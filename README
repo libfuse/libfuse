@@ -1,7 +1,7 @@
 General Information
 ===================
 
-FUSE (Filesystem in USErspace) is a simple interface for userspace
+FUSE (Filesystem in Userspace) is a simple interface for userspace
 programs to export a virtual filesystem to the linux kernel.  FUSE
 also aims to provide a secure method for non privileged users to
 create and mount their own filesystem implementations.
@@ -23,6 +23,7 @@ Installation
 ./configure
 make
 make install
+modprobe fuse
 
 Also see the file 'INSTALL'
 
@@ -72,3 +73,107 @@ doing nasty things.  Currently those limitations are:
 
   - No other user (including root) can access the contents of the mounted
     filesystem.
+
+Configuration
+=============
+
+Some options regarding mount policy can be set in the file
+'/etc/fuse.conf'
+
+Currently these options are:
+
+mount_max = NNN
+
+  Set the maximum number of FUSE mounts allowed to non-root users.
+  The default is 1000.
+
+user_allow_other
+
+  Allow non-root users to specify the 'allow_other' or 'allow_root'
+  mount options.
+
+
+Mount options
+=============
+
+These are FUSE specific mount options that can be specified for all
+filesystems:
+
+default_permissions
+
+  By default FUSE doesn't check file access permissions, the
+  filesystem is free to implement it's access policy or leave it to
+  the underlying file access mechanism (e.g. in case of network
+  filesystems).  This option enables permission checking, restricting
+  access based on file mode.  This is option is usually useful
+  together with the 'allow_other' mount option.
+
+allow_other
+
+  This option overrides the security measure restricting file access
+  to the user mounting the filesystem.  This option is by default only
+  allowed to root, but this restriction can be removed with a
+  configuration option described in the previous section.
+
+allow_root
+
+  This option is similar to 'allow_other' but file access is limited
+  to the user mounting the filesystem and root.
+
+kernel_cache
+
+  This option disables flushing the cache of the file contents on
+  every open().  This should only be enabled on filesystems, where the
+  file data is never changed externally (not through the mounted FUSE
+  filesystem).  Thus it is not suitable for network filesystems and
+  other "intermediate" filesystems.
+
+  NOTE: if this option is not specified (and neither 'direct_io') data
+  is still cached after the open(), so a read() system call will not
+  always initiate a read operation.
+
+large_read
+
+  Issue large read requests.  This can improve performance for some
+  filesystems, but can also degrade performance.  This option is only
+  useful on 2.4.X kernels, as on 2.6 kernels requests size is
+  automatically determined for optimum performance.
+
+direct_io
+
+  This option disables the use of page cache (file content cache) in
+  the kernel for this filesystem.  This has several affects:
+
+     - Each read() or write() system call will initiate one or more
+       read or write operations, data will not be cached in the
+       kernel.
+
+     - The return value of the read() and write() system calls will
+       correspond to the return values of the read and write
+       operations.  This is useful for example if the file size is not
+       known in advance (before reading it).
+
+max_read=N
+
+  With this option the maximum size of read operations can be set.
+  The default is infinite.  Note that the size of read requests is
+  limited anyway to 32 pages (which is 128kbyte on i386).
+
+hard_remove
+
+  The default behavior is that if an open file is deleted, the file is
+  renamed to a hidden file (.fuse_hiddenXXX), and only removed when
+  the file is finally released.  This relieves the filesystem
+  implementation of having to deal with this problem.  This option
+  disables the hiding behavior, and files are removed immediately in
+  an unlink operation (or in a rename operation which overwrites an
+  existing file).
+
+debug
+
+  Turns on debug information printing by the library.
+
+fsname=NAME
+
+  Sets the filesystem name.  The default is the program name.
+  

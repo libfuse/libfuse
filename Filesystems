@@ -1,3 +1,9 @@
+Filesystems using FUSE, that I know of.  In order of appearance.
+
+If you find incorrect or outdated information here, please tell me.
+Also new entries are welcome.
+
+==============================================================================
 Name: OW
 
 Author: Paul H. Alfille / palfille at partners org
@@ -271,5 +277,34 @@ Description:
   SIPES, the need was recognized for the implementation of an
   authorisation server that provides functionality not provided by any
   of the current authorisation solutions.
+
+==============================================================================
+Name: SSHFS-FUSE
+
+Author: Miklos Szeredi / miklos at szeredi hu
+
+Homepage: http://sourceforge.net/project/showfiles.php?group_id=121684&package_id=140425
+
+Description:
+
+  This is a filesystem client based on the SSH File Transfer Protocol.
+  Since most SSH servers already support this protocol it is very easy
+  to set up: i.e. on the server side there's nothing to do.  On the
+  client side mounting the filesystem is as easy as logging into the
+  server with ssh.
+
+==============================================================================
+Name: Siefs
+
+Author: Dmitry Zakharov aka Chaos / dmitry-z at mail ru
+
+Homepage: http://chaos.allsiemens.com/siefs
+
+Description:
+
+  SieFS is a virtual filesystem for accessing Siemens mobile phones'
+  memory (flexmem or MultiMediaCard) from Linux. Now you can mount
+  your phone (by datacable or IRDA) and work with it like with any
+  other removable storage.
 
 ==============================================================================
