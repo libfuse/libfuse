@@ -221,31 +221,35 @@ static void background_request(struct fuse_req *req)
 		get_file(req->file);
 }
 
-static void request_wait_answer_nonint(struct fuse_req *req)
+static int request_wait_answer_nonint(struct fuse_req *req)
 {
+	int err;
 	sigset_t oldset;
 	block_sigs(&oldset);
-	wait_event_interruptible(req->waitq, req->finished);
+	err = wait_event_interruptible(req->waitq, req->finished);
 	restore_sigs(&oldset);
+	return err;
 }
 
 /* Called with fuse_lock held.  Releases, and then reacquires it. */
 static void request_wait_answer(struct fuse_req *req, int interruptible)
 {
+	int intr;
+
 	spin_unlock(&fuse_lock);
 	if (interruptible)
-		wait_event_interruptible(req->waitq, req->finished);
+		intr = wait_event_interruptible(req->waitq, req->finished);
 	else
-		request_wait_answer_nonint(req);
+		intr = request_wait_answer_nonint(req);
 	spin_lock(&fuse_lock);
-	if (interruptible && !req->finished && req->sent) {
+	if (intr && interruptible && req->sent) {
 		/* If request is already in userspace, only allow KILL
 		   signal to interrupt */
 		spin_unlock(&fuse_lock);
-		request_wait_answer_nonint(req);
+		intr = request_wait_answer_nonint(req);
 		spin_lock(&fuse_lock);
 	}
-	if (req->finished)
+	if (!intr)
 		return;
 
 	if (!interruptible || req->sent)
