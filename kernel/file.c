@@ -175,6 +175,7 @@ static int fuse_flush(struct file *file)
 	req->in.args[0].value = &inarg;
 	request_send_nonint(fc, req);
 	err = req->out.h.error;
+	fuse_reset_request(req);
 	up(&inode->i_sem);
 	if (err == -ENOSYS) {
 		fc->no_flush = 1;
