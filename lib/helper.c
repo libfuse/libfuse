@@ -279,11 +279,11 @@ struct fuse *__fuse_setup(int argc, char *argv[],
         }
     }
 
-    fuse_instance = fuse;
     res = set_signal_handlers();
     if (res == -1)
         goto err_destroy;
 
+    fuse_instance = fuse;
     free(kernel_opts);
     free(lib_opts);
     return fuse;
