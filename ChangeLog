@@ -1,3 +1,14 @@
+2004-07-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* When performing create or remove operation, refresh the parent's
+	attributes on next revalidate, as i_nlink (and maybe size/time)
+	could be inacurate.
+
+	* Use redirty_page_for_writepage() in fuse_writepage() for skipped
+	pages (2.6 only)
+
+	* Set set_page_dirty address space operation (2.6 only)
+
 2004-07-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Minor fix in read:  print debug info even if read size is zero

@@ -544,7 +544,7 @@ static int fuse_writepage(struct page *page, struct writeback_control *wbc)
 			if (err)
 				ClearPageWriteback(page);
 			if (err == -EWOULDBLOCK) {
-				__set_page_dirty_nobuffers(page);
+				redirty_page_for_writepage(wbc, page);
 				err = 0;
 			}
 		} else
@@ -681,6 +681,9 @@ static struct address_space_operations fuse_file_aops  = {
 	.writepage =		fuse_writepage,
 	.prepare_write =	fuse_prepare_write,
 	.commit_write =		fuse_commit_write,
+#ifdef KERNEL_2_6
+	.set_page_dirty =	__set_page_dirty_nobuffers,
+#endif
 };
 
 void fuse_init_file_inode(struct inode *inode)

@@ -191,6 +191,18 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	return 0;
 }
 
+static void uncache_dir(struct inode *dir)
+{
+	struct dentry *entry = d_find_alias(dir);
+	if (!entry)
+		dir->i_nlink = 0;
+	else {
+		/* FIXME: this should reset the _attribute_ timeout */
+		entry->d_time = jiffies - 1;
+		dput(entry);
+	}
+}
+
 static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 			    struct inode *dir, struct dentry *entry,
 			    struct fuse_entry_out *outarg, int version,
@@ -216,6 +228,7 @@ static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 					outarg->entry_valid_nsec);
 
 	d_instantiate(entry, inode);
+	uncache_dir(dir);
 	return 0;
 }
 
@@ -352,6 +365,7 @@ static int fuse_unlink(struct inode *dir, struct dentry *entry)
                    discovered at the next lookup/getattr */
 		/* FIXME: mark inode "not uptodate" */
 		entry->d_inode->i_nlink = 0;
+		uncache_dir(dir);
 	}
 	fuse_put_request(fc, req);
 	return err;
@@ -373,8 +387,10 @@ static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 	req->in.args[0].value = entry->d_name.name;
 	request_send(fc, req);
 	err = req->out.h.error;
-	if (!err)
+	if (!err) {
 		entry->d_inode->i_nlink = 0;
+		uncache_dir(dir);
+	}
 	fuse_put_request(fc, req);
 	return err;
 }
@@ -404,6 +420,11 @@ static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 	request_send(fc, req);
 	err = req->out.h.error;
 	fuse_put_request(fc, req);
+	if (!err) {
+		uncache_dir(olddir);
+		if (olddir != newdir)
+			uncache_dir(newdir);
+	}
 	return err;
 }
 
