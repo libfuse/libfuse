@@ -1,3 +1,11 @@
+2004-12-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add -D_FILE_OFFSET_BITS=64 to cflags provided by pkg-config
+
+	* helper.c: add -ho option, which only displays the options not
+	the usage header.  This can be used by filesystems which have
+	their own options.
+
 2004-12-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add source compatibility to 2.1 and 1.1 APIs.  To select betwen

@@ -17,6 +17,7 @@
    even older 1.X API define it to 11. */
 
 #ifndef FUSE_USE_VERSION
+#warning FUSE_USE_VERSION not defined, defaulting to 21
 #define FUSE_USE_VERSION 21
 #endif
 
@@ -342,7 +343,6 @@ void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #    define fuse_new _fuse_new_compat2
 #    define __fuse_setup _fuse_setup_compat2
 #  else
-#    undef FUSE_MAJOR_VERSION
 #    define FUSE_MAJOR_VERSION 1
 #    define FUSE_MINOR_VERSION 1
 #    define fuse_statfs _fuse_statfs_compat1
@@ -352,8 +352,8 @@ void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #    define fuse_mount _fuse_mount_compat1
 #    define FUSE_DEBUG _FUSE_DEBUG_COMPAT1
 #  endif
-#elif FUSE_USE_VERSION != 22
-#  error API version other than 22, 21 and 11 not supported
+#elif FUSE_USE_VERSION < 22
+#  error Compatibility with API version other than 21 and 11 not supported
 #endif
 
 #ifdef __cplusplus

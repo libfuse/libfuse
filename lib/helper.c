@@ -19,9 +19,12 @@ static struct fuse *fuse_instance;
 
 static void usage(const char *progname)
 {
-    fprintf(stderr,
-            "usage: %s mountpoint [options]\n"
-            "Options:\n"
+    if (progname)
+        fprintf(stderr,
+                "usage: %s mountpoint [FUSE options]\n\n", progname);
+
+    fprintf(stderr, 
+            "FUSE options:\n"
             "    -d                  enable debug output (implies -f)\n"
             "    -f                  foreground operation\n"
             "    -s                  disable multithreaded operation\n"
@@ -38,14 +41,13 @@ static void usage(const char *progname)
             "    max_read=N             set maximum size of read requests\n"
             "    hard_remove            immediate removal (don't hide files)\n"
             "    debug                  enable debug output\n"
-            "    fsname=NAME            set filesystem name in mtab\n",
-            progname);
+            "    fsname=NAME            set filesystem name in mtab\n");
 }
 
 static void invalid_option(const char *argv[], int argctr)
 {
     fprintf(stderr, "fuse: invalid option: %s\n\n", argv[argctr]);
-    usage(argv[0]);
+    fprintf(stderr, "see '%s -h' for usage\n", argv[0]);
 }
 
 static void exit_handler()
@@ -171,8 +173,8 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
                 switch (argv[argctr][1]) {
                 case 'o':
                     if (argctr + 1 == argc || argv[argctr+1][0] == '-') {
-                        fprintf(stderr, "missing option after -o\n\n");
-                        usage(argv[0]);
+                        fprintf(stderr, "missing option after -o\n");
+                        fprintf(stderr, "see '%s -h' for usage\n", argv[0]);
                         goto err;
                     }
                     argctr ++;
@@ -215,8 +217,10 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
                     res = add_options(lib_opts, kernel_opts, &argv[argctr][2]);
                     if (res == -1)
                         goto err;
-                }
-                else {
+                } else if(strcmp(argv[argctr], "-ho") == 0) {
+                    usage(NULL);
+                    goto err;
+                } else {
                     invalid_option(argv, argctr);
                     goto err;
                 }
@@ -235,8 +239,8 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
     }
 
     if (*mountpoint == NULL) {
-        fprintf(stderr, "missing mountpoint\n\n");
-        usage(argv[0]);
+        fprintf(stderr, "missing mountpoint\n");
+        fprintf(stderr, "see '%s -h' for usage\n", argv[0]);
         goto err;
     }
     return 0;
@@ -369,7 +373,7 @@ static int fuse_main_common(int argc, char *argv[],
     return 0;
 }
 
-int __fuse_main(int argc, char *argv[],const struct fuse_operations *op,
+int __fuse_main(int argc, char *argv[], const struct fuse_operations *op,
                  size_t op_size)
 {
     return fuse_main_common(argc, argv, op, op_size, 0);
