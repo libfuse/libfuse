@@ -240,6 +240,7 @@ static int unmount_rename(const char *mnt, int quiet, int lazy,
                           const char *mtab, const char *mtab_new)
 {
     int res;
+    struct stat sbuf;
 
     if (getuid() != 0) {
         res = drop_privs();
@@ -252,6 +253,9 @@ static int unmount_rename(const char *mnt, int quiet, int lazy,
 
     if (getuid() != 0)
         restore_privs();
+
+    if (stat(mtab, &sbuf) == 0)
+        chown(mtab_new, sbuf.st_uid, sbuf.st_gid);
 
     res = rename(mtab_new, mtab);
     if (res == -1) {
@@ -1046,6 +1050,7 @@ int main(int argc, char *argv[])
     if (getuid() != 0)
         restore_privs();
 
+    umask(033);
     if (unmount) {
         if (geteuid() == 0) {
             int mtablock = lock_mtab();

@@ -1,3 +1,11 @@
+2005-02-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: set umask, otherwise /etc/mtab will have
+	unpredictable permission.  Spotted by Jindrich Kolorenc
+
+	* fusermount: set owner and group of /etc/mtab to original values
+	on unmount
+	
 2005-02-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Cleaned up directory reading (temporary file is not used)
