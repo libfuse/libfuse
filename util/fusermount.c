@@ -128,6 +128,83 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
     return 0;
 }
 
+
+/* Until there is a nice interface for capabilities in _libc_, this will
+remain here.  I don't think it is fair to expect users to compile libcap
+for this program.  And anyway what's all this fuss about versioning the
+kernel interface?  It is quite good as is.  */
+#define _LINUX_CAPABILITY_VERSION  0x19980330
+
+typedef struct __user_cap_header_struct {
+    unsigned int version;
+    int pid;
+} *cap_user_header_t;
+ 
+typedef struct __user_cap_data_struct {
+    unsigned int effective;
+    unsigned int permitted;
+    unsigned int inheritable;
+} *cap_user_data_t;
+  
+int capget(cap_user_header_t header, cap_user_data_t data);
+int capset(cap_user_header_t header, cap_user_data_t data);
+
+#define CAP_SYS_ADMIN        21
+
+static uid_t oldfsuid;
+static gid_t oldfsgid;
+static struct __user_cap_data_struct oldcaps;
+
+static int drop_privs()
+{
+    int res;
+    struct __user_cap_header_struct head;
+    struct __user_cap_data_struct newcaps;
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capget(&head, &oldcaps);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to get capabilities: %s\n", progname,
+                strerror(errno));
+        return -1;
+    }
+
+    oldfsuid = setfsuid(getuid());
+    oldfsgid = setfsgid(getgid());
+    newcaps = oldcaps;
+    /* Keep CAP_SYS_ADMIN for mount */
+    newcaps.effective &= (1 << CAP_SYS_ADMIN);
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capset(&head, &newcaps);
+    if (res == -1) {
+        setfsuid(oldfsuid);
+        setfsgid(oldfsgid);
+        fprintf(stderr, "%s: failed to set capabilities: %s\n", progname,
+                strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+static void restore_privs()
+{
+    struct __user_cap_header_struct head;
+    int res;
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capset(&head, &oldcaps);
+    if (res == -1)
+        fprintf(stderr, "%s: failed to restore capabilities: %s\n", progname,
+                strerror(errno));
+    
+    setfsuid(oldfsuid);
+    setfsgid(oldfsgid);
+}
+
 static int remove_mount(const char *mnt, int quiet, int lazy)
 {
     int res;
@@ -188,6 +265,14 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
     endmntent(newfp);
     
     if (found) {
+        if (getuid() != 0) {
+            res = drop_privs();
+            if (res == -1) {
+                unlink(mtab_new);
+                return -1;
+            }
+        }
+
         res = umount2(mnt, lazy ? 2 : 0);
         if (res == -1) {
             if (!quiet)
@@ -195,6 +280,8 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
                         progname, mnt,strerror(errno));
             found = -1;
         }
+        if (getuid() != 0)
+            restore_privs();
     }
 
     if (found == 1) {
@@ -216,80 +303,6 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
     return 0;
 }
 
-/* Until there is a nice interface for capabilities in _libc_, this will
-remain here.  I don't think it is fair to expect users to compile libcap
-for this program.  And anyway what's all this fuss about versioning the
-kernel interface?  It is quite good as is.  */
-#define _LINUX_CAPABILITY_VERSION  0x19980330
-
-typedef struct __user_cap_header_struct {
-    unsigned int version;
-    int pid;
-} *cap_user_header_t;
- 
-typedef struct __user_cap_data_struct {
-    unsigned int effective;
-    unsigned int permitted;
-    unsigned int inheritable;
-} *cap_user_data_t;
-  
-int capget(cap_user_header_t header, cap_user_data_t data);
-int capset(cap_user_header_t header, cap_user_data_t data);
-
-#define CAP_SYS_ADMIN        21
-
-static uid_t oldfsuid;
-static gid_t oldfsgid;
-static struct __user_cap_data_struct oldcaps;
-
-static int drop_privs()
-{
-    int res;
-    struct __user_cap_header_struct head;
-    struct __user_cap_data_struct newcaps;
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capget(&head, &oldcaps);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to get capabilities: %s\n", progname,
-                strerror(errno));
-        return -1;
-    }
-
-    oldfsuid = setfsuid(getuid());
-    oldfsgid = setfsgid(getgid());
-    newcaps = oldcaps;
-    /* Keep CAP_SYS_ADMIN for mount */
-    newcaps.effective &= (1 << CAP_SYS_ADMIN);
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capset(&head, &newcaps);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to set capabilities: %s\n", progname,
-                strerror(errno));
-        return -1;
-    }
-    return 0;
-}
-
-static void restore_privs()
-{
-    struct __user_cap_header_struct head;
-    int res;
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capset(&head, &oldcaps);
-    if (res == -1)
-        fprintf(stderr, "%s: failed to restore capabilities: %s\n", progname,
-                strerror(errno));
-    
-    setfsuid(oldfsuid);
-    setfsgid(oldfsgid);
-}
-
 static int begins_with(const char *s, const char *beg)
 {
     if (strncmp(s, beg, strlen(beg)) == 0)
@@ -307,12 +320,6 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     const char *s;
     char *d;
     char *fsname = NULL;
-
-    if (getuid() != 0) {
-        res = drop_privs();
-        if (res == -1)
-            return -1;
-    }
     
     optbuf = malloc(strlen(opts) + 64);
     if (!optbuf) {
@@ -365,9 +372,6 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     }
     *fsnamep = fsname;
 
-    if (getuid() != 0)
-        restore_privs();
-    
     return res;
 }
 
@@ -465,11 +469,19 @@ static int mount_fuse(const char *mnt, const char *opts)
         return -1;
     }
  
-    res = check_perm(&real_mnt, &stbuf, &currdir_fd);
-    if (res == -1)
-        return -1;
+    if (getuid() != 0) {
+        res = drop_privs();
+        if (res == -1)
+            return -1;
+    }
 
-    res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts, &fsname);
+    res = check_perm(&real_mnt, &stbuf, &currdir_fd);
+    if (res != -1)
+        res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
+                       &fsname);
+    if (getuid() != 0)
+        restore_privs();
+
     if (res == -1)
         return -1;
 
@@ -639,8 +651,11 @@ int main(int argc, char *argv[])
 
     origmnt = argv[a++];
 
-    if (getuid() != 0)
-        drop_privs();
+    if (getuid() != 0) {
+        res = drop_privs();
+        if (res == -1)
+            exit(1);
+    }
 
     mnt = resolve_path(origmnt, unmount);
     if (mnt == NULL)

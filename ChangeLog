@@ -3,6 +3,9 @@
 	* A slight API change: fuse_get_context() doesn't need the "fuse"
 	pointer, but the returned context contains it instead.  The
 	fuse_get() function is not needed anymore, so it's removed.
+
+	* Fix mounting and umounting FUSE filesystem under another FUSE
+	filesystem by non-root (bug spotted by Valient Gough)
 	
 2004-09-21  Miklos Szeredi <miklos@szeredi.hu>
 
