@@ -4,12 +4,8 @@ use strict;
 use Fuse;
 use IO::File;
 use POSIX qw(ENOENT ENOSYS EEXIST EPERM O_RDONLY O_RDWR O_APPEND O_CREAT);
-use Fcntl qw(S_ISBLK S_ISCHR S_ISFIFO);
+use Fcntl qw(S_ISBLK S_ISCHR S_ISFIFO SEEK_SET);
 require 'syscall.ph'; # for SYS_mknod
-
-sub debug {
-	print(STDERR join(",",@_),"\n");
-}
 
 sub fixup { return "/tmp/test" . shift }
 
@@ -33,7 +29,6 @@ sub x_getdir {
 sub x_open {
 	my ($file) = fixup(shift);
 	my ($mode) = shift;
-	debug("open",$file,$mode);
 	return -$! unless sysopen(FILE,$file,$mode);
 	close(FILE);
 	return 0;
@@ -41,29 +36,29 @@ sub x_open {
 
 sub x_read {
 	my ($file,$bufsize,$off) = @_;
-	debug("read",@_);
 	my ($rv) = -ENOSYS();
 	my ($handle) = new IO::File;
 	return -ENOENT() unless -e ($file = fixup($file));
+	my ($fsize) = -s $file;
 	return -ENOSYS() unless open($handle,$file);
-	if(seek($handle,$off,0)) {
+	if(seek($handle,$off,SEEK_SET)) {
 		read($handle,$rv,$bufsize);
 	}
-	debug("good");
 	return $rv;
 }
 
 sub x_write {
 	my ($file,$buf,$off) = @_;
-	debug("write",$file,length($buf),$off);
 	my ($rv);
 	return -ENOENT() unless -e ($file = fixup($file));
-	return -ENOSYS() unless sysopen(FILE,$file,O_RDWR()|O_APPEND()|O_CREAT());
-	if(sysseek(FILE,$off,0)) { $rv = syswrite(FILE,$buf); }
+	my ($fsize) = -s $file;
+	return -ENOSYS() unless open(FILE,'+<',$file);
+	if($rv = seek(FILE,$off,SEEK_SET)) {
+		$rv = print(FILE $buf);
+	}
 	$rv = -ENOSYS() unless $rv;
 	close(FILE);
-	debug("good");
-	return $rv;
+	return length($buf);
 }
 
 sub err { return (-shift || -$!) }
@@ -71,30 +66,26 @@ sub err { return (-shift || -$!) }
 sub x_readlink { return readlink(fixup(shift)                 ); }
 sub x_unlink { return unlink(fixup(shift)) ? 0 : -$!;          }
 sub x_rmdir { return err(rmdir(fixup(shift))               ); }
-sub x_symlink { return err(symlink(fixup(shift),fixup(shift))); }
+
+sub x_symlink { return symlink(shift,fixup(shift)) ? 0 : -$!; }
+
 sub x_rename {
-	debug("rename",@_);
 	my ($old) = fixup(shift);
 	my ($new) = fixup(shift);
 	my ($err) = rename($old,$new) ? 0 : -ENOENT();
-	debug("old=$old,new=$new,err=$err");
 	return $err;
 }
 sub x_link { return err(link(fixup(shift),fixup(shift))   ); }
 sub x_chown {
-	debug("chown",@_);
 	my ($fn) = fixup(shift);
 	my ($uid,$gid) = @_;
 	my ($err) = chown($uid,$gid,$fn) ? 0 : -$!;
-	debug("fn=$fn,uid=$uid,gid=$gid,err=$err");
 	return $err;
 }
 sub x_chmod {
-	debug("chmod",@_);
 	my ($fn) = fixup(shift);
 	my ($mode) = shift;
 	my ($err) = chmod($mode,$fn) ? 0 : -$!;
-	debug("fn=$fn,mode=$mode,err=$err");
 	return $err;
 }
 sub x_truncate { return truncate(fixup(shift),shift) ? 0 : -$! ; }
@@ -109,9 +100,7 @@ sub x_mknod {
 	my ($file, $modes, $dev) = @_;
 	$file = fixup($file);
 	$! = 0;
-	debug("mknod",@_);
 	syscall(&SYS_mknod,$file,$modes);
-	debug("mknod retval",$!);
 	return -$!;
 }
 
@@ -139,5 +128,4 @@ Fuse::main(
 	read=>\&x_read,
 	write=>\&x_write,
 	statfs=>\&x_statfs,
-	debug=>1
 );
