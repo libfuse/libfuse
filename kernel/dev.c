@@ -18,6 +18,26 @@
 static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
 
+static int interrupt_error(enum fuse_opcode opcode)
+{
+	switch(opcode) {
+	case FUSE_LOOKUP:
+	case FUSE_GETATTR:
+	case FUSE_READLINK:
+	case FUSE_GETDIR:
+	case FUSE_OPEN:
+	case FUSE_READ:
+	case FUSE_WRITE:
+		return -ERESTARTSYS;
+
+	default:
+		/* Operations which modify the filesystem cannot be safely
+                   restarted, because it is uncertain whether the
+                   operation has completed or not... */
+		return -EINTR;
+	}
+}
+
 static int request_wait_answer(struct fuse_req *req)
 {
 	int ret = 0;
@@ -27,7 +47,7 @@ static int request_wait_answer(struct fuse_req *req)
 	while(!list_empty(&req->list)) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if(signal_pending(current)) {
-			ret = -EINTR;
+			ret = interrupt_error(req->opcode);
 			break;
 		}
 		spin_unlock(&fuse_lock);
