@@ -435,7 +435,7 @@ int _PLfuse_open (const char *file, int flags) {
 int _PLfuse_read (const char *file, char *buf, size_t buflen, off_t off) {
 	int rv;
 	char *rvstr;
-	dXSARGS;
+	dSP;
 	DEBUGf("read begin: %i\n",sp-PL_stack_base);
 	ENTER;
 	SAVETMPS;
@@ -445,7 +445,6 @@ int _PLfuse_read (const char *file, char *buf, size_t buflen, off_t off) {
 	XPUSHs(sv_2mortal(newSViv(off)));
 	PUTBACK;
 	rv = call_sv(_PLfuse_callbacks[15],G_SCALAR);
-	DEBUGf("k\n");
 	SPAGAIN;
 	if(!rv)
 		rv = -ENOENT;
@@ -454,7 +453,12 @@ int _PLfuse_read (const char *file, char *buf, size_t buflen, off_t off) {
 		if(SvTYPE(mysv) == SVt_NV || SvTYPE(mysv) == SVt_IV)
 			rv = SvIV(mysv);
 		else {
-			if(buflen < (rv = SvCUR(mysv)))
+			if(SvPOK(mysv)) {
+				rv = SvCUR(mysv);
+			} else {
+				rv = 0;
+			}
+			if(rv > buflen)
 				croak("read() handler returned more than buflen! (%i > %i)",rv,buflen);
 			if(rv)
 				memcpy(buf,SvPV_nolen(mysv),rv);
