@@ -1,0 +1,407 @@
+diff -ruN kernel/Makefile-2.6 kernel-2.6/Makefile-2.6
+--- kernel/Makefile-2.6	1970-01-01 01:00:00.000000000 +0100
++++ kernel-2.6/Makefile-2.6	2003-09-08 15:30:07.000000000 +0200
+@@ -0,0 +1,26 @@
++KERNELDIR=$(shell cd /lib/modules/`uname -r`/build; /bin/pwd)
++
++default:
++	$(warning To use kbuild, you need write access to)
++	$(warning .tmp_versions/ and .__modpost.cmd in KERNELDIR)
++	$(warning HINT: chmod them 1777)
++	$(MAKE) -C ${KERNELDIR} SUBDIRS=$(PWD) modules
++
++install: default
++	mkdir -p /lib/modules/`uname -r`/kernel/fs/fuse/
++	cp fuse.ko /lib/modules/`uname -r`/kernel/fs/fuse/
++
++insert: install
++	if [ "`lsmod | grep fuse`" ]; then rmmod fuse; fi
++	depmod
++	modprobe fuse
++
++clean:
++	rm -f *.o fuse.ko .*o.cmd fuse.mod.c
++
++EXTRA_CFLAGS := -I$(PWD)/../include
++
++obj-m 		+= fuse.o
++fuse-objs 	:= dev.o dir.o file.o inode.o util.o
++
++
+diff -ruN kernel/dev.c kernel-2.6/dev.c
+--- kernel/dev.c	2003-09-08 15:41:06.000000000 +0200
++++ kernel-2.6/dev.c	2003-09-08 13:42:28.000000000 +0200
+@@ -368,7 +368,7 @@
+ 	if (!inode)
+ 		return -ENOENT;
+ 
+-	invalidate_inode_pages(inode);
++	invalidate_inode_pages(inode->i_mapping);
+ 	iput(inode);
+ 	return 0;
+ }
+diff -ruN kernel/dir.c kernel-2.6/dir.c
+--- kernel/dir.c	2003-09-08 15:41:06.000000000 +0200
++++ kernel-2.6/dir.c	2003-09-08 13:41:12.000000000 +0200
+@@ -11,6 +11,7 @@
+ #include <linux/pagemap.h>
+ #include <linux/slab.h>
+ #include <linux/file.h>
++#include <linux/namei.h>
+ 
+ static struct inode_operations fuse_dir_inode_operations;
+ static struct inode_operations fuse_file_inode_operations;
+@@ -26,7 +27,7 @@
+ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
+ {
+ 	if(S_ISREG(inode->i_mode) && inode->i_size != attr->size)
+-		invalidate_inode_pages(inode);
++		invalidate_inode_pages(inode->i_mapping);
+ 
+ 	inode->i_mode    = (inode->i_mode & S_IFMT) + (attr->mode & 07777);
+ 	inode->i_nlink   = attr->nlink;
+@@ -35,9 +36,9 @@
+ 	inode->i_size    = attr->size;
+ 	inode->i_blksize = PAGE_CACHE_SIZE;
+ 	inode->i_blocks  = attr->blocks;
+-	inode->i_atime   = attr->atime;
+-	inode->i_mtime   = attr->mtime;
+-	inode->i_ctime   = attr->ctime;
++	inode->i_atime.tv_sec   = attr->atime;
++	inode->i_mtime.tv_sec   = attr->mtime;
++	inode->i_ctime.tv_sec   = attr->ctime;
+ }
+ 
+ static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
+@@ -114,7 +115,8 @@
+ 	return out.h.error;
+ }
+ 
+-static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
++static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
++        struct nameidata *nd)
+ {
+ 	int ret;
+ 	struct fuse_lookup_out outarg;
+@@ -151,7 +153,7 @@
+ /* create needs to return a positive entry, so this is actually an
+    mknod+lookup */
+ static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
+-		      int rdev)
++		      dev_t rdev)
+ {
+ 	struct fuse_conn *fc = INO_FC(dir);
+ 	struct fuse_in in = FUSE_IN_INIT;
+@@ -200,7 +202,8 @@
+ }
+ 
+ 
+-static int fuse_create(struct inode *dir, struct dentry *entry, int mode)
++static int fuse_create(struct inode *dir, struct dentry *entry, int mode,
++        struct nameidata *nd)
+ {
+ 	return fuse_mknod(dir, entry, mode, 0);
+ }
+@@ -330,6 +333,12 @@
+ 	struct fuse_out out = FUSE_OUT_INIT;
+ 	struct fuse_getattr_out arg;
+ 	
++	if(inode->i_ino == FUSE_ROOT_INO) {
++		if(!(fc->flags & FUSE_ALLOW_OTHER)
++		   && current->fsuid != fc->uid)
++			return -EACCES;
++	}
++	
+ 	in.h.opcode = FUSE_GETATTR;
+ 	in.h.ino = inode->i_ino;
+ 	out.numargs = 1;
+@@ -343,23 +352,8 @@
+ 	return out.h.error;
+ }
+ 
+-static int fuse_revalidate(struct dentry *entry)
+-{
+-	struct inode *inode = entry->d_inode;
+-	struct fuse_conn *fc = INO_FC(inode);
+-
+-	if(inode->i_ino == FUSE_ROOT_INO) {
+-		if(!(fc->flags & FUSE_ALLOW_OTHER)
+-		   && current->fsuid != fc->uid)
+-			return -EACCES;
+-	}
+-	else if(time_before_eq(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
+-		return 0;
+-
+-	return fuse_getattr(inode);
+-}
+ 
+-static int fuse_permission(struct inode *inode, int mask)
++static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
+ {
+ 	struct fuse_conn *fc = INO_FC(inode);
+ 
+@@ -563,8 +557,8 @@
+ 	/* You can only _set_ these together (they may change by themselves) */
+ 	if((ivalid & (ATTR_ATIME | ATTR_MTIME)) == (ATTR_ATIME | ATTR_MTIME)) {
+ 		fvalid |= FATTR_UTIME;
+-		fattr->atime = iattr->ia_atime;
+-		fattr->mtime = iattr->ia_mtime;
++		fattr->atime = iattr->ia_atime.tv_sec;
++		fattr->mtime = iattr->ia_mtime.tv_sec;
+ 	}
+ 
+ 	return fvalid;
+@@ -602,7 +596,7 @@
+ 	return out.h.error;
+ }
+ 
+-static int fuse_dentry_revalidate(struct dentry *entry, int flags)
++static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
+ {
+ 	if(!entry->d_inode)
+ 		return 0;
+@@ -640,7 +634,6 @@
+ 	link:           fuse_link,
+ 	setattr:	fuse_setattr,
+ 	permission:	fuse_permission,
+-	revalidate:	fuse_revalidate,
+ };
+ 
+ static struct file_operations fuse_dir_operations = {
+@@ -653,7 +646,6 @@
+ static struct inode_operations fuse_file_inode_operations = {
+ 	setattr:	fuse_setattr,
+ 	permission:	fuse_permission,
+-	revalidate:	fuse_revalidate,
+ };
+ 
+ static struct inode_operations fuse_symlink_inode_operations =
+@@ -661,7 +653,6 @@
+ 	setattr:	fuse_setattr,
+ 	readlink:	fuse_readlink,
+ 	follow_link:	fuse_follow_link,
+-	revalidate:	fuse_revalidate,
+ };
+ 
+ static struct dentry_operations fuse_dentry_opertations = {
+diff -ruN kernel/file.c kernel-2.6/file.c
+--- kernel/file.c	2003-09-08 15:41:06.000000000 +0200
++++ kernel-2.6/file.c	2003-09-08 13:45:25.000000000 +0200
+@@ -35,7 +35,7 @@
+ 	in.args[0].value = &inarg;
+ 	request_send(fc, &in, &out);
+ 	if(!out.h.error && !(fc->flags & FUSE_KERNEL_CACHE))
+-		invalidate_inode_pages(inode);
++		invalidate_inode_pages(inode->i_mapping);
+ 
+ 	return out.h.error;
+ }
+@@ -107,7 +107,7 @@
+ 	}
+ 
+ 	kunmap(page);
+-	UnlockPage(page);
++	unlock_page(page);
+ 
+ 	return out.h.error;
+ }
+@@ -143,7 +143,7 @@
+ }
+ 
+ 
+-static int fuse_writepage(struct page *page)
++static int fuse_writepage(struct page *page, struct writeback_control *wbc)
+ {
+ 	struct inode *inode = page->mapping->host;
+ 	unsigned count;
+@@ -162,7 +162,7 @@
+ 	}
+ 	err = write_buffer(inode, page, 0, count);
+   out:
+-	UnlockPage(page);
++	unlock_page(page);
+ 	return 0;
+ }
+ 
+diff -ruN kernel/fuse_i.h kernel-2.6/fuse_i.h
+--- kernel/fuse_i.h	2003-09-08 15:41:06.000000000 +0200
++++ kernel-2.6/fuse_i.h	2003-09-08 13:41:12.000000000 +0200
+@@ -121,7 +121,7 @@
+ };
+ 
+ 
+-#define INO_FC(inode) ((struct fuse_conn *) (inode)->i_sb->u.generic_sbp)
++#define INO_FC(inode) ((struct fuse_conn *) (inode)->i_sb->s_fs_info)
+ #define DEV_FC(file) ((struct fuse_conn *) (file)->private_data)
+ 
+ 
+diff -ruN kernel/inode.c kernel-2.6/inode.c
+--- kernel/inode.c	2003-09-08 15:41:06.000000000 +0200
++++ kernel-2.6/inode.c	2003-09-08 13:41:12.000000000 +0200
+@@ -13,6 +13,9 @@
+ #include <linux/slab.h>
+ #include <linux/file.h>
+ #include <linux/proc_fs.h>
++#include <linux/statfs.h>
++
++#include <asm/statfs.h>
+ 
+ #define FUSE_SUPER_MAGIC 0x65735546
+ 
+@@ -58,7 +61,7 @@
+ 
+ static void fuse_put_super(struct super_block *sb)
+ {
+-	struct fuse_conn *fc = sb->u.generic_sbp;
++	struct fuse_conn *fc = sb->s_fs_info;
+ 
+ 	spin_lock(&fuse_lock);
+ 	fc->sb = NULL;
+@@ -67,11 +70,11 @@
+ 	/* Flush all readers on this fs */
+ 	wake_up_all(&fc->waitq);
+ 	fuse_release_conn(fc);
+-	sb->u.generic_sbp = NULL;
++	sb->s_fs_info = NULL;
+ 	spin_unlock(&fuse_lock);
+ }
+ 
+-static void convert_fuse_statfs(struct statfs *stbuf, struct fuse_kstatfs *attr)
++static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
+ {
+ 	stbuf->f_type    = FUSE_SUPER_MAGIC;
+ 	stbuf->f_bsize   = attr->block_size;
+@@ -85,9 +88,9 @@
+ 	stbuf->f_namelen = attr->namelen;
+ }
+ 
+-static int fuse_statfs(struct super_block *sb, struct statfs *st)
++static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
+ {
+-	struct fuse_conn *fc = sb->u.generic_sbp;
++	struct fuse_conn *fc = sb->s_fs_info;
+ 	struct fuse_in in = FUSE_IN_INIT;
+ 	struct fuse_out out = FUSE_OUT_INIT;
+ 	struct fuse_statfs_out outarg;
+@@ -99,7 +102,7 @@
+ 	out.args[0].value = &outarg;
+ 	request_send(fc, &in, &out);
+ 	if(!out.h.error)
+-		convert_fuse_statfs(st,&outarg.st);
++		convert_fuse_statfs(buf,&outarg.st);
+ 	
+ 	return out.h.error;
+ }
+@@ -155,7 +158,7 @@
+ 	return fuse_iget(sb, 1, &attr, 0);
+ }
+ 
+-static struct super_block *fuse_read_super(struct super_block *sb, 
++static int fuse_read_super(struct super_block *sb, 
+ 					   void *data, int silent)
+ {	
+ 	struct fuse_conn *fc;
+@@ -170,7 +173,7 @@
+ 	root = get_root_inode(sb, d->rootmode);
+ 	if(root == NULL) {
+ 		printk("fuse_read_super: failed to get root inode\n");
+-		return NULL;
++		return -EINVAL;
+ 	}
+ 
+ 	spin_lock(&fuse_lock);
+@@ -183,7 +186,7 @@
+ 		goto err;
+ 	}
+ 
+-        sb->u.generic_sbp = fc;
++        sb->s_fs_info = fc;
+ 	sb->s_root = d_alloc_root(root);
+ 	if(!sb->s_root)
+ 		goto err;
+@@ -193,16 +196,31 @@
+ 	fc->uid = d->uid;
+ 	spin_unlock(&fuse_lock);
+ 	
+-	return sb;
++	return 0;
+ 
+   err:
+ 	spin_unlock(&fuse_lock);
+ 	iput(root);
+-	return NULL;
++	return -EINVAL;
+ }
+ 
+ 
+-static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super, 0);
++static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
++        int flags, const char *dev_name, void *raw_data)
++{
++        return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
++}
++
++
++static struct file_system_type fuse_fs_type = {
++        .owner          = THIS_MODULE,
++        .name           = "fuse",
++        .get_sb         = fuse_get_sb,
++        .kill_sb        = kill_anon_super,
++        .fs_flags       = 0
++};
++
++
+ 
+ int fuse_fs_init()
+ {
+diff -ruN kernel/util.c kernel-2.6/util.c
+--- kernel/util.c	2003-09-08 15:41:06.000000000 +0200
++++ kernel-2.6/util.c	2003-09-08 13:41:12.000000000 +0200
+@@ -9,6 +9,8 @@
+ #include "fuse_i.h"
+ 
+ #include <linux/slab.h>
++#include <linux/init.h>
++#include <linux/vermagic.h>
+ 
+ MODULE_AUTHOR("Miklos Szeredi <mszeredi@inf.bme.hu>");
+ MODULE_DESCRIPTION("Filesystem in Userspace");
+@@ -17,6 +19,10 @@
+ MODULE_LICENSE("GPL");
+ #endif
+ 
++const char vermagic[]
++__attribute__((section("__vermagic"))) =
++VERMAGIC_STRING;
++
+ spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
+ 
+ /* Must be called with the fuse lock held */
+@@ -27,7 +33,7 @@
+ 	}
+ }
+ 
+-int init_module(void)
++int __init fuse_init_module(void)
+ {
+ 	int res;
+ 
+@@ -49,7 +55,7 @@
+ 	return res;
+ }
+ 
+-void cleanup_module(void)
++void __exit fuse_cleanup_module(void)
+ {
+ 	printk(KERN_DEBUG "fuse cleanup\n");
+ 	
+@@ -57,6 +63,9 @@
+ 	fuse_dev_cleanup();
+ }
+ 
++module_init(fuse_init_module);
++module_exit(fuse_cleanup_module);
++
+ /*
+  * Local Variables:
+  * indent-tabs-mode: t
