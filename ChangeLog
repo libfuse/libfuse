@@ -1,5 +1,9 @@
 2005-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.2-pre2
+
+2005-01-09  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Change "uid" mount option to "user_id" to avoid confusion with a
 	mount option "uid" commonly used by many filesystems
 
