@@ -14,35 +14,24 @@ sub fixup { return "/tmp/test" . shift }
 
 sub x_getattr {
 	my ($file) = fixup(shift);
-	debug("getattr $file");
 	return -ENOENT() unless -e $file;
-	debug(lstat($file));
 	return (lstat($file));
 }
 
 sub x_getdir {
 	my ($dirname) = fixup(shift);
-	debug("getdir >$dirname<");
 	unless(opendir(DIRHANDLE,$dirname)) {
-		debug("ENOENT");
 		return -ENOENT();
 	}
-	debug("ok");
 	my (@files) = readdir(DIRHANDLE);
 	closedir(DIRHANDLE);
-	debug(@files);
 	return (@files, 0);
 }
 
 sub x_open {
 	my ($file) = fixup(shift);
-	debug("open flags = $_[0]");
 	my ($fd) = POSIX::open($file,@_);
-	if(!defined($fd)) {
-		debug("POSIX::open(".join(",",$file,@_).") returned undef");
-		return -ENOSYS();
-	}
-	debug("open $file = $fd");
+	return -ENOSYS() if(!defined($fd));
 	return $fd if $fd < 0;
 	POSIX::close($fd);
 	return 0;
@@ -83,12 +72,14 @@ sub x_rmdir    { return err(rmdir(fixup(shift))               ); }
 sub x_symlink  { return err(symlink(fixup(shift),fixup(shift))); }
 sub x_rename   { return err(rename(fixup(shift),fixup(shift)) ); }
 sub x_link     { return err(link(fixup(shift),fixup(shift))   ); }
-sub x_mkdir    { return err(mkdir(fixup(shift),shift)         ); }
 sub x_chmod    { return err(chmod(fixup(shift),shift)         ); }
 sub x_chown    { return err(chown(fixup(shift),shift,shift)   ); }
 sub x_chmod    { return err(chmod(fixup(shift),shift)         ); }
 sub x_truncate { return truncate(fixup(shift),shift) ? 0 : -$! ; }
 sub x_utime    { return utime($_[1],$_[2],fixup($_[0])) ? 0:-$!; }
+
+sub x_mkdir { my ($name, $perm) = @_; return 0 if mkdir(fixup($name),$perm); return -$!; }
+sub x_rmdir { return 0 if rmdir fixup(shift); return -$!; }
 
 sub x_mknod {
 	# since this is called for ALL files, not just devices, I'll do some checks

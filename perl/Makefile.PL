@@ -8,7 +8,7 @@ WriteMakefile(
     ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM => 'Fuse.pm', # retrieve abstract from module
        AUTHOR     => 'Mark Glines <mark@glines.org>') : ()),
-    'LIBS'		=> [''], # e.g., '-lm'
+    'LIBS'		=> ['-lefence'], # e.g., '-lm'
     'DEFINE'		=> '-g -ggdb', # e.g., '-DHAVE_SOMETHING'
 	# Insert -I. if you add *.h files later:
     'INC'		=> '-I../include', # e.g., '-I/usr/include/other'

@@ -24,3 +24,36 @@ This is contributed to the FUSE project by Mark Glines <mark@glines.org>,
 and is therefore subject to the same license and copyright as FUSE itself.
 Please see the AUTHORS and COPYING files from the FUSE distribution for
 more information.
+
+BUGS
+
+Currently theres a huge problem with atomicity - putting an md5sum or something
+in a while loop, and cd'ing into the mountpoint from a different directory
+causes some interesting failures.  For normal perl, every call should grab a
+global lock.  For thread-perl, I'm gonna have to do some research to figure out
+the best solution.
+
+Quite a few things aren't tested.
+
+The tested (and seemingly working) stuff includes:
+getattr
+readlink
+getdir
+mknod
+mkdir
+unlink
+rmdir
+open
+read
+statfs
+
+which leaves:
+symlink
+rename
+link
+chmod
+chown
+truncate
+utime
+write
+

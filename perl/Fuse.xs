@@ -10,26 +10,12 @@
 #else
 #define DEBUGf(a...)
 #endif
-static int
-not_here(char *s)
-{
-    croak("%s not implemented on this architecture", s);
-    return -1;
-}
-
-static double
-constant(char *name, int len, int arg)
-{
-    errno = ENOENT;
-    return 0;
-}
 
 SV *_PLfuse_callbacks[18];
 
 int _PLfuse_getattr(const char *file, struct stat *result) {
 	dSP;
 	int rv, statcount;
-	DEBUGf("getattr begin: %i\n",sp-PL_stack_base);
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -64,7 +50,6 @@ int _PLfuse_getattr(const char *file, struct stat *result) {
 	FREETMPS;
 	LEAVE;
 	PUTBACK;
-	DEBUGf("getattr end: %i\n",sp-PL_stack_base);
 	return rv;
 }
 
@@ -73,7 +58,6 @@ int _PLfuse_readlink(const char *file,char *buf,size_t buflen) {
 	char *rvstr;
 	dSP;
 	I32 ax;
-	DEBUGf("readlink begin: %i\n",sp-PL_stack_base);
 	if(buflen < 1)
 		return EINVAL;
 	ENTER;
@@ -87,7 +71,6 @@ int _PLfuse_readlink(const char *file,char *buf,size_t buflen) {
 		rv = -ENOENT;
 	else {
 		SV *mysv = POPs;
-		DEBUGf("type = %i\n",SvTYPE(mysv));
 		if(SvTYPE(mysv) == SVt_IV || SvTYPE(mysv) == SVt_NV)
 			rv = SvIV(mysv);
 		else {
@@ -97,17 +80,14 @@ int _PLfuse_readlink(const char *file,char *buf,size_t buflen) {
 	}
 	FREETMPS;
 	LEAVE;
-	DEBUGf("ribbit3: %i (%s)\n",rv,buf);
 	buf[buflen-1] = 0;
 	PUTBACK;
-	DEBUGf("readlink end: %i\n",sp-PL_stack_base);
 	return rv;
 }
 
 int _PLfuse_getdir(const char *file, fuse_dirh_t dirh, fuse_dirfil_t dirfil) {
 	int prv, rv;
 	dSP;
-	DEBUGf("getdir begin: %i\n",sp-PL_stack_base);
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -126,7 +106,6 @@ int _PLfuse_getdir(const char *file, fuse_dirh_t dirh, fuse_dirfil_t dirfil) {
 	FREETMPS;
 	LEAVE;
 	PUTBACK;
-	DEBUGf("getdir end: %i\n",sp-PL_stack_base);
 	return rv;
 }
 
@@ -135,7 +114,6 @@ int _PLfuse_mknod (const char *file, mode_t mode, dev_t dev) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
-	DEBUGf("mknod begin: %i\n",sp-PL_stack_base);
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -152,7 +130,6 @@ int _PLfuse_mknod (const char *file, mode_t mode, dev_t dev) {
 	FREETMPS;
 	LEAVE;
 	PUTBACK;
-	DEBUGf("mknod end: %i\n",sp-PL_stack_base);
 	return rv;
 }
 
@@ -177,7 +154,7 @@ int _PLfuse_mkdir (const char *file, mode_t mode) {
 	FREETMPS;
 	LEAVE;
 	PUTBACK;
-	DEBUGf("mkdir end: %i\n",sp-PL_stack_base);
+	DEBUGf("mkdir end: %i %i\n",sp-PL_stack_base,rv);
 	return rv;
 }
 
@@ -226,7 +203,7 @@ int _PLfuse_rmdir (const char *file) {
 	FREETMPS;
 	LEAVE;
 	PUTBACK;
-	DEBUGf("rmdir end: %i\n",sp-PL_stack_base);
+	DEBUGf("rmdir end: %i %i\n",sp-PL_stack_base,rv);
 	return rv;
 }
 
@@ -556,20 +533,6 @@ getattr:	_PLfuse_getattr,
 
 MODULE = Fuse		PACKAGE = Fuse
 PROTOTYPES: DISABLE
-
-
-double
-constant(sv,arg)
-    PREINIT:
-	STRLEN		len;
-    INPUT:
-	SV *		sv
-	char *		s = SvPV(sv, len);
-	int		arg
-    CODE:
-	RETVAL = constant(s,len,arg);
-    OUTPUT:
-	RETVAL
 
 void
 perl_fuse_main(...)
