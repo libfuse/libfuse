@@ -2,7 +2,7 @@
 %define fusemoduledir /lib/modules/%{kernelversion}/kernel/fs/fuse
 
 Name: fuse
-Version: 0.95
+Version: 1.0
 Release: 1
 Summary: Filesystem in Userspace
 Source: %{name}-%{version}.tar.gz

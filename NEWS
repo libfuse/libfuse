@@ -1,4 +1,10 @@
-What is new in 0.99
+What is new in 1.0
+
+* Cleanups and bugfixes
+
+* Added 'release()' VFS call to the FUSE interface
+
+* 64 bit file offsets (handling of > 4 GByte files)
 
 * libfuse is now under LGPL
 
