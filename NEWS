@@ -1,3 +1,40 @@
+What is new in 1.9
+
+* Lots of bugs fixed
+
+* Minor modifications to the library API
+
+* Improvements to the kernel/userspace interface
+
+* Mounting by non-root made more secure
+
+* Build shared library in addition to the static one
+
+* Consolidated mount options
+
+* Optimized reading under 2.6 kernels
+
+* Direct I/O support
+
+* Support file I/O on deleted files
+
+* Extended attributes support
+
+What is new in 1.3
+
+* Thanks to user bugreports and stress testing with LTP and sfx-linux
+a number of bugs were fixed, some quite serious.
+
+* Fix compile problems with recent SuSE kernles
+
+What is new in 1.2
+
+* Fix mount problems on recent 2.6 kernels with SELinux enabled
+
+* Fixed writing files lager than 2GBytes
+
+* Other bugfixes
+
 What is new in 1.1
 
 * Support for the 2.6 kernels

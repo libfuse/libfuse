@@ -6,4 +6,5 @@ EXTRA_DIST =			\
 	fuse.spec		\
 	README*			\
 	Filesystems		\
-	BUGS
+	BUGS			\
+	doc/how-fuse-works
