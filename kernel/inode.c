@@ -73,7 +73,6 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 #ifndef KERNEL_2_6
 	inode->u.generic_ip = NULL;
 #endif
-
 	fi = get_fuse_inode(inode);
 	memset(fi, 0, sizeof(*fi));
 	fi->forget_req = fuse_request_alloc();
