@@ -16,7 +16,11 @@
 
 #ifndef KERNEL_2_6
 #define PageUptodate(page) Page_Uptodate(page)
+#ifndef NO_MM
 #define filemap_fdatawrite filemap_fdatasync
+#else
+#define filemap_fdatawrite do {} while(0)
+#endif
 #endif
 
 static int fuse_open(struct inode *inode, struct file *file)

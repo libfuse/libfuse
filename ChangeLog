@@ -1,5 +1,9 @@
 2004-03-02  Miklos Szeredi <mszeredi@inf.bme.hu>
 
+	* Fix for uClinux (Christian Magnusson)
+
+2004-03-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+
 	* fuse_main() adds "-n progname" to the fusermount command line
 	
 	* More kernel interface changes:
