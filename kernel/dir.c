@@ -8,6 +8,7 @@
 
 #include "fuse_i.h"
 
+#include <linux/pagemap.h>
 #include <linux/slab.h>
 #include <linux/file.h>
 
@@ -32,7 +33,7 @@ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 	inode->i_uid     = attr->uid;
 	inode->i_gid     = attr->gid;
 	inode->i_size    = attr->size;
-	inode->i_blksize = attr->blksize;
+	inode->i_blksize = PAGE_CACHE_SIZE;
 	inode->i_blocks  = attr->blocks;
 	inode->i_atime   = attr->atime;
 	inode->i_mtime   = attr->mtime;
@@ -385,37 +386,37 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 	return ret;
 }
 
-static int read_link(struct dentry *dentry, char **bufp)
+static char *read_link(struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	unsigned long page;
+	char *link;
 
-	page = __get_free_page(GFP_KERNEL);
-	if(!page)
-		return -ENOMEM;
+	link = (char *) __get_free_page(GFP_KERNEL);
+	if(!link)
+		return ERR_PTR(-ENOMEM);
 
 	in.h.opcode = FUSE_READLINK;
 	in.h.ino = inode->i_ino;
-	out.arg = (void *) page;
+	out.arg = link;
 	out.argsize = PAGE_SIZE - 1;
 	out.argvar = 1;
 	request_send(fc, &in, &out);
 	if(out.h.error) {
-		free_page(page);
-		return out.h.error;
+		free_page((unsigned long) link);
+		return ERR_PTR(out.h.error);
 	}
 
-	*bufp = (char *) page;
-	(*bufp)[out.argsize] = '\0';
-	return 0;
+	link[out.argsize] = '\0';
+	return link;
 }
 
 static void free_link(char *link)
 {
-	free_page((unsigned long) link);
+	if(!IS_ERR(link))
+		free_page((unsigned long) link);
 }
 
 static int fuse_readlink(struct dentry *dentry, char *buffer, int buflen)
@@ -423,10 +424,7 @@ static int fuse_readlink(struct dentry *dentry, char *buffer, int buflen)
 	int ret;
 	char *link;
 
-	ret = read_link(dentry, &link);
-	if(ret)
-		return ret;
-
+	link = read_link(dentry);
 	ret = vfs_readlink(dentry, buffer, buflen, link);
 	free_link(link);
 	return ret;
@@ -437,10 +435,7 @@ static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
 	int ret;
 	char *link;
 
-	ret = read_link(dentry, &link);
-	if(ret)
-		return ret;
-
+	link = read_link(dentry);
 	ret = vfs_follow_link(nd, link);
 	free_link(link);
 	return ret;
@@ -550,8 +545,7 @@ static int fuse_dentry_revalidate(struct dentry *entry, int flags)
 {
 	if(!entry->d_inode)
 		return 0;
-	else if(!(flags & LOOKUP_CONTINUE) && 
-		time_after(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
+	else if(!(flags & LOOKUP_CONTINUE))
 		return 0;
 	else
 		return 1;

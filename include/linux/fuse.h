@@ -42,7 +42,7 @@ struct fuse_attr {
 	unsigned int        gid;
 	unsigned int        rdev;
 	unsigned long long  size;
-	unsigned long       blksize;
+	unsigned long       _dummy;
 	unsigned long       blocks;
 	unsigned long       atime;
 	unsigned long       mtime;

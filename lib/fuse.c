@@ -297,7 +297,6 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
     attr->gid     = stbuf->st_gid;
     attr->rdev    = stbuf->st_rdev;
     attr->size    = stbuf->st_size;
-    attr->blksize = stbuf->st_blksize;
     attr->blocks  = stbuf->st_blocks;
     attr->atime   = stbuf->st_atime;
     attr->mtime   = stbuf->st_mtime;

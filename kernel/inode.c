@@ -8,6 +8,7 @@
 
 #include "fuse_i.h"
 
+#include <linux/pagemap.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/file.h>
@@ -104,8 +105,8 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 	struct inode *root;
 	struct fuse_mount_data *d = data;
 
-        sb->s_blocksize = 1024;
-        sb->s_blocksize_bits = 10;
+        sb->s_blocksize = PAGE_CACHE_SIZE;
+        sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
         sb->s_magic = FUSE_SUPER_MAGIC;
         sb->s_op = &fuse_super_operations;
 

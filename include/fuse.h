@@ -30,6 +30,11 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t, const char *, int type);
  *  - All operations should return the negated error value (-errno) on
  *  error.
  * 
+ *  - Getattr() doesn't need to fill in the following fields:
+ *      st_ino
+ *      st_dev
+ *      st_blksize
+ * 
  *  - readlink() should fill the buffer with a null terminated string.  The
  *  buffer size argument includes the space for the terminating null
  *  character.  If the linkname is too long to fit in the buffer, it should
