@@ -59,6 +59,33 @@ static const char *get_user_name()
     }
 }
 
+/* use a lock file so that multiple fusermount processes don't try and
+   modify the mtab file at once! */
+static int lock_mtab()
+{
+    const char *mtab_lock = _PATH_MOUNTED ".fuselock";
+    int mtablock;
+    int res;
+
+    mtablock = open(mtab_lock, O_RDWR | O_CREAT, 0600);
+    if(mtablock >= 0) {
+        res = lockf(mtablock, F_LOCK, 0);
+        if(res < 0)
+            perror("error getting lock: %s");
+    } else
+        fprintf(stderr, "unable to open fuse lock file, continuing anyway\n");
+
+    return mtablock;
+}
+
+static void unlock_mtab(int mtablock)
+{
+    if(mtablock >= 0) {
+	lockf(mtablock, F_ULOCK, 0);
+	close(mtablock);
+    }
+}
+
 static int add_mount(const char *dev, const char *mnt, const char *type)
 {
     int res;
@@ -343,6 +370,7 @@ static int mount_fuse(const char *mnt, int flags)
     const char *dev = FUSE_DEV;
     const char *type = "fuse";
     struct stat stbuf;
+    int mtablock;
 
     res = check_perm(mnt, &stbuf);
     if(res == -1)
@@ -371,8 +399,10 @@ static int mount_fuse(const char *mnt, int flags)
     res = do_mount(dev, mnt, type, stbuf.st_mode & S_IFMT, fd, flags);
     if(res == -1)
         return -1;
-
+    
+    mtablock = lock_mtab();
     res = add_mount(dev, mnt, type);
+    unlock_mtab(mtablock);
     if(res == -1) {
         umount(mnt);
         return -1;
@@ -530,7 +560,9 @@ int main(int argc, char *argv[])
         restore_privs();
     
     if(unmount) {
+        int mtablock = lock_mtab();
         res = remove_mount(mnt);
+        unlock_mtab(mtablock);
         if(res == -1)
             exit(1);
         

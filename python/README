@@ -1,3 +1,8 @@
+#@+leo-ver=4
+#@+node:@file README
+#@@comment
+
+
 General Information
 ===================
 
@@ -21,6 +26,20 @@ then call main().  Make it runnable as a #! script, and mount with
 for some reason,
 	fusermount <mount point> python <script name>
 does not seem to work. (why?)
+
+Update
+======
+
+Updated Dec 2003 by David McNab <david@rebirthing.co.nz>:
+    
+    - added support for 'release' events (ie when file gets closed)
+    - added __init__ to base class, which picks off parameters and
+      stores them as instance attributes:
+          - self.mountpoint - the mountpoint as given in the mount command
+          - self.optlist - unnamed options (eg 'rw', 'exec' etc)
+          - self.optdict - named options (eg, '-o arg1=val1,arg2=val2...' from mount cmd)
+    - fixed incompatibility issues with recent pythons (original was broken
+      under python2.3)
 
 Limitations
 ===========
@@ -58,3 +77,5 @@ License, Version 2.  Future versions, if any, will be available at [3].
 [1] http://www.python.org
 [2] http://sourceforge.net/projects/avf/
 [3] http://unpythonic.dhs.org/~jepler/fuse/
+#@-node:@file README
+#@-leo

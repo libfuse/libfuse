@@ -1,3 +1,6 @@
+//@+leo-ver=4
+//@+node:@file _fusemodule.c
+//@@language c
 /*
     Copyright (C) 2001  Jeff Epler  <jepler@unpythonic.dhs.org>
 
@@ -5,58 +8,83 @@
     See the file COPYING.
 */
 
+//@+others
+//@+node:includes
 #include <Python.h>
 #include <fuse.h>
 #include <time.h>
+//@-node:includes
+//@+node:globals
 
 static PyObject *getattr_cb=NULL, *readlink_cb=NULL, *getdir_cb=NULL,
 	*mknod_cb=NULL, *mkdir_cb=NULL, *unlink_cb=NULL, *rmdir_cb=NULL,
 	*symlink_cb=NULL, *rename_cb=NULL, *link_cb=NULL, *chmod_cb=NULL,
 	*chown_cb=NULL, *truncate_cb=NULL, *utime_cb=NULL,
-	*open_cb=NULL, *read_cb=NULL, *write_cb=NULL;
-
+	*open_cb=NULL, *read_cb=NULL, *write_cb=NULL, *release_cb=NULL;
+//@-node:globals
+//@+node:PROLOGUE
 #define PROLOGUE \
-	int ret = -EINVAL; \
-	if (!v) { PyErr_Print(); goto OUT; } \
-	if(v == Py_None) { ret = 0; goto OUT_DECREF; } \
-	if(PyInt_Check(v)) { ret = PyInt_AsLong(v); goto OUT_DECREF; }
+int ret = -EINVAL; \
+if (!v) { PyErr_Print(); goto OUT; } \
+if(v == Py_None) { ret = 0; goto OUT_DECREF; } \
+if(PyInt_Check(v)) { ret = PyInt_AsLong(v); goto OUT_DECREF; }
 
+//@-node:PROLOGUE
+//@+node:EPILOGUE
 #define EPILOGUE \
-	OUT_DECREF: \
-		Py_DECREF(v); \
-	OUT: \
-		return ret; 
+OUT_DECREF: \
+	Py_DECREF(v); \
+OUT: \
+	return ret; 
+//@-node:EPILOGUE
+//@+node:getattr_func
+
+/* 
+ * Local Variables:
+ * indent-tabs-mode: t
+ * c-basic-offset: 8
+ * End:
+ * Changed by David McNab (david@rebirthing.co.nz) to work with recent pythons.
+ * Namely, replacing PyTuple_* with PySequence_*, and checking numerical values
+ * with both PyInt_Check and PyLong_Check.
+ */
+
 static int getattr_func(const char *path, struct stat *st)
 {
-	int i;
-	PyObject *v = PyObject_CallFunction(getattr_cb, "s", path);
-	PROLOGUE
+int i;
+PyObject *v = PyObject_CallFunction(getattr_cb, "s", path);
+PROLOGUE
 
-	if(!PyTuple_Check(v)) { goto OUT_DECREF; }
-	if(PyTuple_Size(v) < 10) { goto OUT_DECREF; }
-	for(i=0; i<10; i++) {
-		if (!PyInt_Check(PyTuple_GetItem(v, 0))) goto OUT_DECREF;
-	}
-
-	st->st_mode = PyInt_AsLong(PyTuple_GetItem(v, 0));
-	st->st_ino  = PyInt_AsLong(PyTuple_GetItem(v, 1));
-	st->st_dev  = PyInt_AsLong(PyTuple_GetItem(v, 2));
-	st->st_nlink= PyInt_AsLong(PyTuple_GetItem(v, 3));
-	st->st_uid  = PyInt_AsLong(PyTuple_GetItem(v, 4));
-	st->st_gid  = PyInt_AsLong(PyTuple_GetItem(v, 5));
-	st->st_size = PyInt_AsLong(PyTuple_GetItem(v, 6));
-	st->st_atime= PyInt_AsLong(PyTuple_GetItem(v, 7));
-	st->st_mtime= PyInt_AsLong(PyTuple_GetItem(v, 8));
-	st->st_ctime= PyInt_AsLong(PyTuple_GetItem(v, 9));
-
-	/* Fill in fields not provided by Python lstat() */
-	st->st_blksize= 4096;
-	st->st_blocks= (st->st_size + 511)/512;
-	st->st_ino  = 0;
-
-	ret = 0;
-	EPILOGUE
+if(!PySequence_Check(v)) { goto OUT_DECREF; }
+if(PySequence_Size(v) < 10) { goto OUT_DECREF; }
+for(i=0; i<10; i++)
+{
+    PyObject *tmp = PySequence_GetItem(v, i);
+	if (!(PyInt_Check(tmp) || PyLong_Check(tmp))) goto OUT_DECREF;
 }
+
+st->st_mode = PyInt_AsLong(PySequence_GetItem(v, 0));
+st->st_ino  = PyInt_AsLong(PySequence_GetItem(v, 1));
+st->st_dev  = PyInt_AsLong(PySequence_GetItem(v, 2));
+st->st_nlink= PyInt_AsLong(PySequence_GetItem(v, 3));
+st->st_uid  = PyInt_AsLong(PySequence_GetItem(v, 4));
+st->st_gid  = PyInt_AsLong(PySequence_GetItem(v, 5));
+st->st_size = PyInt_AsLong(PySequence_GetItem(v, 6));
+st->st_atime= PyInt_AsLong(PySequence_GetItem(v, 7));
+st->st_mtime= PyInt_AsLong(PySequence_GetItem(v, 8));
+st->st_ctime= PyInt_AsLong(PySequence_GetItem(v, 9));
+
+/* Fill in fields not provided by Python lstat() */
+st->st_blksize= 4096;
+st->st_blocks= (st->st_size + 511)/512;
+st->st_ino  = 0;
+
+ret = 0;
+EPILOGUE
+}
+
+//@-node:getattr_func
+//@+node:readlink_func
 
 static int readlink_func(const char *path, char *link, size_t size)
 {
@@ -72,6 +100,8 @@ static int readlink_func(const char *path, char *link, size_t size)
 
 	EPILOGUE
 }
+//@-node:readlink_func
+//@+node:getdir_add_entry
 
 static int getdir_add_entry(PyObject *w, fuse_dirh_t dh, fuse_dirfil_t df)
 {
@@ -108,6 +138,8 @@ out_decref:
 out:
 	return ret;
 }
+//@-node:getdir_add_entry
+//@+node:getdir_func
 
 static int getdir_func(const char *path, fuse_dirh_t dh, fuse_dirfil_t df)
 {
@@ -130,6 +162,8 @@ static int getdir_func(const char *path, fuse_dirh_t dh, fuse_dirfil_t df)
 
 	EPILOGUE
 }
+//@-node:getdir_func
+//@+node:mknod_func
 
 static int mknod_func(const char *path, mode_t m, dev_t d)
 {
@@ -137,6 +171,8 @@ static int mknod_func(const char *path, mode_t m, dev_t d)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:mknod_func
+//@+node:mkdir_func
 
 static int mkdir_func(const char *path, mode_t m)
 {
@@ -144,6 +180,8 @@ static int mkdir_func(const char *path, mode_t m)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:mkdir_func
+//@+node:unlink_func
 
 static int unlink_func(const char *path)
 {
@@ -151,6 +189,8 @@ static int unlink_func(const char *path)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:unlink_func
+//@+node:rmdir_func
 
 static int rmdir_func(const char *path)
 {
@@ -158,6 +198,8 @@ static int rmdir_func(const char *path)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:rmdir_func
+//@+node:symlink_func
 
 static int symlink_func(const char *path, const char *path1)
 {
@@ -165,6 +207,8 @@ static int symlink_func(const char *path, const char *path1)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:symlink_func
+//@+node:rename_func
 
 static int rename_func(const char *path, const char *path1)
 {
@@ -172,6 +216,8 @@ static int rename_func(const char *path, const char *path1)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:rename_func
+//@+node:link_func
 
 static int link_func(const char *path, const char *path1)
 {
@@ -179,6 +225,8 @@ static int link_func(const char *path, const char *path1)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:link_func
+//@+node:chmod_func
 
 static int chmod_func(const char *path, mode_t m) 
 {
@@ -186,6 +234,8 @@ static int chmod_func(const char *path, mode_t m)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:chmod_func
+//@+node:chown_func
 
 static int chown_func(const char *path, uid_t u, gid_t g) 
 {
@@ -193,6 +243,8 @@ static int chown_func(const char *path, uid_t u, gid_t g)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:chown_func
+//@+node:truncate_func
 
 static int truncate_func(const char *path, off_t o)
 {
@@ -200,6 +252,8 @@ static int truncate_func(const char *path, off_t o)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:truncate_func
+//@+node:utime_func
 
 static int utime_func(const char *path, struct utimbuf *u) {
 	int actime = u ? u->actime : time(NULL);
@@ -209,6 +263,8 @@ static int utime_func(const char *path, struct utimbuf *u) {
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:utime_func
+//@+node:read_func
 
 static int read_func(const char *path, char *buf, size_t s, off_t off)
 {
@@ -221,6 +277,8 @@ static int read_func(const char *path, char *buf, size_t s, off_t off)
 	}
 	EPILOGUE
 }
+//@-node:read_func
+//@+node:write_func
 
 static int write_func(const char *path, const char *buf, size_t t, off_t off)
 {
@@ -228,13 +286,28 @@ static int write_func(const char *path, const char *buf, size_t t, off_t off)
 	PROLOGUE
 	EPILOGUE
 }
+//@-node:write_func
+//@+node:open_func
 
 static int open_func(const char *path, int mode)
 {
 	PyObject *v = PyObject_CallFunction(open_cb, "si", path, mode);
 	PROLOGUE
+    printf("open_func: path=%s\n", path);
 	EPILOGUE
 }
+//@-node:open_func
+//@+node:release_func
+
+static int release_func(const char *path)
+{
+	PyObject *v = PyObject_CallFunction(release_cb, "s", path);
+	PROLOGUE
+    printf("release_func: path=%s\n", path);
+	EPILOGUE
+}
+//@-node:release_func
+//@+node:process_cmd
 
 static void process_cmd(struct fuse *f, struct fuse_cmd *cmd, void *data)
 {
@@ -250,6 +323,8 @@ static void process_cmd(struct fuse *f, struct fuse_cmd *cmd, void *data)
 	PyThreadState_Delete(state);
 	PyEval_ReleaseLock();
 }
+//@-node:process_cmd
+//@+node:pyfuse_loop_mt
 
 static void pyfuse_loop_mt(struct fuse *f)
 {
@@ -263,6 +338,8 @@ static void pyfuse_loop_mt(struct fuse *f)
 	/* Not yet reached: */
 	PyEval_RestoreThread(save);
 }
+//@-node:pyfuse_loop_mt
+//@+node:Fuse_main
 
 
 static PyObject *
@@ -278,15 +355,15 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 		"getattr", "readlink", "getdir", "mknod",
 		"mkdir", "unlink", "rmdir", "symlink", "rename",
 		"link", "chmod", "chown", "truncate", "utime",
-		"open", "read", "write", "flags", "multithreaded", NULL};
+		"open", "read", "write", "release", "flags", "multithreaded", NULL};
 	
 	memset(&op, 0, sizeof(op));
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOii", 
+	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOOii", 
 		kwlist, &getattr_cb, &readlink_cb, &getdir_cb, &mknod_cb,
 		&mkdir_cb, &unlink_cb, &rmdir_cb, &symlink_cb, &rename_cb,
 		&link_cb, &chmod_cb, &chown_cb, &truncate_cb, &utime_cb,
-		&open_cb, &read_cb, &write_cb, &flags, &multithreaded))
+		&open_cb, &read_cb, &write_cb, &release_cb, &flags, &multithreaded))
 		return NULL;
 	
 #define DO_ONE_ATTR(name) if(name ## _cb) { Py_INCREF(name ## _cb); op.name = name ## _func; } else { op.name = NULL; }
@@ -308,6 +385,7 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 	DO_ONE_ATTR(open);
 	DO_ONE_ATTR(read);
 	DO_ONE_ATTR(write);
+    DO_ONE_ATTR(release);
 
 	fuse = fuse_new(0, flags, &op);
 	if(multithreaded)
@@ -315,11 +393,18 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 	else
 		fuse_loop(fuse);
 
+    //printf("Fuse_main: called\n");
+
 	Py_INCREF(Py_None);
 	return Py_None;
 }
-
-/* List of functions defined in the module */
+//@-node:Fuse_main
+//@+node:DL_EXPORT
+//@+at 
+//@nonl
+// List of functions defined in the module
+//@-at
+//@@c
 
 static PyMethodDef Fuse_methods[] = {
 	{"main",	(PyCFunction)Fuse_main,	 METH_VARARGS|METH_KEYWORDS},
@@ -344,11 +429,8 @@ init_fuse(void)
 	PyDict_SetItemString(d, "error", ErrorObject);
 	PyDict_SetItemString(d, "DEBUG", PyInt_FromLong(FUSE_DEBUG));
 }
+//@-node:DL_EXPORT
+//@-others
 
-
-/* 
- * Local Variables:
- * indent-tabs-mode: t
- * c-basic-offset: 8
- * End:
- */
+//@-node:@file _fusemodule.c
+//@-leo

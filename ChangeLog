@@ -1,3 +1,30 @@
+2003-12-11  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Add file locking for mount/unmount (based on patch by Valient
+	Gough)
+
+2003-12-11  David McNab <david@rebirthing.co.nz>
+
+	* Python filesystem - was broken with python2.3, now fixed:
+	   - changed PyTuple_* calls to PySequence_*, because os.lstat
+	     is no longer returning a pure tuple
+	   - changed PyInt_Check() calls to also call PyLong_Check,
+	     to cover for cases (eg os.lstat) where longs are returned
+	   - Added support for file 'release' handling, which IMO is
+	     essential since this signals to a FS that writes to a file
+	     are complete (and therefore the file can now be disposed of
+	     meaningfully at the python filesystem's discretion)
+	   - Added '__init__' handler to base Fuse class, which allows
+	     your Python class to know the mountpoint and mount args,
+	     as attributes myfs.mountpoint, myfs.optlist, myfs.optdict
+	
+	* General:
+	   - added 'mount.fuse' script (in util/ dir), which is meant to be
+	     symlinked from /sbin, and which allows FUSE filesystems to
+	     be mounted with the 'mount' command, and listed in fstab;
+	     also, mount arguments get passed to your filesystem
+
+
 2003-11-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix kernel version detection (again).  Bugreport by Peter Levart
