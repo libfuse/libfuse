@@ -1,5 +1,5 @@
 AC_INIT(lib/fuse.c)
-AM_INIT_AUTOMAKE(fuse, 0.95)
+AM_INIT_AUTOMAKE(fuse, 0.99)
 AM_CONFIG_HEADER(include/config.h)
 
 AC_PROG_CC

@@ -2,8 +2,8 @@
     FUSE: Filesystem in Userspace
     Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
 
-    This program can be distributed under the terms of the GNU GPL.
-    See the file COPYING.
+    This program can be distributed under the terms of the GNU LGPL.
+    See the file COPYING.LIB
 */
 
 #include "fuse_i.h"
@@ -17,8 +17,6 @@
 #include <sys/param.h>
 
 #define FUSE_MAX_PATH 4096
-
-#define FUSE_KERNEL_VERSION_ENV "_FUSE_KERNEL_VERSION"
 
 static inline void inc_avail(struct fuse *f)
 {
@@ -966,17 +964,6 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
 {
     struct fuse *f;
     struct node *root;
-    char verstr[128];
-    char *realver = getenv(FUSE_KERNEL_VERSION_ENV);
-    
-    if(realver != NULL) {
-        sprintf(verstr, "%i", FUSE_KERNEL_VERSION);
-        if(strcmp(verstr, realver) != 0) {
-            fprintf(stderr,
-                    "Warning: FUSE version mismatch: using %s, kernel is %s\n",
-                    realver, verstr);
-        }
-    }
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
 
