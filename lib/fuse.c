@@ -783,6 +783,10 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         do_lookup(f, in, (char *) inarg);
         break;
 
+    case FUSE_FORGET:
+        do_forget(f, in, (struct fuse_forget_in *) inarg);
+        break;
+
     case FUSE_GETATTR:
         do_getattr(f, in);
         break;
@@ -854,31 +858,20 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
     cmd = (struct fuse_cmd *) malloc(sizeof(struct fuse_cmd));
     cmd->buf = (char *) malloc(FUSE_MAX_IN);
 
-    do {
-        res = read(f->fd, cmd->buf, FUSE_MAX_IN);
-        if(res == -1) {
-            perror("reading fuse device");
-            /* BAD... This will happen again */
-            free_cmd(cmd);
-            return NULL;
-        }
-        if((size_t) res < sizeof(struct fuse_in_header)) {
-            fprintf(stderr, "short read on fuse device\n");
-            /* Cannot happen */
-            free_cmd(cmd);
-            return NULL;
-        }
-        cmd->buflen = res;
-
-        /* FORGET is special: it can be done without calling filesystem
-           methods. */
-        in = (struct fuse_in_header *) cmd->buf;
-        if(in->opcode == FUSE_FORGET) {
-            void *inarg = cmd->buf + sizeof(struct fuse_in_header);
-            do_forget(f, in, (struct fuse_forget_in *) inarg);
-        }
-    } while(in->opcode == FUSE_FORGET);
-
+    res = read(f->fd, cmd->buf, FUSE_MAX_IN);
+    if(res == -1) {
+        perror("reading fuse device");
+        /* BAD... This will happen again */
+        free_cmd(cmd);
+        return NULL;
+    }
+    if((size_t) res < sizeof(struct fuse_in_header)) {
+        fprintf(stderr, "short read on fuse device\n");
+        /* Cannot happen */
+        free_cmd(cmd);
+        return NULL;
+    }
+    cmd->buflen = res;
     return cmd;
 }
 
@@ -898,6 +891,17 @@ struct fuse *fuse_new(int fd, int flags)
 {
     struct fuse *f;
     struct node *root;
+    char verstr[128];
+    char *realver = getenv("FUSE_KERNEL_VERSION");
+    
+    if(realver != NULL) {
+        sprintf(verstr, "%i", FUSE_KERNEL_VERSION);
+        if(strcmp(verstr, realver) != 0) {
+            fprintf(stderr,
+                    "Warning: FUSE version mismatch: using %s, kernel is %s\n",
+                    realver, verstr);
+        }
+    }
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
 

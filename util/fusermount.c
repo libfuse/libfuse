@@ -11,10 +11,9 @@
  * NOTE: This program should be part of (or be called from) /bin/mount
  * 
  * Unless that is done, operations on /etc/mtab are not under lock, and so
- * data in it may be lost. (I will _not_ reimplement that locking, and
- * anyway that should be done in libc, if possible.  But probably it is
- * not).
- *
+ * data in this file may be lost. (I will _not_ reimplement that locking,
+ * and anyway that should be done in libc, if possible.  But probably it
+ * isn't).  
  */
 
 #include <stdio.h>
@@ -186,6 +185,10 @@ static int remove_mount(const char *mnt)
     return 0;
 }
 
+/* Until there is a nice interface for capabilities in _libc_, this will
+remain here.  I don't think it is fair to expect users to compile libcap
+for this program.  And anyway what's all this fuss about versioning the
+kernel interface?  It is quite good as is.  */
 #define _LINUX_CAPABILITY_VERSION  0x19980330
 
 typedef struct __user_cap_header_struct {
@@ -409,9 +412,9 @@ int main(int argc, char *argv[])
     int unmount = 0;
     char **userprog;
     int numargs;
-    char **newargv;
     char mypath[PATH_MAX];
     char *unmount_cmd;
+    char verstr[128];
 
     progname = argv[0];
     
@@ -494,15 +497,11 @@ int main(int argc, char *argv[])
 
     unmount_cmd = (char *) malloc(strlen(mypath) + strlen(mnt) + 64);
     sprintf(unmount_cmd, "%s -u %s", mypath, mnt);
+    setenv("FUSE_UNMOUNT_CMD", unmount_cmd, 1);
+    sprintf(verstr, "%i", FUSE_KERNEL_VERSION);
+    setenv("FUSE_KERNEL_VERSION", verstr, 1);
 
-    newargv = (char **) malloc(sizeof(char *) * (numargs + 2));
-    newargv[0] = userprog[0];
-    newargv[1] = unmount_cmd;
-    for(a = 1; a < numargs; a++)
-        newargv[a+1] = userprog[a];
-    newargv[numargs+1] = NULL;
-
-    execvp(userprog[0], newargv);
+    execvp(userprog[0], userprog);
     fprintf(stderr, "%s: failed to exec %s: %s\n", progname, userprog[0],
             strerror(errno));
 

@@ -24,8 +24,6 @@
 #include <utime.h>
 #include <fcntl.h>
 
-static char *unmount_cmd;
-
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
     int res;
@@ -260,11 +258,14 @@ static struct fuse_operations xmp_oper = {
     write:	xmp_write,
 };
 
+static void cleanup()
+{
+    close(0);
+    system(getenv("FUSE_UNMOUNT_CMD"));
+}
 
 static void exit_handler()
 {
-    close(0);
-    system(unmount_cmd);    
     exit(0);
 }
 
@@ -299,19 +300,9 @@ int main(int argc, char *argv[])
     int multithreaded;
     struct fuse *fuse;
 
-    if(argc < 2) {
-        fprintf(stderr,
-                "usage: %s unmount_cmd [options] \n"
-                "Options:\n"
-                "    -d      enable debug output\n"
-                "    -s      disable multithreaded operation\n",
-                argv[0]);
-        exit(1);
-    }
-
     argctr = 1;
-    unmount_cmd = argv[argctr++];
 
+    atexit(cleanup);
     set_signal_handlers();
 
     flags = 0;
@@ -326,6 +317,17 @@ int main(int argc, char *argv[])
             multithreaded = 0;
             break;
 
+        case 'h':
+            fprintf(stderr,
+                    "usage: %s [options] \n"
+                    "Options:\n"
+                    "    -d      enable debug output\n"
+                    "    -s      disable multithreaded operation\n"
+                    "    -h      print help\n",
+                    argv[0]);
+            exit(1);
+            break;
+            
         default:
             fprintf(stderr, "invalid option: %s\n", argv[argctr]);
             exit(1);
