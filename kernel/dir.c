@@ -16,7 +16,7 @@
 #include <linux/mm.h>
 #endif
 #include <linux/sched.h>
-#ifdef KERNEL_2_6_7_PLUS
+#ifdef KERNEL_2_6_8_PLUS
 #include <linux/namei.h>
 #endif
 
@@ -599,7 +599,7 @@ static void free_link(char *link)
 		free_page((unsigned long) link);
 }
 
-#ifdef KERNEL_2_6_7_PLUS
+#ifdef KERNEL_2_6_8_PLUS
 static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	nd_set_link(nd, read_link(dentry));
@@ -1042,7 +1042,7 @@ static struct inode_operations fuse_common_inode_operations = {
 static struct inode_operations fuse_symlink_inode_operations = {
 	.setattr	= fuse_setattr,
 	.follow_link	= fuse_follow_link,
-#ifdef KERNEL_2_6_7_PLUS
+#ifdef KERNEL_2_6_8_PLUS
 	.put_link	= fuse_put_link,
 	.readlink	= generic_readlink,
 #else

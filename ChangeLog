@@ -1,3 +1,7 @@
+2005-01-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix compilation on 2.6.7 
+
 2005-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.2-pre6
