@@ -5,5 +5,5 @@ bin_PROGRAMS = fusermount
 fusermount_SOURCES = fusermount.c
 
 install-exec-hook:
-	chown root $(DESTDIR)$(bindir)/fusermount
-	chmod u+s $(DESTDIR)$(bindir)/fusermount
+	-chown root $(DESTDIR)$(bindir)/fusermount
+	-chmod u+s $(DESTDIR)$(bindir)/fusermount

@@ -1,3 +1,7 @@
+2002-01-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* RPM support by Achim Settelmeier
+
 2002-01-09  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Version 0.95 released
