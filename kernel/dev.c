@@ -68,7 +68,7 @@ static int get_unique(struct fuse_conn *fc)
 void fuse_reset_request(struct fuse_req *req)
 {
 	int preallocated = req->preallocated;
-	
+
 	memset(req, 0, sizeof(*req));
 	INIT_LIST_HEAD(&req->list);
 	init_waitqueue_head(&req->waitq);
@@ -141,11 +141,11 @@ void request_send(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->isreply = 1;
 	req->end = NULL;
-		
+
 	spin_lock(&fuse_lock);
 	req->out.h.error = -ENOTCONN;
 	if (fc->file) {
-		req->in.h.unique = get_unique(fc);		
+		req->in.h.unique = get_unique(fc);
 		list_add_tail(&req->list, &fc->pending);
 		wake_up(&fc->waitq);
 		request_wait_answer(req);
@@ -169,12 +169,12 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 	}
 }
 
-void request_send_async(struct fuse_conn *fc, struct fuse_req *req, 
+void request_send_async(struct fuse_conn *fc, struct fuse_req *req,
 			fuse_reqend_t end)
 {
 	req->end = end;
 	req->isreply = 1;
-	
+
 	spin_lock(&fuse_lock);
 	if (fc->file) {
 		req->in.h.unique = get_unique(fc);
@@ -239,7 +239,7 @@ static inline int copy_in_one(struct fuse_req *req, size_t argsize,
 		printk("fuse_dev_read: buffer too small\n");
 		return -EINVAL;
 	}
-	if (islast && req->in.argpages) 
+	if (islast && req->in.argpages)
 		return copy_in_pages(req, argsize, buf);
 	else if (argsize && copy_to_user(buf, val, argsize))
 		return -EFAULT;
@@ -254,7 +254,7 @@ static int copy_in_args(struct fuse_req *req, char __user *buf, size_t nbytes)
 	struct fuse_in *in = &req->in;
 	size_t orignbytes = nbytes;
 	unsigned argsize;
-	
+
 	argsize = sizeof(in->h);
 	err = copy_in_one(req, argsize, &in->h, 0, buf, nbytes);
 	if (err)
@@ -266,7 +266,7 @@ static int copy_in_args(struct fuse_req *req, char __user *buf, size_t nbytes)
 	for (i = 0; i < in->numargs; i++) {
 		struct fuse_in_arg *arg = &in->args[i];
 		int islast = (i == in->numargs - 1);
-		err = copy_in_one(req, arg->size, arg->value, islast, buf, 
+		err = copy_in_one(req, arg->size, arg->value, islast, buf,
 				  nbytes);
 		if (err)
 			return err;
@@ -407,7 +407,7 @@ static int copy_out_args(struct fuse_req *req, const char __user *buf,
 
 	buf += sizeof(struct fuse_out_header);
 	nbytes -= sizeof(struct fuse_out_header);
-		
+
 	if (!out->h.error) {
 		for (i = 0; i < out->numargs; i++) {
 			struct fuse_out_arg *arg = &out->args[i];
@@ -482,7 +482,7 @@ static int fuse_user_request(struct fuse_conn *fc, const char __user *buf,
 
 	if (copy_from_user(&uh, buf, sizeof(struct fuse_user_header)))
 		return -EFAULT;
-	
+
 	switch (uh.opcode) {
 	case FUSE_INVALIDATE:
 		err = fuse_invalidate(fc, &uh);
@@ -493,7 +493,7 @@ static int fuse_user_request(struct fuse_conn *fc, const char __user *buf,
 	}
 	return err;
 }
-    
+
 static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 			      size_t nbytes, loff_t *off)
 {
@@ -501,7 +501,7 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 	struct fuse_conn *fc = fuse_get_conn(file);
 	struct fuse_req *req;
 	struct fuse_out_header oh;
-	
+
 	if (!fc)
 		return -ENODEV;
 
@@ -512,7 +512,7 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 	if (!oh.unique)	{
 		err = fuse_user_request(fc, buf, nbytes);
 		goto out;
-	}     
+	}
 
         if (oh.error <= -1000 || oh.error > 0) {
                 printk("fuse_dev_write: bad error value\n");
@@ -537,7 +537,7 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 		/* fget() needs to be done in this context */
 		if (req->in.h.opcode == FUSE_GETDIR && !oh.error)
 			process_getdir(req);
-	}	
+	}
 	req->finished = 1;
 	/* Unlocks fuse_lock: */
 	request_end(fc, req);
@@ -652,7 +652,7 @@ static void fuse_version_clean(void)
 	subsystem_unregister(&fuse_subsys);
 #ifndef HAVE_FS_SUBSYS
 	subsystem_unregister(&fs_subsys);
-#endif	
+#endif
 }
 #else
 static struct proc_dir_entry *proc_fs_fuse;
@@ -709,7 +709,7 @@ int __init fuse_dev_init(void)
 					    0, 0, NULL, NULL);
 	if (!fuse_req_cachep)
 		goto out_version_clean;
-	
+
 
 	err = misc_register(&fuse_miscdevice);
 	if (err)

@@ -74,7 +74,7 @@ static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 	else if (S_ISLNK(inode->i_mode)) {
 		inode->i_op = &fuse_symlink_inode_operations;
 	}
-	else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) || 
+	else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
 		 S_ISFIFO(inode->i_mode) || S_ISSOCK(inode->i_mode)) {
 		inode->i_op = &fuse_file_inode_operations;
 		init_special_inode(inode, inode->i_mode,
@@ -175,7 +175,7 @@ struct inode *fuse_ilookup(struct super_block *sb, ino_t ino, unsigned long node
 #endif
 
 static int fuse_send_lookup(struct fuse_conn *fc, struct fuse_req *req,
-			    struct inode *dir, struct dentry *entry, 
+			    struct inode *dir, struct dentry *entry,
 			    struct fuse_entry_out *outarg, int *version)
 {
 	req->in.h.opcode = FUSE_LOOKUP;
@@ -203,7 +203,7 @@ static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 	req = fuse_get_request(fc);
 	if (!req)
 		return -ERESTARTSYS;
-	
+
 	err = fuse_send_lookup(fc, req, dir, entry, outarg, version);
 	fuse_put_request(fc, req);
 	return err;
@@ -215,7 +215,7 @@ static inline unsigned long time_to_jiffies(unsigned long sec,
 	/* prevent wrapping of jiffies */
 	if (sec + 1 >= LONG_MAX / HZ)
 		return 0;
-	
+
 	return jiffies + sec * HZ + nsec / (1000000000 / HZ);
 }
 
@@ -243,7 +243,7 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 			fuse_send_forget(fc, req, outarg.nodeid, version);
 			return -ENOMEM;
 		}
-	} 
+	}
 	fuse_put_request(fc, req);
 	if (err && err != -ENOENT)
 		return err;
@@ -273,7 +273,7 @@ static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 {
 	struct inode *inode;
 	struct fuse_inode *fi;
-	inode = fuse_iget(dir->i_sb, outarg->nodeid, outarg->generation, 
+	inode = fuse_iget(dir->i_sb, outarg->nodeid, outarg->generation,
 			  &outarg->attr, version);
 	if (!inode) {
 		fuse_send_forget(fc, req, outarg->nodeid, version);
@@ -382,7 +382,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	struct fuse_entry_out outarg;
 	unsigned len = strlen(link) + 1;
 	int err;
-	
+
 	if (len > FUSE_SYMLINK_MAX)
 		return -ENAMETOOLONG;
 
@@ -415,7 +415,7 @@ static int fuse_unlink(struct inode *dir, struct dentry *entry)
 	struct fuse_conn *fc = get_fuse_conn(dir);
 	struct fuse_req *req = fuse_get_request(fc);
 	int err;
-	
+
 	if (!req)
 		return -ERESTARTSYS;
 
@@ -428,7 +428,7 @@ static int fuse_unlink(struct inode *dir, struct dentry *entry)
 	err = req->out.h.error;
 	if (!err) {
 		struct inode *inode = entry->d_inode;
-		
+
 		/* Set nlink to zero so the inode can be cleared, if
                    the inode does have more links this will be
                    discovered at the next lookup/getattr */
@@ -445,7 +445,7 @@ static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 	struct fuse_conn *fc = get_fuse_conn(dir);
 	struct fuse_req *req = fuse_get_request(fc);
 	int err;
-	
+
 	if (!req)
 		return -ERESTARTSYS;
 
@@ -550,7 +550,7 @@ int fuse_do_getattr(struct inode *inode)
 	req->out.args[0].size = sizeof(arg);
 	req->out.args[0].value = &arg;
 	request_send(fc, req);
-	err = req->out.h.error;	
+	err = req->out.h.error;
 	if (!err) {
 		struct fuse_inode *fi = get_fuse_inode(inode);
 		change_attributes(inode, &arg.attr);
@@ -612,7 +612,7 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 		   currently if the filesystem suddenly changes the
 		   file mode, we will not be informed about it, and
 		   continue to allow access to the file/directory.
-		   
+
 		   This is actually not so grave, since the user can
 		   simply keep access to the file/directory anyway by
 		   keeping it open... */
@@ -669,7 +669,7 @@ static int fuse_checkdir(struct file *cfile, struct file *file)
 		fput(cfile);
 		return -EPROTO;
 	}
-	
+
 	file->private_data = cfile;
 	return 0;
 }
@@ -691,7 +691,7 @@ static int fuse_getdir(struct file *file)
 	req->out.args[0].size = sizeof(struct fuse_getdir_out);
 	req->out.args[0].value = &outarg;
 	request_send(fc, req);
-	err = req->out.h.error;	
+	err = req->out.h.error;
 	if (!err)
 		err = fuse_checkdir(outarg.file, file);
 	fuse_put_request(fc, req);
@@ -715,11 +715,11 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 	buf = (char *) __get_free_page(GFP_KERNEL);
 	if (!buf)
 		return -ENOMEM;
-	
+
 	ret = kernel_read(cfile, file->f_pos, buf, PAGE_SIZE);
 	if (ret < 0)
 		printk("fuse_readdir: failed to read container file\n");
-	else 
+	else
 		ret = parse_dirfile(buf, ret, file, dstbuf, filldir);
 
 	free_page((unsigned long) buf);
@@ -807,9 +807,9 @@ static unsigned iattr_to_fattr(struct iattr *iattr, struct fuse_attr *fattr)
 {
 	unsigned ivalid = iattr->ia_valid;
 	unsigned fvalid = 0;
-	
+
 	memset(fattr, 0, sizeof(*fattr));
-	
+
 	if (ivalid & ATTR_MODE)
 		fvalid |= FATTR_MODE,   fattr->mode = iattr->ia_mode;
 	if (ivalid & ATTR_UID)
@@ -843,7 +843,7 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	struct fuse_attr_out outarg;
 	int err;
 	int is_truncate = 0;
-	
+
 	if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
 		err = inode_change_ok(inode, attr);
 		if (err)
@@ -898,7 +898,7 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 					     outarg.attr_valid_nsec);
 	} else if (is_truncate)
 		up_write(&fi->write_sem);
-		
+
 	return err;
 }
 
@@ -912,15 +912,15 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 		struct fuse_entry_out outarg;
 		int version;
 		int ret;
-		
+
 		ret = fuse_do_lookup(entry->d_parent->d_inode, entry, &outarg,
 				     &version);
 		if (ret)
 			return 0;
-		
+
 		if (outarg.nodeid != get_node_id(inode))
 			return 0;
-		
+
 		change_attributes(inode, &outarg.attr);
 		inode->i_version = version;
 		entry->d_time = time_to_jiffies(outarg.entry_valid,
@@ -939,7 +939,7 @@ static int fuse_getattr(struct vfsmount *mnt, struct dentry *entry,
 	int err = fuse_revalidate(entry);
 	if (!err)
 		generic_fillattr(inode, stat);
-	
+
 	return err;
 }
 
@@ -1146,7 +1146,7 @@ static int fuse_removexattr(struct dentry *entry, const char *name)
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_req *req;
 	int err;
-	
+
 	if (fc->no_removexattr)
 		return -EOPNOTSUPP;
 
@@ -1243,6 +1243,6 @@ static struct dentry_operations fuse_dentry_operations = {
 #ifdef KERNEL_2_6
 	.d_revalidate	= fuse_dentry_revalidate,
 #else
-	.d_revalidate	= fuse_dentry_revalidate_2_4,	
+	.d_revalidate	= fuse_dentry_revalidate_2_4,
 #endif
 };

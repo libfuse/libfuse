@@ -42,7 +42,7 @@ MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_o
 #define FS_SAFE 0
 #endif
 #ifndef MAX_LFS_FILESIZE
-#define MAX_LFS_FILESIZE (((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1) 
+#define MAX_LFS_FILESIZE (((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1)
 #endif
 struct fuse_mount_data {
 	int fd;
@@ -173,7 +173,7 @@ enum {
 	OPT_FD,
 	OPT_ROOTMODE,
 	OPT_UID,
-	OPT_DEFAULT_PERMISSIONS, 
+	OPT_DEFAULT_PERMISSIONS,
 	OPT_ALLOW_OTHER,
 	OPT_ALLOW_ROOT,
 	OPT_KERNEL_CACHE,
@@ -182,7 +182,7 @@ enum {
 #endif
 	OPT_DIRECT_IO,
 	OPT_MAX_READ,
-	OPT_ERR 
+	OPT_ERR
 };
 
 static match_table_t tokens = {
@@ -214,7 +214,7 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 		substring_t args[MAX_OPT_ARGS];
 		if (!*p)
 			continue;
-		
+
 		token = match_token(p, tokens, args);
 		switch (token) {
 		case OPT_FD:
@@ -228,13 +228,13 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 				return 0;
 			d->rootmode = value;
 			break;
-			
+
 		case OPT_UID:
 			if (match_int(&args[0], &value))
 				return 0;
 			d->uid = value;
 			break;
-			
+
 		case OPT_DEFAULT_PERMISSIONS:
 			d->flags |= FUSE_DEFAULT_PERMISSIONS;
 			break;
@@ -251,7 +251,7 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
 
-#ifndef FUSE_MAINLINE			
+#ifndef FUSE_MAINLINE
 		case OPT_LARGE_READ:
 #ifndef KERNEL_2_6
 			d->flags |= FUSE_LARGE_READ;
@@ -265,7 +265,7 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			}
 #endif
 			break;
-#endif			
+#endif
 		case OPT_DIRECT_IO:
 			d->flags |= FUSE_DIRECT_IO;
 			break;
@@ -432,7 +432,7 @@ static int fuse_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len,
 	struct inode *inode = dentry->d_inode;
 	int len = *max_len;
 	int type = 1;
-	
+
 	if (len < 2 || (connectable && len < 4))
 		return 255;
 
@@ -472,7 +472,7 @@ static struct super_operations fuse_super_operations = {
 };
 
 static int fuse_read_super(struct super_block *sb, void *data, int silent)
-{	
+{
 	struct fuse_conn *fc;
 	struct inode *root;
 	struct fuse_mount_data d;
@@ -512,7 +512,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 		fc->bdi.ra_pages = fc->max_read / PAGE_CACHE_SIZE;
 #endif
 	fc->max_write = FUSE_MAX_IN / 2;
-	
+
 	*get_fuse_conn_super_p(sb) = fc;
 
 	root = get_root_inode(sb, d.rootmode);

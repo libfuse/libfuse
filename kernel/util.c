@@ -33,11 +33,11 @@ int __init fuse_init(void)
 	res = fuse_fs_init();
 	if (res)
 		goto err;
-	
+
 	res = fuse_dev_init();
 	if (res)
 		goto err_fs_cleanup;
-	
+
 	return 0;
 
  err_fs_cleanup:
@@ -49,7 +49,7 @@ int __init fuse_init(void)
 void __exit fuse_exit(void)
 {
 	printk(KERN_DEBUG "fuse exit\n");
-	
+
 	fuse_fs_cleanup();
 	fuse_dev_cleanup();
 }

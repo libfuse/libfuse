@@ -37,7 +37,7 @@
 #     define i_size_read(inode) ((inode)->i_size)
 #     define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
 #  endif
-#endif 
+#endif
 #endif /* FUSE_MAINLINE */
 #include <linux/fs.h>
 #include <linux/wait.h>
@@ -125,7 +125,7 @@ struct fuse_in_arg {
 struct fuse_in {
 	/** The request header */
 	struct fuse_in_header h;
-	
+
 	/** True if the data for the last argument is in req->pages */
 	unsigned argpages:1;
 
@@ -191,7 +191,6 @@ struct fuse_req {
 		struct {
 			struct fuse_write_in in;
 			struct fuse_write_out out;
-			
 		} write;
 		struct fuse_read_in read_in;
 		struct fuse_forget_in forget_in;
@@ -217,7 +216,7 @@ struct fuse_req {
 struct fuse_conn {
 	/** The superblock of the mounted filesystem */
 	struct super_block *sb;
-	
+
 	/** The opened client device */
 	struct file *file;
 
@@ -250,10 +249,10 @@ struct fuse_conn {
 
 	/** The list of unused requests */
 	struct list_head unused_list;
-	
+
 	/** The next unique request id */
 	int reqctr;
-	
+
 	/** Is fsync not implemented by fs? */
 	unsigned no_fsync : 1;
 
@@ -319,7 +318,7 @@ extern struct file_operations fuse_dev_operations;
  * This is the single global spinlock which protects FUSE's structures
  *
  * The following data is protected by this lock:
- * 
+ *
  *  - the private_data field of the device file
  *  - the s_fs_info field of the super block
  *  - unused_list, pending, processing lists in fuse_conn
@@ -369,7 +368,7 @@ int fuse_dev_init(void);
 void fuse_dev_cleanup(void);
 
 /**
- * Initialize the fuse filesystem 
+ * Initialize the fuse filesystem
  */
 int fuse_fs_init(void);
 
@@ -378,7 +377,7 @@ int fuse_fs_init(void);
  */
 void fuse_fs_cleanup(void);
 
-/** 
+/**
  * Allocate a request
  */
 struct fuse_req *fuse_request_alloc(void);
@@ -426,7 +425,7 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
 /**
  * Send asynchronous request
  */
-void request_send_async(struct fuse_conn *fc, struct fuse_req *req, 
+void request_send_async(struct fuse_conn *fc, struct fuse_req *req,
 			fuse_reqend_t end);
 
 /**
