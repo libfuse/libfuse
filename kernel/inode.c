@@ -82,7 +82,8 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 	inode->u.generic_ip = NULL;
 #endif
 	fi = get_fuse_inode(inode);
-	memset(fi, 0, sizeof(*fi));
+	fi->i_time = jiffies - 1;
+	fi->nodeid = 0;
 	fi->forget_req = fuse_request_alloc();
 	if (!fi->forget_req) {
 		kmem_cache_free(fuse_inode_cachep, inode);
@@ -619,7 +620,7 @@ static int inc_mount_count(void)
 	return success;
 }
 
-static int fuse_read_super(struct super_block *sb, void *data, int silent)
+static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct fuse_conn *fc;
 	struct inode *root;
@@ -696,7 +697,7 @@ static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
 				       int flags, const char *dev_name,
 				       void *raw_data)
 {
-	return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
+	return get_sb_nodev(fs_type, flags, raw_data, fuse_fill_super);
 }
 
 static struct file_system_type fuse_fs_type = {
@@ -712,7 +713,7 @@ static struct file_system_type fuse_fs_type = {
 static struct super_block *fuse_read_super_compat(struct super_block *sb,
 						  void *data, int silent)
 {
-	int err = fuse_read_super(sb, data, silent);
+	int err = fuse_fill_super(sb, data, silent);
 	if (err)
 		return NULL;
 	else
@@ -722,7 +723,7 @@ static struct super_block *fuse_read_super_compat(struct super_block *sb,
 static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
 #endif
 
-static void fuse_inode_init_once(void * foo, kmem_cache_t * cachep,
+static void fuse_inode_init_once(void *foo, kmem_cache_t *cachep,
 				 unsigned long flags)
 {
 	struct inode * inode = foo;
@@ -741,7 +742,7 @@ static int __init fuse_fs_init(void)
 		printk("fuse: failed to register filesystem\n");
 	else {
 		fuse_inode_cachep = kmem_cache_create("fuse_inode",
-						      sizeof(struct inode) + sizeof(struct fuse_inode) ,
+						      sizeof(struct fuse_inode),
 						      0, SLAB_HWCACHE_ALIGN,
 						      fuse_inode_init_once, NULL);
 		if (!fuse_inode_cachep) {
@@ -759,7 +760,7 @@ static void fuse_fs_cleanup(void)
 	kmem_cache_destroy(fuse_inode_cachep);
 }
 
-int __init fuse_init(void)
+static int __init fuse_init(void)
 {
 	int res;
 
@@ -786,7 +787,7 @@ int __init fuse_init(void)
 	return res;
 }
 
-void __exit fuse_exit(void)
+static void __exit fuse_exit(void)
 {
 	printk(KERN_DEBUG "fuse exit\n");
 

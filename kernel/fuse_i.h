@@ -21,6 +21,9 @@
 #  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)
 #    define KERNEL_2_6_6_PLUS
 #  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,7)
+#    define KERNEL_2_6_7_PLUS
+#  endif
 #  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 #    define KERNEL_2_6_10_PLUS
 #  endif
@@ -97,8 +100,11 @@ static inline void set_page_dirty_lock(struct page *page)
     filesystems */
 #define FUSE_ALLOW_ROOT		 (1 << 4)
 
-/** FUSE specific inode data */
+/** FUSE inode */
 struct fuse_inode {
+	/** Inode data */
+	struct inode inode;
+
 	/** Unique ID, which identifies the inode between userspace
 	 * and kernel */
 	u64 nodeid;
@@ -336,7 +342,7 @@ static inline struct fuse_conn *get_fuse_conn(struct inode *inode)
 
 static inline struct fuse_inode *get_fuse_inode(struct inode *inode)
 {
-	return (struct fuse_inode *) (&inode[1]);
+	return container_of(inode, struct fuse_inode, inode);
 }
 
 static inline u64 get_node_id(struct inode *inode)

@@ -1,3 +1,12 @@
+2005-01-11  Miklos Szeredi <miklos@szeredi.hu>
+
+	* KERNEL: fix possible inode allocation problem, where
+	sizeof(struct inode) is not aligned (found by Mike Waychison)
+
+	* KERNEL: use new follow_link/put_link methods
+
+	* KERNEL: cosmetic fixes
+
 2005-01-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.2-pre3

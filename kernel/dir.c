@@ -16,15 +16,15 @@
 #include <linux/mm.h>
 #endif
 #include <linux/sched.h>
+#ifdef KERNEL_2_6_7_PLUS
+#include <linux/namei.h>
+#endif
 
 static inline unsigned long time_to_jiffies(unsigned long sec,
 					    unsigned long nsec)
 {
-	/* prevent wrapping of jiffies */
-	if (sec + 1 >= LONG_MAX / HZ)
-		return 0;
-
-	return jiffies + sec * HZ + nsec / (1000000000 / HZ);
+	struct timespec ts = {sec, nsec};
+	return jiffies + timespec_to_jiffies(&ts);
 }
 
 static void fuse_lookup_init(struct fuse_req *req, struct inode *dir,
@@ -46,7 +46,7 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 {
 	if (!entry->d_inode || is_bad_inode(entry->d_inode))
 		return 0;
-	else if (entry->d_time && time_after(jiffies, entry->d_time)) {
+	else if (time_after(jiffies, entry->d_time)) {
 		int err;
 		int version;
 		struct fuse_entry_out outarg;
@@ -440,7 +440,7 @@ static int fuse_revalidate(struct dentry *entry)
 		    (!(fc->flags & FUSE_ALLOW_ROOT) ||
 		     current->fsuid != 0))
 			return -EACCES;
-	} else if (!fi->i_time || time_before_eq(jiffies, fi->i_time))
+	} else if (time_before_eq(jiffies, fi->i_time))
 		return 0;
 
 	return fuse_do_getattr(inode);
@@ -624,6 +624,18 @@ static void free_link(char *link)
 		free_page((unsigned long) link);
 }
 
+#ifdef KERNEL_2_6_7_PLUS
+static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
+{
+	nd_set_link(nd, read_link(dentry));
+	return 0;
+}
+
+static void fuse_put_link(struct dentry *dentry, struct nameidata *nd)
+{
+	free_link(nd_get_link(nd));
+}
+#else
 static int fuse_readlink(struct dentry *dentry, char __user *buffer,
 			 int buflen)
 {
@@ -646,6 +658,7 @@ static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
 	free_link(link);
 	return ret;
 }
+#endif
 
 static int fuse_dir_open(struct inode *inode, struct file *file)
 {
@@ -1054,8 +1067,13 @@ static struct inode_operations fuse_common_inode_operations = {
 
 static struct inode_operations fuse_symlink_inode_operations = {
 	.setattr	= fuse_setattr,
-	.readlink	= fuse_readlink,
 	.follow_link	= fuse_follow_link,
+#ifdef KERNEL_2_6_7_PLUS
+	.put_link	= fuse_put_link,
+	.readlink	= generic_readlink,
+#else
+	.readlink	= fuse_readlink,
+#endif
 #ifdef KERNEL_2_6
 	.getattr	= fuse_getattr,
 #else
