@@ -151,7 +151,7 @@ static int remove_mount(const char *mnt)
             }
         }
         if(remove) {
-            res = umount(mnt);
+            res = umount2(mnt, 2);  /* Lazy umount */
             if(res == -1) {
                 fprintf(stderr, "%s: failed to unmount %s: %s\n", progname,
                         mnt, strerror(errno));
@@ -353,7 +353,7 @@ static int mount_fuse(const char *mnt, int flags)
         pid_t pid = fork();
         if(pid == 0) {
             setuid(0);
-            execl("/sbin/modprobe", "modprobe", "fuse", NULL);
+            execl("/sbin/modprobe", "/sbin/modprobe", "fuse", NULL);
             exit(1);
         }
         if(pid != -1)
