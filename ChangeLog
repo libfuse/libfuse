@@ -5,6 +5,8 @@
 
 	* fusermount: set owner and group of /etc/mtab to original values
 	on unmount
+
+	* libfuse: add 'use_ino' option to help.  Patch by Valient Gough
 	
 2005-02-07  Miklos Szeredi <miklos@szeredi.hu>
 

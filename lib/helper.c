@@ -43,7 +43,8 @@ static void usage(const char *progname)
             "    max_read=N             set maximum size of read requests\n"
             "    hard_remove            immediate removal (don't hide files)\n"
             "    debug                  enable debug output\n"
-            "    fsname=NAME            set filesystem name in mtab\n");
+            "    fsname=NAME            set filesystem name in mtab\n"
+            "    use_ino                let filesystem set inode numbers\n");
 }
 
 static void invalid_option(const char *argv[], int argctr)
