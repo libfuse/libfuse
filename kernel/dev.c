@@ -78,12 +78,14 @@ static void request_wait_answer(struct fuse_req *req, int interruptible)
 		return;
 
 	/* Request interrupted... Wait for it to be unlocked */
-	if (req->locked) {
+	while (req->locked) {
 		req->interrupted = 1;
 		spin_unlock(&fuse_lock);
 		wait_event(req->waitq, !req->locked);
 		spin_lock(&fuse_lock);
 	}
+	if (req->finished)
+		return;
 	
 	/* Operations which modify the filesystem cannot safely be
 	   restarted, because it is uncertain whether the operation has
