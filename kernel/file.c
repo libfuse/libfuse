@@ -118,9 +118,9 @@ static int fuse_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_inode *fi = INO_FI(inode);
-	struct fuse_release_in *inarg;
 	struct fuse_file *ff = file->private_data;
 	struct fuse_req *req = ff->release_req;
+	struct fuse_release_in inarg;
 	
 	down(&inode->i_sem);
 	if (file->f_mode & FMODE_WRITE)
@@ -132,14 +132,14 @@ static int fuse_release(struct inode *inode, struct file *file)
 		up_write(&fi->write_sem);
 	}
 
-	inarg = &req->misc.release_in;
-	inarg->fh = ff->fh;
-	inarg->flags = file->f_flags & ~O_EXCL;
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.fh = ff->fh;
+	inarg.flags = file->f_flags & ~O_EXCL;
 	req->in.h.opcode = FUSE_RELEASE;
 	req->in.h.nodeid = fi->nodeid;
 	req->in.numargs = 1;
-	req->in.args[0].size = sizeof(struct fuse_release_in);
-	req->in.args[0].value = inarg;
+	req->in.args[0].size = sizeof(inarg);
+	req->in.args[0].value = &inarg;
 	request_send(fc, req);
 	fuse_put_request(fc, req);
 	kfree(ff);

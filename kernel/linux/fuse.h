@@ -76,7 +76,7 @@ enum fuse_opcode {
 	FUSE_READ	   = 15,
 	FUSE_WRITE	   = 16,
 	FUSE_STATFS	   = 17,
-	FUSE_RELEASE       = 18, /* no reply */
+	FUSE_RELEASE       = 18,
 	FUSE_INVALIDATE    = 19, /* user initiated */
 	FUSE_FSYNC         = 20,
 	FUSE_SETXATTR      = 21,
@@ -231,10 +231,3 @@ struct fuse_dirent {
 #define FUSE_DIRENT_ALIGN(x) (((x) + sizeof(long) - 1) & ~(sizeof(long) - 1))
 #define FUSE_DIRENT_SIZE(d) \
 	FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + (d)->namelen)
-
-/* 
- * Local Variables:
- * indent-tabs-mode: t
- * c-basic-offset: 8
- * End:
- */

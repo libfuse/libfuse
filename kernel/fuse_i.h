@@ -193,7 +193,6 @@ struct fuse_req {
 			
 		} write;
 		struct fuse_read_in read_in;
-		struct fuse_release_in release_in;
 		struct fuse_forget_in forget_in;
 	} misc;
 
