@@ -11,18 +11,12 @@
 #define _XOPEN_SOURCE 500
 #endif
 
-/* For setgroups() */
-#define _BSD_SOURCE
-
 #include <fuse.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
-#include <signal.h>
-#include <utime.h>
-#include <fcntl.h>
 
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
@@ -237,7 +231,6 @@ static int xmp_write(const char *path, const char *buf, size_t size,
     return res;
 }
 
-
 static struct fuse_operations xmp_oper = {
     getattr:	xmp_getattr,
     readlink:	xmp_readlink,
@@ -258,93 +251,8 @@ static struct fuse_operations xmp_oper = {
     write:	xmp_write,
 };
 
-static void cleanup()
-{
-    close(0);
-    system(getenv("FUSE_UNMOUNT_CMD"));
-}
-
-static void exit_handler()
-{
-    exit(0);
-}
-
-static void set_signal_handlers()
-{
-    struct sigaction sa;
-
-    sa.sa_handler = exit_handler;
-    sigemptyset(&(sa.sa_mask));
-    sa.sa_flags = 0;
-
-    if (sigaction(SIGHUP, &sa, NULL) == -1 || 
-	sigaction(SIGINT, &sa, NULL) == -1 || 
-	sigaction(SIGTERM, &sa, NULL) == -1) {
-	
-	perror("Cannot set exit signal handlers");
-        exit(1);
-    }
-
-    sa.sa_handler = SIG_IGN;
-    
-    if(sigaction(SIGPIPE, &sa, NULL) == -1) {
-	perror("Cannot set ignored signals");
-        exit(1);
-    }
-}
-
 int main(int argc, char *argv[])
 {
-    int argctr;
-    int flags;
-    int multithreaded;
-    struct fuse *fuse;
-
-    argctr = 1;
-
-    atexit(cleanup);
-    set_signal_handlers();
-
-    flags = 0;
-    multithreaded = 1;
-    for(; argctr < argc && argv[argctr][0] == '-'; argctr ++) {
-        switch(argv[argctr][1]) {
-        case 'd':
-            flags |= FUSE_DEBUG;
-            break;
-
-        case 's':
-            multithreaded = 0;
-            break;
-
-        case 'h':
-            fprintf(stderr,
-                    "usage: %s [options] \n"
-                    "Options:\n"
-                    "    -d      enable debug output\n"
-                    "    -s      disable multithreaded operation\n"
-                    "    -h      print help\n",
-                    argv[0]);
-            exit(1);
-            break;
-            
-        default:
-            fprintf(stderr, "invalid option: %s\n", argv[argctr]);
-            exit(1);
-        }
-    }
-    if(argctr != argc) {
-        fprintf(stderr, "missing or surplus argument\n");
-        exit(1);
-    }
-
-    fuse = fuse_new(0, flags);
-    fuse_set_operations(fuse, &xmp_oper);
-
-    if(multithreaded)
-        fuse_loop_mt(fuse);
-    else
-        fuse_loop(fuse);
-
+    fuse_main(argc, argv, &xmp_oper);
     return 0;
 }

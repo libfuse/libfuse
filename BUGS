@@ -5,3 +5,7 @@
 
 - I want really low priority for my cached pages.  Can they start out
   'old' so they will be thrown out on the first oportunity?
+
+- File size change could cause some strange behavior WRT the page
+  cache.
+

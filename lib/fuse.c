@@ -17,6 +17,8 @@
 
 #define FUSE_MAX_PATH 4096
 
+#define FUSE_KERNEL_VERSION_ENV "_FUSE_KERNEL_VERSION"
+
 static struct node *__get_node(struct fuse *f, fino_t ino)
 {
     size_t hash = ino % f->ino_table_size;
@@ -891,7 +893,7 @@ struct fuse *fuse_new(int fd, int flags)
     struct fuse *f;
     struct node *root;
     char verstr[128];
-    char *realver = getenv("FUSE_KERNEL_VERSION");
+    char *realver = getenv(FUSE_KERNEL_VERSION_ENV);
     
     if(realver != NULL) {
         sprintf(verstr, "%i", FUSE_KERNEL_VERSION);

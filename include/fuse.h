@@ -12,6 +12,10 @@
 #include <sys/stat.h>
 #include <utime.h>
 
+/* ----------------------------------------------------------- *
+ * Basic FUSE API                                              *
+ * ----------------------------------------------------------- */
+
 /** Handle for a FUSE filesystem */
 struct fuse;
 
@@ -81,6 +85,7 @@ struct fuse_operations {
 /** Enable debuging output */
 #define FUSE_DEBUG       (1 << 1)
 
+
 /**
  * Create a new FUSE filesystem.
  *
@@ -108,6 +113,7 @@ void fuse_set_operations(struct fuse *f, const struct fuse_operations *op);
  * operations are called. 
  *
  * @param f the FUSE handle
+ * @prarm op the file system operations
  */
 void fuse_loop(struct fuse *f);
 
@@ -134,6 +140,30 @@ void fuse_loop_mt(struct fuse *f);
  */
 void fuse_destroy(struct fuse *f);
 
+/* ----------------------------------------------------------- *
+ * Miscellaneous helper fuctions                               *
+ * ----------------------------------------------------------- */
+
+/*
+ * Main function of FUSE.
+ *
+ * This is for the lazy.  This is all that has to be called from the
+ * main() function.
+ * 
+ * This function does the following:
+ *   - mounts the filesystem
+ *   - installs signal handlers for INT, HUP, TERM and PIPE
+ *   - registers an exit handler to unmount the filesystem on program exit
+ *   - parses command line options (-d -s and -h)
+ *   - creates a fuse handle
+ *   - registers the operations
+ *   - calls either the single-threaded or the multi-threaded event loop
+ *
+ * @param argc the argument counter passed to the main() function
+ * @param argv the argument vector passed to the main() function
+ * @prarm op the file system operation 
+ */
+void fuse_main(int argc, char *argv[], const struct fuse_operations *op);
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *

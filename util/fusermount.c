@@ -39,6 +39,10 @@
 
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
+#define FUSE_MOUNTED_ENV        "_FUSE_MOUNTED"
+#define FUSE_UMOUNT_CMD_ENV     "_FUSE_UNMOUNT_CMD"
+#define FUSE_KERNEL_VERSION_ENV "_FUSE_KERNEL_VERSION"
+
 const char *progname;
 
 static const char *get_user_name()
@@ -497,9 +501,10 @@ int main(int argc, char *argv[])
 
     unmount_cmd = (char *) malloc(strlen(mypath) + strlen(mnt) + 64);
     sprintf(unmount_cmd, "%s -u %s", mypath, mnt);
-    setenv("FUSE_UNMOUNT_CMD", unmount_cmd, 1);
+    setenv(FUSE_UMOUNT_CMD_ENV, unmount_cmd, 1);
     sprintf(verstr, "%i", FUSE_KERNEL_VERSION);
-    setenv("FUSE_KERNEL_VERSION", verstr, 1);
+    setenv(FUSE_KERNEL_VERSION_ENV, verstr, 1);
+    setenv(FUSE_MOUNTED_ENV, "", 1);
 
     execvp(userprog[0], userprog);
     fprintf(stderr, "%s: failed to exec %s: %s\n", progname, userprog[0],
