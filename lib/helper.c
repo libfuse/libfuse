@@ -26,12 +26,12 @@ static void usage(const char *progname)
 
     fprintf(stderr,
             "FUSE options:\n"
-            "    -d                  enable debug output (implies -f)\n"
-            "    -f                  foreground operation\n"
-            "    -s                  disable multithreaded operation\n"
-            "    -r                  mount read only (equivalent to '-o ro')\n"
-            "    -o opt,[opt...]     mount options\n"
-            "    -h                  print help\n"
+            "    -d                     enable debug output (implies -f)\n"
+            "    -f                     foreground operation\n"
+            "    -s                     disable multithreaded operation\n"
+            "    -r                     mount read only (equivalent to '-o ro')\n"
+            "    -o opt,[opt...]        mount options\n"
+            "    -h                     print help\n"
             "\n"
             "Mount options:\n"
             "    default_permissions    enable permission checking\n"
