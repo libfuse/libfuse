@@ -4,6 +4,8 @@
 	is '.' or '..'.  This new path resolvation is now done on mount as
 	well as unmount.  This enables relative paths to work on unmount.
 
+	* fusermount: parse common mount options like "ro", "rw", etc...
+
 	* Allow module params to be changed through sysfs
 
 2004-11-14  Miklos Szeredi <miklos@szeredi.hu>
