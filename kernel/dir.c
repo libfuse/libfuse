@@ -724,11 +724,16 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 {
 	struct inode *inode = entry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_req *req = fuse_get_request(fc);
+	struct fuse_req *req;
 	struct fuse_setattr_in inarg;
 	struct fuse_attr_out outarg;
 	int err;
-	
+
+	/* FIXME: need to fix race between truncate and writepage */
+	if (attr->ia_valid & ATTR_SIZE)	
+		fuse_sync_inode(inode);
+
+	req = fuse_get_request(fc);
 	if (!req)
 		return -ERESTARTSYS;
 

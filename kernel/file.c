@@ -17,13 +17,6 @@
 
 #ifndef KERNEL_2_6
 #define PageUptodate(page) Page_Uptodate(page)
-#ifndef filemap_fdatawrite
-#ifndef NO_MM
-#define filemap_fdatawrite filemap_fdatasync
-#else
-#define filemap_fdatawrite do {} while (0)
-#endif
-#endif
 #endif
 
 static int fuse_open(struct inode *inode, struct file *file)
@@ -85,16 +78,29 @@ static int fuse_open(struct inode *inode, struct file *file)
 	return err;
 }
 
+void fuse_sync_inode(struct inode *inode)
+{
+#ifdef KERNEL_2_6
+	filemap_fdatawrite(inode->i_mapping);
+	filemap_fdatawait(inode->i_mapping);
+#else
+#ifndef NO_MM
+	filemap_fdatasync(inode->i_mapping);
+	filemap_fdatawait(inode->i_mapping);
+#endif
+#endif
+}
+
 static int fuse_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_open_in *inarg;
 	struct fuse_req *req = file->private_data;
 	
-	if (file->f_mode & FMODE_WRITE)
-		filemap_fdatawrite(inode->i_mapping);
-
 	down(&inode->i_sem);
+	if (file->f_mode & FMODE_WRITE)
+		fuse_sync_inode(inode);
+
 	inarg = &req->misc.open_in;
 	inarg->flags = file->f_flags & ~O_EXCL;
 	req->in.h.opcode = FUSE_RELEASE;
