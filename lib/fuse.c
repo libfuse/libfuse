@@ -12,6 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <assert.h>
 
 
 static guint name_hash(const struct node *node)
@@ -29,7 +30,7 @@ static gint name_compare(const struct node *node1, const struct node *node2)
 static struct node *new_node(fino_t parent, const char *name)
 {
     struct node *node = g_new0(struct node, 1);
-    node->name = strdup(name);
+    node->name = g_strdup(name);
     node->parent = parent;
     return node;
 }
@@ -51,15 +52,22 @@ static inline fino_t get_ino(struct node *node)
     return (((fino_t) node) - 0x8000000) >> 3;
 }
 
+static struct node *lookup_node(struct fuse *f, fino_t parent,
+                                const char *name)
+{
+    struct node tmp;
+
+    tmp.name = (char *) name;
+    tmp.parent = parent;
+
+    return g_hash_table_lookup(f->nametab, &tmp);
+}
+
 static fino_t find_node(struct fuse *f, fino_t parent, char *name, int create)
 {
     struct node *node;
-    struct node tmp;
-    
-    tmp.name = name;
-    tmp.parent = parent;
 
-    node = g_hash_table_lookup(f->nametab, &tmp);
+    node = lookup_node(f, parent, name);
     if(node != NULL)
         return get_ino(node);
 
@@ -109,6 +117,27 @@ static void remove_node(struct fuse *f, fino_t ino)
     free_node(node);
 }
 
+static void rename_node(struct fuse *f, fino_t olddir, const char *oldname,
+                        fino_t newdir, const char *newname)
+{
+    struct node *node = lookup_node(f, olddir, oldname);
+    struct node *newnode = lookup_node(f, newdir, newname);
+        
+    assert(node != NULL);
+
+    /* The overwritten node is left to dangle until deleted */
+    if(newnode != NULL)
+        g_hash_table_remove(f->nametab, newnode);
+        
+    /* The renamed node is not freed, since it's pointer is the key */
+    g_hash_table_remove(f->nametab, node);
+    g_free(node->name);
+    node->name = g_strdup(newname);
+    node->parent = newdir;
+    g_hash_table_insert(f->nametab, node, node);
+}
+
+
 static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 {
     attr->mode    = stbuf->st_mode;
@@ -122,23 +151,6 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
     attr->atime   = stbuf->st_atime;
     attr->mtime   = stbuf->st_mtime;
     attr->ctime   = stbuf->st_ctime;
-}
-
-static int get_attributes(struct fuse *f, fino_t ino, struct fuse_attr *attr)
-{
-    char *path;
-    struct stat buf;
-    int res;
-
-    path = get_path(ino);
-    res = -ENOSYS;
-    if(f->op.getattr)
-        res = f->op.getattr(path, &buf);
-    g_free(path);
-    if(res == 0) 
-        convert_stat(&buf, attr);
-    
-    return res;
 }
 
 static int fill_dir(struct fuse_dh *dh, char *name, int type)
@@ -160,7 +172,7 @@ static int fill_dir(struct fuse_dh *dh, char *name, int type)
     return 0;
 }
 
-static void send_reply(struct fuse *f, struct fuse_in_header *in, int result,
+static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
                        void *arg, size_t argsize)
 {
     int res;
@@ -168,25 +180,24 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int result,
     size_t outsize;
     struct fuse_out_header *out;
 
-    if(result > 0) {
-        fprintf(stderr, "positive result to operation %i : %i\n", in->opcode,
-                result);
-        result = -ERANGE;
+    if(error > 0) {
+        fprintf(stderr, "positive error code: %i\n",  error);
+        error = -ERANGE;
     }
 
-    if(result != 0)
+    if(error)
         argsize = 0;
 
     outsize = sizeof(struct fuse_out_header) + argsize;
     outbuf = (char *) g_malloc(outsize);
     out = (struct fuse_out_header *) outbuf;
     out->unique = in->unique;
-    out->result = result;
+    out->error = error;
     if(argsize != 0)
         memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
 
-    printf("   unique: %i, result: %i (%s), outsize: %i\n", out->unique,
-           out->result, strerror(-out->result), outsize);
+    printf("   unique: %i, error: %i (%s), outsize: %i\n", out->unique,
+           out->error, strerror(-out->error), outsize);
                 
     res = write(f->fd, outbuf, outsize);
     if(res == -1)
@@ -198,11 +209,19 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int result,
 static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
 {
     int res;
+    char *path;
+    struct stat buf;
     struct fuse_lookup_out arg;
 
-    arg.ino = find_node(f, in->ino, name, 1);
-    res = get_attributes(f, arg.ino, &arg.attr);
-
+    path = get_path_name(in->ino, name);
+    res = -ENOSYS;
+    if(f->op.getattr)
+        res = f->op.getattr(path, &buf);
+    g_free(path);
+    if(res == 0) {
+        convert_stat(&buf, &arg.attr);
+        arg.ino = find_node(f, in->ino, name, 1);
+    }
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
@@ -217,9 +236,18 @@ static void do_forget(struct fuse *f, unsigned long *inos, size_t num)
 static void do_getattr(struct fuse *f, struct fuse_in_header *in)
 {
     int res;
+    char *path;
+    struct stat buf;
     struct fuse_getattr_out arg;
 
-    res = get_attributes(f, in->ino, &arg.attr);
+    path = get_path(in->ino);
+    res = -ENOSYS;
+    if(f->op.getattr)
+        res = f->op.getattr(path, &buf);
+    g_free(path);
+    if(res == 0) 
+        convert_stat(&buf, &arg.attr);
+
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
@@ -269,8 +297,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     struct fuse_mknod_out outarg;
     struct stat buf;
 
-    outarg.ino = find_node(f, in->ino, inarg->name, 1);
-    path = get_path(outarg.ino);
+    path = get_path_name(in->ino, inarg->name);
     res = -ENOSYS;
     if(f->op.mknod && f->op.getattr) {
         res = f->op.mknod(path, inarg->mode, inarg->rdev);
@@ -278,9 +305,10 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
             res = f->op.getattr(path, &buf);
     }
     g_free(path);
-
-    if(res == 0)
+    if(res == 0) {
         convert_stat(&buf, &outarg.attr);
+        outarg.ino = find_node(f, in->ino, inarg->name, 1);
+    }
 
     send_reply(f, in, res, &outarg, sizeof(outarg));
 }
@@ -330,6 +358,39 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
         res = f->op.symlink(link, path);
     g_free(path);
     send_reply(f, in, res, NULL, 0);
+}
+
+static void do_rename(struct fuse *f, struct fuse_in_header *in,
+                      struct fuse_rename_in *inarg)
+{
+    int res;
+    fino_t olddir = in->ino;
+    fino_t newdir = inarg->newdir;
+    char *oldname = inarg->names;
+    char *newname = inarg->names + strlen(oldname) + 1;
+    char *oldpath = get_path_name(olddir, oldname);
+    char *newpath = get_path_name(newdir, newname);
+
+    res = -ENOSYS;
+    if(f->op.rename)
+        res = f->op.rename(oldpath, newpath);
+    if(res == 0)
+        rename_node(f, olddir, oldname, newdir, newname);
+    send_reply(f, in, res, NULL, 0);   
+}
+
+static void do_link(struct fuse *f, struct fuse_in_header *in,
+                    struct fuse_link_in *inarg)
+{
+    int res;
+    char *oldpath = get_path(in->ino);
+    char *newpath = get_path_name(inarg->newdir, inarg->name);
+
+    res = -ENOSYS;
+    if(f->op.link)
+        res = f->op.link(oldpath, newpath);
+
+    send_reply(f, in, res, NULL, 0);   
 }
 
 
@@ -398,6 +459,14 @@ void fuse_loop(struct fuse *f)
         case FUSE_SYMLINK:
             do_symlink(f, in, (char *) inarg, 
                        ((char *) inarg) + strlen((char *) inarg) + 1);
+            break;
+
+        case FUSE_RENAME:
+            do_rename(f, in, (struct fuse_rename_in *) inarg);
+            break;
+            
+        case FUSE_LINK:
+            do_link(f, in, (struct fuse_link_in *) inarg);
             break;
 
         default:

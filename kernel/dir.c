@@ -22,6 +22,7 @@ static struct inode_operations fuse_special_inode_operations;
 static struct file_operations fuse_dir_operations;
 static struct file_operations fuse_file_operations;
 
+static struct dentry_operations fuse_dentry_opertations;
 
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
@@ -57,7 +58,6 @@ void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 	}
 }
 
-
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 {
 	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
@@ -74,19 +74,18 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 	out.arg = &arg;
 	request_send(fc, &in, &out);
 	
-	if(out.h.result) {
-		/* Negative dentries are not hashed */
-		if(out.h.result == -ENOENT)
-			return NULL;
-		else
-			return ERR_PTR(out.h.result);
+	inode = NULL;
+	if(!out.h.error) {
+		inode = iget(dir->i_sb, arg.ino);
+		if(!inode) 
+			return ERR_PTR(-ENOMEM);
+		
+		fuse_init_inode(inode, &arg.attr);
 	}
+	else if(out.h.error != -ENOENT)
+		return ERR_PTR(out.h.error);
 
-	inode = iget(dir->i_sb, arg.ino);
-	if(!inode) 
-		return ERR_PTR(-ENOMEM);
-
-	fuse_init_inode(inode, &arg.attr);
+	entry->d_op = &fuse_dentry_opertations;
 	d_add(entry, inode);
 	return NULL;
 }
@@ -121,15 +120,15 @@ static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	request_send(fc, &in, &out);
 	kfree(inarg);
 
-	if(out.h.result) 
-		return out.h.result;
+	if(out.h.error) 
+		return out.h.error;
 
 	inode = iget(dir->i_sb, outarg.ino);
 	if(!inode) 
 		return -ENOMEM;
 	
 	fuse_init_inode(inode, &outarg.attr);
-	d_add(entry, inode);
+	d_instantiate(entry, inode);
 
 	return 0;
 }
@@ -163,7 +162,7 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 	request_send(fc, &in, &out);
 	kfree(inarg);
 
-	return out.h.result;
+	return out.h.error;
 }
 
 static int fuse_symlink(struct inode *dir, struct dentry *entry,
@@ -190,7 +189,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	request_send(fc, &in, &out);
 	kfree(inarg);
 	
-	return out.h.result;
+	return out.h.error;
 }
 
 static int fuse_remove(struct inode *dir, struct dentry *entry, 
@@ -205,12 +204,7 @@ static int fuse_remove(struct inode *dir, struct dentry *entry,
 	in.argsize = entry->d_name.len + 1;
 	in.arg = entry->d_name.name;
 	request_send(fc, &in, &out);
-	if(!out.h.result) {
-		d_drop(entry);
-		entry->d_inode->i_nlink = 0;
-	}
-
-	return out.h.result;
+	return out.h.error;
 }
 
 static int fuse_unlink(struct inode *dir, struct dentry *entry)
@@ -251,7 +245,35 @@ static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 	request_send(fc, &in, &out);
 	kfree(inarg);
 
-	return out.h.result;
+	return out.h.error;
+}
+
+static int fuse_link(struct dentry *entry, struct inode *newdir,
+		     struct dentry *newent)
+{
+	struct inode *inode = entry->d_inode;
+	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_link_in *inarg;
+	unsigned int insize;
+	
+	insize = offsetof(struct fuse_link_in, name) + newent->d_name.len + 1;
+	inarg = kmalloc(insize, GFP_KERNEL);
+	if(!inarg)
+		return -ENOMEM;
+	
+	inarg->newdir = newdir->i_ino;
+	strcpy(inarg->name, newent->d_name.name);
+
+	in.h.opcode = FUSE_LINK;
+	in.h.ino = inode->i_ino;
+	in.argsize = insize;
+	in.arg = inarg;
+	request_send(fc, &in, &out);
+	kfree(inarg);
+
+	return out.h.error;
 }
 
 static int fuse_permission(struct inode *inode, int mask)
@@ -259,6 +281,8 @@ static int fuse_permission(struct inode *inode, int mask)
 	return 0;
 }
 
+/* Only revalidate the root inode, since lookup is always redone on
+   the last path segment, and lookup refreshes the attributes */
 static int fuse_revalidate(struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
@@ -267,18 +291,19 @@ static int fuse_revalidate(struct dentry *dentry)
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getattr_out arg;
 	
+	if(inode->i_ino != FUSE_ROOT_INO)
+		return 0;
+
 	in.h.opcode = FUSE_GETATTR;
 	in.h.ino = inode->i_ino;
 	out.argsize = sizeof(arg);
 	out.arg = &arg;
 	request_send(fc, &in, &out);
 	
-	if(out.h.result == 0)
+	if(!out.h.error)
 		change_attributes(inode, &arg.attr);
-	else
-		d_drop(dentry);
-
-	return out.h.result;
+	
+	return out.h.error;
 }
 
 static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
@@ -347,9 +372,9 @@ static int read_link(struct dentry *dentry, char **bufp)
 	out.argsize = PAGE_SIZE - 1;
 	out.argvar = 1;
 	request_send(fc, &in, &out);
-	if(out.h.result) {
+	if(out.h.error) {
 		free_page(page);
-		return out.h.result;
+		return out.h.error;
 	}
 
 	*bufp = (char *) page;
@@ -405,7 +430,7 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 	out.argsize = sizeof(outarg);
 	out.arg = &outarg;
 	request_send(fc, &in, &out);
-	if(out.h.result == 0) {
+	if(!out.h.error) {
 		struct file *cfile = outarg.file;
 		struct inode *inode;
 		if(!cfile) {
@@ -422,7 +447,7 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 		file->private_data = cfile;
 	}
 
-	return out.h.result;
+	return out.h.error;
 }
 
 static int fuse_dir_release(struct inode *inode, struct file *file)
@@ -437,6 +462,14 @@ static int fuse_dir_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static int fuse_dentry_revalidate(struct dentry *entry, int flags)
+{
+	if(!entry->d_inode || !(flags & LOOKUP_CONTINUE))
+		return 0;
+	else
+		return 1;
+}
+
 static struct inode_operations fuse_dir_inode_operations =
 {
 	lookup:		fuse_lookup,
@@ -447,12 +480,12 @@ static struct inode_operations fuse_dir_inode_operations =
 	unlink:         fuse_unlink,
 	rmdir:          fuse_rmdir,
 	rename:         fuse_rename,
-#if 0
 	link:           fuse_link,
+#if 0
 	setattr:	fuse_setattr,
 #endif
 	permission:	fuse_permission,
-        revalidate:	fuse_revalidate,
+	revalidate:	fuse_revalidate,
 };
 
 static struct file_operations fuse_dir_operations = {
@@ -464,12 +497,12 @@ static struct file_operations fuse_dir_operations = {
 
 static struct inode_operations fuse_file_inode_operations = {
 	permission:	fuse_permission,
-        revalidate:	fuse_revalidate,
+	revalidate:	fuse_revalidate,
 };
 
 static struct inode_operations fuse_special_inode_operations = {
 	permission:	fuse_permission,
-        revalidate:	fuse_revalidate,
+	revalidate:	fuse_revalidate,
 };
 
 static struct file_operations fuse_file_operations = {
@@ -479,7 +512,11 @@ static struct inode_operations fuse_symlink_inode_operations =
 {
 	readlink:	fuse_readlink,
 	follow_link:	fuse_follow_link,
-        revalidate:	fuse_revalidate,
+	revalidate:	fuse_revalidate,
+};
+
+static struct dentry_operations fuse_dentry_opertations = {
+	d_revalidate:	fuse_dentry_revalidate,
 };
 
 /* 

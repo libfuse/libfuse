@@ -108,6 +108,28 @@ static int pro_rmdir(const char *path)
     return 0;
 }
 
+static int pro_rename(const char *from, const char *to)
+{
+    int res;
+
+    res = rename(from, to);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+static int pro_link(const char *from, const char *to)
+{
+    int res;
+
+    res = link(from, to);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
 static void exit_handler()
 {
     exit(0);
@@ -152,6 +174,8 @@ static struct fuse_operations pro_oper = {
     symlink:	pro_symlink,
     unlink:	pro_unlink,
     rmdir:	pro_rmdir,
+    rename:     pro_rename,
+    link:	pro_link,
 };
 
 int main(int argc, char *argv[])

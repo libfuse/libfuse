@@ -23,9 +23,11 @@ struct fuse_operations {
     int (*getdir) (const char *path, struct fuse_dh *h, dirfiller_t filler);
     int (*mknod) (const char *path, int mode, int rdev);
     int (*mkdir) (const char *path, int mode);
-    int (*symlink) (const char *from, const char *to);
     int (*unlink) (const char *path);
     int (*rmdir) (const char *path);
+    int (*rename) (const char *from, const char *to);
+    int (*symlink) (const char *from, const char *to);
+    int (*link) (const char *from, const char *to);
 };
 
 struct fuse *fuse_new();

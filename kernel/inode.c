@@ -182,6 +182,9 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 
         sb->u.generic_sbp = fc;
 	sb->s_root = d_alloc_root(root);
+	if(!sb->s_root)
+		goto err;
+
 	fc->sb = sb;
 	spin_unlock(&fuse_lock);
 	

@@ -53,14 +53,14 @@ static int request_check(struct fuse_req *req, struct fuse_out *outp)
 	oh = (struct fuse_out_header *) req->out;
 	size = req->outsize - OHSIZE;
 	
-	if (oh->result <= -512 || oh->result > 0) {
-		printk("fuse: bad result\n");
+	if (oh->error <= -512 || oh->error > 0) {
+		printk("fuse: bad error value: %i\n", oh->error);
 		return -EPROTO;
 	}
 
 	if(size > outp->argsize || 
-	   (oh->result == 0 && !outp->argvar && size != outp->argsize) ||
-	   (oh->result != 0 && size != 0)) {
+	   (oh->error == 0 && !outp->argvar && size != outp->argsize) ||
+	   (oh->error != 0 && size != 0)) {
 		printk("fuse: invalid argument length: %i (%i)\n", size,
 		       req->opcode);
 		return -EPROTO;
@@ -71,7 +71,7 @@ static int request_check(struct fuse_req *req, struct fuse_out *outp)
 	if(size)
 		memcpy(outp->arg, req->out + OHSIZE, size);
 	
-	return oh->result;
+	return oh->error;
 }
 
 static void request_free(struct fuse_req *req)
@@ -158,7 +158,7 @@ void request_send(struct fuse_conn *fc, struct fuse_in *inp,
 	spin_unlock(&fuse_lock);
   out:
 	if(outp)
-		outp->h.result = ret;
+		outp->h.error = ret;
 }
 
 static int request_wait(struct fuse_conn *fc)
