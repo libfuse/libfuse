@@ -1,3 +1,8 @@
+2002-03-16  Mark Glines <mark@glines.org>
+
+	* use struct fuse_statfs everywhere possible to avoid problems
+      with the headerfiles changing struct statfs member sizes
+
 2002-03-01  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Another RPM spec file for RedHat >= 7 by Ian Pilcher
