@@ -86,7 +86,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
  * 
  *  - read(), write() are not passed a filehandle, but rather a
  *  pathname.  The offset of the read and write is passed as the last
- *  argument, like the pread() and pwrite() system calls.
+ *  argument, like the pread() and pwrite() system calls.  (NOTE:
+ *  read() should always return the number of bytes requested, except
+ *  at end of file)
  * 
  *  - release() is called when an open file has:
  *       1) all file descriptors closed
@@ -142,10 +144,11 @@ extern "C" {
  * main() function.
  * 
  * This function does the following:
- *   - mounts the filesystem
+ *   - parses command line options (-d -s and -h)
+ *   - passes all options after '--' to the fusermount program
+ *   - mounts the filesystem by calling fusermount
  *   - installs signal handlers for INT, HUP, TERM and PIPE
  *   - registers an exit handler to unmount the filesystem on program exit
- *   - parses command line options (-d -s and -h)
  *   - creates a fuse handle
  *   - registers the operations
  *   - calls either the single-threaded or the multi-threaded event loop

@@ -201,38 +201,35 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	sb->s_export_op = &fuse_export_operations;
 #endif
 
+	fc = get_conn(d);
+	if(fc == NULL)
+		return -EINVAL;
+	spin_lock(&fuse_lock);
+	if(fc->sb != NULL) {
+		printk("fuse_read_super: connection already mounted\n");
+		spin_unlock(&fuse_lock);
+		return -EINVAL;
+	}
+	fc->sb = sb;
+	fc->flags = d->flags;
+	fc->uid = d->uid;
+	spin_unlock(&fuse_lock);
+	
+	/* fc is needed in fuse_init_file_inode which could be called
+           from get_root_inode */
+	SB_FC(sb) = fc;
+
 	root = get_root_inode(sb, d->rootmode);
 	if(root == NULL) {
 		printk("fuse_read_super: failed to get root inode\n");
 		return -EINVAL;
 	}
 
-	spin_lock(&fuse_lock);
-	fc = get_conn(d);
-	if(fc == NULL)
-		goto err;
-
-	if(fc->sb != NULL) {
-		printk("fuse_read_super: connection already mounted\n");
-		goto err;
-	}
-
-	SB_FC(sb) = fc;
 	sb->s_root = d_alloc_root(root);
 	if(!sb->s_root)
-		goto err;
+		return -EINVAL;
 
-	fc->sb = sb;
-	fc->flags = d->flags;
-	fc->uid = d->uid;
-	spin_unlock(&fuse_lock);
-	
 	return 0;
-
-  err:
-	spin_unlock(&fuse_lock);
-	iput(root);
-	return -EINVAL;
 }
 
 #ifdef KERNEL_2_6

@@ -18,7 +18,7 @@ static struct inode_operations fuse_symlink_inode_operations;
 
 static struct file_operations fuse_dir_operations;
 
-static struct dentry_operations fuse_dentry_opertations;
+static struct dentry_operations fuse_dentry_operations;
 
 /* FIXME: This should be user configurable */
 #define FUSE_REVALIDATE_TIME (1 * HZ)
@@ -137,7 +137,7 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 		return err;
 
 	entry->d_time = jiffies;
-	entry->d_op = &fuse_dentry_opertations;
+	entry->d_op = &fuse_dentry_operations;
 	*inodep = inode;
 	return 0;
 }
@@ -769,7 +769,7 @@ static struct inode_operations fuse_symlink_inode_operations =
 #endif
 };
 
-static struct dentry_operations fuse_dentry_opertations = {
+static struct dentry_operations fuse_dentry_operations = {
 	.d_revalidate	= fuse_dentry_revalidate,
 };
 

@@ -60,6 +60,9 @@ static int fuse_release(struct inode *inode, struct file *file)
 	struct fuse_open_in *inarg = NULL;
 	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_open_in);
 
+	if(file->f_mode & FMODE_WRITE)
+		filemap_fdatawrite(inode->i_mapping);
+
 	in = kmalloc(s, GFP_NOFS);
 	if(!in)
 		return -ENOMEM;
@@ -189,7 +192,6 @@ static int fuse_cache_block(struct address_space *mapping,
 		char *buffer;
 
 		page = grab_cache_page(mapping, index);
-
 		if (!page)
 			return -1;
 
@@ -241,38 +243,40 @@ static int fuse_file_read_block(struct inode *inode, char *bl_buf,
 	return out.h.error;
 }   
 
+static void fuse_file_bigread(struct address_space *mapping,
+			      struct inode *inode, loff_t pos, size_t count)
+{
+	size_t bl_index = pos >> FUSE_BLOCK_SHIFT;
+	size_t bl_end_index = (pos + count) >> FUSE_BLOCK_SHIFT;
+	size_t bl_file_end_index = inode->i_size >> FUSE_BLOCK_SHIFT;
+	
+	if (bl_end_index > bl_file_end_index)
+		bl_end_index = bl_file_end_index;
+	
+	while (bl_index <= bl_end_index) {
+		int res;
+		char *bl_buf = kmalloc(FUSE_BLOCK_SIZE, GFP_NOFS);
+		if (!bl_buf)
+			break;
+		res = fuse_is_block_uptodate(mapping, inode, bl_index);
+		if (!res)
+			res = fuse_file_read_block(inode, bl_buf, bl_index);
+		if (!res)
+			fuse_cache_block(mapping, inode, bl_buf, bl_index);
+		kfree(bl_buf);
+		bl_index++;
+	}
+}
+
 static ssize_t fuse_file_read(struct file *filp, char *buf,
 		size_t count, loff_t * ppos)
 {
 	struct address_space *mapping = filp->f_dentry->d_inode->i_mapping;
 	struct inode *inode = mapping->host;
+	struct fuse_conn *fc = INO_FC(inode);
 
-	size_t bl_index = *ppos >> FUSE_BLOCK_SHIFT;
-	size_t bl_end_index = (*ppos + count) >> FUSE_BLOCK_SHIFT;
-	size_t bl_file_end_index = inode->i_size >> FUSE_BLOCK_SHIFT;
-
-	if (bl_end_index > bl_file_end_index)
-		bl_end_index = bl_file_end_index;
-
-	while (bl_index <= bl_end_index) {
-		int res;
-		char *bl_buf = kmalloc(FUSE_BLOCK_SIZE, GFP_NOFS);
-
-		if (!bl_buf)
-			break;
-
-		res = fuse_is_block_uptodate(mapping, inode, bl_index);
-
-		if (!res)
-			res = fuse_file_read_block(inode, bl_buf, bl_index);
-
-		if (!res)
-			fuse_cache_block(mapping, inode, bl_buf, bl_index);
-
-		kfree(bl_buf);
-
-		bl_index++;
-	}
+	if(fc->flags & FUSE_LARGE_READ)
+		fuse_file_bigread(mapping, inode, *ppos, count);
 
 	return generic_file_read(filp, buf, count, ppos);
 }  
@@ -466,11 +470,15 @@ static struct address_space_operations fuse_file_aops  = {
 
 void fuse_init_file_inode(struct inode *inode)
 {
+#ifdef KERNEL_2_6
+	struct fuse_conn *fc = INO_FC(inode);
+	/* Readahead somehow defeats big reads on 2.6 (says Michael
+           Grigoriev) */
+	if(fc->flags & FUSE_LARGE_READ)
+		inode->i_mapping->backing_dev_info->ra_pages = 0;
+#endif
 	inode->i_fop = &fuse_file_operations;
 	inode->i_data.a_ops = &fuse_file_aops;
-#ifdef KERNEL_2_6
-	inode->i_mapping->backing_dev_info->ra_pages = 0;
-#endif
 }
 
 /* 

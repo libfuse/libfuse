@@ -298,8 +298,7 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 		if(ret < 0) {
 			req->out->h.error = -EPROTO;
 			req->finished = 1;
-		}
-		else {
+		} else {
 			list_add_tail(&req->list, &fc->processing);
 			req->sent = 1;
 		}

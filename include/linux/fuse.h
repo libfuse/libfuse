@@ -12,7 +12,7 @@
 #define FUSE_KERNEL_VERSION 2
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 1
+#define FUSE_KERNEL_MINOR_VERSION 2
 
 /** The inode number of the root indode */
 #define FUSE_ROOT_INO 1
@@ -52,6 +52,12 @@ permission checking is done in the kernel */
 /** If the FUSE_KERNEL_CACHE flag is given, then files will be cached
     until the INVALIDATE operation is invoked */
 #define FUSE_KERNEL_CACHE        (1 << 2)
+
+/** Allow FUSE to combine reads into 64k chunks.  This is useful if
+    the filesystem is better at handling large chunks.  NOTE: in
+    current implementation the raw throughput is worse for large reads
+    than for small. */
+#define FUSE_LARGE_READ          (1 << 3)
 
 struct fuse_attr {
 	unsigned int        mode;

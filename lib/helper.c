@@ -23,13 +23,22 @@ static struct fuse *fuse;
 static void usage(char *progname)
 {
     fprintf(stderr,
-            "usage: %s mountpoint [options] \n"
+            "usage: %s mountpoint [options] [-- [fusermount options]]\n"
             "Options:\n"
             "    -d      enable debug output\n"
             "    -s      disable multithreaded operation\n"
-            "    -h      print help\n",
+            "    -h      print help\n"
+            "\n"
+            "Fusermount options:\n"
+            "            see 'fusermount -h'\n",
             progname);
     exit(1);
+}
+
+static void invalid_option(char *argv[], int argctr)
+{
+    fprintf(stderr, "invalid option: %s\n", argv[argctr]);
+    usage(argv[0]);
 }
 
 static void exit_handler()
@@ -71,19 +80,51 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     int fuse_fd;
     char *fuse_mountpoint = NULL;
     char umount_cmd[1024] = "";
-
-    if(isreexec == NULL) {
+    char **fusermount_args = NULL;
+    
+    if(!isreexec) {
         if(argc < 2 || argv[1][0] == '-')
             usage(argv[0]);
+        argctr ++;
+    }
 
+    flags = 0;
+    multithreaded = 1;
+    for(; argctr < argc && !fusermount_args; argctr ++) {
+        if(argv[argctr][0] == '-' && strlen(argv[argctr]) == 2)
+            switch(argv[argctr][1]) {
+            case 'd':
+                flags |= FUSE_DEBUG;
+                break;
+                
+            case 's':
+                multithreaded = 0;
+                break;
+                
+            case 'h':
+                usage(argv[0]);
+                break;
+                
+            case '-':
+                if(!isreexec)
+                    fusermount_args = &argv[argctr+1];
+                else
+                    invalid_option(argv, argctr);
+                break;
+                
+            default:
+                invalid_option(argv, argctr);
+            }
+        else 
+            invalid_option(argv, argctr);
+    }
+
+    if(!isreexec) {
         fuse_mountpoint = strdup(argv[1]);
-        fuse_fd = fuse_mount(fuse_mountpoint, NULL);
+        fuse_fd = fuse_mount(fuse_mountpoint, (const char **) fusermount_args);
         if(fuse_fd == -1)
             exit(1);
-
-        argctr++;
-    }
-    else {
+    } else {
         char *tmpstr;
 
         /* Old (obsolescent) way of doing the mount: 
@@ -100,32 +141,6 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     }
 
     set_signal_handlers();
-
-    flags = 0;
-    multithreaded = 1;
-    for(; argctr < argc && argv[argctr][0] == '-'; argctr ++) {
-        switch(argv[argctr][1]) {
-        case 'd':
-            flags |= FUSE_DEBUG;
-            break;
-
-        case 's':
-            multithreaded = 0;
-            break;
-
-        case 'h':
-            usage(argv[0]);
-            break;
-
-        default:
-            fprintf(stderr, "invalid option: %s\n", argv[argctr]);
-            exit(1);
-        }
-    }
-    if(argctr != argc) {
-        fprintf(stderr, "missing or surplus argument\n");
-        exit(1);
-    }
 
     fuse = fuse_new(fuse_fd, flags, op);
 

@@ -8,15 +8,25 @@
 
 
 #include <linux/fuse.h>
+#include <linux/version.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#error Kernel version 2.5.* not supported
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+#define KERNEL_2_6
+#endif
+
+#ifndef KERNEL_2_6
 #include <linux/config.h>
 #ifdef CONFIG_MODVERSIONS
 #define MODVERSIONS
 #include <linux/modversions.h>
 #endif
+#endif 
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -27,15 +37,6 @@
 #define FUSE_BLOCK_MASK 0xffff0000
 
 #define FUSE_BLOCK_PAGE_SHIFT (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-#error Kernel version 2.5.* not supported
-#endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
-#define KERNEL_2_6
-#endif
-
 
 /**
  * A Fuse connection.

@@ -487,7 +487,8 @@ static void usage()
             " -p       check default permissions on files\n"
             " -c       cache in kernel space if possible\n"
             " -x       allow other users to access the files (only for root)\n"
-            " -d name  add 'name' as the filesystem name to mtab\n",
+            " -n name  add 'name' as the filesystem name to mtab\n"
+            " -l       issue large reads\n",
             progname);
     exit(1);
 }
@@ -541,13 +542,17 @@ int main(int argc, char *argv[])
             flags |= FUSE_ALLOW_OTHER;
             break;
             
-        case 'd':
+        case 'n':
             a++;
             if(a == argc) {
-                fprintf(stderr, "%s: Missing argument to -d\n", progname);
+                fprintf(stderr, "%s: Missing argument to -n\n", progname);
                 exit(1);
             }
             fsname = argv[a];
+            break;
+
+        case 'l':
+            flags |= FUSE_LARGE_READ;
             break;
 
         default:

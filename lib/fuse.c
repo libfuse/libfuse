@@ -1006,7 +1006,7 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
         res = read(f->fd, cmd->buf, FUSE_MAX_IN);
         if(res == -1) {
             free_cmd(cmd);
-            if(errno == EINTR)
+            if(f->exited || errno == EINTR)
                 return NULL;
 
             /* ENODEV means we got unmounted, so we silenty return failure */
