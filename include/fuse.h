@@ -250,6 +250,14 @@ struct fuse_operations {
      */
     int (*opendir) (const char *, struct fuse_file_info *);
 
+    /** Synchronize directory contents
+     *
+     * If the datasync parameter is non-zero, then only the user data
+     * should be flushed, not the meta data.  The fuse_file_info
+     * parameter is currently unused
+     */
+    int (*fsyncdir) (const char *, int, struct fuse_file_info *);
+
     /**
      * Initialize filesystem
      *

@@ -1,3 +1,7 @@
+2005-03-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fsyncdir() operation
+
 2005-03-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: add locking to background list (fixes previous fix)

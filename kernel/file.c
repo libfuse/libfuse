@@ -151,7 +151,8 @@ static int fuse_flush(struct file *file)
 	return err;
 }
 
-static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
+int fuse_fsync_common(struct file *file, struct dentry *de, int datasync,
+		      int isdir)
 {
 	struct inode *inode = de->d_inode;
 	struct fuse_conn *fc = get_fuse_conn(inode);
@@ -160,7 +161,7 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	struct fuse_fsync_in inarg;
 	int err;
 
-	if (fc->no_fsync)
+	if ((!isdir && fc->no_fsync) || (isdir && fc->no_fsyncdir))
 		return 0;
 
 	req = fuse_get_request(fc);
@@ -170,7 +171,7 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.fh = ff->fh;
 	inarg.fsync_flags = datasync ? 1 : 0;
-	req->in.h.opcode = FUSE_FSYNC;
+	req->in.h.opcode = isdir ? FUSE_FSYNCDIR : FUSE_FSYNC;
 	req->in.h.nodeid = get_node_id(inode);
 	req->inode = inode;
 	req->file = file;
@@ -181,10 +182,18 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	err = req->out.h.error;
 	fuse_put_request(fc, req);
 	if (err == -ENOSYS) {
-		fc->no_fsync = 1;
+		if (isdir)
+			fc->no_fsyncdir = 1;
+		else
+			fc->no_fsync = 1;
 		err = 0;
 	}
 	return err;
+}
+
+static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
+{
+	return fuse_fsync_common(file, de, datasync, 0);
 }
 
 size_t fuse_send_read_common(struct fuse_req *req, struct file *file,

@@ -103,6 +103,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_OPENDIR:		return "OPENDIR";
     case FUSE_READDIR:		return "READDIR";
     case FUSE_RELEASEDIR:	return "RELEASEDIR";
+    case FUSE_FSYNCDIR:		return "FSYNCDIR";
     default: 			return "???";
     }
 }
@@ -1598,6 +1599,24 @@ static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, 0, NULL, 0);
 }
 
+static void do_fsyncdir(struct fuse *f, struct fuse_in_header *in,
+                        struct fuse_fsync_in *inarg)
+{
+    int res;
+    char *path;
+    struct fuse_file_info fi;
+
+    memset(&fi, 0, sizeof(fi));
+    res = -ENOENT;
+    path = get_path(f, in->nodeid);
+    if (path != NULL) {
+        res = -ENOSYS;
+        if (f->op.fsyncdir)
+            res = f->op.fsyncdir(path, inarg->fsync_flags & 1, &fi);
+        free(path);
+    }
+    send_reply(f, in, res, NULL, 0);
+}
 
 static void free_cmd(struct fuse_cmd *cmd)
 {
@@ -1739,6 +1758,10 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_RELEASEDIR:
         do_releasedir(f, in, (struct fuse_release_in *) inarg);
+        break;
+
+    case FUSE_FSYNCDIR:
+        do_fsyncdir(f, in, (struct fuse_fsync_in *) inarg);
         break;
 
     default:
