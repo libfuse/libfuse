@@ -2,6 +2,9 @@
 
 	* new fusermount flag '-z': lazy unmount, default is not lazy
 
+	* Extended attributes operations added (getxattr, setxattr,
+	listxattr, removexattr)
+
 2004-03-25  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* If filesystem doesn't define a statfs operation, then an

@@ -188,8 +188,9 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
     if(found) {
         res = umount2(mnt, lazy ? 2 : 0);
         if(res == -1) {
-            fprintf(stderr, "%s: failed to unmount %s: %s\n", progname, mnt,
-                    strerror(errno));
+            if(!quiet)
+                fprintf(stderr, "%s: failed to unmount %s: %s\n",
+                        progname, mnt,strerror(errno));
             found = -1;
         }
     }
@@ -587,8 +588,9 @@ int main(int argc, char *argv[])
         } else {
             res = umount2(mnt, lazy ? 2 : 0);
             if(res == -1) {
-                fprintf(stderr, "%s: failed to unmount %s: %s\n", progname, mnt,
-                        strerror(errno));
+                if (!quiet)
+                    fprintf(stderr, "%s: failed to unmount %s: %s\n",
+                            progname, mnt, strerror(errno));
             }
         }
         if(res == -1)

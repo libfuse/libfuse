@@ -25,25 +25,29 @@
 static const char *opname(enum fuse_opcode opcode)
 {
     switch(opcode) { 
-    case FUSE_LOOKUP:   return "LOOKUP";
-    case FUSE_FORGET:   return "FORGET";
-    case FUSE_GETATTR:  return "GETATTR";
-    case FUSE_SETATTR:  return "SETATTR";
-    case FUSE_READLINK: return "READLINK";
-    case FUSE_SYMLINK:  return "SYMLINK";
-    case FUSE_GETDIR:   return "GETDIR";
-    case FUSE_MKNOD:    return "MKNOD";
-    case FUSE_MKDIR:    return "MKDIR";
-    case FUSE_UNLINK:   return "UNLINK";
-    case FUSE_RMDIR:    return "RMDIR";
-    case FUSE_RENAME:   return "RENAME";
-    case FUSE_LINK:     return "LINK";
-    case FUSE_OPEN:     return "OPEN";
-    case FUSE_READ:     return "READ";
-    case FUSE_WRITE:    return "WRITE";
-    case FUSE_STATFS:   return "STATFS";
-    case FUSE_RELEASE:  return "RELEASE";
-    case FUSE_FSYNC:    return "FSYNC";
+    case FUSE_LOOKUP:		return "LOOKUP";
+    case FUSE_FORGET:		return "FORGET";
+    case FUSE_GETATTR:		return "GETATTR";
+    case FUSE_SETATTR:		return "SETATTR";
+    case FUSE_READLINK:		return "READLINK";
+    case FUSE_SYMLINK:		return "SYMLINK";
+    case FUSE_GETDIR:		return "GETDIR";
+    case FUSE_MKNOD:		return "MKNOD";
+    case FUSE_MKDIR:		return "MKDIR";
+    case FUSE_UNLINK:		return "UNLINK";
+    case FUSE_RMDIR:		return "RMDIR";
+    case FUSE_RENAME:		return "RENAME";
+    case FUSE_LINK:		return "LINK";
+    case FUSE_OPEN:		return "OPEN";
+    case FUSE_READ:		return "READ";
+    case FUSE_WRITE:		return "WRITE";
+    case FUSE_STATFS:		return "STATFS";
+    case FUSE_RELEASE:		return "RELEASE";
+    case FUSE_FSYNC:		return "FSYNC";
+    case FUSE_SETXATTR:		return "SETXATTR";
+    case FUSE_GETXATTR:		return "GETXATTR";
+    case FUSE_LISTXATTR:	return "LISTXATTR";
+    case FUSE_REMOVEXATTR:	return "REMOVEXATTR";
     default:            return "???";
     }
 }
@@ -968,6 +972,110 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
+static void do_setxattr(struct fuse *f, struct fuse_in_header *in,
+                        struct fuse_setxattr_in *arg)
+{
+    int res;
+    char *path;
+    char *name = PARAM(arg);
+    unsigned char *value = name + strlen(name) + 1;
+
+    res = -ENOENT;
+    path = get_path(f, in->ino);
+    if (path != NULL) {
+        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        if (f->op.setxattr)
+            res = f->op.setxattr(path, name, value, arg->size, arg->flags);
+        free(path);
+    }    
+    send_reply(f, in, res, NULL, 0);
+}
+
+static void do_getxattr(struct fuse *f, struct fuse_in_header *in,
+                        struct fuse_getlistxattr_in *arg)
+{
+    int res;
+    char *path;
+    char *name = PARAM(arg);
+    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
+    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+    char *value = outbuf + sizeof(struct fuse_out_header);
+    size_t size;
+    size_t outsize;
+
+    res = -ENOENT;
+    path = get_path(f, in->ino);
+    if (path != NULL) {
+        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        if (f->op.getxattr)
+            res = f->op.getxattr(path, name, value, arg->size);
+        free(path);
+    }    
+    size = 0;
+    if(res > 0) {
+        size = res;
+        res = 0;
+    }
+    memset(out, 0, sizeof(struct fuse_out_header));
+    out->unique = in->unique;
+    out->error = res;
+    outsize = sizeof(struct fuse_out_header) + size;
+
+    send_reply_raw(f, outbuf, outsize);
+    free(outbuf);
+}
+
+static void do_listxattr(struct fuse *f, struct fuse_in_header *in,
+                         struct fuse_getlistxattr_in *arg)
+{
+    int res;
+    char *path;
+    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
+    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+    char *value = outbuf + sizeof(struct fuse_out_header);
+    size_t size;
+    size_t outsize;
+
+    res = -ENOENT;
+    path = get_path(f, in->ino);
+    if (path != NULL) {
+        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        if (f->op.listxattr)
+            res = f->op.listxattr(path, value, arg->size);
+        free(path);
+    }    
+    size = 0;
+    if(res > 0) {
+        size = res;
+        res = 0;
+    }
+    memset(out, 0, sizeof(struct fuse_out_header));
+    out->unique = in->unique;
+    out->error = res;
+    outsize = sizeof(struct fuse_out_header) + size;
+
+    send_reply_raw(f, outbuf, outsize);
+    free(outbuf);
+}
+
+static void do_removexattr(struct fuse *f, struct fuse_in_header *in,
+                           char *name)
+{
+    int res;
+    char *path;
+
+    res = -ENOENT;
+    path = get_path(f, in->ino);
+    if (path != NULL) {
+        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        if (f->op.removexattr)
+            res = f->op.removexattr(path, name);
+        free(path);
+    }    
+    send_reply(f, in, res, NULL, 0);
+}
+
+
 static void free_cmd(struct fuse_cmd *cmd)
 {
     free(cmd->buf);
@@ -1067,6 +1175,22 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_FSYNC:
         do_fsync(f, in, (struct fuse_fsync_in *) inarg);
+        break;
+
+    case FUSE_SETXATTR:
+        do_setxattr(f, in, (struct fuse_setxattr_in *) inarg);
+        break;
+
+    case FUSE_GETXATTR:
+        do_getxattr(f, in, (struct fuse_getlistxattr_in *) inarg);
+        break;
+
+    case FUSE_LISTXATTR:
+        do_listxattr(f, in, (struct fuse_getlistxattr_in *) inarg);
+        break;
+
+    case FUSE_REMOVEXATTR:
+        do_removexattr(f, in, (char *) inarg);
         break;
 
     default:

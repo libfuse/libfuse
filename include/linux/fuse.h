@@ -94,26 +94,30 @@ struct fuse_kstatfs {
 #define FATTR_CTIME	(1 << 6)
 
 enum fuse_opcode {
-	FUSE_LOOKUP	= 1,
-	FUSE_FORGET	= 2,  /* no reply */
-	FUSE_GETATTR	= 3,
-	FUSE_SETATTR	= 4,
-	FUSE_READLINK	= 5,
-	FUSE_SYMLINK	= 6,
-	FUSE_GETDIR	= 7,
-	FUSE_MKNOD	= 8,
-	FUSE_MKDIR	= 9,
-	FUSE_UNLINK	= 10,
-	FUSE_RMDIR	= 11,
-	FUSE_RENAME	= 12,
-	FUSE_LINK	= 13,
-	FUSE_OPEN	= 14,
-	FUSE_READ	= 15,
-	FUSE_WRITE	= 16,
-	FUSE_STATFS	= 17,
-	FUSE_RELEASE    = 18, /* no reply */
-	FUSE_INVALIDATE = 19, /* user initiated */
-	FUSE_FSYNC      = 20
+	FUSE_LOOKUP	   = 1,
+	FUSE_FORGET	   = 2,  /* no reply */
+	FUSE_GETATTR	   = 3,
+	FUSE_SETATTR	   = 4,
+	FUSE_READLINK	   = 5,
+	FUSE_SYMLINK	   = 6,
+	FUSE_GETDIR	   = 7,
+	FUSE_MKNOD	   = 8,
+	FUSE_MKDIR	   = 9,
+	FUSE_UNLINK	   = 10,
+	FUSE_RMDIR	   = 11,
+	FUSE_RENAME	   = 12,
+	FUSE_LINK	   = 13,
+	FUSE_OPEN	   = 14,
+	FUSE_READ	   = 15,
+	FUSE_WRITE	   = 16,
+	FUSE_STATFS	   = 17,
+	FUSE_RELEASE       = 18, /* no reply */
+	FUSE_INVALIDATE    = 19, /* user initiated */
+	FUSE_FSYNC         = 20,
+	FUSE_SETXATTR      = 21,
+	FUSE_GETXATTR      = 22,
+	FUSE_LISTXATTR     = 23,
+	FUSE_REMOVEXATTR   = 24,
 };
 
 /* Conservative buffer size for the client */
@@ -186,6 +190,15 @@ struct fuse_statfs_out {
 
 struct fuse_fsync_in {
 	int datasync;
+};
+
+struct fuse_setxattr_in {
+	unsigned int size;
+	unsigned int flags;
+};
+
+struct fuse_getlistxattr_in {
+	unsigned int size;
 };
 
 struct fuse_in_header {

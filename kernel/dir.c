@@ -717,6 +717,107 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 {
 	return _fuse_dentry_revalidate(entry);
 }
+
+static int fuse_setxattr(struct dentry *entry, const char *name,
+			 const void *value, size_t size, int flags)
+{
+	struct inode *inode = entry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_setxattr_in inarg;
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.size = size;
+	inarg.flags = flags;
+	
+	in.h.opcode = FUSE_SETXATTR;
+	in.h.ino = inode->i_ino;
+	in.numargs = 3;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	in.args[1].size = strlen(name) + 1;
+	in.args[1].value = name;
+	in.args[2].size = size;
+	in.args[2].value = value;
+	request_send(fc, &in, &out);
+	return out.h.error;
+}
+
+static ssize_t fuse_getxattr(struct dentry *entry, const char *name,
+			     void *value, size_t size)
+{
+	struct inode *inode = entry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_getlistxattr_in inarg;
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.size = size;
+	
+	in.h.opcode = FUSE_GETXATTR;
+	in.h.ino = inode->i_ino;
+	in.numargs = 2;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	in.args[1].size = strlen(name) + 1;
+	in.args[1].value = name;
+	out.argvar = 1;
+	out.numargs = 1;
+	out.args[0].size = size;
+	out.args[0].value = value;
+	request_send(fc, &in, &out);
+	if(!out.h.error)
+		return out.args[0].size;
+	else
+		return out.h.error;
+}
+
+static ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size)
+{
+	struct inode *inode = entry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_getlistxattr_in inarg;
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.size = size;
+	
+	in.h.opcode = FUSE_LISTXATTR;
+	in.h.ino = inode->i_ino;
+	in.numargs = 1;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	out.argvar = 1;
+	out.numargs = 1;
+	out.args[0].size = size;
+	out.args[0].value = list;
+	request_send(fc, &in, &out);
+	if(!out.h.error)
+		return out.args[0].size;
+	else
+		return out.h.error;
+}
+
+static int fuse_removexattr(struct dentry *entry, const char *name)
+{
+	struct inode *inode = entry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	
+	in.h.opcode = FUSE_REMOVEXATTR;
+	in.h.ino = inode->i_ino;
+	in.numargs = 1;
+	in.args[0].size = strlen(name) + 1;
+	in.args[0].value = name;
+	request_send(fc, &in, &out);
+	return out.h.error;
+	
+}
+
 #else /* KERNEL_2_6 */
 
 #define fuse_create _fuse_create
@@ -771,6 +872,10 @@ static struct inode_operations fuse_dir_inode_operations =
 	.permission	= fuse_permission,
 #ifdef KERNEL_2_6
 	.getattr	= fuse_getattr,
+	.setxattr	= fuse_setxattr,
+	.getxattr	= fuse_getxattr,
+	.listxattr	= fuse_listxattr,
+	.removexattr	= fuse_removexattr,
 #else
 	.revalidate	= fuse_revalidate,
 #endif
@@ -788,6 +893,10 @@ static struct inode_operations fuse_file_inode_operations = {
 	.permission	= fuse_permission,
 #ifdef KERNEL_2_6
 	.getattr	= fuse_getattr,
+	.setxattr	= fuse_setxattr,
+	.getxattr	= fuse_getxattr,
+	.listxattr	= fuse_listxattr,
+	.removexattr	= fuse_removexattr,
 #else
 	.revalidate	= fuse_revalidate,
 #endif
@@ -800,6 +909,10 @@ static struct inode_operations fuse_symlink_inode_operations =
 	.follow_link	= fuse_follow_link,
 #ifdef KERNEL_2_6
 	.getattr	= fuse_getattr,
+	.setxattr	= fuse_setxattr,
+	.getxattr	= fuse_getxattr,
+	.listxattr	= fuse_listxattr,
+	.removexattr	= fuse_removexattr,
 #else
 	.revalidate	= fuse_revalidate,
 #endif
