@@ -1,3 +1,10 @@
+2003-12-13  David McNab <david@rebirthing.co.nz>
+
+	* Implemented fsync support in examples/example.py
+
+	* Implemented 'fsync' and 'statfs' methods in python
+	  interface
+
 2003-12-12  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Make it compile on 2.4.19.  

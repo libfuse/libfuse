@@ -248,6 +248,18 @@ static int xmp_statfs(struct fuse_statfs *fst)
     return rv;
 }
 
+static int xmp_release(const char *path, int flags)
+{
+  /* just a stub here */
+  return 0;
+}
+
+static int xmp_fsync(const char *path, int isdatasync)
+{
+  /* just stub this */
+  return 0;
+}
+
 static struct fuse_operations xmp_oper = {
     getattr:	xmp_getattr,
     readlink:	xmp_readlink,
@@ -267,8 +279,8 @@ static struct fuse_operations xmp_oper = {
     read:	xmp_read,
     write:	xmp_write,
     statfs:	xmp_statfs,
-    release:	NULL,
-    fsync:	NULL
+    release:	xmp_release,
+    fsync: xmp_fsync
     
 };
 

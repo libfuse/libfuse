@@ -17,10 +17,12 @@
 //@+node:globals
 
 static PyObject *getattr_cb=NULL, *readlink_cb=NULL, *getdir_cb=NULL,
-	*mknod_cb=NULL, *mkdir_cb=NULL, *unlink_cb=NULL, *rmdir_cb=NULL,
-	*symlink_cb=NULL, *rename_cb=NULL, *link_cb=NULL, *chmod_cb=NULL,
-	*chown_cb=NULL, *truncate_cb=NULL, *utime_cb=NULL,
-	*open_cb=NULL, *read_cb=NULL, *write_cb=NULL, *release_cb=NULL;
+  *mknod_cb=NULL, *mkdir_cb=NULL, *unlink_cb=NULL, *rmdir_cb=NULL,
+  *symlink_cb=NULL, *rename_cb=NULL, *link_cb=NULL, *chmod_cb=NULL,
+  *chown_cb=NULL, *truncate_cb=NULL, *utime_cb=NULL,
+  *open_cb=NULL, *read_cb=NULL, *write_cb=NULL, *release_cb=NULL,
+  *statfs_cb=NULL, *fsync_cb=NULL
+  ;
 //@-node:globals
 //@+node:PROLOGUE
 #define PROLOGUE \
@@ -298,15 +300,63 @@ static int open_func(const char *path, int mode)
 }
 //@-node:open_func
 //@+node:release_func
-
-static int release_func(const char *path)
+static int release_func(const char *path, int flags)
 {
-	PyObject *v = PyObject_CallFunction(release_cb, "s", path);
-	PROLOGUE
-    printf("release_func: path=%s\n", path);
-	EPILOGUE
+  PyObject *v = PyObject_CallFunction(release_cb, "si", path, flags);
+  PROLOGUE
+    //printf("release_func: path=%s flags=%d\n", path, flags);
+  EPILOGUE
 }
 //@-node:release_func
+//@+node:statfs_func
+static int statfs_func(struct fuse_statfs *fst)
+{
+  int i;
+  long retvalues[6];
+  PyObject *v = PyObject_CallFunction(statfs_cb, "");
+PROLOGUE
+
+  if (!PySequence_Check(v))
+    { goto OUT_DECREF; }
+ if (PySequence_Size(v) < 6)
+   { goto OUT_DECREF; }
+ for(i=0; i<6; i++)
+   {
+     PyObject *tmp = PySequence_GetItem(v, i);
+     retvalues[i] = PyInt_Check(tmp)
+       ? PyInt_AsLong(tmp)
+       : (PyLong_Check(tmp)
+          ? PyLong_AsLong(tmp)
+          : 0);
+   }
+
+ fst->block_size  = retvalues[0];
+ fst->blocks      = retvalues[1];
+ fst->blocks_free = retvalues[2];
+ fst->files       = retvalues[3];
+ fst->files_free  = retvalues[4];
+ fst->namelen     = retvalues[5];
+ ret = 0;
+ 
+#ifdef IGNORE_THIS
+ printf("block_size=%ld, blocks=%ld, blocks_free=%ld, files=%ld, files_free=%ld, namelen=%ld\n",
+        retvalues[0], retvalues[1], retvalues[2], retvalues[3], retvalues[4], retvalues[5]);
+#endif
+
+EPILOGUE
+
+}
+
+//@-node:statfs_func
+//@+node:fsync_func
+static int fsync_func(const char *path, int isfsyncfile)
+{
+	PyObject *v = PyObject_CallFunction(fsync_cb, "si", path, isfsyncfile);
+	PROLOGUE
+	EPILOGUE
+}
+
+//@-node:fsync_func
 //@+node:process_cmd
 
 static void process_cmd(struct fuse *f, struct fuse_cmd *cmd, void *data)
@@ -355,18 +405,20 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 		"getattr", "readlink", "getdir", "mknod",
 		"mkdir", "unlink", "rmdir", "symlink", "rename",
 		"link", "chmod", "chown", "truncate", "utime",
-		"open", "read", "write", "release", "flags", "multithreaded", NULL};
+		"open", "read", "write", "release", "statfs", "fsync",
+        "flags", "multithreaded", NULL};
 	
 	memset(&op, 0, sizeof(op));
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOOii", 
-		kwlist, &getattr_cb, &readlink_cb, &getdir_cb, &mknod_cb,
-		&mkdir_cb, &unlink_cb, &rmdir_cb, &symlink_cb, &rename_cb,
-		&link_cb, &chmod_cb, &chown_cb, &truncate_cb, &utime_cb,
-		&open_cb, &read_cb, &write_cb, &release_cb, &flags, &multithreaded))
+	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOOOOii", 
+                                     kwlist, &getattr_cb, &readlink_cb, &getdir_cb, &mknod_cb,
+                                     &mkdir_cb, &unlink_cb, &rmdir_cb, &symlink_cb, &rename_cb,
+                                     &link_cb, &chmod_cb, &chown_cb, &truncate_cb, &utime_cb,
+                                     &open_cb, &read_cb, &write_cb, &release_cb, &statfs_cb, &fsync_cb,
+                                     &flags, &multithreaded))
 		return NULL;
 	
-#define DO_ONE_ATTR(name) if(name ## _cb) { Py_INCREF(name ## _cb); op.name = name ## _func; } else { op.name = NULL; }
+    #define DO_ONE_ATTR(name) if(name ## _cb) { Py_INCREF(name ## _cb); op.name = name ## _func; } else { op.name = NULL; }
 
 	DO_ONE_ATTR(getattr);
 	DO_ONE_ATTR(readlink);
@@ -386,6 +438,8 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 	DO_ONE_ATTR(read);
 	DO_ONE_ATTR(write);
     DO_ONE_ATTR(release);
+    DO_ONE_ATTR(statfs);
+    DO_ONE_ATTR(fsync);
 
 	fuse = fuse_new(0, flags, &op);
 	if(multithreaded)

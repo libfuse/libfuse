@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #@+leo-ver=4
 #@+node:@file xmp.py
-#@@first #!/usr/bin/env python
+#@@first
 #
 #    Copyright (C) 2001  Jeff Epler  <jepler@unpythonic.dhs.org>
 #
@@ -28,10 +28,10 @@ class Xmp(Fuse):
     
         Fuse.__init__(self, *args, **kw)
     
-        if 1:
-            print "mountpoint: %s" % repr(self.mountpoint)
-            print "unnamed mount options: %s" % self.optlist
-            print "named mount options: %s" % self.optdict
+        if 0:
+            print "xmp.py:Xmp:mountpoint: %s" % repr(self.mountpoint)
+            print "xmp.py:Xmp:unnamed mount options: %s" % self.optlist
+            print "xmp.py:Xmp:named mount options: %s" % self.optdict
     
         # do stuff to set up your filesystem here, if you want
         #thread.start_new_thread(self.mythread, ())
@@ -117,14 +117,14 @@ class Xmp(Fuse):
     #@-node:utime
     #@+node:open
     def open(self, path, flags):
-        #print "open: %s" % path
+        #print "xmp.py:Xmp:open: %s" % path
     	os.close(os.open(path, flags))
     	return 0
     
     #@-node:open
     #@+node:read
     def read(self, path, len, offset):
-        #print "read: %s" % path
+        #print "xmp.py:Xmp:read: %s" % path
     	f = open(path, "r")
     	f.seek(offset)
     	return f.read(len)
@@ -132,7 +132,7 @@ class Xmp(Fuse):
     #@-node:read
     #@+node:write
     def write(self, path, buf, off):
-        #print "write: %s" % path
+        #print "xmp.py:Xmp:write: %s" % path
     	f = open(path, "r+")
     	f.seek(off)
     	f.write(buf)
@@ -140,11 +140,38 @@ class Xmp(Fuse):
     
     #@-node:write
     #@+node:release
-    def release(self, path):
-        #print "release: %s" % path
+    def release(self, path, flags):
+        print "xmp.py:Xmp:release: %s %s" % (path, flags)
+        return 0
+    #@-node:release
+    #@+node:statfs
+    def statfs(self):
+        """
+        Should return a tuple with the following 6 elements:
+            - blocksize - size of file blocks, in bytes
+            - totalblocks - total number of blocks in the filesystem
+            - freeblocks - number of free blocks
+            - totalfiles - total number of file inodes
+            - freefiles - nunber of free file inodes
+    
+        Feel free to set any of the above values to 0, which tells
+        the kernel that the info is not available.
+        """
+        print "xmp.py:Xmp:statfs: returning fictitious values"
+        blocks_size = 1024
+        blocks = 100000
+        blocks_free = 25000
+        files = 100000
+        files_free = 60000
+        namelen = 80
+        return (blocks_size, blocks, blocks_free, files, files_free, namelen)
+    #@-node:statfs
+    #@+node:fsync
+    def fsync(self, path, isfsyncfile):
+        print "xmp.py:Xmp:fsync: path=%s, isfsyncfile=%s" % (path, isfsyncfile)
         return 0
     
-    #@-node:release
+    #@-node:fsync
     #@-others
 #@-node:class Xmp
 #@+node:mainline

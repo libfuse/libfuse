@@ -51,7 +51,8 @@ class Fuse:
     #@+node:attribs
     _attrs = ['getattr', 'readlink', 'getdir', 'mknod', 'mkdir',
     	  'unlink', 'rmdir', 'symlink', 'rename', 'link', 'chmod',
-    	  'chown', 'truncate', 'utime', 'open', 'read', 'write', 'release']
+    	  'chown', 'truncate', 'utime', 'open', 'read', 'write', 'release',
+          'statfs', 'fsync']
     
     flags = 0
     multithreaded = 0

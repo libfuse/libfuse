@@ -1,6 +1,6 @@
 #@+leo-ver=4
 #@+node:@file README
-#@@comment
+#@@language
 
 Refer to the INSTALL file for build/install instructions
 
@@ -30,6 +30,16 @@ does not seem to work. (why?)
 
 Update
 ======
+
+Updated 13-Dec-2003 by David McNab <david@rebirthing.co.nz>
+
+    - changed Makefile to use Pyton distutils
+    - added setup.py for distutils
+
+    - added 'code.leo' file for convenience of those who use the Leo
+      code editor (leo.sf.net)
+    
+    - added support for 'statfs' and 'fsync' methods (refer xmp.py)
 
 Updated Dec 2003 by David McNab <david@rebirthing.co.nz>:
     
