@@ -34,7 +34,7 @@ static void *do_work(void *data)
     while(1) {
         struct fuse_cmd *cmd = __fuse_read_cmd(w->f);
         if(cmd == NULL)
-            exit(1);
+            pthread_exit(NULL);
 
         if(f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
             pthread_mutex_lock(&f->lock);

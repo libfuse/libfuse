@@ -305,7 +305,7 @@ static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
     reclen = FUSE_DIRENT_SIZE(&dirent);
     res = fwrite(&dirent, reclen, 1, dh->fp);
     if(res == 0) {
-        perror("writing directory file");
+        perror("fuse: writing directory file");
         return -EIO;
     }
     return 0;
@@ -330,7 +330,7 @@ static void send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
     if(res == -1) {
         /* ENOENT means the operation was interrupted */
         if(errno != ENOENT)
-            perror("writing fuse device");
+            perror("fuse: writing device");
     }
 }
 
@@ -342,7 +342,7 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     struct fuse_out_header *out;
 
     if(error > 0) {
-        fprintf(stderr, "positive error code: %i\n",  error);
+        fprintf(stderr, "fuse: positive error code: %i\n",  error);
         error = -ERANGE;
     }
 
@@ -861,8 +861,11 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 
     res = read(f->fd, cmd->buf, FUSE_MAX_IN);
     if(res == -1) {
-        perror("reading fuse device");
-        /* BAD... This will happen again */
+        /* ENODEV means we got unmounted, so we silenty return failure */
+        if(errno != ENODEV) {
+            perror("fuse: reading device");
+            /* BAD... This will happen again */
+        }
         free_cmd(cmd);
         return NULL;
     }

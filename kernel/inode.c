@@ -64,6 +64,8 @@ static void fuse_put_super(struct super_block *sb)
 	fc->flags = 0;
 	fuse_release_conn(fc);
 	sb->u.generic_sbp = NULL;
+	/* Flush all readers on this fs */
+	wake_up_all(&fc->waitq);
 	spin_unlock(&fuse_lock);
 }
 

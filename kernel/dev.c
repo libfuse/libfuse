@@ -173,7 +173,7 @@ static void request_wait(struct fuse_conn *fc)
 	DECLARE_WAITQUEUE(wait, current);
 
 	add_wait_queue_exclusive(&fc->waitq, &wait);
-	while(list_empty(&fc->pending)) {
+	while(fc->sb != NULL && list_empty(&fc->pending)) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if(signal_pending(current))
 			break;
@@ -230,17 +230,16 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 	struct fuse_conn *fc = DEV_FC(file);
 	struct fuse_req *req = NULL;
 
-	if(fc->sb == NULL)
-		return -EPERM;
-
 	spin_lock(&fuse_lock);
 	request_wait(fc);
-	if(!list_empty(&fc->pending)) {
+	if(fc->sb != NULL && !list_empty(&fc->pending)) {
 		req = list_entry(fc->pending.next, struct fuse_req, list);
 		list_del_init(&req->list);
 		req->locked = 1;
 	}
 	spin_unlock(&fuse_lock);
+	if(fc->sb == NULL)
+		return -ENODEV;
 	if(req == NULL)
 		return -ERESTARTSYS;
 
