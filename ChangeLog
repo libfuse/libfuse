@@ -1,3 +1,16 @@
+2004-11-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: make readpage() uninterruptible
+
+	* kernel: check readonly filesystem flag in fuse_permission
+
+	* lib: don't die if version file not found and new style device
+	exists
+
+	* lib: add '-r' option, which is short for '-o ro'
+
+	* fusermount: simplify device opening
+
 2004-11-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make libfuse and fusermount compatible with future versions

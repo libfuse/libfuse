@@ -17,6 +17,10 @@
 #include <errno.h>
 #include <sys/param.h>
 
+#define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
+#define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
+#define FUSE_DEV_OLD "/proc/fs/fuse/dev"
+
 #define FUSE_MAX_PATH 4096
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*inarg))
 
@@ -1689,15 +1693,21 @@ void __fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 static int check_version(struct fuse *f)
 {
     int res;
-    const char *version_file = FUSE_VERSION_FILE;
+    const char *version_file = FUSE_VERSION_FILE_NEW;
     FILE *vf = fopen(version_file, "r");
     if (vf == NULL) {
-        version_file = "/sys/fs/fuse/version";
+        version_file = FUSE_VERSION_FILE_OLD;
         vf = fopen(version_file, "r");
         if (vf == NULL) {
-            fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
-                    FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
-            return -1;
+            struct stat tmp;
+            if (stat(FUSE_DEV_OLD, &tmp) != -1) {
+                fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
+                        FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+                return -1;
+            } else {
+                fprintf(stderr, "fuse: warning: version of kernel interface unknown\n");
+                return 0;
+            }
         }
     }
     res = fscanf(vf, "%i.%i", &f->majorver, &f->minorver);

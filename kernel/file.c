@@ -233,10 +233,7 @@ static ssize_t fuse_send_read(struct file *file, struct inode *inode,
 	struct fuse_read_in inarg;
 	ssize_t res;
 	
-	req = fuse_get_request(fc);
-	if (!req)
-		return -ERESTARTSYS;
-	
+	req = fuse_get_request_nonint(fc);
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.fh = ff->fh;
 	inarg.offset = pos;
