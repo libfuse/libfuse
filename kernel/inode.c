@@ -16,11 +16,9 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #ifdef KERNEL_2_6
-#include <linux/moduleparam.h>
 #include <linux/parser.h>
 #include <linux/statfs.h>
 #else
-#include <linux/proc_fs.h>
 #include "compat/parser.h"
 #endif
 
@@ -32,23 +30,6 @@ MODULE_LICENSE("GPL");
 
 spinlock_t fuse_lock;
 static kmem_cache_t *fuse_inode_cachep;
-static int mount_count;
-
-static int user_allow_other;
-#ifdef KERNEL_2_6
-module_param(user_allow_other, int, 0644);
-#else
-MODULE_PARM(user_allow_other, "i");
-#endif
-MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_other\" or \"allow_root\" mount options");
-
-static int mount_max = 1000;
-#ifdef KERNEL_2_6
-module_param(mount_max, int, 0644);
-#else
-MODULE_PARM(mount_max, "i");
-#endif
-MODULE_PARM_DESC(mount_max, "Maximum number of FUSE mounts allowed, if -1 then unlimited (default: 1000)");
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
@@ -277,7 +258,6 @@ static void fuse_put_super(struct super_block *sb)
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
 	spin_lock(&fuse_lock);
-	mount_count --;
 	fc->sb = NULL;
 	fc->user_id = 0;
 	fc->flags = 0;
@@ -609,17 +589,6 @@ static struct super_operations fuse_super_operations = {
 	.show_options	= fuse_show_options,
 };
 
-static int inc_mount_count(void)
-{
-	int success = 0;
-	spin_lock(&fuse_lock);
-	mount_count ++;
-	if (mount_max == -1 || mount_count <= mount_max)
-		success = 1;
-	spin_unlock(&fuse_lock);
-	return success;
-}
-
 static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct fuse_conn *fc;
@@ -630,11 +599,6 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 
 	if (!parse_fuse_opt((char *) data, &d))
 		return -EINVAL;
-
-	if (!user_allow_other &&
-	    (d.flags & (FUSE_ALLOW_OTHER | FUSE_ALLOW_ROOT)) &&
-	    current->uid != 0)
-		return -EPERM;
 
 	sb->s_blocksize = PAGE_CACHE_SIZE;
 	sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
@@ -665,10 +629,6 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 
 	*get_fuse_conn_super_p(sb) = fc;
 
-	err = -ENFILE;
-	if (!inc_mount_count() && current->uid != 0)
-		goto err;
-
 	err = -ENOMEM;
 	root = get_root_inode(sb, d.rootmode);
 	if (root == NULL)
@@ -684,7 +644,6 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 
  err:
 	spin_lock(&fuse_lock);
-	mount_count --;
 	fc->sb = NULL;
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);

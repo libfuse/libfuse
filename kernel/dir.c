@@ -438,7 +438,7 @@ static int fuse_revalidate(struct dentry *entry)
 		if (!(fc->flags & FUSE_ALLOW_OTHER) &&
 		    current->fsuid != fc->user_id &&
 		    (!(fc->flags & FUSE_ALLOW_ROOT) ||
-		     current->fsuid != 0))
+		     !capable(CAP_DAC_OVERRIDE)))
 			return -EACCES;
 	} else if (time_before_eq(jiffies, fi->i_time))
 		return 0;
@@ -451,7 +451,7 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 	struct fuse_conn *fc = get_fuse_conn(inode);
 
 	if (!(fc->flags & FUSE_ALLOW_OTHER) && current->fsuid != fc->user_id &&
-	    (!(fc->flags & FUSE_ALLOW_ROOT) || current->fsuid != 0))
+	    (!(fc->flags & FUSE_ALLOW_ROOT) || !capable(CAP_DAC_OVERRIDE)))
 		return -EACCES;
 	else if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
 #ifdef KERNEL_2_6_10_PLUS

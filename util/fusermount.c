@@ -40,10 +40,14 @@
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
 #define FUSE_DEV_NEW "/dev/fuse"
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
+#define FUSE_CONF "/etc/fuse.conf"
 #define FUSE_MAJOR 10
 #define FUSE_MINOR 229
 
-const char *progname;
+static const char *progname;
+
+static int user_allow_other = 0;
+static int mount_max = 1000;
 
 static const char *get_user_name()
 {
@@ -156,9 +160,9 @@ static int lock_mtab()
     if (mtablock >= 0) {
         res = lockf(mtablock, F_LOCK, 0);
         if (res < 0)
-            perror("error getting lock");
+            fprintf(stderr, "%s: error getting lock", progname);
     } else
-        fprintf(stderr, "unable to open fuse lock file, continuing anyway\n");
+        fprintf(stderr, "%s: unable to open fuse lock file\n", progname);
 
     return mtablock;
 }
@@ -215,14 +219,14 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
 
     fp = setmntent(mtab, "r");
     if (fp == NULL) {
-	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab,
+	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
 		strerror(errno));
 	return -1;
     }
     
     newfp = setmntent(mtab_new, "w");
     if (newfp == NULL) {
-	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab_new,
+	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab_new,
 		strerror(errno));
 	return -1;
     }
@@ -272,6 +276,24 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
     return 0;
 }
 
+static int count_fuse_fs()
+{
+    struct mntent *entp;
+    int count = 0;
+    const char *mtab = _PATH_MOUNTED;
+    FILE *fp = setmntent(mtab, "r");
+    if (fp == NULL) {
+        fprintf(stderr, "%s: faild to open %s: %s\n", progname, mtab,
+                strerror(errno));
+        return -1;
+    }
+    while ((entp = getmntent(fp)) != NULL) {
+        if (strcmp(entp->mnt_type, "fuse") == 0)
+            count ++;
+    }
+    endmntent(fp);
+    return count;
+}
 
 static int do_unmount(const char *mnt, int quiet, int lazy, const char *mtab,
                       const char *mtab_new)
@@ -320,6 +342,32 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
     return 0;
 }
 #endif /* USE_UCLIBC */    
+
+static void read_conf(void)
+{
+    FILE *fp = fopen(FUSE_CONF, "r");
+    if (fp != NULL) {
+        char line[256];
+        int isnewline = 1;
+        while (fgets(line, sizeof(line), fp) != NULL) {
+            if (isnewline) {
+                int tmp;
+                if (strcmp(line, "user_allow_other\n") == 0)
+                    user_allow_other = 1;
+                else if (sscanf(line, "mount_max = %i\n", &tmp) == 1)
+                    mount_max = tmp;
+            }
+            if(line[strlen(line)-1] == '\n')
+                isnewline = 1;
+            else
+                isnewline = 0;
+        }
+        fclose(fp);
+    } else if (errno != ENOENT) {
+        fprintf(stderr, "%s: failed to open %s: %s\n", progname, FUSE_CONF,
+                strerror(errno));
+    }
+}
 
 static int begins_with(const char *s, const char *beg)
 {
@@ -424,6 +472,14 @@ static int get_mnt_opts(int flags, char *opts, char **mnt_optsp)
     return 0;
 }
 
+static int opt_eq(const char *s, unsigned len, const char *opt)
+{
+    if(strlen(opt) == len && strncmp(s, opt, len) == 0)
+        return 1;
+    else
+        return 0;
+}
+
 static int do_mount(const char *mnt, const char *type, mode_t rootmode,
                     int fd, const char *opts, const char *dev, char **fsnamep,
                     char **mnt_optsp)
@@ -464,9 +520,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
             int on;
             int flag;
             int skip_option = 0;
-            const char *large_read_opt = "large_read";
-            if (len == strlen(large_read_opt) &&
-                strncmp(large_read_opt, s, len) == 0) {
+            if (opt_eq(s, len, "large_read")) {
                 struct utsname utsname;
                 unsigned kmaj, kmin;
                 res = uname(&utsname);
@@ -476,6 +530,13 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
                     fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %i.%i kernels\n", progname, kmaj, kmin);
                     skip_option = 1;
                 }
+            }
+            if (getuid() != 0 && !user_allow_other &&
+                (opt_eq(s, len, "allow_other") ||
+                 opt_eq(s, len, "allow_root"))) {
+                fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in /etc/fuse.conf\n", progname, len, s);
+                free(optbuf);
+                return -1;
             }
             if (!skip_option) {
                 if (find_mount_flag(s, len, &on, &flag)) {
@@ -713,7 +774,8 @@ static int open_fuse_device(char **devp)
     if (fd >= 0)
         return fd;
     
-    fprintf(stderr, "fuse device not found, try 'modprobe fuse' first\n");
+    fprintf(stderr, "%s: fuse device not found, try 'modprobe fuse' first\n",
+            progname);
     return -1;
 }
 
@@ -729,15 +791,45 @@ static int mount_fuse(const char *mnt, const char *opts)
     char *mnt_opts;
     const char *real_mnt = mnt;
     int currdir_fd = -1;
+    int mtablock = -1;
 
     fd = open_fuse_device(&dev);
     if (fd == -1)
         return -1;
- 
+
+#ifndef USE_UCLIBC 
+    if (geteuid() == 0) {
+        mtablock = lock_mtab();
+        if (mtablock < 0) {
+            close(fd);
+            return -1;
+        }
+    }
+#endif
+
     if (getuid() != 0) {
         res = drop_privs();
-        if (res == -1)
+        if (res == -1) {
+            close(fd);
+#ifndef USE_UCLIBC
+            unlock_mtab(mtablock);
+#endif
             return -1;
+        }
+    }
+
+    read_conf();
+
+    if (getuid != 0 && mount_max != -1) {
+        int mount_count = count_fuse_fs();
+        if (mount_count >= mount_max) {
+            fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in /etc/fuse.conf\n", progname);
+            close(fd);
+#ifndef USE_UCLIBC
+            unlock_mtab(mtablock);
+#endif
+            return -1;
+        }
     }
 
     res = check_version(dev);
@@ -751,8 +843,13 @@ static int mount_fuse(const char *mnt, const char *opts)
     if (getuid() != 0)
         restore_privs();
 
-    if (res == -1)
+    if (res == -1) {
+        close(fd);
+#ifndef USE_UCLIBC
+        unlock_mtab(mtablock);
+#endif
         return -1;
+    }
 
     if (currdir_fd != -1) {
         fchdir(currdir_fd);
@@ -761,11 +858,11 @@ static int mount_fuse(const char *mnt, const char *opts)
     
 #ifndef USE_UCLIBC
     if (geteuid() == 0) {
-        int mtablock = lock_mtab();
         res = add_mount(fsname, mnt, type, mnt_opts);
         unlock_mtab(mtablock);
         if (res == -1) {
             umount2(mnt, 2); /* lazy umount */
+            close(fd);
             return -1;
         }
     }

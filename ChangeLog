@@ -1,3 +1,10 @@
+2005-01-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Remove 'mount_max' and 'user_allow_other' module options.  These
+	are now checked by fusermount, and can be set in /etc/fuse.conf
+
+	* KERNEL: change check for fsid == 0 to capable(CAP_DAC_OVERRIDE)
+
 2005-01-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* KERNEL: fix possible inode allocation problem, where
