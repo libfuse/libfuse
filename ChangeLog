@@ -13,6 +13,10 @@
 
 	* Cache ENOSYS (function not implemented) errors on *xattr, flush
 	and fsync
+
+	* Don't call getdir method from open() only from first readdir().
+	Open is sometimes just used to store the current directory
+	(e.g. find)
 	
 2004-05-18  Miklos Szeredi <mszeredi@inf.bme.hu>
 

@@ -472,6 +472,40 @@ static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 	return 0;
 }
 
+static int fuse_getdir(struct file *file)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_getdir_out_i outarg;
+
+	in.h.opcode = FUSE_GETDIR;
+	in.h.ino = inode->i_ino;
+	out.numargs = 1;
+	out.args[0].size = sizeof(struct fuse_getdir_out);
+	out.args[0].value = &outarg;
+	request_send(fc, &in, &out);
+	if (!out.h.error) {
+		struct file *cfile = outarg.file;
+		struct inode *inode;
+		if (!cfile) {
+			printk("fuse_getdir: invalid file\n");
+			return -EPROTO;
+		}
+		inode = cfile->f_dentry->d_inode;
+		if (!S_ISREG(inode->i_mode)) {
+			printk("fuse_getdir: not a regular file\n");
+			fput(cfile);
+			return -EPROTO;
+		}
+
+		file->private_data = cfile;
+	}
+
+	return out.h.error;
+}
+
 #define DIR_BUFSIZE 2048
 static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 {
@@ -479,8 +513,13 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 	char *buf;
 	int ret;
 
-	if (!cfile)
-		return -EISDIR;
+	if (!cfile) {
+		ret = fuse_getdir(file);
+		if (ret)
+			return ret;
+
+		cfile = file->private_data;
+	}
 
 	buf = kmalloc(DIR_BUFSIZE, GFP_KERNEL);
 	if (!buf)
@@ -554,35 +593,8 @@ static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
 
 static int fuse_dir_open(struct inode *inode, struct file *file)
 {
-	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_getdir_out_i outarg;
-
-	in.h.opcode = FUSE_GETDIR;
-	in.h.ino = inode->i_ino;
-	out.numargs = 1;
-	out.args[0].size = sizeof(struct fuse_getdir_out);
-	out.args[0].value = &outarg;
-	request_send(fc, &in, &out);
-	if (!out.h.error) {
-		struct file *cfile = outarg.file;
-		struct inode *inode;
-		if (!cfile) {
-			printk("fuse_getdir: invalid file\n");
-			return -EPROTO;
-		}
-		inode = cfile->f_dentry->d_inode;
-		if (!S_ISREG(inode->i_mode)) {
-			printk("fuse_getdir: not a regular file\n");
-			fput(cfile);
-			return -EPROTO;
-		}
-
-		file->private_data = cfile;
-	}
-
-	return out.h.error;
+	file->private_data = NULL;
+	return 0;
 }
 
 static int fuse_dir_release(struct inode *inode, struct file *file)
