@@ -69,7 +69,7 @@ sub main {
 	my (@names) = qw(getattr readlink getdir mknod mkdir unlink rmdir symlink rename link chmod chown truncate utime open read write statfs);
 	my ($tmp) = 0;
 	my (%mapping) = map { $_ => $tmp++ } (@names);
-	my (%otherargs) = (debug=>0, threaded=>1, mountpoint=>"");
+	my (%otherargs) = (debug=>0, unthreaded=>1, mountpoint=>"");
 	while(my $name = shift) {
 		my ($subref) = shift;
 		if(exists($otherargs{$name})) {
@@ -82,7 +82,9 @@ sub main {
 			$subs[$mapping{$name}] = $subref;
 		}
 	}
-	perl_fuse_main($0,$otherargs{threaded},$otherargs{debug},$otherargs{mountpoint},@subs);
+	print "flag: debug\n" if $otherargs{debug};
+	print "flag: unthreaded\n" if $otherargs{unthreaded};
+	perl_fuse_main($0,$otherargs{unthreaded},$otherargs{debug},$otherargs{mountpoint},@subs);
 }
 
 # Autoload methods go after =cut, and are processed by the autosplit program.
@@ -128,6 +130,53 @@ None by default.
 =head2 EXPORTABLE CONSTANTS
 
 None.
+
+=head2 FUNCTIONS
+
+=head3 Fuse::main
+
+Takes arguments in the form of hash key=>value pairs.  There are
+many valid keys.  Most of them correspond with names of callback
+functions, as described in section 'FUNCTIONS YOUR FILESYSTEM MAY IMPLEMENT'.
+A few special keys also exist:
+
+
+debug => boolean
+
+=over 1
+
+This turns FUSE call tracing on and off.  Default is 0 (which means off).
+
+=back
+
+mountpoint => string
+
+=over 1
+
+The point at which to mount this filesystem.  There is no default, you must
+specify this.  An example would be '/mnt'.
+
+=back
+
+unthreaded => boolean
+
+=over 1
+
+This turns FUSE multithreading off and on.  NOTE: This perlmodule does not
+currently work properly in multithreaded mode!  The author is unfortunately
+not familiar enough with perl-threads internals, and according to the
+documentation available at time of writing (2002-03-08), those internals are
+subject to changing anyway.  Note that singlethreaded mode also means that
+you will not have to worry about reentrancy, though you will have to worry
+about recursive lookups (since the kernel holds a global lock on your
+filesystem and blocks waiting for one callback to complete before calling
+another).
+
+I hope to add full multithreading functionality later, but for now, I
+recommend you leave this option at the default, 1 (which means
+unthreaded, no threads will be used and no reentrancy is needed).
+
+=back
 
 =head2 FUNCTIONS YOUR FILESYSTEM MAY IMPLEMENT
 

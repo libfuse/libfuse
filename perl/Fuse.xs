@@ -538,7 +538,7 @@ void
 perl_fuse_main(...)
 	PREINIT:
 	struct fuse_operations fops = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
-	int i, varnum = 0, threads, debug, argc;
+	int i, varnum = 0, nothreads, debug, argc, have_mnt;
 	char **argv;
 	STRLEN n_a;
 	STRLEN l;
@@ -548,27 +548,48 @@ perl_fuse_main(...)
 		XSRETURN_UNDEF;
 	}
 	CODE:
-	threads = !SvIV(ST(1));
-	debug = SvIV(ST(2));
-	if(threads && debug) {
-		argc = 4;
-		argv = ((char*[]){NULL,NULL,"-s","-d"});
-	} else if(threads) {
-		argc = 3;
-		argv = ((char*[]){NULL,NULL,"-s"});
-	} else if(debug) {
-		argc = 3;
-		argv = ((char*[]){NULL,NULL,"-d"});
-	} else {
-		argc = 2;
-		argv = ((char*[]){"str","mnt"});
+	/* how annoying. */
+	nothreads = SvIV(ST(1)) ? 1 : 0;
+	debug = SvIV(ST(2)) ? 1 : 0;
+	have_mnt = strlen(SvPV(ST(3),n_a)) ? 1 : 0;
+	switch(have_mnt<<2 | debug<<1 | nothreads) {
+		case 0: /* !nothreads !debug !mnt */
+			argv = ((char*[]){NULL});
+			argc = 1;
+			break;
+		case 1: /* nothreads !debug !mnt */
+			argv = ((char*[]){NULL,"-s"});
+			argc = 2;
+			break;
+		case 2: /* !nothreads debug !mnt */
+			argv = ((char*[]){NULL,"-d"});
+			argc = 2;
+			break;
+		case 3: /* nothreads debug !mnt */
+			argv = ((char*[]){NULL,"-s","-d"});
+			argc = 3;
+			break;
+		case 4: /* !nothreads !debug mnt */
+			argv = ((char*[]){NULL,NULL});
+			argc = 2;
+			break;
+		case 5: /* nothreads !debug mnt */
+			argv = ((char*[]){NULL,NULL,"-s"});
+			argc = 3;
+			break;
+		case 6: /* !nothreads debug mnt */
+			argv = ((char*[]){NULL,NULL,"-d"});
+			argc = 3;
+			break;
+		case 7: /* nothreads debug mnt */
+			argv = ((char*[]){NULL,NULL,"-s","-d"});
+			argc = 4;
+			break;
 	}
 	argv[0] = SvPV(ST(0),n_a);
-	if(strlen(SvPV(ST(3),n_a)))
+	if(have_mnt)
 		argv[1] = SvPV(ST(3),n_a);
-	else
-		argc--;
-	
+	printf("%i %i %i\n",nothreads,debug,have_mnt);
 	for(i=0;i<18;i++) {
 		SV *var = ST(i+4);
 		if((var != &PL_sv_undef) && SvROK(var)) {

@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/debugperl 
 
 use strict;
 use Fuse;
@@ -104,7 +104,25 @@ sub x_mknod {
 
 my ($mountpoint) = "";
 $mountpoint = shift(@ARGV) if @ARGV;
-Fuse::main(mountpoint=>$mountpoint, getattr=>\&x_getattr, readlink=>\&x_readlink, getdir=>\&x_getdir, mknod=>\&x_mknod,
-	mkdir=>\&x_mkdir, unlink=>\&x_unlink, rmdir=>\&x_rmdir, symlink=>\&x_symlink, rename=>\&x_rename, link=>\&x_link,
-	chmod=>\&x_chmod, chown=>\&x_chown, truncate=>\&x_truncate, utime=>\&x_utime, open=>\&x_open, read=>\&x_read, write=>\&x_write
+Fuse::main(
+	unthreaded=>1,
+	debug=>1,
+	mountpoint=>$mountpoint,
+	getattr=>\&x_getattr,
+	readlink=>\&x_readlink,
+	getdir=>\&x_getdir,
+	mknod=>\&x_mknod,
+	mkdir=>\&x_mkdir,
+	unlink=>\&x_unlink,
+	rmdir=>\&x_rmdir,
+	symlink=>\&x_symlink,
+	rename=>\&x_rename,
+	link=>\&x_link,
+	chmod=>\&x_chmod,
+	chown=>\&x_chown,
+	truncate=>\&x_truncate,
+	utime=>\&x_utime,
+	open=>\&x_open,
+	read=>\&x_read,
+	write=>\&x_write
 );
