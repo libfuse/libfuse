@@ -1,3 +1,8 @@
+2004-07-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Check permissions in setattr if 'default_permissions' flag is
+	set.  Bug spotted by Damjan Lango
+
 2004-07-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* 'large_read' mount option removed for 2.6 kernels, since the

@@ -762,6 +762,11 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	int err;
 	int is_truncate = 0;
 	
+	if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
+		err = inode_change_ok(inode, attr);
+		if (err)
+			return err;
+	}
 
 	if (attr->ia_valid & ATTR_SIZE) {
 		unsigned long limit;

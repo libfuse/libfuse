@@ -20,22 +20,22 @@ and checking out the 'fuse' module.
 Installation
 ============
 
-See the file 'INSTALL'
+./configure
+make
+make install
 
-IMPORTANT NOTE: If you run a system with untrusted users, installing
-this program is not recommended, as it could be used to breach
-security (see the 'Security' section for explanation).
+Also see the file 'INSTALL'
 
 How To Use
 ==========
 
 FUSE is made up of three main parts:
 
- - A kernel filesystem module (kernel/fuse.o)
+ - A kernel filesystem module
 
- - A userspace library (lib/libfuse.a)
+ - A userspace library
 
- - A mount/unmount program (util/fusermount)
+ - A mount/unmount program
 
 
 Here's how to create your very own virtual filesystem in five easy
@@ -45,19 +45,14 @@ steps (after installing FUSE):
 
   2) Build the fusexmp program
 
-  3) run 'example/fusexmp /mnt/whatever -d'
+  3) run 'example/fusexmp /mnt/fuse -d'
 
-  4) ls -al /mnt/whatever
+  4) ls -al /mnt/fuse
 
   5) Be glad
 
 If it doesn't work out, please ask!  Also see the file 'include/fuse.h' for
 detailed documentation of the library interface.
-
-The fusermount program accepts a couple of additional options (see
-'fusermount -h').  You can add these options after a '--' like this:
-
-   example/fusexmp /mnt/whatever -d -- -l
 
 Security
 ========
