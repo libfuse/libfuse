@@ -25,12 +25,23 @@ struct fuse_worker {
     fuse_processor_t proc;
 };
 
-static void start_thread(struct fuse_worker *w, pthread_t *thread_id);
+static int start_thread(struct fuse_worker *w, pthread_t *thread_id);
 
 static void *do_work(void *data)
 {
     struct fuse_worker *w = (struct fuse_worker *) data;
     struct fuse *f = w->f;
+    struct fuse_context *ctx;
+
+    ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
+    if (ctx == NULL) {
+        fprintf(stderr, "fuse: failed to allocate fuse context\n");
+        pthread_mutex_lock(&f->lock);
+        f->numavail --;
+        pthread_mutex_unlock(&f->lock);
+        return NULL;
+    }
+    pthread_setspecific(f->context_key, ctx);
 
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -48,11 +59,19 @@ static void *do_work(void *data)
         if (f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
             pthread_mutex_lock(&f->lock);
             if (f->numworker < FUSE_MAX_WORKERS) {
+                /* FIXME: threads should be stored in a list instead
+                   of an array */
+                int res;
                 pthread_t *thread_id = &w->threads[f->numworker];
                 f->numavail ++;
                 f->numworker ++;
                 pthread_mutex_unlock(&f->lock);
-                start_thread(w, thread_id);
+                res = start_thread(w, thread_id);
+                if (res == -1) {
+                    pthread_mutex_lock(&f->lock);
+                    f->numavail --;
+                    pthread_mutex_unlock(&f->lock);
+                }
             } else
                 pthread_mutex_unlock(&f->lock);
         }
@@ -63,7 +82,7 @@ static void *do_work(void *data)
     return NULL;
 }
 
-static void start_thread(struct fuse_worker *w, pthread_t *thread_id)
+static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
 {
     sigset_t oldset;
     sigset_t newset;
@@ -76,23 +95,16 @@ static void start_thread(struct fuse_worker *w, pthread_t *thread_id)
     pthread_sigmask(SIG_SETMASK, &oldset, NULL);
     if (res != 0) {
         fprintf(stderr, "Error creating thread: %s\n", strerror(res));
-        exit(1);
+        return -1;
     }
     
     pthread_detach(*thread_id);
+    return 0;
 }
 
 static struct fuse_context *mt_getcontext(struct fuse *f)
 {
-    struct fuse_context *ctx;
-
-    ctx = (struct fuse_context *) pthread_getspecific(f->context_key);
-    if (ctx == NULL) {
-        ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
-        pthread_setspecific(f->context_key, ctx);
-    }
-
-    return ctx;
+    return (struct fuse_context *) pthread_getspecific(f->context_key);
 }
 
 static void mt_freecontext(void *data)
@@ -100,13 +112,17 @@ static void mt_freecontext(void *data)
     free(data);
 }
 
-void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
+int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
 {
     struct fuse_worker *w;
     int res;
     int i;
 
     w = malloc(sizeof(struct fuse_worker));    
+    if (w == NULL) {
+        fprintf(stderr, "fuse: failed to allocate worker structure\n");
+        return -1;
+    }
     memset(w, 0, sizeof(struct fuse_worker));
     w->f = f;
     w->data = data;
@@ -116,7 +132,7 @@ void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
     res = pthread_key_create(&f->context_key, mt_freecontext);
     if (res != 0) {
         fprintf(stderr, "Failed to create thread specific key\n");
-        exit(1);
+        return -1;
     }
     f->getcontext = mt_getcontext;
     do_work(w);
@@ -127,12 +143,13 @@ void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
     pthread_mutex_unlock(&f->lock);
     pthread_key_delete(f->context_key);
     free(w);
+    return 0;
 }
 
-void fuse_loop_mt(struct fuse *f)
+int fuse_loop_mt(struct fuse *f)
 {
     if (f == NULL)
-        return;
+        return -1;
 
-    __fuse_loop_mt(f, (fuse_processor_t) __fuse_process_cmd, NULL);
+    return __fuse_loop_mt(f, (fuse_processor_t) __fuse_process_cmd, NULL);
 }

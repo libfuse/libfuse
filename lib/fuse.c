@@ -159,14 +159,18 @@ static struct node *lookup_node(struct fuse *f, fino_t parent,
     abort();
 }
 
-static void hash_name(struct fuse *f, struct node *node, fino_t parent,
-                      const char *name)
+static int hash_name(struct fuse *f, struct node *node, fino_t parent,
+                     const char *name)
 {
     size_t hash = name_hash(f, parent, name);
     node->parent = parent;
     node->name = strdup(name);
+    if (node->name == NULL)
+        return -1;
+
     node->name_next = f->name_table[hash];
-    f->name_table[hash] = node;    
+    f->name_table[hash] = node;
+    return 0;
 }
 
 static void unhash_name(struct fuse *f, struct node *node)
@@ -210,14 +214,20 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     }
 
     node = (struct node *) calloc(1, sizeof(struct node));
+    if (node == NULL)
+        return NULL;
+
     node->mode = mode;
     node->rdev = rdev;
     node->open_count = 0;
     node->is_hidden = 0;
     node->ino = next_ino(f);
     node->generation = f->generation;
+    if (hash_name(f, node, parent, name) == -1) {
+        free(node);
+        return NULL;
+    }
     hash_ino(f, node);
-    hash_name(f, node, parent, name);
 
   out:
     node->version = version;
@@ -361,14 +371,18 @@ static int rename_node(struct fuse *f, fino_t olddir, const char *oldname,
     if (newnode != NULL) {
         if (hide) {
             fprintf(stderr, "fuse: hidden file got created during hiding\n");
-            err = -1;
+            err = -EBUSY;
             goto out;
         }
         unhash_name(f, newnode);
     }
         
     unhash_name(f, node);
-    hash_name(f, node, newdir, newname);
+    if (hash_name(f, node, newdir, newname) == -1) {
+        err = -ENOMEM;
+        goto out;
+    }
+        
     if (hide)
         node->is_hidden = 1;
 
@@ -464,15 +478,20 @@ static int __send_reply(struct fuse *f, struct fuse_in_header *in, int error,
 
     outsize = sizeof(struct fuse_out_header) + argsize;
     outbuf = (char *) malloc(outsize);
-    out = (struct fuse_out_header *) outbuf;
-    memset(out, 0, sizeof(struct fuse_out_header));
-    out->unique = in->unique;
-    out->error = error;
-    if (argsize != 0)
-        memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
-
-    res = send_reply_raw(f, outbuf, outsize, locked);
-    free(outbuf);
+    if (outbuf == NULL) {
+        fprintf(stderr, "fuse: failed to allocate reply buffer\n");
+        res = -ENOMEM;
+    } else {
+        out = (struct fuse_out_header *) outbuf;
+        memset(out, 0, sizeof(struct fuse_out_header));
+        out->unique = in->unique;
+        out->error = error;
+        if (argsize != 0)
+            memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
+        
+        res = send_reply_raw(f, outbuf, outsize, locked);
+        free(outbuf);
+    }
 
     return res;
 }
@@ -538,22 +557,18 @@ static int hide_node(struct fuse *f, const char *oldpath, fino_t dir,
 {
     char newname[64];
     char *newpath;
-    int err = -1;
+    int err = -EBUSY;
 
-    if (!f->op.rename || !f->op.unlink)
-        return -EBUSY;
-
-    newpath = hidden_name(f, dir, oldname, newname, sizeof(newname));
-    if (newpath) {
-        err = f->op.rename(oldpath, newpath);
-        if (!err)
-            err = rename_node(f, dir, oldname, dir, newname, 1);
-        free(newpath);
+    if (f->op.rename && f->op.unlink) {
+        newpath = hidden_name(f, dir, oldname, newname, sizeof(newname));
+        if (newpath) {
+            int res = f->op.rename(oldpath, newpath);
+            if (res == 0)
+                err = rename_node(f, dir, oldname, dir, newname, 1);
+            free(newpath);
+        }
     }
-    if (err)
-        return -EBUSY;
-    
-    return 0;
+    return err;
 }
 
 static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
@@ -569,15 +584,19 @@ static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
         memset(arg, 0, sizeof(struct fuse_entry_out));
         convert_stat(&buf, &arg->attr);
         node = find_node(f, ino, name, &arg->attr, version);
-        arg->ino = node->ino;
-        arg->generation = node->generation;
-        arg->entry_valid = ENTRY_REVALIDATE_TIME;
-        arg->entry_valid_nsec = 0;
-        arg->attr_valid = ATTR_REVALIDATE_TIME;
-        arg->attr_valid_nsec = 0;
-        if (f->flags & FUSE_DEBUG) {
-            printf("   INO: %li\n", arg->ino);
-            fflush(stdout);
+        if (node == NULL)
+            res = -ENOMEM;
+        else {
+            arg->ino = node->ino;
+            arg->generation = node->generation;
+            arg->entry_valid = ENTRY_REVALIDATE_TIME;
+            arg->entry_valid_nsec = 0;
+            arg->attr_valid = ATTR_REVALIDATE_TIME;
+            arg->attr_valid_nsec = 0;
+            if (f->flags & FUSE_DEBUG) {
+                printf("   INO: %li\n", arg->ino);
+                fflush(stdout);
+            }
         }
     }
     return res;
@@ -950,7 +969,7 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
                 if (res == 0) {
                     res = f->op.rename(oldpath, newpath);
                     if (res == 0)
-                        rename_node(f, olddir, oldname, newdir, newname, 0);
+                        res = rename_node(f, olddir, oldname, newdir, newname, 0);
                 }
             }
             free(newpath);
@@ -1096,42 +1115,46 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *path;
     char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
-    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-    char *buf = outbuf + sizeof(struct fuse_out_header);
-    size_t size;
-    size_t outsize;
-
-    res = -ENOENT;
-    path = get_path(f, in->ino);
-    if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
-            printf("READ[%u] %u bytes from %llu\n", arg->fh, arg->size,
-                   arg->offset);
-            fflush(stdout);
+    if (outbuf == NULL)
+        send_reply(f, in, -ENOMEM, NULL, 0);
+    else {
+        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+        char *buf = outbuf + sizeof(struct fuse_out_header);
+        size_t size;
+        size_t outsize;
+        
+        res = -ENOENT;
+        path = get_path(f, in->ino);
+        if (path != NULL) {
+            if (f->flags & FUSE_DEBUG) {
+                printf("READ[%u] %u bytes from %llu\n", arg->fh, arg->size,
+                       arg->offset);
+                fflush(stdout);
+            }
+            
+            res = -ENOSYS;
+            if (f->op.read)
+                res = f->op.read(path, buf, arg->size, arg->offset);
+            free(path);
         }
-
-        res = -ENOSYS;
-        if (f->op.read)
-            res = f->op.read(path, buf, arg->size, arg->offset);
-        free(path);
-    }
-    
-    size = 0;
-    if (res >= 0) {
-        size = res;
-        res = 0;
-        if (f->flags & FUSE_DEBUG) {
-            printf("   READ[%u] %u bytes\n", arg->fh, size);
-            fflush(stdout);
+        
+        size = 0;
+        if (res >= 0) {
+            size = res;
+            res = 0;
+            if (f->flags & FUSE_DEBUG) {
+                printf("   READ[%u] %u bytes\n", arg->fh, size);
+                fflush(stdout);
+            }
         }
+        memset(out, 0, sizeof(struct fuse_out_header));
+        out->unique = in->unique;
+        out->error = res;
+        outsize = sizeof(struct fuse_out_header) + size;
+        
+        send_reply_raw(f, outbuf, outsize, 0);
+        free(outbuf);
     }
-    memset(out, 0, sizeof(struct fuse_out_header));
-    out->unique = in->unique;
-    out->error = res;
-    outsize = sizeof(struct fuse_out_header) + size;
-    
-    send_reply_raw(f, outbuf, outsize, 0);
-    free(outbuf);
 }
 
 static void do_write(struct fuse *f, struct fuse_in_header *in,
@@ -1263,21 +1286,25 @@ static void do_getxattr_read(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + size);
-    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-    char *value = outbuf + sizeof(struct fuse_out_header);
-
-    res = common_getxattr(f, in, name, value, size);
-    size = 0;
-    if (res > 0) {
-        size = res;
-        res = 0;
+    if (outbuf == NULL)
+        send_reply(f, in, -ENOMEM, NULL, 0);
+    else {
+        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+        char *value = outbuf + sizeof(struct fuse_out_header);
+        
+        res = common_getxattr(f, in, name, value, size);
+        size = 0;
+        if (res > 0) {
+            size = res;
+            res = 0;
+        }
+        memset(out, 0, sizeof(struct fuse_out_header));
+        out->unique = in->unique;
+        out->error = res;
+        
+        send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size, 0);
+        free(outbuf);
     }
-    memset(out, 0, sizeof(struct fuse_out_header));
-    out->unique = in->unique;
-    out->error = res;
-
-    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size, 0);
-    free(outbuf);
 }
 
 static void do_getxattr_size(struct fuse *f, struct fuse_in_header *in,
@@ -1327,21 +1354,25 @@ static void do_listxattr_read(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + size);
-    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-    char *list = outbuf + sizeof(struct fuse_out_header);
-
-    res = common_listxattr(f, in, list, size);
-    size = 0;
-    if (res > 0) {
-        size = res;
-        res = 0;
+    if (outbuf == NULL)
+        send_reply(f, in, -ENOMEM, NULL, 0);
+    else {
+        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+        char *list = outbuf + sizeof(struct fuse_out_header);
+        
+        res = common_listxattr(f, in, list, size);
+        size = 0;
+        if (res > 0) {
+            size = res;
+            res = 0;
+        }
+        memset(out, 0, sizeof(struct fuse_out_header));
+        out->unique = in->unique;
+        out->error = res;
+        
+        send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size, 0);
+        free(outbuf);
     }
-    memset(out, 0, sizeof(struct fuse_out_header));
-    out->unique = in->unique;
-    out->error = res;
-
-    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size, 0);
-    free(outbuf);
 }
 
 static void do_listxattr_size(struct fuse *f, struct fuse_in_header *in)
@@ -1525,7 +1556,16 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
     void *inarg;
 
     cmd = (struct fuse_cmd *) malloc(sizeof(struct fuse_cmd));
+    if (cmd == NULL) {
+        fprintf(stderr, "fuse: failed to allocate cmd in read\n");
+        return NULL;
+    }
     cmd->buf = (char *) malloc(FUSE_MAX_IN);
+    if (cmd->buf == NULL) {
+        fprintf(stderr, "fuse: failed to allocate read buffer\n");
+        free(cmd);
+        return NULL;
+    }
     in = (struct fuse_in_header *) cmd->buf;
     inarg = cmd->buf + sizeof(struct fuse_in_header);
 
@@ -1563,16 +1603,16 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
     return cmd;
 }
 
-void fuse_loop(struct fuse *f)
+int fuse_loop(struct fuse *f)
 {
     if (f == NULL)
-        return;
+        return -1;
 
     while (1) {
         struct fuse_cmd *cmd;
 
         if (__fuse_exited(f))
-            return;
+            return 0;
 
         cmd = __fuse_read_cmd(f);
         if (cmd == NULL)
@@ -1580,6 +1620,7 @@ void fuse_loop(struct fuse *f)
 
         __fuse_process_cmd(f, cmd);
     }
+    return 0;
 }
 
 int fuse_invalidate(struct fuse *f, const char *path)
@@ -1668,12 +1709,15 @@ int fuse_is_lib_option(const char *opt)
         return 0;
 }
 
-static void parse_lib_opts(struct fuse *f, const char *opts)
+static int parse_lib_opts(struct fuse *f, const char *opts)
 {
     if (opts) {
         char *xopts = strdup(opts);
         char *s = xopts;
         char *opt;
+
+        if (xopts == NULL)
+            return -1;
         
         while((opt = strsep(&s, ","))) {
             if (strcmp(opt, "debug") == 0)
@@ -1685,6 +1729,7 @@ static void parse_lib_opts(struct fuse *f, const char *opts)
         }
         free(xopts);
     }
+    return 0;
 }
 
 struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op)
@@ -1693,13 +1738,15 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
     struct node *root;
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
+    if (f == NULL)
+        goto out;
 
-    if (check_version(f) == -1) {
-        free(f);
-        return NULL;
-    }
+    if (check_version(f) == -1)
+        goto out_free;
 
-    parse_lib_opts(f, opts);
+    if (parse_lib_opts(f, opts) == -1)
+        goto out_free;
+
     f->fd = fd;
     f->ctr = 0;
     f->generation = 0;
@@ -1707,9 +1754,15 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
     f->name_table_size = 14057;
     f->name_table = (struct node **)
         calloc(1, sizeof(struct node *) * f->name_table_size);
+    if (f->name_table == NULL)
+        goto out_free;
+
     f->ino_table_size = 14057;
     f->ino_table = (struct node **)
         calloc(1, sizeof(struct node *) * f->ino_table_size);
+    if (f->ino_table == NULL)
+        goto out_free_name_table;
+
     pthread_mutex_init(&f->lock, NULL);
     f->numworker = 0;
     f->numavail = 0;
@@ -1720,15 +1773,33 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
     f->exited = 0;
 
     root = (struct node *) calloc(1, sizeof(struct node));
+    if (root == NULL)
+        goto out_free_ino_table;
+
     root->mode = 0;
     root->rdev = 0;
     root->name = strdup("/");
+    if (root->name == NULL)
+        goto out_free_root;
+
     root->parent = 0;
     root->ino = FUSE_ROOT_INO;
     root->generation = 0;
     hash_ino(f, root);
 
     return f;
+
+ out_free_root:
+    free(root);
+ out_free_ino_table:
+    free(f->ino_table);
+ out_free_name_table:
+    free(f->name_table);
+ out_free:
+    free(f);
+ out:
+    fprintf(stderr, "fuse: failed to allocate fuse object\n");
+    return NULL;
 }
 
 void fuse_destroy(struct fuse *f)

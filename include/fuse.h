@@ -231,8 +231,9 @@ void fuse_destroy(struct fuse *f);
  * operations are called. 
  *
  * @param f the FUSE handle
+ * @return 0 if no error occured, -1 otherwise
  */
-void fuse_loop(struct fuse *f);
+int fuse_loop(struct fuse *f);
 
 /**
  * Exit from event loop
@@ -252,8 +253,9 @@ void fuse_exit(struct fuse *f);
  * the application.
  *
  * @param f the FUSE handle
+ * @return 0 if no error occured, -1 otherwise
  */
-void fuse_loop_mt(struct fuse *f);
+int fuse_loop_mt(struct fuse *f);
 
 /**
  * Get the current context
@@ -284,7 +286,7 @@ struct fuse_cmd;
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
 void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
-void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
+int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
 int __fuse_exited(struct fuse* f);
 
 #ifdef __cplusplus

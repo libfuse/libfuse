@@ -119,18 +119,23 @@ static int fuse_do(int fuse_fd, const char *opts, int multithreaded,
     return 0;
 }
 
-static void add_option_to(const char *opt, char **optp)
+static int add_option_to(const char *opt, char **optp)
 {
     unsigned len = strlen(opt);
     if (*optp) {
         unsigned oldlen = strlen(*optp);
         *optp = realloc(*optp, oldlen + 1 + len + 1);
+        if (*optp == NULL)
+            return -1;
         (*optp)[oldlen] = ',';
         strcpy(*optp + oldlen + 1, opt);
     } else {
         *optp = malloc(len + 1);
+        if (*optp == NULL)
+            return -1;
         strcpy(*optp, opt);
     }
+    return 0;
 }
 
 static void add_options(char **lib_optp, char **kernel_optp, const char *opts)
@@ -138,12 +143,22 @@ static void add_options(char **lib_optp, char **kernel_optp, const char *opts)
     char *xopts = strdup(opts);
     char *s = xopts;
     char *opt;
-    
+
+    if (xopts == NULL) {
+        fprintf(stderr, "fuse: memory allocation failed\n");
+        exit(1);
+    }
+
     while((opt = strsep(&s, ",")) != NULL) {
+        int res;
         if (fuse_is_lib_option(opt))
-            add_option_to(opt, lib_optp);
+            res = add_option_to(opt, lib_optp);
         else
-            add_option_to(opt, kernel_optp);
+            res = add_option_to(opt, kernel_optp);
+        if (res == -1) {
+            fprintf(stderr, "fuse: memory allocation failed\n");
+            exit(1);
+        }
     }
     free(xopts);
 }
@@ -168,6 +183,10 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
         basename++;
 
     fsname_opt = malloc(strlen(basename) + 64);
+    if (fsname_opt == NULL) {
+        fprintf(stderr, "fuse: memory allocation failed\n");
+        exit(1);
+    }
     sprintf(fsname_opt, "fsname=%s", basename);
     add_options(&lib_opts, &kernel_opts, fsname_opt);
     free(fsname_opt);
@@ -213,8 +232,13 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
                 else
                     invalid_option(argv, argctr);
             }
-        } else if (fuse_mountpoint == NULL)
+        } else if (fuse_mountpoint == NULL) {
             fuse_mountpoint = strdup(argv[argctr]);
+            if (fuse_mountpoint == NULL) {
+                fprintf(stderr, "fuse: memory allocation failed\n");
+                exit(1);
+            }
+        }
         else
             invalid_option(argv, argctr);
     }
