@@ -193,6 +193,7 @@ struct fuse_req {
 
 	struct page *pages[FUSE_MAX_PAGES_PER_REQ];
 	unsigned num_pages;
+	unsigned page_offset;
 };
 
 /**

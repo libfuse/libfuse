@@ -1,3 +1,13 @@
+2004-11-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: make readpage() uninterruptible
+
+	* kernel: when direct_io is turend on, copy data directly to
+	destination without itermediate buffer.  More efficient and safer,
+	since no allocation is done.
+
+	* fusermount: fix warning if fuse module is not loaded
+	
 2004-11-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse API change: open, read, write, flush, fsync and release

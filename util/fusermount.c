@@ -614,7 +614,9 @@ static int try_open(const char *dev, char **devp, int silent)
             close(fd);
             fd = -1;
         }
-    } else if (!silent) {
+    } else if (errno == ENODEV)
+        return -2;
+    else if (!silent) {
         fprintf(stderr, "%s: failed to open %s: %s\n", progname, dev,
                 strerror(errno));
     }
@@ -624,7 +626,7 @@ static int try_open(const char *dev, char **devp, int silent)
 #define FUSE_TMP_DIRNAME "/tmp/.fuse_devXXXXXX"
 #define FUSE_TMP_DEVNAME "/fuse"
 
-static int try_open_new_temp(unsigned devnum, char **devp)
+static int try_open_new_temp(unsigned devnum, char **devp, int silent)
 {
     int res;
     int fd;
@@ -643,7 +645,7 @@ static int try_open_new_temp(unsigned devnum, char **devp)
         rmdir(dirname);
         return -1;
     }
-    fd = try_open(filename, devp, 0);
+    fd = try_open(filename, devp, silent);
     unlink(filename);
     rmdir(dirname);
     return fd;
@@ -662,14 +664,13 @@ static int try_open_new(char **devp, int final)
     if (fd == -1) {
         if (!final)
             return -2;
-        fd = try_open(FUSE_DEV, devp, 0);
-        if (fd != -1)
-            return fd;
-        if (errno == ENODEV)
+        fd = try_open(FUSE_DEV, devp, 1);
+        if (fd == -2)
             return -2;
-        fprintf(stderr, "%s: failed to open %s: %s\n", progname,
-                FUSE_DEV, strerror(errno));
-        return -1;
+        fd = try_open_new_temp(FUSE_MAJOR << 8 | FUSE_MINOR, devp, 1);
+        if (fd == -2)
+            return -2;
+        return try_open(FUSE_DEV, devp, 0);
     }
 
     res = read(fd, buf, sizeof(buf)-1);
@@ -692,7 +693,7 @@ static int try_open_new(char **devp, int final)
     res = stat(dev, &stbuf);
     if (res == -1) {
         if (major == FUSE_MAJOR && minor == FUSE_MINOR)
-            return try_open_new_temp(devnum, devp);
+            return try_open_new_temp(devnum, devp, 0);
         else {
             fprintf(stderr, "%s: failed to open %s: %s\n", progname,
                     dev, strerror(errno));
