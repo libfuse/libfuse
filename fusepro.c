@@ -64,6 +64,50 @@ static int pro_mknod(const char *path, int mode, int rdev)
     return 0;
 }
 
+static int pro_symlink(const char *from, const char *to)
+{
+    int res;
+
+    res = symlink(from, to);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+static int pro_mkdir(const char *path, int mode)
+{
+    int res;
+
+    res = mkdir(path, mode);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+static int pro_unlink(const char *path)
+{
+    int res;
+
+    res = unlink(path);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+static int pro_rmdir(const char *path)
+{
+    int res;
+
+    res = rmdir(path);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
 static void exit_handler()
 {
     exit(0);
@@ -104,6 +148,10 @@ static struct fuse_operations pro_oper = {
     readlink:	pro_readlink,
     getdir:     pro_getdir,
     mknod:	pro_mknod,
+    mkdir:	pro_mkdir,
+    symlink:	pro_symlink,
+    unlink:	pro_unlink,
+    rmdir:	pro_rmdir,
 };
 
 int main(int argc, char *argv[])

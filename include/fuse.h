@@ -20,8 +20,12 @@ typedef int (*dirfiller_t) (struct fuse_dh *, const char *, int type);
 struct fuse_operations {
     int (*getattr) (const char *path, struct stat *stbuf);
     int (*readlink) (const char *path, char *buf, size_t size);
-    int (*mknod) (const char *path, int mode, int rdev);
     int (*getdir) (const char *path, struct fuse_dh *h, dirfiller_t filler);
+    int (*mknod) (const char *path, int mode, int rdev);
+    int (*mkdir) (const char *path, int mode);
+    int (*symlink) (const char *from, const char *to);
+    int (*unlink) (const char *path);
+    int (*rmdir) (const char *path);
 };
 
 struct fuse *fuse_new();

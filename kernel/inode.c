@@ -139,21 +139,14 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 
 static struct inode *get_root_inode(struct super_block *sb)
 {
-	struct inode *root	;
+	struct inode *root;
 
 	root = iget(sb, 1);
 	if(root) {
-		root->i_mode = S_IFDIR;
-		root->i_uid = 0;
-		root->i_gid = 0;
-		root->i_nlink = 2;
-		root->i_size = 0;
-		root->i_blksize = 1024;
-		root->i_blocks = 0;
-		root->i_atime = CURRENT_TIME;
-		root->i_mtime = CURRENT_TIME;
-		root->i_ctime = CURRENT_TIME;
-		fuse_dir_init(root);
+		struct fuse_attr attr;
+		memset(&attr, 0, sizeof(attr));
+		attr.mode = S_IFDIR;
+		fuse_init_inode(root, &attr);
 	}
 
 	return root;

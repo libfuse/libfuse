@@ -109,25 +109,11 @@ extern struct proc_dir_entry *proc_fuse_dev;
  */
 extern spinlock_t fuse_lock;
 
-/**
- * Fill in the directory operations
- */
-void fuse_dir_init(struct inode *inode);
 
 /**
- * Fill in the file operations
+ * Initialize inode
  */
-void fuse_file_init(struct inode *inode);
-
-/**
- * Fill in the symlink operations
- */
-void fuse_symlink_init(struct inode *inode);
-
-/**
- * Fill in the special inode operaions
- */
-void fuse_special_init(struct inode *inode);
+void fuse_init_inode(struct inode *inode, struct fuse_attr *attr);
 
 /**
  * Check if the connection can be released, and if yes, then free the

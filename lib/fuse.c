@@ -43,14 +43,13 @@ static int free_node(struct node *node)
 
 static inline struct node *get_node(fino_t ino)
 {
-    return (struct node *) ino;
+    return (struct node *) ((ino << 3) + 0x8000000);
 }
 
 static inline fino_t get_ino(struct node *node)
 {
-    return (fino_t) node;
+    return (((fino_t) node) - 0x8000000) >> 3;
 }
-
 
 static fino_t find_node(struct fuse *f, fino_t parent, char *name, int create)
 {
@@ -95,13 +94,20 @@ static char *get_path(fino_t ino)
     return ss;
 }
 
+static char *get_path_name(fino_t ino, const char *name)
+{
+    char *path = get_path(ino);
+    char *path2 = g_strconcat(path, "/", name, NULL);
+    g_free(path);
+    return path2;
+}
+
 static void remove_node(struct fuse *f, fino_t ino)
 {
     struct node *node = get_node(ino);
     g_hash_table_remove(f->nametab, node);
     free_node(node);
 }
-
 
 static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 {
@@ -124,30 +130,14 @@ static int get_attributes(struct fuse *f, fino_t ino, struct fuse_attr *attr)
     struct stat buf;
     int res;
 
-    if(f->op.getattr == NULL)
-        return -ENOSYS;
-    
     path = get_path(ino);
-    res = f->op.getattr(path, &buf);
+    res = -ENOSYS;
+    if(f->op.getattr)
+        res = f->op.getattr(path, &buf);
     g_free(path);
     if(res == 0) 
         convert_stat(&buf, attr);
     
-    return res;
-}
-
-static int read_link(struct fuse *f, fino_t ino, char *buf, size_t size)
-{
-    char *path;
-    int res;
-    
-    if(f->op.readlink == NULL)
-        return -ENOSYS;
-
-    path = get_path(ino);
-    res = f->op.readlink(path, buf, size);
-    g_free(path);
-
     return res;
 }
 
@@ -169,27 +159,6 @@ static int fill_dir(struct fuse_dh *dh, char *name, int type)
     }
     return 0;
 }
-
-static int get_dir(struct fuse *f, fino_t ino, FILE *fp)
-{
-    char *path;
-    int res;
-    struct fuse_dh dh;
-    
-    if(f->op.getdir == NULL)
-        return -ENOSYS;
-
-    dh.fuse = f;
-    dh.fp = fp;
-    dh.dir = ino;
-        
-    path = get_path(ino);
-    res = f->op.getdir(path, &dh, (dirfiller_t) fill_dir);
-    g_free(path);
-
-    return res;
-}
-
 
 static void send_reply(struct fuse *f, struct fuse_in_header *in, int result,
                        void *arg, size_t argsize)
@@ -237,7 +206,6 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
-
 static void do_forget(struct fuse *f, unsigned long *inos, size_t num)
 {
     size_t i;
@@ -259,49 +227,111 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
 {
     int res;
     char link[PATH_MAX + 1];
+    char *path;
 
-    res = read_link(f, in->ino, link, PATH_MAX + 1);
-    send_reply(f, in, res, link, res == 0 ? strlen(link) : 0);
-}
-
-static void do_mknod(struct fuse *f, struct fuse_in_header *in,
-                     struct fuse_mknod_in *inarg)
-{
-    int res;
-    struct fuse_mknod_out outarg;
-    
+    path = get_path(in->ino);    
     res = -ENOSYS;
-    if(f->op.mknod != NULL && f->op.getattr != NULL) {
-        char *path;
-        struct stat buf;
+    if(f->op.readlink)
+        res = f->op.readlink(path, link, sizeof(link));
+    g_free(path);
 
-        outarg.ino = find_node(f, in->ino, inarg->name, 1);
-        path = get_path(outarg.ino);
-        res = f->op.mknod(path, inarg->mode, inarg->rdev);
-        if(res == 0)
-            res = f->op.getattr(path, &buf);
-        g_free(path);
-
-        if(res == 0)
-            convert_stat(&buf, &outarg.attr);
-        else
-            remove_node(f, outarg.ino);
-    }
-    send_reply(f, in, res, &outarg, sizeof(outarg));
+    send_reply(f, in, res, link, res == 0 ? strlen(link) : 0);
 }
 
 static void do_getdir(struct fuse *f, struct fuse_in_header *in)
 {
     int res;
     struct fuse_getdir_out arg;
-    FILE *fp = tmpfile();
+    struct fuse_dh dh;
+    char *path;
 
-    res = get_dir(f, in->ino, fp);
-    fflush(fp);
-    arg.fd = fileno(fp);
+    dh.fuse = f;
+    dh.fp = tmpfile();
+    dh.dir = in->ino;
+
+    path = get_path(in->ino);
+    res = -ENOSYS;
+    if(f->op.getdir)
+        res = f->op.getdir(path, &dh, (dirfiller_t) fill_dir);
+    g_free(path);
+
+    fflush(dh.fp);
+    arg.fd = fileno(dh.fp);
     send_reply(f, in, res, &arg, sizeof(arg));
-    fclose(fp);
+    fclose(dh.fp);
 }
+
+static void do_mknod(struct fuse *f, struct fuse_in_header *in,
+                     struct fuse_mknod_in *inarg)
+{
+    int res;
+    char *path;
+    struct fuse_mknod_out outarg;
+    struct stat buf;
+
+    outarg.ino = find_node(f, in->ino, inarg->name, 1);
+    path = get_path(outarg.ino);
+    res = -ENOSYS;
+    if(f->op.mknod && f->op.getattr) {
+        res = f->op.mknod(path, inarg->mode, inarg->rdev);
+        if(res == 0)
+            res = f->op.getattr(path, &buf);
+    }
+    g_free(path);
+
+    if(res == 0)
+        convert_stat(&buf, &outarg.attr);
+
+    send_reply(f, in, res, &outarg, sizeof(outarg));
+}
+
+static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
+                     struct fuse_mkdir_in *inarg)
+{
+    int res;
+    char *path;
+
+    path = get_path_name(in->ino, inarg->name);
+    res = -ENOSYS;
+    if(f->op.mkdir)
+        res = f->op.mkdir(path, inarg->mode);
+    g_free(path);
+    send_reply(f, in, res, NULL, 0);
+}
+
+static void do_remove(struct fuse *f, struct fuse_in_header *in, char *name)
+{
+    int res;
+    char *path;
+
+    path = get_path_name(in->ino, name);
+    res = -ENOSYS;
+    if(in->opcode == FUSE_UNLINK) {
+        if(f->op.unlink)
+            res = f->op.unlink(path);
+    }
+    else {
+        if(f->op.rmdir)
+            res = f->op.rmdir(path);
+    }
+    g_free(path);
+    send_reply(f, in, res, NULL, 0);
+}
+
+static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
+                       char *link)
+{
+    int res;
+    char *path;
+
+    path = get_path_name(in->ino, name);
+    res = -ENOSYS;
+    if(f->op.symlink)
+        res = f->op.symlink(link, path);
+    g_free(path);
+    send_reply(f, in, res, NULL, 0);
+}
+
 
 void fuse_loop(struct fuse *f)
 {
@@ -355,6 +385,20 @@ void fuse_loop(struct fuse *f)
         case FUSE_MKNOD:
             do_mknod(f, in, (struct fuse_mknod_in *) inarg);
             break;
+            
+        case FUSE_MKDIR:
+            do_mkdir(f, in, (struct fuse_mkdir_in *) inarg);
+            break;
+            
+        case FUSE_UNLINK:
+        case FUSE_RMDIR:
+            do_remove(f, in, (char *) inarg);
+            break;
+
+        case FUSE_SYMLINK:
+            do_symlink(f, in, (char *) inarg, 
+                       ((char *) inarg) + strlen((char *) inarg) + 1);
+            break;
 
         default:
             fprintf(stderr, "Operation %i not implemented\n", in->opcode);
@@ -377,7 +421,6 @@ struct fuse *fuse_new()
     return f;
 }
 
-
 void fuse_set_operations(struct fuse *f, const struct fuse_operations *op)
 {
     f->op = *op;
@@ -390,4 +433,3 @@ void fuse_destroy(struct fuse *f)
     g_hash_table_destroy(f->nametab);
     g_free(f);
 }
-

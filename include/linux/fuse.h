@@ -39,6 +39,11 @@ enum fuse_opcode {
 	FUSE_READLINK,
 	FUSE_GETDIR,
 	FUSE_MKNOD,
+	FUSE_MKDIR,
+	FUSE_SYMLINK,
+	FUSE_UNLINK,
+	FUSE_RMDIR,
+	FUSE_RENAME,
 };
 
 /* Conservative buffer size for the client */
@@ -69,10 +74,21 @@ struct fuse_mknod_out {
 	struct fuse_attr attr;
 };
 
+struct fuse_mkdir_in {
+	unsigned short mode;
+	char name[1];
+};
+
+
+struct fuse_rename_in {
+	unsigned long newdir;
+	char names[2];
+};
+
 struct fuse_in_header {
 	int unique;
 	enum fuse_opcode opcode;
-	unsigned long ino;	
+	unsigned long ino;
 };
 
 struct fuse_out_header {
