@@ -1,9 +1,0 @@
-This package was debianized by Roland Bauerschmidt <rb@debian.org> on
-Fri,  5 Apr 2002 16:56:10 +0200.
-
-It was downloaded from http://sourceforge.net/projects/avf/
-
-Upstream Author: Miklos Szeredi <mszeredi@inf.bme.hu>
-
-FUSE is licensed under the terms of the GPL. On Debian systems, the full
-text can be found in /usr/share/common-licenses/GPL.
