@@ -26,6 +26,9 @@
 #ifndef FS_SAFE
 #define FS_SAFE 0
 #endif
+#ifndef FS_BINARY_MOUNTDATA
+#define FS_BINARY_MOUNTDATA 0
+#endif
 
 static void fuse_read_inode(struct inode *inode)
 {
@@ -249,7 +252,7 @@ static struct file_system_type fuse_fs_type = {
 	.name		= "fuse",
 	.get_sb		= fuse_get_sb,
 	.kill_sb	= kill_anon_super,
-	.fs_flags	= FS_SAFE,
+	.fs_flags	= FS_SAFE | FS_BINARY_MOUNTDATA,
 };
 #else
 static struct super_block *fuse_read_super_compat(struct super_block *sb,

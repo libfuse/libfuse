@@ -1,3 +1,7 @@
+2004-03-24  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Add FS_BINARY_MOUNTDATA filesystem flag for kernels > 2.6.4
+
 2004-03-09  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix for uClinux (Christian Magnusson)
