@@ -86,12 +86,15 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
  *  - release() is called when an open file has:
  *       1) all file descriptors closed
  *       2) all memory mappings unmapped
- *    This call need only be implemented if this information is required,
- *    otherwise set this function to NULL.
+ *    For every open() call there will be exactly one release() call
+ *    with the same flags.  It is possible to have a file opened more
+ *    than once, in which case only the last release will mean, that
+ *    no more reads/writes will happen on the file.  This call need
+ *    only be implemented if this information is required, otherwise
+ *    set this function to NULL.
  * 
  *  - fsync() has a boolean 'datasync' parameter which if TRUE then do
- *  an fdatasync() operation.
- */
+ * an fdatasync() operation.  */
 struct fuse_operations {
     int (*getattr)     (const char *, struct stat *);
     int (*readlink)    (const char *, char *, size_t);
