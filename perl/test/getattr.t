@@ -2,9 +2,9 @@
 use test::helper qw($_real $_point);
 use Test::More;
 use Data::Dumper;
-plan tests => 27;
+plan tests => 28;
 my ($a, $b) = ("$_real/wibble","$_point/wibble");
-`touch $a`;
+`touch $b`;
 is(-A "$a", -A "$b", '-A'); # 1
 is(-B "$a", -B "$b", '-B'); # 2
 is(-C "$a", -C "$b", '-C'); # 3
@@ -32,4 +32,11 @@ is(-u "$a", -u "$b", '-u'); # 24
 is(-w "$a", -w "$b", '-w'); # 25
 is(-x "$a", -x "$b", '-x'); # 26
 is(-z "$a", -z "$b", '-z'); # 27
+my (@astat, @bstat);
+@astat = stat("$a");
+@bstat = stat("$b");
+# dev and inode can legally change
+shift(@astat); shift(@astat);
+shift(@bstat); shift(@bstat);
+is(join(" ",@astat),join(" ",@bstat),"stat()");
 `rm -f $a`;

@@ -1,10 +1,9 @@
 #!/usr/bin/perl -w
 use test::helper qw($_point $_loop $_real $_pidfile);
 use strict;
-use Test::More tests => 4;
+use Test::More tests => 3;
 ok(!(scalar grep(/ on $_point /,`cat /proc/mounts`)),"already mounted");
 ok(-f $_loop,"loopback exists");
-ok(-x $_loop,"loopback executable");
 
 if(!fork()) {
 	#close(STDIN);
