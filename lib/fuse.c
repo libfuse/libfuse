@@ -361,15 +361,15 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
         fflush(stdout);
     }
 
-    /* This needs to be done before the reply because otherwise the
-    scheduler can tricks with us, and only let the counter be increased
+    /* This needs to be done before the reply, otherwise the scheduler
+    could play tricks with us, and only let the counter be increased
     long after the operation is done */
     inc_avail(f);
 
     res = write(f->fd, outbuf, outsize);
     if(res == -1) {
         /* ENOENT means the operation was interrupted */
-        if(errno != ENOENT)
+        if(!f->exited && errno != ENOENT)
             perror("fuse: writing device");
         return -errno;
     }
