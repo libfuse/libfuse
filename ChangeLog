@@ -2,6 +2,8 @@
 
 	* LIB: fix double reply in readdir operation
 
+	* fusermount: fix uid checking bug.  Patch by Adam Connell
+
 2005-01-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* KERNEL: provide correct llseek semantics for fuse device (fixes

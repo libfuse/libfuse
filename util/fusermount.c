@@ -809,7 +809,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 
     read_conf();
 
-    if (getuid != 0 && mount_max != -1) {
+    if (getuid() != 0 && mount_max != -1) {
         int mount_count = count_fuse_fs();
         if (mount_count >= mount_max) {
             fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in /etc/fuse.conf\n", progname);
