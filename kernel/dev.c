@@ -15,6 +15,7 @@
 #include <linux/miscdevice.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>
+#include <linux/slab.h>
 
 static kmem_cache_t *fuse_req_cachep;
 

@@ -1,3 +1,7 @@
+2005-01-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Compile fix by Christian Magnusson
+
 2005-01-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compilation for 2.6.{0-5} kernels

@@ -65,18 +65,16 @@ static int fuse_open(struct inode *inode, struct file *file)
 	req->out.args[0].value = &outarg;
 	request_send(fc, req);
 	err = req->out.h.error;
-	if (!err && !(fc->flags & FUSE_KERNEL_CACHE)) {
+	if (!err && !(fc->flags & FUSE_KERNEL_CACHE))
 #ifdef KERNEL_2_6
 		invalidate_inode_pages(inode->i_mapping);
 #else
 		invalidate_inode_pages(inode);
 #endif
-	}
 	if (err) {
 		fuse_request_free(ff->release_req);
 		kfree(ff);
-	}
-	else {
+	} else {
 		ff->fh = outarg.fh;
 		file->private_data = ff;
 	}
@@ -605,16 +603,24 @@ static int fuse_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	if (fc->flags & FUSE_DIRECT_IO)
 		return -ENODEV;
-	else {
-		if ((vma->vm_flags & VM_SHARED)) {
-			if ((vma->vm_flags & VM_WRITE))
-				return -ENODEV;
-			else
-				vma->vm_flags &= ~VM_MAYWRITE;
-		}
-		return generic_file_mmap(file, vma);
+
+	if ((vma->vm_flags & VM_SHARED)) {
+		if ((vma->vm_flags & VM_WRITE))
+			return -ENODEV;
+		else
+			vma->vm_flags &= ~VM_MAYWRITE;
 	}
+	return generic_file_mmap(file, vma);
 }
+
+#ifdef KERNEL_2_6
+static int fuse_set_page_dirty(struct page *page)
+{
+	printk("fuse_set_page_dirty: should not happen\n");
+	dump_stack();
+	return 0;
+}
+#endif
 
 static struct file_operations fuse_file_operations = {
 	.read		= fuse_file_read,
@@ -635,7 +641,7 @@ static struct address_space_operations fuse_file_aops  = {
 	.commit_write	= fuse_commit_write,
 #ifdef KERNEL_2_6
 	.readpages	= fuse_readpages,
-	.set_page_dirty = __set_page_dirty_nobuffers,
+	.set_page_dirty	= fuse_set_page_dirty,
 #endif
 };
 

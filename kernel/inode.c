@@ -27,15 +27,19 @@ static kmem_cache_t *fuse_inode_cachep;
 static int mount_count;
 
 static int user_allow_other;
-static int mount_max = 1000;
 #ifdef KERNEL_2_6
 module_param(user_allow_other, int, 0644);
-module_param(mount_max, int, 0644);
 #else
 MODULE_PARM(user_allow_other, "i");
-MODULE_PARM(mount_max, "i");
 #endif
 MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_other\" or \"allow_root\" mount options");
+
+static int mount_max = 1000;
+#ifdef KERNEL_2_6
+module_param(mount_max, int, 0644);
+#else
+MODULE_PARM(mount_max, "i");
+#endif
 MODULE_PARM_DESC(mount_max, "Maximum number of FUSE mounts allowed, if -1 then unlimited (default: 1000)");
 
 #define FUSE_SUPER_MAGIC 0x65735546
