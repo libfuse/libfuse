@@ -225,9 +225,13 @@ static ssize_t fuse_file_read(struct file *filp, char *buf,
 		bl_end_index = bl_file_end_index;
 
 	while (bl_index <= bl_end_index) {
+		int res;
 		char *bl_buf = kmalloc(FUSE_BLOCK_SIZE, GFP_NOFS);
 
-		int res = fuse_is_block_uptodate(mapping, inode, bl_index);
+		if (!bl_buf)
+			break;
+
+		res = fuse_is_block_uptodate(mapping, inode, bl_index);
 
 		if (!res)
 			res = fuse_file_read_block(inode, bl_buf, bl_index);
