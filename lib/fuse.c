@@ -1742,7 +1742,7 @@ static int check_version(struct fuse *f)
         return -1;
     }
     if (f->minorver < FUSE_KERNEL_MINOR_VERSION) {
-        fprintf(stderr, "fuse: kernel interface too old: need >= %i.%i",
+        fprintf(stderr, "fuse: kernel interface too old: need >= %i.%i\n",
                 FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
         return -1;
     }    

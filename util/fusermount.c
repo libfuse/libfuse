@@ -239,8 +239,8 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
         else {
             res = addmntent(newfp, entp);
             if (res != 0) {
-                fprintf(stderr, "%s: failed to add entry to %s: %s", progname,
-                        mtab_new, strerror(errno));
+                fprintf(stderr, "%s: failed to add entry to %s: %s\n",
+                        progname, mtab_new, strerror(errno));
                 
             }
         }

@@ -359,15 +359,11 @@ static struct fuse_conn *new_conn(void)
 static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 {
 	struct fuse_conn *fc;
-	struct inode *ino;
 
-	ino = file->f_dentry->d_inode;
 	if (file->f_op != &fuse_dev_operations) {
 		printk("FUSE: bad communication file descriptor\n");
-		printk("fuse_dev_operations: %p file->f_op: %p\n",
-		       &fuse_dev_operations, file->f_op);
 		return NULL;
-	}	
+	}
 	fc = new_conn();
 	if (fc == NULL) {
 		printk("FUSE: failed to allocate connection data\n");
