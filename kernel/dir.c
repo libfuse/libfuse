@@ -360,7 +360,7 @@ static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 		if (newent->d_inode)
 			fuse_invalidate_entry(newent);
 	}
-		
+
 	return err;
 }
 

@@ -274,7 +274,7 @@ static void queue_request(struct fuse_conn *fc, struct fuse_req *req)
 	if (fc->reqctr == 0)
 		fc->reqctr = 1;
 	req->in.h.unique = fc->reqctr;
-	req->in.h.len = sizeof(struct fuse_in_header) + 
+	req->in.h.len = sizeof(struct fuse_in_header) +
 		len_args(req->in.numargs, (struct fuse_arg *) req->in.args);
 	if (!req->preallocated) {
 		/* decrease outstanding_sem, but without blocking... */
@@ -711,7 +711,7 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	if (err)
 		goto err_finish;
 	err = -EINVAL;
-	if (!oh.unique || oh.error <= -1000 || oh.error > 0 || 
+	if (!oh.unique || oh.error <= -1000 || oh.error > 0 ||
 	    oh.len != nbytes)
 		goto err_finish;
 

@@ -199,7 +199,7 @@ struct fuse_req {
 
 	/** Request is sent in the background */
 	unsigned background:1;
-	
+
 	/** Data is being copied to/from the request */
 	unsigned locked:1;
 
@@ -236,7 +236,7 @@ struct fuse_req {
 
 	/** Inode used in the request */
 	struct inode *inode;
-	
+
 	/** Second inode used in the request (or NULL) */
 	struct inode *inode2;
 
