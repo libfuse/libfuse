@@ -241,8 +241,8 @@ struct fuse_req {
 /**
  * A Fuse connection.
  *
- * This structure is created, when the client device is opened, and is
- * destroyed, when the client device is closed _and_ the filesystem is
+ * This structure is created, when the filesystem is mounted, and is
+ * destroyed, when the client device is closed and the filesystem is
  * unmounted.
  */
 struct fuse_conn {
