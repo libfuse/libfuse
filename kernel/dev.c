@@ -130,7 +130,7 @@ void request_send(struct fuse_conn *fc, struct fuse_in *in,
 }
 
 
-static inline void destroy_request(struct fuse_conn *fc, struct fuse_req *req)
+static inline void destroy_request(struct fuse_req *req)
 {
 	if(req) {
 		int i;
@@ -262,7 +262,7 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 		req = NULL;
 	}
 	spin_unlock(&fuse_lock);
-	destroy_request(fc, req);
+	destroy_request(req);
 
 	return ret;
 }
@@ -526,7 +526,7 @@ static void end_requests(struct fuse_conn *fc, struct list_head *head)
 			wake_up(&req->waitq);
 		}
 		else
-			destroy_request(fc, req);
+			destroy_request(req);
 	}
 }
 
