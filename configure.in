@@ -45,7 +45,7 @@ if test "$enable_kernel_module" != "no"; then
 
 	AC_MSG_CHECKING([kernel source version])
 	if test -r $kernelsrc/include/linux/version.h; then
-		kernsrcver=`grep UTS_RELEASE $kernelsrc/include/linux/version.h | cut -d \" -f 2`
+		kernsrcver=`(echo "#include <linux/version.h>"; echo "kernsrcver=UTS_RELEASE") | cpp -I $kernelsrc/include | grep "^kernsrcver=" | cut -d \" -f 2`
 	fi
 	if test -z "$kernsrcver"; then
 		AC_MSG_RESULT([Not found])
