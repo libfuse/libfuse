@@ -60,3 +60,18 @@ Description:
   neighbourhood as were it on your own filesystem.
 
 ==============================================================================
+Name: Run-Time-Access
+
+Author: Bob Smith <bsmith at linuxtoys org>
+
+Homepage: http://www.runtimeaccess.com
+
+Description:
+
+  RTA is a specialized memory resident interface to the internal data
+  of your application. It is not a stand-alone server but a library
+  which attaches to your program and offers up your program's internal
+  structures and arrays as tables in a database and as files in a
+  virtual file system.
+
+==============================================================================
