@@ -241,7 +241,7 @@ static void destroy_node(struct fuse *f, fino_t ino, int version)
 
     pthread_mutex_lock(&f->lock);
     node = get_node(f, ino);
-    if(node->version == version) {
+    if(node->version == version && ino != FUSE_ROOT_INO) {
         unhash_name(f, node);
         unhash_ino(f, node);
         free_node(node);
