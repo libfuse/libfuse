@@ -54,12 +54,10 @@ steps (after installing FUSE):
 If it doesn't work out, please ask!  Also see the file 'include/fuse.h' for
 detailed documentation of the library interface.
 
-You can also mount your filesystem like this:
+The fusermount program accepts a couple of additional options (see
+'fusermount -h').  You can add these options after a '--' like this:
 
-   fusermount /mnt/whatever example/fusexmp -d
-
-The fusermount program now accepts a couple of additional options.
-Run it with the '-h' option to see a description.
+   example/fusexmp /mnt/whatever -d -- -l
 
 Security
 ========
@@ -80,22 +78,15 @@ doing nasty things.  Currently those limitations are:
   - No other user (including root) can access the contents of the mounted
     filesystem.
 
-When linux will have private namespaces (as soon as version 2.5 comes out
-hopefully) then this third condition is useless and can be gotten rid of.
+Currently the first two conditions are checked by the fusermount
+program before doing the mount.  This is in fact not perfectly secure,
+since there is a window of time, after fusermount has checked the
+mountpoint and before the mount actually takes place, when the user is
+able to change the mountpoint (e.g. by changing symbolic links). 
 
-Currently the first two conditions are checked by the fusermount program
-before doing the mount.  This has the nice feature, that it's totally
-useless.  Here's why:
+The preferred method would be if the kernel would check the
+permissions.  There is a patch for this for the 2.6.X kernel (where X
+>= 3) in the patch directory.  If you apply this patch then the suid
+bit can be removed from the fusermount program.
 
-   - user creates /tmp/mydir
-   - user starts fusermount
-   - user removes /tmp/mydir just after fusermount checked that it is OK
-   - user creates symlink: ln -s / /tmp/mydir
-   - fusermount actually mounts user's filesystem on '/'
-   - this is bad :(
-
-So to make this secure, the checks must be done by the kernel.  And so
-there is a patch (patch/ms_permission.patch) which does exactly this.
-This is against 2.4.14, but applies to some earlier kernels (not too
-much earlier though), and possibly some later.
-
+Comments about this are appreciated.
