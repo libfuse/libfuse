@@ -1,34 +1,25 @@
 CC = gcc
-
-KCFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe
-KCPPFLAGS = -I /lib/modules/`uname -r`/build/include/ -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES
-
 CFLAGS = -Wall -W -g `glib-config --cflags`
 LDFLAGS = `glib-config --libs`
-CPPFLAGS = 
+CPPFLAGS = -Iinclude
 
-all: fuse.o fusemount
 
-dev.o: dev.c
-	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c dev.c
 
-inode.o: inode.c
-	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c inode.c
+all: kernel/fuse.o fusepro
 
-dir.o: dir.c
-	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c dir.c
+kernel/fuse.o: FORCE
+	make -C kernel fuse.o
 
-util.o: util.c
-	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c util.c
+lib/libfuse.a: FORCE
+	make -C lib libfuse.a
 
-fuse_objs = dev.o inode.o dir.o util.o
-
-fuse.o: $(fuse_objs)
-	ld -r -o fuse.o $(fuse_objs)
-
-fusemount: fusemount.o
+fusepro: fusepro.o lib/libfuse.a
 
 clean:
+	make -C kernel clean
+	make -C lib clean
 	rm -f *.o
-	rm -f fusemount
+	rm -f fusepro
 	rm -f *~
+
+FORCE:

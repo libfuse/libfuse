@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <linux/file.h>
 
 #define FUSE_SUPER_MAGIC 0x65735546
@@ -18,6 +19,70 @@
 static void fuse_read_inode(struct inode *inode)
 {
 	/* No op */
+}
+
+static void send_forget(struct fuse_conn *fc, unsigned long *forget,
+			unsigned int numforget)
+{
+	struct fuse_in in = FUSE_IN_INIT;
+	
+	in.h.opcode = FUSE_FORGET;
+	in.h.ino = 0;
+	in.argsize = numforget * sizeof(unsigned long);
+	in.arg = forget;
+	
+	request_send(fc, &in, NULL);
+}
+
+static int alloc_cleared(struct fuse_conn *fc)
+{
+	unsigned long *tmp;
+	
+	spin_unlock(&fuse_lock);
+	tmp = kmalloc(sizeof(unsigned long) * MAX_CLEARED, GFP_KERNEL);
+	spin_lock(&fuse_lock);
+
+	if(!fc->file || fc->cleared != NULL)
+		kfree(tmp);
+	else if(!tmp)
+		printk("fuse_clear_inode: Cannot allocate memory\n");
+	else
+		fc->cleared = tmp;
+
+	return fc->cleared != NULL;
+}
+
+static unsigned long *add_cleared(struct fuse_conn *fc, unsigned long ino)
+{
+	if(!fc->file || (!fc->cleared && !alloc_cleared(fc)))
+		return NULL;
+
+	fc->cleared[fc->numcleared] = ino;
+	fc->numcleared ++;
+	
+	if(fc->numcleared == MAX_CLEARED) {
+		unsigned long *tmp = fc->cleared;
+		fc->cleared = NULL;
+		fc->numcleared = 0;
+		return tmp;
+	}
+	
+	return NULL;
+}
+
+static void fuse_clear_inode(struct inode *inode)
+{
+	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	unsigned long *forget;
+
+	spin_lock(&fuse_lock);
+	forget = add_cleared(fc, inode->i_ino);
+	spin_unlock(&fuse_lock);
+
+	if(forget) {
+		send_forget(fc, forget, MAX_CLEARED);
+		kfree(forget);
+	}
 }
 
 static void fuse_put_super(struct super_block *sb)
@@ -33,6 +98,7 @@ static void fuse_put_super(struct super_block *sb)
 
 static struct super_operations fuse_super_operations = {
 	read_inode:	fuse_read_inode,
+	clear_inode:	fuse_clear_inode,
 	put_super:	fuse_put_super,
 };
 

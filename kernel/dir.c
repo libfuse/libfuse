@@ -38,34 +38,89 @@ static void init_inode(struct inode *inode, struct fuse_attr *attr)
 		fuse_dir_init(inode);
 	else if(S_ISLNK(inode->i_mode))
 		fuse_symlink_init(inode);
-	else
+	else {
+		fuse_special_init(inode);
 		init_special_inode(inode, inode->i_mode, attr->rdev);
+	}
 }
+
 
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 {
 	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
-	struct fuse_inparam in;
-	struct fuse_outparam out;
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_lookup_out arg;
 	struct inode *inode;
 	
-	in.opcode = FUSE_LOOKUP;
-	in.ino = dir->i_ino;
-	strcpy(in.u.lookup.name, entry->d_name.name);
-
+	in.h.opcode = FUSE_LOOKUP;
+	in.h.ino = dir->i_ino;
+	in.argsize = entry->d_name.len + 1;
+	in.arg = entry->d_name.name;
+	out.argsize = sizeof(arg);
+	out.arg = &arg;
 	request_send(fc, &in, &out);
 	
-	if(out.result)
-		return ERR_PTR(out.result);
+	if(out.h.result) {
+		/* Negative dentries are not hashed */
+		if(out.h.result == -ENOENT)
+			return NULL;
+		else
+			return ERR_PTR(out.h.result);
+	}
 
-	inode = iget(dir->i_sb, out.u.lookup.ino);
+	inode = iget(dir->i_sb, arg.ino);
 	if(!inode) 
 		return ERR_PTR(-ENOMEM);
 
-	init_inode(inode, &out.u.lookup.attr);
-
+	init_inode(inode, &arg.attr);
 	d_add(entry, inode);
 	return NULL;
+}
+
+static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
+		      int rdev)
+{
+	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_mknod_in *inarg;
+	unsigned int insize;
+	struct fuse_mknod_out outarg;
+	struct inode *inode;
+	
+	insize = offsetof(struct fuse_mknod_in, name) + entry->d_name.len + 1;
+	inarg = kmalloc(insize, GFP_KERNEL);
+	if(!inarg)
+		return -ENOMEM;
+	
+	inarg->mode = mode;
+	inarg->rdev = rdev;
+	strcpy(inarg->name, entry->d_name.name);
+
+	in.h.opcode = FUSE_MKNOD;
+	in.h.ino = dir->i_ino;
+	in.argsize = insize;
+	in.arg = inarg;
+	out.argsize = sizeof(outarg);
+	out.arg = &outarg;
+	request_send(fc, &in, &out);
+	kfree(inarg);
+	if(out.h.result)
+		return out.h.result;
+
+	inode = iget(dir->i_sb, outarg.ino);
+	if(!inode) 
+		return -ENOMEM;
+
+	init_inode(inode, &outarg.attr);
+	d_add(entry, inode);
+	return 0;
+}
+
+static int fuse_create(struct inode *dir, struct dentry *entry, int mode)
+{
+	return fuse_mknod(dir, entry, mode, 0);
 }
 
 static int fuse_permission(struct inode *inode, int mask)
@@ -78,18 +133,20 @@ static int fuse_revalidate(struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
-	struct fuse_inparam in;
-	struct fuse_outparam out;
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_getattr_out arg;
 	
-	in.opcode = FUSE_GETATTR;
-	in.ino = inode->i_ino;
-
+	in.h.opcode = FUSE_GETATTR;
+	in.h.ino = inode->i_ino;
+	out.argsize = sizeof(arg);
+	out.arg = &arg;
 	request_send(fc, &in, &out);
 	
-	if(out.result == 0)
-		change_attributes(inode, &out.u.getattr.attr);
+	if(out.h.result == 0)
+		change_attributes(inode, &arg.attr);
 
-	return out.result;
+	return out.h.result;
 }
 
 
@@ -118,7 +175,7 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 	while(nbytes >= FUSE_NAME_OFFSET) {
 		struct fuse_dirent *dirent = (struct fuse_dirent *) p;
 		size_t reclen = FUSE_DIRENT_SIZE(dirent);
-		int err;
+		int over;
 		if(dirent->namelen > NAME_MAX) {
 			printk("fuse_readdir: name too long\n");
 			ret = -EPROTO;
@@ -127,16 +184,14 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 		if(reclen > nbytes)
 			break;
 
-		err = filldir(dstbuf, dirent->name, dirent->namelen,
+		over = filldir(dstbuf, dirent->name, dirent->namelen,
 			      file->f_pos, dirent->ino, dirent->type);
-		if(err) {
-			ret = err;
+		if(over)
 			break;
-		}
+
 		p += reclen;
 		file->f_pos += reclen;
 		nbytes -= reclen;
-		ret ++;
 	}
 
   out:
@@ -150,34 +205,33 @@ static int read_link(struct dentry *dentry, char **bufp)
 {
 	struct inode *inode = dentry->d_inode;
 	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
-	struct fuse_in in;
-	struct fuse_out out;
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
 	unsigned long page;
 
 	page = __get_free_page(GFP_KERNEL);
 	if(!page)
 		return -ENOMEM;
 
-	in.c.opcode = FUSE_READLINK;
-	in.c.ino = inode->i_ino;
-	in.argsize = 0;
+	in.h.opcode = FUSE_READLINK;
+	in.h.ino = inode->i_ino;
 	out.arg = (void *) page;
-	out.argsize = PAGE_SIZE;
-	
+	out.argsize = PAGE_SIZE - 1;
+	out.argvar = 1;
 	request_send(fc, &in, &out);
-	if(out.c.result) {
-		__free_page(page);
-		return out.c.result;
+	if(out.h.result) {
+		free_page(page);
+		return out.h.result;
 	}
 
 	*bufp = (char *) page;
-	(*bufp)[PAGE_SIZE - 1] = 0;
+	(*bufp)[out.argsize] = '\0';
 	return 0;
 }
 
 static void free_link(char *link)
 {
-	__free_page((unsigned long) link);
+	free_page((unsigned long) link);
 }
 
 static int fuse_readlink(struct dentry *dentry, char *buffer, int buflen)
@@ -208,29 +262,31 @@ static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
 	return ret;
 }
 
-static int fuse_open(struct inode *inode, struct file *file)
+static int fuse_dir_open(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
-	struct fuse_inparam in;
-	struct fuse_outparam out;
-	struct file *cfile = NULL;
-	
-	in.opcode = FUSE_OPEN;
-	in.ino = inode->i_ino;
-	in.u.open.flags = file->f_flags & ~O_EXCL;
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_getdir_out outarg;
 
-	request_send(fc, &in, &out);
+	if(!(file->f_flags & O_DIRECTORY))
+		return -EISDIR;
 	
-	if(out.result == 0) {
+	in.h.opcode = FUSE_GETDIR;
+	in.h.ino = inode->i_ino;
+	out.argsize = sizeof(outarg);
+	out.arg = &outarg;
+	request_send(fc, &in, &out);
+	if(out.h.result == 0) {
+		struct file *cfile = outarg.file;
 		struct inode *inode;
-		cfile = out.u.open_internal.file;
 		if(!cfile) {
-			printk("fuse_open: invalid container file\n");
+			printk("fuse_getdir: invalid file\n");
 			return -EPROTO;
 		}
 		inode = cfile->f_dentry->d_inode;
 		if(!S_ISREG(inode->i_mode)) {
-			printk("fuse_open: container is not a regular file\n");
+			printk("fuse_getdir: not a regular file\n");
 			fput(cfile);
 			return -EPROTO;
 		}
@@ -238,28 +294,35 @@ static int fuse_open(struct inode *inode, struct file *file)
 		file->private_data = cfile;
 	}
 
-	return out.result;
+	return out.h.result;
 }
 
-static int fuse_release(struct inode *inode, struct file *file)
+static int fuse_dir_release(struct inode *inode, struct file *file)
 {
-	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
 	struct file *cfile = file->private_data;
-	struct fuse_inparam in;
-	struct fuse_outparam out;
 
-	if(cfile)
-		fput(cfile);
+	if(!cfile)
+		BUG();
+	
+	fput(cfile);
 
-	in.opcode = FUSE_RELEASE;
-	request_send(fc, &in, &out);
-
-	return out.result;
+	return 0;
 }
 
 static struct inode_operations fuse_dir_inode_operations =
 {
 	lookup:		fuse_lookup,
+	create:         fuse_create,
+	mknod:          fuse_mknod,
+#if 0
+
+	link:           fuse_link,
+	unlink:         fuse_unlink,
+	symlink:        fuse_symlink,
+	mkdir:          fuse_mkdir,
+	rmdir:          fuse_rmdir,
+	rename:         fuse_rename,
+#endif
 	permission:	fuse_permission,
         revalidate:	fuse_revalidate,
 };
@@ -267,12 +330,16 @@ static struct inode_operations fuse_dir_inode_operations =
 static struct file_operations fuse_dir_operations = {
 	read:		generic_read_dir,
 	readdir:	fuse_readdir,
-	open:		fuse_open,
-	release:	fuse_release,
+	open:		fuse_dir_open,
+	release:	fuse_dir_release,
 };
 
-static struct inode_operations fuse_file_inode_operations =
-{
+static struct inode_operations fuse_file_inode_operations = {
+	permission:	fuse_permission,
+        revalidate:	fuse_revalidate,
+};
+
+static struct inode_operations fuse_special_inode_operations = {
 	permission:	fuse_permission,
         revalidate:	fuse_revalidate,
 };
@@ -302,6 +369,11 @@ void fuse_file_init(struct inode *inode)
 void fuse_symlink_init(struct inode *inode)
 {
 	inode->i_op = &fuse_symlink_inode_operations;
+}
+
+void fuse_special_init(struct inode *inode)
+{
+	inode->i_op = &fuse_special_inode_operations;
 }
 
 /* 

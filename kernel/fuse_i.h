@@ -6,13 +6,14 @@
     See the file COPYING.
 */
 
-#include "fuse.h"
-
+#include <linux/fuse.h>
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
 #define FUSE_VERSION "0.1"
+
+#define MAX_CLEARED 256
 
 /**
  * A Fuse connection.
@@ -37,8 +38,11 @@ struct fuse_conn {
 	/** The list of requests being processed */
 	struct list_head processing;
 
-	/** The number of outstanding requests */
-	int outstanding;
+	/** The number of cleared inodes */
+	unsigned int numcleared;
+	
+	/** The array of cleared inode numbers */
+	unsigned long *cleared;
 
 	/** Connnection number (for debuging) */
 	int id;
@@ -54,25 +58,45 @@ struct fuse_req {
 	/** The request list */
 	struct list_head list;
 
-	/** The request input parameters */
-	struct fuse_in *in;
+	/** The request ID */
+	int unique;
 
-	/** The request result */
-	struct fuse_out *out;
+	/** The opcode */
+	enum fuse_opcode opcode;
+	
+	/** The request input size */
+	unsigned int insize;
 
-	/** The file returned by open */
-	struct file *file;
+	/** The request input */
+	char *in;
+	
+	/** The maximum request output size, if zero, then the request is
+            asynchronous */
+	unsigned int outsize;
+
+	/** The request output */
+	char *out;
 
 	/** The request wait queue */
 	wait_queue_head_t waitq;
-
-	/** True if the request is finished */
-	int done;
 };
 
-struct fuse_out_open_internal {
-	file *file;
+
+struct fuse_in {
+	struct fuse_in_header h;
+	unsigned int argsize;
+	const void *arg;
 };
+
+struct fuse_out {
+	struct fuse_out_header h;
+	unsigned int argsize;
+	unsigned int argvar;
+	void *arg;
+};
+
+#define FUSE_IN_INIT { {0, 0, 0}, 0, 0 }
+#define FUSE_OUT_INIT { {0, 0}, 0, 0, 0 }
 
 
 /**
@@ -99,6 +123,11 @@ void fuse_file_init(struct inode *inode);
  * Fill in the symlink operations
  */
 void fuse_symlink_init(struct inode *inode);
+
+/**
+ * Fill in the special inode operaions
+ */
+void fuse_special_init(struct inode *inode);
 
 /**
  * Check if the connection can be released, and if yes, then free the

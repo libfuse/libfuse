@@ -14,8 +14,8 @@
 #include <linux/proc_fs.h>
 #include <linux/file.h>
 
-#define ICSIZE sizeof(struct fuse_in_common)
-#define OCSIZE sizeof(struct fuse_out_common)
+#define IHSIZE sizeof(struct fuse_in_header)
+#define OHSIZE sizeof(struct fuse_out_header)
 
 static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
@@ -26,7 +26,7 @@ static int request_wait_answer(struct fuse_req *req)
 	DECLARE_WAITQUEUE(wait, current);
 
 	add_wait_queue(&req->waitq, &wait);
-	while(!req->done) {
+	while(!list_empty(&req->list)) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if(signal_pending(current)) {
 			ret = -EINTR;
@@ -42,49 +42,123 @@ static int request_wait_answer(struct fuse_req *req)
 	return ret;
 }
 
-void request_send(struct fuse_conn *fc, struct fuse_in *in,
-		  struct fuse_out *out)
+static int request_check(struct fuse_req *req, struct fuse_out *outp)
+{
+	struct fuse_out_header *oh;
+	unsigned int size;
+
+	if(!req->out)
+		return -ECONNABORTED;
+
+	oh = (struct fuse_out_header *) req->out;
+	size = req->outsize - OHSIZE;
+	
+	if (oh->result <= -512 || oh->result > 0) {
+		printk("fuse: bad result\n");
+		return -EPROTO;
+	}
+
+	if(size > outp->argsize || 
+	   (oh->result == 0 && !outp->argvar && size != outp->argsize) ||
+	   (oh->result != 0 && size != 0)) {
+		printk("fuse: invalid argument length: %i (%i)\n", size,
+		       req->opcode);
+		return -EPROTO;
+	}
+	
+	memcpy(&outp->h, oh, OHSIZE);
+	outp->argsize = size;
+	if(size)
+		memcpy(outp->arg, req->out + OHSIZE, size);
+	
+	return oh->result;
+}
+
+static void request_free(struct fuse_req *req)
+{
+	kfree(req->in);
+	kfree(req->out);
+	kfree(req);
+}
+
+
+static struct fuse_req *request_new(struct fuse_conn *fc, struct fuse_in *inp,
+				    struct fuse_out *outp)
+{
+	struct fuse_req *req;
+	
+	req = kmalloc(sizeof(*req), GFP_KERNEL);
+	if(!req)
+		return NULL;
+
+	if(outp)
+		req->outsize = OHSIZE + outp->argsize;
+	else
+		req->outsize = 0;
+	req->out = NULL;
+
+	req->insize = IHSIZE + inp->argsize;
+	req->in = kmalloc(req->insize, GFP_KERNEL);
+	if(!req->in) {
+		request_free(req);
+		return NULL;
+	}
+	memcpy(req->in, &inp->h, IHSIZE);
+	if(inp->argsize)
+		memcpy(req->in + IHSIZE, inp->arg, inp->argsize);
+
+	req->opcode = inp->h.opcode;
+	init_waitqueue_head(&req->waitq);
+
+	return req;
+}
+
+/* If 'outp' is NULL then the request this is asynchronous */
+void request_send(struct fuse_conn *fc, struct fuse_in *inp,
+		  struct fuse_out *outp)
 {
 	int ret;
+	struct fuse_in_header *ih;
 	struct fuse_req *req;
 
-	req = kmalloc(sizeof(*req), GFP_KERNEL);
-	if(req == NULL) {
-		out->result = -ENOMEM;
-		return;
-	}
-	
-	req->in = in;
-	req->out = out;
-	req->done = 0;
-	init_waitqueue_head(&req->waitq);
-	
-	spin_lock(&fuse_lock);
-	if(fc->file == NULL) {
-		ret = -ENOTCONN;
+	ret = -ENOMEM;
+	req = request_new(fc, inp, outp);
+	if(!req)
 		goto out;
-	}
 
-	req->in->h.unique = fc->reqctr ++;
+	spin_lock(&fuse_lock);
+	ret = -ENOTCONN;
+	if(fc->file == NULL)
+		goto out_unlock_free;
+	
+	ih = (struct fuse_in_header *) req->in;
+	if(outp) {
+		do fc->reqctr++;
+		while(!fc->reqctr);
+		ih->unique = req->unique = fc->reqctr;
+	}
+	else
+		ih->unique = req->unique = 0;
+
 	list_add_tail(&req->list, &fc->pending);
-	fc->outstanding ++;
-	/* FIXME: Wait until the number of outstanding requests drops
-           below a certain level */
 	wake_up(&fc->waitq);
+
+	/* Async reqests are freed in fuse_dev_read() */
+	if(!outp) 
+		goto out_unlock; 
+	
 	ret = request_wait_answer(req);
-	fc->outstanding --;
 	list_del(&req->list);
+	if(!ret)
+		ret = request_check(req, outp);
 
-  out:
-	kfree(req);
+  out_unlock_free:
+	request_free(req);
+  out_unlock:
 	spin_unlock(&fuse_lock);
-
-	if(ret)
-		out->result = ret;
-	else if (out->result <= -512 || out->result > 0) {
-		printk("Bad result from client: %i\n", out->result);
-		out->result = -EPROTO;
-	}
+  out:
+	if(outp)
+		outp->h.result = ret;
 }
 
 static int request_wait(struct fuse_conn *fc)
@@ -113,31 +187,38 @@ static int request_wait(struct fuse_conn *fc)
 static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			     loff_t *off)
 {
-	ssize_t ret;
+	int ret;
 	struct fuse_conn *fc = file->private_data;
 	struct fuse_req *req;
-	size_t size;
+	char *tmpbuf;
+	unsigned int size;
 
+	if(fc->sb == NULL)
+		return -EPERM;
+	
 	spin_lock(&fuse_lock);
 	ret = request_wait(fc);
 	if(ret)
 		goto err;
 	
 	req = list_entry(fc->pending.next, struct fuse_req, list);
-	size = ICSIZE + req->in->argsize;
-
-	ret = -EPROTO;
+	size = req->insize;
 	if(nbytes < size) {
-		printk("fuse_dev_read: buffer too small (%i)\n", size);
+		printk("fuse_dev_read[%i]: buffer too small\n", fc->id);
+		ret = -EIO;
 		goto err;
 	}
-	
+	tmpbuf = req->in;
+	req->in = NULL;
+
 	list_del(&req->list);
-	list_add_tail(&req->list, &fc->processing);
+	if(req->outsize)
+		list_add_tail(&req->list, &fc->processing);
+	else
+		request_free(req);
 	spin_unlock(&fuse_lock);
 
-	if(copy_to_user(buf, &req->in->c, ICSIZE) ||
-	   copy_to_user(buf + ICSIZE, req->in->arg, req->in->argsize))
+	if(copy_to_user(buf, tmpbuf, size))
 		return -EFAULT;
 	
 	return size;
@@ -155,7 +236,7 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 	list_for_each(entry, &fc->processing) {
 		struct fuse_req *tmp;
 		tmp = list_entry(entry, struct fuse_req, list);
-		if(tmp->in->c.unique == unique) {
+		if(tmp->unique == unique) {
 			req = tmp;
 			break;
 		}
@@ -167,44 +248,55 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 static ssize_t fuse_dev_write(struct file *file, const char *buf,
 			      size_t nbytes, loff_t *off)
 {
+	ssize_t ret;
 	struct fuse_conn *fc = file->private_data;
 	struct fuse_req *req;
-	struct fuse_out_common oc;
 	char *tmpbuf;
+	struct fuse_out_header *oh;
 
-	if(nbytes > 2 * PAGE_SIZE) {
-		printk("fuse_dev_write: write is too long\n");
-		return -EPROTO;
+	if(!fc->sb)
+		return -EPERM;
+
+	ret = -EIO;
+	if(nbytes < OHSIZE || nbytes > OHSIZE + PAGE_SIZE) {
+		printk("fuse_dev_write[%i]: write is short or long\n", fc->id);
+		goto out;
 	}
 	
-	tmpbuf = (char *)  __get_free_pages(GFP_KERNEL, 1);
+	ret = -ENOMEM;
+	tmpbuf = kmalloc(nbytes, GFP_KERNEL);
 	if(!tmpbuf)
-		return -ENOMEM;
-
+		goto out;
+	
+	ret = -EFAULT;
 	if(copy_from_user(tmpbuf, buf, nbytes))
-		return -EFAULT;
+		goto out_free;
 	
 	spin_lock(&fuse_lock);
-	req = request_find(fc, oc.unique);
-	
-	if(req == NULL)
-		printk("fuse_dev_write[%i]: unknown request: %i", fc->id,
-		       oc.unique);
-
-		
-
-	else {
-		struct fuse_outparam *out = &param.u.o;
-		if(req->param.u.i.opcode == FUSE_OPEN && out->result == 0)
-			out->u.open_internal.file = fget(out->u.open.fd);
-
-		req->param = param;
-		req->done = 1;
-		wake_up(&req->waitq);
+	oh =  (struct fuse_out_header *) tmpbuf;
+	req = request_find(fc, oh->unique);
+	if(req == NULL) {
+		ret = -ENOENT;
+		goto out_free_unlock;
 	}
+	list_del_init(&req->list);
+	if(req->opcode == FUSE_GETDIR) {
+		/* fget() needs to be done in this context */
+		struct fuse_getdir_out *arg;
+		arg = (struct fuse_getdir_out *) (tmpbuf + OHSIZE);
+		arg->file = fget(arg->fd);
+	}
+	req->out = tmpbuf;
+	req->outsize = nbytes;
+	tmpbuf = NULL;
+	ret = nbytes;
+	wake_up(&req->waitq);
+  out_free_unlock:
 	spin_unlock(&fuse_lock);
-
-	return nbytes;
+  out_free:
+	kfree(tmpbuf);
+  out:
+	return ret;
 }
 
 
@@ -212,6 +304,9 @@ static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 {
 	struct fuse_conn *fc = file->private_data;
 	unsigned int mask = POLLOUT | POLLWRNORM;
+
+	if(!fc->sb)
+		return -EPERM;
 
 	poll_wait(file, &fc->waitq, wait);
 
@@ -235,8 +330,9 @@ static struct fuse_conn *new_conn(void)
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
-		fc->outstanding = 0;
-		fc->reqctr = 0;
+		fc->reqctr = 1;
+		fc->cleared = NULL;
+		fc->numcleared = 0;
 		
 		spin_lock(&fuse_lock);
 		fc->id = connctr ++;
@@ -265,9 +361,10 @@ static void end_requests(struct list_head *head)
 		struct fuse_req *req;
 		req = list_entry(head->next, struct fuse_req, list);
 		list_del_init(&req->list);
-		req->done = 1;
-		req->param.u.o.result = -ECONNABORTED;
-		wake_up(&req->waitq);
+		if(req->outsize)
+			wake_up(&req->waitq);
+		else
+			request_free(req);
 	}
 }
 
@@ -279,6 +376,9 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 	fc->file = NULL;
 	end_requests(&fc->pending);
 	end_requests(&fc->processing);
+	kfree(fc->cleared);
+	fc->cleared = NULL;
+	fc->numcleared = 0;
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	return 0;
