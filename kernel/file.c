@@ -22,7 +22,7 @@
 static int user_mmap;
 #ifdef KERNEL_2_6
 #include <linux/moduleparam.h>
-module_param(user_mmap, int, 0);
+module_param(user_mmap, int, 0644);
 #else
 MODULE_PARM(user_mmap, "i");
 #endif

@@ -28,7 +28,7 @@ static kmem_cache_t *fuse_inode_cachep;
 
 #ifdef KERNEL_2_6
 #include <linux/moduleparam.h>
-module_param(user_allow_other, int, 0);
+module_param(user_allow_other, int, 0644);
 #else
 MODULE_PARM(user_allow_other, "i");
 #endif
