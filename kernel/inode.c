@@ -36,9 +36,6 @@ static kmem_cache_t *fuse_inode_cachep;
 #ifndef KERNEL_2_6
 #define kstatfs statfs
 #endif
-#ifndef FS_SAFE
-#define FS_SAFE 0
-#endif
 #ifndef MAX_LFS_FILESIZE
 #define MAX_LFS_FILESIZE (((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1)
 #endif
@@ -664,9 +661,6 @@ static struct file_system_type fuse_fs_type = {
 	.name		= "fuse",
 	.get_sb		= fuse_get_sb,
 	.kill_sb	= kill_anon_super,
-#ifndef FUSE_MAINLINE
-	.fs_flags	= FS_SAFE,
-#endif
 };
 #else
 static struct super_block *fuse_read_super_compat(struct super_block *sb,

@@ -416,8 +416,12 @@ int fuse_do_getattr(struct inode *inode)
 	fuse_put_request(fc, req);
 	if (!err) {
 		if ((inode->i_mode ^ arg.attr.mode) & S_IFMT) {
+#ifndef FUSE_MAINLINE
 			if (get_node_id(inode) != FUSE_ROOT_ID)
 				make_bad_inode(inode);
+#else
+			make_bad_inode(inode);
+#endif
 			err = -EIO;
 		} else {
 			struct fuse_inode *fi = get_fuse_inode(inode);
@@ -532,7 +536,7 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 	int err;
 	size_t nbytes;
 	struct page *page;
-	struct inode *inode = file->f_dentry->d_inode;	
+	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_req *req = fuse_get_request_nonint(fc);
 	if (!req)
@@ -722,8 +726,12 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	fuse_put_request(fc, req);
 	if (!err) {
 		if ((inode->i_mode ^ outarg.attr.mode) & S_IFMT) {
+#ifndef FUSE_MAINLINE
 			if (get_node_id(inode) != FUSE_ROOT_ID)
 				make_bad_inode(inode);
+#else
+			make_bad_inode(inode);
+#endif
 			err = -EIO;
 		} else {
 			if (is_truncate) {

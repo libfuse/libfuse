@@ -188,7 +188,7 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 }
 
 size_t fuse_send_read_common(struct fuse_req *req, struct file *file,
-			     struct inode *inode, loff_t pos, size_t count, 
+			     struct inode *inode, loff_t pos, size_t count,
 			     int isdir)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
