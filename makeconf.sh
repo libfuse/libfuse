@@ -15,6 +15,14 @@ else
     autoconf
     echo Running automake...
     automake -a -c
+    (
+	echo Entering directory: kernel
+	cd kernel
+	echo Running autoheader...
+	autoheader
+	echo Running autoconf...
+	autoconf
+    )
 fi
 
 rm -f config.cache config.status

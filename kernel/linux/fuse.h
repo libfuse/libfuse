@@ -146,8 +146,6 @@ struct fuse_open_in {
 
 struct fuse_open_out {
 	unsigned long fh;
-	unsigned long _data_valid;
-	unsigned long _data_valid_nsec;
 	unsigned int _open_flags;
 };
 
