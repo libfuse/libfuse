@@ -549,6 +549,7 @@ static struct fuse_conn *new_conn(void)
 		fc->file = NULL;
 		fc->flags = 0;
 		fc->uid = 0;
+		fc->oldrelease = 0;
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);

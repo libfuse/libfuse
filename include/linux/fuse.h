@@ -108,7 +108,8 @@ enum fuse_opcode {
 	FUSE_STATFS	= 17,
 	FUSE_RELEASE    = 18, /* no reply */
 	FUSE_INVALIDATE = 19, /* user initiated */
-	FUSE_FSYNC      = 20
+	FUSE_FSYNC      = 20,
+	FUSE_RELEASE2   = 21  /* reply needed after all */
 };
 
 /* Conservative buffer size for the client */

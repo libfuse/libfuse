@@ -71,15 +71,12 @@ void fuse_sync_inode(struct inode *inode)
 #endif
 }
 
-static int fuse_release(struct inode *inode, struct file *file)
+static int fuse_release_old(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in *in = NULL;
 	struct fuse_open_in *inarg = NULL;
 	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_open_in);
-
-	if(file->f_mode & FMODE_WRITE)
-		fuse_sync_inode(inode);
 
 	in = kmalloc(s, GFP_NOFS);
 	if(!in)
@@ -97,6 +94,35 @@ static int fuse_release(struct inode *inode, struct file *file)
 		return 0;
 
 	kfree(in);
+	return 0;
+}
+
+static int fuse_release(struct inode *inode, struct file *file)
+{
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_open_in inarg;
+
+	if(file->f_mode & FMODE_WRITE)
+		fuse_sync_inode(inode);
+
+	if (fc->oldrelease)
+		return fuse_release_old(inode, file);
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.flags = file->f_flags & ~O_EXCL;
+
+	in.h.opcode = FUSE_RELEASE2;
+	in.h.ino = inode->i_ino;
+	in.numargs = 1;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	request_send(fc, &in, &out);
+	if (out.h.error == -ENOSYS) {
+		fc->oldrelease = 1;
+		return fuse_release_old(inode, file);
+	}
 	return 0;
 }
 

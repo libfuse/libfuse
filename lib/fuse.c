@@ -41,6 +41,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_STATFS:   return "STATFS";
     case FUSE_RELEASE:  return "RELEASE";
     case FUSE_FSYNC:    return "FSYNC";
+    case FUSE_RELEASE2: return "RELEASE2";
     default:            return "???";
     }
 }
@@ -765,7 +766,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
 }
 
 static void do_release(struct fuse *f, struct fuse_in_header *in,
-                       struct fuse_open_in *arg)
+                       struct fuse_open_in *arg, int reply)
 {
     char *path;
 
@@ -775,6 +776,8 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
             f->op.release(path, arg->flags);
         free(path);
     }
+    if (reply)
+        send_reply(f, in, 0, NULL, 0);
 }
 
 static void do_read(struct fuse *f, struct fuse_in_header *in,
@@ -964,7 +967,11 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         break;
 
     case FUSE_RELEASE:
-        do_release(f, in, (struct fuse_open_in *) inarg);
+        do_release(f, in, (struct fuse_open_in *) inarg, 0);
+        break;
+
+    case FUSE_RELEASE2:
+        do_release(f, in, (struct fuse_open_in *) inarg, 1);
         break;
 
     case FUSE_READ:

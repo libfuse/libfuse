@@ -63,6 +63,10 @@ struct fuse_conn {
 	/** The fuse mount flags for this mount */
 	unsigned int flags;
 
+	/** Is the new (synchronous) release not supported by
+	    userspace? */
+	unsigned int oldrelease;
+
 	/** Readers of the connection are waiting on this */
 	wait_queue_head_t waitq;
 
