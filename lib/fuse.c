@@ -233,6 +233,7 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     hash_ino(f, node);
 
  out:
+    attr->_user_ino = node->ino;
     node->version = version;
  out_err:
     pthread_mutex_unlock(&f->lock);
@@ -660,6 +661,7 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
         memset(&arg, 0, sizeof(struct fuse_attr_out));
         arg.attr_valid = ATTR_REVALIDATE_TIME;
         arg.attr_valid_nsec = 0;
+        arg.attr._user_ino = in->ino;
         convert_stat(&buf, &arg.attr);
     }
 
@@ -747,6 +749,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
                     memset(&outarg, 0, sizeof(struct fuse_attr_out));
                     outarg.attr_valid = ATTR_REVALIDATE_TIME;
                     outarg.attr_valid_nsec = 0;
+                    outarg.attr._user_ino = in->ino;
                     convert_stat(&buf, &outarg.attr);
                 }
             }
@@ -1686,16 +1689,21 @@ void __fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 static int check_version(struct fuse *f)
 {
     int res;
-    FILE *vf = fopen(FUSE_VERSION_FILE, "r");
+    const char *version_file = FUSE_VERSION_FILE;
+    FILE *vf = fopen(version_file, "r");
     if (vf == NULL) {
-        fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
-                FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
-        return -1;
+        version_file = "/sys/fs/fuse/version";
+        vf = fopen(version_file, "r");
+        if (vf == NULL) {
+            fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
+                    FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+            return -1;
+        }
     }
     res = fscanf(vf, "%i.%i", &f->majorver, &f->minorver);
     fclose(vf);
     if (res != 2) {
-        fprintf(stderr, "fuse: error reading %s\n", FUSE_VERSION_FILE);
+        fprintf(stderr, "fuse: error reading %s\n", version_file);
         return -1;
     }
     if (f->majorver != FUSE_KERNEL_VERSION) {
