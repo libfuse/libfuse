@@ -1,2 +1,6 @@
 Makefile
 .deps
+.*.cmd
+*.mod.c
+*.ko
+*.s

@@ -359,19 +359,19 @@ static int fuse_commit_write(struct file *file, struct page *page,
 }
 
 static struct file_operations fuse_file_operations = {
-	open:		fuse_open,
-	release:        fuse_release,
-	fsync:		fuse_fsync,
-	read:		fuse_file_read,
-	write:		generic_file_write,
-	mmap:		generic_file_mmap,
+	.open =		fuse_open,
+	.release =	fuse_release,
+	.fsync =	fuse_fsync,
+	.read =		fuse_file_read,
+	.write =	generic_file_write,
+	.mmap =		generic_file_mmap,
 };
 
 static struct address_space_operations fuse_file_aops  = {
-	readpage:	fuse_readpage,
-	writepage:	fuse_writepage,
-	prepare_write:	fuse_prepare_write,
-	commit_write:	fuse_commit_write,
+	.readpage =		fuse_readpage,
+	.writepage =		fuse_writepage,
+	.prepare_write =	fuse_prepare_write,
+	.commit_write =		fuse_commit_write,
 };
 
 void fuse_init_file_inode(struct inode *inode)

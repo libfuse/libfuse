@@ -701,55 +701,55 @@ static int fuse_dentry_revalidate(struct dentry *entry, int flags)
 
 static struct inode_operations fuse_dir_inode_operations =
 {
-	lookup:		fuse_lookup,
-	create:         fuse_create,
-	mknod:          fuse_mknod,
-	mkdir:          fuse_mkdir,
-	symlink:        fuse_symlink,
-	unlink:         fuse_unlink,
-	rmdir:          fuse_rmdir,
-	rename:         fuse_rename,
-	link:           fuse_link,
-	setattr:	fuse_setattr,
-	permission:	fuse_permission,
+	.lookup		= fuse_lookup,
+	.create		= fuse_create,
+	.mknod		= fuse_mknod,
+	.mkdir		= fuse_mkdir,
+	.symlink	= fuse_symlink,
+	.unlink		= fuse_unlink,
+	.rmdir		= fuse_rmdir,
+	.rename		= fuse_rename,
+	.link		= fuse_link,
+	.setattr	= fuse_setattr,
+	.permission	= fuse_permission,
 #ifdef KERNEL_2_6
-	getattr:	fuse_getattr,
+	.getattr	= fuse_getattr,
 #else
-	revalidate:	fuse_revalidate,
+	.revalidate	= fuse_revalidate,
 #endif
 };
 
 static struct file_operations fuse_dir_operations = {
-	read:		generic_read_dir,
-	readdir:	fuse_readdir,
-	open:		fuse_dir_open,
-	release:	fuse_dir_release,
+	.read		= generic_read_dir,
+	.readdir	= fuse_readdir,
+	.open		= fuse_dir_open,
+	.release	= fuse_dir_release,
 };
 
 static struct inode_operations fuse_file_inode_operations = {
-	setattr:	fuse_setattr,
-	permission:	fuse_permission,
+	.setattr	= fuse_setattr,
+	.permission	= fuse_permission,
 #ifdef KERNEL_2_6
-	getattr:	fuse_getattr,
+	.getattr	= fuse_getattr,
 #else
-	revalidate:	fuse_revalidate,
+	.revalidate	= fuse_revalidate,
 #endif
 };
 
 static struct inode_operations fuse_symlink_inode_operations =
 {
-	setattr:	fuse_setattr,
-	readlink:	fuse_readlink,
-	follow_link:	fuse_follow_link,
+	.setattr	= fuse_setattr,
+	.readlink	= fuse_readlink,
+	.follow_link	= fuse_follow_link,
 #ifdef KERNEL_2_6
-	getattr:	fuse_getattr,
+	.getattr	= fuse_getattr,
 #else
-	revalidate:	fuse_revalidate,
+	.revalidate	= fuse_revalidate,
 #endif
 };
 
 static struct dentry_operations fuse_dentry_opertations = {
-	d_revalidate:	fuse_dentry_revalidate,
+	.d_revalidate	= fuse_dentry_revalidate,
 };
 
 /* 

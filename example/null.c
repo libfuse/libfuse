@@ -71,26 +71,12 @@ static int null_statfs(struct fuse_statfs *st)
 }
 
 static struct fuse_operations null_oper = {
-    getattr:	null_getattr,
-    readlink:	NULL,
-    getdir:     NULL,
-    mknod:	NULL,
-    mkdir:	NULL,
-    symlink:	NULL,
-    unlink:	NULL,
-    rmdir:	NULL,
-    rename:     NULL,
-    link:	NULL,
-    chmod:	NULL,
-    chown:	NULL,
-    truncate:	null_truncate,
-    utime:	NULL,
-    open:	null_open,
-    read:	null_read,
-    write:	null_write,
-    statfs:	null_statfs,
-    release:	NULL,
-    fsync:	NULL
+    .getattr	= null_getattr,
+    .truncate	= null_truncate,
+    .open	= null_open,
+    .read	= null_read,
+    .write	= null_write,
+    .statfs	= null_statfs,
 };
 
 int main(int argc, char *argv[])

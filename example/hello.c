@@ -68,26 +68,10 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset)
 }
 
 static struct fuse_operations hello_oper = {
-    getattr:	hello_getattr,
-    readlink:	NULL,
-    getdir:     hello_getdir,
-    mknod:	NULL,
-    mkdir:	NULL,
-    symlink:	NULL,
-    unlink:	NULL,
-    rmdir:	NULL,
-    rename:     NULL,
-    link:	NULL,
-    chmod:	NULL,
-    chown:	NULL,
-    truncate:	NULL,
-    utime:	NULL,
-    open:	hello_open,
-    read:	hello_read,
-    write:	NULL,
-    statfs:	NULL,
-    release:	NULL,
-    fsync:	NULL
+    .getattr	= hello_getattr,
+    .getdir	= hello_getdir,
+    .open	= hello_open,
+    .read	= hello_read,
 };
 
 int main(int argc, char *argv[])

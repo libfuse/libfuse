@@ -269,26 +269,26 @@ static int xmp_fsync(const char *path, int isdatasync)
 }
 
 static struct fuse_operations xmp_oper = {
-    getattr:	xmp_getattr,
-    readlink:	xmp_readlink,
-    getdir:     xmp_getdir,
-    mknod:	xmp_mknod,
-    mkdir:	xmp_mkdir,
-    symlink:	xmp_symlink,
-    unlink:	xmp_unlink,
-    rmdir:	xmp_rmdir,
-    rename:     xmp_rename,
-    link:	xmp_link,
-    chmod:	xmp_chmod,
-    chown:	xmp_chown,
-    truncate:	xmp_truncate,
-    utime:	xmp_utime,
-    open:	xmp_open,
-    read:	xmp_read,
-    write:	xmp_write,
-    statfs:	xmp_statfs,
-    release:	xmp_release,
-    fsync:	xmp_fsync
+    .getattr	= xmp_getattr,
+    .readlink	= xmp_readlink,
+    .getdir	= xmp_getdir,
+    .mknod	= xmp_mknod,
+    .mkdir	= xmp_mkdir,
+    .symlink	= xmp_symlink,
+    .unlink	= xmp_unlink,
+    .rmdir	= xmp_rmdir,
+    .rename	= xmp_rename,
+    .link	= xmp_link,
+    .chmod	= xmp_chmod,
+    .chown	= xmp_chown,
+    .truncate	= xmp_truncate,
+    .utime	= xmp_utime,
+    .open	= xmp_open,
+    .read	= xmp_read,
+    .write	= xmp_write,
+    .statfs	= xmp_statfs,
+    .release	= xmp_release,
+    .fsync	= xmp_fsync
     
 };
 

@@ -544,12 +544,12 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 }
 
 static struct file_operations fuse_dev_operations = {
-	owner:		THIS_MODULE,
-	read:		fuse_dev_read,
-	write:		fuse_dev_write,
-	poll:		fuse_dev_poll,
-	open:		fuse_dev_open,
-	release:	fuse_dev_release,
+	.owner		= THIS_MODULE,
+	.read		= fuse_dev_read,
+	.write		= fuse_dev_write,
+	.poll		= fuse_dev_poll,
+	.open		= fuse_dev_open,
+	.release	= fuse_dev_release,
 };
 
 int fuse_dev_init()

@@ -112,10 +112,10 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 }
 
 static struct super_operations fuse_super_operations = {
-	read_inode:	fuse_read_inode,
-	clear_inode:	fuse_clear_inode,
-	put_super:	fuse_put_super,
-	statfs: fuse_statfs,
+	.read_inode	= fuse_read_inode,
+	.clear_inode	= fuse_clear_inode,
+	.put_super	= fuse_put_super,
+	.statfs		= fuse_statfs,
 };
 
 
@@ -209,7 +209,8 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 
 #ifdef KERNEL_2_6
 static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
-        int flags, const char *dev_name, void *raw_data)
+				       int flags, const char *dev_name,
+				       void *raw_data)
 {
         return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
 }
