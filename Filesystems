@@ -23,3 +23,16 @@ Description:
   better than NFS.
 
 ==============================================================================
+Name: EncFS - Encrypted Filesystem module for FUSE
+
+Author:  Valient Gough <vgough at pobox com>
+
+Homepage: http://pobox.com/~vgough/encfs.html
+
+Description:
+
+  EncFS provides an encrypted filesystem in user-space. The EncFS
+  module itself runs without any special permissions and uses the FUSE
+  library and Linux kernel module to provide the filesystem interface.
+
+==============================================================================
