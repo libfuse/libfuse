@@ -18,14 +18,22 @@ else
 fusemodule := fuse.ko
 endif
 
-all: all-spec
+all: all-@ENABLE_FUSE_MODULE@
+install: install-@ENABLE_FUSE_MODULE@
+uninstall: uninstall-@ENABLE_FUSE_MODULE@
 
-install: all
+all-n:
+install-n:
+uninstall-n:
+
+all-y: all-spec
+
+install-y: all
 	$(mkdir_p) $(DESTDIR)$(fusemoduledir)
 	$(INSTALL) -m 644 $(fusemodule) $(DESTDIR)$(fusemoduledir)/$(fusemodule)
 	-/sbin/depmod -a
 
-uninstall:
+uninstall-y:
 	rm -f $(DESTDIR)$(fusemoduledir)/$(fusemodule)
 	-/sbin/depmod -a
 

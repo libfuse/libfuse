@@ -1,4 +1,4 @@
-AC_INIT(fuse-kernel, 2.2-pre0)
+AC_INIT(fuse-kernel, 2.2-pre1)
 AC_CONFIG_HEADERS([config.h])
 
 AC_PROG_INSTALL
@@ -22,6 +22,9 @@ if test -z "$kernelsrc"; then
 fi
 AC_MSG_RESULT([$kernelsrc])
 
+AC_ARG_ENABLE(kernel-module,
+	[  --enable-kernel-module  Compile kernel module ])
+
 AC_MSG_CHECKING([kernel source version])
 if test -r $kernelsrc/include/linux/version.h; then
 	kernsrcver=`(echo "#include <linux/version.h>"; echo "kernsrcver=UTS_RELEASE") | cpp -I $kernelsrc/include | grep "^kernsrcver=" | cut -d \" -f 2`
@@ -39,6 +42,7 @@ AC_SUBST(kernelsrc)
 AC_SUBST(majver)
 AC_SUBST(kmoduledir)
 
+ENABLE_FUSE_MODULE=y
 if echo "$kernsrcver" | grep -q "^2.4"; then
        	old_cflags="$CFLAGS"
        	CFLAGS="-I${kernelsrc}/include -Wall -O2 -fno-strict-aliasing -D__KERNEL__"
@@ -47,28 +51,51 @@ if echo "$kernsrcver" | grep -q "^2.4"; then
 			[Kernel has i_size_read() and i_size_write() functions]),,
 		[#include <linux/fs.h>])
 	CFLAGS="$old_cflags"
-fi
-
-AC_MSG_CHECKING([if kernel has extended attribute support])
-if test -f $kernelsrc/include/linux/xattr.h; then
-	AC_DEFINE(HAVE_KERNEL_XATTR, 1, [Kernel has xattr support])
-	AC_MSG_RESULT([yes])
 else
-	AC_MSG_RESULT([no])
+	fuse_configured=no
+	kernel_autoconf=$kernelsrc/include/linux/autoconf.h
+	AC_MSG_CHECKING([if FUSE is configured in the kernel])
+	if test -f $kernel_autoconf; then
+		if grep -q "^#define CONFIG_FUSE 1" $kernel_autoconf || grep -q "^#define CONFIG_FUSE_MODULE 1" $kernel_autoconf; then
+			fuse_configured=yes
+		fi
+	fi
+	AC_MSG_RESULT([$fuse_configured])
+	if test -z "$enable_kernel_module" -a "$fuse_configured" = yes; then
+		ENABLE_FUSE_MODULE=n
+		AC_MSG_WARN([FUSE is configured in the kernel, not building kernel])
+		AC_MSG_WARN([module.  To force building of kernel module use the])
+		AC_MSG_WARN(['--enable-kernel-module' option.])
+	fi
+fi
+if test "$enable_kernel_module" = no; then
+	ENABLE_FUSE_MODULE=n
 fi
 
-isuml=no
-KERNELMAKE_PARAMS=
-KERNELCPPFLAGS=
-AC_MSG_CHECKING([if this is user mode linux])
-if test -f $kernelsrc/include/linux/autoconf.h && grep -q "^#define CONFIG_USERMODE 1" $kernelsrc/include/linux/autoconf.h; then
-	isuml=yes
-	KERNELMAKE_PARAMS="ARCH=um"
-	KERNELCPPFLAGS="-D__arch_um__ -DSUBARCH=\\\"i386\\\" -D_LARGEFILE64_SOURCE -I${kernelsrc}/arch/um/include -Derrno=kernel_errno -I${kernelsrc}/arch/um/kernel/tt/include -I${kernelsrc}/arch/um/kernel/skas/include"
+AC_SUBST(ENABLE_FUSE_MODULE)
+
+if test "$ENABLE_FUSE_MODULE" = y; then
+	AC_MSG_CHECKING([if kernel has extended attribute support])
+	if test -f $kernelsrc/include/linux/xattr.h; then
+		AC_DEFINE(HAVE_KERNEL_XATTR, 1, [Kernel has xattr support])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+	
+	isuml=no
+	KERNELMAKE_PARAMS=
+	KERNELCPPFLAGS=
+	AC_MSG_CHECKING([if this is user mode linux])
+	if test -f $kernelsrc/include/linux/autoconf.h && grep -q "^#define CONFIG_USERMODE 1" $kernelsrc/include/linux/autoconf.h; then
+		isuml=yes
+		KERNELMAKE_PARAMS="ARCH=um"
+		KERNELCPPFLAGS="-D__arch_um__ -DSUBARCH=\\\"i386\\\" -D_LARGEFILE64_SOURCE -I${kernelsrc}/arch/um/include -Derrno=kernel_errno -I${kernelsrc}/arch/um/kernel/tt/include -I${kernelsrc}/arch/um/kernel/skas/include"
+	fi
+	AC_MSG_RESULT([$isuml])
+	AC_SUBST(KERNELMAKE_PARAMS)
+	AC_SUBST(KERNELCPPFLAGS)
 fi
-AC_MSG_RESULT([$isuml])
-AC_SUBST(KERNELMAKE_PARAMS)
-AC_SUBST(KERNELCPPFLAGS)
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

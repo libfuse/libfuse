@@ -1,3 +1,11 @@
+2005-01-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.2-pre1
+
+2005-01-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* If FUSE is configured in the kernel, don't build it by default
+
 2005-01-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Compile fix by Christian Magnusson
