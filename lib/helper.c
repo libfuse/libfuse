@@ -75,6 +75,10 @@ static int fuse_mount_obsolete(int *argcp, char **argv)
     return 0;
 }
 
+/* return value:
+ * >= 0  => fd
+ * -1    => error
+ */
 int receive_fd(int fd) {
     struct msghdr msg;
     struct iovec iov;
@@ -96,12 +100,17 @@ int receive_fd(int fd) {
     msg.msg_control = ccmsg;
     msg.msg_controllen = sizeof(ccmsg);
 
-    rv = recvmsg(fd, &msg, 0);
+    while(((rv = recvmsg(fd, &msg, 0)) == -1) && errno == EINTR);
     if (rv == -1) {
         perror("recvmsg");
         return -1;
     }
-
+    if(!rv) {
+        /* EOF */
+        fprintf(stderr, "got EOF\n");
+        return -1;
+    }
+    
     cmsg = CMSG_FIRSTHDR(&msg);
     if (!cmsg->cmsg_type == SCM_RIGHTS) {
         fprintf(stderr, "got control message of unknown type %d\n",
@@ -120,8 +129,13 @@ int fuse_mount(const char *mountpoint, const char *mount_args)
     /* FIXME: parse mount_args (or just pass it to fusermount ???) */
     mount_args = mount_args;
 
-    if(socketpair(PF_UNIX,SOCK_DGRAM,0,fds)) {
+    /* make sure the socket fds are greater than 0 */
+    fd = open("/dev/null",O_RDONLY); 
+    rv = socketpair(PF_UNIX,SOCK_STREAM,0,fds);
+    close(fd);
+    if(rv) {
         fprintf(stderr,"fuse: failed to socketpair()\n");
+        close(fd);
         return -1;
     }
     pid = fork();
@@ -143,10 +157,9 @@ int fuse_mount(const char *mountpoint, const char *mount_args)
 
     fd = fds[1];
     close(fds[0]);
-    while((rv = receive_fd(fd)) < 0)
-        sleep(1);
+    rv = receive_fd(fd);
     close(fd);
-    while(wait(NULL) != pid); /* bury zombie */
+    waitpid(pid,NULL,0); /* bury zombie */
     return rv;
 }
 

@@ -1,5 +1,5 @@
-#include <stdio.h>                /* fprintf */
-#include <errno.h>                /* errno */
+#include <stdio.h>                 /* fprintf */
+#include <errno.h>                 /* errno */
 #include <string.h>                /* strerror */
 #include <unistd.h>                /* read,write,close */
 #include <stdlib.h>                /* getenv,strtol */
@@ -10,6 +10,10 @@
 #undef IOSLAVE_DEBUG
 char *scratch;
 
+/* return values:
+ * 0  => success
+ * -1 => error condition
+ */
 int send_fd(int sock_fd, int send_fd) {
     int retval;
     struct msghdr msg;
@@ -37,11 +41,12 @@ int send_fd(int sock_fd, int send_fd) {
      */
     vec.iov_base = &sendchar;
     vec.iov_len = sizeof(sendchar);
-    retval = sendmsg(sock_fd, &msg, 0);
+    while((retval = sendmsg(sock_fd, &msg, 0)) == -1 && errno == EINTR);
     if (retval != 1) {
         perror("sendmsg");
+        return -1;
     }
-    return retval;
+    return 0;
 }
 
 int main() {
@@ -50,8 +55,7 @@ int main() {
     if (!env)
         exit(fprintf(stderr, "fuse_ioslave: do not run me directly\n"));
     fd = strtol(env, NULL, 0);
-    while (send_fd(fd, 0) < 0) {
-        sleep(5);
-    }
+    if(send_fd(fd, 0) == -1)
+    	fprintf(stderr,"failed to send fd\n");
     return 0;
 }
