@@ -193,10 +193,11 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	struct inode *root;
 	struct fuse_mount_data *d = data;
 
-        sb->s_blocksize = PAGE_CACHE_SIZE;
-        sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
-        sb->s_magic = FUSE_SUPER_MAGIC;
-        sb->s_op = &fuse_super_operations;
+	sb->s_blocksize = PAGE_CACHE_SIZE;
+	sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
+	sb->s_magic = FUSE_SUPER_MAGIC;
+	sb->s_op = &fuse_super_operations;
+	sb->s_maxbytes = MAX_LFS_FILESIZE;
 #ifdef KERNEL_2_6
 	sb->s_export_op = &fuse_export_operations;
 #endif
@@ -216,7 +217,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	spin_unlock(&fuse_lock);
 	
 	/* fc is needed in fuse_init_file_inode which could be called
-           from get_root_inode */
+	   from get_root_inode */
 	SB_FC(sb) = fc;
 
 	root = get_root_inode(sb, d->rootmode);
@@ -237,15 +238,15 @@ static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
 				       int flags, const char *dev_name,
 				       void *raw_data)
 {
-        return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
+	return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
 }
 
 static struct file_system_type fuse_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "fuse",
-        .get_sb         = fuse_get_sb,
-        .kill_sb        = kill_anon_super,
-        .fs_flags       = 0
+	.owner		= THIS_MODULE,
+	.name		= "fuse",
+	.get_sb		= fuse_get_sb,
+	.kill_sb	= kill_anon_super,
+	.fs_flags	= 0
 };
 #else
 static struct super_block *fuse_read_super_compat(struct super_block *sb,

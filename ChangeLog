@@ -1,3 +1,7 @@
+2004-02-06  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Fixed writing >= 2G files
+	
 2004-02-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Released 1.1
