@@ -1,3 +1,7 @@
+2005-01-20  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.2-pre5 (matches kernel 2.6.11-rc1-mm2)
+
 2005-01-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* KERNEL ABI: remove GETDIR operation, and add OPENDIR, READDIR
