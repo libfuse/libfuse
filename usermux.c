@@ -50,7 +50,7 @@ static void start_avfs(uid_t uid)
     if(pw == NULL)
         return;
 
-    user_fuse = fuse_new(0);
+    user_fuse = fuse_new(FUSE_MULTITHREAD, 0);
     
     userdir = g_strdup_printf("%s/%010u", MOUNTDIR, uid);
     mkdir(userdir, 0755);
@@ -240,7 +240,7 @@ int main(int argc, char *argv[])
     set_signal_handlers();
     atexit(cleanup);
 
-    um_fuse = fuse_new(0);
+    um_fuse = fuse_new(FUSE_MULTITHREAD, 0);
     res = fuse_mount(um_fuse, um_dir);
     if(res == -1)
         exit(1);

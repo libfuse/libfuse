@@ -12,8 +12,6 @@
 #include <linux/spinlock.h>
 #include <linux/rwsem.h>
 
-#define FUSE_VERSION "0.1"
-
 #define MAX_CLEARED 256
 
 /**

@@ -1,14 +1,12 @@
 CC = gcc
 CFLAGS = -Wall -g `glib-config --cflags`
-LDFLAGS = `glib-config --libs` -ldl -L ../avfs/libneon/
+LDFLAGS = `glib-config --libs` -ldl -L ../avfs/libneon/ -L lib
 #LIBXML = -lxml
 LIBXML = -lxmltok -lxmlparse
-LDLIBS = -lneon $(LIBXML) -lpthread
+LDLIBS = -lneon $(LIBXML) -lfuse -lpthread
 CPPFLAGS = -Iinclude -I ../avfs/include
 
-
-
-all: kernel/fuse.o fusepro avfsd
+all: kernel/fuse.o fusexmp avfsd
 
 kernel/fuse.o: FORCE
 	make -C kernel fuse.o
@@ -16,15 +14,21 @@ kernel/fuse.o: FORCE
 lib/libfuse.a: FORCE
 	make -C lib libfuse.a
 
-fusepro: fusepro.o lib/libfuse.a
+lib/libfuse.so: FORCE
+	make -C lib libfuse.so
 
-avfsd: usermux.o avfsd.o ../avfs/lib/avfs.o lib/libfuse.a 
+fusexmp: fusexmp.o lib/libfuse.so
+	gcc $(CFLAGS) $(LDFLAGS) -o fusexmp fusexmp.o $(LDLIBS)
+
+avfsd_objs = usermux.o avfsd.o ../avfs/lib/avfs.o
+avfsd: $(avfsd_objs) lib/libfuse.so
+	gcc $(CFLAGS) $(LDFLAGS) -o avfsd $(avfsd_objs) $(LDLIBS)
 
 clean:
 	make -C kernel clean
 	make -C lib clean
 	rm -f *.o
-	rm -f fusepro avfsd
+	rm -f fusexmp avfsd
 	rm -f *~
 
 FORCE:

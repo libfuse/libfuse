@@ -12,8 +12,6 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 
-#define FUSE_VERSION "0.1"
-
 spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
 
 /* Must be called with the fuse lock held */
@@ -28,7 +26,7 @@ int init_module(void)
 {
 	int res;
 
-	printk(KERN_DEBUG "fuse init (version %s)\n", FUSE_VERSION);
+	printk(KERN_DEBUG "fuse init (version %i)\n", FUSE_KERNEL_VERSION);
 
 	res = fuse_fs_init();
 	if(res)

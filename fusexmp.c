@@ -3,6 +3,9 @@
 #define _XOPEN_SOURCE 500
 #endif
 
+/* For setgroups() */
+#define _BSD_SOURCE
+
 #include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,27 +15,58 @@
 #include <signal.h>
 #include <utime.h>
 #include <fcntl.h>
+#include <grp.h>
+#include <sys/fsuid.h>
 
-static struct fuse *pro_fuse;
+static struct fuse *xmp_fuse;
 
-static int pro_getattr(struct fuse_cred *cred, const char *path,
-                       struct stat *stbuf)
+static int set_creds(struct fuse_cred *cred)
 {
     int res;
 
-    res = lstat(path, stbuf);
+    res = setfsuid(cred->uid);
+    if(res == -1)
+        return -errno;
+
+    res = setfsgid(cred->gid);
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_readlink(struct fuse_cred *cred, const char *path, char *buf,
+static void restore_creds()
+{
+    setfsuid(getuid());
+    setfsgid(getgid());
+}
+
+static int xmp_getattr(struct fuse_cred *cred, const char *path,
+                       struct stat *stbuf)
+{
+    int res;
+
+    res = set_creds(cred);
+    if(res)
+        return res;
+    res = lstat(path, stbuf);
+    restore_creds();
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+static int xmp_readlink(struct fuse_cred *cred, const char *path, char *buf,
                         size_t size)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = readlink(path, buf, size - 1);
+    restore_creds();
     if(res == -1)
         return -errno;
 
@@ -41,14 +75,18 @@ static int pro_readlink(struct fuse_cred *cred, const char *path, char *buf,
 }
 
 
-static int pro_getdir(struct fuse_cred *cred, const char *path, fuse_dirh_t h,
+static int xmp_getdir(struct fuse_cred *cred, const char *path, fuse_dirh_t h,
                       fuse_dirfil_t filler)
 {
     DIR *dp;
     struct dirent *de;
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     dp = opendir(path);
+    restore_creds();
     if(dp == NULL)
         return -errno;
 
@@ -62,125 +100,169 @@ static int pro_getdir(struct fuse_cred *cred, const char *path, fuse_dirh_t h,
     return res;
 }
 
-static int pro_mknod(struct fuse_cred *cred, const char *path, mode_t mode,
+static int xmp_mknod(struct fuse_cred *cred, const char *path, mode_t mode,
                      dev_t rdev)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = mknod(path, mode, rdev);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_mkdir(struct fuse_cred *cred, const char *path, mode_t mode)
+static int xmp_mkdir(struct fuse_cred *cred, const char *path, mode_t mode)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = mkdir(path, mode);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_unlink(struct fuse_cred *cred, const char *path)
+static int xmp_unlink(struct fuse_cred *cred, const char *path)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = unlink(path);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_rmdir(struct fuse_cred *cred, const char *path)
+static int xmp_rmdir(struct fuse_cred *cred, const char *path)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = rmdir(path);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_symlink(struct fuse_cred *cred, const char *from,
+static int xmp_symlink(struct fuse_cred *cred, const char *from,
                        const char *to)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = symlink(from, to);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_rename(struct fuse_cred *cred, const char *from, const char *to)
+static int xmp_rename(struct fuse_cred *cred, const char *from, const char *to)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = rename(from, to);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_link(struct fuse_cred *cred, const char *from, const char *to)
+static int xmp_link(struct fuse_cred *cred, const char *from, const char *to)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = link(from, to);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_chmod(struct fuse_cred *cred, const char *path, mode_t mode)
+static int xmp_chmod(struct fuse_cred *cred, const char *path, mode_t mode)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = chmod(path, mode);
+    restore_creds();
     if(res == -1)
         return -errno;
     
     return 0;
 }
 
-static int pro_chown(struct fuse_cred *cred, const char *path, uid_t uid,
+static int xmp_chown(struct fuse_cred *cred, const char *path, uid_t uid,
                      gid_t gid)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = lchown(path, uid, gid);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_truncate(struct fuse_cred *cred, const char *path, off_t size)
+static int xmp_truncate(struct fuse_cred *cred, const char *path, off_t size)
 {
     int res;
     
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = truncate(path, size);
+    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_utime(struct fuse_cred *cred, const char *path,
+static int xmp_utime(struct fuse_cred *cred, const char *path,
                      struct utimbuf *buf)
 {
     int res;
     
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = utime(path, buf);
+    restore_creds();
     if(res == -1)
         return -errno;
 
@@ -188,11 +270,15 @@ static int pro_utime(struct fuse_cred *cred, const char *path,
 }
 
 
-static int pro_open(struct fuse_cred *cred, const char *path, int flags)
+static int xmp_open(struct fuse_cred *cred, const char *path, int flags)
 {
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     res = open(path, flags);
+    restore_creds();
     if(res == -1) 
         return -errno;
 
@@ -200,13 +286,17 @@ static int pro_open(struct fuse_cred *cred, const char *path, int flags)
     return 0;
 }
 
-static int pro_read(struct fuse_cred *cred, const char *path, char *buf,
+static int xmp_read(struct fuse_cred *cred, const char *path, char *buf,
                     size_t size, off_t offset)
 {
     int fd;
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     fd = open(path, O_RDONLY);
+    restore_creds();
     if(fd == -1)
         return -errno;
 
@@ -218,13 +308,17 @@ static int pro_read(struct fuse_cred *cred, const char *path, char *buf,
     return res;
 }
 
-static int pro_write(struct fuse_cred *cred, const char *path, const char *buf,
+static int xmp_write(struct fuse_cred *cred, const char *path, const char *buf,
                      size_t size, off_t offset)
 {
     int fd;
     int res;
 
+    res = set_creds(cred);
+    if(res)
+        return res;
     fd = open(path, O_WRONLY);
+    restore_creds();
     if(fd == -1)
         return -errno;
 
@@ -267,28 +361,28 @@ static void set_signal_handlers()
 
 static void cleanup()
 {
-    fuse_unmount(pro_fuse);
-    fuse_destroy(pro_fuse);
+    fuse_unmount(xmp_fuse);
+    fuse_destroy(xmp_fuse);
 }
 
-static struct fuse_operations pro_oper = {
-    getattr:	pro_getattr,
-    readlink:	pro_readlink,
-    getdir:     pro_getdir,
-    mknod:	pro_mknod,
-    mkdir:	pro_mkdir,
-    symlink:	pro_symlink,
-    unlink:	pro_unlink,
-    rmdir:	pro_rmdir,
-    rename:     pro_rename,
-    link:	pro_link,
-    chmod:	pro_chmod,
-    chown:	pro_chown,
-    truncate:	pro_truncate,
-    utime:	pro_utime,
-    open:	pro_open,
-    read:	pro_read,
-    write:	pro_write,
+static struct fuse_operations xmp_oper = {
+    getattr:	xmp_getattr,
+    readlink:	xmp_readlink,
+    getdir:     xmp_getdir,
+    mknod:	xmp_mknod,
+    mkdir:	xmp_mkdir,
+    symlink:	xmp_symlink,
+    unlink:	xmp_unlink,
+    rmdir:	xmp_rmdir,
+    rename:     xmp_rename,
+    link:	xmp_link,
+    chmod:	xmp_chmod,
+    chown:	xmp_chown,
+    truncate:	xmp_truncate,
+    utime:	xmp_utime,
+    open:	xmp_open,
+    read:	xmp_read,
+    write:	xmp_write,
 };
 
 int main(int argc, char *argv[])
@@ -301,14 +395,16 @@ int main(int argc, char *argv[])
 
     set_signal_handlers();
     atexit(cleanup);
+    setgroups(0, NULL);
 
-    pro_fuse = fuse_new(0);
-    res = fuse_mount(pro_fuse, argv[1]);
+    xmp_fuse = fuse_new(0,0);
+    res = fuse_mount(xmp_fuse, argv[1]);
     if(res == -1)
         exit(1);
         
-    fuse_set_operations(pro_fuse, &pro_oper);
-    fuse_loop(pro_fuse);
+    fuse_set_operations(xmp_fuse, &xmp_oper);
+
+    fuse_loop(xmp_fuse);
 
     return 0;
 }

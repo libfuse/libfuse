@@ -66,8 +66,8 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 		return NULL;
 	}
 
-	if(d->version != FUSE_MOUNT_VERSION) {
-		printk("fuse_read_super: Bad mount version: %i\n", d->version);
+	if(d->version != FUSE_KERNEL_VERSION) {
+		printk("fuse_read_super: Bad version: %i\n", d->version);
 		return NULL;
 	}
 
@@ -89,12 +89,12 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 
 }
 
-static struct inode *get_root_inode(struct super_block *sb)
+static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
 {
 	struct fuse_attr attr;
 	memset(&attr, 0, sizeof(attr));
 
-	attr.mode = S_IFDIR;
+	attr.mode = mode;
 	return fuse_iget(sb, 1, &attr, 0);
 }
 
@@ -103,20 +103,21 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 {	
 	struct fuse_conn *fc;
 	struct inode *root;
+	struct fuse_mount_data *d = data;
 
         sb->s_blocksize = 1024;
         sb->s_blocksize_bits = 10;
         sb->s_magic = FUSE_SUPER_MAGIC;
         sb->s_op = &fuse_super_operations;
 
-	root = get_root_inode(sb);
+	root = get_root_inode(sb, d->rootmode);
 	if(root == NULL) {
 		printk("fuse_read_super: failed to get root inode\n");
 		return NULL;
 	}
 
 	spin_lock(&fuse_lock);
-	fc = get_conn(data);
+	fc = get_conn(d);
 	if(fc == NULL)
 		goto err;
 

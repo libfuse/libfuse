@@ -16,13 +16,15 @@
 #include <sys/mount.h>
 #include <mntent.h>
 
-static int do_mount(const char *dev, const char *dir, const char *type, int fd)
+static int do_mount(const char *dev, const char *dir, const char *type,
+                    mode_t rootmode, int fd)
 {
     int res;
     struct fuse_mount_data data;
     
-    data.version = FUSE_MOUNT_VERSION;
+    data.version = FUSE_KERNEL_VERSION;
     data.fd = fd;
+    data.rootmode = rootmode;
 
     res = mount(dev, dir, type, MS_MGC_VAL | MS_NOSUID | MS_NODEV, &data);
     if(res == -1) {
@@ -100,7 +102,7 @@ int fuse_mount(struct fuse *f, const char *dir)
     const char *dev = FUSE_DEV;
     const char *type = "fuse";
 
-    if(f->dir != NULL)
+    if(f->mnt != NULL)
         return 0;
 
     f->fd = open(dev, O_RDWR);
@@ -109,12 +111,12 @@ int fuse_mount(struct fuse *f, const char *dir)
         return -1;
     }
     
-    res = do_mount(dev, dir, type, f->fd);
+    res = do_mount(dev, dir, type, f->rootmode, f->fd);
     if(res == -1)
         return -1;
 
     add_mntent(dev, dir, type);
-    f->dir = g_strdup(dir);
+    f->mnt = g_strdup(dir);
     
     return 0;
 }
@@ -123,20 +125,20 @@ int fuse_unmount(struct fuse *f)
 {
     int res;
 
-    if(f->dir == NULL)
+    if(f->mnt == NULL)
         return 0;
 
     close(f->fd);
     f->fd = -1;
 
-    res = umount(f->dir);
+    res = umount(f->mnt);
     if(res == -1)
         perror("umount failed");
     else
-        remove_mntent(f->dir);
+        remove_mntent(f->mnt);
 
-    g_free(f->dir);
-    f->dir = NULL;
+    g_free(f->mnt);
+    f->mnt = NULL;
 
     return res;
 }

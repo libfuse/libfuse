@@ -25,7 +25,8 @@ struct node {
 
 struct fuse {
     int flags;
-    char *dir;
+    char *mnt;
+    mode_t rootmode;
     int fd;
     struct fuse_operations op;
     GHashTable *nametab;

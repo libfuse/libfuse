@@ -9,11 +9,12 @@
 /* This file defines the kernel interface of FUSE */
 
 
-#define FUSE_MOUNT_VERSION 1
+#define FUSE_KERNEL_VERSION 1
 
 struct fuse_mount_data {
 	int version;
 	int fd;
+	unsigned int rootmode;
 };
 
 #define FUSE_ROOT_INO 1

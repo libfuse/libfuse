@@ -407,6 +407,7 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
             res = f->op.readlink(&cred, path, link, sizeof(link));
         g_free(path);
     }
+    link[PATH_MAX] = '\0';
     send_reply(f, in, res, link, !res ? strlen(link) : 0);
 }
 
@@ -756,6 +757,17 @@ static void *do_command(void *data)
     return NULL;
 }
 
+/* This hack makes it possible to link FUSE with or without the
+   pthread library */
+__attribute__((weak))
+int pthread_create(pthread_t *thrid           __attribute__((unused)), 
+                   const pthread_attr_t *attr __attribute__((unused)), 
+                   void *(*func)(void *)      __attribute__((unused)),
+                   void *arg                  __attribute__((unused)))
+{
+    return ENOSYS;
+}
+
 void fuse_loop(struct fuse *f)
 {
     int res;
@@ -787,24 +799,35 @@ void fuse_loop(struct fuse *f)
         
         if(f->flags & FUSE_MULTITHREAD) {
             res = pthread_create(&thrid, &attr, do_command, cmd);
-            if(res != 0) {
-                fprintf(stderr, "Error creating thread: %s\n", 
-                        strerror(errno));
-                exit(1);
-            }
+            if(res == 0)
+                continue;
+            
+            fprintf(stderr, "Error creating thread: %s\n", strerror(res));
+            fprintf(stderr, "Will run in single thread mode\n");
+            f->flags &= ~FUSE_MULTITHREAD;
         }
-        else
-            do_command(cmd);
+
+        do_command(cmd);
     }
 }
 
-struct fuse *fuse_new(int flags)
+struct fuse *fuse_new(int flags, mode_t root)
 {
     struct fuse *f = g_new0(struct fuse, 1);
 
+    if(!root)
+        root = S_IFDIR;
+
+    if(!S_ISDIR(root) && !S_ISREG(root)) {
+        fprintf(stderr, "Invalid mode for root: 0%o\n", root);
+        root = S_IFDIR;
+    }
+    root &= S_IFMT;
+
     f->flags = flags;
+    f->rootmode = root;
     f->fd = -1;
-    f->dir = NULL;
+    f->mnt = NULL;
     f->nametab = g_hash_table_new((GHashFunc) name_hash,
                                   (GCompareFunc) name_compare);
     pthread_mutex_init(&f->lock, NULL);
