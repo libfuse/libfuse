@@ -54,10 +54,10 @@ void fuse_request_free(struct fuse_req *req)
 #ifdef KERNEL_2_6
 static inline void block_sigs(sigset_t *oldset)
 {
-	sigset_t sigmask;
+	sigset_t mask;
 
-	siginitsetinv(&sigmask, sigmask(SIGKILL));
-	sigprocmask(SIG_BLOCK, &sigmask, oldset);
+	siginitsetinv(&mask, sigmask(SIGKILL));
+	sigprocmask(SIG_BLOCK, &mask, oldset);
 }
 
 static inline void restore_sigs(sigset_t *oldset)
