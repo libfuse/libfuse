@@ -1,5 +1,9 @@
 2005-01-17  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.2-pre4
+
+2005-01-17  Miklos Szeredi <miklos@szeredi.hu>
+
 	* fusermount: remove capability setting, which was the cause of
 	problems for some users.  It seems that FS related capabilities
 	are removed by setfsuid(), so this isn't even needed.  
