@@ -1,3 +1,8 @@
+2003-12-15  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added major+minor version to library API, and minor version to
+	  kernel API
+
 2003-12-13  David McNab <david@rebirthing.co.nz>
 
 	* Implemented fsync support in examples/example.py

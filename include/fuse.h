@@ -11,6 +11,12 @@
 
 /* This file defines the library interface of FUSE */
 
+/** Major version of FUSE library interface */
+#define FUSE_MAJOR_VERSION 1
+
+/** Minor version of FUSE library interface */
+#define FUSE_MINOR_VERSION 1
+
 /* Now and forever: this interface uses 64 bit off_t */
 #define _FILE_OFFSET_BITS 64
 

@@ -864,17 +864,6 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
         res = f->op.statfs((struct fuse_statfs *) &arg.st);
     }
 
-    if (0)
-      {
-        printf("block_size=%ld, blocks=%ld, blocks_free=%ld, files=%ld, files_free=%ld, namelen=%ld\n",
-               arg.st.block_size,
-               arg.st.blocks,
-               arg.st.blocks_free,
-               arg.st.files,
-               arg.st.files_free,
-               arg.st.namelen);
-      }
-           
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 

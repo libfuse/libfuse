@@ -11,6 +11,9 @@
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 2
 
+/** Minor version number of this interface */
+#define FUSE_KERNEL_MINOR_VERSION 1
+
 /** The inode number of the root indode */
 #define FUSE_ROOT_INO 1
 

@@ -250,14 +250,22 @@ static int xmp_statfs(struct fuse_statfs *fst)
 
 static int xmp_release(const char *path, int flags)
 {
-  /* just a stub here */
-  return 0;
+    /* Just a stub.  This method is optional and can safely be left
+       unimplemented */
+
+    (void) path;
+    (void) flags;
+    return 0;
 }
 
 static int xmp_fsync(const char *path, int isdatasync)
 {
-  /* just stub this */
-  return 0;
+    /* Just a stub.  This method is optional and can safely be left
+       unimplemented */
+
+    (void) path;
+    (void) isdatasync;
+    return 0;
 }
 
 static struct fuse_operations xmp_oper = {
@@ -280,7 +288,7 @@ static struct fuse_operations xmp_oper = {
     write:	xmp_write,
     statfs:	xmp_statfs,
     release:	xmp_release,
-    fsync: xmp_fsync
+    fsync:	xmp_fsync
     
 };
 
