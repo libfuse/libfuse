@@ -303,6 +303,15 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 
 static int fuse_permission(struct inode *inode, int mask)
 {
+	struct fuse_conn *fc = INO_FC(inode);
+
+	/* (too) simple protection for non-privileged mounts */
+	if(fc->uid) {
+		if(current->fsuid == fc->uid)
+			return 0;
+		else
+			return -EACCES;
+	}
 	return 0;
 }
 

@@ -1,0 +1,62 @@
+--- /store/linux/linux-2.4.14.tar.gz#/linux/fs/namespace.c	Fri Nov  9 08:58:10 2001
++++ linux/fs/namespace.c	Fri Nov  9 09:31:04 2001
+@@ -478,20 +478,15 @@
+ 
+ static int mount_is_safe(struct nameidata *nd)
+ {
+-	if (capable(CAP_SYS_ADMIN))
+-		return 0;
+-	return -EPERM;
+-#ifdef notyet
+ 	if (S_ISLNK(nd->dentry->d_inode->i_mode))
+ 		return -EPERM;
+ 	if (nd->dentry->d_inode->i_mode & S_ISVTX) {
+-		if (current->uid != nd->dentry->d_inode->i_uid)
++		if (current->fsuid != nd->dentry->d_inode->i_uid)
+ 			return -EPERM;
+ 	}
+ 	if (permission(nd->dentry->d_inode, MAY_WRITE))
+ 		return -EPERM;
+ 	return 0;
+-#endif
+ }
+ 
+ static struct vfsmount *copy_tree(struct vfsmount *mnt, struct dentry *dentry)
+@@ -570,9 +565,10 @@
+ {
+ 	struct nameidata old_nd;
+ 	struct vfsmount *mnt = NULL;
+-	int err = mount_is_safe(nd);
+-	if (err)
+-		return err;
++	int err = 0;
++
++	if (!capable(CAP_SYS_ADMIN))
++		return -EPERM;
+ 	if (!old_name || !*old_name)
+ 		return -EINVAL;
+ 	if (path_init(old_name, LOOKUP_POSITIVE|LOOKUP_FOLLOW, &old_nd))
+@@ -741,6 +737,13 @@
+ 		retval = path_walk(dir_name, &nd);
+ 	if (retval)
+ 		return retval;
++
++	if (flags & MS_PERMISSION) {
++		retval = mount_is_safe(&nd);
++		if(retval)
++			return retval;
++	}
++	flags &= ~MS_PERMISSION;
+ 
+ 	if (flags & MS_REMOUNT)
+ 		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
+--- /store/linux/linux-2.4.14.tar.gz#/linux/include/linux/fs.h	Fri Nov  9 08:58:51 2001
++++ linux/include/linux/fs.h	Fri Nov  9 09:24:21 2001
+@@ -105,6 +105,7 @@
+ #define MS_SYNCHRONOUS	16	/* Writes are synced at once */
+ #define MS_REMOUNT	32	/* Alter flags of a mounted FS */
+ #define MS_MANDLOCK	64	/* Allow mandatory locks on an FS */
++#define MS_PERMISSION	128	/* Check write permission on mount target */
+ #define MS_NOATIME	1024	/* Do not update access times. */
+ #define MS_NODIRATIME	2048	/* Do not update directory access times */
+ #define MS_BIND		4096

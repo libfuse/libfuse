@@ -1,0 +1,101 @@
+General Information
+===================
+
+FUSE (Filesystem in USErspace) is a simple interface for userspace
+programs to export a virtual filesystem to the linux kernel.  FUSE
+also aims to provide a secure method for non privileged users to
+create and mount their own filesystem implementations.
+
+You can download the source code releases from
+
+  http://sourceforge.net/projects/avf
+
+or alternatively you can use CVS to get the very latest development
+version: set the cvsroot to
+
+  :pserver:anonymous@cvs.avf.sourceforge.net:/cvsroot/avf
+
+and check out the 'fuse' module.
+
+Installation
+============
+
+See the file 'INSTALL'
+
+IMPORTANT NOTE: If you run a system with untrusted users, installing
+this program is not recommended, as it could be used to breach
+security (see the 'Security' section for explanation).
+
+How To Use
+==========
+
+FUSE is made up of three main parts:
+
+ - A kernel filesystem module (kernel/fuse.o)
+
+ - A userspace library (lib/libfuse.a)
+
+ - A mount/unmount program (util/fusermount)
+
+
+Here's how to create your very own virtual filesystem in five easy
+steps:
+
+  1) Edit the file example/fusexmp.c to do whatever you want...
+
+  2) Build the fusexmp program
+
+  3) run 'util/fusermount /mnt/whatever example/fusexmp -d'
+
+  4) ls -al /mnt/whatever
+
+  5) Be glad!
+
+If it doesn't work out, you can ask the me. (Oh yeah, and you need to
+do 'insmod kernel/fuse.o' before running your program, in case you
+forgot).
+
+See the file 'include/fuse.h' for documentation of the library interface.
+
+
+Security
+========
+
+If you run 'make install', the fusermount program is installed
+set-user-id to root.  This is done to allow normal users to mount
+their own filesystem implementations. 
+
+There must however be some limitations to forbid the Bad User to do
+Naughty Things with your Beautiful system.  Currently those
+limitations are:
+
+  - The user can only mount on a mountpoint, for which it has write
+    permission
+
+  - The mountpoint is not a sticky directory which isn't owned by the
+    user (like /tmp usually is)
+
+  - If the user doing the mount is not root, then no other user
+    (including root) can access the contents of the mounted
+    filesystem.
+
+When linux will have private namespaces (as soon as version 2.5 comes
+out) then this third condition is useless and can be gotten rid of.
+
+Currently the first two conditions are checked by the fusermount
+program before doing the mount.  This has the nice feature, that it's
+totally useless. Here's why:
+
+   - user creates /tmp/mydir
+   - user starts fusermount
+   - user removes /tmp/mydir just after fusermount checked that it is OK
+   - user creates symlink: ln -s / /tmp/mydir
+   - fusermount actually mounts user's filesystem on '/'
+   - this is bad :(
+
+So to make this secure, the checks must be done by the kernel.  And so
+there is a patch (patch/ms_permission.patch) which does exactly this.
+This is against 2.4.14, but applies to some earlier kernels (not too
+much earlier though), and possibly some later (I couldn't know, could
+I?).
+

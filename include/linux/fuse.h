@@ -8,16 +8,32 @@
 
 /* This file defines the kernel interface of FUSE */
 
-
+/** Version number of this interface */
 #define FUSE_KERNEL_VERSION 1
 
-struct fuse_mount_data {
-	int version;
-	int fd;
-	unsigned int rootmode;
-};
-
+/** The inode number of the root indode */
 #define FUSE_ROOT_INO 1
+
+/** Opening this will yield a new control file */
+#define FUSE_DEV "/proc/fs/fuse/dev"
+
+/** Data passed to mount */
+struct fuse_mount_data {
+	/** Must be set to FUSE_KERNEL_VERSION */
+	int version;
+	
+	/** The control file descriptor */
+	int fd;
+	
+	/** The file type of the root inode */
+	unsigned int rootmode;
+
+	/** The user ID of the user initiating this mount */
+	unsigned int uid;
+	
+	/** FUSE specific mount flags */
+	unsigned int flags;
+};
 
 struct fuse_attr {
 	unsigned int        mode;

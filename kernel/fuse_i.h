@@ -13,7 +13,6 @@
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-#include <linux/rwsem.h>
 
 #define MAX_CLEARED 256
 
@@ -30,6 +29,12 @@ struct fuse_conn {
 	
 	/** The opened client device */
 	struct file *file;
+
+	/** The user id for this mount */
+	uid_t uid;
+
+	/** The fuse mount flags for this mount */
+	unsigned int flags;
 
 	/** The client wait queue */
 	wait_queue_head_t waitq;

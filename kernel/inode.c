@@ -41,9 +41,10 @@ static void fuse_put_super(struct super_block *sb)
 
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
+	fc->uid = 0;
+	fc->flags = 0;
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
-
 }
 
 static struct super_operations fuse_super_operations = {
@@ -130,6 +131,8 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 		goto err;
 
 	fc->sb = sb;
+	fc->flags = d->flags;
+	fc->uid = d->uid;
 	spin_unlock(&fuse_lock);
 	
 	return sb;

@@ -16,8 +16,14 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
+#include <sys/fsuid.h>
 #include <linux/fuse.h>
-#include <sys/capability.h>
+
+#define CHECK_PERMISSION 1
+
+#ifndef MS_PERMISSION
+#define MS_PERMISSION	128
+#endif
 
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
@@ -149,8 +155,16 @@ static int remove_mount(const char *mnt)
         }
         *p = '\0';
         p++;
-        if(strcmp(user, buf) == 0 && strcmp(mnt, p) == 0)
+        if(!found && strcmp(user, buf) == 0 && strcmp(mnt, p) == 0) {
+            int res = umount(mnt);
+            if(res == -1) {
+                found = -1;
+                fprintf(stderr, "%s: umount of %s failed: %s\n", progname,
+                        mnt, strerror(errno));
+                break;
+            }
             found = 1;
+        }
         else
             fprintf(newfp, "%s %s\n", buf, p);
     }
@@ -158,7 +172,7 @@ static int remove_mount(const char *mnt)
     fclose(fp);
     fclose(newfp);
 
-    if(found) {
+    if(found == 1) {
         int res;
         res = rename(fusermnt_temp, fusermnt);
         if(res == -1) {
@@ -169,8 +183,9 @@ static int remove_mount(const char *mnt)
         }
     }
     else {
-        fprintf(stderr, "%s: entry for %s not found in %s\n", progname, mnt,
-                fusermnt);
+        if(!found)
+            fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
+                    mnt, fusermnt);
         unlink(fusermnt_temp);
         fusermnt_unlock(lockfd);
         return -1;
@@ -180,24 +195,105 @@ static int remove_mount(const char *mnt)
     return 0;
 }
 
+#define _LINUX_CAPABILITY_VERSION  0x19980330
+
+typedef struct __user_cap_header_struct {
+    unsigned int version;
+    int pid;
+} *cap_user_header_t;
+ 
+typedef struct __user_cap_data_struct {
+    unsigned int effective;
+    unsigned int permitted;
+    unsigned int inheritable;
+} *cap_user_data_t;
+  
+int capget(cap_user_header_t header, cap_user_data_t data);
+int capset(cap_user_header_t header, cap_user_data_t data);
+
+#define CAP_SYS_ADMIN        21
+
+static uid_t oldfsuid;
+static gid_t oldfsgid;
+static struct __user_cap_data_struct oldcaps;
+
+static int drop_privs()
+{
+    int res;
+    struct __user_cap_header_struct head;
+    struct __user_cap_data_struct newcaps;
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capget(&head, &oldcaps);
+    if(res == -1) {
+        fprintf(stderr, "%s: failed to get capabilities: %s\n", progname,
+                strerror(errno));
+        return -1;
+    }
+
+    oldfsuid = setfsuid(getuid());
+    oldfsgid = setfsgid(getgid());
+    newcaps = oldcaps;
+    /* Keep CAP_SYS_ADMIN for mount */
+    newcaps.effective &= (1 << CAP_SYS_ADMIN);
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capset(&head, &newcaps);
+    if(res == -1) {
+        fprintf(stderr, "%s: failed to set capabilities: %s\n", progname,
+                strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+static void restore_privs()
+{
+    struct __user_cap_header_struct head;
+    int res;
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capset(&head, &oldcaps);
+    if(res == -1)
+        fprintf(stderr, "%s: failed to restore capabilities: %s\n", progname,
+                strerror(errno));
+    
+    setfsuid(oldfsuid);
+    setfsgid(oldfsgid);
+}
 
 static int do_mount(const char *dev, const char *mnt, const char *type,
                     mode_t rootmode, int fd)
 {
     int res;
     struct fuse_mount_data data;
+    int flags = MS_NOSUID | MS_NODEV;
+
+    if(getuid() != 0) {
+        res = drop_privs();
+        if(res == -1)
+            return -1;
+
+        flags |= MS_PERMISSION;
+    }
     
     data.version = FUSE_KERNEL_VERSION;
     data.fd = fd;
     data.rootmode = rootmode;
+    data.uid = getuid();
+    data.flags = 0;
 
-    res = mount(dev, mnt, type, MS_MGC_VAL | MS_NOSUID | MS_NODEV, &data);
-    if(res == -1) {
+    res = mount(dev, mnt, type, flags, &data);
+    if(res == -1)
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
-	return -1;
-    }
+
+    if(getuid() != 0)
+        restore_privs();
     
-    return 0;
+    return res;
 }
 
 static int check_perm(const char *mnt, struct stat *stbuf)
@@ -217,21 +313,24 @@ static int check_perm(const char *mnt, struct stat *stbuf)
         return -1;
     }
 
+/* Should be done by the kernel */
+#ifdef CHECK_PERMISSION
     if(getuid() != 0) {
-        if(stbuf->st_uid != getuid()) {
+        if((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
             fprintf(stderr, "%s: mountpoint %s not owned by user\n",
                     progname, mnt);
             return -1;
         }
 
-        res = access(mnt, R_OK | W_OK | (S_ISDIR(stbuf->st_mode) ? X_OK : 0));
+        res = access(mnt, W_OK);
         if(res == -1) {
-            fprintf(stderr, "%s: user has no full access to mountpoint %s\n",
+            fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
                     progname, mnt);
             return -1;
         }
     }
-    
+#endif    
+
     return 0;
 }
 
@@ -295,9 +394,11 @@ int main(int argc, char *argv[])
     int a;
     int fd;
     int res;
-    const char *mnt = NULL;
+    char *mnt = NULL;
     int umount = 0;
     char **userprog;
+    int numargs;
+    char **newargv;
 
     progname = argv[0];
     
@@ -341,6 +442,7 @@ int main(int argc, char *argv[])
     }
     
     userprog = argv + a;
+    numargs = argc - a;
     
     fd = mount_fuse(mnt);
     if(fd == -1)
@@ -356,7 +458,14 @@ int main(int argc, char *argv[])
     setuid(getuid());
     setgid(getgid());
     
-    execv(userprog[0], userprog);
+    newargv = (char **) malloc(sizeof(char *) * (numargs + 2));
+    newargv[0] = userprog[0];
+    newargv[1] = mnt;
+    for(a = 1; a < numargs; a++)
+        newargv[a+1] = userprog[a];
+    newargv[numargs+1] = NULL;
+
+    execv(userprog[0], newargv);
     fprintf(stderr, "%s: failed to exec %s: %s\n", progname, userprog[0],
             strerror(errno));
 

@@ -932,26 +932,15 @@ void fuse_loop(struct fuse *f)
     }
 }
 
-struct fuse *fuse_new(int flags, mode_t rootmode)
+struct fuse *fuse_new(int fd, int flags)
 {
     struct fuse *f;
     struct node *root;
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
 
-    if(!rootmode)
-        rootmode = S_IFDIR;
-
-    if(!S_ISDIR(rootmode) && !S_ISREG(rootmode)) {
-        fprintf(stderr, "Invalid mode for root: 0%o\n", rootmode);
-        rootmode = S_IFDIR;
-    }
-    rootmode &= S_IFMT;
-
     f->flags = flags;
-    f->rootmode = rootmode;
-    f->fd = -1;
-    f->mnt = NULL;
+    f->fd = fd;
     f->ctr = 0;
     f->name_table_size = 14057;
     f->name_table = (struct node **)
@@ -962,7 +951,7 @@ struct fuse *fuse_new(int flags, mode_t rootmode)
     pthread_mutex_init(&f->lock, NULL);
 
     root = (struct node *) calloc(1, sizeof(struct node));
-    root->mode = rootmode;
+    root->mode = 0;
     root->rdev = 0;
     root->name = strdup("/");
     root->parent = 0;
@@ -979,7 +968,6 @@ void fuse_set_operations(struct fuse *f, const struct fuse_operations *op)
 void fuse_destroy(struct fuse *f)
 {
     size_t i;
-    close(f->fd);
     for(i = 0; i < f->ino_table_size; i++) {
         struct node *node;
         struct node *next;

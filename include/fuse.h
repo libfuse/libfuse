@@ -92,29 +92,19 @@ struct fuse_operations {
 #define FUSE_DEBUG       (1 << 1)
 
 /**
- * Create a new FUSE filesystem. The filesystem is not yet mounted
+ * Create a new FUSE filesystem.
  *
+ * @param fd the control file descriptor
  * @param flags any combination of the FUSE flags defined above, or 0
- * @param root the file type of the root node. 0 is the default (directory).
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(int flags, mode_t root);
-
-/**
- * Connect to the kernel and mount the filesystem.
- * 
- * @param f the FUSE handle
- * @param mnt the mount point
- * @return 0 on success -1 on failure
- */
-int fuse_mount(struct fuse *f, const char *mnt);
+struct fuse *fuse_new(int fd, int flags);
 
 /**
  * Set the filesystem operations. 
  * 
  * Operations which are initialised to NULL will return ENOSYS to the
- * calling process.  This function can be called anytime after
- * fuse_new() and before fuse_loop().
+ * calling process.
  * 
  * @param f the FUSE handle
  * @param op the operations
@@ -132,19 +122,9 @@ void fuse_set_operations(struct fuse *f, const struct fuse_operations *op);
 void fuse_loop(struct fuse *f);
 
 /**
- * Disconnect from the kernel and unmount the filesystem
+ * Destroy the FUSE handle. 
  *
- * @param f the FUSE handle
- */
-int fuse_unmount(struct fuse *f);
-
-/**
- * Destroy the filesystem. 
- *
- * The filesystem is not unmounted (call fuse_unmount() for that).
- * After a fork() system call it is possible to call fuse_destroy() in
- * one process, and leave the other process to service the filesystem
- * requests.
+ * The filesystem is not unmounted.
  *
  * @param f the FUSE handle
  */

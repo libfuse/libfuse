@@ -18,7 +18,7 @@
 #include <grp.h>
 #include <sys/fsuid.h>
 
-static struct fuse *xmp_fuse;
+static char *mount_point;
 
 static int set_creds(struct fuse_cred *cred)
 {
@@ -359,12 +359,6 @@ static void set_signal_handlers()
     }
 }
 
-static void cleanup()
-{
-    fuse_unmount(xmp_fuse);
-    fuse_destroy(xmp_fuse);
-}
-
 static struct fuse_operations xmp_oper = {
     getattr:	xmp_getattr,
     readlink:	xmp_readlink,
@@ -385,16 +379,23 @@ static struct fuse_operations xmp_oper = {
     write:	xmp_write,
 };
 
+static void cleanup()
+{
+    char *buf = (char *) malloc(strlen(mount_point) + 128);
+    sprintf(buf, "fusermount -u %s", mount_point);
+    system(buf);
+    free(buf);
+}
+
 int main(int argc, char *argv[])
 {
-    int res;
     int argctr;
-    char *mnt;
     int flags;
+    struct fuse *fuse;
 
     if(argc < 2) {
         fprintf(stderr,
-                "usage: %s [options] mount_dir\n"
+                "usage: %s mount_dir [options] \n"
                 "Options:\n"
                 "    -d      enable debug output\n"
                 "    -s      disable multithreaded operation\n",
@@ -402,8 +403,14 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
+    argctr = 1;
+    mount_point = argv[argctr++];
+
+    set_signal_handlers();
+    atexit(cleanup);
+
     flags = FUSE_MULTITHREAD;
-    for(argctr = 1; argctr < argc && argv[argctr][0] == '-'; argctr ++) {
+    for(; argctr < argc && argv[argctr][0] == '-'; argctr ++) {
         switch(argv[argctr][1]) {
         case 'd':
             flags |= FUSE_DEBUG;
@@ -418,23 +425,16 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
-    if(argctr != argc - 1) {
+    if(argctr != argc) {
         fprintf(stderr, "missing or surplus argument\n");
         exit(1);
     }
-    mnt = argv[argctr];
 
-    set_signal_handlers();
-    atexit(cleanup);
     setgroups(0, NULL);
 
-    xmp_fuse = fuse_new(flags, 0);
-    res = fuse_mount(xmp_fuse, mnt);
-    if(res == -1)
-        exit(1);
-        
-    fuse_set_operations(xmp_fuse, &xmp_oper);
-    fuse_loop(xmp_fuse);
+    fuse = fuse_new(0, flags);
+    fuse_set_operations(fuse, &xmp_oper);
+    fuse_loop(fuse);
 
     return 0;
 }

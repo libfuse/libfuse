@@ -325,6 +325,8 @@ static struct fuse_conn *new_conn(void)
 	if(fc != NULL) {
 		fc->sb = NULL;
 		fc->file = NULL;
+		fc->flags = 0;
+		fc->uid = 0;
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
@@ -397,8 +399,7 @@ int fuse_dev_init()
 	}
 
 	proc_fs_fuse->owner = THIS_MODULE;
-	proc_fuse_dev = create_proc_entry("dev", S_IFSOCK | S_IRUGO | S_IWUGO,
-					  proc_fs_fuse);
+	proc_fuse_dev = create_proc_entry("dev", S_IFSOCK | 0600, proc_fs_fuse);
 	if(!proc_fuse_dev) {
 		printk("fuse: failed to create entry in /proc/fs/fuse\n");
 		goto err;

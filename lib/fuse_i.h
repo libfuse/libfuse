@@ -10,8 +10,6 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#define FUSE_DEV "/proc/fs/fuse/dev"
-
 typedef unsigned long fino_t;
 
 struct node {
@@ -27,8 +25,6 @@ struct node {
 
 struct fuse {
     int flags;
-    char *mnt;
-    mode_t rootmode;
     int fd;
     struct fuse_operations op;
     struct node **name_table;
