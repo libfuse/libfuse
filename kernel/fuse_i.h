@@ -57,6 +57,11 @@
 #ifndef BUG_ON
 #define BUG_ON(x)
 #endif
+#ifndef container_of
+#define container_of(ptr, type, member) ({			\
+        const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+        (type *)( (char *)__mptr - offsetof(type,member) );})
+#endif
 #ifndef __user
 #define __user
 #endif

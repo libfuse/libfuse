@@ -56,16 +56,16 @@ else
 	kernel_autoconf=$kernelsrc/include/linux/autoconf.h
 	AC_MSG_CHECKING([if FUSE is configured in the kernel])
 	if test -f $kernel_autoconf; then
-		if grep -q "^#define CONFIG_FUSE 1" $kernel_autoconf || grep -q "^#define CONFIG_FUSE_MODULE 1" $kernel_autoconf; then
+		if grep -q "^#define CONFIG_FUSE_FS 1" $kernel_autoconf || grep -q "^#define CONFIG_FUSE_FS_MODULE 1" $kernel_autoconf; then
 			fuse_configured=yes
 		fi
 	fi
 	AC_MSG_RESULT([$fuse_configured])
 	if test -z "$enable_kernel_module" -a "$fuse_configured" = yes; then
 		ENABLE_FUSE_MODULE=n
-		AC_MSG_WARN([FUSE is configured in the kernel, not building kernel])
-		AC_MSG_WARN([module.  To force building of kernel module use the])
-		AC_MSG_WARN(['--enable-kernel-module' option.])
+		AC_MSG_NOTICE([NOTE:     Detected that FUSE is already present in the kernel, so])
+		AC_MSG_NOTICE([NOTE:     building of kernel module is disabled.  To force building])
+		AC_MSG_NOTICE([NOTE:     of kernel module use the '--enable-kernel-module' option.])
 	fi
 fi
 if test "$enable_kernel_module" = no; then
