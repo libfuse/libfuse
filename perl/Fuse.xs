@@ -24,7 +24,7 @@ constant(char *name, int len, int arg)
     return 0;
 }
 
-SV *_PLfuse_callbacks[17];
+SV *_PLfuse_callbacks[18];
 
 int _PLfuse_getattr(const char *file, struct stat *result) {
 	dSP;
@@ -472,6 +472,42 @@ int _PLfuse_write (const char *file, const char *buf, size_t buflen, off_t off) 
 	return rv;
 }
 
+int _PLfuse_statfs (struct statfs *st) {
+	int rv;
+	char *rvstr;
+	dSP;
+	DEBUGf("statfs begin\n");
+	ENTER;
+	SAVETMPS;
+	PUSHMARK(SP);
+	PUTBACK;
+	rv = call_sv(_PLfuse_callbacks[17],G_ARRAY);
+	SPAGAIN;
+	if(rv > 5) {
+		st->f_bsize   = POPi;
+		st->f_bavail  = st->f_bfree = POPi;
+		st->f_blocks  = POPi;
+		st->f_ffree   = POPi;
+		st->f_files   = POPi;
+		st->f_namelen = POPi;
+		if(rv > 6)
+			rv = POPi;
+		else
+			rv = 0;
+	} else
+	if(rv > 1)
+		croak("inappropriate number of returned values from statfs");
+	else
+	if(rv)
+		rv = POPi;
+	else
+		rv = -ENOSYS;
+	FREETMPS;
+	LEAVE;
+	DEBUGf("statfs end\n");
+	return rv;
+}
+
 struct fuse_operations _available_ops = {
 getattr:	_PLfuse_getattr,
 			_PLfuse_readlink,
@@ -489,7 +525,8 @@ getattr:	_PLfuse_getattr,
 			_PLfuse_utime,
 			_PLfuse_open,
 			_PLfuse_read,
-			_PLfuse_write
+			_PLfuse_write,
+			_PLfuse_statfs
 };
 
 MODULE = Fuse		PACKAGE = Fuse
@@ -512,13 +549,13 @@ constant(sv,arg)
 void
 perl_fuse_main(...)
 	PREINIT:
-	struct fuse_operations fops = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
+	struct fuse_operations fops = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 	int i, varnum = 0, threads, debug, argc;
 	char **argv;
 	STRLEN n_a;
 	STRLEN l;
 	INIT:
-	if(items != 21) {
+	if(items != 22) {
 		fprintf(stderr,"Perl<->C inconsistency or internal error\n");
 		XSRETURN_UNDEF;
 	}
@@ -544,7 +581,7 @@ perl_fuse_main(...)
 	else
 		argc--;
 	
-	for(i=0;i<17;i++) {
+	for(i=0;i<18;i++) {
 		SV *var = ST(i+4);
 		if((var != &PL_sv_undef) && SvROK(var)) {
 			if(SvTYPE(SvRV(var)) == SVt_PVCV) {

@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
+#include <sys/statfs.h>
 
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
@@ -231,6 +232,15 @@ static int xmp_write(const char *path, const char *buf, size_t size,
     return res;
 }
 
+static int xmp_statfs(struct statfs *fst)
+{
+    struct statfs st;
+    int rv = statfs("/",&st);
+    if(!rv)
+	memcpy(fst,&st,sizeof(st));
+    return rv;
+}
+
 static struct fuse_operations xmp_oper = {
     getattr:	xmp_getattr,
     readlink:	xmp_readlink,
@@ -249,6 +259,7 @@ static struct fuse_operations xmp_oper = {
     open:	xmp_open,
     read:	xmp_read,
     write:	xmp_write,
+    statfs:	xmp_statfs,
 };
 
 int main(int argc, char *argv[])

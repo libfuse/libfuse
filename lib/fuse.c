@@ -306,6 +306,16 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
     attr->_dummy  = 4096;
 }
 
+static void convert_statfs(struct statfs *st, struct fuse_statfs *fst)
+{
+    fst->block_size  = st->f_bsize;
+    fst->blocks      = st->f_blocks;
+    fst->blocks_free = st->f_bavail;
+    fst->files       = st->f_files;
+    fst->files_free  = st->f_ffree;
+    fst->namelen     = st->f_namelen;
+}
+
 static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
 {
     struct fuse_dirent dirent;
@@ -793,6 +803,20 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
+static void do_statfs(struct fuse *f, struct fuse_in_header *in)
+{
+    int res;
+    struct statfs sbuf;
+    struct fuse_statfs_out arg;
+
+    res = -ENOSYS;
+    if(f->op.statfs)
+        res = f->op.statfs(&sbuf);
+    if(!res)
+        convert_statfs(&sbuf,&arg.st);
+    send_reply(f, in, res, &arg, sizeof(arg));
+}
+
 static void free_cmd(struct fuse_cmd *cmd)
 {
     free(cmd->buf);
@@ -876,6 +900,10 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_WRITE:
         do_write(f, in, (struct fuse_write_in *) inarg);
+        break;
+
+    case FUSE_STATFS:
+        do_statfs(f, in);
         break;
 
     default:

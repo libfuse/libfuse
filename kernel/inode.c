@@ -70,10 +70,44 @@ static void fuse_put_super(struct super_block *sb)
 	spin_unlock(&fuse_lock);
 }
 
+static void convert_fuse_statfs(struct statfs *stbuf, struct fuse_statfs *attr)
+{
+	stbuf->f_type    = FUSE_SUPER_MAGIC;
+	stbuf->f_bsize   = attr->block_size;
+	stbuf->f_blocks  = attr->blocks;
+	stbuf->f_bfree   = stbuf->f_bavail = attr->blocks_free;
+	stbuf->f_files   = attr->files;
+	stbuf->f_ffree   = attr->files_free;
+	/* Is this field necessary?  Most filesystems ignore it...
+	stbuf->f_fsid.val[0] = (FUSE_SUPER_MAGIC>>16)&0xffff;
+	stbuf->f_fsid.val[1] =  FUSE_SUPER_MAGIC     &0xffff; */
+	stbuf->f_namelen = attr->namelen;
+}
+
+static int fuse_statfs(struct super_block *sb, struct statfs *st)
+{
+	struct fuse_conn *fc = sb->u.generic_sbp;
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_statfs_out outarg;
+        
+	in.numargs = 0;
+	in.h.opcode = FUSE_STATFS;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
+	request_send(fc, &in, &out);
+	if(!out.h.error)
+		convert_fuse_statfs(st,&outarg.st);
+	
+	return out.h.error;
+}
+
 static struct super_operations fuse_super_operations = {
 	read_inode:	fuse_read_inode,
 	clear_inode:	fuse_clear_inode,
 	put_super:	fuse_put_super,
+	statfs: fuse_statfs,
 };
 
 

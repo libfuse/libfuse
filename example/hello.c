@@ -84,6 +84,7 @@ static struct fuse_operations hello_oper = {
     open:	hello_open,
     read:	hello_read,
     write:	NULL,
+    statfs:	NULL,
 };
 
 int main(int argc, char *argv[])

@@ -1,3 +1,7 @@
+2002-01-07  Mark Glines <mark@glines.org>
+	
+	* Added statfs() support to kernel, lib, examples, and perl!
+
 2001-12-20  Miklos Szeredi <mszeredi@inf.bme.hu>
 	
 	* Added function fuse_get_context() to library API (inspired by

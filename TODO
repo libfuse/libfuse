@@ -2,6 +2,4 @@
 
  - Integrate (parts of) fusermount into mount(8)
 
- - Statfs operation
-
  - Etc, etc...

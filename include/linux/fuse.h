@@ -83,6 +83,7 @@ enum fuse_opcode {
 	FUSE_OPEN	= 14,
 	FUSE_READ	= 15,
 	FUSE_WRITE	= 16,
+	FUSE_STATFS	= 17,
 };
 
 /* Conservative buffer size for the client */
@@ -154,6 +155,19 @@ struct fuse_write_in {
 	unsigned long long offset;
 	unsigned int size;
 	char buf[0];
+};
+
+typedef struct fuse_statfs {
+	long block_size;
+	long blocks;
+	long blocks_free;
+	long files;
+	long files_free;
+	long namelen;
+} fuse_statfs_t;
+
+struct fuse_statfs_out {
+	struct fuse_statfs st;
 };
 
 struct fuse_in_header {

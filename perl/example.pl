@@ -70,6 +70,8 @@ sub e_read {
 	return substr($files{$file}{cont},$off,$buf);
 }
 
+sub e_statfs { return 255, 1, 1, 1, 1, 2 }
+
 # If you run the script directly, it will run fusermount, which will in turn
 # re-run this script.  Hence the funky semantics.
 my ($mountpoint) = "";
@@ -79,6 +81,7 @@ Fuse::main(
 	getattr=>\&e_getattr,
 	getdir=>\&e_getdir,
 	open=>\&e_open,
+	statfs=>\&e_statfs,
 	#read=>\&e_read,
 	#debug=>1, threaded=>0
 );

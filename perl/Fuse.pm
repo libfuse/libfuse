@@ -65,8 +65,8 @@ sub AUTOLOAD {
 bootstrap Fuse $VERSION;
 
 sub main {
-	my (@subs) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-	my (@names) = qw(getattr readlink getdir mknod mkdir unlink rmdir symlink rename link chmod chown truncate utime open read write);
+	my (@subs) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+	my (@names) = qw(getattr readlink getdir mknod mkdir unlink rmdir symlink rename link chmod chown truncate utime open read write statfs);
 	my ($tmp) = 0;
 	my (%mapping) = map { $_ => $tmp++ } (@names);
 	my (%otherargs) = (debug=>0, threaded=>1, mountpoint=>"");
@@ -120,6 +120,14 @@ You can import standard error constants by saying something like
 Every constant you need (file types, open() flags, error values,
 etc) can be imported either from POSIX or from Fcntl, often both.
 See their respective documentations, for more information.
+
+=head2 EXPORT
+
+None by default.
+
+=head2 EXPORTABLE CONSTANTS
+
+None.
 
 =head2 FUNCTIONS YOUR FILESYSTEM MAY IMPLEMENT
 
@@ -278,13 +286,20 @@ Returns an errno.
 
 Called in an attempt to write (or overwrite) a portion of the file.  Be prepared because $buffer could contain random binary data with NULLs and all sorts of other wonderful stuff.
 
-=head2 EXPORT
+=head3 statfs
 
-None by default.
+Arguments:  none
+Returns any of the following:
 
-=head2 Exportable constants
+-ENOANO()
 
-None.
+or
+
+$namelen, $files, $files_free, $blocks, $blocks_avail, $blocksize
+
+or
+
+-ENOANO(), $namelen, $files, $files_free, $blocks, $blocks_avail, $blocksize
 
 =head1 AUTHOR
 
