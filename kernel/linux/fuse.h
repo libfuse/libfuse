@@ -12,16 +12,16 @@
 #define FUSE_KERNEL_VERSION 4
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 1
+#define FUSE_KERNEL_MINOR_VERSION 2
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
 
 /** Opening this will yield a new control file */
-#define FUSE_DEV "/proc/fs/fuse/dev"
+#define FUSE_DEV "/dev/fuse"
 
 /** The file containing the version in the form MAJOR.MINOR */
-#define FUSE_VERSION_FILE "/proc/fs/fuse/version"
+#define FUSE_VERSION_FILE "/sys/fs/fuse/version"
 
 struct fuse_attr {
 	unsigned long       ino;

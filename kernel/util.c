@@ -9,7 +9,7 @@
 #include "fuse_i.h"
 
 #include <linux/init.h>
-#include <linux/slab.h>
+#include <linux/module.h>
 
 MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
@@ -23,9 +23,11 @@ int __init fuse_init(void)
 {
 	int res;
 
-	printk(KERN_DEBUG "fuse init %s (API version %i.%i)\n",
-	       FUSE_VERSION,
+	printk("fuse init (API version %i.%i)\n",
 	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+#ifndef FUSE_MAINLINE
+	printk("fuse distribution version: %s\n", FUSE_VERSION);
+#endif
 
 	spin_lock_init(&fuse_lock);
 	res = fuse_fs_init();
@@ -54,10 +56,3 @@ void __exit fuse_exit(void)
 
 module_init(fuse_init);
 module_exit(fuse_exit);
-
-/*
- * Local Variables:
- * indent-tabs-mode: t
- * c-basic-offset: 8
- * End:
- */

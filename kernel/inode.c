@@ -9,47 +9,41 @@
 #include "fuse_i.h"
 
 #include <linux/pagemap.h>
-#include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/file.h>
 #include <linux/mount.h>
-#include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/module.h>
 #ifdef KERNEL_2_6
+#include <linux/moduleparam.h>
 #include <linux/parser.h>
 #include <linux/statfs.h>
 #else
+#include <linux/proc_fs.h>
 #include "compat/parser.h"
 #endif
 
-
-static int user_allow_other;
 static kmem_cache_t *fuse_inode_cachep;
 
+static int user_allow_other;
 #ifdef KERNEL_2_6
-#include <linux/moduleparam.h>
-module_param(user_allow_other, int, 0);
+module_param(user_allow_other, int, 0644);
 #else
 MODULE_PARM(user_allow_other, "i");
 #endif
-
 MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_other\" or \"allow_root\" mount options");
-
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
 #ifndef KERNEL_2_6
 #define kstatfs statfs
 #endif
-
 #ifndef FS_SAFE
 #define FS_SAFE 0
 #endif
-
 #ifndef MAX_LFS_FILESIZE
 #define MAX_LFS_FILESIZE (((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1) 
 #endif
-
 struct fuse_mount_data {
 	int fd;
 	unsigned int rootmode;
@@ -176,30 +170,32 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	return err;
 }
 
-enum { opt_fd,
-       opt_rootmode,
-       opt_uid,
-       opt_default_permissions, 
-       opt_allow_other,
-       opt_allow_root,
-       opt_kernel_cache,
-       opt_large_read,
-       opt_direct_io,
-       opt_max_read,
-       opt_err };
+enum {
+	OPT_FD,
+	OPT_ROOTMODE,
+	OPT_UID,
+	OPT_DEFAULT_PERMISSIONS, 
+	OPT_ALLOW_OTHER,
+	OPT_ALLOW_ROOT,
+	OPT_KERNEL_CACHE,
+	OPT_LARGE_READ,
+	OPT_DIRECT_IO,
+	OPT_MAX_READ,
+	OPT_ERR 
+};
 
 static match_table_t tokens = {
-	{opt_fd, "fd=%u"},
-	{opt_rootmode, "rootmode=%o"},
-	{opt_uid, "uid=%u"},
-	{opt_default_permissions, "default_permissions"},
-	{opt_allow_other, "allow_other"},
-	{opt_allow_root, "allow_root"},
-	{opt_kernel_cache, "kernel_cache"},
-	{opt_large_read, "large_read"},
-	{opt_direct_io, "direct_io"},
-	{opt_max_read, "max_read=%u" },
-	{opt_err, NULL}
+	{OPT_FD,			"fd=%u"},
+	{OPT_ROOTMODE,			"rootmode=%o"},
+	{OPT_UID,			"uid=%u"},
+	{OPT_DEFAULT_PERMISSIONS,	"default_permissions"},
+	{OPT_ALLOW_OTHER,		"allow_other"},
+	{OPT_ALLOW_ROOT,		"allow_root"},
+	{OPT_KERNEL_CACHE,		"kernel_cache"},
+	{OPT_LARGE_READ,		"large_read"},
+	{OPT_DIRECT_IO,			"direct_io"},
+	{OPT_MAX_READ,			"max_read=%u"},
+	{OPT_ERR,			NULL}
 };
 
 static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
@@ -218,41 +214,41 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 		
 		token = match_token(p, tokens, args);
 		switch (token) {
-		case opt_fd:
+		case OPT_FD:
 			if (match_int(&args[0], &value))
 				return 0;
 			d->fd = value;
 			break;
 
-		case opt_rootmode:
+		case OPT_ROOTMODE:
 			if (match_octal(&args[0], &value))
 				return 0;
 			d->rootmode = value;
 			break;
 			
-		case opt_uid:
+		case OPT_UID:
 			if (match_int(&args[0], &value))
 				return 0;
 			d->uid = value;
 			break;
 			
-		case opt_default_permissions:
+		case OPT_DEFAULT_PERMISSIONS:
 			d->flags |= FUSE_DEFAULT_PERMISSIONS;
 			break;
 
-		case opt_allow_other:
+		case OPT_ALLOW_OTHER:
 			d->flags |= FUSE_ALLOW_OTHER;
 			break;
 
-		case opt_allow_root:
+		case OPT_ALLOW_ROOT:
 			d->flags |= FUSE_ALLOW_ROOT;
 			break;
 
-		case opt_kernel_cache:
+		case OPT_KERNEL_CACHE:
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
 			
-		case opt_large_read:
+		case OPT_LARGE_READ:
 #ifndef KERNEL_2_6
 			d->flags |= FUSE_LARGE_READ;
 #else
@@ -266,11 +262,11 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 #endif
 			break;
 			
-		case opt_direct_io:
+		case OPT_DIRECT_IO:
 			d->flags |= FUSE_DIRECT_IO;
 			break;
 
-		case opt_max_read:
+		case OPT_MAX_READ:
 			if (match_int(&args[0], &value))
 				return 0;
 			d->max_read = value;
@@ -328,7 +324,6 @@ void fuse_release_conn(struct fuse_conn *fc)
 		free_conn(fc);
 }
 
-
 static struct fuse_conn *new_conn(void)
 {
 	struct fuse_conn *fc;
@@ -367,12 +362,12 @@ static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 	struct inode *ino;
 
 	ino = file->f_dentry->d_inode;
-	if (!ino || !proc_fuse_dev ||
-	    strcmp(ino->i_sb->s_type->name, "proc") != 0 ||
-	    proc_fuse_dev->low_ino != ino->i_ino) {
+	if (file->f_op != &fuse_dev_operations) {
 		printk("FUSE: bad communication file descriptor\n");
+		printk("fuse_dev_operations: %p file->f_op: %p\n",
+		       &fuse_dev_operations, file->f_op);
 		return NULL;
-	}
+	}	
 	fc = new_conn();
 	if (fc == NULL) {
 		printk("FUSE: failed to allocate connection data\n");
@@ -402,21 +397,19 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
 	return fuse_iget(sb, 1, 0, &attr, 0);
 }
 
-
 #ifdef KERNEL_2_6
-
 static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 {
 	__u32 *objp = vobjp;
-	unsigned long ino = objp[0];
+	unsigned long nodeid = objp[0];
 	__u32 generation = objp[1];
 	struct inode *inode;
 	struct dentry *entry;
 
-	if (ino == 0)
+	if (nodeid == 0)
 		return ERR_PTR(-ESTALE);
 
-	inode = ilookup(sb, ino);
+	inode = fuse_ilookup(sb, nodeid);
 	if (!inode || inode->i_generation != generation)
 		return ERR_PTR(-ESTALE);
 
@@ -429,8 +422,41 @@ static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 	return entry;
 }
 
+static int fuse_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len,
+			  int connectable)
+{
+	struct inode *inode = dentry->d_inode;
+	struct fuse_inode *fi = INO_FI(inode);
+	int len = *max_len;
+	int type = 1;
+	
+	if (len < 2 || (connectable && len < 4))
+		return 255;
+
+	len = 2;
+	fh[0] = fi->nodeid;
+	fh[1] = inode->i_generation;
+	if (connectable && !S_ISDIR(inode->i_mode)) {
+		struct inode *parent;
+		struct fuse_inode *parent_fi;
+
+		spin_lock(&dentry->d_lock);
+		parent = dentry->d_parent->d_inode;
+		parent_fi = INO_FI(parent);
+		fh[2] = parent_fi->nodeid;
+		fh[3] = parent->i_generation;
+		spin_unlock(&dentry->d_lock);
+		len = 4;
+		type = 2;
+	}
+	*max_len = len;
+	return type;
+}
+
+
 static struct export_operations fuse_export_operations = {
 	.get_dentry	= fuse_get_dentry,
+	.encode_fh      = fuse_encode_fh,
 };
 #endif
 
@@ -482,8 +508,6 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	fc->max_read = d.max_read;
 	fc->max_write = FUSE_MAX_IN / 2;
 	
-	/* fc is needed in fuse_init_file_inode which could be called
-	   from get_root_inode */
 	SB_FC(sb) = fc;
 
 	root = get_root_inode(sb, d.rootmode);
@@ -524,7 +548,9 @@ static struct file_system_type fuse_fs_type = {
 	.name		= "fuse",
 	.get_sb		= fuse_get_sb,
 	.kill_sb	= kill_anon_super,
+#ifndef FUSE_MAINLINE
 	.fs_flags	= FS_SAFE,
+#endif
 };
 #else
 static struct super_block *fuse_read_super_compat(struct super_block *sb,
@@ -543,15 +569,14 @@ static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
 static void fuse_inode_init_once(void * foo, kmem_cache_t * cachep,
 				 unsigned long flags)
 {
-	struct inode * inode = (struct inode *) foo;
+	struct inode * inode = foo;
 
 	if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
 	    SLAB_CTOR_CONSTRUCTOR)
 		inode_init_once(inode);
 }
 
-
-int fuse_fs_init()
+int fuse_fs_init(void)
 {
 	int err;
 
@@ -572,15 +597,8 @@ int fuse_fs_init()
 	return err;
 }
 
-void fuse_fs_cleanup()
+void fuse_fs_cleanup(void)
 {
 	unregister_filesystem(&fuse_fs_type);
 	kmem_cache_destroy(fuse_inode_cachep);
 }
-
-/* 
- * Local Variables:
- * indent-tabs-mode: t
- * c-basic-offset: 8
- * End:
- */

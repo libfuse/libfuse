@@ -8,6 +8,7 @@
 
 
 #include <linux/fuse.h>
+#ifndef FUSE_MAINLINE
 #include <linux/version.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
@@ -15,7 +16,13 @@
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
-#define KERNEL_2_6
+#  define KERNEL_2_6
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)
+#    define KERNEL_2_6_6_PLUS
+#  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+#    define KERNEL_2_6_10_PLUS
+#  endif
 #endif
 
 #include <config.h>
@@ -30,23 +37,27 @@
 #     define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
 #  endif
 #endif 
-#include <linux/kernel.h>
-#include <linux/module.h>
+#endif /* FUSE_MAINLINE */
 #include <linux/fs.h>
+#include <linux/wait.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <asm/semaphore.h>
 
 #ifndef BUG_ON
 #define BUG_ON(x)
 #endif
-
+#ifndef __user
+#define __user
+#endif
+#ifndef KERNEL_2_6
 /** Read combining parameters */
 #define FUSE_BLOCK_SHIFT 16
 #define FUSE_BLOCK_SIZE 65536
 #define FUSE_BLOCK_MASK 0xffff0000
-
 #define FUSE_BLOCK_PAGE_SHIFT (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)
-
+#endif
+/* Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
 
 /* If more requests are outstanding, then the operation will block */
@@ -73,7 +84,6 @@ permission checking is done in the kernel */
     than for small. */
 #define FUSE_LARGE_READ          (1 << 31)
 #endif
-
 /** Bypass the page cache for read and write operations  */
 #define FUSE_DIRECT_IO           (1 << 3)
 
@@ -130,7 +140,7 @@ struct fuse_req;
 struct fuse_conn;
 
 typedef void (*fuse_reqend_t)(struct fuse_conn *, struct fuse_req *);
-typedef int (*fuse_copyout_t)(struct fuse_req *, const char *, size_t);
+typedef int (*fuse_copyout_t)(struct fuse_req *, const char __user *, size_t);
 
 /**
  * A request to the client
@@ -139,8 +149,8 @@ struct fuse_req {
 	/** The request list */
 	struct list_head list;
 
-	/** True if the request is synchronous */
-	unsigned int issync:1;
+	/** True if the request has reply */
+	unsigned int isreply:1;
 
 	/** The request is locked */
 	unsigned int locked:1;
@@ -270,17 +280,13 @@ struct fuse_getdir_out_i {
 #define INO_FC(inode) SB_FC((inode)->i_sb)
 #define INO_FI(i) ((struct fuse_inode *) (((struct inode *)(i))+1))
 
-
-/**
- * The proc entry for the client device ("/proc/fs/fuse/dev")
- */
-extern struct proc_dir_entry *proc_fuse_dev;
+/** Device operations */
+extern struct file_operations fuse_dev_operations;
 
 /**
  * The lock to protect fuses structures
  */
 extern spinlock_t fuse_lock;
-
 
 /**
  * Get a filled in inode
@@ -288,8 +294,11 @@ extern spinlock_t fuse_lock;
 struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 			int generation, struct fuse_attr *attr, int version);
 
-
-struct inode *fuse_ilookup(struct fuse_conn *fc, ino_t ino, unsigned long nodeid);
+#ifdef KERNEL_2_6
+struct inode *fuse_ilookup(struct super_block *sb, unsigned long nodeid);
+#else
+struct inode *fuse_ilookup(struct super_block *sb, ino_t ino, unsigned long nodeid);
+#endif
 
 /**
  * Send FORGET command
@@ -370,20 +379,15 @@ void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req);
 void request_send(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
- * Send a non-interruptible request
- */
-void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req);
-
-/**
  * Send a request for which a reply is not expected
  */
 void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
- * Send a synchronous request without blocking
+ * Send asynchronous request
  */
-void request_send_nonblock(struct fuse_conn *fc, struct fuse_req *req, 
-			   fuse_reqend_t end, void *data);
+void request_send_async(struct fuse_conn *fc, struct fuse_req *req, 
+			fuse_reqend_t end, void *data);
 
 /**
  * Get the attributes of a file
@@ -394,10 +398,3 @@ int fuse_do_getattr(struct inode *inode);
  * Write dirty pages
  */
 void fuse_sync_inode(struct inode *inode);
-
-/*
- * Local Variables:
- * indent-tabs-mode: t
- * c-basic-offset: 8
- * End:
- */

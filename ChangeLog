@@ -1,3 +1,18 @@
+2004-11-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Cleaned up kernel in preparation for merge into mainline:
+
+	* Use /sys/fs/fuse/version instead of /proc/fs/fuse/version
+
+	* Use real device (/dev/fuse) instead of /proc/fs/fuse/dev
+
+	* __user annotations for sparse
+
+	* allocate individual pages instead of kmalloc in fuse_readdir,
+	fuse_read and fuse_write.
+
+	* Fix NFS export in case "use_ino" mount option is given
+
 2004-11-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.1-pre1
