@@ -1,3 +1,8 @@
+2003-12-12  David McNab <david@rebirthing.co.nz>
+
+	* Added distutils support to the python module, as per standard
+	  python development practice
+
 2003-12-11  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Add file locking for mount/unmount (based on patch by Valient
