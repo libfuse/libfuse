@@ -129,7 +129,6 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op);
  * operations are called. 
  *
  * @param f the FUSE handle
- * @prarm op the file system operations
  */
 void fuse_loop(struct fuse *f);
 
@@ -188,7 +187,7 @@ struct fuse_context *fuse_get_context(struct fuse *f);
  *
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
- * @prarm op the file system operation 
+ * @param op the file system operation 
  */
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op);
 

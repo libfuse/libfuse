@@ -61,4 +61,5 @@ void cleanup_module(void)
  * Local Variables:
  * indent-tabs-mode: t
  * c-basic-offset: 8
+ * End:
  */
