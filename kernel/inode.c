@@ -13,6 +13,7 @@
 #include <linux/file.h>
 #include <linux/mount.h>
 #include <linux/seq_file.h>
+#include <linux/init.h>
 #include <linux/module.h>
 #ifdef KERNEL_2_6
 #include <linux/moduleparam.h>
@@ -23,6 +24,13 @@
 #include "compat/parser.h"
 #endif
 
+MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
+MODULE_DESCRIPTION("Filesystem in Userspace");
+#ifdef MODULE_LICENSE
+MODULE_LICENSE("GPL");
+#endif
+
+spinlock_t fuse_lock;
 static kmem_cache_t *fuse_inode_cachep;
 static int mount_count;
 
