@@ -60,8 +60,8 @@ struct node {
 
 struct fuse_dirhandle {
     struct fuse *fuse;
-    nodeid_t dir;
     FILE *fp;
+    int filled;
 };
 
 struct fuse_cmd {
@@ -71,6 +71,13 @@ struct fuse_cmd {
 
 
 static struct fuse_context *(*fuse_getcontext)(void) = NULL;
+
+/* Compatibility with kernel ABI version 5.1 */
+struct fuse_getdir_out {
+    __u32 fd;
+};
+
+#define FUSE_GETDIR 7 
 
 static const char *opname(enum fuse_opcode opcode)
 {
@@ -100,6 +107,9 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_LISTXATTR:	return "LISTXATTR";
     case FUSE_REMOVEXATTR:	return "REMOVEXATTR";
     case FUSE_INIT:		return "INIT";
+    case FUSE_OPENDIR:		return "OPENDIR";
+    case FUSE_READDIR:		return "READDIR";
+    case FUSE_RELEASEDIR:	return "RELEASEDIR";
     default: 			return "???";
     }
 }
@@ -805,29 +815,37 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
     send_reply(f, in, res, link, res == 0 ? strlen(link) : 0);
 }
 
+static int common_getdir(struct fuse *f, struct fuse_in_header *in,
+                       struct fuse_dirhandle *dh)
+{
+    int res;
+    char *path;
+
+    res = -ENOENT;
+    path = get_path(f, in->nodeid);
+    if (path != NULL) {
+        res = -ENOSYS;
+        if (f->op.getdir)
+            res = f->op.getdir(path, dh, fill_dir);
+        free(path);
+    }
+    return res;
+}
+
 static void do_getdir(struct fuse *f, struct fuse_in_header *in)
 {
     int res;
     struct fuse_getdir_out arg;
     struct fuse_dirhandle dh;
-    char *path;
 
     dh.fuse = f;
     dh.fp = tmpfile();
-    dh.dir = in->nodeid;
 
     res = -EIO;
     if (dh.fp == NULL)
         perror("fuse: failed to create temporary file");
     else {
-        res = -ENOENT;
-        path = get_path(f, in->nodeid);
-        if (path != NULL) {
-            res = -ENOSYS;
-            if (f->op.getdir)
-                res = f->op.getdir(path, &dh, fill_dir);
-            free(path);
-        }
+        res = common_getdir(f, in, &dh);
         fflush(dh.fp);
     }
     memset(&arg, 0, sizeof(struct fuse_getdir_out));
@@ -1520,6 +1538,88 @@ static void do_init(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, 0, &outarg, sizeof(outarg));
 }
 
+static struct fuse_dirhandle *get_dirhandle(unsigned long fh)
+{
+    return (struct fuse_dirhandle *) fh;
+}
+
+static void do_opendir(struct fuse *f, struct fuse_in_header *in,
+                       struct fuse_open_in *arg)
+{
+    int res;
+    struct fuse_open_out outarg;
+    struct fuse_dirhandle *dh;
+
+    (void) arg;
+
+    res = -ENOMEM;
+    dh = (struct fuse_dirhandle *) malloc(sizeof(struct fuse_dirhandle));
+    if (dh != NULL) {
+        dh->fuse = f;
+        dh->fp = tmpfile();
+        dh->filled = 0;
+        
+        res = -EIO;
+        if (dh->fp == NULL) {
+            perror("fuse: failed to create temporary file");
+            free(dh);
+        } else {
+            outarg.fh = (unsigned long) dh;
+            res = 0;
+        }
+    }
+    send_reply(f, in, res, &outarg, sizeof(outarg));
+}
+
+static void do_readdir(struct fuse *f, struct fuse_in_header *in,
+                       struct fuse_read_in *arg)
+{
+    int res;
+    char *outbuf;
+    struct fuse_dirhandle *dh = get_dirhandle(arg->fh);
+
+    if (!dh->filled) {
+        res = common_getdir(f, in, dh);
+        if (res)
+            send_reply(f, in, res, NULL, 0);
+        dh->filled = 1;
+    }
+    outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
+    if (outbuf == NULL)
+        send_reply(f, in, -ENOMEM, NULL, 0);
+    else {
+        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+        char *buf = outbuf + sizeof(struct fuse_out_header);
+        size_t size = 0;
+        size_t outsize;
+        fseek(dh->fp, arg->offset, SEEK_SET);
+        res = fread(buf, 1, arg->size, dh->fp);
+        if (res == 0 && ferror(dh->fp))
+            res = -EIO;
+        else {
+            size = res;
+            res = 0;
+        }
+        memset(out, 0, sizeof(struct fuse_out_header));
+        out->unique = in->unique;
+        out->error = res;
+        outsize = sizeof(struct fuse_out_header) + size;
+        
+        send_reply_raw(f, outbuf, outsize);
+        free(outbuf);
+    }
+}
+
+static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
+                          struct fuse_release_in *arg)
+{
+    struct fuse_dirhandle *dh = get_dirhandle(arg->fh);
+    fclose(dh->fp);
+    free(dh);
+    send_reply(f, in, 0, NULL, 0);
+}
+
+
 static void free_cmd(struct fuse_cmd *cmd)
 {
     free(cmd->buf);
@@ -1651,6 +1751,18 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_INIT:
         do_init(f, in, (struct fuse_init_in_out *) inarg);
+        break;
+
+    case FUSE_OPENDIR:
+        do_opendir(f, in, (struct fuse_open_in *) inarg);
+        break;
+
+    case FUSE_READDIR:
+        do_readdir(f, in, (struct fuse_read_in *) inarg);
+        break;
+
+    case FUSE_RELEASEDIR:
+        do_releasedir(f, in, (struct fuse_release_in *) inarg);
         break;
 
     default:

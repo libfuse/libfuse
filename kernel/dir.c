@@ -534,9 +534,9 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 	struct page *page;
 	struct inode *inode = file->f_dentry->d_inode;	
 	struct fuse_conn *fc = get_fuse_conn(inode);
-	struct fuse_req *req = fuse_get_request(fc);
+	struct fuse_req *req = fuse_get_request_nonint(fc);
 	if (!req)
-		return -ERESTARTNOINTR;
+		return -EINTR;
 
 	page = alloc_page(GFP_KERNEL);
 	if (!page) {

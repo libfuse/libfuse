@@ -411,7 +411,7 @@ static int fuse_file_bigread(struct file *file, struct inode *inode,
 #endif /* KERNEL_2_6 */
 
 static size_t fuse_send_write(struct fuse_req *req, struct file *file,
-			       struct inode *inode, loff_t pos, size_t count)
+			      struct inode *inode, loff_t pos, size_t count)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_file *ff = file->private_data;

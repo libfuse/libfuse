@@ -321,11 +321,6 @@ struct fuse_conn {
 #endif
 };
 
-struct fuse_getdir_out_i {
-	int fd;
-	void *file; /* Used by kernel only */
-};
-
 static inline struct fuse_conn **get_fuse_conn_super_p(struct super_block *sb)
 {
 #ifdef KERNEL_2_6
@@ -383,6 +378,23 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
  */
 void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
 		      unsigned long nodeid, int version);
+
+/**
+ * Send READ or READDIR request
+ */
+size_t fuse_send_read_common(struct fuse_req *req, struct file *file,
+			     struct inode *inode, loff_t pos, size_t count,
+			     int isdir);
+
+/**
+ * Send OPEN or OPENDIR request
+ */
+int fuse_open_common(struct inode *inode, struct file *file, int isdir);
+
+/**
+ * Send RELEASE or RELEASEDIR request
+ */
+int fuse_release_common(struct inode *inode, struct file *file, int isdir);
 
 /**
  * Initialise file operations on a regular file
