@@ -3,6 +3,7 @@ Makefile
 aclocal.m4
 configure
 install-sh
+mkinstalldirs
 missing
 config.log
 *.cache
