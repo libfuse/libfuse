@@ -1,13 +1,13 @@
-2004-07-06  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-07-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Minor fix in read:  print debug info even if read size is zero
 
-2004-07-04  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-07-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix race between truncate and writepage (fsx-linux now runs
 	without error)
 
-2004-07-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-07-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix kernel hang on mkfifo under 2.4 kernels (spotted and patch
 	by Mattias Wadman)
@@ -29,13 +29,13 @@
 	* Fix deadlock between page writeback completion and truncate
 	(bug found by Valient Gough with the fsx-linux utility)
 
-2004-07-01  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-07-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Change passing fuse include dir to 2.6 kernel make system more
 	robust (fixes compile problems seen on SuSE 9.1 with updated 2.6
 	kernel)
 
-2004-06-30  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Acquire inode->i_sem before open and release methods to prevent
 	concurrent rename or unlink operations.
@@ -46,22 +46,22 @@
 
 	* Export 'exited' flag with __fuse_exited() (patch by Jeff Harris)
 
-2004-06-27  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix file offset wrap around at 4G when doing large reads
 
-2004-06-24  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix memory leak in open (Valient Gough)
 
-2004-06-24  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add "close after delete" support to libfuse (patch by Valient
 	Gough)
 
 	* Cancel all worker threads before exit in multithreaded mode
 
-2004-06-23  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix locking bugs
 
@@ -71,24 +71,24 @@
 
 	* Check for st_atim member of struct stat
 	
-2004-06-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* No request allocation needed on inode and file release
 	
-2004-06-21  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix possible inode leak in userspace in case of unfinished
 	lookup/mknod/mkdir/symlink/link operation.
 	
-2004-06-20  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix some races and cleanups in fuse_read_super()
 	
-2004-06-19  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Requests are allocated at open time
 	
-2004-06-03  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-06-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Build shared library as well as static (using libtool)
 
@@ -108,23 +108,23 @@
 	Open is sometimes just used to store the current directory
 	(e.g. find)
 	
-2004-05-18  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-05-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added flush() call
 	
-2004-05-04  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-05-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Extended attributes support for 2.4 (patch by Cody Pisto)
 	
-2004-04-20  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-04-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fixed parser with modversions (Mattias Wadman)
 	
-2004-04-19  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-04-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added mount option parser to 2.4 build
 	
-2004-04-13  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-04-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Replaced binary mount data with text options
 
@@ -132,45 +132,45 @@
 
 	* Check in fuse.h whether _FILE_OFFSET_BITS is set to 64
 
-2004-04-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-04-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check some limits so userspace won't get too big requests
 
-2004-04-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-04-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Kill compile warning
 
 	* Upgraded user-mount patch for 2.6.5
 
-2004-04-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-04-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add detection of user-mode-linux to configure
 
-2004-03-31  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-03-31  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fixed zero size case for getxattr and listxattr
 
-2004-03-30  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-03-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* new fusermount flag '-z': lazy unmount, default is not lazy
 
 	* Extended attributes operations added (getxattr, setxattr,
 	listxattr, removexattr)
 
-2004-03-25  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-03-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* If filesystem doesn't define a statfs operation, then an
 	all-zero default statfs is returned instead of ENOSYS
 
-2004-03-24  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-03-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add FS_BINARY_MOUNTDATA filesystem flag for kernels > 2.6.4
 
-2004-03-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-03-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix for uClinux (Christian Magnusson)
 
-2004-03-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-03-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fuse_main() adds "-n progname" to the fusermount command line
 	
@@ -178,14 +178,14 @@
 
 	* Lookup/getattr return cache timeout values
 
-2004-02-25  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Clean up option parsing in fuse_main()
 
 	* Added fuse_get() function which returns the fuse object created
 	by fuse_main()
 
-2004-02-20  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* removed old way of mounting (fusermount mountpoint program)
 
@@ -197,7 +197,7 @@
 
 	* added /proc/fs/fuse/version which contains MAJOR.MINOR
 
-2004-02-19  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* statfs library API changed to match other methods.  Since this
 	  is not backward compatible FUSE_MAJOR_VERSION is changed to 2
@@ -215,11 +215,11 @@
 
 	* kernel interface version changed to 3.1
 	
-2004-02-18  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* user-mount upgraded for 2.6.3 kernel
 	
-2004-02-17  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added user-mount.2.6.2-rc3.patch
 
@@ -228,16 +228,16 @@
 	* fusermount should allow (un)mounting for non-root even if not
 	suid-root
 	
-2004-02-12  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove MS_PERMISSION mount flag (that means something else now)
 	
-2004-02-10  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added check for i_size_read/write functions to configure.in
 	(patch by Valient Gough)
 
-2004-02-06  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fixed writing >= 2G files
 
@@ -249,15 +249,15 @@
 
 	* Make loopback mount of a fuse file work
 	
-2004-02-04  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-02-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 1.1
 	
-2004-01-29  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Properly check if the inode exists in fuse_invalidate
 	
-2004-01-27  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added -q option for fusermount
 
@@ -267,21 +267,21 @@
 
 	* Fix i_nlink correctness after rmdir/unlink
 
-2004-01-26  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 1.1-pre2
 
-2004-01-26  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix typo (thanks Marcos Dione)
 
 	* Compile fixes for 2.4 kernels
 	
-2004-01-23  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix CONFIG_MODVERSIONS compile on 2.6
 	
-2004-01-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Write all pending data before a RELEASE operation
 
@@ -295,11 +295,11 @@
 
 	* fuse_main() can accept fusermount arguments after a '--'
 
-2004-01-19  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Support for exporting filesystem over NFS (see README.NFS)
 
-2004-01-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Support non-blocking writepage on 2.6.  This makes FUSE behave
 	much more nicely in low-memory situations
@@ -307,25 +307,25 @@
 	* Fix 32-bit dev handling in getattr and mknod for 2.6 kernels.
 	(Note: the mknod method does not yet use 32bit device number)
  
-2004-01-13  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Code cleanups
 
-2004-01-07  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 1.1-pre1
 
-2004-01-06  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Integrated 2.6 kernel support patch by Michael Grigoriev
 
 	* Improvements and cleanups for 2.6 kernels
 
-2004-01-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+2004-01-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added -d option to fusermount 
 
-2003-12-15  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-12-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added major+minor version to library API, and minor version to
 	  kernel API
@@ -337,7 +337,7 @@
 	* Implemented 'fsync' and 'statfs' methods in python
 	  interface
 
-2003-12-12  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-12-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make it compile on 2.4.19.  
 
@@ -348,7 +348,7 @@
 	* Added distutils support to the python module, as per standard
 	  python development practice
 
-2003-12-11  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-12-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add file locking for mount/unmount (based on patch by Valient
 	Gough)
@@ -375,25 +375,25 @@
 	     also, mount arguments get passed to your filesystem
 
 
-2003-11-04  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-11-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix kernel version detection (again).  Bugreport by Peter Levart
 
-2003-11-03  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-11-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Applied read combining patch by Michael Grigoriev (tested by
 	Valient Gough and Vincent Wagelaar)
 
-2003-10-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-10-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Mtab handling fix in fusermount by "Valient Gough" (SF patch
 	#766443)
 	
-2003-10-13  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-10-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Error code fixes in kernel module
 	
-2003-10-04  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-10-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel version detection fix
 
@@ -401,7 +401,7 @@
 
 	* fusermount can use modprobe with module-init-tools
 
-2003-09-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-09-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Integrated caching patch by Michael Grigoriev
 
@@ -411,64 +411,64 @@
 	* Added patch by Michael Grigoriev to allow compliation of FUSE
 	kernel module for 2.6 kernels
 
-2003-06-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-06-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* And another spec-file fix by Achim Settelmeier
 
-2003-05-26  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-05-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Spec-file fix by Achim Settelmeier
 
-2003-03-10  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-03-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix umount oops (found by Samuli Kärkkäinen)
 
-2003-03-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-03-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Merge of fuse_redhat.spec and fuse.spec by Achim Settelmeier
 
-2003-03-04  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-03-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Updated fuse.spec file (Achim Settelmeier)
 
-2003-02-19  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-02-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Version 1.0 released
 
-2003-02-12  Miklos Szeredi <mszeredi@inf.bme.hu>
+2003-02-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* SuSE compilation fix by Juan-Mariano de Goyeneche
 
-2002-12-10  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-12-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* The release() VFS call is now exported to the FUSE interface
 
-2002-12-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-12-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* 64 bit file offset fixes in the fuse kernel module
 
 	* Added function 'fuse_exit()' which can be used to exit the main
 	loop
 
-2002-12-03  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-12-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added _FILE_OFFSET_BITS=64 define to fuse.h.  Note, that this is
 	an incompatible interface change.
 
-2002-10-28  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-10-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Portablility fix (bug reported by C. Chris Erway)
 
-2002-10-25  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-10-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use Mark Glines' fd passing method for default operation instead
 	of old reexec
 
-2002-10-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-10-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fix "Stale NFS file handle" bug caused by changes in 2.4.19
 
-2002-10-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-10-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fix incompatiblity with Red Hat kernels, with help from Nathan
 	Thompson-Amato.
@@ -485,24 +485,24 @@
 	* use struct fuse_statfs everywhere possible to avoid problems
       with the headerfiles changing struct statfs member sizes
 
-2002-03-01  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-03-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Another RPM spec file for RedHat >= 7 by Ian Pilcher
 
-2002-01-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-01-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* RPM support by Achim Settelmeier
 
-2002-01-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Version 0.95 released
 	
-2002-01-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Revaidate all path components not just the last, this means a
 	very small performance penalty for being more up-to-date.
 
-2002-01-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+2002-01-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Update and fix python interface
 
@@ -510,13 +510,13 @@
 	
 	* Added statfs() support to kernel, lib, examples, and perl!
 
-2001-12-26  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-12-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Better cross compilation support
 
 	* Ported to Compaq IPAQ
 
-2001-12-20  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-12-20  Miklos Szeredi <miklos@szeredi.hu>
 	
 	* Added function fuse_get_context() to library API (inspired by
 	patch from Matt Ryan) 
@@ -526,37 +526,37 @@
 
 	* Integrated fuse_set_operations() into fuse_new()
 
-2001-12-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-12-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Applied header protection + extern "C" patch by Roland
 	Bauerschmidt
 
-2001-12-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-12-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added perl bindings by Mark Glines 
 
-2001-11-21  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-11-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Cleaned up way of mounting simple filesystems.
 
 	* fuse_main() helper function added
 
-2001-11-18  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-11-18  Miklos Szeredi <miklos@szeredi.hu>
 	
 	* Optimized read/write operations, so that minimal copying of data
 	is done
 
-2001-11-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-11-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Python bindings by Jeff Epler added
 
-2001-11-13  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-11-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fixed vfsmount reference leak in fuse_follow_link
 
 	* FS blocksize is set to PAGE_CACHE_SIZE, blksize attribute from
 	userspace is ignored
 
-2001-11-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-11-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Started ChangeLog
