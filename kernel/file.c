@@ -610,7 +610,11 @@ static int fuse_writepage(struct page *page, struct writeback_control *wbc)
 	if (wbc->nonblocking) {
 		err = write_page_nonblock(inode, page);
 		if (err == -EWOULDBLOCK) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)
 			redirty_page_for_writepage(wbc, page);
+#else
+			__set_page_dirty_nobuffers(page);
+#endif
 			err = 0;
 		}
 	} else
@@ -753,12 +757,12 @@ static struct file_operations fuse_file_operations = {
 };
 
 static struct address_space_operations fuse_file_aops  = {
-	.readpage =		fuse_readpage,
-	.writepage =		fuse_writepage,
-	.prepare_write =	fuse_prepare_write,
-	.commit_write =		fuse_commit_write,
+	.readpage	= fuse_readpage,
+	.writepage	= fuse_writepage,
+	.prepare_write	= fuse_prepare_write,
+	.commit_write	= fuse_commit_write,
 #ifdef KERNEL_2_6
-	.set_page_dirty =	__set_page_dirty_nobuffers,
+	.set_page_dirty = __set_page_dirty_nobuffers,
 #endif
 };
 

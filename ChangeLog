@@ -1,3 +1,7 @@
+2004-07-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Only use redirty_page_for_writepage() for kernels >= 2.6.6
+	
 2004-07-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Separate directory entry and inode attribute validity timer
