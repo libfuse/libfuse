@@ -42,13 +42,14 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_READ:		return "READ";
     case FUSE_WRITE:		return "WRITE";
     case FUSE_STATFS:		return "STATFS";
+    case FUSE_FLUSH:		return "FLUSH";
     case FUSE_RELEASE:		return "RELEASE";
     case FUSE_FSYNC:		return "FSYNC";
     case FUSE_SETXATTR:		return "SETXATTR";
     case FUSE_GETXATTR:		return "GETXATTR";
     case FUSE_LISTXATTR:	return "LISTXATTR";
     case FUSE_REMOVEXATTR:	return "REMOVEXATTR";
-    default:            return "???";
+    default: 			return "???";
     }
 }
 
