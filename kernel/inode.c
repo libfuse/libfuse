@@ -8,8 +8,6 @@
 
 #include "fuse_i.h"
 
-#include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/file.h>

@@ -8,8 +8,6 @@
 
 #include "fuse_i.h"
 
-#include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/poll.h>
 #include <linux/proc_fs.h>
 #include <linux/file.h>

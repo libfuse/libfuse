@@ -8,8 +8,6 @@
 
 #include "fuse_i.h"
 
-#include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/slab.h>
 
 spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;

@@ -8,8 +8,6 @@
 
 #include "fuse_i.h"
 
-#include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/file.h>
 
@@ -20,6 +18,8 @@ static struct inode_operations fuse_symlink_inode_operations;
 static struct file_operations fuse_dir_operations;
 
 static struct dentry_operations fuse_dentry_opertations;
+
+#define FUSE_REVALIDATE_TIME (HZ / 100)
 
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
@@ -314,7 +314,7 @@ static int fuse_revalidate(struct dentry *entry)
 	struct fuse_getattr_out arg;
 	
 	if(inode->i_ino != FUSE_ROOT_INO && 
-	   time_before_eq(jiffies, entry->d_time + HZ / 100))
+	   time_before_eq(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
 		return 0;
 
 	in.h.opcode = FUSE_GETATTR;
@@ -540,7 +540,10 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 
 static int fuse_dentry_revalidate(struct dentry *entry, int flags)
 {
-	if(!entry->d_inode || !(flags & LOOKUP_CONTINUE))
+	if(!entry->d_inode)
+		return 0;
+	else if(!(flags & LOOKUP_CONTINUE) && 
+		time_after(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
 		return 0;
 	else
 		return 1;

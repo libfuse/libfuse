@@ -10,6 +10,7 @@
 #include <linux/fuse.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
@@ -116,7 +117,7 @@ int fuse_mount(struct fuse *f, const char *dir)
         return -1;
 
     add_mntent(dev, dir, type);
-    f->mnt = g_strdup(dir);
+    f->mnt = strdup(dir);
     
     return 0;
 }
@@ -137,7 +138,7 @@ int fuse_unmount(struct fuse *f)
     else
         remove_mntent(f->mnt);
 
-    g_free(f->mnt);
+    free(f->mnt);
     f->mnt = NULL;
 
     return res;

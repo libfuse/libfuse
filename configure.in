@@ -1,0 +1,34 @@
+AC_INIT(lib/fuse.c)
+AM_INIT_AUTOMAKE(fuse, 1.0)
+AM_CONFIG_HEADER(include/config.h)
+
+AC_PROG_CC
+AC_PROG_RANLIB
+
+CFLAGS="-Wall -W -g -O2"
+
+AC_MSG_CHECKING([kernel source directory])
+kernelsrc=
+AC_ARG_WITH(kernel,
+	[  --with-kernel          Specify location of kernel source ],
+	[kernelsrc="$withval"])
+
+if test -z "$kernelsrc"; then
+	buildlink=/lib/modules/`uname -r`/build
+	if test -e $buildlink; then
+		kernelsrc=`(cd $buildlink; /bin/pwd)`
+	else
+		AC_MSG_RESULT([not found])
+		AC_MSG_ERROR([
+*** Please specify the location of the kernel source with
+*** the '--with-kernel=SRCDIR' option])
+	fi
+fi
+AC_MSG_RESULT([$kernelsrc])
+
+KERNINCLUDE=$kernelsrc/include
+AC_SUBST(KERNINCLUDE)
+
+AC_OUTPUT([Makefile kernel/Makefile lib/Makefile example/Makefile])
+
+

@@ -7,6 +7,10 @@
 */
 
 #include <linux/fuse.h>
+
+#include <linux/modversions.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
