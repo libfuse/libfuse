@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <unistd.h>
 #include <signal.h>
 #include <errno.h>
 #include <sys/time.h>
@@ -36,6 +37,7 @@ static void *do_work(void *data)
     struct fuse_worker *w = (struct fuse_worker *) data;
     struct fuse *f = w->f;
     struct fuse_context *ctx;
+    int is_mainthread = (f->numworker == 1);
 
     ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
     if (ctx == NULL) {
@@ -82,6 +84,10 @@ static void *do_work(void *data)
 
         w->proc(w->f, cmd, w->data);
     }
+
+    /* Wait for cancellation */
+    if (!is_mainthread)
+        pause();
 
     return NULL;
 }

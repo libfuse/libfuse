@@ -1,6 +1,13 @@
-2005-03-05  Miklos Szeredi <miklos@szeredi.hu>
+2005-03-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.2.1
+
+2005-03-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* examples: add -lpthread to link flags to work around valgrind
+	quirk
+
+	* lib: don't exit threads, so cancelation doesn't cause segfault
 
 2005-03-04  Miklos Szeredi <miklos@szeredi.hu>
 
