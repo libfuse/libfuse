@@ -1,11 +1,11 @@
-#!/usr/bin/debugperl 
+#!/usr/bin/perl
 
 use strict;
 use Fuse;
 use IO::File;
 use POSIX qw(ENOENT ENOSYS EEXIST EPERM O_RDONLY O_RDWR O_APPEND O_CREAT);
 use Fcntl qw(S_ISBLK S_ISCHR S_ISFIFO SEEK_SET);
-require 'syscall.ph'; # for SYS_mknod
+require 'syscall.ph'; # for SYS_mknod and SYS_lchown
 
 sub fixup { return "/tmp/fusetest" . shift }
 
@@ -67,7 +67,7 @@ sub x_readlink { return readlink(fixup(shift)                 ); }
 sub x_unlink { return unlink(fixup(shift)) ? 0 : -$!;          }
 sub x_rmdir { return err(rmdir(fixup(shift))               ); }
 
-sub x_symlink { return symlink(shift,fixup(shift)) ? 0 : -$!; }
+sub x_symlink { print "symlink\n"; return symlink(shift,fixup(shift)) ? 0 : -$!; }
 
 sub x_rename {
 	my ($old) = fixup(shift);
@@ -78,8 +78,13 @@ sub x_rename {
 sub x_link { return link(fixup(shift),fixup(shift)) ? 0 : -$! }
 sub x_chown {
 	my ($fn) = fixup(shift);
+	print "nonexistent $fn\n" unless -e $fn;
 	my ($uid,$gid) = @_;
-	my ($err) = chown($uid,$gid,$fn) ? 0 : -$!;
+	# perl's chown() does not chown symlinks, it chowns the symlink's
+	# target.  it fails when the link's target doesn't exist, because
+	# the stat64() syscall fails.
+	# this causes error messages when unpacking symlinks in tarballs.
+	my ($err) = syscall(&SYS_lchown,$fn,$uid,$gid,$fn) ? -$! : 0;
 	return $err;
 }
 sub x_chmod {
