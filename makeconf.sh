@@ -1,7 +1,7 @@
 #! /bin/sh
 
 echo Running libtoolize...
-libtoolize --automake
+libtoolize --automake -c
 
 if test ! -z "`which autoreconf`"; then
     echo Running autoreconf...
