@@ -19,7 +19,7 @@
 #ifndef NO_MM
 #define filemap_fdatawrite filemap_fdatasync
 #else
-#define filemap_fdatawrite do {} while(0)
+#define filemap_fdatawrite do {} while (0)
 #endif
 #endif
 
@@ -32,14 +32,14 @@ static int fuse_open(struct inode *inode, struct file *file)
 	int err;
 
 	err = generic_file_open(inode, file);
-	if(err)
+	if (err)
 		return err;
 
 	/* If opening the root node, no lookup has been performed on
 	   it, so the attributes must be refreshed */
-	if(inode->i_ino == FUSE_ROOT_INO) {
+	if (inode->i_ino == FUSE_ROOT_INO) {
 		int err = fuse_do_getattr(inode);
-		if(err)
+		if (err)
 		 	return err;
 	}
 
@@ -52,7 +52,7 @@ static int fuse_open(struct inode *inode, struct file *file)
 	in.args[0].size = sizeof(inarg);
 	in.args[0].value = &inarg;
 	request_send(fc, &in, &out);
-	if(!out.h.error && !(fc->flags & FUSE_KERNEL_CACHE)) {
+	if (!out.h.error && !(fc->flags & FUSE_KERNEL_CACHE)) {
 #ifdef KERNEL_2_6
 		invalidate_inode_pages(inode->i_mapping);
 #else
@@ -70,11 +70,11 @@ static int fuse_release(struct inode *inode, struct file *file)
 	struct fuse_open_in *inarg = NULL;
 	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_open_in);
 
-	if(file->f_mode & FMODE_WRITE)
+	if (file->f_mode & FMODE_WRITE)
 		filemap_fdatawrite(inode->i_mapping);
 
 	in = kmalloc(s, GFP_NOFS);
-	if(!in)
+	if (!in)
 		return -ENOMEM;
 	memset(in, 0, s);
 	inarg = (struct fuse_open_in *) (in + 1);
@@ -85,7 +85,7 @@ static int fuse_release(struct inode *inode, struct file *file)
 	in->numargs = 1;
 	in->args[0].size = sizeof(struct fuse_open_in);
 	in->args[0].value = inarg;
-	if(!request_send_noreply(fc, in))
+	if (!request_send_noreply(fc, in))
 		return 0;
 
 	kfree(in);
@@ -142,9 +142,9 @@ static int fuse_readpage(struct file *file, struct page *page)
 	out.args[0].value = buffer;
 
 	request_send(fc, &in, &out);
-	if(!out.h.error) {
+	if (!out.h.error) {
 		size_t outsize = out.args[0].size;
-		if(outsize < PAGE_CACHE_SIZE) 
+		if (outsize < PAGE_CACHE_SIZE) 
 			memset(buffer + outsize, 0, PAGE_CACHE_SIZE - outsize);
 		flush_dcache_page(page);
 		SetPageUptodate(page);
@@ -287,7 +287,7 @@ static ssize_t fuse_file_read(struct file *filp, char *buf,
 	struct inode *inode = mapping->host;
 	struct fuse_conn *fc = INO_FC(inode);
 
-	if(fc->flags & FUSE_LARGE_READ)
+	if (fc->flags & FUSE_LARGE_READ)
 		fuse_file_bigread(mapping, inode, *ppos, count);
 
 	return generic_file_read(filp, buf, count, ppos);
@@ -318,7 +318,7 @@ static int write_buffer(struct inode *inode, struct page *page,
 	in.args[1].value = buffer + offset;
 	request_send(fc, &in, &out);
 	kunmap(page);
-	if(out.h.error)
+	if (out.h.error)
 		SetPageError(page);
 
 	return out.h.error;
@@ -331,11 +331,11 @@ static int get_write_count(struct inode *inode, struct page *page)
 	int count;
 	
 	end_index = size >> PAGE_CACHE_SHIFT;
-	if(page->index < end_index)
+	if (page->index < end_index)
 		count = PAGE_CACHE_SIZE;
 	else {
 		count = size & (PAGE_CACHE_SIZE - 1);
-		if(page->index > end_index || count == 0)
+		if (page->index > end_index || count == 0)
 			return 0;
 	}
 	return count;
@@ -349,9 +349,9 @@ static void write_buffer_end(struct fuse_conn *fc, struct fuse_in *in,
 	struct page *page = (struct page *) _page;
 	
 	lock_page(page);
-	if(out->h.error) {
+	if (out->h.error) {
 		SetPageError(page);
-		if(out->h.error == -ENOSPC)
+		if (out->h.error == -ENOSPC)
 			set_bit(AS_ENOSPC, &page->mapping->flags);
 		else
 			set_bit(AS_EIO, &page->mapping->flags);
@@ -375,7 +375,7 @@ static int write_buffer_nonblock(struct inode *inode, struct page *page,
 		sizeof(struct fuse_write_in);
 
 	in = kmalloc(s, GFP_NOFS);
-	if(!in)
+	if (!in)
 		return -ENOMEM;
 	memset(in, 0, s);
 	out = (struct fuse_out *)(in + 1);
@@ -394,8 +394,8 @@ static int write_buffer_nonblock(struct inode *inode, struct page *page,
 	in->args[1].size = count;
 	in->args[1].value = buffer + offset;
 	err = request_send_nonblock(fc, in, out, write_buffer_end, page);
-	if(err) {
-		if(err != -EWOULDBLOCK)
+	if (err) {
+		if (err != -EWOULDBLOCK)
 			SetPageError(page);
 		kunmap(page);
 		kfree(in);
@@ -410,14 +410,14 @@ static int fuse_writepage(struct page *page, struct writeback_control *wbc)
 	unsigned count = get_write_count(inode, page);
 
 	err = -EINVAL;
-	if(count) {
+	if (count) {
 		/* FIXME: check sync_mode, and wait for previous writes (or
 		   signal userspace to do this) */
-		if(wbc->nonblocking) {
+		if (wbc->nonblocking) {
 			err = write_buffer_nonblock(inode, page, 0, count);
-			if(!err)
+			if (!err)
 				SetPageWriteback(page);
-			else if(err == -EWOULDBLOCK) {
+			else if (err == -EWOULDBLOCK) {
 				__set_page_dirty_nobuffers(page);
 				err = 0;
 			}
@@ -435,7 +435,7 @@ static int fuse_writepage(struct page *page)
 	struct inode *inode = page->mapping->host;
 	int count = get_write_count(inode, page);
 	err = -EINVAL;
-	if(count)
+	if (count)
 		err = write_buffer(inode, page, 0, count);
 
 	unlock_page(page);
@@ -457,9 +457,9 @@ static int fuse_commit_write(struct file *file, struct page *page,
 	struct inode *inode = page->mapping->host;
 
 	err = write_buffer(inode, page, offset, to - offset);
-	if(!err) {
+	if (!err) {
 		loff_t pos = (page->index << PAGE_CACHE_SHIFT) + to;
-		if(pos > i_size_read(inode))
+		if (pos > i_size_read(inode))
 			i_size_write(inode, pos);
 	}
 	return err;
@@ -490,7 +490,7 @@ void fuse_init_file_inode(struct inode *inode)
 	struct fuse_conn *fc = INO_FC(inode);
 	/* Readahead somehow defeats big reads on 2.6 (says Michael
            Grigoriev) */
-	if(fc->flags & FUSE_LARGE_READ)
+	if (fc->flags & FUSE_LARGE_READ)
 		inode->i_mapping->backing_dev_info->ra_pages = 0;
 #endif
 	inode->i_fop = &fuse_file_operations;

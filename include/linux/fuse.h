@@ -123,6 +123,10 @@ enum fuse_opcode {
 /* Conservative buffer size for the client */
 #define FUSE_MAX_IN 8192
 
+#define FUSE_NAME_MAX 1024
+#define FUSE_SYMLINK_MAX 4096
+#define FUSE_XATTR_SIZE_MAX 4096
+
 struct fuse_entry_out {
 	unsigned long ino;         /* Inode number */
 	unsigned long generation;  /* Inode generation: ino:gen must

@@ -42,11 +42,11 @@ static void fuse_clear_inode(struct inode *inode)
 	struct fuse_forget_in *inarg = NULL;
 	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_forget_in);
 	
-	if(fc == NULL)
+	if (fc == NULL)
 		return;
 
 	in = kmalloc(s, GFP_NOFS);
-	if(!in)
+	if (!in)
 		return;
 	memset(in, 0, s);
 	inarg = (struct fuse_forget_in *) (in + 1);
@@ -58,7 +58,7 @@ static void fuse_clear_inode(struct inode *inode)
 	in->args[0].size = sizeof(struct fuse_forget_in);
 	in->args[0].value = inarg;
 		
-	if(!request_send_noreply(fc, in))
+	if (!request_send_noreply(fc, in))
 		return;
 
 	kfree(in);
@@ -105,7 +105,7 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	out.args[0].size = sizeof(outarg);
 	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
-	if(!out.h.error)
+	if (!out.h.error)
 		convert_fuse_statfs(buf, &outarg.st);
 	
 	return out.h.error;
@@ -117,17 +117,17 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 	struct file *file;
 	struct inode *ino;
 
-	if(d == NULL) {
+	if (d == NULL) {
 		printk("fuse_read_super: Bad mount data\n");
 		return NULL;
 	}
 
 	file = fget(d->fd);
 	ino = NULL;
-	if(file)
+	if (file)
 		ino = file->f_dentry->d_inode;
 	
-	if(!ino || !proc_fuse_dev || proc_fuse_dev->low_ino != ino->i_ino) {
+	if (!ino || !proc_fuse_dev || proc_fuse_dev->low_ino != ino->i_ino) {
 		printk("fuse_read_super: Bad file: %i\n", d->fd);
 		goto out;
 	}
@@ -160,15 +160,15 @@ static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 	struct inode *inode;
 	struct dentry *entry;
 
-	if(ino == 0)
+	if (ino == 0)
 		return ERR_PTR(-ESTALE);
 
 	inode = ilookup(sb, ino);
-	if(!inode || inode->i_generation != generation)
+	if (!inode || inode->i_generation != generation)
 		return ERR_PTR(-ESTALE);
 
 	entry = d_alloc_anon(inode);
-	if(!entry) {
+	if (!entry) {
 		iput(inode);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -194,8 +194,8 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	struct inode *root;
 	struct fuse_mount_data *d = data;
 
-	if(!capable(CAP_SYS_ADMIN)) {
-		if(d->flags & FUSE_ALLOW_OTHER)
+	if (!capable(CAP_SYS_ADMIN)) {
+		if (d->flags & FUSE_ALLOW_OTHER)
 			return -EPERM;
 	}
 
@@ -209,10 +209,10 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 #endif
 
 	fc = get_conn(d);
-	if(fc == NULL)
+	if (fc == NULL)
 		return -EINVAL;
 	spin_lock(&fuse_lock);
-	if(fc->sb != NULL) {
+	if (fc->sb != NULL) {
 		printk("fuse_read_super: connection already mounted\n");
 		spin_unlock(&fuse_lock);
 		return -EINVAL;
@@ -227,13 +227,13 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	SB_FC(sb) = fc;
 
 	root = get_root_inode(sb, d->rootmode);
-	if(root == NULL) {
+	if (root == NULL) {
 		printk("fuse_read_super: failed to get root inode\n");
 		return -EINVAL;
 	}
 
 	sb->s_root = d_alloc_root(root);
-	if(!sb->s_root)
+	if (!sb->s_root)
 		return -EINVAL;
 
 	return 0;
@@ -259,7 +259,7 @@ static struct super_block *fuse_read_super_compat(struct super_block *sb,
 						  void *data, int silent)
 {
 	int err = fuse_read_super(sb, data, silent);
-	if(err)
+	if (err)
 		return NULL;
 	else
 		return sb;
@@ -273,7 +273,7 @@ int fuse_fs_init()
 	int res;
 
 	res = register_filesystem(&fuse_fs_type);
-	if(res)
+	if (res)
 		printk("fuse: failed to register filesystem\n");
 
 	return res;

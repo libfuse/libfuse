@@ -22,7 +22,7 @@ spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
 /* Must be called with the fuse lock held */
 void fuse_release_conn(struct fuse_conn *fc)
 {
-	if(fc->sb == NULL && fc->file == NULL) {
+	if (fc->sb == NULL && fc->file == NULL) {
 		kfree(fc);
 	}
 }
@@ -36,11 +36,11 @@ int __init fuse_init(void)
 	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
 
 	res = fuse_fs_init();
-	if(res)
+	if (res)
 		goto err;
 	
 	res = fuse_dev_init();
-	if(res)
+	if (res)
 		goto err_fs_cleanup;
 	
 	return 0;
