@@ -1,3 +1,8 @@
+2004-12-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* KERNEL: invalidate dentry/attributes if interrupted request
+	could leave filesystem in an unknown state.
+
 2004-12-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* KERNEL: lots of cleanups related to avoiding possible deadlocks.

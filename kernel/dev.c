@@ -216,7 +216,11 @@ static void request_wait_answer(struct fuse_req *req, int interruptible,
 		req->isreply = 0;
 		return;
 	}
-	req->out.h.error = -ERESTARTNOINTR;
+	if (!interruptible || req->sent)
+		req->out.h.error = -EINTR;
+	else
+		req->out.h.error = -ERESTARTNOINTR;
+
 	req->interrupted = 1;
 	if (req->locked) {
 		/* This is uninterruptible sleep, because data is
@@ -303,6 +307,16 @@ static inline void unlock_request(struct fuse_req *req)
 		spin_unlock(&fuse_lock);
 	}
 }
+
+
+/* Why all this complex one-page-at-a-time copying needed instead of
+   just copy_to/from_user()?  The reason is that blocking on a page
+   fault must be avoided while the request is locked.  This is because
+   if servicing that pagefault happens to be done by this filesystem,
+   an unbreakable deadlock can occur.  So the code is careful to allow
+   request interruption during get_user_pages(), and only lock the
+   request while doing kmapped copying, which cannot block.
+ */
 
 struct fuse_copy_state {
 	int write;
@@ -521,7 +535,7 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 	err = -ENODEV;
 	if (!fc->sb)
 		goto err_unlock;
-	err = -EINTR;
+	err = -ERESTARTSYS;
 	if (list_empty(&fc->pending))
 		goto err_unlock;
 

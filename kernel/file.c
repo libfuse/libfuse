@@ -443,6 +443,7 @@ static int fuse_commit_write(struct file *file, struct page *page,
 	req->page_offset = offset;
 	nres = fuse_send_write(req, file, inode, pos, count);
 	err = req->out.h.error;
+	fuse_put_request(fc, req);
 	if (!err && nres != count)
 		err = -EIO;
 	if (!err) {
@@ -454,8 +455,8 @@ static int fuse_commit_write(struct file *file, struct page *page,
 			clear_page_dirty(page);
 			SetPageUptodate(page);
 		}
-	}
-	fuse_put_request(fc, req);
+	} else if (err == -EINTR || err == -EIO)
+		fuse_invalidate_attr(inode);
 	return err;
 }
 
@@ -543,7 +544,9 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 		if (write && pos > i_size_read(inode))
 			i_size_write(inode, pos);
 		*ppos = pos;
-	}
+	} else if (write && (res == -EINTR || res == -EIO))
+		fuse_invalidate_attr(inode);
+
 	return res;
 }
 

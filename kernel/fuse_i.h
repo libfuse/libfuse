@@ -447,3 +447,8 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
  * Get the attributes of a file
  */
 int fuse_do_getattr(struct inode *inode);
+
+/**
+ * Invalidate inode attributes
+ */
+void fuse_invalidate_attr(struct inode *inode);
