@@ -3,7 +3,7 @@ AM_INIT_AUTOMAKE(fuse, 1.1)
 AM_CONFIG_HEADER(include/config.h)
 
 AC_PROG_CC
-AC_PROG_RANLIB
+AC_PROG_LIBTOOL
 
 if test -z "$LD"; then
 	LD=ld

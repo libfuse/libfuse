@@ -15,7 +15,7 @@
 #define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 1
+#define FUSE_MINOR_VERSION 0
 
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64

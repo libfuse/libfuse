@@ -1,10 +1,12 @@
 ## Process this file with automake to produce Makefile.in
 
-lib_LIBRARIES = libfuse.a
+lib_LTLIBRARIES = libfuse.la
 
-libfuse_a_SOURCES = 	\
+libfuse_la_SOURCES = 	\
 	fuse.c		\
 	fuse_mt.c	\
 	helper.c	\
 	mount.c		\
 	fuse_i.h
+
+libfuse_la_LDFLAGS = -lpthread -version-number 2:0:0

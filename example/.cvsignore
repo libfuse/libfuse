@@ -4,3 +4,4 @@ Makefile
 fusexmp
 null
 hello
+.libs

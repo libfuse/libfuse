@@ -9,3 +9,4 @@ config.log
 *.cache
 config.status
 depcomp
+libtool

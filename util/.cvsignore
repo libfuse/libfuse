@@ -1,5 +1,6 @@
 Makefile.in
 Makefile
 .deps
+.libs
 fusermount
 fuse_ioslave
