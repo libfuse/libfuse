@@ -6,13 +6,21 @@
     See the file COPYING.
 */
 
+
 #include <linux/fuse.h>
 
-#include <linux/module.h>
+#include <linux/config.h>
+#ifdef CONFIG_MODVERSIONS
+#define MODVERSIONS
+#include <linux/modversions.h>
+#endif
 #include <linux/kernel.h>
+#include <linux/module.h>
+
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+
 
 /**
  * A Fuse connection.
