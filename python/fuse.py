@@ -69,7 +69,7 @@ class Xmp(Fuse):
 		return os.chmod(path, mode)
 
 	def chown(self, path, user, group):
-		return os.lchown(path, user, group)
+		return os.chown(path, user, group)
 
 	def truncate(self, path, size):
 		f = open(path, "w+")
