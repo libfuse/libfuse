@@ -66,11 +66,13 @@ struct fuse_attr {
 	unsigned int        gid;
 	unsigned int        rdev;
 	unsigned long long  size;
-	unsigned long       _dummy;
 	unsigned long       blocks;
 	unsigned long       atime;
+	unsigned long       atimensec;
 	unsigned long       mtime;
+	unsigned long       mtimensec;
 	unsigned long       ctime;
+	unsigned long       ctimensec;
 };
 
 struct fuse_kstatfs {
@@ -87,7 +89,9 @@ struct fuse_kstatfs {
 #define FATTR_UID	(1 << 1)
 #define FATTR_GID	(1 << 2)
 #define FATTR_SIZE	(1 << 3)
-#define FATTR_UTIME	(1 << 4)
+#define FATTR_ATIME	(1 << 4)
+#define FATTR_MTIME	(1 << 5)
+#define FATTR_CTIME	(1 << 6)
 
 enum fuse_opcode {
 	FUSE_LOOKUP	= 1,

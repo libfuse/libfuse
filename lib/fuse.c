@@ -315,17 +315,19 @@ static void rename_node(struct fuse *f, fino_t olddir, const char *oldname,
 
 static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 {
-    attr->mode    = stbuf->st_mode;
-    attr->nlink   = stbuf->st_nlink;
-    attr->uid     = stbuf->st_uid;
-    attr->gid     = stbuf->st_gid;
-    attr->rdev    = stbuf->st_rdev;
-    attr->size    = stbuf->st_size;
-    attr->blocks  = stbuf->st_blocks;
-    attr->atime   = stbuf->st_atime;
-    attr->mtime   = stbuf->st_mtime;
-    attr->ctime   = stbuf->st_ctime;
-    attr->_dummy  = 4096;
+    attr->mode      = stbuf->st_mode;
+    attr->nlink     = stbuf->st_nlink;
+    attr->uid       = stbuf->st_uid;
+    attr->gid       = stbuf->st_gid;
+    attr->rdev      = stbuf->st_rdev;
+    attr->size      = stbuf->st_size;
+    attr->blocks    = stbuf->st_blocks;
+    attr->atime     = stbuf->st_atime;
+    attr->atimensec = stbuf->st_atim.tv_nsec;
+    attr->mtime     = stbuf->st_mtime;
+    attr->mtimensec = stbuf->st_mtim.tv_nsec;
+    attr->ctime     = stbuf->st_ctime;
+    attr->ctimensec = stbuf->st_ctim.tv_nsec;
 }
 
 static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
@@ -553,7 +555,8 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
                 res = do_chown(f, path, attr, valid);
             if(!res && (valid & FATTR_SIZE))
                 res = do_truncate(f, path, attr);
-            if(!res && (valid & FATTR_UTIME))
+            if(!res && (valid & (FATTR_ATIME | FATTR_MTIME)) == 
+               (FATTR_ATIME | FATTR_MTIME))
                 res = do_utime(f, path, attr);
             if(!res) {
                 struct stat buf;
@@ -665,7 +668,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, &outarg, sizeof(outarg));
 }
 
-static void do_remove(struct fuse *f, struct fuse_in_header *in, char *name)
+static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
 {
     int res;
     char *path;
@@ -674,18 +677,32 @@ static void do_remove(struct fuse *f, struct fuse_in_header *in, char *name)
     path = get_path_name(f, in->ino, name);
     if(path != NULL) {
         res = -ENOSYS;
-        if(in->opcode == FUSE_UNLINK) {
-            if(f->op.unlink)
-                res = f->op.unlink(path);
-        }
-        else {
-            if(f->op.rmdir)
-                res = f->op.rmdir(path);
+        if(f->op.unlink) {
+            res = f->op.unlink(path);
+            if(res == 0)
+                remove_node(f, in->ino, name);
         }
         free(path);
     }
-    if(res == 0)
-        remove_node(f, in->ino, name);
+    send_reply(f, in, res, NULL, 0);
+}
+
+static void do_rmdir(struct fuse *f, struct fuse_in_header *in, char *name)
+{
+    int res;
+    char *path;
+
+    res = -ENOENT;
+    path = get_path_name(f, in->ino, name);
+    if(path != NULL) {
+        res = -ENOSYS;
+        if(f->op.rmdir) {
+            res = f->op.rmdir(path);
+            if(res == 0)
+                remove_node(f, in->ino, name);
+        }
+        free(path);
+    }
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -990,8 +1007,11 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         break;
             
     case FUSE_UNLINK:
+        do_unlink(f, in, (char *) inarg);
+        break;
+
     case FUSE_RMDIR:
-        do_remove(f, in, (char *) inarg);
+        do_rmdir(f, in, (char *) inarg);
         break;
 
     case FUSE_SYMLINK:

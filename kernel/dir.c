@@ -47,11 +47,11 @@ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 	inode->i_blocks  = attr->blocks;
 #ifdef KERNEL_2_6
 	inode->i_atime.tv_sec   = attr->atime;
-	inode->i_atime.tv_nsec  = 0;
+	inode->i_atime.tv_nsec  = attr->atimensec;
 	inode->i_mtime.tv_sec   = attr->mtime;
-	inode->i_mtime.tv_nsec  = 0;
+	inode->i_mtime.tv_nsec  = attr->mtimensec;
 	inode->i_ctime.tv_sec   = attr->ctime;
-	inode->i_ctime.tv_nsec  = 0;
+	inode->i_ctime.tv_nsec  = attr->ctimensec;
 #else
 	inode->i_atime   = attr->atime;
 	inode->i_mtime   = attr->mtime;
@@ -261,43 +261,46 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	return lookup_new_entry(dir, entry, &outarg, out.h.unique, S_IFLNK);
 }
 
-static int fuse_remove(struct inode *dir, struct dentry *entry, 
-		       enum fuse_opcode op)
+static int fuse_unlink(struct inode *dir, struct dentry *entry)
 {
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 
-	in.h.opcode = op;
+	in.h.opcode = FUSE_UNLINK;
 	in.h.ino = dir->i_ino;
 	in.numargs = 1;
 	in.args[0].size = entry->d_name.len + 1;
 	in.args[0].value = entry->d_name.name;
 	request_send(fc, &in, &out);
 
-	return out.h.error;
-}
-
-static int fuse_unlink(struct inode *dir, struct dentry *entry)
-{
-	int err = fuse_remove(dir, entry, FUSE_UNLINK);
-	if(!err) {
-		/* FIXME: the new i_nlink could be returned by the
-                   unlink operation */
-		err = fuse_do_getattr(entry->d_inode);
-		if(err == -ENOENT)
-			entry->d_inode->i_nlink = 0;
-		return 0;
+	if(!out.h.error) {
+		/* Set nlink to zero so the inode can be cleared, if
+                   the inode does have more links this will be
+                   discovered at the next lookup/getattr */
+		/* FIXME: mark inode "not uptodate" */
+		entry->d_inode->i_nlink = 0;
 	}
-	return err;
+
+	return out.h.error;
 }
 
 static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 {
-	int err = fuse_remove(dir, entry, FUSE_RMDIR);
-	if(!err)
+	struct fuse_conn *fc = INO_FC(dir);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+
+	in.h.opcode = FUSE_RMDIR;
+	in.h.ino = dir->i_ino;
+	in.numargs = 1;
+	in.args[0].size = entry->d_name.len + 1;
+	in.args[0].value = entry->d_name.name;
+	request_send(fc, &in, &out);
+	if(!out.h.error)
 		entry->d_inode->i_nlink = 0;
-	return err;
+
+	return out.h.error;
 }
 
 static int fuse_rename(struct inode *olddir, struct dentry *oldent,
@@ -594,7 +597,7 @@ static unsigned int iattr_to_fattr(struct iattr *iattr,
 		fvalid |= FATTR_SIZE,   fattr->size = iattr->ia_size;
 	/* You can only _set_ these together (they may change by themselves) */
 	if((ivalid & (ATTR_ATIME | ATTR_MTIME)) == (ATTR_ATIME | ATTR_MTIME)) {
-		fvalid |= FATTR_UTIME;
+		fvalid |= FATTR_ATIME | FATTR_MTIME;
 #ifdef KERNEL_2_6
 		fattr->atime = iattr->ia_atime.tv_sec;
 		fattr->mtime = iattr->ia_mtime.tv_sec;

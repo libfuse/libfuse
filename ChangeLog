@@ -1,3 +1,9 @@
+2004-02-20  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* more kernel interface changes:
+
+	* added nanosecond precision to file times
+
 2004-02-19  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* statfs library API changed to match other methods.  Since this
