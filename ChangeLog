@@ -1,5 +1,9 @@
 2005-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.2-pre6
+
+2005-01-26  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Fix bug in link() operation which caused the wrong path to be
 	passed as the first argument.  Found by Anton Altaparmakov
 
