@@ -47,7 +47,7 @@ struct fuse {
     fino_t ctr;
     unsigned int generation;
     unsigned int hidectr;
-    unsigned int fh_ctr;
+    unsigned long fh_ctr;
     pthread_mutex_t lock;
     int numworker;
     int numavail;

@@ -1043,7 +1043,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
         f->fh_ctr ++;
         outarg.fh = f->fh_ctr;
         if (f->flags & FUSE_DEBUG) {
-            printf("OPEN[%u] flags: 0x%x\n", outarg.fh, arg->flags);
+            printf("OPEN[%lu] flags: 0x%x\n", outarg.fh, arg->flags);
             fflush(stdout);
         }
 
@@ -1073,7 +1073,7 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in,
     path = get_path(f, in->ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("FLUSH[%u]\n", arg->fh);
+            printf("FLUSH[%lu]\n", arg->fh);
             fflush(stdout);
         }
         res = -ENOSYS;
@@ -1098,7 +1098,7 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
     path = get_path(f, in->ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("RELEASE[%u]\n", arg->fh);
+            printf("RELEASE[%lu]\n", arg->fh);
             fflush(stdout);
         }
         if (f->op.release)
@@ -1131,7 +1131,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
         path = get_path(f, in->ino);
         if (path != NULL) {
             if (f->flags & FUSE_DEBUG) {
-                printf("READ[%u] %u bytes from %llu\n", arg->fh, arg->size,
+                printf("READ[%lu] %u bytes from %llu\n", arg->fh, arg->size,
                        arg->offset);
                 fflush(stdout);
             }
@@ -1147,7 +1147,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
             size = res;
             res = 0;
             if (f->flags & FUSE_DEBUG) {
-                printf("   READ[%u] %u bytes\n", arg->fh, size);
+                printf("   READ[%lu] %u bytes\n", arg->fh, size);
                 fflush(stdout);
             }
         }
@@ -1172,7 +1172,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     path = get_path(f, in->ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("WRITE%s[%u] %u bytes to %llu\n",
+            printf("WRITE%s[%lu] %u bytes to %llu\n",
                    arg->writepage ? "PAGE" : "", arg->fh, arg->size,
                    arg->offset);
             fflush(stdout);
@@ -1238,7 +1238,7 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
     path = get_path(f, in->ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("FSYNC[%u]\n", inarg->fh);
+            printf("FSYNC[%lu]\n", inarg->fh);
             fflush(stdout);
         }
         res = -ENOSYS;

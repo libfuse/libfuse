@@ -144,27 +144,27 @@ struct fuse_open_in {
 };
 
 struct fuse_open_out {
-	unsigned int fh;
+	unsigned long fh;
 };
 
 struct fuse_release_in {
-	unsigned int fh;
+	unsigned long fh;
 	unsigned int flags;
 };
 
 struct fuse_flush_in {
-	unsigned int fh;
+	unsigned long fh;
 };
 
 struct fuse_read_in {
-	unsigned int fh;
+	unsigned long fh;
 	unsigned long long offset;
 	unsigned int size;
 };
 
 struct fuse_write_in {
 	int writepage;
-	unsigned int fh;
+	unsigned long fh;
 	unsigned long long offset;
 	unsigned int size;
 };
@@ -178,7 +178,7 @@ struct fuse_statfs_out {
 };
 
 struct fuse_fsync_in {
-	unsigned int fh;
+	unsigned long fh;
 	int datasync;
 };
 

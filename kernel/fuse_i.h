@@ -82,7 +82,7 @@ struct fuse_inode {
 /** FUSE specific file data */
 struct fuse_file {
 	struct fuse_req *release_req;
-	unsigned int fh;
+	unsigned long fh;
 	struct list_head ff_list;
 };
 
