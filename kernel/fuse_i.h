@@ -195,4 +195,5 @@ int fuse_getattr(struct inode *inode);
  * Local Variables:
  * indent-tabs-mode: t
  * c-basic-offset: 8
+ * End:
  */

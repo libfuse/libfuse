@@ -226,4 +226,3 @@ void fuse_fs_cleanup()
  * c-basic-offset: 8
  * End:
  */
-
