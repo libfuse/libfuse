@@ -758,19 +758,20 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     if(path != NULL) {
         /* The open syscall was interrupted, so it must be cancelled */
         if(res == 0 && res2 == -ENOENT && f->op.release)
-            f->op.release(path);
+            f->op.release(path, arg->flags);
         free(path);
     }
 }
 
-static void do_release(struct fuse *f, struct fuse_in_header *in)
+static void do_release(struct fuse *f, struct fuse_in_header *in,
+                       struct fuse_open_in *arg)
 {
     char *path;
 
     path = get_path(f, in->ino);
     if(path != NULL) {
         if(f->op.release)
-            f->op.release(path);
+            f->op.release(path, arg->flags);
         free(path);
     }
 }
@@ -943,6 +944,10 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         do_open(f, in, (struct fuse_open_in *) inarg);
         break;
 
+    case FUSE_RELEASE:
+        do_release(f, in, (struct fuse_open_in *) inarg);
+        break;
+
     case FUSE_READ:
         do_read(f, in, (struct fuse_read_in *) inarg);
         break;
@@ -955,12 +960,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         do_statfs(f, in);
         break;
 
-    case FUSE_RELEASE:
-        do_release(f, in);
-        break;
-
     default:
-        fprintf(stderr, "Operation %i not implemented\n", in->opcode);
         send_reply(f, in, -ENOSYS, NULL, 0);
     }
 

@@ -44,18 +44,30 @@ static int fuse_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in *in = NULL;
+	struct fuse_open_in *inarg = NULL;
 
 	in = kmalloc(sizeof(struct fuse_in), GFP_NOFS);
 	if(!in)
 		return -ENOMEM;
-
 	memset(in, 0, sizeof(struct fuse_in));
+	
+	inarg = kmalloc(sizeof(struct fuse_open_in), GFP_NOFS);
+	if(!inarg) 
+		goto out_free;
+	memset(inarg, 0, sizeof(struct fuse_open_in));
+
+	inarg->flags = file->f_flags & ~O_EXCL;
 
 	in->h.opcode = FUSE_RELEASE;
 	in->h.ino = inode->i_ino;
+	in->numargs = 1;
+	in->args[0].size = sizeof(struct fuse_open_in);
+	in->args[0].value = inarg;
 	if(!request_send_noreply(fc, in))
 		return 0;
 
+ out_free:
+	kfree(inarg);
 	kfree(in);
 	return 0;
 }

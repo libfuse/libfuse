@@ -102,7 +102,7 @@ struct fuse_operations {
     int (*read)     (const char *, char *, size_t, off_t);
     int (*write)    (const char *, const char *, size_t, off_t);
     int (*statfs)   (struct fuse_statfs *);
-    int (*release)  (const char *);
+    int (*release)  (const char *, int);
 };
 
 /** Extra context that may be needed by some filesystems */
