@@ -56,6 +56,7 @@ static void set_one_signal_handler(int signal, void (*handler)(int))
     struct sigaction sa;
     struct sigaction old_sa;
 
+    memset(&sa, 0, sizeof(struct sigaction));
     sa.sa_handler = handler;
     sigemptyset(&(sa.sa_mask));
     sa.sa_flags = 0;

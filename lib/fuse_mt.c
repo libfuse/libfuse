@@ -125,6 +125,8 @@ void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
     for (i = 1; i < f->numworker; i++)
         pthread_cancel(w->threads[i]);
     pthread_mutex_unlock(&f->lock);
+    pthread_key_delete(f->context_key);
+    free(w);
 }
 
 void fuse_loop_mt(struct fuse *f)
