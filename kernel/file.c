@@ -72,6 +72,10 @@ static int fuse_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
+{
+	return 0;
+}
 
 static int fuse_readpage(struct file *file, struct page *page)
 {
@@ -158,7 +162,7 @@ static int fuse_cache_block(struct address_space *mapping,
 		struct page *page;
 		char *buffer;
 
-		page = find_or_create_page(mapping, index, GFP_NOFS);
+		page = grab_cache_page(mapping, index);
 
 		if (!page)
 			return -1;
@@ -327,6 +331,7 @@ static int fuse_commit_write(struct file *file, struct page *page,
 static struct file_operations fuse_file_operations = {
 	open:		fuse_open,
 	release:        fuse_release,
+	fsync:		fuse_fsync,
 	read:		fuse_file_read,
 	write:		generic_file_write,
 	mmap:		generic_file_mmap,
