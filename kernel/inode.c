@@ -487,7 +487,7 @@ static struct fuse_conn *new_conn(void)
 			}
 			list_add(&req->list, &fc->unused_list);
 		}
-#ifdef KERNEL_2_6
+#ifdef KERNEL_2_6_6_PLUS
 		fc->bdi.ra_pages = (VM_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
 		fc->bdi.unplug_io_fn = default_unplug_io_fn;
 #endif
