@@ -266,7 +266,7 @@ lu_opt_parse(struct list_head *conf, char *domain, char *opts){
 	if(sep){
 	    TRACE("option with parameter");
 
-	    if((strlen(sep + 1) >= MAX_LEN) || !(prop->value = malloc(strlen(sep + 1) + 1))){
+	    if(!(prop->value = malloc(strlen(sep + 1) + 1))){
 		WARN("out of mem!");
 		free(prop->key);
 		free(prop);

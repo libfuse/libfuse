@@ -35,3 +35,16 @@ and
 
 For LUFS specific options (can only be specified in the first
 argument) see the README in the LUFS distribution
+
+
+Captivefs:
+
+from version 0.2 lufis supports mounting the captivefs.  Command line
+should be something like this:
+
+lufis "fs=captivefs,dir_cache_entries=0,image=/store/ntfs/ntfs.img,captive_options=--rw;--load-module=/var/lib/captive/ntoskrnl.exe;--filesystem=/var/lib/captive/ntfs.sys;--sandbox-server=/usr/sbin/captive-sandbox-server;" /mnt/ntfs -s
+
+It may work without the '-s' option, but this is untested.
+
+umounting should be done with 'umount' as root or 'fusermount -u' as
+non-root.

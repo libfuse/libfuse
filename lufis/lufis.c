@@ -13,6 +13,15 @@
 #include <unistd.h>
 #include <errno.h>
 
+/* statfs extension for captivefs */
+struct lufs_sbattr_ {	/* struct statfs64 */
+    unsigned long long sb_bytes;
+    unsigned long long sb_bytes_free;
+    unsigned long long sb_bytes_available;
+    unsigned long long sb_files;
+    unsigned long long sb_ffree;
+};
+
 struct fs_operations {
     void	*(*init)(struct list_head*, struct dir_cache*, struct credentials*, void**);
     void	(*free)(void*);
@@ -33,6 +42,7 @@ struct fs_operations {
     int 	(*link)(void*, char*, char*);
     int 	(*symlink)(void*, char*, char*);
     int 	(*setattr)(void*, char*, struct lufs_fattr*);
+    int 	(*statfs)(void*, struct lufs_sbattr_*);
 };
 
 static struct fs_operations lu_fops;
@@ -227,6 +237,8 @@ static int get_filesystem(const char *fs)
     sprintf(buf, "%s_setattr", fs);
     if(!(lu_fops.setattr = (int(*)(void*, char*, struct lufs_fattr*))dlsym(dlhandle, buf)))
 	ERROR(dlerror());
+    sprintf(buf, "%s_statfs", fs);
+        lu_fops.statfs = (int(*)(void*, struct lufs_sbattr_*))dlsym(dlhandle, buf);
     
     lu_dlhandle = dlhandle;
     free(buf);
@@ -497,7 +509,7 @@ static int lu_open(const char *path, int flags)
     if(!lu_fops.open)
         return -ENOSYS;
 
-    if(lu_fops.open(lu_context, (char *) path, flags) < 0)
+    if(lu_fops.open(lu_context, (char *) path, flags & O_ACCMODE) < 0)
         return -EPERM;
 
     return 0;
@@ -536,6 +548,40 @@ static int lu_release(const char *path, int flags)
     if(lu_fops.release(lu_context, (char *) path) < 0)
         return -EPERM;
 
+    return 0;
+}
+
+#if FUSE_MAJOR_VERSION < 2
+static int lu_statfs(struct fuse_statfs *stbuf)
+#else
+static int lu_statfs(const char *path, struct statfs *stbuf)
+#endif
+{
+    struct lufs_sbattr_ sbattr;
+
+    if(!lu_fops.statfs)
+        return -ENOSYS;
+
+    memset(&sbattr, 0, sizeof(sbattr));
+    if(lu_fops.statfs(lu_context, &sbattr) < 0)
+        return -EPERM;
+
+#if FUSE_MAJOR_VERSION < 2
+    stbuf->blocks      = sbattr.sb_bytes / 512;
+    stbuf->blocks_free = sbattr.sb_bytes_available / 512;
+    stbuf->files       = sbattr.sb_files;
+    stbuf->files_free  = sbattr.sb_ffree;
+    stbuf->namelen     = 255;
+#else
+    (void) path;
+    stbuf->f_bsize = 512;
+    stbuf->f_blocks = sbattr.sb_bytes / 512;
+    stbuf->f_bfree = sbattr.sb_bytes_free / 512;
+    stbuf->f_bavail = sbattr.sb_bytes_available / 512;
+    stbuf->f_files = sbattr.sb_files;
+    stbuf->f_ffree = sbattr.sb_ffree;
+    stbuf->f_namelen = 255;
+#endif
     return 0;
 }
 
@@ -708,6 +754,13 @@ static int lufis_init(int *argcp, char **argvp[])
     return 0;
 }
 
+static void lufis_cleanup(void)
+{
+    if(lu_fops.umount)
+        lu_fops.umount(lu_context);
+    lu_fops.free(lu_context);
+}
+
 static struct fuse_operations lu_oper = {
     .getattr	= lu_getattr,
     .readlink	= lu_readlink,
@@ -727,16 +780,25 @@ static struct fuse_operations lu_oper = {
     .read	= lu_read,
     .write	= lu_write,
     .release	= lu_release,
+    .statfs     = lu_statfs,
 };
 
 int main(int argc, char *argv[])
 {
     int res;
+    int pid;
 
     res = lufis_init(&argc, &argv);
     if(res == -1)
         exit(1);
 
-    fuse_main(argc, argv, &lu_oper);
+    pid = fork();
+    if(pid == -1) 
+        exit(1);
+    if(pid == 0) {
+        fuse_main(argc, argv, &lu_oper);
+        lufis_cleanup();
+    }
+    
     return 0;
 }
