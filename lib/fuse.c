@@ -73,13 +73,6 @@ struct fuse_cmd {
 
 static struct fuse_context *(*fuse_getcontext)(void) = NULL;
 
-/* Compatibility with kernel ABI version 5.1 */
-struct fuse_getdir_out {
-    __u32 fd;
-};
-
-#define FUSE_GETDIR 7
-
 static const char *opname(enum fuse_opcode opcode)
 {
     switch (opcode) {
@@ -89,7 +82,6 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_SETATTR:		return "SETATTR";
     case FUSE_READLINK:		return "READLINK";
     case FUSE_SYMLINK:		return "SYMLINK";
-    case FUSE_GETDIR:		return "GETDIR";
     case FUSE_MKNOD:		return "MKNOD";
     case FUSE_MKDIR:		return "MKDIR";
     case FUSE_UNLINK:		return "UNLINK";
@@ -1523,7 +1515,23 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
     struct fuse_open_out outarg;
     struct fuse_dirhandle *dh;
 
-    (void) arg;
+    if (f->op.opendir) {
+        char *path;
+        res = -ENOENT;
+        path = get_path(f, in->nodeid);
+        if (path != NULL) {
+            struct fuse_file_info fi;
+            memset(&fi, 0, sizeof(fi));
+            fi.flags = arg->flags;
+            res = f->op.opendir(path, &fi);
+            free(path);
+        }
+        if (res != 0) {
+            send_reply(f, in, res, NULL, 0);
+            return;
+        }
+    }
+
     memset(&outarg, 0, sizeof(outarg));
     res = -ENOMEM;
     dh = (struct fuse_dirhandle *) malloc(sizeof(struct fuse_dirhandle));

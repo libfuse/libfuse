@@ -9,7 +9,7 @@ libfuse_la_SOURCES = 	\
 	mount.c		\
 	fuse_i.h
 
-libfuse_la_LDFLAGS = -lpthread -version-number 2:2:0 \
+libfuse_la_LDFLAGS = -lpthread -version-number 2:3:0 \
 	-Wl,--version-script,fuse_versionscript
 
 EXTRA_DIST = fuse_versionscript

@@ -1,3 +1,14 @@
+2005-02-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: added opendir() operation.  This can be used in case
+	permission checking in getdir() is too late.  Thanks to Usarin
+	Heininga for pointing out this deficiency
+
+	* kernel: llseek() method for files and directories made explicit
+
+	* kernel: fixed inode leak in NFS export in case of nodeid
+	wrapping
+
 2005-02-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: clean up some unitialized memory found with valgrind

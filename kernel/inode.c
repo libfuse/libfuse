@@ -520,26 +520,34 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 #ifdef KERNEL_2_6
 static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 {
+	int err;
 	__u32 *objp = vobjp;
 	unsigned long nodeid = objp[0];
 	__u32 generation = objp[1];
 	struct inode *inode;
 	struct dentry *entry;
 
+	err = -ESTALE;
 	if (nodeid == 0)
-		return ERR_PTR(-ESTALE);
+		goto error;
 
 	inode = ilookup5(sb, nodeid, fuse_inode_eq, &nodeid);
-	if (!inode || inode->i_generation != generation)
-		return ERR_PTR(-ESTALE);
+	if (!inode)
+		goto error;
+	if (inode->i_generation != generation)
+		goto error_iput;
 
+	err = -ENOMEM;
 	entry = d_alloc_anon(inode);
-	if (!entry) {
-		iput(inode);
-		return ERR_PTR(-ENOMEM);
-	}
+	if (!entry)
+		goto error_iput;
 
 	return entry;
+
+ error_iput:
+	iput(inode);
+ error:
+	return ERR_PTR(err);
 }
 
 static int fuse_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len,

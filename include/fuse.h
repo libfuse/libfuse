@@ -24,7 +24,7 @@
 #define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 2
+#define FUSE_MINOR_VERSION 3
 
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
@@ -241,6 +241,14 @@ struct fuse_operations {
 
     /** Remove extended attributes */
     int (*removexattr) (const char *, const char *);
+
+    /** Open direcory
+     * 
+     * This method should check if the open operation is permitted for
+     * this directory.  The fuse_file_info parameter is currently
+     * unused.  This method is optional.
+     */
+    int (*opendir) (const char *, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems
