@@ -1,0 +1,7 @@
+#!/bin/sh -e
+
+if [ "$1" = "configure" -a "`uname -r`" = "${kvers}" ]; then
+	depmod -a || true
+fi
+
+#DEBHELPER#

@@ -1,0 +1,11 @@
+fuse for Debian
+---------------
+
+To be able to use fuse, you need to install the appropriate fuse-module
+package for your kernel version. For a self-compiled kernel, install
+fuse-source, unpack the tarball /usr/src/fuse.tar, and run
+make-kpkg modules from your kernel source tree. You should end up having
+a fuse-module package in /usr/src/modules which you need to install with
+dpkg -i fuse-module-...deb.
+
+ -- Roland Bauerschmidt <rb@debian.org>, Fri,  5 Apr 2002 16:56:10 +0200

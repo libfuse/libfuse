@@ -1,0 +1,8 @@
+fuse (0.95-1) unstable; urgency=low
+
+  * Initial Release.
+  * Adapted lots of stuff from the pcmcia-cs package to build module
+    packages properly.
+
+ -- Roland Bauerschmidt <rb@debian.org>  Sun,  7 Apr 2002 19:56:20 +0200
+

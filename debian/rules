@@ -1,0 +1,189 @@
+#!/usr/bin/make -f
+# Sample debian/rules that uses debhelper.
+# GNU copyright 1997 to 1999 by Joey Hess.
+
+#export DH_VERBOSE=1
+export DH_COMPAT=3
+
+DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
+DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
+
+KSRC ?= /usr/src/linux
+MOD_DIR ?= '.'
+
+ifneq (,$(findstring debug,$(DEB_BUILD_OPTIONS)))
+	CFLAGS += -g
+endif
+ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
+	INSTALL_PROGRAM += -s
+endif
+ifndef PERL
+PERL=/usr/bin/perl
+endif
+
+
+build: build-stamp
+build-stamp:
+	$(checkdir)
+
+	./makeconf.sh
+	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --disable-kernel-module --disable-example
+	$(MAKE)
+	
+	(cd perl; $(PERL) Makefile.PL INSTALLDIRS=vendor)
+	$(MAKE) -C perl
+
+	touch build-stamp
+
+clean: kdist_clean
+	$(checkdir)
+	$(checkroot)
+	rm -f build-stamp
+
+	-$(MAKE) distclean
+	-test -r /usr/share/misc/config.sub && \
+	  cp -f /usr/share/misc/config.sub config.sub
+	-test -r /usr/share/misc/config.guess && \
+	  cp -f /usr/share/misc/config.guess config.guess
+
+	-$(MAKE) -C perl distclean
+	
+	find -name '*.o' -o -name '*.so' -o -name fusermount -type f -o \
+		-name 'Makefile' | xargs rm -f
+
+	rm -f debian/control
+	cat debian/source.control debian/fuse.control > debian/control
+	
+	dh_clean
+
+clean-modules:
+	$(checkdir)
+	$(checkroot)
+	rm -f build-modules-stamp
+	rm -rf debian/fuse-module-*
+	rm -f debian/KVERS debian/MODVERS debian/control.tmp
+
+	-$(MAKE) distclean
+
+	dh_clean
+	
+install: build
+	$(checkdir)
+	$(checkroot)
+
+	dh_clean -k
+	dh_installdirs
+
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
+
+	# python bindings
+	install -d $(CURDIR)/debian/tmp/usr/lib/site-python
+	install -m 0644 python/_fusemodule.so python/fuse.py \
+		$(CURDIR)/debian/tmp/usr/lib/site-python
+
+	# perl bindings
+	$(MAKE) -C perl install PREFIX=$(CURDIR)/debian/tmp/usr
+	find $(CURDIR)/debian/tmp/usr/lib -name '*.pl' | xargs rm -f
+
+	# -source package
+	find . \( -name \*.o -path ./debian/tmp \) -prune -o -print | \
+		cpio -admp debian/tmp/usr/src/modules/fuse
+	cd debian/tmp/usr/src/modules/fuse && \
+		$(MAKE) -f debian/rules clean
+	cd debian/tmp/usr/src && \
+		tar cf fuse.tar modules && \
+		rm -r modules
+	gzip -9 debian/tmp/usr/src/fuse.tar
+
+build-modules: build-modules-stamp
+build-modules-stamp:
+	$(checkdir)
+
+	./makeconf.sh
+	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --disable-lib --disable-util --disable-example --disable-python --with-kernel=$(KSRC)
+
+	$(MAKE)
+
+	touch build-modules-stamp
+
+install-modules: build-modules
+	$(checkdir)
+	$(checkroot)
+
+	install -d $(CURDIR)/debian/fuse-module-$(KVERS)/lib/modules/$(KVERS)/kernel/fs/fuse
+	install -m 0644 kernel/fuse.o $(CURDIR)/debian/fuse-module-$(KVERS)/lib/modules/$(KVERS)/kernel/fs/fuse/fuse.o
+
+binary-fuse: build install
+	$(checkdir)
+	$(checkroot)
+	dh_movefiles
+	find debian/ -type d | xargs rmdir --ignore-fail-on-non-empty -p
+
+	dh_installdocs
+	dh_installexamples
+	dh_installchangelogs ChangeLog
+	dh_link
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_makeshlibs
+	dh_installdeb
+	dh_perl
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+binary-modules: build-modules install-modules
+	$(checkdir)
+	$(checkroot)
+
+	KSRC="$(KSRC)" KVERS="$(KVERS)" KDREV="$(KDREV)" sh -v debian/setvers.sh
+	DH_OPTIONS="-pfuse-module-$(KVERS)"
+
+	dh_installdocs $(DH_OPTIONS)
+	dh_installexamples $(DH_OPTIONS)
+	dh_installchangelogs ChangeLog $(DH_OPTIONS)
+	dh_strip $(DH_OPTIONS)
+	dh_compress $(DH_OPTIONS)
+	dh_fixperms $(DH_OPTIONS)
+	dh_md5sums $(DH_OPTIONS)
+	dh_builddeb --destdir=$(MOD_DIR)/.. -pfuse-module-$(KVERS)
+
+binary-arch: binary-fuse
+	$(checkdir)
+	$(checkroot)
+	set -e; KPATH=$(KPATH); \
+	if [ "$$KPATH" ]; then \
+		for k in `IFS=':'; echo $$KPATH`; do \
+			test ! -d $$d || \
+			$(MAKE) -f debian/rules KSRC="$$k" clean-modules binary-modules; \
+		done; \
+	fi
+
+binary: binary-arch
+
+kdist_clean: clean-modules
+
+kdist_image:
+	$(checkdir)
+	$(checkroot)
+	for CONFLOC in ~/.kernel-pkg.conf /etc/kernel-pkg.conf; \
+	do test -f $$CONFLOC && break; done; \
+	$(MAKE) -f debian/rules \
+		MOD_DIR=$(KSRC) CONFLOC=$$CONFLOC \
+		clean-modules binary-modules
+
+kdist: kdist_image
+	KSRC="$(KSRC)" KMAINT="$(KMAINT)" KEMAIL="$(KEMAIL)" \
+		sh -v debian/genchanges.sh
+
+define checkdir
+	test -f debian/rules -a -f debian/changelog
+endef
+
+define checkroot
+	test root = "`whoami`"
+endef
+
+.PHONY: build clean binary-indep binary-arch binary install 
