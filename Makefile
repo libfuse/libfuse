@@ -3,7 +3,8 @@ CC = gcc
 KCFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe
 KCPPFLAGS = -I /lib/modules/`uname -r`/build/include/ -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES
 
-CFLAGS = -Wall -W -g
+CFLAGS = -Wall -W -g `glib-config --cflags`
+LDFLAGS = `glib-config --libs`
 CPPFLAGS = 
 
 all: fuse.o fusemount

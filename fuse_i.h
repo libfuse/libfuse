@@ -54,11 +54,14 @@ struct fuse_req {
 	/** The request list */
 	struct list_head list;
 
-	/** The size of the parameters */
-	size_t size;
+	/** The request input parameters */
+	struct fuse_in *in;
 
-	/** The request parameters */
-	struct fuse_param param;
+	/** The request result */
+	struct fuse_out *out;
+
+	/** The file returned by open */
+	struct file *file;
 
 	/** The request wait queue */
 	wait_queue_head_t waitq;
@@ -66,6 +69,11 @@ struct fuse_req {
 	/** True if the request is finished */
 	int done;
 };
+
+struct fuse_out_open_internal {
+	file *file;
+};
+
 
 /**
  * The proc entry for the client device ("/proc/fs/fuse/dev")
@@ -81,6 +89,16 @@ extern spinlock_t fuse_lock;
  * Fill in the directory operations
  */
 void fuse_dir_init(struct inode *inode);
+
+/**
+ * Fill in the file operations
+ */
+void fuse_file_init(struct inode *inode);
+
+/**
+ * Fill in the symlink operations
+ */
+void fuse_symlink_init(struct inode *inode);
 
 /**
  * Check if the connection can be released, and if yes, then free the
@@ -111,10 +129,9 @@ void fuse_fs_cleanup(void);
 /**
  * Send a request
  *
- * @valuret: if true then the request can return a positive value
  */
-void request_send(struct fuse_conn *fc, struct fuse_inparam *in,
-		  struct fuse_outparam *out, int valuret);
+void request_send(struct fuse_conn *fc, struct fuse_in *in,
+		  struct fuse_out *out);
 
 /*
  * Local Variables:

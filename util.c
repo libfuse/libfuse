@@ -20,7 +20,6 @@ spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
 void fuse_release_conn(struct fuse_conn *fc)
 {
 	if(fc->sb == NULL && fc->file == NULL) {
-		printk(KERN_DEBUG "fuse: release connection: %i\n", fc->id);
 		kfree(fc);
 	}
 }

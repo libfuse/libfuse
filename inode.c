@@ -17,16 +17,12 @@
 
 static void fuse_read_inode(struct inode *inode)
 {
-	printk(KERN_DEBUG "fuse_read_inode: %li\n", inode->i_ino);
-
-	
+	/* No op */
 }
 
 static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = sb->u.generic_sbp;
-
-	printk(KERN_DEBUG "fuse_put_super[%i]\n", fc->id);
 
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
@@ -46,8 +42,6 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 	struct fuse_conn *fc = NULL;
 	struct file *file;
 	struct inode *ino;
-
-	printk(KERN_DEBUG "fuse_read_super\n");
 
 	if(d == NULL) {
 		printk("fuse_read_super: Bad mount data\n");
@@ -115,8 +109,6 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 		printk("fuse_read_super: failed to get root inode\n");
 		return NULL;
 	}
-
-	printk(KERN_DEBUG "root inode: %ld/%d\n", root->i_ino, root->i_dev);
 
 	spin_lock(&fuse_lock);
 	fc = get_conn(data);

@@ -12,6 +12,10 @@
 #include <linux/kernel.h>
 #include <linux/poll.h>
 #include <linux/proc_fs.h>
+#include <linux/file.h>
+
+#define ICSIZE sizeof(struct fuse_in_common)
+#define OCSIZE sizeof(struct fuse_out_common)
 
 static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
@@ -38,8 +42,8 @@ static int request_wait_answer(struct fuse_req *req)
 	return ret;
 }
 
-void request_send(struct fuse_conn *fc, struct fuse_inparam *in,
-		  struct fuse_outparam *out, int valuret)
+void request_send(struct fuse_conn *fc, struct fuse_in *in,
+		  struct fuse_out *out)
 {
 	int ret;
 	struct fuse_req *req;
@@ -50,13 +54,18 @@ void request_send(struct fuse_conn *fc, struct fuse_inparam *in,
 		return;
 	}
 	
-	req->param.u.i = *in;
-	req->size = sizeof(req->param);
+	req->in = in;
+	req->out = out;
 	req->done = 0;
 	init_waitqueue_head(&req->waitq);
 	
 	spin_lock(&fuse_lock);
-	req->param.unique = fc->reqctr ++;
+	if(fc->file == NULL) {
+		ret = -ENOTCONN;
+		goto out;
+	}
+
+	req->in->h.unique = fc->reqctr ++;
 	list_add_tail(&req->list, &fc->pending);
 	fc->outstanding ++;
 	/* FIXME: Wait until the number of outstanding requests drops
@@ -64,16 +73,17 @@ void request_send(struct fuse_conn *fc, struct fuse_inparam *in,
 	wake_up(&fc->waitq);
 	ret = request_wait_answer(req);
 	fc->outstanding --;
-	*out = req->param.u.o;
 	list_del(&req->list);
+
+  out:
 	kfree(req);
 	spin_unlock(&fuse_lock);
 
 	if(ret)
 		out->result = ret;
-	else if (out->result < -512 || (out->result > 0 && !valuret)) {
+	else if (out->result <= -512 || out->result > 0) {
 		printk("Bad result from client: %i\n", out->result);
-		out->result = -EIO;
+		out->result = -EPROTO;
 	}
 }
 
@@ -99,13 +109,13 @@ static int request_wait(struct fuse_conn *fc)
 	return ret;
 }
 
+
 static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			     loff_t *off)
 {
 	ssize_t ret;
 	struct fuse_conn *fc = file->private_data;
 	struct fuse_req *req;
-	struct fuse_param param;
 	size_t size;
 
 	spin_lock(&fuse_lock);
@@ -113,13 +123,10 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 	if(ret)
 		goto err;
 	
-	printk(KERN_DEBUG "fuse_dev_read[%i]\n", fc->id);
-
 	req = list_entry(fc->pending.next, struct fuse_req, list);
-	param = req->param;
-	size = req->size;
+	size = ICSIZE + req->in->argsize;
 
-	ret = -EIO;
+	ret = -EPROTO;
 	if(nbytes < size) {
 		printk("fuse_dev_read: buffer too small (%i)\n", size);
 		goto err;
@@ -129,7 +136,8 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 	list_add_tail(&req->list, &fc->processing);
 	spin_unlock(&fuse_lock);
 
-	if(copy_to_user(buf, &param, size))
+	if(copy_to_user(buf, &req->in->c, ICSIZE) ||
+	   copy_to_user(buf + ICSIZE, req->in->arg, req->in->argsize))
 		return -EFAULT;
 	
 	return size;
@@ -147,9 +155,8 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 	list_for_each(entry, &fc->processing) {
 		struct fuse_req *tmp;
 		tmp = list_entry(entry, struct fuse_req, list);
-		if(tmp->param.unique == unique) {
+		if(tmp->in->c.unique == unique) {
 			req = tmp;
-			list_del_init(&req->list);
 			break;
 		}
 	}
@@ -161,25 +168,36 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 			      size_t nbytes, loff_t *off)
 {
 	struct fuse_conn *fc = file->private_data;
-	struct fuse_param param;
 	struct fuse_req *req;
+	struct fuse_out_common oc;
+	char *tmpbuf;
 
-	printk(KERN_DEBUG "fuse_dev_write[%i]\n", fc->id);
-
-	if(nbytes < sizeof(param.unique) || nbytes > sizeof(param)) {
-		printk("fuse_dev_write: write is short or long\n");
-		return -EIO;
+	if(nbytes > 2 * PAGE_SIZE) {
+		printk("fuse_dev_write: write is too long\n");
+		return -EPROTO;
 	}
+	
+	tmpbuf = (char *)  __get_free_pages(GFP_KERNEL, 1);
+	if(!tmpbuf)
+		return -ENOMEM;
 
-	if(copy_from_user(&param, buf, nbytes))
+	if(copy_from_user(tmpbuf, buf, nbytes))
 		return -EFAULT;
-
+	
 	spin_lock(&fuse_lock);
-	req = request_find(fc, param.unique);
+	req = request_find(fc, oc.unique);
+	
 	if(req == NULL)
 		printk("fuse_dev_write[%i]: unknown request: %i", fc->id,
-		       param.unique);
+		       oc.unique);
+
+		
+
 	else {
+		struct fuse_outparam *out = &param.u.o;
+		if(req->param.u.i.opcode == FUSE_OPEN && out->result == 0)
+			out->u.open_internal.file = fget(out->u.open.fd);
+
 		req->param = param;
 		req->done = 1;
 		wake_up(&req->waitq);
@@ -231,8 +249,6 @@ static int fuse_dev_open(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc;
 
-	printk(KERN_DEBUG "fuse_dev_open\n");
-
 	fc = new_conn();
 	if(!fc)
 		return -ENOMEM;
@@ -240,19 +256,29 @@ static int fuse_dev_open(struct inode *inode, struct file *file)
 	fc->file = file;
 	file->private_data = fc;
 
-	printk(KERN_DEBUG "new connection: %i\n", fc->id);
-
 	return 0;
+}
+
+static void end_requests(struct list_head *head)
+{
+	while(!list_empty(head)) {
+		struct fuse_req *req;
+		req = list_entry(head->next, struct fuse_req, list);
+		list_del_init(&req->list);
+		req->done = 1;
+		req->param.u.o.result = -ECONNABORTED;
+		wake_up(&req->waitq);
+	}
 }
 
 static int fuse_dev_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = file->private_data;
 
-	printk(KERN_DEBUG "fuse_dev_release[%i]\n", fc->id);
-
 	spin_lock(&fuse_lock);
 	fc->file = NULL;
+	end_requests(&fc->pending);
+	end_requests(&fc->processing);
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	return 0;
