@@ -6,6 +6,9 @@
     See the file COPYING.
 */
 
+#ifndef _FUSE_H_
+#define _FUSE_H_
+
 /* This file defines the library interface of FUSE */
 
 #include <sys/types.h>
@@ -85,6 +88,9 @@ struct fuse_operations {
 /** Enable debuging output */
 #define FUSE_DEBUG       (1 << 1)
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * Create a new FUSE filesystem.
@@ -175,3 +181,8 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
 void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
 
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* _FUSE_H_ */

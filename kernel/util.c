@@ -10,6 +10,10 @@
 
 #include <linux/slab.h>
 
+MODULE_AUTHOR("Miklos Szeredi <mszeredi@inf.bme.hu>");
+MODULE_DESCRIPTION("Filesystem in Userspace");
+MODULE_LICENSE("GPL");
+
 spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
 
 /* Must be called with the fuse lock held */
