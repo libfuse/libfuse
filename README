@@ -39,13 +39,13 @@ FUSE is made up of three main parts:
 
 
 Here's how to create your very own virtual filesystem in five easy
-steps:
+steps (after installing FUSE):
 
   1) Edit the file example/fusexmp.c to do whatever you want...
 
   2) Build the fusexmp program
 
-  3) run 'util/fusermount /mnt/whatever example/fusexmp -d'
+  3) run 'example/fusexmp /mnt/whatever -d'
 
   4) ls -al /mnt/whatever
 
@@ -54,6 +54,12 @@ steps:
 If it doesn't work out, please ask!  Also see the file 'include/fuse.h' for
 detailed documentation of the library interface.
 
+You can also mount your filesystem like this:
+
+   fusermount /mnt/whatever example/fusexmp -d
+
+The fusermount program now accepts a couple of additional options.
+Run it with the '-h' option to see a description.
 
 Security
 ========

@@ -1,3 +1,20 @@
+What is new in 0.95
+
+* Optimized read/write operations.  Raw throughput has increased to
+about 60Mbyte/s on a Celeron/360
+
+* Python bindings by Jeff Epler
+
+* Perl bindings by Mark Glines
+
+* Improved multithreaded operation
+
+* Simplified library interface
+
+* Bugfixes
+
+============================================================================
+
 What is new in 0.9:
 
 * Everything
