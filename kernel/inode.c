@@ -105,14 +105,6 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	return out.h.error;
 }
 
-static struct super_operations fuse_super_operations = {
-	.read_inode	= fuse_read_inode,
-	.clear_inode	= fuse_clear_inode,
-	.put_super	= fuse_put_super,
-	.statfs		= fuse_statfs,
-};
-
-
 static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 {
 	struct fuse_conn *fc = NULL;
@@ -156,6 +148,45 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
 	return fuse_iget(sb, 1, &attr, 0);
 }
 
+
+#ifdef KERNEL_2_6
+
+static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
+{
+	__u32 *objp = vobjp;
+	unsigned long ino = objp[0];
+	/* __u32 generation = objp[1]; */
+	struct inode *inode;
+	struct dentry *entry;
+
+	if(ino == 0)
+		return ERR_PTR(-ESTALE);
+
+	inode = ilookup(sb, ino);
+	if(!inode)
+		return ERR_PTR(-ESTALE);
+
+	entry = d_alloc_anon(inode);
+	if(!entry) {
+		iput(inode);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	return entry;
+}
+
+static struct export_operations fuse_export_operations = {
+	.get_dentry	= fuse_get_dentry,
+};
+#endif
+
+static struct super_operations fuse_super_operations = {
+	.read_inode	= fuse_read_inode,
+	.clear_inode	= fuse_clear_inode,
+	.put_super	= fuse_put_super,
+	.statfs		= fuse_statfs,
+};
+
 static int fuse_read_super(struct super_block *sb, void *data, int silent)
 {	
 	struct fuse_conn *fc;
@@ -166,6 +197,9 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
         sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
         sb->s_magic = FUSE_SUPER_MAGIC;
         sb->s_op = &fuse_super_operations;
+#ifdef KERNEL_2_6
+	sb->s_export_op = &fuse_export_operations;
+#endif
 
 	root = get_root_inode(sb, d->rootmode);
 	if(root == NULL) {

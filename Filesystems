@@ -90,3 +90,16 @@ Description:
   the existence of anything else.
 
 ==============================================================================
+Name: KIO Fuse Gateway
+
+Author: Alexander Neundorf <neundorf at kde org>
+
+Homepage: http://kde.ground.cz/tiki-index.php?page=KIO+Fuse+Gateway
+
+Description:
+
+  This gateway makes it possible to mount ioslaves or a general
+  ioslave-gateway via fuse and make them this way available to all
+  linux apps.
+
+==============================================================================

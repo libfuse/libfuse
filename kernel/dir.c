@@ -91,26 +91,12 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino,
 	if(inode) {
 		if(!inode->u.generic_ip)
 			fuse_init_inode(inode, attr);
-		
+
 		change_attributes(inode, attr);
 		inode->i_version = version;
 	}
 
 	return inode;
-}
-
-/* If the inode belongs to an existing directory, then it cannot be
- assigned to new dentry */
-static int inode_ok(struct inode *inode)
-{
-	struct dentry *alias;
-	if(S_ISDIR(inode->i_mode) && (alias = d_find_alias(inode)) != NULL) {
-		dput(alias);
-		printk("fuse: cannot assign an existing directory\n");
-		return 0;
-
-	}
-	return 1;
 }
 
 static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
@@ -134,38 +120,26 @@ static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 	return out.h.error;
 }
 
-static struct dentry *_fuse_lookup(struct inode *dir, struct dentry *entry)
+static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
+			    struct inode **inodep)
 {
-	int ret;
+	int err;
 	struct fuse_lookup_out outarg;
 	int version;
-	struct inode *inode;
+	struct inode *inode = NULL;
 
-	ret = fuse_do_lookup(dir, entry, &outarg, &version);
-	inode = NULL;
-	if(!ret) {
-		ret = -ENOMEM;
+	err = fuse_do_lookup(dir, entry, &outarg, &version);
+	if(!err) {
 		inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr, version);
-		if(!inode) 
-			goto err;
-
-		ret = -EPROTO;
-		if(!inode_ok(inode)) {
-			iput(inode);
-			goto err;
-		}
-	}
-	else if(ret != -ENOENT)
-		goto err;
+		if(!inode)
+			return -ENOMEM;
+	} else if(err != -ENOENT)
+		return err;
 
 	entry->d_time = jiffies;
 	entry->d_op = &fuse_dentry_opertations;
-	d_add(entry, inode);
-
-	return NULL;
-
-  err:
-	return ERR_PTR(ret);
+	*inodep = inode;
+	return 0;
 }
 
 /* create needs to return a positive entry, so this is actually an
@@ -210,11 +184,6 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 		return -EPROTO;
 	}
 
-	if(!inode_ok(inode)) {
-		iput(inode);
-		return -EPROTO;
-	}
-
 	d_instantiate(entry, inode);
 	return 0;
 }
@@ -222,6 +191,21 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 static int _fuse_create(struct inode *dir, struct dentry *entry, int mode)
 {
 	return _fuse_mknod(dir, entry, mode, 0);
+}
+
+/* knfsd needs the new entry instantiated in mkdir/symlink/link. this
+   should rather be done like mknod: attributes returned in out arg to
+   save a call to userspace */
+static int lookup_new_entry(struct inode *dir, struct dentry *entry)
+{
+	struct inode *inode;
+	int err = fuse_lookup_iget(dir, entry, &inode);
+	if(err || !inode) {
+		printk("fuse_mkdir: failed to look up new entry\n");
+		return err ? err : -ENOENT;
+	}
+	d_instantiate(entry, inode);
+	return 0;
 }
 
 static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
@@ -242,8 +226,10 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 	in.args[1].size = entry->d_name.len + 1;
 	in.args[1].value = entry->d_name.name;
 	request_send(fc, &in, &out);
+	if(out.h.error)
+		return out.h.error;
 
-	return out.h.error;
+	return lookup_new_entry(dir, entry);
 }
 
 static int fuse_symlink(struct inode *dir, struct dentry *entry,
@@ -261,8 +247,10 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	in.args[1].size = strlen(link) + 1;
 	in.args[1].value = link;
 	request_send(fc, &in, &out);
+	if(out.h.error)
+		return out.h.error;
 
-	return out.h.error;
+	return lookup_new_entry(dir, entry);
 }
 
 static int fuse_remove(struct inode *dir, struct dentry *entry, 
@@ -337,10 +325,13 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 	in.args[1].size = newent->d_name.len + 1;
 	in.args[1].value = newent->d_name.name;
 	request_send(fc, &in, &out);
+	if(out.h.error)
+		return out.h.error;
 
-	return out.h.error;
+	/* Invalidate old entry, so attributes are refreshed */
+	d_invalidate(entry);
+	return lookup_new_entry(newdir, newent);
 }
-
 
 int fuse_do_getattr(struct inode *inode)
 {
@@ -444,11 +435,14 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 	struct file *cfile = file->private_data;
 	char *buf;
 	int ret;
-	
+
+	if(!cfile)
+		return -EISDIR;
+
 	buf = kmalloc(DIR_BUFSIZE, GFP_KERNEL);
 	if(!buf)
 		return -ENOMEM;
-
+	
 	ret = kernel_read(cfile, file->f_pos, buf, DIR_BUFSIZE);
 	if(ret < 0)
 		printk("fuse_readdir: failed to read container file\n");
@@ -522,9 +516,6 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getdir_out outarg;
 
-	if(!(file->f_flags & O_DIRECTORY))
-		return 0;
-	
 	in.h.opcode = FUSE_GETDIR;
 	in.h.ino = inode->i_ino;
 	out.numargs = 1;
@@ -667,7 +658,11 @@ static int fuse_getattr(struct vfsmount *mnt, struct dentry *entry,
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 				   struct nameidata *nd)
 {
-	return _fuse_lookup(dir, entry);
+	struct inode *inode;
+	int err = fuse_lookup_iget(dir, entry, &inode);
+	if (err)
+		return ERR_PTR(err);
+	return d_splice_alias(inode, entry);
 }
 
 static int fuse_create(struct inode *dir, struct dentry *entry, int mode,
@@ -688,9 +683,29 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 }
 #else /* KERNEL_2_6 */
 
-#define fuse_lookup _fuse_lookup
 #define fuse_create _fuse_create
 #define fuse_permission _fuse_permission
+
+static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
+{
+	struct inode *inode;
+	struct dentry *alias;
+
+	int err = fuse_lookup_iget(dir, entry, &inode);
+	if(err)
+		return ERR_PTR(err);
+
+	if(inode && S_ISDIR(inode->i_mode) &&
+	   (alias = d_find_alias(inode)) != NULL) {
+		dput(alias);
+		iput(inode);
+		printk("fuse: cannot assign an existing directory\n");
+		return -EPROTO;
+	}
+
+	d_add(entry, inode);
+	return NULL;
+}
 
 static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 		      int rdev)

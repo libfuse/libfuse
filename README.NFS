@@ -1,0 +1,11 @@
+For the moment NFS exporting is supported on kernels versions >=
+2.6.0.
+
+You need to add an fsid=NNN option to /etc/exports to make exporting a
+FUSE directory work.
+
+You may get ESTALE (Stale NFS file handle) errors with this.  This is
+because the current FUSE kernel API and the userspace library cannot
+handle a situation where the kernel forgets about a dentry which is
+still referenced by the remote NFS client.  This problem will be
+addressed in a later version.
