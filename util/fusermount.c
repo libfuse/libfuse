@@ -133,11 +133,11 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
     return 0;
 }
 
-static int remove_mount(const char *mnt)
+static int remove_mount(const char *mnt, int quiet)
 {
     int res;
     const char *mtab = _PATH_MOUNTED;
-    const char *mtab_new = _PATH_MOUNTED "~";
+    const char *mtab_new = _PATH_MOUNTED "~fuse~";
     struct mntent *entp;
     FILE *fp;
     FILE *newfp;
@@ -210,7 +210,7 @@ static int remove_mount(const char *mnt)
         }
     }
     else {
-        if(!found)
+        if(!found && !quiet)
             fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
                     mnt, mtab);
         unlink(mtab_new);
@@ -488,7 +488,8 @@ static void usage()
             " -c       cache in kernel space if possible\n"
             " -x       allow other users to access the files (only for root)\n"
             " -n name  add 'name' as the filesystem name to mtab\n"
-            " -l       issue large reads\n",
+            " -l       issue large reads\n"
+            " -q       quiet: don't complain if unmount fails\n",
             progname);
     exit(1);
 }
@@ -509,6 +510,7 @@ int main(int argc, char *argv[])
     const char *fsname = NULL;
     char verstr[128];
     int flags = 0;
+    int quiet = 0;
 
     progname = argv[0];
     
@@ -554,9 +556,14 @@ int main(int argc, char *argv[])
         case 'l':
             flags |= FUSE_LARGE_READ;
             break;
+            
+        case 'q':
+            quiet = 1;
+            break;
 
         default:
             fprintf(stderr, "%s: Unknown option %s\n", progname, argv[a]);
+            fprintf(stderr, "Try `%s -h' for more information\n", progname);
             exit(1);
         }
     }
@@ -580,7 +587,7 @@ int main(int argc, char *argv[])
     
     if(unmount) {
         int mtablock = lock_mtab();
-        res = remove_mount(mnt);
+        res = remove_mount(mnt, quiet);
         unlock_mtab(mtablock);
         if(res == -1)
             exit(1);
@@ -632,7 +639,7 @@ int main(int argc, char *argv[])
     setgid(getgid());
 
     unmount_cmd = (char *) malloc(strlen(mypath) + strlen(mnt) + 64);
-    sprintf(unmount_cmd, "%s -u %s", mypath, mnt);
+    sprintf(unmount_cmd, "%s -u -q %s", mypath, mnt);
     setenv(FUSE_UMOUNT_CMD_ENV, unmount_cmd, 1);
     sprintf(verstr, "%i", FUSE_KERNEL_VERSION);
     setenv(FUSE_KERNEL_VERSION_ENV, verstr, 1);
