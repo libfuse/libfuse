@@ -7,7 +7,7 @@ use POSIX qw(ENOENT ENOSYS EEXIST EPERM O_RDONLY O_RDWR O_APPEND O_CREAT);
 use Fcntl qw(S_ISBLK S_ISCHR S_ISFIFO SEEK_SET);
 require 'syscall.ph'; # for SYS_mknod
 
-sub fixup { return "/tmp/test" . shift }
+sub fixup { return "/tmp/fusetest" . shift }
 
 sub x_getattr {
 	my ($file) = fixup(shift);
@@ -75,7 +75,7 @@ sub x_rename {
 	my ($err) = rename($old,$new) ? 0 : -ENOENT();
 	return $err;
 }
-sub x_link { return err(link(fixup(shift),fixup(shift))   ); }
+sub x_link { return link(fixup(shift),fixup(shift)) ? 0 : -$! }
 sub x_chown {
 	my ($fn) = fixup(shift);
 	my ($uid,$gid) = @_;
@@ -100,7 +100,7 @@ sub x_mknod {
 	my ($file, $modes, $dev) = @_;
 	$file = fixup($file);
 	$! = 0;
-	syscall(&SYS_mknod,$file,$modes);
+	syscall(&SYS_mknod,$file,$modes,$dev);
 	return -$!;
 }
 

@@ -1,0 +1,5 @@
+#!/usr/bin/perl
+use test::helper qw($_real $_point);
+use Test::More;
+plan tests => 1;
+ok(1);

@@ -1,4 +1,4 @@
-Fuse version 0.01
+Fuse version 0.02
 =================
 
 This is a test release.  It seems to work thus far, but still has a few
@@ -27,32 +27,16 @@ more information.
 
 BUGS
 
-A lot of it works, but I have to do some formal testing on all of it
-still.
+I've begun to build a formal testing framework.  Currently it can mount
+and unmount loopback.pl, and all of the base-level functions have test
+scripts.  These need to be fleshed out as problems are noticed.
 
-Building a Linux kernel actually succeeds.  I haven't tried booting it.
-
-The functions, all of which need to be thoroughally tested:
-getattr
-readlink
-getdir
-mknod
-mkdir
-unlink
-rmdir
-open
-read
-statfs
-symlink
-rename
-link
-chmod
-chown
-truncate
-utime
-write
+The current test framework seems to work well, but the underlying mount/
+unmount infrastructure is a crock.  I am not pleased with that code.
 
 While most things work, I do still have a TODO list:
 * while "ln -s" works as expected, "cp -a" kicks out an error on symlinks.
 * "du -sb" reports a couple orders of magnitude too large a size.
-* need a full Test::Harness framework
+* need to sort out cleaner mount semantics for the test framework
+* figure out how to un-linuxcentrify the statfs tests
+* test everything on other architectures and OS's
