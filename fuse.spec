@@ -2,10 +2,11 @@
 %define fusemoduledir /lib/modules/%{kernelversion}/kernel/fs/fuse
 
 %define kernelrel %(uname -r | sed -e s/-/_/)
+%define real_release 4
 
 Name: fuse
 Version: 1.0
-Release: kernel_%{kernelrel}_3
+Release: kernel_%{kernelrel}_%{real_release}
 Summary: Filesystem in Userspace
 Source: %{name}-%{version}.tar.gz
 Copyright: GPL
@@ -14,6 +15,13 @@ URL: http://sourceforge.net/projects/avf
 Buildroot: %{_tmppath}/%{name}-root
 Prefix: /usr
 Packager: Achim Settelmeier <fuse-rpm@sirlab.de>
+# some parts of this specfile are taken from Ian Pilcher's specfile
+
+# don't restrict to RedHat kernels but also allow compilation with 
+# vanilla kernels, too.
+#Requires: kernel = %{kernelrel}, redhat-release >= 7
+#BuildRequires: kernel-source = %{kernelrel}
+
 
 %description
 FUSE (Filesystem in Userspace) is a simple interface for userspace
@@ -35,6 +43,13 @@ case "$RPM_BUILD_ROOT" in *-root) rm -rf $RPM_BUILD_ROOT ;; esac
 make
 make check
 
+## Now build the library as a shared object
+#cd lib
+#gcc -fPIC -DHAVE_CONFIG_H -I../include -Wall -W -g -O2 -c *.c
+#gcc -shared -Wl,-soname,libfuse.so.%{major_ver} -o libfuse.so.%{version} *.o
+#cd ..
+
+
 %install
 case "$RPM_BUILD_ROOT" in *-root) rm -rf $RPM_BUILD_ROOT ;; esac
 make install \
@@ -50,15 +65,21 @@ make -C example clean
 rm -rf example/.deps/
 
 %post
-/sbin/depmod -a
+/sbin/depmod -aq
+
+%preun
+/sbin/modprobe -r fuse
 
 %postun
-/sbin/depmod -a
+/sbin/depmod -aq
+
+
 
 %files
 %defattr(-,root,root)
 %doc README TODO NEWS INSTALL ChangeLog AUTHORS COPYING COPYING.LIB
-%doc example/
+%doc example/ 
+%doc patch/
 
 %{fusemoduledir}
 %{prefix}/lib/libfuse.a
@@ -69,4 +90,16 @@ rm -rf example/.deps/
 # Then uncomment the "%attr()"-line in favour of the line after it.
 #%attr(4500,root,root) %{prefix}/bin/fusermount
 %{prefix}/bin/fusermount
+
+
+
+%changelog
+
+* Tue Mar 04 2003 Achim Settelmeier <fuse-rpm@sirlab.de>
+- "Merged" the specfile by Ian Pilcher (Ian Pilcher <pilchman@attbi.com>) 
+  and this specfile into one. Both are provided by fuse-1.0.tar.gz.
+
+* Mon Mar 03 2003 Achim Settelmeier <fuse-rpm@sirlab.de>
+- Updated specfile for RedHat 8.0 systems
+
 

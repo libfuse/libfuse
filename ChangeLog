@@ -1,3 +1,7 @@
+2003-03-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Merge of fuse_redhat.spec and fuse.spec by Achim Settelmeier
+
 2003-03-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Updated fuse.spec file (Achim Settelmeier)
