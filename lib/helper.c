@@ -15,6 +15,10 @@
 #include <limits.h>
 #include <signal.h>
 #include <errno.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fcntl.h>
+#include <sys/wait.h>
 
 #define FUSE_MOUNTED_ENV     "_FUSE_MOUNTED"
 #define FUSE_UMOUNT_CMD_ENV  "_FUSE_UNMOUNT_CMD"
@@ -71,6 +75,73 @@ static int fuse_mount(int *argcp, char **argv)
     return 0;
 }
 
+int receive_fd(int fd) {
+    struct msghdr msg;
+    struct iovec iov;
+    char buf[1];
+    int rv;
+    int connfd = -1;
+    char ccmsg[CMSG_SPACE(sizeof(connfd))];
+    struct cmsghdr *cmsg;
+
+    iov.iov_base = buf;
+    iov.iov_len = 1;
+
+    msg.msg_name = 0;
+    msg.msg_namelen = 0;
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+    /* old BSD implementations should use msg_accrights instead of
+     * msg_control; the interface is different. */
+    msg.msg_control = ccmsg;
+    msg.msg_controllen = sizeof(ccmsg);
+
+    rv = recvmsg(fd, &msg, 0);
+    if (rv == -1) {
+        perror("recvmsg");
+        return -1;
+    }
+
+    cmsg = CMSG_FIRSTHDR(&msg);
+    if (!cmsg->cmsg_type == SCM_RIGHTS) {
+        fprintf(stderr, "got control message of unknown type %d\n",
+                cmsg->cmsg_type);
+        return -1;
+    }
+    return *(int*)CMSG_DATA(cmsg);
+}
+
+int fuse_mount_ioslave(char *mountpoint) {
+    int fds[2], pid;
+    char env[10];
+    if(socketpair(PF_UNIX,SOCK_DGRAM,0,fds)) {
+        fprintf(stderr,"fuse: failed to socketpair()\n");
+        return -1;
+    }
+    pid = fork();
+    if(pid < 0) {
+        fprintf(stderr,"fuse: failed to fork()\n");
+        close(fds[0]);
+        close(fds[1]);
+        return -1;
+    }
+    if(pid) {
+        int rv, fd = fds[1];
+        close(fds[0]);
+        while((rv = receive_fd(fd)) < 0)
+        	sleep(1);
+        close(fd);
+        while(wait(NULL) != pid); /* bury zombie */
+        return rv;
+    }
+    close(fds[1]);
+    fcntl(fds[0],F_SETFD,0);
+    snprintf(env,sizeof(env),"%i",fds[0]);
+    setenv("_FUSE_IOSLAVE_FD",env,1);
+    execlp("fusermount","fusermount",mountpoint,"fuse_ioslave",NULL);
+    fprintf(stderr,"fuse: failed to exec fusermount\n");
+    exit(1);
+}
 
 static void exit_handler()
 {

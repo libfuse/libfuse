@@ -1,3 +1,10 @@
+2002-04-18  Mark Glines <mark@glines.org>
+
+	* added an alternative to fuse_mount(), called
+      fuse_mount_ioslave(), which does not need to reexec the
+      FUSE program.
+	* added a small helper util needed by fuse_mount_ioslave().
+
 2002-03-16  Mark Glines <mark@glines.org>
 
 	* use struct fuse_statfs everywhere possible to avoid problems
