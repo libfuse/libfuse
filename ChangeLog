@@ -1,3 +1,16 @@
+2004-07-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Separate directory entry and inode attribute validity timer
+
+	* New write semaphore to stop page writeback during truncate
+
+	* Fsync now waits for all writes to complete before sending the
+	request
+
+	* Optimization: if a page is completely written by
+	fuse_commit_write(), clear the dirty flag and set the uptodate
+	flag for that page
+
 2004-07-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add FUSE_HARD_REMOVE flag, and '-i' option to fuse main, which

@@ -87,14 +87,14 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 
 	inode = iget(sb, ino);
 	if (inode) {
-		if (!inode->u.generic_ip) {
-			struct fuse_req *req = fuse_request_alloc();
-			if (!req) {
+		if (!INO_FI(inode)) {
+			struct fuse_inode *fi = fuse_inode_alloc();
+			if (!fi) {
 				iput(inode);
 				inode = NULL;
 				goto out;
 			}
-			inode->u.generic_ip = req;
+			INO_FI(inode) = fi;
 			inode->i_generation = generation;
 			fuse_init_inode(inode, attr);
 		} else if (inode->i_generation != generation)
@@ -182,25 +182,23 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	if (err && err != -ENOENT)
 		return err;
 
-	if (inode)
-		entry->d_time = time_to_jiffies(outarg.entry_valid,
+	if (inode) {
+		struct fuse_inode *fi = INO_FI(inode);
+		entry->d_time =	time_to_jiffies(outarg.entry_valid,
 						outarg.entry_valid_nsec);
+		fi->i_time = time_to_jiffies(outarg.attr_valid,
+					     outarg.attr_valid_nsec);
+	}
 
 	entry->d_op = &fuse_dentry_operations;
 	*inodep = inode;
 	return 0;
 }
 
-static void uncache_dir(struct inode *dir)
+static void fuse_invalidate_attr(struct inode *inode)
 {
-	struct dentry *entry = d_find_alias(dir);
-	if (!entry)
-		dir->i_nlink = 0;
-	else {
-		/* FIXME: this should reset the _attribute_ timeout */
-		entry->d_time = jiffies - 1;
-		dput(entry);
-	}
+	struct fuse_inode *fi = INO_FI(inode);
+	fi->i_time = jiffies - 1;
 }
 
 static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
@@ -209,6 +207,7 @@ static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 			    int mode)
 {
 	struct inode *inode;
+	struct fuse_inode *fi;
 	inode = fuse_iget(dir->i_sb, outarg->ino, outarg->generation, 
 			  &outarg->attr, version);
 	if (!inode) {
@@ -227,8 +226,12 @@ static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 	entry->d_time = time_to_jiffies(outarg->entry_valid,
 					outarg->entry_valid_nsec);
 
+	fi = INO_FI(inode);
+	fi->i_time = time_to_jiffies(outarg->attr_valid,
+				     outarg->attr_valid_nsec);
+
 	d_instantiate(entry, inode);
-	uncache_dir(dir);
+	fuse_invalidate_attr(dir);
 	return 0;
 }
 
@@ -360,12 +363,14 @@ static int fuse_unlink(struct inode *dir, struct dentry *entry)
 	request_send(fc, req);
 	err = req->out.h.error;
 	if (!err) {
+		struct inode *inode = entry->d_inode;
+		
 		/* Set nlink to zero so the inode can be cleared, if
                    the inode does have more links this will be
                    discovered at the next lookup/getattr */
-		/* FIXME: mark inode "not uptodate" */
-		entry->d_inode->i_nlink = 0;
-		uncache_dir(dir);
+		inode->i_nlink = 0;
+		fuse_invalidate_attr(inode);
+		fuse_invalidate_attr(dir);
 	}
 	fuse_put_request(fc, req);
 	return err;
@@ -389,7 +394,7 @@ static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 	err = req->out.h.error;
 	if (!err) {
 		entry->d_inode->i_nlink = 0;
-		uncache_dir(dir);
+		fuse_invalidate_attr(dir);
 	}
 	fuse_put_request(fc, req);
 	return err;
@@ -421,9 +426,9 @@ static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 	err = req->out.h.error;
 	fuse_put_request(fc, req);
 	if (!err) {
-		uncache_dir(olddir);
+		fuse_invalidate_attr(olddir);
 		if (olddir != newdir)
-			uncache_dir(newdir);
+			fuse_invalidate_attr(newdir);
 	}
 	return err;
 }
@@ -467,6 +472,7 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 
 int fuse_do_getattr(struct inode *inode)
 {
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_req *req = fuse_get_request(fc);
 	struct fuse_attr_out arg;
@@ -482,8 +488,11 @@ int fuse_do_getattr(struct inode *inode)
 	req->out.args[0].value = &arg;
 	request_send(fc, req);
 	err = req->out.h.error;	
-	if (!err)
+	if (!err) {
 		change_attributes(inode, &arg.attr);
+		fi->i_time = time_to_jiffies(arg.attr_valid,
+					     arg.attr_valid_nsec);
+	}
 	fuse_put_request(fc, req);
 	return err;
 }
@@ -491,13 +500,14 @@ int fuse_do_getattr(struct inode *inode)
 static int fuse_revalidate(struct dentry *entry)
 {
 	struct inode *inode = entry->d_inode;
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_conn *fc = INO_FC(inode);
 
 	if (inode->i_ino == FUSE_ROOT_INO) {
 		if (!(fc->flags & FUSE_ALLOW_OTHER) &&
 		    current->fsuid != fc->uid)
 			return -EACCES;
-	} else if (!entry->d_time || time_before_eq(jiffies, entry->d_time))
+	} else if (!fi->i_time || time_before_eq(jiffies, fi->i_time))
 		return 0;
 
 	return fuse_do_getattr(inode);
@@ -745,18 +755,32 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 {
 	struct inode *inode = entry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_req *req;
 	struct fuse_setattr_in inarg;
 	struct fuse_attr_out outarg;
 	int err;
+	int is_truncate = 0;
+	
 
-	/* FIXME: need to fix race between truncate and writepage */
-	if (attr->ia_valid & ATTR_SIZE)	
-		fuse_sync_inode(inode);
+	if (attr->ia_valid & ATTR_SIZE) {
+		unsigned long limit;
+		is_truncate = 1;
+
+		limit = current->rlim[RLIMIT_FSIZE].rlim_cur;
+		if (limit != RLIM_INFINITY && attr->ia_size > limit) {
+			send_sig(SIGXFSZ, current, 0);
+			return -EFBIG;
+		}
+		//fuse_sync_inode(inode);
+	}
 
 	req = fuse_get_request(fc);
 	if (!req)
 		return -ERESTARTSYS;
+
+	if (is_truncate)
+		down_write(&fi->write_sem);
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.valid = iattr_to_fattr(attr, &inarg.attr);
@@ -770,14 +794,22 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	req->out.args[0].value = &outarg;
 	request_send(fc, req);
 	err = req->out.h.error;
-	if (!err) {
-		if (attr->ia_valid & ATTR_SIZE &&
-		    outarg.attr.size < i_size_read(inode))
-			vmtruncate(inode, outarg.attr.size);
-
-		change_attributes(inode, &outarg.attr);
-	} 
 	fuse_put_request(fc, req);
+
+	if (!err) {
+		if (is_truncate) {
+			loff_t origsize = i_size_read(inode);
+			i_size_write(inode, outarg.attr.size);
+			up_write(&fi->write_sem);
+			if (origsize > outarg.attr.size)
+				vmtruncate(inode, outarg.attr.size);
+		}
+		change_attributes(inode, &outarg.attr);
+		fi->i_time = time_to_jiffies(outarg.attr_valid,
+					     outarg.attr_valid_nsec);
+	} else if (is_truncate)
+		up_write(&fi->write_sem);
+		
 	return err;
 }
 
@@ -787,6 +819,7 @@ static int _fuse_dentry_revalidate(struct dentry *entry)
 		return 0;
 	else if (entry->d_time && time_after(jiffies, entry->d_time)) {
 		struct inode *inode = entry->d_inode;
+		struct fuse_inode *fi = INO_FI(inode);
 		struct fuse_entry_out outarg;
 		int version;
 		int ret;
@@ -803,6 +836,8 @@ static int _fuse_dentry_revalidate(struct dentry *entry)
 		inode->i_version = version;
 		entry->d_time = time_to_jiffies(outarg.entry_valid,
 						outarg.entry_valid_nsec);
+		fi->i_time = time_to_jiffies(outarg.attr_valid,
+					     outarg.attr_valid_nsec);
 	}
 	return 1;
 }

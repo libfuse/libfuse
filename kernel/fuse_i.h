@@ -65,6 +65,13 @@ permission checking is done in the kernel */
 /** Bypass the page cache for read and write operations  */
 #define FUSE_DIRECT_IO           (1 << 4)
 
+/** FUSE specific inode data */
+struct fuse_inode {
+	struct fuse_req *forget_req;
+	struct rw_semaphore write_sem;
+	unsigned long i_time;
+};
+
 /** One input argument of a request */
 struct fuse_in_arg {
 	unsigned int size;
@@ -223,7 +230,8 @@ struct fuse_getdir_out_i {
 #define SB_FC(sb) ((sb)->u.generic_sbp)
 #endif
 #define INO_FC(inode) SB_FC((inode)->i_sb)
-#define DEV_FC(file) ((struct fuse_conn *) (file)->private_data)
+#define DEV_FC(file) ((file)->private_data)
+#define INO_FI(inode) ((inode)->u.generic_ip)
 
 
 /**
@@ -293,6 +301,11 @@ struct fuse_req *fuse_request_alloc(void);
 void fuse_request_free(struct fuse_req *req);
 
 /**
+ * Reinitialize a request, the preallocated flag is left unmodified
+ */
+void fuse_reset_request(struct fuse_req *req);
+
+/**
  * Reserve a preallocated request
  */
 struct fuse_req *fuse_get_request(struct fuse_conn *fc);
@@ -332,6 +345,11 @@ int fuse_do_getattr(struct inode *inode);
  * Write dirty pages
  */
 void fuse_sync_inode(struct inode *inode);
+
+/**
+ * Allocate fuse specific inode data
+ */
+struct fuse_inode *fuse_inode_alloc(void);
 
 /*
  * Local Variables:

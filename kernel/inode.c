@@ -24,6 +24,7 @@
 
 
 static int user_allow_other;
+static kmem_cache_t *fuse_inode_cachep;
 
 #ifdef KERNEL_2_6
 #include <linux/moduleparam.h>
@@ -53,6 +54,29 @@ struct fuse_mount_data {
 	unsigned int max_read;
 };
 
+struct fuse_inode *fuse_inode_alloc(void)
+{
+	struct fuse_inode *fi;
+
+	fi = kmem_cache_alloc(fuse_inode_cachep, SLAB_KERNEL);
+	if (fi) {
+		memset(fi, 0, sizeof(*fi));
+		fi->forget_req = fuse_request_alloc();
+		if (!fi->forget_req) {
+			kmem_cache_free(fuse_inode_cachep, fi);
+			fi = NULL;
+		} else
+			init_rwsem(&fi->write_sem);
+	}
+
+	return fi;
+}
+
+static void fuse_inode_free(struct fuse_inode *fi)
+{
+	kmem_cache_free(fuse_inode_cachep, fi);
+}
+
 static void fuse_read_inode(struct inode *inode)
 {
 	/* No op */
@@ -74,15 +98,16 @@ void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req, ino_t ino,
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_req *req = inode->u.generic_ip;
+	struct fuse_inode *fi = INO_FI(inode);
 	
-	if (fc == NULL) {
-		if (req)
-			fuse_request_free(req);
-		return;
+	if (fi) {
+		if (fc == NULL)
+			fuse_request_free(fi->forget_req);
+		else 
+			fuse_send_forget(fc, fi->forget_req, inode->i_ino,
+					 inode->i_version);
+		fuse_inode_free(fi);
 	}
-	if (req != NULL)
-		fuse_send_forget(fc, req, inode->i_ino, inode->i_version);
 }
 
 static void fuse_put_super(struct super_block *sb)
@@ -409,18 +434,28 @@ static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
 
 int fuse_fs_init()
 {
-	int res;
+	int err;
 
-	res = register_filesystem(&fuse_fs_type);
-	if (res)
+	err = register_filesystem(&fuse_fs_type);
+	if (err)
 		printk("fuse: failed to register filesystem\n");
+	else {
+		fuse_inode_cachep = kmem_cache_create("fuse_inode",
+						      sizeof(struct fuse_inode),
+						      0, 0, NULL, NULL);
+		if (!fuse_inode_cachep) {
+			unregister_filesystem(&fuse_fs_type);
+			err = -ENOMEM;
+		}
+	}
 
-	return res;
+	return err;
 }
 
 void fuse_fs_cleanup()
 {
 	unregister_filesystem(&fuse_fs_type);
+	kmem_cache_destroy(fuse_inode_cachep);
 }
 
 /* 

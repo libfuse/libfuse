@@ -96,6 +96,16 @@ static int get_unique(struct fuse_conn *fc)
 	return fc->reqctr;
 }
 
+void fuse_reset_request(struct fuse_req *req)
+{
+	int preallocated = req->preallocated;
+	
+	memset(req, 0, sizeof(*req));
+	INIT_LIST_HEAD(&req->list);
+	init_waitqueue_head(&req->waitq);
+	req->preallocated = preallocated;
+}
+
 static struct fuse_req *do_get_request(struct fuse_conn *fc)
 {
 	struct fuse_req *req;
@@ -105,12 +115,7 @@ static struct fuse_req *do_get_request(struct fuse_conn *fc)
 	req = list_entry(fc->unused_list.next, struct fuse_req, list);
 	list_del_init(&req->list);
 	spin_unlock(&fuse_lock);
-	
-	memset(req, 0, sizeof(*req));
-	INIT_LIST_HEAD(&req->list);
-	init_waitqueue_head(&req->waitq);
-	req->preallocated = 1;
-
+	fuse_reset_request(req);
 	return req;
 }
 
@@ -422,7 +427,7 @@ static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
 	struct inode *inode = iget(fc->sb, uh->ino);
 	int err = -ENOENT;
 	if (inode) {
-		if (inode->u.generic_ip) {
+		if (FUSE_FI(inode)) {
 			invalidate_inode_pages(inode);
 			err = 0;
 		}
@@ -577,6 +582,7 @@ static struct fuse_conn *new_conn(void)
 				free_conn(fc);
 				return NULL;
 			}
+			req->preallocated = 1;
 			list_add(&req->list, &fc->unused_list);
 		}
 		fc->reqctr = 1;
