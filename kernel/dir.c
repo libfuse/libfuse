@@ -93,14 +93,12 @@ static int inode_ok(struct inode *inode)
 	return 1;
 }
 
-static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
+static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
+			  struct fuse_lookup_out *outarg, int *version)
 {
-	int ret;
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_lookup_out outarg;
-	struct inode *inode;
 
 	in.h.opcode = FUSE_LOOKUP;
 	in.h.ino = dir->i_ino;
@@ -108,15 +106,26 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 	in.args[0].size = entry->d_name.len + 1;
 	in.args[0].value = entry->d_name.name;
 	out.numargs = 1;
-	out.args[0].size = sizeof(outarg);
-	out.args[0].value = &outarg;
+	out.args[0].size = sizeof(struct fuse_lookup_out);
+	out.args[0].value = outarg;
 	request_send(fc, &in, &out);
-	
+
+	*version = out.h.unique;
+	return out.h.error;
+}
+
+static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
+{
+	int ret;
+	struct fuse_lookup_out outarg;
+	int version;
+	struct inode *inode;
+
+	ret = fuse_do_lookup(dir, entry, &outarg, &version);
 	inode = NULL;
-	if(!out.h.error) {
+	if(!ret) {
 		ret = -ENOMEM;
-		inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr,
-				  out.h.unique);
+		inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr, version);
 		if(!inode) 
 			goto err;
 
@@ -126,10 +135,8 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 			goto err;
 		}
 	}
-	else if(out.h.error != -ENOENT) {
-		ret = out.h.error;
+	else if(ret != -ENOENT)
 		goto err;
-	}
 
 	entry->d_time = jiffies;
 	entry->d_op = &fuse_dentry_opertations;
@@ -599,12 +606,25 @@ static int fuse_dentry_revalidate(struct dentry *entry, int flags)
 {
 	if(!entry->d_inode)
 		return 0;
-	/* Must not revaidate too soon, since kernel revalidate logic is
-           broken, and could return ENOENT */
-	else if(time_after(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
-		return 0;
-	else
-		return 1;
+	else if(time_after(jiffies, entry->d_time + FUSE_REVALIDATE_TIME)) {
+		struct inode *inode = entry->d_inode;
+		struct fuse_lookup_out outarg;
+		int version;
+		int ret;
+		
+		ret = fuse_do_lookup(entry->d_parent->d_inode, entry, &outarg,
+				     &version);
+		if(ret)
+			return 0;
+		
+		if(outarg.ino != inode->i_ino)
+			return 0;
+		
+		change_attributes(inode, &outarg.attr);
+		inode->i_version = version;
+		entry->d_time = jiffies;
+	}
+	return 1;
 }
 
 static struct inode_operations fuse_dir_inode_operations =
