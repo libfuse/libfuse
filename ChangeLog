@@ -1,3 +1,8 @@
+2004-03-25  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* If filesystem doesn't define a statfs operation, then an
+	all-zero default statfs is returned instead of ENOSYS
+
 2004-03-24  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Add FS_BINARY_MOUNTDATA filesystem flag for kernels > 2.6.4

@@ -914,6 +914,13 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
+static int default_statfs(struct statfs *buf)
+{
+    buf->f_namelen = 255;
+    buf->f_bsize = 512;
+    return 0;
+}
+
 static void convert_statfs(struct statfs *statfs, struct fuse_kstatfs *kstatfs)
 {
     kstatfs->bsize	= statfs->f_bsize;
@@ -931,14 +938,14 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
     struct fuse_statfs_out arg;
     struct statfs buf;
 
-    res = -ENOSYS;
-    if(f->op.statfs) {
+    memset(&buf, 0, sizeof(struct statfs));
+    if(f->op.statfs)
         res = f->op.statfs("/", &buf);
-        if(res == 0) {
-            memset(&arg, 0, sizeof(struct fuse_statfs_out));
-            convert_statfs(&buf, &arg.st);
-        }
-    }
+    else
+        res = default_statfs(&buf);
+
+    if(res == 0)
+        convert_statfs(&buf, &arg.st);
 
     send_reply(f, in, res, &arg, sizeof(arg));
 }
