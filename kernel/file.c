@@ -148,7 +148,7 @@ static int fuse_cache_block(struct address_space *mapping,
 	size_t end_index = ((bl_index + 1) << FUSE_BLOCK_PAGE_SHIFT) - 1;
 	size_t file_end_index = inode->i_size >> PAGE_CACHE_SHIFT;
 
-	int i, error = 0;
+	int i;
 
 	if (end_index > file_end_index)
 		end_index = file_end_index;
@@ -159,6 +159,9 @@ static int fuse_cache_block(struct address_space *mapping,
 		char *buffer;
 
 		page = find_or_create_page(mapping, index, GFP_NOFS);
+
+		if (!page)
+			return -1;
 
 		if (!Page_Uptodate(page)) {
 			buffer = kmap(page);
@@ -172,7 +175,7 @@ static int fuse_cache_block(struct address_space *mapping,
 		page_cache_release(page);
 	}
 
-	return error;
+	return 0;
 } 
 
 static int fuse_file_read_block(struct inode *inode, char *bl_buf,
