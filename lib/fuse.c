@@ -54,12 +54,6 @@ static const char *opname(enum fuse_opcode opcode)
     }
 }
 
-static inline void inc_avail(struct fuse *f)
-{
-    pthread_mutex_lock(&f->lock);
-    f->numavail ++;
-    pthread_mutex_unlock(&f->lock);
-}
 
 static inline void dec_avail(struct fuse *f)
 {
@@ -390,7 +384,8 @@ static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
     return 0;
 }
 
-static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
+static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize,
+                          int locked)
 {
     int res;
 
@@ -404,7 +399,11 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
     /* This needs to be done before the reply, otherwise the scheduler
     could play tricks with us, and only let the counter be increased
     long after the operation is done */
-    inc_avail(f);
+    if (!locked)
+        pthread_mutex_lock(&f->lock);
+    f->numavail ++;
+    if (!locked)
+        pthread_mutex_unlock(&f->lock);
 
     res = write(f->fd, outbuf, outsize);
     if (res == -1) {
@@ -416,8 +415,8 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
     return 0;
 }
 
-static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
-                      void *arg, size_t argsize)
+static int __send_reply(struct fuse *f, struct fuse_in_header *in, int error,
+                        void *arg, size_t argsize, int locked)
 {
     int res;
     char *outbuf;
@@ -441,10 +440,16 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     if (argsize != 0)
         memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
 
-    res = send_reply_raw(f, outbuf, outsize);
+    res = send_reply_raw(f, outbuf, outsize, locked);
     free(outbuf);
 
     return res;
+}
+
+static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
+                        void *arg, size_t argsize)
+{
+    return __send_reply(f, in, error, arg, argsize, 0);
 }
 
 static int is_open(struct fuse *f, fino_t dir, const char *name)
@@ -943,7 +948,6 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
                     struct fuse_open_in *arg)
 {
     int res;
-    int res2;
     char *path;
 
     res = -ENOENT;
@@ -953,21 +957,26 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
         if (f->op.open)
             res = f->op.open(path, arg->flags);
     }
-    res2 = send_reply(f, in, res, NULL, 0);
-    if(res == 0) {
+    if (res == 0) {
+        int res2;
+
+        /* If the request is interrupted the lock must be held until
+           the cancellation is finished.  Otherwise there could be
+           races with rename/unlink, against which the kernel can't
+           protect */
+        pthread_mutex_lock(&f->lock);
+        res2 = __send_reply(f, in, res, NULL, 0, 1);
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release)
                 f->op.release(path, arg->flags);
-        } else {
-            struct node *node;
-            
-            pthread_mutex_lock(&f->lock);
-            node = get_node(f, in->ino);
-            ++node->open_count;
-            pthread_mutex_unlock(&f->lock);
-        }
-    }
+        } else
+            get_node(f, in->ino)->open_count ++;
+        pthread_mutex_unlock(&f->lock);
+
+    } else
+        send_reply(f, in, res, NULL, 0);
+
     if (path)
         free(path);
 }
@@ -1052,7 +1061,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     out->error = res;
     outsize = sizeof(struct fuse_out_header) + size;
     
-    send_reply_raw(f, outbuf, outsize);
+    send_reply_raw(f, outbuf, outsize, 0);
     free(outbuf);
 }
 
@@ -1192,7 +1201,7 @@ static void do_getxattr_read(struct fuse *f, struct fuse_in_header *in,
     out->unique = in->unique;
     out->error = res;
 
-    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size);
+    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size, 0);
     free(outbuf);
 }
 
@@ -1256,7 +1265,7 @@ static void do_listxattr_read(struct fuse *f, struct fuse_in_header *in,
     out->unique = in->unique;
     out->error = res;
 
-    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size);
+    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size, 0);
     free(outbuf);
 }
 

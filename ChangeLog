@@ -1,3 +1,9 @@
+2004-07-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix bug in do_open() in libfuse: open count was incremented
+	after the reply is sent so it could race with unlink/forget and
+	cause an abort.
+	
 2004-07-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* When performing create or remove operation, refresh the parent's
