@@ -1,3 +1,9 @@
+2004-03-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* More kernel interface changes:
+
+	* Lookup/getattr return cache timeout values
+
 2004-02-25  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Clean up option parsing in fuse_main()

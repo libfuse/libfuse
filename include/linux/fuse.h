@@ -119,9 +119,14 @@ enum fuse_opcode {
 /* Conservative buffer size for the client */
 #define FUSE_MAX_IN 8192
 
-struct fuse_lookup_out {
-	unsigned long ino;
-	unsigned long generation;
+struct fuse_entry_out {
+	unsigned long ino;         /* Inode number */
+	unsigned long generation;  /* Inode generation: ino:gen must
+                                      be unique for the fs's lifetime */
+	unsigned long entry_valid; /* Cache timeout for the name */
+	unsigned long entry_valid_nsec;
+	unsigned long attr_valid;  /* Cache timeout for the attributes */
+	unsigned long attr_valid_nsec;
 	struct fuse_attr attr;
 };
 
@@ -129,13 +134,14 @@ struct fuse_forget_in {
 	int version;
 };
 
-struct fuse_getattr_out {
+struct fuse_attr_out {
+	unsigned long attr_valid;  /* Cache timeout for the attributes */
+	unsigned long attr_valid_nsec;
 	struct fuse_attr attr;
 };
 
 struct fuse_getdir_out {
 	int fd;
-	void *file; /* Used by kernel only */
 };
 
 struct fuse_mknod_in {
@@ -158,10 +164,6 @@ struct fuse_link_in {
 struct fuse_setattr_in {
 	struct fuse_attr attr;
 	unsigned int valid;
-};
-
-struct fuse_setattr_out {
-	struct fuse_attr attr;
 };
 
 struct fuse_open_in {

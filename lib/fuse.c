@@ -19,6 +19,9 @@
 #define FUSE_MAX_PATH 4096
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*inarg))
 
+#define ENTRY_REVALIDATE_TIME 1 /* sec */
+#define ATTR_REVALIDATE_TIME 1 /* sec */
+
 static const char *opname(enum fuse_opcode opcode)
 {
     switch(opcode) { 
@@ -407,7 +410,7 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
 }
 
 static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
-                       const char *path, struct fuse_lookup_out *arg)
+                       const char *path, struct fuse_entry_out *arg)
 {
     int res;
     struct stat buf;
@@ -416,11 +419,15 @@ static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
     if(res == 0) {
         struct node *node;
 
-        memset(arg, 0, sizeof(struct fuse_lookup_out));
+        memset(arg, 0, sizeof(struct fuse_entry_out));
         convert_stat(&buf, &arg->attr);
         node = find_node(f, ino, name, &arg->attr, version);
         arg->ino = node->ino;
         arg->generation = node->generation;
+        arg->entry_valid = ENTRY_REVALIDATE_TIME;
+        arg->entry_valid_nsec = 0;
+        arg->attr_valid = ATTR_REVALIDATE_TIME;
+        arg->attr_valid_nsec = 0;
         if(f->flags & FUSE_DEBUG) {
             printf("   INO: %li\n", arg->ino);
             fflush(stdout);
@@ -433,7 +440,7 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
 {
     int res;
     char *path;
-    struct fuse_lookup_out arg;
+    struct fuse_entry_out arg;
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
@@ -465,7 +472,7 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     int res;
     char *path;
     struct stat buf;
-    struct fuse_getattr_out arg;
+    struct fuse_attr_out arg;
 
     res = -ENOENT;
     path = get_path(f, in->ino);
@@ -477,7 +484,9 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     }
 
     if(res == 0) {
-        memset(&arg, 0, sizeof(struct fuse_getattr_out));
+        memset(&arg, 0, sizeof(struct fuse_attr_out));
+        arg.attr_valid = ATTR_REVALIDATE_TIME;
+        arg.attr_valid_nsec = 0;
         convert_stat(&buf, &arg.attr);
     }
 
@@ -541,7 +550,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
     char *path;
     int valid = arg->valid;
     struct fuse_attr *attr = &arg->attr;
-    struct fuse_setattr_out outarg;
+    struct fuse_attr_out outarg;
 
     res = -ENOENT;
     path = get_path(f, in->ino);
@@ -562,7 +571,9 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
                 struct stat buf;
                 res = f->op.getattr(path, &buf);
                 if(!res) {
-                    memset(&outarg, 0, sizeof(struct fuse_setattr_out));
+                    memset(&outarg, 0, sizeof(struct fuse_attr_out));
+                    outarg.attr_valid = ATTR_REVALIDATE_TIME;
+                    outarg.attr_valid_nsec = 0;
                     convert_stat(&buf, &outarg.attr);
                 }
             }
@@ -622,7 +633,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *path;
     char *name = PARAM(inarg);
-    struct fuse_lookup_out outarg;
+    struct fuse_entry_out outarg;
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
@@ -648,7 +659,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *path;
     char *name = PARAM(inarg);
-    struct fuse_lookup_out outarg;
+    struct fuse_entry_out outarg;
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
@@ -711,7 +722,7 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
 {
     int res;
     char *path;
-    struct fuse_lookup_out outarg;
+    struct fuse_entry_out outarg;
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
@@ -766,7 +777,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     char *oldpath;
     char *newpath;
     char *name = PARAM(arg);
-    struct fuse_lookup_out outarg;
+    struct fuse_entry_out outarg;
 
     res = -ENOENT;
     oldpath = get_path(f, in->ino);

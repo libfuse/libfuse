@@ -20,9 +20,6 @@ static struct file_operations fuse_dir_operations;
 
 static struct dentry_operations fuse_dentry_operations;
 
-/* FIXME: This should be user configurable */
-#define FUSE_REVALIDATE_TIME (1 * HZ)
-
 #ifndef KERNEL_2_6
 #define new_decode_dev(x) (x)
 #define new_encode_dev(x) (x)
@@ -106,7 +103,7 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 }
 
 static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
-			  struct fuse_lookup_out *outarg, int *version)
+			  struct fuse_entry_out *outarg, int *version)
 {
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
@@ -118,7 +115,7 @@ static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 	in.args[0].size = entry->d_name.len + 1;
 	in.args[0].value = entry->d_name.name;
 	out.numargs = 1;
-	out.args[0].size = sizeof(struct fuse_lookup_out);
+	out.args[0].size = sizeof(struct fuse_entry_out);
 	out.args[0].value = outarg;
 	request_send(fc, &in, &out);
 
@@ -126,11 +123,21 @@ static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 	return out.h.error;
 }
 
+static inline unsigned long time_to_jiffies(unsigned long sec,
+					    unsigned long nsec)
+{
+	/* prevent wrapping of jiffies */
+	if(sec + 1 >= LONG_MAX / HZ)
+		return 0;
+	
+	return jiffies + sec * HZ + nsec / (1000000000 / HZ);
+}
+
 static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 			    struct inode **inodep)
 {
 	int err;
-	struct fuse_lookup_out outarg;
+	struct fuse_entry_out outarg;
 	int version;
 	struct inode *inode = NULL;
 
@@ -143,14 +150,15 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	} else if(err != -ENOENT)
 		return err;
 
-	entry->d_time = jiffies;
+	entry->d_time = time_to_jiffies(outarg.entry_valid,
+					outarg.entry_valid_nsec);
 	entry->d_op = &fuse_dentry_operations;
 	*inodep = inode;
 	return 0;
 }
 
 static int lookup_new_entry(struct inode *dir, struct dentry *entry,
-				   struct fuse_lookup_out *outarg, int version,
+				   struct fuse_entry_out *outarg, int version,
 				   int mode)
 {
 	struct inode *inode;
@@ -178,7 +186,7 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_mknod_in inarg;
-	struct fuse_lookup_out outarg;
+	struct fuse_entry_out outarg;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.mode = mode;
@@ -214,7 +222,7 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_mkdir_in inarg;
-	struct fuse_lookup_out outarg;
+	struct fuse_entry_out outarg;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.mode = mode;
@@ -242,7 +250,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_lookup_out outarg;
+	struct fuse_entry_out outarg;
 
 	in.h.opcode = FUSE_SYMLINK;
 	in.h.ino = dir->i_ino;
@@ -336,7 +344,7 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_link_in inarg;
-	struct fuse_lookup_out outarg;
+	struct fuse_entry_out outarg;
 	
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.newdir = newdir->i_ino;
@@ -366,7 +374,7 @@ int fuse_do_getattr(struct inode *inode)
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_getattr_out arg;
+	struct fuse_attr_out arg;
 	
 	in.h.opcode = FUSE_GETATTR;
 	in.h.ino = inode->i_ino;
@@ -390,7 +398,7 @@ static int fuse_revalidate(struct dentry *entry)
 		if(!(fc->flags & FUSE_ALLOW_OTHER) &&
 		   current->fsuid != fc->uid)
 			return -EACCES;
-	} else if(time_before_eq(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
+	} else if(!entry->d_time || time_before_eq(jiffies, entry->d_time))
 		return 0;
 
 	return fuse_do_getattr(inode);
@@ -541,12 +549,12 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_getdir_out outarg;
+	struct fuse_getdir_out_i outarg;
 
 	in.h.opcode = FUSE_GETDIR;
 	in.h.ino = inode->i_ino;
 	out.numargs = 1;
-	out.args[0].size = sizeof(outarg);
+	out.args[0].size = sizeof(struct fuse_getdir_out);
 	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 	if(!out.h.error) {
@@ -617,7 +625,7 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_setattr_in inarg;
-	struct fuse_setattr_out outarg;
+	struct fuse_attr_out outarg;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.valid = iattr_to_fattr(attr, &inarg.attr);
@@ -646,9 +654,9 @@ static int _fuse_dentry_revalidate(struct dentry *entry)
 {
 	if(!entry->d_inode)
 		return 0;
-	else if(time_after(jiffies, entry->d_time + FUSE_REVALIDATE_TIME)) {
+	else if(entry->d_time && time_after(jiffies, entry->d_time)) {
 		struct inode *inode = entry->d_inode;
-		struct fuse_lookup_out outarg;
+		struct fuse_entry_out outarg;
 		int version;
 		int ret;
 		
@@ -662,7 +670,8 @@ static int _fuse_dentry_revalidate(struct dentry *entry)
 		
 		change_attributes(inode, &outarg.attr);
 		inode->i_version = version;
-		entry->d_time = jiffies;
+		entry->d_time = time_to_jiffies(outarg.entry_valid,
+						outarg.entry_valid_nsec);
 	}
 	return 1;
 }

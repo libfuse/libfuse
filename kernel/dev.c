@@ -334,8 +334,8 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 
 static void process_getdir(struct fuse_req *req)
 {
-	struct fuse_getdir_out *arg;
-	arg = (struct fuse_getdir_out *) req->out->args[0].value;
+	struct fuse_getdir_out_i *arg;
+	arg = (struct fuse_getdir_out_i *) req->out->args[0].value;
 	arg->file = fget(arg->fd);
 }
 

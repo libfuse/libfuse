@@ -151,6 +151,11 @@ struct fuse_req {
 	void *data;
 };
 
+struct fuse_getdir_out_i {
+	int fd;
+	void *file; /* Used by kernel only */
+};
+
 #ifdef KERNEL_2_6
 #define SB_FC(sb) ((struct fuse_conn *) (sb)->s_fs_info)
 #else
