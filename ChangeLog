@@ -1,3 +1,7 @@
+2005-02-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix possible race when operation is interrupted
+
 2005-01-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compilation on 2.6.7 

@@ -221,35 +221,31 @@ static void background_request(struct fuse_req *req)
 		get_file(req->file);
 }
 
-static int request_wait_answer_nonint(struct fuse_req *req)
+static void request_wait_answer_nonint(struct fuse_req *req)
 {
-	int err;
 	sigset_t oldset;
 	block_sigs(&oldset);
-	err = wait_event_interruptible(req->waitq, req->finished);
+	wait_event_interruptible(req->waitq, req->finished);
 	restore_sigs(&oldset);
-	return err;
 }
 
 /* Called with fuse_lock held.  Releases, and then reacquires it. */
 static void request_wait_answer(struct fuse_req *req, int interruptible)
 {
-	int intr;
-
 	spin_unlock(&fuse_lock);
 	if (interruptible)
-		intr = wait_event_interruptible(req->waitq, req->finished);
+		wait_event_interruptible(req->waitq, req->finished);
 	else
-		intr = request_wait_answer_nonint(req);
+		request_wait_answer_nonint(req);
 	spin_lock(&fuse_lock);
-	if (intr && interruptible && req->sent) {
+	if (interruptible && !req->finished && req->sent) {
 		/* If request is already in userspace, only allow KILL
 		   signal to interrupt */
 		spin_unlock(&fuse_lock);
-		intr = request_wait_answer_nonint(req);
+		request_wait_answer_nonint(req);
 		spin_lock(&fuse_lock);
 	}
-	if (!intr)
+	if (req->finished)
 		return;
 
 	if (!interruptible || req->sent)
@@ -271,7 +267,7 @@ static void request_wait_answer(struct fuse_req *req, int interruptible)
 	if (!req->sent && !list_empty(&req->list)) {
 		list_del(&req->list);
 		__fuse_put_request(req);
-	} else if (req->sent)
+	} else if (!req->finished && req->sent)
 		background_request(req);
 }
 
