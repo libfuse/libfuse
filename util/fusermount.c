@@ -86,7 +86,7 @@ static void unlock_mtab(int mtablock)
     }
 }
 
-static int add_mount(const char *dev, const char *mnt, const char *type)
+static int add_mount(const char *fsname, const char *mnt, const char *type)
 {
     int res;
     const char *mtab = _PATH_MOUNTED;
@@ -116,7 +116,7 @@ static int add_mount(const char *dev, const char *mnt, const char *type)
     if(opts == NULL)
         return -1;
     
-    ent.mnt_fsname = (char *) dev;
+    ent.mnt_fsname = (char *) fsname;
     ent.mnt_dir = (char *) mnt;
     ent.mnt_type = (char *) type;
     ent.mnt_opts = opts;
@@ -363,7 +363,7 @@ static int check_perm(const char *mnt, struct stat *stbuf)
     return 0;
 }
 
-static int mount_fuse(const char *mnt, int flags)
+static int mount_fuse(const char *mnt, int flags, const char *fsname)
 {
     int res;
     int fd;
@@ -396,12 +396,15 @@ static int mount_fuse(const char *mnt, int flags)
         return -1;
     }
  
-    res = do_mount(dev, mnt, type, stbuf.st_mode & S_IFMT, fd, flags);
+    if(fsname == NULL)
+        fsname = dev;
+
+    res = do_mount(fsname, mnt, type, stbuf.st_mode & S_IFMT, fd, flags);
     if(res == -1)
         return -1;
     
     mtablock = lock_mtab();
-    res = add_mount(dev, mnt, type);
+    res = add_mount(fsname, mnt, type);
     unlock_mtab(mtablock);
     if(res == -1) {
         umount(mnt);
@@ -479,11 +482,12 @@ static void usage()
     fprintf(stderr,
             "%s: [options] mountpoint [program [args ...]]\n"
             "Options:\n"
-            " -h    print help\n"
-            " -u    unmount\n"
-            " -p    check default permissions on files\n"
-            " -c    cache in kernel space if possible\n"
-            " -x    allow other users to access the files (only for root)\n",
+            " -h       print help\n"
+            " -u       unmount\n"
+            " -p       check default permissions on files\n"
+            " -c       cache in kernel space if possible\n"
+            " -x       allow other users to access the files (only for root)\n"
+            " -d name  add 'name' as the filesystem name to mtab\n",
             progname);
     exit(1);
 }
@@ -501,6 +505,7 @@ int main(int argc, char *argv[])
     char mypath[PATH_MAX];
     char *unmount_cmd;
     char *commfd;
+    const char *fsname = NULL;
     char verstr[128];
     int flags = 0;
 
@@ -534,6 +539,15 @@ int main(int argc, char *argv[])
                 exit(1);
             }
             flags |= FUSE_ALLOW_OTHER;
+            break;
+            
+        case 'd':
+            a++;
+            if(a == argc) {
+                fprintf(stderr, "%s: Missing argument to -d\n", progname);
+                exit(1);
+            }
+            fsname = argv[a];
             break;
 
         default:
@@ -579,7 +593,7 @@ int main(int argc, char *argv[])
     userprog = argv + a;
     numargs = argc - a;
     
-    fd = mount_fuse(mnt, flags);
+    fd = mount_fuse(mnt, flags, fsname);
     if(fd == -1)
         exit(1);
 

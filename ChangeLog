@@ -1,3 +1,7 @@
+2004-01-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added -d option to fusermount 
+
 2003-12-15  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added major+minor version to library API, and minor version to
