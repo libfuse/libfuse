@@ -65,6 +65,24 @@ static inline void restore_sigs(sigset_t *oldset)
 	sigprocmask(SIG_SETMASK, oldset, NULL);
 }
 #else
+#ifdef HAVE_RECALC_SIGPENDING_TSK
+static inline void block_sigs(sigset_t *oldset)
+{
+	spin_lock_irq(&current->sighand->siglock);
+	*oldset = current->blocked;
+	siginitsetinv(&current->blocked, sigmask(SIGKILL) & ~oldset->sig[0]);
+	recalc_sigpending();
+	spin_unlock_irq(&current->sighand->siglock);
+}
+
+static inline void restore_sigs(sigset_t *oldset)
+{
+	spin_lock_irq(&current->sighand->siglock);
+	current->blocked = *oldset;
+	recalc_sigpending();
+	spin_unlock_irq(&current->sighand->siglock);
+}
+#else
 static inline void block_sigs(sigset_t *oldset)
 {
 	spin_lock_irq(&current->sigmask_lock);
@@ -81,6 +99,7 @@ static inline void restore_sigs(sigset_t *oldset)
 	recalc_sigpending(current);
 	spin_unlock_irq(&current->sigmask_lock);
 }
+#endif
 #endif
 
 void fuse_reset_request(struct fuse_req *req)

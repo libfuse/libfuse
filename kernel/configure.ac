@@ -50,6 +50,10 @@ if echo "$kernsrcver" | grep -q "^2.4"; then
 		AC_DEFINE(HAVE_I_SIZE_FUNC, 1,
 			[Kernel has i_size_read() and i_size_write() functions]),,
 		[#include <linux/fs.h>])
+	AC_CHECK_DECL(recalc_sigpending_tsk,
+		AC_DEFINE(HAVE_RECALC_SIGPENDING_TSK, 1,
+			[Kernel has recalc_sigpending_tsk() function]),,
+		[#include <linux/sched.h>])
 	CFLAGS="$old_cflags"
 else
 	fuse_configured=no
