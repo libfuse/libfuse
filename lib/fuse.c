@@ -225,6 +225,37 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     return node;
 }
 
+static int path_lookup(struct fuse *f, const char *path, fino_t *inop)
+{
+    fino_t ino;
+    int err;
+    char *s;
+    char *name;
+    char *tmp = strdup(path);
+    if (!tmp)
+        return -ENOMEM;
+
+    pthread_mutex_lock(&f->lock);
+    ino = FUSE_ROOT_INO;
+    err = 0;
+    for  (s = tmp; (name = strsep(&s, "/")) != NULL; ) {
+        if (name[0]) {
+            struct node *node = __lookup_node(f, ino, name);
+            if (node == NULL) {
+                err = -ENOENT;
+                break;
+            }
+            ino = node->ino;
+        }
+    }
+    pthread_mutex_unlock(&f->lock);
+    free(tmp);
+    if (!err)
+        *inop = ino;
+    
+    return err;
+}
+
 static char *add_name(char *buf, char *s, const char *name)
 {
     size_t len = strlen(name);
@@ -1542,6 +1573,40 @@ void fuse_loop(struct fuse *f)
 
         __fuse_process_cmd(f, cmd);
     }
+}
+
+int fuse_invalidate(struct fuse *f, const char *path)
+{
+    int res;
+    int err;
+    fino_t ino;
+    struct fuse_user_header h;
+
+    err = path_lookup(f, path, &ino);
+    if (err) {
+        if (err == -ENOENT)
+            return 0;
+        else
+            return err;
+    }
+
+    memset(&h, 0, sizeof(struct fuse_user_header));
+    h.opcode = FUSE_INVALIDATE;
+    h.ino = ino;
+    
+    if ((f->flags & FUSE_DEBUG)) {
+        printf("INVALIDATE ino: %li\n", ino);
+        fflush(stdout);
+    }
+
+    res = write(f->fd, &h, sizeof(struct fuse_user_header));
+    if (res == -1) {
+        if (errno != ENOENT) {
+            perror("fuse: writing device");
+            return -errno;
+        }
+    }
+    return 0;
 }
 
 void fuse_exit(struct fuse *f)

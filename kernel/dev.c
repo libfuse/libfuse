@@ -422,6 +422,7 @@ static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
 	struct inode *inode = ilookup(fc->sb, uh->ino);
 	if (!inode)
 		return -ENOENT;
+	fuse_sync_inode(inode);
 	invalidate_inode_pages(inode->i_mapping);
 	iput(inode);
 	return 0;
@@ -433,6 +434,7 @@ static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
 	int err = -ENOENT;
 	if (inode) {
 		if (INO_FI(inode)) {
+			fuse_sync_inode(inode);
 			invalidate_inode_pages(inode);
 			err = 0;
 		}
@@ -453,7 +455,7 @@ static int fuse_user_request(struct fuse_conn *fc, const char *buf,
 		return -EINVAL;
 	}
 
-	if (copy_from_user(&uh, buf, sizeof(struct fuse_out_header)))
+	if (copy_from_user(&uh, buf, sizeof(struct fuse_user_header)))
 		return -EFAULT;
 	
 	switch (uh.opcode) {

@@ -171,6 +171,16 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op);
  */
 struct fuse *fuse_get(void);
 
+/**
+ * Invalidate cached data of a file.
+ *
+ * Useful if the 'kernel_cache' mount option is given, since in that
+ * case the cache is not invalidated on file open.
+ *
+ * @return 0 on success or -errno on failure
+ */
+int fuse_invalidate(struct fuse *f, const char *path);
+
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
  * ----------------------------------------------------------- */

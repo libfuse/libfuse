@@ -1,3 +1,7 @@
+2004-07-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fuse_invalidate() to library API
+
 2004-07-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check permissions in setattr if 'default_permissions' flag is

@@ -60,10 +60,18 @@ static int hello_open(const char *path, int flags)
 
 static int hello_read(const char *path, char *buf, size_t size, off_t offset)
 {
+    size_t len;
     if(strcmp(path, hello_path) != 0)
         return -ENOENT;
     
-    memcpy(buf, hello_str + offset, size);
+    len = strlen(hello_str);
+    if (offset < len) {
+        if (offset + size > len)
+            size = len - offset;
+        memcpy(buf, hello_str + offset, size);
+    } else
+        size = 0;
+
     return size;
 }
 
