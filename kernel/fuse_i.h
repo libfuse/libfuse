@@ -96,6 +96,24 @@ struct fuse_conn {
 	
 	/** The next unique request id */
 	int reqctr;
+	
+	/** Is fsync not implemented by fs? */
+	unsigned int no_fsync : 1;
+
+	/** Is flush not implemented by fs? */
+	unsigned int no_flush : 1;
+
+	/** Is setxattr not implemented by fs? */
+	unsigned int no_setxattr : 1;
+
+	/** Is getxattr not implemented by fs? */
+	unsigned int no_getxattr : 1;
+
+	/** Is listxattr not implemented by fs? */
+	unsigned int no_listxattr : 1;
+
+	/** Is removexattr not implemented by fs? */
+	unsigned int no_removexattr : 1;
 };
 
 /** One input argument of a request */

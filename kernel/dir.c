@@ -783,6 +783,9 @@ static int fuse_setxattr(struct dentry *entry, const char *name,
 	if (size > FUSE_XATTR_SIZE_MAX)
 		return -E2BIG;
 
+	if (fc->no_setxattr)
+		return -EOPNOTSUPP;
+
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.size = size;
 	inarg.flags = flags;
@@ -797,6 +800,10 @@ static int fuse_setxattr(struct dentry *entry, const char *name,
 	in.args[2].size = size;
 	in.args[2].value = value;
 	request_send(fc, &in, &out);
+	if (out.h.error == -ENOSYS) {
+		fc->no_setxattr = 1;
+		return -EOPNOTSUPP;
+	}
 	return out.h.error;
 }
 
@@ -809,6 +816,9 @@ static ssize_t fuse_getxattr(struct dentry *entry, const char *name,
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getxattr_in inarg;
 	struct fuse_getxattr_out outarg;
+
+	if (fc->no_getxattr)
+		return -EOPNOTSUPP;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.size = size;
@@ -833,8 +843,13 @@ static ssize_t fuse_getxattr(struct dentry *entry, const char *name,
 	request_send(fc, &in, &out);
 	if (!out.h.error)
 		return size ? out.args[0].size : outarg.size;
-	else
+	else {
+		if (out.h.error == -ENOSYS) {
+			fc->no_getxattr = 1;
+			return -EOPNOTSUPP;
+		}
 		return out.h.error;
+	}
 }
 
 static ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size)
@@ -845,6 +860,9 @@ static ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size)
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getxattr_in inarg;
 	struct fuse_getxattr_out outarg;
+
+	if (fc->no_listxattr)
+		return -EOPNOTSUPP;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.size = size;
@@ -867,8 +885,13 @@ static ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size)
 	request_send(fc, &in, &out);
 	if (!out.h.error)
 		return size ? out.args[0].size : outarg.size;
-	else
+	else {
+		if (out.h.error == -ENOSYS) {
+			fc->no_listxattr = 1;
+			return -EOPNOTSUPP;
+		}
 		return out.h.error;
+	}
 }
 
 static int fuse_removexattr(struct dentry *entry, const char *name)
@@ -878,12 +901,19 @@ static int fuse_removexattr(struct dentry *entry, const char *name)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	
+	if (fc->no_removexattr)
+		return -EOPNOTSUPP;
+
 	in.h.opcode = FUSE_REMOVEXATTR;
 	in.h.ino = inode->i_ino;
 	in.numargs = 1;
 	in.args[0].size = strlen(name) + 1;
 	in.args[0].value = name;
 	request_send(fc, &in, &out);
+	if (out.h.error == -ENOSYS) {
+		fc->no_removexattr = 1;
+		return -EOPNOTSUPP;
+	}
 	return out.h.error;
 	
 }

@@ -980,8 +980,7 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
-        /* fsync is not mandatory, so don't return ENOSYS */
-        res = 0;
+        res = -ENOSYS;
         if(f->op.fsync)
             res = f->op.fsync(path, inarg->datasync);
         free(path);
@@ -1000,7 +999,7 @@ static void do_setxattr(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
-        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        res = -ENOSYS;
         if (f->op.setxattr)
             res = f->op.setxattr(path, name, value, arg->size, arg->flags);
         free(path);
@@ -1017,7 +1016,7 @@ static int common_getxattr(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
-        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        res = -ENOSYS;
         if (f->op.getxattr)
             res = f->op.getxattr(path, name, value, size);
         free(path);
@@ -1081,7 +1080,7 @@ static int common_listxattr(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
-        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        res = -ENOSYS;
         if (f->op.listxattr)
             res = f->op.listxattr(path, list, size);
         free(path);
@@ -1142,7 +1141,7 @@ static void do_removexattr(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
-        res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
+        res = -ENOSYS;
         if (f->op.removexattr)
             res = f->op.removexattr(path, name);
         free(path);

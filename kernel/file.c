@@ -99,11 +99,16 @@ static int fuse_flush(struct file *file)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	
+	if (fc->no_flush)
+		return 0;
+
 	in.h.opcode = FUSE_FLUSH;
 	in.h.ino = inode->i_ino;
 	request_send(fc, &in, &out);
-	if (out.h.error == -ENOSYS)
+	if (out.h.error == -ENOSYS) {
+		fc->no_flush = 1;
 		return 0;
+	}
 	else
 		return out.h.error;
 }
@@ -116,6 +121,9 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_fsync_in inarg;
 	
+	if (fc->no_fsync)
+		return 0;
+
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.datasync = datasync;
 
@@ -125,6 +133,11 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	in.args[0].size = sizeof(inarg);
 	in.args[0].value = &inarg;
 	request_send(fc, &in, &out);
+
+	if (out.h.error == -ENOSYS) {
+		fc->no_fsync = 1;
+		return 0;
+	}
 	return out.h.error;
 
 	/* FIXME: need to ensure, that all write requests issued

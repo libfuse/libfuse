@@ -103,7 +103,7 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
  *  then set the callback pointer to NULL.
  * 
  *  - fsync() has a boolean 'datasync' parameter which if TRUE then do
- *  an fdatasync() operation.  
+ *  an fdatasync() operation.  Implementing this call is optional.
  */
 struct fuse_operations {
     int (*getattr)     (const char *, struct stat *);

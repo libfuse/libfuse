@@ -10,6 +10,9 @@
 	background if mount is successful.  '-f' and '-d' options disable
 	backgrounding.  This fixes the "Why does my FUSE daemon hang?"
 	newbie complaint.
+
+	* Cache ENOSYS (function not implemented) errors on *xattr, flush
+	and fsync
 	
 2004-05-18  Miklos Szeredi <mszeredi@inf.bme.hu>
 

@@ -543,6 +543,7 @@ static struct fuse_conn *new_conn(void)
 
 	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
 	if (fc != NULL) {
+		memset(fc, 0, sizeof(*fc));
 		fc->sb = NULL;
 		fc->file = NULL;
 		fc->flags = 0;
