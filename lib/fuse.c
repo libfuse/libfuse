@@ -235,43 +235,6 @@ static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
     return node;
 }
 
-static int path_lookup(struct fuse *f, const char *path, nodeid_t *nodeidp,
-                       unsigned long *inop)
-{
-    nodeid_t nodeid;
-    unsigned long ino;
-    int err;
-    char *s;
-    char *name;
-    char *tmp = strdup(path);
-    if (!tmp)
-        return -ENOMEM;
-
-    pthread_mutex_lock(&f->lock);
-    nodeid = FUSE_ROOT_ID;
-    ino = nodeid;
-    err = 0;
-    for  (s = tmp; (name = strsep(&s, "/")) != NULL; ) {
-        if (name[0]) {
-            struct node *node = lookup_node(f, nodeid, name);
-            if (node == NULL) {
-                err = -ENOENT;
-                break;
-            }
-            nodeid = node->nodeid;
-            ino = node->ino;
-        }
-    }
-    pthread_mutex_unlock(&f->lock);
-    free(tmp);
-    if (!err) {
-        *nodeidp = nodeid;
-        *inop = ino;
-    }
-    
-    return err;
-}
-
 static char *add_name(char *buf, char *s, const char *name)
 {
     size_t len = strlen(name);
@@ -1664,7 +1627,7 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f)
     res = read(f->fd, cmd->buf, FUSE_MAX_IN);
     if (res == -1) {
         free_cmd(cmd);
-        if (fuse_exited(f) || errno == EINTR)
+        if (fuse_exited(f) || errno == EINTR || errno == ENOENT)
             return NULL;
         
         /* ENODEV means we got unmounted, so we silenty return failure */
@@ -1718,38 +1681,9 @@ int fuse_loop(struct fuse *f)
 
 int fuse_invalidate(struct fuse *f, const char *path)
 {
-    int res;
-    int err;
-    nodeid_t nodeid;
-    unsigned long ino;
-    struct fuse_user_header h;
-
-    err = path_lookup(f, path, &nodeid, &ino);
-    if (err) {
-        if (err == -ENOENT)
-            return 0;
-        else
-            return err;
-    }
-
-    memset(&h, 0, sizeof(struct fuse_user_header));
-    h.opcode = FUSE_INVALIDATE;
-    h.nodeid = nodeid;
-    h.ino = ino;
-    
-    if ((f->flags & FUSE_DEBUG)) {
-        printf("INVALIDATE nodeid: %li\n", nodeid);
-        fflush(stdout);
-    }
-
-    res = write(f->fd, &h, sizeof(struct fuse_user_header));
-    if (res == -1) {
-        if (errno != ENOENT) {
-            perror("fuse: writing device");
-            return -errno;
-        }
-    }
-    return 0;
+    (void) f;
+    (void) path;
+    return -EINVAL;
 }
 
 void fuse_exit(struct fuse *f)
@@ -1829,8 +1763,10 @@ static int parse_lib_opts(struct fuse *f, const char *opts)
         char *s = xopts;
         char *opt;
 
-        if (xopts == NULL)
+        if (xopts == NULL) {
+            fprintf(stderr, "fuse: memory allocation failed\n");
             return -1;
+        }
         
         while((opt = strsep(&s, ","))) {
             if (strcmp(opt, "debug") == 0)
@@ -1860,8 +1796,10 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     }
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
-    if (f == NULL)
+    if (f == NULL) {
+        fprintf(stderr, "fuse: failed to allocate fuse object\n");
         goto out;
+    }
 
     if (check_version(f) == -1)
         goto out_free;
@@ -1876,14 +1814,18 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     f->name_table_size = 14057;
     f->name_table = (struct node **)
         calloc(1, sizeof(struct node *) * f->name_table_size);
-    if (f->name_table == NULL)
+    if (f->name_table == NULL) {
+        fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free;
+    }
 
     f->id_table_size = 14057;
     f->id_table = (struct node **)
         calloc(1, sizeof(struct node *) * f->id_table_size);
-    if (f->id_table == NULL)
+    if (f->id_table == NULL) {
+        fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free_name_table;
+    }
 
 #ifndef USE_UCLIBC
      pthread_mutex_init(&f->lock, NULL);
@@ -1903,14 +1845,18 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     f->exited = 0;
 
     root = (struct node *) calloc(1, sizeof(struct node));
-    if (root == NULL)
+    if (root == NULL) {
+        fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free_id_table;
+    }
 
     root->mode = 0;
     root->rdev = 0;
     root->name = strdup("/");
-    if (root->name == NULL)
+    if (root->name == NULL) {
+        fprintf(stderr, "fuse: memory allocation failed\n");
         goto out_free_root;
+    }
 
     root->parent = 0;
     root->nodeid = FUSE_ROOT_ID;
@@ -1928,7 +1874,6 @@ struct fuse *fuse_new_common(int fd, const char *opts,
  out_free:
     free(f);
  out:
-    fprintf(stderr, "fuse: failed to allocate fuse object\n");
     return NULL;
 }
 

@@ -83,6 +83,11 @@ struct fuse_file_info {
  * file system operations.  A major exception is that instead of
  * returning an error in 'errno', the operation should return the
  * negated error value (-errno) directly. 
+ *
+ * All methods are optional, but some are essential for a useful
+ * filesystem (e.g. getattr).  Flush, release and fsync are special
+ * purpose methods, without which a full featured filesystem can still
+ * be implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -187,12 +192,13 @@ struct fuse_operations {
     /** Possibly flush cached data 
      * 
      * BIG NOTE: This is not equivalent to fsync().  It's not a
-     * request to sync dirty data, and can safely be ignored.
+     * request to sync dirty data.
      *
      * Flush is called on each close() of a file descriptor.  So if a
      * filesystem wants to return write errors in close() and the file
      * has cached dirty data, this is a good place to write back data
-     * and return any errors.
+     * and return any errors.  Since many applications ignore close()
+     * errors this is not always useful.
      * 
      * NOTE: The flush() method may be called more than once for each
      * open().  This happens if more than one file descriptor refers
@@ -210,10 +216,10 @@ struct fuse_operations {
      * are unmapped.
      *
      * For every open() call there will be exactly one release() call
-     * with the same flags.  It is possible to have a file opened more
-     * than once, in which case only the last release will mean, that
-     * no more reads/writes will happen on the file.  The return value
-     * of release is ignored.  Implementing this method is optional.
+     * with the same flags and file descriptor.  It is possible to
+     * have a file opened more than once, in which case only the last
+     * release will mean, that no more reads/writes will happen on the
+     * file.  The return value of release is ignored.
      */
     int (*release) (const char *, struct fuse_file_info *);
 
@@ -442,7 +448,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
  * ----------------------------------------------------------- */
 
 #if FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
-#  include <fuse_compat.h>
+#  include "fuse_compat.h"
 #  define fuse_dirfil_t fuse_dirfil_t_compat
 #  define __fuse_read_cmd fuse_read_cmd
 #  define __fuse_process_cmd fuse_process_cmd

@@ -9,10 +9,10 @@
 /* This file defines the kernel interface of FUSE */
 
 /** Version number of this interface */
-#define FUSE_KERNEL_VERSION 4
+#define FUSE_KERNEL_VERSION 5
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 2
+#define FUSE_KERNEL_MINOR_VERSION 1
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
@@ -77,7 +77,7 @@ enum fuse_opcode {
 	FUSE_WRITE	   = 16,
 	FUSE_STATFS	   = 17,
 	FUSE_RELEASE       = 18,
-	FUSE_INVALIDATE    = 19, /* user initiated */
+	/*FUSE_INVALIDATE    = 19,*/
 	FUSE_FSYNC         = 20,
 	FUSE_SETXATTR      = 21,
 	FUSE_GETXATTR      = 22,
@@ -210,14 +210,6 @@ struct fuse_in_header {
 struct fuse_out_header {
 	int unique;
 	int error;
-};
-
-struct fuse_user_header {
-	int unique; /* zero */
-	enum fuse_opcode opcode;
-	unsigned long nodeid;
-	unsigned long ino;  /* Needed only on 2.4.x where ino is also
-			       used for inode lookup */
 };
 
 struct fuse_dirent {

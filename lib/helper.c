@@ -379,6 +379,13 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
     return fuse_main_common(argc, argv, op, op_size, 0);
 }
 
+#undef fuse_main
+int fuse_main()
+{
+    fprintf(stderr, "This function does not exist\n");
+    return -1;
+}
+
 void fuse_main_compat1(int argc, char *argv[],
                       const struct fuse_operations_compat1 *op)
 {

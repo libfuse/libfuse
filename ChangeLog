@@ -1,3 +1,43 @@
+2004-12-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* KERNEL: lots of cleanups related to avoiding possible deadlocks.
+	These will cause some regressions, but stability is considered
+	more important.  If any of these features turns out to be
+	important, it can be readded with the deadlock problems addressed.
+	
+	* Make all requests interruptible (only with SIGKILL currently).
+	This can be used to break any deadlock produced by the userspace
+	filesystem accessing it's own exported files.  The RELEASE request
+	is special, because if it's interrupted before sending it to
+	userspace it is still sent, but the reply is not awaited.
+
+	* If request is interrupted before being sent to userspace, and if
+	it hasn't yet got any side effects, it is always restarted,
+	regardless of the SA_RESTART flag.  This makes these interruptions
+	transparent to the process.
+
+	* Remove shared-writable mmap support, which was prone to an
+	out-of-memory deadlock situation
+
+	* Remove INVALIDATE userspace initiated request
+
+	* Make readpages() synchronous.  Asynchronous requests are
+	deadlock prone, since they cannot be interrupted.
+
+	* Add readv/writev support to fuse device operations
+
+	* Remove some printks, which userspace FS can use for a DoS
+	against syslog
+
+	* Remove 'large_read' mount option from 2.6 in kernel, check it in
+	fusermount instead
+
+	* LIB: improve compatibility with a fuse.h header installed in
+	${prefix}/include which in turn includes the real header.
+
+	* LIB: improve compatibility by defining fuse_main() (which is now
+	not used), so old configure scripts find it.
+
 2004-12-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* When mounting on a subdirectory of / don't duplicate slashes at

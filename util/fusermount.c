@@ -33,6 +33,7 @@
 #include <sys/fsuid.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/utsname.h>
 
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
@@ -463,15 +464,31 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
                    !begins_with(s, "uid=")) {
             int on;
             int flag;
-            if (find_mount_flag(s, len, &on, &flag)) {
-                if (on)
-                    flags |= flag;
-                else
-                    flags  &= ~flag;
-            } else {
-                memcpy(d, s, len);
-                d += len;
-                *d++ = ',';
+            int skip_option = 0;
+            const char *large_read_opt = "large_read";
+            if (len == strlen(large_read_opt) &&
+                strncmp(large_read_opt, s, len) == 0) {
+                struct utsname utsname;
+                unsigned kmaj, kmin;
+                res = uname(&utsname);
+                if (res == 0 && 
+                    sscanf(utsname.release, "%u.%u", &kmaj, &kmin) == 2 &&
+                    (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
+                    fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %i.%i kernels\n", progname, kmaj, kmin);
+                    skip_option = 1;
+                }
+            }
+            if (!skip_option) {
+                if (find_mount_flag(s, len, &on, &flag)) {
+                    if (on)
+                        flags |= flag;
+                    else
+                        flags  &= ~flag;
+                } else {
+                    memcpy(d, s, len);
+                    d += len;
+                    *d++ = ',';
+                }
             }
         }
         s += len;

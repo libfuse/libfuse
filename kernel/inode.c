@@ -1,9 +1,9 @@
 /*
-    FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2004  Miklos Szeredi <miklos@szeredi.hu>
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2004  Miklos Szeredi <miklos@szeredi.hu>
 
-    This program can be distributed under the terms of the GNU GPL.
-    See the file COPYING.
+  This program can be distributed under the terms of the GNU GPL.
+  See the file COPYING.
 */
 
 #include "fuse_i.h"
@@ -72,8 +72,6 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 		kmem_cache_free(fuse_inode_cachep, inode);
 		return NULL;
 	}
-	init_rwsem(&fi->write_sem);
-	INIT_LIST_HEAD(&fi->write_files);
 
 	return inode;
 }
@@ -81,7 +79,6 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 static void fuse_destroy_inode(struct inode *inode)
 {
 	struct fuse_inode *fi = get_fuse_inode(inode);
-	BUG_ON(!list_empty(&fi->write_files));
 	if (fi->forget_req)
 		fuse_request_free(fi->forget_req);
 	kmem_cache_free(fuse_inode_cachep, inode);
@@ -119,10 +116,8 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
-	down(&fc->sb_sem);
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
-	up(&fc->sb_sem);
 	fc->uid = 0;
 	fc->flags = 0;
 	/* Flush all readers on this fs */
@@ -177,7 +172,7 @@ enum {
 	OPT_ALLOW_OTHER,
 	OPT_ALLOW_ROOT,
 	OPT_KERNEL_CACHE,
-#ifndef FUSE_MAINLINE
+#ifndef KERNEL_2_6
 	OPT_LARGE_READ,
 #endif
 	OPT_DIRECT_IO,
@@ -193,7 +188,7 @@ static match_table_t tokens = {
 	{OPT_ALLOW_OTHER,		"allow_other"},
 	{OPT_ALLOW_ROOT,		"allow_root"},
 	{OPT_KERNEL_CACHE,		"kernel_cache"},
-#ifndef FUSE_MAINLINE
+#ifndef KERNEL_2_6
 	{OPT_LARGE_READ,		"large_read"},
 #endif
 	{OPT_DIRECT_IO,			"direct_io"},
@@ -251,19 +246,9 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
 
-#ifndef FUSE_MAINLINE
-		case OPT_LARGE_READ:
 #ifndef KERNEL_2_6
+		case OPT_LARGE_READ:
 			d->flags |= FUSE_LARGE_READ;
-#else
-			{
-				static int warned = 0;
-				if (!warned) {
-					printk("fuse: large_read option is deprecated for 2.6 kernels\n");
-					warned = 1;
-				}
-			}
-#endif
 			break;
 #endif
 		case OPT_DIRECT_IO:
@@ -345,7 +330,6 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->processing);
 		INIT_LIST_HEAD(&fc->unused_list);
 		sema_init(&fc->unused_sem, FUSE_MAX_OUTSTANDING);
-		sema_init(&fc->sb_sem, 1);
 		for (i = 0; i < FUSE_MAX_OUTSTANDING; i++) {
 			struct fuse_req *req = fuse_request_alloc();
 			if (!req) {
@@ -368,18 +352,13 @@ static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 {
 	struct fuse_conn *fc;
 
-	if (file->f_op != &fuse_dev_operations) {
-		printk("FUSE: bad communication file descriptor\n");
+	if (file->f_op != &fuse_dev_operations)
 		return NULL;
-	}
 	fc = new_conn();
-	if (fc == NULL) {
-		printk("FUSE: failed to allocate connection data\n");
+	if (fc == NULL)
 		return NULL;
-	}
 	spin_lock(&fuse_lock);
 	if (file->private_data) {
-		printk("fuse_read_super: connection already mounted\n");
 		free_conn(fc);
 		fc = NULL;
 	} else {
@@ -454,7 +433,6 @@ static int fuse_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len,
 	return type;
 }
 
-
 static struct export_operations fuse_export_operations = {
 	.get_dentry	= fuse_get_dentry,
 	.encode_fh      = fuse_encode_fh,
@@ -516,10 +494,8 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	*get_fuse_conn_super_p(sb) = fc;
 
 	root = get_root_inode(sb, d.rootmode);
-	if (root == NULL) {
-		printk("fuse_read_super: failed to get root inode\n");
+	if (root == NULL)
 		goto err;
-	}
 
 	sb->s_root = d_alloc_root(root);
 	if (!sb->s_root) {
@@ -530,10 +506,8 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
  err:
-	down(&fc->sb_sem);
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
-	up(&fc->sb_sem);
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	*get_fuse_conn_super_p(sb) = NULL;

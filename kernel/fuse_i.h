@@ -1,9 +1,9 @@
 /*
-    FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2004  Miklos Szeredi <miklos@szeredi.hu>
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2004  Miklos Szeredi <miklos@szeredi.hu>
 
-    This program can be distributed under the terms of the GNU GPL.
-    See the file COPYING.
+  This program can be distributed under the terms of the GNU GPL.
+  See the file COPYING.
 */
 
 #ifdef FUSE_MAINLINE
@@ -37,7 +37,7 @@
 #     define i_size_read(inode) ((inode)->i_size)
 #     define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
 #  endif
-#endif
+#endif /* KERNEL_2_6 */
 #endif /* FUSE_MAINLINE */
 #include <linux/fs.h>
 #include <linux/wait.h>
@@ -55,12 +55,20 @@
 #ifndef __user
 #define __user
 #endif
+#ifndef KERNEL_2_6
+#include <linux/pagemap.h>
+static inline void set_page_dirty_lock(struct page *page)
+{
+	lock_page(page);
+	set_page_dirty(page);
+	unlock_page(page);
+}
+#endif
 /* Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
 
 /* If more requests are outstanding, then the operation will block */
 #define FUSE_MAX_OUTSTANDING 10
-
 
 /** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
     module will check permissions based on the file mode.  Otherwise no
@@ -96,28 +104,17 @@ struct fuse_inode {
 	/** The request used for sending the FORGET message */
 	struct fuse_req *forget_req;
 
-	/** Semaphore protects the 'write_files' list, and against
-	    truncate racing with async writeouts */
-	struct rw_semaphore write_sem;
-
 	/** Time in jiffies until the file attributes are valid */
 	unsigned long i_time;
-
-	/* List of fuse_files which can provide file handles in
-	 * writepage, protected by write_sem */
-	struct list_head write_files;
 };
 
 /** FUSE specific file data */
 struct fuse_file {
 	/** Request reserved for flush and release */
 	struct fuse_req *release_req;
-	
+
 	/** File handle used by userspace */
 	unsigned long fh;
-
-	/** Element in fuse_inode->write_files */
-	struct list_head ff_list;
 };
 
 /** One input argument of a request */
@@ -142,7 +139,7 @@ struct fuse_in {
 };
 
 /** One output argument of a request */
-struct fuse_out_arg {
+struct fuse_arg {
 	unsigned size;
 	void *value;
 };
@@ -155,10 +152,10 @@ struct fuse_out {
 	/** Last argument is variable length (can be shorter than
 	    arg->size) */
 	unsigned argvar:1;
-	
+
 	/** Last argument is a list of pages to copy data to */
 	unsigned argpages:1;
-	
+
 	/** Zero partially or not copied pages */
 	unsigned page_zeroing:1;
 
@@ -166,30 +163,40 @@ struct fuse_out {
 	unsigned numargs;
 
 	/** Array of arguments */
-	struct fuse_out_arg args[3];
+	struct fuse_arg args[3];
 };
 
 struct fuse_req;
 struct fuse_conn;
 
-/** Function called on finishing an async request */
-typedef void (*fuse_reqend_t)(struct fuse_conn *, struct fuse_req *);
-
 /**
  * A request to the client
  */
 struct fuse_req {
-	/** The request list */
+	/** This can be on either unused_list, pending or processing
+	    lists in fuse_conn */
 	struct list_head list;
+
+	/** refcount */
+	atomic_t count;
 
 	/** True if the request has reply */
 	unsigned isreply:1;
 
-	/* The request is preallocated */
+	/** The request is preallocated */
 	unsigned preallocated:1;
 
-	/* The request is finished */
-	unsigned finished;
+	/** The request was interrupted */
+	unsigned interrupted:1;
+
+	/** Data is being copied to/from the request */
+	unsigned locked:1;
+
+	/** Request has been sent to userspace */
+	unsigned sent:1;
+
+	/** The request is finished */
+	unsigned finished:1;
 
 	/** The request input */
 	struct fuse_in in;
@@ -200,17 +207,10 @@ struct fuse_req {
 	/** Used to wake up the task waiting for completion of request*/
 	wait_queue_head_t waitq;
 
-	/** Request completion callback */
-	fuse_reqend_t end;
-
 	/** Data for asynchronous requests */
 	union {
-		struct {
-			struct fuse_write_in in;
-			struct fuse_write_out out;
-		} write;
-		struct fuse_read_in read_in;
 		struct fuse_forget_in forget_in;
+		struct fuse_release_in release_in;
 	} misc;
 
 	/** page vector */
@@ -260,9 +260,6 @@ struct fuse_conn {
 
 	/** Controls the maximum number of outstanding requests */
 	struct semaphore unused_sem;
-
-	/** Semaphore protecting the super block from going away */
-	struct semaphore sb_sem;
 
 	/** The list of unused requests */
 	struct list_head unused_list;
@@ -418,14 +415,9 @@ void fuse_reset_request(struct fuse_req *req);
 struct fuse_req *fuse_get_request(struct fuse_conn *fc);
 
 /**
- * Reserve a preallocated request, non-interruptible
+ * Reserve a preallocated request, only interruptible by SIGKILL
  */
 struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc);
-
-/**
- * Reserve a preallocated request, non-blocking
- */
-struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc);
 
 /**
  * Free a request
@@ -433,27 +425,25 @@ struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc);
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
- * Send a request
+ * Send a request (synchronous, interruptible)
  */
 void request_send(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
- * Send a request for which a reply is not expected
+ * Send a request (synchronous, non-interruptible except by SIGKILL)
+ *
+ * If background is non-zero and SIGKILL is received still send
+ * request asynchronously
  */
-void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
+void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req,
+			 int background);
 
 /**
- * Send asynchronous request
+ * Send a request with no reply
  */
-void request_send_async(struct fuse_conn *fc, struct fuse_req *req,
-			fuse_reqend_t end);
+void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
  * Get the attributes of a file
  */
 int fuse_do_getattr(struct inode *inode);
-
-/**
- * Write dirty pages
- */
-void fuse_sync_inode(struct inode *inode);
