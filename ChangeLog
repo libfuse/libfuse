@@ -1,3 +1,7 @@
+2004-12-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix bug causing garbage in mount options (spotted by David Shaw)
+
 2004-12-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add 'writepage' flag to 'fuse_file_info'.

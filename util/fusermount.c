@@ -478,6 +478,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
         if (*s)
             s++;
     }
+    *d = '\0';
     res = get_mnt_opts(flags, optbuf, &mnt_opts);
     if (res == -1) {
         free(mnt_opts);
