@@ -17,6 +17,14 @@ static int fuse_open(struct inode *inode, struct file *file)
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_open_in inarg;
 
+	/* If opening the root node, no lookup has been performed on
+	   it, so the attributes must be refreshed */
+	if(inode->i_ino == FUSE_ROOT_INO) {
+		int err = fuse_getattr(inode);
+		if(err)
+		 	return err;
+	}
+
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.flags = file->f_flags & ~O_EXCL;
 

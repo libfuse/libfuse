@@ -1,6 +1,36 @@
-2001-11-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-12-20  Miklos Szeredi <mszeredi@inf.bme.hu>
+	
+	* Added function fuse_get_context() to library API (inspired by
+	patch from Matt Ryan) 
+	
+	* Added flags to fusermount and to kernel interface to control
+	permission checking
 
-	* Started ChangeLog
+	* Integrated fuse_set_operations() into fuse_new()
+
+2001-12-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Applied header protection + extern "C" patch by Roland
+	Bauerschmidt
+
+2001-12-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added perl bindings by Mark Glines 
+
+2001-11-21  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Cleaned up way of mounting simple filesystems.
+
+	* fuse_main() helper function added
+
+2001-11-18  Miklos Szeredi <mszeredi@inf.bme.hu>
+	
+	* Optimized read/write operations, so that minimal copying of data
+	is done
+
+2001-11-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Python bindings by Jeff Epler added
 
 2001-11-13  Miklos Szeredi <mszeredi@inf.bme.hu>
 
@@ -9,7 +39,6 @@
 	* FS blocksize is set to PAGE_CACHE_SIZE, blksize attribute from
 	userspace is ignored
 
-2001-11-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+2001-11-09  Miklos Szeredi <mszeredi@inf.bme.hu>
 
-	* Python bindings by Jeff Epler added
-
+	* Started ChangeLog

@@ -1,8 +1,5 @@
 - It is allowed to mount a directory on a non-directory.
 
-- When a non-directory is mounted the root inode is not filled in, only at
-  the first getattr
-
 - I want really low priority for my cached pages.  Can they start out
   'old' so they will be thrown out on the first oportunity?
 

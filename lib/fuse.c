@@ -781,6 +781,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     struct fuse_in_header *in = (struct fuse_in_header *) cmd->buf;
     void *inarg = cmd->buf + sizeof(struct fuse_in_header);
     size_t argsize;
+    struct fuse_context *ctx = fuse_get_context(f);
 
     dec_avail(f);
 
@@ -789,6 +790,9 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
                in->opcode, in->ino, cmd->buflen);
         fflush(stdout);
     }
+
+    ctx->uid = in->uid;
+    ctx->gid = in->gid;
     
     argsize = cmd->buflen - sizeof(struct fuse_in_header);
         

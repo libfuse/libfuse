@@ -32,6 +32,7 @@ static void fuse_clear_inode(struct inode *inode)
 	in = kmalloc(sizeof(struct fuse_in), GFP_NOFS);
 	if(!in)
 		return;
+	memset(in, 0, sizeof(struct fuse_in));
 
 	inarg = kmalloc(sizeof(struct fuse_forget_in), GFP_NOFS);
 	if(!inarg) 

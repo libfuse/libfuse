@@ -37,6 +37,7 @@ struct fuse {
     int numavail;
     struct fuse_context *(*getcontext)(struct fuse *);
     struct fuse_context context;
+    pthread_key_t context_key;
 };
 
 struct fuse_dirhandle {

@@ -264,7 +264,7 @@ static void restore_privs()
 }
 
 static int do_mount(const char *dev, const char *mnt, const char *type,
-                    mode_t rootmode, int fd)
+                    mode_t rootmode, int fd, int fuseflags)
 {
     int res;
     struct fuse_mount_data data;
@@ -282,7 +282,7 @@ static int do_mount(const char *dev, const char *mnt, const char *type,
     data.fd = fd;
     data.rootmode = rootmode;
     data.uid = getuid();
-    data.flags = 0;
+    data.flags = fuseflags;
 
     res = mount(dev, mnt, type, flags, &data);
     if(res == -1)
@@ -332,7 +332,7 @@ static int check_perm(const char *mnt, struct stat *stbuf)
     return 0;
 }
 
-static int mount_fuse(const char *mnt)
+static int mount_fuse(const char *mnt, int flags)
 {
     int res;
     int fd;
@@ -364,7 +364,7 @@ static int mount_fuse(const char *mnt)
         return -1;
     }
  
-    res = do_mount(dev, mnt, type, stbuf.st_mode & S_IFMT, fd);
+    res = do_mount(dev, mnt, type, stbuf.st_mode & S_IFMT, fd, flags);
     if(res == -1)
         return -1;
 
@@ -401,7 +401,9 @@ static void usage()
             "%s: [options] mountpoint [program [args ...]]\n"
             "Options:\n"
             " -h    print help\n"
-            " -u    unmount\n",
+            " -u    unmount\n"
+            " -p    check default permissions on files\n"
+            " -x    allow other users to access the files (only for root)\n",
             progname);
     exit(1);
 }
@@ -419,6 +421,7 @@ int main(int argc, char *argv[])
     char mypath[PATH_MAX];
     char *unmount_cmd;
     char verstr[128];
+    int flags = 0;
 
     progname = argv[0];
     
@@ -435,6 +438,19 @@ int main(int argc, char *argv[])
             unmount = 1;
             break;
             
+        case 'p':
+            flags |= FUSE_DEFAULT_PERMISSIONS;
+            break;
+            
+        case 'x':
+            if(getuid() != 0) {
+                fprintf(stderr, "%s: option %s is allowed only for root\n",
+                        progname, argv[a]);
+                exit(1);
+            }
+            flags |= FUSE_ALLOW_OTHER;
+            break;
+
         default:
             fprintf(stderr, "%s: Unknown option %s\n", progname, argv[a]);
             exit(1);
@@ -474,7 +490,7 @@ int main(int argc, char *argv[])
     userprog = argv + a;
     numargs = argc - a;
     
-    fd = mount_fuse(mnt);
+    fd = mount_fuse(mnt, flags);
     if(fd == -1)
         exit(1);
 

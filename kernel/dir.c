@@ -315,29 +315,14 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 	return out.h.error;
 }
 
-static int fuse_permission(struct inode *inode, int mask)
-{
-	struct fuse_conn *fc = INO_FC(inode);
 
-	/* (too) simple protection */
-	if(current->fsuid == fc->uid)
-		return 0;
-	else
-		return -EACCES;
-}
-
-static int fuse_revalidate(struct dentry *entry)
+int fuse_getattr(struct inode *inode)
 {
-	struct inode *inode = entry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getattr_out arg;
 	
-	if(inode->i_ino != FUSE_ROOT_INO && 
-	   time_before_eq(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
-		return 0;
-
 	in.h.opcode = FUSE_GETATTR;
 	in.h.ino = inode->i_ino;
 	out.numargs = 1;
@@ -350,6 +335,57 @@ static int fuse_revalidate(struct dentry *entry)
 	
 	return out.h.error;
 }
+
+static int fuse_revalidate(struct dentry *entry)
+{
+	struct inode *inode = entry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+
+	if(inode->i_ino == FUSE_ROOT_INO) {
+		if(!(fc->flags & FUSE_ALLOW_OTHER)
+		   && current->fsuid != fc->uid)
+			return -EACCES;
+	}
+	else if(time_before_eq(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
+		return 0;
+
+	return fuse_getattr(inode);
+}
+
+static int fuse_permission(struct inode *inode, int mask)
+{
+	struct fuse_conn *fc = INO_FC(inode);
+
+	if(!(fc->flags & FUSE_ALLOW_OTHER) && current->fsuid != fc->uid)
+		return -EACCES;
+	else if(fc->flags & FUSE_DEFAULT_PERMISSIONS) {
+		int err = vfs_permission(inode, mask);
+
+		/* If permission is denied, try to refresh file
+		   attributes.  This is also needed, because the root
+		   node will at first have no permissions */
+
+		if(err == -EACCES) {
+		 	err = fuse_getattr(inode);
+			if(!err)
+			 	err = vfs_permission(inode, mask);
+		}
+
+		/* FIXME: Need some mechanism to revoke permissions:
+		   currently if the filesystem suddenly changes the
+		   file mode, we will not be informed abot that, and
+		   continue to allow access to the file/directory.
+		   
+		   This is actually not so grave, since the user can
+		   simply keep access to the file/directory anyway by
+		   keeping it open... */
+
+		return err;
+	}
+	else
+		return 0;
+}
+
 
 static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 			 void *dstbuf, filldir_t filldir)

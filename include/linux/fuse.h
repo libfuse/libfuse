@@ -9,7 +9,7 @@
 /* This file defines the kernel interface of FUSE */
 
 /** Version number of this interface */
-#define FUSE_KERNEL_VERSION 1
+#define FUSE_KERNEL_VERSION 2
 
 /** The inode number of the root indode */
 #define FUSE_ROOT_INO 1
@@ -34,6 +34,17 @@ struct fuse_mount_data {
 	/** FUSE specific mount flags */
 	unsigned int flags;
 };
+
+/* FUSE mount flags: */
+
+/** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
+module will check permissions based on the file mode.  Otherwise no
+permission checking is done in the kernel */
+#define FUSE_DEFAULT_PERMISSIONS (1 << 0)
+
+/** If the FUSE_ALLOW_OTHER flag is given, then not only the user
+    doing the mount will be allowed to access the filesystem */
+#define FUSE_ALLOW_OTHER         (1 << 1)
 
 struct fuse_attr {
 	unsigned int        mode;
@@ -149,6 +160,8 @@ struct fuse_in_header {
 	int unique;
 	enum fuse_opcode opcode;
 	unsigned long ino;
+	unsigned int uid;
+	unsigned int gid;
 };
 
 struct fuse_out_header {

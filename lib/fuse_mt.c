@@ -69,9 +69,28 @@ static void start_thread(struct fuse_worker *w)
     pthread_detach(thrid);
 }
 
+static struct fuse_context *mt_getcontext(struct fuse *f)
+{
+    struct fuse_context *ctx;
+
+    ctx = (struct fuse_context *) pthread_getspecific(f->context_key);
+    if(ctx == NULL) {
+        ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
+        pthread_setspecific(f->context_key, ctx);
+    }
+
+    return ctx;
+}
+
+static void mt_freecontext(void *data)
+{
+    free(data);
+}
+
 void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
 {
     struct fuse_worker *w;
+    int res;
 
     w = malloc(sizeof(struct fuse_worker));    
     w->f = f;
@@ -79,6 +98,12 @@ void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
     w->proc = proc;
 
     f->numworker = 1;
+    res = pthread_key_create(&f->context_key, mt_freecontext);
+    if(res != 0) {
+        fprintf(stderr, "Failed to create thread specific key\n");
+        exit(1);
+    }
+    f->getcontext = mt_getcontext;
     do_work(w);
 }
 

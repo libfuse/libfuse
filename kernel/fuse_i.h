@@ -77,7 +77,7 @@ struct fuse_out {
 	struct fuse_out_arg args[3];
 };
 
-#define FUSE_IN_INIT { {0, 0, 0}, 0}
+#define FUSE_IN_INIT { {0, 0, 0, current->fsuid, current->fsgid}, 0}
 #define FUSE_OUT_INIT { {0, 0}, 0, 0}
 
 /**
@@ -177,6 +177,11 @@ void request_send(struct fuse_conn *fc, struct fuse_in *in,
  * Send a request for which a reply is not expected
  */
 int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in);
+
+/**
+ * Get the attributes of a file
+ */
+int fuse_getattr(struct inode *inode);
 
 /*
  * Local Variables:
