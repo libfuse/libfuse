@@ -429,13 +429,17 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 #endif
 }
 
-static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
+static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
+                    ino_t ino)
 {
     struct fuse_dirent dirent;
     size_t reclen;
     size_t res;
 
-    dirent.ino = (unsigned long) -1;
+    if ((dh->fuse->flags & FUSE_USE_INO))
+        dirent.ino = ino;
+    else
+        dirent.ino = (unsigned long) -1;
     dirent.namelen = strlen(name);
     strncpy(dirent.name, name, sizeof(dirent.name));
     dirent.type = type;
@@ -821,7 +825,7 @@ static void do_getdir(struct fuse *f, struct fuse_in_header *in)
         if (path != NULL) {
             res = -ENOSYS;
             if (f->op.getdir)
-                res = f->op.getdir(path, &dh, (fuse_dirfil_t) fill_dir);
+                res = f->op.getdir(path, &dh, fill_dir);
             free(path);
         }
         fflush(dh.fp);

@@ -27,6 +27,10 @@
 #include <sys/statfs.h>
 #include <utime.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ----------------------------------------------------------- *
  * Basic FUSE API                                              *
  * ----------------------------------------------------------- */
@@ -42,8 +46,14 @@ typedef struct fuse_dirhandle *fuse_dirh_t;
  * @param h the handle passed to the getdir() operation
  * @param name the file name of the directory entry
  * @param type the file type (0 if unknown)  see <dirent.h>
+ * @param ino the inode number, ignored if "use_ino" mount option is
+ *            not specified
  * @return 0 on success, -errno on error
  */
+typedef int (*fuse_dirfil2_t) (fuse_dirh_t h, const char *name, int type,
+                               ino_t ino);
+
+/** Obsolete version of the above function */
 typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
 
 /**
@@ -106,7 +116,7 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
 struct fuse_operations {
     int (*getattr)     (const char *, struct stat *);
     int (*readlink)    (const char *, char *, size_t);
-    int (*getdir)      (const char *, fuse_dirh_t, fuse_dirfil_t);
+    int (*getdir)      (const char *, fuse_dirh_t, fuse_dirfil2_t);
     int (*mknod)       (const char *, mode_t, dev_t);
     int (*mkdir)       (const char *, mode_t);
     int (*unlink)      (const char *);
@@ -137,11 +147,8 @@ struct fuse_context {
     uid_t uid;
     gid_t gid;
     pid_t pid;
+    void *private_data;
 };
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*
  * Main function of FUSE.
@@ -270,7 +277,6 @@ int fuse_invalidate(struct fuse *f, const char *path);
  * @return 1 if it is a library option, 0 otherwise
  */
 int fuse_is_lib_option(const char *opt);
-
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *

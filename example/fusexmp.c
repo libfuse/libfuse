@@ -49,7 +49,7 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 }
 
 
-static int xmp_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
+static int xmp_getdir(const char *path, fuse_dirh_t h, fuse_dirfil2_t filler)
 {
     DIR *dp;
     struct dirent *de;
@@ -60,7 +60,7 @@ static int xmp_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
         return -errno;
 
     while((de = readdir(dp)) != NULL) {
-        res = filler(h, de->d_name, de->d_type);
+        res = filler(h, de->d_name, de->d_type, de->d_ino);
         if(res != 0)
             break;
     }

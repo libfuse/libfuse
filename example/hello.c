@@ -35,14 +35,14 @@ static int hello_getattr(const char *path, struct stat *stbuf)
     return res;
 }
 
-static int hello_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
+static int hello_getdir(const char *path, fuse_dirh_t h, fuse_dirfil2_t filler)
 {
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
-    filler(h, ".", 0);
-    filler(h, "..", 0);
-    filler(h, hello_path + 1, 0);
+    filler(h, ".", 0, 0);
+    filler(h, "..", 0, 0);
+    filler(h, hello_path + 1, 0, 0);
 
     return 0;
 }

@@ -1,3 +1,10 @@
+2004-11-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add ino argument to 'fuse_dirfil_t'.  NOTE: this is a backward
+	compatible change (if "use_ino" mount option is not specified),
+	but causes a warning when compiling filesystems not converted to
+	the new type.
+ 
 2004-11-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added "use_ino" mount option.  This enables the filesystems to
