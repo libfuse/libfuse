@@ -68,29 +68,58 @@ static int readlink_func(const char *path, char *link, size_t size) {
 	EPILOGUE
 }
 
+static int getdir_add_entry(PyObject *w, fuse_dirh_t dh, fuse_dirfil_t df)
+{
+	PyObject *o0;
+	PyObject *o1;
+	int ret = -EINVAL;
+
+	if(!PySequence_Check(w)) {
+		printf("getdir item not sequence\n");
+		goto out;
+	}
+	if(PySequence_Length(w) != 2) {
+		printf("getdir item not len 2\n");
+		goto out;
+	}
+	o0 = PySequence_GetItem(w, 0);
+	o1 = PySequence_GetItem(w, 1);
+
+	if(!PyString_Check(o0)) {
+		printf("getdir item[0] not string\n");
+		goto out_decref;
+	}
+	if(!PyInt_Check(o1)) {
+		printf("getdir item[1] not int\n");
+		goto out_decref;
+	}
+
+	ret = df(dh, PyString_AsString(o0), PyInt_AsLong(o1));	
+
+out_decref:
+	Py_DECREF(o0);
+	Py_DECREF(o1);
+
+out:
+	return ret;
+}
+
 static int getdir_func(const char *path, fuse_dirh_t dh, fuse_dirfil_t df) {
 	PyObject *v = PyObject_CallFunction(getdir_cb, "s", path);
 	int i;
 	PROLOGUE
 
-	if(!PySequence_Check(v)) { printf("getdir_func not sequence\n");goto OUT_DECREF; }
+	if(!PySequence_Check(v)) {
+		printf("getdir_func not sequence\n");
+		goto OUT_DECREF;
+	}
 	for(i=0; i < PySequence_Length(v); i++) {
 		PyObject *w = PySequence_GetItem(v, i);
-		printf("getdir_func validate %d\n", i);
-		if(!PySequence_Check(w)) { printf("getdir item not sequence\n"); goto OUT_DECREF; }
-		if(PySequence_Length(w) != 2) { printf("getdir item not len 2\n"); goto OUT_DECREF; }
-		if(!PyString_Check(PySequence_GetItem(w,0))){ printf("getdir item[0] not string"); goto OUT_DECREF; }
-		if(!PyInt_Check(PySequence_GetItem(w, 1))) { printf("getdir item[1] not int"); goto OUT_DECREF; }
+		ret = getdir_add_entry(w, dh, df);
+		Py_DECREF(w);
+		if(ret != 0)
+			goto OUT_DECREF;
 	}
-
-	for(i=0; i < PySequence_Length(v); i++) {
-		PyObject *w = PySequence_GetItem(v, i);
-		printf("getdir_func %d\n", i);
-		ret = df(dh, PyString_AsString(PySequence_GetItem(w, 0)),
-			PyInt_AsLong(PySequence_GetItem(w, 1)));	
-		if(ret) goto OUT_DECREF;
-	}
-
 	ret = 0;
 
 	EPILOGUE
@@ -191,8 +220,6 @@ int open_func(const char *path, int mode) {
 static PyObject *
 Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 {
-	PyObject *list, *item;
-
 	int flags=0;
 
 	struct fuse_operations op;
@@ -260,7 +287,5 @@ init_fuse(void)
 	d = PyModule_GetDict(m);
 	ErrorObject = PyErr_NewException("fuse.error", NULL, NULL);
 	PyDict_SetItemString(d, "error", ErrorObject);
-	PyDict_SetItemString(d, "MULTITHREAD", PyInt_FromLong(FUSE_MULTITHREAD));
 	PyDict_SetItemString(d, "DEBUG", PyInt_FromLong(FUSE_DEBUG));
-
 }

@@ -78,9 +78,6 @@ struct fuse_operations {
 
 /* FUSE flags: */
 
-/** Process requests in multiple threads */
-#define FUSE_MULTITHREAD (1 << 0)
-
 /** Enable debuging output */
 #define FUSE_DEBUG       (1 << 1)
 
@@ -115,6 +112,20 @@ void fuse_set_operations(struct fuse *f, const struct fuse_operations *op);
 void fuse_loop(struct fuse *f);
 
 /**
+ * FUSE event loop with multiple threads
+ *
+ * Requests from the kernel are processed, and the apropriate
+ * operations are called.  Request are processed in parallel by
+ * distributing them between multiple threads.
+ *
+ * Calling this function requires the pthreads library to be linked to
+ * the application.
+ *
+ * @param f the FUSE handle
+ */
+void fuse_loop_mt(struct fuse *f);
+
+/**
  * Destroy the FUSE handle. 
  *
  * The filesystem is not unmounted.
@@ -122,3 +133,14 @@ void fuse_loop(struct fuse *f);
  * @param f the FUSE handle
  */
 void fuse_destroy(struct fuse *f);
+
+
+/* --------------------------------------------------- *
+ * Advanced API, usually you need not bother with this *
+ * --------------------------------------------------- */
+
+struct fuse_cmd;
+
+struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
+
+void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);

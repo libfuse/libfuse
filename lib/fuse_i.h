@@ -40,3 +40,9 @@ struct fuse_dirhandle {
     fino_t dir;
     FILE *fp;
 };
+
+struct fuse_cmd {
+    struct fuse *f;
+    char *buf;
+    size_t buflen;
+};

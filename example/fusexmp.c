@@ -290,6 +290,7 @@ int main(int argc, char *argv[])
 {
     int argctr;
     int flags;
+    int multithreaded;
     struct fuse *fuse;
 
     if(argc < 2) {
@@ -308,7 +309,8 @@ int main(int argc, char *argv[])
     set_signal_handlers();
     atexit(cleanup);
 
-    flags = FUSE_MULTITHREAD;
+    flags = 0;
+    multithreaded = 1;
     for(; argctr < argc && argv[argctr][0] == '-'; argctr ++) {
         switch(argv[argctr][1]) {
         case 'd':
@@ -316,7 +318,7 @@ int main(int argc, char *argv[])
             break;
 
         case 's':
-            flags &= ~FUSE_MULTITHREAD;
+            multithreaded = 0;
             break;
 
         default:
@@ -331,7 +333,11 @@ int main(int argc, char *argv[])
 
     fuse = fuse_new(0, flags);
     fuse_set_operations(fuse, &xmp_oper);
-    fuse_loop(fuse);
+
+    if(multithreaded)
+        fuse_loop_mt(fuse);
+    else
+        fuse_loop(fuse);
 
     return 0;
 }

@@ -163,8 +163,8 @@ static int request_wait(struct fuse_conn *fc)
 {
 	int ret = 0;
 	DECLARE_WAITQUEUE(wait, current);
-
-	add_wait_queue(&fc->waitq, &wait);
+	
+	add_wait_queue_exclusive(&fc->waitq, &wait);
 	while(list_empty(&fc->pending)) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if(signal_pending(current)) {

@@ -301,6 +301,7 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
     attr->atime   = stbuf->st_atime;
     attr->mtime   = stbuf->st_mtime;
     attr->ctime   = stbuf->st_ctime;
+    attr->_dummy  = 4096;
 }
 
 static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
@@ -745,19 +746,11 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
-struct cmd {
-    struct fuse *f;
-    char *buf;
-    size_t buflen;
-};
-
-static void *do_command(void *data)
+void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
-    struct cmd *cmd = (struct cmd *) data;
     struct fuse_in_header *in = (struct fuse_in_header *) cmd->buf;
     void *inarg = cmd->buf + sizeof(struct fuse_in_header);
     size_t argsize;
-    struct fuse *f = cmd->f;
 
     if((f->flags & FUSE_DEBUG)) {
         printf("unique: %i, opcode: %i, ino: %li, insize: %i\n", in->unique,
@@ -836,66 +829,46 @@ static void *do_command(void *data)
         if(in->unique != 0)
             send_reply(f, in, -ENOSYS, NULL, 0);
     }
-
+    
     free(cmd->buf);
     free(cmd);
-
-    return NULL;
 }
 
-/* This hack makes it possible to link FUSE with or without the
-   pthread library */
-__attribute__((weak))
-int pthread_create(pthread_t *thrid           __attribute__((unused)), 
-                   const pthread_attr_t *attr __attribute__((unused)), 
-                   void *(*func)(void *)      __attribute__((unused)),
-                   void *arg                  __attribute__((unused)))
+struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 {
-    return ENOSYS;
+    ssize_t res;
+    char inbuf[FUSE_MAX_IN];
+    struct fuse_cmd *cmd;
+    
+    res = read(f->fd, inbuf, sizeof(inbuf));
+    if(res == -1) {
+        perror("reading fuse device");
+        /* BAD... This will happen again */
+        return NULL;
+    }
+    if((size_t) res < sizeof(struct fuse_in_header)) {
+        fprintf(stderr, "short read on fuse device\n");
+        /* Cannot happen */
+        return NULL;
+    }
+
+    cmd = (struct fuse_cmd *) malloc(sizeof(*cmd));
+    cmd->buflen = res;
+    cmd->buf = (char *) malloc(cmd->buflen);
+    memcpy(cmd->buf, inbuf, cmd->buflen);
+
+    return cmd;
 }
+
 
 void fuse_loop(struct fuse *f)
 {
-    int res;
-    char inbuf[FUSE_MAX_IN];
-    pthread_attr_t attr;
-    pthread_t thrid;
-
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    
     while(1) {
-        struct cmd *cmd;
-
-        res = read(f->fd, inbuf, sizeof(inbuf));
-        if(res == -1) {
-            perror("reading fuse device");
-            /* BAD... This will happen again */
+        struct fuse_cmd *cmd = __fuse_read_cmd(f);
+        if(cmd == NULL)
             exit(1);
-        }
-        if((size_t) res < sizeof(struct fuse_in_header)) {
-            fprintf(stderr, "short read on fuse device\n");
-            /* Cannot happen */
-            exit(1);
-        }
 
-        cmd = (struct cmd *) malloc(sizeof(struct cmd));
-        cmd->f = f;
-        cmd->buflen = res;
-        cmd->buf = (char *) malloc(cmd->buflen);
-        memcpy(cmd->buf, inbuf, cmd->buflen);
-        
-        if(f->flags & FUSE_MULTITHREAD) {
-            res = pthread_create(&thrid, &attr, do_command, cmd);
-            if(res == 0)
-                continue;
-            
-            fprintf(stderr, "Error creating thread: %s\n", strerror(res));
-            fprintf(stderr, "Will run in single thread mode\n");
-            f->flags &= ~FUSE_MULTITHREAD;
-        }
-
-        do_command(cmd);
+        __fuse_process_cmd(f, cmd);
     }
 }
 
@@ -909,6 +882,7 @@ struct fuse *fuse_new(int fd, int flags)
     f->flags = flags;
     f->fd = fd;
     f->ctr = 0;
+    /* FIXME: Dynamic hash table */
     f->name_table_size = 14057;
     f->name_table = (struct node **)
         calloc(1, sizeof(struct node *) * f->name_table_size);
@@ -934,6 +908,7 @@ void fuse_set_operations(struct fuse *f, const struct fuse_operations *op)
 
 void fuse_destroy(struct fuse *f)
 {
+    /* FIXME: Kill all threads... */
     size_t i;
     for(i = 0; i < f->ino_table_size; i++) {
         struct node *node;
