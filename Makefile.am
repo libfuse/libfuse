@@ -6,7 +6,7 @@ EXTRA_DIST =			\
 	fuse.pc.in		\
 	README*			\
 	Filesystems		\
-	BUGS			\
+	FAQ			\
 	doc/how-fuse-works
 
 pkgconfigdir = $(libdir)/pkgconfig

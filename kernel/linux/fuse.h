@@ -24,7 +24,7 @@
 #define FUSE_VERSION_FILE "/proc/fs/fuse/version"
 
 struct fuse_attr {
-	unsigned long       _user_ino; /* unused, for forward compatibility */
+	unsigned long       _user_ino;
 	unsigned int        mode;
 	unsigned int        nlink;
 	unsigned int        uid;
@@ -146,6 +146,9 @@ struct fuse_open_in {
 
 struct fuse_open_out {
 	unsigned long fh;
+	unsigned long _data_valid;
+	unsigned long _data_valid_nsec;
+	unsigned int _open_flags;
 };
 
 struct fuse_release_in {
@@ -155,6 +158,7 @@ struct fuse_release_in {
 
 struct fuse_flush_in {
 	unsigned long fh;
+	unsigned int _nref;
 };
 
 struct fuse_read_in {
@@ -214,7 +218,7 @@ struct fuse_user_header {
 	int unique; /* zero */
 	enum fuse_opcode opcode;
 	unsigned long ino;
-	unsigned long _user_ino;  /* unused, for forward compatibility */
+	unsigned long _user_ino;
 };
 
 struct fuse_dirent {

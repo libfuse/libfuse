@@ -2,6 +2,10 @@
 
 	* Separate configure for the kernel directory
 
+	* Don't allow write to return more than 'count'
+
+	* Extend kernel interface for future use
+
 2004-11-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Split 2.0 branch

@@ -6,7 +6,7 @@ mkdir_p = mkdir -p
 majver = @majver@
 VERSION = @PACKAGE_VERSION@
 
-DISTFILES = Makefile.in configure.ac configure config.h.in makeconf.sh \
+DISTFILES = Makefile.in configure.ac configure config.h.in ../install-sh \
 	dev.c dir.c file.c inode.c util.c fuse_i.h
 COMPATDISTFILES = compat/parser.c compat/parser.h
 LINUXDISTFILES = linux/fuse.h
