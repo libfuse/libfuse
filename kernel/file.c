@@ -12,7 +12,6 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/rmap.h>
 #ifdef KERNEL_2_6
 #include <linux/writeback.h>
 #include <linux/moduleparam.h>
@@ -742,6 +741,7 @@ static ssize_t fuse_file_read(struct file *file, char __user *buf,
 #ifndef KERNEL_2_6
 	else {
 		if (fc->flags & FUSE_LARGE_READ) {
+			int res;
 			down(&inode->i_sem);
 			res = fuse_file_bigread(file, inode, *ppos, count);
 			up(&inode->i_sem);

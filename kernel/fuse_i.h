@@ -110,8 +110,13 @@ struct fuse_inode {
 
 /** FUSE specific file data */
 struct fuse_file {
+	/** Request reserved for flush and release */
 	struct fuse_req *release_req;
+	
+	/** File handle used by userspace */
 	unsigned long fh;
+
+	/** Element in fuse_inode->write_files */
 	struct list_head ff_list;
 };
 
@@ -144,19 +149,31 @@ struct fuse_out_arg {
 
 /** The request output */
 struct fuse_out {
+	/** Header returned from userspace */
 	struct fuse_out_header h;
+
+	/** Last argument is variable length (can be shorter than
+	    arg->size) */
 	unsigned argvar:1;
+	
+	/** Last argument is a list of pages to copy data to */
 	unsigned argpages:1;
+	
+	/** Zero partially or not copied pages */
 	unsigned page_zeroing:1;
+
+	/** Number or arguments */
 	unsigned numargs;
+
+	/** Array of arguments */
 	struct fuse_out_arg args[3];
 };
 
 struct fuse_req;
 struct fuse_conn;
 
+/** Function called on finishing an async request */
 typedef void (*fuse_reqend_t)(struct fuse_conn *, struct fuse_req *);
-typedef int (*fuse_copyout_t)(struct fuse_req *, const char __user *, size_t);
 
 /**
  * A request to the client
@@ -334,6 +351,9 @@ extern spinlock_t fuse_lock;
 struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 			int generation, struct fuse_attr *attr, int version);
 
+/**
+ * Lookup an inode by nodeid
+ */
 #ifdef KERNEL_2_6
 struct inode *fuse_ilookup(struct super_block *sb, unsigned long nodeid);
 #else
