@@ -1,3 +1,13 @@
+2004-09-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Check temporary file creation failure in do_getdir().  Bug
+	spotted by Terje Oseberg
+	
+2004-09-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Make requests non-interruptible so race with FORGET is avoided.
+	This is only a temporary solution
+	
 2004-09-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug in case two FORGETs for the same node are executed in

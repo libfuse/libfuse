@@ -156,7 +156,9 @@ void __request_send(struct fuse_conn *fc, struct fuse_in *in,
 void request_send(struct fuse_conn *fc, struct fuse_in *in,
 		  struct fuse_out *out)
 {
-	__request_send(fc, in, out, 1);
+	/* There are problems with interrupted requests so it's
+	   disabled for now */
+	__request_send(fc, in, out, 0);
 }
 
 void request_send_nonint(struct fuse_conn *fc, struct fuse_in *in,
