@@ -7,7 +7,7 @@ majver = @majver@
 VERSION = @PACKAGE_VERSION@
 
 DISTFILES = Makefile.in configure.ac configure config.h.in ../install-sh \
-	dev.c dir.c file.c inode.c util.c fuse_i.h fuse_kernel.h
+	dev.c dir.c file.c inode.c fuse_i.h fuse_kernel.h
 COMPATDISTFILES = compat/parser.c compat/parser.h
 
 fusemoduledir = @kmoduledir@/kernel/fs/fuse
@@ -51,7 +51,7 @@ LD = ld
 CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe 
 CPPFLAGS = -I@kernelsrc@/include -I. -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES -DFUSE_VERSION=\"$(VERSION)\" @KERNELCPPFLAGS@
 
-fuse_objs = dev.o dir.o file.o inode.o util.o compat/parser.o
+fuse_objs = dev.o dir.o file.o inode.o compat/parser.o
 
 SUFFIXES = .c .o .s
 
@@ -69,14 +69,13 @@ dev.o: $(fuse_headers)
 dir.o: $(fuse_headers)
 file.o: $(fuse_headers)
 inode.o: $(fuse_headers)
-util.o: $(fuse_headers)
 
 else
 
 EXTRA_CFLAGS += -DFUSE_VERSION=\"$(VERSION)\"
 
 obj-m := fuse.o
-fuse-objs := dev.o dir.o file.o inode.o util.o
+fuse-objs := dev.o dir.o file.o inode.o
 
 all-spec:
 	$(MAKE) -C @kernelsrc@ SUBDIRS=$(PWD) @KERNELMAKE_PARAMS@ modules

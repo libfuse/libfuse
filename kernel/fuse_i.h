@@ -415,16 +415,6 @@ int fuse_dev_init(void);
 void fuse_dev_cleanup(void);
 
 /**
- * Initialize the fuse filesystem
- */
-int fuse_fs_init(void);
-
-/**
- * Cleanup the fuse filesystem
- */
-void fuse_fs_cleanup(void);
-
-/**
  * Allocate a request
  */
 struct fuse_req *fuse_request_alloc(void);
