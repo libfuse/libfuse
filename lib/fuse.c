@@ -853,7 +853,6 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 {
     ssize_t res;
     struct fuse_cmd *cmd;
-    struct fuse_in_header *in;
 
     cmd = (struct fuse_cmd *) malloc(sizeof(struct fuse_cmd));
     cmd->buf = (char *) malloc(FUSE_MAX_IN);
