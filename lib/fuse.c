@@ -109,8 +109,8 @@ static fino_t get_ino(struct node *node)
 
 static fino_t next_ino(struct fuse *f)
 {
-    while(f->ctr == 0 || __get_node(f, f->ctr) != NULL)
-        f->ctr++;
+    do f->ctr++;
+    while(f->ctr == 0 || __get_node(f, f->ctr) != NULL);
     
     return f->ctr;
 }

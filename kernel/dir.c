@@ -272,12 +272,24 @@ static int fuse_remove(struct inode *dir, struct dentry *entry,
 
 static int fuse_unlink(struct inode *dir, struct dentry *entry)
 {
-	return fuse_remove(dir, entry, FUSE_UNLINK);
+	int err = fuse_remove(dir, entry, FUSE_UNLINK);
+	if(!err) {
+		/* FIXME: the new i_nlink could be returned by the
+                   unlink operation */
+		err = fuse_do_getattr(entry->d_inode);
+		if(err == -ENOENT)
+			entry->d_inode->i_nlink = 0;
+		return 0;
+	}
+	return err;
 }
 
 static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 {
-	return fuse_remove(dir, entry, FUSE_RMDIR);
+	int err = fuse_remove(dir, entry, FUSE_RMDIR);
+	if(!err)
+		entry->d_inode->i_nlink = 0;
+	return err;
 }
 
 static int fuse_rename(struct inode *olddir, struct dentry *oldent,

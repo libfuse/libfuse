@@ -6,6 +6,8 @@
 	printed if the cause of the program exit is that the filesystem
 	has already been unmounted
 
+	* Fix i_nlink correctness after rmdir/unlink
+
 2004-01-26  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Released 1.1-pre2
