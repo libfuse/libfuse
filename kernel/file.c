@@ -11,6 +11,7 @@
 #include <linux/slab.h>
 #ifdef KERNEL_2_6
 #include <linux/backing-dev.h>
+#include <linux/writeback.h>
 #endif
 
 #ifndef KERNEL_2_6
@@ -57,17 +58,13 @@ static int fuse_release(struct inode *inode, struct file *file)
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in *in = NULL;
 	struct fuse_open_in *inarg = NULL;
+	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_open_in);
 
-	in = kmalloc(sizeof(struct fuse_in), GFP_NOFS);
+	in = kmalloc(s, GFP_NOFS);
 	if(!in)
 		return -ENOMEM;
-	memset(in, 0, sizeof(struct fuse_in));
-	
-	inarg = kmalloc(sizeof(struct fuse_open_in), GFP_NOFS);
-	if(!inarg) 
-		goto out_free;
-	memset(inarg, 0, sizeof(struct fuse_open_in));
-
+	memset(in, 0, s);
+	inarg = (struct fuse_open_in *) (in + 1);
 	inarg->flags = file->f_flags & ~O_EXCL;
 
 	in->h.opcode = FUSE_RELEASE;
@@ -78,8 +75,6 @@ static int fuse_release(struct inode *inode, struct file *file)
 	if(!request_send_noreply(fc, in))
 		return 0;
 
- out_free:
-	kfree(inarg);
 	kfree(in);
 	return 0;
 }
@@ -102,6 +97,10 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	in.args[0].value = &inarg;
 	request_send(fc, &in, &out);
 	return out.h.error;
+
+	/* FIXME: need to ensure, that all write requests issued
+           before this request are completed.  Should userspace take
+           care of this? */
 }
 
 static int fuse_readpage(struct file *file, struct page *page)
@@ -302,39 +301,130 @@ static int write_buffer(struct inode *inode, struct page *page,
 	in.args[1].size = count;
 	in.args[1].value = buffer + offset;
 	request_send(fc, &in, &out);
-
 	kunmap(page);
+	if(out.h.error)
+		SetPageError(page);
 
 	return out.h.error;
 }
 
-#ifdef KERNEL_2_6
-static int fuse_writepage(struct page *page, struct writeback_control *wbc)
-#else
-static int fuse_writepage(struct page *page)
-#endif
+static int get_write_count(struct inode *inode, struct page *page)
 {
-	struct inode *inode = page->mapping->host;
-	unsigned count;
 	unsigned long end_index;
-	int err;
+	int count;
 	
 	end_index = inode->i_size >> PAGE_CACHE_SHIFT;
 	if(page->index < end_index)
 		count = PAGE_CACHE_SIZE;
 	else {
 		count = inode->i_size & (PAGE_CACHE_SIZE - 1);
-		err = -EIO;
 		if(page->index > end_index || count == 0)
-			goto out;
-
+			return 0;
 	}
-	err = write_buffer(inode, page, 0, count);
-  out:
-	unlock_page(page);
-	return 0;
+	return count;
 }
 
+#ifdef KERNEL_2_6
+
+static void write_buffer_end(struct fuse_conn *fc, struct fuse_in *in,
+			     struct fuse_out *out, void *_page)
+{
+	struct page *page = (struct page *) _page;
+	
+	lock_page(page);
+	if(out->h.error) {
+		SetPageError(page);
+		if(out->h.error == -ENOSPC)
+			set_bit(AS_ENOSPC, &page->mapping->flags);
+		else
+			set_bit(AS_EIO, &page->mapping->flags);
+	}
+	end_page_writeback(page);
+	kunmap(page);
+	unlock_page(page);
+	kfree(in);	
+}
+
+static int write_buffer_nonblock(struct inode *inode, struct page *page,
+				 unsigned offset, size_t count)
+{
+	int err;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in *in = NULL;
+	struct fuse_out *out = NULL;
+	struct fuse_write_in *inarg = NULL;
+	char *buffer;
+	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_out) +
+		sizeof(struct fuse_write_in);
+
+	in = kmalloc(s, GFP_NOFS);
+	if(!in)
+		return -ENOMEM;
+	memset(in, 0, s);
+	out = (struct fuse_out *)(in + 1);
+	inarg = (struct fuse_write_in *)(out + 1);
+	
+	buffer = kmap(page);
+
+	inarg->offset = ((unsigned long long) page->index << PAGE_CACHE_SHIFT) + offset;
+	inarg->size = count;
+	
+	in->h.opcode = FUSE_WRITE;
+	in->h.ino = inode->i_ino;
+	in->numargs = 2;
+	in->args[0].size = sizeof(struct fuse_write_in);
+	in->args[0].value = inarg;
+	in->args[1].size = count;
+	in->args[1].value = buffer + offset;
+	err = request_send_nonblock(fc, in, out, write_buffer_end, page);
+	if(err) {
+		if(err != -EWOULDBLOCK)
+			SetPageError(page);
+		kunmap(page);
+		kfree(in);
+	}
+	return err;
+}
+
+static int fuse_writepage(struct page *page, struct writeback_control *wbc)
+{
+	int err;
+	struct inode *inode = page->mapping->host;
+	unsigned count = get_write_count(inode, page);
+
+	err = -EINVAL;
+	if(count) {
+		/* FIXME: check sync_mode, and wait for previous writes (or
+		   signal userspace to do this) */
+		if(wbc->nonblocking) {
+			err = write_buffer_nonblock(inode, page, 0, count);
+			if(!err)
+				SetPageWriteback(page);
+			else if(err == -EWOULDBLOCK) {
+				__set_page_dirty_nobuffers(page);
+				err = 0;
+			}
+		} else
+			err = write_buffer(inode, page, 0, count);
+	}
+
+	unlock_page(page);
+	return err;
+}
+#else
+static int fuse_writepage(struct page *page)
+{
+	int err;
+	struct inode *inode = page->mapping->host;
+	int count = get_write_count(inode, page);
+	err = -EINVAL;
+	if(count)
+		err = write_buffer(inode, page, 0, count);
+
+	unlock_page(page);
+	return err;
+}
+#endif
 
 static int fuse_prepare_write(struct file *file, struct page *page,
 			      unsigned offset, unsigned to)

@@ -96,6 +96,22 @@ static int get_unique(struct fuse_conn *fc)
 	return fc->reqctr;
 }
 
+/* Must be called with fuse_lock held, and unlocks it */
+static void request_end(struct fuse_conn *fc, struct fuse_req *req)
+{
+	fuse_reqend_t endfunc = req->end;
+
+	if(!endfunc) {
+		wake_up(&req->waitq);
+		spin_unlock(&fuse_lock);
+	} else {
+		spin_unlock(&fuse_lock);
+		endfunc(fc, req->in, req->out, req->data);
+		request_free(req);
+		up(&fc->outstanding);
+	}
+}
+
 void request_send(struct fuse_conn *fc, struct fuse_in *in,
 		  struct fuse_out *out)
 {
@@ -107,24 +123,24 @@ void request_send(struct fuse_conn *fc, struct fuse_in *in,
 
 	out->h.error = -ENOMEM;
 	req = request_new();
-	if(!req)
-		return;
-
-	req->in = in;
-	req->out = out;
-	req->issync = 1;
-
-	spin_lock(&fuse_lock);
-	out->h.error = -ENOTCONN;
-	if(fc->file) {
-		in->h.unique = get_unique(fc);		
-		list_add_tail(&req->list, &fc->pending);
-		wake_up(&fc->waitq);
-		request_wait_answer(req);
-		list_del(&req->list);
+	if(req) {
+		req->in = in;
+		req->out = out;
+		req->issync = 1;
+		req->end = NULL;
+		
+		spin_lock(&fuse_lock);
+		out->h.error = -ENOTCONN;
+		if(fc->file) {
+			in->h.unique = get_unique(fc);		
+			list_add_tail(&req->list, &fc->pending);
+			wake_up(&fc->waitq);
+			request_wait_answer(req);
+			list_del(&req->list);
+		}
+		spin_unlock(&fuse_lock);
+		request_free(req);
 	}
-	spin_unlock(&fuse_lock);
-	request_free(req);
 
 	up(&fc->outstanding);
 }
@@ -133,10 +149,6 @@ void request_send(struct fuse_conn *fc, struct fuse_in *in,
 static inline void destroy_request(struct fuse_req *req)
 {
 	if(req) {
-		int i;
-
-		for(i = 0; i < req->in->numargs; i++)
-			kfree(req->in->args[i].value);
 		kfree(req->in);
 		request_free(req);
 	}
@@ -167,6 +179,42 @@ int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in)
 	wake_up(&fc->waitq);
 	spin_unlock(&fuse_lock);
 	return 0;
+}
+
+int request_send_nonblock(struct fuse_conn *fc, struct fuse_in *in,
+			  struct fuse_out *out, fuse_reqend_t end, void *data)
+{
+	int err;
+	struct fuse_req *req;
+
+	BUG_ON(!end);
+
+	if(down_trylock(&fc->outstanding))
+		return -EWOULDBLOCK;
+
+	err = -ENOMEM;
+	req = request_new();
+	if(req) {
+		req->in = in;
+		req->out = out;
+		req->issync = 1;
+		req->end = end;
+		req->data = data;
+
+		spin_lock(&fuse_lock);
+		err = -ENOTCONN;
+		if(fc->file) {
+			in->h.unique = get_unique(fc);		
+			list_add_tail(&req->list, &fc->pending);
+			wake_up(&fc->waitq);
+			spin_unlock(&fuse_lock);
+			return 0;
+		}
+		spin_unlock(&fuse_lock);
+		request_free(req);
+	}
+	up(&fc->outstanding);
+	return err;
 }
 
 static void request_wait(struct fuse_conn *fc)
@@ -257,13 +305,14 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 		}
 		req->locked = 0;
 		if(ret < 0 || req->interrupted)
-			wake_up(&req->waitq);
-		
-		req = NULL;
+			/* Unlocks fuse_lock: */
+			request_end(fc, req);
+		else
+			spin_unlock(&fuse_lock);
+	} else {
+		spin_unlock(&fuse_lock);
+		destroy_request(req);
 	}
-	spin_unlock(&fuse_lock);
-	destroy_request(req);
-
 	return ret;
 }
 
@@ -452,8 +501,8 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 	}	
 	req->finished = 1;
 	req->locked = 0;
-	wake_up(&req->waitq);
-	spin_unlock(&fuse_lock);
+	/* Unlocks fuse_lock: */
+	request_end(fc, req);
 
   out:
 	if(!err)
@@ -523,9 +572,10 @@ static void end_requests(struct fuse_conn *fc, struct list_head *head)
 		if(req->issync) {
 			req->out->h.error = -ECONNABORTED;
 			req->finished = 1;
-			wake_up(&req->waitq);
-		}
-		else
+			/* Unlocks fuse_lock: */
+			request_end(fc, req);
+			spin_lock(&fuse_lock);
+		} else
 			destroy_request(req);
 	}
 }

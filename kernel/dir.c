@@ -23,6 +23,11 @@ static struct dentry_operations fuse_dentry_opertations;
 /* FIXME: This should be user configurable */
 #define FUSE_REVALIDATE_TIME (1 * HZ)
 
+#ifndef KERNEL_2_6
+#define new_decode_dev(x) (x)
+#define new_encode_dev(x) (x)
+#endif
+
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
 	if(S_ISREG(inode->i_mode) && inode->i_size != attr->size) {
@@ -71,7 +76,8 @@ static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 	}
 	else {
 		inode->i_op = &fuse_file_inode_operations;
-		init_special_inode(inode, inode->i_mode, attr->rdev);
+		init_special_inode(inode, inode->i_mode,
+				   new_decode_dev(attr->rdev));
 	}
 	inode->u.generic_ip = inode;
 }
@@ -176,7 +182,7 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.mode = mode;
-	inarg.rdev = rdev;
+	inarg.rdev = new_encode_dev(rdev);
 
 	in.h.opcode = FUSE_MKNOD;
 	in.h.ino = dir->i_ino;

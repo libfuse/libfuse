@@ -1,3 +1,11 @@
+2004-01-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Support non-blocking writepage on 2.6.  This makes FUSE behave
+	much more nicely in low-memory situations
+
+	* Fix 32-bit dev handling in getattr and mknod for 2.6 kernels.
+	(Note: the mknod method does not yet use 32bit device number)
+ 
 2004-01-13  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Code cleanups

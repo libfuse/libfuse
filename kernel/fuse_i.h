@@ -103,6 +103,10 @@ struct fuse_out {
 #define FUSE_IN_INIT { {0, 0, 0, current->fsuid, current->fsgid}, 0}
 #define FUSE_OUT_INIT { {0, 0}, 0, 0}
 
+struct fuse_req;
+typedef void (*fuse_reqend_t)(struct fuse_conn *, struct fuse_in *,
+			      struct fuse_out *, void *data);
+
 /**
  * A request to the client
  */
@@ -133,6 +137,12 @@ struct fuse_req {
 
 	/** Used to wake up the task waiting for completion of request*/
 	wait_queue_head_t waitq;
+
+	/** Request completion callback */
+	fuse_reqend_t end;
+
+	/** User data */
+	void *data;
 };
 
 #ifdef KERNEL_2_6
@@ -204,6 +214,13 @@ void request_send(struct fuse_conn *fc, struct fuse_in *in,
  * Send a request for which a reply is not expected
  */
 int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in);
+
+
+/**
+ * Send a synchronous request without blocking
+ */
+int request_send_nonblock(struct fuse_conn *fc, struct fuse_in *in,
+			  struct fuse_out *out, fuse_reqend_t end, void *data);
 
 /**
  * Get the attributes of a file

@@ -33,20 +33,16 @@ static void fuse_clear_inode(struct inode *inode)
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in *in = NULL;
 	struct fuse_forget_in *inarg = NULL;
+	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_forget_in);
 	
 	if(fc == NULL)
 		return;
 
-	in = kmalloc(sizeof(struct fuse_in), GFP_NOFS);
+	in = kmalloc(s, GFP_NOFS);
 	if(!in)
 		return;
-	memset(in, 0, sizeof(struct fuse_in));
-
-	inarg = kmalloc(sizeof(struct fuse_forget_in), GFP_NOFS);
-	if(!inarg) 
-		goto out_free;
-	
-	memset(inarg, 0, sizeof(struct fuse_forget_in));
+	memset(in, 0, s);
+	inarg = (struct fuse_forget_in *) (in + 1);
 	inarg->version = inode->i_version;
 		
 	in->h.opcode = FUSE_FORGET;
@@ -58,8 +54,6 @@ static void fuse_clear_inode(struct inode *inode)
 	if(!request_send_noreply(fc, in))
 		return;
 
-  out_free:
-	kfree(inarg);
 	kfree(in);
 }
 
