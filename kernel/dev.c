@@ -241,7 +241,7 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 	if(fc->sb == NULL)
 		return -ENODEV;
 	if(req == NULL)
-		return -ERESTARTSYS;
+		return -EINTR;
 
 	ret = copy_in_args(req->in, buf, nbytes);
 	spin_lock(&fuse_lock);

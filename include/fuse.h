@@ -125,6 +125,13 @@ extern "C" {
  */
 int fuse_mount(const char *mountpoint, const char *args[]);
 
+/*
+ * Umount a FUSE mountpoint
+ *
+ * @param mountpoint the mount point path
+ */
+void fuse_unmount(const char *mountpoint);
+
 /**
  * Create a new FUSE filesystem.
  *
@@ -136,6 +143,15 @@ int fuse_mount(const char *mountpoint, const char *args[]);
 struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op);
 
 /**
+ * Destroy the FUSE handle. 
+ *
+ * The filesystem is not unmounted.
+ *
+ * @param f the FUSE handle
+ */
+void fuse_destroy(struct fuse *f);
+
+/**
  * FUSE event loop.
  *
  * Requests from the kernel are processed, and the apropriate
@@ -144,6 +160,14 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op);
  * @param f the FUSE handle
  */
 void fuse_loop(struct fuse *f);
+
+
+/**
+ * Exit from event loop
+ *
+ * @param f the FUSE handle
+ */
+void fuse_exit(struct fuse *f);
 
 /**
  * FUSE event loop with multiple threads
@@ -158,15 +182,6 @@ void fuse_loop(struct fuse *f);
  * @param f the FUSE handle
  */
 void fuse_loop_mt(struct fuse *f);
-
-/**
- * Destroy the FUSE handle. 
- *
- * The filesystem is not unmounted.
- *
- * @param f the FUSE handle
- */
-void fuse_destroy(struct fuse *f);
 
 /**
  * Get the current context

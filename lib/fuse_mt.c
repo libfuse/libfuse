@@ -32,9 +32,14 @@ static void *do_work(void *data)
     struct fuse *f = w->f;
 
     while(1) {
-        struct fuse_cmd *cmd = __fuse_read_cmd(w->f);
+        struct fuse_cmd *cmd;
+
+        if(f->exited)
+            break;
+
+        cmd = __fuse_read_cmd(w->f);
         if(cmd == NULL)
-            pthread_exit(NULL);
+            continue;
 
         if(f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
             pthread_mutex_lock(&f->lock);

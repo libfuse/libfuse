@@ -355,8 +355,8 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     size_t outsize;
     struct fuse_out_header *out;
 
-    if(error > 0) {
-        fprintf(stderr, "fuse: positive error code: %i\n",  error);
+    if(error <= -512 || error > 0) {
+        fprintf(stderr, "fuse: bad error value: %i\n",  error);
         error = -ERANGE;
     }
 
@@ -366,6 +366,7 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     outsize = sizeof(struct fuse_out_header) + argsize;
     outbuf = (char *) malloc(outsize);
     out = (struct fuse_out_header *) outbuf;
+    memset(out, 0, sizeof(struct fuse_out_header));
     out->unique = in->unique;
     out->error = error;
     if(argsize != 0)
@@ -395,7 +396,9 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
             res = f->op.getattr(path, &buf);
         free(path);
     }
+
     if(res == 0) {
+        memset(&arg, 0, sizeof(struct fuse_lookup_out));
         convert_stat(&buf, &arg.attr);
         arg.ino = find_node(f, in->ino, name, &arg.attr, in->unique);
         if(f->flags & FUSE_DEBUG) {
@@ -431,8 +434,11 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
             res = f->op.getattr(path, &buf);
         free(path);
     }
-    if(res == 0) 
+
+    if(res == 0) {
+        memset(&arg, 0, sizeof(struct fuse_getattr_out));
         convert_stat(&buf, &arg.attr);
+    }
 
     send_reply(f, in, res, &arg, sizeof(arg));
 }
@@ -513,8 +519,10 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
             if(!res) {
                 struct stat buf;
                 res = f->op.getattr(path, &buf);
-                if(!res)
+                if(!res) {
+                    memset(&outarg, 0, sizeof(struct fuse_setattr_out));
                     convert_stat(&buf, &outarg.attr);
+                }
             }
         }
         free(path);
@@ -559,6 +567,8 @@ static void do_getdir(struct fuse *f, struct fuse_in_header *in)
         free(path);
     }
     fflush(dh.fp);
+
+    memset(&arg, 0, sizeof(struct fuse_getdir_out));
     arg.fd = fileno(dh.fp);
     send_reply(f, in, res, &arg, sizeof(arg));
     fclose(dh.fp);
@@ -584,6 +594,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
         free(path);
     }
     if(res == 0) {
+        memset(&outarg, 0, sizeof(struct fuse_mknod_out));
         convert_stat(&buf, &outarg.attr);
         outarg.ino = find_node(f, in->ino, PARAM(inarg), &outarg.attr,
                                in->unique);
@@ -751,6 +762,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
             fflush(stdout);
         }
     }
+    memset(out, 0, sizeof(struct fuse_out_header));
     out->unique = in->unique;
     out->error = res;
     outsize = sizeof(struct fuse_out_header) + size;
@@ -798,8 +810,10 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
     struct fuse_statfs_out arg;
 
     res = -ENOSYS;
-    if(f->op.statfs)
+    if(f->op.statfs) {
+        memset(&arg, 0, sizeof(struct fuse_statfs_out));
         res = f->op.statfs((struct fuse_statfs *) &arg.st);
+    }
 
     send_reply(f, in, res, &arg, sizeof(arg));
 }
@@ -916,18 +930,24 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
     do {
         res = read(f->fd, cmd->buf, FUSE_MAX_IN);
         if(res == -1) {
+            free_cmd(cmd);
+            if(errno == EINTR)
+                return NULL;
+
             /* ENODEV means we got unmounted, so we silenty return failure */
             if(errno != ENODEV) {
-                perror("fuse: reading device");
                 /* BAD... This will happen again */
+                perror("fuse: reading device");
             }
-            free_cmd(cmd);
+
+            fuse_exit(f);
             return NULL;
         }
         if((size_t) res < sizeof(struct fuse_in_header)) {
-            fprintf(stderr, "short read on fuse device\n");
-            /* Cannot happen */
             free_cmd(cmd);
+            /* Cannot happen */
+            fprintf(stderr, "short read on fuse device\n");
+            fuse_exit(f);
             return NULL;
         }
         cmd->buflen = res;
@@ -941,16 +961,25 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
     return cmd;
 }
 
-
 void fuse_loop(struct fuse *f)
 {
     while(1) {
-        struct fuse_cmd *cmd = __fuse_read_cmd(f);
+        struct fuse_cmd *cmd;
+
+        if(f->exited)
+            return;
+
+        cmd = __fuse_read_cmd(f);
         if(cmd == NULL)
-            exit(1);
+            continue;
 
         __fuse_process_cmd(f, cmd);
     }
+}
+
+void fuse_exit(struct fuse *f)
+{
+    f->exited = 1;
 }
 
 struct fuse_context *fuse_get_context(struct fuse *f)
@@ -985,6 +1014,7 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
     f->getcontext = NULL;
     f->context.uid = 0;
     f->context.gid = 0;
+    f->exited = 0;
 
     root = (struct node *) calloc(1, sizeof(struct node));
     root->mode = 0;

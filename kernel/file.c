@@ -53,7 +53,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 	buffer = kmap(page);
 	
 	memset(&inarg, 0, sizeof(inarg));
-	inarg.offset = page->index << PAGE_CACHE_SHIFT;
+	inarg.offset = (unsigned long long) page->index << PAGE_CACHE_SHIFT;
 	inarg.size = PAGE_CACHE_SIZE;
 
 	in.h.opcode = FUSE_READ;
@@ -92,7 +92,8 @@ static int write_buffer(struct inode *inode, struct page *page,
 	buffer = kmap(page);
 
 	memset(&inarg, 0, sizeof(inarg));
-	inarg.offset = (page->index << PAGE_CACHE_SHIFT) + offset;
+	inarg.offset = ((unsigned long long) page->index << PAGE_CACHE_SHIFT) +
+		offset;
 	inarg.size = count;
 	
 	in.h.opcode = FUSE_WRITE;

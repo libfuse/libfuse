@@ -1,3 +1,10 @@
+2002-12-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* 64 bit file offset fixes in the fuse kernel module
+
+	* Added function 'fuse_exit()' which can be used to exit the main
+	loop
+
 2002-12-03  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added _FILE_OFFSET_BITS=64 define to fuse.h.  Note, that this is
