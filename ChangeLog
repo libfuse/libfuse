@@ -7,7 +7,7 @@
 
 	* Check superblock of proc file in addition to inode number
 
-	* Fix reace between request_send_noreply() and fuse_dev_release()
+	* Fix race between request_send_noreply() and fuse_dev_release()
 
 2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
