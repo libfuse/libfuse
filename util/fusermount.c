@@ -530,37 +530,57 @@ static int mount_fuse(const char *mnt, const char *opts)
     return fd;
 }
 
-static char *resolve_path(const char *orig, int unmount)
+static char *resolve_path(const char *orig)
 {
     char buf[PATH_MAX];
+    char *copy;
     char *dst;
-    
-    if (unmount) {
-        char *end;
-        /* Resolving at unmount can only be done very carefully, not touching
-           the mountpoint... So for the moment it's not done. 
+    char *end;
+    char *lastcomp;
+    const char *toresolv;
 
-           Just remove trailing slashes instead.
-        */
-        dst = strdup(orig);
-        if (dst == NULL) {
-            fprintf(stderr, "%s: failed to allocate memory\n", progname);
-            return NULL;
-        }
-
-        for (end = dst + strlen(dst) - 1; end > dst && *end == '/'; end --)
-            *end = '\0';
-
-        return dst;
-    }
-
-    if (realpath(orig, buf) == NULL) {
-        fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
-                strerror(errno));
+    copy = strdup(orig);
+    if (copy == NULL) {
+        fprintf(stderr, "%s: failed to allocate memory\n", progname);
         return NULL;
     }
-    
-    dst = strdup(buf);
+
+    toresolv = copy;
+    lastcomp = NULL;
+    for (end = copy + strlen(copy) - 1; end > copy && *end == '/'; end --);
+    if (end[0] != '/') {
+        char *tmp;
+        end[1] = '\0';
+        tmp = strrchr(copy, '/');
+        if (tmp == NULL) {
+            lastcomp = copy;
+            toresolv = ".";
+        } else {
+            lastcomp = tmp + 1;
+            if (tmp == copy)
+                toresolv = "/";
+        }
+        if (strcmp(lastcomp, ".") == 0 || strcmp(lastcomp, "..") == 0) {
+            lastcomp = NULL;
+            toresolv = copy;
+        }
+        else if (tmp)
+            tmp[0] = '\0';
+    }
+    if (realpath(toresolv, buf) == NULL) {
+        fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
+                strerror(errno));
+        free(copy);
+        return NULL;
+    }
+    if (lastcomp == NULL)
+        dst = strdup(buf);
+    else {
+        dst = (char *) malloc(strlen(buf) + 1 + strlen(lastcomp) + 1);
+        if (dst)
+            sprintf(dst, "%s/%s", buf, lastcomp);
+    }
+    free(copy);
     if (dst == NULL)
         fprintf(stderr, "%s: failed to allocate memory\n", progname);
     return dst;
@@ -682,7 +702,7 @@ int main(int argc, char *argv[])
             exit(1);
     }
 
-    mnt = resolve_path(origmnt, unmount);
+    mnt = resolve_path(origmnt);
     if (mnt == NULL)
         exit(1);
 
