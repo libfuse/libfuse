@@ -1,8 +1,8 @@
 %define kernelversion %(uname -r)
 %define fusemoduledir /lib/modules/%{kernelversion}/kernel/fs/fuse
 
-%define kernelrel %(uname -r | sed -e s/-/_/)
-%define real_release 5
+%define kernelrel %(uname -r | sed -e s/-/_/g)
+%define real_release 6
 
 Name: fuse
 Version: 1.0
@@ -40,7 +40,14 @@ case "$RPM_BUILD_ROOT" in *-root) rm -rf $RPM_BUILD_ROOT ;; esac
 # invoke configure with the --with-kernel option in case we attempt to
 # compile for a different kernel and hope the path is right :-)
 if [ "%{kernelversion}" != $(uname -r) ]; then
-	WITH_KERNEL="--with-kernel=/usr/src/linux-%{kernelversion}"
+	for dir in /lib/modules/%{kernelversion}/build   \
+		 /usr/src/linux-%{kernelversion}         \
+		 /usr/local/src/linux-%{kernelversion}   ; do 
+		if [ -d "$dir" ]; then
+			WITH_KERNEL="--with-kernel=$dir"
+			break
+		fi
+	done
 fi
 
 ./configure \
