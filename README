@@ -77,16 +77,3 @@ doing nasty things.  Currently those limitations are:
 
   - No other user (including root) can access the contents of the mounted
     filesystem.
-
-Currently the first two conditions are checked by the fusermount
-program before doing the mount.  This is in fact not perfectly secure,
-since there is a window of time, after fusermount has checked the
-mountpoint and before the mount actually takes place, when the user is
-able to change the mountpoint (e.g. by changing symbolic links). 
-
-The preferred method would be if the kernel would check the
-permissions.  There is a patch for this for the 2.6.X kernel (where X
->= 3) in the patch directory.  If you apply this patch then the suid
-bit can be removed from the fusermount program.
-
-Comments about this are appreciated.

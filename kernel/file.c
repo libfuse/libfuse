@@ -761,7 +761,11 @@ static int fuse_commit_write(struct file *file, struct page *page,
 			i_size_write(inode, pos);
 		
 		if (offset == 0 && to == PAGE_CACHE_SIZE) {
+#ifdef KERNEL_2_6
 			clear_page_dirty(page);
+#else
+			ClearPageDirty(page);
+#endif
 			SetPageUptodate(page);
 		}
 

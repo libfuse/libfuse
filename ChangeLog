@@ -1,3 +1,9 @@
+2004-07-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Make the non-user mounting more secure by changing the current
+	directory to the mountpoint before checking the permissions and
+	mounting on "." after this
+
 2004-07-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Clean up mount option passing to fusermount and to fuse_new()

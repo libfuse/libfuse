@@ -33,8 +33,6 @@
 #include <sys/un.h>
 #include <linux/fuse.h>
 
-#define CHECK_PERMISSION 1
-
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
@@ -44,7 +42,7 @@ const char *progname;
 static const char *get_user_name()
 {
     struct passwd *pw = getpwuid(getuid());
-    if(pw != NULL && pw->pw_name != NULL)
+    if (pw != NULL && pw->pw_name != NULL)
         return pw->pw_name;
     else {
         fprintf(stderr, "%s: could not determine username\n", progname);
@@ -61,9 +59,9 @@ static int lock_mtab()
     int res;
 
     mtablock = open(mtab_lock, O_RDWR | O_CREAT, 0600);
-    if(mtablock >= 0) {
+    if (mtablock >= 0) {
         res = lockf(mtablock, F_LOCK, 0);
-        if(res < 0)
+        if (res < 0)
             perror("error getting lock");
     } else
         fprintf(stderr, "unable to open fuse lock file, continuing anyway\n");
@@ -73,7 +71,7 @@ static int lock_mtab()
 
 static void unlock_mtab(int mtablock)
 {
-    if(mtablock >= 0) {
+    if (mtablock >= 0) {
 	lockf(mtablock, F_ULOCK, 0);
 	close(mtablock);
     }
@@ -88,25 +86,25 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
     char *opts;
 
     fp = setmntent(mtab, "a");
-    if(fp == NULL) {
+    if (fp == NULL) {
 	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
 		strerror(errno));
 	return -1;
     }
     
-    if(getuid() != 0) {
+    if (getuid() != 0) {
         const char *user = get_user_name();
-        if(user == NULL)
+        if (user == NULL)
             return -1;
         
         opts = malloc(strlen(user) + 128);
-        if(opts != NULL)
+        if (opts != NULL)
             sprintf(opts, "rw,nosuid,nodev,user=%s", user);
     }
     else
         opts = strdup("rw,nosuid,nodev");
     
-    if(opts == NULL) {
+    if (opts == NULL) {
         fprintf(stderr, "%s: failed to allocate memory\n", progname);
         return -1;
     }
@@ -118,7 +116,7 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
     ent.mnt_freq = 0;
     ent.mnt_passno = 0;
     res = addmntent(fp, &ent);
-    if(res != 0) {
+    if (res != 0) {
         fprintf(stderr, "%s: failed to add entry to %s: %s\n", progname,
                 mtab, strerror(errno));
         return -1;
@@ -140,43 +138,43 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
     int found;
 
     fp = setmntent(mtab, "r");
-    if(fp == NULL) {
+    if (fp == NULL) {
 	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab,
 		strerror(errno));
 	return -1;
     }
     
     newfp = setmntent(mtab_new, "w");
-    if(newfp == NULL) {
+    if (newfp == NULL) {
 	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab_new,
 		strerror(errno));
 	return -1;
     }
     
-    if(getuid() != 0) {
+    if (getuid() != 0) {
         user = get_user_name();
-        if(user == NULL)
+        if (user == NULL)
             return -1;
     }
 
     found = 0;
-    while((entp = getmntent(fp)) != NULL) {
+    while ((entp = getmntent(fp)) != NULL) {
         int remove = 0;
-        if(!found && strcmp(entp->mnt_dir, mnt) == 0 &&
+        if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
            strcmp(entp->mnt_type, "fuse") == 0) {
-            if(user == NULL)
+            if (user == NULL)
                 remove = 1;
             else {
                 char *p = strstr(entp->mnt_opts, "user=");
-                if(p != NULL && strcmp(p + 5, user) == 0)
+                if (p != NULL && strcmp(p + 5, user) == 0)
                     remove = 1;
             }
         }
-        if(remove)
+        if (remove)
             found = 1;
         else {
             res = addmntent(newfp, entp);
-            if(res != 0) {
+            if (res != 0) {
                 fprintf(stderr, "%s: failed to add entry to %s: %s", progname,
                         mtab_new, strerror(errno));
                 
@@ -187,26 +185,26 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
     endmntent(fp);
     endmntent(newfp);
     
-    if(found) {
+    if (found) {
         res = umount2(mnt, lazy ? 2 : 0);
-        if(res == -1) {
-            if(!quiet)
+        if (res == -1) {
+            if (!quiet)
                 fprintf(stderr, "%s: failed to unmount %s: %s\n",
                         progname, mnt,strerror(errno));
             found = -1;
         }
     }
 
-    if(found == 1) {
+    if (found == 1) {
         res = rename(mtab_new, mtab);
-        if(res == -1) {
+        if (res == -1) {
             fprintf(stderr, "%s: failed to rename %s to %s: %s\n", progname,
                     mtab_new, mtab, strerror(errno));
             return -1;
         }
     }
     else {
-        if(!found && !quiet)
+        if (!found && !quiet)
             fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
                     mnt, mtab);
         unlink(mtab_new);
@@ -251,7 +249,7 @@ static int drop_privs()
     head.version = _LINUX_CAPABILITY_VERSION;
     head.pid = 0;
     res = capget(&head, &oldcaps);
-    if(res == -1) {
+    if (res == -1) {
         fprintf(stderr, "%s: failed to get capabilities: %s\n", progname,
                 strerror(errno));
         return -1;
@@ -266,7 +264,7 @@ static int drop_privs()
     head.version = _LINUX_CAPABILITY_VERSION;
     head.pid = 0;
     res = capset(&head, &newcaps);
-    if(res == -1) {
+    if (res == -1) {
         fprintf(stderr, "%s: failed to set capabilities: %s\n", progname,
                 strerror(errno));
         return -1;
@@ -282,7 +280,7 @@ static void restore_privs()
     head.version = _LINUX_CAPABILITY_VERSION;
     head.pid = 0;
     res = capset(&head, &oldcaps);
-    if(res == -1)
+    if (res == -1)
         fprintf(stderr, "%s: failed to restore capabilities: %s\n", progname,
                 strerror(errno));
     
@@ -308,9 +306,9 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     char *d;
     char *fsname = NULL;
 
-    if(getuid() != 0) {
+    if (getuid() != 0) {
         res = drop_privs();
-        if(res == -1)
+        if (res == -1)
             return -1;
     }
     
@@ -359,52 +357,72 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
 
     res = mount(fsname, mnt, type, flags, optbuf);
     free(optbuf);
-    if(res == -1) {
+    if (res == -1) {
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
         free(fsname);
     }
     *fsnamep = fsname;
 
-    if(getuid() != 0)
+    if (getuid() != 0)
         restore_privs();
     
     return res;
 }
 
-static int check_perm(const char *mnt, struct stat *stbuf)
+static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
 {
     int res;
+    const char *mnt = *mntp;
    
     res = lstat(mnt, stbuf);
-    if(res == -1) {
+    if (res == -1) {
         fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
                 progname, mnt, strerror(errno));
         return -1;
     }
 
-    if(!S_ISDIR(stbuf->st_mode) && !S_ISREG(stbuf->st_mode)) {
-        fprintf(stderr, "%s: mountpoint %s is a special file\n",
+    /* No permission checking is done for root */
+    if (getuid() == 0)
+        return 0;
+
+    if (!S_ISDIR(stbuf->st_mode)) {
+        fprintf(stderr, "%s: mountpoint %s is not a directory\n",
                 progname, mnt);
         return -1;
     }
 
-/* Should be done by the kernel */
-#ifdef CHECK_PERMISSION
-    if(getuid() != 0) {
-        if((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
-            fprintf(stderr, "%s: mountpoint %s not owned by user\n",
-                    progname, mnt);
-            return -1;
-        }
-
-        res = access(mnt, W_OK);
-        if(res == -1) {
-            fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
-                    progname, mnt);
-            return -1;
-        }
+    *currdir_fd = open(".", O_RDONLY);
+    if (*currdir_fd == -1) {
+        fprintf(stderr, "%s: failed to open current directory: %s\n",
+                progname, strerror(errno));
+        return -1;
     }
-#endif    
+    res = chdir(mnt);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to chdir to mountpoint: %s\n",
+                progname, strerror(errno));
+        return -1;
+    }
+    mnt = *mntp = ".";
+    res = lstat(mnt, stbuf);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
+                progname, mnt, strerror(errno));
+        return -1;
+    }
+
+    if ((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
+        fprintf(stderr, "%s: mountpoint %s not owned by user\n",
+                progname, mnt);
+        return -1;
+    }
+    
+    res = access(mnt, W_OK);
+    if (res == -1) {
+        fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
+                progname, mnt);
+        return -1;
+    }
 
     return 0;
 }
@@ -418,41 +436,48 @@ static int mount_fuse(const char *mnt, const char *opts)
     struct stat stbuf;
     int mtablock;
     char *fsname;
-
-    res = check_perm(mnt, &stbuf);
-    if(res == -1)
-        return -1;
+    const char *real_mnt = mnt;
+    int currdir_fd = -1;
 
     fd = open(dev, O_RDWR);
-    if(fd == -1) {
+    if (fd == -1) {
         int status;
         pid_t pid = fork();
-        if(pid == 0) {
+        if (pid == 0) {
             setuid(0);
             execl("/sbin/modprobe", "/sbin/modprobe", "fuse", NULL);
             exit(1);
         }
-        if(pid != -1)
+        if (pid != -1)
             waitpid(pid, &status, 0);
 
         fd = open(dev, O_RDWR);
     }
-    if(fd == -1) {
+    if (fd == -1) {
         fprintf(stderr, "%s: unable to open fuse device %s: %s\n", progname,
                 dev, strerror(errno));
         return -1;
     }
  
-    res = do_mount(mnt, type, stbuf.st_mode & S_IFMT, fd, opts, &fsname);
-    if(res == -1)
+    res = check_perm(&real_mnt, &stbuf, &currdir_fd);
+    if (res == -1)
         return -1;
 
-    if(geteuid() == 0) {
+    res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts, &fsname);
+    if (res == -1)
+        return -1;
+
+    if (currdir_fd != -1) {
+        fchdir(currdir_fd);
+        close(currdir_fd);
+    }
+
+    if (geteuid() == 0) {
         mtablock = lock_mtab();
         res = add_mount(fsname, mnt, type);
         free(fsname);
         unlock_mtab(mtablock);
-        if(res == -1) {
+        if (res == -1) {
             umount2(mnt, 2); /* lazy umount */
             return -1;
         }
@@ -465,31 +490,37 @@ static int mount_fuse(const char *mnt, const char *opts)
 static char *resolve_path(const char *orig, int unmount)
 {
     char buf[PATH_MAX];
-
-    if(unmount) {
+    char *dst;
+    
+    if (unmount) {
+        char *end;
         /* Resolving at unmount can only be done very carefully, not touching
            the mountpoint... So for the moment it's not done. 
-           
+
            Just remove trailing slashes instead.
         */
-        char *dst = strdup(orig);
-        char *end;
-        if (dst == NULL)
+        dst = strdup(orig);
+        if (dst == NULL) {
+            fprintf(stderr, "%s: failed to allocate memory\n", progname);
             return NULL;
+        }
 
-        for(end = dst + strlen(dst) - 1; end > dst && *end == '/'; end --)
+        for (end = dst + strlen(dst) - 1; end > dst && *end == '/'; end --)
             *end = '\0';
 
         return dst;
     }
 
-    if(realpath(orig, buf) == NULL) {
+    if (realpath(orig, buf) == NULL) {
         fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
                 strerror(errno));
         return NULL;
     }
-
-    return strdup(buf);
+    
+    dst = strdup(buf);
+    if (dst == NULL)
+        fprintf(stderr, "%s: failed to allocate memory\n", progname);
+    return dst;
 }
 
 static int send_fd(int sock_fd, int fd) 
@@ -520,7 +551,7 @@ static int send_fd(int sock_fd, int fd)
      * least one byte" (man 7 unix) */
     vec.iov_base = &sendchar;
     vec.iov_len = sizeof(sendchar);
-    while((retval = sendmsg(sock_fd, &msg, 0)) == -1 && errno == EINTR);
+    while ((retval = sendmsg(sock_fd, &msg, 0)) == -1 && errno == EINTR);
     if (retval != 1) {
         perror("sending file descriptor");
         return -1;
@@ -558,18 +589,18 @@ int main(int argc, char *argv[])
 
     progname = argv[0];
     
-    for(a = 1; a < argc; a++) {
-        if(argv[a][0] != '-')
+    for (a = 1; a < argc; a++) {
+        if (argv[a][0] != '-')
             break;
 
-        switch(argv[a][1]) {
+        switch (argv[a][1]) {
         case 'h':
             usage();
             break;
 
         case 'o':
             a++;
-            if(a == argc) {
+            if (a == argc) {
                 fprintf(stderr, "%s: Missing argument to -o\n", progname);
                 exit(1);
             }
@@ -595,56 +626,54 @@ int main(int argc, char *argv[])
         }
     }
     
-    if(a == argc) {
+    if (a == argc) {
         fprintf(stderr, "%s: Missing mountpoint argument\n", progname);
         exit(1);
     }
 
     origmnt = argv[a++];
 
-    if(getuid() != 0)
+    if (getuid() != 0)
         drop_privs();
 
     mnt = resolve_path(origmnt, unmount);
-    if(mnt == NULL) {
-        fprintf(stderr, "%s: failed to allocate memory\n", progname);
+    if (mnt == NULL)
         exit(1);
-    }
 
-    if(getuid() != 0)
+    if (getuid() != 0)
         restore_privs();
     
-    if(unmount) {
-        if(geteuid() == 0) {
+    if (unmount) {
+        if (geteuid() == 0) {
             int mtablock = lock_mtab();
             res = remove_mount(mnt, quiet, lazy);
             unlock_mtab(mtablock);
         } else {
             res = umount2(mnt, lazy ? 2 : 0);
-            if(res == -1) {
+            if (res == -1) {
                 if (!quiet)
                     fprintf(stderr, "%s: failed to unmount %s: %s\n",
                             progname, mnt, strerror(errno));
             }
         }
-        if(res == -1)
+        if (res == -1)
             exit(1);
         return 0;
     }
 
     commfd = getenv(FUSE_COMMFD_ENV);
-    if(commfd == NULL) {
+    if (commfd == NULL) {
         fprintf(stderr, "%s: old style mounting not supported\n", progname);
         exit(1);
     }
 
     fd = mount_fuse(mnt, opts);
-    if(fd == -1)
+    if (fd == -1)
         exit(1);
 
     cfd = atoi(commfd);
     res = send_fd(cfd, fd);
-    if(res == -1)
+    if (res == -1)
         exit(1);
 
     return 0;
