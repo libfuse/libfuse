@@ -206,6 +206,7 @@ static int fuse_cache_block(struct address_space *mapping,
 			buffer = kmap(page);
 			memcpy(buffer, bl_buf + i * PAGE_CACHE_SIZE,
 					PAGE_CACHE_SIZE);
+			flush_dcache_page(page);
 			SetPageUptodate(page);
 			kunmap(page);
 		}
