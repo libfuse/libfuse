@@ -33,14 +33,18 @@ static inline struct fuse_conn *fuse_get_conn(struct file *file)
 	return fc;
 }
 
+static inline void fuse_request_init(struct fuse_req *req)
+{
+	memset(req, 0, sizeof(*req));
+	INIT_LIST_HEAD(&req->list);
+	init_waitqueue_head(&req->waitq);
+}
+
 struct fuse_req *fuse_request_alloc(void)
 {
 	struct fuse_req *req = kmem_cache_alloc(fuse_req_cachep, SLAB_KERNEL);
-	if (req) {
-		memset(req, 0, sizeof(*req));
-		INIT_LIST_HEAD(&req->list);
-		init_waitqueue_head(&req->waitq);
-	}
+	if (req)
+		fuse_request_init(req);
 	return req;
 }
 
@@ -68,10 +72,7 @@ static int get_unique(struct fuse_conn *fc)
 void fuse_reset_request(struct fuse_req *req)
 {
 	int preallocated = req->preallocated;
-
-	memset(req, 0, sizeof(*req));
-	INIT_LIST_HEAD(&req->list);
-	init_waitqueue_head(&req->waitq);
+	fuse_request_init(req);
 	req->preallocated = preallocated;
 }
 
