@@ -62,6 +62,9 @@ permission checking is done in the kernel */
     than for small. */
 #define FUSE_LARGE_READ          (1 << 3)
 
+/** Bypass the page cache for read and write operations  */
+#define FUSE_DIRECT_IO           (1 << 4)
+
 /** One input argument of a request */
 struct fuse_in_arg {
 	unsigned int size;
@@ -136,7 +139,11 @@ struct fuse_req {
 
 	/** Data for asynchronous requests */
 	union {
-		struct fuse_write_in write_in;
+		struct {
+			struct fuse_write_in in;
+			struct fuse_write_out out;
+			
+		} write;
 		struct fuse_open_in open_in;
 		struct fuse_forget_in forget_in;
 	} misc;
@@ -161,6 +168,12 @@ struct fuse_conn {
 
 	/** The fuse mount flags for this mount */
 	unsigned int flags;
+
+	/** Maximum read size */
+	unsigned int max_read;
+
+	/** Maximum write size */
+	unsigned int max_write;
 
 	/** Readers of the connection are waiting on this */
 	wait_queue_head_t waitq;

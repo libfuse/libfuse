@@ -46,6 +46,7 @@ struct fuse_opts {
     int default_permissions;
     int allow_other;
     int large_read;
+    int direct_io;
 };
 
 static const char *get_user_name()
@@ -318,6 +319,8 @@ static int do_mount(const char *dev, const char *mnt, const char *type,
         s += sprintf(s, ",allow_other");
     if (opts->large_read)
         s += sprintf(s, ",large_read");
+    if (opts->direct_io)
+        s += sprintf(s, ",direct_io");
 
     res = mount(dev, mnt, type, flags, optbuf);
     if(res == -1)
@@ -496,6 +499,7 @@ static void usage()
             " -x       allow other users to access the files (only for root)\n"
             " -n name  add 'name' as the filesystem name to mtab\n"
             " -l       issue large reads\n"
+            " -r       raw I/O\n"
             " -q       quiet: don't complain if unmount fails\n"
             " -z       lazy unmount\n",
             progname);
@@ -566,6 +570,10 @@ int main(int argc, char *argv[])
 
         case 'l':
             opts.large_read = 1;
+            break;
+
+        case 'r':
+            opts.direct_io = 1;
             break;
             
         case 'q':

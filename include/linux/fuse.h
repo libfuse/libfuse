@@ -153,6 +153,10 @@ struct fuse_write_in {
 	unsigned int size;
 };
 
+struct fuse_write_out {
+	unsigned int size;
+};
+
 struct fuse_statfs_out {
 	struct fuse_kstatfs st;
 };

@@ -5,3 +5,4 @@ Makefile
 *.ko
 *.s
 .tmp_versions
+.*.d

@@ -182,8 +182,10 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	if (err && err != -ENOENT)
 		return err;
 
-	entry->d_time = time_to_jiffies(outarg.entry_valid,
-					outarg.entry_valid_nsec);
+	if (inode)
+		entry->d_time = time_to_jiffies(outarg.entry_valid,
+						outarg.entry_valid_nsec);
+
 	entry->d_op = &fuse_dentry_operations;
 	*inodep = inode;
 	return 0;
@@ -209,6 +211,9 @@ static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 		printk("fuse_mknod: inode has wrong type\n");
 		return -EINVAL;
 	}
+
+	entry->d_time = time_to_jiffies(outarg->entry_valid,
+					outarg->entry_valid_nsec);
 
 	d_instantiate(entry, inode);
 	return 0;
@@ -847,7 +852,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 		      int rdev)
 {
-	return fuse_mknod(dir, entry, mode, rdev);
+	return _fuse_mknod(dir, entry, mode, rdev);
 }
 
 static int fuse_dentry_revalidate(struct dentry *entry, int flags)

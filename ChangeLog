@@ -1,3 +1,17 @@
+2004-07-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Fix kernel hang on mkfifo under 2.4 kernels (spotted and patch
+	by Mattias Wadman)
+
+	* Added option for direct read/write (-r)
+
+	* Fix revalidate time setting for newly created inodes
+
+2004-07-01  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Change passing fuse include dir to 2.6 kernel make system more
+	robust (hopefully fixes problems seen on SuSE 9.1)
+
 2004-06-30  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Acquire inode->i_sem before open and release methods to prevent

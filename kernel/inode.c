@@ -37,6 +37,7 @@ struct fuse_mount_data {
 	unsigned int rootmode;
 	unsigned int uid;
 	unsigned int flags;
+	unsigned int max_read;
 };
 
 static void fuse_read_inode(struct inode *inode)
@@ -124,7 +125,8 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 }
 
 enum { opt_fd, opt_rootmode, opt_uid, opt_default_permissions, 
-       opt_allow_other, opt_kernel_cache, opt_large_read, opt_err };
+       opt_allow_other, opt_kernel_cache, opt_large_read, opt_direct_io,
+       opt_max_read, opt_err };
 
 static match_table_t tokens = {
 	{opt_fd, "fd=%u"},
@@ -134,6 +136,8 @@ static match_table_t tokens = {
 	{opt_allow_other, "allow_other"},
 	{opt_kernel_cache, "kernel_cache"},
 	{opt_large_read, "large_read"},
+	{opt_direct_io, "direct_io"},
+	{opt_max_read, "max_read" },
 	{opt_err, NULL}
 };
 
@@ -142,6 +146,7 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 	char *p;
 	memset(d, 0, sizeof(struct fuse_mount_data));
 	d->fd = -1;
+	d->max_read = ~0;
 
 	while ((p = strsep(&opt, ",")) != NULL) {
 		int token;
@@ -185,6 +190,17 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 		case opt_large_read:
 			d->flags |= FUSE_LARGE_READ;
 			break;
+			
+		case opt_direct_io:
+			d->flags |= FUSE_DIRECT_IO;
+			break;
+
+		case opt_max_read:
+			if (match_int(&args[0], &value))
+				return 0;
+			d->max_read = value;
+			break;
+
 		default:
 			return 0;
 		}
@@ -208,6 +224,10 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 		seq_puts(m, ",kernel_cache");
 	if (fc->flags & FUSE_LARGE_READ)
 		seq_puts(m, ",large_read");
+	if (fc->flags & FUSE_DIRECT_IO)
+		seq_puts(m, ",direct_io");
+	if (fc->max_read != ~0)
+		seq_printf(m, ",max_read=%u", fc->max_read);
 	return 0;
 }
 
@@ -314,6 +334,8 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 
 	fc->flags = d.flags;
 	fc->uid = d.uid;
+	fc->max_read = d.max_read;
+	fc->max_write = FUSE_MAX_IN / 2;
 	
 	/* fc is needed in fuse_init_file_inode which could be called
 	   from get_root_inode */

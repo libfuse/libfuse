@@ -67,7 +67,8 @@ util.o: $(fuse_headers)
 
 else
 
-EXTRA_CFLAGS := -I$(PWD)/../include -DFUSE_VERSION=\"@VERSION@\"
+export FUSE_INCLUDE ?= $(shell pwd)/../include
+EXTRA_CFLAGS += -I$(FUSE_INCLUDE) -DFUSE_VERSION=\"@VERSION@\"
 
 obj-m := fuse.o
 fuse-objs := dev.o dir.o file.o inode.o util.o
@@ -75,7 +76,3 @@ fuse-objs := dev.o dir.o file.o inode.o util.o
 all-spec:
 	$(MAKE) -C @kernelsrc@ SUBDIRS=$(PWD) @KERNELMAKE_PARAMS@ modules
 endif
-
-
-
-

@@ -1061,6 +1061,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
+    struct fuse_write_out outarg;
 
     res = -ENOENT;
     path = get_path(f, in->ino);
@@ -1076,17 +1077,12 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
         free(path);
     }
     
-    if (res > 0) {
-        if ((size_t) res != arg->size) {
-            fprintf(stderr, "short write: %u (should be %u)\n", res,
-                    arg->size);
-            res = -EINVAL;
-        }
-        else 
-            res = 0;
+    if (res >= 0) { 
+        outarg.size = res;
+        res = 0;
     }
 
-    send_reply(f, in, res, NULL, 0);
+    send_reply(f, in, res, &outarg, sizeof(outarg));
 }
 
 static int default_statfs(struct statfs *buf)
