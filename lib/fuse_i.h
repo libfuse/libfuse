@@ -51,9 +51,6 @@ struct fuse {
     pthread_mutex_t lock;
     int numworker;
     int numavail;
-    struct fuse_context *(*getcontext)(struct fuse *);
-    struct fuse_context context;
-    pthread_key_t context_key;
     volatile int exited;
     int majorver;
     int minorver;

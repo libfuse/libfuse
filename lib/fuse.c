@@ -23,6 +23,8 @@
 #define ENTRY_REVALIDATE_TIME 1 /* sec */
 #define ATTR_REVALIDATE_TIME 1 /* sec */
 
+static struct fuse_context *(*fuse_getcontext)(void) = NULL;
+
 static const char *opname(enum fuse_opcode opcode)
 {
     switch (opcode) { 
@@ -1428,7 +1430,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     struct fuse_in_header *in = (struct fuse_in_header *) cmd->buf;
     void *inarg = cmd->buf + sizeof(struct fuse_in_header);
     size_t argsize;
-    struct fuse_context *ctx = fuse_get_context(f);
+    struct fuse_context *ctx = fuse_get_context();
 
     dec_avail(f);
 
@@ -1439,6 +1441,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         fflush(stdout);
     }
 
+    ctx->fuse = f;
     ctx->uid = in->uid;
     ctx->gid = in->gid;
     
@@ -1664,12 +1667,18 @@ void fuse_exit(struct fuse *f)
     f->exited = 1;
 }
 
-struct fuse_context *fuse_get_context(struct fuse *f)
+struct fuse_context *fuse_get_context()
 {
-    if (f->getcontext)
-        return f->getcontext(f);
+    static struct fuse_context context;
+    if (fuse_getcontext)
+        return fuse_getcontext();
     else
-        return &f->context;
+        return &context;
+}
+
+void __fuse_set_getcontext_func(struct fuse_context *(*func)(void))
+{
+    fuse_getcontext = func;
 }
 
 static int check_version(struct fuse *f)
@@ -1769,9 +1778,6 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
     f->numworker = 0;
     f->numavail = 0;
     f->op = *op;
-    f->getcontext = NULL;
-    f->context.uid = 0;
-    f->context.gid = 0;
     f->exited = 0;
 
     root = (struct node *) calloc(1, sizeof(struct node));

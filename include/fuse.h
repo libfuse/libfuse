@@ -133,6 +133,7 @@ struct fuse_operations {
 
 /** Extra context that may be needed by some filesystems */
 struct fuse_context {
+    struct fuse *fuse;
     uid_t uid;
     gid_t gid;
 };
@@ -161,15 +162,6 @@ extern "C" {
  * @param op the file system operation 
  */
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op);
-
-/*
- * Returns the fuse object created by fuse_main()
- * 
- * This is useful when fuse_get_context() is used.
- *
- * @return the fuse object
- */
-struct fuse *fuse_get(void);
 
 /**
  * Invalidate cached data of a file.
@@ -266,7 +258,7 @@ int fuse_loop_mt(struct fuse *f);
  * @param f the FUSE handle
  * @return the context 
  */
-struct fuse_context *fuse_get_context(struct fuse *f);
+struct fuse_context *fuse_get_context(void);
 
 /**
  * Check whether a mount option should be passed to the kernel or the
@@ -288,6 +280,7 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
 void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
 int __fuse_exited(struct fuse* f);
+void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 
 #ifdef __cplusplus
 }

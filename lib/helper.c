@@ -17,11 +17,6 @@
 
 static struct fuse *fuse;
 
-struct fuse *fuse_get(void)
-{
-    return fuse;
-}
-
 static void usage(char *progname)
 {
     fprintf(stderr,

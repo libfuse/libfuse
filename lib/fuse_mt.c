@@ -25,6 +25,10 @@ struct fuse_worker {
     fuse_processor_t proc;
 };
 
+static pthread_key_t context_key;
+static pthread_mutex_t context_lock = PTHREAD_MUTEX_INITIALIZER;
+static int context_ref;
+
 static int start_thread(struct fuse_worker *w, pthread_t *thread_id);
 
 static void *do_work(void *data)
@@ -41,7 +45,7 @@ static void *do_work(void *data)
         pthread_mutex_unlock(&f->lock);
         return NULL;
     }
-    pthread_setspecific(f->context_key, ctx);
+    pthread_setspecific(context_key, ctx);
 
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
@@ -94,7 +98,7 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
     res = pthread_create(thread_id, NULL, do_work, w);
     pthread_sigmask(SIG_SETMASK, &oldset, NULL);
     if (res != 0) {
-        fprintf(stderr, "Error creating thread: %s\n", strerror(res));
+        fprintf(stderr, "fuse: error creating thread: %s\n", strerror(res));
         return -1;
     }
     
@@ -102,9 +106,14 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
     return 0;
 }
 
-static struct fuse_context *mt_getcontext(struct fuse *f)
+static struct fuse_context *mt_getcontext(void)
 {
-    return (struct fuse_context *) pthread_getspecific(f->context_key);
+    struct fuse_context *ctx =
+        (struct fuse_context *) pthread_getspecific(context_key);
+    if (ctx == NULL)
+        fprintf(stderr, "fuse: no thread specific data for this thread\n");
+
+    return ctx;
 }
 
 static void mt_freecontext(void *data)
@@ -112,10 +121,38 @@ static void mt_freecontext(void *data)
     free(data);
 }
 
+static int mt_create_context_key()
+{
+    int err = 0;
+    pthread_mutex_lock(&context_lock);
+    if (!context_ref) {
+        err = pthread_key_create(&context_key, mt_freecontext);
+        if (err)
+            fprintf(stderr, "fuse: failed to create thread specific key: %s\n",
+                    strerror(err));
+        else 
+            __fuse_set_getcontext_func(mt_getcontext);
+    }
+    if (!err)
+        context_ref ++;
+    pthread_mutex_unlock(&context_lock);
+    return err;
+}
+
+static void mt_delete_context_key()
+{
+    pthread_mutex_lock(&context_lock);
+    context_ref--;
+    if (!context_ref) {
+        __fuse_set_getcontext_func(NULL);
+        pthread_key_delete(context_key);
+    }
+    pthread_mutex_unlock(&context_lock);
+}
+
 int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
 {
     struct fuse_worker *w;
-    int res;
     int i;
 
     w = malloc(sizeof(struct fuse_worker));    
@@ -128,20 +165,18 @@ int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
     w->data = data;
     w->proc = proc;
 
-    f->numworker = 1;
-    res = pthread_key_create(&f->context_key, mt_freecontext);
-    if (res != 0) {
-        fprintf(stderr, "Failed to create thread specific key\n");
+    if (mt_create_context_key() != 0) {
+        free(w);
         return -1;
     }
-    f->getcontext = mt_getcontext;
+    f->numworker = 1;
     do_work(w);
 
     pthread_mutex_lock(&f->lock);
     for (i = 1; i < f->numworker; i++)
         pthread_cancel(w->threads[i]);
     pthread_mutex_unlock(&f->lock);
-    pthread_key_delete(f->context_key);
+    mt_delete_context_key();
     free(w);
     return 0;
 }
