@@ -4,6 +4,9 @@
 	if FORGET was received earlier than the last RELEASE (bug found
 	with the LTP test-suite)
 
+	* Fix file corruption in case of bigread option. (bug found with
+	LTP)
+
 	* Minor fix in read:  print debug info even if read size is zero
 
 2004-07-04  Miklos Szeredi <mszeredi@inf.bme.hu>

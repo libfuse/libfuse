@@ -321,8 +321,12 @@ static ssize_t fuse_file_read(struct file *filp, char *buf,
 	struct inode *inode = mapping->host;
 	struct fuse_conn *fc = INO_FC(inode);
 
-	if(fc->flags & FUSE_LARGE_READ)
+	if(fc->flags & FUSE_LARGE_READ) {
+		/* Don't allow this to get mixed up with writes */
+		down(&inode->i_sem);
 		fuse_file_bigread(mapping, inode, *ppos, count);
+		up(&inode->i_sem);
+	}
 
 	return generic_file_read(filp, buf, count, ppos);
 }  
