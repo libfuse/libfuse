@@ -1,7 +1,11 @@
-2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
+2004-11-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check kernel interface version in fusermount to prevent
 	strangeness in case of mismatch.
+
+	* Fix potential race between umount and fuse_invalidate
+
+	* Check superblock of proc file in addition to inode number
 
 2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
 

@@ -479,7 +479,11 @@ static int fuse_user_request(struct fuse_conn *fc, const char *buf,
 	
 	switch (uh.opcode) {
 	case FUSE_INVALIDATE:
-		err = fuse_invalidate(fc, &uh);
+		down(&fc->sb_sem);
+		err = -ENODEV;
+		if (fc->sb)
+			err = fuse_invalidate(fc, &uh);
+		up(&fc->sb_sem);
 		break;
 
 	default:
@@ -602,6 +606,7 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->processing);
 		INIT_LIST_HEAD(&fc->unused_list);
 		sema_init(&fc->unused_sem, MAX_OUTSTANDING);
+		sema_init(&fc->sb_sem, 1);
 		for (i = 0; i < MAX_OUTSTANDING; i++) {
 			struct fuse_req *req = fuse_request_alloc();
 			if (!req) {

@@ -123,8 +123,10 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = SB_FC(sb);
 
+	down(&fc->sb_sem);
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
+	up(&fc->sb_sem);
 	fc->uid = 0;
 	fc->flags = 0;
 	/* Flush all readers on this fs */
@@ -311,7 +313,8 @@ static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 	struct inode *ino;
 
 	ino = file->f_dentry->d_inode;
-	if (!ino || !proc_fuse_dev || proc_fuse_dev->low_ino != ino->i_ino) {
+	if (!ino || !proc_fuse_dev || proc_mnt->mnt_sb != ino->i_sb ||
+	    proc_fuse_dev->low_ino != ino->i_ino) {
 		printk("FUSE: bad communication file descriptor\n");
 		return NULL;
 	}
@@ -432,8 +435,10 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
  err:
+	down(&fc->sb_sem);
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
+	up(&fc->sb_sem);
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	SB_FC(sb) = NULL;

@@ -224,6 +224,9 @@ struct fuse_conn {
 	/** Controls the maximum number of outstanding requests */
 	struct semaphore unused_sem;
 
+	/** Semaphore protecting the super block from going away */
+	struct semaphore sb_sem;
+
 	/** The list of unused requests */
 	struct list_head unused_list;
 	
