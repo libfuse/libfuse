@@ -60,7 +60,7 @@ Security
 
 If you run 'make install', the fusermount program is installed
 set-user-id to root.  This is done to allow normal users to mount
-their own filesystem implementations. 
+their own filesystem implementations.
 
 There must however be some limitations, in order to prevent Bad User from
 doing nasty things.  Currently those limitations are:
@@ -176,4 +176,4 @@ debug
 fsname=NAME
 
   Sets the filesystem name.  The default is the program name.
-  
+

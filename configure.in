@@ -7,10 +7,10 @@ m4_ifdef([LT_INIT],
 	[AC_PROG_LIBTOOL])
 AC_PROG_CC
 
-# compatibility for automake < 1.8 
+# compatibility for automake < 1.8
 if test -z "$mkdir_p"; then
 	mkdir_p="../mkinstalldirs"
-	AC_SUBST(mkdir_p)	
+	AC_SUBST(mkdir_p)
 fi
 
 CFLAGS="-Wall -W -g -O2"

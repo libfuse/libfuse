@@ -32,7 +32,7 @@ fi
 if test -z "$kernsrcver"; then
 	AC_MSG_RESULT([Not found])
 	AC_MSG_ERROR([
-*** Cannot determine the version of the linux kernel source. Please 
+*** Cannot determine the version of the linux kernel source. Please
 *** configure the kernel before running this script])
 fi
 AC_MSG_RESULT([$kernsrcver])
@@ -86,7 +86,7 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	else
 		AC_MSG_RESULT([no])
 	fi
-	
+
 	isuml=no
 	KERNELMAKE_PARAMS=
 	KERNELCPPFLAGS=

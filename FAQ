@@ -29,10 +29,10 @@ Subject: close() not in struct fuse_operations
 > Is there a reason for 'close' not being one of the
 > fuse_operations? I'd need to know when files are
 > closed...
- 
+
 It's not easy.  Consider mmap(): if you have a memory file, even after
-closing it, you can read or write the file through memory.  
- 
+closing it, you can read or write the file through memory.
+
 Despite this there are close()-like operations: flush and release.
 Flush gets called on each close() and release gets called when there
 are no more uses of a file, including memory mappings.
@@ -58,7 +58,7 @@ writing for example, and use that information for finally flushing
 dirty data of a file.
 
 > So it appears that there may even be additional file operations after
-> one or more of the release calls.. 
+> one or more of the release calls..
 
 That is expected also.  It would be a bug if there were reads/writes
 after the last release, or if the number of releases didn't match the
@@ -82,7 +82,7 @@ In release() the error value is ignored, and not every close will
 cause a release.  Consider this:
 
   - process opens a file
-  - process forks 
+  - process forks
   - parent closes the file
   - child closes the file
 
@@ -125,7 +125,7 @@ Subject: Short reads
 > bytes.  What I expected to see was the kernel to then issue a read for
 > length 65536 and offset 10.  Instead what I saw in the result was the
 > 10 bytes I returned, followed by 65526 zero bytes.
-> 
+>
 > Is this the intended behavior?
 
 Yes.  You can easily program around it with a for-loop in your read
@@ -135,14 +135,14 @@ function.
 > difference, I'd like to suggest doing it the other way: many people
 > (like me) implement their fuse read function in terms of read(), and
 > read() can return early.
- 
-No.  Read from a pipe/socket can be short, but read from a file can't. 
+
+No.  Read from a pipe/socket can be short, but read from a file can't.
 
 ---------------------------------------------------------------------------
 Subject: protocol error
 
-> I'm having trouble with file writing. I can 
-> 'echo something > file' to a file, but 
+> I'm having trouble with file writing. I can
+> 'echo something > file' to a file, but
 > 'cp file something' or 'cat something > file'
 > gives a protocol error.
 
@@ -176,14 +176,14 @@ Subject: Uid/gid/pid
 > Is there any easy way to know the uid of a reader?  For example, let's
 > say I wanted to create a file that contained 'foo' for uid 1, but
 > 'bar' for uid 2.
- 
-Yes: 
- 
+
+Yes:
+
 fuse_get_context()->uid
 
 
 ---------------------------------------------------------------------------
-Subject: 'find' command  
+Subject: 'find' command
 
 
 > I'm having trouble getting the find command to search through fuse
@@ -208,7 +208,7 @@ Subject: File system interactivity
 > question to the terminal that issued the request.
 >
 > Is there a way I can achieve this goal?
- 
+
 It would not be possible generally speaking, since it might not be an
 interactive program but rather a daemon, or a GUI program creating the
 file.  However you should be able to get the PID for the caller, and
@@ -217,4 +217,4 @@ something similar. Perhaps it would be better to redesign your program
 not to have such interactivity anyway, try to use e.g. extended
 attributes of files to set per-file options, or a configuration file
 for your filesystem.
- 
+

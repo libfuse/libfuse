@@ -4,7 +4,7 @@
 
 2005-01-28  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Fix compilation on 2.6.7 
+	* Fix compilation on 2.6.7
 
 2005-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
@@ -47,14 +47,14 @@
 
 	* fusermount: remove capability setting, which was the cause of
 	problems for some users.  It seems that FS related capabilities
-	are removed by setfsuid(), so this isn't even needed.  
+	are removed by setfsuid(), so this isn't even needed.
 
 2005-01-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fix compilation on 2.4 kernels (reported by Valient Gough)
 
 	* fix failure to unmount bug (found by David Shaw)
-	
+
 	* fusermount: improve parsing of /etc/fuse.conf
 
 2005-01-13  Miklos Szeredi <miklos@szeredi.hu>
@@ -141,7 +141,7 @@
 	These will cause some regressions, but stability is considered
 	more important.  If any of these features turns out to be
 	important, it can be readded with the deadlock problems addressed.
-	
+
 	* Make all requests interruptible (only with SIGKILL currently).
 	This can be used to break any deadlock produced by the userspace
 	filesystem accessing it's own exported files.  The RELEASE request
@@ -245,7 +245,7 @@
 	* fusermount: fix warning if fuse module is not loaded
 
 	* kernel: use /dev/fuse on 2.4 too
-	
+
 2004-11-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse API change: open, read, write, flush, fsync and release
@@ -347,7 +347,7 @@
 	usually needs to be set to "/usr/local/lib/pkgconfig".
 
 	* fuse.h is now installed in ${prefix}/include/fuse/
-	
+
 2004-11-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added "use_ino" mount option.  This enables the filesystems to
@@ -406,21 +406,21 @@
 
 	* Fix mounting and umounting FUSE filesystem under another FUSE
 	filesystem by non-root (bug spotted by Valient Gough)
-	
+
 2004-09-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix deadlock in case of memory allocation failure.  Patch by
 	Christian Magnusson
-	
+
 2004-09-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check memory allocation failures in libfuse
-	
+
 2004-09-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check temporary file creation failure in do_getdir().  Bug
 	spotted by Terje Oseberg
-	
+
 2004-09-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Allow "large_read" option for 2.6 kernels but warn of deprecation
@@ -429,7 +429,7 @@
 	This is only a temporary solution
 
 	* Support compiling FUSE kernel module on 2.4.x UML kernels
-	
+
 2004-09-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug in case two FORGETs for the same node are executed in
@@ -441,13 +441,13 @@
 	* Add -D_REENTRANT to the compile flags
 
 	* Add documentation of fuse internals by Terje Oseberg
- 
+
 2004-08-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Change release method to be non-interruptible.  Fixes bug
 	causing missing release() call when program which has opened files
 	is killed (reported by Franco Broi and David Shaw)
- 
+
 2004-07-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fuse_invalidate() to library API
@@ -465,7 +465,7 @@
 	* Extend kernel API with file handles.  A file handle is returned
 	by open, and passed to read, write, flush, fsync and release.
 	This is currently only used for debug output in the library.
-	
+
 	* Security changes:
 
 	* Change the current directory to the mountpoint before checking
@@ -484,16 +484,16 @@
 	* Clean up mount option passing to fusermount and to fuse_new()
 	BEWARE: this changes the userspace API slightly, and the command
 	line usage of programs using fuse_main()
-	
+
 2004-07-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Optimize reading under 2.6 kernels by issuing multiple page
 	asynchronous read requests
-	
+
 2004-07-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Only use redirty_page_for_writepage() for kernels >= 2.6.6
-	
+
 2004-07-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Separate directory entry and inode attribute validity timer
@@ -516,13 +516,13 @@
 
 	* If temporary buffer allocation fails in raw read, fall back to a
 	smaller buffer
- 	
+
 2004-07-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug in do_open() in libfuse: open count was incremented
 	after the reply is sent so it could race with unlink/forget and
 	cause an abort.
-	
+
 2004-07-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* When performing create or remove operation, refresh the parent's
@@ -606,24 +606,24 @@
 	* Work with newer libtool (1.5a)
 
 	* Check for st_atim member of struct stat
-	
+
 2004-06-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* No request allocation needed on inode and file release
-	
+
 2004-06-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix possible inode leak in userspace in case of unfinished
 	lookup/mknod/mkdir/symlink/link operation.
-	
+
 2004-06-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix some races and cleanups in fuse_read_super()
-	
+
 2004-06-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Requests are allocated at open time
-	
+
 2004-06-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Build shared library as well as static (using libtool)
@@ -643,23 +643,23 @@
 	* Don't call getdir method from open() only from first readdir().
 	Open is sometimes just used to store the current directory
 	(e.g. find)
-	
+
 2004-05-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added flush() call
-	
+
 2004-05-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Extended attributes support for 2.4 (patch by Cody Pisto)
-	
+
 2004-04-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fixed parser with modversions (Mattias Wadman)
-	
+
 2004-04-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added mount option parser to 2.4 build
-	
+
 2004-04-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Replaced binary mount data with text options
@@ -709,7 +709,7 @@
 2004-03-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fuse_main() adds "-n progname" to the fusermount command line
-	
+
 	* More kernel interface changes:
 
 	* Lookup/getattr return cache timeout values
@@ -750,11 +750,11 @@
 	* rdev size increased to 32 bits for mknod
 
 	* kernel interface version changed to 3.1
-	
+
 2004-02-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* user-mount upgraded for 2.6.3 kernel
-	
+
 2004-02-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added user-mount.2.6.2-rc3.patch
@@ -763,11 +763,11 @@
 
 	* fusermount should allow (un)mounting for non-root even if not
 	suid-root
-	
+
 2004-02-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove MS_PERMISSION mount flag (that means something else now)
-	
+
 2004-02-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added check for i_size_read/write functions to configure.in
@@ -784,15 +784,15 @@
 	* Use i_size_read/write for accessing inode->i_size
 
 	* Make loopback mount of a fuse file work
-	
+
 2004-02-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 1.1
-	
+
 2004-01-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Properly check if the inode exists in fuse_invalidate
-	
+
 2004-01-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added -q option for fusermount
@@ -812,11 +812,11 @@
 	* Fix typo (thanks Marcos Dione)
 
 	* Compile fixes for 2.4 kernels
-	
+
 2004-01-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix CONFIG_MODVERSIONS compile on 2.6
-	
+
 2004-01-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Write all pending data before a RELEASE operation
@@ -842,7 +842,7 @@
 
 	* Fix 32-bit dev handling in getattr and mknod for 2.6 kernels.
 	(Note: the mknod method does not yet use 32bit device number)
- 
+
 2004-01-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Code cleanups
@@ -859,7 +859,7 @@
 
 2004-01-05  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Added -d option to fusermount 
+	* Added -d option to fusermount
 
 2003-12-15  Miklos Szeredi <miklos@szeredi.hu>
 
@@ -875,7 +875,7 @@
 
 2003-12-12  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Make it compile on 2.4.19.  
+	* Make it compile on 2.4.19.
 
 	* Add fsync operation (write file failed on xemacs & vi)
 
@@ -903,7 +903,7 @@
 	   - Added '__init__' handler to base Fuse class, which allows
 	     your Python class to know the mountpoint and mount args,
 	     as attributes myfs.mountpoint, myfs.optlist, myfs.optdict
-	
+
 	* General:
 	   - added 'mount.fuse' script (in util/ dir), which is meant to be
 	     symlinked from /sbin, and which allows FUSE filesystems to
@@ -924,11 +924,11 @@
 
 	* Mtab handling fix in fusermount by "Valient Gough" (SF patch
 	#766443)
-	
+
 2003-10-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Error code fixes in kernel module
-	
+
 2003-10-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel version detection fix
@@ -1032,7 +1032,7 @@
 2002-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Version 0.95 released
-	
+
 2002-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Revaidate all path components not just the last, this means a
@@ -1043,7 +1043,7 @@
 	* Update and fix python interface
 
 2002-01-07  Mark Glines <mark@glines.org>
-	
+
 	* Added statfs() support to kernel, lib, examples, and perl!
 
 2001-12-26  Miklos Szeredi <miklos@szeredi.hu>
@@ -1053,10 +1053,10 @@
 	* Ported to Compaq IPAQ
 
 2001-12-20  Miklos Szeredi <miklos@szeredi.hu>
-	
+
 	* Added function fuse_get_context() to library API (inspired by
-	patch from Matt Ryan) 
-	
+	patch from Matt Ryan)
+
 	* Added flags to fusermount and to kernel interface to control
 	permission checking
 
@@ -1069,7 +1069,7 @@
 
 2001-12-02  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Added perl bindings by Mark Glines 
+	* Added perl bindings by Mark Glines
 
 2001-11-21  Miklos Szeredi <miklos@szeredi.hu>
 
@@ -1078,7 +1078,7 @@
 	* fuse_main() helper function added
 
 2001-11-18  Miklos Szeredi <miklos@szeredi.hu>
-	
+
 	* Optimized read/write operations, so that minimal copying of data
 	is done
 

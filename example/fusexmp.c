@@ -153,7 +153,7 @@ static int xmp_chmod(const char *path, mode_t mode)
     res = chmod(path, mode);
     if(res == -1)
         return -errno;
-    
+
     return 0;
 }
 
@@ -171,7 +171,7 @@ static int xmp_chown(const char *path, uid_t uid, gid_t gid)
 static int xmp_truncate(const char *path, off_t size)
 {
     int res;
-    
+
     res = truncate(path, size);
     if(res == -1)
         return -errno;
@@ -182,7 +182,7 @@ static int xmp_truncate(const char *path, off_t size)
 static int xmp_utime(const char *path, struct utimbuf *buf)
 {
     int res;
-    
+
     res = utime(path, buf);
     if(res == -1)
         return -errno;
@@ -196,7 +196,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
     int res;
 
     res = open(path, fi->flags);
-    if(res == -1) 
+    if(res == -1)
         return -errno;
 
     close(res);
@@ -217,7 +217,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
     res = pread(fd, buf, size, offset);
     if(res == -1)
         res = -errno;
-    
+
     close(fd);
     return res;
 }
@@ -236,7 +236,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
     res = pwrite(fd, buf, size, offset);
     if(res == -1)
         res = -errno;
-    
+
     close(fd);
     return res;
 }
@@ -256,7 +256,7 @@ static int xmp_release(const char *path, struct fuse_file_info *fi)
 {
     /* Just a stub.  This method is optional and can safely be left
        unimplemented */
-    
+
     (void) path;
     (void) fi;
     return 0;

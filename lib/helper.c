@@ -24,7 +24,7 @@ static void usage(const char *progname)
         fprintf(stderr,
                 "usage: %s mountpoint [FUSE options]\n\n", progname);
 
-    fprintf(stderr, 
+    fprintf(stderr,
             "FUSE options:\n"
             "    -d                  enable debug output (implies -f)\n"
             "    -f                  foreground operation\n"
@@ -72,7 +72,7 @@ static int set_one_signal_handler(int signal, void (*handler)(int))
         perror("FUSE: cannot get old signal handler");
         return -1;
     }
-        
+
     if (old_sa.sa_handler == SIG_DFL &&
         sigaction(signal, &sa, NULL) == -1) {
         perror("Cannot set signal handler");
@@ -158,7 +158,7 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
     int argctr;
     const char *basename;
     char *fsname_opt;
-    
+
     *kernel_opts = NULL;
     *lib_opts = NULL;
     *mountpoint = NULL;
@@ -181,7 +181,7 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
     free(fsname_opt);
     if (res == -1)
         goto err;
-    
+
     for (argctr = 1; argctr < argc; argctr ++) {
         if (argv[argctr][0] == '-') {
             if (strlen(argv[argctr]) == 2)
@@ -197,13 +197,13 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
                     if (res == -1)
                         goto err;
                     break;
-                    
+
                 case 'd':
                     res = add_options(lib_opts, kernel_opts, "debug");
                     if (res == -1)
                         goto err;
                     break;
-                    
+
                 case 'r':
                     res = add_options(lib_opts, kernel_opts, "ro");
                     if (res == -1)
@@ -217,11 +217,11 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
                 case 's':
                     *multithreaded = 0;
                     break;
-                    
+
                 case 'h':
                     usage(argv[0]);
                     goto err;
-                    
+
                 default:
                     invalid_option(argv, argctr);
                     goto err;
@@ -341,7 +341,7 @@ struct fuse *fuse_setup_compat2(int argc, char *argv[],
                                  char **mountpoint, int *multithreaded,
                                  int *fd)
 {
-    return fuse_setup_common(argc, argv, (struct fuse_operations *) op, 
+    return fuse_setup_common(argc, argv, (struct fuse_operations *) op,
                              sizeof(struct fuse_operations_compat2),
                              mountpoint, multithreaded, fd, 21);
 }
@@ -373,16 +373,16 @@ static int fuse_main_common(int argc, char *argv[],
                              &multithreaded, &fd, compat);
     if (fuse == NULL)
         return 1;
-    
+
     if (multithreaded)
         res = fuse_loop_mt(fuse);
     else
         res = fuse_loop(fuse);
-    
+
     fuse_teardown(fuse, fd, mountpoint);
     if (res == -1)
         return 1;
-    
+
     return 0;
 }
 
@@ -402,7 +402,7 @@ int fuse_main()
 void fuse_main_compat1(int argc, char *argv[],
                       const struct fuse_operations_compat1 *op)
 {
-    fuse_main_common(argc, argv, (struct fuse_operations *) op, 
+    fuse_main_common(argc, argv, (struct fuse_operations *) op,
                      sizeof(struct fuse_operations_compat1), 11);
 }
 

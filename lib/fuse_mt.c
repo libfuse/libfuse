@@ -101,7 +101,7 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
         fprintf(stderr, "fuse: error creating thread: %s\n", strerror(res));
         return -1;
     }
-    
+
     pthread_detach(*thread_id);
     return 0;
 }
@@ -130,7 +130,7 @@ static int mt_create_context_key()
         if (err)
             fprintf(stderr, "fuse: failed to create thread specific key: %s\n",
                     strerror(err));
-        else 
+        else
             fuse_set_getcontext_func(mt_getcontext);
     }
     if (!err)
@@ -155,7 +155,7 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
     struct fuse_worker *w;
     int i;
 
-    w = malloc(sizeof(struct fuse_worker));    
+    w = malloc(sizeof(struct fuse_worker));
     if (w == NULL) {
         fprintf(stderr, "fuse: failed to allocate worker structure\n");
         return -1;

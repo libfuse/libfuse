@@ -7,13 +7,13 @@
 */
 /* This program does the mounting and unmounting of FUSE filesystems */
 
-/* 
+/*
  * NOTE: This program should be part of (or be called from) /bin/mount
- * 
+ *
  * Unless that is done, operations on /etc/mtab are not under lock, and so
  * data in this file may be lost. (I will _not_ reimplement that locking,
  * and anyway that should be done in libc, if possible.  But probably it
- * isn't).  
+ * isn't).
  */
 
 #include <config.h>
@@ -131,7 +131,7 @@ static int add_mount(const char *fsname, const char *mnt, const char *type,
 		strerror(errno));
 	return -1;
     }
-    
+
     ent.mnt_fsname = (char *) fsname;
     ent.mnt_dir = (char *) mnt;
     ent.mnt_type = (char *) type;
@@ -144,7 +144,7 @@ static int add_mount(const char *fsname, const char *mnt, const char *type,
                 mtab, strerror(errno));
         return -1;
     }
-    
+
     endmntent(fp);
     return 0;
 }
@@ -165,14 +165,14 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
 		strerror(errno));
 	return -1;
     }
-    
+
     newfp = setmntent(mtab_new, "w");
     if (newfp == NULL) {
 	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab_new,
 		strerror(errno));
 	return -1;
     }
-    
+
     if (getuid() != 0) {
         user = get_user_name();
         if (user == NULL)
@@ -199,11 +199,10 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
             if (res != 0) {
                 fprintf(stderr, "%s: failed to add entry to %s: %s\n",
                         progname, mtab_new, strerror(errno));
-                
             }
         }
     }
-    
+
     endmntent(fp);
     endmntent(newfp);
 
@@ -268,7 +267,7 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
     int res;
     const char *mtab = _PATH_MOUNTED;
     const char *mtab_new = _PATH_MOUNTED "~fuse~";
-    
+
     res = remove_mount(mnt, quiet, mtab, mtab_new);
     if (res == -1)
         return -1;
@@ -399,7 +398,7 @@ static struct mount_flags mount_flags[] = {
 static int find_mount_flag(const char *s, unsigned len, int *on, int *flag)
 {
     int i;
-            
+
     for (i = 0; mount_flags[i].opt != NULL; i++) {
         const char *opt = mount_flags[i].opt;
         if (strlen(opt) == len && strncmp(opt, s, len) == 0) {
@@ -421,7 +420,7 @@ static int add_option(char **optsp, const char *opt, unsigned expand)
     char *newopts;
     if (*optsp == NULL)
         newopts = strdup(opt);
-    else { 
+    else {
         unsigned oldsize = strlen(*optsp);
         unsigned newsize = oldsize + 1 + strlen(opt) + expand + 1;
         newopts = realloc(*optsp, newsize);
@@ -440,7 +439,7 @@ static int get_mnt_opts(int flags, char *opts, char **mnt_optsp)
 {
     int i;
     int l;
-    
+
     if (!(flags & MS_RDONLY) && add_option(mnt_optsp, "rw", 0) == -1)
         return -1;
 
@@ -487,13 +486,13 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     const char *s;
     char *d;
     char *fsname = NULL;
-    
+
     optbuf = malloc(strlen(opts) + 64);
     if (!optbuf) {
         fprintf(stderr, "%s: failed to allocate memory\n", progname);
         return -1;
     }
-    
+
     for (s = opts, d = optbuf; *s;) {
         unsigned len;
         const char *fsname_str = "fsname=";
@@ -520,7 +519,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
                 struct utsname utsname;
                 unsigned kmaj, kmin;
                 res = uname(&utsname);
-                if (res == 0 && 
+                if (res == 0 &&
                     sscanf(utsname.release, "%u.%u", &kmaj, &kmin) == 2 &&
                     (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
                     fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %i.%i kernels\n", progname, kmaj, kmin);
@@ -617,7 +616,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
     int res;
     const char *mnt = *mntp;
     const char *origmnt;
-   
+
     res = lstat(mnt, stbuf);
     if (res == -1) {
         fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
@@ -661,7 +660,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
                 progname, origmnt);
         return -1;
     }
-    
+
     res = access(mnt, W_OK);
     if (res == -1) {
         fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
@@ -724,13 +723,13 @@ static int try_open_fuse_device(char **devp)
     int fd = try_open(FUSE_DEV_NEW, devp, 1);
     if (fd >= 0)
         return fd;
-    
+
     if (fd == -1) {
         fd = try_open_new_temp(makedev(FUSE_MAJOR, FUSE_MINOR), devp);
         if (fd != -2)
             return fd;
     }
-    
+
     fd = try_open(FUSE_DEV_OLD, devp, 1);
     if (fd >= 0)
         return fd;
@@ -753,7 +752,7 @@ static int open_fuse_device(char **devp)
         fd = try_open_fuse_device(devp);
         if (fd >= 0)
             return fd;
-        
+
 #ifndef USE_UCLIBC
         pid = fork();
 #else
@@ -771,7 +770,7 @@ static int open_fuse_device(char **devp)
     fd = try_open_fuse_device(devp);
     if (fd >= 0)
         return fd;
-    
+
     fprintf(stderr, "%s: fuse device not found, try 'modprobe fuse' first\n",
             progname);
     return -1;
@@ -845,7 +844,7 @@ static int mount_fuse(const char *mnt, const char *opts)
         fchdir(currdir_fd);
         close(currdir_fd);
     }
-    
+
     if (geteuid() == 0) {
         res = add_mount(fsname, mnt, type, mnt_opts);
         unlock_mtab(mtablock);
@@ -924,7 +923,7 @@ static char *resolve_path(const char *orig)
     return dst;
 }
 
-static int send_fd(int sock_fd, int fd) 
+static int send_fd(int sock_fd, int fd)
 {
     int retval;
     struct msghdr msg;
@@ -989,7 +988,7 @@ int main(int argc, char *argv[])
     const char *opts = "";
 
     progname = argv[0];
-    
+
     for (a = 1; a < argc; a++) {
         if (argv[a][0] != '-')
             break;
@@ -1015,7 +1014,7 @@ int main(int argc, char *argv[])
         case 'z':
             lazy = 1;
             break;
-            
+
         case 'q':
             quiet = 1;
             break;
@@ -1026,7 +1025,7 @@ int main(int argc, char *argv[])
             exit(1);
         }
     }
-    
+
     if (a == argc) {
         fprintf(stderr, "%s: missing mountpoint argument\n", progname);
         exit(1);
@@ -1046,13 +1045,13 @@ int main(int argc, char *argv[])
 
     if (getuid() != 0)
         restore_privs();
-    
+
     if (unmount) {
         if (geteuid() == 0) {
             int mtablock = lock_mtab();
             res = unmount_fuse(mnt, quiet, lazy);
             unlock_mtab(mtablock);
-        } else 
+        } else
             res = do_unmount(mnt, quiet, lazy);
         if (res == -1)
             exit(1);

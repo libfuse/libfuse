@@ -51,7 +51,7 @@ struct fuse;
 typedef struct fuse_dirhandle *fuse_dirh_t;
 
 /** Function to add an entry in a getdir() operation
- * 
+ *
  * @param h the handle passed to the getdir() operation
  * @param name the file name of the directory entry
  * @param type the file type (0 if unknown)  see <dirent.h>
@@ -82,7 +82,7 @@ struct fuse_file_info {
  * Most of these should work very similarly to the well known UNIX
  * file system operations.  A major exception is that instead of
  * returning an error in 'errno', the operation should return the
- * negated error value (-errno) directly. 
+ * negated error value (-errno) directly.
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Flush, release and fsync are special
@@ -99,7 +99,7 @@ struct fuse_operations {
     int (*getattr) (const char *, struct stat *);
 
     /** Read the target of a symbolic link
-     * 
+     *
      * The buffer should be filled with a null terminated string.  The
      * buffer size argument includes the space for the terminating
      * null character.  If the linkname is too long to fit in the
@@ -140,19 +140,19 @@ struct fuse_operations {
 
     /** Create a hard link to a file */
     int (*link) (const char *, const char *);
-    
+
     /** Change the permission bits of a file */
     int (*chmod) (const char *, mode_t);
-    
+
     /** Change the owner and group of a file */
     int (*chown) (const char *, uid_t, gid_t);
-    
+
     /** Change the size of a file */
     int (*truncate) (const char *, off_t);
-    
+
     /** Change the access and/or modification times of a file */
     int (*utime) (const char *, struct utimbuf *);
-    
+
     /** File open operation
      *
      * No creation, or trunctation flags (O_CREAT, O_EXCL, O_TRUNC)
@@ -174,8 +174,8 @@ struct fuse_operations {
      */
     int (*read) (const char *, char *, size_t, off_t, struct fuse_file_info *);
 
-    /** Write data to an open file 
-     * 
+    /** Write data to an open file
+     *
      * Write should return exactly the number of bytes requested
      * except on error.  An exception to this is when the 'direct_io'
      * mount option is specified (see read operation).
@@ -184,13 +184,13 @@ struct fuse_operations {
                   struct fuse_file_info *);
 
     /** Get file system statistics
-     * 
+     *
      * The 'f_type' and 'f_fsid' fields are ignored
      */
     int (*statfs) (const char *, struct statfs *);
 
-    /** Possibly flush cached data 
-     * 
+    /** Possibly flush cached data
+     *
      * BIG NOTE: This is not equivalent to fsync().  It's not a
      * request to sync dirty data.
      *
@@ -199,7 +199,7 @@ struct fuse_operations {
      * has cached dirty data, this is a good place to write back data
      * and return any errors.  Since many applications ignore close()
      * errors this is not always useful.
-     * 
+     *
      * NOTE: The flush() method may be called more than once for each
      * open().  This happens if more than one file descriptor refers
      * to an opened file due to dup(), dup2() or fork() calls.  It is
@@ -210,7 +210,7 @@ struct fuse_operations {
     int (*flush) (const char *, struct fuse_file_info *);
 
     /** Release an open file
-     * 
+     *
      * Release is called when there are no more references to an open
      * file: all file descriptors are closed and all memory mappings
      * are unmapped.
@@ -229,21 +229,21 @@ struct fuse_operations {
      * should be flushed, not the meta data.
      */
     int (*fsync) (const char *, int, struct fuse_file_info *);
-    
+
     /** Set extended attributes */
     int (*setxattr) (const char *, const char *, const char *, size_t, int);
-    
+
     /** Get extended attributes */
     int (*getxattr) (const char *, const char *, char *, size_t);
-    
+
     /** List extended attributes */
     int (*listxattr) (const char *, char *, size_t);
-    
+
     /** Remove extended attributes */
     int (*removexattr) (const char *, const char *);
 };
 
-/** Extra context that may be needed by some filesystems 
+/** Extra context that may be needed by some filesystems
  *
  * The uid, gid and pid fields are not filled in case of a writepage
  * operation.
@@ -251,7 +251,7 @@ struct fuse_operations {
 struct fuse_context {
     /** Pointer to the fuse object */
     struct fuse *fuse;
-    
+
     /** User ID of the calling process */
     uid_t uid;
 
@@ -270,7 +270,7 @@ struct fuse_context {
  *
  * This is for the lazy.  This is all that has to be called from the
  * main() function.
- * 
+ *
  * This function does the following:
  *   - parses command line options (-d -s and -h)
  *   - passes relevant mount options to the fuse_mount()
@@ -284,7 +284,7 @@ struct fuse_context {
  *
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
- * @param op the file system operation 
+ * @param op the file system operation
  * @return 0 on success, nonzero on failure
  */
 /*
@@ -325,11 +325,11 @@ void fuse_unmount(const char *mountpoint);
  * @param op_size the size of the fuse_operations structure
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(int fd, const char *opts, 
+struct fuse *fuse_new(int fd, const char *opts,
                       const struct fuse_operations *op, size_t op_size);
 
 /**
- * Destroy the FUSE handle. 
+ * Destroy the FUSE handle.
  *
  * The filesystem is not unmounted.
  *
@@ -341,7 +341,7 @@ void fuse_destroy(struct fuse *f);
  * FUSE event loop.
  *
  * Requests from the kernel are processed, and the apropriate
- * operations are called. 
+ * operations are called.
  *
  * @param f the FUSE handle
  * @return 0 if no error occured, -1 otherwise
@@ -372,12 +372,12 @@ int fuse_loop_mt(struct fuse *f);
 
 /**
  * Get the current context
- * 
+ *
  * The context is only valid for the duration of a filesystem
  * operation, and thus must not be stored and used later.
  *
  * @param f the FUSE handle
- * @return the context 
+ * @return the context
  */
 struct fuse_context *fuse_get_context(void);
 
@@ -402,7 +402,7 @@ int fuse_is_lib_option(const char *opt);
 
 /**
  * The real main function
- * 
+ *
  * Do not call this directly, use fuse_main()
  */
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,

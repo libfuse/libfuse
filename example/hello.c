@@ -65,7 +65,7 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset,
     (void) fi;
     if(strcmp(path, hello_path) != 0)
         return -ENOENT;
-    
+
     len = strlen(hello_str);
     if (offset < len) {
         if (offset + size > len)

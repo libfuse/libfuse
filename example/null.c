@@ -18,7 +18,7 @@ static int null_getattr(const char *path, struct stat *stbuf)
 {
     if(strcmp(path, "/") != 0)
         return -ENOENT;
-    
+
     stbuf->st_mode = S_IFREG | 0644;
     stbuf->st_nlink = 1;
     stbuf->st_uid = getuid();

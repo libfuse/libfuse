@@ -57,7 +57,7 @@ static int receive_fd(int fd)
         /* EOF */
         return -1;
     }
-    
+
     cmsg = CMSG_FIRSTHDR(&msg);
     if (!cmsg->cmsg_type == SCM_RIGHTS) {
         fprintf(stderr, "got control message of unknown type %d\n",
@@ -71,10 +71,10 @@ void fuse_unmount(const char *mountpoint)
 {
     const char *mountprog = FUSERMOUNT_PROG;
     char umount_cmd[1024];
-    
+
     snprintf(umount_cmd, sizeof(umount_cmd) - 1, "%s -u -q -z %s", mountprog,
              mountpoint);
-    
+
     umount_cmd[sizeof(umount_cmd) - 1] = '\0';
     system(umount_cmd);
 }
