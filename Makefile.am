@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = @subdirs@
+SUBDIRS = @subdirs@ @subdirs2@
 
 EXTRA_DIST =			\
 	fuse.pc.in		\

@@ -1,3 +1,15 @@
+2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Merge from fuse_2_0_bugfix to fuse_2_0_merge1
+
+2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Separate configure for the kernel directory
+
+2004-11-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix 'makeconf.sh' to use autoreconf if available
+
 2004-11-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add ino argument to 'fuse_dirfil_t'.  NOTE: This breaks source

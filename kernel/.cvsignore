@@ -1,4 +1,7 @@
 Makefile
+configure
+config.*
+*.cache
 .deps
 .*.cmd
 *.mod.c
