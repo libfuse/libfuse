@@ -21,7 +21,7 @@ try:
 except:
     pass
  
-from _fuse import main, DEBUG
+from _fuse import main
 import os, sys
 from errno import *
 
@@ -85,8 +85,14 @@ class Fuse:
     #@-node:__init__
     #@+node:main
     def main(self):
-    	d = {'flags': self.flags}
-    	d['multithreaded'] = self.multithreaded
+
+        d = {'mountpoint': self.mountpoint}
+        d['multithreaded'] = self.multithreaded
+        if hasattr( self, 'debug'):
+            d['lopts'] = 'debug';
+
+        d['kopts'] = 'allow_other,kernel_cache';
+
     	for a in self._attrs:
     		if hasattr(self,a):
     			d[a] = ErrnoWrapper(getattr(self, a))

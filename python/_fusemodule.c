@@ -6,6 +6,12 @@
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
+
+    Updated for libfuse API changes
+    2004 Steven James <pyro@linuxlabs.com> and
+    Linux Labs International, Inc. http://www.linuxlabs.com
+
+    
 */
 
 //@+others
@@ -23,6 +29,9 @@ static PyObject *getattr_cb=NULL, *readlink_cb=NULL, *getdir_cb=NULL,
   *open_cb=NULL, *read_cb=NULL, *write_cb=NULL, *release_cb=NULL,
   *statfs_cb=NULL, *fsync_cb=NULL
   ;
+
+static int debuglevel=0;
+
 //@-node:globals
 //@+node:PROLOGUE
 #define PROLOGUE \
@@ -309,7 +318,7 @@ static int release_func(const char *path, int flags)
 }
 //@-node:release_func
 //@+node:statfs_func
-static int statfs_func(struct fuse_statfs *fst)
+static int statfs_func( const char *dummy, struct statfs *fst)
 {
   int i;
   long retvalues[6];
@@ -330,12 +339,13 @@ PROLOGUE
           : 0);
    }
 
- fst->block_size  = retvalues[0];
- fst->blocks      = retvalues[1];
- fst->blocks_free = retvalues[2];
- fst->files       = retvalues[3];
- fst->files_free  = retvalues[4];
- fst->namelen     = retvalues[5];
+ fst->f_bsize	= retvalues[0];
+ fst->f_blocks	= retvalues[1];
+ fst->f_bfree	= retvalues[2];
+ fst->f_files	= retvalues[3];
+ fst->f_ffree	= retvalues[4];
+ fst->f_namelen	= retvalues[5];
+
  ret = 0;
  
 #ifdef IGNORE_THIS
@@ -391,13 +401,16 @@ static void pyfuse_loop_mt(struct fuse *f)
 //@-node:pyfuse_loop_mt
 //@+node:Fuse_main
 
+static struct fuse *fuse=NULL;
 
 static PyObject *
 Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 {
-	int flags=0;
+	int fd;
 	int multithreaded=0;
-	static struct fuse *fuse=NULL;
+	char *lopts=NULL;
+	char *kopts=NULL;
+	char *mountpoint;
 
 	struct fuse_operations op;
 
@@ -406,19 +419,20 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 		"mkdir", "unlink", "rmdir", "symlink", "rename",
 		"link", "chmod", "chown", "truncate", "utime",
 		"open", "read", "write", "release", "statfs", "fsync",
-        "flags", "multithreaded", NULL};
+		"mountpoint", "kopts", "lopts", "multithreaded", 
+		"debug", NULL};
 	
 	memset(&op, 0, sizeof(op));
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOOOOii", 
-                                     kwlist, &getattr_cb, &readlink_cb, &getdir_cb, &mknod_cb,
-                                     &mkdir_cb, &unlink_cb, &rmdir_cb, &symlink_cb, &rename_cb,
-                                     &link_cb, &chmod_cb, &chown_cb, &truncate_cb, &utime_cb,
-                                     &open_cb, &read_cb, &write_cb, &release_cb, &statfs_cb, &fsync_cb,
-                                     &flags, &multithreaded))
+	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOOOOsssii", 
+					kwlist, &getattr_cb, &readlink_cb, &getdir_cb, &mknod_cb,
+					&mkdir_cb, &unlink_cb, &rmdir_cb, &symlink_cb, &rename_cb,
+					&link_cb, &chmod_cb, &chown_cb, &truncate_cb, &utime_cb,
+					&open_cb, &read_cb, &write_cb, &release_cb, &statfs_cb, &fsync_cb,
+					&mountpoint, &kopts, &lopts, &multithreaded, &debuglevel))
 		return NULL;
 	
-    #define DO_ONE_ATTR(name) if(name ## _cb) { Py_INCREF(name ## _cb); op.name = name ## _func; } else { op.name = NULL; }
+#define DO_ONE_ATTR(name) if(name ## _cb) { Py_INCREF(name ## _cb); op.name = name ## _func; } else { op.name = NULL; }
 
 	DO_ONE_ATTR(getattr);
 	DO_ONE_ATTR(readlink);
@@ -437,11 +451,12 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 	DO_ONE_ATTR(open);
 	DO_ONE_ATTR(read);
 	DO_ONE_ATTR(write);
-    DO_ONE_ATTR(release);
-    DO_ONE_ATTR(statfs);
-    DO_ONE_ATTR(fsync);
+	DO_ONE_ATTR(release);
+	DO_ONE_ATTR(statfs);
+	DO_ONE_ATTR(fsync);
 
-	fuse = fuse_new(0, flags, &op);
+	fd = fuse_mount(mountpoint, kopts);
+	fuse = fuse_new(fd, lopts, &op);
 	if(multithreaded)
 		pyfuse_loop_mt(fuse);
 	else
@@ -460,8 +475,36 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 //@-at
 //@@c
 
+static char FuseGetContext__doc__[] =
+	"Return the context of a filesystem operation in a dict. uid, gid, pid\n";
+
+static PyObject *FuseGetContext( PyObject *self, PyObject *args) {
+	struct fuse_context *fc;
+	PyObject *ret;
+	PyObject *num;
+
+	fc = fuse_get_context();
+	ret = PyDict_New();
+
+	if(!ret)
+		return(NULL);
+
+	num = PyInt_FromLong( fc->uid);
+	PyDict_SetItemString( ret, "uid", num);	
+
+	num = PyInt_FromLong( fc->gid);
+	PyDict_SetItemString( ret, "gid", num);	
+
+	num = PyInt_FromLong( fc->pid);
+	PyDict_SetItemString( ret, "pid", num);	
+
+	return(ret);
+
+}
+
 static PyMethodDef Fuse_methods[] = {
 	{"main",	(PyCFunction)Fuse_main,	 METH_VARARGS|METH_KEYWORDS},
+	{"FuseGetContext", (PyCFunction)FuseGetContext, METH_VARARGS, FuseGetContext__doc__},
 	{NULL,		NULL}		/* sentinel */
 };
 
@@ -481,7 +524,7 @@ init_fuse(void)
 	d = PyModule_GetDict(m);
 	ErrorObject = PyErr_NewException("fuse.error", NULL, NULL);
 	PyDict_SetItemString(d, "error", ErrorObject);
-	PyDict_SetItemString(d, "DEBUG", PyInt_FromLong(FUSE_DEBUG));
+//	PyDict_SetItemString(d, "DEBUG", PyInt_FromLong(FUSE_DEBUG));
 }
 //@-node:DL_EXPORT
 //@-others
