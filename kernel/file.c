@@ -598,6 +598,11 @@ static ssize_t fuse_send_write(struct fuse_req *req, int writepage,
 	inarg.size = count;
 	req->in.h.opcode = FUSE_WRITE;
 	req->in.h.ino = inode->i_ino;
+	if (writepage) {
+		req->in.h.uid = 0;
+		req->in.h.gid = 0;
+		req->in.h.pid = 0;
+	}
 	req->in.numargs = 2;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
@@ -740,7 +745,7 @@ static void send_write_nonblock(struct fuse_req *req, struct inode *inode,
 	struct fuse_write_in *inarg;
 	struct fuse_file *ff;
 	char *buffer;
-	
+
 	BUG_ON(list_empty(&fi->write_files));
 	ff = list_entry(fi->write_files.next, struct fuse_file, ff_list);
 	
@@ -752,6 +757,9 @@ static void send_write_nonblock(struct fuse_req *req, struct inode *inode,
 	inarg->size = count;
 	req->in.h.opcode = FUSE_WRITE;
 	req->in.h.ino = inode->i_ino;
+	req->in.h.uid = 0;
+	req->in.h.gid = 0;
+	req->in.h.pid = 0;
 	req->in.numargs = 2;
 	req->in.args[0].size = sizeof(struct fuse_write_in);
 	req->in.args[0].value = inarg;

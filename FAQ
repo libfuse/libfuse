@@ -1,0 +1,220 @@
+Here are some good questions and answers in no particular order.
+
+---------------------------------------------------------------------------
+Subject: FUSE vs. LUFS
+
+
+> Can you explain me what are the differences between this two modules
+> and why did you start a new project?
+
+Well looking at the release dates on SF, the first release of FUSE is
+almost a year older than that of LUFS.  But we probably weren't awere
+of each others project for quite some time.
+
+The main difference between them is that in LUFS the filesystem is a
+shared object (.so) which is loaded by lufsmount, and in FUSE the
+filesystem is a separate executable, which uses the fuse library.  The
+actual API is very similar, and I've written a translator, that can
+load LUFS modules and run them using the FUSE kernel module (see the
+lufis package on the FUSE page).
+
+Another difference is that LUFS does some caching of directories and
+file attributes.  FUSE does not do this, so it provides a 'thinner'
+interface.
+
+---------------------------------------------------------------------------
+Subject: close() not in struct fuse_operations
+
+
+> Is there a reason for 'close' not being one of the
+> fuse_operations? I'd need to know when files are
+> closed...
+ 
+It's not easy.  Consider mmap(): if you have a memory file, even after
+closing it, you can read or write the file through memory.  
+ 
+Despite this there are close()-like operations: flush and release.
+Flush gets called on each close() and release gets called when there
+are no more uses of a file, including memory mappings.
+
+---------------------------------------------------------------------------
+Subject: overlapping open/release states
+
+
+> I'm using a fairly current CVS version of Fuse, and have noticed
+> overlapping open / release calls for a file.  In other words a file
+> is opened multiple times and receives multiple release calls.  Is
+> this expected?
+
+It has always been like this.  The open / release calls correspond to
+actual file opens / releases.  The release is called when there are no
+more refernces to the file, i.e. on the last close() or munmap().
+
+> This isn't what I expected.  Do I need to keep track of how many
+> open() calls were made to a file and expect that many release() calls?
+
+Yes.  You can also keep track of the number of files opened for
+writing for example, and use that information for finally flushing
+dirty data of a file.
+
+> So it appears that there may even be additional file operations after
+> one or more of the release calls.. 
+
+That is expected also.  It would be a bug if there were reads/writes
+after the last release, or if the number of releases didn't match the
+number of opens.
+
+> I've solved this in my code by counting the number of open / release
+> calls and only dropping information when the last expected release
+> is received.  But I thought I'd point this out in case, as it was
+> unexpected behavior..
+
+---------------------------------------------------------------------------
+Subject: return value from release()
+
+
+> Hmm.  So it doesn't matter what I return from my release function?  I
+> understand there is not an exact 1:1 relationship between close() and
+> release, but I had hoped that a error return from release would be
+> carried up as an error return from close().
+
+In release() the error value is ignored, and not every close will
+cause a release.  Consider this:
+
+  - process opens a file
+  - process forks 
+  - parent closes the file
+  - child closes the file
+
+The file will only be released on the second close, i.e. when all
+references to the file are closed.  Also memory mapping a file creates
+a reference to the file, that is released when the memory is unmapped.
+
+There is a flush() operation that is called on every close(), through
+which the filesystem can return an error.
+
+Note: there can be read/write operations even after the last flush()
+but before a release().
+
+---------------------------------------------------------------------------
+Subject: FUSE lacks ioctl support
+
+
+>  I'll try to add ioctl support to FUSE, but I am quite new to it, so I
+>  would apreciate any suggestions.
+
+It's not clear to me how would you use ioctls since they are
+meaningless on normal files, and on device files the filesystem
+implementation usually does not care about the ioctl operations.  And
+even if you manage to hack fuse to intercept device ioctls, you
+wouldn't be able to do anything with them, because they contain
+arbitrarily structured data (not length/value as in the case of read
+or write).
+
+[...]
+
+Using getxattr() and setxattr() is much cleaner than ioctl(), and is
+actually supported in fuse-2.0.
+
+---------------------------------------------------------------------------
+Subject: Short reads
+
+
+> Now for the problem case: I cat the 256k file, the kernel issues a
+> read with length 65536 and offset 0.  My program returns only 10
+> bytes.  What I expected to see was the kernel to then issue a read for
+> length 65536 and offset 10.  Instead what I saw in the result was the
+> 10 bytes I returned, followed by 65526 zero bytes.
+> 
+> Is this the intended behavior?
+
+Yes.  You can easily program around it with a for-loop in your read
+function.
+
+> Does this simplify things significantly?  If it isn't much of a
+> difference, I'd like to suggest doing it the other way: many people
+> (like me) implement their fuse read function in terms of read(), and
+> read() can return early.
+ 
+No.  Read from a pipe/socket can be short, but read from a file can't. 
+
+---------------------------------------------------------------------------
+Subject: protocol error
+
+> I'm having trouble with file writing. I can 
+> 'echo something > file' to a file, but 
+> 'cp file something' or 'cat something > file'
+> gives a protocol error.
+
+Two possible reasons for this are:
+
+1) A mismatch between the library version and the kernel module
+version.
+
+2) The write() operation returns less than the 'size' parameter.
+Short writes are generally not allowed (as in case of read()).  The
+exception is if the 'direct_io' mount option is used.
+
+---------------------------------------------------------------------------
+Subject: FUSE naming
+
+
+> There are a million other projects with the same name.  Why did you
+> call it 'FUSE'?
+
+Because I'm an imbecile.  The lesson is that a common term is not a
+good project name.  A somewhat strange story comes to my mind: I was
+contacted by Philip Kendall shortly after releasing FUSE, blaming me
+for choosing the same name as his ZX Spectrum emulator (Fuse).  We
+have known each other from earlier times, since I have also written a
+ZX Spectrum emulator (Spectemu).
+
+---------------------------------------------------------------------------
+Subject: Uid/gid/pid
+
+
+> Is there any easy way to know the uid of a reader?  For example, let's
+> say I wanted to create a file that contained 'foo' for uid 1, but
+> 'bar' for uid 2.
+ 
+Yes: 
+ 
+fuse_get_context()->uid
+
+
+---------------------------------------------------------------------------
+Subject: 'find' command  
+
+
+> I'm having trouble getting the find command to search through fuse
+> directories. What settings do I need in 'getattr'?
+
+use the -noleaf option to find
+(find uses the following parameters to determine whether it should recurse
+into a subdirectory)
+
+nr_links must be >= 3
+size must be > 0
+and must be a directory
+
+so just return those in the getattr for your directories and you wont have
+to use -noleaf.
+
+---------------------------------------------------------------------------
+Subject: File system interactivity
+
+> I need to add interactivity to my user space file system.
+> For example, while executing create(), I need to ask a
+> question to the terminal that issued the request.
+>
+> Is there a way I can achieve this goal?
+ 
+It would not be possible generally speaking, since it might not be an
+interactive program but rather a daemon, or a GUI program creating the
+file.  However you should be able to get the PID for the caller, and
+by looking in /proc you should be able to find the process tty or
+something similar. Perhaps it would be better to redesign your program
+not to have such interactivity anyway, try to use e.g. extended
+attributes of files to set per-file options, or a configuration file
+for your filesystem.
+ 

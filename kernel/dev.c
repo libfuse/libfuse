@@ -121,6 +121,9 @@ static struct fuse_req *do_get_request(struct fuse_conn *fc)
 	list_del_init(&req->list);
 	spin_unlock(&fuse_lock);
 	fuse_reset_request(req);
+	req->in.h.uid = current->fsuid;
+	req->in.h.gid = current->fsgid;
+	req->in.h.pid = current->pid;
 	return req;
 }
 
@@ -132,9 +135,6 @@ struct fuse_req *fuse_get_request(struct fuse_conn *fc)
 		return NULL;
 
 	req = do_get_request(fc);
-	req->in.h.uid = current->fsuid;
-	req->in.h.gid = current->fsgid;
-	req->in.h.pid = current->pid;
 	return req;
 }
 
@@ -146,8 +146,6 @@ struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc)
 		return NULL;
 	
 	req = do_get_request(fc);
-	req->in.h.uid = current->fsuid;
-	req->in.h.gid = current->fsgid;
 	return req;
 }
 

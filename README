@@ -8,12 +8,12 @@ create and mount their own filesystem implementations.
 
 You can download the source code releases from
 
-  http://sourceforge.net/projects/avf
+  http://sourceforge.net/projects/fuse
 
 or alternatively you can use CVS to get the very latest development
 version by setting the cvsroot to
 
-  :pserver:anonymous@cvs.avf.sourceforge.net:/cvsroot/avf
+  :pserver:anonymous@cvs.sourceforge.net:/cvsroot/fuse
 
 and checking out the 'fuse' module.
 
