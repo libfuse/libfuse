@@ -350,3 +350,15 @@ Homepage: http://search.cpan.org/~dpavlin/Fuse-0.05/
 CVS: cvs -d:pserver:anonymous@cvs.sourceforge.net:/cvsroot/fuse co -P perl
 
 ==============================================================================
+Name: Cddfs
+
+Author: Matthieu Castet
+
+Homepage: http://castet.matthieu.free.fr/cddfs/
+
+Description:
+
+  Cddfs [1] is a file system for fuse that use libparanoia in order to
+  mount your audio cd.
+
+==============================================================================

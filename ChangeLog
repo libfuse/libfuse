@@ -1,3 +1,11 @@
+2005-04-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.3-pre3
+
+2005-04-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Implement backward compatibility with version 5 kernel ABI
+
 2005-04-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.3-pre2

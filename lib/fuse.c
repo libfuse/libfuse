@@ -10,6 +10,7 @@
 #include "fuse_i.h"
 #include "fuse_compat.h"
 #include "fuse_kernel.h"
+#include "fuse_kernel_compat5.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -39,7 +40,16 @@
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
 
 #define FUSE_MAX_PATH 4096
-#define PARAM(inarg) (((char *)(inarg)) + sizeof(*inarg))
+#define PARAM_T(inarg, type) (((char *)(inarg)) + sizeof(type))
+#define PARAM(inarg) PARAM_T(inarg, *(inarg))
+#define PARAM_COMPAT(f, inarg, type) \
+    ((f)->major == 5 ? PARAM_T(inarg, struct type ## _compat5) : PARAM(inarg))
+
+#define MEMBER_COMPAT(f, ptr, memb, type) \
+    ((f)->major == 5 ? &((struct type ## _compat5 *) (ptr))->memb : &ptr->memb)
+
+#define SIZEOF_COMPAT(f, type) \
+    ((f)->major == 5 ? sizeof(struct type ## _compat5) : sizeof(struct type))
 
 #define ENTRY_REVALIDATE_TIME 1 /* sec */
 #define ATTR_REVALIDATE_TIME 1 /* sec */
@@ -472,8 +482,35 @@ static int fill_dir5(void *buf, const char *name, int type, ino_t ino,
     return db->len > FUSE_NAME_OFFSET ? 0 : 1;
 }
 
-static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
-                    ino_t ino)
+static int fill_dir_compat5(struct fuse_dirhandle *dh, const char *name,
+                            int type, ino_t ino)
+{
+    size_t namelen = strlen(name);
+    size_t entsize = sizeof(struct fuse_dirhandle) + namelen + 8;
+    struct fuse_dirent_compat5 *dirent;
+
+    if (namelen > FUSE_NAME_MAX)
+        namelen = FUSE_NAME_MAX;
+
+    dh->contents = realloc(dh->contents, dh->len + entsize);
+    if (dh->contents == NULL)
+        return -ENOMEM;
+
+    dirent = (struct fuse_dirent_compat5 *) (dh->contents + dh->len);
+    memset(dirent, 0, entsize);
+    if ((dh->fuse->flags & FUSE_USE_INO))
+        dirent->ino = ino;
+    else
+        dirent->ino = (unsigned long) -1;
+    dirent->namelen = namelen;
+    strncpy(dirent->name, name, namelen);
+    dirent->type = type;
+    dh->len += FUSE_DIRENT_SIZE_COMPAT5(dirent);
+    return 0;
+}
+
+static int fill_dir_new(struct fuse_dirhandle *dh, const char *name, int type,
+                        ino_t ino)
 {
     size_t namelen = strlen(name);
     size_t entsize = sizeof(struct fuse_dirhandle) + namelen + 8;
@@ -498,6 +535,15 @@ static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
     dh->len += FUSE_DIRENT_SIZE(dirent);
     dirent->off = dh->len;
     return 0;
+}
+
+static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
+                    ino_t ino)
+{
+    if (dh->fuse->major == 5)
+        return fill_dir_compat5(dh, name, type, ino);
+    else
+        return fill_dir_new(dh, name, type, ino);
 }
 
 static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
@@ -787,7 +833,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *path;
     int valid = arg->valid;
-    struct fuse_attr *attr = &arg->attr;
+    struct fuse_attr *attr = MEMBER_COMPAT(f, arg, attr, fuse_setattr_in);
     struct fuse_attr_out outarg;
 
     res = -ENOENT;
@@ -893,7 +939,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
     int res;
     int res2;
     char *path;
-    char *name = PARAM(inarg);
+    char *name = PARAM_COMPAT(f, inarg, fuse_mkdir_in);
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
@@ -1101,7 +1147,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
         }
 
         pthread_mutex_lock(&f->lock);
-        res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
+        res2 = send_reply(f, in, res, &outarg, SIZEOF_COMPAT(f, fuse_open_out));
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release) {
@@ -1272,7 +1318,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
         res = 0;
     }
 
-    send_reply(f, in, res, &outarg, sizeof(outarg));
+    send_reply(f, in, res, &outarg, SIZEOF_COMPAT(f, fuse_write_out));
 }
 
 static int default_statfs(struct statfs *buf)
@@ -1430,7 +1476,7 @@ static void do_getxattr_size(struct fuse *f, struct fuse_in_header *in,
         arg.size = res;
         res = 0;
     }
-    send_reply(f, in, res, &arg, sizeof(arg));
+    send_reply(f, in, res, &arg, SIZEOF_COMPAT(f, fuse_getxattr_out));
 }
 
 static void do_getxattr(struct fuse *f, struct fuse_in_header *in,
@@ -1497,7 +1543,7 @@ static void do_listxattr_size(struct fuse *f, struct fuse_in_header *in)
         arg.size = res;
         res = 0;
     }
-    send_reply(f, in, res, &arg, sizeof(arg));
+    send_reply(f, in, res, &arg, SIZEOF_COMPAT(f, fuse_getxattr_out));
 }
 
 static void do_listxattr(struct fuse *f, struct fuse_in_header *in,
@@ -1530,23 +1576,36 @@ static void do_init(struct fuse *f, struct fuse_in_header *in,
                     struct fuse_init_in_out *arg)
 {
     struct fuse_init_in_out outarg;
+
+    if (in->padding == 5) {
+        arg->minor = arg->major;
+        arg->major = in->padding;
+    }
+
     if (f->flags & FUSE_DEBUG) {
-        printf("   INIT: %u.%u\n", arg->major, arg->minor);
+        printf("INIT: %u.%u\n", arg->major, arg->minor);
         fflush(stdout);
     }
     f->got_init = 1;
     if (f->op.init)
         f->user_data = f->op.init();
 
-    if (arg->major < 6) {
-        fprintf(stderr, "Kernel API version 5 not yet handled\n");
-        fuse_exit(f);
-        return;
+    if (arg->major == 5) {
+        f->major = 5;
+        f->minor = 1;
+    } else {
+        f->major = FUSE_KERNEL_VERSION;
+        f->minor = FUSE_KERNEL_MINOR_VERSION;
+    }
+    memset(&outarg, 0, sizeof(outarg));
+    outarg.major = f->major;
+    outarg.minor = f->minor;
+
+    if (f->flags & FUSE_DEBUG) {
+        printf("   INIT: %u.%u\n", outarg.major, outarg.minor);
+        fflush(stdout);
     }
 
-    memset(&outarg, 0, sizeof(outarg));
-    outarg.major = FUSE_KERNEL_VERSION;
-    outarg.minor = FUSE_KERNEL_MINOR_VERSION;
     send_reply(f, in, 0, &outarg, sizeof(outarg));
 }
 
@@ -1592,7 +1651,7 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
         if (res == 0) {
             int res2;
             pthread_mutex_lock(&f->lock);
-            res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
+            res2 = send_reply(f, in, res, &outarg, SIZEOF_COMPAT(f, fuse_open_out));
             if(res2 == -ENOENT) {
                 /* The opendir syscall was interrupted, so it must be
                    cancelled */
@@ -1607,7 +1666,7 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
         }
         free(path);
     } else 
-        send_reply(f, in, 0, &outarg, sizeof(outarg));
+        send_reply(f, in, 0, &outarg, SIZEOF_COMPAT(f, fuse_open_out));
 }
 
 static void do_readdir(struct fuse *f, struct fuse_in_header *in,
@@ -1628,7 +1687,7 @@ static void do_readdir(struct fuse *f, struct fuse_in_header *in,
     }
     buf = outbuf + sizeof(struct fuse_out_header);
 
-    if (f->op.readdir) {
+    if (f->op.readdir && f->major != 5) {
         struct fuse_dirbuf db;
         struct fuse_file_info fi;
         char *path;
@@ -1729,8 +1788,7 @@ static void free_cmd(struct fuse_cmd *cmd)
 void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
     struct fuse_in_header *in = (struct fuse_in_header *) cmd->buf;
-    void *inarg = cmd->buf + sizeof(struct fuse_in_header);
-    size_t argsize;
+    void *inarg = cmd->buf + SIZEOF_COMPAT(f, fuse_in_header);
     struct fuse_context *ctx = fuse_get_context();
 
     fuse_dec_avail(f);
@@ -1753,8 +1811,6 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     ctx->gid = in->gid;
     ctx->pid = in->pid;
     ctx->private_data = f->user_data;
-
-    argsize = cmd->buflen - sizeof(struct fuse_in_header);
 
     switch (in->opcode) {
     case FUSE_LOOKUP:
@@ -1898,7 +1954,7 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f)
         return NULL;
     }
     in = (struct fuse_in_header *) cmd->buf;
-    inarg = cmd->buf + sizeof(struct fuse_in_header);
+    inarg = cmd->buf + SIZEOF_COMPAT(f, fuse_in_header);
 
     res = read(f->fd, cmd->buf, FUSE_MAX_IN);
     if (res == -1) {
@@ -1915,7 +1971,7 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f)
         fuse_exit(f);
         return NULL;
     }
-    if ((size_t) res < sizeof(struct fuse_in_header)) {
+    if ((size_t) res < SIZEOF_COMPAT(f, fuse_in_header)) {
         free_cmd(cmd);
         /* Cannot happen */
         fprintf(stderr, "short read on fuse device\n");

@@ -30,6 +30,8 @@ struct fuse {
     volatile int exited;
     int got_init;
     void *user_data;
+    int major;
+    int minor;
 };
 
 struct fuse *fuse_new_common(int fd, const char *opts,
