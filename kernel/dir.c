@@ -729,7 +729,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 		      int rdev)
 {
-	return fuse_mknod(dir, entry, mode, rdev);
+	return _fuse_mknod(dir, entry, mode, rdev);
 }
 
 static int fuse_dentry_revalidate(struct dentry *entry, int flags)
