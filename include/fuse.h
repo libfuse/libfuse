@@ -11,11 +11,20 @@
 
 /* This file defines the library interface of FUSE */
 
+/* IMPORTANT: you should define FUSE_USE_VERSION before including this
+   header.  To use the new API define it to 22 (recommended for any
+   new application), to use the old API define it to 21, to use the
+   even older 1.X API define it to 11. */
+
+#ifndef FUSE_USE_VERSION
+#define FUSE_USE_VERSION 21
+#endif
+
 /** Major version of FUSE library interface */
-#define FUSE_MAJOR_VERSION 3
+#define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 0
+#define FUSE_MINOR_VERSION 2
 
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
@@ -174,12 +183,15 @@ struct fuse_context {
  *   - registers the operations
  *   - calls either the single-threaded or the multi-threaded event loop
  *
+ * Note: this is currently implemented as a macro.
+ *
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
  * @param op the file system operation 
  * @return 0 on success, nonzero on failure
  */
-int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
+/* int fuse_main(int argc, char *argv[], const struct fuse_operations *op); */
+#define fuse_main(argc, argv, op) __fuse_main(argc, argv, op, sizeof(*(op)))
 
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
@@ -210,10 +222,11 @@ void fuse_unmount(const char *mountpoint);
  * @param fd the control file descriptor
  * @param opts mount options to be used by the library
  * @param op the operations
+ * @param op_size the size of the fuse_operations structure
  * @return the created FUSE handle
  */
 struct fuse *fuse_new(int fd, const char *opts, 
-                      const struct fuse_operations *op);
+                      const struct fuse_operations *op, size_t op_size);
 
 /**
  * Destroy the FUSE handle. 
@@ -287,6 +300,14 @@ int fuse_invalidate(struct fuse *f, const char *path);
  */
 int fuse_is_lib_option(const char *opt);
 
+/**
+ * The real main function
+ * 
+ * Do not call this directly, use fuse_main()
+ */
+int __fuse_main(int argc, char *argv[], const struct fuse_operations *op,
+                size_t op_size);
+
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
  * ----------------------------------------------------------- */
@@ -294,7 +315,7 @@ int fuse_is_lib_option(const char *opt);
 struct fuse_cmd;
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 struct fuse *__fuse_setup(int argc, char *argv[],
-                          const struct fuse_operations *op,
+                          const struct fuse_operations *op, size_t op_size,
                           char **mountpoint, int *multithreaded, int *fd);
 void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);
 struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
@@ -302,6 +323,38 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
 int __fuse_exited(struct fuse* f);
 void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
+
+/* ----------------------------------------------------------- *
+ * Compatibility stuff                                         *
+ * ----------------------------------------------------------- */
+
+#if FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
+#  include <fuse_compat.h>
+#  define fuse_dirfil_t _fuse_dirfil_t_compat
+#  undef fuse_main
+#  undef FUSE_MINOR_VERSION
+#  undef FUSE_MAJOR_VERSION
+#  if FUSE_USE_VERSION == 21
+#    define FUSE_MAJOR_VERSION 2
+#    define FUSE_MINOR_VERSION 1
+#    define fuse_operations _fuse_operations_compat2
+#    define fuse_main _fuse_main_compat2
+#    define fuse_new _fuse_new_compat2
+#    define __fuse_setup _fuse_setup_compat2
+#  else
+#    undef FUSE_MAJOR_VERSION
+#    define FUSE_MAJOR_VERSION 1
+#    define FUSE_MINOR_VERSION 1
+#    define fuse_statfs _fuse_statfs_compat1
+#    define fuse_operations _fuse_operations_compat1
+#    define fuse_main _fuse_main_compat1
+#    define fuse_new _fuse_new_compat1
+#    define fuse_mount _fuse_mount_compat1
+#    define FUSE_DEBUG _FUSE_DEBUG_COMPAT1
+#  endif
+#elif FUSE_USE_VERSION != 22
+#  error API version other than 22, 21 and 11 not supported
+#endif
 
 #ifdef __cplusplus
 }

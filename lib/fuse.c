@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <sys/param.h>
 
+#define FUSE_KERNEL_MINOR_VERSION_NEED 1
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
 #define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
@@ -1067,8 +1068,12 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
-        if (f->op.open)
-            res = f->op.open(path, &fi);
+        if (f->op.open.curr) {
+            if (!f->compat)
+                res = f->op.open.curr(path, &fi);
+            else
+                res = f->op.open.compat2(path, fi.flags);
+        }
     }
     if (res == 0) {
         int res2;
@@ -1087,8 +1092,12 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
         res2 = __send_reply(f, in, res, &outarg, sizeof(outarg), 1);
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
-            if(f->op.release)
-                f->op.release(path, &fi);
+            if(f->op.release.curr) {
+                if (!f->compat)
+                    f->op.release.curr(path, &fi);
+                else
+                    f->op.release.compat2(path, fi.flags);
+            }
         } else
             get_node(f, in->nodeid)->open_count ++;
         pthread_mutex_unlock(&f->lock);
@@ -1146,8 +1155,12 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
             printf("RELEASE[%lu]\n", arg->fh);
             fflush(stdout);
         }
-        if (f->op.release)
-            f->op.release(path, &fi);
+        if (f->op.release.curr) {
+            if (!f->compat)
+                f->op.release.curr(path, &fi);
+            else
+                f->op.release.compat2(path, fi.flags);
+        }
 
         if(node->is_hidden && node->open_count == 0)
             /* can now clean up this hidden file */
@@ -1252,6 +1265,18 @@ static int default_statfs(struct statfs *buf)
     return 0;
 }
 
+static void convert_statfs_compat(struct _fuse_statfs_compat1 *compatbuf,
+                                  struct statfs *statfs)
+{
+    statfs->f_bsize   = compatbuf->block_size;
+    statfs->f_blocks  = compatbuf->blocks;
+    statfs->f_bfree   = compatbuf->blocks_free;
+    statfs->f_bavail  = compatbuf->blocks_free;
+    statfs->f_files   = compatbuf->files;
+    statfs->f_ffree   = compatbuf->files_free;
+    statfs->f_namelen = compatbuf->namelen;
+}
+
 static void convert_statfs(struct statfs *statfs, struct fuse_kstatfs *kstatfs)
 {
     kstatfs->bsize	= statfs->f_bsize;
@@ -1270,8 +1295,17 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
     struct statfs buf;
 
     memset(&buf, 0, sizeof(struct statfs));
-    if (f->op.statfs)
-        res = f->op.statfs("/", &buf);
+    if (f->op.statfs.curr) {
+        if (!f->compat || f->compat > 11)
+            res = f->op.statfs.curr("/", &buf);
+        else {
+            struct _fuse_statfs_compat1 compatbuf;
+            memset(&compatbuf, 0, sizeof(struct _fuse_statfs_compat1));
+            res = f->op.statfs.compat1(&compatbuf);
+            if (res == 0)
+                convert_statfs_compat(&compatbuf, &buf);
+        }
+    }
     else
         res = default_statfs(&buf);
 
@@ -1773,7 +1807,7 @@ static int check_version(struct fuse *f)
                 FUSE_KERNEL_VERSION);
         return -1;
     }
-    if (f->minorver < FUSE_KERNEL_MINOR_VERSION) {
+    if (f->minorver < FUSE_KERNEL_MINOR_VERSION_NEED) {
         fprintf(stderr, "fuse: kernel interface too old: need >= %i.%i\n",
                 FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
         return -1;
@@ -1818,10 +1852,17 @@ static int parse_lib_opts(struct fuse *f, const char *opts)
     return 0;
 }
 
-struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op)
+struct fuse *fuse_new_common(int fd, const char *opts,
+                             const struct fuse_operations *op,
+                             size_t op_size, int compat)
 {
     struct fuse *f;
     struct node *root;
+
+    if (sizeof(struct fuse_operations_i) < op_size) {
+        fprintf(stderr, "fuse: warning: library too old, some operations may not not work\n");
+        op_size = sizeof(struct fuse_operations_i);
+    }
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
     if (f == NULL)
@@ -1862,7 +1903,8 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
 #endif
     f->numworker = 0;
     f->numavail = 0;
-    f->op = *op;
+    memcpy(&f->op, op, op_size);
+    f->compat = compat;
     f->exited = 0;
 
     root = (struct node *) calloc(1, sizeof(struct node));
@@ -1895,6 +1937,29 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
     return NULL;
 }
 
+struct fuse *fuse_new(int fd, const char *opts,
+                      const struct fuse_operations *op, size_t op_size)
+{
+    return fuse_new_common(fd, opts, op, op_size, 0);
+}
+
+struct fuse *_fuse_new_compat2(int fd, const char *opts,
+                              const struct _fuse_operations_compat2 *op)
+{
+    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
+                           sizeof(struct _fuse_operations_compat2), 21);
+}
+
+struct fuse *_fuse_new_compat1(int fd, int flags,
+                              const struct _fuse_operations_compat1 *op)
+{
+    char *opts = NULL;
+    if (flags & _FUSE_DEBUG_COMPAT1)
+        opts = "debug";
+    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
+                           sizeof(struct _fuse_operations_compat1), 11);
+}
+
 void fuse_destroy(struct fuse *f)
 {
     size_t i;
@@ -1923,3 +1988,5 @@ void fuse_destroy(struct fuse *f)
     pthread_mutex_destroy(&f->lock);
     free(f);
 }
+
+__asm__(".symver _fuse_new_compat2,fuse_new@");

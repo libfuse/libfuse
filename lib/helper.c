@@ -6,7 +6,7 @@
     See the file COPYING.LIB.
 */
 
-#include "fuse.h"
+#include "fuse_i.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -249,16 +249,20 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
 }
                               
 
-struct fuse *__fuse_setup(int argc, char *argv[],
-                          const struct fuse_operations *op,
-                          char **mountpoint, int *multithreaded, int *fd)
+static struct fuse *fuse_setup_common(int argc, char *argv[],
+                                      const struct fuse_operations *op,
+                                      size_t op_size,
+                                      char **mountpoint,
+                                      int *multithreaded,
+                                      int *fd,
+                                      int compat)
 {
     struct fuse *fuse;
     int background;
     char *kernel_opts;
     char *lib_opts;
     int res;
-    
+
     if (fuse_instance != NULL) {
         fprintf(stderr, "fuse: __fuse_setup() called twice\n");
         return NULL;
@@ -274,7 +278,7 @@ struct fuse *__fuse_setup(int argc, char *argv[],
     if (*fd == -1)
         goto err_free;
 
-    fuse = fuse_new(*fd, lib_opts, op);
+    fuse = fuse_new_common(*fd, lib_opts, op, op_size, compat);
     if (fuse == NULL)
         goto err_unmount;
 
@@ -306,6 +310,25 @@ struct fuse *__fuse_setup(int argc, char *argv[],
     return NULL;
 }
 
+struct fuse *__fuse_setup(int argc, char *argv[],
+                          const struct fuse_operations *op,
+                          size_t op_size, char **mountpoint,
+                          int *multithreaded, int *fd)
+{
+    return fuse_setup_common(argc, argv, op, op_size, mountpoint,
+                             multithreaded, fd, 0);
+}
+
+struct fuse *_fuse_setup_compat2(int argc, char *argv[],
+                                 const struct _fuse_operations_compat2 *op,
+                                 char **mountpoint, int *multithreaded,
+                                 int *fd)
+{
+    return fuse_setup_common(argc, argv, (struct fuse_operations *) op, 
+                             sizeof(struct _fuse_operations_compat2),
+                             mountpoint, multithreaded, fd, 21);
+}
+
 void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
 {
     if (fuse_instance != fuse)
@@ -319,8 +342,9 @@ void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
     free(mountpoint);
 }
 
-
-int fuse_main(int argc, char *argv[], const struct fuse_operations *op)
+static int fuse_main_common(int argc, char *argv[],
+                            const struct fuse_operations *op, size_t op_size,
+                            int compat)
 {
     struct fuse *fuse;
     char *mountpoint;
@@ -328,7 +352,8 @@ int fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     int res;
     int fd;
 
-    fuse = __fuse_setup(argc, argv, op, &mountpoint, &multithreaded, &fd);
+    fuse = fuse_setup_common(argc, argv, op, op_size, &mountpoint,
+                             &multithreaded, &fd, compat);
     if (fuse == NULL)
         return 1;
     
@@ -344,3 +369,25 @@ int fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     return 0;
 }
 
+int __fuse_main(int argc, char *argv[],const struct fuse_operations *op,
+                 size_t op_size)
+{
+    return fuse_main_common(argc, argv, op, op_size, 0);
+}
+
+void _fuse_main_compat1(int argc, char *argv[],
+                      const struct _fuse_operations_compat1 *op)
+{
+    fuse_main_common(argc, argv, (struct fuse_operations *) op, 
+                     sizeof(struct _fuse_operations_compat1), 11);
+}
+
+int _fuse_main_compat2(int argc, char *argv[],
+                      const struct _fuse_operations_compat2 *op)
+{
+    return fuse_main_common(argc, argv, (struct fuse_operations *) op,
+                            sizeof(struct _fuse_operations_compat2), 21);
+}
+
+__asm__(".symver _fuse_setup_compat2,__fuse_setup@");
+__asm__(".symver _fuse_main_compat2,fuse_main@");

@@ -1,3 +1,12 @@
+2004-12-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add source compatibility to 2.1 and 1.1 APIs.  To select betwen
+	versions simply define FUSE_USE_VERSION to 22, 21 or 11 before
+	including the fuse header
+
+	* Add binary compatibility to 2.1 version of library with symbol
+	versioning
+
 2004-12-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: clean up writing functions

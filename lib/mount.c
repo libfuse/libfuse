@@ -7,6 +7,7 @@
 */
 
 #include "fuse.h"
+#include "fuse_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -123,4 +124,11 @@ int fuse_mount(const char *mountpoint, const char *opts)
     waitpid(pid, NULL, 0); /* bury zombie */
 
     return rv;
+}
+
+int _fuse_mount_compat1(const char *mountpoint, const char *args[])
+{
+    /* just ignore mount args for now */
+    (void) args;
+    return fuse_mount(mountpoint, NULL);
 }
