@@ -2,6 +2,9 @@
 
 	* libfuse: clean up some unitialized memory found with valgrind
 
+	* Add -lpthread to Libs in fuse.pc.  Valgrind seems to need an
+	explicitly linked libpthread for applications
+
 2005-02-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: set umask, otherwise /etc/mtab will have
