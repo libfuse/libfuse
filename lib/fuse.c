@@ -1432,6 +1432,11 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     free_cmd(cmd);
 }
 
+int __fuse_exited(struct fuse* f)
+{
+    return f->exited;
+}
+
 struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 {
     ssize_t res;
@@ -1444,36 +1449,36 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
     in = (struct fuse_in_header *) cmd->buf;
     inarg = cmd->buf + sizeof(struct fuse_in_header);
 
-    do {
-        res = read(f->fd, cmd->buf, FUSE_MAX_IN);
-        if (res == -1) {
-            free_cmd(cmd);
-            if (f->exited || errno == EINTR)
-                return NULL;
-
-            /* ENODEV means we got unmounted, so we silenty return failure */
-            if (errno != ENODEV) {
-                /* BAD... This will happen again */
-                perror("fuse: reading device");
-            }
-
-            fuse_exit(f);
+    res = read(f->fd, cmd->buf, FUSE_MAX_IN);
+    if (res == -1) {
+        free_cmd(cmd);
+        if (__fuse_exited(f) || errno == EINTR)
             return NULL;
-        }
-        if ((size_t) res < sizeof(struct fuse_in_header)) {
-            free_cmd(cmd);
-            /* Cannot happen */
-            fprintf(stderr, "short read on fuse device\n");
-            fuse_exit(f);
-            return NULL;
-        }
-        cmd->buflen = res;
         
-        /* Forget is special, it can be done without messing with threads. */
-        if (in->opcode == FUSE_FORGET)
-            do_forget(f, in, (struct fuse_forget_in *) inarg);
-
-    } while (in->opcode == FUSE_FORGET);
+        /* ENODEV means we got unmounted, so we silenty return failure */
+        if (errno != ENODEV) {
+            /* BAD... This will happen again */
+            perror("fuse: reading device");
+        }
+        
+        fuse_exit(f);
+        return NULL;
+    }
+    if ((size_t) res < sizeof(struct fuse_in_header)) {
+        free_cmd(cmd);
+        /* Cannot happen */
+        fprintf(stderr, "short read on fuse device\n");
+        fuse_exit(f);
+        return NULL;
+    }
+    cmd->buflen = res;
+    
+    /* Forget is special, it can be done without messing with threads. */
+    if (in->opcode == FUSE_FORGET) {
+        do_forget(f, in, (struct fuse_forget_in *) inarg);
+        free_cmd(cmd);
+        return NULL;
+    }
 
     return cmd;
 }
@@ -1486,7 +1491,7 @@ void fuse_loop(struct fuse *f)
     while (1) {
         struct fuse_cmd *cmd;
 
-        if (f->exited)
+        if (__fuse_exited(f))
             return;
 
         cmd = __fuse_read_cmd(f);

@@ -273,6 +273,7 @@ typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
 void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
+int __fuse_exited(struct fuse* f);
 
 #ifdef __cplusplus
 }

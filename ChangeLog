@@ -3,6 +3,12 @@
 	* Acquire inode->i_sem before open and release methods to prevent
 	concurrent rename or unlink operations.
 
+	* Make __fuse_read_cmd() read only one command.  This allows
+	multiplexing the fuse file descriptor with other event sources
+	using select() or poll() (patch by Jeff Harris)
+
+	* Export 'exited' flag with __fuse_exited() (patch by Jeff Harris)
+
 2004-06-27  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix file offset wrap around at 4G when doing large reads

@@ -38,7 +38,7 @@ static void *do_work(void *data)
     while (1) {
         struct fuse_cmd *cmd;
 
-        if (f->exited)
+        if (__fuse_exited(f))
             break;
 
         cmd = __fuse_read_cmd(w->f);
