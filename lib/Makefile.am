@@ -11,3 +11,5 @@ libfuse_la_SOURCES = 	\
 
 libfuse_la_LDFLAGS = -lpthread -version-number 2:2:0 \
 	-Wl,--version-script,fuse_versionscript
+
+EXTRA_DIST = fuse_versionscript
