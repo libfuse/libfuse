@@ -598,9 +598,6 @@ static ssize_t fuse_read(struct file *file, char __user *buf, size_t count,
 		req->num_pages = npages;
 		req->page_offset = offset;
 		nbytes = min(nbytes, (unsigned) (npages * PAGE_SIZE - offset));
-		printk("fusedirect: %i %i %i %i\n", 
-		       count, npages, offset, nbytes);
-
 		err = fuse_send_read_multi(file, req, nbytes, pos);
 		for (i = 0; i < npages; i++)
 			page_cache_release(req->pages[i]);
