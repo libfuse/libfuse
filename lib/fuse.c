@@ -812,6 +812,10 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
     if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
+            printf("UNLINK %s\n", path);
+            fflush(stdout);
+        }
         res = -ENOSYS;
         if (f->op.unlink) {
             if (!(f->flags & FUSE_HARD_REMOVE) && is_open(f, in->ino, name))
@@ -835,6 +839,10 @@ static void do_rmdir(struct fuse *f, struct fuse_in_header *in, char *name)
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
     if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
+            printf("RMDIR %s\n", path);
+            fflush(stdout);
+        }
         res = -ENOSYS;
         if (f->op.rmdir) {
             res = f->op.rmdir(path);
@@ -891,6 +899,10 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
     if (oldpath != NULL) {
         newpath = get_path_name(f, newdir, newname);
         if (newpath != NULL) {
+            if (f->flags & FUSE_DEBUG) {
+                printf("RENAME %s -> %s\n", oldpath, newpath);
+                fflush(stdout);
+            }
             res = -ENOSYS;
             if (f->op.rename) {
                 res = 0;
@@ -950,6 +962,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
+    struct fuse_open_out outarg;
 
     res = -ENOENT;
     path = get_path(f, in->ino);
@@ -966,7 +979,14 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
            races with rename/unlink, against which the kernel can't
            protect */
         pthread_mutex_lock(&f->lock);
-        res2 = __send_reply(f, in, res, NULL, 0, 1);
+        f->fh_ctr ++;
+        outarg.fh = f->fh_ctr;
+        if (f->flags & FUSE_DEBUG) {
+            printf("OPEN[%u] flags: 0x%x\n", outarg.fh, arg->flags);
+            fflush(stdout);
+        }
+
+        res2 = __send_reply(f, in, res, &outarg, sizeof(outarg), 1);
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release)
@@ -982,7 +1002,8 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
         free(path);
 }
 
-static void do_flush(struct fuse *f, struct fuse_in_header *in)
+static void do_flush(struct fuse *f, struct fuse_in_header *in,
+                     struct fuse_flush_in *arg)
 {
     char *path;
     int res;
@@ -990,6 +1011,10 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in)
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
+            printf("FLUSH[%u]\n", arg->fh);
+            fflush(stdout);
+        }
         res = -ENOSYS;
         if (f->op.flush)
             res = f->op.flush(path);
@@ -999,7 +1024,7 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in)
 }
 
 static void do_release(struct fuse *f, struct fuse_in_header *in,
-                       struct fuse_open_in *arg)
+                       struct fuse_release_in *arg)
 {
     struct node *node;
     char *path;
@@ -1011,6 +1036,10 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
 
     path = get_path(f, in->ino);
     if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
+            printf("RELEASE[%u]\n", arg->fh);
+            fflush(stdout);
+        }
         if (f->op.release)
             f->op.release(path, arg->flags);
 
@@ -1038,7 +1067,8 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     path = get_path(f, in->ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("READ %u bytes from %llu\n", arg->size, arg->offset);
+            printf("READ[%u] %u bytes from %llu\n", arg->fh, arg->size,
+                   arg->offset);
             fflush(stdout);
         }
 
@@ -1053,7 +1083,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
         size = res;
         res = 0;
         if (f->flags & FUSE_DEBUG) {
-            printf("   READ %u bytes\n", size);
+            printf("   READ[%u] %u bytes\n", arg->fh, size);
             fflush(stdout);
         }
     }
@@ -1077,7 +1107,9 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     path = get_path(f, in->ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("WRITE %u bytes to %llu\n", arg->size, arg->offset);
+            printf("WRITE%s[%u] %u bytes to %llu\n",
+                   arg->writepage ? "PAGE" : "", arg->fh, arg->size,
+                   arg->offset);
             fflush(stdout);
         }
 
@@ -1140,6 +1172,10 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
+            printf("FSYNC[%u]\n", inarg->fh);
+            fflush(stdout);
+        }
         res = -ENOSYS;
         if (f->op.fsync)
             res = f->op.fsync(path, inarg->datasync);
@@ -1392,11 +1428,11 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         break;
 
     case FUSE_FLUSH:
-        do_flush(f, in);
+        do_flush(f, in, (struct fuse_flush_in *) inarg);
         break;
 
     case FUSE_RELEASE:
-        do_release(f, in, (struct fuse_open_in *) inarg);
+        do_release(f, in, (struct fuse_release_in *) inarg);
         break;
 
     case FUSE_READ:

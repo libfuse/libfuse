@@ -58,20 +58,32 @@ permission checking is done in the kernel */
     until the INVALIDATE operation is invoked */
 #define FUSE_KERNEL_CACHE        (1 << 2)
 
+#ifndef KERNEL_2_6
 /** Allow FUSE to combine reads into 64k chunks.  This is useful if
     the filesystem is better at handling large chunks.  NOTE: in
     current implementation the raw throughput is worse for large reads
     than for small. */
-#define FUSE_LARGE_READ          (1 << 3)
+#define FUSE_LARGE_READ          (1 << 31)
+#endif
 
 /** Bypass the page cache for read and write operations  */
-#define FUSE_DIRECT_IO           (1 << 4)
+#define FUSE_DIRECT_IO           (1 << 3)
 
 /** FUSE specific inode data */
 struct fuse_inode {
 	struct fuse_req *forget_req;
 	struct rw_semaphore write_sem;
 	unsigned long i_time;
+	/* Files which can provide file handles in writepage.
+	   Protected by write_sem  */
+	struct list_head write_files;
+};
+
+/** FUSE specific file data */
+struct fuse_file {
+	struct fuse_req *release_req;
+	unsigned int fh;
+	struct list_head ff_list;
 };
 
 /** One input argument of a request */
@@ -158,7 +170,7 @@ struct fuse_req {
 			
 		} write;
 		struct fuse_read_in read_in;
-		struct fuse_open_in open_in;
+		struct fuse_release_in release_in;
 		struct fuse_forget_in forget_in;
 	} misc;
 

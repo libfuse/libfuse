@@ -16,6 +16,8 @@
  * isn't).  
  */
 
+#include <config.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -440,7 +442,11 @@ static int mount_fuse(const char *mnt, const char *opts)
     int currdir_fd = -1;
 
     fd = open(dev, O_RDWR);
-    if (fd == -1) {
+    if (fd == -1 
+#ifndef AUTO_MODPROBE
+        && getuid() == 0
+#endif
+        ) {
         int status;
         pid_t pid = fork();
         if (pid == 0) {

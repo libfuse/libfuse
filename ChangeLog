@@ -1,8 +1,24 @@
 2004-07-24  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Make the non-user mounting more secure by changing the current
-	directory to the mountpoint before checking the permissions and
-	mounting on "." after this
+	* 'large_read' mount option removed for 2.6 kernels, since the
+	default (dynamic read size) is better
+
+	* Extend kernel API with file handles.  A file handle is returned
+	by open, and passed to read, write, flush, fsync and release.
+	This is currently only used for debug output in the library.
+	
+	* Security changes:
+
+	* Change the current directory to the mountpoint before checking
+	the permissions and mount filesystem on "."
+
+	* By default don't modprobe the fuse module for non-root.  The old
+	behavior can be restored with the '--enable-auto-modprobe' flag of
+	./configure
+
+	* By default don't allow shared writable mappings for non-root.
+	The old behavior can be restored with the 'user_mmap=1' module
+	parameter
 
 2004-07-23  Miklos Szeredi <miklos@szeredi.hu>
 

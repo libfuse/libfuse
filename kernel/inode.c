@@ -65,8 +65,10 @@ struct fuse_inode *fuse_inode_alloc(void)
 		if (!fi->forget_req) {
 			kmem_cache_free(fuse_inode_cachep, fi);
 			fi = NULL;
-		} else
+		} else {
 			init_rwsem(&fi->write_sem);
+			INIT_LIST_HEAD(&fi->write_files);
+		}
 	}
 
 	return fi;
@@ -74,6 +76,9 @@ struct fuse_inode *fuse_inode_alloc(void)
 
 static void fuse_inode_free(struct fuse_inode *fi)
 {
+	BUG_ON(!list_empty(&fi->write_files));
+	if (fi->forget_req)
+		fuse_request_free(fi->forget_req);
 	kmem_cache_free(fuse_inode_cachep, fi);
 }
 
@@ -101,11 +106,11 @@ static void fuse_clear_inode(struct inode *inode)
 	struct fuse_inode *fi = INO_FI(inode);
 	
 	if (fi) {
-		if (fc == NULL)
-			fuse_request_free(fi->forget_req);
-		else 
+		if (fc) {
 			fuse_send_forget(fc, fi->forget_req, inode->i_ino,
 					 inode->i_version);
+			fi->forget_req = NULL;
+		}
 		fuse_inode_free(fi);
 	}
 }
@@ -162,9 +167,18 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	return err;
 }
 
-enum { opt_fd, opt_rootmode, opt_uid, opt_default_permissions, 
-       opt_allow_other, opt_kernel_cache, opt_large_read, opt_direct_io,
-       opt_max_read, opt_err };
+enum { opt_fd,
+       opt_rootmode,
+       opt_uid,
+       opt_default_permissions, 
+       opt_allow_other,
+       opt_kernel_cache,
+#ifndef KERNEL_2_6
+       opt_large_read,
+#endif
+       opt_direct_io,
+       opt_max_read,
+       opt_err };
 
 static match_table_t tokens = {
 	{opt_fd, "fd=%u"},
@@ -173,7 +187,9 @@ static match_table_t tokens = {
 	{opt_default_permissions, "default_permissions"},
 	{opt_allow_other, "allow_other"},
 	{opt_kernel_cache, "kernel_cache"},
+#ifndef KERNEL_2_6
 	{opt_large_read, "large_read"},
+#endif
 	{opt_direct_io, "direct_io"},
 	{opt_max_read, "max_read=%u" },
 	{opt_err, NULL}
@@ -225,9 +241,11 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
 			
+#ifndef KERNEL_2_6
 		case opt_large_read:
 			d->flags |= FUSE_LARGE_READ;
 			break;
+#endif
 			
 		case opt_direct_io:
 			d->flags |= FUSE_DIRECT_IO;
@@ -260,8 +278,10 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 		seq_puts(m, ",allow_other");
 	if (fc->flags & FUSE_KERNEL_CACHE)
 		seq_puts(m, ",kernel_cache");
+#ifndef KERNEL_2_6
 	if (fc->flags & FUSE_LARGE_READ)
 		seq_puts(m, ",large_read");
+#endif
 	if (fc->flags & FUSE_DIRECT_IO)
 		seq_puts(m, ",direct_io");
 	if (fc->max_read != ~0)
