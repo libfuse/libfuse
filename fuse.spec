@@ -2,7 +2,7 @@
 %define fusemoduledir /lib/modules/%{kernelversion}/kernel/fs/fuse
 
 %define kernelrel %(uname -r | sed -e s/-/_/)
-%define real_release 4
+%define real_release 5
 
 Name: fuse
 Version: 1.0
@@ -37,9 +37,15 @@ case "$RPM_BUILD_ROOT" in *-root) rm -rf $RPM_BUILD_ROOT ;; esac
 %setup
 
 %build
+# invoke configure with the --with-kernel option in case we attempt to
+# compile for a different kernel and hope the path is right :-)
+if [ "%{kernelversion}" != $(uname -r) ]; then
+	WITH_KERNEL="--with-kernel=/usr/src/linux-%{kernelversion}"
+fi
+
 ./configure \
-	--with-kernel=/usr/src/linux-%{kernelversion}\
-	--prefix=%{prefix}
+	--prefix=%{prefix} \
+	$WITH_KERNEL
 make
 make check
 
@@ -95,11 +101,13 @@ rm -rf example/.deps/
 
 %changelog
 
+* Sun May 25 2003 Achim Settelmeier <fuse-rpm@sirlab.de>
+- don't add --with-kernel in case we compile for the standard kernel
+
 * Tue Mar 04 2003 Achim Settelmeier <fuse-rpm@sirlab.de>
 - "Merged" the specfile by Ian Pilcher (Ian Pilcher <pilchman@attbi.com>) 
   and this specfile into one. Both are provided by fuse-1.0.tar.gz.
 
 * Mon Mar 03 2003 Achim Settelmeier <fuse-rpm@sirlab.de>
 - Updated specfile for RedHat 8.0 systems
-
 

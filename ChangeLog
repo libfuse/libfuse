@@ -1,3 +1,7 @@
+2003-05-26  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Spec-file fix by Achim Settelmeier
+
 2003-03-10  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix umount oops (found by Samuli Kärkkäinen)
