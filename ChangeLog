@@ -3,6 +3,10 @@
 	* Fix compile problems with ancient (<=2.4.18) kernels (reported
 	by Jeremy Smith)
 
+	* Add "allow_root" mount option.  Patch by Yaroslav Rastrigin
+
+	* Clear the 'exited' flag when mail loop is finished
+
 2004-10-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make xattr functions work under 2.6 (bug found by Vincenzo
