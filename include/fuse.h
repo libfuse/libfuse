@@ -135,9 +135,9 @@ void fuse_loop_mt(struct fuse *f);
 void fuse_destroy(struct fuse *f);
 
 
-/* --------------------------------------------------- *
- * Advanced API, usually you need not bother with this *
- * --------------------------------------------------- */
+/* ----------------------------------------------------------- *
+ * Advanced API for event handling, don't worry about this...  *
+ * ----------------------------------------------------------- */
 
 struct fuse_cmd;
 

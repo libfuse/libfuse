@@ -412,7 +412,7 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
-int do_chmod(struct fuse *f, const char *path, struct fuse_attr *attr)
+static int do_chmod(struct fuse *f, const char *path, struct fuse_attr *attr)
 {
     int res;
 
@@ -423,7 +423,7 @@ int do_chmod(struct fuse *f, const char *path, struct fuse_attr *attr)
     return res;
 }        
 
-int do_chown(struct fuse *f, const char *path, struct fuse_attr *attr,
+static int do_chown(struct fuse *f, const char *path, struct fuse_attr *attr,
              int valid)
 {
     int res;
@@ -437,7 +437,8 @@ int do_chown(struct fuse *f, const char *path, struct fuse_attr *attr,
     return res;
 }
 
-int do_truncate(struct fuse *f, const char *path, struct fuse_attr *attr)
+static int do_truncate(struct fuse *f, const char *path,
+                       struct fuse_attr *attr)
 {
     int res;
 
@@ -448,7 +449,7 @@ int do_truncate(struct fuse *f, const char *path, struct fuse_attr *attr)
     return res;
 }
 
-int do_utime(struct fuse *f, const char *path, struct fuse_attr *attr)
+static int do_utime(struct fuse *f, const char *path, struct fuse_attr *attr)
 {
     int res;
     struct utimbuf buf;
@@ -908,7 +909,6 @@ void fuse_set_operations(struct fuse *f, const struct fuse_operations *op)
 
 void fuse_destroy(struct fuse *f)
 {
-    /* FIXME: Kill all threads... */
     size_t i;
     for(i = 0; i < f->ino_table_size; i++) {
         struct node *node;

@@ -231,8 +231,32 @@ static int xmp_write(const char *path, const char *buf, size_t size,
     return res;
 }
 
+
+static struct fuse_operations xmp_oper = {
+    getattr:	xmp_getattr,
+    readlink:	xmp_readlink,
+    getdir:     xmp_getdir,
+    mknod:	xmp_mknod,
+    mkdir:	xmp_mkdir,
+    symlink:	xmp_symlink,
+    unlink:	xmp_unlink,
+    rmdir:	xmp_rmdir,
+    rename:     xmp_rename,
+    link:	xmp_link,
+    chmod:	xmp_chmod,
+    chown:	xmp_chown,
+    truncate:	xmp_truncate,
+    utime:	xmp_utime,
+    open:	xmp_open,
+    read:	xmp_read,
+    write:	xmp_write,
+};
+
+
 static void exit_handler()
 {
+    close(0);
+    system(unmount_cmd);    
     exit(0);
 }
 
@@ -260,32 +284,6 @@ static void set_signal_handlers()
     }
 }
 
-static struct fuse_operations xmp_oper = {
-    getattr:	xmp_getattr,
-    readlink:	xmp_readlink,
-    getdir:     xmp_getdir,
-    mknod:	xmp_mknod,
-    mkdir:	xmp_mkdir,
-    symlink:	xmp_symlink,
-    unlink:	xmp_unlink,
-    rmdir:	xmp_rmdir,
-    rename:     xmp_rename,
-    link:	xmp_link,
-    chmod:	xmp_chmod,
-    chown:	xmp_chown,
-    truncate:	xmp_truncate,
-    utime:	xmp_utime,
-    open:	xmp_open,
-    read:	xmp_read,
-    write:	xmp_write,
-};
-
-static void cleanup()
-{
-    close(0);
-    system(unmount_cmd);    
-}
-
 int main(int argc, char *argv[])
 {
     int argctr;
@@ -307,7 +305,6 @@ int main(int argc, char *argv[])
     unmount_cmd = argv[argctr++];
 
     set_signal_handlers();
-    atexit(cleanup);
 
     flags = 0;
     multithreaded = 1;
