@@ -19,6 +19,20 @@
 
 #define FUSE_KERNEL_VERSION_ENV "_FUSE_KERNEL_VERSION"
 
+static inline void inc_avail(struct fuse *f)
+{
+    pthread_mutex_lock(&f->lock);
+    f->numavail ++;
+    pthread_mutex_unlock(&f->lock);
+}
+
+static inline void dec_avail(struct fuse *f)
+{
+    pthread_mutex_lock(&f->lock);
+    f->numavail --;
+    pthread_mutex_unlock(&f->lock);
+}
+
 static struct node *__get_node(struct fuse *f, fino_t ino)
 {
     size_t hash = ino % f->ino_table_size;
@@ -321,11 +335,12 @@ static void send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
                out->error, strerror(-out->error), outsize);
         fflush(stdout);
     }
-          
-    pthread_mutex_lock(&f->lock);
-    f->numavail ++;
-    pthread_mutex_unlock(&f->lock);
-      
+
+    /* This needs to be done before the reply because otherwise the
+    scheduler can tricks with us, and only let the counter be increased
+    long after the operation is done */
+    inc_avail(f);
+
     res = write(f->fd, outbuf, outsize);
     if(res == -1) {
         /* ENOENT means the operation was interrupted */
@@ -768,9 +783,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     void *inarg = cmd->buf + sizeof(struct fuse_in_header);
     size_t argsize;
 
-    pthread_mutex_lock(&f->lock);
-    f->numavail --;
-    pthread_mutex_unlock(&f->lock);
+    dec_avail(f);
 
     if((f->flags & FUSE_DEBUG)) {
         printf("unique: %i, opcode: %i, ino: %li, insize: %i\n", in->unique,
@@ -783,10 +796,6 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     switch(in->opcode) {
     case FUSE_LOOKUP:
         do_lookup(f, in, (char *) inarg);
-        break;
-
-    case FUSE_FORGET:
-        do_forget(f, in, (struct fuse_forget_in *) inarg);
         break;
 
     case FUSE_GETATTR:
@@ -855,27 +864,39 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 {
     ssize_t res;
     struct fuse_cmd *cmd;
+    struct fuse_in_header *in;
+    void *inarg;
 
     cmd = (struct fuse_cmd *) malloc(sizeof(struct fuse_cmd));
     cmd->buf = (char *) malloc(FUSE_MAX_IN);
+    in = (struct fuse_in_header *) cmd->buf;
+    inarg = cmd->buf + sizeof(struct fuse_in_header);
 
-    res = read(f->fd, cmd->buf, FUSE_MAX_IN);
-    if(res == -1) {
-        /* ENODEV means we got unmounted, so we silenty return failure */
-        if(errno != ENODEV) {
-            perror("fuse: reading device");
-            /* BAD... This will happen again */
+    do {
+        res = read(f->fd, cmd->buf, FUSE_MAX_IN);
+        if(res == -1) {
+            /* ENODEV means we got unmounted, so we silenty return failure */
+            if(errno != ENODEV) {
+                perror("fuse: reading device");
+                /* BAD... This will happen again */
+            }
+            free_cmd(cmd);
+            return NULL;
         }
-        free_cmd(cmd);
-        return NULL;
-    }
-    if((size_t) res < sizeof(struct fuse_in_header)) {
-        fprintf(stderr, "short read on fuse device\n");
-        /* Cannot happen */
-        free_cmd(cmd);
-        return NULL;
-    }
-    cmd->buflen = res;
+        if((size_t) res < sizeof(struct fuse_in_header)) {
+            fprintf(stderr, "short read on fuse device\n");
+            /* Cannot happen */
+            free_cmd(cmd);
+            return NULL;
+        }
+        cmd->buflen = res;
+        
+        /* Forget is special, it can be done without messing with threads. */
+        if(in->opcode == FUSE_FORGET)
+            do_forget(f, in, (struct fuse_forget_in *) inarg);
+
+    } while(in->opcode == FUSE_FORGET);
+
     return cmd;
 }
 
