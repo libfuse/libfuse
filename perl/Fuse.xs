@@ -562,7 +562,8 @@ perl_fuse_main(...)
 				croak("arg is not a code reference!");
 		}
 	}
-	fd = fuse_mount_ioslave(mountpoint);
+	/* FIXME: need to pass fusermount arguments */
+	fd = fuse_mount(mountpoint,"");
 	if(fd < 0)
 		croak("could not mount fuse filesystem!");
 	fuse_loop(fuse_new(fd,debug ? FUSE_DEBUG : 0,&fops));
