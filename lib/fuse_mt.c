@@ -178,6 +178,7 @@ int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
     pthread_mutex_unlock(&f->lock);
     mt_delete_context_key();
     free(w);
+    f->exited = 0;
     return 0;
 }
 

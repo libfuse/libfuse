@@ -1618,7 +1618,7 @@ int fuse_loop(struct fuse *f)
         struct fuse_cmd *cmd;
 
         if (__fuse_exited(f))
-            return 0;
+            break;
 
         cmd = __fuse_read_cmd(f);
         if (cmd == NULL)
@@ -1626,6 +1626,7 @@ int fuse_loop(struct fuse *f)
 
         __fuse_process_cmd(f, cmd);
     }
+    f->exited = 0;
     return 0;
 }
 
