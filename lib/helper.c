@@ -27,7 +27,8 @@ static void usage(char *progname)
     fprintf(stderr,
             "usage: %s mountpoint [options] [-- [fusermount options]]\n"
             "Options:\n"
-            "    -d      enable debug output\n"
+            "    -d      enable debug output (implies -f)\n"
+            "    -f      foreground operation\n"
             "    -s      disable multithreaded operation\n"
             "    -h      print help\n"
             "\n"
@@ -45,7 +46,7 @@ static void invalid_option(char *argv[], int argctr)
 
 static void exit_handler()
 {
-    if(fuse != NULL)
+    if (fuse != NULL)
         fuse_exit(fuse);
 }
 
@@ -67,10 +68,38 @@ static void set_signal_handlers()
 
     sa.sa_handler = SIG_IGN;
     
-    if(sigaction(SIGPIPE, &sa, NULL) == -1) {
+    if (sigaction(SIGPIPE, &sa, NULL) == -1) {
 	perror("Cannot set ignored signals");
         exit(1);
     }
+}
+
+static int fuse_start(int fuse_fd, int flags, int multithreaded,
+                      int background, const struct fuse_operations *op)
+{
+    int pid;
+
+    fuse = fuse_new(fuse_fd, flags, op);
+    if (fuse == NULL)
+        return 1;
+    
+    if (background) {
+        pid = fork();
+        if (pid == -1)
+            return 1;
+
+        if (pid)
+            exit(0);
+    }
+
+    set_signal_handlers();
+
+    if (multithreaded)
+        fuse_loop_mt(fuse);
+    else
+        fuse_loop(fuse);
+
+    return 0;
 }
 
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
@@ -78,22 +107,30 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     int argctr;
     int flags;
     int multithreaded;
+    int background;
     int fuse_fd;
     char *fuse_mountpoint = NULL;
     char **fusermount_args = NULL;
     char *newargs[3];
     char *basename;
+    int err;
     
     flags = 0;
     multithreaded = 1;
-    for(argctr = 1; argctr < argc && !fusermount_args; argctr ++) {
-        if(argv[argctr][0] == '-') {
-            if(strlen(argv[argctr]) == 2)
-                switch(argv[argctr][1]) {
+    background = 1;
+    for (argctr = 1; argctr < argc && !fusermount_args; argctr ++) {
+        if (argv[argctr][0] == '-') {
+            if (strlen(argv[argctr]) == 2)
+                switch (argv[argctr][1]) {
                 case 'd':
                     flags |= FUSE_DEBUG;
+                    background = 0;
                     break;
                     
+                case 'f':
+                    background = 0;
+                    break;
+
                 case 's':
                     multithreaded = 0;
                     break;
@@ -111,17 +148,17 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
                 }
             else
                 invalid_option(argv, argctr);
-        } else if(fuse_mountpoint == NULL)
+        } else if (fuse_mountpoint == NULL)
             fuse_mountpoint = strdup(argv[argctr]);
         else
             invalid_option(argv, argctr);
     }
 
-    if(fuse_mountpoint == NULL) {
+    if (fuse_mountpoint == NULL) {
         fprintf(stderr, "missing mountpoint\n");
         usage(argv[0]);
     }
-    if(fusermount_args != NULL)
+    if (fusermount_args != NULL)
         fusermount_args -= 2; /* Hack! */
     else {
         fusermount_args = newargs;
@@ -129,30 +166,22 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     }
     
     basename = strrchr(argv[0], '/');
-    if(basename == NULL)
+    if (basename == NULL)
         basename = argv[0];
-    else if(basename[1] != '\0')
+    else if (basename[1] != '\0')
         basename++;
 
     fusermount_args[0] = "-n";
     fusermount_args[1] = basename;
 
     fuse_fd = fuse_mount(fuse_mountpoint, (const char **) fusermount_args);
-    if(fuse_fd == -1)
+    if (fuse_fd == -1)
         exit(1);
 
-    set_signal_handlers();
-
-    fuse = fuse_new(fuse_fd, flags, op);
-    if(fuse == NULL)
-        exit(1);
-
-    if(multithreaded)
-        fuse_loop_mt(fuse);
-    else
-        fuse_loop(fuse);
-
+    err = fuse_start(fuse_fd, flags, multithreaded, background, op);
     close(fuse_fd);
     fuse_unmount(fuse_mountpoint);
+    if (err)
+        exit(err);
 }
 

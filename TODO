@@ -1,5 +1,0 @@
- - Better (but not too complex) library interface for open/read/write/close
-
- - Integrate (parts of) fusermount into mount(8)
-
- - Etc, etc...
