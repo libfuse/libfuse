@@ -35,8 +35,8 @@ clean:
 
 distclean: clean
 	rm -f Makefile
-	rm -f config.h config.log config.status
-	rm -rf autom4te.cache .tmp_versions
+	rm -f config.h config.log config.status config.cache
+	rm -rf .tmp_versions
 
 maintainer-clean: distclean
 

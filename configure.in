@@ -1,5 +1,5 @@
-AC_INIT(lib/fuse.c)
-AM_INIT_AUTOMAKE(fuse, 2.1-pre0)
+AC_INIT(fuse, 2.1-pre0)
+AM_INIT_AUTOMAKE
 AM_CONFIG_HEADER(include/config.h)
 
 m4_ifdef([LT_INIT],
