@@ -1,3 +1,7 @@
+2005-01-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* LIB: fix double reply in readdir operation
+
 2005-01-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* KERNEL: provide correct llseek semantics for fuse device (fixes

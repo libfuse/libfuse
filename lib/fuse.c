@@ -1580,8 +1580,10 @@ static void do_readdir(struct fuse *f, struct fuse_in_header *in,
 
     if (!dh->filled) {
         res = common_getdir(f, in, dh);
-        if (res)
+        if (res) {
             send_reply(f, in, res, NULL, 0);
+            return;
+        }
         dh->filled = 1;
     }
     outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
