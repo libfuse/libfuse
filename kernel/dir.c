@@ -409,8 +409,7 @@ static int _fuse_permission(struct inode *inode, int mask)
 		   keeping it open... */
 
 		return err;
-	}
-	else
+	} else
 		return 0;
 }
 

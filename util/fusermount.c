@@ -396,13 +396,15 @@ static int mount_fuse(const char *mnt, int flags, const char *fsname)
     res = do_mount(fsname, mnt, type, stbuf.st_mode & S_IFMT, fd, flags);
     if(res == -1)
         return -1;
-    
-    mtablock = lock_mtab();
-    res = add_mount(fsname, mnt, type);
-    unlock_mtab(mtablock);
-    if(res == -1) {
-        umount(mnt);
-        return -1;
+
+    if(geteuid() == 0) {
+        mtablock = lock_mtab();
+        res = add_mount(fsname, mnt, type);
+        unlock_mtab(mtablock);
+        if(res == -1) {
+            umount(mnt);
+            return -1;
+        }
     }
 
     return fd;
@@ -580,12 +582,19 @@ int main(int argc, char *argv[])
         restore_privs();
     
     if(unmount) {
-        int mtablock = lock_mtab();
-        res = remove_mount(mnt, quiet);
-        unlock_mtab(mtablock);
+        if(geteuid() == 0) {
+            int mtablock = lock_mtab();
+            res = remove_mount(mnt, quiet);
+            unlock_mtab(mtablock);
+        } else {
+            res = umount2(mnt, 2);
+            if(res == -1) {
+                fprintf(stderr, "%s: failed to unmount %s: %s\n", progname, mnt,
+                        strerror(errno));
+            }
+        }
         if(res == -1)
             exit(1);
-        
         return 0;
     }
 

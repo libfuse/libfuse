@@ -23,6 +23,10 @@
 #define kstatfs statfs
 #endif
 
+#ifndef FS_SAFE
+#define FS_SAFE 0
+#endif
+
 static void fuse_read_inode(struct inode *inode)
 {
 	/* No op */
@@ -193,6 +197,11 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	struct inode *root;
 	struct fuse_mount_data *d = data;
 
+	if(!capable(CAP_SYS_ADMIN)) {
+		if(d->flags & FUSE_ALLOW_OTHER)
+			return -EPERM;
+	}
+
 	sb->s_blocksize = PAGE_CACHE_SIZE;
 	sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
 	sb->s_magic = FUSE_SUPER_MAGIC;
@@ -246,7 +255,7 @@ static struct file_system_type fuse_fs_type = {
 	.name		= "fuse",
 	.get_sb		= fuse_get_sb,
 	.kill_sb	= kill_anon_super,
-	.fs_flags	= 0
+	.fs_flags	= FS_SAFE,
 };
 #else
 static struct super_block *fuse_read_super_compat(struct super_block *sb,

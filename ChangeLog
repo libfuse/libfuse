@@ -1,3 +1,12 @@
+2004-02-17  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added user-mount.2.6.2-rc3.patch
+
+	* Add FS_SAFE flag to fuse filesystem
+
+	* fusermount should allow (un)mounting for non-root even if not
+	suid-root
+	
 2004-02-12  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Remove MS_PERMISSION mount flag (that means something else now)

@@ -632,7 +632,7 @@ int fuse_dev_init()
 	}
 
 	proc_fs_fuse->owner = THIS_MODULE;
-	proc_fuse_dev = create_proc_entry("dev", S_IFSOCK | 0600, proc_fs_fuse);
+	proc_fuse_dev = create_proc_entry("dev", S_IFSOCK | 0666, proc_fs_fuse);
 	if(!proc_fuse_dev) {
 		printk("fuse: failed to create entry in /proc/fs/fuse\n");
 		goto err;
