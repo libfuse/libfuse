@@ -761,20 +761,27 @@ static void do_getdir(struct fuse *f, struct fuse_in_header *in)
     dh.fuse = f;
     dh.fp = tmpfile();
     dh.dir = in->ino;
-    res = -ENOENT;
-    path = get_path(f, in->ino);
-    if (path != NULL) {
-        res = -ENOSYS;
-        if (f->op.getdir)
-            res = f->op.getdir(path, &dh, (fuse_dirfil_t) fill_dir);
-        free(path);
-    }
-    fflush(dh.fp);
 
+    res = -EIO;
+    if (dh.fp == NULL)
+        perror("fuse: failed to create temporary file");
+    else {
+        res = -ENOENT;
+        path = get_path(f, in->ino);
+        if (path != NULL) {
+            res = -ENOSYS;
+            if (f->op.getdir)
+                res = f->op.getdir(path, &dh, (fuse_dirfil_t) fill_dir);
+            free(path);
+        }
+        fflush(dh.fp);
+    }
     memset(&arg, 0, sizeof(struct fuse_getdir_out));
-    arg.fd = fileno(dh.fp);
+    if (res == 0)
+        arg.fd = fileno(dh.fp);
     send_reply(f, in, res, &arg, sizeof(arg));
-    fclose(dh.fp);
+    if (dh.fp != NULL)
+        fclose(dh.fp);
 }
 
 static void do_mknod(struct fuse *f, struct fuse_in_header *in,
