@@ -4,4 +4,4 @@ bin_PROGRAMS = fusexmp
 
 fusexmp_SOURCES = fusexmp.c
 
-fusexmp_LDADD = ../lib/libfuse.a
+fusexmp_LDADD = ../lib/libfuse.a -lpthread

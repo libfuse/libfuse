@@ -18,16 +18,36 @@ if test -z "$kernelsrc"; then
 	if test -e $buildlink; then
 		kernelsrc=`(cd $buildlink; /bin/pwd)`
 	else
-		AC_MSG_RESULT([not found])
+		AC_MSG_RESULT([Not found])
 		AC_MSG_ERROR([
 *** Please specify the location of the kernel source with
 *** the '--with-kernel=SRCDIR' option])
 	fi
 fi
 AC_MSG_RESULT([$kernelsrc])
+AC_MSG_CHECKING([kernel source version])
+kernsrcver=`AC_TRY_RUN([
+#include "$kernelsrc/include/linux/version.h"
+#include <stdio.h>
+
+int main() {
+printf("%s\n", UTS_RELEASE);
+	return 0;
+}
+], , , true)`
+
+if test -z "$kernsrcver"; then
+	AC_MSG_RESULT([Not found])
+	AC_MSG_ERROR([
+*** Cannot determine the version of the linux kernel source. Please 
+*** configure the kernel before running this script])
+fi
+AC_MSG_RESULT([$kernsrcver])
 
 KERNINCLUDE=$kernelsrc/include
 AC_SUBST(KERNINCLUDE)
+kmoduledir=/lib/modules/$kernsrcver
+AC_SUBST(kmoduledir)
 
 AC_OUTPUT([Makefile kernel/Makefile lib/Makefile example/Makefile include/Makefile include/linux/Makefile])
 

@@ -419,6 +419,58 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
+int do_chmod(struct fuse *f, struct fuse_cred *cred, const char *path,
+             struct fuse_attr *attr)
+{
+    int res;
+
+    res = -ENOSYS;
+    if(f->op.chmod)
+        res = f->op.chmod(cred, path, attr->mode);
+
+    return res;
+}        
+
+int do_chown(struct fuse *f, struct fuse_cred *cred, const char *path,
+             struct fuse_attr *attr, int valid)
+{
+    int res;
+    uid_t uid = (valid & FATTR_UID) ? attr->uid : (uid_t) -1;
+    gid_t gid = (valid & FATTR_GID) ? attr->gid : (gid_t) -1;
+    
+    res = -ENOSYS;
+    if(f->op.chown)
+        res = f->op.chown(cred, path, uid, gid);
+
+    return res;
+}
+
+int do_truncate(struct fuse *f, struct fuse_cred *cred, const char *path,
+                struct fuse_attr *attr)
+{
+    int res;
+
+    res = -ENOSYS;
+    if(f->op.truncate)
+        res = f->op.truncate(cred, path, attr->size);
+
+    return res;
+}
+
+int do_utime(struct fuse *f, struct fuse_cred *cred, const char *path,
+             struct fuse_attr *attr)
+{
+    int res;
+    struct utimbuf buf;
+    buf.actime = attr->atime;
+    buf.modtime = attr->mtime;
+    res = -ENOSYS;
+    if(f->op.utime)
+        res = f->op.utime(cred, path, &buf);
+
+    return res;
+}
+
 static void do_setattr(struct fuse *f, struct fuse_in_header *in,
                        struct fuse_setattr_in *arg)
 {
@@ -433,38 +485,23 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
-        res = 0;
-        if(!res && (valid & FATTR_MODE)) {
-            res = -ENOSYS;
-            if(f->op.chmod)
-                res = f->op.chmod(&cred, path, attr->mode);
-        }        
-        if(!res && (valid & (FATTR_UID | FATTR_GID))) {
-            uid_t uid = (valid & FATTR_UID) ? attr->uid : (uid_t) -1;
-            gid_t gid = (valid & FATTR_GID) ? attr->gid : (gid_t) -1;
-            
-            res = -ENOSYS;
-            if(f->op.chown)
-                res = f->op.chown(&cred, path, uid, gid);
-        }
-        if(!res && (valid & FATTR_SIZE)) {
-            res = -ENOSYS;
-            if(f->op.truncate && f->op.getattr) {
-                res = f->op.truncate(&cred, path, attr->size);
-                if(!res) {
-                    struct stat buf;
-                    res = f->op.getattr(&cred, path, &buf);
-                    outarg.newsize = buf.st_size;
-                }
+        res = -ENOSYS;
+        if(f->op.getattr) {
+            res = 0;
+            if(!res && (valid & FATTR_MODE))
+                res = do_chmod(f, &cred, path, attr);
+            if(!res && (valid & (FATTR_UID | FATTR_GID)))
+                res = do_chown(f, &cred, path, attr, valid);
+            if(!res && (valid & FATTR_SIZE))
+                res = do_truncate(f, &cred, path, attr);
+            if(!res && (valid & FATTR_UTIME))
+                res = do_utime(f, &cred, path, attr);
+            if(!res) {
+                struct stat buf;
+                res = f->op.getattr(&cred, path, &buf);
+                if(!res)
+                    convert_stat(&buf, &outarg.attr);
             }
-        }
-        if(!res && (valid & FATTR_UTIME)) {
-            struct utimbuf buf;
-            buf.actime = attr->atime;
-            buf.modtime = attr->mtime;
-            res = -ENOSYS;
-            if(f->op.utime)
-                res = f->op.utime(&cred, path, &buf);
         }
         free(path);
     }

@@ -111,7 +111,7 @@ struct fuse_setattr_in {
 };
 
 struct fuse_setattr_out {
-	unsigned long long newsize;
+	struct fuse_attr attr;
 };
 
 struct fuse_open_in {

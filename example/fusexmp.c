@@ -388,22 +388,52 @@ static struct fuse_operations xmp_oper = {
 int main(int argc, char *argv[])
 {
     int res;
-    if(argc != 2) {
-        fprintf(stderr, "usage: %s mount_dir\n", argv[0]);
+    int argctr;
+    char *mnt;
+    int flags;
+
+    if(argc < 2) {
+        fprintf(stderr,
+                "usage: %s [options] mount_dir\n"
+                "Options:\n"
+                "    -d      enable debug output\n"
+                "    -s      disable multithreaded operation\n",
+                argv[0]);
         exit(1);
     }
+
+    flags = FUSE_MULTITHREAD;
+    for(argctr = 1; argctr < argc && argv[argctr][0] == '-'; argctr ++) {
+        switch(argv[argctr][1]) {
+        case 'd':
+            flags |= FUSE_DEBUG;
+            break;
+
+        case 's':
+            flags &= ~FUSE_MULTITHREAD;
+            break;
+
+        default:
+            fprintf(stderr, "invalid option: %s\n", argv[argctr]);
+            exit(1);
+        }
+    }
+    if(argctr != argc - 1) {
+        fprintf(stderr, "missing or surplus argument\n");
+        exit(1);
+    }
+    mnt = argv[argctr];
 
     set_signal_handlers();
     atexit(cleanup);
     setgroups(0, NULL);
 
-    xmp_fuse = fuse_new(0,0);
-    res = fuse_mount(xmp_fuse, argv[1]);
+    xmp_fuse = fuse_new(flags, 0);
+    res = fuse_mount(xmp_fuse, mnt);
     if(res == -1)
         exit(1);
         
     fuse_set_operations(xmp_fuse, &xmp_oper);
-
     fuse_loop(xmp_fuse);
 
     return 0;

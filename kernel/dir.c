@@ -19,7 +19,8 @@ static struct file_operations fuse_dir_operations;
 
 static struct dentry_operations fuse_dentry_opertations;
 
-#define FUSE_REVALIDATE_TIME (HZ / 100)
+/* FIXME: This should be user configurable */
+#define FUSE_REVALIDATE_TIME (1 * HZ)
 
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
@@ -528,13 +529,13 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	out.arg = &outarg;
 	request_send(fc, &in, &out);
 
-	if(!out.h.error && (attr->ia_valid & ATTR_SIZE)) {
-		if(outarg.newsize > attr->ia_size)
-			outarg.newsize = attr->ia_size;
-			
-		vmtruncate(inode, outarg.newsize);
-	}
+	if(!out.h.error) {
+		if(attr->ia_valid & ATTR_SIZE &&
+		   outarg.attr.size < inode->i_size)
+			vmtruncate(inode, outarg.attr.size);
 
+		change_attributes(inode, &outarg.attr);
+	} 
 	return out.h.error;
 }
 
