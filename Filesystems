@@ -171,3 +171,17 @@ Description:
   as WebDAV API.
 
 ==============================================================================
+Name: RelFS
+
+Author: Vincenzo Ciancia <vincenzo_ml (at) yahoo (dot) it>
+
+Homepage: http://relfs.sourceforge.net/
+
+Description:
+
+  This is a linux userspace filesystem using fuse and a relational
+  database to store information about files. Special directories can
+  represent views on the database, and many powerful features, such as
+  bayesian classification, are added through plugins.
+
+==============================================================================

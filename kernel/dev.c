@@ -62,12 +62,17 @@ static int request_restartable(enum fuse_opcode opcode)
 }
 
 /* Called with fuse_lock held.  Releases, and then reaquires it. */
-static void request_wait_answer(struct fuse_req *req)
+static void request_wait_answer(struct fuse_req *req, int interruptible)
 {
 	int intr;
 	
 	spin_unlock(&fuse_lock);
-	intr = wait_event_interruptible(req->waitq, req->finished);
+	if (interruptible)
+		intr = wait_event_interruptible(req->waitq, req->finished);
+	else {
+		wait_event(req->waitq, req->finished);
+		intr = 0;
+	}
 	spin_lock(&fuse_lock);
 	if (!intr)
 		return;
@@ -171,7 +176,8 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	}
 }
 
-void request_send(struct fuse_conn *fc, struct fuse_req *req)
+static void __request_send(struct fuse_conn *fc, struct fuse_req *req,
+			   int interruptible)
 {
 	req->issync = 1;
 	req->end = NULL;
@@ -182,10 +188,20 @@ void request_send(struct fuse_conn *fc, struct fuse_req *req)
 		req->in.h.unique = get_unique(fc);		
 		list_add_tail(&req->list, &fc->pending);
 		wake_up(&fc->waitq);
-		request_wait_answer(req);
+		request_wait_answer(req, interruptible);
 		list_del(&req->list);
 	}
 	spin_unlock(&fuse_lock);
+}
+
+void request_send(struct fuse_conn *fc, struct fuse_req *req)
+{
+	__request_send(fc, req, 1);
+}
+
+void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req)
+{
+	__request_send(fc, req, 0);
 }
 
 void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)

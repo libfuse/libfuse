@@ -144,7 +144,7 @@ static int fuse_release(struct inode *inode, struct file *file)
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(struct fuse_release_in);
 	req->in.args[0].value = inarg;
-	request_send(fc, req);
+	request_send_nonint(fc, req);
 	fuse_put_request(fc, req);
 	kfree(ff);
 	up(&inode->i_sem);

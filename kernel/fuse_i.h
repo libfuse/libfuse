@@ -348,6 +348,11 @@ void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req);
 void request_send(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
+ * Send a non-interruptible request
+ */
+void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req);
+
+/**
  * Send a request for which a reply is not expected
  */
 void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
