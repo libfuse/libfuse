@@ -15,9 +15,9 @@
 #include <limits.h>
 #include <signal.h>
 
-static struct fuse *fuse;
+static struct fuse *fuse_obj;
 
-static void usage(char *progname)
+static void usage(const char *progname)
 {
     fprintf(stderr,
             "usage: %s mountpoint [options]\n"
@@ -39,22 +39,21 @@ static void usage(char *progname)
             "    debug                  enable debug output\n"
             "    fsname=NAME            set filesystem name in mtab\n",
             progname);
-    exit(1);
 }
 
-static void invalid_option(char *argv[], int argctr)
+static void invalid_option(const char *argv[], int argctr)
 {
-    fprintf(stderr, "invalid option: %s\n\n", argv[argctr]);
+    fprintf(stderr, "fuse: invalid option: %s\n\n", argv[argctr]);
     usage(argv[0]);
 }
 
 static void exit_handler()
 {
-    if (fuse != NULL)
-        fuse_exit(fuse);
+    if (fuse_obj != NULL)
+        fuse_exit(fuse_obj);
 }
 
-static void set_one_signal_handler(int signal, void (*handler)(int))
+static int set_one_signal_handler(int signal, void (*handler)(int))
 {
     struct sigaction sa;
     struct sigaction old_sa;
@@ -66,54 +65,24 @@ static void set_one_signal_handler(int signal, void (*handler)(int))
 
     if (sigaction(signal, NULL, &old_sa) == -1) {
         perror("FUSE: cannot get old signal handler");
-        exit(1);
+        return -1;
     }
         
     if (old_sa.sa_handler == SIG_DFL &&
         sigaction(signal, &sa, NULL) == -1) {
         perror("Cannot set signal handler");
-        exit(1);
+        return -1;
     }
+    return 0;
 }
 
-static void set_signal_handlers()
+static int set_signal_handlers()
 {
-    set_one_signal_handler(SIGHUP, exit_handler);
-    set_one_signal_handler(SIGINT, exit_handler);
-    set_one_signal_handler(SIGTERM, exit_handler);
-    set_one_signal_handler(SIGPIPE, SIG_IGN);
-}
-
-static int fuse_do(int fuse_fd, const char *opts, int multithreaded,
-                      int background, const struct fuse_operations *op)
-{
-    int pid;
-    int res;
-
-    fuse = fuse_new(fuse_fd, opts, op);
-    if (fuse == NULL)
-        return 1;
-    
-    if (background) {
-        pid = fork();
-        if (pid == -1)
-            return 1;
-
-        if (pid)
-            exit(0);
-    }
-
-    set_signal_handlers();
-
-    if (multithreaded)
-        res = fuse_loop_mt(fuse);
-    else
-        res = fuse_loop(fuse);
-    
-    fuse_destroy(fuse);
-
-    if (res == -1)
-        return 1;
+    if (set_one_signal_handler(SIGHUP, exit_handler) == -1 ||
+        set_one_signal_handler(SIGINT, exit_handler) == -1 ||
+        set_one_signal_handler(SIGTERM, exit_handler) == -1 ||
+        set_one_signal_handler(SIGPIPE, SIG_IGN) == -1)
+        return -1;
 
     return 0;
 }
@@ -137,7 +106,7 @@ static int add_option_to(const char *opt, char **optp)
     return 0;
 }
 
-static void add_options(char **lib_optp, char **kernel_optp, const char *opts)
+static int add_options(char **lib_optp, char **kernel_optp, const char *opts)
 {
     char *xopts = strdup(opts);
     char *s = xopts;
@@ -145,7 +114,7 @@ static void add_options(char **lib_optp, char **kernel_optp, const char *opts)
 
     if (xopts == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
-        exit(1);
+        return -1;
     }
 
     while((opt = strsep(&s, ",")) != NULL) {
@@ -156,24 +125,27 @@ static void add_options(char **lib_optp, char **kernel_optp, const char *opts)
             res = add_option_to(opt, kernel_optp);
         if (res == -1) {
             fprintf(stderr, "fuse: memory allocation failed\n");
-            exit(1);
+            return -1;
         }
     }
     free(xopts);
+    return 0;
 }
 
-void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
+static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
+                              char **lib_opts, char **mountpoint,
+                              int *multithreaded, int *background)
 {
+    int res;
     int argctr;
-    int multithreaded;
-    int background;
-    int fuse_fd;
-    char *fuse_mountpoint = NULL;
-    char *basename;
-    char *kernel_opts = NULL;
-    char *lib_opts = NULL;
+    const char *basename;
     char *fsname_opt;
-    int err;
+    
+    *kernel_opts = NULL;
+    *lib_opts = NULL;
+    *mountpoint = NULL;
+    *multithreaded = 1;
+    *background = 1;
 
     basename = strrchr(argv[0], '/');
     if (basename == NULL)
@@ -184,14 +156,14 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     fsname_opt = malloc(strlen(basename) + 64);
     if (fsname_opt == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
-        exit(1);
+        return -1;
     }
     sprintf(fsname_opt, "fsname=%s", basename);
-    add_options(&lib_opts, &kernel_opts, fsname_opt);
+    res = add_options(lib_opts, kernel_opts, fsname_opt);
     free(fsname_opt);
+    if (res == -1)
+        goto err;
     
-    multithreaded = 1;
-    background = 1;
     for (argctr = 1; argctr < argc; argctr ++) {
         if (argv[argctr][0] == '-') {
             if (strlen(argv[argctr]) == 2)
@@ -200,65 +172,155 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
                     if (argctr + 1 == argc || argv[argctr+1][0] == '-') {
                         fprintf(stderr, "missing option after -o\n\n");
                         usage(argv[0]);
+                        goto err;
                     }
                     argctr ++;
-                    add_options(&lib_opts, &kernel_opts, argv[argctr]);
+                    res = add_options(lib_opts, kernel_opts, argv[argctr]);
+                    if (res == -1)
+                        goto err;
                     break;
                     
                 case 'd':
-                    add_options(&lib_opts, &kernel_opts, "debug");
-                    background = 0;
+                    res = add_options(lib_opts, kernel_opts, "debug");
+                    if (res == -1)
+                        goto err;
+                    *background = 0;
                     break;
                     
                 case 'f':
-                    background = 0;
+                    *background = 0;
                     break;
 
                 case 's':
-                    multithreaded = 0;
+                    *multithreaded = 0;
                     break;
                     
                 case 'h':
                     usage(argv[0]);
-                    break;
+                    goto err;
                     
                 default:
                     invalid_option(argv, argctr);
+                    goto err;
                 }
             else {
-                if (argv[argctr][1] == 'o')
-                    add_options(&lib_opts, &kernel_opts, &argv[argctr][2]);
-                else
+                if (argv[argctr][1] == 'o') {
+                    res = add_options(lib_opts, kernel_opts, &argv[argctr][2]);
+                    if (res == -1)
+                        goto err;
+                }
+                else {
                     invalid_option(argv, argctr);
+                    goto err;
+                }
             }
-        } else if (fuse_mountpoint == NULL) {
-            fuse_mountpoint = strdup(argv[argctr]);
-            if (fuse_mountpoint == NULL) {
+        } else if (*mountpoint == NULL) {
+            *mountpoint = strdup(argv[argctr]);
+            if (*mountpoint == NULL) {
                 fprintf(stderr, "fuse: memory allocation failed\n");
-                exit(1);
+                goto err;
             }
         }
-        else
+        else {
             invalid_option(argv, argctr);
+            goto err;
+        }
     }
 
-    if (fuse_mountpoint == NULL) {
+    if (*mountpoint == NULL) {
         fprintf(stderr, "missing mountpoint\n\n");
         usage(argv[0]);
+        goto err;
     }
-    
-    fuse_fd = fuse_mount(fuse_mountpoint, kernel_opts);
-    if (fuse_fd == -1)
-        exit(1);
-    if (kernel_opts)
-        free(kernel_opts);
+    return 0;
 
-    err = fuse_do(fuse_fd, lib_opts, multithreaded, background, op);
-    if (lib_opts)
-        free(lib_opts);
-    close(fuse_fd);
-    fuse_unmount(fuse_mountpoint);
-    if (err)
-        exit(err);
+ err:
+    free(*kernel_opts);
+    free(*lib_opts);
+    free(*mountpoint);
+    return -1;
+}
+                              
+
+struct fuse *__fuse_setup(int argc, char *argv[],
+                          const struct fuse_operations *op,
+                          char **mountpoint, int *multithreaded, int *fd)
+{
+    struct fuse *fuse;
+    int background;
+    char *kernel_opts;
+    char *lib_opts;
+    int res;
+    
+    res = fuse_parse_cmdline(argc, (const char **) argv, &kernel_opts,
+                             &lib_opts, mountpoint, multithreaded,
+                             &background);
+    if (res == -1)
+        return NULL;
+
+    *fd = fuse_mount(*mountpoint, kernel_opts);
+    if (*fd == -1)
+        goto err_free;
+
+    fuse = fuse_new(*fd, lib_opts, op);
+    if (fuse == NULL)
+        goto err_unmount;
+
+    if (background) {
+        res = daemon(0, 0);
+        if (res == -1) {
+            perror("fuse: failed to daemonize program\n");
+            goto err_destroy;
+        }
+    }
+    res = set_signal_handlers();
+    if (res == -1)
+        goto err_destroy;
+
+    free(kernel_opts);
+    free(lib_opts);
+    return fuse;
+
+ err_destroy:
+    fuse_destroy(fuse);
+ err_unmount:
+    fuse_unmount(*mountpoint);
+ err_free:
+    free(kernel_opts);
+    free(lib_opts);
+    free(*mountpoint);
+    return NULL;
+}
+
+void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
+{
+    fuse_destroy(fuse);
+    close(fd);
+    fuse_unmount(mountpoint);
+    free(mountpoint);
+}
+
+
+int fuse_main(int argc, char *argv[], const struct fuse_operations *op)
+{
+    char *mountpoint;
+    int multithreaded;
+    int res;
+    int fd;
+
+    fuse_obj = __fuse_setup(argc, argv, op, &mountpoint, &multithreaded, &fd);
+    if (fuse_obj == NULL)
+        return 1;
+    
+    if (multithreaded)
+        res = fuse_loop_mt(fuse_obj);
+    else
+        res = fuse_loop(fuse_obj);
+    
+    __fuse_teardown(fuse_obj, fd, mountpoint);
+    if (res == -1)
+        return 1;
+    
+    return 0;
 }
 

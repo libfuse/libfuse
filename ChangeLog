@@ -1,3 +1,11 @@
+2004-10-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fuse_main() now does not exit on erro, rather it returns an
+	error code
+
+	* exported __fuse_setup() and __fuse_teardown() functions, which
+	make it easier to implement a custom event loop.
+
 2004-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 1.9

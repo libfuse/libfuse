@@ -15,7 +15,7 @@
 #define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 0
+#define FUSE_MINOR_VERSION 1
 
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
@@ -161,18 +161,9 @@ extern "C" {
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
  * @param op the file system operation 
+ * @return 0 on success, nonzero on failure
  */
-void fuse_main(int argc, char *argv[], const struct fuse_operations *op);
-
-/**
- * Invalidate cached data of a file.
- *
- * Useful if the 'kernel_cache' mount option is given, since in that
- * case the cache is not invalidated on file open.
- *
- * @return 0 on success or -errno on failure
- */
-int fuse_invalidate(struct fuse *f, const char *path);
+int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
 
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
@@ -262,6 +253,16 @@ int fuse_loop_mt(struct fuse *f);
 struct fuse_context *fuse_get_context(void);
 
 /**
+ * Invalidate cached data of a file.
+ *
+ * Useful if the 'kernel_cache' mount option is given, since in that
+ * case the cache is not invalidated on file open.
+ *
+ * @return 0 on success or -errno on failure
+ */
+int fuse_invalidate(struct fuse *f, const char *path);
+
+/**
  * Check whether a mount option should be passed to the kernel or the
  * library
  *
@@ -277,6 +278,10 @@ int fuse_is_lib_option(const char *opt);
 
 struct fuse_cmd;
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
+struct fuse *__fuse_setup(int argc, char *argv[],
+                          const struct fuse_operations *op,
+                          char **mountpoint, int *multithreaded, int *fd);
+void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);
 struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
 void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);

@@ -84,6 +84,5 @@ static struct fuse_operations hello_oper = {
 
 int main(int argc, char *argv[])
 {
-    fuse_main(argc, argv, &hello_oper);
-    return 0;
+    return fuse_main(argc, argv, &hello_oper);
 }
