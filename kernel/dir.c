@@ -633,8 +633,15 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 		   keeping it open... */
 
 		return err;
-	} else
+	} else {
+		int mode = inode->i_mode;
+		if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
+                    (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))
+                        return -EROFS;
+		if ((mask & MAY_EXEC) && !S_ISDIR(mode) && !(mode & S_IXUGO))
+			return -EACCES;
 		return 0;
+	}
 }
 
 static int parse_dirfile(char *buf, size_t nbytes, struct file *file,

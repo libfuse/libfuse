@@ -2,6 +2,15 @@
 
 	* kernel: make readpage() uninterruptible
 
+	* kernel: check readonly filesystem flag in fuse_permission
+
+	* lib: don't die if version file not found and new style device
+	exists
+
+	* lib: add '-r' option, which is short for '-o ro'
+
+	* fusermount: simplify device opening
+
 	* kernel: when direct_io is turend on, copy data directly to
 	destination without itermediate buffer.  More efficient and safer,
 	since no allocation is done.

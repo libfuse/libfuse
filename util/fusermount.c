@@ -39,9 +39,10 @@
 
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
 #define FUSE_DEV_NEW "/dev/fuse"
-#define FUSE_SYS_DEV "/sys/class/misc/fuse/dev"
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
 #define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
+#define FUSE_MAJOR 10
+#define FUSE_MINOR 229
 
 const char *progname;
 
@@ -520,20 +521,18 @@ static int check_version(const char *dev)
     if (strcmp(dev, FUSE_DEV_OLD) == 0)
         isold = 1;
 
-    if (isold)
-        version_file = FUSE_VERSION_FILE_OLD;
-    else
-        version_file = FUSE_VERSION_FILE_NEW;
-
+    version_file = FUSE_VERSION_FILE_NEW;
     vf = fopen(version_file, "r");
     if (vf == NULL) {
-        if (isold) {
-            fprintf(stderr, "%s: kernel interface too old\n", progname);
-            return -1;
-        } else
-            /* If /sys/fs/fuse/version doesn't exist, just skip
-               version checking */
-            return 0;
+        version_file = FUSE_VERSION_FILE_OLD;
+        vf = fopen(version_file, "r");
+        if (vf == NULL) {
+            if (isold) {
+                fprintf(stderr, "%s: kernel interface too old\n", progname);
+                return -1;
+            } else
+                return 0;
+        }
     }
     res = fscanf(vf, "%i.%i", &majorver, &minorver);
     fclose(vf);
@@ -628,7 +627,7 @@ static int try_open(const char *dev, char **devp, int silent)
 #define FUSE_TMP_DIRNAME "/tmp/.fuse_devXXXXXX"
 #define FUSE_TMP_DEVNAME "/fuse"
 
-static int try_open_new_temp(unsigned devnum, char **devp, int silent)
+static int try_open_new_temp(unsigned devnum, char **devp)
 {
     int res;
     int fd;
@@ -647,68 +646,29 @@ static int try_open_new_temp(unsigned devnum, char **devp, int silent)
         rmdir(dirname);
         return -1;
     }
-    fd = try_open(filename, devp, silent);
+    fd = try_open(filename, devp, 0);
     unlink(filename);
     rmdir(dirname);
     return fd;
 }
 
-static int try_open_new(char **devp, int final)
+static int try_open_fuse_device(char **devp)
 {
-    const char *dev;
-    unsigned minor;
-    unsigned major;
-    int res;
-    struct stat stbuf;
-    unsigned devnum;
-    char buf[256];
-    int fd = open(FUSE_SYS_DEV, O_RDONLY);
+    int fd = try_open(FUSE_DEV_NEW, devp, 1);
+    if (fd >= 0)
+        return fd;
+    
     if (fd == -1) {
-        if (!final)
-            return -2;
-        fd = try_open(FUSE_DEV_NEW, devp, 1);
-        if (fd == -2)
-            return -2;
-        fd = try_open_new_temp(FUSE_MAJOR << 8 | FUSE_MINOR, devp, 1);
-        if (fd == -2)
-            return -2;
-        return try_open(FUSE_DEV_NEW, devp, 0);
-    }
-
-    res = read(fd, buf, sizeof(buf)-1);
-    close(fd);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to read from %s: %s\n", progname,
-                FUSE_SYS_DEV, strerror(errno));
-        return -1;
+        fd = try_open_new_temp(FUSE_MAJOR << 8 | FUSE_MINOR, devp);
+        if (fd != -2)
+            return fd;
     }
     
-    buf[res] = '\0';
-    if (sscanf(buf, "%u:%u", &major, &minor) != 2) {
-        fprintf(stderr, "%s: parse error reading from %s\n", progname,
-                FUSE_SYS_DEV);
-        return -1;
-    }
+    fd = try_open(FUSE_DEV_OLD, devp, 1);
+    if (fd >= 0)
+        return fd;
 
-    devnum = (major << 8) + (minor & 0xff) + ((minor & 0xff00) << 12);
-    dev = FUSE_DEV_NEW;
-    res = stat(dev, &stbuf);
-    if (res == -1) {
-        if (major == FUSE_MAJOR && minor == FUSE_MINOR)
-            return try_open_new_temp(devnum, devp, 0);
-        else {
-            fprintf(stderr, "%s: failed to open %s: %s\n", progname,
-                    dev, strerror(errno));
-            return -1;
-        }
-    }
-    
-    if ((stbuf.st_mode & S_IFMT) != S_IFCHR || stbuf.st_rdev != devnum) {
-        fprintf(stderr, "%s: %s exists but has wrong attributes\n", progname,
-                dev);
-        return -1;
-    }
-    return try_open(dev, devp, 0);
+    return -1;
 }
 
 static int open_fuse_device(char **devp)
@@ -723,14 +683,10 @@ static int open_fuse_device(char **devp)
         int status;
         pid_t pid;
 
-        fd = try_open(FUSE_DEV_OLD, devp, 1);
-        if (fd != -1)
+        fd = try_open_fuse_device(devp);
+        if (fd >= 0)
             return fd;
-
-        fd = try_open_new(devp, 0);
-        if (fd != -2)
-            return fd;
-
+        
 #ifndef USE_UCLIBC
         pid = fork();
 #else
@@ -745,14 +701,10 @@ static int open_fuse_device(char **devp)
             waitpid(pid, &status, 0);
     }
 
-    fd = try_open(FUSE_DEV_OLD, devp, 1);
-    if (fd != -1)
+    fd = try_open_fuse_device(devp);
+    if (fd >= 0)
         return fd;
-
-    fd = try_open_new(devp, 1);
-    if (fd != -2)
-        return fd;        
-
+    
     fprintf(stderr, "fuse device not found, try 'modprobe fuse' first\n");
     return -1;
 }

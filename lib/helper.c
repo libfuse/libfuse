@@ -25,6 +25,7 @@ static void usage(const char *progname)
             "    -d                  enable debug output (implies -f)\n"
             "    -f                  foreground operation\n"
             "    -s                  disable multithreaded operation\n"
+            "    -r                  mount read only (equivalent to '-o ro')\n"
             "    -o opt,[opt...]     mount options\n"
             "    -h                  print help\n"
             "\n"
@@ -187,6 +188,12 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
                     *background = 0;
                     break;
                     
+                case 'r':
+                    res = add_options(lib_opts, kernel_opts, "ro");
+                    if (res == -1)
+                        goto err;
+                    break;
+
                 case 'f':
                     *background = 0;
                     break;
