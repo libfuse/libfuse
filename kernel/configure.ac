@@ -38,7 +38,6 @@ kmoduledir=/lib/modules/$kernsrcver
 AC_SUBST(kernelsrc)
 AC_SUBST(majver)
 AC_SUBST(kmoduledir)
-subdirs="$subdirs kernel"
 
 if echo "$kernsrcver" | grep -q "^2.4"; then
        	old_cflags="$CFLAGS"

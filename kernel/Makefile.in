@@ -73,8 +73,7 @@ util.o: $(fuse_headers)
 
 else
 
-export FUSE_INCLUDE ?= $(shell pwd)
-EXTRA_CFLAGS += -I$(FUSE_INCLUDE) -DFUSE_VERSION=\"$(VERSION)\"
+EXTRA_CFLAGS += -DFUSE_VERSION=\"$(VERSION)\"
 
 obj-m := fuse.o
 fuse-objs := dev.o dir.o file.o inode.o util.o

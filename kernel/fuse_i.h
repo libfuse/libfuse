@@ -26,7 +26,7 @@
 #  endif
 #endif
 
-#include <config.h>
+#include "config.h"
 #ifndef KERNEL_2_6
 #  include <linux/config.h>
 #  ifdef CONFIG_MODVERSIONS
