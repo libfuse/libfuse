@@ -1,0 +1,60 @@
+General Information
+===================
+
+This is a Python[1] interface to FUSE[2].
+
+FUSE (Filesystem in USErspace) is a simple interface for userspace
+programs to export a virtual filesystem to the linux kernel.  FUSE
+also aims to provide a secure method for non privileged users to
+create and mount their own filesystem implementations.
+
+When run from the commandline, "fuse.py" simply reexports the root
+filesystem within the mount point as example/fusexmp does in the main
+FUSE distribution.  It also offers a class, fuse.Fuse, which can be
+subclassed to create a filesystem.  fuse.Xmp is the example filesystem
+implementation.
+
+In your subclass of fuse, add attributes with the expected names
+("getattr", "readlink", etc) and call signatures (refer to fuse.Xmp)
+then call main().  Make it runnable as a #! script, and mount with
+	fusermount <mount point> <script name>
+for some reason,
+	fusermount <mount point> python <script name>
+does not seem to work. (why?)
+
+Limitations
+===========
+
+This is minimally tested, though I think I have exercised each function.
+There's no documentation, docstrings, or tests.
+
+Python's lstat() does not return some fields which must be filled in
+(st_blksize, st_blocks, st_ino), and _fusemodule assumes that the return
+value from the lstat() method is identical to Python's lstat().  This
+limitation should be lifted, and some standard order chosen for these
+three values.  For now, though, default values are chosen and du returns a
+number similar to the "real" one.
+
+The Python Global Interpreter Lock is not handled, so using
+fuse.MULTITHREAD will not work.  Modifying the PROLOGUE and EPILOGUE
+functions may take care of this.  For now, just run without
+fuse.MULTITHREAD in flags.
+
+Author
+======
+
+I'm Jeff Epler <jepler@unpythonic.dhs.org>.  I've been dabbling in
+Python for nearly 7 years now, and interested (despite the lack of a
+real practical use) in userspace filesystems ever since I couldn't get
+userfs to compile way back in '93 or so.  FUSE is cool, but i'm still
+not sure what it's good for in practical terms.
+
+I don't know how high a level of interest I'll maintain in this project,
+so if you want to do something with it feel free to do so.  Like FUSE,
+this software is distributed under the terms of the GNU General Public
+License, Version 2.  Future versions, if any, will be available at [3].
+
+
+[1] http://www.python.org
+[2] http://sourceforge.net/projects/avf/
+[3] http://unpythonic.dhs.org/~jepler/fuse/

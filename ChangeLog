@@ -1,3 +1,15 @@
 2001-11-09  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Started ChangeLog
+
+2001-11-13  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Fixed vfsmount reference leak in fuse_follow_link
+
+	* FS blocksize is set to PAGE_CACHE_SIZE, blksize attribute from
+	userspace is ignored
+
+2001-11-14  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Python bindings by Jeff Epler added
+
