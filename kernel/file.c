@@ -62,7 +62,9 @@ static int fuse_open(struct inode *inode, struct file *file)
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
+	down(&inode->i_sem);
 	request_send(fc, req);
+	up(&inode->i_sem);
 	err = req->out.h.error;
 	if (!err && !(fc->flags & FUSE_KERNEL_CACHE)) {
 #ifdef KERNEL_2_6
@@ -95,7 +97,10 @@ static int fuse_release(struct inode *inode, struct file *file)
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(struct fuse_open_in);
 	req->in.args[0].value = inarg;
-	request_send_noreply(fc, req);
+	down(&inode->i_sem);
+	request_send(fc, req);
+	up(&inode->i_sem);
+	fuse_put_request(fc, req);
 
 	/* Return value is ignored by VFS */
 	return 0;

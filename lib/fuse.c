@@ -1010,6 +1010,7 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
         
         free(path);
     }
+    send_reply(f, in, 0, NULL, 0);
 }
 
 static void do_read(struct fuse *f, struct fuse_in_header *in,

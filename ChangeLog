@@ -1,3 +1,8 @@
+2004-06-30  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Acquire inode->i_sem before open and release methods to prevent
+	concurrent rename or unlink operations.
+
 2004-06-27  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix file offset wrap around at 4G when doing large reads
