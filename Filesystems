@@ -6,8 +6,10 @@ Homepage: http://owfs.sourceforge.net
 
 Description:
 
-  OWFS is a method under linux to allow 1-wire devices to appear like
-  files in a directory. 
+  OWFS uses FUSE to expose all the Dallas 1-wire sensors, iButtons and
+  memory chips as a filesystem. Devices are dynamically included in
+  the directory, and properties like temperature are obtained by
+  reading a file.
 
 ==============================================================================
 Name: FunFS (status: alpha)

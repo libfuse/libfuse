@@ -1,3 +1,36 @@
+What is new in 2.2
+
+Userspace changes:
+
+ - Add fuse_file_info structure to file operations, this allows the filesystem
+   to return a file handle in open() which is passed to read(), write(), flush(), 
+   fsync() and release().
+
+ - Add source compatibility with 2.1 and 1.4 releases
+
+ - Binary compatibility with 2.1 release is retained
+
+Kernel changes:
+
+ - Make requests interruptible.  This prevents the filesystem to go
+   into an unbreakable deadlock with itself.
+
+ - Make readpages() synchronous.  Asynchronous requests are deadlock
+   prone, since they cannot be interrupted (see above)
+
+ - Remove shared-writeable mapping support, which could deadlock the
+   machine
+
+ - Remove INVALIDATE userspace initiated request
+
+ - Update ABI to be independent of sizeof(long), so dual-size archs
+   don't cause problems
+
+ - Remove /sys/fs/fuse/version.  Version checking is now done through
+   the fuse device
+
+============================================================================
+
 What is new in 2.1
 
 * Bug fixes
