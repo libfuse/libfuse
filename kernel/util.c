@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2001-2004  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -11,7 +11,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 
-MODULE_AUTHOR("Miklos Szeredi <mszeredi@inf.bme.hu>");
+MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
 #ifdef MODULE_LICENSE
 MODULE_LICENSE("GPL");
