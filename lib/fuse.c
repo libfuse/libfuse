@@ -64,48 +64,48 @@ static inline void dec_avail(struct fuse *f)
     pthread_mutex_unlock(&f->lock);
 }
 
-static struct node *__get_node(struct fuse *f, fino_t ino)
+static struct node *__get_node(struct fuse *f, nodeid_t nodeid)
 {
-    size_t hash = ino % f->ino_table_size;
+    size_t hash = nodeid % f->id_table_size;
     struct node *node;
 
-    for (node = f->ino_table[hash]; node != NULL; node = node->ino_next)
-        if (node->ino == ino)
+    for (node = f->id_table[hash]; node != NULL; node = node->id_next)
+        if (node->nodeid == nodeid)
             return node;
     
     return NULL;
 }
 
-static struct node *get_node(struct fuse *f, fino_t ino)
+static struct node *get_node(struct fuse *f, nodeid_t nodeid)
 {
-    struct node *node = __get_node(f, ino);
+    struct node *node = __get_node(f, nodeid);
     if (node != NULL)
         return node;
     
-    fprintf(stderr, "fuse internal error: inode %lu not found\n", ino);
+    fprintf(stderr, "fuse internal error: inode %lu not found\n", nodeid);
     abort();
 }
 
-static void hash_ino(struct fuse *f, struct node *node)
+static void hash_id(struct fuse *f, struct node *node)
 {
-    size_t hash = node->ino % f->ino_table_size;
-    node->ino_next = f->ino_table[hash];
-    f->ino_table[hash] = node;    
+    size_t hash = node->nodeid % f->id_table_size;
+    node->id_next = f->id_table[hash];
+    f->id_table[hash] = node;    
 }
 
-static void unhash_ino(struct fuse *f, struct node *node)
+static void unhash_id(struct fuse *f, struct node *node)
 {
-    size_t hash = node->ino % f->ino_table_size;
-    struct node **nodep = &f->ino_table[hash];
+    size_t hash = node->nodeid % f->id_table_size;
+    struct node **nodep = &f->id_table[hash];
 
-    for (; *nodep != NULL; nodep = &(*nodep)->ino_next) 
+    for (; *nodep != NULL; nodep = &(*nodep)->id_next) 
         if (*nodep == node) {
-            *nodep = node->ino_next;
+            *nodep = node->id_next;
             return;
         }
 }
 
-static fino_t next_ino(struct fuse *f)
+static nodeid_t next_id(struct fuse *f)
 {
     do {
         f->ctr++;
@@ -121,7 +121,7 @@ static void free_node(struct node *node)
     free(node);
 }
 
-static unsigned int name_hash(struct fuse *f, fino_t parent, const char *name)
+static unsigned int name_hash(struct fuse *f, nodeid_t parent, const char *name)
 {
     unsigned int hash = *name;
 
@@ -132,7 +132,7 @@ static unsigned int name_hash(struct fuse *f, fino_t parent, const char *name)
     return (hash + parent) % f->name_table_size;
 }
 
-static struct node *__lookup_node(struct fuse *f, fino_t parent,
+static struct node *__lookup_node(struct fuse *f, nodeid_t parent,
                                 const char *name)
 {
     size_t hash = name_hash(f, parent, name);
@@ -145,7 +145,7 @@ static struct node *__lookup_node(struct fuse *f, fino_t parent,
     return NULL;
 }
 
-static struct node *lookup_node(struct fuse *f, fino_t parent,
+static struct node *lookup_node(struct fuse *f, nodeid_t parent,
                                 const char *name)
 {
     struct node *node;
@@ -161,7 +161,7 @@ static struct node *lookup_node(struct fuse *f, fino_t parent,
     abort();
 }
 
-static int hash_name(struct fuse *f, struct node *node, fino_t parent,
+static int hash_name(struct fuse *f, struct node *node, nodeid_t parent,
                      const char *name)
 {
     size_t hash = name_hash(f, parent, name);
@@ -191,12 +191,12 @@ static void unhash_name(struct fuse *f, struct node *node)
                 return;
             }
         fprintf(stderr, "fuse internal error: unable to unhash node: %lu\n",
-                node->ino);
+                node->nodeid);
         abort();
     }
 }
 
-static struct node *find_node(struct fuse *f, fino_t parent, char *name,
+static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
                               struct fuse_attr *attr, int version)
 {
     struct node *node;
@@ -209,8 +209,13 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     pthread_mutex_lock(&f->lock);
     node = __lookup_node(f, parent, name);
     if (node != NULL) {
-        if (node->mode == mode && node->rdev == rdev)
+        if (node->mode == mode && node->rdev == rdev && 
+            (!(f->flags & FUSE_USE_INO) || node->ino == attr->ino)) {
+            if (!(f->flags & FUSE_USE_INO))
+                attr->ino = node->nodeid;
+
             goto out;
+        }
         
         unhash_name(f, node);
     }
@@ -219,18 +224,21 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     if (node == NULL)
         goto out_err;
 
+    node->nodeid = next_id(f);
+    if (!(f->flags & FUSE_USE_INO))
+        attr->ino = node->nodeid;
     node->mode = mode;
     node->rdev = rdev;
+    node->ino = attr->ino;
     node->open_count = 0;
     node->is_hidden = 0;
-    node->ino = next_ino(f);
     node->generation = f->generation;
     if (hash_name(f, node, parent, name) == -1) {
         free(node);
         node = NULL;
         goto out_err;
     }
-    hash_ino(f, node);
+    hash_id(f, node);
 
  out:
     node->version = version;
@@ -239,9 +247,11 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     return node;
 }
 
-static int path_lookup(struct fuse *f, const char *path, fino_t *inop)
+static int path_lookup(struct fuse *f, const char *path, nodeid_t *nodeidp,
+                       unsigned long *inop)
 {
-    fino_t ino;
+    nodeid_t nodeid;
+    unsigned long ino;
     int err;
     char *s;
     char *name;
@@ -250,22 +260,26 @@ static int path_lookup(struct fuse *f, const char *path, fino_t *inop)
         return -ENOMEM;
 
     pthread_mutex_lock(&f->lock);
-    ino = FUSE_ROOT_INO;
+    nodeid = FUSE_ROOT_ID;
+    ino = nodeid;
     err = 0;
     for  (s = tmp; (name = strsep(&s, "/")) != NULL; ) {
         if (name[0]) {
-            struct node *node = __lookup_node(f, ino, name);
+            struct node *node = __lookup_node(f, nodeid, name);
             if (node == NULL) {
                 err = -ENOENT;
                 break;
             }
+            nodeid = node->nodeid;
             ino = node->ino;
         }
     }
     pthread_mutex_unlock(&f->lock);
     free(tmp);
-    if (!err)
+    if (!err) {
+        *nodeidp = nodeid;
         *inop = ino;
+    }
     
     return err;
 }
@@ -285,7 +299,7 @@ static char *add_name(char *buf, char *s, const char *name)
     return s;
 }
 
-static char *get_path_name(struct fuse *f, fino_t ino, const char *name)
+static char *get_path_name(struct fuse *f, nodeid_t nodeid, const char *name)
 {
     char buf[FUSE_MAX_PATH];
     char *s = buf + FUSE_MAX_PATH - 1;
@@ -300,7 +314,7 @@ static char *get_path_name(struct fuse *f, fino_t ino, const char *name)
     }
 
     pthread_mutex_lock(&f->lock);
-    for (node = get_node(f, ino); node->ino != FUSE_ROOT_INO;
+    for (node = get_node(f, nodeid); node->nodeid != FUSE_ROOT_ID;
         node = get_node(f, node->parent)) {
         if (node->name == NULL) {
             s = NULL;
@@ -321,27 +335,27 @@ static char *get_path_name(struct fuse *f, fino_t ino, const char *name)
         return strdup(s);
 }
 
-static char *get_path(struct fuse *f, fino_t ino)
+static char *get_path(struct fuse *f, nodeid_t nodeid)
 {
-    return get_path_name(f, ino, NULL);
+    return get_path_name(f, nodeid, NULL);
 }
 
-static void destroy_node(struct fuse *f, fino_t ino, int version)
+static void destroy_node(struct fuse *f, nodeid_t nodeid, int version)
 {
     struct node *node;
 
     pthread_mutex_lock(&f->lock);
-    node = __get_node(f, ino);
-    if (node && node->version == version && ino != FUSE_ROOT_INO) {
+    node = __get_node(f, nodeid);
+    if (node && node->version == version && nodeid != FUSE_ROOT_ID) {
         unhash_name(f, node);
-        unhash_ino(f, node);
+        unhash_id(f, node);
         free_node(node);
     }
     pthread_mutex_unlock(&f->lock);
 
 }
 
-static void remove_node(struct fuse *f, fino_t dir, const char *name)
+static void remove_node(struct fuse *f, nodeid_t dir, const char *name)
 {
     struct node *node;
 
@@ -356,8 +370,8 @@ static void remove_node(struct fuse *f, fino_t dir, const char *name)
     pthread_mutex_unlock(&f->lock);
 }
 
-static int rename_node(struct fuse *f, fino_t olddir, const char *oldname,
-                        fino_t newdir, const char *newname, int hide)
+static int rename_node(struct fuse *f, nodeid_t olddir, const char *oldname,
+                        nodeid_t newdir, const char *newname, int hide)
 {
     struct node *node;
     struct node *newnode;
@@ -397,6 +411,7 @@ static int rename_node(struct fuse *f, fino_t olddir, const char *oldname,
 
 static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 {
+    attr->ino       = stbuf->st_ino;
     attr->mode      = stbuf->st_mode;
     attr->nlink     = stbuf->st_nlink;
     attr->uid       = stbuf->st_uid;
@@ -506,7 +521,7 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     return __send_reply(f, in, error, arg, argsize, 0);
 }
 
-static int is_open(struct fuse *f, fino_t dir, const char *name)
+static int is_open(struct fuse *f, nodeid_t dir, const char *name)
 {
     struct node *node;
     int isopen = 0;
@@ -518,7 +533,7 @@ static int is_open(struct fuse *f, fino_t dir, const char *name)
     return isopen;
 }
 
-static char *hidden_name(struct fuse *f, fino_t dir, const char *oldname,
+static char *hidden_name(struct fuse *f, nodeid_t dir, const char *oldname,
                         char *newname, size_t bufsize)
 {
     struct stat buf;
@@ -537,7 +552,7 @@ static char *hidden_name(struct fuse *f, fino_t dir, const char *oldname,
         do {
             f->hidectr ++;
             snprintf(newname, bufsize, ".fuse_hidden%08x%08x",
-                     (unsigned int) node->ino, f->hidectr);
+                     (unsigned int) node->nodeid, f->hidectr);
             newnode = __lookup_node(f, dir, newname);
         } while(newnode);
         pthread_mutex_unlock(&f->lock);
@@ -556,7 +571,7 @@ static char *hidden_name(struct fuse *f, fino_t dir, const char *oldname,
     return newpath;
 }
 
-static int hide_node(struct fuse *f, const char *oldpath, fino_t dir,
+static int hide_node(struct fuse *f, const char *oldpath, nodeid_t dir,
                      const char *oldname)
 {
     char newname[64];
@@ -575,7 +590,7 @@ static int hide_node(struct fuse *f, const char *oldpath, fino_t dir,
     return err;
 }
 
-static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
+static int lookup_path(struct fuse *f, nodeid_t nodeid, int version, char *name,
                        const char *path, struct fuse_entry_out *arg)
 {
     int res;
@@ -587,18 +602,18 @@ static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
 
         memset(arg, 0, sizeof(struct fuse_entry_out));
         convert_stat(&buf, &arg->attr);
-        node = find_node(f, ino, name, &arg->attr, version);
+        node = find_node(f, nodeid, name, &arg->attr, version);
         if (node == NULL)
             res = -ENOMEM;
         else {
-            arg->ino = node->ino;
+            arg->nodeid = node->nodeid;
             arg->generation = node->generation;
             arg->entry_valid = ENTRY_REVALIDATE_TIME;
             arg->entry_valid_nsec = 0;
             arg->attr_valid = ATTR_REVALIDATE_TIME;
             arg->attr_valid_nsec = 0;
             if (f->flags & FUSE_DEBUG) {
-                printf("   INO: %li\n", arg->ino);
+                printf("   NODEID: %li\n", arg->nodeid);
                 fflush(stdout);
             }
         }
@@ -614,7 +629,7 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     struct fuse_entry_out arg;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, name);
+    path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("LOOKUP %s\n", path);
@@ -622,22 +637,22 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
         }
         res = -ENOSYS;
         if (f->op.getattr)
-            res = lookup_path(f, in->ino, in->unique, name, path, &arg);
+            res = lookup_path(f, in->nodeid, in->unique, name, path, &arg);
         free(path);
     }
     res2 = send_reply(f, in, res, &arg, sizeof(arg));
     if (res == 0 && res2 == -ENOENT)
-        destroy_node(f, arg.ino, in->unique);
+        destroy_node(f, arg.nodeid, in->unique);
 }
 
 static void do_forget(struct fuse *f, struct fuse_in_header *in,
                       struct fuse_forget_in *arg)
 {
     if (f->flags & FUSE_DEBUG) {
-        printf("FORGET %li/%i\n", in->ino, arg->version);
+        printf("FORGET %li/%i\n", in->nodeid, arg->version);
         fflush(stdout);
     }
-    destroy_node(f, in->ino, arg->version);
+    destroy_node(f, in->nodeid, arg->version);
 }
 
 static void do_getattr(struct fuse *f, struct fuse_in_header *in)
@@ -648,7 +663,7 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     struct fuse_attr_out arg;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.getattr)
@@ -661,6 +676,12 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
         arg.attr_valid = ATTR_REVALIDATE_TIME;
         arg.attr_valid_nsec = 0;
         convert_stat(&buf, &arg.attr);
+        if (!(f->flags & FUSE_USE_INO))
+            arg.attr.ino = in->nodeid;
+        else {
+            struct node *node = get_node(f, in->nodeid);
+            node->ino = arg.attr.ino;
+        }
     }
 
     send_reply(f, in, res, &arg, sizeof(arg));
@@ -726,7 +747,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
     struct fuse_attr_out outarg;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.getattr) {
@@ -748,6 +769,12 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
                     outarg.attr_valid = ATTR_REVALIDATE_TIME;
                     outarg.attr_valid_nsec = 0;
                     convert_stat(&buf, &outarg.attr);
+                    if (!(f->flags & FUSE_USE_INO))
+                        outarg.attr.ino = in->nodeid;
+                    else {
+                        struct node *node = get_node(f, in->nodeid);
+                        node->ino = outarg.attr.ino;
+                    }
                 }
             }
         }
@@ -763,7 +790,7 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
     char *path;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.readlink)
@@ -783,14 +810,14 @@ static void do_getdir(struct fuse *f, struct fuse_in_header *in)
 
     dh.fuse = f;
     dh.fp = tmpfile();
-    dh.dir = in->ino;
+    dh.dir = in->nodeid;
 
     res = -EIO;
     if (dh.fp == NULL)
         perror("fuse: failed to create temporary file");
     else {
         res = -ENOENT;
-        path = get_path(f, in->ino);
+        path = get_path(f, in->nodeid);
         if (path != NULL) {
             res = -ENOSYS;
             if (f->op.getdir)
@@ -817,7 +844,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, name);
+    path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("MKNOD %s\n", path);
@@ -827,13 +854,13 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
         if (f->op.mknod && f->op.getattr) {
             res = f->op.mknod(path, inarg->mode, inarg->rdev);
             if (res == 0)
-                res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
+                res = lookup_path(f, in->nodeid, in->unique, name, path, &outarg);
         }
         free(path);
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        destroy_node(f, outarg.ino, in->unique);
+        destroy_node(f, outarg.nodeid, in->unique);
 }
 
 static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
@@ -846,7 +873,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, name);
+    path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("MKDIR %s\n", path);
@@ -856,13 +883,13 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
         if (f->op.mkdir && f->op.getattr) {
             res = f->op.mkdir(path, inarg->mode);
             if (res == 0)
-                res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
+                res = lookup_path(f, in->nodeid, in->unique, name, path, &outarg);
         }
         free(path);
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        destroy_node(f, outarg.ino, in->unique);
+        destroy_node(f, outarg.nodeid, in->unique);
 }
 
 static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
@@ -871,7 +898,7 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
     char *path;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, name);
+    path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("UNLINK %s\n", path);
@@ -879,12 +906,12 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
         }
         res = -ENOSYS;
         if (f->op.unlink) {
-            if (!(f->flags & FUSE_HARD_REMOVE) && is_open(f, in->ino, name))
-                res = hide_node(f, path, in->ino, name);
+            if (!(f->flags & FUSE_HARD_REMOVE) && is_open(f, in->nodeid, name))
+                res = hide_node(f, path, in->nodeid, name);
             else {
                 res = f->op.unlink(path);
                 if (res == 0)
-                    remove_node(f, in->ino, name);
+                    remove_node(f, in->nodeid, name);
             }
         }
         free(path);
@@ -898,7 +925,7 @@ static void do_rmdir(struct fuse *f, struct fuse_in_header *in, char *name)
     char *path;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, name);
+    path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("RMDIR %s\n", path);
@@ -908,7 +935,7 @@ static void do_rmdir(struct fuse *f, struct fuse_in_header *in, char *name)
         if (f->op.rmdir) {
             res = f->op.rmdir(path);
             if (res == 0)
-                remove_node(f, in->ino, name);
+                remove_node(f, in->nodeid, name);
         }
         free(path);
     }
@@ -924,7 +951,7 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, name);
+    path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("SYMLINK %s\n", path);
@@ -934,13 +961,13 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
         if (f->op.symlink && f->op.getattr) {
             res = f->op.symlink(link, path);
             if (res == 0)
-                res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
+                res = lookup_path(f, in->nodeid, in->unique, name, path, &outarg);
         }
         free(path);
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        destroy_node(f, outarg.ino, in->unique);
+        destroy_node(f, outarg.nodeid, in->unique);
 
 }
 
@@ -948,8 +975,8 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
                       struct fuse_rename_in *inarg)
 {
     int res;
-    fino_t olddir = in->ino;
-    fino_t newdir = inarg->newdir;
+    nodeid_t olddir = in->nodeid;
+    nodeid_t newdir = inarg->newdir;
     char *oldname = PARAM(inarg);
     char *newname = oldname + strlen(oldname) + 1;
     char *oldpath;
@@ -994,7 +1021,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
-    oldpath = get_path(f, in->ino);
+    oldpath = get_path(f, in->nodeid);
     if (oldpath != NULL) {
         newpath =  get_path_name(f, arg->newdir, name);
         if (newpath != NULL) {
@@ -1015,7 +1042,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        destroy_node(f, outarg.ino, in->unique);
+        destroy_node(f, outarg.nodeid, in->unique);
 }
 
 static void do_open(struct fuse *f, struct fuse_in_header *in,
@@ -1026,7 +1053,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     struct fuse_open_out outarg;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.open)
@@ -1053,7 +1080,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             if(f->op.release)
                 f->op.release(path, arg->flags);
         } else
-            get_node(f, in->ino)->open_count ++;
+            get_node(f, in->nodeid)->open_count ++;
         pthread_mutex_unlock(&f->lock);
 
     } else
@@ -1070,7 +1097,7 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in,
     int res;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("FLUSH[%lu]\n", arg->fh);
@@ -1091,11 +1118,11 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     pthread_mutex_lock(&f->lock);
-    node = get_node(f, in->ino);
+    node = get_node(f, in->nodeid);
     --node->open_count;
     pthread_mutex_unlock(&f->lock);
 
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("RELEASE[%lu]\n", arg->fh);
@@ -1128,7 +1155,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
         size_t outsize;
         
         res = -ENOENT;
-        path = get_path(f, in->ino);
+        path = get_path(f, in->nodeid);
         if (path != NULL) {
             if (f->flags & FUSE_DEBUG) {
                 printf("READ[%lu] %u bytes from %llu\n", arg->fh, arg->size,
@@ -1169,7 +1196,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     struct fuse_write_out outarg;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("WRITE%s[%lu] %u bytes to %llu\n",
@@ -1235,7 +1262,7 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
             printf("FSYNC[%lu]\n", inarg->fh);
@@ -1258,7 +1285,7 @@ static void do_setxattr(struct fuse *f, struct fuse_in_header *in,
     unsigned char *value = name + strlen(name) + 1;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.setxattr)
@@ -1275,7 +1302,7 @@ static int common_getxattr(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.getxattr)
@@ -1343,7 +1370,7 @@ static int common_listxattr(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.listxattr)
@@ -1408,7 +1435,7 @@ static void do_removexattr(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
-    path = get_path(f, in->ino);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.removexattr)
@@ -1435,8 +1462,8 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     dec_avail(f);
 
     if ((f->flags & FUSE_DEBUG)) {
-        printf("unique: %i, opcode: %s (%i), ino: %li, insize: %i\n",
-               in->unique, opname(in->opcode), in->opcode, in->ino,
+        printf("unique: %i, opcode: %s (%i), nodeid: %li, insize: %i\n",
+               in->unique, opname(in->opcode), in->opcode, in->nodeid,
                cmd->buflen);
         fflush(stdout);
     }
@@ -1634,10 +1661,11 @@ int fuse_invalidate(struct fuse *f, const char *path)
 {
     int res;
     int err;
-    fino_t ino;
+    nodeid_t nodeid;
+    unsigned long ino;
     struct fuse_user_header h;
 
-    err = path_lookup(f, path, &ino);
+    err = path_lookup(f, path, &nodeid, &ino);
     if (err) {
         if (err == -ENOENT)
             return 0;
@@ -1647,10 +1675,11 @@ int fuse_invalidate(struct fuse *f, const char *path)
 
     memset(&h, 0, sizeof(struct fuse_user_header));
     h.opcode = FUSE_INVALIDATE;
+    h.nodeid = nodeid;
     h.ino = ino;
     
     if ((f->flags & FUSE_DEBUG)) {
-        printf("INVALIDATE ino: %li\n", ino);
+        printf("INVALIDATE nodeid: %li\n", nodeid);
         fflush(stdout);
     }
 
@@ -1716,7 +1745,8 @@ static int check_version(struct fuse *f)
 int fuse_is_lib_option(const char *opt)
 {
     if (strcmp(opt, "debug") == 0 ||
-        strcmp(opt, "hard_remove") == 0)
+        strcmp(opt, "hard_remove") == 0 ||
+        strcmp(opt, "use_ino") == 0)
         return 1;
     else
         return 0;
@@ -1737,6 +1767,8 @@ static int parse_lib_opts(struct fuse *f, const char *opts)
                 f->flags |= FUSE_DEBUG;
             else if (strcmp(opt, "hard_remove") == 0)
                 f->flags |= FUSE_HARD_REMOVE;
+            else if (strcmp(opt, "use_ino") == 0)
+                f->flags |= FUSE_USE_INO;
             else 
                 fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
         }
@@ -1770,10 +1802,10 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
     if (f->name_table == NULL)
         goto out_free;
 
-    f->ino_table_size = 14057;
-    f->ino_table = (struct node **)
-        calloc(1, sizeof(struct node *) * f->ino_table_size);
-    if (f->ino_table == NULL)
+    f->id_table_size = 14057;
+    f->id_table = (struct node **)
+        calloc(1, sizeof(struct node *) * f->id_table_size);
+    if (f->id_table == NULL)
         goto out_free_name_table;
 
     pthread_mutex_init(&f->lock, NULL);
@@ -1784,7 +1816,7 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
 
     root = (struct node *) calloc(1, sizeof(struct node));
     if (root == NULL)
-        goto out_free_ino_table;
+        goto out_free_id_table;
 
     root->mode = 0;
     root->rdev = 0;
@@ -1793,16 +1825,16 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
         goto out_free_root;
 
     root->parent = 0;
-    root->ino = FUSE_ROOT_INO;
+    root->nodeid = FUSE_ROOT_ID;
     root->generation = 0;
-    hash_ino(f, root);
+    hash_id(f, root);
 
     return f;
 
  out_free_root:
     free(root);
- out_free_ino_table:
-    free(f->ino_table);
+ out_free_id_table:
+    free(f->id_table);
  out_free_name_table:
     free(f->name_table);
  out_free:
@@ -1815,27 +1847,27 @@ struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op
 void fuse_destroy(struct fuse *f)
 {
     size_t i;
-    for (i = 0; i < f->ino_table_size; i++) {
+    for (i = 0; i < f->id_table_size; i++) {
         struct node *node;
 
-        for (node = f->ino_table[i]; node != NULL; node = node->ino_next) {
+        for (node = f->id_table[i]; node != NULL; node = node->id_next) {
             if (node->is_hidden) {
-                char *path = get_path(f, node->ino);
+                char *path = get_path(f, node->nodeid);
                 if (path)
                     f->op.unlink(path);
             }
         }
     }
-    for (i = 0; i < f->ino_table_size; i++) {
+    for (i = 0; i < f->id_table_size; i++) {
         struct node *node;
         struct node *next;
 
-        for (node = f->ino_table[i]; node != NULL; node = next) {
-            next = node->ino_next;
+        for (node = f->id_table[i]; node != NULL; node = next) {
+            next = node->id_next;
             free_node(node);
         }
     }
-    free(f->ino_table);
+    free(f->id_table);
     free(f->name_table);
     pthread_mutex_destroy(&f->lock);
     free(f);

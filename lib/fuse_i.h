@@ -19,18 +19,22 @@
     remove it immediately */
 #define FUSE_HARD_REMOVE (1 << 2)
 
+/** Use st_ino field in getattr instead of generating inode numbers  */
+#define FUSE_USE_INO     (1 << 3)
 
-typedef unsigned long fino_t;
+
+typedef unsigned long nodeid_t;
 
 struct node {
     struct node *name_next;
-    struct node *ino_next;
-    fino_t ino;
+    struct node *id_next;
+    nodeid_t nodeid;
     unsigned int generation;
-    fino_t parent;
+    nodeid_t parent;
     char *name;
     int mode;
     int rdev;
+    unsigned long ino;
     int version;
     int open_count;
     int is_hidden;
@@ -42,9 +46,9 @@ struct fuse {
     struct fuse_operations op;
     struct node **name_table;
     size_t name_table_size;
-    struct node **ino_table;
-    size_t ino_table_size;
-    fino_t ctr;
+    struct node **id_table;
+    size_t id_table_size;
+    nodeid_t ctr;
     unsigned int generation;
     unsigned int hidectr;
     unsigned long fh_ctr;
@@ -58,7 +62,7 @@ struct fuse {
 
 struct fuse_dirhandle {
     struct fuse *fuse;
-    fino_t dir;
+    nodeid_t dir;
     FILE *fp;
 };
 

@@ -33,6 +33,7 @@ MODULE_PARM_DESC(user_mmap, "Allow non root user to create a shared writable map
 static int fuse_open(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_req *req;
 	struct fuse_open_in inarg;
 	struct fuse_open_out outarg;
@@ -45,7 +46,7 @@ static int fuse_open(struct inode *inode, struct file *file)
 
 	/* If opening the root node, no lookup has been performed on
 	   it, so the attributes must be refreshed */
-	if (inode->i_ino == FUSE_ROOT_INO) {
+	if (fi->nodeid == FUSE_ROOT_ID) {
 		int err = fuse_do_getattr(inode);
 		if (err)
 		 	return err;
@@ -68,11 +69,10 @@ static int fuse_open(struct inode *inode, struct file *file)
 		goto out_put_request;
 	}
 
-
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.flags = file->f_flags & ~O_EXCL;
 	req->in.h.opcode = FUSE_OPEN;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
@@ -140,7 +140,7 @@ static int fuse_release(struct inode *inode, struct file *file)
 	inarg->fh = ff->fh;
 	inarg->flags = file->f_flags & ~O_EXCL;
 	req->in.h.opcode = FUSE_RELEASE;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(struct fuse_release_in);
 	req->in.args[0].value = inarg;
@@ -157,6 +157,7 @@ static int fuse_flush(struct file *file)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_file *ff = file->private_data;
 	struct fuse_req *req = ff->release_req;
 	struct fuse_flush_in inarg;
@@ -169,7 +170,7 @@ static int fuse_flush(struct file *file)
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.fh = ff->fh;
 	req->in.h.opcode = FUSE_FLUSH;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
@@ -210,7 +211,7 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	inarg.fh = ff->fh;
 	inarg.datasync = datasync;
 	req->in.h.opcode = FUSE_FSYNC;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
@@ -228,6 +229,7 @@ static ssize_t fuse_send_read(struct file *file, struct inode *inode,
 			      char *buf, loff_t pos, size_t count)
 {
 	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_file *ff = file->private_data;
 	struct fuse_req *req;
 	struct fuse_read_in inarg;
@@ -242,7 +244,7 @@ static ssize_t fuse_send_read(struct file *file, struct inode *inode,
 	inarg.offset = pos;
 	inarg.size = count;
 	req->in.h.opcode = FUSE_READ;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
@@ -333,6 +335,7 @@ static void fuse_send_readpages(struct fuse_req *req, struct file *file,
 				struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_file *ff = file->private_data;
 	struct fuse_read_in *inarg;
 	loff_t pos;
@@ -348,7 +351,7 @@ static void fuse_send_readpages(struct fuse_req *req, struct file *file,
 	inarg->offset = pos;
 	inarg->size = numpages * PAGE_CACHE_SIZE;
 	req->in.h.opcode = FUSE_READ;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(struct fuse_read_in);
 	req->in.args[0].value = inarg;
@@ -588,6 +591,7 @@ static ssize_t fuse_send_write(struct fuse_req *req, int writepage,
 			       const char *buf, loff_t pos, size_t count)
 {
 	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_inode *fi = INO_FI(inode);
 	struct fuse_write_in inarg;
 	struct fuse_write_out outarg;
 	ssize_t res;
@@ -598,7 +602,7 @@ static ssize_t fuse_send_write(struct fuse_req *req, int writepage,
 	inarg.offset = pos;
 	inarg.size = count;
 	req->in.h.opcode = FUSE_WRITE;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	if (writepage) {
 		req->in.h.uid = 0;
 		req->in.h.gid = 0;
@@ -757,7 +761,7 @@ static void send_write_nonblock(struct fuse_req *req, struct inode *inode,
 	inarg->offset = ((loff_t) page->index << PAGE_CACHE_SHIFT);
 	inarg->size = count;
 	req->in.h.opcode = FUSE_WRITE;
-	req->in.h.ino = inode->i_ino;
+	req->in.h.nodeid = fi->nodeid;
 	req->in.h.uid = 0;
 	req->in.h.gid = 0;
 	req->in.h.pid = 0;

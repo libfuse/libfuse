@@ -58,32 +58,39 @@ struct fuse_mount_data {
 	unsigned int max_read;
 };
 
-struct fuse_inode *fuse_inode_alloc(void)
+static struct inode *fuse_alloc_inode(struct super_block *sb)
 {
+	struct inode *inode;
 	struct fuse_inode *fi;
 
-	fi = kmem_cache_alloc(fuse_inode_cachep, SLAB_KERNEL);
-	if (fi) {
-		memset(fi, 0, sizeof(*fi));
-		fi->forget_req = fuse_request_alloc();
-		if (!fi->forget_req) {
-			kmem_cache_free(fuse_inode_cachep, fi);
-			fi = NULL;
-		} else {
-			init_rwsem(&fi->write_sem);
-			INIT_LIST_HEAD(&fi->write_files);
-		}
-	}
+	inode = kmem_cache_alloc(fuse_inode_cachep, SLAB_KERNEL);
+	if (!inode)
+		return NULL;
 
-	return fi;
+#ifndef KERNEL_2_6
+	inode->u.generic_ip = NULL;
+#endif
+
+	fi = INO_FI(inode);
+	memset(fi, 0, sizeof(*fi));
+	fi->forget_req = fuse_request_alloc();
+	if (!fi->forget_req) {
+		kmem_cache_free(fuse_inode_cachep, inode);
+		return NULL;
+	}
+	init_rwsem(&fi->write_sem);
+	INIT_LIST_HEAD(&fi->write_files);
+
+	return inode;
 }
 
-static void fuse_inode_free(struct fuse_inode *fi)
+static void fuse_destroy_inode(struct inode *inode)
 {
+	struct fuse_inode *fi = INO_FI(inode);
 	BUG_ON(!list_empty(&fi->write_files));
 	if (fi->forget_req)
 		fuse_request_free(fi->forget_req);
-	kmem_cache_free(fuse_inode_cachep, fi);
+	kmem_cache_free(fuse_inode_cachep, inode);
 }
 
 static void fuse_read_inode(struct inode *inode)
@@ -91,13 +98,13 @@ static void fuse_read_inode(struct inode *inode)
 	/* No op */
 }
 
-void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req, ino_t ino,
-		      int version)
+void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
+		      unsigned long nodeid, int version)
 {
 	struct fuse_forget_in *inarg = &req->misc.forget_in;
 	inarg->version = version;
 	req->in.h.opcode = FUSE_FORGET;
-	req->in.h.ino = ino;
+	req->in.h.nodeid = nodeid;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(struct fuse_forget_in);
 	req->in.args[0].value = inarg;
@@ -107,15 +114,11 @@ void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req, ino_t ino,
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_inode *fi = INO_FI(inode);
 	
-	if (fi) {
-		if (fc) {
-			fuse_send_forget(fc, fi->forget_req, inode->i_ino,
-					 inode->i_version);
-			fi->forget_req = NULL;
-		}
-		fuse_inode_free(fi);
+	if (fc) {
+		struct fuse_inode *fi = INO_FI(inode);
+		fuse_send_forget(fc, fi->forget_req, fi->nodeid, inode->i_version);
+		fi->forget_req = NULL;
 	}
 }
 
@@ -330,6 +333,7 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
 	memset(&attr, 0, sizeof(attr));
 
 	attr.mode = mode;
+	attr.ino = FUSE_ROOT_ID;
 	return fuse_iget(sb, 1, 0, &attr, 0);
 }
 
@@ -366,6 +370,8 @@ static struct export_operations fuse_export_operations = {
 #endif
 
 static struct super_operations fuse_super_operations = {
+	.alloc_inode    = fuse_alloc_inode,
+	.destroy_inode  = fuse_destroy_inode,
 	.read_inode	= fuse_read_inode,
 	.clear_inode	= fuse_clear_inode,
 	.put_super	= fuse_put_super,
@@ -469,6 +475,17 @@ static struct super_block *fuse_read_super_compat(struct super_block *sb,
 static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
 #endif
 
+static void fuse_inode_init_once(void * foo, kmem_cache_t * cachep,
+				 unsigned long flags)
+{
+	struct inode * inode = (struct inode *) foo;
+
+	if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
+	    SLAB_CTOR_CONSTRUCTOR)
+		inode_init_once(inode);
+}
+
+
 int fuse_fs_init()
 {
 	int err;
@@ -478,8 +495,9 @@ int fuse_fs_init()
 		printk("fuse: failed to register filesystem\n");
 	else {
 		fuse_inode_cachep = kmem_cache_create("fuse_inode",
-						      sizeof(struct fuse_inode),
-						      0, 0, NULL, NULL);
+						      sizeof(struct inode) + sizeof(struct fuse_inode) ,
+						      0, SLAB_HWCACHE_ALIGN,
+						      fuse_inode_init_once, NULL);
 		if (!fuse_inode_cachep) {
 			unregister_filesystem(&fuse_fs_type);
 			err = -ENOMEM;

@@ -1,3 +1,8 @@
+2004-11-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Added "use_ino" mount option.  This enables the filesystems to
+	set the st_ino field on files
+
 2004-11-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compile problems with ancient (<=2.4.18) kernels (reported

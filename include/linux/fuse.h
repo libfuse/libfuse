@@ -9,13 +9,13 @@
 /* This file defines the kernel interface of FUSE */
 
 /** Version number of this interface */
-#define FUSE_KERNEL_VERSION 3
+#define FUSE_KERNEL_VERSION 4
 
 /** Minor version number of this interface */
 #define FUSE_KERNEL_MINOR_VERSION 1
 
-/** The inode number of the root indode */
-#define FUSE_ROOT_INO 1
+/** The node ID of the root inode */
+#define FUSE_ROOT_ID 1
 
 /** Opening this will yield a new control file */
 #define FUSE_DEV "/proc/fs/fuse/dev"
@@ -24,6 +24,7 @@
 #define FUSE_VERSION_FILE "/proc/fs/fuse/version"
 
 struct fuse_attr {
+	unsigned long       ino;
 	unsigned int        mode;
 	unsigned int        nlink;
 	unsigned int        uid;
@@ -93,8 +94,8 @@ enum fuse_opcode {
 #define FUSE_XATTR_SIZE_MAX 4096
 
 struct fuse_entry_out {
-	unsigned long ino;         /* Inode number */
-	unsigned long generation;  /* Inode generation: ino:gen must
+	unsigned long nodeid;      /* Inode ID */
+	unsigned long generation;  /* Inode generation: nodeid:gen must
                                       be unique for the fs's lifetime */
 	unsigned long entry_valid; /* Cache timeout for the name */
 	unsigned long entry_valid_nsec;
@@ -198,7 +199,7 @@ struct fuse_getxattr_out {
 struct fuse_in_header {
 	int unique;
 	enum fuse_opcode opcode;
-	unsigned long ino;
+	unsigned long nodeid;
 	unsigned int uid;
 	unsigned int gid;
 	unsigned int pid;
@@ -212,7 +213,9 @@ struct fuse_out_header {
 struct fuse_user_header {
 	int unique; /* zero */
 	enum fuse_opcode opcode;
-	unsigned long ino;
+	unsigned long nodeid;
+	unsigned long ino;  /* Needed only on 2.4.x where ino is also
+			       used for inode lookup */
 };
 
 struct fuse_dirent {
