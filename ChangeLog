@@ -1,3 +1,10 @@
+2004-06-24  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Add "close after delete" support to libfuse (patch by Valient
+	Gough)
+
+	* Cancel all worker threads before exit in multithreaded mode
+
 2004-06-23  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix locking bugs

@@ -136,7 +136,7 @@ static unsigned int name_hash(struct fuse *f, fino_t parent, const char *name)
     return (hash + parent) % f->name_table_size;
 }
 
-static struct node *lookup_node(struct fuse *f, fino_t parent,
+static struct node *__lookup_node(struct fuse *f, fino_t parent,
                                 const char *name)
 {
     size_t hash = name_hash(f, parent, name);
@@ -147,6 +147,22 @@ static struct node *lookup_node(struct fuse *f, fino_t parent,
             return node;
 
     return NULL;
+}
+
+static struct node *lookup_node(struct fuse *f, fino_t parent,
+                                const char *name)
+{
+    struct node *node;
+
+    pthread_mutex_lock(&f->lock);
+    node = __lookup_node(f, parent, name);
+    pthread_mutex_unlock(&f->lock);
+    if (node != NULL)
+        return node;
+    
+    fprintf(stderr, "fuse internal error: node %lu/%s not found\n", parent,
+            name);
+    abort();
 }
 
 static void hash_name(struct fuse *f, struct node *node, fino_t parent,
@@ -191,7 +207,7 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
         rdev = attr->rdev;
 
     pthread_mutex_lock(&f->lock);
-    node = lookup_node(f, parent, name);
+    node = __lookup_node(f, parent, name);
     if (node != NULL) {
         if (node->mode == mode && node->rdev == rdev)
             goto out;
@@ -202,6 +218,8 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     node = (struct node *) calloc(1, sizeof(struct node));
     node->mode = mode;
     node->rdev = rdev;
+    node->open_count = 0;
+    node->is_hidden = 0;
     node->ino = next_ino(f);
     node->generation = f->generation;
     hash_ino(f, node);
@@ -289,7 +307,7 @@ static void remove_node(struct fuse *f, fino_t dir, const char *name)
     struct node *node;
 
     pthread_mutex_lock(&f->lock);
-    node = lookup_node(f, dir, name);
+    node = __lookup_node(f, dir, name);
     if (node == NULL) {
         fprintf(stderr, "fuse internal error: unable to remove node %lu/%s\n",
                 dir, name);
@@ -299,27 +317,39 @@ static void remove_node(struct fuse *f, fino_t dir, const char *name)
     pthread_mutex_unlock(&f->lock);
 }
 
-static void rename_node(struct fuse *f, fino_t olddir, const char *oldname,
-                        fino_t newdir, const char *newname)
+static int rename_node(struct fuse *f, fino_t olddir, const char *oldname,
+                        fino_t newdir, const char *newname, int hide)
 {
     struct node *node;
     struct node *newnode;
+    int err = 0;
     
     pthread_mutex_lock(&f->lock);
-    node  = lookup_node(f, olddir, oldname);
-    newnode  = lookup_node(f, newdir, newname);
+    node  = __lookup_node(f, olddir, oldname);
+    newnode  = __lookup_node(f, newdir, newname);
     if (node == NULL) {
         fprintf(stderr, "fuse internal error: unable to rename node %lu/%s\n",
                 olddir, oldname);
         abort();
     }
 
-    if (newnode != NULL)
+    if (newnode != NULL) {
+        if (hide) {
+            fprintf(stderr, "fuse: hidden file got created during hiding\n");
+            err = -1;
+            goto out;
+        }
         unhash_name(f, newnode);
+    }
         
     unhash_name(f, node);
     hash_name(f, node, newdir, newname);
+    if (hide)
+        node->is_hidden = 1;
+
+ out:
     pthread_mutex_unlock(&f->lock);
+    return err;
 }
 
 static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
@@ -415,6 +445,79 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     free(outbuf);
 
     return res;
+}
+
+static int is_open(struct fuse *f, fino_t dir, const char *name)
+{
+    struct node *node;
+    int isopen = 0;
+    pthread_mutex_lock(&f->lock);
+    node = __lookup_node(f, dir, name);
+    if (node && node->open_count > 0)
+        isopen = 1;
+    pthread_mutex_unlock(&f->lock);
+    return isopen;
+}
+
+static char *hidden_name(struct fuse *f, fino_t dir, const char *oldname,
+                        char *newname, size_t bufsize)
+{
+    struct stat buf;
+    struct node *node;
+    struct node *newnode;
+    char *newpath;
+    int res;
+    int failctr = 10;
+
+    if (!f->op.getattr)
+        return NULL;
+
+    do {
+        node = lookup_node(f, dir, oldname);
+        pthread_mutex_lock(&f->lock);
+        do {
+            f->hidectr ++;
+            snprintf(newname, bufsize, ".fuse_hidden%08x%08x",
+                     (unsigned int) node->ino, f->hidectr);
+            newnode = __lookup_node(f, dir, newname);
+        } while(newnode);
+        pthread_mutex_unlock(&f->lock);
+        
+        newpath = get_path_name(f, dir, newname);
+        if (!newpath)
+            break;
+        
+        res = f->op.getattr(newpath, &buf);
+        if (res != 0)
+            break;
+        free(newpath);
+        newpath = NULL;
+    } while(--failctr);
+
+    return newpath;
+}
+
+static int hide_node(struct fuse *f, const char *oldpath, fino_t dir,
+                     const char *oldname)
+{
+    char newname[64];
+    char *newpath;
+    int err = -1;
+
+    if (!f->op.rename || !f->op.unlink)
+        return -EBUSY;
+
+    newpath = hidden_name(f, dir, oldname, newname, sizeof(newname));
+    if (newpath) {
+        err = f->op.rename(oldpath, newpath);
+        if (!err)
+            err = rename_node(f, dir, oldname, dir, newname, 1);
+        free(newpath);
+    }
+    if (err)
+        return -EBUSY;
+    
+    return 0;
 }
 
 static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
@@ -706,9 +809,13 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.unlink) {
-            res = f->op.unlink(path);
-            if (res == 0)
-                remove_node(f, in->ino, name);
+            if (is_open(f, in->ino, name))
+                res = hide_node(f, path, in->ino, name);
+            else {
+                res = f->op.unlink(path);
+                if (res == 0)
+                    remove_node(f, in->ino, name);
+            }
         }
         free(path);
     }
@@ -780,10 +887,16 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
         newpath = get_path_name(f, newdir, newname);
         if (newpath != NULL) {
             res = -ENOSYS;
-            if (f->op.rename)
-                res = f->op.rename(oldpath, newpath);
-            if (res == 0)
-                rename_node(f, olddir, oldname, newdir, newname);
+            if (f->op.rename) {
+                res = 0;
+                if (is_open(f, newdir, newname))
+                    res = hide_node(f, newpath, newdir, newname);
+                if (res == 0) {
+                    res = f->op.rename(oldpath, newpath);
+                    if (res == 0)
+                        rename_node(f, olddir, oldname, newdir, newname, 0);
+                }
+            }
             free(newpath);
         }
         free(oldpath);
@@ -841,11 +954,19 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             res = f->op.open(path, arg->flags);
     }
     res2 = send_reply(f, in, res, NULL, 0);
-    if (path != NULL) {
-        /* The open syscall was interrupted, so it must be cancelled */
-        if (res == 0 && res2 == -ENOENT && f->op.release)
-            f->op.release(path, arg->flags);
-        free(path);
+    if(res == 0) {
+        if(res2 == -ENOENT) {
+            /* The open syscall was interrupted, so it must be cancelled */
+            if(f->op.release)
+                f->op.release(path, arg->flags);
+        } else {
+            struct node *node;
+            
+            pthread_mutex_lock(&f->lock);
+            node = get_node(f, in->ino);
+            ++node->open_count;
+            pthread_mutex_unlock(&f->lock);
+        }
     }
 }
 
@@ -868,14 +989,24 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in)
 static void do_release(struct fuse *f, struct fuse_in_header *in,
                        struct fuse_open_in *arg)
 {
-    if (f->op.release) {
-        char *path;
+    struct node *node;
+    char *path;
 
-        path = get_path(f, in->ino);
-        if (path != NULL) {
+    pthread_mutex_lock(&f->lock);
+    node = get_node(f, in->ino);
+    --node->open_count;
+    pthread_mutex_unlock(&f->lock);
+
+    path = get_path(f, in->ino);
+    if (path != NULL) {
+        if (f->op.release)
             f->op.release(path, arg->flags);
-            free(path);
-        }
+
+        if(node->is_hidden && node->open_count == 0)
+            /* can now clean up this hidden file */
+            f->op.unlink(path);
+        
+        free(path);
     }
 }
 
@@ -1454,7 +1585,19 @@ void fuse_destroy(struct fuse *f)
     size_t i;
     for (i = 0; i < f->ino_table_size; i++) {
         struct node *node;
+
+        for (node = f->ino_table[i]; node != NULL; node = node->ino_next) {
+            if (node->is_hidden) {
+                char *path = get_path(f, node->ino);
+                if (path)
+                    f->op.unlink(path);
+            }
+        }
+    }
+    for (i = 0; i < f->ino_table_size; i++) {
+        struct node *node;
         struct node *next;
+
         for (node = f->ino_table[i]; node != NULL; node = next) {
             next = node->ino_next;
             free_node(node);

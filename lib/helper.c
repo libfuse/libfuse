@@ -98,6 +98,8 @@ static int fuse_start(int fuse_fd, int flags, int multithreaded,
         fuse_loop_mt(fuse);
     else
         fuse_loop(fuse);
+    
+    fuse_destroy(fuse);
 
     return 0;
 }

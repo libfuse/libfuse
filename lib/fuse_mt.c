@@ -20,16 +20,20 @@
 
 struct fuse_worker {
     struct fuse *f;
+    pthread_t threads[FUSE_MAX_WORKERS];
     void *data;
     fuse_processor_t proc;
 };
 
-static void start_thread(struct fuse_worker *w);
+static void start_thread(struct fuse_worker *w, pthread_t *thread_id);
 
 static void *do_work(void *data)
 {
     struct fuse_worker *w = (struct fuse_worker *) data;
     struct fuse *f = w->f;
+
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
     while (1) {
         struct fuse_cmd *cmd;
@@ -43,10 +47,14 @@ static void *do_work(void *data)
 
         if (f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
             pthread_mutex_lock(&f->lock);
-            f->numavail ++;
-            f->numworker ++;
-            pthread_mutex_unlock(&f->lock);
-            start_thread(w);
+            if (f->numworker < FUSE_MAX_WORKERS) {
+                pthread_t *thread_id = &w->threads[f->numworker];
+                f->numavail ++;
+                f->numworker ++;
+                pthread_mutex_unlock(&f->lock);
+                start_thread(w, thread_id);
+            } else
+                pthread_mutex_unlock(&f->lock);
         }
 
         w->proc(w->f, cmd, w->data);
@@ -55,9 +63,8 @@ static void *do_work(void *data)
     return NULL;
 }
 
-static void start_thread(struct fuse_worker *w)
+static void start_thread(struct fuse_worker *w, pthread_t *thread_id)
 {
-    pthread_t thrid;
     sigset_t oldset;
     sigset_t newset;
     int res;
@@ -65,13 +72,14 @@ static void start_thread(struct fuse_worker *w)
     /* Disallow signal reception in worker threads */
     sigfillset(&newset);
     pthread_sigmask(SIG_SETMASK, &newset, &oldset);
-    res = pthread_create(&thrid, NULL, do_work, w);
+    res = pthread_create(thread_id, NULL, do_work, w);
     pthread_sigmask(SIG_SETMASK, &oldset, NULL);
     if (res != 0) {
         fprintf(stderr, "Error creating thread: %s\n", strerror(res));
         exit(1);
     }
-    pthread_detach(thrid);
+    
+    pthread_detach(*thread_id);
 }
 
 static struct fuse_context *mt_getcontext(struct fuse *f)
@@ -96,8 +104,10 @@ void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
 {
     struct fuse_worker *w;
     int res;
+    int i;
 
     w = malloc(sizeof(struct fuse_worker));    
+    memset(w, 0, sizeof(struct fuse_worker));
     w->f = f;
     w->data = data;
     w->proc = proc;
@@ -110,6 +120,11 @@ void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
     }
     f->getcontext = mt_getcontext;
     do_work(w);
+
+    pthread_mutex_lock(&f->lock);
+    for (i = 1; i < f->numworker; i++)
+        pthread_cancel(w->threads[i]);
+    pthread_mutex_unlock(&f->lock);
 }
 
 void fuse_loop_mt(struct fuse *f)

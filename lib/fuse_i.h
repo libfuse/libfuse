@@ -22,6 +22,8 @@ struct node {
     int mode;
     int rdev;
     int version;
+    int open_count;
+    int is_hidden;
 };
 
 struct fuse {
@@ -34,6 +36,7 @@ struct fuse {
     size_t ino_table_size;
     fino_t ctr;
     unsigned int generation;
+    unsigned int hidectr;
     pthread_mutex_t lock;
     int numworker;
     int numavail;
