@@ -3,6 +3,10 @@
 	* Fixed writing >= 2G files
 
 	* Check file size on open (with generic_file_open())
+
+	* Readpage calls flush_dcache_page() after storing data
+
+	* Use i_size_read/write for accessing inode->i_size
 	
 2004-02-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 

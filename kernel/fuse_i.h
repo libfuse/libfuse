@@ -31,6 +31,11 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
+#ifndef KERNEL_2_6
+#define i_size_read(inode) ((inode)->i_size))
+#define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
+#endif
+
 /** Read combining parameters */
 #define FUSE_BLOCK_SHIFT 16
 #define FUSE_BLOCK_SIZE 65536

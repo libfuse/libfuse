@@ -142,6 +142,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 		size_t outsize = out.args[0].size;
 		if(outsize < PAGE_CACHE_SIZE) 
 			memset(buffer + outsize, 0, PAGE_CACHE_SIZE - outsize);
+		flush_dcache_page(page);
 		SetPageUptodate(page);
 	}
 
@@ -156,7 +157,7 @@ static int fuse_is_block_uptodate(struct address_space *mapping,
 {
 	size_t index = bl_index << FUSE_BLOCK_PAGE_SHIFT;
 	size_t end_index = ((bl_index + 1) << FUSE_BLOCK_PAGE_SHIFT) - 1;
-	size_t file_end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+	size_t file_end_index = i_size_read(inode) >> PAGE_CACHE_SHIFT;
 
 	if (end_index > file_end_index)
 		end_index = file_end_index;
@@ -185,7 +186,7 @@ static int fuse_cache_block(struct address_space *mapping,
 {
 	size_t start_index = bl_index << FUSE_BLOCK_PAGE_SHIFT;
 	size_t end_index = ((bl_index + 1) << FUSE_BLOCK_PAGE_SHIFT) - 1;
-	size_t file_end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+	size_t file_end_index = i_size_read(inode) >> PAGE_CACHE_SHIFT;
 
 	int i;
 
@@ -254,7 +255,7 @@ static void fuse_file_bigread(struct address_space *mapping,
 {
 	size_t bl_index = pos >> FUSE_BLOCK_SHIFT;
 	size_t bl_end_index = (pos + count) >> FUSE_BLOCK_SHIFT;
-	size_t bl_file_end_index = inode->i_size >> FUSE_BLOCK_SHIFT;
+	size_t bl_file_end_index = i_size_read(inode) >> FUSE_BLOCK_SHIFT;
 	
 	if (bl_end_index > bl_file_end_index)
 		bl_end_index = bl_file_end_index;
@@ -321,13 +322,14 @@ static int write_buffer(struct inode *inode, struct page *page,
 static int get_write_count(struct inode *inode, struct page *page)
 {
 	unsigned long end_index;
+	loff_t size = i_size_read(inode);
 	int count;
 	
-	end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+	end_index = size >> PAGE_CACHE_SHIFT;
 	if(page->index < end_index)
 		count = PAGE_CACHE_SIZE;
 	else {
-		count = inode->i_size & (PAGE_CACHE_SIZE - 1);
+		count = size & (PAGE_CACHE_SIZE - 1);
 		if(page->index > end_index || count == 0)
 			return 0;
 	}
@@ -452,8 +454,8 @@ static int fuse_commit_write(struct file *file, struct page *page,
 	err = write_buffer(inode, page, offset, to - offset);
 	if(!err) {
 		loff_t pos = (page->index << PAGE_CACHE_SHIFT) + to;
-		if(pos > inode->i_size)
-			inode->i_size = pos;
+		if(pos > i_size_read(inode))
+			i_size_write(inode, pos);
 	}
 	return err;
 }
