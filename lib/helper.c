@@ -15,7 +15,7 @@
 #include <limits.h>
 #include <signal.h>
 
-static struct fuse *fuse_obj;
+static struct fuse *fuse_instance;
 
 static void usage(const char *progname)
 {
@@ -49,8 +49,8 @@ static void invalid_option(const char *argv[], int argctr)
 
 static void exit_handler()
 {
-    if (fuse_obj != NULL)
-        fuse_exit(fuse_obj);
+    if (fuse_instance != NULL)
+        fuse_exit(fuse_instance);
 }
 
 static int set_one_signal_handler(int signal, void (*handler)(int))
@@ -252,6 +252,11 @@ struct fuse *__fuse_setup(int argc, char *argv[],
     char *lib_opts;
     int res;
     
+    if (fuse_instance != NULL) {
+        fprintf(stderr, "fuse: __fuse_setup() called twice\n");
+        return NULL;
+    }
+
     res = fuse_parse_cmdline(argc, (const char **) argv, &kernel_opts,
                              &lib_opts, mountpoint, multithreaded,
                              &background);
@@ -273,6 +278,8 @@ struct fuse *__fuse_setup(int argc, char *argv[],
             goto err_destroy;
         }
     }
+
+    fuse_instance = fuse;
     res = set_signal_handlers();
     if (res == -1)
         goto err_destroy;
@@ -294,6 +301,11 @@ struct fuse *__fuse_setup(int argc, char *argv[],
 
 void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
 {
+    if (fuse_instance != fuse)
+        fprintf(stderr, "fuse: __fuse_teardown() with unknown fuse object\n");
+    else
+        fuse_instance = NULL;
+
     fuse_destroy(fuse);
     close(fd);
     fuse_unmount(mountpoint);
@@ -303,21 +315,22 @@ void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
 
 int fuse_main(int argc, char *argv[], const struct fuse_operations *op)
 {
+    struct fuse *fuse;
     char *mountpoint;
     int multithreaded;
     int res;
     int fd;
 
-    fuse_obj = __fuse_setup(argc, argv, op, &mountpoint, &multithreaded, &fd);
-    if (fuse_obj == NULL)
+    fuse = __fuse_setup(argc, argv, op, &mountpoint, &multithreaded, &fd);
+    if (fuse == NULL)
         return 1;
     
     if (multithreaded)
-        res = fuse_loop_mt(fuse_obj);
+        res = fuse_loop_mt(fuse);
     else
-        res = fuse_loop(fuse_obj);
+        res = fuse_loop(fuse);
     
-    __fuse_teardown(fuse_obj, fd, mountpoint);
+    __fuse_teardown(fuse, fd, mountpoint);
     if (res == -1)
         return 1;
     
