@@ -1,3 +1,7 @@
+2002-03-01  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Another RPM spec file for RedHat >= 7 by Ian Pilcher
+
 2002-01-14  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* RPM support by Achim Settelmeier
