@@ -476,7 +476,7 @@ int _PLfuse_write (const char *file, const char *buf, size_t buflen, off_t off) 
 	return rv;
 }
 
-int _PLfuse_statfs (struct statfs *st) {
+int _PLfuse_statfs (const char *file, struct statfs *st) {
 	int rv;
 	char *rvstr;
 	dSP;
