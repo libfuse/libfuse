@@ -19,6 +19,31 @@
 #define FUSE_MAX_PATH 4096
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*inarg))
 
+static const char *opname(enum fuse_opcode opcode)
+{
+    switch(opcode) { 
+    case FUSE_LOOKUP:   return "LOOKUP";
+    case FUSE_FORGET:   return "FORGET";
+    case FUSE_GETATTR:  return "GETATTR";
+    case FUSE_SETATTR:  return "SETATTR";
+    case FUSE_READLINK: return "READLINK";
+    case FUSE_SYMLINK:  return "SYMLINK";
+    case FUSE_GETDIR:   return "GETDIR";
+    case FUSE_MKNOD:    return "MKNOD";
+    case FUSE_MKDIR:    return "MKDIR";
+    case FUSE_UNLINK:   return "UNLINK";
+    case FUSE_RMDIR:    return "RMDIR";
+    case FUSE_RENAME:   return "RENAME";
+    case FUSE_LINK:     return "LINK";
+    case FUSE_OPEN:     return "OPEN";
+    case FUSE_READ:     return "READ";
+    case FUSE_WRITE:    return "WRITE";
+    case FUSE_STATFS:   return "STATFS";
+    case FUSE_RELEASE:  return "RELEASE";
+    default:            return "???";
+    }
+}
+
 static inline void inc_avail(struct fuse *f)
 {
     pthread_mutex_lock(&f->lock);
@@ -728,6 +753,22 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
+static void do_release(struct fuse *f, struct fuse_in_header *in)
+{
+    int res;
+    char *path;
+
+    res = -ENOENT;
+    path = get_path(f, in->ino);
+    if(path != NULL) {
+        res = -ENOSYS;
+        if(f->op.release)
+            res = f->op.release(path);
+        free(path);
+    }
+    send_reply(f, in, res, NULL, 0);
+}
+
 static void do_read(struct fuse *f, struct fuse_in_header *in,
                     struct fuse_read_in *arg)
 {
@@ -834,8 +875,9 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     dec_avail(f);
 
     if((f->flags & FUSE_DEBUG)) {
-        printf("unique: %i, opcode: %i, ino: %li, insize: %i\n", in->unique,
-               in->opcode, in->ino, cmd->buflen);
+        printf("unique: %i, opcode: %s (%i), ino: %li, insize: %i\n",
+               in->unique, opname(in->opcode), in->opcode, in->ino,
+               cmd->buflen);
         fflush(stdout);
     }
 
@@ -905,6 +947,10 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_STATFS:
         do_statfs(f, in);
+        break;
+
+    case FUSE_RELEASE:
+        do_release(f, in);
         break;
 
     default:

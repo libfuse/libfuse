@@ -267,6 +267,7 @@ static struct fuse_operations xmp_oper = {
     read:	xmp_read,
     write:	xmp_write,
     statfs:	xmp_statfs,
+    release:	NULL
 };
 
 int main(int argc, char *argv[])

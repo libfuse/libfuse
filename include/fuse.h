@@ -75,6 +75,13 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t, const char *, int type);
  *  - read(), write() are not passed a filehandle, but rather a
  *  pathname.  The offset of the read and write is passed as the last
  *  argument, like the pread() and pwrite() system calls.
+ * 
+ *  - release() is called when an open file has:
+ *       1) all file descriptors closed
+ *       2) all memory mappings unmapped
+ *    This call need only be implemented if this information is required,
+ *    otherwise set this function to NULL.
+ *    
  */
 struct fuse_operations {
     int (*getattr)  (const char *, struct stat *);
@@ -95,6 +102,7 @@ struct fuse_operations {
     int (*read)     (const char *, char *, size_t, off_t);
     int (*write)    (const char *, const char *, size_t, off_t);
     int (*statfs)   (struct fuse_statfs *);
+    int (*release)  (const char *);
 };
 
 /** Extra context that may be needed by some filesystems */

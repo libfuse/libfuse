@@ -447,6 +447,7 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->processing);
 		sema_init(&fc->outstanding, MAX_OUTSTANDING);
 		fc->reqctr = 1;
+		fc->has_release = 1;
 	}
 	return fc;
 }

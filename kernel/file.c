@@ -40,6 +40,27 @@ static int fuse_open(struct inode *inode, struct file *file)
 	return out.h.error;
 }
 
+static int fuse_release(struct inode *inode, struct file *file)
+{
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+
+	if(!fc->has_release)
+		return 0;
+
+	in.h.opcode = FUSE_RELEASE;
+	in.h.ino = inode->i_ino;
+	request_send(fc, &in, &out);
+
+	if(out.h.error == -ENOSYS) {
+		fc->has_release = 0;
+		return 0;
+	}
+
+	return out.h.error;
+}
+
 
 static int fuse_readpage(struct file *file, struct page *page)
 {
@@ -159,6 +180,7 @@ static int fuse_commit_write(struct file *file, struct page *page,
 
 static struct file_operations fuse_file_operations = {
 	open:		fuse_open,
+	release:        fuse_release,
 	read:		generic_file_read,
 	write:		generic_file_write,
 	mmap:		generic_file_mmap,

@@ -93,6 +93,7 @@ enum fuse_opcode {
 	FUSE_READ	= 15,
 	FUSE_WRITE	= 16,
 	FUSE_STATFS	= 17,
+	FUSE_RELEASE    = 18
 };
 
 /* Conservative buffer size for the client */
