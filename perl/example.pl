@@ -37,13 +37,13 @@ sub e_getattr {
 	return -ENOENT() unless exists($files{$file});
 	my ($size) = exists($files{$file}{cont}) ? length($files{$file}{cont}) : 0;
 	my ($modes) = ($files{$file}{type}<<9) + $files{$file}{mode};
-	my ($blocks, $gid, $uid, $nlink) = (1,0,0,1);
-	# 4 possible return values:
+	my ($dev, $ino, $rdev, $blocks, $gid, $uid, $nlink, $blksize) = (0,0,0,1,0,0,1,1024);
+	my ($atime, $ctime, $mtime);
+	$atime = $ctime = $mtime = $files{$file}{ctime};
+	# 2 possible types of return values:
 	#return -ENOENT(); # or any other error you care to
-	return ($blocks,$size,$gid,$uid,$nlink,$modes,$files{$file}{ctime});
-	# return ($errno,$blocks,$size,$gid,$uid,$nlink,$modes,$time);
-	# return ($errno,$blksize,$blocks,$size,$gid,$uid,$nlink,$modes,$time);
-	# if omitted, errno defaults to 0, and blksize defaults to 1024.
+	#print(join(",",($dev,$ino,$modes,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks)),"\n");
+	return ($dev,$ino,$modes,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,$blksize,$blocks);
 }
 
 sub e_getdir {
@@ -79,5 +79,6 @@ Fuse::main(
 	getattr=>\&e_getattr,
 	getdir=>\&e_getdir,
 	open=>\&e_open,
-	read=>\&e_read,
+	#read=>\&e_read,
+	#debug=>1, threaded=>0
 );

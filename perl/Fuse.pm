@@ -99,115 +99,184 @@ Fuse - write filesystems in Perl using FUSE
   use Fuse;
   my ($mountpoint) = "";
   $mountpoint = shift(@ARGV) if @ARGV;
-  Fuse::main(mountpoint=>$mountpoint,getattr=>\&my_getattr,getdir=>\&my_getdir, ...);
+  Fuse::main(mountpoint=>$mountpoint, getattr=>\&my_getattr, getdir=>\&my_getdir, ...);
 
 =head1 DESCRIPTION
 
-This lets you implement filesystems in perl, through the FUSE (Filesystem in USErspace) kernel/lib interface.
+This lets you implement filesystems in perl, through the FUSE
+(Filesystem in USErspace) kernel/lib interface.
 
 FUSE expects you to implement callbacks for the various functions.
 
-NOTE:  I have only tested the things implemented in example.pl!  It should work, but some things may not.
+NOTE:  I have only tested the things implemented in example.pl!
+It should work, but some things may not.
 
-In the following definitions, "errno" can be 0 (for a success), -EINVAL, -ENOENT, -EONFIRE, any integer less than 1 really.
-You can import standard error constants by saying something like "use POSIX qw(EDOTDOT ENOANO);".
+In the following definitions, "errno" can be 0 (for a success),
+-EINVAL, -ENOENT, -EONFIRE, any integer less than 1 really.
 
-=head2 FUNCTIONS
+You can import standard error constants by saying something like
+"use POSIX qw(EDOTDOT ENOANO);".
+
+Every constant you need (file types, open() flags, error values,
+etc) can be imported either from POSIX or from Fcntl, often both.
+See their respective documentations, for more information.
+
+=head2 FUNCTIONS YOUR FILESYSTEM MAY IMPLEMENT
 
 =head3 getattr
 
 Arguments:  filename.
-Returns a list, one of the following 4 possibilities:
+Returns a list, very similar to the 'stat' function (see
+perlfunc).  On error, simply return a single numeric scalar
+value (e.g. "return -ENOENT();").
 
-$errno or
+FIXME: the "ino" field is currently ignored.  I tried setting it to 0
+in an example script, which consistently caused segfaults.
 
-($blocks,$size,$gid,$uid,$nlink,$modes,$time) or
+Fields (the following was stolen from perlfunc(1) with apologies):
 
-($errno,$blocks,$size,$gid,$uid,$nlink,$modes,$time) or
+($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
+        $atime,$mtime,$ctime,$blksize,$blocks)
+                         = getattr($filename);
 
-($errno,$blksize,$blocks,$size,$gid,$uid,$nlink,$modes,$time)
+Here are the meaning of the fields:
 
-B<FIXME>: device numeric, for filesystems that implement mknod?
+ 0 dev      device number of filesystem
+ 1 ino      inode number
+ 2 mode     file mode  (type and permissions)
+ 3 nlink    number of (hard) links to the file
+ 4 uid      numeric user ID of file's owner
+ 5 gid      numeric group ID of file's owner
+ 6 rdev     the device identifier (special files only)
+ 7 size     total size of file, in bytes
+ 8 atime    last access time in seconds since the epoch
+ 9 mtime    last modify time in seconds since the epoch
+10 ctime    inode change time (NOT creation time!) in seconds
+            since the epoch
+11 blksize  preferred block size for file system I/O
+12 blocks   actual number of blocks allocated
+
+(The epoch was at 00:00 January 1, 1970 GMT.)
 
 =head3 readlink
 
 Arguments:  link pathname.
 Returns a scalar: either a numeric constant, or a text string.
 
+This is called when dereferencing symbolic links, to learn the target.
+
+example rv: return "/proc/self/fd/stdin";
+
 =head3 getdir
 
 Arguments:  Containing directory name.
-Returns a list: 0 or more text strings (the filenames), followed by errno (usually 0).
+Returns a list: 0 or more text strings (the filenames), followed by a numeric errno (usually 0).
+
+This is used to obtain directory listings.  Its opendir(), readdir(), filldir() and closedir() all in one call.
+
+example rv: return ('.', 'a', 'b', 0);
 
 =head3 mknod
 
 Arguments:  Filename, numeric modes, numeric device
 Returns an errno (0 upon success, as usual).
 
+This function is called for all non-directory, non-symlink nodes,
+not just devices.
+
 =head3 mkdir
 
 Arguments:  New directory pathname, numeric modes.
 Returns an errno.
+
+Called to create a directory.
 
 =head3 unlink
 
 Arguments:  Filename.
 Returns an errno.
 
+Called to remove a file, device, or symlink.
+
 =head3 rmdir
 
 Arguments:  Pathname.
 Returns an errno.
+
+Called to remove a directory.
 
 =head3 symlink
 
 Arguments:  Existing filename, symlink name.
 Returns an errno.
 
+Called to create a symbolic link.
+
 =head3 rename
 
 Arguments:  old filename, new filename.
 Returns an errno.
+
+Called to rename a file, and/or move a file from one directory to another.
 
 =head3 link
 
 Arguments:  Existing filename, hardlink name.
 Returns an errno.
 
+Called to create hard links.
+
 =head3 chmod
 
 Arguments:  Pathname, numeric modes.
 Returns an errno.
+
+Called to change permissions on a file/directory/device/symlink.
 
 =head3 chown
 
 Arguments:  Pathname, numeric uid, numeric gid.
 Returns an errno.
 
+Called to change ownership of a file/directory/device/symlink.
+
 =head3 truncate
 
 Arguments:  Pathname, numeric offset.
 Returns an errno.
+
+Called to truncate a file, at the given offset.
 
 =head3 utime
 
 Arguments:  Pathname, numeric actime, numeric modtime.
 Returns an errno.
 
+Called to change access/modification times for a file/directory/device/symlink.
+
 =head3 open
 
-Arguments:  Pathname, numeric flags (which is an OR-ing of stuff like O_RDONLY and O_SYNC, constants you can import from POSIX).
+Arguments:  Pathname, numeric flags (which is an OR-ing of stuff like O_RDONLY
+and O_SYNC, constants you can import from POSIX).
 Returns an errno.
+
+No creation, or trunctation flags (O_CREAT, O_EXCL, O_TRUNC) will be passed to open().
+Your open() method needs only check if the operation is permitted for the given flags, and return 0 for success.
 
 =head3 read
 
 Arguments:  Pathname, numeric requestedsize, numeric offset.
 Returns a numeric errno, or a string scalar with up to $requestedsize bytes of data.
 
+Called in an attempt to fetch a portion of the file.
+
 =head3 write
 
-Arguments:  Pathname, scalar buffer, numeric offset.  You can use length($buffer) to find the buffersize.
+Arguments:  Pathname, scalar buffer, numeric offset.  You can use length($buffer) to
+find the buffersize.
 Returns an errno.
+
+Called in an attempt to write (or overwrite) a portion of the file.  Be prepared because $buffer could contain random binary data with NULLs and all sorts of other wonderful stuff.
 
 =head2 EXPORT
 

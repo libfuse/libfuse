@@ -4,6 +4,12 @@
 
 #include <fuse.h>
 
+#undef DEBUGf
+#if 1
+#define DEBUGf(a...) fprintf(stderr, ##a)
+#else
+#define DEBUGf(a...)
+#endif
 static int
 not_here(char *s)
 {
@@ -30,33 +36,29 @@ int _PLfuse_getattr(const char *file, struct stat *result) {
 	PUTBACK;
 	rv = call_sv(_PLfuse_callbacks[0],G_ARRAY);
 	SPAGAIN;
-	if(rv < 7) {
-		if(rv > 1)
-			croak("inappropriate number of returned values from getattr");
-		if(rv)
+	if(rv != 13) {
+		if(rv > 1) {
+			fprintf(stderr,"inappropriate number of returned values from getattr\n");
+			rv = -ENOSYS;
+		} else if(rv)
 			rv = POPi;
 		else
-			rv = -EINVAL;
+			rv = -ENOENT;
 	} else {
-		if(rv > 9)
-			croak("inappropriate number of returned values from getattr");
-		result->st_ctime = result->st_mtime = result->st_atime = POPi;
-		result->st_mode = POPi;
-		result->st_nlink = POPi;
-		result->st_uid = POPi;
-		result->st_gid = POPi;
-		result->st_size = POPi;
 		result->st_blocks = POPi;
-		if(rv > 7) {
-			if(rv > 8)
-				result->st_blksize = POPi;
-			else
-				result->st_blksize = 1024;
-			rv = POPi;
-		} else {
-			result->st_blksize = 1024;
-			rv = 0;
-		}
+		result->st_blksize = POPi;
+		result->st_ctime = POPi;
+		result->st_mtime = POPi;
+		result->st_atime = POPi;
+		result->st_size = POPi;
+		result->st_rdev = POPi;
+		result->st_gid = POPi;
+		result->st_uid = POPi;
+		result->st_nlink = POPi;
+		result->st_mode = POPi;
+		/* result->st_ino = */ POPi;
+		result->st_dev = POPi;
+		rv = 0;
 	}
 	FREETMPS;
 	LEAVE;
@@ -67,6 +69,9 @@ int _PLfuse_readlink(const char *file,char *buf,size_t buflen) {
 	int rv;
 	char *rvstr;
 	dXSARGS;
+	DEBUGf("readlink begin\n");
+	if(buflen < 1)
+		return EINVAL;
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -85,12 +90,15 @@ int _PLfuse_readlink(const char *file,char *buf,size_t buflen) {
 		}
 	FREETMPS;
 	LEAVE;
+	buf[buflen-1] = 0;
+	DEBUGf("readlink end\n");
 	return rv;
 }
 
 int _PLfuse_getdir(const char *file, fuse_dirh_t dirh, fuse_dirfil_t dirfil) {
 	int prv, rv;
 	dXSARGS;
+	DEBUGf("getdir begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -99,7 +107,7 @@ int _PLfuse_getdir(const char *file, fuse_dirh_t dirh, fuse_dirfil_t dirfil) {
 	prv = call_sv(_PLfuse_callbacks[2],G_ARRAY);
 	SPAGAIN;
 	if(prv) {
-		SV *mysv = POPs;
+		SV *mysv = sv_2mortal(POPs);
 		if(!SvIOK(mysv)) {
 			fprintf(stderr,"last getdir retval needs to be numeric (e.g. 0 or -ENOENT) (%s)\n",SvPV_nolen(mysv));
 			rv = -ENOSYS;
@@ -114,6 +122,7 @@ int _PLfuse_getdir(const char *file, fuse_dirh_t dirh, fuse_dirfil_t dirfil) {
 	}
 	FREETMPS;
 	LEAVE;
+	DEBUGf("getdir end\n");
 	return rv;
 }
 
@@ -122,6 +131,7 @@ int _PLfuse_mknod (const char *file, mode_t mode, dev_t dev) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("mknod begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -137,6 +147,7 @@ int _PLfuse_mknod (const char *file, mode_t mode, dev_t dev) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("mknod end: %i\n",rv);
 	return rv;
 }
 
@@ -145,6 +156,7 @@ int _PLfuse_mkdir (const char *file, mode_t mode) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("mkdir begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -159,6 +171,7 @@ int _PLfuse_mkdir (const char *file, mode_t mode) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("mkdir end\n");
 	return rv;
 }
 
@@ -168,6 +181,7 @@ int _PLfuse_unlink (const char *file) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("unlink begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -181,6 +195,7 @@ int _PLfuse_unlink (const char *file) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("unlink end\n");
 	return rv;
 }
 
@@ -189,6 +204,7 @@ int _PLfuse_rmdir (const char *file) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("rmdir begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -202,6 +218,7 @@ int _PLfuse_rmdir (const char *file) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("rmdir end\n");
 	return rv;
 }
 
@@ -210,6 +227,7 @@ int _PLfuse_symlink (const char *file, const char *new) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("symlink begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -224,6 +242,7 @@ int _PLfuse_symlink (const char *file, const char *new) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("symlink end\n");
 	return rv;
 }
 
@@ -232,6 +251,7 @@ int _PLfuse_rename (const char *file, const char *new) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("rename begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -246,6 +266,7 @@ int _PLfuse_rename (const char *file, const char *new) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("rename end\n");
 	return rv;
 }
 
@@ -254,6 +275,7 @@ int _PLfuse_link (const char *file, const char *new) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("link begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -268,6 +290,7 @@ int _PLfuse_link (const char *file, const char *new) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("link end\n");
 	return rv;
 }
 
@@ -276,6 +299,7 @@ int _PLfuse_chmod (const char *file, mode_t mode) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("chmod begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -290,6 +314,7 @@ int _PLfuse_chmod (const char *file, mode_t mode) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("chmod end\n");
 	return rv;
 }
 
@@ -298,6 +323,7 @@ int _PLfuse_chown (const char *file, uid_t uid, gid_t gid) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("chown begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -313,6 +339,7 @@ int _PLfuse_chown (const char *file, uid_t uid, gid_t gid) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("chown end\n");
 	return rv;
 }
 
@@ -321,6 +348,7 @@ int _PLfuse_truncate (const char *file, off_t off) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("truncate begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -335,6 +363,7 @@ int _PLfuse_truncate (const char *file, off_t off) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("truncate end\n");
 	return rv;
 }
 
@@ -343,6 +372,7 @@ int _PLfuse_utime (const char *file, struct utimbuf *uti) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("utime begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -358,6 +388,7 @@ int _PLfuse_utime (const char *file, struct utimbuf *uti) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("utime end\n");
 	return rv;
 }
 
@@ -366,6 +397,7 @@ int _PLfuse_open (const char *file, int flags) {
 	SV *rvsv;
 	char *rvstr;
 	dSP;
+	DEBUGf("open begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -380,6 +412,7 @@ int _PLfuse_open (const char *file, int flags) {
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("open end: %i\n",rv);
 	return rv;
 }
 
@@ -387,6 +420,7 @@ int _PLfuse_read (const char *file, char *buf, size_t buflen, off_t off) {
 	int rv;
 	char *rvstr;
 	dXSARGS;
+	DEBUGf("read begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -403,13 +437,14 @@ int _PLfuse_read (const char *file, char *buf, size_t buflen, off_t off) {
 		if(SvTYPE(mysv) == SVt_IV)
 			rv = SvIV(mysv);
 		else {
-			rv = SvLEN(mysv);
+			rv = SvCUR(mysv);
 			if(rv > buflen)
-				croak("read() handler returned more than buflen!");
+				croak("read() handler returned more than buflen! (%i > %i)",rv,buflen);
 			if(rv)
 				memcpy(buf,SvPV_nolen(mysv),rv);
 		}
 	}
+	DEBUGf("read end\n");
 	return rv;
 }
 
@@ -417,6 +452,7 @@ int _PLfuse_write (const char *file, const char *buf, size_t buflen, off_t off) 
 	int rv;
 	char *rvstr;
 	dSP;
+	DEBUGf("write begin\n");
 	ENTER;
 	SAVETMPS;
 	PUSHMARK(SP);
@@ -432,6 +468,7 @@ int _PLfuse_write (const char *file, const char *buf, size_t buflen, off_t off) 
 		rv = 0;
 	FREETMPS;
 	LEAVE;
+	DEBUGf("write end\n");
 	return rv;
 }
 
