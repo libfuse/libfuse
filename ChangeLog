@@ -1,3 +1,8 @@
+2002-12-03  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added _FILE_OFFSET_BITS=64 define to fuse.h.  Note, that this is
+	an incompatible interface change.
+
 2002-10-28  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Portablility fix (bug reported by C. Chris Erway)

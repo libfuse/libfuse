@@ -384,10 +384,19 @@ static char *resolve_path(const char *orig, int unmount)
 {
     char buf[PATH_MAX];
 
-    /* Resolving at unmount can only be done very carefully, not touching
-       the mountpoint... So for the moment it's not done.  */
-    if(unmount)
-        return strdup(orig);
+    if(unmount) {
+        /* Resolving at unmount can only be done very carefully, not touching
+           the mountpoint... So for the moment it's not done. 
+           
+           Just remove trailing slashes instead.
+        */
+        char *dst = strdup(orig);
+        char *end;
+        for(end = dst + strlen(dst) - 1; end > dst && *end == '/'; end --)
+            *end = '\0';
+
+        return dst;
+    }
 
     if(realpath(orig, buf) == NULL) {
         fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
