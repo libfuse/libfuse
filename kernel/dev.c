@@ -12,12 +12,20 @@
 #include <linux/proc_fs.h>
 #include <linux/file.h>
 
-/* If more requests are outstanding, then the operation will block */
-#define MAX_OUTSTANDING 10
-
 static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
 static kmem_cache_t *fuse_req_cachep;
+
+static inline struct fuse_conn *fuse_get_conn(struct file *file)
+{
+	struct fuse_conn *fc;
+	spin_lock(&fuse_lock);
+	fc = (struct fuse_conn *) file->private_data;
+	if (fc && !fc->sb)
+		fc = NULL;
+	spin_unlock(&fuse_lock);
+	return fc;
+}
 
 struct fuse_req *fuse_request_alloc(void)
 {
@@ -211,13 +219,15 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->issync = 0;
 
+	spin_lock(&fuse_lock);
 	if (fc->file) {
-		spin_lock(&fuse_lock);
 		list_add_tail(&req->list, &fc->pending);
 		wake_up(&fc->waitq);
 		spin_unlock(&fuse_lock);
-	} else
+	} else {
+		spin_unlock(&fuse_lock);
 		fuse_put_request(fc, req);
+	}
 }
 
 void request_send_nonblock(struct fuse_conn *fc, struct fuse_req *req, 
@@ -244,7 +254,7 @@ static void request_wait(struct fuse_conn *fc)
 	DECLARE_WAITQUEUE(wait, current);
 
 	add_wait_queue_exclusive(&fc->waitq, &wait);
-	while (fc->sb != NULL && list_empty(&fc->pending)) {
+	while (fc->sb && list_empty(&fc->pending)) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (signal_pending(current))
 			break;
@@ -298,18 +308,25 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			     loff_t *off)
 {
 	ssize_t ret;
-	struct fuse_conn *fc = DEV_FC(file);
+	struct fuse_conn *fc;
 	struct fuse_req *req = NULL;
 
 	spin_lock(&fuse_lock);
+	fc = (struct fuse_conn *) file->private_data;
+	if (!fc) {
+		spin_unlock(&fuse_lock);
+		return -EPERM;
+	}
 	request_wait(fc);
-	if (fc->sb != NULL && !list_empty(&fc->pending)) {
+	if (!fc->sb)
+		fc = NULL;
+	else if (!list_empty(&fc->pending)) {
 		req = list_entry(fc->pending.next, struct fuse_req, list);
 		list_del_init(&req->list);
 		req->locked = 1;
 	}
 	spin_unlock(&fuse_lock);
-	if (fc->sb == NULL)
+	if (!fc)
 		return -ENODEV;
 	if (req == NULL)
 		return -EINTR;
@@ -437,18 +454,26 @@ static inline int copy_out_header(struct fuse_out_header *oh, const char *buf,
 
 static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
 {
-	struct inode *inode = fuse_ilookup(fc, uh->ino, uh->nodeid);
-	if (!inode)
-		return -ENOENT;
-	fuse_sync_inode(inode);
+	int err;
+	down(&fc->sb_sem);
+	err = -ENODEV;
+	if (fc->sb) {
+		struct inode *inode = fuse_ilookup(fc, uh->ino, uh->nodeid);
+		err = -ENOENT;
+		if (inode) {
+			fuse_sync_inode(inode);
 #ifdef KERNEL_2_6
-	invalidate_inode_pages(inode->i_mapping);
+			invalidate_inode_pages(inode->i_mapping);
 #else
-	invalidate_inode_pages(inode);
+			invalidate_inode_pages(inode);
 #endif
+			iput(inode);
+			err = 0;
+		}
+	}
+	up(&fc->sb_sem);
 
-	iput(inode);
-	return 0;
+	return err;
 }
 
 static int fuse_user_request(struct fuse_conn *fc, const char *buf,
@@ -481,12 +506,12 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 			      size_t nbytes, loff_t *off)
 {
 	int err;
-	struct fuse_conn *fc = DEV_FC(file);
+	struct fuse_conn *fc = fuse_get_conn(file);
 	struct fuse_req *req;
 	struct fuse_out_header oh;
-
-	if (!fc->sb)
-		return -EPERM;
+	
+	if (!fc)
+		return -ENODEV;
 
 	err = copy_out_header(&oh, buf, nbytes);
 	if (err)
@@ -538,11 +563,11 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 
 static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 {
-	struct fuse_conn *fc = DEV_FC(file);
+	struct fuse_conn *fc = fuse_get_conn(file);
 	unsigned int mask = POLLOUT | POLLWRNORM;
 
-	if (!fc->sb)
-		return -EPERM;
+	if (!fc)
+		return -ENODEV;
 
 	poll_wait(file, &fc->waitq, wait);
 
@@ -552,70 +577,6 @@ static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 	spin_unlock(&fuse_lock);
 
 	return mask;
-}
-
-static void free_conn(struct fuse_conn *fc)
-{
-	while (!list_empty(&fc->unused_list)) {
-		struct fuse_req *req;
-		req = list_entry(fc->unused_list.next, struct fuse_req, list);
-		list_del(&req->list);
-		fuse_request_free(req);
-	}
-	kfree(fc);
-}
-
-/* Must be called with the fuse lock held */
-void fuse_release_conn(struct fuse_conn *fc)
-{
-	if (fc->sb == NULL && fc->file == NULL) {
-		free_conn(fc);
-	}
-}
-
-static struct fuse_conn *new_conn(void)
-{
-	struct fuse_conn *fc;
-
-	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
-	if (fc != NULL) {
-		int i;
-		memset(fc, 0, sizeof(*fc));
-		fc->sb = NULL;
-		fc->file = NULL;
-		fc->flags = 0;
-		fc->uid = 0;
-		init_waitqueue_head(&fc->waitq);
-		INIT_LIST_HEAD(&fc->pending);
-		INIT_LIST_HEAD(&fc->processing);
-		INIT_LIST_HEAD(&fc->unused_list);
-		sema_init(&fc->unused_sem, MAX_OUTSTANDING);
-		for (i = 0; i < MAX_OUTSTANDING; i++) {
-			struct fuse_req *req = fuse_request_alloc();
-			if (!req) {
-				free_conn(fc);
-				return NULL;
-			}
-			req->preallocated = 1;
-			list_add(&req->list, &fc->unused_list);
-		}
-		fc->reqctr = 1;
-	}
-	return fc;
-}
-
-static int fuse_dev_open(struct inode *inode, struct file *file)
-{
-	struct fuse_conn *fc;
-
-	fc = new_conn();
-	if (!fc)
-		return -ENOMEM;
-
-	fc->file = file;
-	file->private_data = fc;
-
-	return 0;
 }
 
 static void end_requests(struct fuse_conn *fc, struct list_head *head)
@@ -640,13 +601,16 @@ static void end_requests(struct fuse_conn *fc, struct list_head *head)
 
 static int fuse_dev_release(struct inode *inode, struct file *file)
 {
-	struct fuse_conn *fc = DEV_FC(file);
+	struct fuse_conn *fc;
 
 	spin_lock(&fuse_lock);
-	fc->file = NULL;
-	end_requests(fc, &fc->pending);
-	end_requests(fc, &fc->processing);
-	fuse_release_conn(fc);
+	fc = (struct fuse_conn *) file->private_data;
+	if (fc) {
+		fc->file = NULL;
+		end_requests(fc, &fc->pending);
+		end_requests(fc, &fc->processing);
+		fuse_release_conn(fc);
+	}
 	spin_unlock(&fuse_lock);
 	return 0;
 }
@@ -656,7 +620,6 @@ static struct file_operations fuse_dev_operations = {
 	.read		= fuse_dev_read,
 	.write		= fuse_dev_write,
 	.poll		= fuse_dev_poll,
-	.open		= fuse_dev_open,
 	.release	= fuse_dev_release,
 };
 

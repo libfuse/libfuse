@@ -49,6 +49,10 @@
 
 #define FUSE_MAX_PAGES_PER_REQ 32
 
+/* If more requests are outstanding, then the operation will block */
+#define FUSE_MAX_OUTSTANDING 10
+
+
 /** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
 module will check permissions based on the file mode.  Otherwise no
 permission checking is done in the kernel */
@@ -225,6 +229,9 @@ struct fuse_conn {
 	/** Controls the maximum number of outstanding requests */
 	struct semaphore unused_sem;
 
+	/** Semaphore protecting the super block from going away */
+	struct semaphore sb_sem;
+
 	/** The list of unused requests */
 	struct list_head unused_list;
 	
@@ -261,7 +268,6 @@ struct fuse_getdir_out_i {
 #define SB_FC(sb) ((sb)->u.generic_sbp)
 #endif
 #define INO_FC(inode) SB_FC((inode)->i_sb)
-#define DEV_FC(file) ((file)->private_data)
 #define INO_FI(i) ((struct fuse_inode *) (((struct inode *)(i))+1))
 
 

@@ -126,8 +126,10 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = SB_FC(sb);
 
+	down(&fc->sb_sem);
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
+	up(&fc->sb_sem);
 	fc->uid = 0;
 	fc->flags = 0;
 	/* Flush all readers on this fs */
@@ -308,22 +310,85 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 	return 0;
 }
 
+static void free_conn(struct fuse_conn *fc)
+{
+	while (!list_empty(&fc->unused_list)) {
+		struct fuse_req *req;
+		req = list_entry(fc->unused_list.next, struct fuse_req, list);
+		list_del(&req->list);
+		fuse_request_free(req);
+	}
+	kfree(fc);
+}
+
+/* Must be called with the fuse lock held */
+void fuse_release_conn(struct fuse_conn *fc)
+{
+	if (!fc->sb && !fc->file)
+		free_conn(fc);
+}
+
+
+static struct fuse_conn *new_conn(void)
+{
+	struct fuse_conn *fc;
+
+	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
+	if (fc != NULL) {
+		int i;
+		memset(fc, 0, sizeof(*fc));
+		fc->sb = NULL;
+		fc->file = NULL;
+		fc->flags = 0;
+		fc->uid = 0;
+		init_waitqueue_head(&fc->waitq);
+		INIT_LIST_HEAD(&fc->pending);
+		INIT_LIST_HEAD(&fc->processing);
+		INIT_LIST_HEAD(&fc->unused_list);
+		sema_init(&fc->unused_sem, FUSE_MAX_OUTSTANDING);
+		sema_init(&fc->sb_sem, 1);
+		for (i = 0; i < FUSE_MAX_OUTSTANDING; i++) {
+			struct fuse_req *req = fuse_request_alloc();
+			if (!req) {
+				free_conn(fc);
+				return NULL;
+			}
+			req->preallocated = 1;
+			list_add(&req->list, &fc->unused_list);
+		}
+		fc->reqctr = 1;
+	}
+	return fc;
+}
+
 static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 {
 	struct fuse_conn *fc;
 	struct inode *ino;
 
 	ino = file->f_dentry->d_inode;
-	if (!ino || !proc_fuse_dev || proc_fuse_dev->low_ino != ino->i_ino) {
+	if (!ino || !proc_fuse_dev || 
+	    strcmp(ino->i_sb->s_type->name, "proc") != 0 ||
+	    proc_fuse_dev->low_ino != ino->i_ino) {
 		printk("FUSE: bad communication file descriptor\n");
 		return NULL;
 	}
-	fc = file->private_data;
-	if (fc->sb != NULL) {
-		printk("fuse_read_super: connection already mounted\n");
+	fc = new_conn();
+	if (fc == NULL) {
+		printk("FUSE: failed to allocate connection data\n");
 		return NULL;
 	}
-	fc->sb = sb;
+	spin_lock(&fuse_lock);
+	if (file->private_data) {
+		printk("fuse_read_super: connection already mounted\n");
+		free_conn(fc);
+		fc = NULL;
+	} else {
+		file->private_data = fc;
+		fc->sb = sb;
+		fc->file = file;
+	}
+	spin_unlock(&fuse_lock);
 	return fc;
 }
 
@@ -407,9 +472,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	if (!file)
 		return -EINVAL;
 
-	spin_lock(&fuse_lock);
 	fc = get_conn(file, sb);
-	spin_unlock(&fuse_lock);
 	fput(file);
 	if (fc == NULL)
 		return -EINVAL;
@@ -438,8 +501,10 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
  err:
+	down(&fc->sb_sem);
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
+	up(&fc->sb_sem);
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	SB_FC(sb) = NULL;
