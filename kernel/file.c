@@ -462,12 +462,15 @@ static int fuse_commit_write(struct file *file, struct page *page,
 }
 
 static struct file_operations fuse_file_operations = {
-	.open =		fuse_open,
-	.release =	fuse_release,
-	.fsync =	fuse_fsync,
-	.read =		fuse_file_read,
-	.write =	generic_file_write,
-	.mmap =		generic_file_mmap,
+	.read		= fuse_file_read,
+	.write		= generic_file_write,
+	.mmap		= generic_file_mmap,
+	.open		= fuse_open,
+	.release	= fuse_release,
+	.fsync		= fuse_fsync,
+#ifdef KERNEL_2_6
+	.sendfile	= generic_file_sendfile,
+#endif
 };
 
 static struct address_space_operations fuse_file_aops  = {

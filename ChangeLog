@@ -7,6 +7,8 @@
 	* Readpage calls flush_dcache_page() after storing data
 
 	* Use i_size_read/write for accessing inode->i_size
+
+	* Make loopback mount of a fuse file work
 	
 2004-02-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 
