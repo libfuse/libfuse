@@ -173,9 +173,7 @@ enum { opt_fd,
        opt_default_permissions, 
        opt_allow_other,
        opt_kernel_cache,
-#ifndef KERNEL_2_6
        opt_large_read,
-#endif
        opt_direct_io,
        opt_max_read,
        opt_err };
@@ -187,9 +185,7 @@ static match_table_t tokens = {
 	{opt_default_permissions, "default_permissions"},
 	{opt_allow_other, "allow_other"},
 	{opt_kernel_cache, "kernel_cache"},
-#ifndef KERNEL_2_6
 	{opt_large_read, "large_read"},
-#endif
 	{opt_direct_io, "direct_io"},
 	{opt_max_read, "max_read=%u" },
 	{opt_err, NULL}
@@ -241,11 +237,19 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
 			
-#ifndef KERNEL_2_6
 		case opt_large_read:
+#ifndef KERNEL_2_6
 			d->flags |= FUSE_LARGE_READ;
-			break;
+#else
+			{
+				static int warned = 0;
+				if (!warned) {
+					printk("fuse: large_read option is deprecated for 2.6 kernels\n");
+					warned = 1;
+				}
+			}
 #endif
+			break;
 			
 		case opt_direct_io:
 			d->flags |= FUSE_DIRECT_IO;

@@ -1,3 +1,7 @@
+2004-09-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Allow "large_read" option for 2.6 kernels but warn of deprecation
+	
 2004-09-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug in case two FORGETs for the same node are executed in
