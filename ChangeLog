@@ -1,3 +1,7 @@
+2004-01-29  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Properly check if the inode exists in fuse_invalidate
+	
 2004-01-27  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added -q option for fusermount

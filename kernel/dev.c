@@ -410,21 +410,31 @@ static inline int copy_out_header(struct fuse_out_header *oh, const char *buf,
 	return 0;
 }
 
+#ifdef KERNEL_2_6
 static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
 {
-	struct inode *inode = iget(fc->sb, uh->ino);
+	struct inode *inode = ilookup(fc->sb, uh->ino);
 	if (!inode)
 		return -ENOENT;
-
-#ifdef KERNEL_2_6
 	invalidate_inode_pages(inode->i_mapping);
-#else
-	invalidate_inode_pages(inode);
-#endif
-
 	iput(inode);
 	return 0;
 }
+#else 
+static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
+{
+	struct inode *inode = iget(fc->sb, uh->ino);
+	int err = -ENOENT;
+	if(inode) {
+		if(inode->u.generic_ip) {
+			invalidate_inode_pages(inode);
+			err = 0;
+		}
+		iput(inode);
+	}
+	return err;
+}
+#endif
 
 static int fuse_user_request(struct fuse_conn *fc, const char *buf,
 			     size_t nbytes)
