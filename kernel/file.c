@@ -283,7 +283,7 @@ static int fuse_file_read_block(struct inode *inode, char *bl_buf,
 		return -ERESTARTSYS;
 
 	memset(&inarg, 0, sizeof(inarg));
-	inarg.offset = bl_index << FUSE_BLOCK_SHIFT;
+	inarg.offset = (unsigned long long) bl_index << FUSE_BLOCK_SHIFT;
 	inarg.size = FUSE_BLOCK_SIZE;
 	req->in.h.opcode = FUSE_READ;
 	req->in.h.ino = inode->i_ino;
