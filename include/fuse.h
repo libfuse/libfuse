@@ -83,6 +83,12 @@ struct fuse_operations {
     int (*write)    (const char *, const char *, size_t, off_t);
 };
 
+/** Extra context that may be needed by some filesystems */
+struct fuse_context {
+    uid_t uid;
+    gid_t gid;
+};
+
 /* FUSE flags: */
 
 /** Enable debuging output */
@@ -97,20 +103,10 @@ extern "C" {
  *
  * @param fd the control file descriptor
  * @param flags any combination of the FUSE flags defined above, or 0
+ * @param op the operations
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(int fd, int flags);
-
-/**
- * Set the filesystem operations. 
- * 
- * Operations which are initialised to NULL will return ENOSYS to the
- * calling process.
- * 
- * @param f the FUSE handle
- * @param op the operations
- */
-void fuse_set_operations(struct fuse *f, const struct fuse_operations *op);
+struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op);
 
 /**
  * FUSE event loop.
@@ -145,6 +141,17 @@ void fuse_loop_mt(struct fuse *f);
  * @param f the FUSE handle
  */
 void fuse_destroy(struct fuse *f);
+
+/**
+ * Get the current context
+ * 
+ * The context is only valid for the duration of a filesystem
+ * operation, and thus must not be stored and used later.
+ *
+ * @param f the FUSE handle
+ * @return the context 
+ */
+struct fuse_context *fuse_get_context(struct fuse *f);
 
 /* ----------------------------------------------------------- *
  * Miscellaneous helper fuctions                               *

@@ -35,6 +35,8 @@ struct fuse {
     pthread_mutex_t lock;
     int numworker;
     int numavail;
+    struct fuse_context *(*getcontext)(struct fuse *);
+    struct fuse_context context;
 };
 
 struct fuse_dirhandle {

@@ -290,7 +290,6 @@ static void rename_node(struct fuse *f, fino_t olddir, const char *oldname,
     pthread_mutex_unlock(&f->lock);
 }
 
-
 static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 {
     attr->mode    = stbuf->st_mode;
@@ -442,7 +441,7 @@ static int do_chmod(struct fuse *f, const char *path, struct fuse_attr *attr)
 }        
 
 static int do_chown(struct fuse *f, const char *path, struct fuse_attr *attr,
-             int valid)
+                    int valid)
 {
     int res;
     uid_t uid = (valid & FATTR_UID) ? attr->uid : (uid_t) -1;
@@ -912,7 +911,15 @@ void fuse_loop(struct fuse *f)
     }
 }
 
-struct fuse *fuse_new(int fd, int flags)
+struct fuse_context *fuse_get_context(struct fuse *f)
+{
+    if(f->getcontext)
+        return f->getcontext(f);
+    else
+        return &f->context;
+}
+
+struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
 {
     struct fuse *f;
     struct node *root;
@@ -943,6 +950,10 @@ struct fuse *fuse_new(int fd, int flags)
     pthread_mutex_init(&f->lock, NULL);
     f->numworker = 0;
     f->numavail = 0;
+    f->op = *op;
+    f->getcontext = NULL;
+    f->context.uid = 0;
+    f->context.gid = 0;
 
     root = (struct node *) calloc(1, sizeof(struct node));
     root->mode = 0;
@@ -952,11 +963,6 @@ struct fuse *fuse_new(int fd, int flags)
     hash_ino(f, root, FUSE_ROOT_INO);
 
     return f;
-}
-
-void fuse_set_operations(struct fuse *f, const struct fuse_operations *op)
-{
-    f->op = *op;
 }
 
 void fuse_destroy(struct fuse *f)

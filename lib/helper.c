@@ -143,8 +143,7 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
         exit(1);
     }
 
-    fuse = fuse_new(fd, flags);
-    fuse_set_operations(fuse, op);
+    fuse = fuse_new(fd, flags, op);
 
     if(multithreaded)
         fuse_loop_mt(fuse);
