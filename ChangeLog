@@ -1,5 +1,9 @@
 2004-06-22  Miklos Szeredi <mszeredi@inf.bme.hu>
 
+	* Released 1.2
+	
+2004-06-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+
 	* Add FS_BINARY_MOUNTDATA filesystem flag for kernels that define
 	it.  This fixes mount problems on recent 2.6 kernels with SELinux
 	enabled
