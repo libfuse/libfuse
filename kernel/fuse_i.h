@@ -328,6 +328,9 @@ struct fuse_conn {
 	/** Is removexattr not implemented by fs? */
 	unsigned no_removexattr : 1;
 
+	/** Connection failed (version mismatch) */
+	unsigned conn_error : 1;
+
 #ifdef KERNEL_2_6
 	/** Backing dev info */
 	struct backing_dev_info bdi;
@@ -410,7 +413,7 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir);
  */
 int fuse_release_common(struct inode *inode, struct file *file, int isdir);
 
-/** 
+/**
  * Send FSYNC or FSYNCDIR request
  */
 int fuse_fsync_common(struct file *file, struct dentry *de, int datasync,

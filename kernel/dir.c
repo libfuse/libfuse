@@ -512,7 +512,7 @@ static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 			break;
 
 		over = filldir(dstbuf, dirent->name, dirent->namelen,
-			       file->f_pos, dirent->ino, dirent->type);
+			       dirent->off, dirent->ino, dirent->type);
 		if (over)
 			break;
 

@@ -11,7 +11,7 @@
 #include <asm/types.h>
 
 /** Version number of this interface */
-#define FUSE_KERNEL_VERSION 5
+#define FUSE_KERNEL_VERSION 6
 
 /** Minor version number of this interface */
 #define FUSE_KERNEL_MINOR_VERSION 1
@@ -24,6 +24,9 @@
 
 /** The minor number of the fuse character device */
 #define FUSE_MINOR 229
+
+/* Make sure all structures are padded to 64bit boundary, so 32bit
+   userspace works under 64bit kernels */
 
 struct fuse_attr {
 	__u64	ino;
@@ -127,6 +130,7 @@ struct fuse_mknod_in {
 
 struct fuse_mkdir_in {
 	__u32	mode;
+	__u32	padding;
 };
 
 struct fuse_rename_in {
@@ -139,32 +143,38 @@ struct fuse_link_in {
 
 struct fuse_setattr_in {
 	__u32	valid;
+	__u32	padding;
 	struct fuse_attr attr;
 };
 
 struct fuse_open_in {
 	__u32	flags;
+	__u32	padding;
 };
 
 struct fuse_open_out {
 	__u64	fh;
 	__u32	open_flags;
+	__u32	padding;
 };
 
 struct fuse_release_in {
 	__u64	fh;
 	__u32	flags;
+	__u32	padding;
 };
 
 struct fuse_flush_in {
 	__u64	fh;
 	__u32	flush_flags;
+	__u32	padding;
 };
 
 struct fuse_read_in {
 	__u64	fh;
 	__u64	offset;
 	__u32	size;
+	__u32	padding;
 };
 
 struct fuse_write_in {
@@ -176,6 +186,7 @@ struct fuse_write_in {
 
 struct fuse_write_out {
 	__u32	size;
+	__u32	padding;
 };
 
 struct fuse_statfs_out {
@@ -185,6 +196,7 @@ struct fuse_statfs_out {
 struct fuse_fsync_in {
 	__u64	fh;
 	__u32	fsync_flags;
+	__u32	padding;
 };
 
 struct fuse_setxattr_in {
@@ -194,10 +206,12 @@ struct fuse_setxattr_in {
 
 struct fuse_getxattr_in {
 	__u32	size;
+	__u32	padding;
 };
 
 struct fuse_getxattr_out {
 	__u32	size;
+	__u32	padding;
 };
 
 struct fuse_init_in_out {
@@ -213,6 +227,7 @@ struct fuse_in_header {
 	__u32	uid;
 	__u32	gid;
 	__u32	pid;
+	__u32	padding;
 };
 
 struct fuse_out_header {
@@ -223,6 +238,7 @@ struct fuse_out_header {
 
 struct fuse_dirent {
 	__u64	ino;
+	__u64	off;
 	__u32	namelen;
 	__u32	type;
 	char name[0];

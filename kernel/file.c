@@ -528,7 +528,7 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = get_fuse_conn(inode);
-	unsigned nmax = write ? fc->max_write : fc->max_read;
+	size_t nmax = write ? fc->max_write : fc->max_read;
 	loff_t pos = *ppos;
 	ssize_t res = 0;
 	struct fuse_req *req = fuse_get_request(fc);
@@ -536,8 +536,8 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 		return -ERESTARTSYS;
 
 	while (count) {
-		unsigned tmp;
-		unsigned nres;
+		size_t tmp;
+		size_t nres;
 		size_t nbytes = min(count, nmax);
 		int err = fuse_get_user_pages(req, buf, nbytes, !write);
 		if (err) {

@@ -459,6 +459,7 @@ static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
     dirent->namelen = namelen;
     strncpy(dirent->name, name, namelen);
     dirent->type = type;
+    dirent->off = dh->len;
     dh->len += FUSE_DIRENT_SIZE(dirent);
     return 0;
 }

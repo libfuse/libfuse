@@ -1,3 +1,17 @@
+2005-03-31  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel API: add padding to structures, so 64bit and 32bit
+	compiler will return the same size
+
+	* kernel API: add offset field to fuse_dirent.  This will allow
+	more sophisticated readdir interface for userspace
+
+	* kernel API: change major number to 6
+
+	* kernel: fix warnings on 64bit archs
+
+	* kernel: in case of API version mismatch, return ECONNREFUSED
+
 2005-03-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: trivial cleanups

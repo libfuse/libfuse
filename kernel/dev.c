@@ -221,6 +221,10 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	wake_up(&req->waitq);
 	if (req->in.h.opcode == FUSE_INIT) {
 		int i;
+
+		if (req->misc.init_in_out.major != FUSE_KERNEL_VERSION)
+			fc->conn_error = 1;
+
 		/* After INIT reply is received other requests can go
 		   out.  So do (FUSE_MAX_OUTSTANDING - 1) number of
 		   up()s on outstanding_sem.  The last up() is done in
@@ -367,8 +371,11 @@ static void request_send_wait(struct fuse_conn *fc, struct fuse_req *req,
 {
 	req->isreply = 1;
 	spin_lock(&fuse_lock);
-	req->out.h.error = -ENOTCONN;
-	if (fc->file) {
+	if (!fc->file)
+		req->out.h.error = -ENOTCONN;
+	else if (fc->conn_error)
+		req->out.h.error = -ECONNREFUSED;
+	else {
 		queue_request(fc, req);
 		/* acquire extra reference, since request is still needed
 		   after request_end() */
@@ -665,6 +672,17 @@ static void request_wait(struct fuse_conn *fc)
 	remove_wait_queue(&fc->waitq, &wait);
 }
 
+#ifndef KERNEL_2_6
+static inline size_t iov_length(const struct iovec *iov, unsigned long nr_segs)
+{
+	unsigned long seg;
+	size_t ret = 0;
+
+	for (seg = 0; seg < nr_segs; seg++)
+		ret += iov[seg].iov_len;
+	return ret;
+}
+#endif
 /*
  * Read a single request into the userspace filesystem's buffer.  This
  * function waits until a request is available, then removes it from
