@@ -2,21 +2,27 @@
 
 	* Separate configure for the kernel directory
 
-	* Add pkg-config support.  To compile a FUSE based filesystem you
-	can do  "gcc -Wall `pkg-config --cflags --libs fuse` myfs.c -o myfs"
-	or similar.  Note, that the PKG_CONFIG_PATH environment variable
-	usually needs to be set to "/usr/local/lib/pkgconfig".
-
 2004-11-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Split 2.0 branch
 
 	* Fix 'makeconf.sh' to use autoreconf if available
 
+2004-11-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add pkg-config support.  To compile a FUSE based filesystem you
+	can do  "gcc -Wall `pkg-config --cflags --libs fuse` myfs.c -o myfs"
+	or similar.  Note, that the PKG_CONFIG_PATH environment variable
+	usually needs to be set to "/usr/local/lib/pkgconfig".
+
 2004-11-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compile problems with ancient (<=2.4.18) kernels (reported
 	by Jeremy Smith)
+
+	* Add "allow_root" mount option.  Patch by Yaroslav Rastrigin
+
+	* Clear the 'exited' flag when mail loop is finished
 
 2004-10-28  Miklos Szeredi <miklos@szeredi.hu>
 
@@ -613,7 +619,7 @@
 
 2003-03-10  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Fix umount oops (found by Samuli K‰rkk‰inen)
+	* Fix umount oops (found by Samuli K√§rkk√§inen)
 
 2003-03-05  Miklos Szeredi <miklos@szeredi.hu>
 

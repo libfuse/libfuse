@@ -9,7 +9,7 @@
 /* This file defines the kernel interface of FUSE */
 
 /** Version number of this interface */
-#define FUSE_KERNEL_VERSION 3
+#define FUSE_KERNEL_VERSION 4
 
 /** Minor version number of this interface */
 #define FUSE_KERNEL_MINOR_VERSION 1
@@ -24,6 +24,7 @@
 #define FUSE_VERSION_FILE "/proc/fs/fuse/version"
 
 struct fuse_attr {
+	unsigned long       _user_ino; /* unused, for forward compatibility */
 	unsigned int        mode;
 	unsigned int        nlink;
 	unsigned int        uid;
@@ -213,6 +214,7 @@ struct fuse_user_header {
 	int unique; /* zero */
 	enum fuse_opcode opcode;
 	unsigned long ino;
+	unsigned long _user_ino;  /* unused, for forward compatibility */
 };
 
 struct fuse_dirent {

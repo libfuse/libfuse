@@ -3,7 +3,7 @@
 SUBDIRS = @subdirs@ @subdirs2@
 
 EXTRA_DIST =			\
-	fuse.spec		\
+	fuse.pc.in		\
 	README*			\
 	Filesystems		\
 	BUGS			\
