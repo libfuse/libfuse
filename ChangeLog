@@ -3,6 +3,8 @@
 	* Fix bug in fuse_readpages() causing Oops in certain situations.
 	Bug found by Vincenzo Ciancia.
 
+	* Fix compilation with kernels versions > 2.6.9.
+
 2004-11-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check kernel interface version in fusermount to prevent
