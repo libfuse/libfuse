@@ -1,3 +1,9 @@
+2004-07-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* When performing create or remove operation, refresh the parent's
+	attributes on next revalidate, as i_nlink (and maybe size/time)
+	could be inacurate.
+
 2004-07-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make RELEASE method synchronous.  This fixes an abort in libfuse

@@ -145,6 +145,17 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	return 0;
 }
 
+static void uncache_dir(struct inode *dir)
+{
+	struct dentry *entry = d_find_alias(dir);
+	if (!entry)
+		dir->i_nlink = 0;
+	else {
+		entry->d_time = jiffies - FUSE_REVALIDATE_TIME - 1;
+		dput(entry);
+	}
+}
+
 /* create needs to return a positive entry, so this is actually an
    mknod+lookup */
 static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
@@ -188,6 +199,7 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	}
 
 	d_instantiate(entry, inode);
+	uncache_dir(dir);
 	return 0;
 }
 
@@ -208,6 +220,7 @@ static int lookup_new_entry(struct inode *dir, struct dentry *entry)
 		return err ? err : -ENOENT;
 	}
 	d_instantiate(entry, inode);
+	uncache_dir(dir);
 	return 0;
 }
 
@@ -286,6 +299,8 @@ static int fuse_unlink(struct inode *dir, struct dentry *entry)
 		err = fuse_do_getattr(entry->d_inode);
 		if(err == -ENOENT)
 			entry->d_inode->i_nlink = 0;
+
+		uncache_dir(dir);
 		return 0;
 	}
 	return err;
@@ -294,8 +309,10 @@ static int fuse_unlink(struct inode *dir, struct dentry *entry)
 static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 {
 	int err = fuse_remove(dir, entry, FUSE_RMDIR);
-	if(!err)
+	if(!err) {
 		entry->d_inode->i_nlink = 0;
+		uncache_dir(dir);
+	}
 	return err;
 }
 
@@ -320,6 +337,12 @@ static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 	in.args[2].size = newent->d_name.len + 1;
 	in.args[2].value = newent->d_name.name;
 	request_send(fc, &in, &out);
+
+	if (!out.h.error) {
+		uncache_dir(olddir);
+		if (olddir != newdir)
+			uncache_dir(newdir);
+	}
 
 	return out.h.error;
 }
