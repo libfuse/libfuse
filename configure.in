@@ -32,7 +32,7 @@ AC_ARG_ENABLE(example,
 AC_ARG_ENABLE(auto-modprobe,
 	[  --enable-auto-modprobe  Automatically insert kernel module])
 
-subdirs="include patch"
+subdirs="include"
 
 if test "$enable_kernel_module" != "no"; then
 	AC_MSG_CHECKING([kernel source directory])

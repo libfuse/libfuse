@@ -1,3 +1,9 @@
+2004-11-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Split 2.0 branch
+
+	* Fix 'makeconf.sh' to use autoreconf if available
+
 2004-11-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compile problems with ancient (<=2.4.18) kernels (reported
