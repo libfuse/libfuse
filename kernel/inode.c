@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+    Copyright (C) 2001	Miklos Szeredi (mszeredi@inf.bme.hu)
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -21,6 +21,10 @@
 
 #ifndef KERNEL_2_6
 #define kstatfs statfs
+#endif
+
+#ifndef FS_BINARY_MOUNTDATA
+#define FS_BINARY_MOUNTDATA 0
 #endif
 
 static void fuse_read_inode(struct inode *inode)
@@ -74,15 +78,15 @@ static void fuse_put_super(struct super_block *sb)
 
 static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
 {
-	stbuf->f_type    = FUSE_SUPER_MAGIC;
-	stbuf->f_bsize   = attr->block_size;
-	stbuf->f_blocks  = attr->blocks;
-	stbuf->f_bfree   = stbuf->f_bavail = attr->blocks_free;
-	stbuf->f_files   = attr->files;
-	stbuf->f_ffree   = attr->files_free;
+	stbuf->f_type	 = FUSE_SUPER_MAGIC;
+	stbuf->f_bsize	 = attr->block_size;
+	stbuf->f_blocks	 = attr->blocks;
+	stbuf->f_bfree	 = stbuf->f_bavail = attr->blocks_free;
+	stbuf->f_files	 = attr->files;
+	stbuf->f_ffree	 = attr->files_free;
 	/* Is this field necessary?  Most filesystems ignore it...
 	stbuf->f_fsid.val[0] = (FUSE_SUPER_MAGIC>>16)&0xffff;
-	stbuf->f_fsid.val[1] =  FUSE_SUPER_MAGIC     &0xffff; */
+	stbuf->f_fsid.val[1] =	FUSE_SUPER_MAGIC     &0xffff; */
 	stbuf->f_namelen = attr->namelen;
 }
 
@@ -92,7 +96,7 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_statfs_out outarg;
-        
+	
 	in.numargs = 0;
 	in.h.opcode = FUSE_STATFS;
 	out.numargs = 1;
@@ -193,10 +197,11 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	struct inode *root;
 	struct fuse_mount_data *d = data;
 
-        sb->s_blocksize = PAGE_CACHE_SIZE;
-        sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
-        sb->s_magic = FUSE_SUPER_MAGIC;
-        sb->s_op = &fuse_super_operations;
+	sb->s_blocksize = PAGE_CACHE_SIZE;
+	sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
+	sb->s_magic = FUSE_SUPER_MAGIC;
+	sb->s_op = &fuse_super_operations;
+	sb->s_maxbytes = MAX_LFS_FILESIZE;
 #ifdef KERNEL_2_6
 	sb->s_export_op = &fuse_export_operations;
 #endif
@@ -216,7 +221,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	spin_unlock(&fuse_lock);
 	
 	/* fc is needed in fuse_init_file_inode which could be called
-           from get_root_inode */
+	   from get_root_inode */
 	SB_FC(sb) = fc;
 
 	root = get_root_inode(sb, d->rootmode);
@@ -237,15 +242,15 @@ static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
 				       int flags, const char *dev_name,
 				       void *raw_data)
 {
-        return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
+	return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
 }
 
 static struct file_system_type fuse_fs_type = {
-        .owner          = THIS_MODULE,
-        .name           = "fuse",
-        .get_sb         = fuse_get_sb,
-        .kill_sb        = kill_anon_super,
-        .fs_flags       = 0
+	.owner		= THIS_MODULE,
+	.name		= "fuse",
+	.get_sb		= fuse_get_sb,
+	.kill_sb	= kill_anon_super,
+	.fs_flags	= FS_BINARY_MOUNTDATA,
 };
 #else
 static struct super_block *fuse_read_super_compat(struct super_block *sb,

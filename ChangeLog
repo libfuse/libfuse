@@ -1,3 +1,44 @@
+2004-06-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Add FS_BINARY_MOUNTDATA filesystem flag for kernels that define
+	it.  This fixes mount problems on recent 2.6 kernels with SELinux
+	enabled
+	
+	* Merge bugfixes from main branch (see below)
+	
+2004-04-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Check some limits so userspace won't get too big requests
+
+2004-04-05  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Kill compile warning
+
+2004-03-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Fix for uClinux (Christian Magnusson)
+
+2004-02-12  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Remove MS_PERMISSION mount flag (that means something else now)
+	
+2004-02-10  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added check for i_size_read/write functions to configure.in
+	(patch by Valient Gough)
+
+2004-02-06  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Fixed writing >= 2G files
+
+	* Check file size on open (with generic_file_open())
+
+	* Readpage calls flush_dcache_page() after storing data
+
+	* Use i_size_read/write for accessing inode->i_size
+
+	* Make loopback mount of a fuse file work
+	
 2004-02-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Released 1.1

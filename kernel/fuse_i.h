@@ -24,6 +24,11 @@
 #define MODVERSIONS
 #include <linux/modversions.h>
 #endif
+#include <config.h>
+#ifndef HAVE_I_SIZE_FUNC
+#define i_size_read(inode) ((inode)->i_size)
+#define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
+#endif
 #endif 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -147,9 +152,9 @@ struct fuse_req {
 };
 
 #ifdef KERNEL_2_6
-#define SB_FC(sb) ((struct fuse_conn *) (sb)->s_fs_info)
+#define SB_FC(sb) ((sb)->s_fs_info)
 #else
-#define SB_FC(sb) ((struct fuse_conn *) (sb)->u.generic_sbp)
+#define SB_FC(sb) ((sb)->u.generic_sbp)
 #endif
 #define INO_FC(inode) SB_FC((inode)->i_sb)
 #define DEV_FC(file) ((struct fuse_conn *) (file)->private_data)

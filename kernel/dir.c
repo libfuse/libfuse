@@ -30,7 +30,7 @@ static struct dentry_operations fuse_dentry_operations;
 
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
-	if(S_ISREG(inode->i_mode) && inode->i_size != attr->size) {
+	if(S_ISREG(inode->i_mode) && i_size_read(inode) != attr->size) {
 #ifdef KERNEL_2_6
 		invalidate_inode_pages(inode->i_mapping);
 #else
@@ -42,7 +42,7 @@ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 	inode->i_nlink   = attr->nlink;
 	inode->i_uid     = attr->uid;
 	inode->i_gid     = attr->gid;
-	inode->i_size    = attr->size;
+	i_size_write(inode, attr->size);
 	inode->i_blksize = PAGE_CACHE_SIZE;
 	inode->i_blocks  = attr->blocks;
 #ifdef KERNEL_2_6
@@ -62,7 +62,7 @@ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 {
 	inode->i_mode = attr->mode & S_IFMT;
-	inode->i_size = attr->size;
+	i_size_write(inode, attr->size);
 	if(S_ISREG(inode->i_mode)) {
 		inode->i_op = &fuse_file_inode_operations;
 		fuse_init_file_inode(inode);
@@ -105,6 +105,9 @@ static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
+
+	if (entry->d_name.len > FUSE_NAME_MAX)
+		return -ENAMETOOLONG;
 
 	in.h.opcode = FUSE_LOOKUP;
 	in.h.ino = dir->i_ino;
@@ -238,13 +241,17 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
+	unsigned int len = strlen(link) + 1;
+	
+	if (len > FUSE_SYMLINK_MAX)
+		return -ENAMETOOLONG;
 
 	in.h.opcode = FUSE_SYMLINK;
 	in.h.ino = dir->i_ino;
 	in.numargs = 2;
 	in.args[0].size = entry->d_name.len + 1;
 	in.args[0].value = entry->d_name.name;
-	in.args[1].size = strlen(link) + 1;
+	in.args[1].size = len;
 	in.args[1].value = link;
 	request_send(fc, &in, &out);
 	if(out.h.error)
@@ -619,7 +626,7 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 
 	if(!out.h.error) {
 		if(attr->ia_valid & ATTR_SIZE &&
-		   outarg.attr.size < inode->i_size)
+		   outarg.attr.size < i_size_read(inode))
 			vmtruncate(inode, outarg.attr.size);
 
 		change_attributes(inode, &outarg.attr);

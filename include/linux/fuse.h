@@ -114,6 +114,9 @@ enum fuse_opcode {
 /* Conservative buffer size for the client */
 #define FUSE_MAX_IN 8192
 
+#define FUSE_NAME_MAX 1024
+#define FUSE_SYMLINK_MAX 4096
+
 struct fuse_lookup_out {
 	unsigned long ino;
 	struct fuse_attr attr;

@@ -289,7 +289,6 @@ static struct fuse_operations xmp_oper = {
     .statfs	= xmp_statfs,
     .release	= xmp_release,
     .fsync	= xmp_fsync
-    
 };
 
 int main(int argc, char *argv[])

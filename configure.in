@@ -1,5 +1,5 @@
 AC_INIT(lib/fuse.c)
-AM_INIT_AUTOMAKE(fuse, 1.1)
+AM_INIT_AUTOMAKE(fuse, 1.2)
 AM_CONFIG_HEADER(include/config.h)
 
 AC_PROG_CC
@@ -60,6 +60,16 @@ if test "$enable_kernel_module" != "no"; then
 	AC_SUBST(majver)
 	AC_SUBST(kmoduledir)
 	subdirs="$subdirs kernel"
+
+	if echo "$kernsrcver" | grep -q "^2.4"; then
+        	old_cflags="$CFLAGS"
+        	CFLAGS="-I${kernelsrc}/include -Wall -O2 -fno-strict-aliasing -D__KERNEL__"
+		AC_CHECK_DECL(i_size_read,
+			AC_DEFINE(HAVE_I_SIZE_FUNC, 1,
+				[Kernel has i_size_read() and i_size_write() functions]),,
+			[#include <linux/fs.h>])
+		CFLAGS="$old_cflags"
+	fi
 fi
 
 if test "$enable_lib" != "no"; then

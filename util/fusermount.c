@@ -35,10 +35,6 @@
 
 #define CHECK_PERMISSION 1
 
-#ifndef MS_PERMISSION
-#define MS_PERMISSION	128
-#endif
-
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
 #define FUSE_MOUNTED_ENV        "_FUSE_MOUNTED"
@@ -305,8 +301,6 @@ static int do_mount(const char *dev, const char *mnt, const char *type,
         res = drop_privs();
         if(res == -1)
             return -1;
-
-        flags |= MS_PERMISSION;
     }
     
     data.version = FUSE_KERNEL_VERSION;

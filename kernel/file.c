@@ -16,7 +16,13 @@
 
 #ifndef KERNEL_2_6
 #define PageUptodate(page) Page_Uptodate(page)
+#ifndef filemap_fdatawrite
+#ifndef NO_MM
 #define filemap_fdatawrite filemap_fdatasync
+#else
+#define filemap_fdatawrite do {} while(0)
+#endif
+#endif
 #endif
 
 static int fuse_open(struct inode *inode, struct file *file)
@@ -25,6 +31,11 @@ static int fuse_open(struct inode *inode, struct file *file)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_open_in inarg;
+	int err;
+
+	err = generic_file_open(inode, file);
+	if(err)
+		return err;
 
 	/* If opening the root node, no lookup has been performed on
 	   it, so the attributes must be refreshed */
@@ -137,6 +148,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 		size_t outsize = out.args[0].size;
 		if(outsize < PAGE_CACHE_SIZE) 
 			memset(buffer + outsize, 0, PAGE_CACHE_SIZE - outsize);
+		flush_dcache_page(page);
 		SetPageUptodate(page);
 	}
 
@@ -151,7 +163,7 @@ static int fuse_is_block_uptodate(struct address_space *mapping,
 {
 	size_t index = bl_index << FUSE_BLOCK_PAGE_SHIFT;
 	size_t end_index = ((bl_index + 1) << FUSE_BLOCK_PAGE_SHIFT) - 1;
-	size_t file_end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+	size_t file_end_index = i_size_read(inode) >> PAGE_CACHE_SHIFT;
 
 	if (end_index > file_end_index)
 		end_index = file_end_index;
@@ -180,7 +192,7 @@ static int fuse_cache_block(struct address_space *mapping,
 {
 	size_t start_index = bl_index << FUSE_BLOCK_PAGE_SHIFT;
 	size_t end_index = ((bl_index + 1) << FUSE_BLOCK_PAGE_SHIFT) - 1;
-	size_t file_end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+	size_t file_end_index = i_size_read(inode) >> PAGE_CACHE_SHIFT;
 
 	int i;
 
@@ -200,6 +212,7 @@ static int fuse_cache_block(struct address_space *mapping,
 			buffer = kmap(page);
 			memcpy(buffer, bl_buf + i * PAGE_CACHE_SIZE,
 					PAGE_CACHE_SIZE);
+			flush_dcache_page(page);
 			SetPageUptodate(page);
 			kunmap(page);
 		}
@@ -249,7 +262,7 @@ static void fuse_file_bigread(struct address_space *mapping,
 {
 	size_t bl_index = pos >> FUSE_BLOCK_SHIFT;
 	size_t bl_end_index = (pos + count) >> FUSE_BLOCK_SHIFT;
-	size_t bl_file_end_index = inode->i_size >> FUSE_BLOCK_SHIFT;
+	size_t bl_file_end_index = i_size_read(inode) >> FUSE_BLOCK_SHIFT;
 	
 	if (bl_end_index > bl_file_end_index)
 		bl_end_index = bl_file_end_index;
@@ -316,13 +329,14 @@ static int write_buffer(struct inode *inode, struct page *page,
 static int get_write_count(struct inode *inode, struct page *page)
 {
 	unsigned long end_index;
+	loff_t size = i_size_read(inode);
 	int count;
 	
-	end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+	end_index = size >> PAGE_CACHE_SHIFT;
 	if(page->index < end_index)
 		count = PAGE_CACHE_SIZE;
 	else {
-		count = inode->i_size & (PAGE_CACHE_SIZE - 1);
+		count = size & (PAGE_CACHE_SIZE - 1);
 		if(page->index > end_index || count == 0)
 			return 0;
 	}
@@ -447,19 +461,22 @@ static int fuse_commit_write(struct file *file, struct page *page,
 	err = write_buffer(inode, page, offset, to - offset);
 	if(!err) {
 		loff_t pos = (page->index << PAGE_CACHE_SHIFT) + to;
-		if(pos > inode->i_size)
-			inode->i_size = pos;
+		if(pos > i_size_read(inode))
+			i_size_write(inode, pos);
 	}
 	return err;
 }
 
 static struct file_operations fuse_file_operations = {
-	.open =		fuse_open,
-	.release =	fuse_release,
-	.fsync =	fuse_fsync,
-	.read =		fuse_file_read,
-	.write =	generic_file_write,
-	.mmap =		generic_file_mmap,
+	.read		= fuse_file_read,
+	.write		= generic_file_write,
+	.mmap		= generic_file_mmap,
+	.open		= fuse_open,
+	.release	= fuse_release,
+	.fsync		= fuse_fsync,
+#ifdef KERNEL_2_6
+	.sendfile	= generic_file_sendfile,
+#endif
 };
 
 static struct address_space_operations fuse_file_aops  = {
