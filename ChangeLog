@@ -1,3 +1,7 @@
+2004-02-18  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* user-mount upgraded for 2.6.3 kernel
+	
 2004-02-17  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added user-mount.2.6.2-rc3.patch

@@ -1,6 +1,6 @@
-diff -ru linux-2.6.2-rc3.orig/fs/filesystems.c linux-2.6.2-rc3/fs/filesystems.c
---- linux-2.6.2-rc3.orig/fs/filesystems.c	2003-12-18 03:59:18.000000000 +0100
-+++ linux-2.6.2-rc3/fs/filesystems.c	2004-02-16 13:03:45.000000000 +0100
+diff -ru linux-2.6.3-rc4.orig/fs/filesystems.c linux-2.6.3-rc4/fs/filesystems.c
+--- linux-2.6.3-rc4.orig/fs/filesystems.c	2003-12-18 03:59:18.000000000 +0100
++++ linux-2.6.3-rc4/fs/filesystems.c	2004-02-17 10:08:04.000000000 +0100
 @@ -222,7 +222,8 @@
  	if (fs && !try_module_get(fs->owner))
  		fs = NULL;
@@ -11,9 +11,9 @@ diff -ru linux-2.6.2-rc3.orig/fs/filesystems.c linux-2.6.2-rc3/fs/filesystems.c
  		read_lock(&file_systems_lock);
  		fs = *(find_filesystem(name));
  		if (fs && !try_module_get(fs->owner))
-diff -ru linux-2.6.2-rc3.orig/fs/namespace.c linux-2.6.2-rc3/fs/namespace.c
---- linux-2.6.2-rc3.orig/fs/namespace.c	2004-02-16 13:17:00.000000000 +0100
-+++ linux-2.6.2-rc3/fs/namespace.c	2004-02-16 13:07:35.000000000 +0100
+diff -ru linux-2.6.3-rc4.orig/fs/namespace.c linux-2.6.3-rc4/fs/namespace.c
+--- linux-2.6.3-rc4.orig/fs/namespace.c	2004-02-17 10:20:40.000000000 +0100
++++ linux-2.6.3-rc4/fs/namespace.c	2004-02-17 10:08:04.000000000 +0100
 @@ -25,13 +25,16 @@
  
  extern int __init init_rootfs(void);
@@ -280,9 +280,9 @@ diff -ru linux-2.6.2-rc3.orig/fs/namespace.c linux-2.6.2-rc3/fs/namespace.c
  }
  
  asmlinkage long sys_mount(char __user * dev_name, char __user * dir_name,
-diff -ru linux-2.6.2-rc3.orig/fs/super.c linux-2.6.2-rc3/fs/super.c
---- linux-2.6.2-rc3.orig/fs/super.c	2003-12-18 03:58:48.000000000 +0100
-+++ linux-2.6.2-rc3/fs/super.c	2004-02-16 13:03:45.000000000 +0100
+diff -ru linux-2.6.3-rc4.orig/fs/super.c linux-2.6.3-rc4/fs/super.c
+--- linux-2.6.3-rc4.orig/fs/super.c	2004-02-17 10:20:40.000000000 +0100
++++ linux-2.6.3-rc4/fs/super.c	2004-02-17 10:17:38.000000000 +0100
 @@ -705,7 +705,7 @@
  do_kern_mount(const char *fstype, int flags, const char *name, void *data)
  {
@@ -291,8 +291,8 @@ diff -ru linux-2.6.2-rc3.orig/fs/super.c linux-2.6.2-rc3/fs/super.c
 +	struct super_block *sb;
  	struct vfsmount *mnt;
  	int error;
- 
-@@ -713,9 +713,11 @@
+ 	char *secdata = NULL;
+@@ -714,24 +714,23 @@
  		return ERR_PTR(-ENODEV);
  
  	mnt = alloc_vfsmnt(name);
@@ -300,12 +300,30 @@ diff -ru linux-2.6.2-rc3.orig/fs/super.c linux-2.6.2-rc3/fs/super.c
 +	error = PTR_ERR(mnt);
 +	if (IS_ERR(mnt))
  		goto out;
+ 
+ 	if (data) {
+ 		secdata = alloc_secdata();
+-		if (!secdata) {
+-			sb = ERR_PTR(-ENOMEM);
++		error = -ENOMEM;
++		if (!secdata)
+ 			goto out_mnt;
+-		}
+ 
+ 		error = security_sb_copy_data(fstype, data, secdata);
+-		if (error) {
+-			sb = ERR_PTR(error);
++		if (error)
+ 			goto out_free_secdata;
+-		}
+ 	}
+ 
  	sb = type->get_sb(type, flags, name, data);
 +	error = PTR_ERR(sb);
  	if (IS_ERR(sb))
- 		goto out_mnt;
-  	error = security_sb_kern_mount(sb);
-@@ -725,18 +727,18 @@
+ 		goto out_free_secdata;
+  	error = security_sb_kern_mount(sb, secdata);
+@@ -741,20 +740,20 @@
  	mnt->mnt_root = dget(sb->s_root);
  	mnt->mnt_mountpoint = sb->s_root;
  	mnt->mnt_parent = mnt;
@@ -317,6 +335,8 @@ diff -ru linux-2.6.2-rc3.orig/fs/super.c linux-2.6.2-rc3/fs/super.c
  	up_write(&sb->s_umount);
  	deactivate_super(sb);
 -	sb = ERR_PTR(error);
+ out_free_secdata:
+ 	free_secdata(secdata);
  out_mnt:
  	free_vfsmnt(mnt);
  out:
@@ -326,9 +346,9 @@ diff -ru linux-2.6.2-rc3.orig/fs/super.c linux-2.6.2-rc3/fs/super.c
  }
  
  struct vfsmount *kern_mount(struct file_system_type *type)
-diff -ru linux-2.6.2-rc3.orig/include/linux/fs.h linux-2.6.2-rc3/include/linux/fs.h
---- linux-2.6.2-rc3.orig/include/linux/fs.h	2004-02-04 11:03:38.000000000 +0100
-+++ linux-2.6.2-rc3/include/linux/fs.h	2004-02-16 13:03:45.000000000 +0100
+diff -ru linux-2.6.3-rc4.orig/include/linux/fs.h linux-2.6.3-rc4/include/linux/fs.h
+--- linux-2.6.3-rc4.orig/include/linux/fs.h	2004-02-17 10:20:42.000000000 +0100
++++ linux-2.6.3-rc4/include/linux/fs.h	2004-02-17 10:08:04.000000000 +0100
 @@ -55,6 +55,12 @@
  };
  extern struct files_stat_struct files_stat;
@@ -350,9 +370,9 @@ diff -ru linux-2.6.2-rc3.orig/include/linux/fs.h linux-2.6.2-rc3/include/linux/f
  #define FS_REVAL_DOT	16384	/* Check the paths ".", ".." for staleness */
  #define FS_ODD_RENAME	32768	/* Temporary stuff; will go away as soon
  				  * as nfs_rename() will be cleaned up
-diff -ru linux-2.6.2-rc3.orig/include/linux/mount.h linux-2.6.2-rc3/include/linux/mount.h
---- linux-2.6.2-rc3.orig/include/linux/mount.h	2003-12-18 03:58:08.000000000 +0100
-+++ linux-2.6.2-rc3/include/linux/mount.h	2004-02-16 13:03:45.000000000 +0100
+diff -ru linux-2.6.3-rc4.orig/include/linux/mount.h linux-2.6.3-rc4/include/linux/mount.h
+--- linux-2.6.3-rc4.orig/include/linux/mount.h	2003-12-18 03:58:08.000000000 +0100
++++ linux-2.6.3-rc4/include/linux/mount.h	2004-02-17 10:08:04.000000000 +0100
 @@ -30,6 +30,7 @@
  	atomic_t mnt_count;
  	int mnt_flags;
@@ -361,9 +381,9 @@ diff -ru linux-2.6.2-rc3.orig/include/linux/mount.h linux-2.6.2-rc3/include/linu
  	struct list_head mnt_list;
  };
  
-diff -ru linux-2.6.2-rc3.orig/include/linux/sysctl.h linux-2.6.2-rc3/include/linux/sysctl.h
---- linux-2.6.2-rc3.orig/include/linux/sysctl.h	2004-02-16 13:17:03.000000000 +0100
-+++ linux-2.6.2-rc3/include/linux/sysctl.h	2004-02-16 13:03:45.000000000 +0100
+diff -ru linux-2.6.3-rc4.orig/include/linux/sysctl.h linux-2.6.3-rc4/include/linux/sysctl.h
+--- linux-2.6.3-rc4.orig/include/linux/sysctl.h	2004-02-17 10:20:42.000000000 +0100
++++ linux-2.6.3-rc4/include/linux/sysctl.h	2004-02-17 10:08:04.000000000 +0100
 @@ -608,8 +608,8 @@
  	FS_NRFILE=6,	/* int:current number of allocated filedescriptors */
  	FS_MAXFILE=7,	/* int:maximum number of filedescriptors that can be allocated */
@@ -375,9 +395,9 @@ diff -ru linux-2.6.2-rc3.orig/include/linux/sysctl.h linux-2.6.2-rc3/include/lin
  	FS_OVERFLOWUID=11,	/* int: overflow UID */
  	FS_OVERFLOWGID=12,	/* int: overflow GID */
  	FS_LEASES=13,	/* int: leases enabled */
-diff -ru linux-2.6.2-rc3.orig/kernel/sysctl.c linux-2.6.2-rc3/kernel/sysctl.c
---- linux-2.6.2-rc3.orig/kernel/sysctl.c	2004-02-16 13:17:04.000000000 +0100
-+++ linux-2.6.2-rc3/kernel/sysctl.c	2004-02-16 13:03:45.000000000 +0100
+diff -ru linux-2.6.3-rc4.orig/kernel/sysctl.c linux-2.6.3-rc4/kernel/sysctl.c
+--- linux-2.6.3-rc4.orig/kernel/sysctl.c	2004-02-17 10:20:43.000000000 +0100
++++ linux-2.6.3-rc4/kernel/sysctl.c	2004-02-17 10:08:04.000000000 +0100
 @@ -763,6 +763,22 @@
  		.proc_handler	= &proc_dointvec,
  	},
