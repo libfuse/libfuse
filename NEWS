@@ -2,8 +2,10 @@ What is new in 1.1
 
 * Support for the 2.6 kernels
 
+* Support for exporting filesystem over NFS in 2.6 kernels
+
 * Read efficiency improvements: read in 64k blocks instead of 4k
-(Michael Grigoriev)
+(Michael Grigoriev).  Can be turned on with '-l' option of fusermount
 
 * Lazy automatic unmount
 

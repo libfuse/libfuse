@@ -1,6 +1,12 @@
 2004-01-26  Miklos Szeredi <mszeredi@inf.bme.hu>
 
+	* Released 1.1-pre2
+
+2004-01-26  Miklos Szeredi <mszeredi@inf.bme.hu>
+
 	* Fix typo (thanks Marcos Dione)
+
+	* Compile fixes for 2.4 kernels
 	
 2004-01-23  Miklos Szeredi <mszeredi@inf.bme.hu>
 
@@ -13,9 +19,10 @@
 	* Suppress 'Bad file descriptor' warning on exit
 
 	* Replaced fusermount option '-d xxx' with '-n xxx' so it doesn't
-	get confused with '-d' of fuse_main() (sorry for the change)
+	get confused with '-d' of fuse_main() (sorry about this change)
 
-	* New fusermount option '-l' which enables big reads
+	* New fusermount option '-l' which enables big reads.  Big reads
+	are now disabled by default.
 
 	* fuse_main() can accept fusermount arguments after a '--'
 
