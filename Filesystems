@@ -158,3 +158,16 @@ Description:
   improved in the future.
 
 ==============================================================================
+Name: Fusedav
+
+Author: Lennart Poettering <mzshfrqni (at) 0pointer (dot) de>
+
+Homepage: http://0pointer.de/lennart/projects/fusedav/
+
+Description:
+
+  fusedav is a Linux userspace file system driver for mounting WebDAV
+  shares.  It makes use of FUSE as userspace file system API and neon
+  as WebDAV API.
+
+==============================================================================

@@ -126,7 +126,7 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
     return 0;
 }
 
-static int remove_mount(const char *mnt, int quiet)
+static int remove_mount(const char *mnt, int quiet, int lazy)
 {
     int res;
     const char *mtab = _PATH_MOUNTED;
@@ -186,7 +186,7 @@ static int remove_mount(const char *mnt, int quiet)
     endmntent(newfp);
     
     if(found) {
-        res = umount2(mnt, 2);  /* Lazy umount */
+        res = umount2(mnt, lazy ? 2 : 0);
         if(res == -1) {
             fprintf(stderr, "%s: failed to unmount %s: %s\n", progname, mnt,
                     strerror(errno));
@@ -398,7 +398,7 @@ static int mount_fuse(const char *mnt, int flags, const char *fsname)
         res = add_mount(fsname, mnt, type);
         unlock_mtab(mtablock);
         if(res == -1) {
-            umount(mnt);
+            umount2(mnt, 2); /* lazy umount */
             return -1;
         }
     }
@@ -481,7 +481,8 @@ static void usage()
             " -x       allow other users to access the files (only for root)\n"
             " -n name  add 'name' as the filesystem name to mtab\n"
             " -l       issue large reads\n"
-            " -q       quiet: don't complain if unmount fails\n",
+            " -q       quiet: don't complain if unmount fails\n"
+            " -z       lazy unmount\n",
             progname);
     exit(1);
 }
@@ -494,6 +495,7 @@ int main(int argc, char *argv[])
     char *origmnt;
     char *mnt;
     int unmount = 0;
+    int lazy = 0;
     char *commfd;
     const char *fsname = NULL;
     int flags = 0;
@@ -517,6 +519,10 @@ int main(int argc, char *argv[])
 
         case 'u':
             unmount = 1;
+            break;
+
+        case 'z':
+            lazy = 1;
             break;
             
         case 'p':
@@ -576,10 +582,10 @@ int main(int argc, char *argv[])
     if(unmount) {
         if(geteuid() == 0) {
             int mtablock = lock_mtab();
-            res = remove_mount(mnt, quiet);
+            res = remove_mount(mnt, quiet, lazy);
             unlock_mtab(mtablock);
         } else {
-            res = umount2(mnt, 2);
+            res = umount2(mnt, lazy ? 2 : 0);
             if(res == -1) {
                 fprintf(stderr, "%s: failed to unmount %s: %s\n", progname, mnt,
                         strerror(errno));
