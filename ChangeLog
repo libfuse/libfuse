@@ -1,6 +1,8 @@
 2004-06-23  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix locking bugs
+
+	* Don't send reply to RELEASE
 	
 2004-06-22  Miklos Szeredi <mszeredi@inf.bme.hu>
 

@@ -865,17 +865,14 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in)
 static void do_release(struct fuse *f, struct fuse_in_header *in,
                        struct fuse_open_in *arg)
 {
-    char *path;
+    if (f->op.release) {
+        char *path;
 
-    if (!f->op.release) {
-        send_reply(f, in, -ENOSYS, NULL, 0);
-        return;
-    }
-
-    path = get_path(f, in->ino);
-    if (path != NULL) {
-        f->op.release(path, arg->flags);
-        free(path);
+        path = get_path(f, in->ino);
+        if (path != NULL) {
+            f->op.release(path, arg->flags);
+            free(path);
+        }
     }
 }
 
