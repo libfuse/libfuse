@@ -5,7 +5,7 @@
 #include <fuse.h>
 
 #undef DEBUGf
-#if 1
+#if 0
 #define DEBUGf(f, a...) fprintf(stderr, "%s:%d (%i): " f,__BASE_FILE__,__LINE__,PL_stack_sp-PL_stack_base ,##a )
 #else
 #define DEBUGf(a...)
