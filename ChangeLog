@@ -1,5 +1,10 @@
 2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Check kernel interface version in fusermount to prevent
+	strangeness in case of mismatch.
+
+2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Released 2.1-pre0
 
 2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
