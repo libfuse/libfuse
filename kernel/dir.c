@@ -700,7 +700,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 		dput(alias);
 		iput(inode);
 		printk("fuse: cannot assign an existing directory\n");
-		return -EPROTO;
+		return ERR_PTR(-EPROTO);
 	}
 
 	d_add(entry, inode);
