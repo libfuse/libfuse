@@ -4,6 +4,8 @@
 
 	* Make requests non-interruptible so race with FORGET is avoided.
 	This is only a temporary solution
+
+	* Support compiling FUSE kernel module on 2.4.x UML kernels
 	
 2004-09-09  Miklos Szeredi <miklos@szeredi.hu>
 

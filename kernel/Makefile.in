@@ -43,7 +43,7 @@ ifeq ($(majver), 2.4)
 CC = @CC@
 LD = @LD@
 CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe 
-CPPFLAGS = -I@kernelsrc@/include -I../include -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES -DFUSE_VERSION=\"@VERSION@\"
+CPPFLAGS = -I@kernelsrc@/include -I../include -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES -DFUSE_VERSION=\"@VERSION@\" @KERNELCPPFLAGS@
 
 fuse_objs = dev.o dir.o file.o inode.o util.o compat/parser.o
 
