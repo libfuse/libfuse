@@ -505,7 +505,9 @@ static int fuse_revalidate(struct dentry *entry)
 
 	if (inode->i_ino == FUSE_ROOT_INO) {
 		if (!(fc->flags & FUSE_ALLOW_OTHER) &&
-		    current->fsuid != fc->uid)
+		    current->fsuid != fc->uid &&
+		    (!(fc->flags & FUSE_ALLOW_ROOT) ||
+		     current->fsuid != 0))
 			return -EACCES;
 	} else if (!fi->i_time || time_before_eq(jiffies, fi->i_time))
 		return 0;
@@ -517,7 +519,8 @@ static int _fuse_permission(struct inode *inode, int mask)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 
-	if (!(fc->flags & FUSE_ALLOW_OTHER) && current->fsuid != fc->uid)
+	if (!(fc->flags & FUSE_ALLOW_OTHER) && current->fsuid != fc->uid &&
+	    (!(fc->flags & FUSE_ALLOW_ROOT) || current->fsuid != 0))
 		return -EACCES;
 	else if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
 		int err = vfs_permission(inode, mask);

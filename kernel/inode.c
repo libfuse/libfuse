@@ -33,7 +33,7 @@ module_param(user_allow_other, int, 0);
 MODULE_PARM(user_allow_other, "i");
 #endif
 
-MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_other\" mount option");
+MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_other\" or \"allow_root\" mount options");
 
 
 #define FUSE_SUPER_MAGIC 0x65735546
@@ -176,6 +176,7 @@ enum { opt_fd,
        opt_uid,
        opt_default_permissions, 
        opt_allow_other,
+       opt_allow_root,
        opt_kernel_cache,
        opt_large_read,
        opt_direct_io,
@@ -188,6 +189,7 @@ static match_table_t tokens = {
 	{opt_uid, "uid=%u"},
 	{opt_default_permissions, "default_permissions"},
 	{opt_allow_other, "allow_other"},
+	{opt_allow_root, "allow_root"},
 	{opt_kernel_cache, "kernel_cache"},
 	{opt_large_read, "large_read"},
 	{opt_direct_io, "direct_io"},
@@ -237,6 +239,10 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_ALLOW_OTHER;
 			break;
 
+		case opt_allow_root:
+			d->flags |= FUSE_ALLOW_ROOT;
+			break;
+
 		case opt_kernel_cache:
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
@@ -284,6 +290,8 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 		seq_puts(m, ",default_permissions");
 	if (fc->flags & FUSE_ALLOW_OTHER)
 		seq_puts(m, ",allow_other");
+	if (fc->flags & FUSE_ALLOW_ROOT)
+		seq_puts(m, ",allow_root");
 	if (fc->flags & FUSE_KERNEL_CACHE)
 		seq_puts(m, ",kernel_cache");
 #ifndef KERNEL_2_6
@@ -375,7 +383,8 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	if (!parse_fuse_opt((char *) data, &d))
 		return -EINVAL;
 
-	if (!user_allow_other && (d.flags & FUSE_ALLOW_OTHER) &&
+	if (!user_allow_other &&
+	    (d.flags & (FUSE_ALLOW_OTHER | FUSE_ALLOW_ROOT)) &&
 	    current->uid != 0)
 		return -EPERM;
 

@@ -73,6 +73,10 @@ permission checking is done in the kernel */
 /** Bypass the page cache for read and write operations  */
 #define FUSE_DIRECT_IO           (1 << 3)
 
+/** Allow root and setuid-root programs to access fuse-mounted
+    filesystems */
+#define FUSE_ALLOW_ROOT		 (1 << 4)
+
 /** FUSE specific inode data */
 struct fuse_inode {
 	struct fuse_req *forget_req;
