@@ -569,4 +569,4 @@ perl_fuse_main(...)
 	fd = fuse_mount(mountpoint,NULL);
 	if(fd < 0)
 		croak("could not mount fuse filesystem!");
-	fuse_loop(fuse_new(fd,debug ? FUSE_DEBUG : 0,&fops));
+	fuse_loop(fuse_new(fd,debug ? "debug" : NULL,&fops));
