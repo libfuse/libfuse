@@ -159,12 +159,11 @@ struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc)
 
 static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 {
-	if (!req->preallocated)
-		fuse_request_free(req);
-
 	spin_lock(&fuse_lock);
 	if (req->preallocated)
 		list_add(&req->list, &fc->unused_list);
+	else
+		fuse_request_free(req);
 
 	if (fc->outstanding_debt)
 		fc->outstanding_debt--;

@@ -1,3 +1,36 @@
+2005-03-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.2.1
+
+2005-03-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix nasty bug which could cause an Oops under certain
+	situations.  Found by Magnus Johansson
+
+2005-02-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: llseek() method for files and directories made explicit
+
+	* kernel: fixed inode leak in NFS export in case of nodeid
+	wrapping
+
+2005-02-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: clean up some unitialized memory found with valgrind
+
+	* Add -lpthread to Libs in fuse.pc.  Valgrind seems to need an
+	explicitly linked libpthread for applications
+
+2005-02-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: set umask, otherwise /etc/mtab will have
+	unpredictable permission.  Spotted by Jindrich Kolorenc
+
+	* fusermount: set owner and group of /etc/mtab to original values
+	on unmount
+
+	* libfuse: add 'use_ino' option to help.  Patch by Valient Gough
+	
 2005-02-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.2

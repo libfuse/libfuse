@@ -641,6 +641,7 @@ static int fuse_set_page_dirty(struct page *page)
 #endif
 
 static struct file_operations fuse_file_operations = {
+	.llseek		= generic_file_llseek,
 	.read		= fuse_file_read,
 	.write		= fuse_file_write,
 	.mmap		= fuse_file_mmap,

@@ -25,7 +25,10 @@ make
 make install
 modprobe fuse
 
-Also see the file 'INSTALL'
+You may also need to add '/usr/local/lib' to '/etc/ld.so.conf' and/or
+run ldconfig.
+
+For more details see the file 'INSTALL'
 
 How To Use
 ==========

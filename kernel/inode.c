@@ -530,8 +530,12 @@ static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 		return ERR_PTR(-ESTALE);
 
 	inode = ilookup5(sb, nodeid, fuse_inode_eq, &nodeid);
-	if (!inode || inode->i_generation != generation)
+	if (!inode)
 		return ERR_PTR(-ESTALE);
+	if (inode->i_generation != generation) {
+		iput(inode);
+		return ERR_PTR(-ESTALE);
+	}
 
 	entry = d_alloc_anon(inode);
 	if (!entry) {

@@ -1076,6 +1076,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     struct fuse_open_out outarg;
     struct fuse_file_info fi;
 
+    memset(&outarg, 0, sizeof(outarg));
     memset(&fi, 0, sizeof(fi));
     fi.flags = arg->flags;
     res = -ENOENT;
@@ -1552,9 +1553,11 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
 
     (void) arg;
 
+    memset(&outarg, 0, sizeof(outarg));
     res = -ENOMEM;
     dh = (struct fuse_dirhandle *) malloc(sizeof(struct fuse_dirhandle));
     if (dh != NULL) {
+        memset(dh, 0, sizeof(struct fuse_dirhandle));
         dh->fuse = f;
         dh->fp = tmpfile();
         dh->filled = 0;
