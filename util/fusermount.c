@@ -71,7 +71,7 @@ static int lock_mtab()
     if(mtablock >= 0) {
         res = lockf(mtablock, F_LOCK, 0);
         if(res < 0)
-            perror("error getting lock: %s");
+            perror("error getting lock");
     } else
         fprintf(stderr, "unable to open fuse lock file, continuing anyway\n");
 
