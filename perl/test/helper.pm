@@ -17,7 +17,7 @@ if($0 !~ qr|s/u?mount\.t$|) {
 			}
 		}
 	}
-	$reject = 0 if (system("ls $_point >&/dev/null") >> 8);
+	$reject = 1 if (system("ls $_point >&/dev/null") >> 8);
 	die "not properly mounted\n" if $reject;
 }
 1;

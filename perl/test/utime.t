@@ -8,6 +8,6 @@ system("echo frog >file");
 chdir($_point);
 ok(utime(1,2,"file"),"set utime");
 @stat = stat("file");
-is($stat[9],1,"atime");
-is($stat[10],2,"atime");
+is($stat[8],1,"atime");
+is($stat[9],2,"mtime");
 unlink("file");
