@@ -308,3 +308,18 @@ Description:
   other removable storage.
 
 ==============================================================================
+Name: Offline Media Content Database (MediaDatabase)
+
+Author: Mediadatabase Team
+
+Homepage: http://mediadatabase.sourceforge.net/
+
+Description:
+
+  MediaDatabase is database to store filesystem metadata (directory
+  structure) and/or audio tracks descriptions of offline media and
+  frontends to database (WWW, GUI and CUI). It was developed to fight
+  chaos of large compact disk collection but it can help track other
+  removable media such as floppy disks and data DVDs.
+
+==============================================================================
