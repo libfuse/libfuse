@@ -6,4 +6,4 @@ fusexmp_SOURCES = fusexmp.c
 null_SOURCES = null.c
 hello_SOURCES = hello.c
 
-LDADD = ../lib/libfuse.la
+LDADD = ../lib/libfuse.la -lpthread

@@ -178,6 +178,19 @@ void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
 		fuse_putback_request(fc, req);
 }
 
+void fuse_release_background(struct fuse_req *req)
+{
+	if (req->inode)
+		iput(req->inode);
+	if (req->inode2)
+		iput(req->inode2);
+	if (req->file)
+		fput(req->file);
+	spin_lock(&fuse_lock);
+	list_del(&req->bg_entry);
+	spin_unlock(&fuse_lock);
+}
+
 /* Called with fuse_lock, unlocks it */
 static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 {
@@ -186,12 +199,10 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	putback = atomic_dec_and_test(&req->count);
 	spin_unlock(&fuse_lock);
 	if (req->background) {
-		if (req->inode)
-			iput(req->inode);
-		if (req->inode2)
-			iput(req->inode2);
-		if (req->file)
-			fput(req->file);
+		down_read(&fc->sbput_sem);
+		if (fc->sb)
+			fuse_release_background(req);
+		up_read(&fc->sbput_sem);
 	}
 	wake_up(&req->waitq);
 	if (req->in.h.opcode == FUSE_INIT) {
@@ -207,11 +218,12 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 		fuse_putback_request(fc, req);
 }
 
-static void background_request(struct fuse_req *req)
+static void background_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	/* Need to get hold of the inode(s) and/or file used in the
 	   request, so FORGET and RELEASE are not sent too early */
 	req->background = 1;
+	list_add(&req->bg_entry, &fc->background);
 	if (req->inode)
 		req->inode = igrab(req->inode);
 	if (req->inode2)
@@ -231,7 +243,8 @@ static int request_wait_answer_nonint(struct fuse_req *req)
 }
 
 /* Called with fuse_lock held.  Releases, and then reacquires it. */
-static void request_wait_answer(struct fuse_req *req, int interruptible)
+static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req,
+				int interruptible)
 {
 	int intr;
 
@@ -271,7 +284,7 @@ static void request_wait_answer(struct fuse_req *req, int interruptible)
 		list_del(&req->list);
 		__fuse_put_request(req);
 	} else if (!req->finished && req->sent)
-		background_request(req);
+		background_request(fc, req);
 }
 
 static unsigned len_args(unsigned numargs, struct fuse_arg *args)
@@ -315,7 +328,7 @@ static void request_send_wait(struct fuse_conn *fc, struct fuse_req *req,
 		   after request_end() */
 		__fuse_get_request(req);
 
-		request_wait_answer(req, interruptible);
+		request_wait_answer(fc, req, interruptible);
 	}
 	spin_unlock(&fuse_lock);
 }
@@ -351,7 +364,9 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 void request_send_background(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->isreply = 1;
-	background_request(req);
+	spin_lock(&fuse_lock);
+	background_request(fc, req);
+	spin_unlock(&fuse_lock);
 	request_send_nowait(fc, req);
 }
 

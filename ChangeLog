@@ -1,3 +1,19 @@
+2005-03-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: add locking to background list (fixes previous fix)
+
+2005-03-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix bug which could cause leave busy inodes after
+	unmount, and Oops.
+
+2005-03-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* examples: add -lpthread to link flags to work around valgrind
+	quirk
+
+	* lib: don't exit threads, so cancelation doesn't cause segfault
+
 2005-03-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: fix nasty bug which could cause an Oops under certain
