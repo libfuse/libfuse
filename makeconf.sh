@@ -1,11 +1,11 @@
 #! /bin/sh
 
 echo Running libtoolize...
-libtoolize --automake -c
+libtoolize --automake -c -f
 
 if test ! -z "`which autoreconf`"; then
     echo Running autoreconf...
-    autoreconf -i
+    autoreconf -i -f
 else
     echo Running aclocal...
     aclocal
