@@ -12,7 +12,7 @@ AC_SUBST(LD)
 
 # compatibility for automake < 1.8 
 if test -z "$mkdir_p"; then
-	mkdir_p="$(SHELL) ../mkinstalldirs"
+	mkdir_p="../mkinstalldirs"
 	AC_SUBST(mkdir_p)	
 fi
 
