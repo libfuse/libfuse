@@ -27,6 +27,10 @@
 #include <sys/statfs.h>
 #include <utime.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ----------------------------------------------------------- *
  * Basic FUSE API                                              *
  * ----------------------------------------------------------- */
@@ -137,11 +141,8 @@ struct fuse_context {
     uid_t uid;
     gid_t gid;
     pid_t pid;
+    void *private_data;
 };
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /*
  * Main function of FUSE.
@@ -270,7 +271,6 @@ int fuse_invalidate(struct fuse *f, const char *path);
  * @return 1 if it is a library option, 0 otherwise
  */
 int fuse_is_lib_option(const char *opt);
-
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *

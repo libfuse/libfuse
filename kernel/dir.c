@@ -72,12 +72,17 @@ static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 		inode->i_op = &fuse_symlink_inode_operations;
 	}
 	else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) || 
-		 S_ISFIFO(inode->i_mode) || S_ISSOCK(inode->i_mode)){
+		 S_ISFIFO(inode->i_mode) || S_ISSOCK(inode->i_mode)) {
 		inode->i_op = &fuse_file_inode_operations;
 		init_special_inode(inode, inode->i_mode,
 				   new_decode_dev(attr->rdev));
-	} else
+	} else {
+		/* Don't let user create weird files */
 		printk("fuse_init_inode: bad file type: %o\n", inode->i_mode);
+		inode->i_mode = S_IFREG;
+		inode->i_op = &fuse_file_inode_operations;
+		fuse_init_file_inode(inode);
+	}
 }
 
 struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
@@ -220,7 +225,7 @@ static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 	if ((inode->i_mode ^ mode) & S_IFMT) {
 		iput(inode);
 		printk("fuse_mknod: inode has wrong type\n");
-		return -EINVAL;
+		return -EPROTO;
 	}
 
 	entry->d_time = time_to_jiffies(outarg->entry_valid,
@@ -537,7 +542,7 @@ static int _fuse_permission(struct inode *inode, int mask)
 
 		/* FIXME: Need some mechanism to revoke permissions:
 		   currently if the filesystem suddenly changes the
-		   file mode, we will not be informed abot that, and
+		   file mode, we will not be informed about it, and
 		   continue to allow access to the file/directory.
 		   
 		   This is actually not so grave, since the user can
@@ -780,7 +785,6 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 			send_sig(SIGXFSZ, current, 0);
 			return -EFBIG;
 		}
-		//fuse_sync_inode(inode);
 	}
 
 	req = fuse_get_request(fc);

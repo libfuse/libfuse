@@ -199,3 +199,15 @@ Description:
   filesystem, and libgmail to communicate with Gmail.
 
 ==============================================================================
+Name: DataDraw
+
+Author: Bill Cox <bill (at) viasic (dot) com>
+
+Homepage: http://www.viasic.com/opensource/
+
+Description:
+
+  This is an EDA specific data structure diagramming and code
+  generation tool.
+
+==============================================================================
