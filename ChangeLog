@@ -2,6 +2,9 @@
 
 	* Clean up option parsing in fuse_main()
 
+	* Added fuse_get() function which returns the fuse object created
+	by fuse_main()
+
 2004-02-20  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* removed old way of mounting (fusermount mountpoint program)

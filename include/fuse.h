@@ -150,6 +150,15 @@ extern "C" {
  */
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op);
 
+/*
+ * Returns the fuse object created by fuse_main()
+ * 
+ * This is useful when fuse_get_context() is used.
+ *
+ * @return the fuse object
+ */
+struct fuse *fuse_get(void);
+
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
  * ----------------------------------------------------------- */
