@@ -1,3 +1,8 @@
+2002-10-25  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Use Mark Glines' fd passing method for default operation instead
+	of old reexec
+
 2002-10-22  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* fix "Stale NFS file handle" bug caused by changes in 2.4.19

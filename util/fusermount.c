@@ -29,6 +29,8 @@
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <sys/fsuid.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <linux/fuse.h>
 
 #define CHECK_PERMISSION 1
@@ -42,6 +44,7 @@
 #define FUSE_MOUNTED_ENV        "_FUSE_MOUNTED"
 #define FUSE_UMOUNT_CMD_ENV     "_FUSE_UNMOUNT_CMD"
 #define FUSE_KERNEL_VERSION_ENV "_FUSE_KERNEL_VERSION"
+#define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
 const char *progname;
 
@@ -395,6 +398,42 @@ static char *resolve_path(const char *orig, int unmount)
     return strdup(buf);
 }
 
+static int send_fd(int sock_fd, int fd) 
+{
+    int retval;
+    struct msghdr msg;
+    struct cmsghdr *p_cmsg;
+    struct iovec vec;
+    char cmsgbuf[CMSG_SPACE(sizeof(fd))];
+    int *p_fds;
+    char sendchar = 0;
+
+    msg.msg_control = cmsgbuf;
+    msg.msg_controllen = sizeof(cmsgbuf);
+    p_cmsg = CMSG_FIRSTHDR(&msg);
+    p_cmsg->cmsg_level = SOL_SOCKET;
+    p_cmsg->cmsg_type = SCM_RIGHTS;
+    p_cmsg->cmsg_len = CMSG_LEN(sizeof(fd));
+    p_fds = (int *) CMSG_DATA(p_cmsg);
+    *p_fds = fd;
+    msg.msg_controllen = p_cmsg->cmsg_len;
+    msg.msg_name = NULL;
+    msg.msg_namelen = 0;
+    msg.msg_iov = &vec;
+    msg.msg_iovlen = 1;
+    msg.msg_flags = 0;
+    /* "To pass file descriptors or credentials you need to send/read at
+     * least one byte" (man 7 unix) */
+    vec.iov_base = &sendchar;
+    vec.iov_len = sizeof(sendchar);
+    while((retval = sendmsg(sock_fd, &msg, 0)) == -1 && errno == EINTR);
+    if (retval != 1) {
+        perror("sending file descriptor");
+        return -1;
+    }
+    return 0;
+}
+
 static void usage()
 {
     fprintf(stderr,
@@ -420,6 +459,7 @@ int main(int argc, char *argv[])
     int numargs;
     char mypath[PATH_MAX];
     char *unmount_cmd;
+    char *commfd;
     char verstr[128];
     int flags = 0;
 
@@ -482,7 +522,9 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if(a == argc) {
+    commfd = getenv(FUSE_COMMFD_ENV);
+
+    if(a == argc && commfd == NULL) {
         fprintf(stderr, "%s: Missing program argument\n", progname);
         exit(1);
     }
@@ -493,6 +535,14 @@ int main(int argc, char *argv[])
     fd = mount_fuse(mnt, flags);
     if(fd == -1)
         exit(1);
+
+    if(commfd != NULL) {
+        int cfd = atoi(commfd);
+        res = send_fd(cfd, fd);
+        if(res == -1)
+            exit(1);
+        exit(0);
+    }
 
     /* Dup the file descriptor to stdin */
     if(fd != 0) {

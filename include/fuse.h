@@ -116,10 +116,11 @@ extern "C" {
  * fuse_new()
  *
  * @param mountpoint the mount point path
- * @param mount arguments (passed to the fusermount program)
+ * @param args array of arguments to be passed to fusermount (NULL
+ *        terminated).  Can be NULL if no arguments are needed.
  * @return the control file descriptor on success, -1 on failure
  */
-int fuse_mount(const char *mountpoint, const char *mount_args);
+int fuse_mount(const char *mountpoint, const char *args[]);
 
 /**
  * Create a new FUSE filesystem.

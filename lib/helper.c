@@ -20,8 +20,11 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 
-#define FUSE_MOUNTED_ENV     "_FUSE_MOUNTED"
-#define FUSE_UMOUNT_CMD_ENV  "_FUSE_UNMOUNT_CMD"
+#define FUSE_MOUNTED_ENV        "_FUSE_MOUNTED"
+#define FUSE_UMOUNT_CMD_ENV     "_FUSE_UNMOUNT_CMD"
+#define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
+
+#define FUSERMOUNT_PROG         "fusermount"
 
 static void usage(char *progname)
 {
@@ -35,51 +38,22 @@ static void usage(char *progname)
     exit(1);
 }
 
+static char umount_cmd[1024];
+static int fuse_fd;
+
 static void fuse_unmount()
 {
-    close(0);
-    system(getenv(FUSE_UMOUNT_CMD_ENV));
-}
-
-static int fuse_mount_obsolete(int *argcp, char **argv)
-{
-    char *isreexec = getenv(FUSE_MOUNTED_ENV);
-
-    if(isreexec == NULL) {
-        int i;
-        int argc = *argcp;
-        char *mountprog = "fusermount";
-        char **newargv = (char **) malloc((1 + argc + 1) * sizeof(char *));
-
-        if(argc < 2 || argv[1][0] == '-')
-            usage(argv[0]);
-        
-        /* oldargs: "PROG MOUNTPOINT ARGS..."
-           newargs: "fusermount MOUNTPOINT PROG ARGS..." */
-
-        newargv[0] = mountprog;
-        newargv[1] = argv[1];
-        newargv[2] = argv[0];
-        for(i = 2; i < argc; i++)
-            newargv[i+1] = argv[i];
-        newargv[i+1] = NULL;
-
-        execvp(mountprog, newargv);
-        fprintf(stderr, "fuse: failed to exec %s: %s\n", mountprog,
-                strerror(errno));
-        return -1;
-    }
-    unsetenv(FUSE_MOUNTED_ENV);
-    
-    /* The actual file descriptor is stdin */
-    return 0;
+    close(fuse_fd);
+    if(umount_cmd[0] != '\0')
+        system(umount_cmd);
 }
 
 /* return value:
  * >= 0  => fd
  * -1    => error
  */
-int receive_fd(int fd) {
+static int receive_fd(int fd)
+{
     struct msghdr msg;
     struct iovec iov;
     char buf[1];
@@ -120,46 +94,63 @@ int receive_fd(int fd) {
     return *(int*)CMSG_DATA(cmsg);
 }
 
-int fuse_mount(const char *mountpoint, const char *mount_args)
+int fuse_mount(const char *mountpoint, const char *args[])
 {
+    const char *mountprog = FUSERMOUNT_PROG;
     int fds[2], pid;
-    int rv, fd;
-    char env[10];
-    
-    /* FIXME: parse mount_args (or just pass it to fusermount ???) */
-    mount_args = mount_args;
+    int res;
+    int rv;
 
-    /* make sure the socket fds are greater than 0 */
-    fd = open("/dev/null",O_RDONLY); 
-    rv = socketpair(PF_UNIX,SOCK_STREAM,0,fds);
-    close(fd);
-    if(rv) {
-        fprintf(stderr,"fuse: failed to socketpair()\n");
-        close(fd);
+    snprintf(umount_cmd, sizeof(umount_cmd) - 1, "%s -u %s", mountprog,
+             mountpoint);
+    
+    res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
+    if(res == -1) {
+        perror("fuse: socketpair() failed");
         return -1;
     }
+
     pid = fork();
-    if(pid < 0) {
-        fprintf(stderr,"fuse: failed to fork()\n");
+    if(pid == -1) {
+        perror("fuse: fork() failed");
         close(fds[0]);
         close(fds[1]);
         return -1;
     }
+
     if(pid == 0) {
+        char env[10];
+        char **newargv;
+        int numargs = 0;
+        int actr;
+        int i;
+
+        if(args != NULL) 
+            while(args[numargs] != NULL)
+                numargs ++;
+
+        newargv = (char **) malloc((1 + numargs + 2) * sizeof(char *));
+        actr = 0;
+        newargv[actr++] = strdup(mountprog);
+        for(i = 0; i < numargs; i++)
+            newargv[actr++] = strdup(args[i]);
+        newargv[actr++] = strdup(mountpoint);
+        newargv[actr++] = NULL;
+
         close(fds[1]);
-        fcntl(fds[0],F_SETFD,0);
-        snprintf(env,sizeof(env),"%i",fds[0]);
-        setenv("_FUSE_IOSLAVE_FD",env,1);
-        execlp("fusermount","fusermount",mountpoint,"fuse_ioslave",NULL);
-        fprintf(stderr,"fuse: failed to exec fusermount\n");
+        fcntl(fds[0], F_SETFD, 0);
+        snprintf(env, sizeof(env), "%i", fds[0]);
+        setenv(FUSE_COMMFD_ENV, env, 1);
+        execvp(mountprog, newargv);
+        perror("fuse: failed to exec fusermount");
         exit(1);
     }
 
-    fd = fds[1];
     close(fds[0]);
-    rv = receive_fd(fd);
-    close(fd);
-    waitpid(pid,NULL,0); /* bury zombie */
+    rv = receive_fd(fds[1]);
+    close(fds[1]);
+    waitpid(pid, NULL, 0); /* bury zombie */
+
     return rv;
 }
 
@@ -194,20 +185,41 @@ static void set_signal_handlers()
 
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
 {
-    int fd;
-    int argctr;
+    int argctr = 1;
     int flags;
     int multithreaded;
     struct fuse *fuse;
+    char *isreexec = getenv(FUSE_MOUNTED_ENV);
 
-    fd = fuse_mount_obsolete(&argc, argv);
-    if(fd == -1)
-        exit(1);
+    if(isreexec == NULL) {
+        if(argc < 2 || argv[1][0] == '-')
+            usage(argv[0]);
+
+        fuse_fd = fuse_mount(argv[1], NULL);
+        if(fuse_fd == -1)
+            exit(1);
+
+        argctr++;
+    }
+    else {
+        char *tmpstr;
+
+        /* Old (obsolescent) way of doing the mount: 
+           
+             fusermount [options] mountpoint [program [args ...]]
+
+           fusermount execs this program and passes the control file
+           descriptor dup()-ed to stdin */
+        fuse_fd = 0;
+        
+        tmpstr = getenv(FUSE_UMOUNT_CMD_ENV);
+        if(tmpstr != NULL)
+            strncpy(umount_cmd, tmpstr, sizeof(umount_cmd) - 1);
+    }
 
     atexit(fuse_unmount);
     set_signal_handlers();
 
-    argctr = 1;
     flags = 0;
     multithreaded = 1;
     for(; argctr < argc && argv[argctr][0] == '-'; argctr ++) {
@@ -234,7 +246,7 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
         exit(1);
     }
 
-    fuse = fuse_new(fd, flags, op);
+    fuse = fuse_new(fuse_fd, flags, op);
 
     if(multithreaded)
         fuse_loop_mt(fuse);
