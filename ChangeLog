@@ -1,3 +1,8 @@
+2003-10-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Mtab handling fix in fusermount by "Valient Gough" (SF patch
+	#766443)
+	
 2003-10-13  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Error code fixes in kernel module

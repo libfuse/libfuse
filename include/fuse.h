@@ -38,8 +38,14 @@ struct fuse_statfs {
 /** Handle for a getdir() operation */
 typedef struct fuse_dirhandle *fuse_dirh_t;
 
-/** Function to add an entry in a getdir() operation */
-typedef int (*fuse_dirfil_t) (fuse_dirh_t, const char *, int type);
+/** Function to add an entry in a getdir() operation
+ * 
+ * @param h the handle passed to the getdir() operation
+ * @param name the file name of the directory entry
+ * @param type the file type (0 if unknown)  see <dirent.h>
+ * @return 0 on success, -errno on error
+ */
+typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
 
 /**
  * The file system operations:

@@ -150,16 +150,8 @@ static int remove_mount(const char *mnt)
                     remove = 1;
             }
         }
-        if(remove) {
-            res = umount2(mnt, 2);  /* Lazy umount */
-            if(res == -1) {
-                fprintf(stderr, "%s: failed to unmount %s: %s\n", progname,
-                        mnt, strerror(errno));
-                found = -1;
-                break;
-            }
+        if(remove)
             found = 1;
-        }
         else {
             res = addmntent(newfp, entp);
             if(res != 0) {
@@ -172,6 +164,15 @@ static int remove_mount(const char *mnt)
     
     endmntent(fp);
     endmntent(newfp);
+    
+    if(found) {
+        res = umount2(mnt, 2);  /* Lazy umount */
+        if(res == -1) {
+            fprintf(stderr, "%s: failed to unmount %s: %s\n", progname, mnt,
+                    strerror(errno));
+            found = -1;
+        }
+    }
 
     if(found == 1) {
         res = rename(mtab_new, mtab);
