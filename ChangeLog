@@ -1,3 +1,9 @@
+2004-09-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add -D_REENTRANT to the compile flags
+
+	* Add documentation of fuse internals by Terje Oseberg
+ 
 2004-08-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Change release method to be non-interruptible.  Fixes bug

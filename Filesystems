@@ -185,3 +185,17 @@ Description:
   bayesian classification, are added through plugins.
 
 ==============================================================================
+Name: GmailFS
+
+Author: Richard Jones <richard (at) jones (dot) name>
+
+Homepage: http://richard.jones.name/google-hacks/gmail-filesystem/gmail-filesystem.html
+
+Description:
+
+  GmailFS provides a mountable Linux filesystem which uses your Gmail
+  account as its storage medium. GmailFS is a Python application and
+  uses the FUSE userland filesystem infrastructure to help provide the
+  filesystem, and libgmail to communicate with Gmail.
+
+==============================================================================
