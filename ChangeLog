@@ -1,6 +1,8 @@
 2004-02-06  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fixed writing >= 2G files
+
+	* Check file size on open (with generic_file_open())
 	
 2004-02-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 

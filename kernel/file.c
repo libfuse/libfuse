@@ -25,6 +25,11 @@ static int fuse_open(struct inode *inode, struct file *file)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_open_in inarg;
+	int err;
+
+	err = generic_file_open(inode, file);
+	if(err)
+		return err;
 
 	/* If opening the root node, no lookup has been performed on
 	   it, so the attributes must be refreshed */
