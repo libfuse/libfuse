@@ -345,14 +345,20 @@ static ssize_t fuse_read(struct file *file, char *buf, size_t count,
 	char *tmpbuf;
 	ssize_t res = 0;
 	loff_t pos = *ppos;
+	unsigned int max_read = count < fc->max_read ? count : fc->max_read;
 
-	tmpbuf = kmalloc(count < fc->max_read ? count : fc->max_read,
-			 GFP_KERNEL);
+	do {
+		tmpbuf = kmalloc(max_read, GFP_KERNEL);
+		if (tmpbuf)
+			break;
+		
+		max_read /= 2;
+	} while (max_read > PAGE_CACHE_SIZE / 4);
 	if (!tmpbuf)
 		return -ENOMEM;
 
 	while (count) {
-		size_t nbytes = count < fc->max_read ? count : fc->max_read;
+		size_t nbytes = count < max_read ? count : max_read;
 		ssize_t res1;
 		res1 = fuse_send_read(inode, tmpbuf, pos, nbytes);
 		if (res1 < 0) {

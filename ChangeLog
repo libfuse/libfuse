@@ -1,7 +1,10 @@
 2004-07-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add FUSE_HARD_REMOVE flag, and '-i' option to fuse main, which
-	disable the "hide if open" behavior of unlink/rename. 
+	disable the "hide if open" behavior of unlink/rename.
+
+	* If temporary buffer allocation fails in raw read, fall back to a
+	smaller buffer
  	
 2004-07-12  Miklos Szeredi <miklos@szeredi.hu>
 
