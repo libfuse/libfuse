@@ -13,8 +13,15 @@
 #include <linux/slab.h>
 #include <linux/file.h>
 #include <linux/proc_fs.h>
+#ifdef KERNEL_2_6
+#include <linux/statfs.h>
+#endif
 
 #define FUSE_SUPER_MAGIC 0x65735546
+
+#ifndef KERNEL_2_6
+#define kstatfs statfs
+#endif
 
 static void fuse_read_inode(struct inode *inode)
 {
@@ -58,7 +65,7 @@ static void fuse_clear_inode(struct inode *inode)
 
 static void fuse_put_super(struct super_block *sb)
 {
-	struct fuse_conn *fc = sb->u.generic_sbp;
+	struct fuse_conn *fc = SB_FC(sb);
 
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
@@ -67,11 +74,11 @@ static void fuse_put_super(struct super_block *sb)
 	/* Flush all readers on this fs */
 	wake_up_all(&fc->waitq);
 	fuse_release_conn(fc);
-	sb->u.generic_sbp = NULL;
+	SB_FC(sb) = NULL;
 	spin_unlock(&fuse_lock);
 }
 
-static void convert_fuse_statfs(struct statfs *stbuf, struct fuse_kstatfs *attr)
+static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
 {
 	stbuf->f_type    = FUSE_SUPER_MAGIC;
 	stbuf->f_bsize   = attr->block_size;
@@ -85,9 +92,9 @@ static void convert_fuse_statfs(struct statfs *stbuf, struct fuse_kstatfs *attr)
 	stbuf->f_namelen = attr->namelen;
 }
 
-static int fuse_statfs(struct super_block *sb, struct statfs *st)
+static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 {
-	struct fuse_conn *fc = sb->u.generic_sbp;
+	struct fuse_conn *fc = SB_FC(sb);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_statfs_out outarg;
@@ -99,7 +106,7 @@ static int fuse_statfs(struct super_block *sb, struct statfs *st)
 	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 	if(!out.h.error)
-		convert_fuse_statfs(st,&outarg.st);
+		convert_fuse_statfs(buf, &outarg.st);
 	
 	return out.h.error;
 }
@@ -155,8 +162,7 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
 	return fuse_iget(sb, 1, &attr, 0);
 }
 
-static struct super_block *fuse_read_super(struct super_block *sb, 
-					   void *data, int silent)
+static int fuse_read_super(struct super_block *sb, void *data, int silent)
 {	
 	struct fuse_conn *fc;
 	struct inode *root;
@@ -170,7 +176,7 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 	root = get_root_inode(sb, d->rootmode);
 	if(root == NULL) {
 		printk("fuse_read_super: failed to get root inode\n");
-		return NULL;
+		return -EINVAL;
 	}
 
 	spin_lock(&fuse_lock);
@@ -183,7 +189,7 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 		goto err;
 	}
 
-        sb->u.generic_sbp = fc;
+	SB_FC(sb) = fc;
 	sb->s_root = d_alloc_root(root);
 	if(!sb->s_root)
 		goto err;
@@ -193,16 +199,41 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 	fc->uid = d->uid;
 	spin_unlock(&fuse_lock);
 	
-	return sb;
+	return 0;
 
   err:
 	spin_unlock(&fuse_lock);
 	iput(root);
-	return NULL;
+	return -EINVAL;
 }
 
+#ifdef KERNEL_2_6
+static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
+        int flags, const char *dev_name, void *raw_data)
+{
+        return get_sb_nodev(fs_type, flags, raw_data, fuse_read_super);
+}
 
-static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super, 0);
+static struct file_system_type fuse_fs_type = {
+        .owner          = THIS_MODULE,
+        .name           = "fuse",
+        .get_sb         = fuse_get_sb,
+        .kill_sb        = kill_anon_super,
+        .fs_flags       = 0
+};
+#else
+static struct super_block *fuse_read_super_compat(struct super_block *sb,
+						  void *data, int silent)
+{
+	int err = fuse_read_super(sb, data, silent);
+	if(err)
+		return NULL;
+	else
+		return sb;
+}
+
+static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
+#endif
 
 int fuse_fs_init()
 {

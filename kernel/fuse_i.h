@@ -16,12 +16,25 @@
 #endif
 #include <linux/kernel.h>
 #include <linux/module.h>
-
+#include <linux/version.h>
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
+/** Read combining parameters */
+#define FUSE_BLOCK_SHIFT 16
+#define FUSE_BLOCK_SIZE 65536
+#define FUSE_BLOCK_MASK 0xffff0000
+
 #define FUSE_BLOCK_PAGE_SHIFT (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#error Kernel version 2.5.* not supported
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+#define KERNEL_2_6
+#endif
 
 
 /**
@@ -122,8 +135,12 @@ struct fuse_req {
 	wait_queue_head_t waitq;
 };
 
-
-#define INO_FC(inode) ((struct fuse_conn *) (inode)->i_sb->u.generic_sbp)
+#ifdef KERNEL_2_6
+#define SB_FC(sb) ((struct fuse_conn *) (sb)->s_fs_info)
+#else
+#define SB_FC(sb) ((struct fuse_conn *) (sb)->u.generic_sbp)
+#endif
+#define INO_FC(inode) SB_FC((inode)->i_sb)
 #define DEV_FC(file) ((struct fuse_conn *) (file)->private_data)
 
 
@@ -191,7 +208,7 @@ int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in);
 /**
  * Get the attributes of a file
  */
-int fuse_getattr(struct inode *inode);
+int fuse_do_getattr(struct inode *inode);
 
 /*
  * Local Variables:

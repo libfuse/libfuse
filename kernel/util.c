@@ -8,11 +8,11 @@
 
 #include "fuse_i.h"
 
+#include <linux/init.h>
 #include <linux/slab.h>
 
 MODULE_AUTHOR("Miklos Szeredi <mszeredi@inf.bme.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
-
 #ifdef MODULE_LICENSE
 MODULE_LICENSE("GPL");
 #endif
@@ -27,7 +27,7 @@ void fuse_release_conn(struct fuse_conn *fc)
 	}
 }
 
-int init_module(void)
+int __init fuse_init(void)
 {
 	int res;
 
@@ -49,13 +49,16 @@ int init_module(void)
 	return res;
 }
 
-void cleanup_module(void)
+void __exit fuse_exit(void)
 {
-	printk(KERN_DEBUG "fuse cleanup\n");
+	printk(KERN_DEBUG "fuse exit\n");
 	
 	fuse_fs_cleanup();
 	fuse_dev_cleanup();
 }
+
+module_init(fuse_init);
+module_exit(fuse_exit);
 
 /*
  * Local Variables:

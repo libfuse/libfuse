@@ -1,3 +1,9 @@
+2004-01-06  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Integrated 2.6 kernel support patch by Michael Grigoriev
+
+	* Improvements and cleanups for 2.6 kernels
+
 2004-01-05  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added -d option to fusermount 

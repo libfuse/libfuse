@@ -54,10 +54,10 @@ if test "$enable_kernel_module" != "no"; then
 *** configure the kernel before running this script])
 	fi
 	AC_MSG_RESULT([$kernsrcver])
-
-	KERNINCLUDE=$kernelsrc/include
-	AC_SUBST(KERNINCLUDE)
+	majver=`echo "$kernsrcver" | cut -f-2 -d.`
 	kmoduledir=/lib/modules/$kernsrcver
+	AC_SUBST(kernelsrc)
+	AC_SUBST(majver)
 	AC_SUBST(kmoduledir)
 	subdirs="$subdirs kernel"
 fi

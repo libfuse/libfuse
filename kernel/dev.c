@@ -368,7 +368,12 @@ static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
 	if (!inode)
 		return -ENOENT;
 
+#ifdef KERNEL_2_6
+	invalidate_inode_pages(inode->i_mapping);
+#else
 	invalidate_inode_pages(inode);
+#endif
+
 	iput(inode);
 	return 0;
 }

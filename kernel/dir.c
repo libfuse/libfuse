@@ -25,8 +25,13 @@ static struct dentry_operations fuse_dentry_opertations;
 
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
-	if(S_ISREG(inode->i_mode) && inode->i_size != attr->size)
+	if(S_ISREG(inode->i_mode) && inode->i_size != attr->size) {
+#ifdef KERNEL_2_6
+		invalidate_inode_pages(inode->i_mapping);
+#else
 		invalidate_inode_pages(inode);
+#endif
+	}
 
 	inode->i_mode    = (inode->i_mode & S_IFMT) + (attr->mode & 07777);
 	inode->i_nlink   = attr->nlink;
@@ -35,9 +40,18 @@ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 	inode->i_size    = attr->size;
 	inode->i_blksize = PAGE_CACHE_SIZE;
 	inode->i_blocks  = attr->blocks;
+#ifdef KERNEL_2_6
+	inode->i_atime.tv_sec   = attr->atime;
+	inode->i_atime.tv_nsec  = 0;
+	inode->i_mtime.tv_sec   = attr->mtime;
+	inode->i_mtime.tv_nsec  = 0;
+	inode->i_ctime.tv_sec   = attr->ctime;
+	inode->i_ctime.tv_nsec  = 0;
+#else
 	inode->i_atime   = attr->atime;
 	inode->i_mtime   = attr->mtime;
 	inode->i_ctime   = attr->ctime;
+#endif
 }
 
 static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
@@ -114,7 +128,7 @@ static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 	return out.h.error;
 }
 
-static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
+static struct dentry *_fuse_lookup(struct inode *dir, struct dentry *entry)
 {
 	int ret;
 	struct fuse_lookup_out outarg;
@@ -150,8 +164,8 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 
 /* create needs to return a positive entry, so this is actually an
    mknod+lookup */
-static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
-		      int rdev)
+static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
+		      dev_t rdev)
 {
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
@@ -199,10 +213,9 @@ static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	return 0;
 }
 
-
-static int fuse_create(struct inode *dir, struct dentry *entry, int mode)
+static int _fuse_create(struct inode *dir, struct dentry *entry, int mode)
 {
-	return fuse_mknod(dir, entry, mode, 0);
+	return _fuse_mknod(dir, entry, mode, 0);
 }
 
 static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
@@ -323,7 +336,7 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 }
 
 
-int fuse_getattr(struct inode *inode)
+int fuse_do_getattr(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
@@ -349,17 +362,16 @@ static int fuse_revalidate(struct dentry *entry)
 	struct fuse_conn *fc = INO_FC(inode);
 
 	if(inode->i_ino == FUSE_ROOT_INO) {
-		if(!(fc->flags & FUSE_ALLOW_OTHER)
-		   && current->fsuid != fc->uid)
+		if(!(fc->flags & FUSE_ALLOW_OTHER) &&
+		   current->fsuid != fc->uid)
 			return -EACCES;
-	}
-	else if(time_before_eq(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
+	} else if(time_before_eq(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
 		return 0;
 
-	return fuse_getattr(inode);
+	return fuse_do_getattr(inode);
 }
 
-static int fuse_permission(struct inode *inode, int mask)
+static int _fuse_permission(struct inode *inode, int mask)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 
@@ -373,7 +385,7 @@ static int fuse_permission(struct inode *inode, int mask)
 		   node will at first have no permissions */
 
 		if(err == -EACCES) {
-		 	err = fuse_getattr(inode);
+		 	err = fuse_do_getattr(inode);
 			if(!err)
 			 	err = vfs_permission(inode, mask);
 		}
@@ -392,7 +404,6 @@ static int fuse_permission(struct inode *inode, int mask)
 	else
 		return 0;
 }
-
 
 static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 			 void *dstbuf, filldir_t filldir)
@@ -563,8 +574,13 @@ static unsigned int iattr_to_fattr(struct iattr *iattr,
 	/* You can only _set_ these together (they may change by themselves) */
 	if((ivalid & (ATTR_ATIME | ATTR_MTIME)) == (ATTR_ATIME | ATTR_MTIME)) {
 		fvalid |= FATTR_UTIME;
+#ifdef KERNEL_2_6
+		fattr->atime = iattr->ia_atime.tv_sec;
+		fattr->mtime = iattr->ia_mtime.tv_sec;
+#else
 		fattr->atime = iattr->ia_atime;
 		fattr->mtime = iattr->ia_mtime;
+#endif
 	}
 
 	return fvalid;
@@ -602,7 +618,7 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	return out.h.error;
 }
 
-static int fuse_dentry_revalidate(struct dentry *entry, int flags)
+static int _fuse_dentry_revalidate(struct dentry *entry)
 {
 	if(!entry->d_inode)
 		return 0;
@@ -627,6 +643,62 @@ static int fuse_dentry_revalidate(struct dentry *entry, int flags)
 	return 1;
 }
 
+#ifdef KERNEL_2_6
+
+#define fuse_mknod _fuse_mknod
+
+static int fuse_getattr(struct vfsmount *mnt, struct dentry *entry,
+			struct kstat *stat)
+{
+	struct inode *inode = entry->d_inode;
+	int err = fuse_revalidate(entry);
+	if(!err)
+		generic_fillattr(inode, stat);
+	
+	return err;
+}
+
+static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
+				   struct nameidata *nd)
+{
+	return _fuse_lookup(dir, entry);
+}
+
+static int fuse_create(struct inode *dir, struct dentry *entry, int mode,
+		       struct nameidata *nd)
+{
+	return _fuse_create(dir, entry, mode);
+}
+
+static int fuse_permission(struct inode *inode, int mask,
+			    struct nameidata *nd)
+{
+	return _fuse_permission(inode, mask);
+}
+
+static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
+{
+	return _fuse_dentry_revalidate(entry);
+}
+#else /* KERNEL_2_6 */
+
+#define fuse_lookup _fuse_lookup
+#define fuse_create _fuse_create
+#define fuse_permission _fuse_permission
+
+static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
+		      int rdev)
+{
+	return fuse_mknod(dir, entry, mode, rdev);
+}
+
+static int fuse_dentry_revalidate(struct dentry *entry, int flags)
+{
+	return _fuse_dentry_revalidate(entry);
+}
+#endif /* KERNEL_2_6 */
+
+
 static struct inode_operations fuse_dir_inode_operations =
 {
 	lookup:		fuse_lookup,
@@ -640,7 +712,11 @@ static struct inode_operations fuse_dir_inode_operations =
 	link:           fuse_link,
 	setattr:	fuse_setattr,
 	permission:	fuse_permission,
+#ifdef KERNEL_2_6
+	getattr:	fuse_getattr,
+#else
 	revalidate:	fuse_revalidate,
+#endif
 };
 
 static struct file_operations fuse_dir_operations = {
@@ -653,7 +729,11 @@ static struct file_operations fuse_dir_operations = {
 static struct inode_operations fuse_file_inode_operations = {
 	setattr:	fuse_setattr,
 	permission:	fuse_permission,
+#ifdef KERNEL_2_6
+	getattr:	fuse_getattr,
+#else
 	revalidate:	fuse_revalidate,
+#endif
 };
 
 static struct inode_operations fuse_symlink_inode_operations =
@@ -661,7 +741,11 @@ static struct inode_operations fuse_symlink_inode_operations =
 	setattr:	fuse_setattr,
 	readlink:	fuse_readlink,
 	follow_link:	fuse_follow_link,
+#ifdef KERNEL_2_6
+	getattr:	fuse_getattr,
+#else
 	revalidate:	fuse_revalidate,
+#endif
 };
 
 static struct dentry_operations fuse_dentry_opertations = {

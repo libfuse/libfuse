@@ -9,6 +9,13 @@
 
 #include <linux/pagemap.h>
 #include <linux/slab.h>
+#ifdef KERNEL_2_6
+#include <linux/backing-dev.h>
+#endif
+
+#ifndef KERNEL_2_6
+#define PageUptodate(page) Page_Uptodate(page) 
+#endif
 
 static int fuse_open(struct inode *inode, struct file *file)
 {
@@ -20,7 +27,7 @@ static int fuse_open(struct inode *inode, struct file *file)
 	/* If opening the root node, no lookup has been performed on
 	   it, so the attributes must be refreshed */
 	if(inode->i_ino == FUSE_ROOT_INO) {
-		int err = fuse_getattr(inode);
+		int err = fuse_do_getattr(inode);
 		if(err)
 		 	return err;
 	}
@@ -34,8 +41,13 @@ static int fuse_open(struct inode *inode, struct file *file)
 	in.args[0].size = sizeof(inarg);
 	in.args[0].value = &inarg;
 	request_send(fc, &in, &out);
-	if(!out.h.error && !(fc->flags & FUSE_KERNEL_CACHE))
+	if(!out.h.error && !(fc->flags & FUSE_KERNEL_CACHE)) {
+#ifdef KERNEL_2_6
+		invalidate_inode_pages(inode->i_mapping);
+#else
 		invalidate_inode_pages(inode);
+#endif
+	}
 
 	return out.h.error;
 }
@@ -126,7 +138,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 	}
 
 	kunmap(page);
-	UnlockPage(page);
+	unlock_page(page);
 
 	return out.h.error;
 }
@@ -147,7 +159,7 @@ static int fuse_is_block_uptodate(struct address_space *mapping,
 		if (!page)
 			return 0;
 
-		if (!Page_Uptodate(page)) {
+		if (!PageUptodate(page)) {
 			page_cache_release(page);
 			return 0;
 		}
@@ -182,7 +194,7 @@ static int fuse_cache_block(struct address_space *mapping,
 		if (!page)
 			return -1;
 
-		if (!Page_Uptodate(page)) {
+		if (!PageUptodate(page)) {
 			buffer = kmap(page);
 			memcpy(buffer, bl_buf + i * PAGE_CACHE_SIZE,
 					PAGE_CACHE_SIZE);
@@ -190,7 +202,7 @@ static int fuse_cache_block(struct address_space *mapping,
 			kunmap(page);
 		}
 
-		UnlockPage(page);
+		unlock_page(page);
 		page_cache_release(page);
 	}
 
@@ -296,8 +308,11 @@ static int write_buffer(struct inode *inode, struct page *page,
 	return out.h.error;
 }
 
-
+#ifdef KERNEL_2_6
+static int fuse_writepage(struct page *page, struct writeback_control *wbc)
+#else
 static int fuse_writepage(struct page *page)
+#endif
 {
 	struct inode *inode = page->mapping->host;
 	unsigned count;
@@ -316,7 +331,7 @@ static int fuse_writepage(struct page *page)
 	}
 	err = write_buffer(inode, page, 0, count);
   out:
-	UnlockPage(page);
+	unlock_page(page);
 	return 0;
 }
 
@@ -363,6 +378,9 @@ void fuse_init_file_inode(struct inode *inode)
 {
 	inode->i_fop = &fuse_file_operations;
 	inode->i_data.a_ops = &fuse_file_aops;
+#ifdef KERNEL_2_6
+	inode->i_mapping->backing_dev_info->ra_pages = 0;
+#endif
 }
 
 /* 
