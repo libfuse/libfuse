@@ -1,3 +1,18 @@
+2004-11-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* More cleanups in the kernel
+
+	* The 10,229 charater device number has been assigned for FUSE
+
+	* Version file checking fix (reported by Christian Magnusson)
+
+	* fusermount: opening the fuse device now doesn't need /sys.
+
+	* Optimize reading by controlling the maximum readahead based on
+	the 'max_read' mount option
+
+	* fixes for UCLIBC (Christian Magnusson)
+
 2004-11-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Cleaned up kernel in preparation for merge into mainline:

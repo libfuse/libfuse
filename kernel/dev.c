@@ -8,6 +8,7 @@
 
 #include "fuse_i.h"
 
+#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/poll.h>
 #ifdef KERNEL_2_6
@@ -261,7 +262,6 @@ static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 	else if (!list_empty(&fc->pending)) {
 		req = list_entry(fc->pending.next, struct fuse_req, list);
 		list_del_init(&req->list);
-		req->locked = 1;
 	}
 	spin_unlock(&fuse_lock);
 	if (!fc)
@@ -275,12 +275,9 @@ static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 		if (ret < 0) {
 			req->out.h.error = -EPROTO;
 			req->finished = 1;
-		} else {
+		} else
 			list_add_tail(&req->list, &fc->processing);
-			req->sent = 1;
-		}
-		req->locked = 0;
-		if (ret < 0 || req->interrupted)
+		if (ret < 0)
 			/* Unlocks fuse_lock: */
 			request_end(fc, req);
 		else
@@ -471,10 +468,8 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 
 	spin_lock(&fuse_lock);
 	req = request_find(fc, oh.unique);
-	if (req != NULL) {
+	if (req != NULL)
 		list_del_init(&req->list);
-		req->locked = 1;
-	}
 	spin_unlock(&fuse_lock);
 	if (!req)
 		return -ENOENT;
@@ -491,7 +486,6 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 			process_getdir(req);
 	}	
 	req->finished = 1;
-	req->locked = 0;
 	/* Unlocks fuse_lock: */
 	request_end(fc, req);
 
@@ -565,7 +559,6 @@ struct file_operations fuse_dev_operations = {
 };
 
 #ifdef KERNEL_2_6
-#define FUSE_MINOR MISC_DYNAMIC_MINOR
 
 #ifndef FUSE_MAINLINE
 static decl_subsys(fs, NULL, NULL);

@@ -91,7 +91,11 @@ int fuse_mount(const char *mountpoint, const char *opts)
         return -1;
     }
 
+#ifndef USE_UCLIBC
     pid = fork();
+#else
+    pid = vfork();
+#endif
     if(pid == -1) {
         perror("fuse: fork() failed");
         close(fds[0]);

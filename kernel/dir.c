@@ -111,6 +111,7 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 			int generation, struct fuse_attr *attr, int version)
 {
 	struct inode *inode;
+	struct fuse_conn *fc = SB_FC(sb);
 
 	inode = iget5_locked(sb, nodeid, fuse_inode_eq, fuse_inode_set, &nodeid);
 	if (!inode)
@@ -118,6 +119,7 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 
 	if ((inode->i_state & I_NEW)) {
 		inode->i_generation = generation;
+		inode->i_data.backing_dev_info = &fc->bdi;
 		fuse_init_inode(inode, attr);
 		unlock_new_inode(inode);
 	} else if (inode->i_generation != generation)

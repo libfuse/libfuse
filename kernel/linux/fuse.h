@@ -17,6 +17,12 @@
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
 
+/** The major number of the fuse character device */
+#define FUSE_MAJOR 10
+
+/** The minor number of the fuse character device */
+#define FUSE_MINOR 229
+
 /** Opening this will yield a new control file */
 #define FUSE_DEV "/dev/fuse"
 

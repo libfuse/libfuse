@@ -38,8 +38,8 @@
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
-#define FUSE_DEV_NEW "/dev/fuse"
 #define FUSE_SYS_DEV "/sys/class/misc/fuse/dev"
+#define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
 
 const char *progname;
 
@@ -54,6 +54,94 @@ static const char *get_user_name()
     }
 }
 
+#ifndef USE_UCLIBC
+/* Until there is a nice interface for capabilities in _libc_, this will
+remain here.  I don't think it is fair to expect users to compile libcap
+for this program.  And anyway what's all this fuss about versioning the
+kernel interface?  It is quite good as is.  */
+#define _LINUX_CAPABILITY_VERSION  0x19980330
+
+typedef struct __user_cap_header_struct {
+    unsigned int version;
+    int pid;
+} *cap_user_header_t;
+ 
+typedef struct __user_cap_data_struct {
+    unsigned int effective;
+    unsigned int permitted;
+    unsigned int inheritable;
+} *cap_user_data_t;
+  
+int capget(cap_user_header_t header, cap_user_data_t data);
+int capset(cap_user_header_t header, cap_user_data_t data);
+
+#define CAP_SYS_ADMIN        21
+
+static uid_t oldfsuid;
+static gid_t oldfsgid;
+static struct __user_cap_data_struct oldcaps;
+
+static int drop_privs(void)
+{
+    int res;
+    struct __user_cap_header_struct head;
+    struct __user_cap_data_struct newcaps;
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capget(&head, &oldcaps);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to get capabilities: %s\n", progname,
+                strerror(errno));
+        return -1;
+    }
+
+    oldfsuid = setfsuid(getuid());
+    oldfsgid = setfsgid(getgid());
+    newcaps = oldcaps;
+    /* Keep CAP_SYS_ADMIN for mount */
+    newcaps.effective &= (1 << CAP_SYS_ADMIN);
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capset(&head, &newcaps);
+    if (res == -1) {
+        setfsuid(oldfsuid);
+        setfsgid(oldfsgid);
+        fprintf(stderr, "%s: failed to set capabilities: %s\n", progname,
+                strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+static void restore_privs(void)
+{
+    struct __user_cap_header_struct head;
+    int res;
+
+    head.version = _LINUX_CAPABILITY_VERSION;
+    head.pid = 0;
+    res = capset(&head, &oldcaps);
+    if (res == -1)
+        fprintf(stderr, "%s: failed to restore capabilities: %s\n", progname,
+                strerror(errno));
+    
+    setfsuid(oldfsuid);
+    setfsgid(oldfsgid);
+}
+#else /* USE_UCLIBC */
+static int drop_privs(void)
+{
+    return 0;
+}
+static void restore_privs(void)
+{
+}
+#endif /* USE_UCLIBC */
+
+
+#ifndef USE_UCLIBC
 /* use a lock file so that multiple fusermount processes don't try and
    modify the mtab file at once! */
 static int lock_mtab()
@@ -113,88 +201,10 @@ static int add_mount(const char *fsname, const char *mnt, const char *type,
     return 0;
 }
 
-
-/* Until there is a nice interface for capabilities in _libc_, this will
-remain here.  I don't think it is fair to expect users to compile libcap
-for this program.  And anyway what's all this fuss about versioning the
-kernel interface?  It is quite good as is.  */
-#define _LINUX_CAPABILITY_VERSION  0x19980330
-
-typedef struct __user_cap_header_struct {
-    unsigned int version;
-    int pid;
-} *cap_user_header_t;
- 
-typedef struct __user_cap_data_struct {
-    unsigned int effective;
-    unsigned int permitted;
-    unsigned int inheritable;
-} *cap_user_data_t;
-  
-int capget(cap_user_header_t header, cap_user_data_t data);
-int capset(cap_user_header_t header, cap_user_data_t data);
-
-#define CAP_SYS_ADMIN        21
-
-static uid_t oldfsuid;
-static gid_t oldfsgid;
-static struct __user_cap_data_struct oldcaps;
-
-static int drop_privs()
+static int remove_mount(const char *mnt, int quiet, const char *mtab,
+                        const char *mtab_new)
 {
     int res;
-    struct __user_cap_header_struct head;
-    struct __user_cap_data_struct newcaps;
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capget(&head, &oldcaps);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to get capabilities: %s\n", progname,
-                strerror(errno));
-        return -1;
-    }
-
-    oldfsuid = setfsuid(getuid());
-    oldfsgid = setfsgid(getgid());
-    newcaps = oldcaps;
-    /* Keep CAP_SYS_ADMIN for mount */
-    newcaps.effective &= (1 << CAP_SYS_ADMIN);
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capset(&head, &newcaps);
-    if (res == -1) {
-        setfsuid(oldfsuid);
-        setfsgid(oldfsgid);
-        fprintf(stderr, "%s: failed to set capabilities: %s\n", progname,
-                strerror(errno));
-        return -1;
-    }
-    return 0;
-}
-
-static void restore_privs()
-{
-    struct __user_cap_header_struct head;
-    int res;
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capset(&head, &oldcaps);
-    if (res == -1)
-        fprintf(stderr, "%s: failed to restore capabilities: %s\n", progname,
-                strerror(errno));
-    
-    setfsuid(oldfsuid);
-    setfsgid(oldfsgid);
-}
-
-static int remove_mount(const char *mnt, int quiet, int lazy)
-{
-    int res;
-    const char *mtab = _PATH_MOUNTED;
-    const char *mtab_new = _PATH_MOUNTED "~fuse~";
     struct mntent *entp;
     FILE *fp;
     FILE *newfp;
@@ -248,37 +258,9 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
     
     endmntent(fp);
     endmntent(newfp);
-    
-    if (found) {
-        if (getuid() != 0) {
-            res = drop_privs();
-            if (res == -1) {
-                unlink(mtab_new);
-                return -1;
-            }
-        }
 
-        res = umount2(mnt, lazy ? 2 : 0);
-        if (res == -1) {
-            if (!quiet)
-                fprintf(stderr, "%s: failed to unmount %s: %s\n",
-                        progname, mnt,strerror(errno));
-            found = -1;
-        }
-        if (getuid() != 0)
-            restore_privs();
-    }
-
-    if (found == 1) {
-        res = rename(mtab_new, mtab);
-        if (res == -1) {
-            fprintf(stderr, "%s: failed to rename %s to %s: %s\n", progname,
-                    mtab_new, mtab, strerror(errno));
-            return -1;
-        }
-    }
-    else {
-        if (!found && !quiet)
+    if (!found) {
+        if (!quiet)
             fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
                     mnt, mtab);
         unlink(mtab_new);
@@ -287,6 +269,55 @@ static int remove_mount(const char *mnt, int quiet, int lazy)
 
     return 0;
 }
+
+
+static int do_unmount(const char *mnt, int quiet, int lazy, const char *mtab,
+                      const char *mtab_new)
+{
+    int res;
+
+    if (getuid() != 0) {
+        res = drop_privs();
+        if (res == -1)
+            return -1;
+    }
+    res = umount2(mnt, lazy ? 2 : 0);
+    if (res == -1) {
+        if (!quiet)
+            fprintf(stderr, "%s: failed to unmount %s: %s\n",
+                    progname, mnt, strerror(errno));
+        return -1;
+    }
+    if (getuid() != 0)
+        restore_privs();
+
+    res = rename(mtab_new, mtab);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to rename %s to %s: %s\n", progname,
+                mtab_new, mtab, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+static int unmount_fuse(const char *mnt, int quiet, int lazy)
+{
+    int res;
+    const char *mtab = _PATH_MOUNTED;
+    const char *mtab_new = _PATH_MOUNTED "~fuse~";
+    
+    res = remove_mount(mnt, quiet, mtab, mtab_new);
+    if (res == -1)
+        return -1;
+
+    res = do_unmount(mnt, quiet, lazy, mtab, mtab_new);
+    if (res == -1) {
+        unlink(mtab_new);
+        return -1;
+    }
+    return 0;
+}
+#endif /* USE_UCLIBC */    
 
 static int begins_with(const char *s, const char *beg)
 {
@@ -475,20 +506,32 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     return res;
 }
 
-static int check_version(void)
+static int check_version(const char *dev)
 {
     int res;
     int majorver;
     int minorver;
-    const char *version_file = FUSE_VERSION_FILE;
-    FILE *vf = fopen(version_file, "r");
+    const char *version_file;
+    int isold = 0;
+    FILE *vf;
+
+    if (strcmp(dev, FUSE_DEV_OLD) == 0)
+        isold = 1;
+
+    if (isold)
+        version_file = FUSE_VERSION_FILE_OLD;
+    else
+        version_file = FUSE_VERSION_FILE;
+
+    vf = fopen(version_file, "r");
     if (vf == NULL) {
-        version_file = "/sys/fs/fuse/version";
-        vf = fopen(version_file, "r");
-        if (vf == NULL) {
+        if (isold) {
             fprintf(stderr, "%s: kernel interface too old\n", progname);
             return -1;
-        }
+        } else
+            /* If /sys/fs/fuse/version doesn't exist, just skip
+               version checking */
+            return 0;
     }
     res = fscanf(vf, "%i.%i", &majorver, &minorver);
     fclose(vf);
@@ -606,7 +649,7 @@ static int try_open_new_temp(unsigned devnum, char **devp)
     return fd;
 }
 
-static int try_open_new(char **devp)
+static int try_open_new(char **devp, int final)
 {
     const char *dev;
     unsigned minor;
@@ -616,8 +659,18 @@ static int try_open_new(char **devp)
     unsigned devnum;
     char buf[256];
     int fd = open(FUSE_SYS_DEV, O_RDONLY);
-    if (fd == -1)
-        return -2;
+    if (fd == -1) {
+        if (!final)
+            return -2;
+        fd = try_open(FUSE_DEV, devp, 0);
+        if (fd != -1)
+            return fd;
+        if (errno == ENODEV)
+            return -2;
+        fprintf(stderr, "%s: failed to open %s: %s\n", progname,
+                FUSE_DEV, strerror(errno));
+        return -1;
+    }
 
     res = read(fd, buf, sizeof(buf)-1);
     close(fd);
@@ -635,10 +688,17 @@ static int try_open_new(char **devp)
     }
 
     devnum = (major << 8) + (minor & 0xff) + ((minor & 0xff00) << 12);
-    dev = FUSE_DEV_NEW;
+    dev = FUSE_DEV;
     res = stat(dev, &stbuf);
-    if (res == -1)
-        return try_open_new_temp(devnum, devp);
+    if (res == -1) {
+        if (major == FUSE_MAJOR && minor == FUSE_MINOR)
+            return try_open_new_temp(devnum, devp);
+        else {
+            fprintf(stderr, "%s: failed to open %s: %s\n", progname,
+                    dev, strerror(errno));
+            return -1;
+        }
+    }
     
     if ((stbuf.st_mode & S_IFMT) != S_IFCHR || stbuf.st_rdev != devnum) {
         fprintf(stderr, "%s: %s exists but has wrong attributes\n", progname,
@@ -652,21 +712,27 @@ static int open_fuse_device(char **devp)
 {
     int fd;
 
-    fd = try_open_new(devp);
-    if (fd != -2)
-        return fd;
-
-    fd = try_open(FUSE_DEV_OLD, devp, 1);
-    if (fd != -1)
-        return fd;
-
     if (1
 #ifndef AUTO_MODPROBE
         && getuid() == 0
 #endif
         ) {
         int status;
-        pid_t pid = fork();
+        pid_t pid;
+
+        fd = try_open(FUSE_DEV_OLD, devp, 1);
+        if (fd != -1)
+            return fd;
+
+        fd = try_open_new(devp, 0);
+        if (fd != -2)
+            return fd;
+
+#ifndef USE_UCLIBC
+        pid = fork();
+#else
+        pid = vfork();
+#endif
         if (pid == 0) {
             setuid(0);
             execl("/sbin/modprobe", "/sbin/modprobe", "fuse", NULL);
@@ -674,16 +740,15 @@ static int open_fuse_device(char **devp)
         }
         if (pid != -1)
             waitpid(pid, &status, 0);
-
-        fd = try_open_new(devp);
-        if (fd != -2)
-            return fd;
-
-        fd = try_open(FUSE_DEV_OLD, devp, 1);
-        if (fd != -1)
-            return fd;
-        
     }
+
+    fd = try_open(FUSE_DEV_OLD, devp, 1);
+    if (fd != -1)
+        return fd;
+
+    fd = try_open_new(devp, 1);
+    if (fd != -2)
+        return fd;        
 
     fprintf(stderr, "fuse device not found, try 'modprobe fuse' first\n");
     return -1;
@@ -697,7 +762,6 @@ static int mount_fuse(const char *mnt, const char *opts)
     char *dev;
     const char *type = "fuse";
     struct stat stbuf;
-    int mtablock;
     char *fsname;
     char *mnt_opts;
     const char *real_mnt = mnt;
@@ -713,7 +777,7 @@ static int mount_fuse(const char *mnt, const char *opts)
             return -1;
     }
 
-    res = check_version();
+    res = check_version(dev);
     if (res != -1) {
         res = check_perm(&real_mnt, &stbuf, &currdir_fd);
         if (res != -1)
@@ -731,9 +795,10 @@ static int mount_fuse(const char *mnt, const char *opts)
         fchdir(currdir_fd);
         close(currdir_fd);
     }
-
+    
+#ifndef USE_UCLIBC
     if (geteuid() == 0) {
-        mtablock = lock_mtab();
+        int mtablock = lock_mtab();
         res = add_mount(fsname, mnt, type, mnt_opts);
         unlock_mtab(mtablock);
         if (res == -1) {
@@ -741,6 +806,8 @@ static int mount_fuse(const char *mnt, const char *opts)
             return -1;
         }
     }
+#endif
+
     free(fsname);
     free(mnt_opts);
     free(dev);
@@ -928,11 +995,14 @@ int main(int argc, char *argv[])
         restore_privs();
     
     if (unmount) {
+#ifndef USE_UCLIBC
         if (geteuid() == 0) {
             int mtablock = lock_mtab();
-            res = remove_mount(mnt, quiet, lazy);
+            res = unmount_fuse(mnt, quiet, lazy);
             unlock_mtab(mtablock);
-        } else {
+        } else 
+#endif
+        {
             res = umount2(mnt, lazy ? 2 : 0);
             if (res == -1) {
                 if (!quiet)

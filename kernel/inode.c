@@ -178,7 +178,9 @@ enum {
 	OPT_ALLOW_OTHER,
 	OPT_ALLOW_ROOT,
 	OPT_KERNEL_CACHE,
+#ifndef FUSE_MAINLINE
 	OPT_LARGE_READ,
+#endif
 	OPT_DIRECT_IO,
 	OPT_MAX_READ,
 	OPT_ERR 
@@ -192,7 +194,9 @@ static match_table_t tokens = {
 	{OPT_ALLOW_OTHER,		"allow_other"},
 	{OPT_ALLOW_ROOT,		"allow_root"},
 	{OPT_KERNEL_CACHE,		"kernel_cache"},
+#ifndef FUSE_MAINLINE
 	{OPT_LARGE_READ,		"large_read"},
+#endif
 	{OPT_DIRECT_IO,			"direct_io"},
 	{OPT_MAX_READ,			"max_read=%u"},
 	{OPT_ERR,			NULL}
@@ -247,7 +251,8 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 		case OPT_KERNEL_CACHE:
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
-			
+
+#ifndef FUSE_MAINLINE			
 		case OPT_LARGE_READ:
 #ifndef KERNEL_2_6
 			d->flags |= FUSE_LARGE_READ;
@@ -261,7 +266,7 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			}
 #endif
 			break;
-			
+#endif			
 		case OPT_DIRECT_IO:
 			d->flags |= FUSE_DIRECT_IO;
 			break;
@@ -351,6 +356,10 @@ static struct fuse_conn *new_conn(void)
 			req->preallocated = 1;
 			list_add(&req->list, &fc->unused_list);
 		}
+#ifdef KERNEL_2_6
+		fc->bdi.ra_pages = (VM_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
+		fc->bdi.unplug_io_fn = default_unplug_io_fn;
+#endif
 		fc->reqctr = 1;
 	}
 	return fc;
@@ -502,6 +511,10 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	fc->flags = d.flags;
 	fc->uid = d.uid;
 	fc->max_read = d.max_read;
+#ifdef KERNEL_2_6
+	if (fc->max_read / PAGE_CACHE_SIZE < fc->bdi.ra_pages)
+		fc->bdi.ra_pages = fc->max_read / PAGE_CACHE_SIZE;
+#endif
 	fc->max_write = FUSE_MAX_IN / 2;
 	
 	SB_FC(sb) = fc;

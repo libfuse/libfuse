@@ -42,6 +42,10 @@
 #include <linux/wait.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#ifdef KERNEL_2_6
+#include <linux/mm.h>
+#include <linux/backing-dev.h>
+#endif
 #include <asm/semaphore.h>
 
 #ifndef BUG_ON
@@ -152,15 +156,6 @@ struct fuse_req {
 	/** True if the request has reply */
 	unsigned int isreply:1;
 
-	/** The request is locked */
-	unsigned int locked:1;
-
-	/** The request has been interrupted while it was locked */
-	unsigned int interrupted:1;
-
-	/* The request has been sent to the client */
-	unsigned int sent:1;
-
 	/* The request is preallocated */
 	unsigned int preallocated:1;
 
@@ -264,6 +259,11 @@ struct fuse_conn {
 
 	/** Is removexattr not implemented by fs? */
 	unsigned int no_removexattr : 1;
+
+#ifdef KERNEL_2_6
+	/** Backing dev info */
+	struct backing_dev_info bdi;
+#endif
 };
 
 struct fuse_getdir_out_i {
@@ -283,7 +283,16 @@ struct fuse_getdir_out_i {
 extern struct file_operations fuse_dev_operations;
 
 /**
- * The lock to protect fuses structures
+ * This is the single global spinlock which protects FUSE's structures
+ *
+ * The following data is protected by this lock:
+ * 
+ *  - the private_data field of the device file
+ *  - the s_fs_info field of the super block
+ *  - unused_list, pending, processing lists in fuse_conn
+ *  - the unique request ID counter reqctr in fuse_conn
+ *  - the sb (super_block) field in fuse_conn
+ *  - the file (device file) field in fuse_conn
  */
 extern spinlock_t fuse_lock;
 
@@ -335,7 +344,6 @@ int fuse_fs_init(void);
  * Cleanup the fuse filesystem
  */
 void fuse_fs_cleanup(void);
-
 
 /** 
  * Allocate a request
