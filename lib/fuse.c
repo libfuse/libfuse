@@ -806,7 +806,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     }
     
     size = 0;
-    if(res > 0) {
+    if(res >= 0) {
         size = res;
         res = 0;
         if(f->flags & FUSE_DEBUG) {

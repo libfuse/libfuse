@@ -4,6 +4,8 @@
 	if FORGET was received earlier than the last RELEASE (bug found
 	with the LTP test-suite)
 
+	* Minor fix in read:  print debug info even if read size is zero
+
 2004-07-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix race between truncate and writepage (fsx-linux now runs
