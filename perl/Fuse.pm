@@ -66,10 +66,11 @@ bootstrap Fuse $VERSION;
 
 sub main {
 	my (@subs) = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-	my (@names) = qw(getattr readlink getdir mknod mkdir unlink rmdir symlink rename link chmod chown truncate utime open read write statfs);
+	my (@names) = qw(getattr readlink getdir mknod mkdir unlink rmdir symlink
+			 rename link chmod chown truncate utime open read write statfs);
 	my ($tmp) = 0;
 	my (%mapping) = map { $_ => $tmp++ } (@names);
-	my (%otherargs) = (debug=>0, unthreaded=>1, mountpoint=>"");
+	my (%otherargs) = (debug=>0, mountpoint=>"");
 	while(my $name = shift) {
 		my ($subref) = shift;
 		if(exists($otherargs{$name})) {
@@ -82,9 +83,7 @@ sub main {
 			$subs[$mapping{$name}] = $subref;
 		}
 	}
-	print "flag: debug\n" if $otherargs{debug};
-	print "flag: unthreaded\n" if $otherargs{unthreaded};
-	perl_fuse_main($0,$otherargs{unthreaded},$otherargs{debug},$otherargs{mountpoint},@subs);
+	perl_fuse_main($otherargs{debug},$otherargs{mountpoint},@subs);
 }
 
 # Autoload methods go after =cut, and are processed by the autosplit program.

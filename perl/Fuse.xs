@@ -32,7 +32,6 @@ int _PLfuse_getattr(const char *file, struct stat *result) {
 		else
 			rv = -ENOENT;
 	} else {
-		DEBUGf("populating\n");
 		result->st_blocks = POPi;
 		result->st_blksize = POPi;
 		result->st_ctime = POPi;
@@ -51,7 +50,6 @@ int _PLfuse_getattr(const char *file, struct stat *result) {
 	FREETMPS;
 	LEAVE;
 	PUTBACK;
-	DEBUGf("getattr end %i %o\n",rv,result->st_mode);
 	return rv;
 }
 
@@ -540,60 +538,21 @@ void
 perl_fuse_main(...)
 	PREINIT:
 	struct fuse_operations fops = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
-	int i, varnum = 0, nothreads, debug, argc, have_mnt;
-	char **argv;
+	int i, fd, varnum = 0, debug, have_mnt;
+	char *mountpoint;
 	STRLEN n_a;
 	STRLEN l;
 	INIT:
-	if(items != 22) {
+	if(items != 20) {
 		fprintf(stderr,"Perl<->C inconsistency or internal error\n");
 		XSRETURN_UNDEF;
 	}
 	CODE:
-	/* how annoying. */
-	nothreads = SvIV(ST(1)) ? 1 : 0;
-	debug = SvIV(ST(2)) ? 1 : 0;
-	have_mnt = strlen(SvPV(ST(3),n_a)) ? 1 : 0;
-	switch(have_mnt<<2 | debug<<1 | nothreads) {
-		case 0: /* !nothreads !debug !mnt */
-			argv = ((char*[]){NULL});
-			argc = 1;
-			break;
-		case 1: /* nothreads !debug !mnt */
-			argv = ((char*[]){NULL,"-s"});
-			argc = 2;
-			break;
-		case 2: /* !nothreads debug !mnt */
-			argv = ((char*[]){NULL,"-d"});
-			argc = 2;
-			break;
-		case 3: /* nothreads debug !mnt */
-			argv = ((char*[]){NULL,"-s","-d"});
-			argc = 3;
-			break;
-		case 4: /* !nothreads !debug mnt */
-			argv = ((char*[]){NULL,NULL});
-			argc = 2;
-			break;
-		case 5: /* nothreads !debug mnt */
-			argv = ((char*[]){NULL,NULL,"-s"});
-			argc = 3;
-			break;
-		case 6: /* !nothreads debug mnt */
-			argv = ((char*[]){NULL,NULL,"-d"});
-			argc = 3;
-			break;
-		case 7: /* nothreads debug mnt */
-			argv = ((char*[]){NULL,NULL,"-s","-d"});
-			argc = 4;
-			break;
-	}
-	argv[0] = SvPV(ST(0),n_a);
-	if(have_mnt)
-		argv[1] = SvPV(ST(3),n_a);
-	printf("%i %i %i\n",nothreads,debug,have_mnt);
+	debug = SvIV(ST(0));
+	mountpoint = SvPV_nolen(ST(1));
+	/* FIXME: reevaluate multithreading support when perl6 arrives */
 	for(i=0;i<18;i++) {
-		SV *var = ST(i+4);
+		SV *var = ST(i+2);
 		if((var != &PL_sv_undef) && SvROK(var)) {
 			if(SvTYPE(SvRV(var)) == SVt_PVCV) {
 				void **tmp1 = (void**)&_available_ops, **tmp2 = (void**)&fops;
@@ -603,6 +562,7 @@ perl_fuse_main(...)
 				croak("arg is not a code reference!");
 		}
 	}
-	printf("pre-main\n");
-	fuse_main(argc,argv,&fops);
-	printf("post-main\n");
+	fd = fuse_mount_ioslave(mountpoint);
+	if(fd < 0)
+		croak("could not mount fuse filesystem!");
+	fuse_loop(fuse_new(fd,debug ? FUSE_DEBUG : 0,&fops));

@@ -5,6 +5,7 @@ use Fuse;
 use IO::File;
 use POSIX qw(ENOENT ENOSYS EEXIST EPERM O_RDONLY O_RDWR O_APPEND O_CREAT);
 use Fcntl qw(S_ISBLK S_ISCHR S_ISFIFO);
+require 'syscall.ph'; # for SYS_mknod
 
 sub debug {
 	print(STDERR join(",",@_),"\n");
@@ -31,10 +32,10 @@ sub x_getdir {
 
 sub x_open {
 	my ($file) = fixup(shift);
-	my ($fd) = POSIX::open($file,@_);
-	return -ENOSYS() if(!defined($fd));
-	return $fd if $fd < 0;
-	POSIX::close($fd);
+	my ($mode) = shift;
+	debug("open",$file,$mode);
+	return -$! unless sysopen(FILE,$file,$mode);
+	close(FILE);
 	return 0;
 }
 
@@ -106,21 +107,12 @@ sub x_mknod {
 	# since this is called for ALL files, not just devices, I'll do some checks
 	# and possibly run the real mknod command.
 	my ($file, $modes, $dev) = @_;
-	return -EEXIST() if -e ($file = fixup($file));
-	return -EPERM() if (system("touch $file 2>/dev/null") >> 8);
-	if(S_ISBLK($modes) || S_ISCHR($modes) || S_ISFIFO($modes)) {
-		system("rm -f $file 2>/dev/null");
-		my ($chr) = 'c';
-		my ($omodes) = sprintf("%o",$modes & 0x1ff);
-		$chr = 'b' if S_ISBLK($modes);
-		if(S_ISFIFO($modes)) {
-			$chr = 'p';
-			$dev = "";
-		} else {
-			$dev = (($dev>>8) & 255) . " " . ($dev & 255);
-		}
-		system("mknod --mode=$omodes '$file' $chr $dev");
-	}
+	$file = fixup($file);
+	$! = 0;
+	debug("mknod",@_);
+	syscall(&SYS_mknod,$file,$modes);
+	debug("mknod retval",$!);
+	return -$!;
 }
 
 # kludge
@@ -128,7 +120,6 @@ sub x_statfs {return 255,1000000,500000,1000000,500000,4096}
 my ($mountpoint) = "";
 $mountpoint = shift(@ARGV) if @ARGV;
 Fuse::main(
-	unthreaded=>1,
 	mountpoint=>$mountpoint,
 	getattr=>\&x_getattr,
 	readlink=>\&x_readlink,
@@ -147,5 +138,6 @@ Fuse::main(
 	open=>\&x_open,
 	read=>\&x_read,
 	write=>\&x_write,
-	statfs=>\&x_statfs
+	statfs=>\&x_statfs,
+	debug=>1
 );
