@@ -81,6 +81,8 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     int fuse_fd;
     char *fuse_mountpoint = NULL;
     char **fusermount_args = NULL;
+    char *newargs[3];
+    char *basename;
     
     flags = 0;
     multithreaded = 1;
@@ -119,6 +121,21 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
         fprintf(stderr, "missing mountpoint\n");
         usage(argv[0]);
     }
+    if(fusermount_args != NULL)
+        fusermount_args -= 2; /* Hack! */
+    else {
+        fusermount_args = newargs;
+        fusermount_args[2] = NULL;
+    }
+    
+    basename = strrchr(argv[0], '/');
+    if(basename == NULL)
+        basename = argv[0];
+    else if(basename[1] != '\0')
+        basename++;
+
+    fusermount_args[0] = "-n";
+    fusermount_args[1] = basename;
 
     fuse_fd = fuse_mount(fuse_mountpoint, (const char **) fusermount_args);
     if(fuse_fd == -1)
