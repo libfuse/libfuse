@@ -387,6 +387,10 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
     if(path != NULL) {
+        if(f->flags & FUSE_DEBUG) {
+            printf("LOOKUP %s\n", path);
+            fflush(stdout);
+        }
         res = -ENOSYS;
         if(f->op.getattr)
             res = f->op.getattr(path, &buf);
@@ -395,6 +399,10 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     if(res == 0) {
         convert_stat(&buf, &arg.attr);
         arg.ino = find_node(f, in->ino, name, &arg.attr, in->unique);
+        if(f->flags & FUSE_DEBUG) {
+            printf("   LOOKUP: %li\n", arg.ino);
+            fflush(stdout);
+        }
     }
     send_reply(f, in, res, &arg, sizeof(arg));
 }
@@ -724,6 +732,11 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
+        if(f->flags & FUSE_DEBUG) {
+            printf("READ %u bytes from %llu\n", arg->size, arg->offset);
+            fflush(stdout);
+        }
+
         res = -ENOSYS;
         if(f->op.read)
             res = f->op.read(path, buf, arg->size, arg->offset);
@@ -734,6 +747,10 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     if(res > 0) {
         size = res;
         res = 0;
+        if(f->flags & FUSE_DEBUG) {
+            printf("   READ %u bytes\n", size);
+            fflush(stdout);
+        }
     }
     out->unique = in->unique;
     out->error = res;
@@ -752,6 +769,11 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
+        if(f->flags & FUSE_DEBUG) {
+            printf("WRITE %u bytes to %llu\n", arg->size, arg->offset);
+            fflush(stdout);
+        }
+
         res = -ENOSYS;
         if(f->op.write)
             res = f->op.write(path, arg->buf, arg->size, arg->offset);

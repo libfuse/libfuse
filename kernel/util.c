@@ -12,7 +12,10 @@
 
 MODULE_AUTHOR("Miklos Szeredi <mszeredi@inf.bme.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
+
+#ifdef MODULE_LICENSE
 MODULE_LICENSE("GPL");
+#endif
 
 spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
 
