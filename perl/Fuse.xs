@@ -566,7 +566,7 @@ perl_fuse_main(...)
 		}
 	}
 	/* FIXME: need to pass fusermount arguments */
-	fd = fuse_mount(mountpoint,"");
+	fd = fuse_mount(mountpoint,NULL);
 	if(fd < 0)
 		croak("could not mount fuse filesystem!");
 	fuse_loop(fuse_new(fd,debug ? FUSE_DEBUG : 0,&fops));
