@@ -41,7 +41,7 @@ static void fuse_unmount()
     system(getenv(FUSE_UMOUNT_CMD_ENV));
 }
 
-static int fuse_mount(int *argcp, char **argv)
+static int fuse_mount_obsolete(int *argcp, char **argv)
 {
     char *isreexec = getenv(FUSE_MOUNTED_ENV);
 
@@ -111,9 +111,15 @@ int receive_fd(int fd) {
     return *(int*)CMSG_DATA(cmsg);
 }
 
-int fuse_mount_ioslave(char *mountpoint) {
+int fuse_mount(const char *mountpoint, const char *mount_args)
+{
     int fds[2], pid;
+    int rv, fd;
     char env[10];
+    
+    /* FIXME: parse mount_args (or just pass it to fusermount ???) */
+    mount_args = mount_args;
+
     if(socketpair(PF_UNIX,SOCK_DGRAM,0,fds)) {
         fprintf(stderr,"fuse: failed to socketpair()\n");
         return -1;
@@ -125,22 +131,23 @@ int fuse_mount_ioslave(char *mountpoint) {
         close(fds[1]);
         return -1;
     }
-    if(pid) {
-        int rv, fd = fds[1];
-        close(fds[0]);
-        while((rv = receive_fd(fd)) < 0)
-        	sleep(1);
-        close(fd);
-        while(wait(NULL) != pid); /* bury zombie */
-        return rv;
+    if(pid == 0) {
+        close(fds[1]);
+        fcntl(fds[0],F_SETFD,0);
+        snprintf(env,sizeof(env),"%i",fds[0]);
+        setenv("_FUSE_IOSLAVE_FD",env,1);
+        execlp("fusermount","fusermount",mountpoint,"fuse_ioslave",NULL);
+        fprintf(stderr,"fuse: failed to exec fusermount\n");
+        exit(1);
     }
-    close(fds[1]);
-    fcntl(fds[0],F_SETFD,0);
-    snprintf(env,sizeof(env),"%i",fds[0]);
-    setenv("_FUSE_IOSLAVE_FD",env,1);
-    execlp("fusermount","fusermount",mountpoint,"fuse_ioslave",NULL);
-    fprintf(stderr,"fuse: failed to exec fusermount\n");
-    exit(1);
+
+    fd = fds[1];
+    close(fds[0]);
+    while((rv = receive_fd(fd)) < 0)
+        sleep(1);
+    close(fd);
+    while(wait(NULL) != pid); /* bury zombie */
+    return rv;
 }
 
 static void exit_handler()
@@ -180,7 +187,7 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     int multithreaded;
     struct fuse *fuse;
 
-    fd = fuse_mount(&argc, argv);
+    fd = fuse_mount_obsolete(&argc, argv);
     if(fd == -1)
         exit(1);
 

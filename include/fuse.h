@@ -100,6 +100,18 @@ struct fuse_context {
 extern "C" {
 #endif
 
+/*
+ * Create a FUSE mountpoint
+ *
+ * Returns a control file descriptor suitable for passing to
+ * fuse_new()
+ *
+ * @param mountpoint the mount point path
+ * @param mount arguments (passed to the fusermount program)
+ * @return the control file descriptor on success, -1 on failure
+ */
+int fuse_mount(const char *mountpoint, const char *mount_args);
+
 /**
  * Create a new FUSE filesystem.
  *
@@ -179,17 +191,6 @@ struct fuse_context *fuse_get_context(struct fuse *f);
  * @prarm op the file system operation 
  */
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op);
-
-/*
- * Spawn an I/O slave, creating an fd suitable for passing to fuse_new()
- *
- * This spawns fusermount, and then a small message tosser process to
- * allow access to fuse_new() and fuse_loop() without the limitations
- * of reexecuting the main FUSE process and destroying stdin.
- *
- * @param mountpoint a char pointer to the requested mountpoint
- */
-int fuse_mount_ioslave(char *mountpoint);
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
