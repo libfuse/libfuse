@@ -607,7 +607,7 @@
 
 2003-03-10  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Fix umount oops (found by Samuli K‰rkk‰inen)
+	* Fix umount oops (found by Samuli K√§rkk√§inen)
 
 2003-03-05  Miklos Szeredi <miklos@szeredi.hu>
 
