@@ -117,7 +117,8 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 	return ERR_PTR(ret);
 }
 
-/* create needs to return a positive entry, so this also does a lookup */
+/* create needs to return a positive entry, so this is actually an
+   mknod+lookup */
 static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 		      int rdev)
 {
@@ -305,14 +306,11 @@ static int fuse_permission(struct inode *inode, int mask)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 
-	/* (too) simple protection for non-privileged mounts */
-	if(fc->uid) {
-		if(current->fsuid == fc->uid)
-			return 0;
-		else
-			return -EACCES;
-	}
-	return 0;
+	/* (too) simple protection */
+	if(current->fsuid == fc->uid)
+		return 0;
+	else
+		return -EACCES;
 }
 
 static int fuse_revalidate(struct dentry *entry)

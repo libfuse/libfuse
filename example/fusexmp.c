@@ -15,58 +15,25 @@
 #include <signal.h>
 #include <utime.h>
 #include <fcntl.h>
-#include <grp.h>
-#include <sys/fsuid.h>
 
-static char *mount_point;
+static char *unmount_cmd;
 
-static int set_creds(struct fuse_cred *cred)
+static int xmp_getattr(const char *path, struct stat *stbuf)
 {
     int res;
 
-    res = setfsuid(cred->uid);
-    if(res == -1)
-        return -errno;
-
-    res = setfsgid(cred->gid);
-    if(res == -1)
-        return -errno;
-
-    return 0;
-}
-
-static void restore_creds()
-{
-    setfsuid(getuid());
-    setfsgid(getgid());
-}
-
-static int xmp_getattr(struct fuse_cred *cred, const char *path,
-                       struct stat *stbuf)
-{
-    int res;
-
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = lstat(path, stbuf);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_readlink(struct fuse_cred *cred, const char *path, char *buf,
-                        size_t size)
+static int xmp_readlink(const char *path, char *buf, size_t size)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = readlink(path, buf, size - 1);
-    restore_creds();
     if(res == -1)
         return -errno;
 
@@ -75,18 +42,13 @@ static int xmp_readlink(struct fuse_cred *cred, const char *path, char *buf,
 }
 
 
-static int xmp_getdir(struct fuse_cred *cred, const char *path, fuse_dirh_t h,
-                      fuse_dirfil_t filler)
+static int xmp_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
 {
     DIR *dp;
     struct dirent *de;
-    int res;
+    int res = 0;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     dp = opendir(path);
-    restore_creds();
     if(dp == NULL)
         return -errno;
 
@@ -100,169 +62,121 @@ static int xmp_getdir(struct fuse_cred *cred, const char *path, fuse_dirh_t h,
     return res;
 }
 
-static int xmp_mknod(struct fuse_cred *cred, const char *path, mode_t mode,
-                     dev_t rdev)
+static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = mknod(path, mode, rdev);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_mkdir(struct fuse_cred *cred, const char *path, mode_t mode)
+static int xmp_mkdir(const char *path, mode_t mode)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = mkdir(path, mode);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_unlink(struct fuse_cred *cred, const char *path)
+static int xmp_unlink(const char *path)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = unlink(path);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_rmdir(struct fuse_cred *cred, const char *path)
+static int xmp_rmdir(const char *path)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = rmdir(path);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_symlink(struct fuse_cred *cred, const char *from,
-                       const char *to)
+static int xmp_symlink(const char *from, const char *to)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = symlink(from, to);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_rename(struct fuse_cred *cred, const char *from, const char *to)
+static int xmp_rename(const char *from, const char *to)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = rename(from, to);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_link(struct fuse_cred *cred, const char *from, const char *to)
+static int xmp_link(const char *from, const char *to)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = link(from, to);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_chmod(struct fuse_cred *cred, const char *path, mode_t mode)
+static int xmp_chmod(const char *path, mode_t mode)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = chmod(path, mode);
-    restore_creds();
     if(res == -1)
         return -errno;
     
     return 0;
 }
 
-static int xmp_chown(struct fuse_cred *cred, const char *path, uid_t uid,
-                     gid_t gid)
+static int xmp_chown(const char *path, uid_t uid, gid_t gid)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = lchown(path, uid, gid);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_truncate(struct fuse_cred *cred, const char *path, off_t size)
+static int xmp_truncate(const char *path, off_t size)
 {
     int res;
     
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = truncate(path, size);
-    restore_creds();
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int xmp_utime(struct fuse_cred *cred, const char *path,
-                     struct utimbuf *buf)
+static int xmp_utime(const char *path, struct utimbuf *buf)
 {
     int res;
     
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = utime(path, buf);
-    restore_creds();
     if(res == -1)
         return -errno;
 
@@ -270,15 +184,11 @@ static int xmp_utime(struct fuse_cred *cred, const char *path,
 }
 
 
-static int xmp_open(struct fuse_cred *cred, const char *path, int flags)
+static int xmp_open(const char *path, int flags)
 {
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     res = open(path, flags);
-    restore_creds();
     if(res == -1) 
         return -errno;
 
@@ -286,17 +196,12 @@ static int xmp_open(struct fuse_cred *cred, const char *path, int flags)
     return 0;
 }
 
-static int xmp_read(struct fuse_cred *cred, const char *path, char *buf,
-                    size_t size, off_t offset)
+static int xmp_read(const char *path, char *buf, size_t size, off_t offset)
 {
     int fd;
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     fd = open(path, O_RDONLY);
-    restore_creds();
     if(fd == -1)
         return -errno;
 
@@ -308,17 +213,13 @@ static int xmp_read(struct fuse_cred *cred, const char *path, char *buf,
     return res;
 }
 
-static int xmp_write(struct fuse_cred *cred, const char *path, const char *buf,
-                     size_t size, off_t offset)
+static int xmp_write(const char *path, const char *buf, size_t size,
+                     off_t offset)
 {
     int fd;
     int res;
 
-    res = set_creds(cred);
-    if(res)
-        return res;
     fd = open(path, O_WRONLY);
-    restore_creds();
     if(fd == -1)
         return -errno;
 
@@ -381,10 +282,8 @@ static struct fuse_operations xmp_oper = {
 
 static void cleanup()
 {
-    char *buf = (char *) malloc(strlen(mount_point) + 128);
-    sprintf(buf, "fusermount -u %s", mount_point);
-    system(buf);
-    free(buf);
+    close(0);
+    system(unmount_cmd);    
 }
 
 int main(int argc, char *argv[])
@@ -395,7 +294,7 @@ int main(int argc, char *argv[])
 
     if(argc < 2) {
         fprintf(stderr,
-                "usage: %s mount_dir [options] \n"
+                "usage: %s unmount_cmd [options] \n"
                 "Options:\n"
                 "    -d      enable debug output\n"
                 "    -s      disable multithreaded operation\n",
@@ -404,7 +303,7 @@ int main(int argc, char *argv[])
     }
 
     argctr = 1;
-    mount_point = argv[argctr++];
+    unmount_cmd = argv[argctr++];
 
     set_signal_handlers();
     atexit(cleanup);
@@ -429,8 +328,6 @@ int main(int argc, char *argv[])
         fprintf(stderr, "missing or surplus argument\n");
         exit(1);
     }
-
-    setgroups(0, NULL);
 
     fuse = fuse_new(0, flags);
     fuse_set_operations(fuse, &xmp_oper);

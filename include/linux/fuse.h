@@ -149,8 +149,6 @@ struct fuse_in_header {
 	int unique;
 	enum fuse_opcode opcode;
 	unsigned long ino;
-	unsigned int uid;
-	unsigned int gid;
 };
 
 struct fuse_out_header {

@@ -18,6 +18,10 @@ install-exec-local: fuse.o
 	$(INSTALL) -m 644 fuse.o $(DESTDIR)$(fusemoduledir)/fuse.o
 	/sbin/depmod -a
 
+uninstall-local:
+	rm -f $(DESTDIR)$(fusemoduledir)/fuse.o
+	/sbin/depmod -a
+
 clean-local:
 	rm -f *.o *.s
 

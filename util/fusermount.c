@@ -5,6 +5,17 @@
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
 */
+/* This program does the mounting and unmounting of FUSE filesystems */
+
+/* 
+ * NOTE: This program should be part of (or be called from) /bin/mount
+ * 
+ * Unless that is done, operations on /etc/mtab are not under lock, and so
+ * data in it may be lost. (I will _not_ reimplement that locking, and
+ * anyway that should be done in libc, if possible.  But probably it is
+ * not).
+ *
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +24,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <mntent.h>
+#include <limits.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
@@ -28,12 +41,6 @@
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
 const char *progname;
-const char *fusermnt = "/etc/fusermnt";
-const char *fusermnt_temp = "/etc/fusermnt~";
-
-#define FUSE_USERNAME_MAX 256
-#define FUSE_PATH_MAX 4096
-#define FUSEMNT_LINE_MAX (FUSE_USERNAME_MAX + 1 + FUSE_PATH_MAX + 1)
 
 static const char *get_user_name()
 {
@@ -46,152 +53,136 @@ static const char *get_user_name()
     }
 }
 
-static int fusermnt_lock()
+static int add_mount(const char *dev, const char *mnt, const char *type)
 {
     int res;
-    const char *lockfile = fusermnt;
-    int fd = open(lockfile, O_WRONLY | O_CREAT, 0644);
-    if(fd == -1) {
-        fprintf(stderr, "%s: failed to open lockfile %s: %s\n", progname,
-                lockfile, strerror(errno));
-        return -1;
-    }
-    res = lockf(fd, F_LOCK, 0);
-    if(res == -1) {
-        fprintf(stderr, "%s: failed to lock file %s: %s\n", progname,
-                lockfile, strerror(errno));
-        close(fd);
-        return -1;
-    }
-
-    return fd;
-}
-
-static void fusermnt_unlock(int fd)
-{
-    lockf(fd, F_UNLCK, 0);
-    close(fd);
-}
-
-
-static int add_mount(const char *mnt)
-{
+    const char *mtab = _PATH_MOUNTED;
+    struct mntent ent;
     FILE *fp;
-    int lockfd;
-    const char *user = get_user_name();
-    if(user == NULL)
-        return -1;
+    char *opts;
 
-    lockfd = fusermnt_lock();
-    if(lockfd == -1)
-        return -1;
-
-    fp = fopen(fusermnt, "a");
+    fp = setmntent(mtab, "a");
     if(fp == NULL) {
-        fprintf(stderr, "%s: could not open %s for writing: %s\n", progname,
-                fusermnt, strerror(errno));
+	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab,
+		strerror(errno));
+	return -1;
+    }
+    
+    if(getuid() != 0) {
+        const char *user = get_user_name();
+        if(user == NULL)
+            return -1;
+        
+        opts = malloc(strlen(user) + 128);
+        if(opts != NULL)
+            sprintf(opts, "rw,nosuid,nodev,user=%s", user);
+    }
+    else
+        opts = strdup("rw,nosuid,nodev");
+    
+    if(opts == NULL)
+        return -1;
+    
+    ent.mnt_fsname = (char *) dev;
+    ent.mnt_dir = (char *) mnt;
+    ent.mnt_type = (char *) type;
+    ent.mnt_opts = opts;
+    ent.mnt_freq = 0;
+    ent.mnt_passno = 0;
+    res = addmntent(fp, &ent);
+    if(res != 0) {
+        fprintf(stderr, "%s: failed to add entry to %s: %s\n", progname,
+                mtab, strerror(errno));
         return -1;
     }
-    fprintf(fp, "%s %s\n", user, mnt);
-    fclose(fp);
-
-    fusermnt_unlock(lockfd);
+    
+    endmntent(fp);
     return 0;
 }
 
 static int remove_mount(const char *mnt)
 {
+    int res;
+    const char *mtab = _PATH_MOUNTED;
+    const char *mtab_new = _PATH_MOUNTED "~";
+    struct mntent *entp;
     FILE *fp;
     FILE *newfp;
-    int lockfd;
+    const char *user = NULL;
     int found;
-    char buf[FUSEMNT_LINE_MAX + 1];
-    const char *user = get_user_name();
-    if(user == NULL)
-        return -1;
 
-    lockfd = fusermnt_lock();
-    if(lockfd == -1)
-        return -1;
-
-    fp = fopen(fusermnt, "r");
+    fp = setmntent(mtab, "r");
     if(fp == NULL) {
-        fprintf(stderr, "%s: could not open %s for reading: %s\n", progname,
-                fusermnt, strerror(errno));
-        fusermnt_unlock(lockfd);
-        return -1;
-    }
-
-    newfp = fopen(fusermnt_temp, "w");
-    if(newfp == NULL) {
-        fprintf(stderr, "%s: could not open %s for writing: %s\n", progname,
-                fusermnt_temp, strerror(errno));
-        fclose(fp);
-        fusermnt_unlock(lockfd);
-        return -1;
+	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab,
+		strerror(errno));
+	return -1;
     }
     
-    found = 0;
-    while(fgets(buf, sizeof(buf), fp) != NULL) {
-        char *end = buf + strlen(buf) - 1;
-        char *p;
-        if(*end != '\n') {
-            fprintf(stderr, "%s: line too long in file %s\n", progname,
-                    fusermnt);
-            while(fgets(buf, sizeof(buf), fp) != NULL) {
-                char *end = buf + strlen(buf) - 1;
-                if(*end == '\n')
-                    break;
-            }
-            continue;
-        }
-        *end = '\0';
+    newfp = setmntent(mtab_new, "w");
+    if(newfp == NULL) {
+	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab_new,
+		strerror(errno));
+	return -1;
+    }
+    
+    if(getuid() != 0) {
+        user = get_user_name();
+        if(user == NULL)
+            return -1;
+    }
 
-        for(p = buf; *p != '\0' && *p != ' '; p++);
-        if(*p == '\0') {
-            fprintf(stderr, "%s: malformed line in file %s\n", progname,
-                    fusermnt);
-            continue;
+    found = 0;
+    while((entp = getmntent(fp)) != NULL) {
+        int remove = 0;
+        if(!found && strcmp(entp->mnt_dir, mnt) == 0 &&
+           strcmp(entp->mnt_type, "fuse") == 0) {
+            if(user == NULL)
+                remove = 1;
+            else {
+                char *p = strstr(entp->mnt_opts, "user=");
+                if(p != NULL && strcmp(p + 5, user) == 0)
+                    remove = 1;
+            }
         }
-        *p = '\0';
-        p++;
-        if(!found && strcmp(user, buf) == 0 && strcmp(mnt, p) == 0) {
-            int res = umount(mnt);
+        if(remove) {
+            res = umount(mnt);
             if(res == -1) {
-                found = -1;
-                fprintf(stderr, "%s: umount of %s failed: %s\n", progname,
+                fprintf(stderr, "%s: failed to unmount %s: %s\n", progname,
                         mnt, strerror(errno));
+                found = -1;
                 break;
             }
             found = 1;
         }
-        else
-            fprintf(newfp, "%s %s\n", buf, p);
+        else {
+            res = addmntent(newfp, entp);
+            if(res != 0) {
+                fprintf(stderr, "%s: failed to add entry to %s: %s", progname,
+                        mtab_new, strerror(errno));
+                
+            }
+        }
     }
-
-    fclose(fp);
-    fclose(newfp);
+    
+    endmntent(fp);
+    endmntent(newfp);
 
     if(found == 1) {
-        int res;
-        res = rename(fusermnt_temp, fusermnt);
+        res = rename(mtab_new, mtab);
         if(res == -1) {
-            fprintf(stderr, "%s: failed to rename %s to %s: %s\n",
-                    progname, fusermnt_temp, fusermnt, strerror(errno));
-            fusermnt_unlock(lockfd);
+            fprintf(stderr, "%s: failed to rename %s to %s: %s\n", progname,
+                    mtab_new, mtab, strerror(errno));
             return -1;
         }
     }
     else {
         if(!found)
             fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
-                    mnt, fusermnt);
-        unlink(fusermnt_temp);
-        fusermnt_unlock(lockfd);
+                    mnt, mtab);
+        unlink(mtab_new);
         return -1;
     }
 
-    fusermnt_unlock(lockfd);
     return 0;
 }
 
@@ -348,6 +339,19 @@ static int mount_fuse(const char *mnt)
 
     fd = open(dev, O_RDWR);
     if(fd == -1) {
+        int status;
+        pid_t pid = fork();
+        if(pid == 0) {
+            setuid(0);
+            execl("/sbin/modprobe", "modprobe", "fuse", NULL);
+            exit(1);
+        }
+        if(pid != -1)
+            waitpid(pid, &status, 0);
+
+        fd = open(dev, O_RDWR);
+    }
+    if(fd == -1) {
         fprintf(stderr, "%s: unable to open fuse device %s: %s\n", progname,
                 dev, strerror(errno));
         return -1;
@@ -357,7 +361,7 @@ static int mount_fuse(const char *mnt)
     if(res == -1)
         return -1;
 
-    res = add_mount(mnt);
+    res = add_mount(dev, mnt, type);
     if(res == -1) {
         umount(mnt);
         return -1;
@@ -366,16 +370,22 @@ static int mount_fuse(const char *mnt)
     return fd;
 }
 
-static int do_umount(const char *mnt)
+static char *resolve_path(const char *orig, int unmount)
 {
-    int res;
+    char buf[PATH_MAX];
 
-    res = remove_mount(mnt);
-    if(res == -1)
-        return -1;
+    /* Resolving at unmount can only be done very carefully, not touching
+       the mountpoint... So for the moment it's not done.  */
+    if(unmount)
+        return strdup(orig);
 
-    umount(mnt);
-    return 0;
+    if(realpath(orig, buf) == NULL) {
+        fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
+                strerror(errno));
+        return NULL;
+    }
+
+    return strdup(buf);
 }
 
 static void usage()
@@ -384,7 +394,7 @@ static void usage()
             "%s: [options] mountpoint [program [args ...]]\n"
             "Options:\n"
             " -h    print help\n"
-            " -u    umount\n",
+            " -u    unmount\n",
             progname);
     exit(1);
 }
@@ -394,11 +404,14 @@ int main(int argc, char *argv[])
     int a;
     int fd;
     int res;
-    char *mnt = NULL;
-    int umount = 0;
+    char *origmnt;
+    char *mnt;
+    int unmount = 0;
     char **userprog;
     int numargs;
     char **newargv;
+    char mypath[PATH_MAX];
+    char *unmount_cmd;
 
     progname = argv[0];
     
@@ -412,7 +425,7 @@ int main(int argc, char *argv[])
             break;
 
         case 'u':
-            umount = 1;
+            unmount = 1;
             break;
             
         default:
@@ -426,10 +439,20 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    mnt = argv[a++];
+    origmnt = argv[a++];
+
+    if(getpid() != 0)
+        drop_privs();
+
+    mnt = resolve_path(origmnt, unmount);
+    if(mnt == NULL)
+        exit(1);
+
+    if(getpid() != 0)
+        restore_privs();
     
-    if(umount) {
-        res = do_umount(mnt);
+    if(unmount) {
+        res = remove_mount(mnt);
         if(res == -1)
             exit(1);
         
@@ -454,23 +477,36 @@ int main(int argc, char *argv[])
         close(fd);
     }
 
+    /* Strangely this doesn't work after dropping permissions... */
+    res = readlink("/proc/self/exe", mypath, sizeof(mypath) - 1);
+    if(res == -1) {
+        fprintf(stderr, "%s: failed to determine self path: %s\n",
+                progname, strerror(errno));
+        strcpy(mypath, "fusermount");
+        fprintf(stderr, "using %s as the default\n", mypath);
+    }
+    else 
+        mypath[res] = '\0';
+
     /* Drop setuid/setgid permissions */
     setuid(getuid());
     setgid(getgid());
-    
+
+    unmount_cmd = (char *) malloc(strlen(mypath) + strlen(mnt) + 64);
+    sprintf(unmount_cmd, "%s -u %s", mypath, mnt);
+
     newargv = (char **) malloc(sizeof(char *) * (numargs + 2));
     newargv[0] = userprog[0];
-    newargv[1] = mnt;
+    newargv[1] = unmount_cmd;
     for(a = 1; a < numargs; a++)
         newargv[a+1] = userprog[a];
     newargv[numargs+1] = NULL;
 
-    execv(userprog[0], newargv);
+    execvp(userprog[0], newargv);
     fprintf(stderr, "%s: failed to exec %s: %s\n", progname, userprog[0],
             strerror(errno));
 
-    execl("/proc/self/exe", progname, "-u", mnt, NULL);
-    fprintf(stderr, "%s: failed to exec self: %s\n", progname,
-            strerror(errno));
-    exit(1);
+    close(0);
+    system(unmount_cmd);
+    return 1;
 }

@@ -21,32 +21,19 @@ typedef struct fuse_dirhandle *fuse_dirh_t;
 /** Function to add an entry in a getdir() operation */
 typedef int (*fuse_dirfil_t) (fuse_dirh_t, const char *, int type);
 
-/** Credentials for an operation, these are determined by the fsuid
-    and fsgid of the calling process */
-struct fuse_cred {
-    uid_t uid;
-    gid_t gid;
-    /* FIXME: supplementary groups should also be included */
-    /* (And capabilities???) */
-};
-
 /**
  * The file system operations:
  *
  * Most of these should work very similarly to the well known UNIX
  * file system operations.  Exceptions are:
  * 
- *  - All operations get a fuse_cred structure by which the filesystem
- *  implementation can check, whether the operation is permitted or
- *  not.
- * 
  *  - All operations should return the negated error value (-errno) on
  *  error.
  * 
- *  - readlink() should fill the buffer with a null terminated string.
- *  The buffer size argument includes the space for the terminating
- *  null character.  If the linkname is too long to fit in the buffer,
- *  it should be truncated.  The return value should be 0 for success.
+ *  - readlink() should fill the buffer with a null terminated string.  The
+ *  buffer size argument includes the space for the terminating null
+ *  character.  If the linkname is too long to fit in the buffer, it should
+ *  be truncated.  The return value should be 0 for success.
  *
  *  - getdir() is the opendir(), readdir(), ..., closedir() sequence
  *  in one call. For each directory entry the filldir parameter should
@@ -62,25 +49,26 @@ struct fuse_cred {
  * 
  *  - read(), write() are not passed a filehandle, but rather a
  *  pathname.  The offset of the read and write is passed as the last
- *  argument, like the pread() and pwrite() system calls.  */
+ *  argument, like the pread() and pwrite() system calls.
+ */
 struct fuse_operations {
-    int (*getattr)  (struct fuse_cred *, const char *, struct stat *);
-    int (*readlink) (struct fuse_cred *, const char *, char *, size_t);
-    int (*getdir)   (struct fuse_cred *, const char *, fuse_dirh_t, fuse_dirfil_t);
-    int (*mknod)    (struct fuse_cred *, const char *, mode_t, dev_t);
-    int (*mkdir)    (struct fuse_cred *, const char *, mode_t);
-    int (*unlink)   (struct fuse_cred *, const char *);
-    int (*rmdir)    (struct fuse_cred *, const char *);
-    int (*symlink)  (struct fuse_cred *, const char *, const char *);
-    int (*rename)   (struct fuse_cred *, const char *, const char *);
-    int (*link)     (struct fuse_cred *, const char *, const char *);
-    int (*chmod)    (struct fuse_cred *, const char *, mode_t);
-    int (*chown)    (struct fuse_cred *, const char *, uid_t, gid_t);
-    int (*truncate) (struct fuse_cred *, const char *, off_t);
-    int (*utime)    (struct fuse_cred *, const char *, struct utimbuf *);
-    int (*open)     (struct fuse_cred *, const char *, int);
-    int (*read)     (struct fuse_cred *, const char *, char *, size_t, off_t);
-    int (*write)    (struct fuse_cred *, const char *, const char *, size_t, off_t);
+    int (*getattr)  (const char *, struct stat *);
+    int (*readlink) (const char *, char *, size_t);
+    int (*getdir)   (const char *, fuse_dirh_t, fuse_dirfil_t);
+    int (*mknod)    (const char *, mode_t, dev_t);
+    int (*mkdir)    (const char *, mode_t);
+    int (*unlink)   (const char *);
+    int (*rmdir)    (const char *);
+    int (*symlink)  (const char *, const char *);
+    int (*rename)   (const char *, const char *);
+    int (*link)     (const char *, const char *);
+    int (*chmod)    (const char *, mode_t);
+    int (*chown)    (const char *, uid_t, gid_t);
+    int (*truncate) (const char *, off_t);
+    int (*utime)    (const char *, struct utimbuf *);
+    int (*open)     (const char *, int);
+    int (*read)     (const char *, char *, size_t, off_t);
+    int (*write)    (const char *, const char *, size_t, off_t);
 };
 
 /* FUSE flags: */

@@ -354,16 +354,13 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     }
                 
     res = write(f->fd, outbuf, outsize);
-    if(res == -1)
-        perror("writing fuse device");
+    if(res == -1) {
+        /* ENOENT means the operation was interrupted */
+        if(errno != ENOENT)
+            perror("writing fuse device");
+    }
 
     free(outbuf);
-}
-
-static void fill_cred(struct fuse_in_header *in, struct fuse_cred *cred)
-{
-    cred->uid = in->uid;
-    cred->gid = in->gid;
 }
 
 static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
@@ -372,15 +369,13 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     char *path;
     struct stat buf;
     struct fuse_lookup_out arg;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.getattr)
-            res = f->op.getattr(&cred, path, &buf);
+            res = f->op.getattr(path, &buf);
         free(path);
     }
     if(res == 0) {
@@ -402,15 +397,13 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     char *path;
     struct stat buf;
     struct fuse_getattr_out arg;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.getattr)
-            res = f->op.getattr(&cred, path, &buf);
+            res = f->op.getattr(path, &buf);
         free(path);
     }
     if(res == 0) 
@@ -419,20 +412,19 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
-int do_chmod(struct fuse *f, struct fuse_cred *cred, const char *path,
-             struct fuse_attr *attr)
+int do_chmod(struct fuse *f, const char *path, struct fuse_attr *attr)
 {
     int res;
 
     res = -ENOSYS;
     if(f->op.chmod)
-        res = f->op.chmod(cred, path, attr->mode);
+        res = f->op.chmod(path, attr->mode);
 
     return res;
 }        
 
-int do_chown(struct fuse *f, struct fuse_cred *cred, const char *path,
-             struct fuse_attr *attr, int valid)
+int do_chown(struct fuse *f, const char *path, struct fuse_attr *attr,
+             int valid)
 {
     int res;
     uid_t uid = (valid & FATTR_UID) ? attr->uid : (uid_t) -1;
@@ -440,25 +432,23 @@ int do_chown(struct fuse *f, struct fuse_cred *cred, const char *path,
     
     res = -ENOSYS;
     if(f->op.chown)
-        res = f->op.chown(cred, path, uid, gid);
+        res = f->op.chown(path, uid, gid);
 
     return res;
 }
 
-int do_truncate(struct fuse *f, struct fuse_cred *cred, const char *path,
-                struct fuse_attr *attr)
+int do_truncate(struct fuse *f, const char *path, struct fuse_attr *attr)
 {
     int res;
 
     res = -ENOSYS;
     if(f->op.truncate)
-        res = f->op.truncate(cred, path, attr->size);
+        res = f->op.truncate(path, attr->size);
 
     return res;
 }
 
-int do_utime(struct fuse *f, struct fuse_cred *cred, const char *path,
-             struct fuse_attr *attr)
+int do_utime(struct fuse *f, const char *path, struct fuse_attr *attr)
 {
     int res;
     struct utimbuf buf;
@@ -466,7 +456,7 @@ int do_utime(struct fuse *f, struct fuse_cred *cred, const char *path,
     buf.modtime = attr->mtime;
     res = -ENOSYS;
     if(f->op.utime)
-        res = f->op.utime(cred, path, &buf);
+        res = f->op.utime(path, &buf);
 
     return res;
 }
@@ -479,9 +469,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
     int valid = arg->valid;
     struct fuse_attr *attr = &arg->attr;
     struct fuse_setattr_out outarg;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
@@ -489,16 +477,16 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
         if(f->op.getattr) {
             res = 0;
             if(!res && (valid & FATTR_MODE))
-                res = do_chmod(f, &cred, path, attr);
+                res = do_chmod(f, path, attr);
             if(!res && (valid & (FATTR_UID | FATTR_GID)))
-                res = do_chown(f, &cred, path, attr, valid);
+                res = do_chown(f, path, attr, valid);
             if(!res && (valid & FATTR_SIZE))
-                res = do_truncate(f, &cred, path, attr);
+                res = do_truncate(f, path, attr);
             if(!res && (valid & FATTR_UTIME))
-                res = do_utime(f, &cred, path, attr);
+                res = do_utime(f, path, attr);
             if(!res) {
                 struct stat buf;
-                res = f->op.getattr(&cred, path, &buf);
+                res = f->op.getattr(path, &buf);
                 if(!res)
                     convert_stat(&buf, &outarg.attr);
             }
@@ -513,15 +501,13 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
     int res;
     char link[PATH_MAX + 1];
     char *path;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.readlink)
-            res = f->op.readlink(&cred, path, link, sizeof(link));
+            res = f->op.readlink(path, link, sizeof(link));
         free(path);
     }
     link[PATH_MAX] = '\0';
@@ -534,9 +520,7 @@ static void do_getdir(struct fuse *f, struct fuse_in_header *in)
     struct fuse_getdir_out arg;
     struct fuse_dirhandle dh;
     char *path;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     dh.fuse = f;
     dh.fp = tmpfile();
     dh.dir = in->ino;
@@ -545,7 +529,7 @@ static void do_getdir(struct fuse *f, struct fuse_in_header *in)
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.getdir)
-            res = f->op.getdir(&cred, path, &dh, (fuse_dirfil_t) fill_dir);
+            res = f->op.getdir(path, &dh, (fuse_dirfil_t) fill_dir);
         free(path);
     }
     fflush(dh.fp);
@@ -561,17 +545,15 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     char *path;
     struct fuse_mknod_out outarg;
     struct stat buf;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path_name(f, in->ino, inarg->name);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.mknod && f->op.getattr) {
-            res = f->op.mknod(&cred, path, inarg->mode, inarg->rdev);
+            res = f->op.mknod(path, inarg->mode, inarg->rdev);
             if(res == 0)
-                res = f->op.getattr(&cred, path, &buf);
+                res = f->op.getattr(path, &buf);
         }
         free(path);
     }
@@ -589,15 +571,13 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path_name(f, in->ino, inarg->name);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.mkdir)
-            res = f->op.mkdir(&cred, path, inarg->mode);
+            res = f->op.mkdir(path, inarg->mode);
         free(path);
     }
     send_reply(f, in, res, NULL, 0);
@@ -607,20 +587,18 @@ static void do_remove(struct fuse *f, struct fuse_in_header *in, char *name)
 {
     int res;
     char *path;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
     if(path != NULL) {
         res = -ENOSYS;
         if(in->opcode == FUSE_UNLINK) {
             if(f->op.unlink)
-                res = f->op.unlink(&cred, path);
+                res = f->op.unlink(path);
         }
         else {
             if(f->op.rmdir)
-                res = f->op.rmdir(&cred, path);
+                res = f->op.rmdir(path);
         }
         free(path);
     }
@@ -634,15 +612,13 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
 {
     int res;
     char *path;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.symlink)
-            res = f->op.symlink(&cred, link, path);
+            res = f->op.symlink(link, path);
         free(path);
     }
     send_reply(f, in, res, NULL, 0);
@@ -658,9 +634,7 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
     char *newname = inarg->names + strlen(oldname) + 1;
     char *oldpath;
     char *newpath;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     oldpath = get_path_name(f, olddir, oldname);
     if(oldpath != NULL) {
@@ -668,7 +642,7 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
         if(newpath != NULL) {
             res = -ENOSYS;
             if(f->op.rename)
-                res = f->op.rename(&cred, oldpath, newpath);
+                res = f->op.rename(oldpath, newpath);
             if(res == 0)
                 rename_node(f, olddir, oldname, newdir, newname);
             free(newpath);
@@ -684,9 +658,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *oldpath;
     char *newpath;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     oldpath = get_path(f, in->ino);
     if(oldpath != NULL) {
@@ -694,7 +666,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
         if(newpath != NULL) {
             res = -ENOSYS;
             if(f->op.link)
-                res = f->op.link(&cred, oldpath, newpath);
+                res = f->op.link(oldpath, newpath);
             free(newpath);
         }
         free(oldpath);
@@ -707,15 +679,13 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.open)
-            res = f->op.open(&cred, path, arg->flags);
+            res = f->op.open(path, arg->flags);
         free(path);
     }
     send_reply(f, in, res, NULL, 0);
@@ -728,15 +698,13 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     char *path;
     char *buf = (char *) malloc(arg->size);
     size_t size;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.read)
-            res = f->op.read(&cred, path, buf, arg->size, arg->offset);
+            res = f->op.read(path, buf, arg->size, arg->offset);
         free(path);
     }
     
@@ -755,15 +723,13 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
-    struct fuse_cred cred;
 
-    fill_cred(in, &cred);
     res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.write)
-            res = f->op.write(&cred, path, arg->buf, arg->size, arg->offset);
+            res = f->op.write(path, arg->buf, arg->size, arg->offset);
         free(path);
     }
     
@@ -905,11 +871,13 @@ void fuse_loop(struct fuse *f)
         res = read(f->fd, inbuf, sizeof(inbuf));
         if(res == -1) {
             perror("reading fuse device");
-            continue;
+            /* BAD... This will happen again */
+            exit(1);
         }
         if((size_t) res < sizeof(struct fuse_in_header)) {
             fprintf(stderr, "short read on fuse device\n");
-            continue;
+            /* Cannot happen */
+            exit(1);
         }
 
         cmd = (struct cmd *) malloc(sizeof(struct cmd));

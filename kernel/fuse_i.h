@@ -95,7 +95,7 @@ struct fuse_out {
 	void *arg;
 };
 
-#define FUSE_IN_INIT { {0, 0, 0, current->fsuid, current->fsgid}, 0, 0 }
+#define FUSE_IN_INIT { {0, 0, 0}, 0, 0 }
 #define FUSE_OUT_INIT { {0, 0}, 0, 0, 0 }
 
 

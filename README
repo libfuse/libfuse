@@ -11,11 +11,11 @@ You can download the source code releases from
   http://sourceforge.net/projects/avf
 
 or alternatively you can use CVS to get the very latest development
-version: set the cvsroot to
+version by setting the cvsroot to
 
   :pserver:anonymous@cvs.avf.sourceforge.net:/cvsroot/avf
 
-and check out the 'fuse' module.
+and checking out the 'fuse' module.
 
 Installation
 ============
@@ -49,13 +49,10 @@ steps:
 
   4) ls -al /mnt/whatever
 
-  5) Be glad!
+  5) Be glad
 
-If it doesn't work out, you can ask the me. (Oh yeah, and you need to
-do 'insmod kernel/fuse.o' before running your program, in case you
-forgot).
-
-See the file 'include/fuse.h' for documentation of the library interface.
+If it doesn't work out, please ask!  Also see the file 'include/fuse.h' for
+detailed documentation of the library interface.
 
 
 Security
@@ -65,9 +62,8 @@ If you run 'make install', the fusermount program is installed
 set-user-id to root.  This is done to allow normal users to mount
 their own filesystem implementations. 
 
-There must however be some limitations to forbid the Bad User to do
-Naughty Things with your Beautiful system.  Currently those
-limitations are:
+There must however be some limitations, in order to prevent Bad User from
+doing nasty things.  Currently those limitations are:
 
   - The user can only mount on a mountpoint, for which it has write
     permission
@@ -75,16 +71,15 @@ limitations are:
   - The mountpoint is not a sticky directory which isn't owned by the
     user (like /tmp usually is)
 
-  - If the user doing the mount is not root, then no other user
-    (including root) can access the contents of the mounted
+  - No other user (including root) can access the contents of the mounted
     filesystem.
 
-When linux will have private namespaces (as soon as version 2.5 comes
-out) then this third condition is useless and can be gotten rid of.
+When linux will have private namespaces (as soon as version 2.5 comes out
+hopefully) then this third condition is useless and can be gotten rid of.
 
-Currently the first two conditions are checked by the fusermount
-program before doing the mount.  This has the nice feature, that it's
-totally useless. Here's why:
+Currently the first two conditions are checked by the fusermount program
+before doing the mount.  This has the nice feature, that it's totally
+useless.  Here's why:
 
    - user creates /tmp/mydir
    - user starts fusermount
@@ -96,6 +91,5 @@ totally useless. Here's why:
 So to make this secure, the checks must be done by the kernel.  And so
 there is a patch (patch/ms_permission.patch) which does exactly this.
 This is against 2.4.14, but applies to some earlier kernels (not too
-much earlier though), and possibly some later (I couldn't know, could
-I?).
+much earlier though), and possibly some later.
 
