@@ -1,0 +1,130 @@
+The following diagram shows how a filesystem operation (in this
+example unlink) is performed in FUSE.
+
+NOTE: everything in this description is greatly simplified
+
+ |  "rm /mnt/fuse/file"               |  FUSE filesystem daemon
+ |                                    |
+ |                                    |  >sys_read()
+ |                                    |    >fuse_dev_read()
+ |                                    |      >request_wait()
+ |                                    |        [sleep on fc->waitq]
+ |                                    |
+ |  >sys_unlink()                     |
+ |    >fuse_unlink()                  |
+ |      [get request from             |
+ |       fc->unused_list]             |
+ |      >request_send()               |
+ |        [queue req on fc->pending]  |
+ |        [wake up fc->waitq]         |        [woken up]
+ |        >request_wait_answer()      |
+ |          [sleep on req->waitq]     |
+ |                                    |      <request_wait()
+ |                                    |      [remove req from fc->pending]
+ |                                    |      [copy req to read buffer]
+ |                                    |      [add req to fc->processing]
+ |                                    |    <fuse_dev_read()
+ |                                    |  <sys_read()
+ |                                    |
+ |                                    |  [perform unlink]
+ |                                    |
+ |                                    |  >sys_write()
+ |                                    |    >fuse_dev_write()
+ |                                    |      [look up req in fc->processing]
+ |                                    |      [remove from fc->processing]
+ |                                    |      [copy write buffer to req]
+ |          [woken up]                |      [wake up req->waitq]
+ |                                    |    <fuse_dev_write()
+ |                                    |  <sys_write()
+ |        <request_wait_answer()      |
+ |      <request_send()               |
+ |      [add request to               |
+ |       fc->unused_list]             |
+ |    <fuse_unlink()                  |
+ |  <sys_unlink()                     |
+
+There are a couple of ways in which to deadlock a FUSE filesystem.
+Since we are talking about unprivileged userspace programs,
+something must be done about these.
+
+Scenario 1 -  Simple deadlock
+-----------------------------
+
+ |  "rm /mnt/fuse/file"               |  FUSE filesystem daemon
+ |                                    |
+ |  >sys_unlink("/mnt/fuse/file")     |
+ |    [acquire inode semaphore        |
+ |     for "file"]                    |
+ |    >fuse_unlink()                  |
+ |      [sleep on req->waitq]         |
+ |                                    |  <sys_read()
+ |                                    |  >sys_unlink("/mnt/fuse/file")
+ |                                    |    [acquire inode semaphore
+ |                                    |     for "file"]
+ |                                    |    *DEADLOCK*
+
+The solution for this is to allow requests to be interrupted while
+they are in userspace:
+
+ |      [interrupted by signal]       |
+ |    <fuse_unlink()                  |
+ |    [release semaphore]             |    [semaphore acquired]
+ |  <sys_unlink()                     |
+ |                                    |    >fuse_unlink()
+ |                                    |      [queue req on fc->pending]
+ |                                    |      [wake up fc->waitq]
+ |                                    |      [sleep on req->waitq]
+
+If the filesystem daemon was single threaded, this will stop here,
+since there's no other thread to dequeue and execute the request.
+In this case the solution is to kill the FUSE daemon as well.  If
+there are multiple serving threads, you just have to kill them as
+long as any remain.
+
+Moral: a filesystem which deadlocks, can soon find itself dead.
+
+Scenario 2 - Tricky deadlock
+----------------------------
+
+This one needs a carefully crafted filesystem.  It's a variation on
+the above, only the call back to the filesystem is not explicit,
+but is caused by a pagefault.
+
+ |  Kamikaze filesystem thread 1      |  Kamikaze filesystem thread 2
+ |                                    |
+ |  [fd = open("/mnt/fuse/file")]     |  [request served normally]
+ |  [mmap fd to 'addr']               |
+ |  [close fd]                        |  [FLUSH triggers 'magic' flag]
+ |  [read a byte from addr]           |
+ |    >do_page_fault()                |
+ |      [find or create page]         |
+ |      [lock page]                   |
+ |      >fuse_readpage()              |
+ |         [queue READ request]       |
+ |         [sleep on req->waitq]      |
+ |                                    |  [read request to buffer]
+ |                                    |  [create reply header before addr]
+ |                                    |  >sys_write(addr - headerlength)
+ |                                    |    >fuse_dev_write()
+ |                                    |      [look up req in fc->processing]
+ |                                    |      [remove from fc->processing]
+ |                                    |      [copy write buffer to req]
+ |                                    |        >do_page_fault()
+ |                                    |           [find or create page]
+ |                                    |           [lock page]
+ |                                    |           * DEADLOCK *
+
+Solution is again to let the the request be interrupted (not
+elaborated further).
+
+An additional problem is that while the write buffer is being
+copied to the request, the request must not be interrupted.  This
+is because the destination address of the copy may not be valid
+after the request is interrupted.
+
+This is solved with doing the copy atomically, and allowing
+interruption while the page(s) belonging to the write buffer are
+faulted with get_user_pages().  The 'req->locked' flag indicates
+when the copy is taking place, and interruption is delayed until
+this flag is unset.
+

@@ -1,3 +1,7 @@
+2005-03-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: trivial cleanups
+
 2005-03-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fsyncdir() operation
