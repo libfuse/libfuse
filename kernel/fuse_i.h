@@ -43,6 +43,25 @@
 
 #define FUSE_BLOCK_PAGE_SHIFT (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)
 
+/** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
+module will check permissions based on the file mode.  Otherwise no
+permission checking is done in the kernel */
+#define FUSE_DEFAULT_PERMISSIONS (1 << 0)
+
+/** If the FUSE_ALLOW_OTHER flag is given, then not only the user
+    doing the mount will be allowed to access the filesystem */
+#define FUSE_ALLOW_OTHER         (1 << 1)
+
+/** If the FUSE_KERNEL_CACHE flag is given, then files will be cached
+    until the INVALIDATE operation is invoked */
+#define FUSE_KERNEL_CACHE        (1 << 2)
+
+/** Allow FUSE to combine reads into 64k chunks.  This is useful if
+    the filesystem is better at handling large chunks.  NOTE: in
+    current implementation the raw throughput is worse for large reads
+    than for small. */
+#define FUSE_LARGE_READ          (1 << 3)
+
 /**
  * A Fuse connection.
  *

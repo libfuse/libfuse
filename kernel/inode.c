@@ -12,7 +12,10 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/file.h>
+#include <linux/mount.h>
 #include <linux/proc_fs.h>
+#include <linux/parser.h>
+#include <linux/seq_file.h>
 #ifdef KERNEL_2_6
 #include <linux/statfs.h>
 #endif
@@ -26,9 +29,13 @@
 #ifndef FS_SAFE
 #define FS_SAFE 0
 #endif
-#ifndef FS_BINARY_MOUNTDATA
-#define FS_BINARY_MOUNTDATA 0
-#endif
+
+struct fuse_mount_data {
+	int fd;
+	unsigned int rootmode;
+	unsigned int uid;
+	unsigned int flags;
+};
 
 static void fuse_read_inode(struct inode *inode)
 {
@@ -111,24 +118,113 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	return out.h.error;
 }
 
-static struct fuse_conn *get_conn(struct fuse_mount_data *d)
+enum { opt_fd, opt_rootmode, opt_uid, opt_default_permissions, 
+       opt_allow_other, opt_kernel_cache, opt_large_read, opt_err };
+
+static match_table_t tokens = {
+	{opt_fd, "fd=%u"},
+	{opt_rootmode, "rootmode=%o"},
+	{opt_uid, "uid=%u"},
+	{opt_default_permissions, "default_permissions"},
+	{opt_allow_other, "allow_other"},
+	{opt_kernel_cache, "kernel_cache"},
+	{opt_large_read, "large_read"},
+	{opt_err, NULL}
+};
+
+static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
+{
+	char *p;
+	memset(d, 0, sizeof(struct fuse_mount_data));
+	d->fd = -1;
+
+	if (opt == NULL)
+		return 0;
+
+	if (opt[PAGE_SIZE - 1] != '\0')
+		return 0;
+
+	while ((p = strsep(&opt, ",")) != NULL) {
+		int token;
+		int value;
+		substring_t args[MAX_OPT_ARGS];
+		if (!*p)
+			continue;
+		
+		token = match_token(p, tokens, args);
+		switch (token) {
+		case opt_fd:
+			if (match_int(&args[0], &value))
+				return 0;
+			d->fd = value;
+			break;
+
+		case opt_rootmode:
+			if (match_octal(&args[0], &value))
+				return 0;
+			d->rootmode = value;
+			break;
+			
+		case opt_uid:
+			if (match_int(&args[0], &value))
+				return 0;
+			d->uid = value;
+			break;
+			
+		case opt_default_permissions:
+			d->flags |= FUSE_DEFAULT_PERMISSIONS;
+			break;
+
+		case opt_allow_other:
+			d->flags |= FUSE_ALLOW_OTHER;
+			break;
+
+		case opt_kernel_cache:
+			d->flags |= FUSE_KERNEL_CACHE;
+			break;
+			
+		case opt_large_read:
+			d->flags |= FUSE_LARGE_READ;
+			break;
+		default:
+			return 0;
+		}
+	}
+	if (d->fd == -1)
+		return 0;
+
+	return 1;
+}
+
+static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
+{
+	struct fuse_conn *fc = SB_FC(mnt->mnt_sb);
+
+	seq_printf(m, ",uid=%u", fc->uid);
+	if (fc->flags & FUSE_DEFAULT_PERMISSIONS)
+		seq_puts(m, ",default_permissions");
+	if (fc->flags & FUSE_ALLOW_OTHER)
+		seq_puts(m, ",allow_other");
+	if (fc->flags & FUSE_KERNEL_CACHE)
+		seq_puts(m, ",kernel_cache");
+	if (fc->flags & FUSE_LARGE_READ)
+		seq_puts(m, ",large_read");
+	return 0;
+}
+
+static struct fuse_conn *get_conn(int fd)
 {
 	struct fuse_conn *fc = NULL;
 	struct file *file;
 	struct inode *ino;
 
-	if (d == NULL) {
-		printk("fuse_read_super: Bad mount data\n");
-		return NULL;
-	}
-
-	file = fget(d->fd);
+	file = fget(fd);
 	ino = NULL;
 	if (file)
 		ino = file->f_dentry->d_inode;
 	
 	if (!ino || !proc_fuse_dev || proc_fuse_dev->low_ino != ino->i_ino) {
-		printk("fuse_read_super: Bad file: %i\n", d->fd);
+		printk("FUSE: bad communication file descriptor: %i\n", fd);
 		goto out;
 	}
 
@@ -186,18 +282,20 @@ static struct super_operations fuse_super_operations = {
 	.clear_inode	= fuse_clear_inode,
 	.put_super	= fuse_put_super,
 	.statfs		= fuse_statfs,
+	.show_options	= fuse_show_options,
 };
 
 static int fuse_read_super(struct super_block *sb, void *data, int silent)
 {	
 	struct fuse_conn *fc;
 	struct inode *root;
-	struct fuse_mount_data *d = data;
+	struct fuse_mount_data d;
 
-	if (!capable(CAP_SYS_ADMIN)) {
-		if (d->flags & FUSE_ALLOW_OTHER)
-			return -EPERM;
-	}
+	if (!parse_fuse_opt((char *) data, &d))
+		return -EINVAL;
+
+	if ((d.flags & FUSE_ALLOW_OTHER) && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
 
 	sb->s_blocksize = PAGE_CACHE_SIZE;
 	sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
@@ -208,9 +306,10 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	sb->s_export_op = &fuse_export_operations;
 #endif
 
-	fc = get_conn(d);
+	fc = get_conn(d.fd);
 	if (fc == NULL)
 		return -EINVAL;
+
 	spin_lock(&fuse_lock);
 	if (fc->sb != NULL) {
 		printk("fuse_read_super: connection already mounted\n");
@@ -218,15 +317,15 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 		return -EINVAL;
 	}
 	fc->sb = sb;
-	fc->flags = d->flags;
-	fc->uid = d->uid;
+	fc->flags = d.flags;
+	fc->uid = d.uid;
 	spin_unlock(&fuse_lock);
 	
 	/* fc is needed in fuse_init_file_inode which could be called
 	   from get_root_inode */
 	SB_FC(sb) = fc;
 
-	root = get_root_inode(sb, d->rootmode);
+	root = get_root_inode(sb, d.rootmode);
 	if (root == NULL) {
 		printk("fuse_read_super: failed to get root inode\n");
 		return -EINVAL;
@@ -252,7 +351,7 @@ static struct file_system_type fuse_fs_type = {
 	.name		= "fuse",
 	.get_sb		= fuse_get_sb,
 	.kill_sb	= kill_anon_super,
-	.fs_flags	= FS_SAFE | FS_BINARY_MOUNTDATA,
+	.fs_flags	= FS_SAFE,
 };
 #else
 static struct super_block *fuse_read_super_compat(struct super_block *sb,

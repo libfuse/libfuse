@@ -41,6 +41,13 @@
 
 const char *progname;
 
+struct fuse_opts {
+    int kernel_cache;
+    int default_permissions;
+    int allow_other;
+    int large_read;
+};
+
 static const char *get_user_name()
 {
     struct passwd *pw = getpwuid(getuid());
@@ -289,11 +296,12 @@ static void restore_privs()
 }
 
 static int do_mount(const char *dev, const char *mnt, const char *type,
-                    mode_t rootmode, int fd, int fuseflags)
+                    mode_t rootmode, int fd, struct fuse_opts *opts)
 {
     int res;
-    struct fuse_mount_data data;
     int flags = MS_NOSUID | MS_NODEV;
+    char optbuf[1024];
+    char *s = optbuf;
 
     if(getuid() != 0) {
         res = drop_privs();
@@ -301,12 +309,17 @@ static int do_mount(const char *dev, const char *mnt, const char *type,
             return -1;
     }
     
-    data.fd = fd;
-    data.rootmode = rootmode;
-    data.uid = getuid();
-    data.flags = fuseflags;
+    s += sprintf(s, "fd=%i,rootmode=%o,uid=%i", fd, rootmode, getuid());
+    if (opts->kernel_cache)
+        s += sprintf(s, ",kernel_cache");
+    if (opts->default_permissions)
+        s += sprintf(s, ",default_permissions");
+    if (opts->allow_other)
+        s += sprintf(s, ",allow_other");
+    if (opts->large_read)
+        s += sprintf(s, ",large_read");
 
-    res = mount(dev, mnt, type, flags, &data);
+    res = mount(dev, mnt, type, flags, optbuf);
     if(res == -1)
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
 
@@ -354,7 +367,8 @@ static int check_perm(const char *mnt, struct stat *stbuf)
     return 0;
 }
 
-static int mount_fuse(const char *mnt, int flags, const char *fsname)
+static int mount_fuse(const char *mnt, struct fuse_opts *opts,
+                      const char *fsname)
 {
     int res;
     int fd;
@@ -390,7 +404,7 @@ static int mount_fuse(const char *mnt, int flags, const char *fsname)
     if(fsname == NULL)
         fsname = dev;
 
-    res = do_mount(fsname, mnt, type, stbuf.st_mode & S_IFMT, fd, flags);
+    res = do_mount(fsname, mnt, type, stbuf.st_mode & S_IFMT, fd, opts);
     if(res == -1)
         return -1;
 
@@ -499,10 +513,12 @@ int main(int argc, char *argv[])
     int lazy = 0;
     char *commfd;
     const char *fsname = NULL;
-    int flags = 0;
     int quiet = 0;
+    struct fuse_opts opts;
     int cfd;
 
+
+    memset(&opts, 0, sizeof(struct fuse_opts));
     progname = argv[0];
     
     for(a = 1; a < argc; a++) {
@@ -511,7 +527,7 @@ int main(int argc, char *argv[])
 
         switch(argv[a][1]) {
         case 'c':
-            flags |= FUSE_KERNEL_CACHE;
+            opts.kernel_cache = 1;
             break;
 
         case 'h':
@@ -527,7 +543,7 @@ int main(int argc, char *argv[])
             break;
             
         case 'p':
-            flags |= FUSE_DEFAULT_PERMISSIONS;
+            opts.default_permissions = 1;
             break;
             
         case 'x':
@@ -536,7 +552,7 @@ int main(int argc, char *argv[])
                         progname, argv[a]);
                 exit(1);
             }
-            flags |= FUSE_ALLOW_OTHER;
+            opts.allow_other = 1;
             break;
             
         case 'n':
@@ -549,7 +565,7 @@ int main(int argc, char *argv[])
             break;
 
         case 'l':
-            flags |= FUSE_LARGE_READ;
+            opts.large_read = 1;
             break;
             
         case 'q':
@@ -604,7 +620,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    fd = mount_fuse(mnt, flags, fsname);
+    fd = mount_fuse(mnt, &opts, fsname);
     if(fd == -1)
         exit(1);
 
