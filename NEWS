@@ -2,9 +2,9 @@ What is new in 2.2
 
 Userspace changes:
 
- - Add fuse_file_info structure to file operations, this allows the filesystem
-   to return a file handle in open() which is passed to read(), write(), flush(), 
-   fsync() and release().
+ - Add fuse_file_info structure to file operations, this allows the
+   filesystem to return a file handle in open() which is passed to
+   read(), write(), flush(), fsync() and release().
 
  - Add source compatibility with 2.1 and 1.4 releases
 
@@ -28,6 +28,10 @@ Kernel changes:
 
  - Remove /sys/fs/fuse/version.  Version checking is now done through
    the fuse device
+
+ - Replace directory reading method on the kernel interface.  Instead
+   of passing an open file descriptor to the kernel, send data through
+   the FUSE device, like all other operations.
 
 ============================================================================
 
