@@ -158,17 +158,14 @@ static int fuse_flush(struct file *file)
 	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_file *ff = file->private_data;
-	struct fuse_req *req;
+	struct fuse_req *req = ff->release_req;
 	struct fuse_flush_in inarg;
 	int err;
 	
 	if (fc->no_flush)
 		return 0;
 
-	req = fuse_get_request(fc);
-	if (!req)
-		return -EINTR;
-
+	down(&inode->i_sem);
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.fh = ff->fh;
 	req->in.h.opcode = FUSE_FLUSH;
@@ -176,13 +173,13 @@ static int fuse_flush(struct file *file)
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
-	request_send(fc, req);
+	request_send_nonint(fc, req);
 	err = req->out.h.error;
+	up(&inode->i_sem);
 	if (err == -ENOSYS) {
 		fc->no_flush = 1;
 		err = 0;
 	}
-	fuse_put_request(fc, req);
 	return err;
 }
 

@@ -1,3 +1,8 @@
+2004-10-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't allow fuse_flush() to be interrupted (bug found by David
+	Shaw)
+
 2004-09-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add PID to fuse_context.  Patch by Steven James
