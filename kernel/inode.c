@@ -46,10 +46,10 @@ MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_o
 #endif
 struct fuse_mount_data {
 	int fd;
-	unsigned int rootmode;
-	unsigned int uid;
-	unsigned int flags;
-	unsigned int max_read;
+	unsigned rootmode;
+	unsigned uid;
+	unsigned flags;
+	unsigned max_read;
 };
 
 static struct inode *fuse_alloc_inode(struct super_block *sb)
@@ -392,7 +392,7 @@ static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 	return fc;
 }
 
-static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
+static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 {
 	struct fuse_attr attr;
 	memset(&attr, 0, sizeof(attr));

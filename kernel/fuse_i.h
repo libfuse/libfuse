@@ -6,7 +6,6 @@
     See the file COPYING.
 */
 
-
 #include <linux/fuse.h>
 #ifndef FUSE_MAINLINE
 #include <linux/version.h>
@@ -54,13 +53,6 @@
 #ifndef __user
 #define __user
 #endif
-#ifndef KERNEL_2_6
-/** Read combining parameters */
-#define FUSE_BLOCK_SHIFT 16
-#define FUSE_BLOCK_SIZE 65536
-#define FUSE_BLOCK_MASK 0xffff0000
-#define FUSE_BLOCK_PAGE_SHIFT (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)
-#endif
 /* Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
 
@@ -69,8 +61,8 @@
 
 
 /** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
-module will check permissions based on the file mode.  Otherwise no
-permission checking is done in the kernel */
+    module will check permissions based on the file mode.  Otherwise no
+    permission checking is done in the kernel */
 #define FUSE_DEFAULT_PERMISSIONS (1 << 0)
 
 /** If the FUSE_ALLOW_OTHER flag is given, then not only the user
@@ -115,28 +107,30 @@ struct fuse_file {
 
 /** One input argument of a request */
 struct fuse_in_arg {
-	unsigned int size;
+	unsigned size;
 	const void *value;
 };
 
 /** The request input */
 struct fuse_in {
 	struct fuse_in_header h;
-	unsigned int numargs;
+	unsigned numargs;
 	struct fuse_in_arg args[3];
 };
 
 /** One output argument of a request */
 struct fuse_out_arg {
-	unsigned int size;
+	unsigned size;
 	void *value;
 };
 
 /** The request output */
 struct fuse_out {
 	struct fuse_out_header h;
-	unsigned int argvar;
-	unsigned int numargs;
+	unsigned argvar:1;
+	unsigned argpages:1;
+	unsigned page_zeroing:1;
+	unsigned numargs;
 	struct fuse_out_arg args[3];
 };
 
@@ -154,13 +148,13 @@ struct fuse_req {
 	struct list_head list;
 
 	/** True if the request has reply */
-	unsigned int isreply:1;
+	unsigned isreply:1;
 
 	/* The request is preallocated */
-	unsigned int preallocated:1;
+	unsigned preallocated:1;
 
 	/* The request is finished */
-	unsigned int finished;
+	unsigned finished;
 
 	/** The request input */
 	struct fuse_in in;
@@ -174,12 +168,6 @@ struct fuse_req {
 	/** Request completion callback */
 	fuse_reqend_t end;
 
-	/** Request copy out function */
-	fuse_copyout_t copy_out;
-
-	/** User data */
-	void *data;
-
 	/** Data for asynchronous requests */
 	union {
 		struct {
@@ -191,8 +179,13 @@ struct fuse_req {
 		struct fuse_forget_in forget_in;
 	} misc;
 
+	/** page vector */
 	struct page *pages[FUSE_MAX_PAGES_PER_REQ];
+
+	/** number of pages in vector */
 	unsigned num_pages;
+
+	/** offset of data on first page */
 	unsigned page_offset;
 };
 
@@ -214,13 +207,13 @@ struct fuse_conn {
 	uid_t uid;
 
 	/** The fuse mount flags for this mount */
-	unsigned int flags;
+	unsigned flags;
 
 	/** Maximum read size */
-	unsigned int max_read;
+	unsigned max_read;
 
 	/** Maximum write size */
-	unsigned int max_write;
+	unsigned max_write;
 
 	/** Readers of the connection are waiting on this */
 	wait_queue_head_t waitq;
@@ -244,22 +237,22 @@ struct fuse_conn {
 	int reqctr;
 	
 	/** Is fsync not implemented by fs? */
-	unsigned int no_fsync : 1;
+	unsigned no_fsync : 1;
 
 	/** Is flush not implemented by fs? */
-	unsigned int no_flush : 1;
+	unsigned no_flush : 1;
 
 	/** Is setxattr not implemented by fs? */
-	unsigned int no_setxattr : 1;
+	unsigned no_setxattr : 1;
 
 	/** Is getxattr not implemented by fs? */
-	unsigned int no_getxattr : 1;
+	unsigned no_getxattr : 1;
 
 	/** Is listxattr not implemented by fs? */
-	unsigned int no_listxattr : 1;
+	unsigned no_listxattr : 1;
 
 	/** Is removexattr not implemented by fs? */
-	unsigned int no_removexattr : 1;
+	unsigned no_removexattr : 1;
 
 #ifdef KERNEL_2_6
 	/** Backing dev info */
@@ -395,7 +388,7 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
  * Send asynchronous request
  */
 void request_send_async(struct fuse_conn *fc, struct fuse_req *req, 
-			fuse_reqend_t end, void *data);
+			fuse_reqend_t end);
 
 /**
  * Get the attributes of a file

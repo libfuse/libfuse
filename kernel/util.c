@@ -40,9 +40,9 @@ int __init fuse_init(void)
 	
 	return 0;
 
-  err_fs_cleanup:
+ err_fs_cleanup:
 	fuse_fs_cleanup();
-  err:
+ err:
 	return res;
 }
 

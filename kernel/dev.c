@@ -17,6 +17,7 @@
 #include <linux/proc_fs.h>
 #endif
 #include <linux/miscdevice.h>
+#include <linux/pagemap.h>
 #include <linux/file.h>
 
 static kmem_cache_t *fuse_req_cachep;
@@ -169,10 +170,9 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 }
 
 void request_send_async(struct fuse_conn *fc, struct fuse_req *req, 
-			   fuse_reqend_t end, void *data)
+			fuse_reqend_t end)
 {
 	req->end = end;
-	req->data = data;
 	req->isreply = 1;
 	
 	spin_lock(&fuse_lock);
@@ -289,7 +289,7 @@ static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 	return ret;
 }
 
-static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
+static struct fuse_req *request_find(struct fuse_conn *fc, unsigned unique)
 {
 	struct list_head *entry;
 	struct fuse_req *req = NULL;
@@ -310,6 +310,37 @@ static void process_getdir(struct fuse_req *req)
 {
 	struct fuse_getdir_out_i *arg = req->out.args[0].value;
 	arg->file = fget(arg->fd);
+}
+
+static int copy_out_pages(struct fuse_req *req, const char __user *buf,
+			  size_t nbytes)
+{
+	unsigned count;
+	unsigned page_offset;
+	unsigned zeroing = req->out.page_zeroing;
+	unsigned i;
+	
+	req->out.args[0].size = nbytes;
+	page_offset = req->page_offset;
+	count = min(nbytes, (unsigned) PAGE_CACHE_SIZE - page_offset);
+	for (i = 0; i < req->num_pages && (zeroing || nbytes); i++) {
+		struct page *page = req->pages[i];
+		char *tmpbuf = kmap(page);
+		int err = 0;
+		if (count < PAGE_CACHE_SIZE && zeroing)
+			memset(tmpbuf, 0, PAGE_CACHE_SIZE);
+		if (count)
+			err = copy_from_user(tmpbuf + page_offset, buf, count);
+		flush_dcache_page(page);
+		kunmap(page);
+		if (err)
+			return -EFAULT;
+		nbytes -= count;
+		buf += count;
+		count = min(nbytes, (unsigned) PAGE_CACHE_SIZE);
+		page_offset = 0;
+	}
+	return 0;
 }
 
 static inline int copy_out_one(struct fuse_out_arg *arg,
@@ -346,9 +377,10 @@ static inline int copy_out_args(struct fuse_req *req, const char __user *buf,
 	nbytes -= sizeof(struct fuse_out_header);
 		
 	if (!out->h.error) {
-		if (req->copy_out)
-			return req->copy_out(req, buf, nbytes);
-		else {
+		if (out->argpages) {
+			if (nbytes <= out->args[0].size)
+				return copy_out_pages(req, buf, nbytes);
+		} else {
 			for (i = 0; i < out->numargs; i++) {
 				struct fuse_out_arg *arg = &out->args[i];
 				int allowvar;
@@ -489,17 +521,17 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 	/* Unlocks fuse_lock: */
 	request_end(fc, req);
 
-  out:
+ out:
 	if (!err)
 		return nbytes;
 	else
 		return err;
 }
 
-static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
+static unsigned fuse_dev_poll(struct file *file, poll_table *wait)
 {
 	struct fuse_conn *fc = fuse_get_conn(file);
-	unsigned int mask = POLLOUT | POLLWRNORM;
+	unsigned mask = POLLOUT | POLLWRNORM;
 
 	if (!fc)
 		return -ENODEV;
@@ -605,7 +637,7 @@ static void fuse_version_clean(void)
 static struct proc_dir_entry *proc_fs_fuse;
 
 static int read_version(char *page, char **start, off_t off, int count,
-			   int *eof, void *data)
+			int *eof, void *data)
 {
 	char *s = page;
 	s += sprintf(s, "%i.%i\n", FUSE_KERNEL_VERSION,

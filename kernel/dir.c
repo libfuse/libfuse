@@ -389,7 +389,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	struct fuse_inode *fi = INO_FI(dir);
 	struct fuse_req *req;
 	struct fuse_entry_out outarg;
-	unsigned int len = strlen(link) + 1;
+	unsigned len = strlen(link) + 1;
 	int err;
 	
 	if (len > FUSE_SYMLINK_MAX)
@@ -619,7 +619,7 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 #ifdef KERNEL_2_6_10_PLUS
 				err = generic_permission(inode, mask, NULL);
 #else
-			 	err = vfs_permission(inode, mask);
+				err = vfs_permission(inode, mask);
 #endif
 		}
 
@@ -659,7 +659,7 @@ static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 			break;
 
 		over = filldir(dstbuf, dirent->name, dirent->namelen,
-			      file->f_pos, dirent->ino, dirent->type);
+			       file->f_pos, dirent->ino, dirent->type);
 		if (over)
 			break;
 
@@ -820,11 +820,10 @@ static int fuse_dir_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static unsigned int iattr_to_fattr(struct iattr *iattr,
-				   struct fuse_attr *fattr)
+static unsigned iattr_to_fattr(struct iattr *iattr, struct fuse_attr *fattr)
 {
-	unsigned int ivalid = iattr->ia_valid;
-	unsigned int fvalid = 0;
+	unsigned ivalid = iattr->ia_valid;
+	unsigned fvalid = 0;
 	
 	memset(fattr, 0, sizeof(*fattr));
 	
@@ -962,7 +961,7 @@ static int fuse_getattr(struct vfsmount *mnt, struct dentry *entry,
 }
 
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
-				   struct nameidata *nd)
+				  struct nameidata *nd)
 {
 	struct inode *inode;
 	int err = fuse_lookup_iget(dir, entry, &inode);
@@ -993,7 +992,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 }
 
 static int fuse_mknod_2_4(struct inode *dir, struct dentry *entry, int mode,
-		      int rdev)
+			  int rdev)
 {
 	return fuse_mknod(dir, entry, mode, rdev);
 }
