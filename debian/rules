@@ -57,6 +57,7 @@ clean-modules:
 
 	-$(MAKE) distclean
 
+	test -f debian/control || touch debian/control
 	dh_clean
 	
 install: build
