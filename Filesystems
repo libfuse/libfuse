@@ -103,3 +103,29 @@ Description:
   linux apps.
 
 ==============================================================================
+Name: C# bindings
+
+Author: Valient Gough <vgough at pobox com>
+
+Homepage: http://pobox.com/~vgough/fuse-csharp.html
+
+Description:
+
+  It allows you to write a Linux filesystem in C#. It uses the FUSE
+  library to do the actual Linux filesystem integration, and adds an
+  interface to the Mono runtime.
+
+==============================================================================
+Name: LUFS bridge (alpha)
+
+Author: Miklos Szeredi <mszeredi at inf bme hu >
+
+Homepage: http://sourceforge.net/project/showfiles.php?group_id=21636&package_id=109154
+
+Description:
+
+  This is a modified LUFS daemon, which uses the FUSE kernel module.  It
+  is binary compatible with existing LUFS filesystems, so no
+  recompilation is needed.
+
+==============================================================================

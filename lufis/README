@@ -1,10 +1,17 @@
-This is a modified LUFS daemon, which uses the FUSE kernel module.
+This is a modified LUFS daemon, which uses the FUSE kernel module.  It
+is binary compatible with existing LUFS filesystems, so no
+recompilation is needed.
+
+Licence:
+
+GPL (see COPYING).  Most of the code is copied from the LUFS source
+written by Florin Malita <mali@go.ro>, thanks!
 
 Disclaimer:
 
 This is currently just a proof-of-concept implementation, not a
 finished product.  That said it seems perfectly stable.  Comments, are
-welcome at <mszeredi@inf.bme.hu>.
+of course welcome <mszeredi@inf.bme.hu>.
 
 Installation:
 
@@ -16,7 +23,7 @@ Usage, for exampe:
 
   ./lufis fs=sshfs,host=kempelen,username=mszeredi /mnt/lufis/ -s
 
-The '-s' option is important!
+Don't forget the '-s' option, without it the filesystem may misbehave!
 
 For help on FUSE specific options see:
 
@@ -28,5 +35,3 @@ and
 
 For LUFS specific options (can only be specified in the first
 argument) see the README in the LUFS distribution
-
-
