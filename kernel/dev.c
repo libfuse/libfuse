@@ -180,10 +180,8 @@ void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
 
 void fuse_release_background(struct fuse_req *req)
 {
-	if (req->inode)
-		iput(req->inode);
-	if (req->inode2)
-		iput(req->inode2);
+	iput(req->inode);
+	iput(req->inode2);
 	if (req->file)
 		fput(req->file);
 	spin_lock(&fuse_lock);
@@ -435,24 +433,15 @@ struct fuse_copy_state {
 	unsigned len;
 };
 
-static unsigned fuse_copy_init(struct fuse_copy_state *cs, int write,
-			       struct fuse_req *req, const struct iovec *iov,
-			       unsigned long nr_segs)
+static void fuse_copy_init(struct fuse_copy_state *cs, int write,
+			   struct fuse_req *req, const struct iovec *iov,
+			   unsigned long nr_segs)
 {
-	unsigned i;
-	unsigned nbytes;
-
 	memset(cs, 0, sizeof(*cs));
 	cs->write = write;
 	cs->req = req;
 	cs->iov = iov;
 	cs->nr_segs = nr_segs;
-
-	nbytes = 0;
-	for (i = 0; i < nr_segs; i++)
-		nbytes += iov[i].iov_len;
-
-	return nbytes;
 }
 
 static inline void fuse_copy_finish(struct fuse_copy_state *cs)
@@ -616,7 +605,6 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 	struct fuse_req *req;
 	struct fuse_in *in;
 	struct fuse_copy_state cs;
-	unsigned nbytes;
 	unsigned reqsize;
 
 	spin_lock(&fuse_lock);
@@ -638,9 +626,9 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 
 	in = &req->in;
 	reqsize = req->in.h.len;
-	nbytes = fuse_copy_init(&cs, 1, req, iov, nr_segs);
+	fuse_copy_init(&cs, 1, req, iov, nr_segs);
 	err = -EINVAL;
-	if (nbytes >= reqsize) {
+	if (iov_length(iov, nr_segs) >= reqsize) {
 		err = fuse_copy_one(&cs, &in->h, sizeof(in->h));
 		if (!err)
 			err = fuse_copy_args(&cs, in->numargs, in->argpages,
@@ -721,7 +709,7 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 			       unsigned long nr_segs, loff_t *off)
 {
 	int err;
-	unsigned nbytes;
+	unsigned nbytes = iov_length(iov, nr_segs);
 	struct fuse_req *req;
 	struct fuse_out_header oh;
 	struct fuse_copy_state cs;
@@ -729,7 +717,7 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	if (!fc)
 		return -ENODEV;
 
-	nbytes = fuse_copy_init(&cs, 0, NULL, iov, nr_segs);
+	fuse_copy_init(&cs, 0, NULL, iov, nr_segs);
 	if (nbytes < sizeof(struct fuse_out_header))
 		return -EINVAL;
 
