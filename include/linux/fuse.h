@@ -119,7 +119,6 @@ struct fuse_getdir_out {
 struct fuse_mknod_in {
 	unsigned short mode;
 	unsigned short rdev;
-	char name[0];
 };
 
 struct fuse_mknod_out {
@@ -129,17 +128,14 @@ struct fuse_mknod_out {
 
 struct fuse_mkdir_in {
 	unsigned short mode;
-	char name[0];
 };
 
 struct fuse_rename_in {
 	unsigned long newdir;
-	char names[0];
 };
 
 struct fuse_link_in {
 	unsigned long newdir;
-	char name[0];
 };
 
 struct fuse_setattr_in {
@@ -163,7 +159,6 @@ struct fuse_read_in {
 struct fuse_write_in {
 	unsigned long long offset;
 	unsigned int size;
-	char buf[0];
 };
 
 struct fuse_statfs_out {

@@ -1,3 +1,7 @@
+2002-10-28  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Portablility fix (bug reported by C. Chris Erway)
+
 2002-10-25  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Use Mark Glines' fd passing method for default operation instead

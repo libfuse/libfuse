@@ -17,6 +17,7 @@
 #include <sys/param.h>
 
 #define FUSE_MAX_PATH 4096
+#define PARAM(inarg) (((char *)(inarg)) + sizeof(*inarg))
 
 static inline void inc_avail(struct fuse *f)
 {
@@ -572,7 +573,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     struct stat buf;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, inarg->name);
+    path = get_path_name(f, in->ino, PARAM(inarg));
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.mknod && f->op.getattr) {
@@ -584,7 +585,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     }
     if(res == 0) {
         convert_stat(&buf, &outarg.attr);
-        outarg.ino = find_node(f, in->ino, inarg->name, &outarg.attr,
+        outarg.ino = find_node(f, in->ino, PARAM(inarg), &outarg.attr,
                                in->unique);
     }
 
@@ -598,7 +599,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, inarg->name);
+    path = get_path_name(f, in->ino, PARAM(inarg));
     if(path != NULL) {
         res = -ENOSYS;
         if(f->op.mkdir)
@@ -655,8 +656,8 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
     int res;
     fino_t olddir = in->ino;
     fino_t newdir = inarg->newdir;
-    char *oldname = inarg->names;
-    char *newname = inarg->names + strlen(oldname) + 1;
+    char *oldname = PARAM(inarg);
+    char *newname = oldname + strlen(oldname) + 1;
     char *oldpath;
     char *newpath;
 
@@ -687,7 +688,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     res = -ENOENT;
     oldpath = get_path(f, in->ino);
     if(oldpath != NULL) {
-        newpath =  get_path_name(f, arg->newdir, arg->name);
+        newpath =  get_path_name(f, arg->newdir, PARAM(arg));
         if(newpath != NULL) {
             res = -ENOSYS;
             if(f->op.link)
@@ -774,7 +775,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
 
         res = -ENOSYS;
         if(f->op.write)
-            res = f->op.write(path, arg->buf, arg->size, arg->offset);
+            res = f->op.write(path, PARAM(arg), arg->size, arg->offset);
         free(path);
     }
     
