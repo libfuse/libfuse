@@ -8,7 +8,6 @@
 
 /* This file defines the kernel interface of FUSE */
 
-#include "fusestat.h"
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 2
 
@@ -59,6 +58,15 @@ struct fuse_attr {
 	unsigned long       atime;
 	unsigned long       mtime;
 	unsigned long       ctime;
+};
+
+struct fuse_kstatfs {
+    long block_size;
+    long blocks;
+    long blocks_free;
+    long files;
+    long files_free;
+    long namelen;
 };
 
 #define FATTR_MODE	(1 << 0)
@@ -159,7 +167,7 @@ struct fuse_write_in {
 };
 
 struct fuse_statfs_out {
-	struct fuse_statfs st;
+	struct fuse_kstatfs st;
 };
 
 struct fuse_in_header {

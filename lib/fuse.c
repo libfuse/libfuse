@@ -800,7 +800,7 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
 
     res = -ENOSYS;
     if(f->op.statfs)
-        res = f->op.statfs(&arg.st);
+        res = f->op.statfs((struct fuse_statfs *) &arg.st);
 
     send_reply(f, in, res, &arg, sizeof(arg));
 }

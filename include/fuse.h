@@ -15,13 +15,22 @@
 #include <sys/stat.h>
 #include <utime.h>
 
-#include <fusestat.h>
 /* ----------------------------------------------------------- *
  * Basic FUSE API                                              *
  * ----------------------------------------------------------- */
 
 /** Handle for a FUSE filesystem */
 struct fuse;
+
+/* Statfs structure used by FUSE */
+struct fuse_statfs {
+    long block_size;
+    long blocks;
+    long blocks_free;
+    long files;
+    long files_free;
+    long namelen;
+};
 
 /** Handle for a getdir() operation */
 typedef struct fuse_dirhandle *fuse_dirh_t;

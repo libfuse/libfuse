@@ -70,7 +70,7 @@ static void fuse_put_super(struct super_block *sb)
 	spin_unlock(&fuse_lock);
 }
 
-static void convert_fuse_statfs(struct statfs *stbuf, struct fuse_statfs *attr)
+static void convert_fuse_statfs(struct statfs *stbuf, struct fuse_kstatfs *attr)
 {
 	stbuf->f_type    = FUSE_SUPER_MAGIC;
 	stbuf->f_bsize   = attr->block_size;

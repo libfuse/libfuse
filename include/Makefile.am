@@ -2,4 +2,4 @@
 
 SUBDIRS = linux
 
-include_HEADERS = fuse.h fusestat.h
+include_HEADERS = fuse.h
