@@ -1,3 +1,7 @@
+2005-02-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: clean up some unitialized memory found with valgrind
+
 2005-02-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: set umask, otherwise /etc/mtab will have
