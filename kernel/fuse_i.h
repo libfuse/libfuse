@@ -113,6 +113,9 @@ struct fuse_req {
 	/* The request has been sent to the client */
 	unsigned int sent:1;
 
+	/* The request is preallocated */
+	unsigned int preallocated:1;
+
 	/* The request is finished */
 	unsigned int finished;
 
@@ -266,18 +269,23 @@ int fuse_fs_init(void);
 void fuse_fs_cleanup(void);
 
 
+/** 
+ * Allocate a request
+ */
+struct fuse_req *fuse_request_alloc(void);
+
 /**
- * Reserve a request
+ * Free a request
+ */
+void fuse_request_free(struct fuse_req *req);
+
+/**
+ * Reserve a preallocated request
  */
 struct fuse_req *fuse_get_request(struct fuse_conn *fc);
 
 /**
- * Reserve a request, non-iterruptable
- */
-struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc);
-
-/**
- * Reserve a request, non-blocking
+ * Reserve a preallocated request, non-blocking
  */
 struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc);
 

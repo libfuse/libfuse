@@ -60,13 +60,15 @@ void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req, ino_t ino,
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_req *req;
+	struct fuse_req *req = inode->u.generic_ip;
 	
-	if (fc == NULL)
+	if (fc == NULL) {
+		if (req)
+			fuse_request_free(req);
 		return;
-
-	req = fuse_get_request_nonint(fc);
-	fuse_send_forget(fc, req, inode->i_ino, inode->i_version);
+	}
+	if (req != NULL)
+		fuse_send_forget(fc, req, inode->i_ino, inode->i_version);
 }
 
 static void fuse_put_super(struct super_block *sb)

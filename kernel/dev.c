@@ -109,6 +109,7 @@ static struct fuse_req *do_get_request(struct fuse_conn *fc)
 	memset(req, 0, sizeof(*req));
 	INIT_LIST_HEAD(&req->list);
 	init_waitqueue_head(&req->waitq);
+	req->preallocated = 1;
 
 	return req;
 }
@@ -139,20 +140,16 @@ struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc)
 	return req;
 }
 
-struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc)
-{
-	down(&fc->unused_sem);
-	
-	return do_get_request(fc);
-}
-
-
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
 {
-	spin_lock(&fuse_lock);
-	list_add(&req->list, &fc->unused_list);
-	spin_unlock(&fuse_lock);
-	up(&fc->unused_sem);
+	if (!req->preallocated)
+		fuse_request_free(req);
+	else {
+		spin_lock(&fuse_lock);
+		list_add(&req->list, &fc->unused_list);
+		spin_unlock(&fuse_lock);
+		up(&fc->unused_sem);
+	}
 }
 
 /* Must be called with fuse_lock held, and unlocks it */

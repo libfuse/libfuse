@@ -78,8 +78,6 @@ static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 				   new_decode_dev(attr->rdev));
 	} else
 		printk("fuse_init_inode: bad file type: %o\n", inode->i_mode);
-
-	inode->u.generic_ip = inode;
 }
 
 struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
@@ -90,6 +88,13 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 	inode = iget(sb, ino);
 	if (inode) {
 		if (!inode->u.generic_ip) {
+			struct fuse_req *req = fuse_request_alloc();
+			if (!req) {
+				iput(inode);
+				inode = NULL;
+				goto out;
+			}
+			inode->u.generic_ip = req;
 			inode->i_generation = generation;
 			fuse_init_inode(inode, attr);
 		} else if (inode->i_generation != generation)
@@ -98,6 +103,7 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 		change_attributes(inode, attr);
 		inode->i_version = version;
 	}
+ out:
 
 	return inode;
 }

@@ -16,12 +16,12 @@
 
 #ifndef KERNEL_2_6
 #define PageUptodate(page) Page_Uptodate(page)
-#ifndef NO_MM
 #ifndef filemap_fdatawrite
+#ifndef NO_MM
 #define filemap_fdatawrite filemap_fdatasync
-#endif
 #else
 #define filemap_fdatawrite do {} while (0)
+#endif
 #endif
 #endif
 
@@ -29,6 +29,7 @@ static int fuse_open(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_req *req;
+	struct fuse_req *req2;
 	struct fuse_open_in inarg;
 	int err;
 
@@ -48,6 +49,12 @@ static int fuse_open(struct inode *inode, struct file *file)
 	if (!req)
 		return -ERESTARTSYS;
 
+	req2 = fuse_request_alloc();
+	if (!req2) {
+		fuse_put_request(fc, req);
+		return -ENOMEM;
+	}
+
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.flags = file->f_flags & ~O_EXCL;
 	req->in.h.opcode = FUSE_OPEN;
@@ -64,6 +71,10 @@ static int fuse_open(struct inode *inode, struct file *file)
 		invalidate_inode_pages(inode);
 #endif
 	}
+	if (err)
+		fuse_request_free(req2);
+	else
+		file->private_data = req2;
 	fuse_put_request(fc, req);
 	return err;
 }
@@ -72,12 +83,11 @@ static int fuse_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_open_in *inarg;
-	struct fuse_req *req;
+	struct fuse_req *req = file->private_data;
 	
 	if (file->f_mode & FMODE_WRITE)
 		filemap_fdatawrite(inode->i_mapping);
 
-	req = fuse_get_request_nonint(fc);
 	inarg = &req->misc.open_in;
 	inarg->flags = file->f_flags & ~O_EXCL;
 	req->in.h.opcode = FUSE_RELEASE;
