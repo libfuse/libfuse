@@ -1,3 +1,7 @@
+2004-03-31  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* fixed zero size case for getxattr and listxattr
+
 2004-03-30  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* new fusermount flag '-z': lazy unmount, default is not lazy

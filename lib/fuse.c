@@ -390,7 +390,7 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     size_t outsize;
     struct fuse_out_header *out;
 
-    if(error <= -512 || error > 0) {
+    if(error <= -1000 || error > 0) {
         fprintf(stderr, "fuse: bad error value: %i\n",  error);
         error = -ERANGE;
     }
@@ -991,26 +991,32 @@ static void do_setxattr(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
-static void do_getxattr(struct fuse *f, struct fuse_in_header *in,
-                        struct fuse_getlistxattr_in *arg)
+static int common_getxattr(struct fuse *f, struct fuse_in_header *in,
+                           const char *name, char *value, size_t size)
 {
     int res;
     char *path;
-    char *name = PARAM(arg);
-    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
-    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-    char *value = outbuf + sizeof(struct fuse_out_header);
-    size_t size;
-    size_t outsize;
 
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
         res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
         if (f->op.getxattr)
-            res = f->op.getxattr(path, name, value, arg->size);
+            res = f->op.getxattr(path, name, value, size);
         free(path);
     }    
+    return res;
+}
+
+static void do_getxattr_read(struct fuse *f, struct fuse_in_header *in,
+                             const char *name, size_t size)
+{
+    int res;
+    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + size);
+    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+    char *value = outbuf + sizeof(struct fuse_out_header);
+
+    res = common_getxattr(f, in, name, value, size);
     size = 0;
     if(res > 0) {
         size = res;
@@ -1019,31 +1025,62 @@ static void do_getxattr(struct fuse *f, struct fuse_in_header *in,
     memset(out, 0, sizeof(struct fuse_out_header));
     out->unique = in->unique;
     out->error = res;
-    outsize = sizeof(struct fuse_out_header) + size;
 
-    send_reply_raw(f, outbuf, outsize);
+    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size);
     free(outbuf);
 }
 
-static void do_listxattr(struct fuse *f, struct fuse_in_header *in,
-                         struct fuse_getlistxattr_in *arg)
+static void do_getxattr_size(struct fuse *f, struct fuse_in_header *in,
+                             const char *name)
+{
+    int res;
+    struct fuse_getxattr_out arg;
+
+    res = common_getxattr(f, in, name, NULL, 0);
+    if(res >= 0) {
+        arg.size = res;
+        res = 0;
+    }
+    send_reply(f, in, res, &arg, sizeof(arg));
+}
+
+static void do_getxattr(struct fuse *f, struct fuse_in_header *in,
+                        struct fuse_getxattr_in *arg)
+{
+    char *name = PARAM(arg);
+    
+    if(arg->size)
+        do_getxattr_read(f, in, name, arg->size);
+    else
+        do_getxattr_size(f, in, name);
+}
+
+static int common_listxattr(struct fuse *f, struct fuse_in_header *in,
+                            char *list, size_t size)
 {
     int res;
     char *path;
-    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
-    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-    char *value = outbuf + sizeof(struct fuse_out_header);
-    size_t size;
-    size_t outsize;
 
     res = -ENOENT;
     path = get_path(f, in->ino);
     if (path != NULL) {
         res = -EOPNOTSUPP; /* or is it ENOTSUPP ??? */
         if (f->op.listxattr)
-            res = f->op.listxattr(path, value, arg->size);
+            res = f->op.listxattr(path, list, size);
         free(path);
     }    
+    return res;
+}
+
+static void do_listxattr_read(struct fuse *f, struct fuse_in_header *in,
+                              size_t size)
+{
+    int res;
+    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + size);
+    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+    char *list = outbuf + sizeof(struct fuse_out_header);
+
+    res = common_listxattr(f, in, list, size);
     size = 0;
     if(res > 0) {
         size = res;
@@ -1052,10 +1089,31 @@ static void do_listxattr(struct fuse *f, struct fuse_in_header *in,
     memset(out, 0, sizeof(struct fuse_out_header));
     out->unique = in->unique;
     out->error = res;
-    outsize = sizeof(struct fuse_out_header) + size;
 
-    send_reply_raw(f, outbuf, outsize);
+    send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size);
     free(outbuf);
+}
+
+static void do_listxattr_size(struct fuse *f, struct fuse_in_header *in)
+{
+    int res;
+    struct fuse_getxattr_out arg;
+
+    res = common_listxattr(f, in, NULL, 0);
+    if (res >= 0) {
+        arg.size = res;
+        res = 0;
+    }
+    send_reply(f, in, res, &arg, sizeof(arg));
+}
+
+static void do_listxattr(struct fuse *f, struct fuse_in_header *in,
+                         struct fuse_getxattr_in *arg)
+{
+    if(arg->size)
+        do_listxattr_read(f, in, arg->size);
+    else
+        do_listxattr_size(f, in);
 }
 
 static void do_removexattr(struct fuse *f, struct fuse_in_header *in,
@@ -1182,11 +1240,11 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         break;
 
     case FUSE_GETXATTR:
-        do_getxattr(f, in, (struct fuse_getlistxattr_in *) inarg);
+        do_getxattr(f, in, (struct fuse_getxattr_in *) inarg);
         break;
 
     case FUSE_LISTXATTR:
-        do_listxattr(f, in, (struct fuse_getlistxattr_in *) inarg);
+        do_listxattr(f, in, (struct fuse_getxattr_in *) inarg);
         break;
 
     case FUSE_REMOVEXATTR:

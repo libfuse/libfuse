@@ -751,7 +751,8 @@ static ssize_t fuse_getxattr(struct dentry *entry, const char *name,
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_getlistxattr_in inarg;
+	struct fuse_getxattr_in inarg;
+	struct fuse_getxattr_out outarg;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.size = size;
@@ -763,13 +764,19 @@ static ssize_t fuse_getxattr(struct dentry *entry, const char *name,
 	in.args[0].value = &inarg;
 	in.args[1].size = strlen(name) + 1;
 	in.args[1].value = name;
-	out.argvar = 1;
+	/* This is really two different operations rolled into one */
 	out.numargs = 1;
-	out.args[0].size = size;
-	out.args[0].value = value;
+	if(size) {
+		out.argvar = 1;
+		out.args[0].size = size;
+		out.args[0].value = value;
+	} else {
+		out.args[0].size = sizeof(outarg);
+		out.args[0].value = &outarg;
+	}
 	request_send(fc, &in, &out);
 	if(!out.h.error)
-		return out.args[0].size;
+		return size ? out.args[0].size : outarg.size;
 	else
 		return out.h.error;
 }
@@ -780,7 +787,8 @@ static ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size)
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_getlistxattr_in inarg;
+	struct fuse_getxattr_in inarg;
+	struct fuse_getxattr_out outarg;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.size = size;
@@ -790,13 +798,19 @@ static ssize_t fuse_listxattr(struct dentry *entry, char *list, size_t size)
 	in.numargs = 1;
 	in.args[0].size = sizeof(inarg);
 	in.args[0].value = &inarg;
-	out.argvar = 1;
+	/* This is really two different operations rolled into one */
 	out.numargs = 1;
-	out.args[0].size = size;
-	out.args[0].value = list;
+	if(size) {
+		out.argvar = 1;
+		out.args[0].size = size;
+		out.args[0].value = list;
+	} else {
+		out.args[0].size = sizeof(outarg);
+		out.args[0].value = &outarg;
+	}
 	request_send(fc, &in, &out);
 	if(!out.h.error)
-		return out.args[0].size;
+		return size ? out.args[0].size : outarg.size;
 	else
 		return out.h.error;
 }

@@ -82,6 +82,8 @@ if test "$enable_example" != "no"; then
 	subdirs="$subdirs example";
 fi
 
+AC_CHECK_FUNCS([setxattr])
+
 AC_SUBST(subdirs)
 
 AC_OUTPUT([Makefile kernel/Makefile lib/Makefile util/Makefile example/Makefile include/Makefile include/linux/Makefile patch/Makefile])

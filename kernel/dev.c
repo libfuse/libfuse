@@ -482,7 +482,7 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 		goto out;
 	}     
 
-        if (oh.error <= -512 || oh.error > 0) {
+        if (oh.error <= -1000 || oh.error > 0) {
                 printk("fuse_dev_write: bad error value\n");
                 return -EINVAL;
         }

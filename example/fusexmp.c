@@ -6,6 +6,8 @@
     See the file COPYING.
 */
 
+#include <config.h>
+
 #ifdef linux
 /* For pread()/pwrite() */
 #define _XOPEN_SOURCE 500
@@ -19,6 +21,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <sys/statfs.h>
+#ifdef HAVE_SETXATTR
+#include <sys/xattr.h>
+#endif
 
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
@@ -264,6 +269,43 @@ static int xmp_fsync(const char *path, int isdatasync)
     return 0;
 }
 
+#ifdef HAVE_SETXATTR
+/* xattr operations are optional and can safely be left unimplemented */
+static int xmp_setxattr(const char *path, const char *name, const char *value,
+                        size_t size, int flags)
+{
+    int res = lsetxattr(path, name, value, size, flags);
+    if(res == -1)
+        return -errno;
+    return 0;
+}
+
+static int xmp_getxattr(const char *path, const char *name, char *value,
+                    size_t size)
+{
+    int res = lgetxattr(path, name, value, size);
+    if(res == -1)
+        return -errno;
+    return res;
+}
+
+static int xmp_listxattr(const char *path, char *list, size_t size)
+{
+    int res = llistxattr(path, list, size);
+    if(res == -1)
+        return -errno;
+    return res;
+}
+
+static int xmp_removexattr(const char *path, const char *name)
+{
+    int res = lremovexattr(path, name);
+    if(res == -1)
+        return -errno;
+    return 0;
+}
+#endif /* HAVE_SETXATTR */
+
 static struct fuse_operations xmp_oper = {
     .getattr	= xmp_getattr,
     .readlink	= xmp_readlink,
@@ -284,7 +326,13 @@ static struct fuse_operations xmp_oper = {
     .write	= xmp_write,
     .statfs	= xmp_statfs,
     .release	= xmp_release,
-    .fsync	= xmp_fsync
+    .fsync	= xmp_fsync,
+#ifdef HAVE_SETXATTR
+    .setxattr	= xmp_setxattr,
+    .getxattr	= xmp_getxattr,
+    .listxattr	= xmp_listxattr,
+    .removexattr= xmp_removexattr,
+#endif
 };
 
 int main(int argc, char *argv[])

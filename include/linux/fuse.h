@@ -197,7 +197,11 @@ struct fuse_setxattr_in {
 	unsigned int flags;
 };
 
-struct fuse_getlistxattr_in {
+struct fuse_getxattr_in {
+	unsigned int size;
+};
+
+struct fuse_getxattr_out {
 	unsigned int size;
 };
 
