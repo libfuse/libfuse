@@ -211,13 +211,15 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->issync = 0;
 
+	spin_lock(&fuse_lock);
 	if (fc->file) {
-		spin_lock(&fuse_lock);
 		list_add_tail(&req->list, &fc->pending);
 		wake_up(&fc->waitq);
 		spin_unlock(&fuse_lock);
-	} else
+	} else {
+		spin_unlock(&fuse_lock);
 		fuse_put_request(fc, req);
+	}
 }
 
 void request_send_nonblock(struct fuse_conn *fc, struct fuse_req *req, 
