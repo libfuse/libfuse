@@ -178,23 +178,15 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	wake_up(&req->waitq);
 	if (req->in.h.opcode == FUSE_INIT) {
 		int i;
-		/* up() one less than FUSE_MAX_OUTSTANDING, because
-		   fuse_putback_request() will also do an up() */
+		/* After INIT reply is received other requests can go
+		   out.  So do (FUSE_MAX_OUTSTANDING - 1) number of
+		   up()s on outstanding_sem.  The last up() is done in
+		   fuse_putback_request() */
 		for (i = 1; i < FUSE_MAX_OUTSTANDING; i++)
 			up(&fc->outstanding_sem);
 	}
 	if (putback)
 		fuse_putback_request(fc, req);
-}
-
-static int request_wait_answer_nonint(struct fuse_req *req)
-{
-	int err;
-	sigset_t oldset;
-	block_sigs(&oldset);
-	err = wait_event_interruptible(req->waitq, req->finished);
-	restore_sigs(&oldset);
-	return err;
 }
 
 static void background_request(struct fuse_req *req)
@@ -208,6 +200,16 @@ static void background_request(struct fuse_req *req)
 		req->inode2 = igrab(req->inode2);
 	if (req->file)
 		get_file(req->file);
+}
+
+static int request_wait_answer_nonint(struct fuse_req *req)
+{
+	int err;
+	sigset_t oldset;
+	block_sigs(&oldset);
+	err = wait_event_interruptible(req->waitq, req->finished);
+	restore_sigs(&oldset);
+	return err;
 }
 
 /* Called with fuse_lock held.  Releases, and then reacquires it. */
@@ -377,7 +379,6 @@ static inline void unlock_request(struct fuse_req *req)
 		spin_unlock(&fuse_lock);
 	}
 }
-
 
 /* Why all this complex one-page-at-a-time copying needed instead of
    just copy_to/from_user()?  The reason is that blocking on a page
@@ -828,7 +829,7 @@ static struct miscdevice fuse_miscdevice = {
 int __init fuse_dev_init(void)
 {
 	int err = -ENOMEM;
-	fuse_req_cachep = kmem_cache_create("fuser_request",
+	fuse_req_cachep = kmem_cache_create("fuse_request",
 					    sizeof(struct fuse_req),
 					    0, 0, NULL, NULL);
 	if (!fuse_req_cachep)
