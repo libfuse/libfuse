@@ -36,6 +36,10 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
+#ifndef BUG_ON
+#define BUG_ON(x)
+#endif
+
 /** Read combining parameters */
 #define FUSE_BLOCK_SHIFT 16
 #define FUSE_BLOCK_SIZE 65536

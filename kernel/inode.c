@@ -46,6 +46,10 @@ MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_o
 #define FS_SAFE 0
 #endif
 
+#ifndef MAX_LFS_FILESIZE
+#define MAX_LFS_FILESIZE (((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1) 
+#endif
+
 struct fuse_mount_data {
 	int fd;
 	unsigned int rootmode;
