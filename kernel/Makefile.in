@@ -2,7 +2,7 @@
 
 SHELL = /bin/sh
 INSTALL = @INSTALL@
-mkinstalldirs = $(SHELL) ../mkinstalldirs
+mkdir_p = @mkdir_p@
 majver = @majver@
 
 DISTFILES = Makefile.in dev.c dir.c file.c inode.c util.c fuse_i.h
@@ -18,7 +18,7 @@ endif
 all: all-spec
 
 install: all
-	@$(mkinstalldirs) $(DESTDIR)$(fusemoduledir)
+	$(mkdir_p) $(DESTDIR)$(fusemoduledir)
 	$(INSTALL) -m 644 $(fusemodule) $(DESTDIR)$(fusemoduledir)/$(fusemodule)
 	-/sbin/depmod -a
 
