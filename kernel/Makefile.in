@@ -73,7 +73,7 @@ obj-m := fuse.o
 fuse-objs := dev.o dir.o file.o inode.o util.o
 
 all-spec:
-	$(MAKE) -C @kernelsrc@ SUBDIRS=$(PWD) modules
+	$(MAKE) -C @kernelsrc@ SUBDIRS=$(PWD) @KERNELMAKE_PARAMS@ modules
 endif
 
 

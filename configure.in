@@ -70,6 +70,15 @@ if test "$enable_kernel_module" != "no"; then
 			[#include <linux/fs.h>])
 		CFLAGS="$old_cflags"
 	fi
+	isuml=no
+	KERNELMAKE_PARAMS=
+	AC_MSG_CHECKING([if this is user mode linux])
+	if test -f $kernelsrc/include/linux/autoconf.h && grep -q "^#define CONFIG_USERMODE 1" $kernelsrc/include/linux/autoconf.h; then
+		isuml=yes
+		KERNELMAKE_PARAMS="ARCH=um"
+	fi
+	AC_MSG_RESULT([$isuml])
+	AC_SUBST(KERNELMAKE_PARAMS)
 fi
 
 if test "$enable_lib" != "no"; then

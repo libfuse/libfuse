@@ -1,3 +1,7 @@
+2004-04-02  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Add detection of user-mode-linux to configure
+
 2004-03-31  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* fixed zero size case for getxattr and listxattr
