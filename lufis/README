@@ -1,0 +1,32 @@
+This is a modified LUFS daemon, which uses the FUSE kernel module.
+
+Disclaimer:
+
+This is currently just a proof-of-concept implementation, not a
+finished product.  That said it seems perfectly stable.  Comments, are
+welcome at <mszeredi@inf.bme.hu>.
+
+Installation:
+
+  - install lufs (0.9.7)
+  - install fuse (1.1)
+  - enter 'make' in this directory
+
+Usage, for exampe:
+
+  ./lufis fs=sshfs,host=kempelen,username=mszeredi /mnt/lufis/ -s
+
+The '-s' option is important!
+
+For help on FUSE specific options see:
+
+  ./lufis fs=localfs -h
+
+and 
+
+  ./lufis fs=localfs / -- -h
+
+For LUFS specific options (can only be specified in the first
+argument) see the README in the LUFS distribution
+
+
