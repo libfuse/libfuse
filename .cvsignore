@@ -1,6 +1,7 @@
 Makefile.in
 Makefile
-aclocal.m4
+*.m4
+ltmain.sh
 configure
 install-sh
 mkinstalldirs

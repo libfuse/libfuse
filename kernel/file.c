@@ -220,7 +220,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 	ssize_t res;
 	loff_t pos;
 
-	pos = (unsigned long long) page->index << PAGE_CACHE_SHIFT;
+	pos = (loff_t) page->index << PAGE_CACHE_SHIFT;
 	buffer = kmap(page);
 	res = fuse_send_read(inode, buffer, pos, PAGE_CACHE_SIZE);
 	if (res >= 0) {
@@ -234,6 +234,115 @@ static int fuse_readpage(struct file *file, struct page *page)
 	unlock_page(page);
 	return res;
 }
+
+#ifdef KERNEL_2_6
+
+static int read_pages_copyout(struct fuse_req *req, const char *buf,
+			      size_t nbytes)
+{
+	unsigned i;
+	unsigned long base_index = req->pages[0]->index;
+	for (i = 0; i < req->num_pages; i++) {
+		struct page *page = req->pages[i];
+		unsigned long offset;
+		unsigned count;
+		char *tmpbuf;
+		int err;
+
+		offset = (page->index - base_index) * PAGE_CACHE_SIZE;
+		if (offset >= nbytes)
+			count = 0;
+		else if (offset + PAGE_CACHE_SIZE <= nbytes)
+			count = PAGE_CACHE_SIZE;
+		else
+			count = nbytes - offset;
+
+		tmpbuf = kmap(page);
+		err = 0;
+		if (count)
+			err = copy_from_user(tmpbuf, buf + offset, count);
+		if (count < PAGE_CACHE_SIZE)
+			memset(tmpbuf + count, 0, PAGE_CACHE_SIZE - count);
+		kunmap(page);
+		if (err)
+			return -EFAULT;
+
+		flush_dcache_page(page);
+		SetPageUptodate(page);
+	}
+	return 0;
+}
+
+static void read_pages_end(struct fuse_conn *fc, struct fuse_req *req)
+{
+	unsigned i;
+
+	for (i = 0; i < req->num_pages; i++)
+		unlock_page(req->pages[i]);
+	
+	fuse_put_request(fc, req);
+}
+
+static void fuse_send_readpages(struct fuse_req *req, struct inode *inode)
+{
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_read_in *inarg;
+	loff_t pos;
+	unsigned numpages;
+	
+	pos = (loff_t) req->pages[0]->index << PAGE_CACHE_SHIFT;
+	/* Allow for holes between the pages */
+	numpages = req->pages[req->num_pages - 1]->index + 1 
+		- req->pages[0]->index;
+	
+	inarg = &req->misc.read_in;
+	inarg->offset = pos;
+	inarg->size = numpages * PAGE_CACHE_SIZE;
+	req->in.h.opcode = FUSE_READ;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(struct fuse_read_in);
+	req->in.args[0].value = inarg;
+	req->copy_out = read_pages_copyout;
+	request_send_nonblock(fc, req, read_pages_end, NULL);
+}
+
+static int fuse_readpages_fill(void *_reqp, struct page *page)
+{
+	struct inode *inode = page->mapping->host;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_req **reqp = (struct fuse_req **) _reqp; 
+	struct fuse_req *req = *reqp;
+	
+	if (req->num_pages && 
+	    (req->num_pages == FUSE_MAX_PAGES_PER_REQ ||
+	     (req->num_pages + 1) * PAGE_CACHE_SIZE > fc->max_read ||
+	     req->pages[req->num_pages - 1]->index + 1 != page->index)) {
+		struct fuse_conn *fc = INO_FC(page->mapping->host);
+		fuse_send_readpages(req, inode);
+		*reqp = req = fuse_get_request(fc);
+	}
+	req->pages[req->num_pages] = page;
+	req->num_pages ++;
+	return 0;
+}
+
+static int fuse_readpages(struct file *file, struct address_space *mapping,
+			  struct list_head *pages, unsigned nr_pages)
+{
+	struct inode *inode = mapping->host;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_req *req = fuse_get_request(fc);
+	
+	read_cache_pages(mapping, pages, fuse_readpages_fill, &req);
+	if (req->num_pages)
+		fuse_send_readpages(req, inode);
+	else
+		fuse_put_request(fc, req);
+
+	return 0;
+}
+#endif
 
 static int fuse_is_block_uptodate(struct inode *inode, size_t bl_index)
 {
@@ -305,7 +414,7 @@ static int fuse_file_read_block(struct inode *inode, char *bl_buf,
 	ssize_t res;
 	loff_t offset;
 	
-	offset = (unsigned long long) bl_index << FUSE_BLOCK_SHIFT;
+	offset = (loff_t) bl_index << FUSE_BLOCK_SHIFT;
 	res = fuse_send_read(inode, bl_buf, offset, FUSE_BLOCK_SIZE);
 	if (res >= 0) {
 		if (res < FUSE_BLOCK_SIZE)
@@ -451,7 +560,7 @@ static int write_buffer(struct inode *inode, struct page *page,
 	if (!req)
 		return -ERESTARTSYS;
 	
-	pos = ((unsigned long long) page->index << PAGE_CACHE_SHIFT) + offset;
+	pos = ((loff_t) page->index << PAGE_CACHE_SHIFT) + offset;
 	buffer = kmap(page);
 	res = fuse_send_write(req, inode, buffer + offset, pos, count);
 	fuse_put_request(fc, req);
@@ -504,7 +613,7 @@ static int write_page_block(struct inode *inode, struct page *page)
 	count = get_write_count(inode, page);
 	res = 0;
 	if (count) {
-		pos = ((unsigned long long) page->index << PAGE_CACHE_SHIFT);
+		pos = ((loff_t) page->index << PAGE_CACHE_SHIFT);
 		buffer = kmap(page);
 		res = fuse_send_write(req, inode, buffer, pos, count);
 		if (res >= 0) {
@@ -561,7 +670,7 @@ static void send_write_nonblock(struct fuse_req *req, struct inode *inode,
 
 	inarg = &req->misc.write.in;
 	buffer = kmap(page);
-	inarg->offset = ((unsigned long long) page->index << PAGE_CACHE_SHIFT);
+	inarg->offset = ((loff_t) page->index << PAGE_CACHE_SHIFT);
 	inarg->size = count;
 	req->in.h.opcode = FUSE_WRITE;
 	req->in.h.ino = inode->i_ino;
@@ -762,6 +871,7 @@ static struct address_space_operations fuse_file_aops  = {
 	.prepare_write	= fuse_prepare_write,
 	.commit_write	= fuse_commit_write,
 #ifdef KERNEL_2_6
+	.readpages	= fuse_readpages,
 	.set_page_dirty = __set_page_dirty_nobuffers,
 #endif
 };

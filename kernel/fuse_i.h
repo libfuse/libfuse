@@ -43,6 +43,8 @@
 
 #define FUSE_BLOCK_PAGE_SHIFT (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)
 
+#define FUSE_MAX_PAGES_PER_REQ 32
+
 /** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
 module will check permissions based on the file mode.  Otherwise no
 permission checking is done in the kernel */
@@ -103,6 +105,7 @@ struct fuse_req;
 struct fuse_conn;
 
 typedef void (*fuse_reqend_t)(struct fuse_conn *, struct fuse_req *);
+typedef int (*fuse_copyout_t)(struct fuse_req *, const char *, size_t);
 
 /**
  * A request to the client
@@ -141,6 +144,9 @@ struct fuse_req {
 	/** Request completion callback */
 	fuse_reqend_t end;
 
+	/** Request copy out function */
+	fuse_copyout_t copy_out;
+
 	/** User data */
 	void *data;
 
@@ -151,9 +157,13 @@ struct fuse_req {
 			struct fuse_write_out out;
 			
 		} write;
+		struct fuse_read_in read_in;
 		struct fuse_open_in open_in;
 		struct fuse_forget_in forget_in;
 	} misc;
+
+	struct page *pages[FUSE_MAX_PAGES_PER_REQ];
+	unsigned num_pages;
 };
 
 /**

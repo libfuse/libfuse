@@ -1,3 +1,8 @@
+2004-07-20  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Optimize reading under 2.6 kernels by issuing multiple page
+	asynchronous read requests
+	
 2004-07-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Only use redirty_page_for_writepage() for kernels >= 2.6.6

@@ -364,9 +364,10 @@ static inline int copy_out_one(struct fuse_out_arg *arg, const char **srcp,
 	return 0;
 }
 
-static inline int copy_out_args(struct fuse_out *out, const char *buf,
+static inline int copy_out_args(struct fuse_req *req, const char *buf,
 				size_t nbytes)
 {
+	struct fuse_out *out = &req->out;
 	int err;
 	int i;
 
@@ -374,18 +375,22 @@ static inline int copy_out_args(struct fuse_out *out, const char *buf,
 	nbytes -= sizeof(struct fuse_out_header);
 		
 	if (!out->h.error) {
-		for (i = 0; i < out->numargs; i++) {
-			struct fuse_out_arg *arg = &out->args[i];
-			int allowvar;
-
-			if (out->argvar && i == out->numargs - 1)
-				allowvar = 1;
-			else
-				allowvar = 0;
-
-			err = copy_out_one(arg, &buf, &nbytes, allowvar);
-			if (err)
-				return err;
+		if (req->copy_out)
+			return req->copy_out(req, buf, nbytes);
+		else {
+			for (i = 0; i < out->numargs; i++) {
+				struct fuse_out_arg *arg = &out->args[i];
+				int allowvar;
+				
+				if (out->argvar && i == out->numargs - 1)
+					allowvar = 1;
+				else
+					allowvar = 0;
+				
+				err = copy_out_one(arg, &buf, &nbytes, allowvar);
+				if (err)
+					return err;
+			}
 		}
 	}
 
@@ -499,7 +504,7 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 		return -ENOENT;
 
 	req->out.h = oh;
-	err = copy_out_args(&req->out, buf, nbytes);
+	err = copy_out_args(req, buf, nbytes);
 
 	spin_lock(&fuse_lock);
 	if (err)
