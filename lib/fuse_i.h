@@ -52,7 +52,6 @@ struct fuse_dirhandle {
 };
 
 struct fuse_cmd {
-    struct fuse *f;
     char *buf;
     size_t buflen;
 };

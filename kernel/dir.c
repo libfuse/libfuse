@@ -726,8 +726,53 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 	return _fuse_dentry_revalidate(entry);
 }
 
+#else /* KERNEL_2_6 */
+
+#define fuse_create _fuse_create
+#define fuse_permission _fuse_permission
+
+static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
+{
+	struct inode *inode;
+	struct dentry *alias;
+
+	int err = fuse_lookup_iget(dir, entry, &inode);
+	if (err)
+		return ERR_PTR(err);
+
+	if (inode && S_ISDIR(inode->i_mode) &&
+	    (alias = d_find_alias(inode)) != NULL) {
+		dput(alias);
+		iput(inode);
+		printk("fuse: cannot assign an existing directory\n");
+		return ERR_PTR(-EPROTO);
+	}
+
+	d_add(entry, inode);
+	return NULL;
+}
+
+static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
+		      int rdev)
+{
+	return fuse_mknod(dir, entry, mode, rdev);
+}
+
+static int fuse_dentry_revalidate(struct dentry *entry, int flags)
+{
+	return _fuse_dentry_revalidate(entry);
+}
+#endif /* KERNEL_2_6 */
+
+#ifdef HAVE_KERNEL_XATTR
+
+#ifdef KERNEL_2_6
 static int fuse_setxattr(struct dentry *entry, const char *name,
 			 const void *value, size_t size, int flags)
+#else
+static int fuse_setxattr(struct dentry *entry, const char *name,
+			 void *value, size_t size, int flags)
+#endif
 {
 	struct inode *inode = entry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
@@ -843,44 +888,7 @@ static int fuse_removexattr(struct dentry *entry, const char *name)
 	
 }
 
-#else /* KERNEL_2_6 */
-
-#define fuse_create _fuse_create
-#define fuse_permission _fuse_permission
-
-static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
-{
-	struct inode *inode;
-	struct dentry *alias;
-
-	int err = fuse_lookup_iget(dir, entry, &inode);
-	if (err)
-		return ERR_PTR(err);
-
-	if (inode && S_ISDIR(inode->i_mode) &&
-	    (alias = d_find_alias(inode)) != NULL) {
-		dput(alias);
-		iput(inode);
-		printk("fuse: cannot assign an existing directory\n");
-		return ERR_PTR(-EPROTO);
-	}
-
-	d_add(entry, inode);
-	return NULL;
-}
-
-static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
-		      int rdev)
-{
-	return fuse_mknod(dir, entry, mode, rdev);
-}
-
-static int fuse_dentry_revalidate(struct dentry *entry, int flags)
-{
-	return _fuse_dentry_revalidate(entry);
-}
-#endif /* KERNEL_2_6 */
-
+#endif
 
 static struct inode_operations fuse_dir_inode_operations =
 {
@@ -897,12 +905,14 @@ static struct inode_operations fuse_dir_inode_operations =
 	.permission	= fuse_permission,
 #ifdef KERNEL_2_6
 	.getattr	= fuse_getattr,
+#else
+	.revalidate	= fuse_revalidate,
+#endif
+#ifdef HAVE_KERNEL_XATTR
 	.setxattr	= fuse_setxattr,
 	.getxattr	= fuse_getxattr,
 	.listxattr	= fuse_listxattr,
 	.removexattr	= fuse_removexattr,
-#else
-	.revalidate	= fuse_revalidate,
 #endif
 };
 
@@ -918,12 +928,14 @@ static struct inode_operations fuse_file_inode_operations = {
 	.permission	= fuse_permission,
 #ifdef KERNEL_2_6
 	.getattr	= fuse_getattr,
+#else
+	.revalidate	= fuse_revalidate,
+#endif
+#ifdef HAVE_KERNEL_XATTR
 	.setxattr	= fuse_setxattr,
 	.getxattr	= fuse_getxattr,
 	.listxattr	= fuse_listxattr,
 	.removexattr	= fuse_removexattr,
-#else
-	.revalidate	= fuse_revalidate,
 #endif
 };
 
@@ -934,12 +946,14 @@ static struct inode_operations fuse_symlink_inode_operations =
 	.follow_link	= fuse_follow_link,
 #ifdef KERNEL_2_6
 	.getattr	= fuse_getattr,
+#else
+	.revalidate	= fuse_revalidate,
+#endif
+#ifdef HAVE_KERNEL_XATTR
 	.setxattr	= fuse_setxattr,
 	.getxattr	= fuse_getxattr,
 	.listxattr	= fuse_listxattr,
 	.removexattr	= fuse_removexattr,
-#else
-	.revalidate	= fuse_revalidate,
 #endif
 };
 

@@ -140,12 +140,6 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 	memset(d, 0, sizeof(struct fuse_mount_data));
 	d->fd = -1;
 
-	if (opt == NULL)
-		return 0;
-
-	if (opt[PAGE_SIZE - 1] != '\0')
-		return 0;
-
 	while ((p = strsep(&opt, ",")) != NULL) {
 		int token;
 		int value;
