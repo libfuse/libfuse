@@ -7,10 +7,21 @@
 
 	* Fix revalidate time setting for newly created inodes
 
+	* Remove uid==0 check for '-x' option in fusermount (kernel checks
+	this)
+
+	* fuse_main() only installs handlers for signals (out of INT, HUP,
+	TERM, PIPE), for which no handler has yet been installed
+
+	* Add module option 'user_allow_other' which if set to non-zero
+	will allow non root user to specify the 'allow_other' mount option
+	('-x' option of fusermount)
+
 2004-07-01  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Change passing fuse include dir to 2.6 kernel make system more
-	robust (hopefully fixes problems seen on SuSE 9.1)
+	robust (fixes compile problems seen on SuSE 9.1 with updated 2.6
+	kernel)
 
 2004-06-30  Miklos Szeredi <mszeredi@inf.bme.hu>
 

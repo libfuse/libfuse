@@ -22,6 +22,19 @@
 #include "compat/parser.h"
 #endif
 
+
+static int user_allow_other;
+
+#ifdef KERNEL_2_6
+#include <linux/moduleparam.h>
+module_param(user_allow_other, int, 0);
+#else
+MODULE_PARM(user_allow_other, "i");
+#endif
+
+MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_other\" mount option");
+
+
 #define FUSE_SUPER_MAGIC 0x65735546
 
 #ifndef KERNEL_2_6
@@ -309,7 +322,8 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	if (!parse_fuse_opt((char *) data, &d))
 		return -EINVAL;
 
-	if ((d.flags & FUSE_ALLOW_OTHER) && !capable(CAP_SYS_ADMIN))
+	if (!user_allow_other && (d.flags & FUSE_ALLOW_OTHER) &&
+	    current->uid != 0)
 		return -EPERM;
 
 	sb->s_blocksize = PAGE_CACHE_SIZE;

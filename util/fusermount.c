@@ -551,11 +551,6 @@ int main(int argc, char *argv[])
             break;
             
         case 'x':
-            if(getuid() != 0) {
-                fprintf(stderr, "%s: option %s is allowed only for root\n",
-                        progname, argv[a]);
-                exit(1);
-            }
             opts.allow_other = 1;
             break;
             

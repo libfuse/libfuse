@@ -50,28 +50,33 @@ static void exit_handler()
         fuse_exit(fuse);
 }
 
-static void set_signal_handlers()
+static void set_one_signal_handler(int signal, void (*handler)(int))
 {
     struct sigaction sa;
+    struct sigaction old_sa;
 
-    sa.sa_handler = exit_handler;
+    sa.sa_handler = handler;
     sigemptyset(&(sa.sa_mask));
     sa.sa_flags = 0;
 
-    if (sigaction(SIGHUP, &sa, NULL) == -1 || 
-	sigaction(SIGINT, &sa, NULL) == -1 || 
-	sigaction(SIGTERM, &sa, NULL) == -1) {
-	
-	perror("Cannot set exit signal handlers");
+    if (sigaction(signal, NULL, &old_sa) == -1) {
+        perror("FUSE: cannot get old signal handler");
         exit(1);
     }
+        
+    if (old_sa.sa_handler == SIG_DFL &&
+        sigaction(signal, &sa, NULL) == -1) {
+        perror("Cannot set signal handler");
+        exit(1);
+    }
+}
 
-    sa.sa_handler = SIG_IGN;
-    
-    if (sigaction(SIGPIPE, &sa, NULL) == -1) {
-	perror("Cannot set ignored signals");
-        exit(1);
-    }
+static void set_signal_handlers()
+{
+    set_one_signal_handler(SIGHUP, exit_handler);
+    set_one_signal_handler(SIGINT, exit_handler);
+    set_one_signal_handler(SIGTERM, exit_handler);
+    set_one_signal_handler(SIGPIPE, SIG_IGN);
 }
 
 static int fuse_start(int fuse_fd, int flags, int multithreaded,
