@@ -18,13 +18,13 @@
 #define KERNEL_2_6
 #endif
 
+#include <config.h>
 #ifndef KERNEL_2_6
 #include <linux/config.h>
 #ifdef CONFIG_MODVERSIONS
 #define MODVERSIONS
 #include <linux/modversions.h>
 #endif
-#include <config.h>
 #ifndef HAVE_I_SIZE_FUNC
 #define i_size_read(inode) ((inode)->i_size)
 #define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)

@@ -1,3 +1,8 @@
+2004-10-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Make xattr functions work under 2.6 (bug found by Vincenzo
+	Ciancia)
+
 2004-10-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Reset request in fuse_flush() (bugreport by David Shaw)
