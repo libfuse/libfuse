@@ -490,14 +490,14 @@ static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 	struct fuse_conn *fc;
 
 	if (file->f_op != &fuse_dev_operations)
-		return NULL;
+		return ERR_PTR(-EINVAL);
 	fc = new_conn();
 	if (fc == NULL)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 	spin_lock(&fuse_lock);
 	if (file->private_data) {
 		free_conn(fc);
-		fc = NULL;
+		fc = ERR_PTR(-EINVAL);
 	} else {
 		file->private_data = fc;
 		fc->sb = sb;
@@ -612,8 +612,8 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 
 	fc = get_conn(file, sb);
 	fput(file);
-	if (fc == NULL)
-		return -EINVAL;
+	if (IS_ERR(fc))
+		return PTR_ERR(fc);
 
 	fc->flags = d.flags;
 	fc->user_id = d.user_id;
