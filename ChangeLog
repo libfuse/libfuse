@@ -1,3 +1,8 @@
+2004-12-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* When mounting on a subdirectory of / don't duplicate slashes at
+	the beggining of path (spotted by David Shaw)
+
 2004-12-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug causing garbage in mount options (spotted by David Shaw)

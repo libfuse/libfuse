@@ -817,8 +817,13 @@ static char *resolve_path(const char *orig)
         dst = strdup(buf);
     else {
         dst = (char *) malloc(strlen(buf) + 1 + strlen(lastcomp) + 1);
-        if (dst)
-            sprintf(dst, "%s/%s", buf, lastcomp);
+        if (dst) {
+            unsigned buflen = strlen(buf);
+            if (buflen && buf[buflen-1] == '/')
+                sprintf(dst, "%s%s", buf, lastcomp);
+            else
+                sprintf(dst, "%s/%s", buf, lastcomp);
+        }
     }
     free(copy);
     if (dst == NULL)
