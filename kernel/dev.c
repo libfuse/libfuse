@@ -138,7 +138,7 @@ struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc)
 	return intr ? NULL : do_get_request(fc);
 }
 
-void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
+static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (!req->preallocated)
 		fuse_request_free(req);
@@ -312,7 +312,7 @@ void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req)
 	request_send_wait(fc, req, 0);
 }
 
-void request_send_nowait(struct fuse_conn *fc, struct fuse_req *req)
+static void request_send_nowait(struct fuse_conn *fc, struct fuse_req *req)
 {
 	spin_lock(&fuse_lock);
 	if (fc->file) {

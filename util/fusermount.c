@@ -61,92 +61,32 @@ static const char *get_user_name()
     }
 }
 
-#ifndef USE_UCLIBC
-/* Until there is a nice interface for capabilities in _libc_, this will
-remain here.  I don't think it is fair to expect users to compile libcap
-for this program.  And anyway what's all this fuss about versioning the
-kernel interface?  It is quite good as is.  */
-#define _LINUX_CAPABILITY_VERSION  0x19980330
-
-typedef struct user_cap_header_struct {
-    unsigned int version;
-    int pid;
-} *cap_user_header_t;
- 
-typedef struct user_cap_data_struct {
-    unsigned int effective;
-    unsigned int permitted;
-    unsigned int inheritable;
-} *cap_user_data_t;
-  
-int capget(cap_user_header_t header, cap_user_data_t data);
-int capset(cap_user_header_t header, cap_user_data_t data);
-
-#define CAP_SYS_ADMIN        21
-
 static uid_t oldfsuid;
 static gid_t oldfsgid;
-static struct user_cap_data_struct oldcaps;
 
 static int drop_privs(void)
 {
-    int res;
-    struct user_cap_header_struct head;
-    struct user_cap_data_struct newcaps;
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capget(&head, &oldcaps);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to get capabilities: %s\n", progname,
-                strerror(errno));
-        return -1;
-    }
-
     oldfsuid = setfsuid(getuid());
     oldfsgid = setfsgid(getgid());
-    newcaps = oldcaps;
-    /* Keep CAP_SYS_ADMIN for mount */
-    newcaps.effective &= (1 << CAP_SYS_ADMIN);
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capset(&head, &newcaps);
-    if (res == -1) {
-        setfsuid(oldfsuid);
-        setfsgid(oldfsgid);
-        fprintf(stderr, "%s: failed to set capabilities: %s\n", progname,
-                strerror(errno));
-        return -1;
-    }
     return 0;
 }
 
 static void restore_privs(void)
 {
-    struct user_cap_header_struct head;
-    int res;
-
-    head.version = _LINUX_CAPABILITY_VERSION;
-    head.pid = 0;
-    res = capset(&head, &oldcaps);
-    if (res == -1)
-        fprintf(stderr, "%s: failed to restore capabilities: %s\n", progname,
-                strerror(errno));
-    
     setfsuid(oldfsuid);
     setfsgid(oldfsgid);
 }
-#else /* USE_UCLIBC */
-static int drop_privs(void)
-{
-    return 0;
-}
-static void restore_privs(void)
-{
-}
-#endif /* USE_UCLIBC */
 
+static int do_unmount(const char *mnt, int quiet, int lazy)
+{
+    int res = umount2(mnt, lazy ? 2 : 0);
+    if (res == -1) {
+        if (!quiet)
+            fprintf(stderr, "%s: failed to unmount %s: %s\n",
+                    progname, mnt, strerror(errno));
+    }
+    return res;
+}
 
 #ifndef USE_UCLIBC
 /* use a lock file so that multiple fusermount processes don't try and
@@ -296,8 +236,8 @@ static int count_fuse_fs()
     return count;
 }
 
-static int do_unmount(const char *mnt, int quiet, int lazy, const char *mtab,
-                      const char *mtab_new)
+static int unmount_rename(const char *mnt, int quiet, int lazy,
+                          const char *mtab, const char *mtab_new)
 {
     int res;
 
@@ -306,13 +246,10 @@ static int do_unmount(const char *mnt, int quiet, int lazy, const char *mtab,
         if (res == -1)
             return -1;
     }
-    res = umount2(mnt, lazy ? 2 : 0);
-    if (res == -1) {
-        if (!quiet)
-            fprintf(stderr, "%s: failed to unmount %s: %s\n",
-                    progname, mnt, strerror(errno));
+    res = do_unmount(mnt, quiet, lazy);
+    if (res == -1)
         return -1;
-    }
+
     if (getuid() != 0)
         restore_privs();
 
@@ -335,14 +272,44 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
     if (res == -1)
         return -1;
 
-    res = do_unmount(mnt, quiet, lazy, mtab, mtab_new);
+    res = unmount_rename(mnt, quiet, lazy, mtab, mtab_new);
     if (res == -1) {
         unlink(mtab_new);
         return -1;
     }
     return 0;
 }
-#endif /* USE_UCLIBC */    
+#else /* USE_UCLIBC */
+static int lock_mtab()
+{
+    return 0;
+}
+
+static void unlock_mtab(int mtablock)
+{
+    (void) mtablock;
+}
+
+static int count_fuse_fs()
+{
+    return 0;
+}
+
+static int add_mount(const char *fsname, const char *mnt, const char *type,
+                     const char *opts)
+{
+    (void) fsname;
+    (void) mnt;
+    (void) type;
+    (void) opts;
+    return 0;
+}
+
+static int unmount_fuse(const char *mnt, int quiet, int lazy)
+{
+    return do_unmount(mnt, quiet, lazy);
+}
+#endif
 
 static void strip_line(char *line)
 {
@@ -644,6 +611,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
 {
     int res;
     const char *mnt = *mntp;
+    const char *origmnt;
    
     res = lstat(mnt, stbuf);
     if (res == -1) {
@@ -674,24 +642,25 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
                 progname, strerror(errno));
         return -1;
     }
+    origmnt = mnt;
     mnt = *mntp = ".";
     res = lstat(mnt, stbuf);
     if (res == -1) {
         fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
-                progname, mnt, strerror(errno));
+                progname, origmnt, strerror(errno));
         return -1;
     }
 
     if ((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
         fprintf(stderr, "%s: mountpoint %s not owned by user\n",
-                progname, mnt);
+                progname, origmnt);
         return -1;
     }
     
     res = access(mnt, W_OK);
     if (res == -1) {
         fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
-                progname, mnt);
+                progname, origmnt);
         return -1;
     }
 
@@ -821,7 +790,6 @@ static int mount_fuse(const char *mnt, const char *opts)
     if (fd == -1)
         return -1;
 
-#ifndef USE_UCLIBC 
     if (geteuid() == 0) {
         mtablock = lock_mtab();
         if (mtablock < 0) {
@@ -829,15 +797,12 @@ static int mount_fuse(const char *mnt, const char *opts)
             return -1;
         }
     }
-#endif
 
     if (getuid() != 0) {
         res = drop_privs();
         if (res == -1) {
             close(fd);
-#ifndef USE_UCLIBC
             unlock_mtab(mtablock);
-#endif
             return -1;
         }
     }
@@ -849,9 +814,7 @@ static int mount_fuse(const char *mnt, const char *opts)
         if (mount_count >= mount_max) {
             fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in /etc/fuse.conf\n", progname);
             close(fd);
-#ifndef USE_UCLIBC
             unlock_mtab(mtablock);
-#endif
             return -1;
         }
     }
@@ -869,9 +832,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 
     if (res == -1) {
         close(fd);
-#ifndef USE_UCLIBC
         unlock_mtab(mtablock);
-#endif
         return -1;
     }
 
@@ -880,7 +841,6 @@ static int mount_fuse(const char *mnt, const char *opts)
         close(currdir_fd);
     }
     
-#ifndef USE_UCLIBC
     if (geteuid() == 0) {
         res = add_mount(fsname, mnt, type, mnt_opts);
         unlock_mtab(mtablock);
@@ -890,7 +850,6 @@ static int mount_fuse(const char *mnt, const char *opts)
             return -1;
         }
     }
-#endif
 
     free(fsname);
     free(mnt_opts);
@@ -937,7 +896,7 @@ static char *resolve_path(const char *orig)
             tmp[0] = '\0';
     }
     if (realpath(toresolv, buf) == NULL) {
-        fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
+        fprintf(stderr, "%s: bad mount point %s: %s\n", progname, orig,
                 strerror(errno));
         free(copy);
         return NULL;
@@ -1038,7 +997,7 @@ int main(int argc, char *argv[])
         case 'o':
             a++;
             if (a == argc) {
-                fprintf(stderr, "%s: Missing argument to -o\n", progname);
+                fprintf(stderr, "%s: missing argument to -o\n", progname);
                 exit(1);
             }
             opts = argv[a];
@@ -1057,14 +1016,14 @@ int main(int argc, char *argv[])
             break;
 
         default:
-            fprintf(stderr, "%s: Unknown option %s\n", progname, argv[a]);
+            fprintf(stderr, "%s: unknown option %s\n", progname, argv[a]);
             fprintf(stderr, "Try `%s -h' for more information\n", progname);
             exit(1);
         }
     }
     
     if (a == argc) {
-        fprintf(stderr, "%s: Missing mountpoint argument\n", progname);
+        fprintf(stderr, "%s: missing mountpoint argument\n", progname);
         exit(1);
     }
 
@@ -1084,21 +1043,12 @@ int main(int argc, char *argv[])
         restore_privs();
     
     if (unmount) {
-#ifndef USE_UCLIBC
         if (geteuid() == 0) {
             int mtablock = lock_mtab();
             res = unmount_fuse(mnt, quiet, lazy);
             unlock_mtab(mtablock);
         } else 
-#endif
-        {
-            res = umount2(mnt, lazy ? 2 : 0);
-            if (res == -1) {
-                if (!quiet)
-                    fprintf(stderr, "%s: failed to unmount %s: %s\n",
-                            progname, mnt, strerror(errno));
-            }
-        }
+            res = do_unmount(mnt, quiet, lazy);
         if (res == -1)
             exit(1);
         return 0;
