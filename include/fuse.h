@@ -50,11 +50,8 @@ typedef struct fuse_dirhandle *fuse_dirh_t;
  *            not specified
  * @return 0 on success, -errno on error
  */
-typedef int (*fuse_dirfil2_t) (fuse_dirh_t h, const char *name, int type,
-                               ino_t ino);
-
-/** Obsolete version of the above function */
-typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
+typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
+                              ino_t ino);
 
 /**
  * The file system operations:
@@ -116,7 +113,7 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
 struct fuse_operations {
     int (*getattr)     (const char *, struct stat *);
     int (*readlink)    (const char *, char *, size_t);
-    int (*getdir)      (const char *, fuse_dirh_t, fuse_dirfil2_t);
+    int (*getdir)      (const char *, fuse_dirh_t, fuse_dirfil_t);
     int (*mknod)       (const char *, mode_t, dev_t);
     int (*mkdir)       (const char *, mode_t);
     int (*unlink)      (const char *);
@@ -293,6 +290,16 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
 int __fuse_exited(struct fuse* f);
 void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
+
+
+/* ----------------------------------------------------------- *
+ * Compatibility cruft                                         *
+ * ----------------------------------------------------------- */
+
+#ifdef FUSE_DIRFIL_COMPAT
+typedef int (*fuse_dirfil_old_t) (fuse_dirh_t h, const char *name, int type);
+#define fuse_dirfil_t fuse_dirfil_old_t
+#endif
 
 #ifdef __cplusplus
 }

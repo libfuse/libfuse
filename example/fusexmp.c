@@ -49,7 +49,7 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 }
 
 
-static int xmp_getdir(const char *path, fuse_dirh_t h, fuse_dirfil2_t filler)
+static int xmp_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
 {
     DIR *dp;
     struct dirent *de;
