@@ -221,6 +221,13 @@ void request_send(struct fuse_conn *fc, struct fuse_in *in,
 		  struct fuse_out *out);
 
 /**
+ * Send a non-interruptible request
+ *
+ */
+void request_send_nonint(struct fuse_conn *fc, struct fuse_in *in,
+			 struct fuse_out *out);
+
+/**
  * Send a request for which a reply is not expected
  */
 int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in);

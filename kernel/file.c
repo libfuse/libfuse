@@ -118,7 +118,7 @@ static int fuse_release(struct inode *inode, struct file *file)
 	in.numargs = 1;
 	in.args[0].size = sizeof(inarg);
 	in.args[0].value = &inarg;
-	request_send(fc, &in, &out);
+	request_send_nonint(fc, &in, &out);
 	if (out.h.error == -ENOSYS) {
 		fc->oldrelease = 1;
 		return fuse_release_old(inode, file);

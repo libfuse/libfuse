@@ -635,7 +635,7 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	struct fuse_setattr_out outarg;
 
 	if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
-		err = inode_change_ok(inode, attr);
+		int err = inode_change_ok(inode, attr);
 		if (err)
 			return err;
 	}
