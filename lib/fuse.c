@@ -829,6 +829,22 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     }
 }
 
+static void do_flush(struct fuse *f, struct fuse_in_header *in)
+{
+    char *path;
+    int res;
+
+    res = -ENOENT;
+    path = get_path(f, in->ino);
+    if(path != NULL) {
+        res = -ENOSYS;
+        if(f->op.flush)
+            res = f->op.flush(path);
+        free(path);
+    }
+    send_reply(f, in, res, NULL, 0);
+}
+
 static void do_release(struct fuse *f, struct fuse_in_header *in,
                        struct fuse_open_in *arg)
 {
@@ -1213,6 +1229,10 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_OPEN:
         do_open(f, in, (struct fuse_open_in *) inarg);
+        break;
+
+    case FUSE_FLUSH:
+        do_flush(f, in);
         break;
 
     case FUSE_RELEASE:

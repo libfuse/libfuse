@@ -92,6 +92,22 @@ static int fuse_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static int fuse_flush(struct file *file)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	
+	in.h.opcode = FUSE_FLUSH;
+	in.h.ino = inode->i_ino;
+	request_send(fc, &in, &out);
+	if (out.h.error == -ENOSYS)
+		return 0;
+	else
+		return out.h.error;
+}
+
 static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 {
 	struct inode *inode = de->d_inode;
@@ -470,6 +486,7 @@ static struct file_operations fuse_file_operations = {
 	.write		= generic_file_write,
 	.mmap		= generic_file_mmap,
 	.open		= fuse_open,
+	.flush		= fuse_flush,
 	.release	= fuse_release,
 	.fsync		= fuse_fsync,
 #ifdef KERNEL_2_6

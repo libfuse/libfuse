@@ -1,3 +1,7 @@
+2004-05-18  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added flush() call
+	
 2004-05-04  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Extended attributes support for 2.4 (patch by Cody Pisto)

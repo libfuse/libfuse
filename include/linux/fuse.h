@@ -82,6 +82,7 @@ enum fuse_opcode {
 	FUSE_GETXATTR      = 22,
 	FUSE_LISTXATTR     = 23,
 	FUSE_REMOVEXATTR   = 24,
+	FUSE_FLUSH         = 25,
 };
 
 /* Conservative buffer size for the client */
