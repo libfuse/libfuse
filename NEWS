@@ -1,3 +1,11 @@
+What is new in 1.2
+
+* Fix mount problems on recent 2.6 kernels with SELinux enabled
+
+* Fixed writing files lager than 2GBytes
+
+* Other bugfixes
+
 What is new in 1.1
 
 * Support for the 2.6 kernels
