@@ -268,7 +268,7 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
     int res;
 
     if (fuse_instance != NULL) {
-        fprintf(stderr, "fuse: __fuse_setup() called twice\n");
+        fprintf(stderr, "fuse: fuse_setup() called twice\n");
         return NULL;
     }
 
@@ -314,7 +314,7 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
     return NULL;
 }
 
-struct fuse *__fuse_setup(int argc, char *argv[],
+struct fuse *fuse_setup(int argc, char *argv[],
                           const struct fuse_operations *op,
                           size_t op_size, char **mountpoint,
                           int *multithreaded, int *fd)
@@ -323,20 +323,20 @@ struct fuse *__fuse_setup(int argc, char *argv[],
                              multithreaded, fd, 0);
 }
 
-struct fuse *_fuse_setup_compat2(int argc, char *argv[],
-                                 const struct _fuse_operations_compat2 *op,
+struct fuse *fuse_setup_compat2(int argc, char *argv[],
+                                 const struct fuse_operations_compat2 *op,
                                  char **mountpoint, int *multithreaded,
                                  int *fd)
 {
     return fuse_setup_common(argc, argv, (struct fuse_operations *) op, 
-                             sizeof(struct _fuse_operations_compat2),
+                             sizeof(struct fuse_operations_compat2),
                              mountpoint, multithreaded, fd, 21);
 }
 
-void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
+void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
 {
     if (fuse_instance != fuse)
-        fprintf(stderr, "fuse: __fuse_teardown() with unknown fuse object\n");
+        fprintf(stderr, "fuse: fuse_teardown() with unknown fuse object\n");
     else
         fuse_instance = NULL;
 
@@ -366,32 +366,33 @@ static int fuse_main_common(int argc, char *argv[],
     else
         res = fuse_loop(fuse);
     
-    __fuse_teardown(fuse, fd, mountpoint);
+    fuse_teardown(fuse, fd, mountpoint);
     if (res == -1)
         return 1;
     
     return 0;
 }
 
-int __fuse_main(int argc, char *argv[], const struct fuse_operations *op,
-                 size_t op_size)
+int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
+                   size_t op_size)
 {
     return fuse_main_common(argc, argv, op, op_size, 0);
 }
 
-void _fuse_main_compat1(int argc, char *argv[],
-                      const struct _fuse_operations_compat1 *op)
+void fuse_main_compat1(int argc, char *argv[],
+                      const struct fuse_operations_compat1 *op)
 {
     fuse_main_common(argc, argv, (struct fuse_operations *) op, 
-                     sizeof(struct _fuse_operations_compat1), 11);
+                     sizeof(struct fuse_operations_compat1), 11);
 }
 
-int _fuse_main_compat2(int argc, char *argv[],
-                      const struct _fuse_operations_compat2 *op)
+int fuse_main_compat2(int argc, char *argv[],
+                      const struct fuse_operations_compat2 *op)
 {
     return fuse_main_common(argc, argv, (struct fuse_operations *) op,
-                            sizeof(struct _fuse_operations_compat2), 21);
+                            sizeof(struct fuse_operations_compat2), 21);
 }
 
-__asm__(".symver _fuse_setup_compat2,__fuse_setup@");
-__asm__(".symver _fuse_main_compat2,fuse_main@");
+__asm__(".symver fuse_setup_compat2,__fuse_setup@");
+__asm__(".symver fuse_teardown,__fuse_teardown@");
+__asm__(".symver fuse_main_compat2,fuse_main@");

@@ -63,12 +63,12 @@ for this program.  And anyway what's all this fuss about versioning the
 kernel interface?  It is quite good as is.  */
 #define _LINUX_CAPABILITY_VERSION  0x19980330
 
-typedef struct __user_cap_header_struct {
+typedef struct user_cap_header_struct {
     unsigned int version;
     int pid;
 } *cap_user_header_t;
  
-typedef struct __user_cap_data_struct {
+typedef struct user_cap_data_struct {
     unsigned int effective;
     unsigned int permitted;
     unsigned int inheritable;
@@ -81,13 +81,13 @@ int capset(cap_user_header_t header, cap_user_data_t data);
 
 static uid_t oldfsuid;
 static gid_t oldfsgid;
-static struct __user_cap_data_struct oldcaps;
+static struct user_cap_data_struct oldcaps;
 
 static int drop_privs(void)
 {
     int res;
-    struct __user_cap_header_struct head;
-    struct __user_cap_data_struct newcaps;
+    struct user_cap_header_struct head;
+    struct user_cap_data_struct newcaps;
 
     head.version = _LINUX_CAPABILITY_VERSION;
     head.pid = 0;
@@ -119,7 +119,7 @@ static int drop_privs(void)
 
 static void restore_privs(void)
 {
-    struct __user_cap_header_struct head;
+    struct user_cap_header_struct head;
     int res;
 
     head.version = _LINUX_CAPABILITY_VERSION;

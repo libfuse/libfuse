@@ -126,7 +126,7 @@ int fuse_mount(const char *mountpoint, const char *opts)
     return rv;
 }
 
-int _fuse_mount_compat1(const char *mountpoint, const char *args[])
+int fuse_mount_compat1(const char *mountpoint, const char *args[])
 {
     /* just ignore mount args for now */
     (void) args;

@@ -53,10 +53,10 @@ static void *do_work(void *data)
     while (1) {
         struct fuse_cmd *cmd;
 
-        if (__fuse_exited(f))
+        if (fuse_exited(f))
             break;
 
-        cmd = __fuse_read_cmd(w->f);
+        cmd = fuse_read_cmd(w->f);
         if (cmd == NULL)
             continue;
 
@@ -131,7 +131,7 @@ static int mt_create_context_key()
             fprintf(stderr, "fuse: failed to create thread specific key: %s\n",
                     strerror(err));
         else 
-            __fuse_set_getcontext_func(mt_getcontext);
+            fuse_set_getcontext_func(mt_getcontext);
     }
     if (!err)
         context_ref ++;
@@ -144,13 +144,13 @@ static void mt_delete_context_key()
     pthread_mutex_lock(&context_lock);
     context_ref--;
     if (!context_ref) {
-        __fuse_set_getcontext_func(NULL);
+        fuse_set_getcontext_func(NULL);
         pthread_key_delete(context_key);
     }
     pthread_mutex_unlock(&context_lock);
 }
 
-int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
+int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
 {
     struct fuse_worker *w;
     int i;
@@ -187,5 +187,7 @@ int fuse_loop_mt(struct fuse *f)
     if (f == NULL)
         return -1;
 
-    return __fuse_loop_mt(f, (fuse_processor_t) __fuse_process_cmd, NULL);
+    return fuse_loop_mt_proc(f, (fuse_processor_t) fuse_process_cmd, NULL);
 }
+
+__asm__(".symver fuse_loop_mt_proc,__fuse_loop_mt@");

@@ -9,11 +9,11 @@
 /* these definitions provide source compatibility to prior versions.
    Do not include this file directly! */
 
-typedef int (*_fuse_dirfil_t_compat) (fuse_dirh_t h, const char *name, int type);
-struct _fuse_operations_compat2 {
+typedef int (*fuse_dirfil_t_compat) (fuse_dirh_t h, const char *name, int type);
+struct fuse_operations_compat2 {
     int (*getattr)     (const char *, struct stat *);
     int (*readlink)    (const char *, char *, size_t);
-    int (*getdir)      (const char *, fuse_dirh_t, _fuse_dirfil_t_compat);
+    int (*getdir)      (const char *, fuse_dirh_t, fuse_dirfil_t_compat);
     int (*mknod)       (const char *, mode_t, dev_t);
     int (*mkdir)       (const char *, mode_t);
     int (*unlink)      (const char *);
@@ -38,13 +38,13 @@ struct _fuse_operations_compat2 {
     int (*removexattr) (const char *, const char *);
 };
 
-int _fuse_main_compat2(int argc, char *argv[], const struct _fuse_operations_compat2 *op);
+int fuse_main_compat2(int argc, char *argv[], const struct fuse_operations_compat2 *op);
 
-struct fuse *_fuse_new_compat2(int fd, const char *opts, const struct _fuse_operations_compat2 *op);
+struct fuse *fuse_new_compat2(int fd, const char *opts, const struct fuse_operations_compat2 *op);
 
-struct fuse *_fuse_setup_compat2(int argc, char *argv[], const struct _fuse_operations_compat2 *op, char **mountpoint, int *multithreaded, int *fd);
+struct fuse *fuse_setup_compat2(int argc, char *argv[], const struct fuse_operations_compat2 *op, char **mountpoint, int *multithreaded, int *fd);
 
-struct _fuse_statfs_compat1 {
+struct fuse_statfs_compat1 {
     long block_size;
     long blocks;
     long blocks_free;
@@ -53,10 +53,10 @@ struct _fuse_statfs_compat1 {
     long namelen;
 };
 
-struct _fuse_operations_compat1 {
+struct fuse_operations_compat1 {
     int (*getattr)  (const char *, struct stat *);
     int (*readlink) (const char *, char *, size_t);
-    int (*getdir)   (const char *, fuse_dirh_t, _fuse_dirfil_t_compat);
+    int (*getdir)   (const char *, fuse_dirh_t, fuse_dirfil_t_compat);
     int (*mknod)    (const char *, mode_t, dev_t);
     int (*mkdir)    (const char *, mode_t);
     int (*unlink)   (const char *);
@@ -71,15 +71,15 @@ struct _fuse_operations_compat1 {
     int (*open)     (const char *, int);
     int (*read)     (const char *, char *, size_t, off_t);
     int (*write)    (const char *, const char *, size_t, off_t);
-    int (*statfs)   (struct _fuse_statfs_compat1 *);
+    int (*statfs)   (struct fuse_statfs_compat1 *);
     int (*release)  (const char *, int);
     int (*fsync)    (const char *, int);
 };
 
-#define _FUSE_DEBUG_COMPAT1       (1 << 1)
+#define FUSE_DEBUG_COMPAT1       (1 << 1)
 
-int _fuse_mount_compat1(const char *mountpoint, const char *args[]);
+int fuse_mount_compat1(const char *mountpoint, const char *args[]);
 
-struct fuse *_fuse_new_compat1(int fd, int flags, const struct _fuse_operations_compat1 *op);
+struct fuse *fuse_new_compat1(int fd, int flags, const struct fuse_operations_compat1 *op);
 
-void _fuse_main_compat1(int argc, char *argv[], const struct _fuse_operations_compat1 *op);
+void fuse_main_compat1(int argc, char *argv[], const struct fuse_operations_compat1 *op);

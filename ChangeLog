@@ -4,6 +4,8 @@
 
 	* More comments in fuse.h
 
+	* Get rid of double underscores
+
 2004-12-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add -D_FILE_OFFSET_BITS=64 to cflags provided by pkg-config

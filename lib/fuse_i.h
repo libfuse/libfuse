@@ -66,7 +66,7 @@ struct fuse_operations_i {
                         struct fuse_file_info *);
     union {
         int (*curr)    (const char *, struct statfs *);
-        int (*compat1) (struct _fuse_statfs_compat1 *);
+        int (*compat1) (struct fuse_statfs_compat1 *);
     } statfs;
     int (*flush)       (const char *, struct fuse_file_info *);
     union {

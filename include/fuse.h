@@ -285,7 +285,7 @@ struct fuse_context {
 int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
 */
 #define fuse_main(argc, argv, op) \
-            __fuse_main(argc, argv, op, sizeof(*(op)))
+            fuse_main_real(argc, argv, op, sizeof(*(op)))
 
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
@@ -399,8 +399,8 @@ int fuse_is_lib_option(const char *opt);
  * 
  * Do not call this directly, use fuse_main()
  */
-int __fuse_main(int argc, char *argv[], const struct fuse_operations *op,
-                size_t op_size);
+int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
+                   size_t op_size);
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
@@ -413,29 +413,29 @@ struct fuse_cmd;
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 
 /** This is the part of fuse_main() before the event loop */
-struct fuse *__fuse_setup(int argc, char *argv[],
-                          const struct fuse_operations *op, size_t op_size,
+struct fuse *fuse_setup(int argc, char *argv[],
+                        const struct fuse_operations *op, size_t op_size,
                           char **mountpoint, int *multithreaded, int *fd);
 
 /** This is the part of fuse_main() after the event loop */
-void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);
+void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);
 
 /** Read a single command.  If none are read, return NULL */
-struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
+struct fuse_cmd *fuse_read_cmd(struct fuse *f);
 
 /** Process a single command */
-void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
+void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 
 /** Multi threaded event loop, which calls the custom command
     processor function */
-int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
+int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data);
 
 /** Return the exited flag, which indicates if fuse_exit() has been
     called */
-int __fuse_exited(struct fuse* f);
+int fuse_exited(struct fuse* f);
 
 /** Set function which can be used to get the current context */
-void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
+void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff                                         *
@@ -443,26 +443,32 @@ void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 
 #if FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
 #  include <fuse_compat.h>
-#  define fuse_dirfil_t _fuse_dirfil_t_compat
+#  define fuse_dirfil_t fuse_dirfil_t_compat
+#  define __fuse_read_cmd fuse_read_cmd
+#  define __fuse_process_cmd fuse_process_cmd
+#  define __fuse_loop_mt fuse_loop_mt_proc
 #  undef fuse_main
 #  undef FUSE_MINOR_VERSION
 #  undef FUSE_MAJOR_VERSION
 #  if FUSE_USE_VERSION == 21
 #    define FUSE_MAJOR_VERSION 2
 #    define FUSE_MINOR_VERSION 1
-#    define fuse_operations _fuse_operations_compat2
-#    define fuse_main _fuse_main_compat2
-#    define fuse_new _fuse_new_compat2
-#    define __fuse_setup _fuse_setup_compat2
+#    define fuse_operations fuse_operations_compat2
+#    define fuse_main fuse_main_compat2
+#    define fuse_new fuse_new_compat2
+#    define __fuse_setup fuse_setup_compat2
+#    define __fuse_teardown fuse_teardown
+#    define __fuse_exited fuse_exited
+#    define __fuse_set_getcontext_func fuse_set_getcontext_func
 #  else
 #    define FUSE_MAJOR_VERSION 1
 #    define FUSE_MINOR_VERSION 1
-#    define fuse_statfs _fuse_statfs_compat1
-#    define fuse_operations _fuse_operations_compat1
-#    define fuse_main _fuse_main_compat1
-#    define fuse_new _fuse_new_compat1
-#    define fuse_mount _fuse_mount_compat1
-#    define FUSE_DEBUG _FUSE_DEBUG_COMPAT1
+#    define fuse_statfs fuse_statfs_compat1
+#    define fuse_operations fuse_operations_compat1
+#    define fuse_main fuse_main_compat1
+#    define fuse_new fuse_new_compat1
+#    define fuse_mount fuse_mount_compat1
+#    define FUSE_DEBUG FUSE_DEBUG_COMPAT1
 #  endif
 #elif FUSE_USE_VERSION < 22
 #  error Compatibility with API version other than 21 and 11 not supported

@@ -1,28 +1,28 @@
 FUSE_2.2 {
 	global:
-		__fuse_exited;
-		__fuse_loop_mt;
-		__fuse_main;
-		__fuse_process_cmd;
-		__fuse_read_cmd;
-		__fuse_set_getcontext_func;
-		__fuse_setup;
-		__fuse_teardown;
-		_fuse_setup_compat2;
-		_fuse_main_compat1;
-		_fuse_main_compat2;
-		_fuse_mount_compat1;
-		_fuse_new_compat1;
-		_fuse_new_compat2;
 		fuse_destroy;
 		fuse_exit;
+		fuse_exited;
 		fuse_get_context;
 		fuse_invalidate;
 		fuse_is_lib_option;
 		fuse_loop;
 		fuse_loop_mt;
+		fuse_loop_mt_proc;
+		fuse_main_compat1;
+		fuse_main_compat2;
+		fuse_main_real;
 		fuse_mount;
+		fuse_mount_compat1;
 		fuse_new;
+		fuse_new_compat1;
+		fuse_new_compat2;
+		fuse_process_cmd;
+		fuse_read_cmd;
+		fuse_set_getcontext_func;
+		fuse_setup;
+		fuse_setup_compat2;
+		fuse_teardown;
 		fuse_unmount;
 	local:
 		 *;

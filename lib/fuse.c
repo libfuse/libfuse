@@ -61,7 +61,6 @@ static const char *opname(enum fuse_opcode opcode)
     }
 }
 
-
 static inline void dec_avail(struct fuse *f)
 {
     pthread_mutex_lock(&f->lock);
@@ -69,7 +68,7 @@ static inline void dec_avail(struct fuse *f)
     pthread_mutex_unlock(&f->lock);
 }
 
-static struct node *__get_node(struct fuse *f, nodeid_t nodeid)
+static struct node *get_node_nocheck(struct fuse *f, nodeid_t nodeid)
 {
     size_t hash = nodeid % f->id_table_size;
     struct node *node;
@@ -83,7 +82,7 @@ static struct node *__get_node(struct fuse *f, nodeid_t nodeid)
 
 static struct node *get_node(struct fuse *f, nodeid_t nodeid)
 {
-    struct node *node = __get_node(f, nodeid);
+    struct node *node = get_node_nocheck(f, nodeid);
     if (node != NULL)
         return node;
     
@@ -116,7 +115,7 @@ static nodeid_t next_id(struct fuse *f)
         f->ctr++;
         if (!f->ctr)
             f->generation ++;
-    } while (f->ctr == 0 || __get_node(f, f->ctr) != NULL);
+    } while (f->ctr == 0 || get_node_nocheck(f, f->ctr) != NULL);
     return f->ctr;
 }
 
@@ -137,7 +136,7 @@ static unsigned int name_hash(struct fuse *f, nodeid_t parent, const char *name)
     return (hash + parent) % f->name_table_size;
 }
 
-static struct node *__lookup_node(struct fuse *f, nodeid_t parent,
+static struct node *lookup_node(struct fuse *f, nodeid_t parent,
                                 const char *name)
 {
     size_t hash = name_hash(f, parent, name);
@@ -148,22 +147,6 @@ static struct node *__lookup_node(struct fuse *f, nodeid_t parent,
             return node;
 
     return NULL;
-}
-
-static struct node *lookup_node(struct fuse *f, nodeid_t parent,
-                                const char *name)
-{
-    struct node *node;
-
-    pthread_mutex_lock(&f->lock);
-    node = __lookup_node(f, parent, name);
-    pthread_mutex_unlock(&f->lock);
-    if (node != NULL)
-        return node;
-    
-    fprintf(stderr, "fuse internal error: node %lu/%s not found\n", parent,
-            name);
-    abort();
 }
 
 static int hash_name(struct fuse *f, struct node *node, nodeid_t parent,
@@ -212,7 +195,7 @@ static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
         rdev = attr->rdev;
 
     pthread_mutex_lock(&f->lock);
-    node = __lookup_node(f, parent, name);
+    node = lookup_node(f, parent, name);
     if (node != NULL) {
         if (node->mode == mode && node->rdev == rdev && 
             (!(f->flags & FUSE_USE_INO) || node->ino == attr->ino)) {
@@ -270,7 +253,7 @@ static int path_lookup(struct fuse *f, const char *path, nodeid_t *nodeidp,
     err = 0;
     for  (s = tmp; (name = strsep(&s, "/")) != NULL; ) {
         if (name[0]) {
-            struct node *node = __lookup_node(f, nodeid, name);
+            struct node *node = lookup_node(f, nodeid, name);
             if (node == NULL) {
                 err = -ENOENT;
                 break;
@@ -350,7 +333,7 @@ static void destroy_node(struct fuse *f, nodeid_t nodeid, int version)
     struct node *node;
 
     pthread_mutex_lock(&f->lock);
-    node = __get_node(f, nodeid);
+    node = get_node_nocheck(f, nodeid);
     if (node && node->version == version && nodeid != FUSE_ROOT_ID) {
         unhash_name(f, node);
         unhash_id(f, node);
@@ -365,7 +348,7 @@ static void remove_node(struct fuse *f, nodeid_t dir, const char *name)
     struct node *node;
 
     pthread_mutex_lock(&f->lock);
-    node = __lookup_node(f, dir, name);
+    node = lookup_node(f, dir, name);
     if (node == NULL) {
         fprintf(stderr, "fuse internal error: unable to remove node %lu/%s\n",
                 dir, name);
@@ -383,8 +366,8 @@ static int rename_node(struct fuse *f, nodeid_t olddir, const char *oldname,
     int err = 0;
     
     pthread_mutex_lock(&f->lock);
-    node  = __lookup_node(f, olddir, oldname);
-    newnode  = __lookup_node(f, newdir, newname);
+    node  = lookup_node(f, olddir, oldname);
+    newnode  = lookup_node(f, newdir, newname);
     if (node == NULL) {
         fprintf(stderr, "fuse internal error: unable to rename node %lu/%s\n",
                 olddir, oldname);
@@ -488,8 +471,8 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize,
     return 0;
 }
 
-static int __send_reply(struct fuse *f, struct fuse_in_header *in, int error,
-                        void *arg, size_t argsize, int locked)
+static int do_send_reply(struct fuse *f, struct fuse_in_header *in, int error,
+                         void *arg, size_t argsize, int locked)
 {
     int res;
     char *outbuf;
@@ -525,9 +508,15 @@ static int __send_reply(struct fuse *f, struct fuse_in_header *in, int error,
 }
 
 static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
-                        void *arg, size_t argsize)
+                      void *arg, size_t argsize)
 {
-    return __send_reply(f, in, error, arg, argsize, 0);
+    return do_send_reply(f, in, error, arg, argsize, 0);
+}
+
+static int send_reply_locked(struct fuse *f, struct fuse_in_header *in,
+                             int error, void *arg, size_t argsize)
+{
+    return do_send_reply(f, in, error, arg, argsize, 1);
 }
 
 static int is_open(struct fuse *f, nodeid_t dir, const char *name)
@@ -535,7 +524,7 @@ static int is_open(struct fuse *f, nodeid_t dir, const char *name)
     struct node *node;
     int isopen = 0;
     pthread_mutex_lock(&f->lock);
-    node = __lookup_node(f, dir, name);
+    node = lookup_node(f, dir, name);
     if (node && node->open_count > 0)
         isopen = 1;
     pthread_mutex_unlock(&f->lock);
@@ -556,13 +545,18 @@ static char *hidden_name(struct fuse *f, nodeid_t dir, const char *oldname,
         return NULL;
 
     do {
-        node = lookup_node(f, dir, oldname);
         pthread_mutex_lock(&f->lock);
+        node = lookup_node(f, dir, oldname);
+        if (node == NULL) {
+            fprintf(stderr, "fuse internal error: node %lu/%s not found\n",
+                    dir, oldname);
+            abort();
+        }
         do {
             f->hidectr ++;
             snprintf(newname, bufsize, ".fuse_hidden%08x%08x",
                      (unsigned int) node->nodeid, f->hidectr);
-            newnode = __lookup_node(f, dir, newname);
+            newnode = lookup_node(f, dir, newname);
         } while(newnode);
         pthread_mutex_unlock(&f->lock);
         
@@ -1089,7 +1083,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             fflush(stdout);
         }
 
-        res2 = __send_reply(f, in, res, &outarg, sizeof(outarg), 1);
+        res2 = send_reply_locked(f, in, res, &outarg, sizeof(outarg));
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release.curr) {
@@ -1266,7 +1260,7 @@ static int default_statfs(struct statfs *buf)
     return 0;
 }
 
-static void convert_statfs_compat(struct _fuse_statfs_compat1 *compatbuf,
+static void convert_statfs_compat(struct fuse_statfs_compat1 *compatbuf,
                                   struct statfs *statfs)
 {
     statfs->f_bsize   = compatbuf->block_size;
@@ -1300,8 +1294,8 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
         if (!f->compat || f->compat > 11)
             res = f->op.statfs.curr("/", &buf);
         else {
-            struct _fuse_statfs_compat1 compatbuf;
-            memset(&compatbuf, 0, sizeof(struct _fuse_statfs_compat1));
+            struct fuse_statfs_compat1 compatbuf;
+            memset(&compatbuf, 0, sizeof(struct fuse_statfs_compat1));
             res = f->op.statfs.compat1(&compatbuf);
             if (res == 0)
                 convert_statfs_compat(&compatbuf, &buf);
@@ -1517,7 +1511,7 @@ static void free_cmd(struct fuse_cmd *cmd)
     free(cmd);
 }
 
-void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
+void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
     struct fuse_in_header *in = (struct fuse_in_header *) cmd->buf;
     void *inarg = cmd->buf + sizeof(struct fuse_in_header);
@@ -1641,12 +1635,12 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     free_cmd(cmd);
 }
 
-int __fuse_exited(struct fuse* f)
+int fuse_exited(struct fuse* f)
 {
     return f->exited;
 }
 
-struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
+struct fuse_cmd *fuse_read_cmd(struct fuse *f)
 {
     ssize_t res;
     struct fuse_cmd *cmd;
@@ -1670,7 +1664,7 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
     res = read(f->fd, cmd->buf, FUSE_MAX_IN);
     if (res == -1) {
         free_cmd(cmd);
-        if (__fuse_exited(f) || errno == EINTR)
+        if (fuse_exited(f) || errno == EINTR)
             return NULL;
         
         /* ENODEV means we got unmounted, so we silenty return failure */
@@ -1709,14 +1703,14 @@ int fuse_loop(struct fuse *f)
     while (1) {
         struct fuse_cmd *cmd;
 
-        if (__fuse_exited(f))
+        if (fuse_exited(f))
             break;
 
-        cmd = __fuse_read_cmd(f);
+        cmd = fuse_read_cmd(f);
         if (cmd == NULL)
             continue;
 
-        __fuse_process_cmd(f, cmd);
+        fuse_process_cmd(f, cmd);
     }
     f->exited = 0;
     return 0;
@@ -1772,7 +1766,7 @@ struct fuse_context *fuse_get_context()
         return &context;
 }
 
-void __fuse_set_getcontext_func(struct fuse_context *(*func)(void))
+void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 {
     fuse_getcontext = func;
 }
@@ -1944,21 +1938,21 @@ struct fuse *fuse_new(int fd, const char *opts,
     return fuse_new_common(fd, opts, op, op_size, 0);
 }
 
-struct fuse *_fuse_new_compat2(int fd, const char *opts,
-                              const struct _fuse_operations_compat2 *op)
+struct fuse *fuse_new_compat2(int fd, const char *opts,
+                              const struct fuse_operations_compat2 *op)
 {
     return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           sizeof(struct _fuse_operations_compat2), 21);
+                           sizeof(struct fuse_operations_compat2), 21);
 }
 
-struct fuse *_fuse_new_compat1(int fd, int flags,
-                              const struct _fuse_operations_compat1 *op)
+struct fuse *fuse_new_compat1(int fd, int flags,
+                              const struct fuse_operations_compat1 *op)
 {
     char *opts = NULL;
-    if (flags & _FUSE_DEBUG_COMPAT1)
+    if (flags & FUSE_DEBUG_COMPAT1)
         opts = "debug";
     return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           sizeof(struct _fuse_operations_compat1), 11);
+                           sizeof(struct fuse_operations_compat1), 11);
 }
 
 void fuse_destroy(struct fuse *f)
@@ -1990,4 +1984,8 @@ void fuse_destroy(struct fuse *f)
     free(f);
 }
 
-__asm__(".symver _fuse_new_compat2,fuse_new@");
+__asm__(".symver fuse_exited,__fuse_exited@");
+__asm__(".symver fuse_process_cmd,__fuse_process_cmd@");
+__asm__(".symver fuse_read_cmd,__fuse_read_cmd@");
+__asm__(".symver fuse_set_getcontext_func,__fuse_set_getcontext_func@");
+__asm__(".symver fuse_new_compat2,fuse_new@");
