@@ -23,7 +23,7 @@ Description:
   better than NFS.
 
 ==============================================================================
-Name: EncFS - Encrypted Filesystem module for FUSE
+Name: EncFS
 
 Author:  Valient Gough <vgough at pobox com>
 
@@ -34,5 +34,29 @@ Description:
   EncFS provides an encrypted filesystem in user-space. The EncFS
   module itself runs without any special permissions and uses the FUSE
   library and Linux kernel module to provide the filesystem interface.
+
+==============================================================================
+Name: FUSE-J
+
+Author: Peter Levart <Peter.Levart at select-tech si>
+
+Download: http://www.select-tech.si/fuse/
+
+Description: 
+
+  FUSE-J provides Java binding for FUSE.  It comes with the
+  "proof-of-concept" ZIP filesystem which seems to be pretty stable.
+
+==============================================================================
+Name: SMB for FUSE
+
+Author: Vincent Wagelaar <vincent at ricardis tudelft nl>
+
+Homepage: http://hannibal.lr-s.tudelft.nl/~vincent/fusesmb/
+
+Description:
+
+  With SMB for Fuse you can seamlessly browse your network
+  neighbourhood as were it on your own filesystem.
 
 ==============================================================================
