@@ -1444,6 +1444,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     ctx->fuse = f;
     ctx->uid = in->uid;
     ctx->gid = in->gid;
+    ctx->pid = in->pid;
     
     argsize = cmd->buflen - sizeof(struct fuse_in_header);
         

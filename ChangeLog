@@ -1,3 +1,7 @@
+2004-09-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add PID to fuse_context.  Patch by Steven James
+
 2004-09-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* A slight API change: fuse_get_context() doesn't need the "fuse"

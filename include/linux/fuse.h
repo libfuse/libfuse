@@ -201,6 +201,7 @@ struct fuse_in_header {
 	unsigned long ino;
 	unsigned int uid;
 	unsigned int gid;
+	unsigned int pid;
 };
 
 struct fuse_out_header {

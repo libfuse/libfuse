@@ -136,6 +136,7 @@ struct fuse_context {
     struct fuse *fuse;
     uid_t uid;
     gid_t gid;
+    pid_t pid;
 };
 
 #ifdef __cplusplus

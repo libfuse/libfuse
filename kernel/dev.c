@@ -134,6 +134,7 @@ struct fuse_req *fuse_get_request(struct fuse_conn *fc)
 	req = do_get_request(fc);
 	req->in.h.uid = current->fsuid;
 	req->in.h.gid = current->fsgid;
+	req->in.h.pid = current->pid;
 	return req;
 }
 
