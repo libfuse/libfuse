@@ -93,6 +93,7 @@ static int fuse_do(int fuse_fd, const char *opts, int multithreaded,
                       int background, const struct fuse_operations *op)
 {
     int pid;
+    int res;
 
     fuse = fuse_new(fuse_fd, opts, op);
     if (fuse == NULL)
@@ -110,11 +111,14 @@ static int fuse_do(int fuse_fd, const char *opts, int multithreaded,
     set_signal_handlers();
 
     if (multithreaded)
-        fuse_loop_mt(fuse);
+        res = fuse_loop_mt(fuse);
     else
-        fuse_loop(fuse);
+        res = fuse_loop(fuse);
     
     fuse_destroy(fuse);
+
+    if (res == -1)
+        return 1;
 
     return 0;
 }
