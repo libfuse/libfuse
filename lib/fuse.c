@@ -968,6 +968,8 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
             pthread_mutex_unlock(&f->lock);
         }
     }
+    if (path)
+        free(path);
 }
 
 static void do_flush(struct fuse *f, struct fuse_in_header *in)

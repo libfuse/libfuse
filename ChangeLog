@@ -1,5 +1,9 @@
 2004-06-24  Miklos Szeredi <mszeredi@inf.bme.hu>
 
+	* Fix memory leak in open (Valient Gough)
+
+2004-06-24  Miklos Szeredi <mszeredi@inf.bme.hu>
+
 	* Add "close after delete" support to libfuse (patch by Valient
 	Gough)
 
