@@ -1,9 +1,8 @@
 ## Process this file with automake to produce Makefile.in
 
-SUBDIRS = linux
-
 fuseincludedir=$(includedir)/fuse
 fuseinclude_HEADERS = fuse.h
+noinst_HEADERS = fuse_kernel.h
 
 # remove fuse.h from old place to avoid collision with new one
 install-data-local:

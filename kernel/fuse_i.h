@@ -6,8 +6,10 @@
     See the file COPYING.
 */
 
+#ifdef FUSE_MAINLINE
 #include <linux/fuse.h>
-#ifndef FUSE_MAINLINE
+#else
+#include "fuse_kernel.h"
 #include <linux/version.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)

@@ -4,6 +4,8 @@
 
 	* kernel: no allocation on write in direct_io mode
 
+	* move linux/fuse.h to fuse_kernel.h
+
 2004-11-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: clean up reading functions
