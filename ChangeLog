@@ -1,3 +1,8 @@
+2004-06-21  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Fix possible inode leak in userspace in case of unfinished
+	lookup/mknod/mkdir/symlink/link operation.
+	
 2004-06-20  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fix some races and cleanups in fuse_read_super()

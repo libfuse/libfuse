@@ -444,6 +444,7 @@ static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
 static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
 {
     int res;
+    int res2;
     char *path;
     struct fuse_entry_out arg;
 
@@ -459,7 +460,9 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
             res = lookup_path(f, in->ino, in->unique, name, path, &arg);
         free(path);
     }
-    send_reply(f, in, res, &arg, sizeof(arg));
+    res2 = send_reply(f, in, res, &arg, sizeof(arg));
+    if (res == 0 && res2 == -ENOENT)
+        destroy_node(f, arg.ino, in->unique);
 }
 
 static void do_forget(struct fuse *f, struct fuse_in_header *in,
@@ -636,6 +639,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
                      struct fuse_mknod_in *inarg)
 {
     int res;
+    int res2;
     char *path;
     char *name = PARAM(inarg);
     struct fuse_entry_out outarg;
@@ -655,13 +659,16 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
         }
         free(path);
     }
-    send_reply(f, in, res, &outarg, sizeof(outarg));
+    res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
+    if (res == 0 && res2 == -ENOENT)
+        destroy_node(f, outarg.ino, in->unique);
 }
 
 static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
                      struct fuse_mkdir_in *inarg)
 {
     int res;
+    int res2;
     char *path;
     char *name = PARAM(inarg);
     struct fuse_entry_out outarg;
@@ -681,7 +688,9 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
         }
         free(path);
     }
-    send_reply(f, in, res, &outarg, sizeof(outarg));
+    res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
+    if (res == 0 && res2 == -ENOENT)
+        destroy_node(f, outarg.ino, in->unique);
 }
 
 static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
@@ -726,6 +735,7 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
                        char *link)
 {
     int res;
+    int res2;
     char *path;
     struct fuse_entry_out outarg;
 
@@ -744,7 +754,10 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
         }
         free(path);
     }
-    send_reply(f, in, res, &outarg, sizeof(outarg));
+    res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
+    if (res == 0 && res2 == -ENOENT)
+        destroy_node(f, outarg.ino, in->unique);
+
 }
 
 static void do_rename(struct fuse *f, struct fuse_in_header *in,
@@ -779,6 +792,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
                     struct fuse_link_in *arg)
 {
     int res;
+    int res2;
     char *oldpath;
     char *newpath;
     char *name = PARAM(arg);
@@ -804,7 +818,9 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
         }
         free(oldpath);
     }
-    send_reply(f, in, res, &outarg, sizeof(outarg));   
+    res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
+    if (res == 0 && res2 == -ENOENT)
+        destroy_node(f, outarg.ino, in->unique);
 }
 
 static void do_open(struct fuse *f, struct fuse_in_header *in,

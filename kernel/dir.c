@@ -102,6 +102,23 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 	return inode;
 }
 
+static int fuse_send_lookup(struct fuse_conn *fc, struct fuse_req *req,
+			    struct inode *dir, struct dentry *entry, 
+			    struct fuse_entry_out *outarg, int *version)
+{
+	req->in.h.opcode = FUSE_LOOKUP;
+	req->in.h.ino = dir->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = entry->d_name.len + 1;
+	req->in.args[0].value = entry->d_name.name;
+	req->out.numargs = 1;
+	req->out.args[0].size = sizeof(struct fuse_entry_out);
+	req->out.args[0].value = outarg;
+	request_send(fc, req);
+	*version = req->out.h.unique;
+	return req->out.h.error;
+}
+
 static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 			  struct fuse_entry_out *outarg, int *version)
 {
@@ -114,17 +131,8 @@ static int fuse_do_lookup(struct inode *dir, struct dentry *entry,
 	req = fuse_get_request(fc);
 	if (!req)
 		return -ERESTARTSYS;
-	req->in.h.opcode = FUSE_LOOKUP;
-	req->in.h.ino = dir->i_ino;
-	req->in.numargs = 1;
-	req->in.args[0].size = entry->d_name.len + 1;
-	req->in.args[0].value = entry->d_name.name;
-	req->out.numargs = 1;
-	req->out.args[0].size = sizeof(struct fuse_entry_out);
-	req->out.args[0].value = outarg;
-	request_send(fc, req);
-	*version = req->out.h.unique;
-	err = req->out.h.error;
+	
+	err = fuse_send_lookup(fc, req, dir, entry, outarg, version);
 	fuse_put_request(fc, req);
 	return err;
 }
@@ -142,18 +150,30 @@ static inline unsigned long time_to_jiffies(unsigned long sec,
 static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 			    struct inode **inodep)
 {
+	struct fuse_conn *fc = INO_FC(dir);
 	int err;
 	struct fuse_entry_out outarg;
 	int version;
 	struct inode *inode = NULL;
+	struct fuse_req *req;
 
-	err = fuse_do_lookup(dir, entry, &outarg, &version);
+	if (entry->d_name.len > FUSE_NAME_MAX)
+		return -ENAMETOOLONG;
+	req = fuse_get_request(fc);
+	if (!req)
+		return -ERESTARTSYS;
+
+	err = fuse_send_lookup(fc, req, dir, entry, &outarg, &version);
 	if (!err) {
 		inode = fuse_iget(dir->i_sb, outarg.ino, outarg.generation,
 				  &outarg.attr, version);
-		if (!inode)
+		if (!inode) {
+			fuse_send_forget(fc, req, outarg.ino, version);
 			return -ENOMEM;
-	} else if (err != -ENOENT)
+		}
+	} 
+	fuse_put_request(fc, req);
+	if (err && err != -ENOENT)
 		return err;
 
 	entry->d_time = time_to_jiffies(outarg.entry_valid,
@@ -163,15 +183,19 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	return 0;
 }
 
-static int lookup_new_entry(struct inode *dir, struct dentry *entry,
-				   struct fuse_entry_out *outarg, int version,
-				   int mode)
+static int lookup_new_entry(struct fuse_conn *fc, struct fuse_req *req,
+			    struct inode *dir, struct dentry *entry,
+			    struct fuse_entry_out *outarg, int version,
+			    int mode)
 {
 	struct inode *inode;
 	inode = fuse_iget(dir->i_sb, outarg->ino, outarg->generation, 
 			  &outarg->attr, version);
-	if (!inode) 
+	if (!inode) {
+		fuse_send_forget(fc, req, outarg->ino, version);
 		return -ENOMEM;
+	}
+	fuse_put_request(fc, req);
 
 	/* Don't allow userspace to do really stupid things... */
 	if ((inode->i_mode ^ mode) & S_IFMT) {
@@ -213,9 +237,10 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	request_send(fc, req);
 	err = req->out.h.error;
 	if (!err)
-		err = lookup_new_entry(dir, entry, &outarg, req->out.h.unique,
-				       mode);
-	fuse_put_request(fc, req);
+		err = lookup_new_entry(fc, req, dir, entry, &outarg,
+				       req->out.h.unique, mode);
+	else
+		fuse_put_request(fc, req);
 	return err;
 }
 
@@ -251,9 +276,10 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 	request_send(fc, req);
 	err = req->out.h.error;
 	if (!err)
-		err = lookup_new_entry(dir, entry, &outarg, req->out.h.unique,
-				       S_IFDIR);
-	fuse_put_request(fc, req);
+		err = lookup_new_entry(fc, req, dir, entry, &outarg,
+				       req->out.h.unique, S_IFDIR);
+	else
+		fuse_put_request(fc, req);
 	return err;
 }
 
@@ -286,9 +312,10 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	request_send(fc, req);
 	err = req->out.h.error;
 	if (!err)
-		err = lookup_new_entry(dir, entry, &outarg, req->out.h.unique,
-				       S_IFLNK);
-	fuse_put_request(fc, req);
+		err = lookup_new_entry(fc, req, dir, entry, &outarg,
+				       req->out.h.unique, S_IFLNK);
+	else
+		fuse_put_request(fc, req);
 	return err;
 }
 
@@ -399,10 +426,10 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 	if (!err) {
 		/* Invalidate old entry, so attributes are refreshed */
 		d_invalidate(entry);
-		err = lookup_new_entry(newdir, newent, &outarg,
+		err = lookup_new_entry(fc, req, newdir, newent, &outarg,
 				       req->out.h.unique, inode->i_mode);
-	}
-	fuse_put_request(fc, req);
+	} else
+		fuse_put_request(fc, req);
 	return err;
 }
 

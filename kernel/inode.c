@@ -44,24 +44,29 @@ static void fuse_read_inode(struct inode *inode)
 	/* No op */
 }
 
+void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req, ino_t ino,
+		      int version)
+{
+	struct fuse_forget_in *inarg = &req->misc.forget_in;
+	inarg->version = version;
+	req->in.h.opcode = FUSE_FORGET;
+	req->in.h.ino = ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(struct fuse_forget_in);
+	req->in.args[0].value = inarg;
+	request_send_noreply(fc, req);
+}
+
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_req *req;
-	struct fuse_forget_in *inarg = NULL;
 	
 	if (fc == NULL)
 		return;
 
 	req = fuse_get_request_nonint(fc);
-	inarg = &req->misc.forget_in;
-	inarg->version = inode->i_version;
-	req->in.h.opcode = FUSE_FORGET;
-	req->in.h.ino = inode->i_ino;
-	req->in.numargs = 1;
-	req->in.args[0].size = sizeof(struct fuse_forget_in);
-	req->in.args[0].value = inarg;
-	request_send_noreply(fc, req);
+	fuse_send_forget(fc, req, inode->i_ino, inode->i_version);
 }
 
 static void fuse_put_super(struct super_block *sb)

@@ -229,6 +229,12 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 
 
 /**
+ * Send FORGET command
+ */
+void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req, ino_t ino,
+		      int version);
+
+/**
  * Initialise operations on regular file
  */
 void fuse_init_file_inode(struct inode *inode);
