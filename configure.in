@@ -12,24 +12,35 @@ AC_SUBST(LD)
 
 CFLAGS="-Wall -W -g -O2"
 
-AC_MSG_CHECKING([kernel source directory])
-kernelsrc=
-AC_ARG_WITH(kernel,
-	[  --with-kernel          Specify location of kernel source ],
-	[kernelsrc="$withval"])
+AC_ARG_ENABLE(kernel-module,
+	[  --enable-kernel-module  Compile kernel module, requires --with-kernel option ])
+AC_ARG_ENABLE(lib,
+	[  --enable-lib            Compile with library ])
+AC_ARG_ENABLE(util,
+	[  --enable-util           Compile with util ])
+AC_ARG_ENABLE(example,
+	[  --enable-example        Compile with examples ])
 
-if test -z "$kernelsrc"; then
-	buildlink=/lib/modules/`uname -r`/build
-	if test -e $buildlink; then
-		kernelsrc=`(cd $buildlink; /bin/pwd)`
-	else
-		AC_MSG_RESULT([Not found])
-		AC_MSG_ERROR([
+if test "$enable_kernel_module" != "no"; then
+	AC_MSG_CHECKING([kernel source directory])
+	kernelsrc=
+	AC_ARG_WITH(kernel,
+		[  --with-kernel           Specify location of kernel source ],
+		[kernelsrc="$withval"])
+
+	if test -z "$kernelsrc"; then
+		buildlink=/lib/modules/`uname -r`/build
+		if test -e $buildlink; then
+			kernelsrc=`(cd $buildlink; /bin/pwd)`
+		else
+			AC_MSG_RESULT([Not found])
+			AC_MSG_ERROR([
 *** Please specify the location of the kernel source with
 *** the '--with-kernel=SRCDIR' option])
+		fi
 	fi
+	AC_MSG_RESULT([$kernelsrc])
 fi
-AC_MSG_RESULT([$kernelsrc])
 
 oldcc=$CC
 oldcross_compiling=$cross_compiling
@@ -38,33 +49,45 @@ if test "$cross_compiling" = yes; then
 	cross_compiling=no
 fi
 
-AC_MSG_CHECKING([kernel source version])
-kernsrcver=`AC_TRY_RUN([
-#include "$kernelsrc/include/linux/version.h"
-#include <stdio.h>
+if test "$enable_kernel_module" != "no"; then
+	AC_MSG_CHECKING([kernel source version])
+	kernsrcver=`sed -ne '/^VERSION = \(.*\)/{s//\1/;p;q;}' $kernelsrc/Makefile`
+	kernsrcver="$kernsrcver.`sed -ne '/^PATCHLEVEL = \(.*\)/{s//\1/;p;q;}' $kernelsrc/Makefile`"
+	kernsrcver="$kernsrcver.`sed -ne '/^SUBLEVEL = \(.*\)/{s//\1/;p;q;}' $kernelsrc/Makefile`"
+	kernsrcver="$kernsrcver`sed -ne '/^EXTRAVERSION = \(.*\)/{s//\1/;p;q;}' $kernelsrc/Makefile`"
 
-int main() {
-printf("%s\n", UTS_RELEASE);
-	return 0;
-}
-], , , true)`
-
-if test -z "$kernsrcver"; then
-	AC_MSG_RESULT([Not found])
-	AC_MSG_ERROR([
+	if test -z "$kernsrcver"; then
+		AC_MSG_RESULT([Not found])
+		AC_MSG_ERROR([
 *** Cannot determine the version of the linux kernel source. Please 
 *** configure the kernel before running this script])
+	fi
+	AC_MSG_RESULT([$kernsrcver])
 fi
-AC_MSG_RESULT([$kernsrcver])
 
 CC=$oldcc
 cross_compiling=$oldcross_compiling
+subdirs="include patch"
 
-KERNINCLUDE=$kernelsrc/include
-AC_SUBST(KERNINCLUDE)
-kmoduledir=/lib/modules/$kernsrcver
-AC_SUBST(kmoduledir)
+if test "$enable_kernel_module" != "no"; then
+	KERNINCLUDE=$kernelsrc/include
+	AC_SUBST(KERNINCLUDE)
+	kmoduledir=/lib/modules/$kernsrcver
+	AC_SUBST(kmoduledir)
+	subdirs="$subdirs kernel"
+fi
+
+if test "$enable_lib" != "no"; then
+	subdirs="$subdirs lib";
+fi
+if test "$enable_util" != "no"; then
+	subdirs="$subdirs util";
+fi
+if test "$enable_example" != "no"; then
+	subdirs="$subdirs example";
+fi
+
+AC_SUBST(subdirs)
 
 AC_OUTPUT([Makefile kernel/Makefile lib/Makefile util/Makefile example/Makefile include/Makefile include/linux/Makefile patch/Makefile])
-
 
