@@ -371,6 +371,7 @@ extern struct file_operations fuse_dev_operations;
  *  - the private_data field of the device file
  *  - the s_fs_info field of the super block
  *  - unused_list, pending, processing lists in fuse_conn
+ *  - background list in fuse_conn
  *  - the unique request ID counter reqctr in fuse_conn
  *  - the sb (super_block) field in fuse_conn
  *  - the file (device file) field in fuse_conn

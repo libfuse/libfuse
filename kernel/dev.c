@@ -186,7 +186,9 @@ void fuse_release_background(struct fuse_req *req)
 		iput(req->inode2);
 	if (req->file)
 		fput(req->file);
+	spin_lock(&fuse_lock);
 	list_del(&req->bg_entry);
+	spin_unlock(&fuse_lock);
 }
 
 /* Called with fuse_lock, unlocks it */
@@ -362,7 +364,9 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 void request_send_background(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->isreply = 1;
+	spin_lock(&fuse_lock);
 	background_request(fc, req);
+	spin_unlock(&fuse_lock);
 	request_send_nowait(fc, req);
 }
 
