@@ -1,3 +1,8 @@
+2003-11-03  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Applied read combining patch by Michael Grigoriev (tested by
+	Valient Gough and Vincent Wagelaar)
+
 2003-10-22  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Mtab handling fix in fusermount by "Valient Gough" (SF patch

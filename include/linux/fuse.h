@@ -17,6 +17,11 @@
 /** Opening this will yield a new control file */
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
+/** Read combining parameters */
+#define FUSE_BLOCK_SHIFT 16
+#define FUSE_BLOCK_SIZE 65536
+#define FUSE_BLOCK_MASK 0xffff0000
+
 /** Data passed to mount */
 struct fuse_mount_data {
 	/** Must be set to FUSE_KERNEL_VERSION */

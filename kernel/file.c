@@ -112,6 +112,134 @@ static int fuse_readpage(struct file *file, struct page *page)
 	return out.h.error;
 }
 
+static int fuse_is_block_uptodate(struct address_space *mapping,
+		struct inode *inode, size_t bl_index)
+{
+	size_t index = bl_index << FUSE_BLOCK_PAGE_SHIFT;
+	size_t end_index = ((bl_index + 1) << FUSE_BLOCK_PAGE_SHIFT) - 1;
+	size_t file_end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+
+	if (end_index > file_end_index)
+		end_index = file_end_index;
+
+	for (; index <= end_index; index++) {
+		struct page *page = find_get_page(mapping, index);
+
+		if (!page)
+			return 0;
+
+		if (!Page_Uptodate(page)) {
+			page_cache_release(page);
+			return 0;
+		}
+
+		page_cache_release(page);
+	}
+
+	return 1;
+}
+
+
+static int fuse_cache_block(struct address_space *mapping,
+		struct inode *inode, char *bl_buf,
+		size_t bl_index)
+{
+	size_t start_index = bl_index << FUSE_BLOCK_PAGE_SHIFT;
+	size_t end_index = ((bl_index + 1) << FUSE_BLOCK_PAGE_SHIFT) - 1;
+	size_t file_end_index = inode->i_size >> PAGE_CACHE_SHIFT;
+
+	int i, error = 0;
+
+	if (end_index > file_end_index)
+		end_index = file_end_index;
+
+	for (i = 0; start_index + i <= end_index; i++) {
+		size_t index = start_index + i;
+		struct page *page;
+		char *buffer;
+
+		page = find_or_create_page(mapping, index, GFP_NOFS);
+
+		if (!Page_Uptodate(page)) {
+			buffer = kmap(page);
+			memcpy(buffer, bl_buf + i * PAGE_CACHE_SIZE,
+					PAGE_CACHE_SIZE);
+			SetPageUptodate(page);
+			kunmap(page);
+		}
+
+		UnlockPage(page);
+		page_cache_release(page);
+	}
+
+	return error;
+} 
+
+static int fuse_file_read_block(struct inode *inode, char *bl_buf,
+		size_t bl_index)
+{
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_read_in inarg;
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.offset = bl_index << FUSE_BLOCK_SHIFT;
+	inarg.size = FUSE_BLOCK_SIZE;
+
+	in.h.opcode = FUSE_READ;
+	in.h.ino = inode->i_ino;
+	in.numargs = 1;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	out.argvar = 1;
+	out.numargs = 1;
+	out.args[0].size = FUSE_BLOCK_SIZE;
+	out.args[0].value = bl_buf;
+
+	request_send(fc, &in, &out);
+
+	if (!out.h.error) {
+		size_t outsize = out.args[0].size;
+		if (outsize < FUSE_BLOCK_SIZE)
+			memset(bl_buf + outsize, 0, FUSE_BLOCK_SIZE - outsize);
+	}
+
+	return out.h.error;
+}   
+
+static ssize_t fuse_file_read(struct file *filp, char *buf,
+		size_t count, loff_t * ppos)
+{
+	struct address_space *mapping = filp->f_dentry->d_inode->i_mapping;
+	struct inode *inode = mapping->host;
+
+	size_t bl_index = *ppos >> FUSE_BLOCK_SHIFT;
+	size_t bl_end_index = (*ppos + count) >> FUSE_BLOCK_SHIFT;
+	size_t bl_file_end_index = inode->i_size >> FUSE_BLOCK_SHIFT;
+
+	if (bl_end_index > bl_file_end_index)
+		bl_end_index = bl_file_end_index;
+
+	while (bl_index <= bl_end_index) {
+		char *bl_buf = kmalloc(FUSE_BLOCK_SIZE, GFP_NOFS);
+
+		int res = fuse_is_block_uptodate(mapping, inode, bl_index);
+
+		if (!res)
+			res = fuse_file_read_block(inode, bl_buf, bl_index);
+
+		if (!res)
+			fuse_cache_block(mapping, inode, bl_buf, bl_index);
+
+		kfree(bl_buf);
+
+		bl_index++;
+	}
+
+	return generic_file_read(filp, buf, count, ppos);
+}  
+
 static int write_buffer(struct inode *inode, struct page *page,
 			unsigned offset, size_t count)
 {
@@ -192,7 +320,7 @@ static int fuse_commit_write(struct file *file, struct page *page,
 static struct file_operations fuse_file_operations = {
 	open:		fuse_open,
 	release:        fuse_release,
-	read:		generic_file_read,
+	read:		fuse_file_read,
 	write:		generic_file_write,
 	mmap:		generic_file_mmap,
 };

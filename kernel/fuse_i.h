@@ -21,6 +21,8 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
+#define FUSE_BLOCK_PAGE_SHIFT (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)
+
 
 /**
  * A Fuse connection.
