@@ -78,7 +78,7 @@ void fuse_unmount(const char *mountpoint)
     system(umount_cmd);
 }
 
-int fuse_mount(const char *mountpoint, const char *args[])
+int fuse_mount(const char *mountpoint, const char *opts)
 {
     const char *mountprog = FUSERMOUNT_PROG;
     int fds[2], pid;
@@ -101,28 +101,14 @@ int fuse_mount(const char *mountpoint, const char *args[])
 
     if(pid == 0) {
         char env[10];
-        char **newargv;
-        int numargs = 0;
-        int actr;
-        int i;
-
-        if(args != NULL) 
-            while(args[numargs] != NULL)
-                numargs ++;
-
-        newargv = (char **) malloc((1 + numargs + 2) * sizeof(char *));
-        actr = 0;
-        newargv[actr++] = strdup(mountprog);
-        for(i = 0; i < numargs; i++)
-            newargv[actr++] = strdup(args[i]);
-        newargv[actr++] = strdup(mountpoint);
-        newargv[actr++] = NULL;
+        const char *argv[] = {mountprog, opts ? "-o" : mountpoint, opts,
+                              mountpoint, NULL};
 
         close(fds[1]);
         fcntl(fds[0], F_SETFD, 0);
         snprintf(env, sizeof(env), "%i", fds[0]);
         setenv(FUSE_COMMFD_ENV, env, 1);
-        execvp(mountprog, newargv);
+        execvp(mountprog, (char **) argv);
         perror("fuse: failed to exec fusermount");
         exit(1);
     }

@@ -25,23 +25,31 @@ struct fuse *fuse_get(void)
 static void usage(char *progname)
 {
     fprintf(stderr,
-            "usage: %s mountpoint [options] [-- [fusermount options]]\n"
+            "usage: %s mountpoint [options]\n"
             "Options:\n"
-            "    -d      enable debug output (implies -f)\n"
-            "    -f      foreground operation\n"
-            "    -s      disable multithreaded operation\n"
-            "    -i      immediate removal (don't delay until last release)\n"
-            "    -h      print help\n"
+            "    -d                  enable debug output (implies -f)\n"
+            "    -f                  foreground operation\n"
+            "    -s                  disable multithreaded operation\n"
+            "    -o opt,[opt...]     mount options\n"
+            "    -h                  print help\n"
             "\n"
-            "Fusermount options:\n"
-            "            see 'fusermount -h'\n",
+            "Mount options:\n"
+            "    default_permissions    enable permission checking\n"
+            "    allow_other            allow access to other users\n"
+            "    kernel_cache           cache files in kernel\n"
+            "    large_read             issue large read requests (2.4 only)\n"
+            "    direct_io              use direct I/O\n"
+            "    max_read=N             set maximum size of read requests\n"
+            "    hard_remove            immediate removal (don't hide files)\n"
+            "    debug                  enable debug output\n"
+            "    fsname=NAME            set filesystem name in mtab\n",
             progname);
     exit(1);
 }
 
 static void invalid_option(char *argv[], int argctr)
 {
-    fprintf(stderr, "invalid option: %s\n", argv[argctr]);
+    fprintf(stderr, "invalid option: %s\n\n", argv[argctr]);
     usage(argv[0]);
 }
 
@@ -81,12 +89,12 @@ static void set_signal_handlers()
     set_one_signal_handler(SIGPIPE, SIG_IGN);
 }
 
-static int fuse_start(int fuse_fd, int flags, int multithreaded,
+static int fuse_do(int fuse_fd, const char *opts, int multithreaded,
                       int background, const struct fuse_operations *op)
 {
     int pid;
 
-    fuse = fuse_new(fuse_fd, flags, op);
+    fuse = fuse_new(fuse_fd, opts, op);
     if (fuse == NULL)
         return 1;
     
@@ -111,35 +119,79 @@ static int fuse_start(int fuse_fd, int flags, int multithreaded,
     return 0;
 }
 
+static void add_option_to(const char *opt, char **optp)
+{
+    unsigned len = strlen(opt);
+    if (*optp) {
+        unsigned oldlen = strlen(*optp);
+        *optp = realloc(*optp, oldlen + 1 + len + 1);
+        (*optp)[oldlen] = ',';
+        strcpy(*optp + oldlen + 1, opt);
+    } else {
+        *optp = malloc(len + 1);
+        strcpy(*optp, opt);
+    }
+}
+
+static void add_options(char **lib_optp, char **kernel_optp, const char *opts)
+{
+    char *xopts = strdup(opts);
+    char *s = xopts;
+    char *opt;
+    
+    while((opt = strsep(&s, ",")) != NULL) {
+        if (fuse_is_lib_option(opt))
+            add_option_to(opt, lib_optp);
+        else
+            add_option_to(opt, kernel_optp);
+    }
+    free(xopts);
+}
+
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
 {
     int argctr;
-    int flags;
     int multithreaded;
     int background;
     int fuse_fd;
     char *fuse_mountpoint = NULL;
-    char **fusermount_args = NULL;
-    char *newargs[3];
     char *basename;
+    char *kernel_opts = NULL;
+    char *lib_opts = NULL;
+    char *fsname_opt;
     int err;
+
+    basename = strrchr(argv[0], '/');
+    if (basename == NULL)
+        basename = argv[0];
+    else if (basename[1] != '\0')
+        basename++;
+
+    fsname_opt = malloc(strlen(basename) + 64);
+    sprintf(fsname_opt, "fsname=%s", basename);
+    add_options(&lib_opts, &kernel_opts, fsname_opt);
+    free(fsname_opt);
     
-    flags = 0;
     multithreaded = 1;
     background = 1;
-    for (argctr = 1; argctr < argc && !fusermount_args; argctr ++) {
+    for (argctr = 1; argctr < argc; argctr ++) {
         if (argv[argctr][0] == '-') {
             if (strlen(argv[argctr]) == 2)
                 switch (argv[argctr][1]) {
+                case 'o':
+                    if (argctr + 1 == argc || argv[argctr+1][0] == '-') {
+                        fprintf(stderr, "missing option after -o\n\n");
+                        usage(argv[0]);
+                    }
+                    argctr ++;
+                    add_options(&lib_opts, &kernel_opts, argv[argctr]);
+                    break;
+                    
                 case 'd':
-                    flags |= FUSE_DEBUG;
+                    add_options(&lib_opts, &kernel_opts, "debug");
                     background = 0;
                     break;
                     
-                case 'i':
-                    flags |= FUSE_HARD_REMOVE;
-                    break;
-
                 case 'f':
                     background = 0;
                     break;
@@ -152,15 +204,15 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
                     usage(argv[0]);
                     break;
                     
-                case '-':
-                    fusermount_args = &argv[argctr+1];
-                    break;
-                    
                 default:
                     invalid_option(argv, argctr);
                 }
-            else
-                invalid_option(argv, argctr);
+            else {
+                if (argv[argctr][1] == 'o')
+                    add_options(&lib_opts, &kernel_opts, &argv[argctr][2]);
+                else
+                    invalid_option(argv, argctr);
+            }
         } else if (fuse_mountpoint == NULL)
             fuse_mountpoint = strdup(argv[argctr]);
         else
@@ -168,30 +220,19 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
     }
 
     if (fuse_mountpoint == NULL) {
-        fprintf(stderr, "missing mountpoint\n");
+        fprintf(stderr, "missing mountpoint\n\n");
         usage(argv[0]);
     }
-    if (fusermount_args != NULL)
-        fusermount_args -= 2; /* Hack! */
-    else {
-        fusermount_args = newargs;
-        fusermount_args[2] = NULL;
-    }
     
-    basename = strrchr(argv[0], '/');
-    if (basename == NULL)
-        basename = argv[0];
-    else if (basename[1] != '\0')
-        basename++;
-
-    fusermount_args[0] = "-n";
-    fusermount_args[1] = basename;
-
-    fuse_fd = fuse_mount(fuse_mountpoint, (const char **) fusermount_args);
+    fuse_fd = fuse_mount(fuse_mountpoint, kernel_opts);
     if (fuse_fd == -1)
         exit(1);
+    if (kernel_opts)
+        free(kernel_opts);
 
-    err = fuse_start(fuse_fd, flags, multithreaded, background, op);
+    err = fuse_do(fuse_fd, lib_opts, multithreaded, background, op);
+    if (lib_opts)
+        free(lib_opts);
     close(fuse_fd);
     fuse_unmount(fuse_mountpoint);
     if (err)

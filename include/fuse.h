@@ -90,20 +90,18 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
  *  with the same flags.  It is possible to have a file opened more
  *  than once, in which case only the last release will mean, that no
  *  more reads/writes will happen on the file.  The return value of
- *  release is ignored.  This call need only be implemented if this
- *  information is required, otherwise set this function to NULL.
+ *  release is ignored.  Implementing this method is optional.
  * 
  *  - flush() is called when close() has been called on an open file.
  *  NOTE: this does not mean that the file is released (e.g. after
  *  fork() an open file will have two references which both must be
- *  closed before the file is released).  The flush() method can be
+ *  closed before the file is released).  The flush() method may be
  *  called more than once for each open().  The return value of
  *  flush() is passed on to the close() system call.  Implementing
- *  this call is optional.  If it is not needed by the filesystem,
- *  then set the callback pointer to NULL.
+ *  this method is optional.
  * 
  *  - fsync() has a boolean 'datasync' parameter which if TRUE then do
- *  an fdatasync() operation.  Implementing this call is optional.
+ *  an fdatasync() operation.  Implementing this method is optional.
  */
 struct fuse_operations {
     int (*getattr)     (const char *, struct stat *);
@@ -139,15 +137,6 @@ struct fuse_context {
     gid_t gid;
 };
 
-/* FUSE flags: */
-
-/** Enable debuging output */
-#define FUSE_DEBUG       (1 << 1)
-
-/** If a file is removed but it's still open, don't hide the file but
-    remove it immediately */
-#define FUSE_HARD_REMOVE (1 << 2)
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -160,8 +149,7 @@ extern "C" {
  * 
  * This function does the following:
  *   - parses command line options (-d -s and -h)
- *   - passes all options after '--' to the fusermount program
- *   - mounts the filesystem by calling fusermount
+ *   - passes relevant mount options to the fuse_mount()
  *   - installs signal handlers for INT, HUP, TERM and PIPE
  *   - registers an exit handler to unmount the filesystem on program exit
  *   - creates a fuse handle
@@ -194,11 +182,10 @@ struct fuse *fuse_get(void);
  * fuse_new()
  *
  * @param mountpoint the mount point path
- * @param args array of arguments to be passed to fusermount (NULL
- *        terminated).  Can be NULL if no arguments are needed.
+ * @param opts a comma separated list of mount options.  Can be NULL.
  * @return the control file descriptor on success, -1 on failure
  */
-int fuse_mount(const char *mountpoint, const char *args[]);
+int fuse_mount(const char *mountpoint, const char *opts);
 
 /*
  * Umount a FUSE mountpoint
@@ -211,11 +198,12 @@ void fuse_unmount(const char *mountpoint);
  * Create a new FUSE filesystem.
  *
  * @param fd the control file descriptor
- * @param flags any combination of the FUSE flags defined above, or 0
+ * @param opts mount options to be used by the library
  * @param op the operations
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op);
+struct fuse *fuse_new(int fd, const char *opts, 
+                      const struct fuse_operations *op);
 
 /**
  * Destroy the FUSE handle. 
@@ -267,6 +255,16 @@ void fuse_loop_mt(struct fuse *f);
  * @return the context 
  */
 struct fuse_context *fuse_get_context(struct fuse *f);
+
+/**
+ * Check whether a mount option should be passed to the kernel or the
+ * library
+ *
+ * @param opt the option to check
+ * @return 1 if it is a library option, 0 otherwise
+ */
+int fuse_is_lib_option(const char *opt);
+
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *

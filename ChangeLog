@@ -1,3 +1,9 @@
+2004-07-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Clean up mount option passing to fusermount and to fuse_new()
+	BEWARE: this changes the userspace API slightly, and the command
+	line usage of programs using fuse_main()
+	
 2004-07-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Optimize reading under 2.6 kernels by issuing multiple page

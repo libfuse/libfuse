@@ -175,7 +175,7 @@ static match_table_t tokens = {
 	{opt_kernel_cache, "kernel_cache"},
 	{opt_large_read, "large_read"},
 	{opt_direct_io, "direct_io"},
-	{opt_max_read, "max_read" },
+	{opt_max_read, "max_read=%u" },
 	{opt_err, NULL}
 };
 

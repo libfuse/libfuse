@@ -10,6 +10,16 @@
 #include <stdio.h>
 #include <pthread.h>
 
+/* FUSE flags: */
+
+/** Enable debuging output */
+#define FUSE_DEBUG       (1 << 1)
+
+/** If a file is removed but it's still open, don't hide the file but
+    remove it immediately */
+#define FUSE_HARD_REMOVE (1 << 2)
+
+
 typedef unsigned long fino_t;
 
 struct node {

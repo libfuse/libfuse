@@ -41,14 +41,6 @@
 
 const char *progname;
 
-struct fuse_opts {
-    int kernel_cache;
-    int default_permissions;
-    int allow_other;
-    int large_read;
-    int direct_io;
-};
-
 static const char *get_user_name()
 {
     struct passwd *pw = getpwuid(getuid());
@@ -97,7 +89,7 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
 
     fp = setmntent(mtab, "a");
     if(fp == NULL) {
-	fprintf(stderr, "%s failed to open %s: %s\n", progname, mtab,
+	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
 		strerror(errno));
 	return -1;
     }
@@ -114,8 +106,10 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
     else
         opts = strdup("rw,nosuid,nodev");
     
-    if(opts == NULL)
+    if(opts == NULL) {
+        fprintf(stderr, "%s: failed to allocate memory\n", progname);
         return -1;
+    }
     
     ent.mnt_fsname = (char *) fsname;
     ent.mnt_dir = (char *) mnt;
@@ -296,13 +290,23 @@ static void restore_privs()
     setfsgid(oldfsgid);
 }
 
-static int do_mount(const char *dev, const char *mnt, const char *type,
-                    mode_t rootmode, int fd, struct fuse_opts *opts)
+static int begins_with(const char *s, const char *beg)
+{
+    if (strncmp(s, beg, strlen(beg)) == 0)
+        return 1;
+    else
+        return 0;
+}
+
+static int do_mount(const char *mnt, const char *type, mode_t rootmode,
+                    int fd, const char *opts, char **fsnamep)
 {
     int res;
     int flags = MS_NOSUID | MS_NODEV;
-    char optbuf[1024];
-    char *s = optbuf;
+    char *optbuf;
+    const char *s;
+    char *d;
+    char *fsname = NULL;
 
     if(getuid() != 0) {
         res = drop_privs();
@@ -310,21 +314,56 @@ static int do_mount(const char *dev, const char *mnt, const char *type,
             return -1;
     }
     
-    s += sprintf(s, "fd=%i,rootmode=%o,uid=%i", fd, rootmode, getuid());
-    if (opts->kernel_cache)
-        s += sprintf(s, ",kernel_cache");
-    if (opts->default_permissions)
-        s += sprintf(s, ",default_permissions");
-    if (opts->allow_other)
-        s += sprintf(s, ",allow_other");
-    if (opts->large_read)
-        s += sprintf(s, ",large_read");
-    if (opts->direct_io)
-        s += sprintf(s, ",direct_io");
+    optbuf = malloc(strlen(opts) + 64);
+    if (!optbuf) {
+        fprintf(stderr, "%s: failed to allocate memory\n", progname);
+        return -1;
+    }
+    
+    for (s = opts, d = optbuf; *s;) {
+        unsigned len;
+        const char *fsname_str = "fsname=";
+        for (len = 0; s[len] && s[len] != ','; len++);
+        if (begins_with(s, fsname_str)) {
+            unsigned fsname_str_len = strlen(fsname_str);
+            if (fsname)
+                free(fsname);
+            fsname = malloc(len - fsname_str_len + 1);
+            if (!fsname) {
+                fprintf(stderr, "%s: failed to allocate memory\n", progname);
+                free(optbuf);
+                return -1;
+            }
+            memcpy(fsname, s + fsname_str_len, len - fsname_str_len);
+            fsname[len - fsname_str_len] = '\0';
+        } else if (!begins_with(s, "fd=") &&
+                   !begins_with(s, "rootmode=") &&
+                   !begins_with(s, "uid=")) {
+            memcpy(d, s, len);
+            d += len;
+            *d++ = ',';
+        }
+        s += len;
+        if (*s)
+            s++;
+    }
+    sprintf(d, "fd=%i,rootmode=%o,uid=%i", fd, rootmode, getuid());
+    if (fsname == NULL) {
+        fsname = strdup(FUSE_DEV);
+        if (!fsname) {
+            fprintf(stderr, "%s: failed to allocate memory\n", progname);
+            free(optbuf);
+            return -1;
+        }
+    }
 
-    res = mount(dev, mnt, type, flags, optbuf);
-    if(res == -1)
+    res = mount(fsname, mnt, type, flags, optbuf);
+    free(optbuf);
+    if(res == -1) {
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
+        free(fsname);
+    }
+    *fsnamep = fsname;
 
     if(getuid() != 0)
         restore_privs();
@@ -370,8 +409,7 @@ static int check_perm(const char *mnt, struct stat *stbuf)
     return 0;
 }
 
-static int mount_fuse(const char *mnt, struct fuse_opts *opts,
-                      const char *fsname)
+static int mount_fuse(const char *mnt, const char *opts)
 {
     int res;
     int fd;
@@ -379,6 +417,7 @@ static int mount_fuse(const char *mnt, struct fuse_opts *opts,
     const char *type = "fuse";
     struct stat stbuf;
     int mtablock;
+    char *fsname;
 
     res = check_perm(mnt, &stbuf);
     if(res == -1)
@@ -404,22 +443,21 @@ static int mount_fuse(const char *mnt, struct fuse_opts *opts,
         return -1;
     }
  
-    if(fsname == NULL)
-        fsname = dev;
-
-    res = do_mount(fsname, mnt, type, stbuf.st_mode & S_IFMT, fd, opts);
+    res = do_mount(mnt, type, stbuf.st_mode & S_IFMT, fd, opts, &fsname);
     if(res == -1)
         return -1;
 
     if(geteuid() == 0) {
         mtablock = lock_mtab();
         res = add_mount(fsname, mnt, type);
+        free(fsname);
         unlock_mtab(mtablock);
         if(res == -1) {
             umount2(mnt, 2); /* lazy umount */
             return -1;
         }
-    }
+    } else
+        free(fsname);
 
     return fd;
 }
@@ -436,6 +474,9 @@ static char *resolve_path(const char *orig, int unmount)
         */
         char *dst = strdup(orig);
         char *end;
+        if (dst == NULL)
+            return NULL;
+
         for(end = dst + strlen(dst) - 1; end > dst && *end == '/'; end --)
             *end = '\0';
 
@@ -492,16 +533,11 @@ static void usage()
     fprintf(stderr,
             "%s: [options] mountpoint\n"
             "Options:\n"
-            " -h       print help\n"
-            " -u       unmount\n"
-            " -p       check default permissions on files\n"
-            " -c       cache in kernel space if possible\n"
-            " -x       allow other users to access the files (only for root)\n"
-            " -n name  add 'name' as the filesystem name to mtab\n"
-            " -l       issue large reads\n"
-            " -r       raw I/O\n"
-            " -q       quiet: don't complain if unmount fails\n"
-            " -z       lazy unmount\n",
+            " -h                print help\n"
+            " -o opt[,opt...]   mount options\n"
+            " -u                unmount\n"
+            " -q                quiet\n"
+            " -z                lazy unmount\n",
             progname);
     exit(1);
 }
@@ -516,13 +552,10 @@ int main(int argc, char *argv[])
     int unmount = 0;
     int lazy = 0;
     char *commfd;
-    const char *fsname = NULL;
     int quiet = 0;
-    struct fuse_opts opts;
     int cfd;
+    const char *opts = "";
 
-
-    memset(&opts, 0, sizeof(struct fuse_opts));
     progname = argv[0];
     
     for(a = 1; a < argc; a++) {
@@ -530,12 +563,17 @@ int main(int argc, char *argv[])
             break;
 
         switch(argv[a][1]) {
-        case 'c':
-            opts.kernel_cache = 1;
-            break;
-
         case 'h':
             usage();
+            break;
+
+        case 'o':
+            a++;
+            if(a == argc) {
+                fprintf(stderr, "%s: Missing argument to -o\n", progname);
+                exit(1);
+            }
+            opts = argv[a];
             break;
 
         case 'u':
@@ -544,31 +582,6 @@ int main(int argc, char *argv[])
 
         case 'z':
             lazy = 1;
-            break;
-            
-        case 'p':
-            opts.default_permissions = 1;
-            break;
-            
-        case 'x':
-            opts.allow_other = 1;
-            break;
-            
-        case 'n':
-            a++;
-            if(a == argc) {
-                fprintf(stderr, "%s: Missing argument to -n\n", progname);
-                exit(1);
-            }
-            fsname = argv[a];
-            break;
-
-        case 'l':
-            opts.large_read = 1;
-            break;
-
-        case 'r':
-            opts.direct_io = 1;
             break;
             
         case 'q':
@@ -589,14 +602,16 @@ int main(int argc, char *argv[])
 
     origmnt = argv[a++];
 
-    if(getpid() != 0)
+    if(getuid() != 0)
         drop_privs();
 
     mnt = resolve_path(origmnt, unmount);
-    if(mnt == NULL)
+    if(mnt == NULL) {
+        fprintf(stderr, "%s: failed to allocate memory\n", progname);
         exit(1);
+    }
 
-    if(getpid() != 0)
+    if(getuid() != 0)
         restore_privs();
     
     if(unmount) {
@@ -623,7 +638,7 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    fd = mount_fuse(mnt, &opts, fsname);
+    fd = mount_fuse(mnt, opts);
     if(fd == -1)
         exit(1);
 

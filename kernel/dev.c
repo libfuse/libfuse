@@ -432,7 +432,7 @@ static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
 	struct inode *inode = iget(fc->sb, uh->ino);
 	int err = -ENOENT;
 	if (inode) {
-		if (FUSE_FI(inode)) {
+		if (INO_FI(inode)) {
 			invalidate_inode_pages(inode);
 			err = 0;
 		}

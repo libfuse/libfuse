@@ -1550,7 +1550,36 @@ static int check_version(struct fuse *f)
     return 0;
 }
 
-struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
+
+int fuse_is_lib_option(const char *opt)
+{
+    if (strcmp(opt, "debug") == 0 ||
+        strcmp(opt, "hard_remove") == 0)
+        return 1;
+    else
+        return 0;
+}
+
+static void parse_lib_opts(struct fuse *f, const char *opts)
+{
+    if (opts) {
+        char *xopts = strdup(opts);
+        char *s = xopts;
+        char *opt;
+        
+        while((opt = strsep(&s, ","))) {
+            if (strcmp(opt, "debug") == 0)
+                f->flags |= FUSE_DEBUG;
+            else if (strcmp(opt, "hard_remove") == 0)
+                f->flags |= FUSE_HARD_REMOVE;
+            else 
+                fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
+        }
+        free(xopts);
+    }
+}
+
+struct fuse *fuse_new(int fd, const char *opts, const struct fuse_operations *op)
 {
     struct fuse *f;
     struct node *root;
@@ -1562,7 +1591,7 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
         return NULL;
     }
 
-    f->flags = flags;
+    parse_lib_opts(f, opts);
     f->fd = fd;
     f->ctr = 0;
     f->generation = 0;
