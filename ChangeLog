@@ -1,6 +1,9 @@
 2004-09-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Allow "large_read" option for 2.6 kernels but warn of deprecation
+
+	* Make requests non-interruptible so race with FORGET is avoided.
+	This is only a temporary solution
 	
 2004-09-09  Miklos Szeredi <miklos@szeredi.hu>
 
