@@ -5,7 +5,6 @@ INSTALL = @INSTALL@
 mkinstalldirs = $(SHELL) ../mkinstalldirs
 majver = @majver@
 
-EXTRA_CFLAGS := -I$(PWD)/../include
 DISTFILES = Makefile.in dev.c dir.c file.c inode.c util.c fuse_i.h
 
 fusemoduledir = @kmoduledir@/kernel/fs/fuse
@@ -44,7 +43,7 @@ ifeq ($(majver), 2.4)
 CC = @CC@
 LD = @LD@
 CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe
-CPPFLAGS = -I@kernelsrc@/include -I../include -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES
+CPPFLAGS = -I@kernelsrc@/include -I../include -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES -DFUSE_VERSION=\"@VERSION@\"
 
 fuse_objs = dev.o dir.o file.o inode.o util.o
 
@@ -67,6 +66,8 @@ inode.o: $(fuse_headers)
 util.o: $(fuse_headers)
 
 else
+
+EXTRA_CFLAGS := -I$(PWD)/../include -DFUSE_VERSION=\"@VERSION@\"
 
 obj-m := fuse.o
 fuse-objs := dev.o dir.o file.o inode.o util.o

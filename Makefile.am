@@ -3,4 +3,5 @@
 SUBDIRS = @subdirs@
 
 EXTRA_DIST =			\
-	fuse.spec
+	fuse.spec		\
+	README*

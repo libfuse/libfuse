@@ -1,3 +1,17 @@
+What is new in 1.1
+
+* Support for the 2.6 kernels
+
+* Read efficiency improvements: read in 64k blocks instead of 4k
+(Michael Grigoriev)
+
+* Lazy automatic unmount
+
+* Added 'fsync()' VFS call to the FUSE interface
+
+* Bugfixes
+
+
 What is new in 1.0
 
 * Cleanups and bugfixes

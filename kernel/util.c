@@ -31,7 +31,9 @@ int __init fuse_init(void)
 {
 	int res;
 
-	printk(KERN_DEBUG "fuse init (version %i)\n", FUSE_KERNEL_VERSION);
+	printk(KERN_DEBUG "fuse init %s (API version %i.%i)\n",
+	       FUSE_VERSION,
+	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
 
 	res = fuse_fs_init();
 	if(res)
