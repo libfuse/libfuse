@@ -78,6 +78,8 @@ a number of bugs were fixed, some quite serious.
 
 * Fix compile problems with recent SuSE kernles
 
+============================================================================
+
 What is new in 1.2
 
 * Fix mount problems on recent 2.6 kernels with SELinux enabled
