@@ -1,7 +1,10 @@
 What is new in 2.3
 
  - Add new directory related operations: opendir(), readdir(),
-   releasedir() and fsyncdir().
+   releasedir() and fsyncdir()
+
+ - Add init() and destroy() operations which are called before the
+   event loop is started and after it has exited
 
  - Update kernel ABI so that on dual architectures (e.g. AMD64) 32bit
    binaries work under a 64bit kernel

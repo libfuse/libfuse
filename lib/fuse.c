@@ -63,6 +63,13 @@ struct fuse_dirhandle {
     unsigned char *contents;
     unsigned len;
     int filled;
+    unsigned long fh;
+};
+
+struct fuse_dirbuf {
+    struct fuse *fuse;
+    char *buf;
+    unsigned len;
 };
 
 struct fuse_cmd {
@@ -436,6 +443,35 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 #endif
 }
 
+static int fill_dir5(void *buf, const char *name, int type, ino_t ino,
+                     off_t off)
+{
+    size_t namelen = strlen(name);
+    size_t size;
+    struct fuse_dirbuf *db = (struct fuse_dirbuf *) buf;
+    struct fuse_dirent *dirent;
+
+    if (db->len <= FUSE_NAME_OFFSET)
+        return 1;
+
+    dirent = (struct fuse_dirent *) db->buf;
+    if ((db->fuse->flags & FUSE_USE_INO))
+        dirent->ino = ino;
+    else
+        dirent->ino = (unsigned long) -1;
+    dirent->off = off;
+    dirent->namelen = namelen;
+    dirent->type = type;
+    size = FUSE_DIRENT_SIZE(dirent);
+    if (db->len < size)
+        return 1;
+    
+    strncpy(dirent->name, name, namelen);
+    db->len -= size;
+    db->buf += size;
+    return db->len > FUSE_NAME_OFFSET ? 0 : 1;
+}
+
 static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
                     ino_t ino)
 {
@@ -459,8 +495,8 @@ static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
     dirent->namelen = namelen;
     strncpy(dirent->name, name, namelen);
     dirent->type = type;
-    dirent->off = dh->len;
     dh->len += FUSE_DIRENT_SIZE(dirent);
+    dirent->off = dh->len;
     return 0;
 }
 
@@ -1502,6 +1538,12 @@ static void do_init(struct fuse *f, struct fuse_in_header *in,
     if (f->op.init)
         f->user_data = f->op.init();
 
+    if (arg->major < 6) {
+        fprintf(stderr, "Kernel API version 5 not yet handled\n");
+        fuse_exit(f);
+        return;
+    }
+
     memset(&outarg, 0, sizeof(outarg));
     outarg.major = FUSE_KERNEL_VERSION;
     outarg.minor = FUSE_KERNEL_MINOR_VERSION;
@@ -1520,81 +1562,137 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
     struct fuse_open_out outarg;
     struct fuse_dirhandle *dh;
 
+    dh = (struct fuse_dirhandle *) malloc(sizeof(struct fuse_dirhandle));
+    if (dh == NULL) {
+        send_reply(f, in, -ENOMEM, NULL, 0);
+        return;
+    }
+    memset(dh, 0, sizeof(struct fuse_dirhandle));
+    dh->fuse = f;
+    dh->contents = NULL;
+    dh->len = 0;
+    dh->filled = 0;
+
+    memset(&outarg, 0, sizeof(outarg));
+    outarg.fh = (unsigned long) dh;
+
     if (f->op.opendir) {
+        struct fuse_file_info fi;
         char *path;
+
+        memset(&fi, 0, sizeof(fi));
+        fi.flags = arg->flags;
+
         res = -ENOENT;
         path = get_path(f, in->nodeid);
         if (path != NULL) {
-            struct fuse_file_info fi;
-            memset(&fi, 0, sizeof(fi));
-            fi.flags = arg->flags;
             res = f->op.opendir(path, &fi);
-            free(path);
+            dh->fh = fi.fh;
         }
-        if (res != 0) {
+        if (res == 0) {
+            int res2;
+            pthread_mutex_lock(&f->lock);
+            res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
+            if(res2 == -ENOENT) {
+                /* The opendir syscall was interrupted, so it must be
+                   cancelled */
+                if(f->op.releasedir)
+                    f->op.releasedir(path, &fi);
+                free(dh);
+            }
+            pthread_mutex_unlock(&f->lock);
+        } else {
             send_reply(f, in, res, NULL, 0);
-            return;
+            free(dh);
         }
-    }
-
-    memset(&outarg, 0, sizeof(outarg));
-    res = -ENOMEM;
-    dh = (struct fuse_dirhandle *) malloc(sizeof(struct fuse_dirhandle));
-    if (dh != NULL) {
-        memset(dh, 0, sizeof(struct fuse_dirhandle));
-        dh->fuse = f;
-        dh->contents = NULL;
-        dh->len = 0;
-        dh->filled = 0;
-        outarg.fh = (unsigned long) dh;
-        res = 0;
-    }
-    send_reply(f, in, res, &outarg, sizeof(outarg));
+        free(path);
+    } else 
+        send_reply(f, in, 0, &outarg, sizeof(outarg));
 }
 
 static void do_readdir(struct fuse *f, struct fuse_in_header *in,
                        struct fuse_read_in *arg)
 {
-    char *outbuf;
+    int res;
     struct fuse_dirhandle *dh = get_dirhandle(arg->fh);
+    struct fuse_out_header *out;
+    char *outbuf;
+    char *buf;
+    size_t size = 0;
+    size_t outsize;
 
-    if (!dh->filled) {
-        int res = common_getdir(f, in, dh);
-        if (res) {
-            send_reply(f, in, res, NULL, 0);
-            return;
-        }
-        dh->filled = 1;
-    }
     outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
-    if (outbuf == NULL)
+    if (outbuf == NULL) {
         send_reply(f, in, -ENOMEM, NULL, 0);
-    else {
-        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-        char *buf = outbuf + sizeof(struct fuse_out_header);
-        size_t size = 0;
-        size_t outsize;
+        return;
+    }
+    buf = outbuf + sizeof(struct fuse_out_header);
+
+    if (f->op.readdir) {
+        struct fuse_dirbuf db;
+        struct fuse_file_info fi;
+        char *path;
+
+        db.fuse = f;
+        db.buf = buf;
+        db.len = arg->size;
+
+        memset(&fi, 0, sizeof(fi));
+        fi.fh = dh->fh;
+
+        path = get_path(f, in->nodeid);
+        res = f->op.readdir(path ? path : "-", &db, fill_dir5, arg->offset, &fi);
+        free(path);
+        if (res)
+            goto err;
+
+        size = arg->size - db.len;
+    } else {
+        if (!dh->filled) {
+            res = common_getdir(f, in, dh);
+            if (res)
+                goto err;
+            dh->filled = 1;
+        }
+
         if (arg->offset < dh->len) {
             size = arg->size;
             if (arg->offset + size > dh->len)
                 size = dh->len - arg->offset;
-
+            
             memcpy(buf, dh->contents + arg->offset, size);
         }
-        memset(out, 0, sizeof(struct fuse_out_header));
-        out->unique = in->unique;
-        out->error = 0;
-        outsize = sizeof(struct fuse_out_header) + size;
-
-        send_reply_raw(f, outbuf, outsize);
-        free(outbuf);
     }
+    out = (struct fuse_out_header *) outbuf;
+    memset(out, 0, sizeof(struct fuse_out_header));
+    out->unique = in->unique;
+    out->error = 0;
+    outsize = sizeof(struct fuse_out_header) + size;
+    
+    send_reply_raw(f, outbuf, outsize);
+    free(outbuf);
+    return;
+
+ err:
+    send_reply(f, in, res, NULL, 0);
+    free(outbuf);
 }
 
 static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
                           struct fuse_release_in *arg)
 {
     struct fuse_dirhandle *dh = get_dirhandle(arg->fh);
+    if (f->op.releasedir) {
+        char *path;
+        struct fuse_file_info fi;
+        
+        memset(&fi, 0, sizeof(fi));
+        fi.fh = dh->fh;
+
+        path = get_path(f, in->nodeid);
+        f->op.releasedir(path ? path : "-", &fi);
+        free(path);
+    }
     free(dh->contents);
     free(dh);
     send_reply(f, in, 0, NULL, 0);
@@ -1605,9 +1703,12 @@ static void do_fsyncdir(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
+    struct fuse_dirhandle *dh = get_dirhandle(inarg->fh);
     struct fuse_file_info fi;
 
     memset(&fi, 0, sizeof(fi));
+    fi.fh = dh->fh;
+
     res = -ENOENT;
     path = get_path(f, in->nodeid);
     if (path != NULL) {
