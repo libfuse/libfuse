@@ -32,18 +32,21 @@ int _PLfuse_getattr(const char *file, struct stat *result) {
 		else
 			rv = -ENOENT;
 	} else {
-		result->st_blocks = POPi;
 		result->st_blksize = POPi;
 		result->st_ctime = POPi;
 		result->st_mtime = POPi;
 		result->st_atime = POPi;
+		/* What the HELL?  Perl says the blockcount is the last argument.
+		 * Everything else says the blockcount is the last argument.  So why
+		 * was it folded into the middle of the list? */
+		result->st_blocks = POPi;
 		result->st_size = POPi;
 		result->st_rdev = POPi;
 		result->st_gid = POPi;
 		result->st_uid = POPi;
 		result->st_nlink = POPi;
 		result->st_mode = POPi;
-		/* result->st_ino = */ POPi;
+		/*result->st_ino =*/ POPi;
 		result->st_dev = POPi;
 		rv = 0;
 	}
