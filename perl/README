@@ -1,0 +1,26 @@
+Fuse version 0.01
+=================
+
+This is a test release.  It seems to work thus far, but still has a few
+iffy areas, as well as a few rough edges.  There will be future
+releases.
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test  # currently this just makes sure the lib can link
+   make install
+
+DEPENDENCIES
+
+This module requires the FUSE userspace library and the FUSE kernel module.
+
+COPYRIGHT AND LICENCE
+
+This is contributed to the FUSE project by Mark Glines <mark@glines.org>,
+and is therefore subject to the same license and copyright as FUSE itself.
+Please see the AUTHORS and COPYING files from the FUSE distribution for
+more information.
