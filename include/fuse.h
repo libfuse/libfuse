@@ -87,7 +87,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type);
  *       2) all memory mappings unmapped
  *    This call need only be implemented if this information is required,
  *    otherwise set this function to NULL.
- *    
+ * 
+ *  - fsync() has a boolean 'datasync' parameter which if TRUE then do
+ *  an fdatasync() operation.
  */
 struct fuse_operations {
     int (*getattr)  (const char *, struct stat *);
@@ -109,6 +111,7 @@ struct fuse_operations {
     int (*write)    (const char *, const char *, size_t, off_t);
     int (*statfs)   (struct fuse_statfs *);
     int (*release)  (const char *, int);
+    int (*fsync)    (const char *, int);
 };
 
 /** Extra context that may be needed by some filesystems */

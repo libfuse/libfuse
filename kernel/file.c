@@ -74,7 +74,22 @@ static int fuse_release(struct inode *inode, struct file *file)
 
 static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 {
-	return 0;
+	struct inode *inode = de->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_fsync_in inarg;
+	
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.datasync = datasync;
+
+	in.h.opcode = FUSE_FSYNC;
+	in.h.ino = inode->i_ino;
+	in.numargs = 1;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	request_send(fc, &in, &out);
+	return out.h.error;
 }
 
 static int fuse_readpage(struct file *file, struct page *page)

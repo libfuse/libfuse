@@ -2,7 +2,7 @@
 
 	* Make it compile on 2.4.19.  
 
-	* Add dummy fsync operation (write file failed on xemacs & vi)
+	* Add fsync operation (write file failed on xemacs & vi)
 
 2003-12-12  David McNab <david@rebirthing.co.nz>
 

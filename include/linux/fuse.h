@@ -103,7 +103,8 @@ enum fuse_opcode {
 	FUSE_WRITE	= 16,
 	FUSE_STATFS	= 17,
 	FUSE_RELEASE    = 18, /* no reply */
-	FUSE_INVALIDATE = 19  /* user initiated */
+	FUSE_INVALIDATE = 19, /* user initiated */
+	FUSE_FSYNC      = 20
 };
 
 /* Conservative buffer size for the client */
@@ -174,6 +175,10 @@ struct fuse_write_in {
 
 struct fuse_statfs_out {
 	struct fuse_kstatfs st;
+};
+
+struct fuse_fsync_in {
+	int datasync;
 };
 
 struct fuse_in_header {

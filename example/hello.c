@@ -86,7 +86,8 @@ static struct fuse_operations hello_oper = {
     read:	hello_read,
     write:	NULL,
     statfs:	NULL,
-    release:	NULL
+    release:	NULL,
+    fsync:	NULL
 };
 
 int main(int argc, char *argv[])

@@ -40,6 +40,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_WRITE:    return "WRITE";
     case FUSE_STATFS:   return "STATFS";
     case FUSE_RELEASE:  return "RELEASE";
+    case FUSE_FSYNC:    return "FSYNC";
     default:            return "???";
     }
 }
@@ -866,6 +867,24 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
+static void do_fsync(struct fuse *f, struct fuse_in_header *in,
+                     struct fuse_fsync_in *inarg)
+{
+    int res;
+    char *path;
+
+    res = -ENOENT;
+    path = get_path(f, in->ino);
+    if(path != NULL) {
+        /* fsync is not mandatory, so don't return ENOSYS */
+        res = 0;
+        if(f->op.fsync)
+            res = f->op.fsync(path, inarg->datasync);
+        free(path);
+    }
+    send_reply(f, in, res, NULL, 0);
+}
+
 static void free_cmd(struct fuse_cmd *cmd)
 {
     free(cmd->buf);
@@ -958,6 +977,10 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_STATFS:
         do_statfs(f, in);
+        break;
+
+    case FUSE_FSYNC:
+        do_fsync(f, in, (struct fuse_fsync_in *) inarg);
         break;
 
     default:

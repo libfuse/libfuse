@@ -12,7 +12,7 @@
 #include <time.h>
 #include <errno.h>
 
-#define UNUSED __attribute__((unused))
+#define UNUSED(x) x __attribute__((unused))
 
 static int null_getattr(const char *path, struct stat *stbuf)
 {
@@ -89,7 +89,8 @@ static struct fuse_operations null_oper = {
     read:	null_read,
     write:	null_write,
     statfs:	null_statfs,
-    release:	NULL
+    release:	NULL,
+    fsync:	NULL
 };
 
 int main(int argc, char *argv[])
