@@ -367,7 +367,7 @@ static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 	struct inode *ino;
 
 	ino = file->f_dentry->d_inode;
-	if (!ino || !proc_fuse_dev || 
+	if (!ino || !proc_fuse_dev ||
 	    strcmp(ino->i_sb->s_type->name, "proc") != 0 ||
 	    proc_fuse_dev->low_ino != ino->i_ino) {
 		printk("FUSE: bad communication file descriptor\n");

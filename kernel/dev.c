@@ -139,24 +139,22 @@ static struct fuse_req *do_get_request(struct fuse_conn *fc)
 
 struct fuse_req *fuse_get_request(struct fuse_conn *fc)
 {
-	struct fuse_req *req;
-	
 	if (down_interruptible(&fc->unused_sem))
 		return NULL;
+	return  do_get_request(fc);
+}
 
-	req = do_get_request(fc);
-	return req;
+struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc)
+{
+	down(&fc->unused_sem);
+	return do_get_request(fc);
 }
 
 struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc)
 {
-	struct fuse_req *req;
-
 	if (down_trylock(&fc->unused_sem))
 		return NULL;
-	
-	req = do_get_request(fc);
-	return req;
+	return  do_get_request(fc);
 }
 
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)

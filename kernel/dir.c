@@ -600,7 +600,12 @@ static int _fuse_permission(struct inode *inode, int mask)
 	    (!(fc->flags & FUSE_ALLOW_ROOT) || current->fsuid != 0))
 		return -EACCES;
 	else if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
-		int err = vfs_permission(inode, mask);
+		int err;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,10)
+		err = vfs_permission(inode, mask);
+#else
+		err = generic_permission(inode, mask, NULL);
+#endif
 
 		/* If permission is denied, try to refresh file
 		   attributes.  This is also needed, because the root
@@ -608,8 +613,13 @@ static int _fuse_permission(struct inode *inode, int mask)
 
 		if (err == -EACCES) {
 		 	err = fuse_do_getattr(inode);
-			if (!err)
+			if (!err) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,10)
 			 	err = vfs_permission(inode, mask);
+#else
+				err = generic_permission(inode, mask, NULL);
+#endif
+			}
 		}
 
 		/* FIXME: Need some mechanism to revoke permissions:
@@ -853,9 +863,12 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	if (attr->ia_valid & ATTR_SIZE) {
 		unsigned long limit;
 		is_truncate = 1;
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,10)
 		limit = current->rlim[RLIMIT_FSIZE].rlim_cur;
-		if (limit != RLIM_INFINITY && attr->ia_size > limit) {
+#else
+		limit = current->signal->rlim[RLIMIT_FSIZE].rlim_cur;
+#endif
+		if (limit != RLIM_INFINITY && attr->ia_size > (loff_t) limit) {
 			send_sig(SIGXFSZ, current, 0);
 			return -EFBIG;
 		}

@@ -378,7 +378,7 @@ static int fuse_readpages_fill(void *_data, struct page *page)
 	     req->pages[req->num_pages - 1]->index + 1 != page->index)) {
 		struct fuse_conn *fc = INO_FC(page->mapping->host);
 		fuse_send_readpages(req, data->file, inode);
-		data->req = req = fuse_get_request(fc);
+		data->req = req = fuse_get_request_nonint(fc);
 	}
 	req->pages[req->num_pages] = page;
 	req->num_pages ++;
@@ -392,7 +392,7 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_readpages_data data;
 
-	data.req = fuse_get_request(fc);
+	data.req = fuse_get_request_nonint(fc);
 	data.file = file;
 	data.inode = inode;
 	

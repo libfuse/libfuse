@@ -350,6 +350,11 @@ void fuse_reset_request(struct fuse_req *req);
 struct fuse_req *fuse_get_request(struct fuse_conn *fc);
 
 /**
+ * Reserve a preallocated request, non-interruptible
+ */
+struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc);
+
+/**
  * Reserve a preallocated request, non-blocking
  */
 struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc);

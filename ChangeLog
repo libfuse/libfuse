@@ -1,3 +1,14 @@
+2004-11-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.1-pre1
+
+2004-11-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix bug in fuse_readpages() causing Oops in certain situations.
+	Bug found by Vincenzo Ciancia.
+
+	* Fix compilation with kernels versions > 2.6.9.
+
 2004-11-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check kernel interface version in fusermount to prevent
@@ -9,7 +20,7 @@
 
 	* Check superblock of proc file in addition to inode number
 
-	* Fix reace between request_send_noreply() and fuse_dev_release()
+	* Fix race between request_send_noreply() and fuse_dev_release()
 
 2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
