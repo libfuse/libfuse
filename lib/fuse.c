@@ -215,7 +215,7 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
 
     node = (struct node *) calloc(1, sizeof(struct node));
     if (node == NULL)
-        return NULL;
+        goto out_err;
 
     node->mode = mode;
     node->rdev = rdev;
@@ -225,12 +225,14 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     node->generation = f->generation;
     if (hash_name(f, node, parent, name) == -1) {
         free(node);
-        return NULL;
+        node = NULL;
+        goto out_err;
     }
     hash_ino(f, node);
 
-  out:
+ out:
     node->version = version;
+ out_err:
     pthread_mutex_unlock(&f->lock);
     return node;
 }
