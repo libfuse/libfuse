@@ -1,8 +1,14 @@
 2004-02-20  Miklos Szeredi <mszeredi@inf.bme.hu>
 
+	* removed old way of mounting (fusermount mountpoint program)
+
 	* more kernel interface changes:
 
 	* added nanosecond precision to file times
+
+	* removed interface version from mount data
+
+	* added /proc/fs/fuse/version which contains MAJOR.MINOR
 
 2004-02-19  Miklos Szeredi <mszeredi@inf.bme.hu>
 

@@ -1106,6 +1106,9 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 
 void fuse_loop(struct fuse *f)
 {
+    if(f == NULL)
+        return;
+
     while(1) {
         struct fuse_cmd *cmd;
 
@@ -1133,12 +1136,46 @@ struct fuse_context *fuse_get_context(struct fuse *f)
         return &f->context;
 }
 
+static int check_version(struct fuse *f)
+{
+    int res;
+    FILE *vf = fopen(FUSE_VERSION_FILE, "r");
+    if(vf == NULL) {
+        fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
+                FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+        return -1;
+    }
+    res = fscanf(vf, "%i.%i", &f->majorver, &f->minorver);
+    fclose(vf);
+    if(res != 2) {
+        fprintf(stderr, "fuse: error reading %s\n", FUSE_VERSION_FILE);
+        return -1;
+    }
+    if(f->majorver != FUSE_KERNEL_VERSION) {
+        fprintf(stderr, "fuse: bad kernel interface major version: needs %i\n",
+                FUSE_KERNEL_VERSION);
+        return -1;
+    }
+    if(f->minorver < FUSE_KERNEL_MINOR_VERSION) {
+        fprintf(stderr, "fuse: kernel interface too old: need >= %i.%i",
+                FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+        return -1;
+    }    
+    
+    return 0;
+}
+
 struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
 {
     struct fuse *f;
     struct node *root;
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
+
+    if(check_version(f) == -1) {
+        free(f);
+        return NULL;
+    }
 
     f->flags = flags;
     f->fd = fd;

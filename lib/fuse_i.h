@@ -41,6 +41,8 @@ struct fuse {
     struct fuse_context context;
     pthread_key_t context_key;
     volatile int exited;
+    int majorver;
+    int minorver;
 };
 
 struct fuse_dirhandle {

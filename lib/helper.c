@@ -15,9 +15,6 @@
 #include <limits.h>
 #include <signal.h>
 
-#define FUSE_MOUNTED_ENV        "_FUSE_MOUNTED"
-#define FUSE_UMOUNT_CMD_ENV     "_FUSE_UNMOUNT_CMD"
-
 static struct fuse *fuse;
 
 static void usage(char *progname)
@@ -73,21 +70,14 @@ static void set_signal_handlers()
 
 void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
 {
-    int argctr = 1;
+    int argctr = 2;
     int flags;
     int multithreaded;
-    char *isreexec = getenv(FUSE_MOUNTED_ENV);
     int fuse_fd;
     char *fuse_mountpoint = NULL;
     char umount_cmd[1024] = "";
     char **fusermount_args = NULL;
     
-    if(!isreexec) {
-        if(argc < 2 || argv[1][0] == '-')
-            usage(argv[0]);
-        argctr ++;
-    }
-
     flags = 0;
     multithreaded = 1;
     for(; argctr < argc && !fusermount_args; argctr ++) {
@@ -106,10 +96,7 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
                 break;
                 
             case '-':
-                if(!isreexec)
-                    fusermount_args = &argv[argctr+1];
-                else
-                    invalid_option(argv, argctr);
+                fusermount_args = &argv[argctr+1];
                 break;
                 
             default:
@@ -119,30 +106,16 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
             invalid_option(argv, argctr);
     }
 
-    if(!isreexec) {
-        fuse_mountpoint = strdup(argv[1]);
-        fuse_fd = fuse_mount(fuse_mountpoint, (const char **) fusermount_args);
-        if(fuse_fd == -1)
-            exit(1);
-    } else {
-        char *tmpstr;
-
-        /* Old (obsolescent) way of doing the mount: 
-           
-             fusermount [options] mountpoint [program [args ...]]
-
-           fusermount execs this program and passes the control file
-           descriptor dup()-ed to stdin */
-        fuse_fd = 0;
-        
-        tmpstr = getenv(FUSE_UMOUNT_CMD_ENV);
-        if(tmpstr != NULL)
-            strncpy(umount_cmd, tmpstr, sizeof(umount_cmd) - 1);
-    }
+    fuse_mountpoint = strdup(argv[1]);
+    fuse_fd = fuse_mount(fuse_mountpoint, (const char **) fusermount_args);
+    if(fuse_fd == -1)
+        exit(1);
 
     set_signal_handlers();
 
     fuse = fuse_new(fuse_fd, flags, op);
+    if(fuse == NULL)
+        exit(1);
 
     if(multithreaded)
         fuse_loop_mt(fuse);

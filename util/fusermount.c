@@ -37,9 +37,6 @@
 
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
-#define FUSE_MOUNTED_ENV        "_FUSE_MOUNTED"
-#define FUSE_UMOUNT_CMD_ENV     "_FUSE_UNMOUNT_CMD"
-#define FUSE_KERNEL_VERSION_ENV "_FUSE_KERNEL_VERSION"
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
 const char *progname;
@@ -303,7 +300,6 @@ static int do_mount(const char *dev, const char *mnt, const char *type,
             return -1;
     }
     
-    data.version = FUSE_KERNEL_VERSION;
     data.fd = fd;
     data.rootmode = rootmode;
     data.uid = getuid();
@@ -476,7 +472,7 @@ static int send_fd(int sock_fd, int fd)
 static void usage()
 {
     fprintf(stderr,
-            "%s: [options] mountpoint [program [args ...]]\n"
+            "%s: [options] mountpoint\n"
             "Options:\n"
             " -h       print help\n"
             " -u       unmount\n"
@@ -498,15 +494,11 @@ int main(int argc, char *argv[])
     char *origmnt;
     char *mnt;
     int unmount = 0;
-    char **userprog;
-    int numargs;
-    char mypath[PATH_MAX];
-    char *unmount_cmd;
     char *commfd;
     const char *fsname = NULL;
-    char verstr[128];
     int flags = 0;
     int quiet = 0;
+    int cfd;
 
     progname = argv[0];
     
@@ -599,60 +591,19 @@ int main(int argc, char *argv[])
     }
 
     commfd = getenv(FUSE_COMMFD_ENV);
-
-    if(a == argc && commfd == NULL) {
-        fprintf(stderr, "%s: Missing program argument\n", progname);
+    if(commfd == NULL) {
+        fprintf(stderr, "%s: old style mounting not supported\n", progname);
         exit(1);
     }
-    
-    userprog = argv + a;
-    numargs = argc - a;
-    
+
     fd = mount_fuse(mnt, flags, fsname);
     if(fd == -1)
         exit(1);
 
-    if(commfd != NULL) {
-        int cfd = atoi(commfd);
-        res = send_fd(cfd, fd);
-        if(res == -1)
-            exit(1);
-        exit(0);
-    }
+    cfd = atoi(commfd);
+    res = send_fd(cfd, fd);
+    if(res == -1)
+        exit(1);
 
-    /* Dup the file descriptor to stdin */
-    if(fd != 0) {
-        dup2(fd, 0);
-        close(fd);
-    }
-
-    /* Strangely this doesn't work after dropping permissions... */
-    res = readlink("/proc/self/exe", mypath, sizeof(mypath) - 1);
-    if(res == -1) {
-        fprintf(stderr, "%s: failed to determine self path: %s\n",
-                progname, strerror(errno));
-        strcpy(mypath, "fusermount");
-        fprintf(stderr, "using %s as the default\n", mypath);
-    }
-    else 
-        mypath[res] = '\0';
-
-    /* Drop setuid/setgid permissions */
-    setuid(getuid());
-    setgid(getgid());
-
-    unmount_cmd = (char *) malloc(strlen(mypath) + strlen(mnt) + 64);
-    sprintf(unmount_cmd, "%s -u -q %s", mypath, mnt);
-    setenv(FUSE_UMOUNT_CMD_ENV, unmount_cmd, 1);
-    sprintf(verstr, "%i", FUSE_KERNEL_VERSION);
-    setenv(FUSE_KERNEL_VERSION_ENV, verstr, 1);
-    setenv(FUSE_MOUNTED_ENV, "", 1);
-
-    execvp(userprog[0], userprog);
-    fprintf(stderr, "%s: failed to exec %s: %s\n", progname, userprog[0],
-            strerror(errno));
-
-    close(0);
-    system(unmount_cmd);
-    return 1;
+    return 0;
 }

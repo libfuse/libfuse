@@ -114,5 +114,8 @@ void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
 
 void fuse_loop_mt(struct fuse *f)
 {
+    if(f == NULL)
+        return;
+
     __fuse_loop_mt(f, (fuse_processor_t) __fuse_process_cmd, NULL);
 }

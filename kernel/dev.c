@@ -611,10 +611,17 @@ static struct file_operations fuse_dev_operations = {
 	.release	= fuse_dev_release,
 };
 
+static int read_version(char *page, char **start, off_t off, int count,
+			   int *eof, void *data)
+{
+	char *s = page;
+	s += sprintf(s, "%i.%i\n", FUSE_KERNEL_VERSION,
+		     FUSE_KERNEL_MINOR_VERSION);
+	return s - page;
+}
+
 int fuse_dev_init()
 {
-	int ret;
-
 	proc_fs_fuse = NULL;
 	proc_fuse_dev = NULL;
 
@@ -624,33 +631,31 @@ int fuse_dev_init()
 	if(!fuse_req_cachep)
 		return -ENOMEM;
 
-	ret = -ENOMEM;
 	proc_fs_fuse = proc_mkdir("fuse", proc_root_fs);
-	if(!proc_fs_fuse) {
-		printk("fuse: failed to create directory in /proc/fs\n");
-		goto err;
+	if(proc_fs_fuse) {
+		struct proc_dir_entry *de;
+
+		proc_fs_fuse->owner = THIS_MODULE;
+		proc_fuse_dev = create_proc_entry("dev", S_IFSOCK | 0666,
+						  proc_fs_fuse);
+		if(proc_fuse_dev) {
+			proc_fuse_dev->owner = THIS_MODULE;
+			proc_fuse_dev->proc_fops = &fuse_dev_operations;
+		}
+		de = create_proc_entry("version", S_IFREG | 0444, proc_fs_fuse);
+		if (de) {
+			de->owner = THIS_MODULE;
+			de->read_proc = read_version;
+		}
 	}
-
-	proc_fs_fuse->owner = THIS_MODULE;
-	proc_fuse_dev = create_proc_entry("dev", S_IFSOCK | 0666, proc_fs_fuse);
-	if(!proc_fuse_dev) {
-		printk("fuse: failed to create entry in /proc/fs/fuse\n");
-		goto err;
-	}
-
-	proc_fuse_dev->proc_fops = &fuse_dev_operations;
-
 	return 0;
-
-  err:
-	fuse_dev_cleanup();
-	return ret;
 }
 
 void fuse_dev_cleanup()
 {
 	if(proc_fs_fuse) {
 		remove_proc_entry("dev", proc_fs_fuse);
+		remove_proc_entry("version", proc_fs_fuse);
 		remove_proc_entry("fuse", proc_root_fs);
 	}
 	

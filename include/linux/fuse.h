@@ -20,11 +20,11 @@
 /** Opening this will yield a new control file */
 #define FUSE_DEV "/proc/fs/fuse/dev"
 
+/** The file containing the version in the form MAJOR.MINOR */
+#define FUSE_VERSION_FILE "/proc/fs/fuse/version"
+
 /** Data passed to mount */
 struct fuse_mount_data {
-	/** Must be set to FUSE_KERNEL_VERSION */
-	int version;
-	
 	/** The control file descriptor */
 	int fd;
 	

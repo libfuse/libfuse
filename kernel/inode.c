@@ -119,11 +119,6 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 		return NULL;
 	}
 
-	if(d->version != FUSE_KERNEL_VERSION) {
-		printk("fuse_read_super: Bad version: %i\n", d->version);
-		return NULL;
-	}
-
 	file = fget(d->fd);
 	ino = NULL;
 	if(file)
