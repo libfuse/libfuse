@@ -1,3 +1,8 @@
+2004-02-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* On 2.4 kernels if CONFIG_PREEMPT is defined use
+	i_size_read/write
+
 2004-02-06  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Fixed writing >= 2G files
