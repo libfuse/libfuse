@@ -253,7 +253,7 @@ struct fuse_conn {
 	struct file *file;
 
 	/** The user id for this mount */
-	uid_t uid;
+	uid_t user_id;
 
 	/** The fuse mount flags for this mount */
 	unsigned flags;

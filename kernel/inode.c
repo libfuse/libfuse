@@ -56,7 +56,7 @@ MODULE_PARM_DESC(mount_max, "Maximum number of FUSE mounts allowed, if -1 then u
 struct fuse_mount_data {
 	int fd;
 	unsigned rootmode;
-	unsigned uid;
+	unsigned user_id;
 	unsigned flags;
 	unsigned max_read;
 };
@@ -270,7 +270,7 @@ static void fuse_put_super(struct super_block *sb)
 	spin_lock(&fuse_lock);
 	mount_count --;
 	fc->sb = NULL;
-	fc->uid = 0;
+	fc->user_id = 0;
 	fc->flags = 0;
 	/* Flush all readers on this fs */
 	wake_up_all(&fc->waitq);
@@ -319,7 +319,7 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 enum {
 	OPT_FD,
 	OPT_ROOTMODE,
-	OPT_UID,
+	OPT_USER_ID,
 	OPT_DEFAULT_PERMISSIONS,
 	OPT_ALLOW_OTHER,
 	OPT_ALLOW_ROOT,
@@ -335,7 +335,7 @@ enum {
 static match_table_t tokens = {
 	{OPT_FD,			"fd=%u"},
 	{OPT_ROOTMODE,			"rootmode=%o"},
-	{OPT_UID,			"uid=%u"},
+	{OPT_USER_ID,			"user_id=%u"},
 	{OPT_DEFAULT_PERMISSIONS,	"default_permissions"},
 	{OPT_ALLOW_OTHER,		"allow_other"},
 	{OPT_ALLOW_ROOT,		"allow_root"},
@@ -376,10 +376,10 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->rootmode = value;
 			break;
 
-		case OPT_UID:
+		case OPT_USER_ID:
 			if (match_int(&args[0], &value))
 				return 0;
-			d->uid = value;
+			d->user_id = value;
 			break;
 
 		case OPT_DEFAULT_PERMISSIONS:
@@ -427,7 +427,7 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(mnt->mnt_sb);
 
-	seq_printf(m, ",uid=%u", fc->uid);
+	seq_printf(m, ",user_id=%u", fc->user_id);
 	if (fc->flags & FUSE_DEFAULT_PERMISSIONS)
 		seq_puts(m, ",default_permissions");
 	if (fc->flags & FUSE_ALLOW_OTHER)
@@ -476,7 +476,7 @@ static struct fuse_conn *new_conn(void)
 		fc->sb = NULL;
 		fc->file = NULL;
 		fc->flags = 0;
-		fc->uid = 0;
+		fc->user_id = 0;
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
@@ -646,7 +646,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 		return -EINVAL;
 
 	fc->flags = d.flags;
-	fc->uid = d.uid;
+	fc->user_id = d.user_id;
 	fc->max_read = d.max_read;
 #ifdef KERNEL_2_6
 	if (fc->max_read / PAGE_CACHE_SIZE < fc->bdi.ra_pages)

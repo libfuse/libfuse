@@ -36,6 +36,7 @@ static void usage(const char *progname)
             "Mount options:\n"
             "    default_permissions    enable permission checking\n"
             "    allow_other            allow access to other users\n"
+            "    allow_root             allow access to root\n"
             "    kernel_cache           cache files in kernel\n"
             "    large_read             issue large read requests (2.4 only)\n"
             "    direct_io              use direct I/O\n"

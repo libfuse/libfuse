@@ -1,5 +1,10 @@
 2005-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Change "uid" mount option to "user_id" to avoid confusion with a
+	mount option "uid" commonly used by many filesystems
+
+2005-01-09  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Released 2.2-pre1
 
 2005-01-09  Miklos Szeredi <miklos@szeredi.hu>
@@ -116,6 +121,10 @@
 
 	* Add binary compatibility to 2.1 version of library with symbol
 	versioning
+
+2004-12-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.1
 
 2004-12-01  Miklos Szeredi <miklos@szeredi.hu>
 
