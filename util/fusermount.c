@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -343,24 +344,47 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
 }
 #endif /* USE_UCLIBC */    
 
+static void strip_line(char *line)
+{
+    char *s = strchr(line, '#');
+    if (s != NULL)
+        s[0] = '\0';
+    for (s = line + strlen(line) - 1; s >= line && isspace((unsigned char) *s); s--);
+    s[1] = '\0';
+    for (s = line; isspace((unsigned char) *s); s++);
+    if (s != line)
+        memmove(line, s, strlen(s)+1);
+}
+
 static void read_conf(void)
 {
     FILE *fp = fopen(FUSE_CONF, "r");
     if (fp != NULL) {
+        int linenum = 1;
         char line[256];
         int isnewline = 1;
         while (fgets(line, sizeof(line), fp) != NULL) {
             if (isnewline) {
-                int tmp;
-                if (strcmp(line, "user_allow_other\n") == 0)
-                    user_allow_other = 1;
-                else if (sscanf(line, "mount_max = %i\n", &tmp) == 1)
-                    mount_max = tmp;
-            }
-            if(line[strlen(line)-1] == '\n')
-                isnewline = 1;
-            else
-                isnewline = 0;
+                if (line[strlen(line)-1] == '\n') {
+                    int tmp;
+                    strip_line(line);
+                    if (strcmp(line, "user_allow_other") == 0)
+                        user_allow_other = 1;
+                    else if (sscanf(line, "mount_max = %i", &tmp) == 1)
+                        mount_max = tmp;
+                    else if(line[0])
+                        fprintf(stderr, "%s: unknown parameter in %s at line %i: '%s'\n",
+                                progname, FUSE_CONF, linenum, line);
+                } else {
+                    fprintf(stderr, "%s: reading %s: line %i too long\n",
+                            progname, FUSE_CONF, linenum);
+                    isnewline = 0;
+                }
+                
+            } else if(line[strlen(line)-1] == '\n')
+                    isnewline = 1;
+            if (isnewline)
+                linenum ++;
         }
         fclose(fp);
     } else if (errno != ENOENT) {
