@@ -476,7 +476,7 @@ int _PLfuse_write (const char *file, const char *buf, size_t buflen, off_t off) 
 	return rv;
 }
 
-int _PLfuse_statfs (struct fuse_statfs *st) {
+int _PLfuse_statfs (struct statfs *st) {
 	int rv;
 	char *rvstr;
 	dSP;
@@ -488,12 +488,12 @@ int _PLfuse_statfs (struct fuse_statfs *st) {
 	rv = call_sv(_PLfuse_callbacks[17],G_ARRAY);
 	SPAGAIN;
 	if(rv > 5) {
-		st->block_size  = POPi;
-		st->blocks_free = POPi;
-		st->blocks      = POPi;
-		st->files_free  = POPi;
-		st->files       = POPi;
-		st->namelen     = POPi;
+		st->f_bsize    = POPi;
+		st->f_bfree    = POPi;
+		st->f_blocks   = POPi;
+		st->f_ffree    = POPi;
+		st->f_files    = POPi;
+		st->f_namelen  = POPi;
 		if(rv > 6)
 			rv = POPi;
 		else

@@ -13,5 +13,5 @@ WriteMakefile(
 	# Insert -I. if you add *.h files later:
     'INC'		=> '-I../include', # e.g., '-I/usr/include/other'
 	# Un-comment this if you add C files to link with later:
-    'OBJECT'		=> 'Fuse.o ../lib/libfuse.a -lpthread', # link all the C files too
+    'OBJECT'		=> 'Fuse.o ../lib/.libs/libfuse.a -lpthread', # link all the C files too
 );
