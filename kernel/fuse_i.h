@@ -233,6 +233,11 @@ int request_send_nonblock(struct fuse_conn *fc, struct fuse_in *in,
  */
 int fuse_do_getattr(struct inode *inode);
 
+/**
+ * Write dirty pages
+ */
+void fuse_sync_inode(struct inode *inode);
+
 /*
  * Local Variables:
  * indent-tabs-mode: t

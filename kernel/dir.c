@@ -611,6 +611,10 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	struct fuse_setattr_in inarg;
 	struct fuse_setattr_out outarg;
 
+	/* FIXME: need to fix race between truncate and writepage */
+	if (attr->ia_valid & ATTR_SIZE)	
+		fuse_sync_inode(inode);
+
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.valid = iattr_to_fattr(attr, &inarg.attr);
 	
