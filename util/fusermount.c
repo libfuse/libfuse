@@ -33,7 +33,6 @@
 #include <sys/fsuid.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <linux/fuse.h>
 
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 

@@ -7,9 +7,8 @@ majver = @majver@
 VERSION = @PACKAGE_VERSION@
 
 DISTFILES = Makefile.in configure.ac configure config.h.in ../install-sh \
-	dev.c dir.c file.c inode.c util.c fuse_i.h
+	dev.c dir.c file.c inode.c util.c fuse_i.h fuse_kernel.h
 COMPATDISTFILES = compat/parser.c compat/parser.h
-LINUXDISTFILES = linux/fuse.h
 
 fusemoduledir = @kmoduledir@/kernel/fs/fuse
 
@@ -40,12 +39,10 @@ distclean: clean
 
 maintainer-clean: distclean
 
-distdir: $(DISTFILES) $(COMPATDISTFILES) $(LINUXDISTFILES)
+distdir: $(DISTFILES) $(COMPATDISTFILES)
 	cp -p $(DISTFILES) $(distdir)
 	mkdir $(distdir)/compat
 	cp -p $(COMPATDISTFILES) $(distdir)/compat
-	mkdir $(distdir)/linux
-	cp -p $(LINUXDISTFILES) $(distdir)/linux
 
 ifeq ($(majver), 2.4)
 
@@ -66,7 +63,7 @@ all-spec: fuse.o
 fuse.o: $(fuse_objs)
 	$(LD) -r -o fuse.o $(fuse_objs)
 
-fuse_headers = fuse_i.h linux/fuse.h
+fuse_headers = fuse_i.h fuse_kernel.h
 
 dev.o: $(fuse_headers)
 dir.o: $(fuse_headers)

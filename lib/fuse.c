@@ -8,7 +8,7 @@
 
 #include <config.h>
 #include "fuse_i.h"
-#include <linux/fuse.h>
+#include "fuse_kernel.h"
 
 #include <string.h>
 #include <stdlib.h>
