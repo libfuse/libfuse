@@ -330,3 +330,23 @@ Author: Colin McCormack / colin at chinix com
 Homepage: http://mini.net/tcl/13853
 
 ==============================================================================
+Name: Python interface for FUSE
+
+Author: Jeff Epler
+
+Maintainer: Sebastien Delafond / sdelafond at gmx net
+
+CVS: cvs -d:pserver:anonymous@cvs.sourceforge.net:/cvsroot/fuse co -P python
+
+==============================================================================
+Name: Perl interface for FUSE
+
+Author: Mark Glines
+
+Maintainer: Dobrica Pavlinusic / dpavlin at rot13 org
+
+Homepage: http://search.cpan.org/~dpavlin/Fuse-0.05/
+
+CVS: cvs -d:pserver:anonymous@cvs.sourceforge.net:/cvsroot/fuse co -P perl
+
+==============================================================================
