@@ -157,9 +157,9 @@ struct fuse_getdir_out_i {
 };
 
 #ifdef KERNEL_2_6
-#define SB_FC(sb) ((struct fuse_conn *) (sb)->s_fs_info)
+#define SB_FC(sb) ((sb)->s_fs_info)
 #else
-#define SB_FC(sb) ((struct fuse_conn *) (sb)->u.generic_sbp)
+#define SB_FC(sb) ((sb)->u.generic_sbp)
 #endif
 #define INO_FC(inode) SB_FC((inode)->i_sb)
 #define DEV_FC(file) ((struct fuse_conn *) (file)->private_data)
