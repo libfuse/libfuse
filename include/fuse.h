@@ -83,7 +83,12 @@ struct fuse_operations {
 };
 
 /* FUSE flags: */
+
+/** Process requests in multiple threads */
 #define FUSE_MULTITHREAD (1 << 0)
+
+/** Enable debuging output */
+#define FUSE_DEBUG       (1 << 1)
 
 /**
  * Create a new FUSE filesystem. The filesystem is not yet mounted

@@ -6,6 +6,5 @@ install-sh
 mkinstalldirs
 missing
 config.log
-config.h
 config.cache
 config.status

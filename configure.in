@@ -29,6 +29,6 @@ AC_MSG_RESULT([$kernelsrc])
 KERNINCLUDE=$kernelsrc/include
 AC_SUBST(KERNINCLUDE)
 
-AC_OUTPUT([Makefile kernel/Makefile lib/Makefile example/Makefile])
+AC_OUTPUT([Makefile kernel/Makefile lib/Makefile example/Makefile include/Makefile include/linux/Makefile])
 
 

@@ -347,9 +347,11 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     if(argsize != 0)
         memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
 
-    printf("   unique: %i, error: %i (%s), outsize: %i\n", out->unique,
-           out->error, strerror(-out->error), outsize);
-    fflush(stdout);
+    if((f->flags & FUSE_DEBUG)) {
+        printf("   unique: %i, error: %i (%s), outsize: %i\n", out->unique,
+               out->error, strerror(-out->error), outsize);
+        fflush(stdout);
+    }
                 
     res = write(f->fd, outbuf, outsize);
     if(res == -1)
@@ -755,9 +757,11 @@ static void *do_command(void *data)
     size_t argsize;
     struct fuse *f = cmd->f;
 
-    printf("unique: %i, opcode: %i, ino: %li, insize: %i\n", in->unique,
-           in->opcode, in->ino, cmd->buflen);
-    fflush(stdout);
+    if((f->flags & FUSE_DEBUG)) {
+        printf("unique: %i, opcode: %i, ino: %li, insize: %i\n", in->unique,
+               in->opcode, in->ino, cmd->buflen);
+        fflush(stdout);
+    }
     
     argsize = cmd->buflen - sizeof(struct fuse_in_header);
         
