@@ -60,7 +60,8 @@ struct node {
 
 struct fuse_dirhandle {
     struct fuse *fuse;
-    FILE *fp;
+    unsigned char *contents;
+    unsigned len;
     int filled;
 };
 
@@ -446,17 +447,18 @@ static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
                     ino_t ino)
 {
     size_t namelen = strlen(name);
+    size_t entsize = sizeof(struct fuse_dirhandle) + namelen + 8;
     struct fuse_dirent *dirent;
-    size_t reclen;
-    size_t res;
 
     if (namelen > FUSE_NAME_MAX)
         namelen = FUSE_NAME_MAX;
 
-    dirent = calloc(1, sizeof(struct fuse_dirent) + namelen + 8);
-    if (dirent == NULL)
+    dh->contents = realloc(dh->contents, dh->len + entsize);
+    if (dh->contents == NULL)
         return -ENOMEM;
 
+    dirent = (struct fuse_dirent *) (dh->contents + dh->len);
+    memset(dirent, 0, entsize);
     if ((dh->fuse->flags & FUSE_USE_INO))
         dirent->ino = ino;
     else
@@ -464,13 +466,7 @@ static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
     dirent->namelen = namelen;
     strncpy(dirent->name, name, namelen);
     dirent->type = type;
-    reclen = FUSE_DIRENT_SIZE(dirent);
-    res = fwrite(dirent, reclen, 1, dh->fp);
-    free(dirent);
-    if (res == 0) {
-        perror("fuse: writing directory file");
-        return -EIO;
-    }
+    dh->len += FUSE_DIRENT_SIZE(dirent);
     return 0;
 }
 
@@ -830,30 +826,6 @@ static int common_getdir(struct fuse *f, struct fuse_in_header *in,
         free(path);
     }
     return res;
-}
-
-static void do_getdir(struct fuse *f, struct fuse_in_header *in)
-{
-    int res;
-    struct fuse_getdir_out arg;
-    struct fuse_dirhandle dh;
-
-    dh.fuse = f;
-    dh.fp = tmpfile();
-
-    res = -EIO;
-    if (dh.fp == NULL)
-        perror("fuse: failed to create temporary file");
-    else {
-        res = common_getdir(f, in, &dh);
-        fflush(dh.fp);
-    }
-    memset(&arg, 0, sizeof(struct fuse_getdir_out));
-    if (res == 0)
-        arg.fd = fileno(dh.fp);
-    send_reply(f, in, res, &arg, sizeof(arg));
-    if (dh.fp != NULL)
-        fclose(dh.fp);
 }
 
 static void do_mknod(struct fuse *f, struct fuse_in_header *in,
@@ -1556,17 +1528,11 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
     dh = (struct fuse_dirhandle *) malloc(sizeof(struct fuse_dirhandle));
     if (dh != NULL) {
         dh->fuse = f;
-        dh->fp = tmpfile();
+        dh->contents = NULL;
+        dh->len = 0;
         dh->filled = 0;
-
-        res = -EIO;
-        if (dh->fp == NULL) {
-            perror("fuse: failed to create temporary file");
-            free(dh);
-        } else {
-            outarg.fh = (unsigned long) dh;
-            res = 0;
-        }
+        outarg.fh = (unsigned long) dh;
+        res = 0;
     }
     send_reply(f, in, res, &outarg, sizeof(outarg));
 }
@@ -1574,12 +1540,11 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
 static void do_readdir(struct fuse *f, struct fuse_in_header *in,
                        struct fuse_read_in *arg)
 {
-    int res;
     char *outbuf;
     struct fuse_dirhandle *dh = get_dirhandle(arg->fh);
 
     if (!dh->filled) {
-        res = common_getdir(f, in, dh);
+        int res = common_getdir(f, in, dh);
         if (res) {
             send_reply(f, in, res, NULL, 0);
             return;
@@ -1594,17 +1559,16 @@ static void do_readdir(struct fuse *f, struct fuse_in_header *in,
         char *buf = outbuf + sizeof(struct fuse_out_header);
         size_t size = 0;
         size_t outsize;
-        fseek(dh->fp, arg->offset, SEEK_SET);
-        res = fread(buf, 1, arg->size, dh->fp);
-        if (res == 0 && ferror(dh->fp))
-            res = -EIO;
-        else {
-            size = res;
-            res = 0;
+        if (arg->offset < dh->len) {
+            size = arg->size;
+            if (arg->offset + size > dh->len)
+                size = dh->len - arg->offset;
+
+            memcpy(buf, dh->contents + arg->offset, size);
         }
         memset(out, 0, sizeof(struct fuse_out_header));
         out->unique = in->unique;
-        out->error = res;
+        out->error = 0;
         outsize = sizeof(struct fuse_out_header) + size;
 
         send_reply_raw(f, outbuf, outsize);
@@ -1616,7 +1580,7 @@ static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
                           struct fuse_release_in *arg)
 {
     struct fuse_dirhandle *dh = get_dirhandle(arg->fh);
-    fclose(dh->fp);
+    free(dh->contents);
     free(dh);
     send_reply(f, in, 0, NULL, 0);
 }
@@ -1672,10 +1636,6 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     case FUSE_READLINK:
         do_readlink(f, in);
-        break;
-
-    case FUSE_GETDIR:
-        do_getdir(f, in);
         break;
 
     case FUSE_MKNOD:

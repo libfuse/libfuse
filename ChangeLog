@@ -1,3 +1,7 @@
+2005-02-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Cleaned up directory reading (temporary file is not used)
+
 2005-02-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.2
