@@ -3,6 +3,10 @@
 	* Fix locking bugs
 
 	* Don't send reply to RELEASE
+
+	* Work with newer libtool (1.5a)
+
+	* Check for st_atim member of struct stat
 	
 2004-06-22  Miklos Szeredi <mszeredi@inf.bme.hu>
 

@@ -6,6 +6,7 @@
     See the file COPYING.LIB
 */
 
+#include <config.h>
 #include "fuse_i.h"
 #include <linux/fuse.h>
 
@@ -331,11 +332,13 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
     attr->size      = stbuf->st_size;
     attr->blocks    = stbuf->st_blocks;
     attr->atime     = stbuf->st_atime;
-    attr->atimensec = stbuf->st_atim.tv_nsec;
     attr->mtime     = stbuf->st_mtime;
-    attr->mtimensec = stbuf->st_mtim.tv_nsec;
     attr->ctime     = stbuf->st_ctime;
+#ifdef HAVE_STRUCT_STAT_ST_ATIM
+    attr->atimensec = stbuf->st_atim.tv_nsec;
+    attr->mtimensec = stbuf->st_mtim.tv_nsec;
     attr->ctimensec = stbuf->st_ctim.tv_nsec;
+#endif
 }
 
 static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)

@@ -2,8 +2,10 @@ AC_INIT(lib/fuse.c)
 AM_INIT_AUTOMAKE(fuse, 1.1)
 AM_CONFIG_HEADER(include/config.h)
 
+m4_ifdef([LT_INIT],
+	[LT_INIT],
+	[AC_PROG_LIBTOOL])
 AC_PROG_CC
-AC_PROG_LIBTOOL
 
 if test -z "$LD"; then
 	LD=ld
@@ -107,6 +109,7 @@ if test "$enable_example" != "no"; then
 fi
 
 AC_CHECK_FUNCS([setxattr])
+AC_CHECK_MEMBERS([struct stat.st_atim])
 
 AC_SUBST(subdirs)
 
