@@ -27,7 +27,7 @@ uninstall:
 	-/sbin/depmod -a
 
 clean:
-	-rm -f $(fusemodule) *.o .*.cmd *.mod.c *.ko *.s
+	-rm -f $(fusemodule) *.o .*.cmd *.mod.c *.ko *.s */*.o
 
 distclean: clean
 	rm -f Makefile
@@ -42,17 +42,17 @@ ifeq ($(majver), 2.4)
 
 CC = @CC@
 LD = @LD@
-CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe
+CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe 
 CPPFLAGS = -I@kernelsrc@/include -I../include -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES -DFUSE_VERSION=\"@VERSION@\"
 
-fuse_objs = dev.o dir.o file.o inode.o util.o
+fuse_objs = dev.o dir.o file.o inode.o util.o compat/parser.o
 
 SUFFIXES = .c .o .s
 
 all-spec: fuse.o
 
 .c.o:
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c $<
+	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
 fuse.o: $(fuse_objs)
 	$(LD) -r -o fuse.o $(fuse_objs)

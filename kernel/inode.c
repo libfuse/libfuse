@@ -14,10 +14,12 @@
 #include <linux/file.h>
 #include <linux/mount.h>
 #include <linux/proc_fs.h>
-#include <linux/parser.h>
 #include <linux/seq_file.h>
 #ifdef KERNEL_2_6
+#include <linux/parser.h>
 #include <linux/statfs.h>
+#else
+#include "compat/parser.h"
 #endif
 
 #define FUSE_SUPER_MAGIC 0x65735546
