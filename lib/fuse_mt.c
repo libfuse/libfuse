@@ -40,9 +40,9 @@ static void *do_work(void *data)
     ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
     if (ctx == NULL) {
         fprintf(stderr, "fuse: failed to allocate fuse context\n");
-        pthread_mutex_lock(&f->lock);
+        pthread_mutex_lock(&f->worker_lock);
         f->numavail --;
-        pthread_mutex_unlock(&f->lock);
+        pthread_mutex_unlock(&f->worker_lock);
         return NULL;
     }
     pthread_setspecific(context_key, ctx);
@@ -61,7 +61,7 @@ static void *do_work(void *data)
             continue;
 
         if (f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
-            pthread_mutex_lock(&f->lock);
+            pthread_mutex_lock(&f->worker_lock);
             if (f->numworker < FUSE_MAX_WORKERS) {
                 /* FIXME: threads should be stored in a list instead
                    of an array */
@@ -69,15 +69,15 @@ static void *do_work(void *data)
                 pthread_t *thread_id = &w->threads[f->numworker];
                 f->numavail ++;
                 f->numworker ++;
-                pthread_mutex_unlock(&f->lock);
+                pthread_mutex_unlock(&f->worker_lock);
                 res = start_thread(w, thread_id);
                 if (res == -1) {
-                    pthread_mutex_lock(&f->lock);
+                    pthread_mutex_lock(&f->worker_lock);
                     f->numavail --;
-                    pthread_mutex_unlock(&f->lock);
+                    pthread_mutex_unlock(&f->worker_lock);
                 }
             } else
-                pthread_mutex_unlock(&f->lock);
+                pthread_mutex_unlock(&f->worker_lock);
         }
 
         w->proc(w->f, cmd, w->data);

@@ -1,6 +1,6 @@
 Name: OW
 
-Author: Paul H. Alfille     palfille at partners org
+Author: Paul H. Alfille / palfille at partners org
 
 Homepage: http://owfs.sourceforge.net
 
@@ -12,7 +12,7 @@ Description:
 ==============================================================================
 Name: FunFS (status: alpha)
 
-Author: Michael Grigoriev (Net Integration Technologies)     mag at luminal org
+Author: Michael Grigoriev (Net Integration Technologies) / mag at luminal org
 
 Homepage: http://www.luminal.org/wiki/index.php/FunFS/FunFS
 
@@ -24,7 +24,7 @@ Description:
 ==============================================================================
 Name: EncFS
 
-Author:  Valient Gough     vgough at pobox com
+Author:  Valient Gough / vgough at pobox com
 
 Homepage: http://pobox.com/~vgough/encfs.html
 
@@ -37,9 +37,11 @@ Description:
 ==============================================================================
 Name: FUSE-J
 
-Author: Peter Levart     peter.levart at select-tech si
+Author: Peter Levart / peter.levart at select-tech si
 
 Download: http://www.select-tech.si/fuse/
+
+Alternate download: http://www.cl.cam.ac.uk/~tdm25/fuse-j/
 
 Description: 
 
@@ -49,7 +51,7 @@ Description:
 ==============================================================================
 Name: SMB for FUSE
 
-Author: Vincent Wagelaar     vincent at ricardis tudelft nl
+Author: Vincent Wagelaar / vincent at ricardis tudelft nl
 
 Homepage: http://hannibal.lr-s.tudelft.nl/~vincent/fusesmb/
 
@@ -61,7 +63,7 @@ Description:
 ==============================================================================
 Name: Run-Time-Access
 
-Author: Bob Smith     bsmith at linuxtoys org
+Author: Bob Smith / bsmith at linuxtoys org
 
 Homepage: http://www.runtimeaccess.com
 
@@ -76,7 +78,7 @@ Description:
 ==============================================================================
 Name: PhoneBook
 
-Author: David McNab     david at rebirthing co nz
+Author: David McNab / david at rebirthing co nz
 
 Homepage: http://www.freenet.org.nz/phonebook
 
@@ -91,7 +93,7 @@ Description:
 ==============================================================================
 Name: KIO Fuse Gateway
 
-Author: Alexander Neundorf     neundorf at kde org
+Author: Alexander Neundorf / neundorf at kde org
 
 Homepage: http://kde.ground.cz/tiki-index.php?page=KIO+Fuse+Gateway
 
@@ -104,7 +106,7 @@ Description:
 ==============================================================================
 Name: C# bindings
 
-Author: Valient Gough     vgough at pobox com
+Author: Valient Gough / vgough at pobox com
 
 Homepage: http://pobox.com/~vgough/fuse-csharp.html
 
@@ -117,7 +119,7 @@ Description:
 ==============================================================================
 Name: LUFS bridge (alpha)
 
-Author: Miklos Szeredi     miklos at szeredi hu
+Author: Miklos Szeredi / miklos at szeredi hu
 
 Homepage: http://sourceforge.net/project/showfiles.php?group_id=121684&package_id=132803
 
@@ -130,7 +132,7 @@ Description:
 ==============================================================================
 Name: btfs (Bluetooth FileSystemMapping)
 
-Author: Collin R. Mulliner     collin at betaversion net
+Author: Collin R. Mulliner / collin at betaversion net
 
 Homepage: http://www.mulliner.org/bluetooth/btfs.php
 
@@ -144,7 +146,7 @@ Description:
 ==============================================================================
 Name: mcachefs
 
-Author: Michael Still     mikal at stillhq com
+Author: Michael Still / mikal at stillhq com
 
 Homepage: http://lists.samba.org/archive/linux/2004-March/010211.html
 
@@ -159,7 +161,7 @@ Description:
 ==============================================================================
 Name: Fusedav
 
-Author: Lennart Poettering     mzshfrqni at 0pointer de
+Author: Lennart Poettering / mzshfrqni at 0pointer de
 
 Homepage: http://0pointer.de/lennart/projects/fusedav/
 
@@ -172,7 +174,7 @@ Description:
 ==============================================================================
 Name: RelFS
 
-Author: Vincenzo Ciancia     vincenzo_ml at yahoo it
+Author: Vincenzo Ciancia / vincenzo_ml at yahoo it
 
 Homepage: http://relfs.sourceforge.net/
 
@@ -186,7 +188,7 @@ Description:
 ==============================================================================
 Name: GmailFS
 
-Author: Richard Jones     richard at jones name
+Author: Richard Jones / richard at jones name
 
 Homepage: http://richard.jones.name/google-hacks/gmail-filesystem/gmail-filesystem.html
 
@@ -200,7 +202,7 @@ Description:
 ==============================================================================
 Name: DataDraw
 
-Author: Bill Cox     bill at viasic com
+Author: Bill Cox / bill at viasic com
 
 Homepage: http://www.viasic.com/opensource/
 
@@ -212,7 +214,7 @@ Description:
 ==============================================================================
 Name: gphoto2-fuse-fs
 
-Author: Christopher Lester     lester at hep phy cam ac uk
+Author: Christopher Lester / lester at hep phy cam ac uk
 
 Homepage: http://www.hep.phy.cam.ac.uk/~lester/gphoto2-fuse-fs/
 
@@ -226,7 +228,7 @@ Description:
 ==============================================================================
 Name: cvsfs-fuse
 
-Author: Patrick Frank     pfrank at gmx de
+Author: Patrick Frank / pfrank at gmx de
 
 Homepage: http://sourceforge.net/projects/cvsfs
 
@@ -240,7 +242,7 @@ Description:
 ==============================================================================
 Name: Wayback (User-level Versioning File System for Linux)
 
-Author: Brian Cornell     techie at northwestern edu
+Author: Brian Cornell / techie at northwestern edu
 
 Homepage: http://wayback.sourceforge.net/
 
@@ -252,5 +254,20 @@ Description:
   data. Wayback provides the ability to remount any already mounted
   file system with versioning support under a different
   directory.
+
+==============================================================================
+Name: Trivial Rolebased Authorisation & Capability Statemachine (TRACS)
+
+Author: Rob J Meijer / rmeijer at xs4all nl
+
+Homepage: http://www.xs4all.nl/~rmeijer/tracs.html
+
+Description:
+
+  This project is the first spin-off project of the Security Incident
+  Policy Enforcement System project. In the process of designing a
+  SIPES, the need was recognized for the implementation of an
+  authorisation server that provides functionality not provided by any
+  of the current authorisation solutions.
 
 ==============================================================================

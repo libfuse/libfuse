@@ -8,6 +8,8 @@
 
 /* This file defines the kernel interface of FUSE */
 
+#include <asm/types.h>
+
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 5
 
@@ -24,30 +26,30 @@
 #define FUSE_MINOR 229
 
 struct fuse_attr {
-	unsigned long       ino;
-	unsigned int        mode;
-	unsigned int        nlink;
-	unsigned int        uid;
-	unsigned int        gid;
-	unsigned int        rdev;
-	unsigned long long  size;
-	unsigned long       blocks;
-	unsigned long       atime;
-	unsigned long       atimensec;
-	unsigned long       mtime;
-	unsigned long       mtimensec;
-	unsigned long       ctime;
-	unsigned long       ctimensec;
+	__u64	ino;
+	__u64	size;
+	__u64	blocks;
+	__u64	atime;
+	__u64	mtime;
+	__u64	ctime;
+	__u32	atimensec;
+	__u32	mtimensec;
+	__u32	ctimensec;
+	__u32	mode;
+	__u32	nlink;
+	__u32	uid;
+	__u32	gid;
+	__u32	rdev;
 };
 
 struct fuse_kstatfs {
-	unsigned int        bsize;
-	unsigned long long  blocks;
-	unsigned long long  bfree;
-	unsigned long long  bavail;
-	unsigned long long  files;
-	unsigned long long  ffree;
-	unsigned int        namelen;
+	__u64	blocks;
+	__u64	bfree;
+	__u64	bavail;
+	__u64	files;
+	__u64	ffree;
+	__u32	bsize;
+	__u32	namelen;
 };
 
 #define FATTR_MODE	(1 << 0)
@@ -94,86 +96,87 @@ enum fuse_opcode {
 #define FUSE_XATTR_SIZE_MAX 4096
 
 struct fuse_entry_out {
-	unsigned long nodeid;      /* Inode ID */
-	unsigned long generation;  /* Inode generation: nodeid:gen must
-                                      be unique for the fs's lifetime */
-	unsigned long entry_valid; /* Cache timeout for the name */
-	unsigned long entry_valid_nsec;
-	unsigned long attr_valid;  /* Cache timeout for the attributes */
-	unsigned long attr_valid_nsec;
+	__u64	nodeid;		/* Inode ID */
+	__u64	generation;	/* Inode generation: nodeid:gen must
+				   be unique for the fs's lifetime */
+	__u64	entry_valid;	/* Cache timeout for the name */
+	__u64	attr_valid;	/* Cache timeout for the attributes */
+	__u32	entry_valid_nsec;
+	__u32	attr_valid_nsec;
 	struct fuse_attr attr;
 };
 
 struct fuse_forget_in {
-	int version;
+	__u64	version;
 };
 
 struct fuse_attr_out {
-	unsigned long attr_valid;  /* Cache timeout for the attributes */
-	unsigned long attr_valid_nsec;
+	__u64	attr_valid;	/* Cache timeout for the attributes */
+	__u32	attr_valid_nsec;
+	__u32	dummy;
 	struct fuse_attr attr;
 };
 
 struct fuse_getdir_out {
-	int fd;
+	__u32	fd;
 };
 
 struct fuse_mknod_in {
-	unsigned int mode;
-	unsigned int rdev;
+	__u32	mode;
+	__u32	rdev;
 };
 
 struct fuse_mkdir_in {
-	unsigned int mode;
+	__u32	mode;
 };
 
 struct fuse_rename_in {
-	unsigned long newdir;
+	__u64	newdir;
 };
 
 struct fuse_link_in {
-	unsigned long newdir;
+	__u64	newdir;
 };
 
 struct fuse_setattr_in {
+	__u32	valid;
 	struct fuse_attr attr;
-	unsigned int valid;
 };
 
 struct fuse_open_in {
-	unsigned int flags;
+	__u32	flags;
 };
 
 struct fuse_open_out {
-	unsigned long fh;
-	unsigned int _open_flags;
+	__u64	fh;
+	__u32	open_flags;
 };
 
 struct fuse_release_in {
-	unsigned long fh;
-	unsigned int flags;
+	__u64	fh;
+	__u32	flags;
 };
 
 struct fuse_flush_in {
-	unsigned long fh;
-	unsigned int _nref;
+	__u64	fh;
+	__u32	flush_flags;
 };
 
 struct fuse_read_in {
-	unsigned long fh;
-	unsigned long long offset;
-	unsigned int size;
+	__u64	fh;
+	__u64	offset;
+	__u32	size;
 };
 
 struct fuse_write_in {
-	int writepage;
-	unsigned long fh;
-	unsigned long long offset;
-	unsigned int size;
+	__u64	fh;
+	__u64	offset;
+	__u32	size;
+	__u32	write_flags;
 };
 
 struct fuse_write_out {
-	unsigned int size;
+	__u32	size;
 };
 
 struct fuse_statfs_out {
@@ -181,45 +184,47 @@ struct fuse_statfs_out {
 };
 
 struct fuse_fsync_in {
-	unsigned long fh;
-	int datasync;
+	__u64	fh;
+	__u32	fsync_flags;
 };
 
 struct fuse_setxattr_in {
-	unsigned int size;
-	unsigned int flags;
+	__u32	size;
+	__u32	flags;
 };
 
 struct fuse_getxattr_in {
-	unsigned int size;
+	__u32	size;
 };
 
 struct fuse_getxattr_out {
-	unsigned int size;
+	__u32	size;
 };
 
 struct fuse_in_header {
-	int unique;
-	enum fuse_opcode opcode;
-	unsigned long nodeid;
-	unsigned int uid;
-	unsigned int gid;
-	unsigned int pid;
+	__u32	len;
+	__u32	opcode;
+	__u64	unique;
+	__u64	nodeid;
+	__u32	uid;
+	__u32	gid;
+	__u32	pid;
 };
 
 struct fuse_out_header {
-	int unique;
-	int error;
+	__u32	len;
+	__s32	error;
+	__u64	unique;
 };
 
 struct fuse_dirent {
-	unsigned long ino;
-	unsigned short namelen;
-	unsigned char type;
-	char name[256];
+	__u64	ino;
+	__u32	namelen;
+	__u32	type;
+	char name[0];
 };
 
-#define FUSE_NAME_OFFSET ((unsigned int) ((struct fuse_dirent *) 0)->name)
-#define FUSE_DIRENT_ALIGN(x) (((x) + sizeof(long) - 1) & ~(sizeof(long) - 1))
+#define FUSE_NAME_OFFSET ((unsigned) ((struct fuse_dirent *) 0)->name)
+#define FUSE_DIRENT_ALIGN(x) (((x) + sizeof(__u64) - 1) & ~(sizeof(__u64) - 1))
 #define FUSE_DIRENT_SIZE(d) \
 	FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + (d)->namelen)

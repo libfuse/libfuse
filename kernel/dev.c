@@ -55,15 +55,6 @@ void fuse_request_free(struct fuse_req *req)
 	kmem_cache_free(fuse_req_cachep, req);
 }
 
-static int get_unique(struct fuse_conn *fc)
-{
-	fc->reqctr++;
-	/* zero is special */
-	if (fc->reqctr == 0)
-		fc->reqctr = 1;
-	return fc->reqctr;
-}
-
 #ifdef KERNEL_2_6
 static inline void block_sigs(sigset_t *oldset)
 {
@@ -112,6 +103,7 @@ static void __fuse_get_request(struct fuse_req *req)
 /* Must be called with > 1 refcount */
 static void __fuse_put_request(struct fuse_req *req)
 {
+	BUG_ON(atomic_read(&req->count) < 2);
 	atomic_dec(&req->count);
 }
 
@@ -134,7 +126,7 @@ static struct fuse_req *do_get_request(struct fuse_conn *fc)
 
 struct fuse_req *fuse_get_request(struct fuse_conn *fc)
 {
-	if (down_interruptible(&fc->unused_sem))
+	if (down_interruptible(&fc->outstanding_sem))
 		return NULL;
 	return  do_get_request(fc);
 }
@@ -145,7 +137,7 @@ struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc)
 	sigset_t oldset;
 
 	block_sigs(&oldset);
-	intr = down_interruptible(&fc->unused_sem);
+	intr = down_interruptible(&fc->outstanding_sem);
 	restore_sigs(&oldset);
 	return intr ? NULL : do_get_request(fc);
 }
@@ -154,12 +146,16 @@ void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (!req->preallocated)
 		fuse_request_free(req);
-	else {
-		spin_lock(&fuse_lock);
+
+	spin_lock(&fuse_lock);
+	if (req->preallocated)
 		list_add(&req->list, &fc->unused_list);
-		spin_unlock(&fuse_lock);
-		up(&fc->unused_sem);
-	}
+
+	if (fc->outstanding_debt)
+		fc->outstanding_debt--;
+	else
+		up(&fc->outstanding_sem);
+	spin_unlock(&fuse_lock);
 }
 
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
@@ -175,6 +171,14 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	req->finished = 1;
 	putback = atomic_dec_and_test(&req->count);
 	spin_unlock(&fuse_lock);
+	if (req->background) {
+		if (req->inode)
+			iput(req->inode);
+		if (req->inode2)
+			iput(req->inode2);
+		if (req->file)
+			fput(req->file);
+	}
 	wake_up(&req->waitq);
 	if (putback)
 		fuse_putback_request(fc, req);
@@ -190,9 +194,21 @@ static int request_wait_answer_nonint(struct fuse_req *req)
 	return err;
 }
 
-/* Called with fuse_lock held.  Releases, and then reaquires it. */
-static void request_wait_answer(struct fuse_req *req, int interruptible,
-				int background)
+static void background_request(struct fuse_req *req)
+{
+	/* Need to get hold of the inode(s) and/or file used in the
+	   request, so FORGET and RELEASE are not sent too early */
+	req->background = 1;
+	if (req->inode)
+		req->inode = igrab(req->inode);
+	if (req->inode2)
+		req->inode2 = igrab(req->inode2);
+	if (req->file)
+		get_file(req->file);
+}
+
+/* Called with fuse_lock held.  Releases, and then reacquires it. */
+static void request_wait_answer(struct fuse_req *req, int interruptible)
 {
 	int intr;
 
@@ -212,10 +228,6 @@ static void request_wait_answer(struct fuse_req *req, int interruptible,
 	if (!intr)
 		return;
 
-	if (background && !req->sent) {
-		req->isreply = 0;
-		return;
-	}
 	if (!interruptible || req->sent)
 		req->out.h.error = -EINTR;
 	else
@@ -232,55 +244,92 @@ static void request_wait_answer(struct fuse_req *req, int interruptible,
 		wait_event(req->waitq, !req->locked);
 		spin_lock(&fuse_lock);
 	}
-	if (!list_empty(&req->list)) {
-		/* request is still on one of the lists */
+	if (!req->sent && !list_empty(&req->list)) {
 		list_del(&req->list);
 		__fuse_put_request(req);
+	} else if (req->sent)
+		background_request(req);
+}
+
+static unsigned len_args(unsigned numargs, struct fuse_arg *args)
+{
+	unsigned nbytes = 0;
+	unsigned i;
+
+	for (i = 0; i < numargs; i++)
+		nbytes += args[i].size;
+
+	return nbytes;
+}
+
+static void queue_request(struct fuse_conn *fc, struct fuse_req *req)
+{
+	fc->reqctr++;
+	/* zero is special */
+	if (fc->reqctr == 0)
+		fc->reqctr = 1;
+	req->in.h.unique = fc->reqctr;
+	req->in.h.len = sizeof(struct fuse_in_header) + 
+		len_args(req->in.numargs, (struct fuse_arg *) req->in.args);
+	if (!req->preallocated) {
+		/* decrease outstanding_sem, but without blocking... */
+		if (down_trylock(&fc->outstanding_sem))
+			fc->outstanding_debt++;
 	}
+	list_add_tail(&req->list, &fc->pending);
+	wake_up(&fc->waitq);
 }
 
 static void request_send_wait(struct fuse_conn *fc, struct fuse_req *req,
-			      int interruptible, int background)
+			      int interruptible)
 {
 	req->isreply = 1;
 	spin_lock(&fuse_lock);
 	req->out.h.error = -ENOTCONN;
 	if (fc->file) {
-		req->in.h.unique = get_unique(fc);
-		list_add_tail(&req->list, &fc->pending);
-		wake_up(&fc->waitq);
+		queue_request(fc, req);
 		/* acquire extra reference, since request is still needed
 		   after request_end() */
 		__fuse_get_request(req);
 
-		request_wait_answer(req, interruptible, background);
+		request_wait_answer(req, interruptible);
 	}
 	spin_unlock(&fuse_lock);
 }
 
 void request_send(struct fuse_conn *fc, struct fuse_req *req)
 {
-	request_send_wait(fc, req, 1, 0);
+	request_send_wait(fc, req, 1);
 }
 
-void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req,
-			 int background)
+void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req)
 {
-	request_send_wait(fc, req, 0, background);
+	request_send_wait(fc, req, 0);
 }
 
-void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
+void request_send_nowait(struct fuse_conn *fc, struct fuse_req *req)
 {
-	req->isreply = 0;
 	spin_lock(&fuse_lock);
 	if (fc->file) {
-		list_add_tail(&req->list, &fc->pending);
-		wake_up(&fc->waitq);
+		queue_request(fc, req);
 		spin_unlock(&fuse_lock);
 	} else {
 		req->out.h.error = -ENOTCONN;
 		request_end(fc, req);
 	}
+}
+
+void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
+{
+	req->isreply = 0;
+	request_send_nowait(fc, req);
+}
+
+void request_send_background(struct fuse_conn *fc, struct fuse_req *req)
+{
+	req->isreply = 1;
+	background_request(req);
+	request_send_nowait(fc, req);
 }
 
 static inline int lock_request(struct fuse_req *req)
@@ -486,17 +535,6 @@ static int fuse_copy_args(struct fuse_copy_state *cs, unsigned numargs,
 	return err;
 }
 
-static unsigned len_args(unsigned numargs, struct fuse_arg *args)
-{
-	unsigned nbytes = 0;
-	unsigned i;
-
-	for (i = 0; i < numargs; i++)
-		nbytes += args[i].size;
-
-	return nbytes;
-}
-
 static void request_wait(struct fuse_conn *fc)
 {
 	DECLARE_WAITQUEUE(wait, current);
@@ -544,8 +582,7 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 	spin_unlock(&fuse_lock);
 
 	in = &req->in;
-	reqsize = sizeof(struct fuse_in_header);
-	reqsize += len_args(in->numargs, (struct fuse_arg *) in->args);
+	reqsize = req->in.h.len;
 	nbytes = fuse_copy_init(&cs, 1, req, iov, nr_segs);
 	err = -EINVAL;
 	if (nbytes >= reqsize) {
@@ -652,16 +689,22 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	if (err)
 		goto err_finish;
 	err = -EINVAL;
-	if (!oh.unique || oh.error <= -1000 || oh.error > 0)
+	if (!oh.unique || oh.error <= -1000 || oh.error > 0 || 
+	    oh.len != nbytes)
 		goto err_finish;
 
 	spin_lock(&fuse_lock);
 	req = request_find(fc, oh.unique);
-	err = -ENOENT;
+	err = -EINVAL;
 	if (!req)
 		goto err_unlock;
 
 	list_del_init(&req->list);
+	if (req->interrupted) {
+		request_end(fc, req);
+		fuse_copy_finish(&cs);
+		return -ENOENT;
+	}
 	req->out.h = oh;
 	req->locked = 1;
 	cs.req = req;

@@ -24,14 +24,19 @@
 #endif
 
 static kmem_cache_t *fuse_inode_cachep;
+static int mount_count;
 
 static int user_allow_other;
+static int mount_max = 1000;
 #ifdef KERNEL_2_6
 module_param(user_allow_other, int, 0644);
+module_param(mount_max, int, 0644);
 #else
 MODULE_PARM(user_allow_other, "i");
+MODULE_PARM(mount_max, "i");
 #endif
 MODULE_PARM_DESC(user_allow_other, "Allow non root user to specify the \"allow_other\" or \"allow_root\" mount options");
+MODULE_PARM_DESC(mount_max, "Maximum number of FUSE mounts allowed, if -1 then unlimited (default: 1000)");
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
@@ -112,11 +117,155 @@ static void fuse_clear_inode(struct inode *inode)
 	}
 }
 
+void fuse_change_attributes(struct inode *inode, struct fuse_attr *attr)
+{
+	if (S_ISREG(inode->i_mode) && i_size_read(inode) != attr->size)
+#ifdef KERNEL_2_6
+		invalidate_inode_pages(inode->i_mapping);
+#else
+		invalidate_inode_pages(inode);
+#endif
+
+	inode->i_ino     = attr->ino;
+	inode->i_mode    = (inode->i_mode & S_IFMT) + (attr->mode & 07777);
+	inode->i_nlink   = attr->nlink;
+	inode->i_uid     = attr->uid;
+	inode->i_gid     = attr->gid;
+	i_size_write(inode, attr->size);
+	inode->i_blksize = PAGE_CACHE_SIZE;
+	inode->i_blocks  = attr->blocks;
+#ifdef KERNEL_2_6
+	inode->i_atime.tv_sec   = attr->atime;
+	inode->i_atime.tv_nsec  = attr->atimensec;
+	inode->i_mtime.tv_sec   = attr->mtime;
+	inode->i_mtime.tv_nsec  = attr->mtimensec;
+	inode->i_ctime.tv_sec   = attr->ctime;
+	inode->i_ctime.tv_nsec  = attr->ctimensec;
+#else
+	inode->i_atime   = attr->atime;
+	inode->i_mtime   = attr->mtime;
+	inode->i_ctime   = attr->ctime;
+#endif
+}
+
+static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
+{
+	inode->i_mode = attr->mode & S_IFMT;
+	i_size_write(inode, attr->size);
+	if (S_ISREG(inode->i_mode)) {
+		fuse_init_common(inode);
+		fuse_init_file_inode(inode);
+	} else if (S_ISDIR(inode->i_mode))
+		fuse_init_dir(inode);
+	else if (S_ISLNK(inode->i_mode))
+		fuse_init_symlink(inode);
+	else if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
+		 S_ISFIFO(inode->i_mode) || S_ISSOCK(inode->i_mode)) {
+		fuse_init_common(inode);
+		init_special_inode(inode, inode->i_mode,
+				   new_decode_dev(attr->rdev));
+	} else {
+		/* Don't let user create weird files */
+		inode->i_mode = S_IFREG;
+		fuse_init_common(inode);
+		fuse_init_file_inode(inode);
+	}
+}
+
+#ifdef KERNEL_2_6
+static int fuse_inode_eq(struct inode *inode, void *_nodeidp)
+{
+	unsigned long nodeid = *(unsigned long *) _nodeidp;
+	if (get_node_id(inode) == nodeid)
+		return 1;
+	else
+		return 0;
+}
+
+static int fuse_inode_set(struct inode *inode, void *_nodeidp)
+{
+	unsigned long nodeid = *(unsigned long *) _nodeidp;
+	get_fuse_inode(inode)->nodeid = nodeid;
+	return 0;
+}
+
+struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
+			int generation, struct fuse_attr *attr, int version)
+{
+	struct inode *inode;
+	struct fuse_conn *fc = get_fuse_conn_super(sb);
+	int retried = 0;
+
+ retry:
+	inode = iget5_locked(sb, nodeid, fuse_inode_eq, fuse_inode_set, &nodeid);
+	if (!inode)
+		return NULL;
+
+	if ((inode->i_state & I_NEW)) {
+		inode->i_generation = generation;
+		inode->i_data.backing_dev_info = &fc->bdi;
+		fuse_init_inode(inode, attr);
+		unlock_new_inode(inode);
+	} else if ((inode->i_mode ^ attr->mode) & S_IFMT) {
+		BUG_ON(retried);
+		/* Inode has changed type, any I/O on the old should fail */
+		make_bad_inode(inode);
+		iput(inode);
+		retried = 1;
+		goto retry;
+	}
+
+	fuse_change_attributes(inode, attr);
+	inode->i_version = version;
+	return inode;
+}
+#else
+static int fuse_inode_eq(struct inode *inode, unsigned long ino, void *_nodeidp){
+	unsigned long nodeid = *(unsigned long *) _nodeidp;
+	if (inode->u.generic_ip && get_node_id(inode) == nodeid)
+		return 1;
+	else
+		return 0;
+}
+
+struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
+			int generation, struct fuse_attr *attr, int version)
+{
+	struct inode *inode;
+	int retried = 0;
+
+ retry:
+	inode = iget4(sb, attr->ino, fuse_inode_eq, &nodeid);
+	if (!inode)
+		return NULL;
+
+	if (!inode->u.generic_ip) {
+		get_fuse_inode(inode)->nodeid = nodeid;
+		inode->u.generic_ip = inode;
+		inode->i_generation = generation;
+		fuse_init_inode(inode, attr);
+	} else if ((inode->i_mode ^ attr->mode) & S_IFMT) {
+		BUG_ON(retried);
+		/* Inode has changed type, any I/O on the old should fail */
+		remove_inode_hash(inode);
+		make_bad_inode(inode);
+		iput(inode);
+		retried = 1;
+		goto retry;
+	}
+
+	fuse_change_attributes(inode, attr);
+	inode->i_version = version;
+	return inode;
+}
+#endif
+
 static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
 	spin_lock(&fuse_lock);
+	mount_count --;
 	fc->sb = NULL;
 	fc->uid = 0;
 	fc->flags = 0;
@@ -329,7 +478,7 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
 		INIT_LIST_HEAD(&fc->unused_list);
-		sema_init(&fc->unused_sem, FUSE_MAX_OUTSTANDING);
+		sema_init(&fc->outstanding_sem, FUSE_MAX_OUTSTANDING);
 		for (i = 0; i < FUSE_MAX_OUTSTANDING; i++) {
 			struct fuse_req *req = fuse_request_alloc();
 			if (!req) {
@@ -392,7 +541,7 @@ static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 	if (nodeid == 0)
 		return ERR_PTR(-ESTALE);
 
-	inode = fuse_ilookup(sb, nodeid);
+	inode = ilookup5(sb, nodeid, fuse_inode_eq, &nodeid);
 	if (!inode || inode->i_generation != generation)
 		return ERR_PTR(-ESTALE);
 
@@ -449,12 +598,24 @@ static struct super_operations fuse_super_operations = {
 	.show_options	= fuse_show_options,
 };
 
+static int inc_mount_count(void)
+{
+	int success = 0;
+	spin_lock(&fuse_lock);
+	mount_count ++;
+	if (mount_max == -1 || mount_count <= mount_max)
+		success = 1;
+	spin_unlock(&fuse_lock);
+	return success;
+}
+
 static int fuse_read_super(struct super_block *sb, void *data, int silent)
 {
 	struct fuse_conn *fc;
 	struct inode *root;
 	struct fuse_mount_data d;
 	struct file *file;
+	int err;
 
 	if (!parse_fuse_opt((char *) data, &d))
 		return -EINVAL;
@@ -493,6 +654,11 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 
 	*get_fuse_conn_super_p(sb) = fc;
 
+	err = -ENFILE;
+	if (!inc_mount_count() && current->uid != 0)
+		goto err;
+
+	err = -ENOMEM;
 	root = get_root_inode(sb, d.rootmode);
 	if (root == NULL)
 		goto err;
@@ -507,11 +673,12 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 
  err:
 	spin_lock(&fuse_lock);
+	mount_count --;
 	fc->sb = NULL;
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	*get_fuse_conn_super_p(sb) = NULL;
-	return -EINVAL;
+	return err;
 }
 
 #ifdef KERNEL_2_6

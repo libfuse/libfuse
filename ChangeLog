@@ -1,3 +1,23 @@
+2005-01-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* KERNEL: if request is interrupted, still keep reference to used
+	inode(s) and file, so that FORGET and RELEASE are not sent until
+	userspace finishes the request.
+
+2004-12-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* KERNEL ABI: update interface to make it independent of type
+	sizes.  This will help on 64 bit architectures which can run
+	legacy 32 bit applications.
+
+	* KERNEL ABI: add "len" field to request headers.  This will allow
+	sending/receiving requests in multiple chunks.
+
+	* KERNEL: handle file type change more intelligently
+
+	* LIB: "-o debug" option should disable backgrounding (fix by
+	Fabien Reygrobellet)
+
 2004-12-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* KERNEL: invalidate dentry/attributes if interrupted request

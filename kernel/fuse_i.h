@@ -37,6 +37,8 @@
 #     define i_size_read(inode) ((inode)->i_size)
 #     define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
 #  endif
+#  define new_decode_dev(x) (x)
+#  define new_encode_dev(x) (x)
 #endif /* KERNEL_2_6 */
 #endif /* FUSE_MAINLINE */
 #include <linux/fs.h>
@@ -64,10 +66,10 @@ static inline void set_page_dirty_lock(struct page *page)
 	unlock_page(page);
 }
 #endif
-/* Max number of pages that can be used in a single read request */
+/** Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
 
-/* If more requests are outstanding, then the operation will block */
+/** If more requests are outstanding, then the operation will block */
 #define FUSE_MAX_OUTSTANDING 10
 
 /** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
@@ -99,7 +101,7 @@ static inline void set_page_dirty_lock(struct page *page)
 struct fuse_inode {
 	/** Unique ID, which identifies the inode between userspace
 	 * and kernel */
-	unsigned long nodeid;
+	u64 nodeid;
 
 	/** The request used for sending the FORGET message */
 	struct fuse_req *forget_req;
@@ -114,7 +116,7 @@ struct fuse_file {
 	struct fuse_req *release_req;
 
 	/** File handle used by userspace */
-	unsigned long fh;
+	u64 fh;
 };
 
 /** One input argument of a request */
@@ -189,6 +191,9 @@ struct fuse_req {
 	/** The request was interrupted */
 	unsigned interrupted:1;
 
+	/** Request is sent in the background */
+	unsigned background:1;
+	
 	/** Data is being copied to/from the request */
 	unsigned locked:1;
 
@@ -221,6 +226,15 @@ struct fuse_req {
 
 	/** offset of data on first page */
 	unsigned page_offset;
+
+	/** Inode used in the request */
+	struct inode *inode;
+	
+	/** Second inode used in the request (or NULL) */
+	struct inode *inode2;
+
+	/** File used in the request (or NULL) */
+	struct file *file;
 };
 
 /**
@@ -259,7 +273,11 @@ struct fuse_conn {
 	struct list_head processing;
 
 	/** Controls the maximum number of outstanding requests */
-	struct semaphore unused_sem;
+	struct semaphore outstanding_sem;
+
+	/** This counts the number of outstanding requests if
+	    outstanding_sem would go negative */
+	unsigned outstanding_debt;
 
 	/** The list of unused requests */
 	struct list_head unused_list;
@@ -320,7 +338,7 @@ static inline struct fuse_inode *get_fuse_inode(struct inode *inode)
 	return (struct fuse_inode *) (&inode[1]);
 }
 
-static inline unsigned long get_node_id(struct inode *inode)
+static inline u64 get_node_id(struct inode *inode)
 {
 	return get_fuse_inode(inode)->nodeid;
 }
@@ -349,24 +367,35 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 			int generation, struct fuse_attr *attr, int version);
 
 /**
- * Lookup an inode by nodeid
- */
-#ifdef KERNEL_2_6
-struct inode *fuse_ilookup(struct super_block *sb, unsigned long nodeid);
-#else
-struct inode *fuse_ilookup(struct super_block *sb, ino_t ino, unsigned long nodeid);
-#endif
-
-/**
  * Send FORGET command
  */
 void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
 		      unsigned long nodeid, int version);
 
 /**
- * Initialise operations on regular file
+ * Initialise file operations on a regular file
  */
 void fuse_init_file_inode(struct inode *inode);
+
+/**
+ * Initialise inode operations on regular files and special files
+ */
+void fuse_init_common(struct inode *inode);
+
+/**
+ * Initialise inode and file operations on a directory
+ */
+void fuse_init_dir(struct inode *inode);
+
+/**
+ * Initialise inode operations on a symlink
+ */
+void fuse_init_symlink(struct inode *inode);
+
+/**
+ * Change attributes of an inode
+ */
+void fuse_change_attributes(struct inode *inode, struct fuse_attr *attr);
 
 /**
  * Check if the connection can be released, and if yes, then free the
@@ -431,17 +460,18 @@ void request_send(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
  * Send a request (synchronous, non-interruptible except by SIGKILL)
- *
- * If background is non-zero and SIGKILL is received still send
- * request asynchronously
  */
-void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req,
-			 int background);
+void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
  * Send a request with no reply
  */
 void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
+
+/**
+ * Send a request in the background
+ */
+void request_send_background(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
  * Get the attributes of a file

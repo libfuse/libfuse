@@ -7,6 +7,7 @@
 */
 
 #include "fuse_i.h"
+#include "fuse_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -88,6 +89,19 @@ static int set_signal_handlers()
         return -1;
 
     return 0;
+}
+
+static int opt_member(const char *opts, const char *opt)
+{
+    const char *e, *s = opts;
+    int optlen = strlen(opt);
+    for (s = opts; s; s = e + 1) {
+        if(!(e = strchr(s, ',')))
+            break;
+        if (e - s == optlen && strncmp(s, opt, optlen) == 0)
+            return 1;
+    }
+    return (s && strcmp(s, opt) == 0);
 }
 
 static int add_option_to(const char *opt, char **optp)
@@ -187,7 +201,6 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
                     res = add_options(lib_opts, kernel_opts, "debug");
                     if (res == -1)
                         goto err;
-                    *background = 0;
                     break;
                     
                 case 'r':
@@ -251,7 +264,6 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
     free(*mountpoint);
     return -1;
 }
-                              
 
 static struct fuse *fuse_setup_common(int argc, char *argv[],
                                       const struct fuse_operations *op,
@@ -286,7 +298,7 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
     if (fuse == NULL)
         goto err_unmount;
 
-    if (background) {
+    if (background && !opt_member(lib_opts, "debug")) {
         res = daemon(0, 0);
         if (res == -1) {
             perror("fuse: failed to daemonize program\n");
