@@ -48,14 +48,17 @@ sub e_getattr {
 
 sub e_getdir {
 	# return as many text filenames as you like, followed by the retval.
+	print((scalar keys %files)."\n");
 	return (keys %files),0;
 }
 
 sub e_open {
 	# VFS sanity check; it keeps all the necessary state, not much to do here.
 	my ($file) = filename_fixup(shift);
+	print("open called\n");
 	return -ENOENT() unless exists($files{$file});
 	return -EISDIR() unless exists($files{$file}{cont});
+	print("open ok\n");
 	return 0;
 }
 
@@ -82,6 +85,6 @@ Fuse::main(
 	getdir=>\&e_getdir,
 	open=>\&e_open,
 	statfs=>\&e_statfs,
-	#read=>\&e_read,
+	read=>\&e_read,
 	#debug=>1, threaded=>0
 );

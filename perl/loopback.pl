@@ -2,6 +2,7 @@
 
 use strict;
 use Fuse;
+use IO::File;
 use POSIX qw(ENOENT ENOSYS EEXIST EPERM O_RDONLY O_RDWR O_APPEND O_CREAT);
 use Fcntl qw(S_ISBLK S_ISCHR S_ISFIFO);
 
@@ -15,8 +16,8 @@ sub x_getattr {
 	my ($file) = fixup(shift);
 	debug("getattr $file");
 	return -ENOENT() unless -e $file;
-	debug(stat($file));
-	return (stat($file));
+	debug(lstat($file));
+	return (lstat($file));
 }
 
 sub x_getdir {
@@ -44,7 +45,6 @@ sub x_open {
 	debug("open $file = $fd");
 	return $fd if $fd < 0;
 	POSIX::close($fd);
-	debug("good: $fd");
 	return 0;
 }
 
@@ -52,10 +52,12 @@ sub x_read {
 	my ($file,$bufsize,$off) = @_;
 	debug("read",@_);
 	my ($rv) = -ENOSYS();
+	my ($handle) = new IO::File;
 	return -ENOENT() unless -e ($file = fixup($file));
-	return -ENOSYS() unless sysopen(FILE,$file,O_RDONLY());
-	if(sysseek(FILE,$off,0)) { sysread(FILE,$rv,$bufsize); }
-	close(FILE);
+	return -ENOSYS() unless open($handle,$file);
+	if(seek($handle,$off,0)) {
+		read($handle,$rv,$bufsize);
+	}
 	debug("good");
 	return $rv;
 }
@@ -75,7 +77,7 @@ sub x_write {
 
 sub err { return (-shift || -$!) }
 
-sub x_readlink { return err(readlink(fixup(shift))            ); }
+sub x_readlink { return readlink(fixup(shift)                 ); }
 sub x_unlink   { return unlink(fixup(shift)) ? 0 : -$!;          }
 sub x_rmdir    { return err(rmdir(fixup(shift))               ); }
 sub x_symlink  { return err(symlink(fixup(shift),fixup(shift))); }
@@ -85,7 +87,7 @@ sub x_mkdir    { return err(mkdir(fixup(shift),shift)         ); }
 sub x_chmod    { return err(chmod(fixup(shift),shift)         ); }
 sub x_chown    { return err(chown(fixup(shift),shift,shift)   ); }
 sub x_chmod    { return err(chmod(fixup(shift),shift)         ); }
-sub x_truncate { return err(truncate(fixup(shift),shift)      ); }
+sub x_truncate { return truncate(fixup(shift),shift) ? 0 : -$! ; }
 sub x_utime    { return utime($_[1],$_[2],fixup($_[0])) ? 0:-$!; }
 
 sub x_mknod {
@@ -111,7 +113,7 @@ sub x_mknod {
 
 my ($mountpoint) = "";
 $mountpoint = shift(@ARGV) if @ARGV;
-Fuse::main(mountpoint=>$mountpoint, getattr=>\&x_getattr, readlink=>\&readlink, getdir=>\&x_getdir, mknod=>\&x_mknod,
+Fuse::main(mountpoint=>$mountpoint, getattr=>\&x_getattr, readlink=>\&x_readlink, getdir=>\&x_getdir, mknod=>\&x_mknod,
 	mkdir=>\&x_mkdir, unlink=>\&x_unlink, rmdir=>\&x_rmdir, symlink=>\&x_symlink, rename=>\&x_rename, link=>\&x_link,
 	chmod=>\&x_chmod, chown=>\&x_chown, truncate=>\&x_truncate, utime=>\&x_utime, open=>\&x_open, read=>\&x_read, write=>\&x_write
 );
