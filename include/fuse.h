@@ -15,7 +15,7 @@
 #include <sys/stat.h>
 #include <utime.h>
 
-#include "fusestat.h"
+#include <fusestat.h>
 /* ----------------------------------------------------------- *
  * Basic FUSE API                                              *
  * ----------------------------------------------------------- */
