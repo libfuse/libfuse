@@ -7,6 +7,8 @@
 */
 
 #include <linux/fs.h>
+#include <linux/list.h>
+#include <linux/spinlock.h>
 
 #define FUSE_VERSION "0.1"
 
@@ -23,6 +25,35 @@ struct fuse_conn {
 	
 	/** The opened client device */
 	struct file *file;
+
+	/** The client wait queue */
+	wait_queue_head_t waitq;
+
+	/** The list of pending requests */
+	struct list_head pending;
+
+	/** The list of requests being processed */
+	struct list_head processing;
+
+	/** The number of outstanding requests */
+	int outstanding;
+
+	/** Connnection number (for debuging) */
+	int id;
+};
+
+/**
+ * A filesystem request
+ */
+struct fuse_req {
+	/** The request list */
+	struct list_head list;
+
+	/** The size of the data */
+	size_t size;
+
+	/** A pointer to the data */
+	void *data;
 };
 
 /**
@@ -31,10 +62,14 @@ struct fuse_conn {
 extern struct proc_dir_entry *proc_fuse_dev;
 
 /**
+ * The lock to protect fuses structures
+ */
+extern spinlock_t fuse_lock;
+
+/**
  * Fill in the directory operations
  */
 void fuse_dir_init(struct inode *inode);
-
 
 /**
  * Check if the connection can be released, and if yes, then free the

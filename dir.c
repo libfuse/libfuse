@@ -7,13 +7,10 @@
 */
 
 
-#include "fuse.h"
+#include "fuse_i.h"
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/smp_lock.h>
-#include <linux/sched.h>
-#include <linux/file.h>
 
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 {

@@ -11,7 +11,6 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/smp_lock.h>
 #include <linux/sched.h>
 #include <linux/file.h>
 
@@ -28,10 +27,13 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = sb->u.generic_sbp;
 
-	printk(KERN_DEBUG "fuse_put_super\n");
+	printk(KERN_DEBUG "fuse_put_super[%i]\n", fc->id);
 
+	spin_lock(&fuse_lock);
 	fc->sb = NULL;
 	fuse_release_conn(fc);
+	spin_unlock(&fuse_lock);
+
 }
 
 static struct super_operations fuse_super_operations = {
@@ -76,60 +78,68 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 
 }
 
+static struct inode *get_root_inode(struct super_block *sb)
+{
+	struct inode *root	;
+
+	root = iget(sb, 1);
+	if(root) {
+		root->i_mode = S_IFDIR;
+		root->i_uid = 0;
+		root->i_gid = 0;
+		root->i_nlink = 2;
+		root->i_size = 0;
+		root->i_blksize = 1024;
+		root->i_blocks = 0;
+		root->i_atime = CURRENT_TIME;
+		root->i_mtime = CURRENT_TIME;
+		root->i_ctime = CURRENT_TIME;
+		fuse_dir_init(root);
+	}
+
+	return root;
+}
+
 static struct super_block *fuse_read_super(struct super_block *sb, 
 					   void *data, int silent)
 {	
 	struct fuse_conn *fc;
 	struct inode *root;
 
-	fc = get_conn(data);
-	if(fc == NULL)
-		goto err;
-
-	if(fc->sb != NULL) {
-		printk("fuse_read_super: file already mounted\n");
-		goto err;
-	}
-
-        sb->u.generic_sbp = fc;
         sb->s_blocksize = 1024;
         sb->s_blocksize_bits = 10;
         sb->s_magic = FUSE_SUPER_MAGIC;
         sb->s_op = &fuse_super_operations;
 
-	root = iget(sb, 1);
-	if(!root) {
+	root = get_root_inode(sb);
+	if(root == NULL) {
 		printk("fuse_read_super: failed to get root inode\n");
-		goto err;
+		return NULL;
 	}
 
 	printk(KERN_DEBUG "root inode: %ld/%d\n", root->i_ino, root->i_dev);
 
-	root->i_mode = S_IFDIR;
-	root->i_uid = 0;
-	root->i_gid = 0;
-	root->i_nlink = 2;
-	root->i_size = 0;
-	root->i_blksize = 1024;
-	root->i_blocks = 0;
-	root->i_atime = CURRENT_TIME;
-	root->i_mtime = CURRENT_TIME;
-	root->i_ctime = CURRENT_TIME;
-	fuse_dir_init(root);
+	spin_lock(&fuse_lock);
+	fc = get_conn(data);
+	if(fc == NULL)
+		goto err;
 
-	sb->s_root = d_alloc_root(root);
-	if(!sb->s_root) {
-		printk("fuse_read_super: failed to allocate root dentry\n");
-		goto err_iput;
+	if(fc->sb != NULL) {
+		printk("fuse_read_super: connection %i already mounted\n",
+		       fc->id);
+		goto err;
 	}
 
+        sb->u.generic_sbp = fc;
+	sb->s_root = d_alloc_root(root);
 	fc->sb = sb;
-
+	spin_unlock(&fuse_lock);
+	
 	return sb;
 
-  err_iput:
-	iput(root);
   err:
+	spin_unlock(&fuse_lock);
+	iput(root);
 	return NULL;
 }
 

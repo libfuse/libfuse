@@ -10,69 +10,155 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/smp_lock.h>
 #include <linux/poll.h>
-#include <linux/file.h>
 #include <linux/proc_fs.h>
 
 static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
 
+static struct fuse_req *request_wait(struct fuse_conn *fc)
+{
+	DECLARE_WAITQUEUE(wait, current);
+	struct fuse_req *req;
+
+	spin_lock(&fuse_lock);
+	add_wait_queue(&fc->waitq, &wait);
+	set_current_state(TASK_INTERRUPTIBLE);
+	while(list_empty(&fc->pending)) {
+		if(signal_pending(current))
+			break;
+
+		spin_unlock(&fuse_lock);
+		schedule();
+		spin_lock(&fuse_lock);
+	}
+	set_current_state(TASK_RUNNING);
+	remove_wait_queue(&fc->waitq, &wait);
+
+	if(list_empty(&fc->pending))
+		return NULL;
+
+	req = list_entry(fc->pending.next, struct fuse_req, list);
+	list_del(&req->list);
+	spin_unlock(&fuse_lock);
+
+	return req;
+}
+
+static void request_processing(struct fuse_conn *fc, struct fuse_req *req)
+{
+	spin_lock(&fuse_lock);
+	list_add_tail(&req->list, &fc->processing);
+	fc->outstanding ++;
+	spin_unlock(&fuse_lock);
+}
+
+static void request_free(struct fuse_req *req)
+{
+	kfree(req);
+}
+
 static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			     loff_t *off)
 {
-	printk(KERN_DEBUG "fuse_dev_read\n");
-	return 0;
+	ssize_t res;
+	struct fuse_conn *fc = file->private_data;
+	struct fuse_req *req;
+
+	printk(KERN_DEBUG "fuse_dev_read[%i]\n", fc->id);
+
+	res = -ERESTARTSYS;
+	req = request_wait(fc);
+	if(req == NULL)
+		goto err;
+
+	res = -EIO;
+	if(nbytes < req->size) {
+		printk("fuse_dev_read: buffer too small (%i)\n", req->size);
+		goto err_free_req;
+	}
+	
+	res = -EFAULT;
+	if(copy_to_user(buf, req->data, req->size))
+		goto err_free_req;
+
+	request_processing(fc, req);
+	return req->size;
+
+  err_free_req:
+	request_free(req);
+  err:
+	return res;
 }
 
 static ssize_t fuse_dev_write(struct file *file, const char *buf,
 				size_t nbytes, loff_t *off)
 {
-	printk(KERN_DEBUG "fuse_dev_write <%.*s>\n", (int) nbytes, buf);
+	struct fuse_conn *fc = file->private_data;
+
+	printk(KERN_DEBUG "fuse_dev_write[%i] <%.*s>\n", fc->id, (int) nbytes,
+	       buf);
 	return nbytes;
 }
 
 
 static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 {
-	printk(KERN_DEBUG "fuse_dev_poll\n");
+	struct fuse_conn *fc = file->private_data;
+
+	printk(KERN_DEBUG "fuse_dev_poll[%i]\n", fc->id);
 	return 0;
+}
+
+static struct fuse_conn *new_conn(void)
+{
+	static int connctr = 1;
+	struct fuse_conn *fc;
+
+	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
+	if(fc != NULL) {
+		fc->sb = NULL;
+		fc->file = NULL;
+		init_waitqueue_head(&fc->waitq);
+		INIT_LIST_HEAD(&fc->pending);
+		INIT_LIST_HEAD(&fc->processing);
+		fc->outstanding = 0;
+		
+		spin_lock(&fuse_lock);
+		fc->id = connctr ++;
+		spin_unlock(&fuse_lock);
+	}
+	return fc;
 }
 
 static int fuse_dev_open(struct inode *inode, struct file *file)
 {
-	int res;
 	struct fuse_conn *fc;
 
 	printk(KERN_DEBUG "fuse_dev_open\n");
 
-	res = -ENOMEM;
-	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
+	fc = new_conn();
 	if(!fc)
-		goto out;
-	
-	fc->sb = NULL;
+		return -ENOMEM;
+
 	fc->file = file;
-	
-	lock_kernel();
 	file->private_data = fc;
-	unlock_kernel();
-	res = 0;
-	
-  out:
-	return res;
+
+	printk(KERN_DEBUG "new connection: %i\n", fc->id);
+
+	return 0;
 }
 
 static int fuse_dev_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = file->private_data;
 
-	printk(KERN_DEBUG "fuse_dev_release\n");
+	printk(KERN_DEBUG "fuse_dev_release[%i]\n", fc->id);
 
-	lock_kernel();
+	spin_lock(&fuse_lock);
 	fc->file = NULL;
 	fuse_release_conn(fc);
-	unlock_kernel();
+	spin_unlock(&fuse_lock);
 	return 0;
 }
 

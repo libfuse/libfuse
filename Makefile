@@ -17,10 +17,10 @@ inode.o: inode.c
 dir.o: dir.c
 	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c dir.c
 
-main.o: main.c
-	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c main.c
+util.o: util.c
+	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c util.c
 
-fuse_objs = dev.o inode.o dir.o main.o
+fuse_objs = dev.o inode.o dir.o util.o
 
 fuse.o: $(fuse_objs)
 	ld -r -o fuse.o $(fuse_objs)
