@@ -17,7 +17,7 @@
 
 	* fusermount: fix uid checking bug.  Patch by Adam Connell
 
-	* KERNEL: fix compile on various RedHad patched 2.4 kernels.
+	* KERNEL: fix compile on various RedHat patched 2.4 kernels.
 	Patch by Keshava Gowda
 
 2005-01-20  Miklos Szeredi <miklos@szeredi.hu>
