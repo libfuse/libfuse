@@ -1,3 +1,8 @@
+2005-01-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix bug in link() operation which caused the wrong path to be
+	passed as the first argument.  Found by Anton Altaparmakov
+
 2005-01-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* LIB: fix double reply in readdir operation

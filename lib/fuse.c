@@ -1044,9 +1044,9 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
-    oldpath = get_path(f, in->nodeid);
+    oldpath = get_path(f, arg->oldnodeid);
     if (oldpath != NULL) {
-        newpath =  get_path_name(f, arg->newdir, name);
+        newpath =  get_path_name(f, in->nodeid, name);
         if (newpath != NULL) {
             if (f->flags & FUSE_DEBUG) {
                 printf("LINK %s\n", newpath);
@@ -1056,7 +1056,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
             if (f->op.link && f->op.getattr) {
                 res = f->op.link(oldpath, newpath);
                 if (res == 0)
-                    res = lookup_path(f, arg->newdir, in->unique, name,
+                    res = lookup_path(f, in->nodeid, in->unique, name,
                                       newpath, &outarg);
             }
             free(newpath);

@@ -376,9 +376,9 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 		return -ERESTARTNOINTR;
 
 	memset(&inarg, 0, sizeof(inarg));
-	inarg.newdir = get_node_id(newdir);
+	inarg.oldnodeid = get_node_id(inode);
 	req->in.h.opcode = FUSE_LINK;
-	req->inode2 = newdir;
+	req->inode2 = inode;
 	req->in.numargs = 2;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;

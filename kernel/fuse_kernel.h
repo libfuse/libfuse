@@ -133,7 +133,7 @@ struct fuse_rename_in {
 };
 
 struct fuse_link_in {
-	__u64	newdir;
+	__u64	oldnodeid;
 };
 
 struct fuse_setattr_in {
