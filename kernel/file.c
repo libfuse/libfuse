@@ -350,7 +350,6 @@ static void write_buffer_end(struct fuse_conn *fc, struct fuse_in *in,
 {
 	struct page *page = (struct page *) _page;
 	
-	lock_page(page);
 	if(out->h.error) {
 		SetPageError(page);
 		if(out->h.error == -ENOSPC)
@@ -360,7 +359,6 @@ static void write_buffer_end(struct fuse_conn *fc, struct fuse_in *in,
 	}
 	end_page_writeback(page);
 	kunmap(page);
-	unlock_page(page);
 	kfree(in);	
 }
 
@@ -416,10 +414,11 @@ static int fuse_writepage(struct page *page, struct writeback_control *wbc)
 		/* FIXME: check sync_mode, and wait for previous writes (or
 		   signal userspace to do this) */
 		if(wbc->nonblocking) {
+			SetPageWriteback(page);
 			err = write_buffer_nonblock(inode, page, 0, count);
-			if(!err)
-				SetPageWriteback(page);
-			else if(err == -EWOULDBLOCK) {
+			if (err)
+				ClearPageWriteback(page);
+			if(err == -EWOULDBLOCK) {
 				__set_page_dirty_nobuffers(page);
 				err = 0;
 			}
