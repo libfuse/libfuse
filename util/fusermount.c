@@ -35,6 +35,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/utsname.h>
+#include <sys/sysmacros.h>
 
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
@@ -323,6 +324,18 @@ static void strip_line(char *line)
         memmove(line, s, strlen(s)+1);
 }
 
+static void parse_line(char *line, int linenum)
+{
+    int tmp;
+    if (strcmp(line, "user_allow_other") == 0)
+        user_allow_other = 1;
+    else if (sscanf(line, "mount_max = %i", &tmp) == 1)
+        mount_max = tmp;
+    else if(line[0])
+        fprintf(stderr, "%s: unknown parameter in %s at line %i: '%s'\n",
+                progname, FUSE_CONF, linenum, line);
+}
+
 static void read_conf(void)
 {
     FILE *fp = fopen(FUSE_CONF, "r");
@@ -333,23 +346,15 @@ static void read_conf(void)
         while (fgets(line, sizeof(line), fp) != NULL) {
             if (isnewline) {
                 if (line[strlen(line)-1] == '\n') {
-                    int tmp;
                     strip_line(line);
-                    if (strcmp(line, "user_allow_other") == 0)
-                        user_allow_other = 1;
-                    else if (sscanf(line, "mount_max = %i", &tmp) == 1)
-                        mount_max = tmp;
-                    else if(line[0])
-                        fprintf(stderr, "%s: unknown parameter in %s at line %i: '%s'\n",
-                                progname, FUSE_CONF, linenum, line);
+                    parse_line(line, linenum);
                 } else {
                     fprintf(stderr, "%s: reading %s: line %i too long\n",
                             progname, FUSE_CONF, linenum);
                     isnewline = 0;
                 }
-                
             } else if(line[strlen(line)-1] == '\n')
-                    isnewline = 1;
+                isnewline = 1;
             if (isnewline)
                 linenum ++;
         }
@@ -689,7 +694,7 @@ static int try_open(const char *dev, char **devp, int silent)
 #define FUSE_TMP_DIRNAME "/tmp/.fuse_devXXXXXX"
 #define FUSE_TMP_DEVNAME "/fuse"
 
-static int try_open_new_temp(unsigned devnum, char **devp)
+static int try_open_new_temp(dev_t devnum, char **devp)
 {
     int res;
     int fd;
@@ -721,7 +726,7 @@ static int try_open_fuse_device(char **devp)
         return fd;
     
     if (fd == -1) {
-        fd = try_open_new_temp(FUSE_MAJOR << 8 | FUSE_MINOR, devp);
+        fd = try_open_new_temp(makedev(FUSE_MAJOR, FUSE_MINOR), devp);
         if (fd != -2)
             return fd;
     }
