@@ -27,15 +27,12 @@ more information.
 
 BUGS
 
-Currently theres a huge problem with atomicity - putting an md5sum or something
-in a while loop, and cd'ing into the mountpoint from a different directory
-causes some interesting failures.  For normal perl, every call should grab a
-global lock.  For thread-perl, I'm gonna have to do some research to figure out
-the best solution.
+A lot of it works, but I have to do some formal testing on all of it
+still.
 
-Quite a few things aren't tested.
+Building a Linux kernel actually succeeds.  I haven't tried booting it.
 
-The tested (and seemingly working) stuff includes:
+The functions, all of which need to be thoroughally tested:
 getattr
 readlink
 getdir
@@ -46,8 +43,6 @@ rmdir
 open
 read
 statfs
-
-which leaves:
 symlink
 rename
 link
@@ -57,3 +52,7 @@ truncate
 utime
 write
 
+While most things work, I do still have a TODO list:
+* while "ln -s" works as expected, "cp -a" kicks out an error on symlinks.
+* "du -sb" reports a couple orders of magnitude too large a size.
+* need a full Test::Harness framework
