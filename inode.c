@@ -6,7 +6,6 @@
     See the file COPYING.
 */
 
-#include "fuse.h"
 #include "fuse_i.h"
 
 #include <linux/module.h>

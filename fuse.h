@@ -1,4 +1,3 @@
-/* -*- indent-tabs-mode: t; c-basic-offset: 8; -*- */
 /*
     FUSE: Filesystem in Userspace
     Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
@@ -15,3 +14,43 @@ struct fuse_mount_data {
 	int fd;
 };
 
+enum fuse_opcode {
+	FUSE_OPEN,
+	FUSE_RELEASE,
+};
+
+struct fuse_inparam {
+	enum fuse_opcode opcode;
+	union {
+		struct {
+			unsigned int ino;
+			int flags;
+		} open;
+	} u;
+};
+
+struct fuse_outparam {
+	int result;
+	union {
+		struct {
+			int fd;
+		} open;
+	} u;
+};
+
+struct fuse_param {
+	int unique;
+	int result;
+	union {
+		struct fuse_inparam i;
+		struct fuse_outparam o;
+	} u;
+};
+
+
+/* 
+ * Local Variables:
+ * indent-tabs-mode: t
+ * c-basic-offset: 8
+ * End:
+ */

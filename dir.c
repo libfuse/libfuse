@@ -43,9 +43,21 @@ static int fuse_readdir(struct file *file, void *dirent, filldir_t filldir)
 
 static int fuse_open(struct inode *inode, struct file *file)
 {
+	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	struct fuse_inparam in;
+	struct fuse_outparam out;
+	
 	printk(KERN_DEBUG "fuse_open: %li\n", inode->i_ino);
 
-	return 0;
+	in.opcode = FUSE_OPEN;
+	in.u.open.ino = inode->i_ino;
+	in.u.open.flags = file->f_flags & ~O_EXCL;
+
+	request_send(fc, &in, &out, 0);
+
+	printk(KERN_DEBUG "  fuse_open: <%i> %i\n", out.result, out.u.open.fd);
+
+	return out.result;
 }
 
 static int fuse_release(struct inode *inode, struct file *file)

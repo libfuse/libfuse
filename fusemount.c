@@ -17,8 +17,30 @@
 #include <sys/mount.h>
 #include <mntent.h>
 
+static void loop(int devfd)
+{
+    int res;
+    struct fuse_param param;
+    
+    while(1) {
+        res = read(devfd, &param, sizeof(param));
+        if(res == -1) {
+            perror("read");
+            exit(1);
+        }
+        
+        printf("unique: %i, opcode: %i\n", param.unique, param.u.i.opcode);
+        param.u.o.result = 0;
+        
+        res = write(devfd, &param, sizeof(param));
+        if(res == -1) {
+            perror("write");
+            exit(1);
+        }
+    }
+}
 
-int mount_fuse(const char *dev, const char *dir, int devfd)
+static int mount_fuse(const char *dev, const char *dir, int devfd)
 {
     int res;
     const char *type;
@@ -81,7 +103,7 @@ int main(int argc, char *argv[])
 
     mount_fuse(dev, dir, devfd);
 
-    sleep(1000);
-
+    loop(devfd);
+    
     return 0;
 }

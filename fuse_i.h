@@ -6,6 +6,8 @@
     See the file COPYING.
 */
 
+#include "fuse.h"
+
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -40,20 +42,29 @@ struct fuse_conn {
 
 	/** Connnection number (for debuging) */
 	int id;
+
+	/** The request id */
+	int reqctr;
 };
 
 /**
- * A filesystem request
+ * A request to the client
  */
 struct fuse_req {
 	/** The request list */
 	struct list_head list;
 
-	/** The size of the data */
+	/** The size of the parameters */
 	size_t size;
 
-	/** A pointer to the data */
-	void *data;
+	/** The request parameters */
+	struct fuse_param param;
+
+	/** The request wait queue */
+	wait_queue_head_t waitq;
+
+	/** True if the request is finished */
+	int done;
 };
 
 /**
@@ -96,6 +107,14 @@ int fuse_fs_init(void);
  * Cleanup the fuse filesystem
  */
 void fuse_fs_cleanup(void);
+
+/**
+ * Send a request
+ *
+ * @valuret: if true then the request can return a positive value
+ */
+void request_send(struct fuse_conn *fc, struct fuse_inparam *in,
+		  struct fuse_outparam *out, int valuret);
 
 /*
  * Local Variables:

@@ -16,18 +16,79 @@
 static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
 
-static struct fuse_req *request_wait(struct fuse_conn *fc)
+static int request_wait_answer(struct fuse_req *req)
 {
+	int ret = 0;
 	DECLARE_WAITQUEUE(wait, current);
+
+	add_wait_queue(&req->waitq, &wait);
+	while(!req->done) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		if(signal_pending(current)) {
+			ret = -EINTR;
+			break;
+		}
+		spin_unlock(&fuse_lock);
+		schedule();
+		spin_lock(&fuse_lock);
+	}
+	set_current_state(TASK_RUNNING);
+	remove_wait_queue(&req->waitq, &wait);
+
+	return ret;
+}
+
+void request_send(struct fuse_conn *fc, struct fuse_inparam *in,
+		  struct fuse_outparam *out, int valuret)
+{
+	int ret;
 	struct fuse_req *req;
 
+	req = kmalloc(sizeof(*req), GFP_KERNEL);
+	if(req == NULL) {
+		out->result = -ENOMEM;
+		return;
+	}
+	
+	req->param.u.i = *in;
+	req->size = sizeof(req->param);
+	req->done = 0;
+	init_waitqueue_head(&req->waitq);
+	
 	spin_lock(&fuse_lock);
-	add_wait_queue(&fc->waitq, &wait);
-	set_current_state(TASK_INTERRUPTIBLE);
-	while(list_empty(&fc->pending)) {
-		if(signal_pending(current))
-			break;
+	req->param.unique = fc->reqctr ++;
+	list_add_tail(&req->list, &fc->pending);
+	fc->outstanding ++;
+	/* FIXME: Wait until the number of outstanding requests drops
+           below a certain level */
+	wake_up(&fc->waitq);
+	ret = request_wait_answer(req);
+	fc->outstanding --;
+	*out = req->param.u.o;
+	list_del(&req->list);
+	kfree(req);
+	spin_unlock(&fuse_lock);
 
+	if(ret)
+		out->result = ret;
+	else if (out->result < -512 || (out->result > 0 && !valuret)) {
+		printk("Bad result from client: %i\n", out->result);
+		out->result = -EIO;
+	}
+}
+
+static int request_wait(struct fuse_conn *fc)
+{
+	int ret = 0;
+	DECLARE_WAITQUEUE(wait, current);
+
+	add_wait_queue(&fc->waitq, &wait);
+	while(list_empty(&fc->pending)) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		if(signal_pending(current)) {
+			ret = -ERESTARTSYS;
+			break;
+		}
 		spin_unlock(&fuse_lock);
 		schedule();
 		spin_lock(&fuse_lock);
@@ -35,69 +96,96 @@ static struct fuse_req *request_wait(struct fuse_conn *fc)
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(&fc->waitq, &wait);
 
-	if(list_empty(&fc->pending))
-		return NULL;
-
-	req = list_entry(fc->pending.next, struct fuse_req, list);
-	list_del(&req->list);
-	spin_unlock(&fuse_lock);
-
-	return req;
-}
-
-static void request_processing(struct fuse_conn *fc, struct fuse_req *req)
-{
-	spin_lock(&fuse_lock);
-	list_add_tail(&req->list, &fc->processing);
-	fc->outstanding ++;
-	spin_unlock(&fuse_lock);
-}
-
-static void request_free(struct fuse_req *req)
-{
-	kfree(req);
+	return ret;
 }
 
 static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			     loff_t *off)
 {
-	ssize_t res;
+	ssize_t ret;
 	struct fuse_conn *fc = file->private_data;
 	struct fuse_req *req;
+	struct fuse_param param;
+	size_t size;
 
+	spin_lock(&fuse_lock);
+	ret = request_wait(fc);
+	if(ret)
+		goto err;
+	
 	printk(KERN_DEBUG "fuse_dev_read[%i]\n", fc->id);
 
-	res = -ERESTARTSYS;
-	req = request_wait(fc);
-	if(req == NULL)
-		goto err;
+	req = list_entry(fc->pending.next, struct fuse_req, list);
+	param = req->param;
+	size = req->size;
 
-	res = -EIO;
-	if(nbytes < req->size) {
-		printk("fuse_dev_read: buffer too small (%i)\n", req->size);
-		goto err_free_req;
+	ret = -EIO;
+	if(nbytes < size) {
+		printk("fuse_dev_read: buffer too small (%i)\n", size);
+		goto err;
 	}
 	
-	res = -EFAULT;
-	if(copy_to_user(buf, req->data, req->size))
-		goto err_free_req;
+	list_del(&req->list);
+	list_add_tail(&req->list, &fc->processing);
+	spin_unlock(&fuse_lock);
 
-	request_processing(fc, req);
-	return req->size;
+	if(copy_to_user(buf, &param, size))
+		return -EFAULT;
+	
+	return size;
 
-  err_free_req:
-	request_free(req);
   err:
-	return res;
+	spin_unlock(&fuse_lock);
+	return ret;
+}
+
+static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
+{
+	struct list_head *entry;
+	struct fuse_req *req = NULL;
+
+	list_for_each(entry, &fc->processing) {
+		struct fuse_req *tmp;
+		tmp = list_entry(entry, struct fuse_req, list);
+		if(tmp->param.unique == unique) {
+			req = tmp;
+			list_del_init(&req->list);
+			break;
+		}
+	}
+
+	return req;
 }
 
 static ssize_t fuse_dev_write(struct file *file, const char *buf,
-				size_t nbytes, loff_t *off)
+			      size_t nbytes, loff_t *off)
 {
 	struct fuse_conn *fc = file->private_data;
+	struct fuse_param param;
+	struct fuse_req *req;
 
-	printk(KERN_DEBUG "fuse_dev_write[%i] <%.*s>\n", fc->id, (int) nbytes,
-	       buf);
+	printk(KERN_DEBUG "fuse_dev_write[%i]\n", fc->id);
+
+	if(nbytes < sizeof(param.unique) || nbytes > sizeof(param)) {
+		printk("fuse_dev_write: write is short or long\n");
+		return -EIO;
+	}
+
+	if(copy_from_user(&param, buf, nbytes))
+		return -EFAULT;
+
+	spin_lock(&fuse_lock);
+	req = request_find(fc, param.unique);
+	if(req == NULL)
+		printk("fuse_dev_write[%i]: unknown request: %i", fc->id,
+		       param.unique);
+	else {
+		req->param = param;
+		req->done = 1;
+		wake_up(&req->waitq);
+	}
+	spin_unlock(&fuse_lock);
+
 	return nbytes;
 }
 
@@ -105,9 +193,16 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 {
 	struct fuse_conn *fc = file->private_data;
+	unsigned int mask = POLLOUT | POLLWRNORM;
 
-	printk(KERN_DEBUG "fuse_dev_poll[%i]\n", fc->id);
-	return 0;
+	poll_wait(file, &fc->waitq, wait);
+
+	spin_lock(&fuse_lock);
+	if (!list_empty(&fc->pending))
+                mask |= POLLIN | POLLRDNORM;
+	spin_unlock(&fuse_lock);
+
+	return mask;
 }
 
 static struct fuse_conn *new_conn(void)
@@ -123,6 +218,7 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
 		fc->outstanding = 0;
+		fc->reqctr = 0;
 		
 		spin_lock(&fuse_lock);
 		fc->id = connctr ++;
@@ -173,12 +269,12 @@ static struct file_operations fuse_dev_operations = {
 
 int fuse_dev_init()
 {
-	int res;
+	int ret;
 
 	proc_fs_fuse = NULL;
 	proc_fuse_dev = NULL;
 
-	res = -EIO;
+	ret = -EIO;
 	proc_fs_fuse = proc_mkdir("fuse", proc_root_fs);
 	if(!proc_fs_fuse) {
 		printk("fuse: failed to create directory in /proc/fs\n");
@@ -199,8 +295,7 @@ int fuse_dev_init()
 
   err:
 	fuse_dev_cleanup();
-	return res;
-
+	return ret;
 }
 
 void fuse_dev_cleanup()
