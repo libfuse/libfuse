@@ -65,7 +65,7 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 	inode->u.generic_ip = NULL;
 #endif
 
-	fi = INO_FI(inode);
+	fi = get_fuse_inode(inode);
 	memset(fi, 0, sizeof(*fi));
 	fi->forget_req = fuse_request_alloc();
 	if (!fi->forget_req) {
@@ -80,7 +80,7 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 
 static void fuse_destroy_inode(struct inode *inode)
 {
-	struct fuse_inode *fi = INO_FI(inode);
+	struct fuse_inode *fi = get_fuse_inode(inode);
 	BUG_ON(!list_empty(&fi->write_files));
 	if (fi->forget_req)
 		fuse_request_free(fi->forget_req);
@@ -107,10 +107,9 @@ void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
 
 static void fuse_clear_inode(struct inode *inode)
 {
-	struct fuse_conn *fc = INO_FC(inode);
-	
+	struct fuse_conn *fc = get_fuse_conn(inode);
 	if (fc) {
-		struct fuse_inode *fi = INO_FI(inode);
+		struct fuse_inode *fi = get_fuse_inode(inode);
 		fuse_send_forget(fc, fi->forget_req, fi->nodeid, inode->i_version);
 		fi->forget_req = NULL;
 	}
@@ -118,7 +117,7 @@ static void fuse_clear_inode(struct inode *inode)
 
 static void fuse_put_super(struct super_block *sb)
 {
-	struct fuse_conn *fc = SB_FC(sb);
+	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
 	down(&fc->sb_sem);
 	spin_lock(&fuse_lock);
@@ -129,7 +128,7 @@ static void fuse_put_super(struct super_block *sb)
 	/* Flush all readers on this fs */
 	wake_up_all(&fc->waitq);
 	fuse_release_conn(fc);
-	SB_FC(sb) = NULL;
+	*get_fuse_conn_super_p(sb) = NULL;
 	spin_unlock(&fuse_lock);
 }
 
@@ -148,7 +147,7 @@ static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr
 
 static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 {
-	struct fuse_conn *fc = SB_FC(sb);
+	struct fuse_conn *fc = get_fuse_conn_super(sb);
 	struct fuse_req *req;
 	struct fuse_statfs_out outarg;
 	int err;
@@ -289,7 +288,7 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 
 static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 {
-	struct fuse_conn *fc = SB_FC(mnt->mnt_sb);
+	struct fuse_conn *fc = get_fuse_conn_super(mnt->mnt_sb);
 
 	seq_printf(m, ",uid=%u", fc->uid);
 	if (fc->flags & FUSE_DEFAULT_PERMISSIONS)
@@ -431,7 +430,6 @@ static int fuse_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len,
 			  int connectable)
 {
 	struct inode *inode = dentry->d_inode;
-	struct fuse_inode *fi = INO_FI(inode);
 	int len = *max_len;
 	int type = 1;
 	
@@ -439,16 +437,14 @@ static int fuse_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len,
 		return 255;
 
 	len = 2;
-	fh[0] = fi->nodeid;
+	fh[0] = get_fuse_inode(inode)->nodeid;
 	fh[1] = inode->i_generation;
 	if (connectable && !S_ISDIR(inode->i_mode)) {
 		struct inode *parent;
-		struct fuse_inode *parent_fi;
 
 		spin_lock(&dentry->d_lock);
 		parent = dentry->d_parent->d_inode;
-		parent_fi = INO_FI(parent);
-		fh[2] = parent_fi->nodeid;
+		fh[2] = get_fuse_inode(parent)->nodeid;
 		fh[3] = parent->i_generation;
 		spin_unlock(&dentry->d_lock);
 		len = 4;
@@ -517,7 +513,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 #endif
 	fc->max_write = FUSE_MAX_IN / 2;
 	
-	SB_FC(sb) = fc;
+	*get_fuse_conn_super_p(sb) = fc;
 
 	root = get_root_inode(sb, d.rootmode);
 	if (root == NULL) {
@@ -540,7 +536,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	up(&fc->sb_sem);
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
-	SB_FC(sb) = NULL;
+	*get_fuse_conn_super_p(sb) = NULL;
 	return -EINVAL;
 }
 

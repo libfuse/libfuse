@@ -69,15 +69,13 @@
     doing the mount will be allowed to access the filesystem */
 #define FUSE_ALLOW_OTHER         (1 << 1)
 
-/** If the FUSE_KERNEL_CACHE flag is given, then files will be cached
-    until the INVALIDATE operation is invoked */
+/** If the FUSE_KERNEL_CACHE flag is given, then cached data will not
+    be flushed on open */
 #define FUSE_KERNEL_CACHE        (1 << 2)
 
 #ifndef KERNEL_2_6
 /** Allow FUSE to combine reads into 64k chunks.  This is useful if
-    the filesystem is better at handling large chunks.  NOTE: in
-    current implementation the raw throughput is worse for large reads
-    than for small. */
+    the filesystem is better at handling large chunks */
 #define FUSE_LARGE_READ          (1 << 31)
 #endif
 /** Bypass the page cache for read and write operations  */
@@ -89,12 +87,22 @@
 
 /** FUSE specific inode data */
 struct fuse_inode {
+	/** Unique ID, which identifies the inode between userspace
+	 * and kernel */
 	unsigned long nodeid;
+
+	/** The request used for sending the FORGET message */
 	struct fuse_req *forget_req;
+
+	/** Semaphore protects the 'write_files' list, and against
+	    truncate racing with async writeouts */
 	struct rw_semaphore write_sem;
+
+	/** Time in jiffies until the file attributes are valid */
 	unsigned long i_time;
-	/* Files which can provide file handles in writepage.
-	   Protected by write_sem  */
+
+	/* List of fuse_files which can provide file handles in
+	 * writepage, protected by write_sem */
 	struct list_head write_files;
 };
 
@@ -113,8 +121,16 @@ struct fuse_in_arg {
 
 /** The request input */
 struct fuse_in {
+	/** The request header */
 	struct fuse_in_header h;
+	
+	/** True if the data for the last argument is in req->pages */
+	unsigned argpages:1;
+
+	/** Number of arguments */
 	unsigned numargs;
+
+	/** Array of arguments */
 	struct fuse_in_arg args[3];
 };
 
@@ -265,13 +281,34 @@ struct fuse_getdir_out_i {
 	void *file; /* Used by kernel only */
 };
 
+static inline struct fuse_conn **get_fuse_conn_super_p(struct super_block *sb)
+{
 #ifdef KERNEL_2_6
-#define SB_FC(sb) ((sb)->s_fs_info)
+	return (struct fuse_conn **) &sb->s_fs_info;
 #else
-#define SB_FC(sb) ((sb)->u.generic_sbp)
+	return (struct fuse_conn **) &sb->u.generic_sbp;
 #endif
-#define INO_FC(inode) SB_FC((inode)->i_sb)
-#define INO_FI(i) ((struct fuse_inode *) (((struct inode *)(i))+1))
+}
+
+static inline struct fuse_conn *get_fuse_conn_super(struct super_block *sb)
+{
+	return *get_fuse_conn_super_p(sb);
+}
+
+static inline struct fuse_conn *get_fuse_conn(struct inode *inode)
+{
+	return get_fuse_conn_super(inode->i_sb);
+}
+
+static inline struct fuse_inode *get_fuse_inode(struct inode *inode)
+{
+	return (struct fuse_inode *) (&inode[1]);
+}
+
+static inline unsigned long get_node_id(struct inode *inode)
+{
+	return get_fuse_inode(inode)->nodeid;
+}
 
 /** Device operations */
 extern struct file_operations fuse_dev_operations;

@@ -205,39 +205,74 @@ static void request_wait(struct fuse_conn *fc)
 	remove_wait_queue(&fc->waitq, &wait);
 }
 
-static inline int copy_in_one(const void *src, size_t srclen,
-			      char __user **dstp, size_t *dstlenp)
+static inline int copy_in_page(char __user *buf, struct page *page,
+			       unsigned offset, unsigned count)
 {
-	if (*dstlenp < srclen) {
-		printk("fuse_dev_read: buffer too small\n");
-		return -EINVAL;
+	char *tmpbuf = kmap(page);
+	int err = copy_to_user(buf, tmpbuf + offset, count);
+	kunmap(page);
+	return err;
+}
+
+static int copy_in_pages(struct fuse_req *req, size_t nbytes, char __user *buf)
+{
+	unsigned i;
+	unsigned offset = req->page_offset;
+	unsigned count = min(nbytes, (unsigned) PAGE_SIZE - offset);
+	for (i = 0; i < req->num_pages && nbytes; i++) {
+		struct page *page = req->pages[i];
+		if (page && copy_in_page(buf, page, offset, count))
+			return -EFAULT;
+		nbytes -= count;
+		buf += count;
+		count = min(nbytes, (unsigned) PAGE_SIZE);
+		offset = 0;
 	}
-			
-	if (srclen && copy_to_user(*dstp, src, srclen))
-		return -EFAULT;
-
-	*dstp += srclen;
-	*dstlenp -= srclen;
-
 	return 0;
 }
 
-static inline int copy_in_args(struct fuse_in *in, char __user *buf,
-			       size_t nbytes)
+static inline int copy_in_one(struct fuse_req *req, size_t argsize,
+			      const void *val, int islast, char __user *buf,
+			      size_t nbytes)
 {
-	int err;
+	if (nbytes < argsize) {
+		printk("fuse_dev_read: buffer too small\n");
+		return -EINVAL;
+	}
+	if (islast && req->in.argpages) 
+		return copy_in_pages(req, argsize, buf);
+	else if (argsize && copy_to_user(buf, val, argsize))
+		return -EFAULT;
+	else
+		return 0;
+}
+
+static int copy_in_args(struct fuse_req *req, char __user *buf, size_t nbytes)
+{
 	int i;
+	int err;
+	struct fuse_in *in = &req->in;
 	size_t orignbytes = nbytes;
-		
-	err = copy_in_one(&in->h, sizeof(in->h), &buf, &nbytes);
+	unsigned argsize;
+	
+	argsize = sizeof(in->h);
+	err = copy_in_one(req, argsize, &in->h, 0, buf, nbytes);
 	if (err)
 		return err;
 
+	buf += argsize;
+	nbytes -= argsize;
+
 	for (i = 0; i < in->numargs; i++) {
 		struct fuse_in_arg *arg = &in->args[i];
-		err = copy_in_one(arg->value, arg->size, &buf, &nbytes);
+		int islast = (i == in->numargs - 1);
+		err = copy_in_one(req, arg->size, arg->value, islast, buf, 
+				  nbytes);
 		if (err)
 			return err;
+
+		buf += arg->size;
+		nbytes -= arg->size;
 	}
 
 	return orignbytes - nbytes;
@@ -269,7 +304,7 @@ static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 	if (req == NULL)
 		return -EINTR;
 
-	ret = copy_in_args(&req->in, buf, nbytes);
+	ret = copy_in_args(req, buf, nbytes);
 	spin_lock(&fuse_lock);
 	if (req->isreply) {
 		if (ret < 0) {
@@ -312,91 +347,78 @@ static void process_getdir(struct fuse_req *req)
 	arg->file = fget(arg->fd);
 }
 
-static int copy_out_pages(struct fuse_req *req, const char __user *buf,
-			  size_t nbytes)
+static inline int copy_out_page(const char __user *buf, struct page *page,
+				unsigned offset, unsigned count, int zeroing)
 {
-	unsigned count;
-	unsigned page_offset;
-	unsigned zeroing = req->out.page_zeroing;
+	int err = 0;
+	char *tmpbuf = kmap(page);
+	if (count < PAGE_SIZE && zeroing)
+		memset(tmpbuf, 0, PAGE_SIZE);
+	if (count)
+		err = copy_from_user(tmpbuf + offset, buf, count);
+	flush_dcache_page(page);
+	kunmap(page);
+	return err;
+}
+
+static int copy_out_pages(struct fuse_req *req, size_t nbytes,
+			  const char __user *buf)
+{
 	unsigned i;
-	
-	req->out.args[0].size = nbytes;
-	page_offset = req->page_offset;
-	count = min(nbytes, (unsigned) PAGE_CACHE_SIZE - page_offset);
+	unsigned offset = req->page_offset;
+	unsigned zeroing = req->out.page_zeroing;
+	unsigned count = min(nbytes, (unsigned) PAGE_SIZE - offset);
+
 	for (i = 0; i < req->num_pages && (zeroing || nbytes); i++) {
 		struct page *page = req->pages[i];
-		char *tmpbuf = kmap(page);
-		int err = 0;
-		if (count < PAGE_CACHE_SIZE && zeroing)
-			memset(tmpbuf, 0, PAGE_CACHE_SIZE);
-		if (count)
-			err = copy_from_user(tmpbuf + page_offset, buf, count);
-		flush_dcache_page(page);
-		kunmap(page);
-		if (err)
-			return -EFAULT;
+		if (page && copy_out_page(buf, page, offset, count, zeroing))
+		    return -EFAULT;
 		nbytes -= count;
 		buf += count;
-		count = min(nbytes, (unsigned) PAGE_CACHE_SIZE);
-		page_offset = 0;
+		count = min(nbytes, (unsigned) PAGE_SIZE);
+		offset = 0;
 	}
 	return 0;
 }
 
-static inline int copy_out_one(struct fuse_out_arg *arg,
-			       const char __user **srcp,
-			       size_t *srclenp, int allowvar)
+static inline int copy_out_one(struct fuse_req *req, struct fuse_out_arg *arg,
+			       int islast, const char __user *buf, size_t nbytes)
 {
-	size_t dstlen = arg->size;
-	if (*srclenp < dstlen) {
-		if (!allowvar) {
+	if (nbytes < arg->size) {
+		if (!islast || !req->out.argvar) {
 			printk("fuse_dev_write: write is short\n");
 			return -EINVAL;
 		}
-		dstlen = *srclenp;
+		arg->size = nbytes;
 	}
-
-	if (dstlen && copy_from_user(arg->value, *srcp, dstlen))
+	if (islast && req->out.argpages)
+		return copy_out_pages(req, arg->size, buf);
+	else if (arg->size && copy_from_user(arg->value, buf, arg->size))
 		return -EFAULT;
-
-	*srcp += dstlen;
-	*srclenp -= dstlen;
-	arg->size = dstlen;
-
-	return 0;
+	else
+		return 0;
 }
 
-static inline int copy_out_args(struct fuse_req *req, const char __user *buf,
-				size_t nbytes)
+static int copy_out_args(struct fuse_req *req, const char __user *buf,
+			 size_t nbytes)
 {
 	struct fuse_out *out = &req->out;
-	int err;
 	int i;
 
 	buf += sizeof(struct fuse_out_header);
 	nbytes -= sizeof(struct fuse_out_header);
 		
 	if (!out->h.error) {
-		if (out->argpages) {
-			if (nbytes <= out->args[0].size)
-				return copy_out_pages(req, buf, nbytes);
-		} else {
-			for (i = 0; i < out->numargs; i++) {
-				struct fuse_out_arg *arg = &out->args[i];
-				int allowvar;
-				
-				if (out->argvar && i == out->numargs - 1)
-					allowvar = 1;
-				else
-					allowvar = 0;
-				
-				err = copy_out_one(arg, &buf, &nbytes, allowvar);
-				if (err)
-					return err;
-			}
+		for (i = 0; i < out->numargs; i++) {
+			struct fuse_out_arg *arg = &out->args[i];
+			int islast = (i == out->numargs - 1);
+			int err = copy_out_one(req, arg, islast, buf, nbytes);
+			if (err)
+				return err;
+			buf += arg->size;
+			nbytes -= arg->size;
 		}
 	}
-
 	if (nbytes != 0) {
 		printk("fuse_dev_write: write is long\n");
 		return -EINVAL;
@@ -412,7 +434,6 @@ static inline int copy_out_header(struct fuse_out_header *oh,
 		printk("fuse_dev_write: write is short\n");
 		return -EINVAL;
 	}
-	
 	if (copy_from_user(oh, buf, sizeof(struct fuse_out_header)))
 		return -EFAULT;
 
@@ -591,7 +612,7 @@ struct file_operations fuse_dev_operations = {
 };
 
 #ifdef KERNEL_2_6
-#ifndef FUSE_MAINLINE
+#ifndef HAVE_FS_SUBSYS
 static decl_subsys(fs, NULL, NULL);
 #endif
 static decl_subsys(fuse, NULL, NULL);
@@ -607,7 +628,7 @@ static int __init fuse_version_init(void)
 {
 	int err;
 
-#ifndef FUSE_MAINLINE
+#ifndef HAVE_FS_SUBSYS
 	subsystem_register(&fs_subsys);
 #endif
 	kset_set_kset_s(&fuse_subsys, fs_subsys);
@@ -617,7 +638,7 @@ static int __init fuse_version_init(void)
 	err = subsys_create_file(&fuse_subsys, &fuse_attr_version);
 	if (err) {
 		subsystem_unregister(&fuse_subsys);
-#ifndef FUSE_MAINLINE
+#ifndef HAVE_FS_SUBSYS
 		subsystem_unregister(&fs_subsys);
 #endif
 		return err;
@@ -629,7 +650,7 @@ static void fuse_version_clean(void)
 {
 	subsys_remove_file(&fuse_subsys, &fuse_attr_version);
 	subsystem_unregister(&fuse_subsys);
-#ifndef FUSE_MAINLINE
+#ifndef HAVE_FS_SUBSYS
 	subsystem_unregister(&fs_subsys);
 #endif	
 }

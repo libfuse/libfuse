@@ -1,3 +1,9 @@
+2004-12-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: clean up writing functions
+
+	* kernel: no allocation on write in direct_io mode
+
 2004-11-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: clean up reading functions
