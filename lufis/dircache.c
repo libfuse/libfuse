@@ -305,7 +305,11 @@ int lu_cache_readdir(struct dir_cache *cache, char *dir,
     
     list_for_each(p, &d->d_entries){
         de = list_entry(p, struct direntry, e_list);
+#if FUSE_MAJOR_VERSION < 2 || (FUSE_MAJOR_VERSION == 2 && FUSE_MINOR_VERSION < 1)
         filler(h, de->e_name, 0);
+#else
+        filler(h, de->e_name, 0, 0);
+#endif
     }
 
     d->d_stamp = time(NULL);

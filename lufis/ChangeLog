@@ -1,3 +1,7 @@
+2004-10-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix compilation with post 1.9 FUSE
+
 2004-03-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make it possible to mount captivefs filesystem
