@@ -233,12 +233,18 @@ static int xmp_write(const char *path, const char *buf, size_t size,
     return res;
 }
 
-static int xmp_statfs(struct statfs *fst)
+static int xmp_statfs(struct fuse_statfs *fst)
 {
     struct statfs st;
     int rv = statfs("/",&st);
-    if(!rv)
-	memcpy(fst,&st,sizeof(st));
+    if(!rv) {
+    	fst->block_size  = st.f_bsize;
+    	fst->blocks      = st.f_blocks;
+    	fst->blocks_free = st.f_bavail;
+    	fst->files       = st.f_files;
+    	fst->files_free  = st.f_ffree;
+    	fst->namelen     = st.f_namelen;
+    }
     return rv;
 }
 

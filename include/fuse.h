@@ -13,9 +13,9 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/statfs.h>
 #include <utime.h>
 
+#include "fusestat.h"
 /* ----------------------------------------------------------- *
  * Basic FUSE API                                              *
  * ----------------------------------------------------------- */
@@ -82,7 +82,7 @@ struct fuse_operations {
     int (*open)     (const char *, int);
     int (*read)     (const char *, char *, size_t, off_t);
     int (*write)    (const char *, const char *, size_t, off_t);
-    int (*statfs)   (struct statfs *);
+    int (*statfs)   (struct fuse_statfs *);
 };
 
 /** Extra context that may be needed by some filesystems */

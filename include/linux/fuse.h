@@ -8,6 +8,7 @@
 
 /* This file defines the kernel interface of FUSE */
 
+#include "fusestat.h"
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 2
 
@@ -156,15 +157,6 @@ struct fuse_write_in {
 	unsigned int size;
 	char buf[0];
 };
-
-typedef struct fuse_statfs {
-	long block_size;
-	long blocks;
-	long blocks_free;
-	long files;
-	long files_free;
-	long namelen;
-} fuse_statfs_t;
 
 struct fuse_statfs_out {
 	struct fuse_statfs st;

@@ -14,8 +14,9 @@ sub fixup { return "/tmp/test" . shift }
 
 sub x_getattr {
 	my ($file) = fixup(shift);
-	return -ENOENT() unless -e $file;
-	return (lstat($file));
+	my (@list) = lstat($file);
+	return -$! unless @list;
+	return @list;
 }
 
 sub x_getdir {
@@ -53,7 +54,7 @@ sub x_read {
 
 sub x_write {
 	my ($file,$buf,$off) = @_;
-	debug("write",@_);
+	debug("write",$file,length($buf),$off);
 	my ($rv);
 	return -ENOENT() unless -e ($file = fixup($file));
 	return -ENOSYS() unless sysopen(FILE,$file,O_RDWR()|O_APPEND()|O_CREAT());
@@ -67,16 +68,36 @@ sub x_write {
 sub err { return (-shift || -$!) }
 
 sub x_readlink { return readlink(fixup(shift)                 ); }
-sub x_unlink   { return unlink(fixup(shift)) ? 0 : -$!;          }
-sub x_rmdir    { return err(rmdir(fixup(shift))               ); }
-sub x_symlink  { return err(symlink(fixup(shift),fixup(shift))); }
-sub x_rename   { return err(rename(fixup(shift),fixup(shift)) ); }
-sub x_link     { return err(link(fixup(shift),fixup(shift))   ); }
-sub x_chmod    { return err(chmod(fixup(shift),shift)         ); }
-sub x_chown    { return err(chown(fixup(shift),shift,shift)   ); }
-sub x_chmod    { return err(chmod(fixup(shift),shift)         ); }
+sub x_unlink { return unlink(fixup(shift)) ? 0 : -$!;          }
+sub x_rmdir { return err(rmdir(fixup(shift))               ); }
+sub x_symlink { return err(symlink(fixup(shift),fixup(shift))); }
+sub x_rename {
+	debug("rename",@_);
+	my ($old) = fixup(shift);
+	my ($new) = fixup(shift);
+	my ($err) = rename($old,$new) ? 0 : -ENOENT();
+	debug("old=$old,new=$new,err=$err");
+	return $err;
+}
+sub x_link { return err(link(fixup(shift),fixup(shift))   ); }
+sub x_chown {
+	debug("chown",@_);
+	my ($fn) = fixup(shift);
+	my ($uid,$gid) = @_;
+	my ($err) = chown($uid,$gid,$fn) ? 0 : -$!;
+	debug("fn=$fn,uid=$uid,gid=$gid,err=$err");
+	return $err;
+}
+sub x_chmod {
+	debug("chmod",@_);
+	my ($fn) = fixup(shift);
+	my ($mode) = shift;
+	my ($err) = chmod($mode,$fn) ? 0 : -$!;
+	debug("fn=$fn,mode=$mode,err=$err");
+	return $err;
+}
 sub x_truncate { return truncate(fixup(shift),shift) ? 0 : -$! ; }
-sub x_utime    { return utime($_[1],$_[2],fixup($_[0])) ? 0:-$!; }
+sub x_utime { return utime($_[1],$_[2],fixup($_[0])) ? 0:-$!; }
 
 sub x_mkdir { my ($name, $perm) = @_; return 0 if mkdir(fixup($name),$perm); return -$!; }
 sub x_rmdir { return 0 if rmdir fixup(shift); return -$!; }
@@ -102,11 +123,12 @@ sub x_mknod {
 	}
 }
 
+# kludge
+sub x_statfs {return 255,1000000,500000,1000000,500000,4096}
 my ($mountpoint) = "";
 $mountpoint = shift(@ARGV) if @ARGV;
 Fuse::main(
 	unthreaded=>1,
-	debug=>1,
 	mountpoint=>$mountpoint,
 	getattr=>\&x_getattr,
 	readlink=>\&x_readlink,
@@ -124,5 +146,6 @@ Fuse::main(
 	utime=>\&x_utime,
 	open=>\&x_open,
 	read=>\&x_read,
-	write=>\&x_write
+	write=>\&x_write,
+	statfs=>\&x_statfs
 );

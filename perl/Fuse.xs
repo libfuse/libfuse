@@ -32,6 +32,7 @@ int _PLfuse_getattr(const char *file, struct stat *result) {
 		else
 			rv = -ENOENT;
 	} else {
+		DEBUGf("populating\n");
 		result->st_blocks = POPi;
 		result->st_blksize = POPi;
 		result->st_ctime = POPi;
@@ -50,6 +51,7 @@ int _PLfuse_getattr(const char *file, struct stat *result) {
 	FREETMPS;
 	LEAVE;
 	PUTBACK;
+	DEBUGf("getattr end %i %o\n",rv,result->st_mode);
 	return rv;
 }
 
@@ -473,7 +475,7 @@ int _PLfuse_write (const char *file, const char *buf, size_t buflen, off_t off) 
 	return rv;
 }
 
-int _PLfuse_statfs (struct statfs *st) {
+int _PLfuse_statfs (struct fuse_statfs *st) {
 	int rv;
 	char *rvstr;
 	dSP;
@@ -485,12 +487,12 @@ int _PLfuse_statfs (struct statfs *st) {
 	rv = call_sv(_PLfuse_callbacks[17],G_ARRAY);
 	SPAGAIN;
 	if(rv > 5) {
-		st->f_bsize   = POPi;
-		st->f_bavail  = st->f_bfree = POPi;
-		st->f_blocks  = POPi;
-		st->f_ffree   = POPi;
-		st->f_files   = POPi;
-		st->f_namelen = POPi;
+		st->block_size  = POPi;
+		st->blocks_free = POPi;
+		st->blocks      = POPi;
+		st->files_free  = POPi;
+		st->files       = POPi;
+		st->namelen     = POPi;
 		if(rv > 6)
 			rv = POPi;
 		else
