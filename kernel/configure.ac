@@ -49,14 +49,6 @@ if echo "$kernsrcver" | grep -q "^2.4"; then
 	CFLAGS="$old_cflags"
 fi
 
-AC_MSG_CHECKING([whether fs_subsys is declared])
-if grep -q fs_subsys $kernelsrc/include/linux/fs.h; then
-	AC_DEFINE(HAVE_FS_SUBSYS, 1, [Kernel defines fs_subsys])
-	AC_MSG_RESULT([yes])
-else
-	AC_MSG_RESULT([no])
-fi
-
 AC_MSG_CHECKING([if kernel has extended attribute support])
 if test -f $kernelsrc/include/linux/xattr.h; then
 	AC_DEFINE(HAVE_KERNEL_XATTR, 1, [Kernel has xattr support])

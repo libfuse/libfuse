@@ -216,6 +216,7 @@ struct fuse_req {
 	union {
 		struct fuse_forget_in forget_in;
 		struct fuse_release_in release_in;
+		struct fuse_init_in_out init_in_out;
 	} misc;
 
 	/** page vector */
@@ -482,3 +483,8 @@ int fuse_do_getattr(struct inode *inode);
  * Invalidate inode attributes
  */
 void fuse_invalidate_attr(struct inode *inode);
+
+/**
+ * Send the INIT message
+ */
+void fuse_send_init(struct fuse_conn *fc);

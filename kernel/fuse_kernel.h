@@ -79,13 +79,13 @@ enum fuse_opcode {
 	FUSE_WRITE	   = 16,
 	FUSE_STATFS	   = 17,
 	FUSE_RELEASE       = 18,
-	/*FUSE_INVALIDATE    = 19,*/
 	FUSE_FSYNC         = 20,
 	FUSE_SETXATTR      = 21,
 	FUSE_GETXATTR      = 22,
 	FUSE_LISTXATTR     = 23,
 	FUSE_REMOVEXATTR   = 24,
 	FUSE_FLUSH         = 25,
+	FUSE_INIT          = 26
 };
 
 /* Conservative buffer size for the client */
@@ -199,6 +199,11 @@ struct fuse_getxattr_in {
 
 struct fuse_getxattr_out {
 	__u32	size;
+};
+
+struct fuse_init_in_out {
+	__u32	major;
+	__u32	minor;
 };
 
 struct fuse_in_header {

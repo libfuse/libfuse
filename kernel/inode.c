@@ -478,14 +478,13 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
 		INIT_LIST_HEAD(&fc->unused_list);
-		sema_init(&fc->outstanding_sem, FUSE_MAX_OUTSTANDING);
+		sema_init(&fc->outstanding_sem, 0);
 		for (i = 0; i < FUSE_MAX_OUTSTANDING; i++) {
 			struct fuse_req *req = fuse_request_alloc();
 			if (!req) {
 				free_conn(fc);
 				return NULL;
 			}
-			req->preallocated = 1;
 			list_add(&req->list, &fc->unused_list);
 		}
 #ifdef KERNEL_2_6
@@ -668,7 +667,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 		iput(root);
 		goto err;
 	}
-
+	fuse_send_init(fc);
 	return 0;
 
  err:

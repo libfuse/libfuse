@@ -99,6 +99,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_GETXATTR:		return "GETXATTR";
     case FUSE_LISTXATTR:	return "LISTXATTR";
     case FUSE_REMOVEXATTR:	return "REMOVEXATTR";
+    case FUSE_INIT:		return "INIT";
     default: 			return "???";
     }
 }
@@ -1504,6 +1505,20 @@ static void do_removexattr(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
+static void do_init(struct fuse *f, struct fuse_in_header *in,
+                    struct fuse_init_in_out *arg)
+{
+    struct fuse_init_in_out outarg;
+    if (f->flags & FUSE_DEBUG) {
+        printf("   INIT: %u.%u\n", arg->major, arg->minor);
+        fflush(stdout);
+    }
+    f->got_init = 1;
+    memset(&outarg, 0, sizeof(outarg));
+    outarg.major = FUSE_KERNEL_VERSION;
+    outarg.minor = FUSE_KERNEL_MINOR_VERSION;
+    send_reply(f, in, 0, &outarg, sizeof(outarg));
+}
 
 static void free_cmd(struct fuse_cmd *cmd)
 {
@@ -1525,6 +1540,12 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
                in->unique, opname(in->opcode), in->opcode,
                (unsigned long) in->nodeid, cmd->buflen);
         fflush(stdout);
+    }
+
+    if (!f->got_init && in->opcode != FUSE_INIT) {
+        /* Old kernel version probably */
+        send_reply(f, in, -EPROTO, NULL, 0);
+        goto out;
     }
 
     ctx->fuse = f;
@@ -1628,10 +1649,15 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         do_removexattr(f, in, (char *) inarg);
         break;
 
+    case FUSE_INIT:
+        do_init(f, in, (struct fuse_init_in_out *) inarg);
+        break;
+
     default:
         send_reply(f, in, -ENOSYS, NULL, 0);
     }
 
+ out:
     free_cmd(cmd);
 }
 
@@ -1742,47 +1768,6 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
     fuse_getcontext = func;
 }
 
-static int check_version(struct fuse *f)
-{
-    int res;
-    const char *version_file = FUSE_VERSION_FILE_NEW;
-    FILE *vf = fopen(version_file, "r");
-    if (vf == NULL) {
-        version_file = FUSE_VERSION_FILE_OLD;
-        vf = fopen(version_file, "r");
-        if (vf == NULL) {
-            struct stat tmp;
-            if (stat(FUSE_DEV_OLD, &tmp) != -1) {
-                fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
-                        FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
-                return -1;
-            } else {
-                fprintf(stderr, "fuse: warning: version of kernel interface unknown\n");
-                return 0;
-            }
-        }
-    }
-    res = fscanf(vf, "%i.%i", &f->majorver, &f->minorver);
-    fclose(vf);
-    if (res != 2) {
-        fprintf(stderr, "fuse: error reading %s\n", version_file);
-        return -1;
-    }
-    if (f->majorver != FUSE_KERNEL_VERSION) {
-        fprintf(stderr, "fuse: bad kernel interface major version: needs %i\n",
-                FUSE_KERNEL_VERSION);
-        return -1;
-    }
-    if (f->minorver < FUSE_KERNEL_MINOR_VERSION_NEED) {
-        fprintf(stderr, "fuse: kernel interface too old: need >= %i.%i\n",
-                FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
-        return -1;
-    }    
-    
-    return 0;
-}
-
-
 int fuse_is_lib_option(const char *opt)
 {
     if (strcmp(opt, "debug") == 0 ||
@@ -1837,9 +1822,6 @@ struct fuse *fuse_new_common(int fd, const char *opts,
         fprintf(stderr, "fuse: failed to allocate fuse object\n");
         goto out;
     }
-
-    if (check_version(f) == -1)
-        goto out_free;
 
     if (parse_lib_opts(f, opts) == -1)
         goto out_free;

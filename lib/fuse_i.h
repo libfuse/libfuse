@@ -28,8 +28,7 @@ struct fuse {
     int numworker;
     int numavail;
     volatile int exited;
-    int majorver;
-    int minorver;
+    int got_init;
 };
 
 struct fuse *fuse_new_common(int fd, const char *opts,

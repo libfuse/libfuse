@@ -40,7 +40,6 @@
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
 #define FUSE_DEV_NEW "/dev/fuse"
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
-#define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
 #define FUSE_MAJOR 10
 #define FUSE_MINOR 229
 
@@ -532,24 +531,16 @@ static int check_version(const char *dev)
     int majorver;
     int minorver;
     const char *version_file;
-    int isold = 0;
     FILE *vf;
 
-    if (strcmp(dev, FUSE_DEV_OLD) == 0)
-        isold = 1;
+    if (strcmp(dev, FUSE_DEV_OLD) != 0)
+        return 0;
 
-    version_file = FUSE_VERSION_FILE_NEW;
+    version_file = FUSE_VERSION_FILE_OLD;
     vf = fopen(version_file, "r");
     if (vf == NULL) {
-        version_file = FUSE_VERSION_FILE_OLD;
-        vf = fopen(version_file, "r");
-        if (vf == NULL) {
-            if (isold) {
-                fprintf(stderr, "%s: kernel interface too old\n", progname);
-                return -1;
-            } else
-                return 0;
-        }
+        fprintf(stderr, "%s: kernel interface too old\n", progname);
+        return -1;
     }
     res = fscanf(vf, "%i.%i", &majorver, &minorver);
     fclose(vf);
@@ -557,7 +548,7 @@ static int check_version(const char *dev)
         fprintf(stderr, "%s: error reading %s\n", progname, version_file);
         return -1;
     }
-    if (majorver < 3) {
+     if (majorver < 3) {
         fprintf(stderr, "%s: kernel interface too old\n", progname);
         return -1;
     }

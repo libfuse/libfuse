@@ -16,6 +16,6 @@ mkdir -p $destdir/include/linux
 
 
 for f in dev.c dir.c file.c inode.c util.c fuse_i.h; do
-    unifdef -DKERNEL_2_6 -DKERNEL_2_6_6_PLUS -DKERNEL_2_6_10_PLUS -DHAVE_KERNEL_XATTR -DFS_SAFE -DMAX_LFS_FILESIZE -DFUSE_MAINLINE -DBUG_ON -DHAVE_FS_SUBSYS -D__user -DMODULE_LICENSE $f > $destdir/fs/fuse/$f
+    unifdef -DKERNEL_2_6 -DKERNEL_2_6_6_PLUS -DKERNEL_2_6_10_PLUS -DHAVE_KERNEL_XATTR -DFS_SAFE -DMAX_LFS_FILESIZE -DFUSE_MAINLINE -DBUG_ON -D__user -DMODULE_LICENSE $f > $destdir/fs/fuse/$f
 done
 cp fuse_kernel.h $destdir/include/linux/fuse.h

@@ -4,6 +4,10 @@
 	inode(s) and file, so that FORGET and RELEASE are not sent until
 	userspace finishes the request.
 
+	* remove /{sys,proc}/fs/fuse/version, and instead add an INIT
+	request with the same information, which is more flexible,
+	simpler, works on embedded systems.
+
 2004-12-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* KERNEL ABI: update interface to make it independent of type
