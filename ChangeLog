@@ -13,6 +13,20 @@
 
 	* Fix NFS export in case "use_ino" mount option is given
 
+	* Make libfuse and fusermount compatible with future versions
+
+	* fusermount: properly add mount options to /etc/mtab
+
+2004-11-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: do not resolve last component of mountpoint on if it
+	is '.' or '..'.  This new path resolvation is now done on mount as
+	well as unmount.  This enables relative paths to work on unmount.
+
+	* fusermount: parse common mount options like "ro", "rw", etc...
+
+	* Allow module params to be changed through sysfs
+
 2004-11-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.1-pre1

@@ -37,6 +37,10 @@
 
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
+#define FUSE_DEV_OLD "/proc/fs/fuse/dev"
+#define FUSE_DEV_NEW "/dev/fuse"
+#define FUSE_SYS_DEV "/sys/class/misc/fuse/dev"
+
 const char *progname;
 
 static const char *get_user_name()
@@ -77,13 +81,13 @@ static void unlock_mtab(int mtablock)
     }
 }
 
-static int add_mount(const char *fsname, const char *mnt, const char *type)
+static int add_mount(const char *fsname, const char *mnt, const char *type,
+                     const char *opts)
 {
     int res;
     const char *mtab = _PATH_MOUNTED;
     struct mntent ent;
     FILE *fp;
-    char *opts;
 
     fp = setmntent(mtab, "a");
     if (fp == NULL) {
@@ -92,27 +96,10 @@ static int add_mount(const char *fsname, const char *mnt, const char *type)
 	return -1;
     }
     
-    if (getuid() != 0) {
-        const char *user = get_user_name();
-        if (user == NULL)
-            return -1;
-        
-        opts = malloc(strlen(user) + 128);
-        if (opts != NULL)
-            sprintf(opts, "rw,nosuid,nodev,user=%s", user);
-    }
-    else
-        opts = strdup("rw,nosuid,nodev");
-    
-    if (opts == NULL) {
-        fprintf(stderr, "%s: failed to allocate memory\n", progname);
-        return -1;
-    }
-    
     ent.mnt_fsname = (char *) fsname;
     ent.mnt_dir = (char *) mnt;
     ent.mnt_type = (char *) type;
-    ent.mnt_opts = opts;
+    ent.mnt_opts = (char *) opts;
     ent.mnt_freq = 0;
     ent.mnt_passno = 0;
     res = addmntent(fp, &ent);
@@ -309,12 +296,109 @@ static int begins_with(const char *s, const char *beg)
         return 0;
 }
 
+struct mount_flags {
+    const char *opt;
+    unsigned long flag;
+    int on;
+    int safe;
+};
+
+static struct mount_flags mount_flags[] = {
+    {"rw",      MS_RDONLY,      0, 1},
+    {"ro",      MS_RDONLY,      1, 1},
+    {"suid",    MS_NOSUID,      0, 0},
+    {"nosuid",  MS_NOSUID,      1, 1},
+    {"dev",     MS_NODEV,       0, 0},
+    {"nodev",   MS_NODEV,       1, 1},
+    {"exec",    MS_NOEXEC,      0, 1},
+    {"noexec",  MS_NOEXEC,      1, 1},
+    {"async",   MS_SYNCHRONOUS, 0, 1},
+    {"sync",    MS_SYNCHRONOUS, 1, 1},
+    {"atime",   MS_NOATIME,     0, 1},
+    {"noatime", MS_NOATIME,     1, 1},
+    {NULL,      0,              0, 0}
+};
+
+static int find_mount_flag(const char *s, unsigned len, int *on, int *flag)
+{
+    int i;
+            
+    for (i = 0; mount_flags[i].opt != NULL; i++) {
+        const char *opt = mount_flags[i].opt;
+        if (strlen(opt) == len && strncmp(opt, s, len) == 0) {
+            *on = mount_flags[i].on;
+            *flag = mount_flags[i].flag;
+            if (!mount_flags[i].safe && getuid() != 0) {
+                *flag = 0;
+                fprintf(stderr, "%s: unsafe option %s ignored\n",
+                        progname, opt);
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int add_option(char **optsp, const char *opt, unsigned expand)
+{
+    char *newopts;
+    if (*optsp == NULL)
+        newopts = strdup(opt);
+    else { 
+        unsigned oldsize = strlen(*optsp);
+        unsigned newsize = oldsize + 1 + strlen(opt) + expand + 1;
+        newopts = realloc(*optsp, newsize);
+        if (newopts)
+            sprintf(newopts + oldsize, ",%s", opt);
+    }
+    if (newopts == NULL) {
+        fprintf(stderr, "%s: failed to allocate memory\n", progname);
+        return -1;
+    }
+    *optsp = newopts;
+    return 0;
+}
+
+static int get_mnt_opts(int flags, char *opts, char **mnt_optsp)
+{
+    int i;
+    int l;
+    
+    if (!(flags & MS_RDONLY) && add_option(mnt_optsp, "rw", 0) == -1)
+        return -1;
+
+    for (i = 0; mount_flags[i].opt != NULL; i++) {
+        if (mount_flags[i].on && (flags & mount_flags[i].flag) &&
+            add_option(mnt_optsp, mount_flags[i].opt, 0) == -1)
+            return -1;
+    }
+
+    if (add_option(mnt_optsp, opts, 0) == -1)
+        return -1;
+    /* remove comma from end of opts*/
+    l = strlen(*mnt_optsp);
+    if ((*mnt_optsp)[l-1] == ',')
+        (*mnt_optsp)[l-1] = '\0';
+    if (getuid() != 0) {
+        const char *user = get_user_name();
+        if (user == NULL)
+            return -1;
+
+        if (add_option(mnt_optsp, "user=", strlen(user)) == -1)
+            return -1;
+        strcat(*mnt_optsp, user);
+    }
+    return 0;
+}
+
 static int do_mount(const char *mnt, const char *type, mode_t rootmode,
-                    int fd, const char *opts, char **fsnamep)
+                    int fd, const char *opts, const char *dev, char **fsnamep,
+                    char **mnt_optsp)
 {
     int res;
     int flags = MS_NOSUID | MS_NODEV;
     char *optbuf;
+    char *mnt_opts = NULL;
     const char *s;
     char *d;
     char *fsname = NULL;
@@ -344,17 +428,32 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
         } else if (!begins_with(s, "fd=") &&
                    !begins_with(s, "rootmode=") &&
                    !begins_with(s, "uid=")) {
-            memcpy(d, s, len);
-            d += len;
-            *d++ = ',';
+            int on;
+            int flag;
+            if (find_mount_flag(s, len, &on, &flag)) {
+                if (on)
+                    flags |= flag;
+                else
+                    flags  &= ~flag;
+            } else {
+                memcpy(d, s, len);
+                d += len;
+                *d++ = ',';
+            }
         }
         s += len;
         if (*s)
             s++;
     }
+    res = get_mnt_opts(flags, optbuf, &mnt_opts);
+    if (res == -1) {
+        free(mnt_opts);
+        free(optbuf);
+        return -1;
+    }
     sprintf(d, "fd=%i,rootmode=%o,uid=%i", fd, rootmode, getuid());
     if (fsname == NULL) {
-        fsname = strdup(FUSE_DEV);
+        fsname = strdup(dev);
         if (!fsname) {
             fprintf(stderr, "%s: failed to allocate memory\n", progname);
             free(optbuf);
@@ -363,12 +462,15 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     }
 
     res = mount(fsname, mnt, type, flags, optbuf);
-    free(optbuf);
     if (res == -1) {
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
         free(fsname);
+        free(mnt_opts);
+    } else {
+        *fsnamep = fsname;
+        *mnt_optsp = mnt_opts;
     }
-    *fsnamep = fsname;
+    free(optbuf);
 
     return res;
 }
@@ -378,15 +480,20 @@ static int check_version(void)
     int res;
     int majorver;
     int minorver;
-    FILE *vf = fopen(FUSE_VERSION_FILE, "r");
+    const char *version_file = FUSE_VERSION_FILE;
+    FILE *vf = fopen(version_file, "r");
     if (vf == NULL) {
-        fprintf(stderr, "%s: kernel interface too old\n", progname);
-        return -1;
+        version_file = "/sys/fs/fuse/version";
+        vf = fopen(version_file, "r");
+        if (vf == NULL) {
+            fprintf(stderr, "%s: kernel interface too old\n", progname);
+            return -1;
+        }
     }
     res = fscanf(vf, "%i.%i", &majorver, &minorver);
     fclose(vf);
     if (res != 2) {
-        fprintf(stderr, "%s: error reading %s\n", progname, FUSE_VERSION_FILE);
+        fprintf(stderr, "%s: error reading %s\n", progname, version_file);
         return -1;
     }
     if (majorver < 3) {
@@ -454,20 +561,106 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
     return 0;
 }
 
-static int mount_fuse(const char *mnt, const char *opts)
+static int try_open(const char *dev, char **devp, int silent)
+{
+    int fd = open(dev, O_RDWR);
+    if (fd != -1) {
+        *devp = strdup(dev);
+        if (*devp == NULL) {
+            fprintf(stderr, "%s: failed to allocate memory\n", progname);
+            close(fd);
+            fd = -1;
+        }
+    } else if (!silent) {
+        fprintf(stderr, "%s: failed to open %s: %s\n", progname, dev,
+                strerror(errno));
+    }
+    return fd;
+}
+
+#define FUSE_TMP_DIRNAME "/tmp/.fuse_devXXXXXX"
+#define FUSE_TMP_DEVNAME "/fuse"
+
+static int try_open_new_temp(unsigned devnum, char **devp)
 {
     int res;
     int fd;
-    const char *dev = FUSE_DEV;
-    const char *type = "fuse";
-    struct stat stbuf;
-    int mtablock;
-    char *fsname;
-    const char *real_mnt = mnt;
-    int currdir_fd = -1;
+    char dirname[] = FUSE_TMP_DIRNAME;
+    char filename[] = FUSE_TMP_DIRNAME FUSE_TMP_DEVNAME;
+    if (mkdtemp(dirname) == NULL) {
+        fprintf(stderr, "%s: failed to create temporary device directory: %s\n",
+                progname, strerror(errno));
+        return -1;
+    }
+    sprintf(filename, "%s%s", dirname, FUSE_TMP_DEVNAME);
+    res = mknod(filename, S_IFCHR | 0600, devnum);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to create device node: %s\n", progname,
+                strerror(errno));
+        rmdir(dirname);
+        return -1;
+    }
+    fd = try_open(filename, devp, 0);
+    unlink(filename);
+    rmdir(dirname);
+    return fd;
+}
 
-    fd = open(dev, O_RDWR);
-    if (fd == -1 
+static int try_open_new(char **devp)
+{
+    const char *dev;
+    unsigned minor;
+    unsigned major;
+    int res;
+    struct stat stbuf;
+    unsigned devnum;
+    char buf[256];
+    int fd = open(FUSE_SYS_DEV, O_RDONLY);
+    if (fd == -1)
+        return -2;
+
+    res = read(fd, buf, sizeof(buf)-1);
+    close(fd);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to read from %s: %s\n", progname,
+                FUSE_SYS_DEV, strerror(errno));
+        return -1;
+    }
+    
+    buf[res] = '\0';
+    if (sscanf(buf, "%u:%u", &major, &minor) != 2) {
+        fprintf(stderr, "%s: parse error reading from %s\n", progname,
+                FUSE_SYS_DEV);
+        return -1;
+    }
+
+    devnum = (major << 8) + (minor & 0xff) + ((minor & 0xff00) << 12);
+    dev = FUSE_DEV_NEW;
+    res = stat(dev, &stbuf);
+    if (res == -1)
+        return try_open_new_temp(devnum, devp);
+    
+    if ((stbuf.st_mode & S_IFMT) != S_IFCHR || stbuf.st_rdev != devnum) {
+        fprintf(stderr, "%s: %s exists but has wrong attributes\n", progname,
+                dev);
+        return -1;
+    }
+    return try_open(dev, devp, 0);
+}
+
+static int open_fuse_device(char **devp)
+{
+    int fd;
+
+    fd = try_open_new(devp);
+    if (fd != -2)
+        return fd;
+
+    fd = try_open(FUSE_DEV_OLD, devp, 1);
+    if (fd != -1)
+        return fd;
+
+    if (1
 #ifndef AUTO_MODPROBE
         && getuid() == 0
 #endif
@@ -482,13 +675,37 @@ static int mount_fuse(const char *mnt, const char *opts)
         if (pid != -1)
             waitpid(pid, &status, 0);
 
-        fd = open(dev, O_RDWR);
+        fd = try_open_new(devp);
+        if (fd != -2)
+            return fd;
+
+        fd = try_open(FUSE_DEV_OLD, devp, 1);
+        if (fd != -1)
+            return fd;
+        
     }
-    if (fd == -1) {
-        fprintf(stderr, "%s: unable to open fuse device %s: %s\n", progname,
-                dev, strerror(errno));
+
+    fprintf(stderr, "fuse device not found, try 'modprobe fuse' first\n");
+    return -1;
+}
+
+
+static int mount_fuse(const char *mnt, const char *opts)
+{
+    int res;
+    int fd;
+    char *dev;
+    const char *type = "fuse";
+    struct stat stbuf;
+    int mtablock;
+    char *fsname;
+    char *mnt_opts;
+    const char *real_mnt = mnt;
+    int currdir_fd = -1;
+
+    fd = open_fuse_device(&dev);
+    if (fd == -1)
         return -1;
-    }
  
     if (getuid() != 0) {
         res = drop_privs();
@@ -501,7 +718,7 @@ static int mount_fuse(const char *mnt, const char *opts)
         res = check_perm(&real_mnt, &stbuf, &currdir_fd);
         if (res != -1)
             res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
-                           &fsname);
+                           dev, &fsname, &mnt_opts);
     }
 
     if (getuid() != 0)
@@ -517,50 +734,71 @@ static int mount_fuse(const char *mnt, const char *opts)
 
     if (geteuid() == 0) {
         mtablock = lock_mtab();
-        res = add_mount(fsname, mnt, type);
-        free(fsname);
+        res = add_mount(fsname, mnt, type, mnt_opts);
         unlock_mtab(mtablock);
         if (res == -1) {
             umount2(mnt, 2); /* lazy umount */
             return -1;
         }
-    } else
-        free(fsname);
+    }
+    free(fsname);
+    free(mnt_opts);
+    free(dev);
 
     return fd;
 }
 
-static char *resolve_path(const char *orig, int unmount)
+static char *resolve_path(const char *orig)
 {
     char buf[PATH_MAX];
+    char *copy;
     char *dst;
-    
-    if (unmount) {
-        char *end;
-        /* Resolving at unmount can only be done very carefully, not touching
-           the mountpoint... So for the moment it's not done. 
+    char *end;
+    char *lastcomp;
+    const char *toresolv;
 
-           Just remove trailing slashes instead.
-        */
-        dst = strdup(orig);
-        if (dst == NULL) {
-            fprintf(stderr, "%s: failed to allocate memory\n", progname);
-            return NULL;
-        }
-
-        for (end = dst + strlen(dst) - 1; end > dst && *end == '/'; end --)
-            *end = '\0';
-
-        return dst;
-    }
-
-    if (realpath(orig, buf) == NULL) {
-        fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
-                strerror(errno));
+    copy = strdup(orig);
+    if (copy == NULL) {
+        fprintf(stderr, "%s: failed to allocate memory\n", progname);
         return NULL;
     }
-    
-    dst = strdup(buf);
+
+    toresolv = copy;
+    lastcomp = NULL;
+    for (end = copy + strlen(copy) - 1; end > copy && *end == '/'; end --);
+    if (end[0] != '/') {
+        char *tmp;
+        end[1] = '\0';
+        tmp = strrchr(copy, '/');
+        if (tmp == NULL) {
+            lastcomp = copy;
+            toresolv = ".";
+        } else {
+            lastcomp = tmp + 1;
+            if (tmp == copy)
+                toresolv = "/";
+        }
+        if (strcmp(lastcomp, ".") == 0 || strcmp(lastcomp, "..") == 0) {
+            lastcomp = NULL;
+            toresolv = copy;
+        }
+        else if (tmp)
+            tmp[0] = '\0';
+    }
+    if (realpath(toresolv, buf) == NULL) {
+        fprintf(stderr, "%s: Bad mount point %s: %s\n", progname, orig,
+                strerror(errno));
+        free(copy);
+        return NULL;
+    }
+    if (lastcomp == NULL)
+        dst = strdup(buf);
+    else {
+        dst = (char *) malloc(strlen(buf) + 1 + strlen(lastcomp) + 1);
+        if (dst)
+            sprintf(dst, "%s/%s", buf, lastcomp);
+    }
+    free(copy);
     if (dst == NULL)
         fprintf(stderr, "%s: failed to allocate memory\n", progname);
     return dst;
@@ -682,7 +920,7 @@ int main(int argc, char *argv[])
             exit(1);
     }
 
-    mnt = resolve_path(origmnt, unmount);
+    mnt = resolve_path(origmnt);
     if (mnt == NULL)
         exit(1);
 

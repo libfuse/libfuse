@@ -1719,16 +1719,21 @@ void __fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 static int check_version(struct fuse *f)
 {
     int res;
-    FILE *vf = fopen(FUSE_VERSION_FILE, "r");
+    const char *version_file = FUSE_VERSION_FILE;
+    FILE *vf = fopen(version_file, "r");
     if (vf == NULL) {
-        fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
-                FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
-        return -1;
+        version_file = "/sys/fs/fuse/version";
+        vf = fopen(version_file, "r");
+        if (vf == NULL) {
+            fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
+                    FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+            return -1;
+        }
     }
     res = fscanf(vf, "%i.%i", &f->majorver, &f->minorver);
     fclose(vf);
     if (res != 2) {
-        fprintf(stderr, "fuse: error reading %s\n", FUSE_VERSION_FILE);
+        fprintf(stderr, "fuse: error reading %s\n", version_file);
         return -1;
     }
     if (f->majorver != FUSE_KERNEL_VERSION) {
