@@ -32,10 +32,10 @@ chfile="$KSRC/../fuse-module-${KVERS}_${MODVERS}_${ARCH}.changes"
 dpkg-genchanges -b ${maint:+-e"$maint"} -u"$KSRC/.." \
 	-ldebian/changelog.tmp \
 	-cdebian/control.tmp > "$chfile.pt"
-if test -e "${GNUPGHOME:-$HOME/.gnupg/secring.gpg}"; then
+if test -e "${GNUPGHOME:-$HOME/.gnupg/secring.gpg}" && test -x /usr/bin/gpg; then
     gpg -ast ${email:+-u"$email"} \
 	--clearsign < "$chfile.pt" > "$chfile"
-else
+elif test -x /usr/bin/pgp; then
     pgp -fast ${email:+-u"$email"} +clearsig=on \
 	< "$chfile.pt" > "$chfile"
 fi

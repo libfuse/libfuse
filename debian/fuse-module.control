@@ -1,7 +1,7 @@
 Package: fuse-module-${kvers}
 Section: misc
 Architecture: any
-Provides: fule-module
+Provides: fuse-module
 Depends: kernel-image-${kvers} (= ${kversdeb})
 Recommends: fuse-utils
 Description: Filesystem in USErspace (kernel module)

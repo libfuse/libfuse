@@ -1,3 +1,12 @@
+fuse (1.0-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/genchanges.sh: Only run gpg/pgp if available. Closes: #209358.
+  * debian/fuse-module.control: Fixed typo (fuse-module instead of
+    fule-module). Closes: #212576.
+
+ -- Roland Bauerschmidt <rb@debian.org>  Tue,  7 Oct 2003 18:00:23 +0200
+
 fuse (0.95-1) unstable; urgency=low
 
   * Initial Release.
