@@ -192,7 +192,7 @@ static inline int copy_in_one(const void *src, size_t srclen, char **dstp,
 {
 	if(*dstlenp < srclen) {
 		printk("fuse_dev_read: buffer too small\n");
-		return -EIO;
+		return -EINVAL;
 	}
 			
 	if(copy_to_user(*dstp, src, srclen))
@@ -298,7 +298,7 @@ static inline int copy_out_one(struct fuse_out_arg *arg, const char **srcp,
 	if(*srclenp < dstlen) {
 		if(!allowvar) {
 			printk("fuse_dev_write: write is short\n");
-			return -EIO;
+			return -EINVAL;
 		}
 		dstlen = *srclenp;
 	}
@@ -342,7 +342,7 @@ static inline int copy_out_args(struct fuse_out *out, const char *buf,
 
 	if(nbytes != 0) {
 		printk("fuse_dev_write: write is long\n");
-		return -EIO;
+		return -EINVAL;
 	}
 
 	return 0;
@@ -353,7 +353,7 @@ static inline int copy_out_header(struct fuse_out_header *oh, const char *buf,
 {
 	if(nbytes < sizeof(struct fuse_out_header)) {
 		printk("fuse_dev_write: write is short\n");
-		return -EIO;
+		return -EINVAL;
 	}
 	
 	if(copy_from_user(oh, buf, sizeof(struct fuse_out_header)))
@@ -381,7 +381,7 @@ static int fuse_user_request(struct fuse_conn *fc, const char *buf,
 
 	if (nbytes < sizeof(struct fuse_user_header)) {
 		printk("fuse_dev_write: write is short\n");
-		return -EIO;
+		return -EINVAL;
 	}
 
 	if(copy_from_user(&uh, buf, sizeof(struct fuse_out_header)))
@@ -421,7 +421,7 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 
         if (oh.error <= -512 || oh.error > 0) {
                 printk("fuse_dev_write: bad error value\n");
-                return -EIO;
+                return -EINVAL;
         }
 
 	spin_lock(&fuse_lock);
@@ -560,7 +560,7 @@ int fuse_dev_init()
 	if(!fuse_req_cachep)
 		return -ENOMEM;
 
-	ret = -EIO;
+	ret = -ENOMEM;
 	proc_fs_fuse = proc_mkdir("fuse", proc_root_fs);
 	if(!proc_fs_fuse) {
 		printk("fuse: failed to create directory in /proc/fs\n");

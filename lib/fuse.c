@@ -843,7 +843,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
         if((size_t) res != arg->size) {
             fprintf(stderr, "short write: %u (should be %u)\n", res,
                     arg->size);
-            res = -EIO;
+            res = -EINVAL;
         }
         else 
             res = 0;
