@@ -56,9 +56,6 @@ struct fuse_conn {
 	
 	/** The next unique request id */
 	int reqctr;
-
-	/* Flag indicating whether the release call is supported */
-	int has_release;
 };
 
 /** One input argument of a request */

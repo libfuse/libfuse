@@ -43,22 +43,21 @@ static int fuse_open(struct inode *inode, struct file *file)
 static int fuse_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_in *in = NULL;
 
-	if(!fc->has_release)
+	in = kmalloc(sizeof(struct fuse_in), GFP_NOFS);
+	if(!in)
+		return -ENOMEM;
+
+	memset(in, 0, sizeof(struct fuse_in));
+
+	in->h.opcode = FUSE_RELEASE;
+	in->h.ino = inode->i_ino;
+	if(!request_send_noreply(fc, in))
 		return 0;
 
-	in.h.opcode = FUSE_RELEASE;
-	in.h.ino = inode->i_ino;
-	request_send(fc, &in, &out);
-
-	if(out.h.error == -ENOSYS) {
-		fc->has_release = 0;
-		return 0;
-	}
-
-	return out.h.error;
+	kfree(in);
+	return 0;
 }
 
 

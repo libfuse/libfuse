@@ -142,8 +142,9 @@ static inline void destroy_request(struct fuse_conn *fc, struct fuse_req *req)
 	}
 }
 
-/* This one is currently only used for sending the FORGET request, which is
-   a kernel initiated request.  So the outstanding semaphore is not used.  */
+/* This one is currently only used for sending FORGET and RELEASE,
+   which are kernel initiated request.  So the outstanding semaphore
+   is not used.  */
 int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in)
 {
 	struct fuse_req *req;
@@ -447,7 +448,6 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->processing);
 		sema_init(&fc->outstanding, MAX_OUTSTANDING);
 		fc->reqctr = 1;
-		fc->has_release = 1;
 	}
 	return fc;
 }

@@ -755,18 +755,14 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
 
 static void do_release(struct fuse *f, struct fuse_in_header *in)
 {
-    int res;
     char *path;
 
-    res = -ENOENT;
     path = get_path(f, in->ino);
     if(path != NULL) {
-        res = -ENOSYS;
         if(f->op.release)
-            res = f->op.release(path);
+            f->op.release(path);
         free(path);
     }
-    send_reply(f, in, res, NULL, 0);
 }
 
 static void do_read(struct fuse *f, struct fuse_in_header *in,
