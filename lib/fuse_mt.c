@@ -16,56 +16,26 @@
 #include <errno.h>
 #include <sys/time.h>
 
-#define FUSE_WORKER_IDLE 10
-
-static pthread_mutex_t fuse_mt_lock = PTHREAD_MUTEX_INITIALIZER;
-
+#define FUSE_NUM_WORKERS 5
 
 struct fuse_worker {
-    struct fuse_worker *next;
-    struct fuse_worker *prev;
     struct fuse *f;
     void *data;
     fuse_processor_t proc;
-    struct fuse_cmd *cmd;
-    int avail;
-    pthread_cond_t start;
 };
 
 static void *do_work(void *data)
 {
     struct fuse_worker *w = (struct fuse_worker *) data;
-    int ret;
     
-    do {
-        struct timeval now;
-        struct timespec timeout;
+    while(1) {
+        struct fuse_cmd *cmd = __fuse_read_cmd(w->f);
+        if(cmd == NULL)
+            exit(1);
 
-        w->proc(w->f, w->cmd, w->data);
+        w->proc(w->f, cmd, w->data);
 
-        pthread_mutex_lock(&fuse_mt_lock);
-        w->avail = 1;
-        w->cmd = NULL;
-        gettimeofday(&now, NULL);
-        timeout.tv_sec = now.tv_sec + FUSE_WORKER_IDLE;
-        timeout.tv_nsec = now.tv_usec * 1000;
-
-        ret = 0;
-        while(w->cmd == NULL && ret != ETIMEDOUT)
-            ret = pthread_cond_timedwait(&w->start, &fuse_mt_lock, &timeout);
-
-        if(ret == ETIMEDOUT) {
-            struct fuse_worker *next = w->next;
-            struct fuse_worker *prev = w->prev;
-            prev->next = next;
-            next->prev = prev;
-            pthread_cond_destroy(&w->start);
-            free(w);
-        }
-        w->avail = 0;
-        pthread_mutex_unlock(&fuse_mt_lock);
-
-    } while(ret != ETIMEDOUT);
+    }
 
     return NULL;
 }
@@ -91,48 +61,18 @@ static void start_thread(struct fuse_worker *w)
 
 void __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data)
 {
-    struct fuse_worker *head;
+    struct fuse_worker *w;
+    int i;
 
-    head = malloc(sizeof(struct fuse_worker));
-    head->next = head;
-    head->prev = head;
+    w = malloc(sizeof(struct fuse_worker));    
+    w->f = f;
+    w->data = data;
+    w->proc = proc;
 
-    while(1) {
-        struct fuse_worker *w;
-        struct fuse_cmd *cmd = __fuse_read_cmd(f);
-        if(cmd == NULL)
-            exit(1);
+    for(i = 1; i < FUSE_NUM_WORKERS; i++)
+        start_thread(w);
 
-        pthread_mutex_lock(&fuse_mt_lock);
-        for(w = head->next; w != head; w = w->next) 
-            if(w->avail)
-                break;
-
-        if(w != head) {
-            pthread_cond_signal(&w->start);
-            w->cmd = cmd;
-            w = NULL;
-        }
-        else {
-            struct fuse_worker *prev = head->prev;
-            struct fuse_worker *next = head;
-            w = malloc(sizeof(struct fuse_worker));
-            w->prev = prev;
-            w->next = next;
-            next->prev = w;
-            prev->next = w;
-            w->f = f;
-            w->data = data;
-            w->proc = proc;
-            w->cmd = cmd;
-            w->avail = 0;
-            pthread_cond_init(&w->start, NULL);
-        }
-        pthread_mutex_unlock(&fuse_mt_lock);
-
-        if(w != NULL)
-            start_thread(w);
-    }
+    do_work(w);
 }
 
 void fuse_loop_mt(struct fuse *f)
