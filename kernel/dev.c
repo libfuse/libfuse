@@ -12,13 +12,39 @@
 #include <linux/proc_fs.h>
 #include <linux/file.h>
 
-#define IHSIZE sizeof(struct fuse_in_header)
-#define OHSIZE sizeof(struct fuse_out_header)
+/* If more requests are outstanding, then the operation will block */
+#define MAX_OUTSTANDING 10
 
 static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
+static kmem_cache_t *fuse_req_cachep;
 
-static int interrupt_error(enum fuse_opcode opcode)
+static struct fuse_req *request_new(void)
+{
+	struct fuse_req *req;
+
+	req = (struct fuse_req *) kmem_cache_alloc(fuse_req_cachep, SLAB_NOFS);
+	if(req) {
+		INIT_LIST_HEAD(&req->list);
+		req->issync = 0;
+		req->locked = 0;
+		req->interrupted = 0;
+		req->sent = 0;
+		req->finished = 0;
+		req->in = NULL;
+		req->out = NULL;
+		init_waitqueue_head(&req->waitq);
+	}
+
+	return req;
+}
+
+static void request_free(struct fuse_req *req)
+{
+	kmem_cache_free(fuse_req_cachep, req);
+}
+
+static int request_restartable(enum fuse_opcode opcode)
 {
 	switch(opcode) {
 	case FUSE_LOOKUP:
@@ -28,222 +54,214 @@ static int interrupt_error(enum fuse_opcode opcode)
 	case FUSE_OPEN:
 	case FUSE_READ:
 	case FUSE_WRITE:
-		return -ERESTARTSYS;
+		return 1;
 
 	default:
-		/* Operations which modify the filesystem cannot be safely
-                   restarted, because it is uncertain whether the
-                   operation has completed or not... */
-		return -EINTR;
+		return 0;
 	}
 }
 
-static int request_wait_answer(struct fuse_req *req)
+/* Called with fuse_lock held.  Releases, and then reaquires it. */
+static void request_wait_answer(struct fuse_req *req)
 {
-	int ret = 0;
-	DECLARE_WAITQUEUE(wait, current);
+	int intr;
+	
+	spin_unlock(&fuse_lock);
+	intr = wait_event_interruptible(req->waitq, req->finished);
+	spin_lock(&fuse_lock);
+	if(!intr)
+		return;
 
-	add_wait_queue(&req->waitq, &wait);
-	while(!list_empty(&req->list)) {
-		set_current_state(TASK_INTERRUPTIBLE);
-		if(signal_pending(current)) {
-			ret = interrupt_error(req->opcode);
-			break;
-		}
+	/* Request interrupted... Wait for it to be unlocked */
+	if(req->locked) {
+		req->interrupted = 1;
 		spin_unlock(&fuse_lock);
-		schedule();
+		wait_event(req->waitq, !req->locked);
 		spin_lock(&fuse_lock);
 	}
-	set_current_state(TASK_RUNNING);
-	remove_wait_queue(&req->waitq, &wait);
-
-	return ret;
-}
-
-static int request_check(struct fuse_req *req, struct fuse_out *outp)
-{
-	struct fuse_out_header *oh;
-	unsigned int size;
-
-	if(!req->out)
-		return -ECONNABORTED;
-
-	oh = (struct fuse_out_header *) req->out;
-	size = req->outsize - OHSIZE;
 	
-	if (oh->error <= -512 || oh->error > 0) {
-		printk("fuse: bad error value: %i\n", oh->error);
-		return -EPROTO;
-	}
-
-	if(size > outp->argsize || 
-	   (oh->error == 0 && !outp->argvar && size != outp->argsize) ||
-	   (oh->error != 0 && size != 0)) {
-		printk("fuse: invalid argument length: %i (%i)\n", size,
-		       req->opcode);
-		return -EPROTO;
-	}
-	
-	memcpy(&outp->h, oh, OHSIZE);
-	outp->argsize = size;
-	if(size)
-		memcpy(outp->arg, req->out + OHSIZE, size);
-	
-	return oh->error;
-}
-
-static void request_free(struct fuse_req *req)
-{
-	kfree(req->in);
-	kfree(req->out);
-	kfree(req);
-}
-
-
-static struct fuse_req *request_new(struct fuse_conn *fc, struct fuse_in *inp,
-				    struct fuse_out *outp)
-{
-	struct fuse_req *req;
-	
-	req = kmalloc(sizeof(*req), GFP_NOFS);
-	if(!req)
-		return NULL;
-
-	if(outp)
-		req->outsize = OHSIZE + outp->argsize;
+	/* Operations which modify the filesystem cannot safely be
+	   restarted, because it is uncertain whether the operation has
+	   completed or not... */
+	if(req->sent && !request_restartable(req->in->h.opcode))
+		req->out->h.error = -EINTR;
 	else
-		req->outsize = 0;
-	req->out = NULL;
-
-	req->insize = IHSIZE + inp->argsize;
-	req->in = kmalloc(req->insize, GFP_NOFS);
-	if(!req->in) {
-		request_free(req);
-		return NULL;
-	}
-	memcpy(req->in, &inp->h, IHSIZE);
-	if(inp->argsize)
-		memcpy(req->in + IHSIZE, inp->arg, inp->argsize);
-
-	req->opcode = inp->h.opcode;
-	init_waitqueue_head(&req->waitq);
-
-	return req;
+		req->out->h.error = -ERESTARTSYS;
 }
 
-/* If 'outp' is NULL then the request this is asynchronous */
-void request_send(struct fuse_conn *fc, struct fuse_in *inp,
-		  struct fuse_out *outp)
+static int get_unique(struct fuse_conn *fc)
 {
-	int ret;
-	struct fuse_in_header *ih;
+	do fc->reqctr++;
+	while(!fc->reqctr);
+	return fc->reqctr;
+}
+
+void request_send(struct fuse_conn *fc, struct fuse_in *in,
+		  struct fuse_out *out)
+{
 	struct fuse_req *req;
 
-	ret = -ENOMEM;
-	req = request_new(fc, inp, outp);
+	out->h.error = -ERESTARTSYS;
+	if(down_interruptible(&fc->outstanding))
+		return;
+
+	out->h.error = -ENOMEM;
+	req = request_new();
 	if(!req)
-		goto out;
+		return;
+
+	req->in = in;
+	req->out = out;
+	req->issync = 1;
 
 	spin_lock(&fuse_lock);
-	ret = -ENOTCONN;
-	if(!fc->file)
-		goto out_unlock_free;
-	
-	ih = (struct fuse_in_header *) req->in;
-	if(outp) {
-		do fc->reqctr++;
-		while(!fc->reqctr);
-		ih->unique = req->unique = fc->reqctr;
+	out->h.error = -ENOTCONN;
+	if(fc->file) {
+		in->h.unique = get_unique(fc);		
+		list_add_tail(&req->list, &fc->pending);
+		wake_up(&fc->waitq);
+		request_wait_answer(req);
+		list_del(&req->list);
 	}
-	else
-		ih->unique = req->unique = 0;
+	spin_unlock(&fuse_lock);
+	request_free(req);
+
+	up(&fc->outstanding);
+}
+
+
+static inline void destroy_request(struct fuse_conn *fc, struct fuse_req *req)
+{
+	if(req) {
+		int i;
+
+		for(i = 0; i < req->in->numargs; i++)
+			kfree(req->in->args[i].value);
+		kfree(req->in);
+		request_free(req);
+	}
+}
+
+/* This one is currently only used for sending the FORGET request, which is
+   a kernel initiated request.  So the outstanding semaphore is not used.  */
+int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in)
+{
+	struct fuse_req *req;
+
+	req = request_new();
+	if(!req)
+		return -ENOMEM;
+
+	req->in = in;
+	req->issync = 0;
+
+	spin_lock(&fuse_lock);
+	if(!fc->file) {
+		spin_unlock(&fuse_lock);
+		request_free(req);
+		return -ENOTCONN;
+	}
 
 	list_add_tail(&req->list, &fc->pending);
 	wake_up(&fc->waitq);
-
-	/* Async reqests are freed in fuse_dev_read() */
-	if(!outp) 
-		goto out_unlock; 
-	
-	ret = request_wait_answer(req);
-	list_del(&req->list);
-	if(!ret)
-		ret = request_check(req, outp);
-
-  out_unlock_free:
-	request_free(req);
-  out_unlock:
 	spin_unlock(&fuse_lock);
-  out:
-	if(outp)
-		outp->h.error = ret;
+	return 0;
 }
 
-static int request_wait(struct fuse_conn *fc)
+static void request_wait(struct fuse_conn *fc)
 {
-	int ret = 0;
 	DECLARE_WAITQUEUE(wait, current);
-	
+
 	add_wait_queue_exclusive(&fc->waitq, &wait);
 	while(list_empty(&fc->pending)) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		if(signal_pending(current)) {
-			ret = -ERESTARTSYS;
+		if(signal_pending(current))
 			break;
-		}
+
 		spin_unlock(&fuse_lock);
 		schedule();
 		spin_lock(&fuse_lock);
 	}
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(&fc->waitq, &wait);
-
-	return ret;
 }
 
+static inline int copy_in_one(const void *src, size_t srclen, char **dstp,
+			      size_t *dstlenp)
+{
+	if(*dstlenp < srclen) {
+		printk("fuse_dev_read: buffer too small\n");
+		return -EIO;
+	}
+			
+	if(copy_to_user(*dstp, src, srclen))
+		return -EFAULT;
+
+	*dstp += srclen;
+	*dstlenp -= srclen;
+
+	return 0;
+}
+
+static inline int copy_in_args(struct fuse_in *in, char *buf, size_t nbytes)
+{
+	int err;
+	int i;
+	size_t orignbytes = nbytes;
+		
+	err = copy_in_one(&in->h, sizeof(in->h), &buf, &nbytes);
+	if(err)
+		return err;
+
+	for(i = 0; i < in->numargs; i++) {
+		struct fuse_in_arg *arg = &in->args[i];
+		err = copy_in_one(arg->value, arg->size, &buf, &nbytes);
+		if(err)
+			return err;
+	}
+
+	return orignbytes - nbytes;
+}
 
 static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			     loff_t *off)
 {
-	int ret;
+	ssize_t ret;
 	struct fuse_conn *fc = DEV_FC(file);
-	struct fuse_req *req;
-	char *tmpbuf;
-	unsigned int size;
+	struct fuse_req *req = NULL;
 
 	if(fc->sb == NULL)
 		return -EPERM;
-	
+
 	spin_lock(&fuse_lock);
-	ret = request_wait(fc);
-	if(ret)
-		goto err;
-	
-	req = list_entry(fc->pending.next, struct fuse_req, list);
-	size = req->insize;
-	if(nbytes < size) {
-		printk("fuse_dev_read: buffer too small\n");
-		ret = -EIO;
-		goto err;
+	request_wait(fc);
+	if(!list_empty(&fc->pending)) {
+		req = list_entry(fc->pending.next, struct fuse_req, list);
+		list_del_init(&req->list);
+		req->locked = 1;
 	}
-	tmpbuf = req->in;
-	req->in = NULL;
-
-	list_del(&req->list);
-	if(req->outsize)
-		list_add_tail(&req->list, &fc->processing);
-	else
-		request_free(req);
 	spin_unlock(&fuse_lock);
+	if(req == NULL)
+		return -ERESTARTSYS;
 
-	if(copy_to_user(buf, tmpbuf, size))
-		return -EFAULT;
-	
-	kfree(tmpbuf);
-	return size;
-
-  err:
+	ret = copy_in_args(req->in, buf, nbytes);
+	spin_lock(&fuse_lock);
+	if(req->issync || ret < 0) {
+		if(ret < 0) 
+			list_add_tail(&req->list, &fc->pending);
+		else {
+			list_add_tail(&req->list, &fc->processing);
+			req->sent = 1;
+		}
+		req->locked = 0;
+		if(req->interrupted)
+			wake_up(&req->waitq);
+		
+		req = NULL;
+	}
 	spin_unlock(&fuse_lock);
+	destroy_request(fc, req);
+
 	return ret;
 }
 
@@ -255,7 +273,7 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 	list_for_each(entry, &fc->processing) {
 		struct fuse_req *tmp;
 		tmp = list_entry(entry, struct fuse_req, list);
-		if(tmp->unique == unique) {
+		if(tmp->in->h.unique == unique) {
 			req = tmp;
 			break;
 		}
@@ -264,58 +282,135 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 	return req;
 }
 
+static void process_getdir(struct fuse_req *req)
+{
+	struct fuse_getdir_out *arg;
+	arg = (struct fuse_getdir_out *) req->out->args[0].value;
+	arg->file = fget(arg->fd);
+}
+
+static inline int copy_out_one(struct fuse_out_arg *arg, const char **srcp,
+			       size_t *srclenp, int allowvar)
+{
+	size_t dstlen = arg->size;
+	if(*srclenp < dstlen) {
+		if(!allowvar) {
+			printk("fuse_dev_write: write is short\n");
+			return -EIO;
+		}
+		dstlen = *srclenp;
+	}
+
+	if(dstlen) {
+		if(copy_from_user(arg->value, *srcp, dstlen))
+			return -EFAULT;
+	}
+
+	*srcp += dstlen;
+	*srclenp -= dstlen;
+	arg->size = dstlen;
+
+	return 0;
+}
+
+static inline int copy_out_args(struct fuse_out *out, const char *buf,
+				size_t nbytes)
+{
+	int err;
+	int i;
+
+	buf += sizeof(struct fuse_out_header);
+	nbytes -= sizeof(struct fuse_out_header);
+		
+	if(!out->h.error) {
+		for(i = 0; i < out->numargs; i++) {
+			struct fuse_out_arg *arg = &out->args[i];
+			int allowvar;
+
+			if(out->argvar && i == out->numargs - 1)
+				allowvar = 1;
+			else
+				allowvar = 0;
+
+			err = copy_out_one(arg, &buf, &nbytes, allowvar);
+			if(err)
+				return err;
+		}
+	}
+
+	if(nbytes != 0) {
+		printk("fuse_dev_write: write is long\n");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static inline int copy_out_header(struct fuse_out_header *oh, const char *buf,
+				  size_t nbytes)
+{
+	if(nbytes < sizeof(struct fuse_out_header)) {
+		printk("fuse_dev_write: write is short\n");
+		return -EIO;
+	}
+	
+	if(copy_from_user(oh, buf, sizeof(struct fuse_out_header)))
+		return -EFAULT;
+
+        if (oh->error <= -512 || oh->error > 0) {
+                printk("fuse_dev_write: bad error value\n");
+                return -EIO;
+        }
+
+	return 0;
+}
+
 static ssize_t fuse_dev_write(struct file *file, const char *buf,
 			      size_t nbytes, loff_t *off)
 {
-	ssize_t ret;
+	int err;
 	struct fuse_conn *fc = DEV_FC(file);
 	struct fuse_req *req;
-	char *tmpbuf;
-	struct fuse_out_header *oh;
+	struct fuse_out_header oh;
 
 	if(!fc->sb)
 		return -EPERM;
 
-	ret = -EIO;
-	if(nbytes < OHSIZE || nbytes > OHSIZE + PAGE_SIZE) {
-		printk("fuse_dev_write: write is short or long\n");
-		goto out;
-	}
-	
-	ret = -ENOMEM;
-	tmpbuf = kmalloc(nbytes, GFP_NOFS);
-	if(!tmpbuf)
-		goto out;
-	
-	ret = -EFAULT;
-	if(copy_from_user(tmpbuf, buf, nbytes))
-		goto out_free;
+	err = copy_out_header(&oh, buf, nbytes);
+	if(err)
+		return err;
 	
 	spin_lock(&fuse_lock);
-	oh =  (struct fuse_out_header *) tmpbuf;
-	req = request_find(fc, oh->unique);
-	if(req == NULL) {
-		ret = -ENOENT;
-		goto out_free_unlock;
+	req = request_find(fc, oh.unique);
+	if(req != NULL) {
+		list_del_init(&req->list);
+		req->locked = 1;
 	}
-	list_del_init(&req->list);
-	if(req->opcode == FUSE_GETDIR) {
-		/* fget() needs to be done in this context */
-		struct fuse_getdir_out *arg;
-		arg = (struct fuse_getdir_out *) (tmpbuf + OHSIZE);
-		arg->file = fget(arg->fd);
-	}
-	req->out = tmpbuf;
-	req->outsize = nbytes;
-	tmpbuf = NULL;
-	ret = nbytes;
-	wake_up(&req->waitq);
-  out_free_unlock:
 	spin_unlock(&fuse_lock);
-  out_free:
-	kfree(tmpbuf);
-  out:
-	return ret;
+	if(!req)
+		return -ENOENT;
+
+	req->out->h = oh;
+	err = copy_out_args(req->out, buf, nbytes);
+
+	spin_lock(&fuse_lock);
+	if(err)
+		list_add_tail(&fc->processing, &req->list);
+	else {
+		/* fget() needs to be done in this context */
+		if(req->in->h.opcode == FUSE_GETDIR && !oh.error)
+			process_getdir(req);
+		req->finished = 1;
+	}	
+	req->locked = 0;
+	if(!err || req->interrupted)
+		wake_up(&req->waitq);
+	spin_unlock(&fuse_lock);
+
+	if(!err)
+		return nbytes;
+	else
+		return err;
 }
 
 
@@ -350,6 +445,7 @@ static struct fuse_conn *new_conn(void)
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
+		sema_init(&fc->outstanding, MAX_OUTSTANDING);
 		fc->reqctr = 1;
 	}
 	return fc;
@@ -369,16 +465,18 @@ static int fuse_dev_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static void end_requests(struct list_head *head)
+static void end_requests(struct fuse_conn *fc, struct list_head *head)
 {
 	while(!list_empty(head)) {
 		struct fuse_req *req;
 		req = list_entry(head->next, struct fuse_req, list);
 		list_del_init(&req->list);
-		if(req->outsize)
+		if(req->issync) {
+			req->out->h.error = -ECONNABORTED;
 			wake_up(&req->waitq);
+		}
 		else
-			request_free(req);
+			destroy_request(fc, req);
 	}
 }
 
@@ -388,8 +486,8 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 
 	spin_lock(&fuse_lock);
 	fc->file = NULL;
-	end_requests(&fc->pending);
-	end_requests(&fc->processing);
+	end_requests(fc, &fc->pending);
+	end_requests(fc, &fc->processing);
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	return 0;
@@ -410,6 +508,12 @@ int fuse_dev_init()
 
 	proc_fs_fuse = NULL;
 	proc_fuse_dev = NULL;
+
+	fuse_req_cachep = kmem_cache_create("fuser_request",
+					     sizeof(struct fuse_req),
+					     0, 0, NULL, NULL);
+	if(!fuse_req_cachep)
+		return -ENOMEM;
 
 	ret = -EIO;
 	proc_fs_fuse = proc_mkdir("fuse", proc_root_fs);
@@ -440,6 +544,8 @@ void fuse_dev_cleanup()
 		remove_proc_entry("dev", proc_fs_fuse);
 		remove_proc_entry("fuse", proc_root_fs);
 	}
+	
+	kmem_cache_destroy(fuse_req_cachep);
 }
 
 /* 

@@ -10,19 +10,21 @@
 #include <linux/pagemap.h>
 #include <linux/slab.h>
 
-
 static int fuse_open(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_open_in arg;
+	struct fuse_open_in inarg;
 
-	arg.flags = file->f_flags & ~O_EXCL;
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.flags = file->f_flags & ~O_EXCL;
+
 	in.h.opcode = FUSE_OPEN;
 	in.h.ino = inode->i_ino;
-	in.argsize = sizeof(arg);
-	in.arg = &arg;
+	in.numargs = 1;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
 	request_send(fc, &in, &out);
 	if(!out.h.error)
 		invalidate_inode_pages(inode);
@@ -37,27 +39,30 @@ static int fuse_readpage(struct file *file, struct page *page)
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_read_in arg;
+	struct fuse_read_in inarg;
 	char *buffer;
 
 	buffer = kmap(page);
-
-	arg.offset = page->index << PAGE_CACHE_SHIFT;
-	arg.size = PAGE_CACHE_SIZE;
+	
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.offset = page->index << PAGE_CACHE_SHIFT;
+	inarg.size = PAGE_CACHE_SIZE;
 
 	in.h.opcode = FUSE_READ;
 	in.h.ino = inode->i_ino;
-	in.argsize = sizeof(arg);
-	in.arg = &arg;
-	out.argsize = PAGE_CACHE_SIZE;
+	in.numargs = 1;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
 	out.argvar = 1;
-	out.arg = buffer;
+	out.numargs = 1;
+	out.args[0].size = PAGE_CACHE_SIZE;
+	out.args[0].value = buffer;
 
 	request_send(fc, &in, &out);
 	if(!out.h.error) {
-		if(out.argsize < PAGE_CACHE_SIZE) 
-			memset(buffer + out.argsize, 0,
-			       PAGE_CACHE_SIZE - out.argsize);
+		size_t outsize = out.args[0].size;
+		if(outsize < PAGE_CACHE_SIZE) 
+			memset(buffer + outsize, 0, PAGE_CACHE_SIZE - outsize);
 		SetPageUptodate(page);
 	}
 
@@ -73,27 +78,25 @@ static int write_buffer(struct inode *inode, struct page *page,
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_write_in *arg;
-	size_t argsize;
+	struct fuse_write_in inarg;
 	char *buffer;
 
-	argsize = offsetof(struct fuse_write_in, buf) + count;
-	arg = kmalloc(argsize, GFP_KERNEL);
-	if(!arg)
-		return -ENOMEM;
-
-	arg->offset = (page->index << PAGE_CACHE_SHIFT) + offset;
-	arg->size = count;
 	buffer = kmap(page);
-	memcpy(arg->buf, buffer + offset, count);
-	kunmap(page);
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.offset = (page->index << PAGE_CACHE_SHIFT) + offset;
+	inarg.size = count;
 	
 	in.h.opcode = FUSE_WRITE;
 	in.h.ino = inode->i_ino;
-	in.argsize = argsize;
-	in.arg = arg;
+	in.numargs = 2;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	in.args[1].size = count;
+	in.args[1].value = buffer + offset;
 	request_send(fc, &in, &out);
-	kfree(arg);
+
+	kunmap(page);
 
 	return out.h.error;
 }

@@ -79,29 +79,52 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino,
 	return inode;
 }
 
+/* If the inode belongs to an existing directory, then it cannot be
+ assigned to new dentry */
+static int inode_ok(struct inode *inode)
+{
+	struct dentry *alias;
+	if(S_ISDIR(inode->i_mode) && (alias = d_find_alias(inode)) != NULL) {
+		dput(alias);
+		printk("fuse: cannot assign an existing directory\n");
+		return 0;
+
+	}
+	return 1;
+}
+
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 {
 	int ret;
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_lookup_out arg;
+	struct fuse_lookup_out outarg;
 	struct inode *inode;
 
 	in.h.opcode = FUSE_LOOKUP;
 	in.h.ino = dir->i_ino;
-	in.argsize = entry->d_name.len + 1;
-	in.arg = entry->d_name.name;
-	out.argsize = sizeof(arg);
-	out.arg = &arg;
+	in.numargs = 1;
+	in.args[0].size = entry->d_name.len + 1;
+	in.args[0].value = entry->d_name.name;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 	
 	inode = NULL;
 	if(!out.h.error) {
 		ret = -ENOMEM;
-		inode = fuse_iget(dir->i_sb, arg.ino, &arg.attr, out.h.unique);
+		inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr,
+				  out.h.unique);
 		if(!inode) 
 			goto err;
+
+		ret = -EPROTO;
+		if(!inode_ok(inode)) {
+			iput(inode);
+			goto err;
+		}
 	}
 	else if(out.h.error != -ENOENT) {
 		ret = out.h.error;
@@ -126,28 +149,25 @@ static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_mknod_in *inarg;
-	unsigned int insize;
+	struct fuse_mknod_in inarg;
 	struct fuse_mknod_out outarg;
 	struct inode *inode;
-	
-	insize = offsetof(struct fuse_mknod_in, name) + entry->d_name.len + 1;
-	inarg = kmalloc(insize, GFP_KERNEL);
-	if(!inarg)
-		return -ENOMEM;
-	
-	inarg->mode = mode;
-	inarg->rdev = rdev;
-	strcpy(inarg->name, entry->d_name.name);
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.mode = mode;
+	inarg.rdev = rdev;
 
 	in.h.opcode = FUSE_MKNOD;
 	in.h.ino = dir->i_ino;
-	in.argsize = insize;
-	in.arg = inarg;
-	out.argsize = sizeof(outarg);
-	out.arg = &outarg;
+	in.numargs = 2;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	in.args[1].size = entry->d_name.len + 1;
+	in.args[1].value = entry->d_name.name;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
-	kfree(inarg);
 
 	if(out.h.error) 
 		return out.h.error;
@@ -155,6 +175,18 @@ static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr, out.h.unique);
 	if(!inode) 
 		return -ENOMEM;
+
+	/* Don't allow userspace to do really stupid things... */
+	if((inode->i_mode ^ mode) & S_IFMT) {
+		iput(inode);
+		printk("fuse_mknod: inode has wrong type\n");
+		return -EPROTO;
+	}
+
+	if(!inode_ok(inode)) {
+		iput(inode);
+		return -EPROTO;
+	}
 
 	d_instantiate(entry, inode);
 	return 0;
@@ -171,23 +203,19 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_mkdir_in *inarg;
-	unsigned int insize;
-	
-	insize = offsetof(struct fuse_mkdir_in, name) + entry->d_name.len + 1;
-	inarg = kmalloc(insize, GFP_KERNEL);
-	if(!inarg)
-		return -ENOMEM;
-	
-	inarg->mode = mode;
-	strcpy(inarg->name, entry->d_name.name);
+	struct fuse_mkdir_in inarg;
+
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.mode = mode;
 
 	in.h.opcode = FUSE_MKDIR;
 	in.h.ino = dir->i_ino;
-	in.argsize = insize;
-	in.arg = inarg;
+	in.numargs = 2;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	in.args[1].size = entry->d_name.len + 1;
+	in.args[1].value = entry->d_name.name;
 	request_send(fc, &in, &out);
-	kfree(inarg);
 
 	return out.h.error;
 }
@@ -198,24 +226,16 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	char *inarg;
-	unsigned int insize;
-	
-	insize = entry->d_name.len + 1 + strlen(link) + 1;
-	inarg = kmalloc(insize, GFP_KERNEL);
-	if(!inarg)
-		return -ENOMEM;
-	
-	strcpy(inarg, entry->d_name.name);
-	strcpy(inarg + entry->d_name.len + 1, link);
 
 	in.h.opcode = FUSE_SYMLINK;
 	in.h.ino = dir->i_ino;
-	in.argsize = insize;
-	in.arg = inarg;
+	in.numargs = 2;
+	in.args[0].size = entry->d_name.len + 1;
+	in.args[0].value = entry->d_name.name;
+	in.args[1].size = strlen(link) + 1;
+	in.args[1].value = link;
 	request_send(fc, &in, &out);
-	kfree(inarg);
-	
+
 	return out.h.error;
 }
 
@@ -228,9 +248,11 @@ static int fuse_remove(struct inode *dir, struct dentry *entry,
 
 	in.h.opcode = op;
 	in.h.ino = dir->i_ino;
-	in.argsize = entry->d_name.len + 1;
-	in.arg = entry->d_name.name;
+	in.numargs = 1;
+	in.args[0].size = entry->d_name.len + 1;
+	in.args[0].value = entry->d_name.name;
 	request_send(fc, &in, &out);
+
 	return out.h.error;
 }
 
@@ -250,27 +272,21 @@ static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 	struct fuse_conn *fc = INO_FC(olddir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_rename_in *inarg;
-	unsigned int oldnamsize = oldent->d_name.len + 1;
-	unsigned int newnamsize = newent->d_name.len + 1;
-	unsigned int insize;
+	struct fuse_rename_in inarg;
 	
-	insize = offsetof(struct fuse_rename_in, names) + oldnamsize +
-		newnamsize;
-	inarg = kmalloc(insize, GFP_KERNEL);
-	if(!inarg)
-		return -ENOMEM;
-	
-	inarg->newdir = newdir->i_ino;
-	strcpy(inarg->names, oldent->d_name.name);
-	strcpy(inarg->names + oldnamsize, newent->d_name.name);
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.newdir = newdir->i_ino;
 
 	in.h.opcode = FUSE_RENAME;
 	in.h.ino = olddir->i_ino;
-	in.argsize = insize;
-	in.arg = inarg;
+	in.numargs = 3;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	in.args[1].size = oldent->d_name.len + 1;
+	in.args[1].value = oldent->d_name.name;
+	in.args[2].size = newent->d_name.len + 1;
+	in.args[2].value = newent->d_name.name;
 	request_send(fc, &in, &out);
-	kfree(inarg);
 
 	return out.h.error;
 }
@@ -282,23 +298,19 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_link_in *inarg;
-	unsigned int insize;
+	struct fuse_link_in inarg;
 	
-	insize = offsetof(struct fuse_link_in, name) + newent->d_name.len + 1;
-	inarg = kmalloc(insize, GFP_KERNEL);
-	if(!inarg)
-		return -ENOMEM;
-	
-	inarg->newdir = newdir->i_ino;
-	strcpy(inarg->name, newent->d_name.name);
+	memset(&inarg, 0, sizeof(inarg));
+	inarg.newdir = newdir->i_ino;
 
 	in.h.opcode = FUSE_LINK;
 	in.h.ino = inode->i_ino;
-	in.argsize = insize;
-	in.arg = inarg;
+	in.numargs = 2;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	in.args[1].size = newent->d_name.len + 1;
+	in.args[1].value = newent->d_name.name;
 	request_send(fc, &in, &out);
-	kfree(inarg);
 
 	return out.h.error;
 }
@@ -328,8 +340,9 @@ static int fuse_revalidate(struct dentry *entry)
 
 	in.h.opcode = FUSE_GETATTR;
 	in.h.ino = inode->i_ino;
-	out.argsize = sizeof(arg);
-	out.arg = &arg;
+	out.numargs = 1;
+	out.args[0].size = sizeof(arg);
+	out.args[0].value = &arg;
 	request_send(fc, &in, &out);
 	
 	if(!out.h.error)
@@ -400,16 +413,17 @@ static char *read_link(struct dentry *dentry)
 
 	in.h.opcode = FUSE_READLINK;
 	in.h.ino = inode->i_ino;
-	out.arg = link;
-	out.argsize = PAGE_SIZE - 1;
 	out.argvar = 1;
+	out.numargs = 1;
+	out.args[0].size = PAGE_SIZE - 1;
+	out.args[0].value = link;
 	request_send(fc, &in, &out);
 	if(out.h.error) {
 		free_page((unsigned long) link);
 		return ERR_PTR(out.h.error);
 	}
 
-	link[out.argsize] = '\0';
+	link[out.args[0].size] = '\0';
 	return link;
 }
 
@@ -453,8 +467,9 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 	
 	in.h.opcode = FUSE_GETDIR;
 	in.h.ino = inode->i_ino;
-	out.argsize = sizeof(outarg);
-	out.arg = &outarg;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 	if(!out.h.error) {
 		struct file *cfile = outarg.file;
@@ -521,14 +536,17 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	struct fuse_setattr_in inarg;
 	struct fuse_setattr_out outarg;
 
+	memset(&inarg, 0, sizeof(inarg));
 	inarg.valid = iattr_to_fattr(attr, &inarg.attr);
 	
 	in.h.opcode = FUSE_SETATTR;
 	in.h.ino = inode->i_ino;
-	in.argsize = sizeof(inarg);
-	in.arg = &inarg;
-	out.argsize = sizeof(outarg);
-	out.arg = &outarg;
+	in.numargs = 1;
+	in.args[0].size = sizeof(inarg);
+	in.args[0].value = &inarg;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 
 	if(!out.h.error) {

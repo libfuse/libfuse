@@ -14,14 +14,12 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
-#define MAX_CLEARED 256
-
 /**
  * A Fuse connection.
  *
  * This structure is created, when the client device is opened, and is
  * destroyed, when the client device is closed _and_ the filesystem is
- * umounted.
+ * unmounted.
  */
 struct fuse_conn {
 	/** The superblock of the mounted filesystem */
@@ -36,7 +34,7 @@ struct fuse_conn {
 	/** The fuse mount flags for this mount */
 	unsigned int flags;
 
-	/** The client wait queue */
+	/** Readers of the connection are waiting on this */
 	wait_queue_head_t waitq;
 
 	/** The list of pending requests */
@@ -45,9 +43,42 @@ struct fuse_conn {
 	/** The list of requests being processed */
 	struct list_head processing;
 
-	/** The request id */
+	/** Controls the maximum number of outstanding requests */
+	struct semaphore outstanding;
+	
+	/** The next unique request id */
 	int reqctr;
 };
+
+/** One input argument of a request */
+struct fuse_in_arg {
+	unsigned int size;
+	const void *value;
+};
+
+/** The request input */
+struct fuse_in {
+	struct fuse_in_header h;
+	unsigned int numargs;
+	struct fuse_in_arg args[3];
+};
+
+/** One output argument of a request */
+struct fuse_out_arg {
+	unsigned int size;
+	void *value;
+};
+
+/** The request output */
+struct fuse_out {
+	struct fuse_out_header h;
+	unsigned int argvar;
+	unsigned int numargs;
+	struct fuse_out_arg args[3];
+};
+
+#define FUSE_IN_INIT { {0, 0, 0}, 0}
+#define FUSE_OUT_INIT { {0, 0}, 0, 0}
 
 /**
  * A request to the client
@@ -56,47 +87,34 @@ struct fuse_req {
 	/** The request list */
 	struct list_head list;
 
-	/** The request ID */
-	int unique;
+	/** True if the request is synchronous */
+	unsigned int issync:1;
 
-	/** The opcode */
-	enum fuse_opcode opcode;
-	
-	/** The request input size */
-	unsigned int insize;
+	/** The request is locked */
+	unsigned int locked:1;
+
+	/** The request has been interrupted while it was locked */
+	unsigned int interrupted:1;
+
+	/* The request has been sent to the client */
+	unsigned int sent:1;
+
+	/* The request is finished */
+	unsigned int finished:1;
 
 	/** The request input */
-	char *in;
-	
-	/** The maximum request output size */
-	unsigned int outsize;
+	struct fuse_in *in;
 
 	/** The request output */
-	char *out;
+	struct fuse_out *out;
 
-	/** The request wait queue */
+	/** Used to wake up the task waiting for completion of request*/
 	wait_queue_head_t waitq;
 };
 
 
 #define INO_FC(inode) ((struct fuse_conn *) (inode)->i_sb->u.generic_sbp)
 #define DEV_FC(file) ((struct fuse_conn *) (file)->private_data)
-
-struct fuse_in {
-	struct fuse_in_header h;
-	unsigned int argsize;
-	const void *arg;
-};
-
-struct fuse_out {
-	struct fuse_out_header h;
-	unsigned int argsize;
-	unsigned int argvar;
-	void *arg;
-};
-
-#define FUSE_IN_INIT { {0, 0, 0}, 0, 0 }
-#define FUSE_OUT_INIT { {0, 0}, 0, 0, 0 }
 
 
 /**
@@ -154,6 +172,11 @@ void fuse_fs_cleanup(void);
  */
 void request_send(struct fuse_conn *fc, struct fuse_in *in,
 		  struct fuse_out *out);
+
+/**
+ * Send a request for which a reply is not expected
+ */
+int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in);
 
 /*
  * Local Variables:

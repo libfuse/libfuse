@@ -165,20 +165,6 @@ static fino_t find_node(struct fuse *f, fino_t parent, char *name,
     return get_ino(node);
 }
 
-static fino_t find_node_dir(struct fuse *f, fino_t parent, char *name)
-{
-    struct node *node;
-
-    pthread_mutex_lock(&f->lock);
-    node = lookup_node(f, parent, name);
-    pthread_mutex_unlock(&f->lock);
-
-    if(node != NULL)
-        return get_ino(node);
-    else
-        return (fino_t) -1;
-}
-
 static char *add_name(char *buf, char *s, const char *name)
 {
     size_t len = strlen(name);
@@ -310,7 +296,7 @@ static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
     size_t reclen;
     size_t res;
 
-    dirent.ino = find_node_dir(dh->fuse, dh->dir, name);
+    dirent.ino = (unsigned long) -1;
     dirent.namelen = strlen(name);
     strncpy(dirent.name, name, sizeof(dirent.name));
     dirent.type = type;
@@ -323,10 +309,28 @@ static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
     return 0;
 }
 
+static void send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
+{
+    int res;
+
+    if((f->flags & FUSE_DEBUG)) {
+        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+        printf("   unique: %i, error: %i (%s), outsize: %i\n", out->unique,
+               out->error, strerror(-out->error), outsize);
+        fflush(stdout);
+    }
+                
+    res = write(f->fd, outbuf, outsize);
+    if(res == -1) {
+        /* ENOENT means the operation was interrupted */
+        if(errno != ENOENT)
+            perror("writing fuse device");
+    }
+}
+
 static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
                        void *arg, size_t argsize)
 {
-    int res;
     char *outbuf;
     size_t outsize;
     struct fuse_out_header *out;
@@ -347,18 +351,7 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     if(argsize != 0)
         memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
 
-    if((f->flags & FUSE_DEBUG)) {
-        printf("   unique: %i, error: %i (%s), outsize: %i\n", out->unique,
-               out->error, strerror(-out->error), outsize);
-        fflush(stdout);
-    }
-                
-    res = write(f->fd, outbuf, outsize);
-    if(res == -1) {
-        /* ENOENT means the operation was interrupted */
-        if(errno != ENOENT)
-            perror("writing fuse device");
-    }
+    send_reply_raw(f, outbuf, outsize);
 
     free(outbuf);
 }
@@ -388,6 +381,10 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
 static void do_forget(struct fuse *f, struct fuse_in_header *in,
                       struct fuse_forget_in *arg)
 {
+    if(f->flags & FUSE_DEBUG) {
+        printf("FORGET %li/%i\n", in->ino, arg->version);
+        fflush(stdout);
+    }
     destroy_node(f, in->ino, arg->version);
 }
 
@@ -697,8 +694,11 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
-    char *buf = (char *) malloc(arg->size);
+    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
+    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+    char *buf = outbuf + sizeof(struct fuse_out_header);
     size_t size;
+    size_t outsize;
 
     res = -ENOENT;
     path = get_path(f, in->ino);
@@ -714,9 +714,12 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
         size = res;
         res = 0;
     }
-
-    send_reply(f, in, res, buf, size);
-    free(buf);
+    out->unique = in->unique;
+    out->error = res;
+    outsize = sizeof(struct fuse_out_header) + size;
+    
+    send_reply_raw(f, outbuf, outsize);
+    free(outbuf);
 }
 
 static void do_write(struct fuse *f, struct fuse_in_header *in,
@@ -747,6 +750,12 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
+static void free_cmd(struct fuse_cmd *cmd)
+{
+    free(cmd->buf);
+    free(cmd);
+}
+
 void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
     struct fuse_in_header *in = (struct fuse_in_header *) cmd->buf;
@@ -764,10 +773,6 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     switch(in->opcode) {
     case FUSE_LOOKUP:
         do_lookup(f, in, (char *) inarg);
-        break;
-
-    case FUSE_FORGET:
-        do_forget(f, in, (struct fuse_forget_in *) inarg);
         break;
 
     case FUSE_GETATTR:
@@ -826,37 +831,45 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     default:
         fprintf(stderr, "Operation %i not implemented\n", in->opcode);
-        /* No need to send reply to async requests */
-        if(in->unique != 0)
-            send_reply(f, in, -ENOSYS, NULL, 0);
+        send_reply(f, in, -ENOSYS, NULL, 0);
     }
-    
-    free(cmd->buf);
-    free(cmd);
+
+    free_cmd(cmd);
 }
 
 struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 {
     ssize_t res;
-    char inbuf[FUSE_MAX_IN];
     struct fuse_cmd *cmd;
-    
-    res = read(f->fd, inbuf, sizeof(inbuf));
-    if(res == -1) {
-        perror("reading fuse device");
-        /* BAD... This will happen again */
-        return NULL;
-    }
-    if((size_t) res < sizeof(struct fuse_in_header)) {
-        fprintf(stderr, "short read on fuse device\n");
-        /* Cannot happen */
-        return NULL;
-    }
+    struct fuse_in_header *in;
 
-    cmd = (struct fuse_cmd *) malloc(sizeof(*cmd));
-    cmd->buflen = res;
-    cmd->buf = (char *) malloc(cmd->buflen);
-    memcpy(cmd->buf, inbuf, cmd->buflen);
+    cmd = (struct fuse_cmd *) malloc(sizeof(struct fuse_cmd));
+    cmd->buf = (char *) malloc(FUSE_MAX_IN);
+
+    do {
+        res = read(f->fd, cmd->buf, FUSE_MAX_IN);
+        if(res == -1) {
+            perror("reading fuse device");
+            /* BAD... This will happen again */
+            free_cmd(cmd);
+            return NULL;
+        }
+        if((size_t) res < sizeof(struct fuse_in_header)) {
+            fprintf(stderr, "short read on fuse device\n");
+            /* Cannot happen */
+            free_cmd(cmd);
+            return NULL;
+        }
+        cmd->buflen = res;
+
+        /* FORGET is special: it can be done without calling filesystem
+           methods. */
+        in = (struct fuse_in_header *) cmd->buf;
+        if(in->opcode == FUSE_FORGET) {
+            void *inarg = cmd->buf + sizeof(struct fuse_in_header);
+            do_forget(f, in, (struct fuse_forget_in *) inarg);
+        }
+    } while(in->opcode == FUSE_FORGET);
 
     return cmd;
 }

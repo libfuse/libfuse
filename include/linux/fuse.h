@@ -56,22 +56,22 @@ struct fuse_attr {
 #define FATTR_UTIME	(1 << 4)
 
 enum fuse_opcode {
-	FUSE_LOOKUP     = 1,
-	FUSE_FORGET,
-	FUSE_GETATTR,
-	FUSE_SETATTR,
-	FUSE_READLINK,
-	FUSE_SYMLINK,
-	FUSE_GETDIR,
-	FUSE_MKNOD,
-	FUSE_MKDIR,
-	FUSE_UNLINK,
-	FUSE_RMDIR,
-	FUSE_RENAME,
-	FUSE_LINK,
-	FUSE_OPEN,
-	FUSE_READ,
-	FUSE_WRITE,
+	FUSE_LOOKUP	= 1,
+	FUSE_FORGET	= 2,
+	FUSE_GETATTR	= 3,
+	FUSE_SETATTR	= 4,
+	FUSE_READLINK	= 5,
+	FUSE_SYMLINK	= 6,
+	FUSE_GETDIR	= 7,
+	FUSE_MKNOD	= 8,
+	FUSE_MKDIR	= 9,
+	FUSE_UNLINK	= 10,
+	FUSE_RMDIR	= 11,
+	FUSE_RENAME	= 12,
+	FUSE_LINK	= 13,
+	FUSE_OPEN	= 14,
+	FUSE_READ	= 15,
+	FUSE_WRITE	= 16,
 };
 
 /* Conservative buffer size for the client */
@@ -98,7 +98,7 @@ struct fuse_getdir_out {
 struct fuse_mknod_in {
 	unsigned short mode;
 	unsigned short rdev;
-	char name[1];
+	char name[0];
 };
 
 struct fuse_mknod_out {
@@ -108,17 +108,17 @@ struct fuse_mknod_out {
 
 struct fuse_mkdir_in {
 	unsigned short mode;
-	char name[1];
+	char name[0];
 };
 
 struct fuse_rename_in {
 	unsigned long newdir;
-	char names[1];
+	char names[0];
 };
 
 struct fuse_link_in {
 	unsigned long newdir;
-	char name[1];
+	char name[0];
 };
 
 struct fuse_setattr_in {
@@ -142,7 +142,7 @@ struct fuse_read_in {
 struct fuse_write_in {
 	unsigned long long offset;
 	unsigned int size;
-	char buf[1];
+	char buf[0];
 };
 
 struct fuse_in_header {

@@ -23,17 +23,35 @@ static void fuse_read_inode(struct inode *inode)
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_forget_in arg;
+	struct fuse_in *in = NULL;
+	struct fuse_forget_in *inarg = NULL;
 	
-	arg.version = inode->i_version;
+	if(fc == NULL)
+		return;
+
+	in = kmalloc(sizeof(struct fuse_in), GFP_NOFS);
+	if(!in)
+		return;
+
+	inarg = kmalloc(sizeof(struct fuse_forget_in), GFP_NOFS);
+	if(!inarg) 
+		goto out_free;
 	
-	in.h.opcode = FUSE_FORGET;
-	in.h.ino = inode->i_ino;
-	in.argsize = sizeof(arg);
-	in.arg = &arg;
-	
-	request_send(fc, &in, NULL);
+	memset(inarg, 0, sizeof(struct fuse_forget_in));
+	inarg->version = inode->i_version;
+		
+	in->h.opcode = FUSE_FORGET;
+	in->h.ino = inode->i_ino;
+	in->numargs = 1;
+	in->args[0].size = sizeof(struct fuse_forget_in);
+	in->args[0].value = inarg;
+		
+	if(!request_send_noreply(fc, in))
+		return;
+
+  out_free:
+	kfree(inarg);
+	kfree(in);
 }
 
 static void fuse_put_super(struct super_block *sb)
@@ -45,6 +63,7 @@ static void fuse_put_super(struct super_block *sb)
 	fc->uid = 0;
 	fc->flags = 0;
 	fuse_release_conn(fc);
+	sb->u.generic_sbp = NULL;
 	spin_unlock(&fuse_lock);
 }
 
