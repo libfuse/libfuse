@@ -11,7 +11,7 @@
 //@+others
 //@+node:includes
 #include <Python.h>
-#include <fuse.h>
+#include "fuse.h"
 #include <time.h>
 //@-node:includes
 //@+node:globals

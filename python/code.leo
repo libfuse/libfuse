@@ -2,7 +2,7 @@
 <leo_file>
 <leo_header file_format="2" tnodes="0" max_tnode_index="69" clone_windows="0"/>
 <globals body_outline_ratio="0.2448559670781893">
-	<global_window_position top="130" left="90" height="631" width="1124"/>
+	<global_window_position top="129" left="90" height="631" width="1124"/>
 	<global_log_window_position top="0" left="0" height="0" width="0"/>
 </globals>
 <preferences>
@@ -13,7 +13,7 @@
 </find_panel_settings>
 <vnodes>
 <v t="davidmcnab.121303142957" a="E"><vh>fuse python bindings</vh>
-<v t="davidmcnab.121303142957.1" tnodeList="davidmcnab.121303142957.1,davidmcnab.121303142957.2,davidmcnab.121303142957.3,davidmcnab.121303142957.4,davidmcnab.121303142957.5,davidmcnab.121303142957.6,davidmcnab.121303142957.7,davidmcnab.121303142957.8,davidmcnab.121303142957.9,davidmcnab.121303142957.10,davidmcnab.121303142957.11,davidmcnab.121303142957.12,davidmcnab.121303142957.13,davidmcnab.121303142957.14,davidmcnab.121303142957.15,davidmcnab.121303142957.16,davidmcnab.121303142957.17,davidmcnab.121303142957.18,davidmcnab.121303142957.19,davidmcnab.121303142957.20,davidmcnab.121303142957.21,davidmcnab.121303142957.22,davidmcnab.121303142957.23,davidmcnab.121303142957.24,davidmcnab.121303144441,davidmcnab.121303144441.1,davidmcnab.121303142957.25,davidmcnab.121303142957.26,davidmcnab.121303142957.27,davidmcnab.121303142957.28"><vh>@file _fusemodule.c</vh>
+<v t="davidmcnab.121303142957.1" a="E" tnodeList="davidmcnab.121303142957.1,davidmcnab.121303142957.2,davidmcnab.121303142957.3,davidmcnab.121303142957.4,davidmcnab.121303142957.5,davidmcnab.121303142957.6,davidmcnab.121303142957.7,davidmcnab.121303142957.8,davidmcnab.121303142957.9,davidmcnab.121303142957.10,davidmcnab.121303142957.11,davidmcnab.121303142957.12,davidmcnab.121303142957.13,davidmcnab.121303142957.14,davidmcnab.121303142957.15,davidmcnab.121303142957.16,davidmcnab.121303142957.17,davidmcnab.121303142957.18,davidmcnab.121303142957.19,davidmcnab.121303142957.20,davidmcnab.121303142957.21,davidmcnab.121303142957.22,davidmcnab.121303142957.23,davidmcnab.121303142957.24,davidmcnab.121303144441,davidmcnab.121303144441.1,davidmcnab.121303142957.25,davidmcnab.121303142957.26,davidmcnab.121303142957.27,davidmcnab.121303142957.28"><vh>@file _fusemodule.c</vh>
 <v t="davidmcnab.121303142957.2"><vh>includes</vh></v>
 <v t="davidmcnab.121303142957.3" a="M"><vh>globals</vh></v>
 <v t="davidmcnab.121303142957.4"><vh>PROLOGUE</vh></v>
@@ -81,14 +81,27 @@
 <v t="davidmcnab.121303142957.60"><vh>read</vh></v>
 <v t="davidmcnab.121303142957.61"><vh>write</vh></v>
 <v t="davidmcnab.121303142957.62" a="M"><vh>release</vh></v>
-<v t="davidmcnab.121303144134" a="V"><vh>statfs</vh></v>
+<v t="davidmcnab.121303144134"><vh>statfs</vh></v>
 <v t="davidmcnab.121303144134.1"><vh>fsync</vh></v>
 </v>
 <v t="davidmcnab.121303142957.63"><vh>mainline</vh></v>
 </v>
 <v t="davidmcnab.121303142957.64" tnodeList="davidmcnab.121303142957.64"><vh>@file setup.py</vh></v>
 <v t="davidmcnab.121303142957.65" tnodeList="davidmcnab.121303142957.65"><vh>@file README</vh></v>
-<v t="davidmcnab.121303142957.67" tnodeList="davidmcnab.121303142957.67"><vh>@file mount.fuse</vh></v>
+<v t="davidmcnab.121303142957.67" a="E" tnodeList="davidmcnab.121303142957.67"><vh>@file mount.fuse</vh></v>
+<v t="davidmcnab.121403050157" a="E"><vh>@file fuse.py</vh>
+<v t="davidmcnab.121403050157.1"><vh>&lt;&lt; fuse declarations &gt;&gt;</vh></v>
+<v t="davidmcnab.121403050157.2" a="E"><vh>class ErrnoWrapper</vh>
+<v t="davidmcnab.121403050157.3"><vh>&lt;&lt; class ErrnoWrapper declarations &gt;&gt;</vh></v>
+<v t="davidmcnab.121403050157.4"><vh>__init__</vh></v>
+<v t="davidmcnab.121403050157.5" a="V"><vh>__call__</vh></v>
+</v>
+<v t="davidmcnab.121403050157.6" a="E"><vh>class Fuse</vh>
+<v t="davidmcnab.121403050157.7"><vh>&lt;&lt; class Fuse declarations &gt;&gt;</vh></v>
+<v t="davidmcnab.121403050157.8"><vh>__init__</vh></v>
+<v t="davidmcnab.121403050157.9"><vh>main</vh></v>
+</v>
+</v>
 </v>
 </vnodes>
 <tnodes>
@@ -986,6 +999,122 @@ EPILOGUE
 	EPILOGUE
 }
 
+</t>
+<t tx="davidmcnab.121403050157">@ignore
+@language python
+&lt;&lt; fuse declarations &gt;&gt;
+@others
+    #@-node:main
+    #@-others
+#@-node:class Fuse
+#@-others
+#@-node:@file fuse.py
+#@-leo
+</t>
+<t tx="davidmcnab.121403050157.1">#@+leo-ver=4
+#@+node:@file fuse.py
+#
+#    Copyright (C) 2001  Jeff Epler  &lt;jepler@unpythonic.dhs.org&gt;
+#
+#    This program can be distributed under the terms of the GNU GPL.
+#    See the file COPYING.
+#
+
+
+#@@language python
+#@+others
+#@+node:imports
+# suppress version mismatch warnings
+try:
+    import warnings
+    warnings.filterwarnings('ignore',
+                            'Python C API version mismatch',
+                            RuntimeWarning,
+                            )
+except:
+    pass
+ 
+from _fuse import main, DEBUG
+import os, sys
+from errno import *
+
+#@-node:imports
+#@+node:class ErrnoWrapper
+</t>
+<t tx="davidmcnab.121403050157.2">class ErrnoWrapper:
+	&lt;&lt; class ErrnoWrapper declarations &gt;&gt;
+	@others
+</t>
+<t tx="davidmcnab.121403050157.3">    #@	@+others
+    #@+node:__init__
+</t>
+<t tx="davidmcnab.121403050157.4">def __init__(self, func):
+	self.func = func
+</t>
+<t tx="davidmcnab.121403050157.5">#@-node:__init__
+#@+node:__call__
+def __call__(self, *args, **kw):
+	try:
+		return apply(self.func, args, kw)
+	except (IOError, OSError), detail:
+		# Sometimes this is an int, sometimes an instance...
+		if hasattr(detail, "errno"): detail = detail.errno
+		return -detail
+</t>
+<t tx="davidmcnab.121403050157.6">    #@-node:__call__
+    #@-others
+#@-node:class ErrnoWrapper
+#@+node:class Fuse
+class Fuse:
+	&lt;&lt; class Fuse declarations &gt;&gt;
+	@others
+</t>
+<t tx="davidmcnab.121403050157.7">#@	@+others
+#@+node:attribs
+_attrs = ['getattr', 'readlink', 'getdir', 'mknod', 'mkdir',
+	  'unlink', 'rmdir', 'symlink', 'rename', 'link', 'chmod',
+	  'chown', 'truncate', 'utime', 'open', 'read', 'write', 'release',
+      'statfs', 'fsync']
+
+flags = 0
+multithreaded = 0
+
+#@-node:attribs
+#@+node:__init__
+</t>
+<t tx="davidmcnab.121403050157.8">def __init__(self, *args, **kw):
+
+    # default attributes
+    self.optlist = []
+    self.optdict = {}
+    self.mountpoint = None
+
+    # grab arguments, if any
+    argv = sys.argv
+    argc = len(argv)
+    if argc &gt; 1:
+        # we've been given the mountpoint
+        self.mountpoint = argv[1]
+    if argc &gt; 2:
+        # we've received mount args
+        optstr = argv[2]
+        opts = optstr.split(",")
+        for o in opts:
+            try:
+                k, v = o.split("=", 1)
+                self.optdict[k] = v
+            except:
+                self.optlist.append(o)
+</t>
+<t tx="davidmcnab.121403050157.9">#@-node:__init__
+#@+node:main
+def main(self):
+	d = {'flags': self.flags}
+	d['multithreaded'] = self.multithreaded
+	for a in self._attrs:
+		if hasattr(self,a):
+			d[a] = ErrnoWrapper(getattr(self, a))
+	apply(main, (), d)
 </t>
 </tnodes>
 </leo_file>
