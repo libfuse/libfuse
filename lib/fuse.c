@@ -349,7 +349,7 @@ static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
     return 0;
 }
 
-static void send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
+static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
 {
     int res;
 
@@ -370,12 +370,15 @@ static void send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
         /* ENOENT means the operation was interrupted */
         if(errno != ENOENT)
             perror("fuse: writing device");
+        return -errno;
     }
+    return 0;
 }
 
-static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
-                       void *arg, size_t argsize)
+static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
+                      void *arg, size_t argsize)
 {
+    int res;
     char *outbuf;
     size_t outsize;
     struct fuse_out_header *out;
@@ -397,9 +400,10 @@ static void send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     if(argsize != 0)
         memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
 
-    send_reply_raw(f, outbuf, outsize);
-
+    res = send_reply_raw(f, outbuf, outsize);
     free(outbuf);
+
+    return res;
 }
 
 static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
@@ -740,6 +744,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
                     struct fuse_open_in *arg)
 {
     int res;
+    int res2;
     char *path;
 
     res = -ENOENT;
@@ -748,9 +753,14 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
         res = -ENOSYS;
         if(f->op.open)
             res = f->op.open(path, arg->flags);
+    }
+    res2 = send_reply(f, in, res, NULL, 0);
+    if(path != NULL) {
+        /* The open syscall was interrupted, so it must be cancelled */
+        if(res == 0 && res2 == -ENOENT && f->op.release)
+            f->op.release(path);
         free(path);
     }
-    send_reply(f, in, res, NULL, 0);
 }
 
 static void do_release(struct fuse *f, struct fuse_in_header *in)
