@@ -188,5 +188,6 @@ void fuse_fs_cleanup()
  * Local Variables:
  * indent-tabs-mode: t
  * c-basic-offset: 8
- * End: */
+ * End:
+ */
 

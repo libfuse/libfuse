@@ -2,8 +2,6 @@
 
  - Permission checking for users other then the owner of the mount
 
- - Improve efficiency of read and write operations
-
  - Integrate (parts of) fusermount into mount(8)
 
  - Statfs operation
