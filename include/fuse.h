@@ -17,8 +17,10 @@
 /** Minor version of FUSE library interface */
 #define FUSE_MINOR_VERSION 1
 
-/* Now and forever: this interface uses 64 bit off_t */
-#define _FILE_OFFSET_BITS 64
+/* This interface uses 64 bit off_t */
+#if _FILE_OFFSET_BITS != 64
+#error Please add -D_FILE_OFFSET_BITS=64 to your compile flags!
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
