@@ -814,7 +814,7 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.unlink) {
-            if (is_open(f, in->ino, name))
+            if (!(f->flags & FUSE_HARD_REMOVE) && is_open(f, in->ino, name))
                 res = hide_node(f, path, in->ino, name);
             else {
                 res = f->op.unlink(path);
@@ -894,7 +894,8 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
             res = -ENOSYS;
             if (f->op.rename) {
                 res = 0;
-                if (is_open(f, newdir, newname))
+                if (!(f->flags & FUSE_HARD_REMOVE) && 
+                    is_open(f, newdir, newname))
                     res = hide_node(f, newpath, newdir, newname);
                 if (res == 0) {
                     res = f->op.rename(oldpath, newpath);

@@ -30,6 +30,7 @@ static void usage(char *progname)
             "    -d      enable debug output (implies -f)\n"
             "    -f      foreground operation\n"
             "    -s      disable multithreaded operation\n"
+            "    -i      immediate removal (don't delay until last release)\n"
             "    -h      print help\n"
             "\n"
             "Fusermount options:\n"
@@ -134,6 +135,10 @@ void fuse_main(int argc, char *argv[], const struct fuse_operations *op)
                     background = 0;
                     break;
                     
+                case 'i':
+                    flags |= FUSE_HARD_REMOVE;
+                    break;
+
                 case 'f':
                     background = 0;
                     break;

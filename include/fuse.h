@@ -144,6 +144,10 @@ struct fuse_context {
 /** Enable debuging output */
 #define FUSE_DEBUG       (1 << 1)
 
+/** If a file is removed but it's still open, don't hide the file but
+    remove it immediately */
+#define FUSE_HARD_REMOVE (1 << 2)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
