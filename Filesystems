@@ -211,3 +211,17 @@ Description:
   generation tool.
 
 ==============================================================================
+Name: gphoto2-fuse-fs
+
+Author: Christopher Lester <lester at hep phy cam ac uk>
+
+Homepage: http://www.hep.phy.cam.ac.uk/~lester/gphoto2-fuse-fs/
+
+Description:
+
+  This program allows mounting a gphoto2 based digital camera so that
+  you can access the files via "standard" programs like "ls, cat, tar,
+  gthumb, netscape, firefox, etc" rather than just through "gtkam and
+  gphoto2"
+
+==============================================================================
