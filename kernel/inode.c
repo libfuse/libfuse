@@ -148,7 +148,7 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
 	memset(&attr, 0, sizeof(attr));
 
 	attr.mode = mode;
-	return fuse_iget(sb, 1, &attr, 0);
+	return fuse_iget(sb, 1, 0, &attr, 0);
 }
 
 
@@ -158,7 +158,7 @@ static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 {
 	__u32 *objp = vobjp;
 	unsigned long ino = objp[0];
-	/* __u32 generation = objp[1]; */
+	__u32 generation = objp[1];
 	struct inode *inode;
 	struct dentry *entry;
 
@@ -166,7 +166,7 @@ static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 		return ERR_PTR(-ESTALE);
 
 	inode = ilookup(sb, ino);
-	if(!inode)
+	if(!inode || inode->i_generation != generation)
 		return ERR_PTR(-ESTALE);
 
 	entry = d_alloc_anon(inode);

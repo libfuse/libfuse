@@ -16,6 +16,7 @@ struct node {
     struct node *name_next;
     struct node *ino_next;
     fino_t ino;
+    unsigned int generation;
     fino_t parent;
     char *name;
     int mode;
@@ -32,6 +33,7 @@ struct fuse {
     struct node **ino_table;
     size_t ino_table_size;
     fino_t ctr;
+    unsigned int generation;
     pthread_mutex_t lock;
     int numworker;
     int numavail;

@@ -117,6 +117,7 @@ enum fuse_opcode {
 
 struct fuse_lookup_out {
 	unsigned long ino;
+	unsigned long generation;
 	struct fuse_attr attr;
 };
 
@@ -133,19 +134,13 @@ struct fuse_getdir_out {
 	void *file; /* Used by kernel only */
 };
 
-/* FIXME: 2.6 needs 32 bit rdev */
 struct fuse_mknod_in {
-	unsigned short mode;
-	unsigned short rdev;
-};
-
-struct fuse_mknod_out {
-	unsigned long ino;
-	struct fuse_attr attr;
+	unsigned int mode;
+	unsigned int rdev;
 };
 
 struct fuse_mkdir_in {
-	unsigned short mode;
+	unsigned int mode;
 };
 
 struct fuse_rename_in {

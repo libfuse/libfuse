@@ -174,7 +174,7 @@ extern spinlock_t fuse_lock;
 /**
  * Get a filled in inode
  */
-struct inode *fuse_iget(struct super_block *sb, ino_t ino,
+struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 			struct fuse_attr *attr, int version);
 
 

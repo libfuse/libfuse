@@ -3,7 +3,18 @@
 	* statfs library API changed to match other methods.  Since this
 	  is not backward compatible FUSE_MAJOR_VERSION is changed to 2
 
-	* statfs kernel interface changed to 64 bits, added 'bavail' field
+	* kernel interface changes follow:
+
+	* statfs changed to 64 bits, added 'bavail' field
+
+	* add generation number to lookup result
+
+	* optimized mknod/mkdir/symlink/link (no separate lookup is
+	needed)
+
+	* rdev size increased to 32 bits for mknod
+
+	* kernel interface version changed to 3.1
 	
 2004-02-18  Miklos Szeredi <mszeredi@inf.bme.hu>
 

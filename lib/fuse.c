@@ -81,11 +81,9 @@ static struct node *get_node(struct fuse *f, fino_t ino)
     abort();
 }
 
-static void hash_ino(struct fuse *f, struct node *node, fino_t ino)
+static void hash_ino(struct fuse *f, struct node *node)
 {
-    size_t hash = ino % f->ino_table_size;
-    node->ino = ino;
-    
+    size_t hash = node->ino % f->ino_table_size;
     node->ino_next = f->ino_table[hash];
     f->ino_table[hash] = node;    
 }
@@ -102,16 +100,13 @@ static void unhash_ino(struct fuse *f, struct node *node)
         }
 }
 
-static fino_t get_ino(struct node *node)
-{
-    return node->ino;
-}
-
 static fino_t next_ino(struct fuse *f)
 {
-    do f->ctr++;
-    while(f->ctr == 0 || __get_node(f, f->ctr) != NULL);
-    
+    do {
+        f->ctr++;
+        if(!f->ctr)
+            f->generation ++;
+    } while(f->ctr == 0 || __get_node(f, f->ctr) != NULL);
     return f->ctr;
 }
 
@@ -176,8 +171,8 @@ static void unhash_name(struct fuse *f, struct node *node)
     }
 }
 
-static fino_t find_node(struct fuse *f, fino_t parent, char *name,
-                        struct fuse_attr *attr, int version)
+static struct node *find_node(struct fuse *f, fino_t parent, char *name,
+                              struct fuse_attr *attr, int version)
 {
     struct node *node;
     int mode = attr->mode & S_IFMT;
@@ -198,13 +193,15 @@ static fino_t find_node(struct fuse *f, fino_t parent, char *name,
     node = (struct node *) calloc(1, sizeof(struct node));
     node->mode = mode;
     node->rdev = rdev;
-    hash_ino(f, node, next_ino(f));
+    node->ino = next_ino(f);
+    node->generation = f->generation;
+    hash_ino(f, node);
     hash_name(f, node, parent, name);
 
   out:
     node->version = version;
     pthread_mutex_unlock(&f->lock);
-    return get_ino(node);
+    return node;
 }
 
 static char *add_name(char *buf, char *s, const char *name)
@@ -407,11 +404,33 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     return res;
 }
 
+static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
+                       const char *path, struct fuse_lookup_out *arg)
+{
+    int res;
+    struct stat buf;
+
+    res = f->op.getattr(path, &buf);
+    if(res == 0) {
+        struct node *node;
+
+        memset(arg, 0, sizeof(struct fuse_lookup_out));
+        convert_stat(&buf, &arg->attr);
+        node = find_node(f, ino, name, &arg->attr, version);
+        arg->ino = node->ino;
+        arg->generation = node->generation;
+        if(f->flags & FUSE_DEBUG) {
+            printf("   INO: %li\n", arg->ino);
+            fflush(stdout);
+        }
+    }
+    return res;
+}
+
 static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
 {
     int res;
     char *path;
-    struct stat buf;
     struct fuse_lookup_out arg;
 
     res = -ENOENT;
@@ -423,18 +442,8 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
         }
         res = -ENOSYS;
         if(f->op.getattr)
-            res = f->op.getattr(path, &buf);
+            res = lookup_path(f, in->ino, in->unique, name, path, &arg);
         free(path);
-    }
-
-    if(res == 0) {
-        memset(&arg, 0, sizeof(struct fuse_lookup_out));
-        convert_stat(&buf, &arg.attr);
-        arg.ino = find_node(f, in->ino, name, &arg.attr, in->unique);
-        if(f->flags & FUSE_DEBUG) {
-            printf("   LOOKUP: %li\n", arg.ino);
-            fflush(stdout);
-        }
     }
     send_reply(f, in, res, &arg, sizeof(arg));
 }
@@ -609,27 +618,24 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
-    struct fuse_mknod_out outarg;
-    struct stat buf;
+    char *name = PARAM(inarg);
+    struct fuse_lookup_out outarg;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, PARAM(inarg));
+    path = get_path_name(f, in->ino, name);
     if(path != NULL) {
+        if(f->flags & FUSE_DEBUG) {
+            printf("MKNOD %s\n", path);
+            fflush(stdout);
+        }
         res = -ENOSYS;
         if(f->op.mknod && f->op.getattr) {
             res = f->op.mknod(path, inarg->mode, inarg->rdev);
             if(res == 0)
-                res = f->op.getattr(path, &buf);
+                res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
         }
         free(path);
     }
-    if(res == 0) {
-        memset(&outarg, 0, sizeof(struct fuse_mknod_out));
-        convert_stat(&buf, &outarg.attr);
-        outarg.ino = find_node(f, in->ino, PARAM(inarg), &outarg.attr,
-                               in->unique);
-    }
-
     send_reply(f, in, res, &outarg, sizeof(outarg));
 }
 
@@ -638,16 +644,25 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
+    char *name = PARAM(inarg);
+    struct fuse_lookup_out outarg;
 
     res = -ENOENT;
-    path = get_path_name(f, in->ino, PARAM(inarg));
+    path = get_path_name(f, in->ino, name);
     if(path != NULL) {
+        if(f->flags & FUSE_DEBUG) {
+            printf("MKDIR %s\n", path);
+            fflush(stdout);
+        }
         res = -ENOSYS;
-        if(f->op.mkdir)
+        if(f->op.mkdir && f->op.getattr) {
             res = f->op.mkdir(path, inarg->mode);
+            if(res == 0)
+                res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
+        }
         free(path);
     }
-    send_reply(f, in, res, NULL, 0);
+    send_reply(f, in, res, &outarg, sizeof(outarg));
 }
 
 static void do_remove(struct fuse *f, struct fuse_in_header *in, char *name)
@@ -679,16 +694,24 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
 {
     int res;
     char *path;
+    struct fuse_lookup_out outarg;
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
     if(path != NULL) {
+        if(f->flags & FUSE_DEBUG) {
+            printf("SYMLINK %s\n", path);
+            fflush(stdout);
+        }
         res = -ENOSYS;
-        if(f->op.symlink)
+        if(f->op.symlink && f->op.getattr) {
             res = f->op.symlink(link, path);
+            if(res == 0)
+                res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
+        }
         free(path);
     }
-    send_reply(f, in, res, NULL, 0);
+    send_reply(f, in, res, &outarg, sizeof(outarg));
 }
 
 static void do_rename(struct fuse *f, struct fuse_in_header *in,
@@ -725,20 +748,30 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *oldpath;
     char *newpath;
+    char *name = PARAM(arg);
+    struct fuse_lookup_out outarg;
 
     res = -ENOENT;
     oldpath = get_path(f, in->ino);
     if(oldpath != NULL) {
-        newpath =  get_path_name(f, arg->newdir, PARAM(arg));
+        newpath =  get_path_name(f, arg->newdir, name);
         if(newpath != NULL) {
+            if(f->flags & FUSE_DEBUG) {
+                printf("LINK %s\n", newpath);
+                fflush(stdout);
+            }
             res = -ENOSYS;
-            if(f->op.link)
+            if(f->op.link && f->op.getattr) {
                 res = f->op.link(oldpath, newpath);
+                if(res == 0)
+                    res = lookup_path(f, arg->newdir, in->unique, name,
+                                      newpath, &outarg);
+            }
             free(newpath);
         }
         free(oldpath);
     }
-    send_reply(f, in, res, NULL, 0);   
+    send_reply(f, in, res, &outarg, sizeof(outarg));   
 }
 
 static void do_open(struct fuse *f, struct fuse_in_header *in,
@@ -1090,6 +1123,7 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
     f->flags = flags;
     f->fd = fd;
     f->ctr = 0;
+    f->generation = 0;
     /* FIXME: Dynamic hash table */
     f->name_table_size = 14057;
     f->name_table = (struct node **)
@@ -1111,7 +1145,9 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
     root->rdev = 0;
     root->name = strdup("/");
     root->parent = 0;
-    hash_ino(f, root, FUSE_ROOT_INO);
+    root->ino = FUSE_ROOT_INO;
+    root->generation = 0;
+    hash_ino(f, root);
 
     return f;
 }

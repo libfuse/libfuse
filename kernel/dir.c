@@ -74,23 +74,29 @@ static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 	else if(S_ISLNK(inode->i_mode)) {
 		inode->i_op = &fuse_symlink_inode_operations;
 	}
-	else {
+	else if(S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) || 
+		S_ISFIFO(inode->i_mode) || S_ISSOCK(inode->i_mode)){
 		inode->i_op = &fuse_file_inode_operations;
 		init_special_inode(inode, inode->i_mode,
 				   new_decode_dev(attr->rdev));
-	}
+	} else
+		printk("fuse_init_inode: bad file type: %o\n", inode->i_mode);
+
 	inode->u.generic_ip = inode;
 }
 
-struct inode *fuse_iget(struct super_block *sb, ino_t ino,
+struct inode *fuse_iget(struct super_block *sb, ino_t ino, int generation,
 			struct fuse_attr *attr, int version)
 {
 	struct inode *inode;
 
 	inode = iget(sb, ino);
 	if(inode) {
-		if(!inode->u.generic_ip)
+		if(!inode->u.generic_ip) {
+			inode->i_generation = generation;
 			fuse_init_inode(inode, attr);
+		} else if(inode->i_generation != generation)
+			printk("fuse_iget: bad generation for ino %lu\n", ino);
 
 		change_attributes(inode, attr);
 		inode->i_version = version;
@@ -130,7 +136,8 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 
 	err = fuse_do_lookup(dir, entry, &outarg, &version);
 	if(!err) {
-		inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr, version);
+		inode = fuse_iget(dir->i_sb, outarg.ino, outarg.generation,
+				  &outarg.attr, version);
 		if(!inode)
 			return -ENOMEM;
 	} else if(err != -ENOENT)
@@ -142,8 +149,28 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	return 0;
 }
 
-/* create needs to return a positive entry, so this is actually an
-   mknod+lookup */
+static int lookup_new_entry(struct inode *dir, struct dentry *entry,
+				   struct fuse_lookup_out *outarg, int version,
+				   int mode)
+{
+	struct inode *inode;
+	inode = fuse_iget(dir->i_sb, outarg->ino, outarg->generation, 
+			  &outarg->attr, version);
+	if(!inode) 
+		return -ENOMEM;
+
+	/* Don't allow userspace to do really stupid things... */
+	if((inode->i_mode ^ mode) & S_IFMT) {
+		iput(inode);
+		printk("fuse_mknod: inode has wrong type\n");
+		return -EINVAL;
+	}
+
+	d_instantiate(entry, inode);
+	return 0;
+}
+
+
 static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 		      dev_t rdev)
 {
@@ -151,8 +178,7 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_mknod_in inarg;
-	struct fuse_mknod_out outarg;
-	struct inode *inode;
+	struct fuse_lookup_out outarg;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.mode = mode;
@@ -173,19 +199,7 @@ static int _fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	if(out.h.error) 
 		return out.h.error;
 
-	inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr, out.h.unique);
-	if(!inode) 
-		return -ENOMEM;
-
-	/* Don't allow userspace to do really stupid things... */
-	if((inode->i_mode ^ mode) & S_IFMT) {
-		iput(inode);
-		printk("fuse_mknod: inode has wrong type\n");
-		return -EPROTO;
-	}
-
-	d_instantiate(entry, inode);
-	return 0;
+	return lookup_new_entry(dir, entry, &outarg, out.h.unique, mode);
 }
 
 static int _fuse_create(struct inode *dir, struct dentry *entry, int mode)
@@ -193,20 +207,6 @@ static int _fuse_create(struct inode *dir, struct dentry *entry, int mode)
 	return _fuse_mknod(dir, entry, mode, 0);
 }
 
-/* knfsd needs the new entry instantiated in mkdir/symlink/link. this
-   should rather be done like mknod: attributes returned in out arg to
-   save a call to userspace */
-static int lookup_new_entry(struct inode *dir, struct dentry *entry)
-{
-	struct inode *inode;
-	int err = fuse_lookup_iget(dir, entry, &inode);
-	if(err || !inode) {
-		printk("fuse_mkdir: failed to look up new entry\n");
-		return err ? err : -ENOENT;
-	}
-	d_instantiate(entry, inode);
-	return 0;
-}
 
 static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 {
@@ -214,6 +214,7 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_mkdir_in inarg;
+	struct fuse_lookup_out outarg;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.mode = mode;
@@ -225,11 +226,14 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 	in.args[0].value = &inarg;
 	in.args[1].size = entry->d_name.len + 1;
 	in.args[1].value = entry->d_name.name;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 	if(out.h.error)
 		return out.h.error;
 
-	return lookup_new_entry(dir, entry);
+	return lookup_new_entry(dir, entry, &outarg, out.h.unique, S_IFDIR);
 }
 
 static int fuse_symlink(struct inode *dir, struct dentry *entry,
@@ -238,6 +242,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_lookup_out outarg;
 
 	in.h.opcode = FUSE_SYMLINK;
 	in.h.ino = dir->i_ino;
@@ -246,11 +251,14 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	in.args[0].value = entry->d_name.name;
 	in.args[1].size = strlen(link) + 1;
 	in.args[1].value = link;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 	if(out.h.error)
 		return out.h.error;
 
-	return lookup_new_entry(dir, entry);
+	return lookup_new_entry(dir, entry, &outarg, out.h.unique, S_IFLNK);
 }
 
 static int fuse_remove(struct inode *dir, struct dentry *entry, 
@@ -325,6 +333,7 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_link_in inarg;
+	struct fuse_lookup_out outarg;
 	
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.newdir = newdir->i_ino;
@@ -336,13 +345,17 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 	in.args[0].value = &inarg;
 	in.args[1].size = newent->d_name.len + 1;
 	in.args[1].value = newent->d_name.name;
+	out.numargs = 1;
+	out.args[0].size = sizeof(outarg);
+	out.args[0].value = &outarg;
 	request_send(fc, &in, &out);
 	if(out.h.error)
 		return out.h.error;
 
 	/* Invalidate old entry, so attributes are refreshed */
 	d_invalidate(entry);
-	return lookup_new_entry(newdir, newent);
+	return lookup_new_entry(newdir, newent, &outarg, out.h.unique,
+				inode->i_mode);
 }
 
 int fuse_do_getattr(struct inode *inode)
