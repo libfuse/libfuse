@@ -12,3 +12,4 @@ config.*
 depcomp
 libtool
 INSTALL
+fuse.pc

@@ -3,8 +3,13 @@
 SUBDIRS = @subdirs@
 
 EXTRA_DIST =			\
-	fuse.spec		\
+	fuse.pc.in		\
 	README*			\
 	Filesystems		\
 	BUGS			\
 	doc/how-fuse-works
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = fuse.pc
+
+$(pkgconfig_DATA): config.status

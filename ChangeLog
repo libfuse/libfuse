@@ -5,6 +5,13 @@
 	just add '-DFUSE_DIRFIL_COMPAT' compile flag or fix the source.
 	Do not use the "use_ino" mount flag with filesystems compiled with
 	FUSE_DIRFIL_COMPAT.
+
+	* Add pkg-config support.  To compile a FUSE based filesystem you
+	can do  "gcc -Wall `pkg-config --cflags --libs fuse` myfs.c -o myfs"
+	or similar.  Note, that the PKG_CONFIG_PATH environment variable
+	usually needs to be set to "/usr/local/lib/pkgconfig".
+
+	* fuse.h is now installed in ${prefix}/include/fuse/
 	
 2004-11-02  Miklos Szeredi <miklos@szeredi.hu>
 

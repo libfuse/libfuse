@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: fuse
+Description: Filesystem in Userspace
+Version: @VERSION@
+Libs: -L${libdir} -lfuse
+Cflags: -I${includedir}/fuse

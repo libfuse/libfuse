@@ -121,5 +121,5 @@ AC_CHECK_MEMBERS([struct stat.st_atim])
 
 AC_SUBST(subdirs)
 
-AC_OUTPUT([Makefile kernel/Makefile lib/Makefile util/Makefile example/Makefile include/Makefile include/linux/Makefile patch/Makefile])
-
+AC_CONFIG_FILES([fuse.pc Makefile kernel/Makefile lib/Makefile util/Makefile example/Makefile include/Makefile include/linux/Makefile patch/Makefile])
+AC_OUTPUT
