@@ -1,3 +1,10 @@
+2004-02-19  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* statfs library API changed to match other methods.  Since this
+	  is not backward compatible FUSE_MAJOR_VERSION is changed to 2
+
+	* statfs kernel interface changed to 64 bits, added 'bavail' field
+	
 2004-02-18  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* user-mount upgraded for 2.6.3 kernel

@@ -853,15 +853,30 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     send_reply(f, in, res, NULL, 0);
 }
 
+static void convert_statfs(struct statfs *statfs, struct fuse_kstatfs *kstatfs)
+{
+    kstatfs->bsize	= statfs->f_bsize;
+    kstatfs->blocks	= statfs->f_blocks;
+    kstatfs->bfree	= statfs->f_bfree;
+    kstatfs->bavail	= statfs->f_bavail;
+    kstatfs->files	= statfs->f_files;
+    kstatfs->ffree	= statfs->f_ffree;
+    kstatfs->namelen	= statfs->f_namelen;
+}
+
 static void do_statfs(struct fuse *f, struct fuse_in_header *in)
 {
     int res;
     struct fuse_statfs_out arg;
+    struct statfs buf;
 
     res = -ENOSYS;
     if(f->op.statfs) {
-        memset(&arg, 0, sizeof(struct fuse_statfs_out));
-        res = f->op.statfs((struct fuse_statfs *) &arg.st);
+        res = f->op.statfs("/", &buf);
+        if(res == 0) {
+            memset(&arg, 0, sizeof(struct fuse_statfs_out));
+            convert_statfs(&buf, &arg.st);
+        }
     }
 
     send_reply(f, in, res, &arg, sizeof(arg));

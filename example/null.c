@@ -64,19 +64,12 @@ static int null_write(const char *path, const char *UNUSED(buf), size_t size,
     return size;
 }
 
-static int null_statfs(struct fuse_statfs *st)
-{
-    return st->block_size = st->blocks = st->blocks_free = st->files =
-	st->files_free = st->namelen = 0;
-}
-
 static struct fuse_operations null_oper = {
     .getattr	= null_getattr,
     .truncate	= null_truncate,
     .open	= null_open,
     .read	= null_read,
     .write	= null_write,
-    .statfs	= null_statfs,
 };
 
 int main(int argc, char *argv[])

@@ -12,7 +12,7 @@
 /* This file defines the library interface of FUSE */
 
 /** Major version of FUSE library interface */
-#define FUSE_MAJOR_VERSION 1
+#define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
 #define FUSE_MINOR_VERSION 1
@@ -22,6 +22,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <utime.h>
 
 /* ----------------------------------------------------------- *
@@ -30,16 +31,6 @@
 
 /** Handle for a FUSE filesystem */
 struct fuse;
-
-/* Statfs structure used by FUSE */
-struct fuse_statfs {
-    long block_size;
-    long blocks;
-    long blocks_free;
-    long files;
-    long files_free;
-    long namelen;
-};
 
 /** Handle for a getdir() operation */
 typedef struct fuse_dirhandle *fuse_dirh_t;
@@ -117,7 +108,7 @@ struct fuse_operations {
     int (*open)     (const char *, int);
     int (*read)     (const char *, char *, size_t, off_t);
     int (*write)    (const char *, const char *, size_t, off_t);
-    int (*statfs)   (struct fuse_statfs *);
+    int (*statfs)   (const char *, struct statfs *);
     int (*release)  (const char *, int);
     int (*fsync)    (const char *, int);
 };

@@ -9,10 +9,10 @@
 /* This file defines the kernel interface of FUSE */
 
 /** Version number of this interface */
-#define FUSE_KERNEL_VERSION 2
+#define FUSE_KERNEL_VERSION 3
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 2
+#define FUSE_KERNEL_MINOR_VERSION 1
 
 /** The inode number of the root indode */
 #define FUSE_ROOT_INO 1
@@ -74,12 +74,13 @@ struct fuse_attr {
 };
 
 struct fuse_kstatfs {
-    long block_size;
-    long blocks;
-    long blocks_free;
-    long files;
-    long files_free;
-    long namelen;
+	unsigned int        bsize;
+	unsigned long long  blocks;
+	unsigned long long  bfree;
+	unsigned long long  bavail;
+	unsigned long long  files;
+	unsigned long long  ffree;
+	unsigned int        namelen;
 };
 
 #define FATTR_MODE	(1 << 0)

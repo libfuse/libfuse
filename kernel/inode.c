@@ -79,15 +79,14 @@ static void fuse_put_super(struct super_block *sb)
 static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
 {
 	stbuf->f_type    = FUSE_SUPER_MAGIC;
-	stbuf->f_bsize   = attr->block_size;
+	stbuf->f_bsize   = attr->bsize;
 	stbuf->f_blocks  = attr->blocks;
-	stbuf->f_bfree   = stbuf->f_bavail = attr->blocks_free;
+	stbuf->f_bfree   = attr->bfree;
+	stbuf->f_bavail  = attr->bavail;
 	stbuf->f_files   = attr->files;
-	stbuf->f_ffree   = attr->files_free;
-	/* Is this field necessary?  Most filesystems ignore it...
-	stbuf->f_fsid.val[0] = (FUSE_SUPER_MAGIC>>16)&0xffff;
-	stbuf->f_fsid.val[1] =  FUSE_SUPER_MAGIC     &0xffff; */
+	stbuf->f_ffree   = attr->ffree;
 	stbuf->f_namelen = attr->namelen;
+	/* fsid is left zero */
 }
 
 static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
