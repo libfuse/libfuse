@@ -19,11 +19,11 @@ struct fuse_mount_data {
 #define FUSE_ROOT_INO 1
 
 struct fuse_attr {
-	unsigned short      mode;
-	unsigned short      nlink;
-	unsigned short      uid;
-	unsigned short      gid;
-	unsigned short      rdev;
+	unsigned int        mode;
+	unsigned int        nlink;
+	unsigned int        uid;
+	unsigned int        gid;
+	unsigned int        rdev;
 	unsigned long long  size;
 	unsigned long       blksize;
 	unsigned long       blocks;
@@ -32,19 +32,28 @@ struct fuse_attr {
 	unsigned long       ctime;
 };
 
+#define FATTR_MODE	(1 << 0)
+#define FATTR_UID	(1 << 1)
+#define FATTR_GID	(1 << 2)
+#define FATTR_SIZE	(1 << 3)
+#define FATTR_UTIME	(1 << 4)
+
 enum fuse_opcode {
 	FUSE_LOOKUP     = 1,
 	FUSE_FORGET,
 	FUSE_GETATTR,
+	FUSE_SETATTR,
 	FUSE_READLINK,
+	FUSE_SYMLINK,
 	FUSE_GETDIR,
 	FUSE_MKNOD,
 	FUSE_MKDIR,
-	FUSE_SYMLINK,
 	FUSE_UNLINK,
 	FUSE_RMDIR,
 	FUSE_RENAME,
 	FUSE_LINK,
+	FUSE_OPEN,
+	FUSE_READ,
 };
 
 /* Conservative buffer size for the client */
@@ -88,6 +97,20 @@ struct fuse_rename_in {
 struct fuse_link_in {
 	unsigned long newdir;
 	char name[1];
+};
+
+struct fuse_setattr_in {
+	struct fuse_attr attr;
+	unsigned int valid;
+};
+
+struct fuse_open_in {
+	unsigned int flags;
+};
+
+struct fuse_read_in {
+	unsigned long long offset;
+	unsigned int size;
 };
 
 struct fuse_in_header {

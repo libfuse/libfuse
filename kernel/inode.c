@@ -39,7 +39,7 @@ static int alloc_cleared(struct fuse_conn *fc)
 	unsigned long *tmp;
 	
 	spin_unlock(&fuse_lock);
-	tmp = kmalloc(sizeof(unsigned long) * MAX_CLEARED, GFP_KERNEL);
+	tmp = kmalloc(sizeof(unsigned long) * MAX_CLEARED, GFP_NOFS);
 	spin_lock(&fuse_lock);
 
 	if(!fc->file || fc->cleared != NULL)
@@ -72,7 +72,7 @@ static unsigned long *add_cleared(struct fuse_conn *fc, unsigned long ino)
 
 static void fuse_clear_inode(struct inode *inode)
 {
-	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(inode);
 	unsigned long *forget;
 
 	spin_lock(&fuse_lock);
@@ -139,17 +139,11 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 
 static struct inode *get_root_inode(struct super_block *sb)
 {
-	struct inode *root;
+	struct fuse_attr attr;
+	memset(&attr, 0, sizeof(attr));
 
-	root = iget(sb, 1);
-	if(root) {
-		struct fuse_attr attr;
-		memset(&attr, 0, sizeof(attr));
-		attr.mode = S_IFDIR;
-		fuse_init_inode(root, &attr);
-	}
-
-	return root;
+	attr.mode = S_IFDIR;
+	return fuse_iget(sb, 1, &attr);
 }
 
 static struct super_block *fuse_read_super(struct super_block *sb, 

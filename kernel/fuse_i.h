@@ -82,6 +82,9 @@ struct fuse_req {
 };
 
 
+#define INO_FC(inode) ((struct fuse_conn *) (inode)->i_sb->u.generic_sbp)
+#define DEV_FC(file) ((struct fuse_conn *) (file)->private_data)
+
 struct fuse_in {
 	struct fuse_in_header h;
 	unsigned int argsize;
@@ -111,9 +114,16 @@ extern spinlock_t fuse_lock;
 
 
 /**
- * Initialize inode
+ * Get a filled in inode
  */
-void fuse_init_inode(struct inode *inode, struct fuse_attr *attr);
+struct inode *fuse_iget(struct super_block *sb, ino_t ino,
+			struct fuse_attr *attr);
+
+
+/**
+ * Initialise operations on regular file
+ */
+void fuse_init_file_inode(struct inode *inode);
 
 /**
  * Check if the connection can be released, and if yes, then free the

@@ -103,7 +103,6 @@ int fuse_mount(struct fuse *f, const char *dir)
     if(f->dir != NULL)
         return 0;
 
-    f->dir = g_strdup(dir);
     f->fd = open(dev, O_RDWR);
     if(f->fd == -1) {
         perror(dev);
@@ -115,6 +114,7 @@ int fuse_mount(struct fuse *f, const char *dir)
         return -1;
 
     add_mntent(dev, dir, type);
+    f->dir = g_strdup(dir);
     
     return 0;
 }

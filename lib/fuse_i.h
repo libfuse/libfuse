@@ -17,6 +17,7 @@ typedef unsigned long fino_t;
 struct node {
     char *name;
     fino_t parent;
+    int mode;
 };
 
 struct fuse {

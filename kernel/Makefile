@@ -5,7 +5,7 @@ CPPFLAGS = -I /lib/modules/`uname -r`/build/include/ -D__KERNEL__ -DMODULE -D_LO
 
 all: fuse.o
 
-fuse_objs = dev.o inode.o dir.o util.o
+fuse_objs = dev.o inode.o dir.o file.o util.o
 
 fuse.o: $(fuse_objs)
 	ld -r -o fuse.o $(fuse_objs)

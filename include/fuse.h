@@ -10,24 +10,30 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <utime.h>
 
 struct fuse;
 struct fuse_dh;
 
 typedef int (*dirfiller_t) (struct fuse_dh *, const char *, int type);
 
-
 struct fuse_operations {
-    int (*getattr) (const char *path, struct stat *stbuf);
+    int (*getattr)  (const char *path, struct stat *stbuf);
     int (*readlink) (const char *path, char *buf, size_t size);
-    int (*getdir) (const char *path, struct fuse_dh *h, dirfiller_t filler);
-    int (*mknod) (const char *path, int mode, int rdev);
-    int (*mkdir) (const char *path, int mode);
-    int (*unlink) (const char *path);
-    int (*rmdir) (const char *path);
-    int (*rename) (const char *from, const char *to);
-    int (*symlink) (const char *from, const char *to);
-    int (*link) (const char *from, const char *to);
+    int (*getdir)   (const char *path, struct fuse_dh *h, dirfiller_t filler);
+    int (*mknod)    (const char *path, mode_t mode, dev_t rdev);
+    int (*mkdir)    (const char *path, mode_t mode);
+    int (*unlink)   (const char *path);
+    int (*rmdir)    (const char *path);
+    int (*symlink)  (const char *from, const char *to);
+    int (*rename)   (const char *from, const char *to);
+    int (*link)     (const char *from, const char *to);
+    int (*chmod)    (const char *path, mode_t mode);
+    int (*chown)    (const char *path, uid_t uid, gid_t gid);
+    int (*truncate) (const char *path, off_t size);
+    int (*utime)    (const char *path, struct utimbuf *buf);
+    int (*open)     (const char *path, int flags);
+    int (*pread)    (const char *path, char *buf, size_t size, off_t offset);
 };
 
 struct fuse *fuse_new();

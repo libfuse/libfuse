@@ -10,9 +10,8 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/sched.h>
-#include <linux/file.h>
 #include <linux/slab.h>
+#include <linux/file.h>
 
 static struct inode_operations fuse_dir_inode_operations;
 static struct inode_operations fuse_file_inode_operations;
@@ -20,13 +19,12 @@ static struct inode_operations fuse_symlink_inode_operations;
 static struct inode_operations fuse_special_inode_operations;
 
 static struct file_operations fuse_dir_operations;
-static struct file_operations fuse_file_operations;
 
 static struct dentry_operations fuse_dentry_opertations;
 
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
-	inode->i_mode    = attr->mode;
+	inode->i_mode    = (inode->i_mode & S_IFMT) + (attr->mode & 07777);
 	inode->i_nlink   = attr->nlink;
 	inode->i_uid     = attr->uid;
 	inode->i_gid     = attr->gid;
@@ -38,29 +36,46 @@ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 	inode->i_ctime   = attr->ctime;
 }
 
-void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
+static void fuse_init_inode(struct inode *inode, int mode, int rdev)
 {
-	change_attributes(inode, attr);
-	
+	inode->i_mode = mode & S_IFMT;
 	if(S_ISREG(inode->i_mode)) {
 		inode->i_op = &fuse_file_inode_operations;
-		inode->i_fop = &fuse_file_operations;
+		fuse_init_file_inode(inode);
 	}
 	else if(S_ISDIR(inode->i_mode)) {
 		inode->i_op = &fuse_dir_inode_operations;
 		inode->i_fop = &fuse_dir_operations;
 	}
-	else if(S_ISLNK(inode->i_mode))
+	else if(S_ISLNK(inode->i_mode)) {
 		inode->i_op = &fuse_symlink_inode_operations;
+	}
 	else {
 		inode->i_op = &fuse_special_inode_operations;
-		init_special_inode(inode, inode->i_mode, attr->rdev);
+		init_special_inode(inode, inode->i_mode, rdev);
 	}
+	inode->u.generic_ip = inode;
+}
+
+struct inode *fuse_iget(struct super_block *sb, ino_t ino,
+			struct fuse_attr *attr)
+{
+	struct inode *inode;
+
+	inode = iget(sb, ino);
+	if(inode) {
+		if(!inode->u.generic_ip)
+			fuse_init_inode(inode, attr->mode, attr->rdev);
+		
+		change_attributes(inode, attr);
+	}
+
+	return inode;
 }
 
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 {
-	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_lookup_out arg;
@@ -76,11 +91,9 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 	
 	inode = NULL;
 	if(!out.h.error) {
-		inode = iget(dir->i_sb, arg.ino);
+		inode = fuse_iget(dir->i_sb, arg.ino, &arg.attr);
 		if(!inode) 
 			return ERR_PTR(-ENOMEM);
-		
-		fuse_init_inode(inode, &arg.attr);
 	}
 	else if(out.h.error != -ENOENT)
 		return ERR_PTR(out.h.error);
@@ -94,7 +107,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 		      int rdev)
 {
-	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_mknod_in *inarg;
@@ -123,11 +136,10 @@ static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	if(out.h.error) 
 		return out.h.error;
 
-	inode = iget(dir->i_sb, outarg.ino);
+	inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr);
 	if(!inode) 
 		return -ENOMEM;
-	
-	fuse_init_inode(inode, &outarg.attr);
+
 	d_instantiate(entry, inode);
 
 	return 0;
@@ -141,7 +153,7 @@ static int fuse_create(struct inode *dir, struct dentry *entry, int mode)
 
 static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 {
-	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_mkdir_in *inarg;
@@ -168,7 +180,7 @@ static int fuse_mkdir(struct inode *dir, struct dentry *entry, int mode)
 static int fuse_symlink(struct inode *dir, struct dentry *entry,
 			const char *link)
 {
-	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	char *inarg;
@@ -195,7 +207,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 static int fuse_remove(struct inode *dir, struct dentry *entry, 
 		       enum fuse_opcode op)
 {
-	struct fuse_conn *fc = dir->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 
@@ -220,7 +232,7 @@ static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 		       struct inode *newdir, struct dentry *newent)
 {
-	struct fuse_conn *fc = olddir->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(olddir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_rename_in *inarg;
@@ -252,7 +264,7 @@ static int fuse_link(struct dentry *entry, struct inode *newdir,
 		     struct dentry *newent)
 {
 	struct inode *inode = entry->d_inode;
-	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_link_in *inarg;
@@ -286,7 +298,7 @@ static int fuse_permission(struct inode *inode, int mask)
 static int fuse_revalidate(struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
-	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getattr_out arg;
@@ -357,7 +369,7 @@ static int fuse_readdir(struct file *file, void *dstbuf, filldir_t filldir)
 static int read_link(struct dentry *dentry, char **bufp)
 {
 	struct inode *inode = dentry->d_inode;
-	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	unsigned long page;
@@ -417,7 +429,7 @@ static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
 
 static int fuse_dir_open(struct inode *inode, struct file *file)
 {
-	struct fuse_conn *fc = inode->i_sb->u.generic_sbp;
+	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getdir_out outarg;
@@ -453,13 +465,54 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 static int fuse_dir_release(struct inode *inode, struct file *file)
 {
 	struct file *cfile = file->private_data;
-
-	if(!cfile)
-		BUG();
-	
 	fput(cfile);
 
 	return 0;
+}
+
+static unsigned int iattr_to_fattr(struct iattr *iattr,
+				   struct fuse_attr *fattr)
+{
+	unsigned int ivalid = iattr->ia_valid;
+	unsigned int fvalid = 0;
+	
+	memset(fattr, 0, sizeof(*fattr));
+	
+	if(ivalid & ATTR_MODE)
+		fvalid |= FATTR_MODE,   fattr->mode = iattr->ia_mode;
+	if(ivalid & ATTR_UID)
+		fvalid |= FATTR_UID,    fattr->uid = iattr->ia_uid;
+	if(ivalid & ATTR_GID)
+		fvalid |= FATTR_GID,    fattr->gid = iattr->ia_gid;
+	if(ivalid & ATTR_SIZE)
+		fvalid |= FATTR_SIZE,   fattr->size = iattr->ia_size;
+	/* You can only _set_ these together (they may change by themselves) */
+	if((ivalid & (ATTR_ATIME | ATTR_MTIME)) == (ATTR_ATIME | ATTR_MTIME)) {
+		fvalid |= FATTR_UTIME;
+		fattr->atime = iattr->ia_atime;
+		fattr->mtime = iattr->ia_mtime;
+	}
+
+	return fvalid;
+}
+
+static int fuse_setattr(struct dentry *entry, struct iattr *attr)
+{
+	struct inode *inode = entry->d_inode;
+	struct fuse_conn *fc = INO_FC(inode);
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_setattr_in arg;
+
+	arg.valid = iattr_to_fattr(attr, &arg.attr);
+	
+	in.h.opcode = FUSE_SETATTR;
+	in.h.ino = inode->i_ino;
+	in.argsize = sizeof(arg);
+	in.arg = &arg;
+	request_send(fc, &in, &out);
+
+	return out.h.error;
 }
 
 static int fuse_dentry_revalidate(struct dentry *entry, int flags)
@@ -481,9 +534,7 @@ static struct inode_operations fuse_dir_inode_operations =
 	rmdir:          fuse_rmdir,
 	rename:         fuse_rename,
 	link:           fuse_link,
-#if 0
 	setattr:	fuse_setattr,
-#endif
 	permission:	fuse_permission,
 	revalidate:	fuse_revalidate,
 };
@@ -496,20 +547,20 @@ static struct file_operations fuse_dir_operations = {
 };
 
 static struct inode_operations fuse_file_inode_operations = {
+	setattr:	fuse_setattr,
 	permission:	fuse_permission,
 	revalidate:	fuse_revalidate,
 };
 
 static struct inode_operations fuse_special_inode_operations = {
+	setattr:	fuse_setattr,
 	permission:	fuse_permission,
 	revalidate:	fuse_revalidate,
 };
 
-static struct file_operations fuse_file_operations = {
-};
-
 static struct inode_operations fuse_symlink_inode_operations =
 {
+	setattr:	fuse_setattr,
 	readlink:	fuse_readlink,
 	follow_link:	fuse_follow_link,
 	revalidate:	fuse_revalidate,

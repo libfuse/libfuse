@@ -1,11 +1,17 @@
-#include <fuse.h>
+#ifdef linux
+/* For pread()/pwrite() */
+#define _XOPEN_SOURCE 500
+#endif
 
+#include <fuse.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
 #include <signal.h>
+#include <utime.h>
+#include <fcntl.h>
 
 static struct fuse *pro_fuse;
 
@@ -53,7 +59,7 @@ static int pro_getdir(const char *path, struct fuse_dh *h, dirfiller_t filler)
     return res;
 }
 
-static int pro_mknod(const char *path, int mode, int rdev)
+static int pro_mknod(const char *path, mode_t mode, dev_t rdev)
 {
     int res;
 
@@ -64,18 +70,7 @@ static int pro_mknod(const char *path, int mode, int rdev)
     return 0;
 }
 
-static int pro_symlink(const char *from, const char *to)
-{
-    int res;
-
-    res = symlink(from, to);
-    if(res == -1)
-        return -errno;
-
-    return 0;
-}
-
-static int pro_mkdir(const char *path, int mode)
+static int pro_mkdir(const char *path, mode_t mode)
 {
     int res;
 
@@ -108,6 +103,17 @@ static int pro_rmdir(const char *path)
     return 0;
 }
 
+static int pro_symlink(const char *from, const char *to)
+{
+    int res;
+
+    res = symlink(from, to);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
 static int pro_rename(const char *from, const char *to)
 {
     int res;
@@ -128,6 +134,80 @@ static int pro_link(const char *from, const char *to)
         return -errno;
 
     return 0;
+}
+
+static int pro_chmod(const char *path, mode_t mode)
+{
+    int res;
+
+    res = chmod(path, mode);
+    if(res == -1)
+        return -errno;
+    
+    return 0;
+}
+
+static int pro_chown(const char *path, uid_t uid, gid_t gid)
+{
+    int res;
+
+    res = chown(path, uid, gid);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+static int pro_truncate(const char *path, off_t size)
+{
+    int res;
+    
+    res = truncate(path, size);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+static int pro_utime(const char *path, struct utimbuf *buf)
+{
+    int res;
+    
+    res = utime(path, buf);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
+
+static int pro_open(const char *path, int flags)
+{
+    int res;
+
+    res = open(path, flags);
+    if(res == -1) 
+        return -errno;
+
+    close(res);
+    return 0;
+}
+
+static int pro_pread(const char *path, char *buf, size_t size, off_t offset)
+{
+    int fd;
+    int res;
+
+    fd = open(path, 0);
+    if(fd == -1)
+        return -errno;
+
+    res = pread(fd, buf, size, offset);
+    if(res == -1)
+        res = -errno;
+    
+    close(fd);
+    return res;
 }
 
 static void exit_handler()
@@ -176,10 +256,17 @@ static struct fuse_operations pro_oper = {
     rmdir:	pro_rmdir,
     rename:     pro_rename,
     link:	pro_link,
+    chmod:	pro_chmod,
+    chown:	pro_chown,
+    truncate:	pro_truncate,
+    utime:	pro_utime,
+    open:	pro_open,
+    pread:	pro_pread,
 };
 
 int main(int argc, char *argv[])
 {
+    int res;
     if(argc != 2) {
         fprintf(stderr, "usage: %s mount_dir\n", argv[0]);
         exit(1);
@@ -189,7 +276,10 @@ int main(int argc, char *argv[])
     atexit(cleanup);
 
     pro_fuse = fuse_new();
-    fuse_mount(pro_fuse, argv[1]);
+    res = fuse_mount(pro_fuse, argv[1]);
+    if(res == -1)
+        exit(1);
+        
     fuse_set_operations(pro_fuse, &pro_oper);
     fuse_loop(pro_fuse);
 

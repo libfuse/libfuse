@@ -87,7 +87,7 @@ static struct fuse_req *request_new(struct fuse_conn *fc, struct fuse_in *inp,
 {
 	struct fuse_req *req;
 	
-	req = kmalloc(sizeof(*req), GFP_KERNEL);
+	req = kmalloc(sizeof(*req), GFP_NOFS);
 	if(!req)
 		return NULL;
 
@@ -98,7 +98,7 @@ static struct fuse_req *request_new(struct fuse_conn *fc, struct fuse_in *inp,
 	req->out = NULL;
 
 	req->insize = IHSIZE + inp->argsize;
-	req->in = kmalloc(req->insize, GFP_KERNEL);
+	req->in = kmalloc(req->insize, GFP_NOFS);
 	if(!req->in) {
 		request_free(req);
 		return NULL;
@@ -188,7 +188,7 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			     loff_t *off)
 {
 	int ret;
-	struct fuse_conn *fc = file->private_data;
+	struct fuse_conn *fc = DEV_FC(file);
 	struct fuse_req *req;
 	char *tmpbuf;
 	unsigned int size;
@@ -249,7 +249,7 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 			      size_t nbytes, loff_t *off)
 {
 	ssize_t ret;
-	struct fuse_conn *fc = file->private_data;
+	struct fuse_conn *fc = DEV_FC(file);
 	struct fuse_req *req;
 	char *tmpbuf;
 	struct fuse_out_header *oh;
@@ -302,7 +302,7 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 
 static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 {
-	struct fuse_conn *fc = file->private_data;
+	struct fuse_conn *fc = DEV_FC(file);
 	unsigned int mask = POLLOUT | POLLWRNORM;
 
 	if(!fc->sb)
@@ -370,7 +370,7 @@ static void end_requests(struct list_head *head)
 
 static int fuse_dev_release(struct inode *inode, struct file *file)
 {
-	struct fuse_conn *fc = file->private_data;
+	struct fuse_conn *fc = DEV_FC(file);
 
 	spin_lock(&fuse_lock);
 	fc->file = NULL;
