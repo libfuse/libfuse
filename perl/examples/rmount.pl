@@ -30,7 +30,6 @@ map { my ($str) = $_; $args{$str} = sub { netlink($str,@_) } }
 sub connect_remote {
 	sshopen2($host, *READER, *WRITER, "./rmount_remote.pl $dir")
 		or die "ssh: $!\n";
-#	open2(*READER,*WRITER,"./rmount_remote.pl $dir");
 	select WRITER;
 	$| = 1;
 	select STDOUT;
