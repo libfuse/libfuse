@@ -60,6 +60,14 @@ if test "$enable_kernel_module" != "no"; then
 	AC_SUBST(majver)
 	AC_SUBST(kmoduledir)
 	subdirs="$subdirs kernel"
+
+        old_cflags="$CFLAGS"
+        CFLAGS="-I${kernelsrc}/include -Wall -O2 -D__KERNEL__"
+	AC_CHECK_DECL(i_size_read,
+		AC_DEFINE(HAVE_I_SIZE_FUNC, 1,
+		[Kernel has i_size_read() and i_size_write() functions]),,
+		[#include <linux/fs.h>])
+	CFLAGS="$old_cflags"
 fi
 
 if test "$enable_lib" != "no"; then
