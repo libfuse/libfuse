@@ -6,5 +6,6 @@ install-sh
 mkinstalldirs
 missing
 config.log
-config.cache
+*.cache
 config.status
+depcomp
