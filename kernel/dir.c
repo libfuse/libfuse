@@ -634,6 +634,12 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	struct fuse_setattr_in inarg;
 	struct fuse_setattr_out outarg;
 
+	if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
+		err = inode_change_ok(inode, attr);
+		if (err)
+			return err;
+	}
+
 	/* FIXME: need to fix race between truncate and writepage */
 	if (attr->ia_valid & ATTR_SIZE)	
 		fuse_sync_inode(inode);
