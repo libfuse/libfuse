@@ -1,5 +1,10 @@
 2005-01-20  Miklos Szeredi <miklos@szeredi.hu>
 
+	* KERNEL: provide correct llseek semantics for fuse device (fixes
+	a bug on Progeny 2.4.20 kernel).  Reported by Valient Gough
+
+2005-01-20  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Released 2.2-pre5 (matches kernel 2.6.11-rc1-mm2)
 
 2005-01-18  Miklos Szeredi <miklos@szeredi.hu>

@@ -803,6 +803,7 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 
 struct file_operations fuse_dev_operations = {
 	.owner		= THIS_MODULE,
+	.llseek		= no_llseek,
 	.read		= fuse_dev_read,
 	.readv		= fuse_dev_readv,
 	.write		= fuse_dev_write,
