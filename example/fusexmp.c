@@ -1,3 +1,11 @@
+/*
+    FUSE: Filesystem in Userspace
+    Copyright (C) 2001  Miklos Szeredi (mszeredi@inf.bme.hu)
+
+    This program can be distributed under the terms of the GNU GPL.
+    See the file COPYING.
+*/
+
 #ifdef linux
 /* For pread()/pwrite() */
 #define _XOPEN_SOURCE 500

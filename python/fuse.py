@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+#
+#    Copyright (C) 2001  Jeff Epler  <jepler@unpythonic.dhs.org>
+#
+#    This program can be distributed under the terms of the GNU GPL.
+#    See the file COPYING.
+#
 
 from _fuse import main, DEBUG
 import os
@@ -23,8 +29,10 @@ class Fuse:
 		  'chown', 'truncate', 'utime', 'open', 'read', 'write']
 
 	flags = 0
+	multithreaded = 0
 	def main(self):
 		d = {'flags': self.flags}
+		d['multithreaded'] = self.multithreaded
 		for a in self._attrs:
 			if hasattr(self,a):
 				d[a] = ErrnoWrapper(getattr(self, a))
@@ -98,4 +106,5 @@ class Xmp(Fuse):
 if __name__ == '__main__':
 	server = Xmp()
 	server.flags = DEBUG
+	server.multithreaded = 1;
 	server.main()

@@ -1,16 +1,19 @@
-#include "Python.h"
-#include "fuse.h"
+/*
+    Copyright (C) 2001  Jeff Epler  <jepler@unpythonic.dhs.org>
+
+    This program can be distributed under the terms of the GNU GPL.
+    See the file COPYING.
+*/
+
+#include <Python.h>
+#include <fuse.h>
 #include <time.h>
 
-static PyObject *ErrorObject;
-
-PyObject *getattr_cb=NULL, *readlink_cb=NULL, *getdir_cb=NULL,
-	 *mknod_cb=NULL, *mkdir_cb=NULL, *unlink_cb=NULL, *rmdir_cb=NULL,
-	 *symlink_cb=NULL, *rename_cb=NULL, *link_cb=NULL, *chmod_cb=NULL,
-	 *chown_cb=NULL, *truncate_cb=NULL, *utime_cb=NULL,
-	 *open_cb=NULL, *read_cb=NULL, *write_cb=NULL;
-struct fuse *fuse=NULL;
-
+static PyObject *getattr_cb=NULL, *readlink_cb=NULL, *getdir_cb=NULL,
+	*mknod_cb=NULL, *mkdir_cb=NULL, *unlink_cb=NULL, *rmdir_cb=NULL,
+	*symlink_cb=NULL, *rename_cb=NULL, *link_cb=NULL, *chmod_cb=NULL,
+	*chown_cb=NULL, *truncate_cb=NULL, *utime_cb=NULL,
+	*open_cb=NULL, *read_cb=NULL, *write_cb=NULL;
 
 #define PROLOGUE \
 	int ret = -EINVAL; \
@@ -23,7 +26,8 @@ struct fuse *fuse=NULL;
 		Py_DECREF(v); \
 	OUT: \
 		return ret; 
-static int getattr_func(const char *path, struct stat *st) {
+static int getattr_func(const char *path, struct stat *st)
+{
 	int i;
 	PyObject *v = PyObject_CallFunction(getattr_cb, "s", path);
 	PROLOGUE
@@ -54,7 +58,8 @@ static int getattr_func(const char *path, struct stat *st) {
 	EPILOGUE
 }
 
-static int readlink_func(const char *path, char *link, size_t size) {
+static int readlink_func(const char *path, char *link, size_t size)
+{
 	PyObject *v = PyObject_CallFunction(readlink_cb, "s", path);
 	char *s;
 	PROLOGUE
@@ -104,7 +109,8 @@ out:
 	return ret;
 }
 
-static int getdir_func(const char *path, fuse_dirh_t dh, fuse_dirfil_t df) {
+static int getdir_func(const char *path, fuse_dirh_t dh, fuse_dirfil_t df)
+{
 	PyObject *v = PyObject_CallFunction(getdir_cb, "s", path);
 	int i;
 	PROLOGUE
@@ -125,67 +131,77 @@ static int getdir_func(const char *path, fuse_dirh_t dh, fuse_dirfil_t df) {
 	EPILOGUE
 }
 
-int mknod_func(const char *path, mode_t m, dev_t d) {
+static int mknod_func(const char *path, mode_t m, dev_t d)
+{
 	PyObject *v = PyObject_CallFunction(mknod_cb, "sii", path, m, d);
 	PROLOGUE
 	EPILOGUE
 }
 
-int mkdir_func(const char *path, mode_t m) {
+static int mkdir_func(const char *path, mode_t m)
+{
 	PyObject *v = PyObject_CallFunction(mkdir_cb, "si", path, m);
 	PROLOGUE
 	EPILOGUE
 }
 
-int unlink_func(const char *path) {
+static int unlink_func(const char *path)
+{
 	PyObject *v = PyObject_CallFunction(unlink_cb, "s", path);
 	PROLOGUE
 	EPILOGUE
 }
 
-int rmdir_func(const char *path) {
+static int rmdir_func(const char *path)
+{
 	PyObject *v = PyObject_CallFunction(rmdir_cb, "s", path);
 	PROLOGUE
 	EPILOGUE
 }
 
-int symlink_func(const char *path, const char *path1) {
+static int symlink_func(const char *path, const char *path1)
+{
 	PyObject *v = PyObject_CallFunction(symlink_cb, "ss", path, path1);
 	PROLOGUE
 	EPILOGUE
 }
 
-int rename_func(const char *path, const char *path1) {
+static int rename_func(const char *path, const char *path1)
+{
 	PyObject *v = PyObject_CallFunction(rename_cb, "ss", path, path1);
 	PROLOGUE
 	EPILOGUE
 }
 
-int link_func(const char *path, const char *path1) {
+static int link_func(const char *path, const char *path1)
+{
 	PyObject *v = PyObject_CallFunction(link_cb, "ss", path, path1);
 	PROLOGUE
 	EPILOGUE
 }
 
-int chmod_func(const char *path, mode_t m) {
+static int chmod_func(const char *path, mode_t m) 
+{
 	PyObject *v = PyObject_CallFunction(chmod_cb, "si", path, m);
 	PROLOGUE
 	EPILOGUE
 }
 
-int chown_func(const char *path, uid_t u, gid_t g) {
+static int chown_func(const char *path, uid_t u, gid_t g) 
+{
 	PyObject *v = PyObject_CallFunction(chown_cb, "sii", path, u, g);
 	PROLOGUE
 	EPILOGUE
 }
 
-int truncate_func(const char *path, off_t o) {
+static int truncate_func(const char *path, off_t o)
+{
 	PyObject *v = PyObject_CallFunction(truncate_cb, "si", path, o);
 	PROLOGUE
 	EPILOGUE
 }
 
-int utime_func(const char *path, struct utimbuf *u) {
+static int utime_func(const char *path, struct utimbuf *u) {
 	int actime = u ? u->actime : time(NULL);
 	int modtime = u ? u->modtime : actime;
 	PyObject *v = PyObject_CallFunction(utime_cb, "s(ii)",
@@ -194,7 +210,8 @@ int utime_func(const char *path, struct utimbuf *u) {
 	EPILOGUE
 }
 
-int read_func(const char *path, char *buf, size_t s, off_t off) {
+static int read_func(const char *path, char *buf, size_t s, off_t off)
+{
 	PyObject *v = PyObject_CallFunction(read_cb, "sii", path, s, off);
 	PROLOGUE
 	if(PyString_Check(v)) {
@@ -205,22 +222,55 @@ int read_func(const char *path, char *buf, size_t s, off_t off) {
 	EPILOGUE
 }
 
-int write_func(const char *path, const char *buf, size_t t, off_t off) {
+static int write_func(const char *path, const char *buf, size_t t, off_t off)
+{
 	PyObject *v = PyObject_CallFunction(write_cb,"ss#i", path, buf, t, off);
 	PROLOGUE
 	EPILOGUE
 }
 
-int open_func(const char *path, int mode) {
+static int open_func(const char *path, int mode)
+{
 	PyObject *v = PyObject_CallFunction(open_cb, "si", path, mode);
 	PROLOGUE
 	EPILOGUE
 }
 
+static void process_cmd(struct fuse *f, struct fuse_cmd *cmd, void *data)
+{
+	PyInterpreterState *interp = (PyInterpreterState *) data;
+	PyThreadState *state;
+
+	PyEval_AcquireLock();
+	state = PyThreadState_New(interp);
+	PyThreadState_Swap(state);
+	__fuse_process_cmd(f, cmd);
+	PyThreadState_Clear(state);
+	PyThreadState_Swap(NULL);
+	PyThreadState_Delete(state);
+	PyEval_ReleaseLock();
+}
+
+static void pyfuse_loop_mt(struct fuse *f)
+{
+	PyInterpreterState *interp;
+	PyThreadState *save;
+
+	PyEval_InitThreads();
+	interp = PyThreadState_Get()->interp;
+	save = PyEval_SaveThread();
+	__fuse_loop_mt(f, process_cmd, interp);
+	/* Not yet reached: */
+	PyEval_RestoreThread(save);
+}
+
+
 static PyObject *
 Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 {
 	int flags=0;
+	int multithreaded=0;
+	static struct fuse *fuse=NULL;
 
 	struct fuse_operations op;
 
@@ -228,13 +278,13 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 		"getattr", "readlink", "getdir", "mknod",
 		"mkdir", "unlink", "rmdir", "symlink", "rename",
 		"link", "chmod", "chown", "truncate", "utime",
-		"open", "read", "write", "flags", NULL};
+		"open", "read", "write", "flags", "multithreaded", NULL};
 				
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOi", 
+	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOii", 
 		kwlist, &getattr_cb, &readlink_cb, &getdir_cb, &mknod_cb,
 		&mkdir_cb, &unlink_cb, &rmdir_cb, &symlink_cb, &rename_cb,
 		&link_cb, &chmod_cb, &chown_cb, &truncate_cb, &utime_cb,
-		&open_cb, &read_cb, &write_cb, &flags))
+		&open_cb, &read_cb, &write_cb, &flags, &multithreaded))
 		return NULL;
 	
 #define DO_ONE_ATTR(name) if(name ## _cb) { Py_INCREF(name ## _cb); op.name = name ## _func; } else { op.name = NULL; }
@@ -259,7 +309,10 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 
 	fuse = fuse_new(0, flags);
 	fuse_set_operations(fuse, &op);	
-	fuse_loop(fuse);
+	if(multithreaded)
+		pyfuse_loop_mt(fuse);
+	else
+		fuse_loop(fuse);
 
 	Py_INCREF(Py_None);
 	return Py_None;
@@ -279,7 +332,8 @@ DL_EXPORT(void)
 init_fuse(void)
 {
 	PyObject *m, *d;
-
+	static PyObject *ErrorObject;
+ 
 	/* Create the module and add the functions */
 	m = Py_InitModule("_fuse", Fuse_methods);
 
@@ -289,3 +343,11 @@ init_fuse(void)
 	PyDict_SetItemString(d, "error", ErrorObject);
 	PyDict_SetItemString(d, "DEBUG", PyInt_FromLong(FUSE_DEBUG));
 }
+
+
+/* 
+ * Local Variables:
+ * indent-tabs-mode: t
+ * c-basic-offset: 8
+ * End:
+ */
