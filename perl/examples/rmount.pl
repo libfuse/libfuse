@@ -47,7 +47,7 @@ $SIG{CHLD} = sub {
 connect_remote;
 
 sub netlink {
-	my ($str) = join("\n",map {" $_"} (split("\n",Dumper(\@_))))."\n";
+	my ($str) = Dumper(\@_)."\n";
 	$str = sprintf("%08i\n%s",length($str),$str);
 	while(1) { # retry as necessary
 		my ($sig) = $SIG{ALRM};

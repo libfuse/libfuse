@@ -137,7 +137,7 @@ while(read(STDIN,$len,9) == 9) {
 	exit 0 if $cmd eq "bye";
 	die "cannot find command $cmd\n" unless exists($main::{"x_$cmd"});
 	@args = $main::{"x_$cmd"}(@args);
-	$cmd = join("\n",map {" $_"} (split("\n",Dumper(\@args))))."\n";
+	$cmd = Dumper(\@args)."\n";
 	$cmd = sprintf("%08i\n%s",length($cmd),$cmd);
 	print $cmd;
 }
