@@ -31,8 +31,7 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
-/* Some 2.4 kernels may have with the preemptible kernel patch */
-#if !defined(KERNEL_2_6) && !defined(CONFIG_PREEMPT)
+#ifndef KERNEL_2_6
 #define i_size_read(inode) ((inode)->i_size)
 #define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
 #endif
