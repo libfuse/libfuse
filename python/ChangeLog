@@ -1,6 +1,0 @@
-2004-09-27  Miklos Szeredi <miklos@szeredi.hu>
-
-	* Applied patch by Steven James.  The Python binding in the CVS
-	version fell out of date and wouldn't compile. Fixed and added
-	FuseGetContext call.
-
