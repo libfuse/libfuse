@@ -75,3 +75,18 @@ Description:
   virtual file system.
 
 ==============================================================================
+Name: PhoneBook
+
+Author: David McNab <david at rebirthing co nz>
+
+Homepage: http://www.freenet.org.nz/phonebook
+
+Description:
+
+  PhoneBook is expressly designed for use in situations where someone can 
+  be under pressure (legal, military and/or criminal) to disclose 
+  decryption keys, and has a 'chaffing' scheme whereby the user can 
+  disclose only passphrases for non-sensitive material, and credibly deny 
+  the existence of anything else.
+
+==============================================================================
