@@ -17,9 +17,6 @@ endif
 ifeq (,$(findstring nostrip,$(DEB_BUILD_OPTIONS)))
 	INSTALL_PROGRAM += -s
 endif
-ifndef PERL
-PERL=/usr/bin/perl
-endif
 
 
 build: build-stamp
@@ -30,9 +27,6 @@ build-stamp:
 	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --disable-kernel-module --disable-example
 	$(MAKE)
 	
-	(cd perl; $(PERL) Makefile.PL INSTALLDIRS=vendor)
-	$(MAKE) -C perl
-
 	touch build-stamp
 
 clean: kdist_clean
@@ -46,10 +40,8 @@ clean: kdist_clean
 	-test -r /usr/share/misc/config.guess && \
 	  cp -f /usr/share/misc/config.guess config.guess
 
-	-$(MAKE) -C perl distclean
-	
 	find -name '*.o' -o -name '*.so' -o -name fusermount -type f -o \
-		-name 'Makefile' | xargs rm -f
+		\( -name 'Makefile' -a ! -regex '.*python.*' \) | xargs rm -f
 
 	rm -f debian/control
 	cat debian/source.control debian/fuse.control > debian/control
@@ -76,15 +68,6 @@ install: build
 
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/tmp
 
-	# python bindings
-	install -d $(CURDIR)/debian/tmp/usr/lib/site-python
-	install -m 0644 python/_fusemodule.so python/fuse.py \
-		$(CURDIR)/debian/tmp/usr/lib/site-python
-
-	# perl bindings
-	$(MAKE) -C perl install PREFIX=$(CURDIR)/debian/tmp/usr
-	find $(CURDIR)/debian/tmp/usr/lib -name '*.pl' | xargs rm -f
-
 	# -source package
 	find . \( -name \*.o -path ./debian/tmp \) -prune -o -print | \
 		cpio -admp debian/tmp/usr/src/modules/fuse
@@ -100,7 +83,7 @@ build-modules-stamp:
 	$(checkdir)
 
 	./makeconf.sh
-	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --disable-lib --disable-util --disable-example --disable-python --with-kernel=$(KSRC)
+	./configure --host=$(DEB_HOST_GNU_TYPE) --build=$(DEB_BUILD_GNU_TYPE) --prefix=/usr --mandir=\$${prefix}/share/man --infodir=\$${prefix}/share/info --disable-lib --disable-util --disable-example --with-kernel=$(KSRC)
 
 	$(MAKE)
 
@@ -128,7 +111,6 @@ binary-fuse: build install
 	dh_fixperms
 	dh_makeshlibs
 	dh_installdeb
-	dh_perl
 	dh_shlibdeps
 	dh_gencontrol
 	dh_md5sums

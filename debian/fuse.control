@@ -4,7 +4,10 @@ Architecture: any
 Suggests: fuse-utils (= ${Source-Version}), fuse-module
 Description: Filesystem in USErspace (development files)
  Simple interface for userspace programs to export a virtual
- filesystem to the linux kernel. 
+ filesystem to the linux kernel.
+ .
+ This package contains the files necessary to write applications in C
+ or C++ using fuse.
 
 Package: fuse-utils
 Section: utils
@@ -13,7 +16,10 @@ Depends: ${shlibs:Depends}
 Suggests: fuse-module
 Description: Filesystem in USErspace (utilities)
  Simple interface for userspace programs to export a virtual
- filesystem to the linux kernel. 
+ filesystem to the linux kernel.
+ .
+ This package contains the fusermount utility which is necessary to
+ mount fuse filesystems.
 
 Package: fuse-source
 Section: utils
@@ -24,19 +30,6 @@ Suggests: devscripts
 Description: Filesystem in USErspace (source for kernel module)
  Simple interface for userspace programs to export a virtual
  filesystem to the linux kernel. 
-
-Package: fuse-python
-Section: utils
-Architecture: any
-Depends: ${shlibs:Depends}, python (>= 2.2), fuse-utils (= ${Source-Version})
-Description: Filesystem in USErspace (python bindings)
- Simple interface for userspace programs to export a virtual
- filesystem to the linux kernel. 
-
-Package: fuse-perl
-Section: utils
-Architecture: any
-Depends: ${shlibs:Depends}, ${perl:Depends}, fuse-utils (= ${Source-Version})
-Description: Filesystem in USErspace (perl bindings)
- Simple interface for userspace programs to export a virtual
- filesystem to the linux kernel.
+ .
+ This package contains the source code for the fuse module. It is
+ required to use fuse with a self-compiled kernel.
