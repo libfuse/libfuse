@@ -16,7 +16,7 @@
 #define PageUptodate(page) Page_Uptodate(page)
 #define clear_page_dirty(page)	ClearPageDirty(page)
 #endif
-static int fuse_open(struct inode *inode, struct file *file)
+int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_req *req;
@@ -54,7 +54,7 @@ static int fuse_open(struct inode *inode, struct file *file)
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.flags = file->f_flags & ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
-	req->in.h.opcode = FUSE_OPEN;
+	req->in.h.opcode = isdir ? FUSE_OPENDIR : FUSE_OPEN;
 	req->in.h.nodeid = get_node_id(inode);
 	req->inode = inode;
 	req->in.numargs = 1;
@@ -84,7 +84,7 @@ static int fuse_open(struct inode *inode, struct file *file)
 	return err;
 }
 
-static int fuse_release(struct inode *inode, struct file *file)
+int fuse_release_common(struct inode *inode, struct file *file, int isdir)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_file *ff = file->private_data;
@@ -93,7 +93,7 @@ static int fuse_release(struct inode *inode, struct file *file)
 
 	inarg->fh = ff->fh;
 	inarg->flags = file->f_flags & ~O_EXCL;
-	req->in.h.opcode = FUSE_RELEASE;
+	req->in.h.opcode = isdir ? FUSE_RELEASEDIR : FUSE_RELEASE;
 	req->in.h.nodeid = get_node_id(inode);
 	req->inode = inode;
 	req->in.numargs = 1;
@@ -104,6 +104,16 @@ static int fuse_release(struct inode *inode, struct file *file)
 
 	/* Return value is ignored by VFS */
 	return 0;
+}
+
+static int fuse_open(struct inode *inode, struct file *file)
+{
+	return fuse_open_common(inode, file, 0);
+}
+
+static int fuse_release(struct inode *inode, struct file *file)
+{
+	return fuse_release_common(inode, file, 0);
 }
 
 static int fuse_flush(struct file *file)
@@ -177,8 +187,9 @@ static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 	return err;
 }
 
-static ssize_t fuse_send_read(struct fuse_req *req, struct file *file,
-			      struct inode *inode, loff_t pos,  size_t count)
+size_t fuse_send_read_common(struct fuse_req *req, struct file *file,
+			     struct inode *inode, loff_t pos, size_t count, 
+			     int isdir)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_file *ff = file->private_data;
@@ -188,7 +199,7 @@ static ssize_t fuse_send_read(struct fuse_req *req, struct file *file,
 	inarg.fh = ff->fh;
 	inarg.offset = pos;
 	inarg.size = count;
-	req->in.h.opcode = FUSE_READ;
+	req->in.h.opcode = isdir ? FUSE_READDIR : FUSE_READ;
 	req->in.h.nodeid = get_node_id(inode);
 	req->inode = inode;
 	req->file = file;
@@ -201,6 +212,13 @@ static ssize_t fuse_send_read(struct fuse_req *req, struct file *file,
 	req->out.args[0].size = count;
 	request_send_nonint(fc, req);
 	return req->out.args[0].size;
+}
+
+static inline size_t fuse_send_read(struct fuse_req *req, struct file *file,
+				    struct inode *inode, loff_t pos,
+				    size_t count)
+{
+	return fuse_send_read_common(req, file, inode, pos, count, 0);
 }
 
 static int fuse_readpage(struct file *file, struct page *page)
@@ -392,7 +410,7 @@ static int fuse_file_bigread(struct file *file, struct inode *inode,
 }
 #endif /* KERNEL_2_6 */
 
-static ssize_t fuse_send_write(struct fuse_req *req, struct file *file,
+static size_t fuse_send_write(struct fuse_req *req, struct file *file,
 			       struct inode *inode, loff_t pos, size_t count)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
@@ -431,7 +449,7 @@ static int fuse_commit_write(struct file *file, struct page *page,
 			     unsigned offset, unsigned to)
 {
 	int err;
-	ssize_t nres;
+	size_t nres;
 	unsigned count = to - offset;
 	struct inode *inode = page->mapping->host;
 	struct fuse_conn *fc = get_fuse_conn(inode);
