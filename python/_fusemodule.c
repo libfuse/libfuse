@@ -279,7 +279,9 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 		"mkdir", "unlink", "rmdir", "symlink", "rename",
 		"link", "chmod", "chown", "truncate", "utime",
 		"open", "read", "write", "flags", "multithreaded", NULL};
-				
+	
+	memset(&op, 0, sizeof(op));
+
 	if (!PyArg_ParseTupleAndKeywords(args, kw, "|OOOOOOOOOOOOOOOOOii", 
 		kwlist, &getattr_cb, &readlink_cb, &getdir_cb, &mknod_cb,
 		&mkdir_cb, &unlink_cb, &rmdir_cb, &symlink_cb, &rename_cb,
@@ -307,8 +309,7 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 	DO_ONE_ATTR(read);
 	DO_ONE_ATTR(write);
 
-	fuse = fuse_new(0, flags);
-	fuse_set_operations(fuse, &op);	
+	fuse = fuse_new(0, flags, &op);
 	if(multithreaded)
 		pyfuse_loop_mt(fuse);
 	else

@@ -1,3 +1,12 @@
+2002-01-09  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Revaidate all path components not just the last, this means a
+	very small performance penalty for being more up-to-date.
+
+2002-01-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Update and fix python interface
+
 2002-01-07  Mark Glines <mark@glines.org>
 	
 	* Added statfs() support to kernel, lib, examples, and perl!

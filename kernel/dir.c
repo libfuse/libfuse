@@ -601,8 +601,7 @@ static int fuse_dentry_revalidate(struct dentry *entry, int flags)
 		return 0;
 	/* Must not revaidate too soon, since kernel revalidate logic is
            broken, and could return ENOENT */
-	else if(!(flags & LOOKUP_CONTINUE) &&
-		time_after(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
+	else if(time_after(jiffies, entry->d_time + FUSE_REVALIDATE_TIME))
 		return 0;
 	else
 		return 1;

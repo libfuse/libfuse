@@ -548,7 +548,7 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
         free(path);
     }
     link[PATH_MAX] = '\0';
-    send_reply(f, in, res, link, !res ? strlen(link) : 0);
+    send_reply(f, in, res, link, res == 0 ? strlen(link) : 0);
 }
 
 static void do_getdir(struct fuse *f, struct fuse_in_header *in)
@@ -812,8 +812,9 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
     res = -ENOSYS;
     if(f->op.statfs)
         res = f->op.statfs(&sbuf);
-    if(!res)
+    if(res == 0)
         convert_statfs(&sbuf,&arg.st);
+
     send_reply(f, in, res, &arg, sizeof(arg));
 }
 
