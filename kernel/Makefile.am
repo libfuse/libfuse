@@ -3,6 +3,7 @@
 EXTRA_DIST = dev.c dir.c file.c inode.c util.c fuse_i.h
 
 CC = @CC@
+LD = @LD@
 CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe
 CPPFAGS = -I@KERNINCLUDE@ -I../include -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES
 INSTALL = @INSTALL@
@@ -31,7 +32,7 @@ clean-local:
 fuse_objs = dev.o dir.o file.o inode.o util.o
 
 fuse.o: $(fuse_objs)
-	ld -r -o fuse.o $(fuse_objs)
+	$(LD) -r -o fuse.o $(fuse_objs)
 
 fuse_headers = fuse_i.h ../include/linux/fuse.h
 

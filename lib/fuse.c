@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
+#include <sys/param.h>
 
 #define FUSE_MAX_PATH 4096
 

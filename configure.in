@@ -5,6 +5,11 @@ AM_CONFIG_HEADER(include/config.h)
 AC_PROG_CC
 AC_PROG_RANLIB
 
+if test -z "$LD"; then
+	LD=ld
+fi
+AC_SUBST(LD)
+
 CFLAGS="-Wall -W -g -O2"
 
 AC_MSG_CHECKING([kernel source directory])
@@ -25,6 +30,14 @@ if test -z "$kernelsrc"; then
 	fi
 fi
 AC_MSG_RESULT([$kernelsrc])
+
+oldcc=$CC
+oldcross_compiling=$cross_compiling
+if test "$cross_compiling" = yes; then
+	CC=gcc
+	cross_compiling=no
+fi
+
 AC_MSG_CHECKING([kernel source version])
 kernsrcver=`AC_TRY_RUN([
 #include "$kernelsrc/include/linux/version.h"
@@ -43,6 +56,9 @@ if test -z "$kernsrcver"; then
 *** configure the kernel before running this script])
 fi
 AC_MSG_RESULT([$kernsrcver])
+
+CC=$oldcc
+cross_compiling=$oldcross_compiling
 
 KERNINCLUDE=$kernelsrc/include
 AC_SUBST(KERNINCLUDE)

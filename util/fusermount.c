@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <mntent.h>
-#include <limits.h>
+#include <sys/param.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
