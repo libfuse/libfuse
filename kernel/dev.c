@@ -19,27 +19,21 @@ static struct proc_dir_entry *proc_fs_fuse;
 struct proc_dir_entry *proc_fuse_dev;
 static kmem_cache_t *fuse_req_cachep;
 
-static struct fuse_req *request_new(void)
+struct fuse_req *fuse_request_alloc(void)
 {
 	struct fuse_req *req;
 
-	req = (struct fuse_req *) kmem_cache_alloc(fuse_req_cachep, SLAB_NOFS);
+	req = (struct fuse_req *) kmem_cache_alloc(fuse_req_cachep, SLAB_KERNEL);
 	if (req) {
+		memset(req, 0, sizeof(*req));
 		INIT_LIST_HEAD(&req->list);
-		req->issync = 0;
-		req->locked = 0;
-		req->interrupted = 0;
-		req->sent = 0;
-		req->finished = 0;
-		req->in = NULL;
-		req->out = NULL;
 		init_waitqueue_head(&req->waitq);
 	}
 
 	return req;
 }
 
-static void request_free(struct fuse_req *req)
+void fuse_request_free(struct fuse_req *req)
 {
 	kmem_cache_free(fuse_req_cachep, req);
 }
@@ -49,11 +43,17 @@ static int request_restartable(enum fuse_opcode opcode)
 	switch (opcode) {
 	case FUSE_LOOKUP:
 	case FUSE_GETATTR:
+	case FUSE_SETATTR:
 	case FUSE_READLINK:
 	case FUSE_GETDIR:
 	case FUSE_OPEN:
 	case FUSE_READ:
 	case FUSE_WRITE:
+	case FUSE_STATFS:
+	case FUSE_FSYNC:
+	case FUSE_GETXATTR:
+	case FUSE_SETXATTR:
+	case FUSE_LISTXATTR:
 		return 1;
 
 	default:
@@ -83,10 +83,10 @@ static void request_wait_answer(struct fuse_req *req)
 	/* Operations which modify the filesystem cannot safely be
 	   restarted, because it is uncertain whether the operation has
 	   completed or not... */
-	if (req->sent && !request_restartable(req->in->h.opcode))
-		req->out->h.error = -EINTR;
+	if (req->sent && !request_restartable(req->in.h.opcode))
+		req->out.h.error = -EINTR;
 	else
-		req->out->h.error = -ERESTARTSYS;
+		req->out.h.error = -ERESTARTSYS;
 }
 
 static int get_unique(struct fuse_conn *fc)
@@ -94,6 +94,65 @@ static int get_unique(struct fuse_conn *fc)
 	do fc->reqctr++;
 	while (!fc->reqctr);
 	return fc->reqctr;
+}
+
+static struct fuse_req *do_get_request(struct fuse_conn *fc)
+{
+	struct fuse_req *req;
+
+	spin_lock(&fuse_lock);
+	BUG_ON(list_empty(&fc->unused_list));
+	req = list_entry(fc->unused_list.next, struct fuse_req, list);
+	list_del_init(&req->list);
+	spin_unlock(&fuse_lock);
+	
+	memset(req, 0, sizeof(*req));
+	INIT_LIST_HEAD(&req->list);
+	init_waitqueue_head(&req->waitq);
+
+	return req;
+}
+
+struct fuse_req *fuse_get_request(struct fuse_conn *fc)
+{
+	struct fuse_req *req;
+	
+	if (down_interruptible(&fc->unused_sem))
+		return NULL;
+
+	req = do_get_request(fc);
+	req->in.h.uid = current->fsuid;
+	req->in.h.gid = current->fsgid;
+	return req;
+}
+
+struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc)
+{
+	struct fuse_req *req;
+
+	if (down_trylock(&fc->unused_sem))
+		return NULL;
+	
+	req = do_get_request(fc);
+	req->in.h.uid = current->fsuid;
+	req->in.h.gid = current->fsgid;
+	return req;
+}
+
+struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc)
+{
+	down(&fc->unused_sem);
+	
+	return do_get_request(fc);
+}
+
+
+void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
+{
+	spin_lock(&fuse_lock);
+	list_add(&req->list, &fc->unused_list);
+	spin_unlock(&fuse_lock);
+	up(&fc->unused_sem);
 }
 
 /* Must be called with fuse_lock held, and unlocks it */
@@ -106,115 +165,57 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 		spin_unlock(&fuse_lock);
 	} else {
 		spin_unlock(&fuse_lock);
-		endfunc(fc, req->in, req->out, req->data);
-		request_free(req);
-		up(&fc->outstanding);
+		endfunc(fc, req);
 	}
 }
 
-void request_send(struct fuse_conn *fc, struct fuse_in *in,
-		  struct fuse_out *out)
+void request_send(struct fuse_conn *fc, struct fuse_req *req)
 {
-	struct fuse_req *req;
-
-	out->h.error = -ERESTARTSYS;
-	if (down_interruptible(&fc->outstanding))
-		return;
-
-	out->h.error = -ENOMEM;
-	req = request_new();
-	if (req) {
-		req->in = in;
-		req->out = out;
-		req->issync = 1;
-		req->end = NULL;
+	req->issync = 1;
+	req->end = NULL;
 		
-		spin_lock(&fuse_lock);
-		out->h.error = -ENOTCONN;
-		if (fc->file) {
-			in->h.unique = get_unique(fc);		
-			list_add_tail(&req->list, &fc->pending);
-			wake_up(&fc->waitq);
-			request_wait_answer(req);
-			list_del(&req->list);
-		}
-		spin_unlock(&fuse_lock);
-		request_free(req);
+	spin_lock(&fuse_lock);
+	req->out.h.error = -ENOTCONN;
+	if (fc->file) {
+		req->in.h.unique = get_unique(fc);		
+		list_add_tail(&req->list, &fc->pending);
+		wake_up(&fc->waitq);
+		request_wait_answer(req);
+		list_del(&req->list);
 	}
-
-	up(&fc->outstanding);
+	spin_unlock(&fuse_lock);
 }
 
-
-static inline void destroy_request(struct fuse_req *req)
+void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 {
-	if (req) {
-		kfree(req->in);
-		request_free(req);
-	}
-}
-
-/* This one is currently only used for sending FORGET and RELEASE,
-   which are kernel initiated request.  So the outstanding semaphore
-   is not used.  */
-int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in)
-{
-	struct fuse_req *req;
-
-	req = request_new();
-	if (!req)
-		return -ENOMEM;
-
-	req->in = in;
 	req->issync = 0;
 
 	spin_lock(&fuse_lock);
-	if (!fc->file) {
-		spin_unlock(&fuse_lock);
-		request_free(req);
-		return -ENOTCONN;
-	}
-
-	list_add_tail(&req->list, &fc->pending);
-	wake_up(&fc->waitq);
+	if (fc->file) {
+		list_add_tail(&req->list, &fc->pending);
+		wake_up(&fc->waitq);
+	} else
+		fuse_put_request(fc, req);
 	spin_unlock(&fuse_lock);
-	return 0;
 }
 
-int request_send_nonblock(struct fuse_conn *fc, struct fuse_in *in,
-			  struct fuse_out *out, fuse_reqend_t end, void *data)
+void request_send_nonblock(struct fuse_conn *fc, struct fuse_req *req, 
+			   fuse_reqend_t end, void *data)
 {
-	int err;
-	struct fuse_req *req;
-
-	BUG_ON(!end);
-
-	if (down_trylock(&fc->outstanding))
-		return -EWOULDBLOCK;
-
-	err = -ENOMEM;
-	req = request_new();
-	if (req) {
-		req->in = in;
-		req->out = out;
-		req->issync = 1;
-		req->end = end;
-		req->data = data;
-
-		spin_lock(&fuse_lock);
-		err = -ENOTCONN;
-		if (fc->file) {
-			in->h.unique = get_unique(fc);		
-			list_add_tail(&req->list, &fc->pending);
-			wake_up(&fc->waitq);
-			spin_unlock(&fuse_lock);
-			return 0;
-		}
+	req->end = end;
+	req->data = data;
+	req->issync = 1;
+	
+	spin_lock(&fuse_lock);
+	if (fc->file) {
+		req->in.h.unique = get_unique(fc);
+		list_add_tail(&req->list, &fc->pending);
+		wake_up(&fc->waitq);
 		spin_unlock(&fuse_lock);
-		request_free(req);
+	} else {
+		req->out.h.error = -ENOTCONN;
+		request_end(fc, req);
 	}
-	up(&fc->outstanding);
-	return err;
 }
 
 static void request_wait(struct fuse_conn *fc)
@@ -292,11 +293,11 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 	if (req == NULL)
 		return -EINTR;
 
-	ret = copy_in_args(req->in, buf, nbytes);
+	ret = copy_in_args(&req->in, buf, nbytes);
 	spin_lock(&fuse_lock);
 	if (req->issync) {
 		if (ret < 0) {
-			req->out->h.error = -EPROTO;
+			req->out.h.error = -EPROTO;
 			req->finished = 1;
 		} else {
 			list_add_tail(&req->list, &fc->processing);
@@ -310,7 +311,7 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 			spin_unlock(&fuse_lock);
 	} else {
 		spin_unlock(&fuse_lock);
-		destroy_request(req);
+		fuse_put_request(fc, req);
 	}
 	return ret;
 }
@@ -323,7 +324,7 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 	list_for_each(entry, &fc->processing) {
 		struct fuse_req *tmp;
 		tmp = list_entry(entry, struct fuse_req, list);
-		if (tmp->in->h.unique == unique) {
+		if (tmp->in.h.unique == unique) {
 			req = tmp;
 			break;
 		}
@@ -335,7 +336,7 @@ static struct fuse_req *request_find(struct fuse_conn *fc, unsigned int unique)
 static void process_getdir(struct fuse_req *req)
 {
 	struct fuse_getdir_out_i *arg;
-	arg = (struct fuse_getdir_out_i *) req->out->args[0].value;
+	arg = (struct fuse_getdir_out_i *) req->out.args[0].value;
 	arg->file = fget(arg->fd);
 }
 
@@ -495,15 +496,15 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 	if (!req)
 		return -ENOENT;
 
-	req->out->h = oh;
-	err = copy_out_args(req->out, buf, nbytes);
+	req->out.h = oh;
+	err = copy_out_args(&req->out, buf, nbytes);
 
 	spin_lock(&fuse_lock);
 	if (err)
-		req->out->h.error = -EPROTO;
+		req->out.h.error = -EPROTO;
 	else {
 		/* fget() needs to be done in this context */
-		if (req->in->h.opcode == FUSE_GETDIR && !oh.error)
+		if (req->in.h.opcode == FUSE_GETDIR && !oh.error)
 			process_getdir(req);
 	}	
 	req->finished = 1;
@@ -537,12 +538,32 @@ static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 	return mask;
 }
 
+static void free_conn(struct fuse_conn *fc)
+{
+	while (!list_empty(&fc->unused_list)) {
+		struct fuse_req *req;
+		req = list_entry(fc->unused_list.next, struct fuse_req, list);
+		list_del(&req->list);
+		fuse_request_free(req);
+	}
+	kfree(fc);
+}
+
+/* Must be called with the fuse lock held */
+void fuse_release_conn(struct fuse_conn *fc)
+{
+	if (fc->sb == NULL && fc->file == NULL) {
+		free_conn(fc);
+	}
+}
+
 static struct fuse_conn *new_conn(void)
 {
 	struct fuse_conn *fc;
 
 	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
 	if (fc != NULL) {
+		int i;
 		memset(fc, 0, sizeof(*fc));
 		fc->sb = NULL;
 		fc->file = NULL;
@@ -551,7 +572,16 @@ static struct fuse_conn *new_conn(void)
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
-		sema_init(&fc->outstanding, MAX_OUTSTANDING);
+		INIT_LIST_HEAD(&fc->unused_list);
+		sema_init(&fc->unused_sem, MAX_OUTSTANDING);
+		for (i = 0; i < MAX_OUTSTANDING; i++) {
+			struct fuse_req *req = fuse_request_alloc();
+			if (!req) {
+				free_conn(fc);
+				return NULL;
+			}
+			list_add(&req->list, &fc->unused_list);
+		}
 		fc->reqctr = 1;
 	}
 	return fc;
@@ -578,13 +608,13 @@ static void end_requests(struct fuse_conn *fc, struct list_head *head)
 		req = list_entry(head->next, struct fuse_req, list);
 		list_del_init(&req->list);
 		if (req->issync) {
-			req->out->h.error = -ECONNABORTED;
+			req->out.h.error = -ECONNABORTED;
 			req->finished = 1;
 			/* Unlocks fuse_lock: */
 			request_end(fc, req);
 			spin_lock(&fuse_lock);
 		} else
-			destroy_request(req);
+			fuse_put_request(fc, req);
 	}
 }
 
@@ -657,7 +687,7 @@ void fuse_dev_cleanup()
 		remove_proc_entry("version", proc_fs_fuse);
 		remove_proc_entry("fuse", proc_root_fs);
 	}
-	
+
 	kmem_cache_destroy(fuse_req_cachep);
 }
 

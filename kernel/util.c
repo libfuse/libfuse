@@ -19,14 +19,6 @@ MODULE_LICENSE("GPL");
 
 spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
 
-/* Must be called with the fuse lock held */
-void fuse_release_conn(struct fuse_conn *fc)
-{
-	if (fc->sb == NULL && fc->file == NULL) {
-		kfree(fc);
-	}
-}
-
 int __init fuse_init(void)
 {
 	int res;

@@ -47,30 +47,21 @@ static void fuse_read_inode(struct inode *inode)
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in *in = NULL;
+	struct fuse_req *req;
 	struct fuse_forget_in *inarg = NULL;
-	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_forget_in);
 	
 	if (fc == NULL)
 		return;
 
-	in = kmalloc(s, GFP_NOFS);
-	if (!in)
-		return;
-	memset(in, 0, s);
-	inarg = (struct fuse_forget_in *) (in + 1);
+	req = fuse_get_request_nonint(fc);
+	inarg = &req->misc.forget_in;
 	inarg->version = inode->i_version;
-		
-	in->h.opcode = FUSE_FORGET;
-	in->h.ino = inode->i_ino;
-	in->numargs = 1;
-	in->args[0].size = sizeof(struct fuse_forget_in);
-	in->args[0].value = inarg;
-		
-	if (!request_send_noreply(fc, in))
-		return;
-
-	kfree(in);
+	req->in.h.opcode = FUSE_FORGET;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(struct fuse_forget_in);
+	req->in.args[0].value = inarg;
+	request_send_noreply(fc, req);
 }
 
 static void fuse_put_super(struct super_block *sb)
@@ -104,20 +95,25 @@ static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr
 static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 {
 	struct fuse_conn *fc = SB_FC(sb);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_req *req;
 	struct fuse_statfs_out outarg;
-        
-	in.numargs = 0;
-	in.h.opcode = FUSE_STATFS;
-	out.numargs = 1;
-	out.args[0].size = sizeof(outarg);
-	out.args[0].value = &outarg;
-	request_send(fc, &in, &out);
-	if (!out.h.error)
+	int err;
+
+        req = fuse_get_request(fc);
+	if (!req)
+		return -ERESTARTSYS;
+
+	req->in.numargs = 0;
+	req->in.h.opcode = FUSE_STATFS;
+	req->out.numargs = 1;
+	req->out.args[0].size = sizeof(outarg);
+	req->out.args[0].value = &outarg;
+	request_send(fc, req);
+	err = req->out.h.error;
+	if (!err)
 		convert_fuse_statfs(buf, &outarg.st);
-	
-	return out.h.error;
+	fuse_put_request(fc, req);
+	return err;
 }
 
 enum { opt_fd, opt_rootmode, opt_uid, opt_default_permissions, 

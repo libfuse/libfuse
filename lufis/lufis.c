@@ -793,19 +793,13 @@ static struct fuse_operations lu_oper = {
 int main(int argc, char *argv[])
 {
     int res;
-    int pid;
 
     res = lufis_init(&argc, &argv);
     if(res == -1)
         exit(1);
 
-    pid = fork();
-    if(pid == -1) 
-        exit(1);
-    if(pid == 0) {
-        fuse_main(argc, argv, &lu_oper);
-        lufis_cleanup();
-    }
+    fuse_main(argc, argv, &lu_oper);
+    lufis_cleanup();
     
     return 0;
 }

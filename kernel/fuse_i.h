@@ -62,6 +62,83 @@ permission checking is done in the kernel */
     than for small. */
 #define FUSE_LARGE_READ          (1 << 3)
 
+/** One input argument of a request */
+struct fuse_in_arg {
+	unsigned int size;
+	const void *value;
+};
+
+/** The request input */
+struct fuse_in {
+	struct fuse_in_header h;
+	unsigned int numargs;
+	struct fuse_in_arg args[3];
+};
+
+/** One output argument of a request */
+struct fuse_out_arg {
+	unsigned int size;
+	void *value;
+};
+
+/** The request output */
+struct fuse_out {
+	struct fuse_out_header h;
+	unsigned int argvar;
+	unsigned int numargs;
+	struct fuse_out_arg args[3];
+};
+
+struct fuse_req;
+struct fuse_conn;
+
+typedef void (*fuse_reqend_t)(struct fuse_conn *, struct fuse_req *);
+
+/**
+ * A request to the client
+ */
+struct fuse_req {
+	/** The request list */
+	struct list_head list;
+
+	/** True if the request is synchronous */
+	unsigned int issync:1;
+
+	/** The request is locked */
+	unsigned int locked:1;
+
+	/** The request has been interrupted while it was locked */
+	unsigned int interrupted:1;
+
+	/* The request has been sent to the client */
+	unsigned int sent:1;
+
+	/* The request is finished */
+	unsigned int finished;
+
+	/** The request input */
+	struct fuse_in in;
+
+	/** The request output */
+	struct fuse_out out;
+
+	/** Used to wake up the task waiting for completion of request*/
+	wait_queue_head_t waitq;
+
+	/** Request completion callback */
+	fuse_reqend_t end;
+
+	/** User data */
+	void *data;
+
+	/** Data for asynchronous requests */
+	union {
+		struct fuse_write_in write_in;
+		struct fuse_open_in open_in;
+		struct fuse_forget_in forget_in;
+	} misc;
+};
+
 /**
  * A Fuse connection.
  *
@@ -92,7 +169,10 @@ struct fuse_conn {
 	struct list_head processing;
 
 	/** Controls the maximum number of outstanding requests */
-	struct semaphore outstanding;
+	struct semaphore unused_sem;
+
+	/** The list of unused requests */
+	struct list_head unused_list;
 	
 	/** The next unique request id */
 	int reqctr;
@@ -114,78 +194,6 @@ struct fuse_conn {
 
 	/** Is removexattr not implemented by fs? */
 	unsigned int no_removexattr : 1;
-};
-
-/** One input argument of a request */
-struct fuse_in_arg {
-	unsigned int size;
-	const void *value;
-};
-
-/** The request input */
-struct fuse_in {
-	struct fuse_in_header h;
-	unsigned int numargs;
-	struct fuse_in_arg args[3];
-};
-
-/** One output argument of a request */
-struct fuse_out_arg {
-	unsigned int size;
-	void *value;
-};
-
-/** The request output */
-struct fuse_out {
-	struct fuse_out_header h;
-	unsigned int argvar;
-	unsigned int numargs;
-	struct fuse_out_arg args[3];
-};
-
-#define FUSE_IN_INIT { {0, 0, 0, current->fsuid, current->fsgid}, 0}
-#define FUSE_OUT_INIT { {0, 0}, 0, 0}
-
-struct fuse_req;
-typedef void (*fuse_reqend_t)(struct fuse_conn *, struct fuse_in *,
-			      struct fuse_out *, void *data);
-
-/**
- * A request to the client
- */
-struct fuse_req {
-	/** The request list */
-	struct list_head list;
-
-	/** True if the request is synchronous */
-	unsigned int issync:1;
-
-	/** The request is locked */
-	unsigned int locked:1;
-
-	/** The request has been interrupted while it was locked */
-	unsigned int interrupted:1;
-
-	/* The request has been sent to the client */
-	unsigned int sent:1;
-
-	/* The request is finished */
-	unsigned int finished:1;
-
-	/** The request input */
-	struct fuse_in *in;
-
-	/** The request output */
-	struct fuse_out *out;
-
-	/** Used to wake up the task waiting for completion of request*/
-	wait_queue_head_t waitq;
-
-	/** Request completion callback */
-	fuse_reqend_t end;
-
-	/** User data */
-	void *data;
 };
 
 struct fuse_getdir_out_i {
@@ -251,24 +259,42 @@ int fuse_fs_init(void);
  */
 void fuse_fs_cleanup(void);
 
+
+/**
+ * Reserve a request
+ */
+struct fuse_req *fuse_get_request(struct fuse_conn *fc);
+
+/**
+ * Reserve a request, non-iterruptable
+ */
+struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc);
+
+/**
+ * Reserve a request, non-blocking
+ */
+struct fuse_req *fuse_get_request_nonblock(struct fuse_conn *fc);
+
+/**
+ * Free a request
+ */
+void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req);
+
 /**
  * Send a request
- *
  */
-void request_send(struct fuse_conn *fc, struct fuse_in *in,
-		  struct fuse_out *out);
+void request_send(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
  * Send a request for which a reply is not expected
  */
-int request_send_noreply(struct fuse_conn *fc, struct fuse_in *in);
-
+void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
  * Send a synchronous request without blocking
  */
-int request_send_nonblock(struct fuse_conn *fc, struct fuse_in *in,
-			  struct fuse_out *out, fuse_reqend_t end, void *data);
+void request_send_nonblock(struct fuse_conn *fc, struct fuse_req *req, 
+			   fuse_reqend_t end, void *data);
 
 /**
  * Get the attributes of a file

@@ -17,7 +17,9 @@
 #ifndef KERNEL_2_6
 #define PageUptodate(page) Page_Uptodate(page)
 #ifndef NO_MM
+#ifndef filemap_fdatawrite
 #define filemap_fdatawrite filemap_fdatasync
+#endif
 #else
 #define filemap_fdatawrite do {} while (0)
 #endif
@@ -26,8 +28,7 @@
 static int fuse_open(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_req *req;
 	struct fuse_open_in inarg;
 	int err;
 
@@ -43,52 +44,50 @@ static int fuse_open(struct inode *inode, struct file *file)
 		 	return err;
 	}
 
+	req = fuse_get_request(fc);
+	if (!req)
+		return -ERESTARTSYS;
+
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.flags = file->f_flags & ~O_EXCL;
-
-	in.h.opcode = FUSE_OPEN;
-	in.h.ino = inode->i_ino;
-	in.numargs = 1;
-	in.args[0].size = sizeof(inarg);
-	in.args[0].value = &inarg;
-	request_send(fc, &in, &out);
-	if (!out.h.error && !(fc->flags & FUSE_KERNEL_CACHE)) {
+	req->in.h.opcode = FUSE_OPEN;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(inarg);
+	req->in.args[0].value = &inarg;
+	request_send(fc, req);
+	err = req->out.h.error;
+	if (!err && !(fc->flags & FUSE_KERNEL_CACHE)) {
 #ifdef KERNEL_2_6
 		invalidate_inode_pages(inode->i_mapping);
 #else
 		invalidate_inode_pages(inode);
 #endif
 	}
-
-	return out.h.error;
+	fuse_put_request(fc, req);
+	return err;
 }
 
 static int fuse_release(struct inode *inode, struct file *file)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in *in = NULL;
-	struct fuse_open_in *inarg = NULL;
-	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_open_in);
-
+	struct fuse_open_in *inarg;
+	struct fuse_req *req;
+	
 	if (file->f_mode & FMODE_WRITE)
 		filemap_fdatawrite(inode->i_mapping);
 
-	in = kmalloc(s, GFP_NOFS);
-	if (!in)
-		return -ENOMEM;
-	memset(in, 0, s);
-	inarg = (struct fuse_open_in *) (in + 1);
+	req = fuse_get_request_nonint(fc);
+	inarg = &req->misc.open_in;
 	inarg->flags = file->f_flags & ~O_EXCL;
+	req->in.h.opcode = FUSE_RELEASE;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(struct fuse_open_in);
+	req->in.args[0].value = inarg;
+	request_send_noreply(fc, req);
 
-	in->h.opcode = FUSE_RELEASE;
-	in->h.ino = inode->i_ino;
-	in->numargs = 1;
-	in->args[0].size = sizeof(struct fuse_open_in);
-	in->args[0].value = inarg;
-	if (!request_send_noreply(fc, in))
-		return 0;
-
-	kfree(in);
+	/* Return value is ignored by VFS */
 	return 0;
 }
 
@@ -96,49 +95,58 @@ static int fuse_flush(struct file *file)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_req *req;
+	int err;
 	
 	if (fc->no_flush)
 		return 0;
 
-	in.h.opcode = FUSE_FLUSH;
-	in.h.ino = inode->i_ino;
-	request_send(fc, &in, &out);
-	if (out.h.error == -ENOSYS) {
+	req = fuse_get_request(fc);
+	if (!req)
+		return -EINTR;
+
+	req->in.h.opcode = FUSE_FLUSH;
+	req->in.h.ino = inode->i_ino;
+	request_send(fc, req);
+	err = req->out.h.error;
+	if (err == -ENOSYS) {
 		fc->no_flush = 1;
-		return 0;
+		err = 0;
 	}
-	else
-		return out.h.error;
+	fuse_put_request(fc, req);
+	return err;
 }
 
 static int fuse_fsync(struct file *file, struct dentry *de, int datasync)
 {
 	struct inode *inode = de->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_req *req;
 	struct fuse_fsync_in inarg;
+	int err;
 	
 	if (fc->no_fsync)
 		return 0;
 
+	req = fuse_get_request(fc);
+	if (!req)
+		return -ERESTARTSYS;
+	
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.datasync = datasync;
-
-	in.h.opcode = FUSE_FSYNC;
-	in.h.ino = inode->i_ino;
-	in.numargs = 1;
-	in.args[0].size = sizeof(inarg);
-	in.args[0].value = &inarg;
-	request_send(fc, &in, &out);
-
-	if (out.h.error == -ENOSYS) {
+	req->in.h.opcode = FUSE_FSYNC;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(inarg);
+	req->in.args[0].value = &inarg;
+	request_send(fc, req);
+	err = req->out.h.error;
+	if (err == -ENOSYS) {
 		fc->no_fsync = 1;
-		return 0;
+		err = 0;
 	}
-	return out.h.error;
+	fuse_put_request(fc, req);
+	return err;
 
 	/* FIXME: need to ensure, that all write requests issued
            before this request are completed.  Should userspace take
@@ -149,40 +157,42 @@ static int fuse_readpage(struct file *file, struct page *page)
 {
 	struct inode *inode = page->mapping->host;
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_req *req;
 	struct fuse_read_in inarg;
 	char *buffer;
+	int err;
 
 	buffer = kmap(page);
+	
+	req = fuse_get_request(fc);
+	if (!req)
+		return -ERESTARTSYS;
 	
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.offset = (unsigned long long) page->index << PAGE_CACHE_SHIFT;
 	inarg.size = PAGE_CACHE_SIZE;
-
-	in.h.opcode = FUSE_READ;
-	in.h.ino = inode->i_ino;
-	in.numargs = 1;
-	in.args[0].size = sizeof(inarg);
-	in.args[0].value = &inarg;
-	out.argvar = 1;
-	out.numargs = 1;
-	out.args[0].size = PAGE_CACHE_SIZE;
-	out.args[0].value = buffer;
-
-	request_send(fc, &in, &out);
-	if (!out.h.error) {
-		size_t outsize = out.args[0].size;
+	req->in.h.opcode = FUSE_READ;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(inarg);
+	req->in.args[0].value = &inarg;
+	req->out.argvar = 1;
+	req->out.numargs = 1;
+	req->out.args[0].size = PAGE_CACHE_SIZE;
+	req->out.args[0].value = buffer;
+	request_send(fc, req);
+	err = req->out.h.error;
+	if (!err) {
+		size_t outsize = req->out.args[0].size;
 		if (outsize < PAGE_CACHE_SIZE) 
 			memset(buffer + outsize, 0, PAGE_CACHE_SIZE - outsize);
 		flush_dcache_page(page);
 		SetPageUptodate(page);
 	}
-
+	fuse_put_request(fc, req);
 	kunmap(page);
 	unlock_page(page);
-
-	return out.h.error;
+	return err;
 }
 
 static int fuse_is_block_uptodate(struct address_space *mapping,
@@ -255,33 +265,34 @@ static int fuse_file_read_block(struct inode *inode, char *bl_buf,
 		size_t bl_index)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_req *req = fuse_get_request(fc);
 	struct fuse_read_in inarg;
+	int err;
+
+	if (!req)
+		return -ERESTARTSYS;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.offset = bl_index << FUSE_BLOCK_SHIFT;
 	inarg.size = FUSE_BLOCK_SIZE;
-
-	in.h.opcode = FUSE_READ;
-	in.h.ino = inode->i_ino;
-	in.numargs = 1;
-	in.args[0].size = sizeof(inarg);
-	in.args[0].value = &inarg;
-	out.argvar = 1;
-	out.numargs = 1;
-	out.args[0].size = FUSE_BLOCK_SIZE;
-	out.args[0].value = bl_buf;
-
-	request_send(fc, &in, &out);
-
-	if (!out.h.error) {
-		size_t outsize = out.args[0].size;
+	req->in.h.opcode = FUSE_READ;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(inarg);
+	req->in.args[0].value = &inarg;
+	req->out.argvar = 1;
+	req->out.numargs = 1;
+	req->out.args[0].size = FUSE_BLOCK_SIZE;
+	req->out.args[0].value = bl_buf;
+	request_send(fc, req);
+	err = req->out.h.error;
+	if (!err) {
+		size_t outsize = req->out.args[0].size;
 		if (outsize < FUSE_BLOCK_SIZE)
 			memset(bl_buf + outsize, 0, FUSE_BLOCK_SIZE - outsize);
 	}
-
-	return out.h.error;
+	fuse_put_request(fc, req);
+	return err;
 }   
 
 static void fuse_file_bigread(struct address_space *mapping,
@@ -296,7 +307,7 @@ static void fuse_file_bigread(struct address_space *mapping,
 	
 	while (bl_index <= bl_end_index) {
 		int res;
-		char *bl_buf = kmalloc(FUSE_BLOCK_SIZE, GFP_NOFS);
+		char *bl_buf = kmalloc(FUSE_BLOCK_SIZE, GFP_KERNEL);
 		if (!bl_buf)
 			break;
 		res = fuse_is_block_uptodate(mapping, inode, bl_index);
@@ -326,31 +337,35 @@ static int write_buffer(struct inode *inode, struct page *page,
 			unsigned offset, size_t count)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in in = FUSE_IN_INIT;
-	struct fuse_out out = FUSE_OUT_INIT;
+	struct fuse_req *req;
 	struct fuse_write_in inarg;
 	char *buffer;
+	int err;
 
 	buffer = kmap(page);
+
+	req = fuse_get_request(fc);
+	if (!req)
+		return -ERESTARTSYS;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.offset = ((unsigned long long) page->index << PAGE_CACHE_SHIFT) +
 		offset;
 	inarg.size = count;
-	
-	in.h.opcode = FUSE_WRITE;
-	in.h.ino = inode->i_ino;
-	in.numargs = 2;
-	in.args[0].size = sizeof(inarg);
-	in.args[0].value = &inarg;
-	in.args[1].size = count;
-	in.args[1].value = buffer + offset;
-	request_send(fc, &in, &out);
+	req->in.h.opcode = FUSE_WRITE;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 2;
+	req->in.args[0].size = sizeof(inarg);
+	req->in.args[0].value = &inarg;
+	req->in.args[1].size = count;
+	req->in.args[1].value = buffer + offset;
+	request_send(fc, req);
+	err = req->out.h.error;
+	fuse_put_request(fc, req);
 	kunmap(page);
-	if (out.h.error)
+	if (err)
 		SetPageError(page);
-
-	return out.h.error;
+	return err;
 }
 
 static int get_write_count(struct inode *inode, struct page *page)
@@ -372,15 +387,14 @@ static int get_write_count(struct inode *inode, struct page *page)
 
 #ifdef KERNEL_2_6
 
-static void write_buffer_end(struct fuse_conn *fc, struct fuse_in *in,
-			     struct fuse_out *out, void *_page)
+static void write_buffer_end(struct fuse_conn *fc, struct fuse_req *req)
 {
-	struct page *page = (struct page *) _page;
+	struct page *page = (struct page *) req->data;
 	
 	lock_page(page);
-	if (out->h.error) {
+	if (req->out.h.error) {
 		SetPageError(page);
-		if (out->h.error == -ENOSPC)
+		if (req->out.h.error == -ENOSPC)
 			set_bit(AS_ENOSPC, &page->mapping->flags);
 		else
 			set_bit(AS_EIO, &page->mapping->flags);
@@ -388,48 +402,34 @@ static void write_buffer_end(struct fuse_conn *fc, struct fuse_in *in,
 	end_page_writeback(page);
 	kunmap(page);
 	unlock_page(page);
-	kfree(in);	
+	fuse_put_request(fc, req);
 }
 
 static int write_buffer_nonblock(struct inode *inode, struct page *page,
 				 unsigned offset, size_t count)
 {
-	int err;
 	struct fuse_conn *fc = INO_FC(inode);
-	struct fuse_in *in = NULL;
-	struct fuse_out *out = NULL;
+	struct fuse_req *req;
 	struct fuse_write_in *inarg = NULL;
 	char *buffer;
-	unsigned int s = sizeof(struct fuse_in) + sizeof(struct fuse_out) +
-		sizeof(struct fuse_write_in);
 
-	in = kmalloc(s, GFP_NOFS);
-	if (!in)
-		return -ENOMEM;
-	memset(in, 0, s);
-	out = (struct fuse_out *)(in + 1);
-	inarg = (struct fuse_write_in *)(out + 1);
-	
+	req = fuse_get_request_nonblock(fc);
+	if (!req)
+		return -EWOULDBLOCK;
+
+	inarg = &req->misc.write_in;
 	buffer = kmap(page);
-
 	inarg->offset = ((unsigned long long) page->index << PAGE_CACHE_SHIFT) + offset;
 	inarg->size = count;
-	
-	in->h.opcode = FUSE_WRITE;
-	in->h.ino = inode->i_ino;
-	in->numargs = 2;
-	in->args[0].size = sizeof(struct fuse_write_in);
-	in->args[0].value = inarg;
-	in->args[1].size = count;
-	in->args[1].value = buffer + offset;
-	err = request_send_nonblock(fc, in, out, write_buffer_end, page);
-	if (err) {
-		if (err != -EWOULDBLOCK)
-			SetPageError(page);
-		kunmap(page);
-		kfree(in);
-	}
-	return err;
+	req->in.h.opcode = FUSE_WRITE;
+	req->in.h.ino = inode->i_ino;
+	req->in.numargs = 2;
+	req->in.args[0].size = sizeof(struct fuse_write_in);
+	req->in.args[0].value = inarg;
+	req->in.args[1].size = count;
+	req->in.args[1].value = buffer + offset;
+	request_send_nonblock(fc, req, write_buffer_end, page);
+	return 0;
 }
 
 static int fuse_writepage(struct page *page, struct writeback_control *wbc)

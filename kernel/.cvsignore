@@ -4,3 +4,4 @@ Makefile
 *.mod.c
 *.ko
 *.s
+.tmp_versions

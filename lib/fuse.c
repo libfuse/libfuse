@@ -24,7 +24,7 @@
 
 static const char *opname(enum fuse_opcode opcode)
 {
-    switch(opcode) { 
+    switch (opcode) { 
     case FUSE_LOOKUP:		return "LOOKUP";
     case FUSE_FORGET:		return "FORGET";
     case FUSE_GETATTR:		return "GETATTR";
@@ -72,8 +72,8 @@ static struct node *__get_node(struct fuse *f, fino_t ino)
     size_t hash = ino % f->ino_table_size;
     struct node *node;
 
-    for(node = f->ino_table[hash]; node != NULL; node = node->ino_next)
-        if(node->ino == ino)
+    for (node = f->ino_table[hash]; node != NULL; node = node->ino_next)
+        if (node->ino == ino)
             return node;
     
     return NULL;
@@ -82,7 +82,7 @@ static struct node *__get_node(struct fuse *f, fino_t ino)
 static struct node *get_node(struct fuse *f, fino_t ino)
 {
     struct node *node = __get_node(f, ino);
-    if(node != NULL)
+    if (node != NULL)
         return node;
     
     fprintf(stderr, "fuse internal error: inode %lu not found\n", ino);
@@ -101,8 +101,8 @@ static void unhash_ino(struct fuse *f, struct node *node)
     size_t hash = node->ino % f->ino_table_size;
     struct node **nodep = &f->ino_table[hash];
 
-    for(; *nodep != NULL; nodep = &(*nodep)->ino_next) 
-        if(*nodep == node) {
+    for (; *nodep != NULL; nodep = &(*nodep)->ino_next) 
+        if (*nodep == node) {
             *nodep = node->ino_next;
             return;
         }
@@ -112,9 +112,9 @@ static fino_t next_ino(struct fuse *f)
 {
     do {
         f->ctr++;
-        if(!f->ctr)
+        if (!f->ctr)
             f->generation ++;
-    } while(f->ctr == 0 || __get_node(f, f->ctr) != NULL);
+    } while (f->ctr == 0 || __get_node(f, f->ctr) != NULL);
     return f->ctr;
 }
 
@@ -128,8 +128,8 @@ static unsigned int name_hash(struct fuse *f, fino_t parent, const char *name)
 {
     unsigned int hash = *name;
 
-    if(hash)
-        for(name += 1; *name != '\0'; name++)
+    if (hash)
+        for (name += 1; *name != '\0'; name++)
             hash = (hash << 5) - hash + *name;
 
     return (hash + parent) % f->name_table_size;
@@ -141,8 +141,8 @@ static struct node *lookup_node(struct fuse *f, fino_t parent,
     size_t hash = name_hash(f, parent, name);
     struct node *node;
 
-    for(node = f->name_table[hash]; node != NULL; node = node->name_next)
-        if(node->parent == parent && strcmp(node->name, name) == 0)
+    for (node = f->name_table[hash]; node != NULL; node = node->name_next)
+        if (node->parent == parent && strcmp(node->name, name) == 0)
             return node;
 
     return NULL;
@@ -160,12 +160,12 @@ static void hash_name(struct fuse *f, struct node *node, fino_t parent,
 
 static void unhash_name(struct fuse *f, struct node *node)
 {
-    if(node->name != NULL) {
+    if (node->name != NULL) {
         size_t hash = name_hash(f, node->parent, node->name);
         struct node **nodep = &f->name_table[hash];
         
-        for(; *nodep != NULL; nodep = &(*nodep)->name_next)
-            if(*nodep == node) {
+        for (; *nodep != NULL; nodep = &(*nodep)->name_next)
+            if (*nodep == node) {
                 *nodep = node->name_next;
                 node->name_next = NULL;
                 free(node->name);
@@ -186,13 +186,13 @@ static struct node *find_node(struct fuse *f, fino_t parent, char *name,
     int mode = attr->mode & S_IFMT;
     int rdev = 0;
     
-    if(S_ISCHR(mode) || S_ISBLK(mode))
+    if (S_ISCHR(mode) || S_ISBLK(mode))
         rdev = attr->rdev;
 
     pthread_mutex_lock(&f->lock);
     node = lookup_node(f, parent, name);
-    if(node != NULL) {
-        if(node->mode == mode && node->rdev == rdev)
+    if (node != NULL) {
+        if (node->mode == mode && node->rdev == rdev)
             goto out;
         
         unhash_name(f, node);
@@ -216,7 +216,7 @@ static char *add_name(char *buf, char *s, const char *name)
 {
     size_t len = strlen(name);
     s -= len;
-    if(s <= buf) {
+    if (s <= buf) {
         fprintf(stderr, "fuse: path too long: ...%s\n", s + len);
         return NULL;
     }
@@ -235,29 +235,29 @@ static char *get_path_name(struct fuse *f, fino_t ino, const char *name)
     
     *s = '\0';
 
-    if(name != NULL) {
+    if (name != NULL) {
         s = add_name(buf, s, name);
-        if(s == NULL)
+        if (s == NULL)
             return NULL;
     }
 
     pthread_mutex_lock(&f->lock);
-    for(node = get_node(f, ino); node->ino != FUSE_ROOT_INO;
+    for (node = get_node(f, ino); node->ino != FUSE_ROOT_INO;
         node = get_node(f, node->parent)) {
-        if(node->name == NULL) {
+        if (node->name == NULL) {
             s = NULL;
             break;
         }
         
         s = add_name(buf, s, node->name);
-        if(s == NULL)
+        if (s == NULL)
             break;
     }
     pthread_mutex_unlock(&f->lock);
 
-    if(s == NULL) 
+    if (s == NULL) 
         return NULL;
-    else if(*s == '\0')
+    else if (*s == '\0')
         return strdup("/");
     else
         return strdup(s);
@@ -274,7 +274,7 @@ static void destroy_node(struct fuse *f, fino_t ino, int version)
 
     pthread_mutex_lock(&f->lock);
     node = get_node(f, ino);
-    if(node->version == version && ino != FUSE_ROOT_INO) {
+    if (node->version == version && ino != FUSE_ROOT_INO) {
         unhash_name(f, node);
         unhash_ino(f, node);
         free_node(node);
@@ -289,7 +289,7 @@ static void remove_node(struct fuse *f, fino_t dir, const char *name)
 
     pthread_mutex_lock(&f->lock);
     node = lookup_node(f, dir, name);
-    if(node == NULL) {
+    if (node == NULL) {
         fprintf(stderr, "fuse internal error: unable to remove node %lu/%s\n",
                 dir, name);
         abort();
@@ -307,13 +307,13 @@ static void rename_node(struct fuse *f, fino_t olddir, const char *oldname,
     pthread_mutex_lock(&f->lock);
     node  = lookup_node(f, olddir, oldname);
     newnode  = lookup_node(f, newdir, newname);
-    if(node == NULL) {
+    if (node == NULL) {
         fprintf(stderr, "fuse internal error: unable to rename node %lu/%s\n",
                 olddir, oldname);
         abort();
     }
 
-    if(newnode != NULL)
+    if (newnode != NULL)
         unhash_name(f, newnode);
         
     unhash_name(f, node);
@@ -350,7 +350,7 @@ static int fill_dir(struct fuse_dirhandle *dh, char *name, int type)
     dirent.type = type;
     reclen = FUSE_DIRENT_SIZE(&dirent);
     res = fwrite(&dirent, reclen, 1, dh->fp);
-    if(res == 0) {
+    if (res == 0) {
         perror("fuse: writing directory file");
         return -EIO;
     }
@@ -361,7 +361,7 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
 {
     int res;
 
-    if((f->flags & FUSE_DEBUG)) {
+    if ((f->flags & FUSE_DEBUG)) {
         struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
         printf("   unique: %i, error: %i (%s), outsize: %i\n", out->unique,
                out->error, strerror(-out->error), outsize);
@@ -374,9 +374,9 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
     inc_avail(f);
 
     res = write(f->fd, outbuf, outsize);
-    if(res == -1) {
+    if (res == -1) {
         /* ENOENT means the operation was interrupted */
-        if(!f->exited && errno != ENOENT)
+        if (!f->exited && errno != ENOENT)
             perror("fuse: writing device");
         return -errno;
     }
@@ -391,12 +391,12 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     size_t outsize;
     struct fuse_out_header *out;
 
-    if(error <= -1000 || error > 0) {
+    if (error <= -1000 || error > 0) {
         fprintf(stderr, "fuse: bad error value: %i\n",  error);
         error = -ERANGE;
     }
 
-    if(error)
+    if (error)
         argsize = 0;
 
     outsize = sizeof(struct fuse_out_header) + argsize;
@@ -405,7 +405,7 @@ static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
     memset(out, 0, sizeof(struct fuse_out_header));
     out->unique = in->unique;
     out->error = error;
-    if(argsize != 0)
+    if (argsize != 0)
         memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
 
     res = send_reply_raw(f, outbuf, outsize);
@@ -421,7 +421,7 @@ static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
     struct stat buf;
 
     res = f->op.getattr(path, &buf);
-    if(res == 0) {
+    if (res == 0) {
         struct node *node;
 
         memset(arg, 0, sizeof(struct fuse_entry_out));
@@ -433,7 +433,7 @@ static int lookup_path(struct fuse *f, fino_t ino, int version,  char *name,
         arg->entry_valid_nsec = 0;
         arg->attr_valid = ATTR_REVALIDATE_TIME;
         arg->attr_valid_nsec = 0;
-        if(f->flags & FUSE_DEBUG) {
+        if (f->flags & FUSE_DEBUG) {
             printf("   INO: %li\n", arg->ino);
             fflush(stdout);
         }
@@ -449,13 +449,13 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
-    if(path != NULL) {
-        if(f->flags & FUSE_DEBUG) {
+    if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
             printf("LOOKUP %s\n", path);
             fflush(stdout);
         }
         res = -ENOSYS;
-        if(f->op.getattr)
+        if (f->op.getattr)
             res = lookup_path(f, in->ino, in->unique, name, path, &arg);
         free(path);
     }
@@ -465,7 +465,7 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
 static void do_forget(struct fuse *f, struct fuse_in_header *in,
                       struct fuse_forget_in *arg)
 {
-    if(f->flags & FUSE_DEBUG) {
+    if (f->flags & FUSE_DEBUG) {
         printf("FORGET %li/%i\n", in->ino, arg->version);
         fflush(stdout);
     }
@@ -481,14 +481,14 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.getattr)
+        if (f->op.getattr)
             res = f->op.getattr(path, &buf);
         free(path);
     }
 
-    if(res == 0) {
+    if (res == 0) {
         memset(&arg, 0, sizeof(struct fuse_attr_out));
         arg.attr_valid = ATTR_REVALIDATE_TIME;
         arg.attr_valid_nsec = 0;
@@ -503,7 +503,7 @@ static int do_chmod(struct fuse *f, const char *path, struct fuse_attr *attr)
     int res;
 
     res = -ENOSYS;
-    if(f->op.chmod)
+    if (f->op.chmod)
         res = f->op.chmod(path, attr->mode);
 
     return res;
@@ -517,7 +517,7 @@ static int do_chown(struct fuse *f, const char *path, struct fuse_attr *attr,
     gid_t gid = (valid & FATTR_GID) ? attr->gid : (gid_t) -1;
     
     res = -ENOSYS;
-    if(f->op.chown)
+    if (f->op.chown)
         res = f->op.chown(path, uid, gid);
 
     return res;
@@ -529,7 +529,7 @@ static int do_truncate(struct fuse *f, const char *path,
     int res;
 
     res = -ENOSYS;
-    if(f->op.truncate)
+    if (f->op.truncate)
         res = f->op.truncate(path, attr->size);
 
     return res;
@@ -542,7 +542,7 @@ static int do_utime(struct fuse *f, const char *path, struct fuse_attr *attr)
     buf.actime = attr->atime;
     buf.modtime = attr->mtime;
     res = -ENOSYS;
-    if(f->op.utime)
+    if (f->op.utime)
         res = f->op.utime(path, &buf);
 
     return res;
@@ -559,23 +559,23 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.getattr) {
+        if (f->op.getattr) {
             res = 0;
-            if(!res && (valid & FATTR_MODE))
+            if (!res && (valid & FATTR_MODE))
                 res = do_chmod(f, path, attr);
-            if(!res && (valid & (FATTR_UID | FATTR_GID)))
+            if (!res && (valid & (FATTR_UID | FATTR_GID)))
                 res = do_chown(f, path, attr, valid);
-            if(!res && (valid & FATTR_SIZE))
+            if (!res && (valid & FATTR_SIZE))
                 res = do_truncate(f, path, attr);
-            if(!res && (valid & (FATTR_ATIME | FATTR_MTIME)) == 
+            if (!res && (valid & (FATTR_ATIME | FATTR_MTIME)) == 
                (FATTR_ATIME | FATTR_MTIME))
                 res = do_utime(f, path, attr);
-            if(!res) {
+            if (!res) {
                 struct stat buf;
                 res = f->op.getattr(path, &buf);
-                if(!res) {
+                if (!res) {
                     memset(&outarg, 0, sizeof(struct fuse_attr_out));
                     outarg.attr_valid = ATTR_REVALIDATE_TIME;
                     outarg.attr_valid_nsec = 0;
@@ -596,9 +596,9 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.readlink)
+        if (f->op.readlink)
             res = f->op.readlink(path, link, sizeof(link));
         free(path);
     }
@@ -618,9 +618,9 @@ static void do_getdir(struct fuse *f, struct fuse_in_header *in)
     dh.dir = in->ino;
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.getdir)
+        if (f->op.getdir)
             res = f->op.getdir(path, &dh, (fuse_dirfil_t) fill_dir);
         free(path);
     }
@@ -642,15 +642,15 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
-    if(path != NULL) {
-        if(f->flags & FUSE_DEBUG) {
+    if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
             printf("MKNOD %s\n", path);
             fflush(stdout);
         }
         res = -ENOSYS;
-        if(f->op.mknod && f->op.getattr) {
+        if (f->op.mknod && f->op.getattr) {
             res = f->op.mknod(path, inarg->mode, inarg->rdev);
-            if(res == 0)
+            if (res == 0)
                 res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
         }
         free(path);
@@ -668,15 +668,15 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
-    if(path != NULL) {
-        if(f->flags & FUSE_DEBUG) {
+    if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
             printf("MKDIR %s\n", path);
             fflush(stdout);
         }
         res = -ENOSYS;
-        if(f->op.mkdir && f->op.getattr) {
+        if (f->op.mkdir && f->op.getattr) {
             res = f->op.mkdir(path, inarg->mode);
-            if(res == 0)
+            if (res == 0)
                 res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
         }
         free(path);
@@ -691,11 +691,11 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.unlink) {
+        if (f->op.unlink) {
             res = f->op.unlink(path);
-            if(res == 0)
+            if (res == 0)
                 remove_node(f, in->ino, name);
         }
         free(path);
@@ -710,11 +710,11 @@ static void do_rmdir(struct fuse *f, struct fuse_in_header *in, char *name)
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.rmdir) {
+        if (f->op.rmdir) {
             res = f->op.rmdir(path);
-            if(res == 0)
+            if (res == 0)
                 remove_node(f, in->ino, name);
         }
         free(path);
@@ -731,15 +731,15 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
 
     res = -ENOENT;
     path = get_path_name(f, in->ino, name);
-    if(path != NULL) {
-        if(f->flags & FUSE_DEBUG) {
+    if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
             printf("SYMLINK %s\n", path);
             fflush(stdout);
         }
         res = -ENOSYS;
-        if(f->op.symlink && f->op.getattr) {
+        if (f->op.symlink && f->op.getattr) {
             res = f->op.symlink(link, path);
-            if(res == 0)
+            if (res == 0)
                 res = lookup_path(f, in->ino, in->unique, name, path, &outarg);
         }
         free(path);
@@ -760,13 +760,13 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     oldpath = get_path_name(f, olddir, oldname);
-    if(oldpath != NULL) {
+    if (oldpath != NULL) {
         newpath = get_path_name(f, newdir, newname);
-        if(newpath != NULL) {
+        if (newpath != NULL) {
             res = -ENOSYS;
-            if(f->op.rename)
+            if (f->op.rename)
                 res = f->op.rename(oldpath, newpath);
-            if(res == 0)
+            if (res == 0)
                 rename_node(f, olddir, oldname, newdir, newname);
             free(newpath);
         }
@@ -786,17 +786,17 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     oldpath = get_path(f, in->ino);
-    if(oldpath != NULL) {
+    if (oldpath != NULL) {
         newpath =  get_path_name(f, arg->newdir, name);
-        if(newpath != NULL) {
-            if(f->flags & FUSE_DEBUG) {
+        if (newpath != NULL) {
+            if (f->flags & FUSE_DEBUG) {
                 printf("LINK %s\n", newpath);
                 fflush(stdout);
             }
             res = -ENOSYS;
-            if(f->op.link && f->op.getattr) {
+            if (f->op.link && f->op.getattr) {
                 res = f->op.link(oldpath, newpath);
-                if(res == 0)
+                if (res == 0)
                     res = lookup_path(f, arg->newdir, in->unique, name,
                                       newpath, &outarg);
             }
@@ -816,15 +816,15 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.open)
+        if (f->op.open)
             res = f->op.open(path, arg->flags);
     }
     res2 = send_reply(f, in, res, NULL, 0);
-    if(path != NULL) {
+    if (path != NULL) {
         /* The open syscall was interrupted, so it must be cancelled */
-        if(res == 0 && res2 == -ENOENT && f->op.release)
+        if (res == 0 && res2 == -ENOENT && f->op.release)
             f->op.release(path, arg->flags);
         free(path);
     }
@@ -837,9 +837,9 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in)
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.flush)
+        if (f->op.flush)
             res = f->op.flush(path);
         free(path);
     }
@@ -851,10 +851,14 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
 {
     char *path;
 
+    if (!f->op.release) {
+        send_reply(f, in, -ENOSYS, NULL, 0);
+        return;
+    }
+
     path = get_path(f, in->ino);
-    if(path != NULL) {
-        if(f->op.release)
-            f->op.release(path, arg->flags);
+    if (path != NULL) {
+        f->op.release(path, arg->flags);
         free(path);
     }
 }
@@ -872,23 +876,23 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
-        if(f->flags & FUSE_DEBUG) {
+    if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
             printf("READ %u bytes from %llu\n", arg->size, arg->offset);
             fflush(stdout);
         }
 
         res = -ENOSYS;
-        if(f->op.read)
+        if (f->op.read)
             res = f->op.read(path, buf, arg->size, arg->offset);
         free(path);
     }
     
     size = 0;
-    if(res > 0) {
+    if (res > 0) {
         size = res;
         res = 0;
-        if(f->flags & FUSE_DEBUG) {
+        if (f->flags & FUSE_DEBUG) {
             printf("   READ %u bytes\n", size);
             fflush(stdout);
         }
@@ -910,20 +914,20 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
-        if(f->flags & FUSE_DEBUG) {
+    if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
             printf("WRITE %u bytes to %llu\n", arg->size, arg->offset);
             fflush(stdout);
         }
 
         res = -ENOSYS;
-        if(f->op.write)
+        if (f->op.write)
             res = f->op.write(path, PARAM(arg), arg->size, arg->offset);
         free(path);
     }
     
-    if(res > 0) {
-        if((size_t) res != arg->size) {
+    if (res > 0) {
+        if ((size_t) res != arg->size) {
             fprintf(stderr, "short write: %u (should be %u)\n", res,
                     arg->size);
             res = -EINVAL;
@@ -960,12 +964,12 @@ static void do_statfs(struct fuse *f, struct fuse_in_header *in)
     struct statfs buf;
 
     memset(&buf, 0, sizeof(struct statfs));
-    if(f->op.statfs)
+    if (f->op.statfs)
         res = f->op.statfs("/", &buf);
     else
         res = default_statfs(&buf);
 
-    if(res == 0)
+    if (res == 0)
         convert_statfs(&buf, &arg.st);
 
     send_reply(f, in, res, &arg, sizeof(arg));
@@ -979,9 +983,9 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
 
     res = -ENOENT;
     path = get_path(f, in->ino);
-    if(path != NULL) {
+    if (path != NULL) {
         res = -ENOSYS;
-        if(f->op.fsync)
+        if (f->op.fsync)
             res = f->op.fsync(path, inarg->datasync);
         free(path);
     }
@@ -1034,7 +1038,7 @@ static void do_getxattr_read(struct fuse *f, struct fuse_in_header *in,
 
     res = common_getxattr(f, in, name, value, size);
     size = 0;
-    if(res > 0) {
+    if (res > 0) {
         size = res;
         res = 0;
     }
@@ -1053,7 +1057,7 @@ static void do_getxattr_size(struct fuse *f, struct fuse_in_header *in,
     struct fuse_getxattr_out arg;
 
     res = common_getxattr(f, in, name, NULL, 0);
-    if(res >= 0) {
+    if (res >= 0) {
         arg.size = res;
         res = 0;
     }
@@ -1065,7 +1069,7 @@ static void do_getxattr(struct fuse *f, struct fuse_in_header *in,
 {
     char *name = PARAM(arg);
     
-    if(arg->size)
+    if (arg->size)
         do_getxattr_read(f, in, name, arg->size);
     else
         do_getxattr_size(f, in, name);
@@ -1098,7 +1102,7 @@ static void do_listxattr_read(struct fuse *f, struct fuse_in_header *in,
 
     res = common_listxattr(f, in, list, size);
     size = 0;
-    if(res > 0) {
+    if (res > 0) {
         size = res;
         res = 0;
     }
@@ -1126,7 +1130,7 @@ static void do_listxattr_size(struct fuse *f, struct fuse_in_header *in)
 static void do_listxattr(struct fuse *f, struct fuse_in_header *in,
                          struct fuse_getxattr_in *arg)
 {
-    if(arg->size)
+    if (arg->size)
         do_listxattr_read(f, in, arg->size);
     else
         do_listxattr_size(f, in);
@@ -1165,7 +1169,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     dec_avail(f);
 
-    if((f->flags & FUSE_DEBUG)) {
+    if ((f->flags & FUSE_DEBUG)) {
         printf("unique: %i, opcode: %s (%i), ino: %li, insize: %i\n",
                in->unique, opname(in->opcode), in->opcode, in->ino,
                cmd->buflen);
@@ -1177,7 +1181,7 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     
     argsize = cmd->buflen - sizeof(struct fuse_in_header);
         
-    switch(in->opcode) {
+    switch (in->opcode) {
     case FUSE_LOOKUP:
         do_lookup(f, in, (char *) inarg);
         break;
@@ -1292,13 +1296,13 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
 
     do {
         res = read(f->fd, cmd->buf, FUSE_MAX_IN);
-        if(res == -1) {
+        if (res == -1) {
             free_cmd(cmd);
-            if(f->exited || errno == EINTR)
+            if (f->exited || errno == EINTR)
                 return NULL;
 
             /* ENODEV means we got unmounted, so we silenty return failure */
-            if(errno != ENODEV) {
+            if (errno != ENODEV) {
                 /* BAD... This will happen again */
                 perror("fuse: reading device");
             }
@@ -1306,7 +1310,7 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
             fuse_exit(f);
             return NULL;
         }
-        if((size_t) res < sizeof(struct fuse_in_header)) {
+        if ((size_t) res < sizeof(struct fuse_in_header)) {
             free_cmd(cmd);
             /* Cannot happen */
             fprintf(stderr, "short read on fuse device\n");
@@ -1316,27 +1320,27 @@ struct fuse_cmd *__fuse_read_cmd(struct fuse *f)
         cmd->buflen = res;
         
         /* Forget is special, it can be done without messing with threads. */
-        if(in->opcode == FUSE_FORGET)
+        if (in->opcode == FUSE_FORGET)
             do_forget(f, in, (struct fuse_forget_in *) inarg);
 
-    } while(in->opcode == FUSE_FORGET);
+    } while (in->opcode == FUSE_FORGET);
 
     return cmd;
 }
 
 void fuse_loop(struct fuse *f)
 {
-    if(f == NULL)
+    if (f == NULL)
         return;
 
-    while(1) {
+    while (1) {
         struct fuse_cmd *cmd;
 
-        if(f->exited)
+        if (f->exited)
             return;
 
         cmd = __fuse_read_cmd(f);
-        if(cmd == NULL)
+        if (cmd == NULL)
             continue;
 
         __fuse_process_cmd(f, cmd);
@@ -1350,7 +1354,7 @@ void fuse_exit(struct fuse *f)
 
 struct fuse_context *fuse_get_context(struct fuse *f)
 {
-    if(f->getcontext)
+    if (f->getcontext)
         return f->getcontext(f);
     else
         return &f->context;
@@ -1360,23 +1364,23 @@ static int check_version(struct fuse *f)
 {
     int res;
     FILE *vf = fopen(FUSE_VERSION_FILE, "r");
-    if(vf == NULL) {
+    if (vf == NULL) {
         fprintf(stderr, "fuse: kernel interface too old, need >= %i.%i\n",
                 FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
         return -1;
     }
     res = fscanf(vf, "%i.%i", &f->majorver, &f->minorver);
     fclose(vf);
-    if(res != 2) {
+    if (res != 2) {
         fprintf(stderr, "fuse: error reading %s\n", FUSE_VERSION_FILE);
         return -1;
     }
-    if(f->majorver != FUSE_KERNEL_VERSION) {
+    if (f->majorver != FUSE_KERNEL_VERSION) {
         fprintf(stderr, "fuse: bad kernel interface major version: needs %i\n",
                 FUSE_KERNEL_VERSION);
         return -1;
     }
-    if(f->minorver < FUSE_KERNEL_MINOR_VERSION) {
+    if (f->minorver < FUSE_KERNEL_MINOR_VERSION) {
         fprintf(stderr, "fuse: kernel interface too old: need >= %i.%i",
                 FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
         return -1;
@@ -1392,7 +1396,7 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
 
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
 
-    if(check_version(f) == -1) {
+    if (check_version(f) == -1) {
         free(f);
         return NULL;
     }
@@ -1432,10 +1436,10 @@ struct fuse *fuse_new(int fd, int flags, const struct fuse_operations *op)
 void fuse_destroy(struct fuse *f)
 {
     size_t i;
-    for(i = 0; i < f->ino_table_size; i++) {
+    for (i = 0; i < f->ino_table_size; i++) {
         struct node *node;
         struct node *next;
-        for(node = f->ino_table[i]; node != NULL; node = next) {
+        for (node = f->ino_table[i]; node != NULL; node = next) {
             next = node->ino_next;
             free_node(node);
         }
