@@ -5,9 +5,16 @@
  * Version 2.  See the file COPYING for more details.
  */
 
+#include <linux/config.h>
+#ifdef CONFIG_MODVERSIONS
+#define MODVERSIONS
+#include <linux/modversions.h>
+#endif
+
+#include "parser.h"
+
 #include <linux/ctype.h>
 #include <linux/module.h>
-#include <linux/parser.h>
 #include <linux/slab.h>
 #include <linux/string.h>
 

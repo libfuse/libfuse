@@ -1,3 +1,7 @@
+2004-04-20  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Fixed parser with modversions (Mattias Wadman)
+	
 2004-04-19  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* Added mount option parser to 2.4 build
