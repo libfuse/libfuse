@@ -38,8 +38,10 @@
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
+#define FUSE_DEV_NEW "/dev/fuse"
 #define FUSE_SYS_DEV "/sys/class/misc/fuse/dev"
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
+#define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
 
 const char *progname;
 
@@ -521,7 +523,7 @@ static int check_version(const char *dev)
     if (isold)
         version_file = FUSE_VERSION_FILE_OLD;
     else
-        version_file = FUSE_VERSION_FILE;
+        version_file = FUSE_VERSION_FILE_NEW;
 
     vf = fopen(version_file, "r");
     if (vf == NULL) {
@@ -664,13 +666,13 @@ static int try_open_new(char **devp, int final)
     if (fd == -1) {
         if (!final)
             return -2;
-        fd = try_open(FUSE_DEV, devp, 1);
+        fd = try_open(FUSE_DEV_NEW, devp, 1);
         if (fd == -2)
             return -2;
         fd = try_open_new_temp(FUSE_MAJOR << 8 | FUSE_MINOR, devp, 1);
         if (fd == -2)
             return -2;
-        return try_open(FUSE_DEV, devp, 0);
+        return try_open(FUSE_DEV_NEW, devp, 0);
     }
 
     res = read(fd, buf, sizeof(buf)-1);
@@ -689,7 +691,7 @@ static int try_open_new(char **devp, int final)
     }
 
     devnum = (major << 8) + (minor & 0xff) + ((minor & 0xff00) << 12);
-    dev = FUSE_DEV;
+    dev = FUSE_DEV_NEW;
     res = stat(dev, &stbuf);
     if (res == -1) {
         if (major == FUSE_MAJOR && minor == FUSE_MINOR)

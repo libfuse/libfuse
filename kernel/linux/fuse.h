@@ -23,12 +23,6 @@
 /** The minor number of the fuse character device */
 #define FUSE_MINOR 229
 
-/** Opening this will yield a new control file */
-#define FUSE_DEV "/dev/fuse"
-
-/** The file containing the version in the form MAJOR.MINOR */
-#define FUSE_VERSION_FILE "/sys/fs/fuse/version"
-
 struct fuse_attr {
 	unsigned long       ino;
 	unsigned int        mode;

@@ -18,6 +18,7 @@
 #include <sys/param.h>
 
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
+#define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
 
 #define FUSE_MAX_PATH 4096
@@ -1744,7 +1745,7 @@ void __fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 static int check_version(struct fuse *f)
 {
     int res;
-    const char *version_file = FUSE_VERSION_FILE;
+    const char *version_file = FUSE_VERSION_FILE_NEW;
     FILE *vf = fopen(version_file, "r");
     if (vf == NULL) {
         version_file = FUSE_VERSION_FILE_OLD;

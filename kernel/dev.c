@@ -13,10 +13,10 @@
 #include <linux/poll.h>
 #ifdef KERNEL_2_6
 #include <linux/kobject.h>
-#include <linux/miscdevice.h>
 #else
 #include <linux/proc_fs.h>
 #endif
+#include <linux/miscdevice.h>
 #include <linux/file.h>
 
 static kmem_cache_t *fuse_req_cachep;
@@ -559,7 +559,6 @@ struct file_operations fuse_dev_operations = {
 };
 
 #ifdef KERNEL_2_6
-
 #ifndef FUSE_MAINLINE
 static decl_subsys(fs, NULL, NULL);
 #endif
@@ -572,22 +571,15 @@ static ssize_t version_show(struct subsystem *subsys, char *buf)
 }
 static struct subsys_attribute fuse_attr_version = __ATTR_RO(version);
 
-static struct miscdevice fuse_miscdevice = {
-	.minor = FUSE_MINOR,
-	.name  = "fuse",
-	.fops = &fuse_dev_operations,
-};
-
-static int __init fuse_sysfs_init(void)
+static int __init fuse_version_init(void)
 {
 	int err;
-#ifdef FUSE_MAINLINE
-	err = fs_subsys_register(&fuse_subsys);
-#else
+
+#ifndef FUSE_MAINLINE
 	subsystem_register(&fs_subsys);
+#endif
 	kset_set_kset_s(&fuse_subsys, fs_subsys);
 	err = subsystem_register(&fuse_subsys);
-#endif
 	if (err)
 		return err;
 	err = subsys_create_file(&fuse_subsys, &fuse_attr_version);
@@ -601,33 +593,13 @@ static int __init fuse_sysfs_init(void)
 	return 0;
 }
 
-static void fuse_sysfs_clean(void)
+static void fuse_version_clean(void)
 {
 	subsys_remove_file(&fuse_subsys, &fuse_attr_version);
 	subsystem_unregister(&fuse_subsys);
 #ifndef FUSE_MAINLINE
 	subsystem_unregister(&fs_subsys);
 #endif	
-}
-
-static int __init fuse_device_init(void)
-{
-	int err = fuse_sysfs_init();
-	if (err)
-		return err;
-
-	err = misc_register(&fuse_miscdevice);
-	if (err) {
-		fuse_sysfs_clean();
-		return err;
-	}
-	return 0;
-}
-
-static void fuse_device_clean(void)
-{
-	misc_deregister(&fuse_miscdevice);
-	fuse_sysfs_clean();
 }
 #else
 static struct proc_dir_entry *proc_fs_fuse;
@@ -641,19 +613,12 @@ static int read_version(char *page, char **start, off_t off, int count,
 	return s - page;
 }
 
-static int fuse_device_init(void)
+static int fuse_version_init(void)
 {
 	proc_fs_fuse = proc_mkdir("fuse", proc_root_fs);
 	if (proc_fs_fuse) {
 		struct proc_dir_entry *de;
 
-		proc_fs_fuse->owner = THIS_MODULE;
-		de = create_proc_entry("dev", S_IFSOCK | 0666,
-						  proc_fs_fuse);
-		if (de) {
-			de->owner = THIS_MODULE;
-			de->proc_fops = &fuse_dev_operations;
-		}
 		de = create_proc_entry("version", S_IFREG | 0444, proc_fs_fuse);
 		if (de) {
 			de->owner = THIS_MODULE;
@@ -663,20 +628,25 @@ static int fuse_device_init(void)
 	return 0;
 }
 
-static void fuse_device_clean(void)
+static void fuse_version_clean(void)
 {
 	if (proc_fs_fuse) {
-		remove_proc_entry("dev", proc_fs_fuse);
 		remove_proc_entry("version", proc_fs_fuse);
 		remove_proc_entry("fuse", proc_root_fs);
 	}
 }
 #endif
 
+static struct miscdevice fuse_miscdevice = {
+	.minor = FUSE_MINOR,
+	.name  = "fuse",
+	.fops = &fuse_dev_operations,
+};
+
 int __init fuse_dev_init(void)
 {
 	int err;
-	err = fuse_device_init();
+	err = fuse_version_init();
 	if (err)
 		goto out;
 
@@ -685,18 +655,26 @@ int __init fuse_dev_init(void)
 					    sizeof(struct fuse_req),
 					    0, 0, NULL, NULL);
 	if (!fuse_req_cachep)
-		goto out_device_clean;
+		goto out_version_clean;
 	
+
+	err = misc_register(&fuse_miscdevice);
+	if (err)
+		goto out_cache_clean;
+
 	return 0;
-	
- out_device_clean:
-	fuse_device_clean();
+
+ out_cache_clean:
+	kmem_cache_destroy(fuse_req_cachep);
+ out_version_clean:
+	fuse_version_clean();
  out:
 	return err;
 }
 
 void fuse_dev_cleanup(void)
 {
-	fuse_device_clean();
+	misc_deregister(&fuse_miscdevice);
 	kmem_cache_destroy(fuse_req_cachep);
+	fuse_version_clean();
 }
