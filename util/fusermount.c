@@ -35,8 +35,6 @@
 #include <sys/un.h>
 #include <linux/fuse.h>
 
-#define FUSE_DEV "/proc/fs/fuse/dev"
-
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
 const char *progname;
@@ -375,6 +373,29 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     return res;
 }
 
+static int check_version(void)
+{
+    int res;
+    int majorver;
+    int minorver;
+    FILE *vf = fopen(FUSE_VERSION_FILE, "r");
+    if (vf == NULL) {
+        fprintf(stderr, "%s: kernel interface too old\n", progname);
+        return -1;
+    }
+    res = fscanf(vf, "%i.%i", &majorver, &minorver);
+    fclose(vf);
+    if (res != 2) {
+        fprintf(stderr, "%s: error reading %s\n", progname, FUSE_VERSION_FILE);
+        return -1;
+    }
+    if (majorver < 3) {
+        fprintf(stderr, "%s: kernel interface too old\n", progname);
+        return -1;
+    }
+    return 0;
+}
+
 static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
 {
     int res;
@@ -475,10 +496,14 @@ static int mount_fuse(const char *mnt, const char *opts)
             return -1;
     }
 
-    res = check_perm(&real_mnt, &stbuf, &currdir_fd);
-    if (res != -1)
-        res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
-                       &fsname);
+    res = check_version();
+    if (res != -1) {
+        res = check_perm(&real_mnt, &stbuf, &currdir_fd);
+        if (res != -1)
+            res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
+                           &fsname);
+    }
+
     if (getuid() != 0)
         restore_privs();
 

@@ -17,7 +17,7 @@ MODULE_DESCRIPTION("Filesystem in Userspace");
 MODULE_LICENSE("GPL");
 #endif
 
-spinlock_t fuse_lock = SPIN_LOCK_UNLOCKED;
+spinlock_t fuse_lock;
 
 int __init fuse_init(void)
 {
@@ -27,6 +27,7 @@ int __init fuse_init(void)
 	       FUSE_VERSION,
 	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
 
+	spin_lock_init(&fuse_lock);
 	res = fuse_fs_init();
 	if (res)
 		goto err;
