@@ -49,6 +49,17 @@ if test "$enable_kernel_module" != "no"; then
 	kernsrcver="$kernsrcver.`sed -ne '/^SUBLEVEL = \(.*\)/{s//\1/;p;q;}' $kernelsrc/Makefile`"
 	kernsrcver="$kernsrcver`sed -ne '/^EXTRAVERSION = \(.*\)/{s//\1/;p;q;}' $kernelsrc/Makefile`"
 
+	if test -f /etc/SuSE-release ; then
+		if grep -qs "^CONFIG_HIGHMEM4G" $kernelsrc/.config ; then
+			kernsrcver="$kernsrcver-4GB"
+		elif grep -qs "^CONFIG_HIGHMEM64G" $kernelsrc/.config ; then
+			kernsrcver="$kernsrcver-64GB"
+		fi
+		if grep -qs "^CONFIG_SMP" $kernelsrc/.config ; then
+			kernsrcver="$kernsrcver-SMP"
+		fi
+	fi
+
 	if test -z "$kernsrcver"; then
 		AC_MSG_RESULT([Not found])
 		AC_MSG_ERROR([
