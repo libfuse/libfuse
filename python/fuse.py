@@ -21,7 +21,8 @@ try:
 except:
     pass
  
-from _fuse import main
+from _fuse import main, FuseGetContext, FuseInvalidate
+from string import join
 import os, sys
 from errno import *
 
@@ -82,6 +83,13 @@ class Fuse:
                     self.optdict[k] = v
                 except:
                     self.optlist.append(o)
+
+    def GetContext(self):
+	return FuseGetContext(self)
+
+    def Invalidate(self, path):
+        return FuseInvalidate(self, path)
+
     #@-node:__init__
     #@+node:main
     def main(self):
@@ -91,8 +99,16 @@ class Fuse:
         if hasattr( self, 'debug'):
             d['lopts'] = 'debug';
 
-        d['kopts'] = 'allow_other,kernel_cache';
+        k=[]
+        if hasattr(self,'allow_other'):
+                k.append('allow_other')
 
+        if hasattr(self,'kernel_cache'):
+                k.append('kernel_cache')
+
+	if len(k):
+                d['kopts'] = join(k,',')
+	
     	for a in self._attrs:
     		if hasattr(self,a):
     			d[a] = ErrnoWrapper(getattr(self, a))

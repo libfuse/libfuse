@@ -179,7 +179,6 @@ class Xmp(Fuse):
 if __name__ == '__main__':
 
 	server = Xmp()
-	server.flags = 0
 	server.multithreaded = 1;
 	server.main()
 #@-node:mainline

@@ -474,6 +474,24 @@ Fuse_main(PyObject *self, PyObject *args, PyObject *kw)
 // List of functions defined in the module
 //@-at
 //@@c
+static char FuseInvalidate__doc__[] =
+	"Tell Fuse kernel module to explicitly invalidate a cached inode's contents\n";
+
+static PyObject *FuseInvalidate( PyObject *self, PyObject *args) {
+	char *path;
+	PyObject *ret;
+	int err;
+
+	PyString_Check(args);
+
+	path = PyString_AsString(args);
+
+	err = fuse_invalidate(fuse, path);
+
+	ret = PyInt_FromLong(err);
+
+	return(ret);
+}
 
 static char FuseGetContext__doc__[] =
 	"Return the context of a filesystem operation in a dict. uid, gid, pid\n";
@@ -505,6 +523,7 @@ static PyObject *FuseGetContext( PyObject *self, PyObject *args) {
 static PyMethodDef Fuse_methods[] = {
 	{"main",	(PyCFunction)Fuse_main,	 METH_VARARGS|METH_KEYWORDS},
 	{"FuseGetContext", (PyCFunction)FuseGetContext, METH_VARARGS, FuseGetContext__doc__},
+	{"FuseInvalidate", (PyCFunction)FuseInvalidate, METH_VARARGS, FuseInvalidate__doc__},
 	{NULL,		NULL}		/* sentinel */
 };
 
