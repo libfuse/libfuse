@@ -6,5 +6,5 @@ libfuse_a_SOURCES = 	\
 	fuse.c		\
 	fuse_mt.c	\
 	helper.c	\
-	mount.c
+	mount.c		\
 	fuse_i.h
