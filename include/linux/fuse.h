@@ -54,6 +54,7 @@ enum fuse_opcode {
 	FUSE_LINK,
 	FUSE_OPEN,
 	FUSE_READ,
+	FUSE_WRITE,
 };
 
 /* Conservative buffer size for the client */
@@ -62,6 +63,10 @@ enum fuse_opcode {
 struct fuse_lookup_out {
 	unsigned long ino;
 	struct fuse_attr attr;
+};
+
+struct fuse_forget_in {
+	int version;
 };
 
 struct fuse_getattr_out {
@@ -104,6 +109,10 @@ struct fuse_setattr_in {
 	unsigned int valid;
 };
 
+struct fuse_setattr_out {
+	unsigned long long newsize;
+};
+
 struct fuse_open_in {
 	unsigned int flags;
 };
@@ -113,10 +122,18 @@ struct fuse_read_in {
 	unsigned int size;
 };
 
+struct fuse_write_in {
+	unsigned long long offset;
+	unsigned int size;
+	char buf[1];
+};
+
 struct fuse_in_header {
 	int unique;
 	enum fuse_opcode opcode;
 	unsigned long ino;
+	unsigned int uid;
+	unsigned int gid;
 };
 
 struct fuse_out_header {

@@ -15,7 +15,8 @@
 
 static struct fuse *pro_fuse;
 
-static int pro_getattr(const char *path, struct stat *stbuf)
+static int pro_getattr(struct fuse_cred *cred, const char *path,
+                       struct stat *stbuf)
 {
     int res;
 
@@ -26,7 +27,8 @@ static int pro_getattr(const char *path, struct stat *stbuf)
     return 0;
 }
 
-static int pro_readlink(const char *path, char *buf, size_t size)
+static int pro_readlink(struct fuse_cred *cred, const char *path, char *buf,
+                        size_t size)
 {
     int res;
 
@@ -39,7 +41,8 @@ static int pro_readlink(const char *path, char *buf, size_t size)
 }
 
 
-static int pro_getdir(const char *path, struct fuse_dh *h, dirfiller_t filler)
+static int pro_getdir(struct fuse_cred *cred, const char *path, fuse_dirh_t h,
+                      fuse_dirfil_t filler)
 {
     DIR *dp;
     struct dirent *de;
@@ -59,7 +62,8 @@ static int pro_getdir(const char *path, struct fuse_dh *h, dirfiller_t filler)
     return res;
 }
 
-static int pro_mknod(const char *path, mode_t mode, dev_t rdev)
+static int pro_mknod(struct fuse_cred *cred, const char *path, mode_t mode,
+                     dev_t rdev)
 {
     int res;
 
@@ -70,7 +74,7 @@ static int pro_mknod(const char *path, mode_t mode, dev_t rdev)
     return 0;
 }
 
-static int pro_mkdir(const char *path, mode_t mode)
+static int pro_mkdir(struct fuse_cred *cred, const char *path, mode_t mode)
 {
     int res;
 
@@ -81,7 +85,7 @@ static int pro_mkdir(const char *path, mode_t mode)
     return 0;
 }
 
-static int pro_unlink(const char *path)
+static int pro_unlink(struct fuse_cred *cred, const char *path)
 {
     int res;
 
@@ -92,7 +96,7 @@ static int pro_unlink(const char *path)
     return 0;
 }
 
-static int pro_rmdir(const char *path)
+static int pro_rmdir(struct fuse_cred *cred, const char *path)
 {
     int res;
 
@@ -103,7 +107,8 @@ static int pro_rmdir(const char *path)
     return 0;
 }
 
-static int pro_symlink(const char *from, const char *to)
+static int pro_symlink(struct fuse_cred *cred, const char *from,
+                       const char *to)
 {
     int res;
 
@@ -114,7 +119,7 @@ static int pro_symlink(const char *from, const char *to)
     return 0;
 }
 
-static int pro_rename(const char *from, const char *to)
+static int pro_rename(struct fuse_cred *cred, const char *from, const char *to)
 {
     int res;
 
@@ -125,7 +130,7 @@ static int pro_rename(const char *from, const char *to)
     return 0;
 }
 
-static int pro_link(const char *from, const char *to)
+static int pro_link(struct fuse_cred *cred, const char *from, const char *to)
 {
     int res;
 
@@ -136,7 +141,7 @@ static int pro_link(const char *from, const char *to)
     return 0;
 }
 
-static int pro_chmod(const char *path, mode_t mode)
+static int pro_chmod(struct fuse_cred *cred, const char *path, mode_t mode)
 {
     int res;
 
@@ -147,18 +152,19 @@ static int pro_chmod(const char *path, mode_t mode)
     return 0;
 }
 
-static int pro_chown(const char *path, uid_t uid, gid_t gid)
+static int pro_chown(struct fuse_cred *cred, const char *path, uid_t uid,
+                     gid_t gid)
 {
     int res;
 
-    res = chown(path, uid, gid);
+    res = lchown(path, uid, gid);
     if(res == -1)
         return -errno;
 
     return 0;
 }
 
-static int pro_truncate(const char *path, off_t size)
+static int pro_truncate(struct fuse_cred *cred, const char *path, off_t size)
 {
     int res;
     
@@ -169,7 +175,8 @@ static int pro_truncate(const char *path, off_t size)
     return 0;
 }
 
-static int pro_utime(const char *path, struct utimbuf *buf)
+static int pro_utime(struct fuse_cred *cred, const char *path,
+                     struct utimbuf *buf)
 {
     int res;
     
@@ -181,7 +188,7 @@ static int pro_utime(const char *path, struct utimbuf *buf)
 }
 
 
-static int pro_open(const char *path, int flags)
+static int pro_open(struct fuse_cred *cred, const char *path, int flags)
 {
     int res;
 
@@ -193,16 +200,35 @@ static int pro_open(const char *path, int flags)
     return 0;
 }
 
-static int pro_pread(const char *path, char *buf, size_t size, off_t offset)
+static int pro_read(struct fuse_cred *cred, const char *path, char *buf,
+                    size_t size, off_t offset)
 {
     int fd;
     int res;
 
-    fd = open(path, 0);
+    fd = open(path, O_RDONLY);
     if(fd == -1)
         return -errno;
 
     res = pread(fd, buf, size, offset);
+    if(res == -1)
+        res = -errno;
+    
+    close(fd);
+    return res;
+}
+
+static int pro_write(struct fuse_cred *cred, const char *path, const char *buf,
+                     size_t size, off_t offset)
+{
+    int fd;
+    int res;
+
+    fd = open(path, O_WRONLY);
+    if(fd == -1)
+        return -errno;
+
+    res = pwrite(fd, buf, size, offset);
     if(res == -1)
         res = -errno;
     
@@ -261,7 +287,8 @@ static struct fuse_operations pro_oper = {
     truncate:	pro_truncate,
     utime:	pro_utime,
     open:	pro_open,
-    pread:	pro_pread,
+    read:	pro_read,
+    write:	pro_write,
 };
 
 int main(int argc, char *argv[])
@@ -275,7 +302,7 @@ int main(int argc, char *argv[])
     set_signal_handlers();
     atexit(cleanup);
 
-    pro_fuse = fuse_new();
+    pro_fuse = fuse_new(0);
     res = fuse_mount(pro_fuse, argv[1]);
     if(res == -1)
         exit(1);

@@ -10,6 +10,7 @@
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
+#include <linux/rwsem.h>
 
 #define FUSE_VERSION "0.1"
 
@@ -38,15 +39,6 @@ struct fuse_conn {
 	/** The list of requests being processed */
 	struct list_head processing;
 
-	/** The number of cleared inodes */
-	unsigned int numcleared;
-	
-	/** The array of cleared inode numbers */
-	unsigned long *cleared;
-
-	/** Connnection number (for debuging) */
-	int id;
-
 	/** The request id */
 	int reqctr;
 };
@@ -70,8 +62,7 @@ struct fuse_req {
 	/** The request input */
 	char *in;
 	
-	/** The maximum request output size, if zero, then the request is
-            asynchronous */
+	/** The maximum request output size */
 	unsigned int outsize;
 
 	/** The request output */
@@ -98,7 +89,7 @@ struct fuse_out {
 	void *arg;
 };
 
-#define FUSE_IN_INIT { {0, 0, 0}, 0, 0 }
+#define FUSE_IN_INIT { {0, 0, 0, current->fsuid, current->fsgid}, 0, 0 }
 #define FUSE_OUT_INIT { {0, 0}, 0, 0, 0 }
 
 
@@ -117,7 +108,7 @@ extern spinlock_t fuse_lock;
  * Get a filled in inode
  */
 struct inode *fuse_iget(struct super_block *sb, ino_t ino,
-			struct fuse_attr *attr);
+			struct fuse_attr *attr, int version);
 
 
 /**

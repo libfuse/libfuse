@@ -16,7 +16,6 @@
 static struct inode_operations fuse_dir_inode_operations;
 static struct inode_operations fuse_file_inode_operations;
 static struct inode_operations fuse_symlink_inode_operations;
-static struct inode_operations fuse_special_inode_operations;
 
 static struct file_operations fuse_dir_operations;
 
@@ -24,6 +23,9 @@ static struct dentry_operations fuse_dentry_opertations;
 
 static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
+	if(S_ISREG(inode->i_mode) && inode->i_size != attr->size)
+		invalidate_inode_pages(inode);
+
 	inode->i_mode    = (inode->i_mode & S_IFMT) + (attr->mode & 07777);
 	inode->i_nlink   = attr->nlink;
 	inode->i_uid     = attr->uid;
@@ -36,9 +38,10 @@ static void change_attributes(struct inode *inode, struct fuse_attr *attr)
 	inode->i_ctime   = attr->ctime;
 }
 
-static void fuse_init_inode(struct inode *inode, int mode, int rdev)
+static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 {
-	inode->i_mode = mode & S_IFMT;
+	inode->i_mode = attr->mode & S_IFMT;
+	inode->i_size = attr->size;
 	if(S_ISREG(inode->i_mode)) {
 		inode->i_op = &fuse_file_inode_operations;
 		fuse_init_file_inode(inode);
@@ -51,23 +54,24 @@ static void fuse_init_inode(struct inode *inode, int mode, int rdev)
 		inode->i_op = &fuse_symlink_inode_operations;
 	}
 	else {
-		inode->i_op = &fuse_special_inode_operations;
-		init_special_inode(inode, inode->i_mode, rdev);
+		inode->i_op = &fuse_file_inode_operations;
+		init_special_inode(inode, inode->i_mode, attr->rdev);
 	}
 	inode->u.generic_ip = inode;
 }
 
 struct inode *fuse_iget(struct super_block *sb, ino_t ino,
-			struct fuse_attr *attr)
+			struct fuse_attr *attr, int version)
 {
 	struct inode *inode;
 
 	inode = iget(sb, ino);
 	if(inode) {
 		if(!inode->u.generic_ip)
-			fuse_init_inode(inode, attr->mode, attr->rdev);
+			fuse_init_inode(inode, attr);
 		
 		change_attributes(inode, attr);
+		inode->i_version = version;
 	}
 
 	return inode;
@@ -75,12 +79,13 @@ struct inode *fuse_iget(struct super_block *sb, ino_t ino,
 
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 {
+	int ret;
 	struct fuse_conn *fc = INO_FC(dir);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_lookup_out arg;
 	struct inode *inode;
-	
+
 	in.h.opcode = FUSE_LOOKUP;
 	in.h.ino = dir->i_ino;
 	in.argsize = entry->d_name.len + 1;
@@ -91,16 +96,24 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry)
 	
 	inode = NULL;
 	if(!out.h.error) {
-		inode = fuse_iget(dir->i_sb, arg.ino, &arg.attr);
+		ret = -ENOMEM;
+		inode = fuse_iget(dir->i_sb, arg.ino, &arg.attr, out.h.unique);
 		if(!inode) 
-			return ERR_PTR(-ENOMEM);
+			goto err;
 	}
-	else if(out.h.error != -ENOENT)
-		return ERR_PTR(out.h.error);
+	else if(out.h.error != -ENOENT) {
+		ret = out.h.error;
+		goto err;
+	}
 
+	entry->d_time = jiffies;
 	entry->d_op = &fuse_dentry_opertations;
 	d_add(entry, inode);
+
 	return NULL;
+
+  err:
+	return ERR_PTR(ret);
 }
 
 /* create needs to return a positive entry, so this also does a lookup */
@@ -136,12 +149,11 @@ static int fuse_mknod(struct inode *dir, struct dentry *entry, int mode,
 	if(out.h.error) 
 		return out.h.error;
 
-	inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr);
+	inode = fuse_iget(dir->i_sb, outarg.ino, &outarg.attr, out.h.unique);
 	if(!inode) 
 		return -ENOMEM;
 
 	d_instantiate(entry, inode);
-
 	return 0;
 }
 
@@ -293,17 +305,16 @@ static int fuse_permission(struct inode *inode, int mask)
 	return 0;
 }
 
-/* Only revalidate the root inode, since lookup is always redone on
-   the last path segment, and lookup refreshes the attributes */
-static int fuse_revalidate(struct dentry *dentry)
+static int fuse_revalidate(struct dentry *entry)
 {
-	struct inode *inode = dentry->d_inode;
+	struct inode *inode = entry->d_inode;
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
 	struct fuse_getattr_out arg;
 	
-	if(inode->i_ino != FUSE_ROOT_INO)
+	if(inode->i_ino != FUSE_ROOT_INO && 
+	   time_before_eq(jiffies, entry->d_time + HZ / 100))
 		return 0;
 
 	in.h.opcode = FUSE_GETATTR;
@@ -435,7 +446,7 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 	struct fuse_getdir_out outarg;
 
 	if(!(file->f_flags & O_DIRECTORY))
-		return -EISDIR;
+		return 0;
 	
 	in.h.opcode = FUSE_GETDIR;
 	in.h.ino = inode->i_ino;
@@ -465,7 +476,9 @@ static int fuse_dir_open(struct inode *inode, struct file *file)
 static int fuse_dir_release(struct inode *inode, struct file *file)
 {
 	struct file *cfile = file->private_data;
-	fput(cfile);
+
+	if(cfile)
+		fput(cfile);
 
 	return 0;
 }
@@ -502,15 +515,25 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	struct fuse_conn *fc = INO_FC(inode);
 	struct fuse_in in = FUSE_IN_INIT;
 	struct fuse_out out = FUSE_OUT_INIT;
-	struct fuse_setattr_in arg;
+	struct fuse_setattr_in inarg;
+	struct fuse_setattr_out outarg;
 
-	arg.valid = iattr_to_fattr(attr, &arg.attr);
+	inarg.valid = iattr_to_fattr(attr, &inarg.attr);
 	
 	in.h.opcode = FUSE_SETATTR;
 	in.h.ino = inode->i_ino;
-	in.argsize = sizeof(arg);
-	in.arg = &arg;
+	in.argsize = sizeof(inarg);
+	in.arg = &inarg;
+	out.argsize = sizeof(outarg);
+	out.arg = &outarg;
 	request_send(fc, &in, &out);
+
+	if(!out.h.error && (attr->ia_valid & ATTR_SIZE)) {
+		if(outarg.newsize > attr->ia_size)
+			outarg.newsize = attr->ia_size;
+			
+		vmtruncate(inode, outarg.newsize);
+	}
 
 	return out.h.error;
 }
@@ -547,12 +570,6 @@ static struct file_operations fuse_dir_operations = {
 };
 
 static struct inode_operations fuse_file_inode_operations = {
-	setattr:	fuse_setattr,
-	permission:	fuse_permission,
-	revalidate:	fuse_revalidate,
-};
-
-static struct inode_operations fuse_special_inode_operations = {
 	setattr:	fuse_setattr,
 	permission:	fuse_permission,
 	revalidate:	fuse_revalidate,

@@ -13,30 +13,38 @@
 #include <utime.h>
 
 struct fuse;
-struct fuse_dh;
+typedef struct fuse_dirhandle *fuse_dirh_t;
 
-typedef int (*dirfiller_t) (struct fuse_dh *, const char *, int type);
+typedef int (*fuse_dirfil_t) (fuse_dirh_t, const char *, int type);
 
-struct fuse_operations {
-    int (*getattr)  (const char *path, struct stat *stbuf);
-    int (*readlink) (const char *path, char *buf, size_t size);
-    int (*getdir)   (const char *path, struct fuse_dh *h, dirfiller_t filler);
-    int (*mknod)    (const char *path, mode_t mode, dev_t rdev);
-    int (*mkdir)    (const char *path, mode_t mode);
-    int (*unlink)   (const char *path);
-    int (*rmdir)    (const char *path);
-    int (*symlink)  (const char *from, const char *to);
-    int (*rename)   (const char *from, const char *to);
-    int (*link)     (const char *from, const char *to);
-    int (*chmod)    (const char *path, mode_t mode);
-    int (*chown)    (const char *path, uid_t uid, gid_t gid);
-    int (*truncate) (const char *path, off_t size);
-    int (*utime)    (const char *path, struct utimbuf *buf);
-    int (*open)     (const char *path, int flags);
-    int (*pread)    (const char *path, char *buf, size_t size, off_t offset);
+struct fuse_cred {
+    uid_t uid;
+    gid_t gid;
 };
 
-struct fuse *fuse_new();
+struct fuse_operations {
+    int (*getattr)  (struct fuse_cred *, const char *, struct stat *);
+    int (*readlink) (struct fuse_cred *, const char *, char *, size_t);
+    int (*getdir)   (struct fuse_cred *, const char *, fuse_dirh_t, fuse_dirfil_t);
+    int (*mknod)    (struct fuse_cred *, const char *, mode_t, dev_t);
+    int (*mkdir)    (struct fuse_cred *, const char *, mode_t);
+    int (*unlink)   (struct fuse_cred *, const char *);
+    int (*rmdir)    (struct fuse_cred *, const char *);
+    int (*symlink)  (struct fuse_cred *, const char *, const char *);
+    int (*rename)   (struct fuse_cred *, const char *, const char *);
+    int (*link)     (struct fuse_cred *, const char *, const char *);
+    int (*chmod)    (struct fuse_cred *, const char *, mode_t);
+    int (*chown)    (struct fuse_cred *, const char *, uid_t, gid_t);
+    int (*truncate) (struct fuse_cred *, const char *, off_t);
+    int (*utime)    (struct fuse_cred *, const char *, struct utimbuf *);
+    int (*open)     (struct fuse_cred *, const char *, int);
+    int (*read)     (struct fuse_cred *, const char *, char *, size_t, off_t);
+    int (*write)    (struct fuse_cred *, const char *, const char *, size_t, off_t);
+};
+
+#define FUSE_MULTITHREAD (1 << 0)
+
+struct fuse *fuse_new(int flags);
 
 int fuse_mount(struct fuse *f, const char *dir);
 

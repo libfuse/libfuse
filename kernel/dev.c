@@ -128,7 +128,7 @@ void request_send(struct fuse_conn *fc, struct fuse_in *inp,
 
 	spin_lock(&fuse_lock);
 	ret = -ENOTCONN;
-	if(fc->file == NULL)
+	if(!fc->file)
 		goto out_unlock_free;
 	
 	ih = (struct fuse_in_header *) req->in;
@@ -204,7 +204,7 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 	req = list_entry(fc->pending.next, struct fuse_req, list);
 	size = req->insize;
 	if(nbytes < size) {
-		printk("fuse_dev_read[%i]: buffer too small\n", fc->id);
+		printk("fuse_dev_read: buffer too small\n");
 		ret = -EIO;
 		goto err;
 	}
@@ -221,6 +221,7 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 	if(copy_to_user(buf, tmpbuf, size))
 		return -EFAULT;
 	
+	kfree(tmpbuf);
 	return size;
 
   err:
@@ -259,12 +260,12 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 
 	ret = -EIO;
 	if(nbytes < OHSIZE || nbytes > OHSIZE + PAGE_SIZE) {
-		printk("fuse_dev_write[%i]: write is short or long\n", fc->id);
+		printk("fuse_dev_write: write is short or long\n");
 		goto out;
 	}
 	
 	ret = -ENOMEM;
-	tmpbuf = kmalloc(nbytes, GFP_KERNEL);
+	tmpbuf = kmalloc(nbytes, GFP_NOFS);
 	if(!tmpbuf)
 		goto out;
 	
@@ -320,7 +321,6 @@ static unsigned int fuse_dev_poll(struct file *file, poll_table *wait)
 
 static struct fuse_conn *new_conn(void)
 {
-	static int connctr = 1;
 	struct fuse_conn *fc;
 
 	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
@@ -331,12 +331,6 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
 		fc->reqctr = 1;
-		fc->cleared = NULL;
-		fc->numcleared = 0;
-		
-		spin_lock(&fuse_lock);
-		fc->id = connctr ++;
-		spin_unlock(&fuse_lock);
 	}
 	return fc;
 }
@@ -376,9 +370,6 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 	fc->file = NULL;
 	end_requests(&fc->pending);
 	end_requests(&fc->processing);
-	kfree(fc->cleared);
-	fc->cleared = NULL;
-	fc->numcleared = 0;
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
 	return 0;

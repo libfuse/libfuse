@@ -21,68 +21,20 @@ static void fuse_read_inode(struct inode *inode)
 	/* No op */
 }
 
-static void send_forget(struct fuse_conn *fc, unsigned long *forget,
-			unsigned int numforget)
-{
-	struct fuse_in in = FUSE_IN_INIT;
-	
-	in.h.opcode = FUSE_FORGET;
-	in.h.ino = 0;
-	in.argsize = numforget * sizeof(unsigned long);
-	in.arg = forget;
-	
-	request_send(fc, &in, NULL);
-}
-
-static int alloc_cleared(struct fuse_conn *fc)
-{
-	unsigned long *tmp;
-	
-	spin_unlock(&fuse_lock);
-	tmp = kmalloc(sizeof(unsigned long) * MAX_CLEARED, GFP_NOFS);
-	spin_lock(&fuse_lock);
-
-	if(!fc->file || fc->cleared != NULL)
-		kfree(tmp);
-	else if(!tmp)
-		printk("fuse_clear_inode: Cannot allocate memory\n");
-	else
-		fc->cleared = tmp;
-
-	return fc->cleared != NULL;
-}
-
-static unsigned long *add_cleared(struct fuse_conn *fc, unsigned long ino)
-{
-	if(!fc->file || (!fc->cleared && !alloc_cleared(fc)))
-		return NULL;
-
-	fc->cleared[fc->numcleared] = ino;
-	fc->numcleared ++;
-	
-	if(fc->numcleared == MAX_CLEARED) {
-		unsigned long *tmp = fc->cleared;
-		fc->cleared = NULL;
-		fc->numcleared = 0;
-		return tmp;
-	}
-	
-	return NULL;
-}
-
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = INO_FC(inode);
-	unsigned long *forget;
-
-	spin_lock(&fuse_lock);
-	forget = add_cleared(fc, inode->i_ino);
-	spin_unlock(&fuse_lock);
-
-	if(forget) {
-		send_forget(fc, forget, MAX_CLEARED);
-		kfree(forget);
-	}
+	struct fuse_in in = FUSE_IN_INIT;
+	struct fuse_forget_in arg;
+	
+	arg.version = inode->i_version;
+	
+	in.h.opcode = FUSE_FORGET;
+	in.h.ino = inode->i_ino;
+	in.argsize = sizeof(arg);
+	in.arg = &arg;
+	
+	request_send(fc, &in, NULL);
 }
 
 static void fuse_put_super(struct super_block *sb)
@@ -143,7 +95,7 @@ static struct inode *get_root_inode(struct super_block *sb)
 	memset(&attr, 0, sizeof(attr));
 
 	attr.mode = S_IFDIR;
-	return fuse_iget(sb, 1, &attr);
+	return fuse_iget(sb, 1, &attr, 0);
 }
 
 static struct super_block *fuse_read_super(struct super_block *sb, 
@@ -169,8 +121,7 @@ static struct super_block *fuse_read_super(struct super_block *sb,
 		goto err;
 
 	if(fc->sb != NULL) {
-		printk("fuse_read_super: connection %i already mounted\n",
-		       fc->id);
+		printk("fuse_read_super: connection already mounted\n");
 		goto err;
 	}
 
@@ -213,6 +164,5 @@ void fuse_fs_cleanup()
  * Local Variables:
  * indent-tabs-mode: t
  * c-basic-offset: 8
- * End:
- */
+ * End: */
 
