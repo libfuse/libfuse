@@ -46,6 +46,10 @@ permission checking is done in the kernel */
     doing the mount will be allowed to access the filesystem */
 #define FUSE_ALLOW_OTHER         (1 << 1)
 
+/** If the FUSE_KERNEL_CACHE flag is given, then files will be cached
+    until the INVALIDATE operation is invoked */
+#define FUSE_KERNEL_CACHE        (1 << 2)
+
 struct fuse_attr {
 	unsigned int        mode;
 	unsigned int        nlink;
@@ -77,7 +81,7 @@ struct fuse_kstatfs {
 
 enum fuse_opcode {
 	FUSE_LOOKUP	= 1,
-	FUSE_FORGET	= 2,
+	FUSE_FORGET	= 2,  /* no reply */
 	FUSE_GETATTR	= 3,
 	FUSE_SETATTR	= 4,
 	FUSE_READLINK	= 5,
@@ -93,7 +97,8 @@ enum fuse_opcode {
 	FUSE_READ	= 15,
 	FUSE_WRITE	= 16,
 	FUSE_STATFS	= 17,
-	FUSE_RELEASE    = 18
+	FUSE_RELEASE    = 18, /* no reply */
+	FUSE_INVALIDATE = 19  /* user initiated */
 };
 
 /* Conservative buffer size for the client */
@@ -177,6 +182,12 @@ struct fuse_in_header {
 struct fuse_out_header {
 	int unique;
 	int error;
+};
+
+struct fuse_user_header {
+	int unique; /* zero */
+	enum fuse_opcode opcode;
+	unsigned long ino;
 };
 
 struct fuse_dirent {

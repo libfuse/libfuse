@@ -1,0 +1,25 @@
+Name: OW
+
+Author: Paul H. Alfille <palfille at partners org>
+
+Homepage: http://home.earthlink.net/~palfille/ow.html
+
+Description:
+
+  OWFS is a method under linux to allow 1-wire devices to appear like
+  files in a directory. 
+
+==============================================================================
+Name: FunFS
+
+Author: Michael Grigoriev (Net Integration Technologies) <mag at
+luminal org>
+
+Homepage: http://open.nit.ca/wiki/?page=FunFS
+
+Description:
+
+  FunFS is an advanced network file system with a simple goal: to be
+  better than NFS.
+
+==============================================================================

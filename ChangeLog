@@ -1,3 +1,12 @@
+2003-09-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Integrated caching patch by Michael Grigoriev
+
+2003-09-08  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* Added "Filesystems" file with descriptions of projects using
+	FUSE
+
 2003-06-02  Miklos Szeredi <mszeredi@inf.bme.hu>
 
 	* And another spec-file fix by Achim Settelmeier

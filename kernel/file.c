@@ -34,7 +34,7 @@ static int fuse_open(struct inode *inode, struct file *file)
 	in.args[0].size = sizeof(inarg);
 	in.args[0].value = &inarg;
 	request_send(fc, &in, &out);
-	if(!out.h.error)
+	if(!out.h.error && !(fc->flags & FUSE_KERNEL_CACHE))
 		invalidate_inode_pages(inode);
 
 	return out.h.error;

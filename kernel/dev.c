@@ -359,13 +359,45 @@ static inline int copy_out_header(struct fuse_out_header *oh, const char *buf,
 	if(copy_from_user(oh, buf, sizeof(struct fuse_out_header)))
 		return -EFAULT;
 
-        if (oh->error <= -512 || oh->error > 0) {
-                printk("fuse_dev_write: bad error value\n");
-                return -EIO;
-        }
-
 	return 0;
 }
+
+static int fuse_invalidate(struct fuse_conn *fc, struct fuse_user_header *uh)
+{
+	struct inode *inode = iget(fc->sb, uh->ino);
+	if (!inode)
+		return -ENOENT;
+
+	invalidate_inode_pages(inode);
+	iput(inode);
+	return 0;
+}
+
+static int fuse_user_request(struct fuse_conn *fc, const char *buf,
+			     size_t nbytes)
+{
+	struct fuse_user_header uh;
+	int err;
+
+	if (nbytes < sizeof(struct fuse_user_header)) {
+		printk("fuse_dev_write: write is short\n");
+		return -EIO;
+	}
+
+	if(copy_from_user(&uh, buf, sizeof(struct fuse_out_header)))
+		return -EFAULT;
+	
+	switch(uh.opcode) {
+	case FUSE_INVALIDATE:
+		err = fuse_invalidate(fc, &uh);
+		break;
+
+	default:
+		err = -ENOSYS;
+	}
+	return err;
+}
+    
 
 static ssize_t fuse_dev_write(struct file *file, const char *buf,
 			      size_t nbytes, loff_t *off)
@@ -381,7 +413,17 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 	err = copy_out_header(&oh, buf, nbytes);
 	if(err)
 		return err;
-	
+
+	if (!oh.unique)	{
+		err = fuse_user_request(fc, buf, nbytes);
+		goto out;
+	}     
+
+        if (oh.error <= -512 || oh.error > 0) {
+                printk("fuse_dev_write: bad error value\n");
+                return -EIO;
+        }
+
 	spin_lock(&fuse_lock);
 	req = request_find(fc, oh.unique);
 	if(req != NULL) {
@@ -408,6 +450,7 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 	wake_up(&req->waitq);
 	spin_unlock(&fuse_lock);
 
+  out:
 	if(!err)
 		return nbytes;
 	else

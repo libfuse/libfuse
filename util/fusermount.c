@@ -451,6 +451,7 @@ static void usage()
             " -h    print help\n"
             " -u    unmount\n"
             " -p    check default permissions on files\n"
+            " -c    cache in kernel space if possible\n"
             " -x    allow other users to access the files (only for root)\n",
             progname);
     exit(1);
@@ -479,6 +480,10 @@ int main(int argc, char *argv[])
             break;
 
         switch(argv[a][1]) {
+        case 'c':
+            flags |= FUSE_KERNEL_CACHE;
+            break;
+
         case 'h':
             usage();
             break;
