@@ -85,9 +85,9 @@ struct fuse_file_info {
  * negated error value (-errno) directly.
  *
  * All methods are optional, but some are essential for a useful
- * filesystem (e.g. getattr).  Flush, release and fsync are special
- * purpose methods, without which a full featured filesystem can still
- * be implemented.
+ * filesystem (e.g. getattr).  Flush, release, fsync, init and destroy
+ * are special purpose methods, without which a full featured
+ * filesystem can still be implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -245,10 +245,26 @@ struct fuse_operations {
     /** Open direcory
      * 
      * This method should check if the open operation is permitted for
-     * this directory.  The fuse_file_info parameter is currently
-     * unused.  This method is optional.
+     * this  directory.   The  fuse_file_info parameter  is  currently
+     * unused.
      */
     int (*opendir) (const char *, struct fuse_file_info *);
+
+    /**
+     * Initialize filesystem
+     *
+     * The return value will passed in the private_data field of
+     * fuse_context to all file operations and as a parameter to the
+     * destroy() method.
+     */
+    void *(*init) (void);
+
+    /**
+     * Clean up filesystem
+     * 
+     * Called on filesystem exit.
+     */
+    void (*destroy) (void *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -269,7 +285,7 @@ struct fuse_context {
     /** Thread ID of the calling process */
     pid_t pid;
 
-    /** Currently unused */
+    /** Private filesystem data */
     void *private_data;
 };
 

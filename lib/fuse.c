@@ -1497,6 +1497,9 @@ static void do_init(struct fuse *f, struct fuse_in_header *in,
         fflush(stdout);
     }
     f->got_init = 1;
+    if (f->op.init)
+        f->user_data = f->op.init();
+
     memset(&outarg, 0, sizeof(outarg));
     outarg.major = FUSE_KERNEL_VERSION;
     outarg.minor = FUSE_KERNEL_MINOR_VERSION;
@@ -1628,6 +1631,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     ctx->uid = in->uid;
     ctx->gid = in->gid;
     ctx->pid = in->pid;
+    ctx->private_data = f->user_data;
 
     argsize = cmd->buflen - sizeof(struct fuse_in_header);
 
@@ -2031,6 +2035,8 @@ void fuse_destroy(struct fuse *f)
     free(f->name_table);
     pthread_mutex_destroy(&f->lock);
     pthread_mutex_destroy(&f->worker_lock);
+    if (f->op.destroy)
+        f->op.destroy(f->user_data);
     free(f);
 }
 

@@ -1,8 +1,10 @@
 2005-02-28  Miklos Szeredi <miklos@szeredi.hu>
 
-	* libfuse: added opendir() operation.  This can be used in case
+	* libfuse: added opendir() method.  This can be used in case
 	permission checking in getdir() is too late.  Thanks to Usarin
 	Heininga for pointing out this deficiency
+
+	* libfuse: added init() and destroy() methods to fuse_operations
 
 	* kernel: llseek() method for files and directories made explicit
 
