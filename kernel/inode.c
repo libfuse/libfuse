@@ -204,28 +204,23 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 	return 0;
 }
 
-static struct fuse_conn *get_conn(int fd)
+static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 {
-	struct fuse_conn *fc = NULL;
-	struct file *file;
+	struct fuse_conn *fc;
 	struct inode *ino;
 
-	file = fget(fd);
-	ino = NULL;
-	if (file)
-		ino = file->f_dentry->d_inode;
-	
+	ino = file->f_dentry->d_inode;
 	if (!ino || !proc_fuse_dev || proc_fuse_dev->low_ino != ino->i_ino) {
-		printk("FUSE: bad communication file descriptor: %i\n", fd);
-		goto out;
+		printk("FUSE: bad communication file descriptor\n");
+		return NULL;
 	}
-
 	fc = file->private_data;
-
-  out:
-	fput(file);
+	if (fc->sb != NULL) {
+		printk("fuse_read_super: connection already mounted\n");
+		return NULL;
+	}
+	fc->sb = sb;
 	return fc;
-
 }
 
 static struct inode *get_root_inode(struct super_block *sb, unsigned int mode)
@@ -282,6 +277,7 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	struct fuse_conn *fc;
 	struct inode *root;
 	struct fuse_mount_data d;
+	struct file *file;
 
 	if (!parse_fuse_opt((char *) data, &d))
 		return -EINVAL;
@@ -298,20 +294,19 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	sb->s_export_op = &fuse_export_operations;
 #endif
 
-	fc = get_conn(d.fd);
-	if (fc == NULL)
+	file = fget(d.fd);
+	if (!file)
 		return -EINVAL;
 
 	spin_lock(&fuse_lock);
-	if (fc->sb != NULL) {
-		printk("fuse_read_super: connection already mounted\n");
-		spin_unlock(&fuse_lock);
+	fc = get_conn(file, sb);
+	spin_unlock(&fuse_lock);
+	fput(file);
+	if (fc == NULL)
 		return -EINVAL;
-	}
-	fc->sb = sb;
+
 	fc->flags = d.flags;
 	fc->uid = d.uid;
-	spin_unlock(&fuse_lock);
 	
 	/* fc is needed in fuse_init_file_inode which could be called
 	   from get_root_inode */
@@ -320,14 +315,24 @@ static int fuse_read_super(struct super_block *sb, void *data, int silent)
 	root = get_root_inode(sb, d.rootmode);
 	if (root == NULL) {
 		printk("fuse_read_super: failed to get root inode\n");
-		return -EINVAL;
+		goto err;
 	}
 
 	sb->s_root = d_alloc_root(root);
-	if (!sb->s_root)
-		return -EINVAL;
+	if (!sb->s_root) {
+		iput(root);
+		goto err;
+	}
 
 	return 0;
+
+ err:
+	spin_lock(&fuse_lock);
+	fc->sb = NULL;
+	fuse_release_conn(fc);
+	spin_unlock(&fuse_lock);
+	SB_FC(sb) = NULL;
+	return -EINVAL;
 }
 
 #ifdef KERNEL_2_6
