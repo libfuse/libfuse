@@ -8,6 +8,8 @@ What is new in 2.1
 
 * Kernel module can be compiled separately
 
+* Added handling of common mount flags ("ro", "rw", etc..)
+
 ============================================================================
 
 What is new in 1.9
