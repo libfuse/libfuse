@@ -191,11 +191,11 @@ static int xmp_utime(const char *path, struct utimbuf *buf)
 }
 
 
-static int xmp_open(const char *path, int flags)
+static int xmp_open(const char *path, struct fuse_file_info *fi)
 {
     int res;
 
-    res = open(path, flags);
+    res = open(path, fi->flags);
     if(res == -1) 
         return -errno;
 
@@ -203,11 +203,13 @@ static int xmp_open(const char *path, int flags)
     return 0;
 }
 
-static int xmp_read(const char *path, char *buf, size_t size, off_t offset)
+static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
+                    struct fuse_file_info *fi)
 {
     int fd;
     int res;
 
+    (void) fi;
     fd = open(path, O_RDONLY);
     if(fd == -1)
         return -errno;
@@ -221,11 +223,12 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset)
 }
 
 static int xmp_write(const char *path, const char *buf, size_t size,
-                     off_t offset)
+                     off_t offset, struct fuse_file_info *fi)
 {
     int fd;
     int res;
 
+    (void) fi;
     fd = open(path, O_WRONLY);
     if(fd == -1)
         return -errno;
@@ -249,23 +252,25 @@ static int xmp_statfs(const char *path, struct statfs *stbuf)
     return 0;
 }
 
-static int xmp_release(const char *path, int flags)
+static int xmp_release(const char *path, struct fuse_file_info *fi)
 {
     /* Just a stub.  This method is optional and can safely be left
        unimplemented */
-
+    
     (void) path;
-    (void) flags;
+    (void) fi;
     return 0;
 }
 
-static int xmp_fsync(const char *path, int isdatasync)
+static int xmp_fsync(const char *path, int isdatasync,
+                     struct fuse_file_info *fi)
 {
     /* Just a stub.  This method is optional and can safely be left
        unimplemented */
 
     (void) path;
     (void) isdatasync;
+    (void) fi;
     return 0;
 }
 

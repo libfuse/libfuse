@@ -51,7 +51,6 @@ struct fuse {
     nodeid_t ctr;
     unsigned int generation;
     unsigned int hidectr;
-    unsigned long fh_ctr;
     pthread_mutex_t lock;
     int numworker;
     int numavail;

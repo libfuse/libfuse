@@ -38,7 +38,7 @@ static int null_truncate(const char *path, off_t UNUSED(size))
     return 0;
 }
 
-static int null_open(const char *path, int UNUSED(flags))
+static int null_open(const char *path, struct fuse_file_info *UNUSED(fi))
 {
     if(strcmp(path, "/") != 0)
         return -ENOENT;
@@ -47,7 +47,7 @@ static int null_open(const char *path, int UNUSED(flags))
 }
 
 static int null_read(const char *path, char *UNUSED(buf), size_t size,
-                     off_t UNUSED(offset))
+                     off_t UNUSED(offset), struct fuse_file_info *UNUSED(fi))
 {
     if(strcmp(path, "/") != 0)
         return -ENOENT;
@@ -56,7 +56,7 @@ static int null_read(const char *path, char *UNUSED(buf), size_t size,
 }
 
 static int null_write(const char *path, const char *UNUSED(buf), size_t size,
-                     off_t UNUSED(offset))
+                     off_t UNUSED(offset), struct fuse_file_info *UNUSED(fi))
 {
     if(strcmp(path, "/") != 0)
         return -ENOENT;

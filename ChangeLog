@@ -1,3 +1,10 @@
+2004-11-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse API change: open, read, write, flush, fsync and release
+	are passed a 'struct fuse_file_info' pointer containing the open
+	flags (open and release), and the file handle.  Verion changed to
+	3.0.
+
 2004-11-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* More cleanups in the kernel

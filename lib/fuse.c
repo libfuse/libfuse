@@ -1058,13 +1058,16 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *path;
     struct fuse_open_out outarg;
+    struct fuse_file_info fi;
 
+    memset(&fi, 0, sizeof(fi));
+    fi.flags = arg->flags;
     res = -ENOENT;
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
         if (f->op.open)
-            res = f->op.open(path, arg->flags);
+            res = f->op.open(path, &fi);
     }
     if (res == 0) {
         int res2;
@@ -1074,8 +1077,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
            races with rename/unlink, against which the kernel can't
            protect */
         pthread_mutex_lock(&f->lock);
-        f->fh_ctr ++;
-        outarg.fh = f->fh_ctr;
+        outarg.fh = fi.fh;
         if (f->flags & FUSE_DEBUG) {
             printf("OPEN[%lu] flags: 0x%x\n", outarg.fh, arg->flags);
             fflush(stdout);
@@ -1085,7 +1087,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
         if(res2 == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release)
-                f->op.release(path, arg->flags);
+                f->op.release(path, &fi);
         } else
             get_node(f, in->nodeid)->open_count ++;
         pthread_mutex_unlock(&f->lock);
@@ -1102,7 +1104,10 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in,
 {
     char *path;
     int res;
+    struct fuse_file_info fi;
 
+    memset(&fi, 0, sizeof(fi));
+    fi.fh = arg->fh;
     res = -ENOENT;
     path = get_path(f, in->nodeid);
     if (path != NULL) {
@@ -1112,7 +1117,7 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in,
         }
         res = -ENOSYS;
         if (f->op.flush)
-            res = f->op.flush(path);
+            res = f->op.flush(path, &fi);
         free(path);
     }
     send_reply(f, in, res, NULL, 0);
@@ -1123,6 +1128,11 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
 {
     struct node *node;
     char *path;
+    struct fuse_file_info fi;
+
+    memset(&fi, 0, sizeof(fi));
+    fi.flags = arg->flags;
+    fi.fh = arg->fh;
 
     pthread_mutex_lock(&f->lock);
     node = get_node(f, in->nodeid);
@@ -1136,7 +1146,7 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
             fflush(stdout);
         }
         if (f->op.release)
-            f->op.release(path, arg->flags);
+            f->op.release(path, &fi);
 
         if(node->is_hidden && node->open_count == 0)
             /* can now clean up this hidden file */
@@ -1160,7 +1170,11 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
         char *buf = outbuf + sizeof(struct fuse_out_header);
         size_t size;
         size_t outsize;
+        struct fuse_file_info fi;
         
+        memset(&fi, 0, sizeof(fi));
+        fi.fh = arg->fh;
+
         res = -ENOENT;
         path = get_path(f, in->nodeid);
         if (path != NULL) {
@@ -1172,7 +1186,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
             
             res = -ENOSYS;
             if (f->op.read)
-                res = f->op.read(path, buf, arg->size, arg->offset);
+                res = f->op.read(path, buf, arg->size, arg->offset, &fi);
             free(path);
         }
         
@@ -1201,6 +1215,10 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     int res;
     char *path;
     struct fuse_write_out outarg;
+    struct fuse_file_info fi;
+
+    memset(&fi, 0, sizeof(fi));
+    fi.fh = arg->fh;
 
     res = -ENOENT;
     path = get_path(f, in->nodeid);
@@ -1214,7 +1232,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
 
         res = -ENOSYS;
         if (f->op.write)
-            res = f->op.write(path, PARAM(arg), arg->size, arg->offset);
+            res = f->op.write(path, PARAM(arg), arg->size, arg->offset, &fi);
         free(path);
     }
     
@@ -1267,6 +1285,10 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
+    struct fuse_file_info fi;
+
+    memset(&fi, 0, sizeof(fi));
+    fi.fh = inarg->fh;
 
     res = -ENOENT;
     path = get_path(f, in->nodeid);
@@ -1277,7 +1299,7 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
         }
         res = -ENOSYS;
         if (f->op.fsync)
-            res = f->op.fsync(path, inarg->datasync);
+            res = f->op.fsync(path, inarg->datasync, &fi);
         free(path);
     }
     send_reply(f, in, res, NULL, 0);

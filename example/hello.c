@@ -47,20 +47,22 @@ static int hello_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
     return 0;
 }
 
-static int hello_open(const char *path, int flags)
+static int hello_open(const char *path, struct fuse_file_info *fi)
 {
     if(strcmp(path, hello_path) != 0)
         return -ENOENT;
 
-    if((flags & 3) != O_RDONLY)
+    if((fi->flags & 3) != O_RDONLY)
         return -EACCES;
 
     return 0;
 }
 
-static int hello_read(const char *path, char *buf, size_t size, off_t offset)
+static int hello_read(const char *path, char *buf, size_t size, off_t offset,
+                      struct fuse_file_info *fi)
 {
     size_t len;
+    (void) fi;
     if(strcmp(path, hello_path) != 0)
         return -ENOENT;
     

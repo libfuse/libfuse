@@ -12,10 +12,10 @@
 /* This file defines the library interface of FUSE */
 
 /** Major version of FUSE library interface */
-#define FUSE_MAJOR_VERSION 2
+#define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 1
+#define FUSE_MINOR_VERSION 0
 
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
@@ -52,6 +52,16 @@ typedef struct fuse_dirhandle *fuse_dirh_t;
  */
 typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
                               ino_t ino);
+
+/** Information about open files */
+struct fuse_file_info {
+    /** Open flags.  Available in open() and release() */
+    int flags;
+
+    /** File handle.  May be filled in by filesystem in open().
+        Available in all other file operations */
+    unsigned long fh;
+};
 
 /**
  * The file system operations:
@@ -125,13 +135,15 @@ struct fuse_operations {
     int (*chown)       (const char *, uid_t, gid_t);
     int (*truncate)    (const char *, off_t);
     int (*utime)       (const char *, struct utimbuf *);
-    int (*open)        (const char *, int);
-    int (*read)        (const char *, char *, size_t, off_t);
-    int (*write)       (const char *, const char *, size_t, off_t);
+    int (*open)        (const char *, struct fuse_file_info *);
+    int (*read)        (const char *, char *, size_t, off_t,
+                        struct fuse_file_info *);
+    int (*write)       (const char *, const char *, size_t, off_t,
+                        struct fuse_file_info *);
     int (*statfs)      (const char *, struct statfs *);
-    int (*flush)       (const char *);
-    int (*release)     (const char *, int);
-    int (*fsync)       (const char *, int);
+    int (*flush)       (const char *, struct fuse_file_info *);
+    int (*release)     (const char *, struct fuse_file_info *);
+    int (*fsync)       (const char *, int, struct fuse_file_info *);
     int (*setxattr)    (const char *, const char *, const char *, size_t, int);
     int (*getxattr)    (const char *, const char *, char *, size_t);
     int (*listxattr)   (const char *, char *, size_t);
@@ -290,16 +302,6 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
 int __fuse_exited(struct fuse* f);
 void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
-
-
-/* ----------------------------------------------------------- *
- * Compatibility cruft                                         *
- * ----------------------------------------------------------- */
-
-#ifdef FUSE_DIRFIL_COMPAT
-typedef int (*fuse_dirfil_old_t) (fuse_dirh_t h, const char *name, int type);
-#define fuse_dirfil_t fuse_dirfil_old_t
-#endif
 
 #ifdef __cplusplus
 }
