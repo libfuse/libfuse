@@ -440,7 +440,8 @@ struct fuse_req *fuse_get_request(struct fuse_conn *fc);
 struct fuse_req *fuse_get_request_nonint(struct fuse_conn *fc);
 
 /**
- * Free a request
+ * Decrement reference count of a request.  If count goes to zero put
+ * on unused list (preallocated) or free reqest (not preallocated).
  */
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req);
 
