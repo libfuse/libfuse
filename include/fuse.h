@@ -13,11 +13,10 @@
 
 /* IMPORTANT: you should define FUSE_USE_VERSION before including this
    header.  To use the new API define it to 22 (recommended for any
-   new application), to use the old API define it to 21, to use the
-   even older 1.X API define it to 11. */
+   new application), to use the old API define it to 21 (this is the
+   default), to use the even older 1.X API define it to 11. */
 
 #ifndef FUSE_USE_VERSION
-#warning FUSE_USE_VERSION not defined, defaulting to 21
 #define FUSE_USE_VERSION 21
 #endif
 
@@ -71,101 +70,192 @@ struct fuse_file_info {
     /** File handle.  May be filled in by filesystem in open().
         Available in all other file operations */
     unsigned long fh;
+
+    /** In case of a write operation indicates if this was caused by a
+        writepage */
+    int writepage;
 };
 
 /**
  * The file system operations:
  *
  * Most of these should work very similarly to the well known UNIX
- * file system operations.  Exceptions are:
- * 
- *  - All operations should return the negated error value (-errno) on
- *  error.
- * 
- *  - Getattr() doesn't need to fill in the following fields:
- *      st_ino
- *      st_dev
- *      st_blksize
- * 
- *  - readlink() should fill the buffer with a null terminated string.  The
- *  buffer size argument includes the space for the terminating null
- *  character.  If the linkname is too long to fit in the buffer, it should
- *  be truncated.  The return value should be 0 for success.
- *
- *  - getdir() is the opendir(), readdir(), ..., closedir() sequence
- *  in one call. For each directory entry the filldir parameter should
- *  be called. 
- *
- *  - There is no create() operation, mknod() will be called for
- *  creation of all non directory, non symlink nodes.
- *
- *  - open() should not return a filehandle, but 0 on success.  No
- *  creation, or trunctation flags (O_CREAT, O_EXCL, O_TRUNC) will be
- *  passed to open().  Open should only check if the operation is
- *  permitted for the given flags.
- * 
- *  - read(), write() are not passed a filehandle, but rather a
- *  pathname.  The offset of the read and write is passed as the last
- *  argument, like the pread() and pwrite() system calls.  (NOTE:
- *  read() should always return the number of bytes requested, except
- *  at end of file)
- * 
- *  - release() is called when an open file has:
- *       1) all file descriptors closed
- *       2) all memory mappings unmapped
- *  For every open() call there will be exactly one release() call
- *  with the same flags.  It is possible to have a file opened more
- *  than once, in which case only the last release will mean, that no
- *  more reads/writes will happen on the file.  The return value of
- *  release is ignored.  Implementing this method is optional.
- * 
- *  - flush() is called when close() has been called on an open file.
- *  NOTE: this does not mean that the file is released (e.g. after
- *  fork() an open file will have two references which both must be
- *  closed before the file is released).  The flush() method may be
- *  called more than once for each open().  The return value of
- *  flush() is passed on to the close() system call.  Implementing
- *  this method is optional.
- * 
- *  - fsync() has a boolean 'datasync' parameter which if TRUE then do
- *  an fdatasync() operation.  Implementing this method is optional.
+ * file system operations.  A major exception is that instead of
+ * returning an error in 'errno', the operation should return the
+ * negated error value (-errno) directly. 
  */
 struct fuse_operations {
-    int (*getattr)     (const char *, struct stat *);
-    int (*readlink)    (const char *, char *, size_t);
-    int (*getdir)      (const char *, fuse_dirh_t, fuse_dirfil_t);
-    int (*mknod)       (const char *, mode_t, dev_t);
-    int (*mkdir)       (const char *, mode_t);
-    int (*unlink)      (const char *);
-    int (*rmdir)       (const char *);
-    int (*symlink)     (const char *, const char *);
-    int (*rename)      (const char *, const char *);
-    int (*link)        (const char *, const char *);
-    int (*chmod)       (const char *, mode_t);
-    int (*chown)       (const char *, uid_t, gid_t);
-    int (*truncate)    (const char *, off_t);
-    int (*utime)       (const char *, struct utimbuf *);
-    int (*open)        (const char *, struct fuse_file_info *);
-    int (*read)        (const char *, char *, size_t, off_t,
-                        struct fuse_file_info *);
-    int (*write)       (const char *, const char *, size_t, off_t,
-                        struct fuse_file_info *);
-    int (*statfs)      (const char *, struct statfs *);
-    int (*flush)       (const char *, struct fuse_file_info *);
-    int (*release)     (const char *, struct fuse_file_info *);
-    int (*fsync)       (const char *, int, struct fuse_file_info *);
-    int (*setxattr)    (const char *, const char *, const char *, size_t, int);
-    int (*getxattr)    (const char *, const char *, char *, size_t);
-    int (*listxattr)   (const char *, char *, size_t);
+    /** Get file attributes.
+     *
+     * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
+     * ignored.  The 'st_ino' field is ignored except if the 'use_ino'
+     * mount option is given.
+     */
+    int (*getattr) (const char *, struct stat *);
+
+    /** Read the target of a symbolic link
+     * 
+     * The buffer should be filled with a null terminated string.  The
+     * buffer size argument includes the space for the terminating
+     * null character.  If the linkname is too long to fit in the
+     * buffer, it should be truncated.  The return value should be 0
+     * for success.
+     */
+    int (*readlink) (const char *, char *, size_t);
+
+    /** Read the contents of a directory
+     *
+     * This operation is the opendir(), readdir(), ..., closedir()
+     * sequence in one call. For each directory entry the filldir
+     * function should be called.
+     */
+    int (*getdir) (const char *, fuse_dirh_t, fuse_dirfil_t);
+
+    /** Create a file node
+     *
+     * There is no create() operation, mknod() will be called for
+     * creation of all non-directory, non-symlink nodes.
+     */
+    int (*mknod) (const char *, mode_t, dev_t);
+
+    /** Create a directory */
+    int (*mkdir) (const char *, mode_t);
+
+    /** Remove a file */
+    int (*unlink) (const char *);
+
+    /** Remove a directory */
+    int (*rmdir) (const char *);
+
+    /** Create a symbolic link */
+    int (*symlink) (const char *, const char *);
+
+    /** Rename a file */
+    int (*rename) (const char *, const char *);
+
+    /** Create a hard link to a file */
+    int (*link) (const char *, const char *);
+    
+    /** Change the permission bits of a file */
+    int (*chmod) (const char *, mode_t);
+    
+    /** Change the owner and group of a file */
+    int (*chown) (const char *, uid_t, gid_t);
+    
+    /** Change the size of a file */
+    int (*truncate) (const char *, off_t);
+    
+    /** Change the access and/or modification times of a file */
+    int (*utime) (const char *, struct utimbuf *);
+    
+    /** File open operation
+     *
+     * No creation, or trunctation flags (O_CREAT, O_EXCL, O_TRUNC)
+     * will be passed to open().  Open should check if the operation
+     * is permitted for the given flags.  Optionally open may also
+     * return an arbitary filehandle in the fuse_file_info structure,
+     * which will be passed to all file operations.
+     */
+    int (*open) (const char *, struct fuse_file_info *);
+
+    /** Read data from an open file
+     *
+     * Read should return exactly the number of bytes requested except
+     * on EOF or error, otherwise the rest of the data will be
+     * substituted with zeroes.  An exception to this is when the
+     * 'direct_io' mount option is specified, in which case the return
+     * value of the read system call will reflect the return value of
+     * this operation.
+     */
+    int (*read) (const char *, char *, size_t, off_t, struct fuse_file_info *);
+
+    /** Write data to an open file 
+     * 
+     * Write should return exactly the number of bytes requested
+     * except on error.  An exception to this is when the 'direct_io'
+     * mount option is specified (see read operation).
+     */
+    int (*write) (const char *, const char *, size_t, off_t,
+                  struct fuse_file_info *);
+
+    /** Get file system statistics
+     * 
+     * The 'f_type' and 'f_fsid' fields are ignored
+     */
+    int (*statfs) (const char *, struct statfs *);
+
+    /** Possibly flush cached data 
+     * 
+     * BIG NOTE: This is not equivalent to fsync().  It's not a
+     * request to sync dirty data, and can safely be ignored.
+     *
+     * Flush is called on each close() of a file descriptor.  So if a
+     * filesystem wants to return write errors in close() and the file
+     * has cached dirty data, this is a good place to write back data
+     * and return any errors.
+     * 
+     * NOTE: The flush() method may be called more than once for each
+     * open().  This happens if more than one file descriptor refers
+     * to an opened file due to dup(), dup2() or fork() calls.  It is
+     * not possible to determine if a flush is final, so each flush
+     * should be treated equally.  Multiple write-flush sequences are
+     * relatively rare, so this shouldn't be a problem.
+     */
+    int (*flush) (const char *, struct fuse_file_info *);
+
+    /** Release an open file
+     * 
+     * Release is called when there are no more references to an open
+     * file: all file descriptors are closed and all memory mappings
+     * are unmapped.
+     *
+     * For every open() call there will be exactly one release() call
+     * with the same flags.  It is possible to have a file opened more
+     * than once, in which case only the last release will mean, that
+     * no more reads/writes will happen on the file.  The return value
+     * of release is ignored.  Implementing this method is optional.
+     */
+    int (*release) (const char *, struct fuse_file_info *);
+
+    /** Synchronize file contents
+     *
+     * If the datasync parameter is non-zero, then only the user data
+     * should be flushed, not the meta data.
+     */
+    int (*fsync) (const char *, int, struct fuse_file_info *);
+    
+    /** Set extended attributes */
+    int (*setxattr) (const char *, const char *, const char *, size_t, int);
+    
+    /** Get extended attributes */
+    int (*getxattr) (const char *, const char *, char *, size_t);
+    
+    /** List extended attributes */
+    int (*listxattr) (const char *, char *, size_t);
+    
+    /** Remove extended attributes */
     int (*removexattr) (const char *, const char *);
 };
 
-/** Extra context that may be needed by some filesystems */
+/** Extra context that may be needed by some filesystems 
+ *
+ * The uid, gid and pid fields are not filled in case of a writepage
+ * operation.
+ */
 struct fuse_context {
+    /** Pointer to the fuse object */
     struct fuse *fuse;
+    
+    /** User ID of the calling process */
     uid_t uid;
+
+    /** Group ID of the calling process */
     gid_t gid;
+
+    /** Thread ID of the calling process */
     pid_t pid;
+
+    /** Currently unused */
     void *private_data;
 };
 
@@ -191,8 +281,11 @@ struct fuse_context {
  * @param op the file system operation 
  * @return 0 on success, nonzero on failure
  */
-/* int fuse_main(int argc, char *argv[], const struct fuse_operations *op); */
-#define fuse_main(argc, argv, op) __fuse_main(argc, argv, op, sizeof(*(op)))
+/*
+int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
+*/
+#define fuse_main(argc, argv, op) \
+            __fuse_main(argc, argv, op, sizeof(*(op)))
 
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
@@ -313,16 +406,35 @@ int __fuse_main(int argc, char *argv[], const struct fuse_operations *op,
  * Advanced API for event handling, don't worry about this...  *
  * ----------------------------------------------------------- */
 
+/** Structure containing a raw command */
 struct fuse_cmd;
+
+/** Function type used to process commands */
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
+
+/** This is the part of fuse_main() before the event loop */
 struct fuse *__fuse_setup(int argc, char *argv[],
                           const struct fuse_operations *op, size_t op_size,
                           char **mountpoint, int *multithreaded, int *fd);
+
+/** This is the part of fuse_main() after the event loop */
 void __fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);
+
+/** Read a single command.  If none are read, return NULL */
 struct fuse_cmd *__fuse_read_cmd(struct fuse *f);
+
+/** Process a single command */
 void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
+
+/** Multi threaded event loop, which calls the custom command
+    processor function */
 int __fuse_loop_mt(struct fuse *f, fuse_processor_t proc, void *data);
+
+/** Return the exited flag, which indicates if fuse_exit() has been
+    called */
 int __fuse_exited(struct fuse* f);
+
+/** Set function which can be used to get the current context */
 void __fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 
 /* ----------------------------------------------------------- *

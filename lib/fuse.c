@@ -1233,6 +1233,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
+    fi.writepage = arg->writepage;
 
     res = -ENOENT;
     path = get_path(f, in->nodeid);

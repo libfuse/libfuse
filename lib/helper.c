@@ -47,7 +47,7 @@ static void usage(const char *progname)
 static void invalid_option(const char *argv[], int argctr)
 {
     fprintf(stderr, "fuse: invalid option: %s\n\n", argv[argctr]);
-    fprintf(stderr, "see '%s -h' for usage\n", argv[0]);
+    fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
 }
 
 static void exit_handler()
@@ -174,7 +174,7 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
                 case 'o':
                     if (argctr + 1 == argc || argv[argctr+1][0] == '-') {
                         fprintf(stderr, "missing option after -o\n");
-                        fprintf(stderr, "see '%s -h' for usage\n", argv[0]);
+                        fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
                         goto err;
                     }
                     argctr ++;
@@ -240,7 +240,7 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
 
     if (*mountpoint == NULL) {
         fprintf(stderr, "missing mountpoint\n");
-        fprintf(stderr, "see '%s -h' for usage\n", argv[0]);
+        fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
         goto err;
     }
     return 0;
