@@ -190,6 +190,9 @@ struct fuse_req {
 	    lists in fuse_conn */
 	struct list_head list;
 
+	/** Entry on the background list */
+	struct list_head bg_entry;
+
 	/** refcount */
 	atomic_t count;
 
@@ -284,12 +287,19 @@ struct fuse_conn {
 	/** The list of requests being processed */
 	struct list_head processing;
 
+	/** Requests put in the background (RELEASE or any other
+	    interrupted request) */
+	struct list_head background;
+
 	/** Controls the maximum number of outstanding requests */
 	struct semaphore outstanding_sem;
 
 	/** This counts the number of outstanding requests if
 	    outstanding_sem would go negative */
 	unsigned outstanding_debt;
+
+	/** RW semaphore for exclusion with fuse_put_super() */
+	struct rw_semaphore sbput_sem;
 
 	/** The list of unused requests */
 	struct list_head unused_list;
@@ -487,6 +497,11 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
  * Send a request in the background
  */
 void request_send_background(struct fuse_conn *fc, struct fuse_req *req);
+
+/**
+ * Release inodes and file assiciated with background request
+ */
+void fuse_release_background(struct fuse_req *req);
 
 /**
  * Get the attributes of a file

@@ -100,7 +100,7 @@ void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
 static void fuse_clear_inode(struct inode *inode)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
-	if (fc) {
+	if (fc && (inode->i_sb->s_flags & MS_ACTIVE)) {
 		struct fuse_inode *fi = get_fuse_inode(inode);
 		fuse_send_forget(fc, fi->forget_req, fi->nodeid, inode->i_version);
 		fi->forget_req = NULL;
@@ -254,12 +254,18 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
+	down_write(&fc->sbput_sem);
+	while (!list_empty(&fc->background))
+		fuse_release_background(list_entry(fc->background.next,
+						   struct fuse_req, bg_entry));
+
 	spin_lock(&fuse_lock);
 	fc->sb = NULL;
 	fc->user_id = 0;
 	fc->flags = 0;
 	/* Flush all readers on this fs */
 	wake_up_all(&fc->waitq);
+	up_write(&fc->sbput_sem);
 	fuse_release_conn(fc);
 	*get_fuse_conn_super_p(sb) = NULL;
 	spin_unlock(&fuse_lock);
@@ -467,7 +473,9 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
 		INIT_LIST_HEAD(&fc->unused_list);
+		INIT_LIST_HEAD(&fc->background);
 		sema_init(&fc->outstanding_sem, 0);
+		init_rwsem(&fc->sbput_sem);
 		for (i = 0; i < FUSE_MAX_OUTSTANDING; i++) {
 			struct fuse_req *req = fuse_request_alloc();
 			if (!req) {
