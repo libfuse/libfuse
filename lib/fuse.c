@@ -319,7 +319,11 @@ static void send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
                out->error, strerror(-out->error), outsize);
         fflush(stdout);
     }
-                
+          
+    pthread_mutex_lock(&f->lock);
+    f->numavail ++;
+    pthread_mutex_unlock(&f->lock);
+      
     res = write(f->fd, outbuf, outsize);
     if(res == -1) {
         /* ENOENT means the operation was interrupted */
@@ -762,6 +766,10 @@ void __fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
     void *inarg = cmd->buf + sizeof(struct fuse_in_header);
     size_t argsize;
 
+    pthread_mutex_lock(&f->lock);
+    f->numavail --;
+    pthread_mutex_unlock(&f->lock);
+
     if((f->flags & FUSE_DEBUG)) {
         printf("unique: %i, opcode: %i, ino: %li, insize: %i\n", in->unique,
                in->opcode, in->ino, cmd->buflen);
@@ -904,6 +912,8 @@ struct fuse *fuse_new(int fd, int flags)
     f->ino_table = (struct node **)
         calloc(1, sizeof(struct node *) * f->ino_table_size);
     pthread_mutex_init(&f->lock, NULL);
+    f->numworker = 0;
+    f->numavail = 0;
 
     root = (struct node *) calloc(1, sizeof(struct node));
     root->mode = 0;

@@ -33,6 +33,8 @@ struct fuse {
     size_t ino_table_size;
     fino_t ctr;
     pthread_mutex_t lock;
+    int numworker;
+    int numavail;
 };
 
 struct fuse_dirhandle {

@@ -25,7 +25,6 @@ uninstall-local:
 clean-local:
 	rm -f *.o *.s
 
-
 .c.o:
 	$(CC) $(CFLAGS) $(CPPFAGS) -c $<
 
@@ -33,3 +32,11 @@ fuse_objs = dev.o dir.o file.o inode.o util.o
 
 fuse.o: $(fuse_objs)
 	ld -r -o fuse.o $(fuse_objs)
+
+fuse_headers = fuse_i.h ../include/linux/fuse.h
+
+dev.o: $(fuse_headers)
+dir.o: $(fuse_headers)
+file.o: $(fuse_headers)
+inode.o: $(fuse_headers)
+util.o: $(fuse_headers)

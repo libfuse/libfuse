@@ -246,15 +246,17 @@ static ssize_t fuse_dev_read(struct file *file, char *buf, size_t nbytes,
 
 	ret = copy_in_args(req->in, buf, nbytes);
 	spin_lock(&fuse_lock);
-	if(req->issync || ret < 0) {
-		if(ret < 0) 
-			list_add_tail(&req->list, &fc->pending);
+	if(req->issync) {
+		if(ret < 0) {
+			req->out->h.error = -EPROTO;
+			req->finished = 1;
+		}
 		else {
 			list_add_tail(&req->list, &fc->processing);
 			req->sent = 1;
 		}
 		req->locked = 0;
-		if(req->interrupted)
+		if(ret < 0 || req->interrupted)
 			wake_up(&req->waitq);
 		
 		req = NULL;
@@ -395,16 +397,15 @@ static ssize_t fuse_dev_write(struct file *file, const char *buf,
 
 	spin_lock(&fuse_lock);
 	if(err)
-		list_add_tail(&fc->processing, &req->list);
+		req->out->h.error = -EPROTO;
 	else {
 		/* fget() needs to be done in this context */
 		if(req->in->h.opcode == FUSE_GETDIR && !oh.error)
 			process_getdir(req);
-		req->finished = 1;
 	}	
+	req->finished = 1;
 	req->locked = 0;
-	if(!err || req->interrupted)
-		wake_up(&req->waitq);
+	wake_up(&req->waitq);
 	spin_unlock(&fuse_lock);
 
 	if(!err)
@@ -473,6 +474,7 @@ static void end_requests(struct fuse_conn *fc, struct list_head *head)
 		list_del_init(&req->list);
 		if(req->issync) {
 			req->out->h.error = -ECONNABORTED;
+			req->finished = 1;
 			wake_up(&req->waitq);
 		}
 		else
