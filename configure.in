@@ -49,6 +49,6 @@ AC_SUBST(KERNINCLUDE)
 kmoduledir=/lib/modules/$kernsrcver
 AC_SUBST(kmoduledir)
 
-AC_OUTPUT([Makefile kernel/Makefile lib/Makefile example/Makefile include/Makefile include/linux/Makefile])
+AC_OUTPUT([Makefile kernel/Makefile lib/Makefile util/Makefile example/Makefile include/Makefile include/linux/Makefile])
 
 

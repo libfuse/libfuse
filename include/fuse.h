@@ -27,6 +27,7 @@ struct fuse_cred {
     uid_t uid;
     gid_t gid;
     /* FIXME: supplementary groups should also be included */
+    /* (And capabilities???) */
 };
 
 /**
