@@ -62,6 +62,19 @@ typedef struct fuse_dirhandle *fuse_dirh_t;
 typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
                               ino_t ino);
 
+/** Function to add an entry in a readdir() operation
+ *
+ * @param buf the buffer passed to the readdir() operation
+ * @param name the file name of the directory entry
+ * @param type the file type (0 if unknown)  see <dirent.h>
+ * @param ino the inode number, ignored if "use_ino" mount option is
+ *            not specified
+ * @param off offset of the next entry
+ * @return 0 on success, 1 if buffer is full
+ */
+typedef int (*fuse_dirfil5_t) (void *buf, const char *name, int type,
+                               ino_t ino, off_t off);
+
 /** Information about open files */
 struct fuse_file_info {
     /** Open flags.  Available in open() and release() */
@@ -85,9 +98,10 @@ struct fuse_file_info {
  * negated error value (-errno) directly.
  *
  * All methods are optional, but some are essential for a useful
- * filesystem (e.g. getattr).  Flush, release, fsync, init and destroy
- * are special purpose methods, without which a full featured
- * filesystem can still be implemented.
+ * filesystem (e.g. getattr).  Flush, release, fsync, opendir,
+ * readdir, releasedir, fsyncdir, init and destroy are special purpose
+ * methods, without which a full featured filesystem can still be
+ * implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -243,18 +257,27 @@ struct fuse_operations {
     int (*removexattr) (const char *, const char *);
 
     /** Open direcory
-     * 
+     *
      * This method should check if the open operation is permitted for
-     * this  directory.   The  fuse_file_info parameter  is  currently
-     * unused.
+     * this  directory
      */
     int (*opendir) (const char *, struct fuse_file_info *);
+
+    /** Read directory
+     *
+     * This is an alternative inteface to getdir(), and if defined
+     * getdir() will not be called
+     */
+    int (*readdir) (const char *, void *, fuse_dirfil5_t, off_t,
+                    struct fuse_file_info *);
+
+    /** Release directory */
+    int (*releasedir) (const char *, struct fuse_file_info *);
 
     /** Synchronize directory contents
      *
      * If the datasync parameter is non-zero, then only the user data
-     * should be flushed, not the meta data.  The fuse_file_info
-     * parameter is currently unused
+     * should be flushed, not the meta data
      */
     int (*fsyncdir) (const char *, int, struct fuse_file_info *);
 
@@ -269,7 +292,7 @@ struct fuse_operations {
 
     /**
      * Clean up filesystem
-     * 
+     *
      * Called on filesystem exit.
      */
     void (*destroy) (void *);

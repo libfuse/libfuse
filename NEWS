@@ -1,3 +1,13 @@
+What is new in 2.3
+
+ - Add new directory related operations: opendir(), readdir(),
+   releasedir() and fsyncdir().
+
+ - Update kernel ABI so that on dual architectures (e.g. AMD64) 32bit
+   binaries work under a 64bit kernel
+
+ - Bugfixes
+
 What is new in 2.2
 
 Userspace changes:

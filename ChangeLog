@@ -1,3 +1,23 @@
+2005-04-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.3-pre2
+
+2005-04-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix dirent offset handling
+
+	* lib: add readdir and releasedir methods
+
+	* lib: use fh field of fuse_file_info in opendir, readdir,
+	releasedir and fsyncdir methods
+
+	* lib: check kernel API version and bail out of it's old.  This
+	will be properly fixed in the next release
+
+2005-03-31  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.3-pre1
+
 2005-03-31  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel API: add padding to structures, so 64bit and 32bit

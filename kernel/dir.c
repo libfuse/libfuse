@@ -506,19 +506,19 @@ static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 		struct fuse_dirent *dirent = (struct fuse_dirent *) buf;
 		size_t reclen = FUSE_DIRENT_SIZE(dirent);
 		int over;
-		if (dirent->namelen > FUSE_NAME_MAX)
+		if (!dirent->namelen || dirent->namelen > FUSE_NAME_MAX)
 			return -EIO;
 		if (reclen > nbytes)
 			break;
 
 		over = filldir(dstbuf, dirent->name, dirent->namelen,
-			       dirent->off, dirent->ino, dirent->type);
+			       file->f_pos, dirent->ino, dirent->type);
 		if (over)
 			break;
 
 		buf += reclen;
-		file->f_pos += reclen;
 		nbytes -= reclen;
+		file->f_pos = dirent->off;
 	}
 
 	return 0;
