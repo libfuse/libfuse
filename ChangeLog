@@ -10,6 +10,8 @@
 
 	* kernel: fix warnings on 64bit archs
 
+	* kernel: in case of API version mismatch, return ECONNREFUSED
+
 2005-03-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: trivial cleanups
