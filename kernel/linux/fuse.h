@@ -146,6 +146,7 @@ struct fuse_open_in {
 
 struct fuse_open_out {
 	unsigned long fh;
+	unsigned int _open_flags;
 };
 
 struct fuse_release_in {
@@ -155,6 +156,7 @@ struct fuse_release_in {
 
 struct fuse_flush_in {
 	unsigned long fh;
+	unsigned int _nref;
 };
 
 struct fuse_read_in {

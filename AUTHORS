@@ -2,15 +2,3 @@ FUSE core
 ---------
 
 Miklos Szeredi     <miklos@szeredi.hu>
-
-
-Python bindings
----------------
-
-Jeff Epler         <jepler@unpythonic.dhs.org>
-
-
-Perl bindings
--------------
-
-Mark Glines        <mark@glines.org>

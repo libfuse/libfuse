@@ -1,10 +1,15 @@
-2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
+2004-11-11  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Merge from fuse_2_0_bugfix to fuse_2_0_merge1
+	* Check kernel interface version in fusermount to prevent
+	strangeness in case of mismatch.
 
 2004-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Separate configure for the kernel directory
+
+	* Don't allow write to return more than 'count'
+
+	* Extend kernel interface for future use
 
 2004-11-09  Miklos Szeredi <miklos@szeredi.hu>
 

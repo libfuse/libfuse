@@ -618,8 +618,12 @@ static ssize_t fuse_send_write(struct fuse_req *req, int writepage,
 	req->out.args[0].value = &outarg;
 	request_send(fc, req);
 	res = req->out.h.error;
-	if (!res)
-		return outarg.size;
+	if (!res) {
+		if (outarg.size > count)
+			return -EPROTO;
+		else
+			return outarg.size;
+	}
 	else
 		return res;
 }

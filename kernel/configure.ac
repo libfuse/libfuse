@@ -1,6 +1,8 @@
 AC_INIT(fuse-kernel, 2.1-pre0)
 AC_CONFIG_HEADERS([config.h])
 
+AC_PROG_INSTALL
+
 AC_MSG_CHECKING([kernel source directory])
 kernelsrc=
 AC_ARG_WITH(kernel,
