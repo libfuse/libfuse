@@ -12,6 +12,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/file.h>
+#include <linux/proc_fs.h>
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
@@ -132,7 +133,7 @@ static struct fuse_conn *get_conn(struct fuse_mount_data *d)
 	if(file)
 		ino = file->f_dentry->d_inode;
 	
-	if(!ino || ino->u.generic_ip != proc_fuse_dev) {
+	if(!ino || !proc_fuse_dev || proc_fuse_dev->low_ino != ino->i_ino) {
 		printk("fuse_read_super: Bad file: %i\n", d->fd);
 		goto out;
 	}

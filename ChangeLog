@@ -1,3 +1,8 @@
+2002-10-22  Miklos Szeredi <mszeredi@inf.bme.hu>
+
+	* fix incompatiblity with Red Hat kernels, with help from Nathan
+	Thompson-Amato.
+
 2002-04-18  Mark Glines <mark@glines.org>
 
 	* added an alternative to fuse_mount(), called
