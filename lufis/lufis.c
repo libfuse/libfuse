@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/vfs.h>
 
 /* statfs extension for captivefs */
 struct lufs_sbattr_ {	/* struct statfs64 */
@@ -551,13 +552,6 @@ static int lu_release(const char *path, int flags)
     return 0;
 }
 
-static int lu_default_statfs(struct statfs *buf)
-{
-    buf->f_namelen = 255;
-    buf->f_bsize = 512;
-    return 0;
-}
-
 #if FUSE_MAJOR_VERSION < 2
 static int lu_statfs(struct fuse_statfs *stbuf)
 #else
@@ -566,12 +560,11 @@ static int lu_statfs(const char *path, struct statfs *stbuf)
 {
     struct lufs_sbattr_ sbattr;
 
-    if(!lu_fops.statfs)
-        return lu_default_statfs(stbuf);
-
     memset(&sbattr, 0, sizeof(sbattr));
-    if(lu_fops.statfs(lu_context, &sbattr) < 0)
-        return -EPERM;
+    if(lu_fops.statfs) {
+        if(lu_fops.statfs(lu_context, &sbattr) < 0)
+            return -EPERM;
+    }
 
 #if FUSE_MAJOR_VERSION < 2
     stbuf->blocks      = sbattr.sb_bytes / 512;
@@ -724,6 +717,8 @@ static int lufis_init(int *argcp, char **argvp[])
 	ERROR("could not parse options!");
         return -1;
     }
+
+    lu_opt_loadcfg(&lu_cfg, "/etc/lufsd.conf");
 
     (*argcp)--;
     (*argvp)++;
