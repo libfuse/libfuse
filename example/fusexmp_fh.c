@@ -48,29 +48,40 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
     return 0;
 }
 
+static int xmp_opendir(const char *path, struct fuse_file_info *fi)
+{
+    DIR *dp = opendir(path);
+    if (dp == NULL)
+        return -errno;
+
+    fi->fh = (unsigned long) dp;
+    return 0;
+}
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
-    DIR *dp;
+    DIR *dp = (DIR *) fi->fh;
     struct dirent *de;
 
-    (void) offset;
-    (void) fi;
-
-    dp = opendir(path);
-    if(dp == NULL)
-        return -errno;
-
-    while((de = readdir(dp)) != NULL) {
+    (void) path;
+    seekdir(dp, offset);
+    while ((de = readdir(dp)) != NULL) {
         struct stat st;
         memset(&st, 0, sizeof(st));
         st.st_ino = de->d_ino;
         st.st_mode = de->d_type << 12;
-        if (filler(buf, de->d_name, &st, 0))
+        if (filler(buf, de->d_name, &st, de->d_off))
             break;
     }
 
+    return 0;
+}
+
+static int xmp_releasedir(const char *path, struct fuse_file_info *fi)
+{
+    DIR *dp = (DIR *) fi->fh;
+    (void) path;
     closedir(dp);
     return 0;
 }
@@ -205,45 +216,33 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
     if(res == -1)
         return -errno;
 
-    close(res);
+    fi->fh = res;
     return 0;
 }
 
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
-    int fd;
     int res;
 
-    (void) fi;
-    fd = open(path, O_RDONLY);
-    if(fd == -1)
-        return -errno;
-
-    res = pread(fd, buf, size, offset);
+    (void) path;
+    res = pread(fi->fh, buf, size, offset);
     if(res == -1)
         res = -errno;
 
-    close(fd);
     return res;
 }
 
 static int xmp_write(const char *path, const char *buf, size_t size,
                      off_t offset, struct fuse_file_info *fi)
 {
-    int fd;
     int res;
 
-    (void) fi;
-    fd = open(path, O_WRONLY);
-    if(fd == -1)
-        return -errno;
-
-    res = pwrite(fd, buf, size, offset);
+    (void) path;
+    res = pwrite(fi->fh, buf, size, offset);
     if(res == -1)
         res = -errno;
 
-    close(fd);
     return res;
 }
 
@@ -260,23 +259,25 @@ static int xmp_statfs(const char *path, struct statfs *stbuf)
 
 static int xmp_release(const char *path, struct fuse_file_info *fi)
 {
-    /* Just a stub.  This method is optional and can safely be left
-       unimplemented */
-
     (void) path;
-    (void) fi;
+    close(fi->fh);
+
     return 0;
 }
 
 static int xmp_fsync(const char *path, int isdatasync,
                      struct fuse_file_info *fi)
 {
-    /* Just a stub.  This method is optional and can safely be left
-       unimplemented */
-
+    int res;
     (void) path;
-    (void) isdatasync;
-    (void) fi;
+
+    if (isdatasync)
+        res = fdatasync(fi->fh);
+    else
+        res = fsync(fi->fh);
+    if(res == -1)
+        return -errno;
+
     return 0;
 }
 
@@ -320,7 +321,9 @@ static int xmp_removexattr(const char *path, const char *name)
 static struct fuse_operations xmp_oper = {
     .getattr	= xmp_getattr,
     .readlink	= xmp_readlink,
+    .opendir	= xmp_opendir,
     .readdir	= xmp_readdir,
+    .releasedir	= xmp_releasedir,
     .mknod	= xmp_mknod,
     .mkdir	= xmp_mkdir,
     .symlink	= xmp_symlink,

@@ -35,14 +35,18 @@ static int hello_getattr(const char *path, struct stat *stbuf)
     return res;
 }
 
-static int hello_getdir(const char *path, fuse_dirh_t h, fuse_dirfil_t filler)
+static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+                         off_t offset, struct fuse_file_info *fi)
 {
+    (void) offset;
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
-    filler(h, ".", 0, 0);
-    filler(h, "..", 0, 0);
-    filler(h, hello_path + 1, 0, 0);
+    filler(buf, ".", NULL, 0);
+    filler(buf, "..", NULL, 0);
+    filler(buf, hello_path + 1, NULL, 0);
 
     return 0;
 }
@@ -79,7 +83,7 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset,
 
 static struct fuse_operations hello_oper = {
     .getattr	= hello_getattr,
-    .getdir	= hello_getdir,
+    .readdir	= hello_readdir,
     .open	= hello_open,
     .read	= hello_read,
 };

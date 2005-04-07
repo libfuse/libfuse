@@ -2,6 +2,7 @@ Makefile.in
 Makefile
 .deps
 fusexmp
+fusexmp_fh
 null
 hello
 .libs

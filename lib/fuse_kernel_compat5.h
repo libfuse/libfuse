@@ -38,5 +38,3 @@ struct fuse_dirent_compat5 {
 };
 
 #define FUSE_NAME_OFFSET_COMPAT5 ((unsigned) ((struct fuse_dirent_compat5 *) 0)->name)
-#define FUSE_DIRENT_SIZE_COMPAT5(d) \
-	FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET_COMPAT5 + (d)->namelen)

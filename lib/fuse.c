@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <sys/param.h>
+#include <sys/uio.h>
 
 /* FUSE flags: */
 
@@ -69,17 +70,15 @@ struct node {
 };
 
 struct fuse_dirhandle {
+    pthread_mutex_t lock;
     struct fuse *fuse;
     unsigned char *contents;
+    int allocated;
     unsigned len;
+    unsigned needlen;
     int filled;
     unsigned long fh;
-};
-
-struct fuse_dirbuf {
-    struct fuse *fuse;
-    char *buf;
-    unsigned len;
+    int error;
 };
 
 struct fuse_cmd {
@@ -89,6 +88,19 @@ struct fuse_cmd {
 
 
 static struct fuse_context *(*fuse_getcontext)(void) = NULL;
+
+#ifndef USE_UCLIBC
+#define mutex_init(mut) pthread_mutex_init(mut, NULL)
+#else
+static void mutex_init(pthread_mutex_t mut)
+{
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+    pthread_mutex_init(mut, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
+#endif
 
 static const char *opname(enum fuse_opcode opcode)
 {
@@ -453,103 +465,22 @@ static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
 #endif
 }
 
-static int fill_dir5(void *buf, const char *name, int type, ino_t ino,
-                     off_t off)
+static  size_t iov_length(const struct iovec *iov, size_t count)
 {
-    size_t namelen = strlen(name);
-    size_t size;
-    struct fuse_dirbuf *db = (struct fuse_dirbuf *) buf;
-    struct fuse_dirent *dirent;
+    size_t seg;
+    size_t ret = 0;
 
-    if (db->len <= FUSE_NAME_OFFSET)
-        return 1;
-
-    dirent = (struct fuse_dirent *) db->buf;
-    if ((db->fuse->flags & FUSE_USE_INO))
-        dirent->ino = ino;
-    else
-        dirent->ino = (unsigned long) -1;
-    dirent->off = off;
-    dirent->namelen = namelen;
-    dirent->type = type;
-    size = FUSE_DIRENT_SIZE(dirent);
-    if (db->len < size)
-        return 1;
-    
-    strncpy(dirent->name, name, namelen);
-    db->len -= size;
-    db->buf += size;
-    return db->len > FUSE_NAME_OFFSET ? 0 : 1;
+    for (seg = 0; seg < count; seg++)
+        ret += iov[seg].iov_len;
+    return ret;
 }
 
-static int fill_dir_compat5(struct fuse_dirhandle *dh, const char *name,
-                            int type, ino_t ino)
-{
-    size_t namelen = strlen(name);
-    size_t entsize = sizeof(struct fuse_dirhandle) + namelen + 8;
-    struct fuse_dirent_compat5 *dirent;
-
-    if (namelen > FUSE_NAME_MAX)
-        namelen = FUSE_NAME_MAX;
-
-    dh->contents = realloc(dh->contents, dh->len + entsize);
-    if (dh->contents == NULL)
-        return -ENOMEM;
-
-    dirent = (struct fuse_dirent_compat5 *) (dh->contents + dh->len);
-    memset(dirent, 0, entsize);
-    if ((dh->fuse->flags & FUSE_USE_INO))
-        dirent->ino = ino;
-    else
-        dirent->ino = (unsigned long) -1;
-    dirent->namelen = namelen;
-    strncpy(dirent->name, name, namelen);
-    dirent->type = type;
-    dh->len += FUSE_DIRENT_SIZE_COMPAT5(dirent);
-    return 0;
-}
-
-static int fill_dir_new(struct fuse_dirhandle *dh, const char *name, int type,
-                        ino_t ino)
-{
-    size_t namelen = strlen(name);
-    size_t entsize = sizeof(struct fuse_dirhandle) + namelen + 8;
-    struct fuse_dirent *dirent;
-
-    if (namelen > FUSE_NAME_MAX)
-        namelen = FUSE_NAME_MAX;
-
-    dh->contents = realloc(dh->contents, dh->len + entsize);
-    if (dh->contents == NULL)
-        return -ENOMEM;
-
-    dirent = (struct fuse_dirent *) (dh->contents + dh->len);
-    memset(dirent, 0, entsize);
-    if ((dh->fuse->flags & FUSE_USE_INO))
-        dirent->ino = ino;
-    else
-        dirent->ino = (unsigned long) -1;
-    dirent->namelen = namelen;
-    strncpy(dirent->name, name, namelen);
-    dirent->type = type;
-    dh->len += FUSE_DIRENT_SIZE(dirent);
-    dirent->off = dh->len;
-    return 0;
-}
-
-static int fill_dir(struct fuse_dirhandle *dh, const char *name, int type,
-                    ino_t ino)
-{
-    if (dh->fuse->major == 5)
-        return fill_dir_compat5(dh, name, type, ino);
-    else
-        return fill_dir_new(dh, name, type, ino);
-}
-
-static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
+static int send_reply_raw(struct fuse *f, const struct iovec iov[],
+                          size_t count)
 {
     int res;
-    struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
+    unsigned outsize = iov_length(iov, count);
+    struct fuse_out_header *out = (struct fuse_out_header *) iov[0].iov_base;
     out->len = outsize;
 
     if ((f->flags & FUSE_DEBUG)) {
@@ -563,7 +494,7 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
        increased long after the operation is done */
     fuse_inc_avail(f);
 
-    res = write(f->fd, outbuf, outsize);
+    res = writev(f->fd, iov, count);
     if (res == -1) {
         /* ENOENT means the operation was interrupted */
         if (!f->exited && errno != ENOENT)
@@ -576,37 +507,26 @@ static int send_reply_raw(struct fuse *f, char *outbuf, size_t outsize)
 static int send_reply(struct fuse *f, struct fuse_in_header *in, int error,
                       void *arg, size_t argsize)
 {
-    int res;
-    char *outbuf;
-    size_t outsize;
-    struct fuse_out_header *out;
+    struct fuse_out_header out;
+    struct iovec iov[2];
+    size_t count;
 
     if (error <= -1000 || error > 0) {
         fprintf(stderr, "fuse: bad error value: %i\n",  error);
         error = -ERANGE;
     }
 
-    if (error)
-        argsize = 0;
-
-    outsize = sizeof(struct fuse_out_header) + argsize;
-    outbuf = (char *) malloc(outsize);
-    if (outbuf == NULL) {
-        fprintf(stderr, "fuse: failed to allocate reply buffer\n");
-        res = -ENOMEM;
-    } else {
-        out = (struct fuse_out_header *) outbuf;
-        memset(out, 0, sizeof(struct fuse_out_header));
-        out->unique = in->unique;
-        out->error = error;
-        if (argsize != 0)
-            memcpy(outbuf + sizeof(struct fuse_out_header), arg, argsize);
-
-        res = send_reply_raw(f, outbuf, outsize);
-        free(outbuf);
+    out.unique = in->unique;
+    out.error = error;
+    count = 1;
+    iov[0].iov_base = &out;
+    iov[0].iov_len = sizeof(struct fuse_out_header);
+    if (argsize && !error) {
+        count++;
+        iov[1].iov_base = arg;
+        iov[1].iov_len = argsize;
     }
-
-    return res;
+    return send_reply_raw(f, iov, count);
 }
 
 static int is_open(struct fuse *f, nodeid_t dir, const char *name)
@@ -885,23 +805,6 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
     }
     link[PATH_MAX] = '\0';
     send_reply(f, in, res, link, res == 0 ? strlen(link) : 0);
-}
-
-static int common_getdir(struct fuse *f, struct fuse_in_header *in,
-                       struct fuse_dirhandle *dh)
-{
-    int res;
-    char *path;
-
-    res = -ENOENT;
-    path = get_path(f, in->nodeid);
-    if (path != NULL) {
-        res = -ENOSYS;
-        if (f->op.getdir)
-            res = f->op.getdir(path, dh, fill_dir);
-        free(path);
-    }
-    return res;
 }
 
 static void do_mknod(struct fuse *f, struct fuse_in_header *in,
@@ -1237,52 +1140,47 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
 {
     int res;
     char *path;
-    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
-    if (outbuf == NULL)
+    size_t size;
+    char *buf;
+    struct fuse_file_info fi;
+
+    buf = (char *) malloc(arg->size);
+    if (buf == NULL) {
         send_reply(f, in, -ENOMEM, NULL, 0);
-    else {
-        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-        char *buf = outbuf + sizeof(struct fuse_out_header);
-        size_t size;
-        size_t outsize;
-        struct fuse_file_info fi;
-
-        memset(&fi, 0, sizeof(fi));
-        fi.fh = arg->fh;
-
-        res = -ENOENT;
-        path = get_path(f, in->nodeid);
-        if (path != NULL) {
-            if (f->flags & FUSE_DEBUG) {
-                printf("READ[%lu] %u bytes from %llu\n",
-                       (unsigned long) arg->fh, arg->size, arg->offset);
-                fflush(stdout);
-            }
-
-            res = -ENOSYS;
-            if (f->op.read)
-                res = f->op.read(path, buf, arg->size, arg->offset, &fi);
-            free(path);
-        }
-
-        size = 0;
-        if (res >= 0) {
-            size = res;
-            res = 0;
-            if (f->flags & FUSE_DEBUG) {
-                printf("   READ[%lu] %u bytes\n", (unsigned long) arg->fh,
-                       size);
-                fflush(stdout);
-            }
-        }
-        memset(out, 0, sizeof(struct fuse_out_header));
-        out->unique = in->unique;
-        out->error = res;
-        outsize = sizeof(struct fuse_out_header) + size;
-
-        send_reply_raw(f, outbuf, outsize);
-        free(outbuf);
+        return;
     }
+
+    memset(&fi, 0, sizeof(fi));
+    fi.fh = arg->fh;
+
+    res = -ENOENT;
+    path = get_path(f, in->nodeid);
+    if (path != NULL) {
+        if (f->flags & FUSE_DEBUG) {
+            printf("READ[%lu] %u bytes from %llu\n",
+                   (unsigned long) arg->fh, arg->size, arg->offset);
+            fflush(stdout);
+        }
+
+        res = -ENOSYS;
+        if (f->op.read)
+            res = f->op.read(path, buf, arg->size, arg->offset, &fi);
+        free(path);
+    }
+
+    size = 0;
+    if (res >= 0) {
+        size = res;
+        res = 0;
+        if (f->flags & FUSE_DEBUG) {
+            printf("   READ[%lu] %u bytes\n", (unsigned long) arg->fh,
+                   size);
+            fflush(stdout);
+        }
+    }
+
+    send_reply(f, in, res, buf, size);
+    free(buf);
 }
 
 static void do_write(struct fuse *f, struct fuse_in_header *in,
@@ -1313,6 +1211,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
         free(path);
     }
 
+    memset(&outarg, 0, sizeof(outarg));
     if (res >= 0) {
         outarg.size = res;
         res = 0;
@@ -1443,26 +1342,19 @@ static void do_getxattr_read(struct fuse *f, struct fuse_in_header *in,
                              const char *name, size_t size)
 {
     int res;
-    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + size);
-    if (outbuf == NULL)
+    char *value = (char *) malloc(size);
+    if (value == NULL) {
         send_reply(f, in, -ENOMEM, NULL, 0);
-    else {
-        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-        char *value = outbuf + sizeof(struct fuse_out_header);
-
-        res = common_getxattr(f, in, name, value, size);
-        size = 0;
-        if (res > 0) {
-            size = res;
-            res = 0;
-        }
-        memset(out, 0, sizeof(struct fuse_out_header));
-        out->unique = in->unique;
-        out->error = res;
-
-        send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size);
-        free(outbuf);
+        return;
     }
+    res = common_getxattr(f, in, name, value, size);
+    size = 0;
+    if (res > 0) {
+        size = res;
+        res = 0;
+    }
+    send_reply(f, in, res, value, size);
+    free(value);
 }
 
 static void do_getxattr_size(struct fuse *f, struct fuse_in_header *in,
@@ -1471,6 +1363,7 @@ static void do_getxattr_size(struct fuse *f, struct fuse_in_header *in,
     int res;
     struct fuse_getxattr_out arg;
 
+    memset(&arg, 0, sizeof(arg));
     res = common_getxattr(f, in, name, NULL, 0);
     if (res >= 0) {
         arg.size = res;
@@ -1511,26 +1404,19 @@ static void do_listxattr_read(struct fuse *f, struct fuse_in_header *in,
                               size_t size)
 {
     int res;
-    char *outbuf = (char *) malloc(sizeof(struct fuse_out_header) + size);
-    if (outbuf == NULL)
+    char *list = (char *) malloc(size);
+    if (list == NULL) {
         send_reply(f, in, -ENOMEM, NULL, 0);
-    else {
-        struct fuse_out_header *out = (struct fuse_out_header *) outbuf;
-        char *list = outbuf + sizeof(struct fuse_out_header);
-
-        res = common_listxattr(f, in, list, size);
-        size = 0;
-        if (res > 0) {
-            size = res;
-            res = 0;
-        }
-        memset(out, 0, sizeof(struct fuse_out_header));
-        out->unique = in->unique;
-        out->error = res;
-
-        send_reply_raw(f, outbuf, sizeof(struct fuse_out_header) + size);
-        free(outbuf);
+        return;
     }
+    res = common_listxattr(f, in, list, size);
+    size = 0;
+    if (res > 0) {
+        size = res;
+        res = 0;
+    }
+    send_reply(f, in, res, list, size);
+    free(list);
 }
 
 static void do_listxattr_size(struct fuse *f, struct fuse_in_header *in)
@@ -1538,6 +1424,7 @@ static void do_listxattr_size(struct fuse *f, struct fuse_in_header *in)
     int res;
     struct fuse_getxattr_out arg;
 
+    memset(&arg, 0, sizeof(arg));
     res = common_listxattr(f, in, NULL, 0);
     if (res >= 0) {
         arg.size = res;
@@ -1631,6 +1518,7 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
     dh->contents = NULL;
     dh->len = 0;
     dh->filled = 0;
+    mutex_init(&dh->lock);
 
     memset(&outarg, 0, sizeof(outarg));
     outarg.fh = (unsigned long) dh;
@@ -1657,6 +1545,7 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
                    cancelled */
                 if(f->op.releasedir)
                     f->op.releasedir(path, &fi);
+                pthread_mutex_destroy(&dh->lock);
                 free(dh);
             }
             pthread_mutex_unlock(&f->lock);
@@ -1665,76 +1554,143 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
             free(dh);
         }
         free(path);
-    } else 
+    } else
         send_reply(f, in, 0, &outarg, SIZEOF_COMPAT(f, fuse_open_out));
+}
+
+static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
+                           int type, ino_t ino, off_t off)
+{
+    unsigned namelen = strlen(name);
+    unsigned entlen;
+    unsigned entsize;
+    unsigned padlen;
+    unsigned newlen;
+    unsigned char *newptr;
+
+    if (!(dh->fuse->flags & FUSE_USE_INO))
+        ino = (ino_t) -1;
+
+    if (namelen > FUSE_NAME_MAX)
+        namelen = FUSE_NAME_MAX;
+    else if (!namelen) {
+        dh->error = -EIO;
+        return 1;
+    }
+
+    entlen = (dh->fuse->major == 5 ?
+              FUSE_NAME_OFFSET_COMPAT5 : FUSE_NAME_OFFSET) + namelen;
+    entsize = FUSE_DIRENT_ALIGN(entlen);
+    padlen = entsize - entlen;
+    newlen = dh->len + entsize;
+    if (off && dh->fuse->major != 5) {
+        dh->filled = 0;
+        if (newlen > dh->needlen)
+            return 1;
+    }
+    
+    newptr = realloc(dh->contents, newlen);
+    if (!newptr) {
+        dh->error = -ENOMEM;
+        return 1;
+    }
+    dh->contents = newptr;
+    if (dh->fuse->major == 5) {
+        struct fuse_dirent_compat5 *dirent;
+        dirent = (struct fuse_dirent_compat5 *) (dh->contents + dh->len);
+        dirent->ino = ino;
+        dirent->namelen = namelen;
+        dirent->type = type;
+        strncpy(dirent->name, name, namelen);
+    } else {
+        struct fuse_dirent *dirent;
+        dirent = (struct fuse_dirent *) (dh->contents + dh->len);
+        dirent->ino = ino;
+        dirent->off = off ? off : newlen;
+        dirent->namelen = namelen;
+        dirent->type = type;
+        strncpy(dirent->name, name, namelen);
+    }
+    if (padlen)
+        memset(dh->contents + dh->len + entlen, 0, padlen);
+    dh->len = newlen;
+    return 0;
+}
+
+static int fill_dir(void *buf, const char *name, const struct stat *stat,
+                    off_t off)
+{
+    int type = stat ? (stat->st_mode & 0170000) >> 12 : 0;
+    ino_t ino = stat ? stat->st_ino : (ino_t) -1;
+    return fill_dir_common(buf, name, type, ino, off);
+}
+
+static int fill_dir_old(struct fuse_dirhandle *dh, const char *name, int type,
+                        ino_t ino)
+{
+    fill_dir_common(dh, name, type, ino, 0);
+    return dh->error;
+}
+
+static int readdir_fill(struct fuse *f, struct fuse_in_header *in,
+                        struct fuse_read_in *arg, struct fuse_dirhandle *dh)
+{
+    int err = -ENOENT;
+    char *path = get_path(f, in->nodeid);
+    if (path != NULL) {
+        struct fuse_file_info fi;
+
+        memset(&fi, 0, sizeof(fi));
+        fi.fh = dh->fh;
+
+        dh->len = 0;
+        dh->error = 0;
+        dh->needlen = arg->size;
+        dh->filled = 1;
+        err = -ENOSYS;
+        if (f->op.readdir) {
+            off_t offset = f->major == 5 ? 0 : arg->offset;
+            err = f->op.readdir(path, dh, fill_dir, offset, &fi);
+        } else if (f->op.getdir)
+            err = f->op.getdir(path, dh, fill_dir_old);
+        if (!err)
+            err = dh->error;
+        if (err)
+            dh->filled = 0;
+        free(path);
+    }
+    return err;
 }
 
 static void do_readdir(struct fuse *f, struct fuse_in_header *in,
                        struct fuse_read_in *arg)
 {
-    int res;
+    int err = 0;
     struct fuse_dirhandle *dh = get_dirhandle(arg->fh);
-    struct fuse_out_header *out;
-    char *outbuf;
-    char *buf;
     size_t size = 0;
-    size_t outsize;
+    unsigned char *buf = NULL;
 
-    outbuf = (char *) malloc(sizeof(struct fuse_out_header) + arg->size);
-    if (outbuf == NULL) {
-        send_reply(f, in, -ENOMEM, NULL, 0);
-        return;
+    pthread_mutex_lock(&dh->lock);
+    if (!dh->filled) {
+        err = readdir_fill(f, in, arg, dh);
+        if (err)
+            goto out;
     }
-    buf = outbuf + sizeof(struct fuse_out_header);
-
-    if (f->op.readdir && f->major != 5) {
-        struct fuse_dirbuf db;
-        struct fuse_file_info fi;
-        char *path;
-
-        db.fuse = f;
-        db.buf = buf;
-        db.len = arg->size;
-
-        memset(&fi, 0, sizeof(fi));
-        fi.fh = dh->fh;
-
-        path = get_path(f, in->nodeid);
-        res = f->op.readdir(path ? path : "-", &db, fill_dir5, arg->offset, &fi);
-        free(path);
-        if (res)
-            goto err;
-
-        size = arg->size - db.len;
-    } else {
-        if (!dh->filled) {
-            res = common_getdir(f, in, dh);
-            if (res)
-                goto err;
-            dh->filled = 1;
-        }
-
+    if (dh->filled) {
         if (arg->offset < dh->len) {
             size = arg->size;
             if (arg->offset + size > dh->len)
                 size = dh->len - arg->offset;
-            
-            memcpy(buf, dh->contents + arg->offset, size);
+            buf = dh->contents + arg->offset;
         }
+    } else {
+        size = dh->len;
+        buf = dh->contents;
     }
-    out = (struct fuse_out_header *) outbuf;
-    memset(out, 0, sizeof(struct fuse_out_header));
-    out->unique = in->unique;
-    out->error = 0;
-    outsize = sizeof(struct fuse_out_header) + size;
-    
-    send_reply_raw(f, outbuf, outsize);
-    free(outbuf);
-    return;
 
- err:
-    send_reply(f, in, res, NULL, 0);
-    free(outbuf);
+ out:
+    send_reply(f, in, err, buf, size);
+    pthread_mutex_unlock(&dh->lock);
 }
 
 static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
@@ -1744,7 +1700,7 @@ static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
     if (f->op.releasedir) {
         char *path;
         struct fuse_file_info fi;
-        
+
         memset(&fi, 0, sizeof(fi));
         fi.fh = dh->fh;
 
@@ -1752,6 +1708,9 @@ static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
         f->op.releasedir(path ? path : "-", &fi);
         free(path);
     }
+    pthread_mutex_lock(&dh->lock);
+    pthread_mutex_unlock(&dh->lock);
+    pthread_mutex_destroy(&dh->lock);
     free(dh->contents);
     free(dh);
     send_reply(f, in, 0, NULL, 0);
@@ -2115,19 +2074,8 @@ struct fuse *fuse_new_common(int fd, const char *opts,
         goto out_free_name_table;
     }
 
-#ifndef USE_UCLIBC
-     pthread_mutex_init(&f->lock, NULL);
-     pthread_mutex_init(&f->worker_lock, NULL);
-#else
-     {
-         pthread_mutexattr_t attr;
-         pthread_mutexattr_init(&attr);
-         pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-         pthread_mutex_init(&f->lock, &attr);
-         pthread_mutex_init(&f->worker_lock, &attr);
-         pthread_mutexattr_destroy(&attr);
-     }
-#endif
+    mutex_init(&f->lock);
+    mutex_init(&f->worker_lock);
     f->numworker = 0;
     f->numavail = 0;
     memcpy(&f->op, op, op_size);
