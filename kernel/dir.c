@@ -647,7 +647,8 @@ static int fuse_dir_release(struct inode *inode, struct file *file)
 
 static int fuse_dir_fsync(struct file *file, struct dentry *de, int datasync)
 {
-	return fuse_fsync_common(file, de, datasync, 1);
+	/* nfsd can call this with no file */
+	return file ? fuse_fsync_common(file, de, datasync, 1) : 0;
 }
 
 static unsigned iattr_to_fattr(struct iattr *iattr, struct fuse_attr *fattr)
