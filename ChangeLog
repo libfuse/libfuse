@@ -2,6 +2,9 @@
 
 	* Fix Oops in case of nfs export.  Spotted by David Shaw
 
+	* Fix another Oops in case of write over nfs with direct_io turned
+	on.  Again spotted by David Shaw
+
 2005-04-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.3-pre4

@@ -508,6 +508,10 @@ static int fuse_get_user_pages(struct fuse_req *req, const char __user *buf,
 	unsigned offset = user_addr & ~PAGE_MASK;
 	int npages;
 
+	/* This doesn't work with nfsd */
+	if (!current->mm)
+		return -EPERM;
+
 	nbytes = min(nbytes, (unsigned) FUSE_MAX_PAGES_PER_REQ << PAGE_SHIFT);
 	npages = (nbytes + offset + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	npages = min(npages, FUSE_MAX_PAGES_PER_REQ);
