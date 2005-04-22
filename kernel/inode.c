@@ -99,8 +99,8 @@ void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
 
 static void fuse_clear_inode(struct inode *inode)
 {
-	struct fuse_conn *fc = get_fuse_conn(inode);
-	if (fc && (inode->i_sb->s_flags & MS_ACTIVE)) {
+	if (inode->i_sb->s_flags & MS_ACTIVE) {
+		struct fuse_conn *fc = get_fuse_conn(inode);
 		struct fuse_inode *fi = get_fuse_inode(inode);
 		fuse_send_forget(fc, fi->forget_req, fi->nodeid, inode->i_version);
 		fi->forget_req = NULL;
@@ -260,14 +260,13 @@ static void fuse_put_super(struct super_block *sb)
 						   struct fuse_req, bg_entry));
 
 	spin_lock(&fuse_lock);
-	fc->sb = NULL;
+	fc->mounted = 0;
 	fc->user_id = 0;
 	fc->flags = 0;
 	/* Flush all readers on this fs */
 	wake_up_all(&fc->waitq);
 	up_write(&fc->sbput_sem);
 	fuse_release_conn(fc);
-	*get_fuse_conn_super_p(sb) = NULL;
 	spin_unlock(&fuse_lock);
 }
 
@@ -314,7 +313,6 @@ enum {
 	OPT_USER_ID,
 	OPT_DEFAULT_PERMISSIONS,
 	OPT_ALLOW_OTHER,
-	OPT_ALLOW_ROOT,
 	OPT_KERNEL_CACHE,
 #ifndef KERNEL_2_6
 	OPT_LARGE_READ,
@@ -330,7 +328,6 @@ static match_table_t tokens = {
 	{OPT_USER_ID,			"user_id=%u"},
 	{OPT_DEFAULT_PERMISSIONS,	"default_permissions"},
 	{OPT_ALLOW_OTHER,		"allow_other"},
-	{OPT_ALLOW_ROOT,		"allow_root"},
 	{OPT_KERNEL_CACHE,		"kernel_cache"},
 #ifndef KERNEL_2_6
 	{OPT_LARGE_READ,		"large_read"},
@@ -382,10 +379,6 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_ALLOW_OTHER;
 			break;
 
-		case OPT_ALLOW_ROOT:
-			d->flags |= FUSE_ALLOW_ROOT;
-			break;
-
 		case OPT_KERNEL_CACHE:
 			d->flags |= FUSE_KERNEL_CACHE;
 			break;
@@ -424,8 +417,6 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 		seq_puts(m, ",default_permissions");
 	if (fc->flags & FUSE_ALLOW_OTHER)
 		seq_puts(m, ",allow_other");
-	if (fc->flags & FUSE_ALLOW_ROOT)
-		seq_puts(m, ",allow_root");
 	if (fc->flags & FUSE_KERNEL_CACHE)
 		seq_puts(m, ",kernel_cache");
 #ifndef KERNEL_2_6
@@ -453,7 +444,8 @@ static void free_conn(struct fuse_conn *fc)
 /* Must be called with the fuse lock held */
 void fuse_release_conn(struct fuse_conn *fc)
 {
-	if (!fc->sb && !fc->file)
+	fc->count--;
+	if (!fc->count)
 		free_conn(fc);
 }
 
@@ -465,10 +457,6 @@ static struct fuse_conn *new_conn(void)
 	if (fc != NULL) {
 		int i;
 		memset(fc, 0, sizeof(*fc));
-		fc->sb = NULL;
-		fc->file = NULL;
-		fc->flags = 0;
-		fc->user_id = 0;
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
@@ -508,8 +496,10 @@ static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 		fc = ERR_PTR(-EINVAL);
 	} else {
 		file->private_data = fc;
-		fc->sb = sb;
-		fc->file = file;
+		*get_fuse_conn_super_p(sb) = fc;
+		fc->mounted = 1;
+		fc->connected = 1;
+		fc->count = 2;
 	}
 	spin_unlock(&fuse_lock);
 	return fc;
@@ -636,8 +626,6 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 #endif
 	fc->max_write = FUSE_MAX_IN / 2;
 
-	*get_fuse_conn_super_p(sb) = fc;
-
 	err = -ENOMEM;
 	root = get_root_inode(sb, d.rootmode);
 	if (root == NULL)
@@ -653,10 +641,8 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 
  err:
 	spin_lock(&fuse_lock);
-	fc->sb = NULL;
 	fuse_release_conn(fc);
 	spin_unlock(&fuse_lock);
-	*get_fuse_conn_super_p(sb) = NULL;
 	return err;
 }
 

@@ -35,6 +35,9 @@
 /** Use st_ino field in getattr instead of generating inode numbers  */
 #define FUSE_USE_INO     (1 << 3)
 
+/** Only allow root or the owner to access the filesystem */
+#define FUSE_ALLOW_ROOT  (1 << 4)
+
 #define FUSE_KERNEL_MINOR_VERSION_NEED 1
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
 #define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
@@ -1765,6 +1768,15 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
         goto out;
     }
 
+    if ((f->flags & FUSE_ALLOW_ROOT) && in->uid != f->owner && in->uid != 0 &&
+        in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
+        in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC && 
+        in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
+        in->opcode != FUSE_FSYNCDIR && in->opcode != FUSE_RELEASEDIR) {
+        send_reply(f, in, -EACCES, NULL, 0);
+        goto out;
+    }
+
     ctx->fuse = f;
     ctx->uid = in->uid;
     ctx->gid = in->gid;
@@ -2000,7 +2012,8 @@ int fuse_is_lib_option(const char *opt)
 {
     if (strcmp(opt, "debug") == 0 ||
         strcmp(opt, "hard_remove") == 0 ||
-        strcmp(opt, "use_ino") == 0)
+        strcmp(opt, "use_ino") == 0 ||
+        strcmp(opt, "allow_root") == 0)
         return 1;
     else
         return 0;
@@ -2025,6 +2038,8 @@ static int parse_lib_opts(struct fuse *f, const char *opts)
                 f->flags |= FUSE_HARD_REMOVE;
             else if (strcmp(opt, "use_ino") == 0)
                 f->flags |= FUSE_USE_INO;
+            else if (strcmp(opt, "allow_root") == 0)
+                f->flags |= FUSE_ALLOW_ROOT;
             else
                 fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
         }
@@ -2099,6 +2114,8 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     root->generation = 0;
     root->refctr = 1;
     hash_id(f, root);
+
+    f->owner = getuid();
 
     return f;
 

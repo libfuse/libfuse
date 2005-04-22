@@ -24,7 +24,7 @@ static inline struct fuse_conn *fuse_get_conn(struct file *file)
 	struct fuse_conn *fc;
 	spin_lock(&fuse_lock);
 	fc = file->private_data;
-	if (fc && !fc->sb)
+	if (fc && !fc->mounted)
 		fc = NULL;
 	spin_unlock(&fuse_lock);
 	return fc;
@@ -214,7 +214,7 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	spin_unlock(&fuse_lock);
 	if (req->background) {
 		down_read(&fc->sbput_sem);
-		if (fc->sb)
+		if (fc->mounted)
 			fuse_release_background(req);
 		up_read(&fc->sbput_sem);
 	}
@@ -371,7 +371,7 @@ static void request_send_wait(struct fuse_conn *fc, struct fuse_req *req,
 {
 	req->isreply = 1;
 	spin_lock(&fuse_lock);
-	if (!fc->file)
+	if (!fc->connected)
 		req->out.h.error = -ENOTCONN;
 	else if (fc->conn_error)
 		req->out.h.error = -ECONNREFUSED;
@@ -404,7 +404,7 @@ void request_send_nonint(struct fuse_conn *fc, struct fuse_req *req)
 static void request_send_nowait(struct fuse_conn *fc, struct fuse_req *req)
 {
 	spin_lock(&fuse_lock);
-	if (fc->file) {
+	if (fc->connected) {
 		queue_request(fc, req);
 		spin_unlock(&fuse_lock);
 	} else {
@@ -659,7 +659,7 @@ static void request_wait(struct fuse_conn *fc)
 	DECLARE_WAITQUEUE(wait, current);
 
 	add_wait_queue_exclusive(&fc->waitq, &wait);
-	while (fc->sb && list_empty(&fc->pending)) {
+	while (fc->mounted && list_empty(&fc->pending)) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (signal_pending(current))
 			break;
@@ -709,7 +709,7 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 		goto err_unlock;
 	request_wait(fc);
 	err = -ENODEV;
-	if (!fc->sb)
+	if (!fc->mounted)
 		goto err_unlock;
 	err = -ERESTARTSYS;
 	if (list_empty(&fc->pending))
@@ -917,7 +917,7 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 	spin_lock(&fuse_lock);
 	fc = file->private_data;
 	if (fc) {
-		fc->file = NULL;
+		fc->connected = 0;
 		end_requests(fc, &fc->pending);
 		end_requests(fc, &fc->processing);
 		fuse_release_conn(fc);

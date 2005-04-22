@@ -101,10 +101,6 @@ static inline void set_page_dirty_lock(struct page *page)
 /** Bypass the page cache for read and write operations  */
 #define FUSE_DIRECT_IO           (1 << 3)
 
-/** Allow root and setuid-root programs to access fuse-mounted
-    filesystems */
-#define FUSE_ALLOW_ROOT		 (1 << 4)
-
 /** FUSE inode */
 struct fuse_inode {
 	/** Inode data */
@@ -260,11 +256,8 @@ struct fuse_req {
  * unmounted.
  */
 struct fuse_conn {
-	/** The superblock of the mounted filesystem */
-	struct super_block *sb;
-
-	/** The opened client device */
-	struct file *file;
+	/** Reference count */
+	int count;
 
 	/** The user id for this mount */
 	uid_t user_id;
@@ -306,6 +299,12 @@ struct fuse_conn {
 
 	/** The next unique request id */
 	int reqctr;
+
+	/** Mount is active */
+	unsigned mounted : 1;
+
+	/** Connection established */
+	unsigned connected : 1;
 
 	/** Connection failed (version mismatch) */
 	unsigned conn_error : 1;

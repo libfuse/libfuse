@@ -6,6 +6,12 @@
 	* Fix buggy behavior of open(..., O_CREAT|O_EXCL) if interrupted.
 	Reported by David Shaw
 
+	* Remove "allow_root" option from kernel module, and implement
+	it's functionality in the library
+
+	* Fix Oops caused by premature release of fuse_conn.  Clean up
+	related code, to be more readable
+
 2005-04-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix Oops in case of nfs export.  Spotted by David Shaw

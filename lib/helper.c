@@ -138,8 +138,12 @@ static int add_options(char **lib_optp, char **kernel_optp, const char *opts)
 
     while((opt = strsep(&s, ",")) != NULL) {
         int res;
-        if (fuse_is_lib_option(opt))
+        if (fuse_is_lib_option(opt)) {
             res = add_option_to(opt, lib_optp);
+            /* Compatibility hack */
+            if (strcmp(opt, "allow_root") == 0 && res != -1)
+                res = add_option_to("allow_other", kernel_optp);
+        }
         else
             res = add_option_to(opt, kernel_optp);
         if (res == -1) {

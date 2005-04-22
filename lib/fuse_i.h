@@ -32,6 +32,7 @@ struct fuse {
     void *user_data;
     int major;
     int minor;
+    uid_t owner;
 };
 
 struct fuse *fuse_new_common(int fd, const char *opts,
