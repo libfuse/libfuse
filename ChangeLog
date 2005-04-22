@@ -1,3 +1,11 @@
+2005-04-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add -msoft-float to kernel module compile flags for 2.4.X.  This
+	is needed on certain architectures.  Report from Chris Kirby
+
+	* Fix buggy behavior of open(..., O_CREAT|O_EXCL) if interrupted.
+	Reported by David Shaw
+
 2005-04-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix Oops in case of nfs export.  Spotted by David Shaw

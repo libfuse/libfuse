@@ -24,6 +24,9 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 	struct fuse_open_out outarg;
 	struct fuse_file *ff;
 	int err;
+	/* Restarting the syscall is not allowed if O_CREAT and O_EXCL
+	   are both set, because creation will fail on the restart */
+	int excl = (file->f_flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL);
 
 	err = generic_file_open(inode, file);
 	if (err)
@@ -37,9 +40,12 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 		 	return err;
 	}
 
-	req = fuse_get_request(fc);
+	if (excl)
+		req = fuse_get_request_nonint(fc);
+	else
+		req = fuse_get_request(fc);
 	if (!req)
-		return -ERESTARTSYS;
+		return excl ? -EINTR : -ERESTARTSYS;
 
 	err = -ENOMEM;
 	ff = kmalloc(sizeof(struct fuse_file), GFP_KERNEL);
@@ -63,7 +69,10 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 	req->out.numargs = 1;
 	req->out.args[0].size = sizeof(outarg);
 	req->out.args[0].value = &outarg;
-	request_send(fc, req);
+	if (excl)
+		request_send_nonint(fc, req);
+	else
+		request_send(fc, req);
 	err = req->out.h.error;
 	if (!err && !(fc->flags & FUSE_KERNEL_CACHE))
 #ifdef KERNEL_2_6
