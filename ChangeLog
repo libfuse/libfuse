@@ -1,3 +1,7 @@
+2005-04-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.3-pre5
+
 2005-04-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add -msoft-float to kernel module compile flags for 2.4.X.  This
