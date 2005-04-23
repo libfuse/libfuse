@@ -12,6 +12,9 @@
 	* Fix Oops caused by premature release of fuse_conn.  Clean up
 	related code, to be more readable
 
+	* Sendfile should not use page cache if "direct_io" mount option
+	is given
+
 2005-04-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix Oops in case of nfs export.  Spotted by David Shaw

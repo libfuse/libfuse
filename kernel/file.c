@@ -654,6 +654,17 @@ static int fuse_file_mmap(struct file *file, struct vm_area_struct *vma)
 }
 
 #ifdef KERNEL_2_6
+static ssize_t fuse_file_sendfile(struct file *file, loff_t *ppos,
+				  size_t count, read_actor_t actor,
+				  void *target)
+{
+	struct fuse_conn *fc = get_fuse_conn(file->f_dentry->d_inode);
+	if (fc->flags & FUSE_DIRECT_IO)
+		return -EINVAL;
+	else
+		return generic_file_sendfile(file, ppos, count, actor, target);
+}
+
 static int fuse_set_page_dirty(struct page *page)
 {
 	printk("fuse_set_page_dirty: should not happen\n");
@@ -672,7 +683,7 @@ static struct file_operations fuse_file_operations = {
 	.release	= fuse_release,
 	.fsync		= fuse_fsync,
 #ifdef KERNEL_2_6
-	.sendfile	= generic_file_sendfile,
+	.sendfile	= fuse_file_sendfile,
 #endif
 };
 
