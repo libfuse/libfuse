@@ -433,17 +433,45 @@ int fuse_do_getattr(struct inode *inode)
 	return err;
 }
 
+static int fuse_allow_task(struct fuse_conn *fc, struct task_struct *task)
+{
+	if (fc->flags & FUSE_ALLOW_OTHER)
+		return 1;
+
+	/* Calling into a user-controlled filesystem gives the
+	   filesystem daemon ptrace-like capabilities over the
+	   requester process.  This means, that the filesystem daemon
+	   is able to record the exact filesystem operations
+	   performed, and can also control the behavior of the
+	   requester process in otherwise impossible ways.  For
+	   example it can delay the operation for arbitrary length of
+	   time allowing DoS against the requester.
+
+	   For this reason only those processes can call into the
+	   filesystem, for which the owner of the mount has ptrace
+	   privilege.  This excludes processes started by other users,
+	   suid or sgid processes. */
+	if (task->euid == fc->user_id &&
+	    task->suid == fc->user_id &&
+	    task->uid == fc->user_id &&
+	    task->egid == fc->group_id &&
+	    task->sgid == fc->group_id &&
+	    task->gid == fc->group_id)
+		return 1;
+
+	return 0;
+}
+
 static int fuse_revalidate(struct dentry *entry)
 {
 	struct inode *inode = entry->d_inode;
 	struct fuse_inode *fi = get_fuse_inode(inode);
 	struct fuse_conn *fc = get_fuse_conn(inode);
 
-	if (get_node_id(inode) == FUSE_ROOT_ID) {
-		if (!(fc->flags & FUSE_ALLOW_OTHER) &&
-		    current->fsuid != fc->user_id)
-			return -EACCES;
-	} else if (time_before_eq(jiffies, fi->i_time))
+	if (!fuse_allow_task(fc, current))
+		return -EACCES;
+	if (get_node_id(inode) != FUSE_ROOT_ID &&
+	    time_before_eq(jiffies, fi->i_time))
 		return 0;
 
 	return fuse_do_getattr(inode);
@@ -453,7 +481,7 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
 
-	if (!(fc->flags & FUSE_ALLOW_OTHER) && current->fsuid != fc->user_id)
+	if (!fuse_allow_task(fc, current))
 		return -EACCES;
 	else if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
 #ifdef KERNEL_2_6_10_PLUS
@@ -772,6 +800,15 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 	int err = fuse_lookup_iget(dir, entry, &inode);
 	if (err)
 		return ERR_PTR(err);
+	if (inode && S_ISDIR(inode->i_mode)) {
+		/* Don't allow creating an alias to a directory  */
+		struct dentry *alias = d_find_alias(inode);
+		if (alias && !(alias->d_flags & DCACHE_DISCONNECTED)) {
+			dput(alias);
+			iput(inode);
+			return ERR_PTR(-EIO);
+		}
+	}
 	return d_splice_alias(inode, entry);
 }
 #else /* KERNEL_2_6 */

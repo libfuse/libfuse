@@ -491,7 +491,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     char *d;
     char *fsname = NULL;
 
-    optbuf = malloc(strlen(opts) + 64);
+    optbuf = malloc(strlen(opts) + 128);
     if (!optbuf) {
         fprintf(stderr, "%s: failed to allocate memory\n", progname);
         return -1;
@@ -515,7 +515,8 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
             fsname[len - fsname_str_len] = '\0';
         } else if (!begins_with(s, "fd=") &&
                    !begins_with(s, "rootmode=") &&
-                   !begins_with(s, "user_id=")) {
+                   !begins_with(s, "user_id=") &&
+                   !begins_with(s, "group_id=")) {
             int on;
             int flag;
             int skip_option = 0;
@@ -561,7 +562,8 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
         free(optbuf);
         return -1;
     }
-    sprintf(d, "fd=%i,rootmode=%o,user_id=%i", fd, rootmode, getuid());
+    sprintf(d, "fd=%i,rootmode=%o,user_id=%i,group_id=%i",
+            fd, rootmode, getuid(), getgid());
     if (fsname == NULL) {
         fsname = strdup(dev);
         if (!fsname) {
