@@ -1,3 +1,9 @@
+2005-04-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Make fusermount work with fuse kernel modules not yet supporting
+	the "group_id" option (added for the purpose of stricter
+	permission checking).
+
 2005-04-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check for hard-linked directories in lookup.  This could cause

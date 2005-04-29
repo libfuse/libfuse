@@ -574,6 +574,11 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     }
 
     res = mount(fsname, mnt, type, flags, optbuf);
+    if (res == -1 && errno == EINVAL) {
+        /* It could be an old version not supporting group_id */
+        sprintf(d, "fd=%i,rootmode=%o,user_id=%i", fd, rootmode, getuid());
+        res = mount(fsname, mnt, type, flags, optbuf);
+    }
     if (res == -1) {
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
         free(fsname);
