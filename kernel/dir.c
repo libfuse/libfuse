@@ -433,24 +433,24 @@ int fuse_do_getattr(struct inode *inode)
 	return err;
 }
 
+/*
+ * Calling into a user-controlled filesystem gives the filesystem
+ * daemon ptrace-like capabilities over the requester process.  This
+ * means, that the filesystem daemon is able to record the exact
+ * filesystem operations performed, and can also control the behavior
+ * of the requester process in otherwise impossible ways.  For example
+ * it can delay the operation for arbitrary length of time allowing
+ * DoS against the requester.
+ *
+ * For this reason only those processes can call into the filesystem,
+ * for which the owner of the mount has ptrace privilege.  This
+ * excludes processes started by other users, suid or sgid processes.
+ */
 static int fuse_allow_task(struct fuse_conn *fc, struct task_struct *task)
 {
 	if (fc->flags & FUSE_ALLOW_OTHER)
 		return 1;
 
-	/* Calling into a user-controlled filesystem gives the
-	   filesystem daemon ptrace-like capabilities over the
-	   requester process.  This means, that the filesystem daemon
-	   is able to record the exact filesystem operations
-	   performed, and can also control the behavior of the
-	   requester process in otherwise impossible ways.  For
-	   example it can delay the operation for arbitrary length of
-	   time allowing DoS against the requester.
-
-	   For this reason only those processes can call into the
-	   filesystem, for which the owner of the mount has ptrace
-	   privilege.  This excludes processes started by other users,
-	   suid or sgid processes. */
 	if (task->euid == fc->user_id &&
 	    task->suid == fc->user_id &&
 	    task->uid == fc->user_id &&
