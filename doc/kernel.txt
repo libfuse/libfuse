@@ -95,7 +95,7 @@ How are requirements fulfilled?
         directory)
 
      2) Even if 1) is solved the mount owner can change the behavior
-        of other users' processes.  
+        of other users' processes.
 
          - It can slow down or indefinitely delay the execution of a
            filesystem operation creating a DoS against the user or the
@@ -127,7 +127,7 @@ config option.  If this config option is set, the mounting user can
 add the "allow_other" mount option which disables the check for other
 users' processes.
 
-Kernel - userspace interface 
+Kernel - userspace interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The following diagram shows how a filesystem operation (in this
