@@ -391,8 +391,8 @@ static void forget_node(struct fuse *f, nodeid_t nodeid, uint64_t version)
     struct node *node;
 
     pthread_mutex_lock(&f->lock);
-    node = get_node(f, nodeid);
-    if (node->version == version && nodeid != FUSE_ROOT_ID) {
+    node = get_node_nocheck(f, nodeid);
+    if (node && node->version == version && nodeid != FUSE_ROOT_ID) {
         node->version = 0;
         unhash_name(f, node);
         unref_node(f, node);

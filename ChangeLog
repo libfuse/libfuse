@@ -1,3 +1,8 @@
+2005-05-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix abort for out of order FORGET messages.  Again.  Spotted by
+	Franco Broi again.  Sorry :)
+
 2005-04-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.3-pre6
