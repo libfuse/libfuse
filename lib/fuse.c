@@ -68,6 +68,7 @@ struct node {
     nodeid_t parent;
     char *name;
     uint64_t version;
+    uint64_t nlookup;
     int open_count;
     int is_hidden;
 };
@@ -254,6 +255,10 @@ static int hash_name(struct fuse *f, struct node *node, nodeid_t parent,
 
 static void delete_node(struct fuse *f, struct node *node)
 {
+    if (f->flags & FUSE_DEBUG) {
+        printf("delete: %lu\n", node->nodeid);
+        fflush(stdout);
+    }
     assert(!node->name);
     unhash_id(f, node);
     free_node(node);
@@ -325,6 +330,7 @@ static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
         hash_id(f, node);
     }
     node->version = version;
+    node->nlookup ++;
  out_err:
     pthread_mutex_unlock(&f->lock);
     return node;
@@ -386,7 +392,23 @@ static char *get_path(struct fuse *f, nodeid_t nodeid)
     return get_path_name(f, nodeid, NULL);
 }
 
-static void forget_node(struct fuse *f, nodeid_t nodeid, uint64_t version)
+static void forget_node(struct fuse *f, nodeid_t nodeid, uint64_t nlookup)
+{
+    struct node *node;
+    if (nodeid == FUSE_ROOT_ID)
+        return;
+    pthread_mutex_lock(&f->lock);
+    node = get_node(f, nodeid);
+    assert(node->nlookup >= nlookup);
+    node->nlookup -= nlookup;
+    if (!node->nlookup) {
+        unhash_name(f, node);
+        unref_node(f, node);
+    }
+    pthread_mutex_unlock(&f->lock);
+}
+
+static void forget_node_old(struct fuse *f, nodeid_t nodeid, uint64_t version)
 {
     struct node *node;
 
@@ -398,7 +420,14 @@ static void forget_node(struct fuse *f, nodeid_t nodeid, uint64_t version)
         unref_node(f, node);
     }
     pthread_mutex_unlock(&f->lock);
+}
 
+static void cancel_lookup(struct fuse *f, nodeid_t nodeid, uint64_t version)
+{
+    if (f->major <= 6)
+        forget_node_old(f, nodeid, version);
+    else
+        forget_node(f, nodeid, 1);
 }
 
 static void remove_node(struct fuse *f, nodeid_t dir, const char *name)
@@ -658,7 +687,7 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     }
     res2 = send_reply(f, in, res, &arg, sizeof(arg));
     if (res == 0 && res2 == -ENOENT)
-        forget_node(f, arg.nodeid, in->unique);
+        cancel_lookup(f, arg.nodeid, in->unique);
 }
 
 static void do_forget(struct fuse *f, struct fuse_in_header *in,
@@ -666,10 +695,13 @@ static void do_forget(struct fuse *f, struct fuse_in_header *in,
 {
     if (f->flags & FUSE_DEBUG) {
         printf("FORGET %lu/%llu\n", (unsigned long) in->nodeid,
-               arg->version);
+               arg->nlookup);
         fflush(stdout);
     }
-    forget_node(f, in->nodeid, arg->version);
+    if (f->major <= 6)
+        forget_node_old(f, in->nodeid, arg->nlookup);
+    else
+        forget_node(f, in->nodeid, arg->nlookup);
 }
 
 static void do_getattr(struct fuse *f, struct fuse_in_header *in)
@@ -836,7 +868,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        forget_node(f, outarg.nodeid, in->unique);
+        cancel_lookup(f, outarg.nodeid, in->unique);
 }
 
 static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
@@ -865,7 +897,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        forget_node(f, outarg.nodeid, in->unique);
+        cancel_lookup(f, outarg.nodeid, in->unique);
 }
 
 static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
@@ -944,7 +976,7 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        forget_node(f, outarg.nodeid, in->unique);
+        cancel_lookup(f, outarg.nodeid, in->unique);
 
 }
 
@@ -1019,7 +1051,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     }
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
-        forget_node(f, outarg.nodeid, in->unique);
+        cancel_lookup(f, outarg.nodeid, in->unique);
 }
 
 static void do_open(struct fuse *f, struct fuse_in_header *in,
@@ -1482,6 +1514,9 @@ static void do_init(struct fuse *f, struct fuse_in_header *in,
 
     if (arg->major == 5) {
         f->major = 5;
+        f->minor = 1;
+    } else if (arg->major == 6) {
+        f->major = 6;
         f->minor = 1;
     } else {
         f->major = FUSE_KERNEL_VERSION;
@@ -2113,6 +2148,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     root->nodeid = FUSE_ROOT_ID;
     root->generation = 0;
     root->refctr = 1;
+    root->nlookup = 1;
     hash_id(f, root);
 
     f->owner = getuid();

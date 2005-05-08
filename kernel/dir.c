@@ -48,7 +48,6 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 		return 0;
 	else if (time_after(jiffies, entry->d_time)) {
 		int err;
-		int version;
 		struct fuse_entry_out outarg;
 		struct inode *inode = entry->d_inode;
 		struct fuse_inode *fi = get_fuse_inode(inode);
@@ -59,15 +58,19 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 
 		fuse_lookup_init(req, entry->d_parent->d_inode, entry, &outarg);
 		request_send_nonint(fc, req);
-		version = req->out.h.unique;
 		err = req->out.h.error;
+		if (!err) {
+			if (outarg.nodeid != get_node_id(inode)) {
+				fuse_send_forget(fc, req, outarg.nodeid, 1);
+				return 0;
+			}
+			fi->nlookup ++;
+		}
 		fuse_put_request(fc, req);
-		if (err || outarg.nodeid != get_node_id(inode) ||
-		    (outarg.attr.mode ^ inode->i_mode) & S_IFMT)
+		if (err || (outarg.attr.mode ^ inode->i_mode) & S_IFMT)
 			return 0;
 
 		fuse_change_attributes(inode, &outarg.attr);
-		inode->i_version = version;
 		entry->d_time = time_to_jiffies(outarg.entry_valid,
 						outarg.entry_valid_nsec);
 		fi->i_time = time_to_jiffies(outarg.attr_valid,
@@ -94,7 +97,6 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 			    struct inode **inodep)
 {
 	int err;
-	int version;
 	struct fuse_entry_out outarg;
 	struct inode *inode = NULL;
 	struct fuse_conn *fc = get_fuse_conn(dir);
@@ -109,13 +111,12 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 
 	fuse_lookup_init(req, dir, entry, &outarg);
 	request_send(fc, req);
-	version = req->out.h.unique;
 	err = req->out.h.error;
 	if (!err) {
 		inode = fuse_iget(dir->i_sb, outarg.nodeid, outarg.generation,
-				  &outarg.attr, version);
+				  &outarg.attr);
 		if (!inode) {
-			fuse_send_forget(fc, req, outarg.nodeid, version);
+			fuse_send_forget(fc, req, outarg.nodeid, 1);
 			return -ENOMEM;
 		}
 	}
@@ -154,7 +155,6 @@ static int create_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 	struct fuse_entry_out outarg;
 	struct inode *inode;
 	struct fuse_inode *fi;
-	int version;
 	int err;
 
 	req->in.h.nodeid = get_node_id(dir);
@@ -163,16 +163,15 @@ static int create_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 	req->out.args[0].size = sizeof(outarg);
 	req->out.args[0].value = &outarg;
 	request_send(fc, req);
-	version = req->out.h.unique;
 	err = req->out.h.error;
 	if (err) {
 		fuse_put_request(fc, req);
 		return err;
 	}
 	inode = fuse_iget(dir->i_sb, outarg.nodeid, outarg.generation,
-			  &outarg.attr, version);
+			  &outarg.attr);
 	if (!inode) {
-		fuse_send_forget(fc, req, outarg.nodeid, version);
+		fuse_send_forget(fc, req, outarg.nodeid, 1);
 		return -ENOMEM;
 	}
 	fuse_put_request(fc, req);

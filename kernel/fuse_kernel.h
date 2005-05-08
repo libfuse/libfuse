@@ -11,7 +11,7 @@
 #include <asm/types.h>
 
 /** Version number of this interface */
-#define FUSE_KERNEL_VERSION 6
+#define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
 #define FUSE_KERNEL_MINOR_VERSION 1
@@ -113,7 +113,7 @@ struct fuse_entry_out {
 };
 
 struct fuse_forget_in {
-	__u64	version;
+	__u64	nlookup;
 };
 
 struct fuse_attr_out {

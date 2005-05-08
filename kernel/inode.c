@@ -63,6 +63,7 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 	fi = get_fuse_inode(inode);
 	fi->i_time = jiffies - 1;
 	fi->nodeid = 0;
+	fi->nlookup = 0;
 	fi->forget_req = fuse_request_alloc();
 	if (!fi->forget_req) {
 		kmem_cache_free(fuse_inode_cachep, inode);
@@ -86,10 +87,10 @@ static void fuse_read_inode(struct inode *inode)
 }
 
 void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
-		      unsigned long nodeid, int version)
+		      unsigned long nodeid, u64 nlookup)
 {
 	struct fuse_forget_in *inarg = &req->misc.forget_in;
-	inarg->version = version;
+	inarg->nlookup = nlookup;
 	req->in.h.opcode = FUSE_FORGET;
 	req->in.h.nodeid = nodeid;
 	req->in.numargs = 1;
@@ -103,7 +104,7 @@ static void fuse_clear_inode(struct inode *inode)
 	if (inode->i_sb->s_flags & MS_ACTIVE) {
 		struct fuse_conn *fc = get_fuse_conn(inode);
 		struct fuse_inode *fi = get_fuse_inode(inode);
-		fuse_send_forget(fc, fi->forget_req, fi->nodeid, inode->i_version);
+		fuse_send_forget(fc, fi->forget_req, fi->nodeid, fi->nlookup);
 		fi->forget_req = NULL;
 	}
 }
@@ -181,9 +182,10 @@ static int fuse_inode_set(struct inode *inode, void *_nodeidp)
 }
 
 struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
-			int generation, struct fuse_attr *attr, int version)
+			int generation, struct fuse_attr *attr)
 {
 	struct inode *inode;
+	struct fuse_inode *fi;
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 	int retried = 0;
 
@@ -206,8 +208,9 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 		goto retry;
 	}
 
+	fi = get_fuse_inode(inode);
+	fi->nlookup ++;
 	fuse_change_attributes(inode, attr);
-	inode->i_version = version;
 	return inode;
 }
 #else
@@ -220,9 +223,10 @@ static int fuse_inode_eq(struct inode *inode, unsigned long ino, void *_nodeidp)
 }
 
 struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
-			int generation, struct fuse_attr *attr, int version)
+			int generation, struct fuse_attr *attr)
 {
 	struct inode *inode;
+	struct fuse_inode *fi;
 	int retried = 0;
 
  retry:
@@ -245,8 +249,9 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 		goto retry;
 	}
 
+	fi = get_fuse_inode(inode);
+	fi->nlookup ++;
 	fuse_change_attributes(inode, attr);
-	inode->i_version = version;
 	return inode;
 }
 #endif
@@ -523,7 +528,7 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 
 	attr.mode = mode;
 	attr.ino = FUSE_ROOT_ID;
-	return fuse_iget(sb, 1, 0, &attr, 0);
+	return fuse_iget(sb, 1, 0, &attr);
 }
 
 #ifdef KERNEL_2_6
