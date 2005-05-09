@@ -33,7 +33,7 @@
 	* Make checking of permission for other users more strict.  Now
 	the same privilege is required for the mount owner as for ptrace
 	on the process performing the filesystem operation.
-	
+
 2005-04-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.3-pre5
@@ -171,7 +171,7 @@
 	on unmount
 
 	* libfuse: add 'use_ino' option to help.  Patch by Valient Gough
-	
+
 2005-02-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Cleaned up directory reading (temporary file is not used)

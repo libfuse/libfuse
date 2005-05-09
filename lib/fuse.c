@@ -1626,7 +1626,7 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
         if (newlen > dh->needlen)
             return 1;
     }
-    
+
     newptr = realloc(dh->contents, newlen);
     if (!newptr) {
         dh->error = -ENOMEM;
@@ -1805,7 +1805,7 @@ void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 
     if ((f->flags & FUSE_ALLOW_ROOT) && in->uid != f->owner && in->uid != 0 &&
         in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
-        in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC && 
+        in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&
         in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
         in->opcode != FUSE_FSYNCDIR && in->opcode != FUSE_RELEASEDIR) {
         send_reply(f, in, -EACCES, NULL, 0);
@@ -2199,8 +2199,10 @@ void fuse_destroy(struct fuse *f)
         for (node = f->id_table[i]; node != NULL; node = node->id_next) {
             if (node->is_hidden) {
                 char *path = get_path(f, node->nodeid);
-                if (path)
+                if (path) {
                     f->op.unlink(path);
+                    free(path);
+                }
             }
         }
     }

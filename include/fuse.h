@@ -252,7 +252,7 @@ struct fuse_operations {
      * should use this.
      *
      * The filesystem may choose between two modes of operation:
-     * 
+     *
      * 1) The readdir implementation ignores the offset parameter, and
      * passes zero to the filler function's offset.  The filler
      * function will not return '1' (unless an error happens), so the
