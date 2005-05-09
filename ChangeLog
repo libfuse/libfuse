@@ -1,9 +1,13 @@
+2005-05-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.3-pre7
+
 2005-05-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Better fix for out of order FORGET messages.  Now the
 	LOOKUP/FORGET messages are balanced exactly (one FORGET can
 	balance many lookups), so the order no longer matters.  This
-	changes the ABI slightly, but the library remains backward
+	changes the kernel ABI slightly, but the library remains backward
 	compatible.
 
 2005-05-06  Miklos Szeredi <miklos@szeredi.hu>

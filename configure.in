@@ -1,4 +1,4 @@
-AC_INIT(fuse, 2.3-pre6)
+AC_INIT(fuse, 2.3-pre7)
 AM_INIT_AUTOMAKE
 AM_CONFIG_HEADER(include/config.h)
 
