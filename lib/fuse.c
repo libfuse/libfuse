@@ -6,7 +6,6 @@
     See the file COPYING.LIB
 */
 
-#include <config.h>
 #include "fuse_i.h"
 #include "fuse_compat.h"
 #include "fuse_kernel.h"
@@ -674,6 +673,7 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
     struct fuse_entry_out arg;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -685,6 +685,7 @@ static void do_lookup(struct fuse *f, struct fuse_in_header *in, char *name)
             res = lookup_path(f, in->nodeid, in->unique, name, path, &arg);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     res2 = send_reply(f, in, res, &arg, sizeof(arg));
     if (res == 0 && res2 == -ENOENT)
         cancel_lookup(f, arg.nodeid, in->unique);
@@ -712,6 +713,7 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
     struct fuse_attr_out arg;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -719,6 +721,7 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
             res = f->op.getattr(path, &buf);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
 
     if (res == 0) {
         memset(&arg, 0, sizeof(struct fuse_attr_out));
@@ -792,6 +795,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
     struct fuse_attr_out outarg;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -821,6 +825,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
         }
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, &outarg, sizeof(outarg));
 }
 
@@ -831,6 +836,7 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
     char *path;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -838,6 +844,7 @@ static void do_readlink(struct fuse *f, struct fuse_in_header *in)
             res = f->op.readlink(path, link, sizeof(link));
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     link[PATH_MAX] = '\0';
     send_reply(f, in, res, link, res == 0 ? strlen(link) : 0);
 }
@@ -852,6 +859,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -866,6 +874,7 @@ static void do_mknod(struct fuse *f, struct fuse_in_header *in,
         }
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
         cancel_lookup(f, outarg.nodeid, in->unique);
@@ -881,6 +890,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -895,6 +905,7 @@ static void do_mkdir(struct fuse *f, struct fuse_in_header *in,
         }
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
         cancel_lookup(f, outarg.nodeid, in->unique);
@@ -906,6 +917,7 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
     char *path;
 
     res = -ENOENT;
+    pthread_rwlock_wrlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -925,6 +937,7 @@ static void do_unlink(struct fuse *f, struct fuse_in_header *in, char *name)
         }
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -934,6 +947,7 @@ static void do_rmdir(struct fuse *f, struct fuse_in_header *in, char *name)
     char *path;
 
     res = -ENOENT;
+    pthread_rwlock_wrlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -948,6 +962,7 @@ static void do_rmdir(struct fuse *f, struct fuse_in_header *in, char *name)
         }
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -960,6 +975,7 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, in->nodeid, name);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -974,6 +990,7 @@ static void do_symlink(struct fuse *f, struct fuse_in_header *in, char *name,
         }
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
         cancel_lookup(f, outarg.nodeid, in->unique);
@@ -992,6 +1009,7 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
     char *newpath;
 
     res = -ENOENT;
+    pthread_rwlock_wrlock(&f->tree_lock);
     oldpath = get_path_name(f, olddir, oldname);
     if (oldpath != NULL) {
         newpath = get_path_name(f, newdir, newname);
@@ -1016,6 +1034,7 @@ static void do_rename(struct fuse *f, struct fuse_in_header *in,
         }
         free(oldpath);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -1030,6 +1049,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
     struct fuse_entry_out outarg;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     oldpath = get_path(f, arg->oldnodeid);
     if (oldpath != NULL) {
         newpath =  get_path_name(f, in->nodeid, name);
@@ -1049,6 +1069,7 @@ static void do_link(struct fuse *f, struct fuse_in_header *in,
         }
         free(oldpath);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     res2 = send_reply(f, in, res, &outarg, sizeof(outarg));
     if (res == 0 && res2 == -ENOENT)
         cancel_lookup(f, outarg.nodeid, in->unique);
@@ -1066,6 +1087,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
     memset(&fi, 0, sizeof(fi));
     fi.flags = arg->flags;
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -1104,6 +1126,7 @@ static void do_open(struct fuse *f, struct fuse_in_header *in,
 
     if (path)
         free(path);
+    pthread_rwlock_unlock(&f->tree_lock);
 }
 
 static void do_flush(struct fuse *f, struct fuse_in_header *in,
@@ -1116,6 +1139,7 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in,
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -1127,6 +1151,7 @@ static void do_flush(struct fuse *f, struct fuse_in_header *in,
             res = f->op.flush(path, &fi);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -1149,6 +1174,7 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
     unlink_hidden = (node->is_hidden && !node->open_count);
     pthread_mutex_unlock(&f->lock);
 
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (f->flags & FUSE_DEBUG) {
         printf("RELEASE[%lu] flags: 0x%x\n", fi.fh, fi.flags);
@@ -1166,6 +1192,7 @@ static void do_release(struct fuse *f, struct fuse_in_header *in,
 
     if (path)
         free(path);
+    pthread_rwlock_unlock(&f->tree_lock);
 
     send_reply(f, in, 0, NULL, 0);
 }
@@ -1189,6 +1216,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
     fi.fh = arg->fh;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -1202,6 +1230,7 @@ static void do_read(struct fuse *f, struct fuse_in_header *in,
             res = f->op.read(path, buf, arg->size, arg->offset, &fi);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
 
     size = 0;
     if (res >= 0) {
@@ -1231,6 +1260,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
     fi.writepage = arg->write_flags & 1;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -1245,6 +1275,7 @@ static void do_write(struct fuse *f, struct fuse_in_header *in,
             res = f->op.write(path, PARAM(arg), arg->size, arg->offset, &fi);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
 
     memset(&outarg, 0, sizeof(outarg));
     if (res >= 0) {
@@ -1323,6 +1354,7 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
     fi.fh = inarg->fh;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
@@ -1334,6 +1366,7 @@ static void do_fsync(struct fuse *f, struct fuse_in_header *in,
             res = f->op.fsync(path, inarg->fsync_flags & 1, &fi);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -1346,6 +1379,7 @@ static void do_setxattr(struct fuse *f, struct fuse_in_header *in,
     unsigned char *value = name + strlen(name) + 1;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -1353,6 +1387,7 @@ static void do_setxattr(struct fuse *f, struct fuse_in_header *in,
             res = f->op.setxattr(path, name, value, arg->size, arg->flags);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -1363,6 +1398,7 @@ static int common_getxattr(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -1370,6 +1406,7 @@ static int common_getxattr(struct fuse *f, struct fuse_in_header *in,
             res = f->op.getxattr(path, name, value, size);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     return res;
 }
 
@@ -1425,6 +1462,7 @@ static int common_listxattr(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -1432,6 +1470,7 @@ static int common_listxattr(struct fuse *f, struct fuse_in_header *in,
             res = f->op.listxattr(path, list, size);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     return res;
 }
 
@@ -1484,6 +1523,7 @@ static void do_removexattr(struct fuse *f, struct fuse_in_header *in,
     char *path;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -1491,6 +1531,7 @@ static void do_removexattr(struct fuse *f, struct fuse_in_header *in,
             res = f->op.removexattr(path, name);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 
@@ -1569,6 +1610,7 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
         fi.flags = arg->flags;
 
         res = -ENOENT;
+        pthread_rwlock_rdlock(&f->tree_lock);
         path = get_path(f, in->nodeid);
         if (path != NULL) {
             res = f->op.opendir(path, &fi);
@@ -1592,6 +1634,7 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
             free(dh);
         }
         free(path);
+        pthread_rwlock_unlock(&f->tree_lock);
     } else
         send_reply(f, in, 0, &outarg, SIZEOF_COMPAT(f, fuse_open_out));
 }
@@ -1674,6 +1717,7 @@ static int readdir_fill(struct fuse *f, struct fuse_in_header *in,
                         struct fuse_read_in *arg, struct fuse_dirhandle *dh)
 {
     int err = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     char *path = get_path(f, in->nodeid);
     if (path != NULL) {
         struct fuse_file_info fi;
@@ -1697,6 +1741,7 @@ static int readdir_fill(struct fuse *f, struct fuse_in_header *in,
             dh->filled = 0;
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     return err;
 }
 
@@ -1742,9 +1787,11 @@ static void do_releasedir(struct fuse *f, struct fuse_in_header *in,
         memset(&fi, 0, sizeof(fi));
         fi.fh = dh->fh;
 
+        pthread_rwlock_rdlock(&f->tree_lock);
         path = get_path(f, in->nodeid);
         f->op.releasedir(path ? path : "-", &fi);
         free(path);
+        pthread_rwlock_unlock(&f->tree_lock);
     }
     pthread_mutex_lock(&dh->lock);
     pthread_mutex_unlock(&dh->lock);
@@ -1766,6 +1813,7 @@ static void do_fsyncdir(struct fuse *f, struct fuse_in_header *in,
     fi.fh = dh->fh;
 
     res = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, in->nodeid);
     if (path != NULL) {
         res = -ENOSYS;
@@ -1773,6 +1821,7 @@ static void do_fsyncdir(struct fuse *f, struct fuse_in_header *in,
             res = f->op.fsyncdir(path, inarg->fsync_flags & 1, &fi);
         free(path);
     }
+    pthread_rwlock_unlock(&f->tree_lock);
     send_reply(f, in, res, NULL, 0);
 }
 

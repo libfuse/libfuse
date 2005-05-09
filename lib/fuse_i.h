@@ -6,6 +6,10 @@
     See the file COPYING.LIB.
 */
 
+/* For pthread_rwlock_t */
+#define _GNU_SOURCE
+
+#include <config.h>
 #include "fuse.h"
 #include <pthread.h>
 
@@ -25,6 +29,7 @@ struct fuse {
     unsigned int hidectr;
     pthread_mutex_t lock;
     pthread_mutex_t worker_lock;
+    pthread_rwlock_t tree_lock;
     int numworker;
     int numavail;
     volatile int exited;
