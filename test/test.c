@@ -3,19 +3,29 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <errno.h>
+#include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
 
 static char testfile[1024];
 static char testfile2[1024];
+static char testdir[1024];
+static char testdir2[1024];
 static char testname[256];
+static char testdata[] = "abcdefghijklmnopqrstuvwxyz";
+static const char *testdir_files[] = { "f1", "f2", NULL};
 static char zerodata[4096];
+static int testdatalen = sizeof(testdata) - 1;
+
+#define MAX_ENTRIES 1024
 
 static void test_perror(const char *func, const char *msg)
 {
-    fprintf(stderr, "[%s] %s %s: %s\n", testname, func, msg, strerror(errno));
+    fprintf(stderr, "[%s] %s() - %s: %s\n", testname, func, msg,
+            strerror(errno));
 }
 
 static void test_error(const char *func, const char *msg, ...)
@@ -27,7 +37,7 @@ static void start_test(const char *fmt, ...)
 static void test_error(const char *func, const char *msg, ...)
 {
     va_list ap;
-    fprintf(stderr, "[%s] %s ", testname, func);
+    fprintf(stderr, "[%s] %s() - ", testname, func);
     va_start(ap, msg);
     vfprintf(stderr, msg, ap);
     va_end(ap);
@@ -60,6 +70,66 @@ static int check_size(const char *path, int len)
     }
     if (stbuf.st_size != len) {
         ERROR("length %u instead of %u", (int) stbuf.st_size, (int) len);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_type(const char *path, mode_t type)
+{
+    struct stat stbuf;
+    int res = lstat(path, &stbuf);
+    if (res == -1) {
+        PERROR("lstat");
+        return -1;
+    }
+    if ((stbuf.st_mode & S_IFMT) != type) {
+        ERROR("type 0%o instead of 0%o", stbuf.st_mode & S_IFMT, type);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_mode(const char *path, mode_t mode)
+{
+    struct stat stbuf;
+    int res = lstat(path, &stbuf);
+    if (res == -1) {
+        PERROR("lstat");
+        return -1;
+    }
+    if ((stbuf.st_mode & 07777) != mode) {
+        ERROR("mode 0%o instead of 0%o", stbuf.st_mode & 07777, mode);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_nlink(const char *path, nlink_t nlink)
+{
+    struct stat stbuf;
+    int res = lstat(path, &stbuf);
+    if (res == -1) {
+        PERROR("lstat");
+        return -1;
+    }
+    if (stbuf.st_nlink != nlink) {
+        ERROR("nlink %i instead of %i", stbuf.st_nlink, nlink);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_nonexist(const char *path)
+{
+    struct stat stbuf;
+    int res = lstat(path, &stbuf);
+    if (res == 0) {
+        ERROR("file should not exist");
+        return -1;
+    }
+    if (errno != ENOENT) {
+        ERROR("file should not exist: %s", strerror(errno));
         return -1;
     }
     return 0;
@@ -109,6 +179,77 @@ static int check_data(const char *path, const char *data, int offset,
     return 0;
 }
 
+static int check_dir_contents(const char *path, const char **contents)
+{
+    int i;
+    int res;
+    int err = 0;;
+    int found[MAX_ENTRIES];
+    const char *cont[MAX_ENTRIES];
+    DIR *dp;
+
+    for (i = 0; contents[i]; i++) {
+        assert(i < MAX_ENTRIES - 3);
+        found[i] = 0;
+        cont[i] = contents[i];
+    }
+    found[i] = 0;
+    cont[i++] = ".";
+    found[i] = 0;
+    cont[i++] = "..";
+    cont[i] = NULL;
+
+    dp = opendir(path);
+    if (dp == NULL) {
+        PERROR("opendir");
+        return -1;
+    }
+    memset(found, 0, sizeof(found));
+    while(1) {
+        struct dirent *de;
+        errno = 0;
+        de = readdir(dp);
+        if (de == NULL) {
+            if (errno) {
+                PERROR("readdir");
+                closedir(dp);
+                return -1;
+            }
+            break;
+        }
+        for (i = 0; cont[i] != NULL; i++) {
+            assert(i < MAX_ENTRIES);
+            if (strcmp(cont[i], de->d_name) == 0) {
+                if (found[i]) {
+                    ERROR("duplicate entry <%s>", de->d_name);
+                    err--;
+                } else
+                    found[i] = 1;
+                break;
+            }
+        }
+        if (!cont[i]) {
+            ERROR("unexpected entry <%s>", de->d_name);
+            err --;
+        }
+    }
+    for (i = 0; cont[i] != NULL; i++) {
+        if (!found[i]) {
+            ERROR("missing entry <%s>", cont[i]);
+            err--;
+        }
+    }
+    res = closedir(dp);
+    if (res == -1) {
+        PERROR("closedir");
+        return -1;
+    }
+    if (err)
+        return -1;
+
+    return 0;
+}
+
 static int create_file(const char *path, const char *data, int len)
 {
     int res;
@@ -136,6 +277,15 @@ static int create_file(const char *path, const char *data, int len)
         PERROR("close");
         return -1;
     }
+    res = check_type(path, S_IFREG);
+    if (res == -1)
+        return -1;
+    res = check_mode(path, 0644);
+    if (res == -1)
+        return -1;
+    res = check_nlink(path, 1);
+    if (res == -1)
+        return -1;
     res = check_size(path, len);
     if (res == -1)
         return -1;
@@ -147,10 +297,68 @@ static int create_file(const char *path, const char *data, int len)
     return 0;
 }
 
+static int cleanup_dir(const char *path, const char **dir_files, int quiet)
+{
+    int i;
+    int err = 0;
+
+    for (i = 0; dir_files[i]; i++) {
+        int res;
+        char fpath[1024];
+        sprintf(fpath, "%s/%s", path, dir_files[i]);
+        res = unlink(fpath);
+        if (res == -1 && !quiet) {
+            PERROR("unlink");
+            err --;
+        }
+    }
+    if (err)
+        return -1;
+
+    return 0;
+}
+
+static int create_dir(const char *path, const char **dir_files)
+{
+    int res;
+    int i;
+
+    rmdir(path);
+    res = mkdir(path, 0755);
+    if (res == -1) {
+        PERROR("mkdir");
+        return -1;
+    }
+    res = check_type(path, S_IFDIR);
+    if (res == -1)
+        return -1;
+    res = check_mode(path, 0755);
+    if (res == -1)
+        return -1;
+    
+    for (i = 0; dir_files[i]; i++) {
+        char fpath[1024];
+        sprintf(fpath, "%s/%s", path, dir_files[i]);
+        res = create_file(fpath, "", 0);
+        if (res == -1) {
+            cleanup_dir(path, dir_files, 1);
+            return -1;
+        }
+    }
+    res = check_dir_contents(path, dir_files);
+    if (res == -1) {
+        cleanup_dir(path, dir_files, 1);
+        return -1;
+    }
+
+    return 0;
+}
+
+
 int test_truncate(int len)
 {
-    const char *data = "abcdefghijklmnopqrstuvwxyz";
-    int datalen = strlen(data); 
+    const char *data = testdata;
+    int datalen = testdatalen;
     int res;
 
     start_test("truncate(%u)", (int) len);
@@ -181,6 +389,67 @@ int test_truncate(int len)
                 return -1;
         }
     }
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile2);
+    if (res == -1)
+        return -1;
+
+    success();
+    return 0;
+}
+
+static int test_create(void)
+{
+    const char *data = testdata;
+    int datalen = testdatalen;
+    int err = 0;
+    int res;
+    int fd;
+
+    start_test("create");
+    unlink(testfile);
+    fd = creat(testfile, 0644);
+    if (fd == -1) {
+        PERROR("creat");
+        return -1;
+    }
+    res = write(fd, data, datalen);
+    if (res == -1) {
+        PERROR("write");
+        close(fd);
+        return -1;
+    }
+    if (res != datalen) {
+        ERROR("write is short: %u instead of %u", res, datalen);
+        close(fd);
+        return -1;
+    }
+    res = close(fd);
+    if (res == -1) {
+        PERROR("close");
+        return -1;
+    }
+    res = check_type(testfile, S_IFREG);
+    if (res == -1)
+        return -1;
+    err += check_mode(testfile, 0644);
+    err += check_nlink(testfile, 1);
+    err += check_size(testfile, datalen);
+    err += check_data(testfile, data, 0, datalen);
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile);
+    if (res == -1)
+        return -1;
+    if (err)
+        return -1;
 
     success();
     return 0;
@@ -189,9 +458,10 @@ int test_truncate(int len)
 static int test_symlink(void)
 {
     char buf[1024];
-    const char *data = "abcdefghijklmnopqrstuvwxyz";
-    int datalen = strlen(data); 
+    const char *data = testdata;
+    int datalen = testdatalen;
     int linklen = strlen(testfile);
+    int err = 0;
     int res;
 
     start_test("symlink");
@@ -205,40 +475,228 @@ static int test_symlink(void)
         PERROR("symlink");
         return -1;
     }
+    res = check_type(testfile2, S_IFLNK);
+    if (res == -1)
+        return -1;
+    err += check_mode(testfile2, 0777);
+    err += check_nlink(testfile2, 1);
     res = readlink(testfile2, buf, sizeof(buf));
     if (res == -1) {
         PERROR("readlink");
-        return -1;
+        err--;
     }
     if (res != linklen) {
         ERROR("short readlink: %u instead of %u", res, linklen);
-        return -1;
+        err--;
     }
     if (memcmp(buf, testfile, linklen) != 0) {
         ERROR("link mismatch");
+        err--;
+    }
+    err += check_size(testfile2, datalen);
+    err += check_data(testfile2, data, 0, datalen);
+    res = unlink(testfile2);
+    if (res == -1) {
+        PERROR("unlink");
         return -1;
     }
-
-    res = check_size(testfile2, datalen);
+    res = check_nonexist(testfile2);
     if (res == -1)
         return -1;
-    
-    res = check_data(testfile2, data, 0, datalen);
-    if (res == -1)
+    if (err)
         return -1;
 
     success();
     return 0;
 }
 
-int main(void)
+static int test_rename_file(void)
 {
-    sprintf(testfile, "/tmp/fusetest/testfile");
-    sprintf(testfile2, "/tmp/fusetest/testfile2");
-    test_symlink();
-    test_truncate(0);
-    test_truncate(10);
-    test_truncate(26);
-    test_truncate(100);
+    const char *data = testdata;
+    int datalen = testdatalen;
+    int err = 0;
+    int res;
+
+    start_test("rename file");
+    res = create_file(testfile, data, datalen);
+    if (res == -1)
+        return -1;
+    
+    unlink(testfile2);
+    res = rename(testfile, testfile2);
+    if (res == -1) {
+        PERROR("rename");
+        return -1;
+    }
+    res = check_nonexist(testfile);
+    if (res == -1)
+        return -1;
+    res = check_type(testfile2, S_IFREG);
+    if (res == -1)
+        return -1;
+    err += check_mode(testfile2, 0644);
+    err += check_nlink(testfile2, 1);
+    err += check_size(testfile2, datalen);
+    err += check_data(testfile2, data, 0, datalen);
+    res = unlink(testfile2);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile2);
+    if (res == -1)
+        return -1;
+    if (err)
+        return -1;
+
+    success();
+    return 0;
+}
+
+static int test_rename_dir(void)
+{
+    int err = 0;
+    int res;
+
+    start_test("rename dir");
+    res = create_dir(testdir, testdir_files);
+    if (res == -1)
+        return -1;
+    
+    rmdir(testdir2);
+    res = rename(testdir, testdir2);
+    if (res == -1) {
+        PERROR("rename");
+        cleanup_dir(testdir, testdir_files, 1);
+        return -1;
+    }
+    res = check_nonexist(testdir);
+    if (res == -1) {
+        cleanup_dir(testdir, testdir_files, 1);
+        return -1;
+    }
+    res = check_type(testdir2, S_IFDIR);
+    if (res == -1) {
+        cleanup_dir(testdir2, testdir_files, 1);
+        return -1;
+    }
+    err += check_mode(testdir2, 0755);
+    err += check_dir_contents(testdir2, testdir_files);
+    err += cleanup_dir(testdir2, testdir_files, 0);
+    res = rmdir(testdir2);
+    if (res == -1) {
+        PERROR("rmdir");
+        return -1;
+    }
+    res = check_nonexist(testdir2);
+    if (res == -1)
+        return -1;
+    if (err)
+        return -1;
+
+    success();
+    return 0;
+}
+
+int test_mkfifo(void)
+{
+    int res;
+    int err = 0;
+
+    start_test("mkfifo");
+    unlink(testfile);
+    res = mkfifo(testfile, 0644);
+    if (res == -1) {
+        PERROR("mkfifo");
+        return -1;
+    }
+    res = check_type(testfile, S_IFIFO);
+    if (res == -1)
+        return -1;
+    err += check_mode(testfile, 0644);
+    err += check_nlink(testfile, 1);
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile);
+    if (res == -1)
+        return -1;
+    if (err)
+        return -1;
+
+    success();
+    return 0;
+}
+
+int test_mkdir(void)
+{
+    int res;
+    int err = 0;
+    const char *dir_contents[] = {NULL};
+
+    start_test("mkdir");
+    rmdir(testdir);
+    res = mkdir(testdir, 0755);
+    if (res == -1) {
+        PERROR("mkdir");
+        return -1;
+    }
+    res = check_type(testdir, S_IFDIR);
+    if (res == -1)
+        return -1;
+    err += check_mode(testdir, 0755);
+    err += check_nlink(testdir, 2);
+    err += check_dir_contents(testdir, dir_contents);
+    res = rmdir(testdir);
+    if (res == -1) {
+        PERROR("rmdir");
+        return -1;
+    }
+    res = check_nonexist(testdir);
+    if (res == -1)
+        return -1;
+    if (err)
+        return -1;
+
+    success();
+    return 0;
+}
+
+int main(int argc, char *argv[])
+{
+    const char *basepath;
+    int err = 0;
+
+    if (argc != 2) {
+        fprintf(stderr, "usage: %s testdir\n", argv[0]);
+        return 1;
+    }
+    basepath = argv[1];
+    assert(strlen(basepath) < 512);
+
+    sprintf(testfile, "%s/testfile", basepath);
+    sprintf(testfile2, "%s/testfile2", basepath);
+    sprintf(testdir, "%s/testdir", basepath);
+    sprintf(testdir2, "%s/testdir2", basepath);
+    err += test_create();
+    err += test_symlink();
+    err += test_mkfifo();
+    err += test_mkdir();
+    err += test_rename_file();
+    err += test_rename_dir();
+    err += test_truncate(0);
+    err += test_truncate(testdatalen / 2);
+    err += test_truncate(testdatalen);
+    err += test_truncate(testdatalen + 100);
+    unlink(testfile);
+    unlink(testfile2);
+    rmdir(testdir);
+    rmdir(testdir2);
+
+    if (err)
+        return 1;
+
     return 0;
 }
