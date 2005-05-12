@@ -1,5 +1,9 @@
 2005-05-12  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.3-rc1
+
+2005-05-12  Miklos Szeredi <miklos@szeredi.hu>
+
 	* File save in krusader and other editors doesn't work with sshfs,
 	because open() is interrupted by a periodic signal, and open()
 	restarts forever, without any progress.  This could just be fixed
