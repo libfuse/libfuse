@@ -1,3 +1,15 @@
+2005-05-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* File save in krusader and other editors doesn't work with sshfs,
+	because open() is interrupted by a periodic signal, and open()
+	restarts forever, without any progress.  This could just be fixed
+	in open(), but the problem is more generic: if signals are
+	received more often than the filesystem can get the request to
+	userspace, it will never finish.  This is probably only a
+	theoretical problem, nevertheless I'm removing the possibility to
+	interrupt requests with anything other than SIGKILL, even before
+	being sent to userspace.  Bugreport by Eduard Czimbalmos.
+
 2005-05-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: add "tree_lock" rwlock, that is locked for write in

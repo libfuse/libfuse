@@ -24,9 +24,6 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 	struct fuse_open_out outarg;
 	struct fuse_file *ff;
 	int err;
-	/* Restarting the syscall is not allowed if O_CREAT and O_EXCL
-	   are both set, because creation will fail on the restart */
-	int excl = (file->f_flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL);
 
 	err = generic_file_open(inode, file);
 	if (err)
@@ -40,12 +37,9 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 		 	return err;
 	}
 
-	if (excl)
-		req = fuse_get_request_nonint(fc);
-	else
-		req = fuse_get_request(fc);
+	req = fuse_get_request(fc);
 	if (!req)
-		return excl ? -EINTR : -ERESTARTSYS;
+		return -EINTR;
 
 	err = -ENOMEM;
 	ff = kmalloc(sizeof(struct fuse_file), GFP_KERNEL);
@@ -69,10 +63,7 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 	req->out.numargs = 1;
 	req->out.args[0].size = sizeof(outarg);
 	req->out.args[0].value = &outarg;
-	if (excl)
-		request_send_nonint(fc, req);
-	else
-		request_send(fc, req);
+	request_send(fc, req);
 	err = req->out.h.error;
 	if (!err && !(fc->flags & FUSE_KERNEL_CACHE))
 #ifdef KERNEL_2_6
@@ -137,7 +128,7 @@ static int fuse_flush(struct file *file)
 	if (fc->no_flush)
 		return 0;
 
-	req = fuse_get_request_nonint(fc);
+	req = fuse_get_request(fc);
 	if (!req)
 		return -EINTR;
 
@@ -150,7 +141,7 @@ static int fuse_flush(struct file *file)
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(inarg);
 	req->in.args[0].value = &inarg;
-	request_send_nonint(fc, req);
+	request_send(fc, req);
 	err = req->out.h.error;
 	fuse_put_request(fc, req);
 	if (err == -ENOSYS) {
@@ -175,7 +166,7 @@ int fuse_fsync_common(struct file *file, struct dentry *de, int datasync,
 
 	req = fuse_get_request(fc);
 	if (!req)
-		return -ERESTARTSYS;
+		return -EINTR;
 
 	memset(&inarg, 0, sizeof(inarg));
 	inarg.fh = ff->fh;
@@ -228,7 +219,7 @@ size_t fuse_send_read_common(struct fuse_req *req, struct file *file,
 	req->out.argvar = 1;
 	req->out.numargs = 1;
 	req->out.args[0].size = count;
-	request_send_nonint(fc, req);
+	request_send(fc, req);
 	return req->out.args[0].size;
 }
 
@@ -244,7 +235,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 	struct inode *inode = page->mapping->host;
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	loff_t pos = (loff_t) page->index << PAGE_CACHE_SHIFT;
-	struct fuse_req *req = fuse_get_request_nonint(fc);
+	struct fuse_req *req = fuse_get_request(fc);
 	int err = -EINTR;
 	if (!req)
 		goto out;
@@ -318,7 +309,7 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
 	int err;
 	data.file = file;
 	data.inode = inode;
-	data.req = fuse_get_request_nonint(fc);
+	data.req = fuse_get_request(fc);
 	if (!data.req)
 		return -EINTR;
 
@@ -411,7 +402,7 @@ static int fuse_file_bigread(struct file *file, struct inode *inode,
 
 	req = fuse_get_request(fc);
 	if (!req)
-		return -ERESTARTSYS;
+		return -EINTR;
 
 	for (; starti < endi; starti = nexti) {
 		nexti = starti + (FUSE_BLOCK_SIZE >> PAGE_CACHE_SHIFT);
@@ -452,7 +443,7 @@ static size_t fuse_send_write(struct fuse_req *req, struct file *file,
 	req->out.numargs = 1;
 	req->out.args[0].size = sizeof(struct fuse_write_out);
 	req->out.args[0].value = &outarg;
-	request_send_nonint(fc, req);
+	request_send(fc, req);
 	return outarg.size;
 }
 
@@ -472,7 +463,7 @@ static int fuse_commit_write(struct file *file, struct page *page,
 	struct inode *inode = page->mapping->host;
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	loff_t pos = ((loff_t) page->index << PAGE_CACHE_SHIFT) + offset;
-	struct fuse_req *req = fuse_get_request_nonint(fc);
+	struct fuse_req *req = fuse_get_request(fc);
 	if (!req)
 		return -EINTR;
 
@@ -546,7 +537,7 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 	ssize_t res = 0;
 	struct fuse_req *req = fuse_get_request(fc);
 	if (!req)
-		return -ERESTARTSYS;
+		return -EINTR;
 
 	while (count) {
 		size_t tmp;
