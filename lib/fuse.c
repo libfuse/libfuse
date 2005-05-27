@@ -37,10 +37,8 @@
 /** Only allow root or the owner to access the filesystem */
 #define FUSE_ALLOW_ROOT  (1 << 4)
 
-#define FUSE_KERNEL_MINOR_VERSION_NEED 1
-#define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
-#define FUSE_VERSION_FILE_NEW "/sys/fs/fuse/version"
-#define FUSE_DEV_OLD "/proc/fs/fuse/dev"
+/** Make a best effort to fill in inode number in a readdir **/
+#define FUSE_READDIR_INO (1 << 5)
 
 #define FUSE_MAX_PATH 4096
 #define PARAM_T(inarg, type) (((char *)(inarg)) + sizeof(type))
@@ -82,6 +80,7 @@ struct fuse_dirhandle {
     int filled;
     unsigned long fh;
     int error;
+    struct node *node;
 };
 
 struct fuse_cmd {
@@ -1597,6 +1596,11 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
     dh->contents = NULL;
     dh->len = 0;
     dh->filled = 0;
+    if (f->flags & FUSE_READDIR_INO) {
+        pthread_mutex_lock(&f->lock);
+        dh->node = get_node(f, in->nodeid);
+        pthread_mutex_unlock(&f->lock);
+    }
     mutex_init(&dh->lock);
 
     memset(&outarg, 0, sizeof(outarg));
@@ -1649,8 +1653,17 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
     unsigned newlen;
     unsigned char *newptr;
 
-    if (!(dh->fuse->flags & FUSE_USE_INO))
+    if (!(dh->fuse->flags & FUSE_USE_INO)) {
         ino = (ino_t) -1;
+        if (dh->fuse->flags & FUSE_READDIR_INO) {
+            struct node *node;
+            pthread_mutex_lock(&dh->fuse->lock);
+            node = lookup_node(dh->fuse, dh->node->nodeid, name);
+            if (node)
+                ino  = (ino_t) node->nodeid;
+            pthread_mutex_unlock(&dh->fuse->lock);
+        }
+    }
 
     if (namelen > FUSE_NAME_MAX)
         namelen = FUSE_NAME_MAX;
@@ -2097,7 +2110,8 @@ int fuse_is_lib_option(const char *opt)
     if (strcmp(opt, "debug") == 0 ||
         strcmp(opt, "hard_remove") == 0 ||
         strcmp(opt, "use_ino") == 0 ||
-        strcmp(opt, "allow_root") == 0)
+        strcmp(opt, "allow_root") == 0 ||
+        strcmp(opt, "readdir_ino") == 0)
         return 1;
     else
         return 0;
@@ -2124,6 +2138,8 @@ static int parse_lib_opts(struct fuse *f, const char *opts)
                 f->flags |= FUSE_USE_INO;
             else if (strcmp(opt, "allow_root") == 0)
                 f->flags |= FUSE_ALLOW_ROOT;
+            else if (strcmp(opt, "readdir_ino") == 0)
+                f->flags |= FUSE_READDIR_INO;
             else
                 fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
         }

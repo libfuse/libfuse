@@ -1,3 +1,10 @@
+2005-05-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add "readdir_ino" mount option, which tries to fill in the d_ino
+	field in struct dirent.  This mount option is ignored if "use_ino"
+	is used.  It helps some programs (e.g. 'pwd' used over NFS from a
+	non-Linux OS).  Patch by David Shaw.
+
 2005-05-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.3-rc1
