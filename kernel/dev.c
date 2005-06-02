@@ -563,7 +563,7 @@ static int fuse_copy_pages(struct fuse_copy_state *cs, unsigned nbytes,
 	unsigned offset = req->page_offset;
 	unsigned count = min(nbytes, (unsigned) PAGE_SIZE - offset);
 
-	for (i = 0; i < req->num_pages && nbytes; i++) {
+	for (i = 0; i < req->num_pages && (nbytes || zeroing); i++) {
 		struct page *page = req->pages[i];
 		int err = fuse_copy_page(cs, page, offset, count, zeroing);
 		if (err)

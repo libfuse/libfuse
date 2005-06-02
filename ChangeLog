@@ -1,3 +1,11 @@
+2005-06-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix serious information leak: if the filesystem returns a short
+	byte count to a read request, and there are non-zero number of
+	pages which are not filled at all, these pages will not be zeroed.
+	Hence the user can read out previous memory contents.  Found by
+	Sven Tantau.
+
 2005-05-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add "readdir_ino" mount option, which tries to fill in the d_ino
