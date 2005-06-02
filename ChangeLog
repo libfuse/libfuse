@@ -1,5 +1,9 @@
 2005-06-02  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.3.0
+
+2005-06-02  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Fix serious information leak: if the filesystem returns a short
 	byte count to a read request, and there are non-zero number of
 	pages which are not filled at all, these pages will not be zeroed.
