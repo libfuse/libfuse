@@ -7,8 +7,7 @@ EXTRA_DIST =			\
 	README*			\
 	Filesystems		\
 	FAQ			\
-	doc/how-fuse-works	\
-	doc/kernel.txt
+	doc/how-fuse-works
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = fuse.pc

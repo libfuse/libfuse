@@ -325,9 +325,6 @@ struct fuse_conn {
 	/** Is removexattr not implemented by fs? */
 	unsigned no_removexattr : 1;
 
-	/** Connection failed (version mismatch) */
-	unsigned conn_error : 1;
-
 #ifdef KERNEL_2_6
 	/** Backing dev info */
 	struct backing_dev_info bdi;
