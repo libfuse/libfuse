@@ -172,6 +172,19 @@ hard_remove
   an unlink operation (or in a rename operation which overwrites an
   existing file).
 
+  It is recommended that you not use the hard_remove option. When
+  hard_remove is set, the following libc functions fail on unlinked
+  files (returning errno of ENOENT):
+     - read()
+     - write()
+     - fsync()
+     - close()
+     - f*xattr()
+     - ftruncate()
+     - fstat()
+     - fchmod()
+     - fchown()
+
 debug
 
   Turns on debug information printing by the library.
