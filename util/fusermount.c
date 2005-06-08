@@ -43,8 +43,6 @@
 #define FUSE_DEV_NEW "/dev/fuse"
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
 #define FUSE_CONF "/etc/fuse.conf"
-#define FUSE_MAJOR 10
-#define FUSE_MINOR 229
 
 static const char *progname;
 
@@ -65,17 +63,20 @@ static const char *get_user_name()
 static uid_t oldfsuid;
 static gid_t oldfsgid;
 
-static int drop_privs(void)
+static void drop_privs(void)
 {
-    oldfsuid = setfsuid(getuid());
-    oldfsgid = setfsgid(getgid());
-    return 0;
+    if (getuid() != 0) {
+        oldfsuid = setfsuid(getuid());
+        oldfsgid = setfsgid(getgid());
+    }
 }
 
 static void restore_privs(void)
 {
-    setfsuid(oldfsuid);
-    setfsgid(oldfsgid);
+    if (getuid() != 0) {
+        setfsuid(oldfsuid);
+        setfsgid(oldfsgid);
+    }
 }
 
 static int do_unmount(const char *mnt, int quiet, int lazy)
@@ -242,17 +243,11 @@ static int unmount_rename(const char *mnt, int quiet, int lazy,
     int res;
     struct stat sbuf;
 
-    if (getuid() != 0) {
-        res = drop_privs();
-        if (res == -1)
-            return -1;
-    }
+    drop_privs();
     res = do_unmount(mnt, quiet, lazy);
+    restore_privs();
     if (res == -1)
         return -1;
-
-    if (getuid() != 0)
-        restore_privs();
 
     if (stat(mtab, &sbuf) == 0)
         chown(mtab_new, sbuf.st_uid, sbuf.st_gid);
@@ -725,45 +720,15 @@ static int try_open(const char *dev, char **devp, int silent)
     return fd;
 }
 
-#define FUSE_TMP_DIRNAME "/tmp/.fuse_devXXXXXX"
-#define FUSE_TMP_DEVNAME "/fuse"
-
-static int try_open_new_temp(dev_t devnum, char **devp)
-{
-    int res;
-    int fd;
-    char dirname[] = FUSE_TMP_DIRNAME;
-    char filename[] = FUSE_TMP_DIRNAME FUSE_TMP_DEVNAME;
-    if (mkdtemp(dirname) == NULL) {
-        fprintf(stderr, "%s: failed to create temporary device directory: %s\n",
-                progname, strerror(errno));
-        return -1;
-    }
-    sprintf(filename, "%s%s", dirname, FUSE_TMP_DEVNAME);
-    res = mknod(filename, S_IFCHR | 0600, devnum);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to create device node: %s\n", progname,
-                strerror(errno));
-        rmdir(dirname);
-        return -1;
-    }
-    fd = try_open(filename, devp, 0);
-    unlink(filename);
-    rmdir(dirname);
-    return fd;
-}
-
 static int try_open_fuse_device(char **devp)
 {
-    int fd = try_open(FUSE_DEV_NEW, devp, 1);
+    int fd;
+
+    drop_privs();
+    fd = try_open(FUSE_DEV_NEW, devp, 1);
+    restore_privs();
     if (fd >= 0)
         return fd;
-
-    if (fd == -1) {
-        fd = try_open_new_temp(makedev(FUSE_MAJOR, FUSE_MINOR), devp);
-        if (fd != -2)
-            return fd;
-    }
 
     fd = try_open(FUSE_DEV_OLD, devp, 1);
     if (fd >= 0)
@@ -838,15 +803,7 @@ static int mount_fuse(const char *mnt, const char *opts)
         }
     }
 
-    if (getuid() != 0) {
-        res = drop_privs();
-        if (res == -1) {
-            close(fd);
-            unlock_mtab(mtablock);
-            return -1;
-        }
-    }
-
+    drop_privs();
     read_conf();
 
     if (getuid() != 0 && mount_max != -1) {
@@ -862,15 +819,12 @@ static int mount_fuse(const char *mnt, const char *opts)
     res = check_version(dev);
     if (res != -1) {
         res = check_perm(&real_mnt, &stbuf, &currdir_fd, &mountpoint_fd);
-        if (getuid() != 0)
-            restore_privs();
+        restore_privs();
         if (res != -1)
             res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
                            dev, &fsname, &mnt_opts);
-    } else {
-        if (getuid() != 0)
-            restore_privs();
-    }
+    } else
+        restore_privs();
 
     if (currdir_fd != -1) {
         fchdir(currdir_fd);
@@ -1073,18 +1027,11 @@ int main(int argc, char *argv[])
 
     origmnt = argv[a++];
 
-    if (getuid() != 0) {
-        res = drop_privs();
-        if (res == -1)
-            exit(1);
-    }
-
+    drop_privs();
     mnt = resolve_path(origmnt);
+    restore_privs();
     if (mnt == NULL)
         exit(1);
-
-    if (getuid() != 0)
-        restore_privs();
 
     umask(033);
     if (unmount) {
