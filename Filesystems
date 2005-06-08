@@ -362,3 +362,16 @@ Description:
   mount your audio cd.
 
 ==============================================================================
+Name:  Fuse-J-shfs
+
+Author: Paul "Joey" Clark / joey at hwi ath cx
+
+Homepage: http://hwi.ath.cx/twiki/bin/view/Neuralyte/FuseJshfs
+
+Description:
+
+  Fuse-J-shfs lets you easily implement a virtual filesystem in Unix
+  shellscript.  And naturally, it already has some handy vfs
+  implementations you can use straight away: gzip, rar, sparse, ...
+
+==============================================================================
