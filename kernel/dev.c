@@ -17,6 +17,10 @@
 #include <linux/file.h>
 #include <linux/slab.h>
 
+#ifdef MODULE_ALIAS_MISCDEV
+MODULE_ALIAS_MISCDEV(FUSE_MINOR);
+#endif
+
 static kmem_cache_t *fuse_req_cachep;
 
 static inline struct fuse_conn *fuse_get_conn(struct file *file)
