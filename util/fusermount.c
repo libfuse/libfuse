@@ -622,11 +622,12 @@ static int check_version(const char *dev)
     return 0;
 }
 
-static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
+static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd,
+                      int *mountpoint_fd)
 {
     int res;
     const char *mnt = *mntp;
-    const char *origmnt;
+    const char *origmnt = mnt;
 
     res = lstat(mnt, stbuf);
     if (res == -1) {
@@ -639,45 +640,68 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd)
     if (getuid() == 0)
         return 0;
 
-    if (!S_ISDIR(stbuf->st_mode)) {
-        fprintf(stderr, "%s: mountpoint %s is not a directory\n",
+    if (S_ISDIR(stbuf->st_mode)) {
+        *currdir_fd = open(".", O_RDONLY);
+        if (*currdir_fd == -1) {
+            fprintf(stderr, "%s: failed to open current directory: %s\n",
+                    progname, strerror(errno));
+            return -1;
+        }
+        res = chdir(mnt);
+        if (res == -1) {
+            fprintf(stderr, "%s: failed to chdir to mountpoint: %s\n",
+                    progname, strerror(errno));
+            return -1;
+        }
+        mnt = *mntp = ".";
+        res = lstat(mnt, stbuf);
+        if (res == -1) {
+            fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
+                    progname, origmnt, strerror(errno));
+            return -1;
+        }
+        
+        if ((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
+            fprintf(stderr, "%s: mountpoint %s not owned by user\n",
+                    progname, origmnt);
+            return -1;
+        }
+        
+        res = access(mnt, W_OK);
+        if (res == -1) {
+            fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
+                    progname, origmnt);
+            return -1;
+        }
+    } else if (S_ISREG(stbuf->st_mode)) {
+        static char procfile[256];
+        *mountpoint_fd = open(mnt, O_WRONLY);
+        if (*mountpoint_fd == -1) {
+            fprintf(stderr, "%s: failed to open %s: %s\n", progname, mnt,
+                    strerror(errno));
+            return -1;
+        }
+        res = fstat(*mountpoint_fd, stbuf);
+        if (res == -1) {
+            fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
+                    progname, mnt, strerror(errno));
+            return -1;
+        }
+        if (!S_ISREG(stbuf->st_mode)) {
+            fprintf(stderr, "%s: mountpoint %s is no longer a regular file\n",
+                    progname, mnt);
+            return -1;
+        }
+
+        sprintf(procfile, "/proc/self/fd/%i", *mountpoint_fd);
+        *mntp = procfile;
+    } else {
+        fprintf(stderr,
+                "%s: mountpoint %s is not a directory or a regular file\n",
                 progname, mnt);
         return -1;
     }
 
-    *currdir_fd = open(".", O_RDONLY);
-    if (*currdir_fd == -1) {
-        fprintf(stderr, "%s: failed to open current directory: %s\n",
-                progname, strerror(errno));
-        return -1;
-    }
-    res = chdir(mnt);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to chdir to mountpoint: %s\n",
-                progname, strerror(errno));
-        return -1;
-    }
-    origmnt = mnt;
-    mnt = *mntp = ".";
-    res = lstat(mnt, stbuf);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
-                progname, origmnt, strerror(errno));
-        return -1;
-    }
-
-    if ((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
-        fprintf(stderr, "%s: mountpoint %s not owned by user\n",
-                progname, origmnt);
-        return -1;
-    }
-
-    res = access(mnt, W_OK);
-    if (res == -1) {
-        fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
-                progname, origmnt);
-        return -1;
-    }
 
     return 0;
 }
@@ -799,6 +823,7 @@ static int mount_fuse(const char *mnt, const char *opts)
     char *mnt_opts;
     const char *real_mnt = mnt;
     int currdir_fd = -1;
+    int mountpoint_fd = -1;
     int mtablock = -1;
 
     fd = open_fuse_device(&dev);
@@ -836,24 +861,28 @@ static int mount_fuse(const char *mnt, const char *opts)
 
     res = check_version(dev);
     if (res != -1) {
-        res = check_perm(&real_mnt, &stbuf, &currdir_fd);
+        res = check_perm(&real_mnt, &stbuf, &currdir_fd, &mountpoint_fd);
+        if (getuid() != 0)
+            restore_privs();
         if (res != -1)
             res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
                            dev, &fsname, &mnt_opts);
-    }
-
-    if (getuid() != 0)
-        restore_privs();
-
-    if (res == -1) {
-        close(fd);
-        unlock_mtab(mtablock);
-        return -1;
+    } else {
+        if (getuid() != 0)
+            restore_privs();
     }
 
     if (currdir_fd != -1) {
         fchdir(currdir_fd);
         close(currdir_fd);
+    }
+    if (mountpoint_fd != -1)
+        close(mountpoint_fd);
+
+    if (res == -1) {
+        close(fd);
+        unlock_mtab(mtablock);
+        return -1;
     }
 
     if (geteuid() == 0) {

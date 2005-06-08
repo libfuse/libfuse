@@ -3,6 +3,9 @@
 	* Enable the auto-loading of the module via access to the
 	corresponding device file.  Patch by Takashi Iwai.
 
+	* Allow mounting a regular file (over a regular file) for
+	unprivleged users.
+
 2005-06-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.3.0
