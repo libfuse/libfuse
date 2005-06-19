@@ -362,7 +362,7 @@ Description:
   mount your audio cd.
 
 ==============================================================================
-Name:  Fuse-J-shfs
+Name: Fuse-J-shfs
 
 Author: Paul "Joey" Clark / joey at hwi ath cx
 
@@ -373,5 +373,18 @@ Description:
   Fuse-J-shfs lets you easily implement a virtual filesystem in Unix
   shellscript.  And naturally, it already has some handy vfs
   implementations you can use straight away: gzip, rar, sparse, ...
+
+==============================================================================
+Name:  SMBNetFS
+
+Author: Mikhail Kshevetskiy / kl at laska dorms spbu ru
+
+Homepage: http://smbnetfs.airm.net/
+
+Description:
+
+   SMBNetFS is a Linux filesystem that allow you to use
+   samba/microsoft network in the same manner as the network
+   neighborhood in Microsoft Windows.
 
 ==============================================================================
