@@ -94,7 +94,7 @@ static struct fuse_context *(*fuse_getcontext)(void) = NULL;
 #ifndef USE_UCLIBC
 #define mutex_init(mut) pthread_mutex_init(mut, NULL)
 #else
-static void mutex_init(pthread_mutex_t mut)
+static void mutex_init(pthread_mutex_t *mut)
 {
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -1730,8 +1730,9 @@ static int readdir_fill(struct fuse *f, struct fuse_in_header *in,
                         struct fuse_read_in *arg, struct fuse_dirhandle *dh)
 {
     int err = -ENOENT;
+    char *path;
     pthread_rwlock_rdlock(&f->tree_lock);
-    char *path = get_path(f, in->nodeid);
+    path = get_path(f, in->nodeid);
     if (path != NULL) {
         struct fuse_file_info fi;
 
