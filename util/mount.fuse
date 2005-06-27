@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# FUSE mount helper
+# Petr Klima <qaxi@seznam.cz>
+# Thanks to Miklos Szeredi <miklos@szeredi.hu>
+# to kick me to the right way
+#
+
+VERSION="0.0.1"
+PRGNAME=`basename $0`
+
+USAGE="${PRGNAME} version ${VERSION}
+usage: ${PRGNAME} fusefs_type#[mountpath] mountpoint [FUSE options]
+
+	example: ${PRGNAME} sshfs#root@tux:/ /mnt/tuxssh -o rw
+"
+
+function die {
+	echo -e "$PRGNAME# $1" >&2
+	[ -z "$2" ] && exit 128
+	exit "$2"
+}
+
+[ "$#" -ge 2 ] || die "${USAGE}"
+
+FSTYPE=${1%%\#*} # for now i have to be same as FUSE mount binary
+		 # should be configurable
+
+FSBIN=`which ${FSTYPE} 2>/dev/null` \
+	|| die "Can not find FUSE mount binary for FS ${FSTYPE}" 1
+
+MOUNTPATH=${1#*#}
+
+# was there an # in $1
+[ "$1" = "$MOUNTPATH" ] && MOUNTPATH=""
+
+MOUNTPOINT="$2"
+[ -d "${MOUNTPOINT}" ] || die "Directory ${MOUNTPOINT} does not exist"
+
+shift
+shift
+
+OPTIONS="$@"
+
+export PATH
+${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}
+
+
+
