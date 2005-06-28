@@ -2,6 +2,8 @@
 
 	* Add 'mount.fuse' written by Petr Klima
 
+	* '/dev/fuse' is created by 'make install' if does not yet exist
+
 2005-06-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix UCLIBC compile error.  Patch by Christian Magnusson
