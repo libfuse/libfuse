@@ -1,3 +1,7 @@
+2005-06-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add 'mount.fuse' written by Petr Klima
+
 2005-06-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix UCLIBC compile error.  Patch by Christian Magnusson
