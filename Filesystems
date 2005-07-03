@@ -383,8 +383,21 @@ Homepage: http://smbnetfs.airm.net/
 
 Description:
 
-   SMBNetFS is a Linux filesystem that allow you to use
-   samba/microsoft network in the same manner as the network
-   neighborhood in Microsoft Windows.
+  SMBNetFS is a Linux filesystem that allow you to use samba/microsoft
+  network in the same manner as the network neighborhood in Microsoft
+  Windows.
+
+==============================================================================
+Name: NTFS-FUSE
+
+Author: Yura Pakhuchiy / pakhuchiy at gmail com
+
+Homepage: http://linux-ntfs.sf.net/
+
+Description:
+
+  NTFS-FUSE is part of ntfsprogs package (utily name - ntfsmount). It's rely
+  on libntfs. NTFS-FUSE support file overwrite changing it size and can
+  list/read/write/add/remove named data streams via xattr interface.
 
 ==============================================================================

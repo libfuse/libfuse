@@ -583,58 +583,44 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 	return res;
 }
 
+static ssize_t fuse_direct_read(struct file *file, char __user *buf,
+				     size_t count, loff_t *ppos)
+{
+	return fuse_direct_io(file, buf, count, ppos, 0);
+}
+
+static ssize_t fuse_direct_write(struct file *file, const char __user *buf,
+				 size_t count, loff_t *ppos)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	ssize_t res;
+	/* Don't allow parallel writes to the same file */
+	down(&inode->i_sem);
+	res = fuse_direct_io(file, buf, count, ppos, 1);
+	up(&inode->i_sem);
+	return res;
+}
+
+#ifndef KERNEL_2_6
 static ssize_t fuse_file_read(struct file *file, char __user *buf,
 			      size_t count, loff_t *ppos)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = get_fuse_conn(inode);
 
-	if (fc->flags & FUSE_DIRECT_IO)
-		return fuse_direct_io(file, buf, count, ppos, 0);
-#ifndef KERNEL_2_6
-	else {
-		if (fc->flags & FUSE_LARGE_READ) {
-			int res;
-			down(&inode->i_sem);
-			res = fuse_file_bigread(file, inode, *ppos, count);
-			up(&inode->i_sem);
-			if (res)
-				return res;
-		}
-		return generic_file_read(file, buf, count, ppos);
-	}
-#else
-	else
-		return generic_file_read(file, buf, count, ppos);
-#endif
-}
-
-static ssize_t fuse_file_write(struct file *file, const char __user *buf,
-			       size_t count, loff_t *ppos)
-{
-	struct inode *inode = file->f_dentry->d_inode;
-	struct fuse_conn *fc = get_fuse_conn(inode);
-
-	if (fc->flags & FUSE_DIRECT_IO) {
-		ssize_t res;
-		/* Don't allow parallel writes to the same file */
+	if (fc->flags & FUSE_LARGE_READ) {
+		int res;
 		down(&inode->i_sem);
-		res = fuse_direct_io(file, buf, count, ppos, 1);
+		res = fuse_file_bigread(file, inode, *ppos, count);
 		up(&inode->i_sem);
-		return res;
+		if (res)
+			return res;
 	}
-	else
-		return generic_file_write(file, buf, count, ppos);
+	return generic_file_read(file, buf, count, ppos);
 }
-
+#endif
 static int fuse_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
-	struct inode *inode = file->f_dentry->d_inode;
-	struct fuse_conn *fc = get_fuse_conn(inode);
-
-	if (fc->flags & FUSE_DIRECT_IO)
-		return -ENODEV;
-
 	if ((vma->vm_flags & VM_SHARED)) {
 		if ((vma->vm_flags & VM_WRITE))
 			return -ENODEV;
@@ -645,17 +631,6 @@ static int fuse_file_mmap(struct file *file, struct vm_area_struct *vma)
 }
 
 #ifdef KERNEL_2_6
-static ssize_t fuse_file_sendfile(struct file *file, loff_t *ppos,
-				  size_t count, read_actor_t actor,
-				  void *target)
-{
-	struct fuse_conn *fc = get_fuse_conn(file->f_dentry->d_inode);
-	if (fc->flags & FUSE_DIRECT_IO)
-		return -EINVAL;
-	else
-		return generic_file_sendfile(file, ppos, count, actor, target);
-}
-
 static int fuse_set_page_dirty(struct page *page)
 {
 	printk("fuse_set_page_dirty: should not happen\n");
@@ -666,16 +641,31 @@ static int fuse_set_page_dirty(struct page *page)
 
 static struct file_operations fuse_file_operations = {
 	.llseek		= generic_file_llseek,
+#ifdef KERNEL_2_6
+	.read		= generic_file_read,	
+#else
 	.read		= fuse_file_read,
-	.write		= fuse_file_write,
+#endif
+	.write		= generic_file_write,
 	.mmap		= fuse_file_mmap,
 	.open		= fuse_open,
 	.flush		= fuse_flush,
 	.release	= fuse_release,
 	.fsync		= fuse_fsync,
 #ifdef KERNEL_2_6
-	.sendfile	= fuse_file_sendfile,
+	.sendfile	= generic_file_sendfile,
 #endif
+};
+
+static struct file_operations fuse_direct_io_file_operations = {
+	.llseek		= generic_file_llseek,
+	.read		= fuse_direct_read,
+	.write		= fuse_direct_write,
+	.open		= fuse_open,
+	.flush		= fuse_flush,
+	.release	= fuse_release,
+	.fsync		= fuse_fsync,
+	/* no mmap and sendfile */
 };
 
 static struct address_space_operations fuse_file_aops  = {
@@ -690,6 +680,12 @@ static struct address_space_operations fuse_file_aops  = {
 
 void fuse_init_file_inode(struct inode *inode)
 {
-	inode->i_fop = &fuse_file_operations;
-	inode->i_data.a_ops = &fuse_file_aops;
+	struct fuse_conn *fc = get_fuse_conn(inode);
+
+	if (fc->flags & FUSE_DIRECT_IO)
+		inode->i_fop = &fuse_direct_io_file_operations;
+	else {
+		inode->i_fop = &fuse_file_operations;
+		inode->i_data.a_ops = &fuse_file_aops;
+	}
 }
