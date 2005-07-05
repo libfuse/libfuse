@@ -41,6 +41,24 @@ using the sftp protocol.
 Mount options
 ~~~~~~~~~~~~~
 
+'fd=N'
+
+  The file descriptor to use for communication between the userspace
+  filesystem and the kernel.  The file descriptor must have been
+  obtained by opening the FUSE device ('/dev/fuse').
+
+'rootmode=M'
+
+  The file mode of the filesystem's root in octal representation.
+
+'user_id=N'
+
+  The numeric user id of the mount owner.
+
+'group_id=N'
+
+  The numeric group id of the mount owner.
+
 'default_permissions'
 
   By default FUSE doesn't check file access permissions, the
@@ -148,14 +166,14 @@ How are requirements fulfilled?
      2) Even if 1) is solved the mount owner can change the behavior
         of other users' processes.
 
-         - It can slow down or indefinitely delay the execution of a
+         i) It can slow down or indefinitely delay the execution of a
            filesystem operation creating a DoS against the user or the
            whole system.  For example a suid application locking a
            system file, and then accessing a file on the mount owner's
            filesystem could be stopped, and thus causing the system
            file to be locked forever.
 
-         - It can present files or directories of unlimited length, or
+         ii) It can present files or directories of unlimited length, or
            directory structures of unlimited depth, possibly causing a
            system process to eat up diskspace, memory or other
            resources, again causing DoS.
@@ -167,6 +185,11 @@ How are requirements fulfilled?
 	without using a FUSE mount, the same criteria as used in
 	ptrace can be used to check if a process is allowed to access
 	the filesystem or not.
+
+	Note that the ptrace check is not strictly necessary to
+	prevent B/2/i, it is enough to check if mount owner has enough
+	privilege to send signal to the process accessing the
+	filesystem, since SIGSTOP can be used to get a similar effect.
 
 I think these limitations are unacceptable?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
