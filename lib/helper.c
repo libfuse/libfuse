@@ -46,6 +46,7 @@ static void usage(const char *progname)
             "    fsname=NAME            set filesystem name in mtab\n"
             "    use_ino                let filesystem set inode numbers\n"
             "    readdir_ino            try to fill in d_ino in readdir\n"
+            "    nonempty               allow mounts over non-empty file/dir\n"
             );
 }
 

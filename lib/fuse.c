@@ -80,7 +80,7 @@ struct fuse_dirhandle {
     int filled;
     unsigned long fh;
     int error;
-    struct node *node;
+    nodeid_t nodeid;
 };
 
 struct fuse_cmd {
@@ -1596,11 +1596,7 @@ static void do_opendir(struct fuse *f, struct fuse_in_header *in,
     dh->contents = NULL;
     dh->len = 0;
     dh->filled = 0;
-    if (f->flags & FUSE_READDIR_INO) {
-        pthread_mutex_lock(&f->lock);
-        dh->node = get_node(f, in->nodeid);
-        pthread_mutex_unlock(&f->lock);
-    }
+    dh->nodeid = in->nodeid;
     mutex_init(&dh->lock);
 
     memset(&outarg, 0, sizeof(outarg));
@@ -1658,7 +1654,7 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
         if (dh->fuse->flags & FUSE_READDIR_INO) {
             struct node *node;
             pthread_mutex_lock(&dh->fuse->lock);
-            node = lookup_node(dh->fuse, dh->node->nodeid, name);
+            node = lookup_node(dh->fuse, dh->nodeid, name);
             if (node)
                 ino  = (ino_t) node->nodeid;
             pthread_mutex_unlock(&dh->fuse->lock);

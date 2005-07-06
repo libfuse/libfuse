@@ -193,6 +193,23 @@ fsname=NAME
 
   Sets the filesystem name.  The default is the program name.
 
+use_ino
+
+  Honor the 'st_ino' field in getattr() and fill_dir().  This value is
+  used to fill in the 'st_ino' field in the stat()/lstat()/fstat()
+  functions and the 'd_ino' field in the readdir() function.  The
+  filesystem does not have to guarantee uniqueness, however some
+  applications rely on this value being unique for the whole
+  filesystem.
+
+readdir_ino
+
+  If 'use_ino' option is not given, still try to fill in the 'd_ino'
+  field in readdir().  If the name was previously looked up, and is
+  still in the cache, the inode number found there will be used.
+  Otherwise it will be set to '-1'.  If 'use_ino' option is given,
+  this option is ignored.
+
 nonempty
 
   Allows mounts over a non-empty file or directory.  By default these

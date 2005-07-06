@@ -9,6 +9,8 @@
 	* kernel: check if mandatory mount options ('fd', 'rootmode',
 	'user_id', 'group_id') are all given
 
+	* lib: simplify 'readdir_ino' handling
+
 2005-07-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: clean up 'direct_io' code
