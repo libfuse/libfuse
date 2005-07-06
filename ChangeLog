@@ -1,3 +1,14 @@
+2005-07-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: check if mountpoint is empty (only '.' and '..' for
+	directories, and size = 0 for regular files).  If "nonempty"
+	option is given, omit this check.  This is useful, so users don't
+	accidentally hide data (e.g. from backup programs).  Thanks to
+	Frank van Maarseveen for pointing this out.
+
+	* kernel: check if mandatory mount options ('fd', 'rootmode',
+	'user_id', 'group_id') are all given
+
 2005-07-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: clean up 'direct_io' code

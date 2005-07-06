@@ -157,6 +157,8 @@ struct fuse_operations {
      * is permitted for the given flags.  Optionally open may also
      * return an arbitary filehandle in the fuse_file_info structure,
      * which will be passed to all file operations.
+     * 
+     * Changed in version 2.2
      */
     int (*open) (const char *, struct fuse_file_info *);
 
@@ -168,6 +170,8 @@ struct fuse_operations {
      * 'direct_io' mount option is specified, in which case the return
      * value of the read system call will reflect the return value of
      * this operation.
+     *
+     * Changed in version 2.2
      */
     int (*read) (const char *, char *, size_t, off_t, struct fuse_file_info *);
 
@@ -176,6 +180,8 @@ struct fuse_operations {
      * Write should return exactly the number of bytes requested
      * except on error.  An exception to this is when the 'direct_io'
      * mount option is specified (see read operation).
+     *
+     * Changed in version 2.2
      */
     int (*write) (const char *, const char *, size_t, off_t,
                   struct fuse_file_info *);
@@ -203,6 +209,8 @@ struct fuse_operations {
      * not possible to determine if a flush is final, so each flush
      * should be treated equally.  Multiple write-flush sequences are
      * relatively rare, so this shouldn't be a problem.
+     * 
+     * Changed in version 2.2
      */
     int (*flush) (const char *, struct fuse_file_info *);
 
@@ -217,6 +225,8 @@ struct fuse_operations {
      * have a file opened more than once, in which case only the last
      * release will mean, that no more reads/writes will happen on the
      * file.  The return value of release is ignored.
+     *
+     * Changed in version 2.2
      */
     int (*release) (const char *, struct fuse_file_info *);
 
@@ -224,6 +234,8 @@ struct fuse_operations {
      *
      * If the datasync parameter is non-zero, then only the user data
      * should be flushed, not the meta data.
+     *
+     * Changed in version 2.2
      */
     int (*fsync) (const char *, int, struct fuse_file_info *);
 
@@ -243,6 +255,8 @@ struct fuse_operations {
      *
      * This method should check if the open operation is permitted for
      * this  directory
+     *
+     * Introduced in version 2.3
      */
     int (*opendir) (const char *, struct fuse_file_info *);
 
@@ -264,17 +278,24 @@ struct fuse_operations {
      * passes non-zero offset to the filler function.  When the buffer
      * is full (or an error happens) the filler function will return
      * '1'.
+     * 
+     * Introduced in version 2.3
      */
     int (*readdir) (const char *, void *, fuse_fill_dir_t, off_t,
                     struct fuse_file_info *);
 
-    /** Release directory */
+    /** Release directory 
+     *
+     * Introduced in version 2.3
+     */
     int (*releasedir) (const char *, struct fuse_file_info *);
 
     /** Synchronize directory contents
      *
      * If the datasync parameter is non-zero, then only the user data
      * should be flushed, not the meta data
+     *
+     * Introduced in version 2.3
      */
     int (*fsyncdir) (const char *, int, struct fuse_file_info *);
 
@@ -284,6 +305,8 @@ struct fuse_operations {
      * The return value will passed in the private_data field of
      * fuse_context to all file operations and as a parameter to the
      * destroy() method.
+     * 
+     * Introduced in version 2.3
      */
     void *(*init) (void);
 
@@ -291,6 +314,8 @@ struct fuse_operations {
      * Clean up filesystem
      *
      * Called on filesystem exit.
+     * 
+     * Introduced in version 2.3
      */
     void (*destroy) (void *);
 };

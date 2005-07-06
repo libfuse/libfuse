@@ -193,3 +193,9 @@ fsname=NAME
 
   Sets the filesystem name.  The default is the program name.
 
+nonempty
+
+  Allows mounts over a non-empty file or directory.  By default these
+  mounts are rejected (from version 2.3.1) to prevent accidental
+  covering up of data, which could for example prevent automatic
+  backup.

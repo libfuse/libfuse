@@ -27,6 +27,7 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <mntent.h>
+#include <dirent.h>
 #include <sys/param.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
@@ -474,9 +475,41 @@ static int opt_eq(const char *s, unsigned len, const char *opt)
         return 0;
 }
 
+static int check_mountpoint_empty(const char *mnt, mode_t rootmode,
+                                  off_t rootsize)
+{
+    int isempty = 1;
+
+    if (S_ISDIR(rootmode)) {
+        struct dirent *ent;
+        DIR *dp = opendir(mnt);
+        if (dp == NULL) {
+            fprintf(stderr, "%s: failed to mountpoint for reading: %s\n",
+                    progname, strerror(errno));
+            return -1;
+        }
+        while ((ent = readdir(dp)) != NULL) {
+            if (strcmp(ent->d_name, ".") != 0 &&
+                strcmp(ent->d_name, "..") != 0) {
+                isempty = 0;
+                break;
+            }
+        }
+        closedir(dp);
+    } else if (rootsize)
+        isempty = 0;
+
+    if (!isempty) {
+        fprintf(stderr, "%s: mountpoint is not empty\n", progname);
+        fprintf(stderr, "%s: if you are sure this is safe, use the 'nonempty' mount option\n", progname);
+        return -1;
+    }
+    return 0;
+}
+
 static int do_mount(const char *mnt, const char *type, mode_t rootmode,
                     int fd, const char *opts, const char *dev, char **fsnamep,
-                    char **mnt_optsp)
+                    char **mnt_optsp, off_t rootsize)
 {
     int res;
     int flags = MS_NOSUID | MS_NODEV;
@@ -485,6 +518,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     const char *s;
     char *d;
     char *fsname = NULL;
+    int check_empty = 1;
 
     optbuf = malloc(strlen(opts) + 128);
     if (!optbuf) {
@@ -503,11 +537,12 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
             fsname = malloc(len - fsname_str_len + 1);
             if (!fsname) {
                 fprintf(stderr, "%s: failed to allocate memory\n", progname);
-                free(optbuf);
-                return -1;
+                goto err;
             }
             memcpy(fsname, s + fsname_str_len, len - fsname_str_len);
             fsname[len - fsname_str_len] = '\0';
+        } else if (opt_eq(s, len, "nonempty")) {
+            check_empty = 0;
         } else if (!begins_with(s, "fd=") &&
                    !begins_with(s, "rootmode=") &&
                    !begins_with(s, "user_id=") &&
@@ -530,8 +565,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
                 (opt_eq(s, len, "allow_other") ||
                  opt_eq(s, len, "allow_root"))) {
                 fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in /etc/fuse.conf\n", progname, len, s);
-                free(optbuf);
-                return -1;
+                goto err;
             }
             if (!skip_option) {
                 if (find_mount_flag(s, len, &on, &flag)) {
@@ -552,21 +586,21 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     }
     *d = '\0';
     res = get_mnt_opts(flags, optbuf, &mnt_opts);
-    if (res == -1) {
-        free(mnt_opts);
-        free(optbuf);
-        return -1;
-    }
+    if (res == -1)
+        goto err;
+
     sprintf(d, "fd=%i,rootmode=%o,user_id=%i,group_id=%i",
             fd, rootmode, getuid(), getgid());
     if (fsname == NULL) {
         fsname = strdup(dev);
         if (!fsname) {
             fprintf(stderr, "%s: failed to allocate memory\n", progname);
-            free(optbuf);
-            return -1;
+            goto err;
         }
     }
+
+    if (check_empty && check_mountpoint_empty(mnt, rootmode, rootsize) == -1)
+        goto err;
 
     res = mount(fsname, mnt, type, flags, optbuf);
     if (res == -1 && errno == EINVAL) {
@@ -576,8 +610,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     }
     if (res == -1) {
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
-        free(fsname);
-        free(mnt_opts);
+        goto err;
     } else {
         *fsnamep = fsname;
         *mnt_optsp = mnt_opts;
@@ -585,6 +618,12 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     free(optbuf);
 
     return res;
+
+ err:
+    free(fsname);
+    free(mnt_opts);
+    free(optbuf);
+    return -1;
 }
 
 static int check_version(const char *dev)
@@ -822,7 +861,7 @@ static int mount_fuse(const char *mnt, const char *opts)
         restore_privs();
         if (res != -1)
             res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
-                           dev, &fsname, &mnt_opts);
+                           dev, &fsname, &mnt_opts, stbuf.st_size);
     } else
         restore_privs();
 
