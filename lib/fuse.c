@@ -40,6 +40,19 @@
 /** Make a best effort to fill in inode number in a readdir **/
 #define FUSE_READDIR_INO (1 << 5)
 
+/** Ignore file mode supplied by the filesystem, and create one based
+    on the 'umask' option */
+#define FUSE_SET_MODE (1 << 6)
+
+/** Ignore st_uid supplied by the filesystem and set it based on the
+    'uid' option*/
+#define FUSE_SET_UID (1 << 7)
+
+/** Ignore st_gid supplied by the filesystem and set it based on the
+    'gid' option*/
+#define FUSE_SET_GID (1 << 8)
+
+
 #define FUSE_MAX_PATH 4096
 #define PARAM_T(inarg, type) (((char *)(inarg)) + sizeof(type))
 #define PARAM(inarg) PARAM_T(inarg, *(inarg))
@@ -294,29 +307,19 @@ static struct node *lookup_node(struct fuse *f, nodeid_t parent,
 }
 
 static struct node *find_node(struct fuse *f, nodeid_t parent, char *name,
-                              struct fuse_attr *attr, uint64_t version)
+                              uint64_t version)
 {
     struct node *node;
-    int mode = attr->mode & S_IFMT;
-    int rdev = 0;
-
-    if (S_ISCHR(mode) || S_ISBLK(mode))
-        rdev = attr->rdev;
 
     pthread_mutex_lock(&f->lock);
     node = lookup_node(f, parent, name);
-    if (node != NULL) {
-        if (!(f->flags & FUSE_USE_INO))
-            attr->ino = node->nodeid;
-    } else {
+    if (node == NULL) {
         node = (struct node *) calloc(1, sizeof(struct node));
         if (node == NULL)
             goto out_err;
 
         node->refctr = 1;
         node->nodeid = next_id(f);
-        if (!(f->flags & FUSE_USE_INO))
-            attr->ino = node->nodeid;
         node->open_count = 0;
         node->is_hidden = 0;
         node->generation = f->generation;
@@ -475,13 +478,16 @@ static int rename_node(struct fuse *f, nodeid_t olddir, const char *oldname,
     return err;
 }
 
-static void convert_stat(struct stat *stbuf, struct fuse_attr *attr)
+static void convert_stat(struct fuse *f, nodeid_t nodeid, struct stat *stbuf,
+                         struct fuse_attr *attr)
 {
-    attr->ino       = stbuf->st_ino;
+    attr->ino       = (f->flags & FUSE_USE_INO) ? stbuf->st_ino : nodeid;
     attr->mode      = stbuf->st_mode;
+    if (f->flags & FUSE_SET_MODE)
+        attr->mode = (attr->mode & S_IFMT) | (0777 & ~f->umask);
     attr->nlink     = stbuf->st_nlink;
-    attr->uid       = stbuf->st_uid;
-    attr->gid       = stbuf->st_gid;
+    attr->uid       = (f->flags & FUSE_SET_UID) ? f->uid : stbuf->st_uid;
+    attr->gid       = (f->flags & FUSE_SET_GID) ? f->gid : stbuf->st_gid;
     attr->rdev      = stbuf->st_rdev;
     attr->size      = stbuf->st_size;
     attr->blocks    = stbuf->st_blocks;
@@ -643,12 +649,12 @@ static int lookup_path(struct fuse *f, nodeid_t nodeid, uint64_t version,
     if (res == 0) {
         struct node *node;
 
-        memset(arg, 0, sizeof(struct fuse_entry_out));
-        convert_stat(&buf, &arg->attr);
-        node = find_node(f, nodeid, name, &arg->attr, version);
+        node = find_node(f, nodeid, name, version);
         if (node == NULL)
             res = -ENOMEM;
         else {
+            memset(arg, 0, sizeof(struct fuse_entry_out));
+            convert_stat(f, node->nodeid, &buf, &arg->attr);
             arg->nodeid = node->nodeid;
             arg->generation = node->generation;
             arg->entry_valid = ENTRY_REVALIDATE_TIME;
@@ -726,9 +732,7 @@ static void do_getattr(struct fuse *f, struct fuse_in_header *in)
         memset(&arg, 0, sizeof(struct fuse_attr_out));
         arg.attr_valid = ATTR_REVALIDATE_TIME;
         arg.attr_valid_nsec = 0;
-        convert_stat(&buf, &arg.attr);
-        if (!(f->flags & FUSE_USE_INO))
-            arg.attr.ino = in->nodeid;
+        convert_stat(f, in->nodeid, &buf, &arg.attr);
     }
 
     send_reply(f, in, res, &arg, sizeof(arg));
@@ -816,9 +820,7 @@ static void do_setattr(struct fuse *f, struct fuse_in_header *in,
                     memset(&outarg, 0, sizeof(struct fuse_attr_out));
                     outarg.attr_valid = ATTR_REVALIDATE_TIME;
                     outarg.attr_valid_nsec = 0;
-                    convert_stat(&buf, &outarg.attr);
-                    if (!(f->flags & FUSE_USE_INO))
-                        outarg.attr.ino = in->nodeid;
+                    convert_stat(f, in->nodeid, &buf, &outarg.attr);
                 }
             }
         }
@@ -2102,13 +2104,24 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
     fuse_getcontext = func;
 }
 
+static int begins_with(const char *s, const char *beg)
+{
+    if (strncmp(s, beg, strlen(beg)) == 0)
+        return 1;
+    else
+        return 0;
+}
+
 int fuse_is_lib_option(const char *opt)
 {
     if (strcmp(opt, "debug") == 0 ||
         strcmp(opt, "hard_remove") == 0 ||
         strcmp(opt, "use_ino") == 0 ||
         strcmp(opt, "allow_root") == 0 ||
-        strcmp(opt, "readdir_ino") == 0)
+        strcmp(opt, "readdir_ino") == 0 ||
+        begins_with(opt, "umask=") ||
+        begins_with(opt, "uid=") ||
+        begins_with(opt, "gid="))
         return 1;
     else
         return 0;
@@ -2137,6 +2150,12 @@ static int parse_lib_opts(struct fuse *f, const char *opts)
                 f->flags |= FUSE_ALLOW_ROOT;
             else if (strcmp(opt, "readdir_ino") == 0)
                 f->flags |= FUSE_READDIR_INO;
+            else if (sscanf(opt, "umask=%o", &f->umask) == 1)
+                f->flags |= FUSE_SET_MODE;
+            else if (sscanf(opt, "uid=%u", &f->uid) == 1)
+                f->flags |= FUSE_SET_UID;
+            else if(sscanf(opt, "gid=%u", &f->gid) == 1)
+                f->flags |= FUSE_SET_GID;
             else
                 fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
         }

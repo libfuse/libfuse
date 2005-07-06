@@ -47,6 +47,9 @@ static void usage(const char *progname)
             "    use_ino                let filesystem set inode numbers\n"
             "    readdir_ino            try to fill in d_ino in readdir\n"
             "    nonempty               allow mounts over non-empty file/dir\n"
+            "    umask=M                set file permissions (octal)\n"
+            "    uid=N                  set file owner\n"
+            "    gid=N                  set file group\n"
             );
 }
 

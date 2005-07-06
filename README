@@ -216,3 +216,17 @@ nonempty
   mounts are rejected (from version 2.3.1) to prevent accidental
   covering up of data, which could for example prevent automatic
   backup.
+
+umask=M
+
+  Override the permission bits in 'st_mode' set by the filesystem.
+  The resulting permission bits are the ones missing from the given
+  umask value.  The value is given in octal representation.
+
+uid=N
+
+  Override the 'st_uid' field set by the filesystem.
+
+gid=N
+
+  Override the 'st_gid' field set by the filesystem.

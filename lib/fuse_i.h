@@ -38,6 +38,9 @@ struct fuse {
     int major;
     int minor;
     uid_t owner;
+    uid_t uid;
+    gid_t gid;
+    mode_t umask;
 };
 
 struct fuse *fuse_new_common(int fd, const char *opts,

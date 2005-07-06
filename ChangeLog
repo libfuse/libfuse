@@ -11,6 +11,8 @@
 
 	* lib: simplify 'readdir_ino' handling
 
+	* lib: add mount options 'umask=M', 'uid=N', 'gid=N'
+
 2005-07-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: clean up 'direct_io' code
