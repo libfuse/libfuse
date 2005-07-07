@@ -136,6 +136,8 @@ static int add_options(char **lib_optp, char **kernel_optp, const char *opts)
     char *xopts = strdup(opts);
     char *s = xopts;
     char *opt;
+    int has_allow_other = 0;
+    int has_allow_root = 0;
 
     if (xopts == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
@@ -147,15 +149,24 @@ static int add_options(char **lib_optp, char **kernel_optp, const char *opts)
         if (fuse_is_lib_option(opt)) {
             res = add_option_to(opt, lib_optp);
             /* Compatibility hack */
-            if (strcmp(opt, "allow_root") == 0 && res != -1)
+            if (strcmp(opt, "allow_root") == 0 && res != -1) {
+                has_allow_root = 1;
                 res = add_option_to("allow_other", kernel_optp);
+            }
         }
-        else
+        else {
             res = add_option_to(opt, kernel_optp);
+            if (strcmp(opt, "allow_other") == 0)
+                has_allow_other = 1;
+        }
         if (res == -1) {
             fprintf(stderr, "fuse: memory allocation failed\n");
             return -1;
         }
+    }
+    if (has_allow_other && has_allow_root) {
+        fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
+        return -1;
     }
     free(xopts);
     return 0;
