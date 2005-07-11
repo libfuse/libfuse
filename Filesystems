@@ -401,3 +401,15 @@ Description:
   list/read/write/add/remove named data streams via xattr interface.
 
 ==============================================================================
+Name: BTSlave (BitTorrent File System)
+
+Author: Bill Cox / bill at viasic com
+
+Homepage: http://btslave.sourceforge.net/
+
+Description:
+
+  BTSlave allows users to mount a BitTorrent .torrent file as a file
+  system.
+
+==============================================================================
