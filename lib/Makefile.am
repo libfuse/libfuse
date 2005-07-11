@@ -10,7 +10,7 @@ libfuse_la_SOURCES = 	\
 	fuse_i.h	\
 	fuse_kernel_compat5.h
 
-libfuse_la_LDFLAGS = -lpthread -version-number 2:3:0 \
+libfuse_la_LDFLAGS = -lpthread -version-number 2:3:1 \
 	-Wl,--version-script,fuse_versionscript
 
 EXTRA_DIST = fuse_versionscript
