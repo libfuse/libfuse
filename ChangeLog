@@ -1,3 +1,8 @@
+2005-07-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: don't block signals in worker threads.  Problem noticed by
+	Usarin Heininga
+
 2005-07-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: don't allow both 'allow_other' and 'allow_root' options to

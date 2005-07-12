@@ -94,15 +94,7 @@ static void *do_work(void *data)
 
 static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
 {
-    sigset_t oldset;
-    sigset_t newset;
-    int res;
-
-    /* Disallow signal reception in worker threads */
-    sigfillset(&newset);
-    pthread_sigmask(SIG_SETMASK, &newset, &oldset);
-    res = pthread_create(thread_id, NULL, do_work, w);
-    pthread_sigmask(SIG_SETMASK, &oldset, NULL);
+    int res = pthread_create(thread_id, NULL, do_work, w);
     if (res != 0) {
         fprintf(stderr, "fuse: error creating thread: %s\n", strerror(res));
         return -1;
