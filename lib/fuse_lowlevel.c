@@ -451,169 +451,42 @@ static void do_statfs(fuse_req_t req, fuse_ino_t nodeid)
         fuse_reply_err(req, ENOSYS);
 }
 
-static void do_setxattr(struct fuse_ll *f, struct fuse_in_header *in,
+static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid,
                         struct fuse_setxattr_in *arg)
 {
-    int res;
-    char *path;
     char *name = PARAM(arg);
     unsigned char *value = name + strlen(name) + 1;
 
-    res = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, in->nodeid);
-    if (path != NULL) {
-        res = -ENOSYS;
-        if (f->op.setxattr)
-            res = f->op.setxattr(path, name, value, arg->size, arg->flags);
-        free(path);
-    }
-    pthread_rwlock_unlock(&f->tree_lock);
-    send_reply(f, in, res, NULL, 0);
+    if (req->f->op.setxattr)
+            req->f->op.setxattr(req, nodeid, name, value, arg->size, arg->flags);
+    else
+        fuse_reply_err(req, ENOSYS);
 }
 
-static int common_getxattr(struct fuse_ll *f, struct fuse_in_header *in,
-                           const char *name, char *value, size_t size)
-{
-    int res;
-    char *path;
-
-    res = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, in->nodeid);
-    if (path != NULL) {
-        res = -ENOSYS;
-        if (f->op.getxattr)
-            res = f->op.getxattr(path, name, value, size);
-        free(path);
-    }
-    pthread_rwlock_unlock(&f->tree_lock);
-    return res;
-}
-
-static void do_getxattr_read(struct fuse_ll *f, struct fuse_in_header *in,
-                             const char *name, size_t size)
-{
-    int res;
-    char *value = (char *) malloc(size);
-    if (value == NULL) {
-        send_reply(f, in, -ENOMEM, NULL, 0);
-        return;
-    }
-    res = common_getxattr(f, in, name, value, size);
-    size = 0;
-    if (res > 0) {
-        size = res;
-        res = 0;
-    }
-    send_reply(f, in, res, value, size);
-    free(value);
-}
-
-static void do_getxattr_size(struct fuse_ll *f, struct fuse_in_header *in,
-                             const char *name)
-{
-    int res;
-    struct fuse_getxattr_out arg;
-
-    memset(&arg, 0, sizeof(arg));
-    res = common_getxattr(f, in, name, NULL, 0);
-    if (res >= 0) {
-        arg.size = res;
-        res = 0;
-    }
-    send_reply(f, in, res, &arg, SIZEOF_COMPAT(f, fuse_getxattr_out));
-}
-
-static void do_getxattr(struct fuse_ll *f, struct fuse_in_header *in,
+static void do_getxattr(fuse_req_t req, fuse_ino_t nodeid,
                         struct fuse_getxattr_in *arg)
 {
-    char *name = PARAM(arg);
-
-    if (arg->size)
-        do_getxattr_read(f, in, name, arg->size);
+    if (req->f->op.getxattr)
+        req->f->op.getxattr(req, nodeid, PARAM(arg), arg->size);
     else
-        do_getxattr_size(f, in, name);
+        fuse_reply_err(req, ENOSYS);
 }
 
-static int common_listxattr(struct fuse_ll *f, struct fuse_in_header *in,
-                            char *list, size_t size)
-{
-    int res;
-    char *path;
-
-    res = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, in->nodeid);
-    if (path != NULL) {
-        res = -ENOSYS;
-        if (f->op.listxattr)
-            res = f->op.listxattr(path, list, size);
-        free(path);
-    }
-    pthread_rwlock_unlock(&f->tree_lock);
-    return res;
-}
-
-static void do_listxattr_read(struct fuse_ll *f, struct fuse_in_header *in,
-                              size_t size)
-{
-    int res;
-    char *list = (char *) malloc(size);
-    if (list == NULL) {
-        send_reply(f, in, -ENOMEM, NULL, 0);
-        return;
-    }
-    res = common_listxattr(f, in, list, size);
-    size = 0;
-    if (res > 0) {
-        size = res;
-        res = 0;
-    }
-    send_reply(f, in, res, list, size);
-    free(list);
-}
-
-static void do_listxattr_size(struct fuse_ll *f, struct fuse_in_header *in)
-{
-    int res;
-    struct fuse_getxattr_out arg;
-
-    memset(&arg, 0, sizeof(arg));
-    res = common_listxattr(f, in, NULL, 0);
-    if (res >= 0) {
-        arg.size = res;
-        res = 0;
-    }
-    send_reply(f, in, res, &arg, SIZEOF_COMPAT(f, fuse_getxattr_out));
-}
-
-static void do_listxattr(struct fuse_ll *f, struct fuse_in_header *in,
+static void do_listxattr(fuse_req_t req, fuse_ino_t nodeid,
                          struct fuse_getxattr_in *arg)
 {
-    if (arg->size)
-        do_listxattr_read(f, in, arg->size);
+    if (req->f->op.listxattr)
+        req->f->op.listxattr(req, nodeid, arg->size);
     else
-        do_listxattr_size(f, in);
+        fuse_reply_err(req, ENOSYS);
 }
 
-static void do_removexattr(struct fuse_ll *f, struct fuse_in_header *in,
-                           char *name)
+static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, char *name)
 {
-    int res;
-    char *path;
-
-    res = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, in->nodeid);
-    if (path != NULL) {
-        res = -ENOSYS;
-        if (f->op.removexattr)
-            res = f->op.removexattr(path, name);
-        free(path);
-    }
-    pthread_rwlock_unlock(&f->tree_lock);
-    send_reply(f, in, res, NULL, 0);
+    if (req->f->op.removexattr)
+        req->f->op.removexattr(req, nodeid, name);
+    else
+        fuse_reply_err(req, ENOSYS);
 }
 
 static void do_init(struct fuse_ll *f, struct fuse_in_header *in,
