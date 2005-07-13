@@ -1,11 +1,20 @@
 FUSE_2.2 {
 	global:
+		fuse_add_dirent;
 		fuse_destroy;
+		fuse_dirent_size;
 		fuse_exit;
 		fuse_exited;
 		fuse_get_context;
 		fuse_invalidate;
 		fuse_is_lib_option;
+		fuse_ll_new;
+		fuse_ll_destroy;
+		fuse_ll_is_lib_option;
+		fuse_ll_loop;
+		fuse_ll_exited;
+		fuse_ll_read_cmd;
+		fuse_ll_process_cmd;
 		fuse_loop;
 		fuse_loop_mt;
 		fuse_loop_mt_proc;
@@ -20,6 +29,16 @@ FUSE_2.2 {
 		fuse_new_compat2;
 		fuse_process_cmd;
 		fuse_read_cmd;
+		fuse_reply_err;
+		fuse_reply_none;
+		fuse_reply_entry;
+		fuse_reply_attr;
+		fuse_reply_readlink;
+		fuse_reply_open;
+		fuse_reply_write;
+		fuse_reply_buf;
+		fuse_reply_statfs;
+		fuse_reply_xattr;
 		fuse_set_getcontext_func;
 		fuse_setup;
 		fuse_setup_compat2;

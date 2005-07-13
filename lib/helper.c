@@ -289,6 +289,7 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
 }
 
 static struct fuse *fuse_setup_common(int argc, char *argv[],
+                                      
                                       const struct fuse_operations *op,
                                       size_t op_size,
                                       char **mountpoint,

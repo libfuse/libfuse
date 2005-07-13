@@ -10,6 +10,9 @@
 #error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h instead."
 #endif
 
+#ifndef _FUSE_COMMON_H_
+#define _FUSE_COMMON_H_
+
 /** Information about open files */
 struct fuse_file_info {
     /** Open flags.  Available in open() and release() */
@@ -22,28 +25,9 @@ struct fuse_file_info {
     /** In case of a write operation indicates if this was caused by a
         writepage */
     int writepage;
+
+    /** Can be filled in by open, to use direct I/O on this file */
+    unsigned int direct_io : 1;
 };
 
-/** Extra context that may be needed by some filesystems
- *
- * The uid, gid and pid fields are not filled in case of a writepage
- * operation.
- */
-struct fuse_context {
-    /** Pointer to the fuse object */
-    struct fuse *fuse;
-
-    /** User ID of the calling process */
-    uid_t uid;
-
-    /** Group ID of the calling process */
-    gid_t gid;
-
-    /** Thread ID of the calling process */
-    pid_t pid;
-
-    /** Private filesystem data */
-    void *private_data;
-};
-
-
+#endif /* _FUSE_COMMON_H_ */

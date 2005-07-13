@@ -13,7 +13,12 @@
  * Low level API                                               *
  * ----------------------------------------------------------- */
 
-#include <fuse_common.h>
+#include "fuse_common.h"
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
+#include <utime.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,10 +30,9 @@ typedef struct fuse_req *fuse_req_t;
 struct fuse_entry_param {
     fuse_ino_t ino;
     unsigned long generation;
-    const struct stat *attr;
+    struct stat attr;
     double attr_timeout;
     double entry_timeout;
-    unsigned int direct_io : 1;
 };
 
 /* 'to_set' flags in setattr */
@@ -40,9 +44,14 @@ struct fuse_entry_param {
 #define FUSE_SET_ATTR_MTIME	(1 << 5)
 #define FUSE_SET_ATTR_CTIME	(1 << 6)
 
-struct fuse_lowlevel_operations {
+/* ------------------------------------------ */
+
+struct fuse_ll_operations {
+    void* (*init)   (void);
+    void (*destroy) (void *);
+
     void (*lookup)  (fuse_req_t req, fuse_ino_t parent, const char *name);
-    void (*forget)  (fuse_req_t req, fuse_ino_t ino);
+    void (*forget)  (fuse_req_t req, fuse_ino_t ino, unsigned long nlookup);
     void (*getattr) (fuse_req_t req, fuse_ino_t ino);
     void (*setattr) (fuse_req_t req, fuse_ino_t ino, struct stat *attr,
                      int to_set);
@@ -59,22 +68,22 @@ struct fuse_lowlevel_operations {
                      fuse_ino_t newparent, const char *newname);
     void (*link)    (fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
                      const char *newname);
-    void (*open)    (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *f);
+    void (*open)    (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
     void (*read)    (fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-                     struct fuse_file_info *f);
+                     struct fuse_file_info *fi);
     void (*write)   (fuse_req_t req, fuse_ino_t ino, const char *buf,
-                     size_t size, off_t off, struct fuse_file_info *f);
-    void (*flush)   (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *f);
-    void (*release) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *f);
+                     size_t size, off_t off, struct fuse_file_info *fi);
+    void (*flush)   (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
+    void (*release) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
     void (*fsync)   (fuse_req_t req, fuse_ino_t ino, int datasync,
-                     struct fuse_file_info *f);
-    void (*opendir) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *f);
+                     struct fuse_file_info *fi);
+    void (*opendir) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
     void (*readdir)  (fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
-                     struct fuse_file_info *f);
+                      struct fuse_file_info *fi);
     void (*releasedir) (fuse_req_t req, fuse_ino_t ino,
-                        struct fuse_file_info *f);
+                        struct fuse_file_info *fi);
     void (*fsyncdir) (fuse_req_t req, fuse_ino_t ino, int datasync,
-                      struct fuse_file_info *f);
+                      struct fuse_file_info *fi);
     void (*statfs)  (fuse_req_t req, fuse_ino_t ino);
     void (*setxattr)(fuse_req_t req, fuse_ino_t ino, const char *name,
                      const char *value, size_t size, int flags);
@@ -84,43 +93,67 @@ struct fuse_lowlevel_operations {
     void (*removexattr)(fuse_req_t req, fuse_ino_t ino, const char *name);
 };
 
-/* all except release and forget */
+/* ------------------------------------------ */
+
+/* all except forget */
 int fuse_reply_err(fuse_req_t req, int err);
 
-/* forget, unlink, rmdir, rename, setxattr, removexattr, release, releasedir */
-int fuse_reply_ok(fuse_req_t req);
+/* forget */
+int fuse_reply_none(fuse_req_t req);
 
 /* lookup, mknod, mkdir, symlink, link */
-int fuse_reply_entry(fuse_req_t req, struct fuse_entry_param *e);
+int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
 
 /* getattr, setattr */
-int fuse_reply_attr(fuse_req_t req, int struct stat *attr, double attr_timeout);
+int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
+                    double attr_timeout);
+
 /* readlink */
 int fuse_reply_readlink(fuse_req_t req, const char *link);
 
-/* open, flush, fsync, opendir, fsyncdir */
-int fuse_reply_file_info(fuse_req_t req, const struct fuse_file_info *f);
+/* open, opendir */
+int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *fi);
 
 /* write */
-int fuse_reply_write(fuse_req_t req, size_t count,
-                         const struct fuse_file_info *f);
+int fuse_reply_write(fuse_req_t req, size_t count);
 
-/* read, readdir */
-int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size,
-                    const struct fuse_file_info *f);
+/* read, readdir, getxattr, listxattr */
+int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size);
 
 /* statfs */
 int fuse_reply_statfs(fuse_req_t req, const struct statfs *statfs);
 
 /* getxattr, listxattr */
-int fuse_reply_xattr(fuse_req_t req, const char *buf, size_t size);
+int fuse_reply_xattr(fuse_req_t req, size_t count);
+
+/* ------------------------------------------ */
 
 /* return the size of a directory entry */
 size_t fuse_dirent_size(size_t namelen);
 
 /* add a directory entry to the buffer */
-void fuse_add_dirent(char *buf, const char *name, const struct stat *stat,
-                     off_t off);
+char *fuse_add_dirent(char *buf, const char *name, const struct stat *stat,
+                      off_t off);
+
+/* ------------------------------------------ */
+
+struct fuse_ll *fuse_ll_new(int fd, const char *opts,
+                            const struct fuse_ll_operations *op,
+                            size_t op_size);
+
+void fuse_ll_destroy(struct fuse_ll *f);
+
+int fuse_ll_is_lib_option(const char *opt);
+
+int fuse_ll_loop(struct fuse_ll *f);
+
+int fuse_ll_exited(struct fuse_ll* f);
+
+struct fuse_cmd *fuse_ll_read_cmd(struct fuse_ll *f);
+
+void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd);
+
+/* ------------------------------------------ */
 
 #ifdef __cplusplus
 }

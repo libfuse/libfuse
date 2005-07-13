@@ -31,6 +31,8 @@
 #error Please add -D_FILE_OFFSET_BITS=64 to your compile flags!
 #endif
 
+#include "fuse_common.h"
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
@@ -62,20 +64,6 @@ typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
 typedef struct fuse_dirhandle *fuse_dirh_t;
 typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
                               ino_t ino);
-
-/** Information about open files */
-struct fuse_file_info {
-    /** Open flags.  Available in open() and release() */
-    int flags;
-
-    /** File handle.  May be filled in by filesystem in open().
-        Available in all other file operations */
-    unsigned long fh;
-
-    /** In case of a write operation indicates if this was caused by a
-        writepage */
-    int writepage;
-};
 
 /**
  * The file system operations:
@@ -459,12 +447,9 @@ int fuse_loop_mt(struct fuse *f);
 struct fuse_context *fuse_get_context(void);
 
 /**
- * Invalidate cached data of a file.
- *
- * Useful if the 'kernel_cache' mount option is given, since in that
- * case the cache is not invalidated on file open.
- *
- * @return 0 on success or -errno on failure
+ * Obsolete, doesn't do anything
+ * 
+ * @return 0 
  */
 int fuse_invalidate(struct fuse *f, const char *path);
 

@@ -5,6 +5,7 @@ lib_LTLIBRARIES = libfuse.la
 libfuse_la_SOURCES = 	\
 	fuse.c		\
 	fuse_mt.c	\
+	fuse_lowlevel.c	\
 	helper.c	\
 	mount.c		\
 	fuse_i.h	\
