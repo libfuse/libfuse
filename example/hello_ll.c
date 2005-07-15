@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
     mountpoint = argv[1];
     fd = fuse_mount(mountpoint, NULL);
     if (fd != -1) {
-        f = fuse_ll_new(fd, "debug", &hello_ll_oper, sizeof(hello_ll_oper));
+        f = fuse_ll_new(fd, "debug", &hello_ll_oper, sizeof(hello_ll_oper), NULL);
         if (f != NULL) {
             err = fuse_ll_loop(f);
             fuse_ll_destroy(f);

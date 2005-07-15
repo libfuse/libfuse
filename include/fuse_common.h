@@ -30,4 +30,7 @@ struct fuse_file_info {
     unsigned int direct_io : 1;
 };
 
+/** Structure containing a raw command */
+struct fuse_cmd;
+
 #endif /* _FUSE_COMMON_H_ */

@@ -11,106 +11,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
-#include <unistd.h>
-#include <signal.h>
-#include <errno.h>
-#include <sys/time.h>
 
-#define FUSE_MAX_WORKERS 10
-
-struct fuse_worker {
-    struct fuse *f;
-    pthread_t threads[FUSE_MAX_WORKERS];
-    void *data;
-    fuse_processor_t proc;
-};
 
 static pthread_key_t context_key;
 static pthread_mutex_t context_lock = PTHREAD_MUTEX_INITIALIZER;
 static int context_ref;
 
-static int start_thread(struct fuse_worker *w, pthread_t *thread_id);
-
-static void *do_work(void *data)
-{
-    struct fuse_worker *w = (struct fuse_worker *) data;
-    struct fuse *f = w->f;
-    struct fuse_context *ctx;
-    int is_mainthread = (f->numworker == 1);
-
-    ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
-    if (ctx == NULL) {
-        fprintf(stderr, "fuse: failed to allocate fuse context\n");
-        pthread_mutex_lock(&f->worker_lock);
-        f->numavail --;
-        pthread_mutex_unlock(&f->worker_lock);
-        return NULL;
-    }
-    pthread_setspecific(context_key, ctx);
-
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
-    while (1) {
-        struct fuse_cmd *cmd;
-
-        if (fuse_exited(f))
-            break;
-
-        cmd = fuse_read_cmd(w->f);
-        if (cmd == NULL)
-            continue;
-
-        if (f->numavail == 0 && f->numworker < FUSE_MAX_WORKERS) {
-            pthread_mutex_lock(&f->worker_lock);
-            if (f->numworker < FUSE_MAX_WORKERS) {
-                /* FIXME: threads should be stored in a list instead
-                   of an array */
-                int res;
-                pthread_t *thread_id = &w->threads[f->numworker];
-                f->numavail ++;
-                f->numworker ++;
-                pthread_mutex_unlock(&f->worker_lock);
-                res = start_thread(w, thread_id);
-                if (res == -1) {
-                    pthread_mutex_lock(&f->worker_lock);
-                    f->numavail --;
-                    pthread_mutex_unlock(&f->worker_lock);
-                }
-            } else
-                pthread_mutex_unlock(&f->worker_lock);
-        }
-
-        w->proc(w->f, cmd, w->data);
-    }
-
-    /* Wait for cancellation */
-    if (!is_mainthread)
-        pause();
-
-    return NULL;
-}
-
-static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
-{
-    int res = pthread_create(thread_id, NULL, do_work, w);
-    if (res != 0) {
-        fprintf(stderr, "fuse: error creating thread: %s\n", strerror(res));
-        return -1;
-    }
-
-    pthread_detach(*thread_id);
-    return 0;
-}
-
 static struct fuse_context *mt_getcontext(void)
 {
-    struct fuse_context *ctx =
-        (struct fuse_context *) pthread_getspecific(context_key);
-    if (ctx == NULL)
-        fprintf(stderr, "fuse: no thread specific data for this thread\n");
-
+    struct fuse_context *ctx;
+        
+    ctx = (struct fuse_context *) pthread_getspecific(context_key);
+    if (ctx == NULL) {
+        ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));
+        if (ctx == NULL) {
+            fprintf(stderr, "fuse: failed to allocate thread specific data\n");
+            return NULL;
+        }
+        pthread_setspecific(context_key, ctx);
+    }
     return ctx;
 }
 
@@ -148,44 +67,48 @@ static void mt_delete_context_key()
     pthread_mutex_unlock(&context_lock);
 }
 
+struct procdata {
+    struct fuse *f;
+    fuse_processor_t proc;
+    void *data;
+};
+
+static void mt_generic_proc(struct fuse_ll *f, struct fuse_cmd *cmd, void *data)
+{
+    (void) f;
+    struct procdata *pd = (struct procdata *) data;
+    pd->proc(pd->f, cmd, pd->data);
+}
+
 int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
 {
-    struct fuse_worker *w;
-    int i;
+    int res;
+    struct procdata pd;
 
-    w = malloc(sizeof(struct fuse_worker));
-    if (w == NULL) {
-        fprintf(stderr, "fuse: failed to allocate worker structure\n");
+    pd.f = f;
+    pd.proc = proc;
+    pd.data = data;
+
+    if (mt_create_context_key() != 0)
         return -1;
-    }
-    memset(w, 0, sizeof(struct fuse_worker));
-    w->f = f;
-    w->data = data;
-    w->proc = proc;
 
-    if (mt_create_context_key() != 0) {
-        free(w);
-        return -1;
-    }
-    f->numworker = 1;
-    do_work(w);
+    res = fuse_ll_loop_mt_proc(f->fll, mt_generic_proc, &pd);
 
-    pthread_mutex_lock(&f->lock);
-    for (i = 1; i < f->numworker; i++)
-        pthread_cancel(w->threads[i]);
-    pthread_mutex_unlock(&f->lock);
     mt_delete_context_key();
-    free(w);
-    f->exited = 0;
-    return 0;
+    return res;
 }
 
 int fuse_loop_mt(struct fuse *f)
 {
-    if (f == NULL)
+    int res;
+
+    if (mt_create_context_key() != 0)
         return -1;
 
-    return fuse_loop_mt_proc(f, (fuse_processor_t) fuse_process_cmd, NULL);
+    res = fuse_ll_loop_mt(f->fll);
+
+    mt_delete_context_key();
+    return res;
 }
 
 __asm__(".symver fuse_loop_mt_proc,__fuse_loop_mt@");

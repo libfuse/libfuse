@@ -449,7 +449,7 @@ struct fuse_context *fuse_get_context(void);
 /**
  * Obsolete, doesn't do anything
  * 
- * @return 0 
+ * @return -EINVAL
  */
 int fuse_invalidate(struct fuse *f, const char *path);
 
@@ -473,9 +473,6 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
  * ----------------------------------------------------------- */
-
-/** Structure containing a raw command */
-struct fuse_cmd;
 
 /** Function type used to process commands */
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);

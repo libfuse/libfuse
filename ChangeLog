@@ -1,3 +1,9 @@
+2005-07-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: add '-v', '--version' and '--help' options
+
+	* add inode based API
+
 2005-07-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: don't block signals in worker threads.  Problem noticed by

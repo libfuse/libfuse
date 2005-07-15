@@ -6,7 +6,8 @@
     See the file COPYING.LIB
 */
 
-#include "fuse_lowlevel.h"
+#include <config.h>
+#include "fuse_lowlevel_i.h"
 #include "fuse_kernel.h"
 
 #include <stdio.h>
@@ -22,19 +23,6 @@
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 
-struct fuse_ll {
-    unsigned int debug : 1;
-    unsigned int allow_root : 1;
-    int fd;
-    struct fuse_ll_operations op;
-    volatile int exited;
-    int got_init;
-    void *user_data;
-    int major;
-    int minor;
-    uid_t owner;
-};
-
 struct fuse_cmd {
     char *buf;
     size_t buflen;
@@ -43,10 +31,21 @@ struct fuse_cmd {
 struct fuse_req {
     struct fuse_ll *f;
     uint64_t unique;
-    uid_t uid;
-    gid_t gid;
-    pid_t pid;
+    struct fuse_ctx ctx;
 };
+
+#ifndef USE_UCLIBC
+#define mutex_init(mut) pthread_mutex_init(mut, NULL)
+#else
+static void mutex_init(pthread_mutex_t *mut)
+{
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+    pthread_mutex_init(mut, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
+#endif
 
 static const char *opname(enum fuse_opcode opcode)
 {
@@ -81,6 +80,20 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_FSYNCDIR:		return "FSYNCDIR";
     default: 			return "???";
     }
+}
+
+static inline void fuse_dec_avail(struct fuse_ll *f)
+{
+    pthread_mutex_lock(&f->worker_lock);
+    f->numavail --;
+    pthread_mutex_unlock(&f->worker_lock);
+}
+
+static inline void fuse_inc_avail(struct fuse_ll *f)
+{
+    pthread_mutex_lock(&f->worker_lock);
+    f->numavail ++;
+    pthread_mutex_unlock(&f->worker_lock);
 }
 
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
@@ -143,10 +156,15 @@ static int send_reply_raw(struct fuse_ll *f, const struct iovec iov[],
         fflush(stdout);
     }
 
+    /* This needs to be done before the reply, otherwise the scheduler
+       could play tricks with us, and only let the counter be
+       increased long after the operation is done */
+    fuse_inc_avail(f);
+
     res = writev(f->fd, iov, count);
     if (res == -1) {
         /* ENOENT means the operation was interrupted */
-        if (!f->exited && errno != ENOENT)
+        if (!fuse_ll_exited(f) && errno != ENOENT)
             perror("fuse: writing device");
         return -errno;
     }
@@ -589,10 +607,10 @@ static void do_fsyncdir(fuse_req_t req, fuse_ino_t nodeid,
         fuse_reply_err(req, ENOSYS);
 }
 
-static void do_statfs(fuse_req_t req, fuse_ino_t nodeid)
+static void do_statfs(fuse_req_t req)
 {
     if (req->f->op.statfs)
-        req->f->op.statfs(req, nodeid);
+        req->f->op.statfs(req);
     else
         fuse_reply_err(req, ENOSYS);
 }
@@ -647,7 +665,7 @@ static void do_init(struct fuse_ll *f, uint64_t unique,
     }
     f->got_init = 1;
     if (f->op.init)
-        f->user_data = f->op.init();
+        f->userdata = f->op.init(f->userdata);
 
     f->major = FUSE_KERNEL_VERSION;
     f->minor = FUSE_KERNEL_MINOR_VERSION;
@@ -664,6 +682,16 @@ static void do_init(struct fuse_ll *f, uint64_t unique,
     send_reply(f, unique, 0, &outarg, sizeof(outarg));
 }
 
+void *fuse_req_userdata(fuse_req_t req)
+{
+    return req->f->userdata;
+}
+
+const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
+{
+    return &req->ctx;
+}
+
 static void free_cmd(struct fuse_cmd *cmd)
 {
     free(cmd->buf);
@@ -675,6 +703,8 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
     struct fuse_in_header *in = (struct fuse_in_header *) cmd->buf;
     void *inarg = cmd->buf + sizeof(struct fuse_in_header);
     struct fuse_req *req;
+
+    fuse_dec_avail(f);
 
     if (f->debug) {
         printf("unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %i\n",
@@ -708,9 +738,9 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
     
     req->f = f;
     req->unique = in->unique;
-    req->uid = in->uid;
-    req->gid = in->gid;
-    req->pid = in->pid;
+    req->ctx.uid = in->uid;
+    req->ctx.gid = in->gid;
+    req->ctx.pid = in->pid;
 
     switch (in->opcode) {
     case FUSE_LOOKUP:
@@ -783,7 +813,7 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
         break;
 
     case FUSE_STATFS:
-        do_statfs(req, in->nodeid);
+        do_statfs(req);
         break;
 
     case FUSE_FSYNC:
@@ -830,6 +860,11 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
     free_cmd(cmd);
 }
 
+void fuse_ll_exit(struct fuse_ll *f)
+{
+    f->exited = 1;
+}
+
 int fuse_ll_exited(struct fuse_ll* f)
 {
     return f->exited;
@@ -868,14 +903,14 @@ struct fuse_cmd *fuse_ll_read_cmd(struct fuse_ll *f)
             perror("fuse: reading device");
         }
 
-        f->exited = 1;
+        fuse_ll_exit(f);
         return NULL;
     }
     if ((size_t) res < sizeof(struct fuse_in_header)) {
         free_cmd(cmd);
         /* Cannot happen */
         fprintf(stderr, "short read on fuse device\n");
-        f->exited = 1;
+        fuse_ll_exit(f);
         return NULL;
     }
     cmd->buflen = res;
@@ -941,7 +976,7 @@ static int parse_ll_opts(struct fuse_ll *f, const char *opts)
 
 struct fuse_ll *fuse_ll_new(int fd, const char *opts,
                             const struct fuse_ll_operations *op,
-                            size_t op_size)
+                            size_t op_size, void *userdata)
 {
     struct fuse_ll *f;
 
@@ -963,6 +998,8 @@ struct fuse_ll *fuse_ll_new(int fd, const char *opts,
     memcpy(&f->op, op, op_size);
     f->exited = 0;
     f->owner = getuid();
+    f->userdata = userdata;
+    mutex_init(&f->worker_lock);
 
     return f;
 
@@ -974,6 +1011,10 @@ struct fuse_ll *fuse_ll_new(int fd, const char *opts,
 
 void fuse_ll_destroy(struct fuse_ll *f)
 {
+    if (f->op.destroy)
+        f->op.destroy(f->userdata);
+
+    pthread_mutex_destroy(&f->worker_lock);
     free(f);
 }
 

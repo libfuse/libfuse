@@ -992,7 +992,7 @@ static int send_fd(int sock_fd, int fd)
     return 0;
 }
 
-static void usage()
+static void usage(void)
 {
     fprintf(stderr,
             "%s: [options] mountpoint\n"
@@ -1004,6 +1004,12 @@ static void usage()
             " -z                lazy unmount\n",
             progname);
     exit(1);
+}
+
+static void show_version(void)
+{
+    printf("%s\n", PACKAGE_STRING);
+    exit(0);
 }
 
 int main(int argc, char *argv[])
@@ -1031,6 +1037,10 @@ int main(int argc, char *argv[])
             usage();
             break;
 
+        case 'v':
+            show_version();
+            break;
+
         case 'o':
             a++;
             if (a == argc) {
@@ -1052,11 +1062,24 @@ int main(int argc, char *argv[])
             quiet = 1;
             break;
 
+        case '-':
+            if (strcmp(&argv[a][2], "help") == 0)
+                usage();
+            else if (strcmp(&argv[a][2], "version") == 0)
+                show_version();
+
+            /* fall through */
+
         default:
-            fprintf(stderr, "%s: unknown option %s\n", progname, argv[a]);
+            fprintf(stderr, "%s: unknown option '%s'\n", progname, argv[a]);
             fprintf(stderr, "Try `%s -h' for more information\n", progname);
             exit(1);
         }
+    }
+
+    if (lazy && !unmount) {
+        fprintf(stderr, "%s: -z can only be used with -u\n", progname);
+        exit(1);
     }
 
     if (a == argc) {

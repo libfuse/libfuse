@@ -24,8 +24,12 @@
 extern "C" {
 #endif
 
+/** The node ID of the root inode */
+#define FUSE_ROOT_ID 1
+
 typedef unsigned long fuse_ino_t;
 typedef struct fuse_req *fuse_req_t;
+struct fuse_ll;
 
 struct fuse_entry_param {
     fuse_ino_t ino;
@@ -33,6 +37,17 @@ struct fuse_entry_param {
     struct stat attr;
     double attr_timeout;
     double entry_timeout;
+};
+
+struct fuse_ctx {
+        /** User ID of the calling process */
+    uid_t uid;
+
+    /** Group ID of the calling process */
+    gid_t gid;
+
+    /** Thread ID of the calling process */
+    pid_t pid;
 };
 
 /* 'to_set' flags in setattr */
@@ -47,7 +62,7 @@ struct fuse_entry_param {
 /* ------------------------------------------ */
 
 struct fuse_ll_operations {
-    void* (*init)   (void);
+    void* (*init)   (void *);
     void (*destroy) (void *);
 
     void (*lookup)  (fuse_req_t req, fuse_ino_t parent, const char *name);
@@ -84,7 +99,7 @@ struct fuse_ll_operations {
                         struct fuse_file_info *fi);
     void (*fsyncdir) (fuse_req_t req, fuse_ino_t ino, int datasync,
                       struct fuse_file_info *fi);
-    void (*statfs)  (fuse_req_t req, fuse_ino_t ino);
+    void (*statfs)  (fuse_req_t req);
     void (*setxattr)(fuse_req_t req, fuse_ino_t ino, const char *name,
                      const char *value, size_t size, int flags);
     void (*getxattr)(fuse_req_t req, fuse_ino_t ino, const char *name,
@@ -137,9 +152,17 @@ char *fuse_add_dirent(char *buf, const char *name, const struct stat *stat,
 
 /* ------------------------------------------ */
 
+void *fuse_req_userdata(fuse_req_t req);
+
+const struct fuse_ctx *fuse_req_ctx(fuse_req_t req);
+
+/* ------------------------------------------ */
+
+typedef void (*fuse_ll_processor_t)(struct fuse_ll *, struct fuse_cmd *, void *);
+
 struct fuse_ll *fuse_ll_new(int fd, const char *opts,
                             const struct fuse_ll_operations *op,
-                            size_t op_size);
+                            size_t op_size, void *userdata);
 
 void fuse_ll_destroy(struct fuse_ll *f);
 
@@ -147,11 +170,17 @@ int fuse_ll_is_lib_option(const char *opt);
 
 int fuse_ll_loop(struct fuse_ll *f);
 
+void fuse_ll_exit(struct fuse_ll *f);
+
 int fuse_ll_exited(struct fuse_ll* f);
 
 struct fuse_cmd *fuse_ll_read_cmd(struct fuse_ll *f);
 
 void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd);
+
+int fuse_ll_loop_mt(struct fuse_ll *f);
+
+int fuse_ll_loop_mt_proc(struct fuse_ll *f, fuse_ll_processor_t proc, void *data);
 
 /* ------------------------------------------ */
 
