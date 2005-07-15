@@ -413,3 +413,18 @@ Description:
   system.
 
 ==============================================================================
+Name: GfarmFS-FUSE
+
+Author: Takuya Ishibashi / takuya at soum co jp
+
+Homepage: http://datafarm.apgrid.org/software/gfarmfs-fuse.en.html
+
+Description:
+
+  GfarmFS-FUSE enables you to mount a Gfarm filesystem in userspace.
+  Grid Datafarm is a Petascale data-intensive computing project
+  initiated in Japan. The challenge involves construction of a Peta-
+  to Exascale parallel filesystem exploiting local storages of PCs
+  spread over the world-wide Grid.
+
+==============================================================================
