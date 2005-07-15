@@ -6,11 +6,13 @@
     See the file COPYING.LIB.
 */
 
-#include "fuse_i.h"
+#include "fuse.h"
+#include "fuse_lowlevel.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 
 static pthread_key_t context_key;
@@ -92,7 +94,7 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
     if (mt_create_context_key() != 0)
         return -1;
 
-    res = fuse_ll_loop_mt_proc(f->fll, mt_generic_proc, &pd);
+    res = fuse_ll_loop_mt_proc(fuse_get_lowlevel(f), mt_generic_proc, &pd);
 
     mt_delete_context_key();
     return res;
@@ -105,7 +107,7 @@ int fuse_loop_mt(struct fuse *f)
     if (mt_create_context_key() != 0)
         return -1;
 
-    res = fuse_ll_loop_mt(f->fll);
+    res = fuse_ll_loop_mt(fuse_get_lowlevel(f));
 
     mt_delete_context_key();
     return res;

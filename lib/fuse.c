@@ -6,7 +6,12 @@
     See the file COPYING.LIB
 */
 
-#include "fuse_i.h"
+
+/* For pthread_rwlock_t */
+#define _GNU_SOURCE
+
+#include "fuse.h"
+#include "fuse_lowlevel.h"
 #include "fuse_compat.h"
 
 #include <stdio.h>
@@ -17,6 +22,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <stdint.h>
+#include <pthread.h>
 #include <sys/param.h>
 #include <sys/uio.h>
 
@@ -52,6 +58,26 @@
 
 #define ENTRY_REVALIDATE_TIME 1.0 /* sec */
 #define ATTR_REVALIDATE_TIME 1.0 /* sec */
+
+struct fuse {
+    struct fuse_ll *fll;
+    int flags;
+    struct fuse_operations op;
+    int compat;
+    struct node **name_table;
+    size_t name_table_size;
+    struct node **id_table;
+    size_t id_table_size;
+    fuse_ino_t ctr;
+    unsigned int generation;
+    unsigned int hidectr;
+    pthread_mutex_t lock;
+    pthread_rwlock_t tree_lock;
+    void *user_data;
+    uid_t uid;
+    gid_t gid;
+    mode_t umask;
+};
 
 struct node {
     struct node *name_next;
@@ -1624,6 +1650,11 @@ struct fuse_context *fuse_get_context()
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 {
     fuse_getcontext = func;
+}
+
+struct fuse_ll *fuse_get_lowlevel(struct fuse *f)
+{
+    return f->fll;
 }
 
 static int begins_with(const char *s, const char *beg)

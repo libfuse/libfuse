@@ -497,10 +497,13 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data);
 
 /** Return the exited flag, which indicates if fuse_exit() has been
     called */
-int fuse_exited(struct fuse* f);
+int fuse_exited(struct fuse *f);
 
 /** Set function which can be used to get the current context */
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
+
+/** Returns the lowlevel FUSE object */
+struct fuse_ll *fuse_get_lowlevel(struct fuse *f);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff                                         *

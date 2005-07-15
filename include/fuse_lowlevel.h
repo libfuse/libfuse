@@ -15,10 +15,10 @@
 
 #include "fuse_common.h"
 
+#include <utime.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
-#include <utime.h>
 
 #ifdef __cplusplus
 extern "C" {

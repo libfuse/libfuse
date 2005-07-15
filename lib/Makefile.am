@@ -9,7 +9,6 @@ libfuse_la_SOURCES = 		\
 	fuse_lowlevel_mt.c	\
 	helper.c		\
 	mount.c			\
-	fuse_i.h		\
 	fuse_lowlevel_i.h
 
 libfuse_la_LDFLAGS = -lpthread -version-number 2:3:1 \
