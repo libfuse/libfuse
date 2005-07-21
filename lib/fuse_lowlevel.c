@@ -319,7 +319,7 @@ int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
 
     memset(&arg, 0, sizeof(arg));
     arg.fh = f->fh;
-    
+
     return send_reply_req(req, &arg, sizeof(arg));
 }
 
@@ -329,7 +329,7 @@ int fuse_reply_write(fuse_req_t req, size_t count)
 
     memset(&arg, 0, sizeof(arg));
     arg.size = count;
-    
+
     return send_reply_req(req, &arg, sizeof(arg));
 }
 
@@ -344,7 +344,7 @@ int fuse_reply_statfs(fuse_req_t req, const struct statfs *statfs)
 
     memset(&arg, 0, sizeof(arg));
     convert_statfs(statfs, &arg.st);
-    
+
     return send_reply_req(req, &arg, sizeof(arg));
 }
 
@@ -354,7 +354,7 @@ int fuse_reply_xattr(fuse_req_t req, size_t count)
 
     memset(&arg, 0, sizeof(arg));
     arg.size = count;
-    
+
     return send_reply_req(req, &arg, sizeof(arg));
 }
 
@@ -468,7 +468,7 @@ static void do_open(fuse_req_t req, fuse_ino_t nodeid,
                     struct fuse_open_in *arg)
 {
     struct fuse_file_info fi;
-    
+
     memset(&fi, 0, sizeof(fi));
     fi.flags = arg->flags;
 
@@ -735,7 +735,7 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
         fprintf(stderr, "fuse: failed to allocate request\n");
         goto out;
     }
-    
+
     req->f = f;
     req->unique = in->unique;
     req->ctx.uid = in->uid;

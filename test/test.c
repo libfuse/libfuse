@@ -33,7 +33,7 @@ static void test_error(const char *func, const char *msg, ...)
 
 static void start_test(const char *fmt, ...)
      __attribute__ ((format (printf, 1, 2)));
-     
+
 static void test_error(const char *func, const char *msg, ...)
 {
     va_list ap;
@@ -254,7 +254,7 @@ static int create_file(const char *path, const char *data, int len)
 {
     int res;
     int fd;
-    
+
     unlink(path);
     fd = creat(path, 0644);
     if (fd == -1) {
@@ -335,7 +335,7 @@ static int create_dir(const char *path, const char **dir_files)
     res = check_mode(path, 0755);
     if (res == -1)
         return -1;
-    
+
     for (i = 0; dir_files[i]; i++) {
         char fpath[1024];
         sprintf(fpath, "%s/%s", path, dir_files[i]);
@@ -365,7 +365,7 @@ int test_truncate(int len)
     res = create_file(testfile, data, datalen);
     if (res == -1)
         return -1;
-    
+
     res = truncate(testfile, len);
     if (res == -1) {
         PERROR("truncate");
@@ -374,7 +374,7 @@ int test_truncate(int len)
     res = check_size(testfile, len);
     if (res == -1)
         return -1;
-    
+
     if (len > 0) {
         if (len <= datalen) {
             res = check_data(testfile, data, 0, len);
@@ -468,7 +468,7 @@ static int test_symlink(void)
     res = create_file(testfile, data, datalen);
     if (res == -1)
         return -1;
-    
+
     unlink(testfile2);
     res = symlink(testfile, testfile2);
     if (res == -1) {
@@ -521,7 +521,7 @@ static int test_rename_file(void)
     res = create_file(testfile, data, datalen);
     if (res == -1)
         return -1;
-    
+
     unlink(testfile2);
     res = rename(testfile, testfile2);
     if (res == -1) {
@@ -562,7 +562,7 @@ static int test_rename_dir(void)
     res = create_dir(testdir, testdir_files);
     if (res == -1)
         return -1;
-    
+
     rmdir(testdir2);
     res = rename(testdir, testdir2);
     if (res == -1) {

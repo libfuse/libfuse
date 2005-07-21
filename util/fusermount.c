@@ -23,6 +23,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -694,13 +695,13 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd,
                     progname, origmnt, strerror(errno));
             return -1;
         }
-        
+
         if ((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
             fprintf(stderr, "%s: mountpoint %s not owned by user\n",
                     progname, origmnt);
             return -1;
         }
-        
+
         res = access(mnt, W_OK);
         if (res == -1) {
             fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
@@ -1014,25 +1015,34 @@ static void show_version(void)
 
 int main(int argc, char *argv[])
 {
-    int a;
+    int ch;
     int fd;
     int res;
     char *origmnt;
     char *mnt;
-    int unmount = 0;
-    int lazy = 0;
+    static int unmount = 0;
+    static int lazy = 0;
+    static int quiet = 0;
     char *commfd;
-    int quiet = 0;
     int cfd;
     const char *opts = "";
 
-    progname = argv[0];
+    static const struct option long_opts[] = {
+        {"unmount", no_argument, NULL, 'u'},
+        {"lazy",    no_argument, NULL, 'z'},
+        {"quiet",   no_argument, NULL, 'q'},
+        {"help",    no_argument, NULL, 'h'},
+        {"version", no_argument, NULL, 'v'},
+        {0, 0, 0, 0}};
 
-    for (a = 1; a < argc; a++) {
-        if (argv[a][0] != '-')
-            break;
+    progname = strdup(argv[0]);
+    if (progname == NULL) {
+        fprintf(stderr, "%s: failed to allocate memory\n", argv[0]);
+        exit(1);
+    }
 
-        switch (argv[a][1]) {
+    while ((ch = getopt_long(argc, argv, "hvo:uzq", long_opts, NULL)) != -1) {
+        switch (ch) {
         case 'h':
             usage();
             break;
@@ -1042,12 +1052,7 @@ int main(int argc, char *argv[])
             break;
 
         case 'o':
-            a++;
-            if (a == argc) {
-                fprintf(stderr, "%s: missing argument to -o\n", progname);
-                exit(1);
-            }
-            opts = argv[a];
+            opts = optarg;
             break;
 
         case 'u':
@@ -1062,17 +1067,7 @@ int main(int argc, char *argv[])
             quiet = 1;
             break;
 
-        case '-':
-            if (strcmp(&argv[a][2], "help") == 0)
-                usage();
-            else if (strcmp(&argv[a][2], "version") == 0)
-                show_version();
-
-            /* fall through */
-
         default:
-            fprintf(stderr, "%s: unknown option '%s'\n", progname, argv[a]);
-            fprintf(stderr, "Try `%s -h' for more information\n", progname);
             exit(1);
         }
     }
@@ -1082,12 +1077,12 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    if (a == argc) {
+    if (optind >= argc) {
         fprintf(stderr, "%s: missing mountpoint argument\n", progname);
         exit(1);
     }
 
-    origmnt = argv[a++];
+    origmnt = argv[optind];
 
     drop_privs();
     mnt = resolve_path(origmnt);

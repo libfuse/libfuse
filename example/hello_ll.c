@@ -27,13 +27,13 @@ static int hello_stat(fuse_ino_t ino, struct stat *stbuf)
         stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
         break;
-        
+
     case 2:
         stbuf->st_mode = S_IFREG | 0444;
         stbuf->st_nlink = 1;
         stbuf->st_size = strlen(hello_str);
         break;
-        
+
     default:
         return -1;
     }
@@ -63,7 +63,7 @@ static void hello_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
         e.attr_timeout = 1.0;
         e.entry_timeout = 1.0;
         hello_stat(e.ino, &e.attr);
-        
+
         fuse_reply_entry(req, &e);
     }
 }
@@ -89,7 +89,6 @@ static void dirbuf_add(struct dirbuf *b, const char *name, fuse_ino_t ino)
 static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
                              off_t off, size_t maxsize)
 {
-        
     if (off < bufsize)
         return fuse_reply_buf(req, buf + off, min(bufsize - off, maxsize));
     else
@@ -105,7 +104,7 @@ static void hello_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         fuse_reply_err(req, ENOTDIR);
     else {
         struct dirbuf b;
-    
+
         memset(&b, 0, sizeof(b));
         dirbuf_add(&b, ".", 1);
         dirbuf_add(&b, "..", 1);

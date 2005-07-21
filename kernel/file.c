@@ -248,6 +248,8 @@ static int fuse_readpage(struct file *file, struct page *page)
 	fuse_put_request(fc, req);
 	if (!err)
 		SetPageUptodate(page);
+	if (!(inode->i_sb->s_flags & MS_NOATIME))
+		fuse_invalidate_attr(inode);
  out:
 	unlock_page(page);
 	return err;
@@ -268,6 +270,8 @@ static int fuse_send_readpages(struct fuse_req *req, struct file *file,
 			SetPageUptodate(page);
 		unlock_page(page);
 	}
+	if (!(inode->i_sb->s_flags & MS_NOATIME))
+		fuse_invalidate_attr(inode);
 	return req->out.h.error;
 }
 
@@ -484,8 +488,8 @@ static int fuse_commit_write(struct file *file, struct page *page,
 			clear_page_dirty(page);
 			SetPageUptodate(page);
 		}
-	} else if (err == -EINTR || err == -EIO)
-		fuse_invalidate_attr(inode);
+	}
+	fuse_invalidate_attr(inode);
 	return err;
 }
 
@@ -577,7 +581,8 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 		if (write && pos > i_size_read(inode))
 			i_size_write(inode, pos);
 		*ppos = pos;
-	} else if (write && (res == -EINTR || res == -EIO))
+	}
+	if (write || !(inode->i_sb->s_flags & MS_NOATIME))
 		fuse_invalidate_attr(inode);
 
 	return res;
@@ -642,7 +647,7 @@ static int fuse_set_page_dirty(struct page *page)
 static struct file_operations fuse_file_operations = {
 	.llseek		= generic_file_llseek,
 #ifdef KERNEL_2_6
-	.read		= generic_file_read,	
+	.read		= generic_file_read,
 #else
 	.read		= fuse_file_read,
 #endif

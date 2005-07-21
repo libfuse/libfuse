@@ -145,7 +145,7 @@ struct fuse_operations {
      * is permitted for the given flags.  Optionally open may also
      * return an arbitary filehandle in the fuse_file_info structure,
      * which will be passed to all file operations.
-     * 
+     *
      * Changed in version 2.2
      */
     int (*open) (const char *, struct fuse_file_info *);
@@ -197,7 +197,7 @@ struct fuse_operations {
      * not possible to determine if a flush is final, so each flush
      * should be treated equally.  Multiple write-flush sequences are
      * relatively rare, so this shouldn't be a problem.
-     * 
+     *
      * Changed in version 2.2
      */
     int (*flush) (const char *, struct fuse_file_info *);
@@ -266,13 +266,13 @@ struct fuse_operations {
      * passes non-zero offset to the filler function.  When the buffer
      * is full (or an error happens) the filler function will return
      * '1'.
-     * 
+     *
      * Introduced in version 2.3
      */
     int (*readdir) (const char *, void *, fuse_fill_dir_t, off_t,
                     struct fuse_file_info *);
 
-    /** Release directory 
+    /** Release directory
      *
      * Introduced in version 2.3
      */
@@ -293,7 +293,7 @@ struct fuse_operations {
      * The return value will passed in the private_data field of
      * fuse_context to all file operations and as a parameter to the
      * destroy() method.
-     * 
+     *
      * Introduced in version 2.3
      */
     void *(*init) (void);
@@ -302,7 +302,7 @@ struct fuse_operations {
      * Clean up filesystem
      *
      * Called on filesystem exit.
-     * 
+     *
      * Introduced in version 2.3
      */
     void (*destroy) (void *);
@@ -448,7 +448,7 @@ struct fuse_context *fuse_get_context(void);
 
 /**
  * Obsolete, doesn't do anything
- * 
+ *
  * @return -EINVAL
  */
 int fuse_invalidate(struct fuse *f, const char *path);

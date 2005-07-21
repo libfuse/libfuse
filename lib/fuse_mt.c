@@ -22,7 +22,7 @@ static int context_ref;
 static struct fuse_context *mt_getcontext(void)
 {
     struct fuse_context *ctx;
-        
+
     ctx = (struct fuse_context *) pthread_getspecific(context_key);
     if (ctx == NULL) {
         ctx = (struct fuse_context *) malloc(sizeof(struct fuse_context));

@@ -1,3 +1,16 @@
+2005-07-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't change mtime/ctime/atime to local time on read/write.
+	Bug reported by Ben Grimm
+
+	* Install fuse_common.h and fuse_lowlevel.h.  Report by Christian
+	Magnusson
+
+	* fusermount: use getopt_long() for option parsing.  It allows the
+	use of '--' to stop argument scanning, so fusermount can now
+	operate on directories whose names begin with a '-'.  Patch by
+	Adam Connell
+
 2005-07-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: add '-v', '--version' and '--help' options

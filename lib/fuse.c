@@ -550,7 +550,7 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
                         int err)
 {
     if (!err) {
-        if (fuse_reply_entry(req, e) == -ENOENT) 
+        if (fuse_reply_entry(req, e) == -ENOENT)
             forget_node(req_fuse(req), e->ino, 1);
     } else
         reply_err(req, err);
@@ -1353,7 +1353,7 @@ static void fuse_releasedir(fuse_req_t req, fuse_ino_t ino,
                             struct fuse_file_info *llfi)
 {
     struct fuse *f = req_fuse_prepare(req);
-    struct fuse_file_info fi;    
+    struct fuse_file_info fi;
     struct fuse_dirhandle *dh = get_dirhandle(llfi, &fi);
     if (f->op.releasedir) {
         char *path;
@@ -1698,7 +1698,7 @@ static int parse_lib_opts(struct fuse *f, const char *opts, char **llopts)
             if (fuse_ll_is_lib_option(opt)) {
                 size_t optlen = strlen(opt);
                 if (strcmp(opt, "debug") == 0)
-                    f->flags |= FUSE_DEBUG;                
+                    f->flags |= FUSE_DEBUG;
                 memmove(d, opt, optlen);
                 d += optlen;
                 *d++ = ',';

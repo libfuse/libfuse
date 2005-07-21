@@ -72,8 +72,8 @@ void fuse_unmount(const char *mountpoint)
     const char *mountprog = FUSERMOUNT_PROG;
     char umount_cmd[1024];
 
-    snprintf(umount_cmd, sizeof(umount_cmd) - 1, "%s -u -q -z %s", mountprog,
-             mountpoint);
+    snprintf(umount_cmd, sizeof(umount_cmd) - 1, "%s -u -q -z -- %s",
+             mountprog, mountpoint);
 
     umount_cmd[sizeof(umount_cmd) - 1] = '\0';
     system(umount_cmd);
@@ -106,8 +106,17 @@ int fuse_mount(const char *mountpoint, const char *opts)
 
     if(pid == 0) {
         char env[10];
-        const char *argv[] = {mountprog, opts ? "-o" : mountpoint, opts,
-                              mountpoint, NULL};
+        const char *argv[32];
+        int a = 0;
+        
+        argv[a++] = mountprog;
+        if (opts) {
+            argv[a++] = "-o";
+            argv[a++] = opts;
+        }
+        argv[a++] = "--";
+        argv[a++] = mountpoint;
+        argv[a++] = NULL;
 
         close(fds[1]);
         fcntl(fds[0], F_SETFD, 0);
