@@ -502,7 +502,7 @@ static struct fuse_conn *new_conn(void)
 		fc->bdi.ra_pages = (VM_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
 		fc->bdi.unplug_io_fn = default_unplug_io_fn;
 #endif
-		fc->reqctr = 1;
+		fc->reqctr = 0;
 	}
 	return fc;
 }

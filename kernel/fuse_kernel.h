@@ -14,7 +14,7 @@
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 1
+#define FUSE_KERNEL_MINOR_VERSION 2
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
@@ -55,6 +55,14 @@ struct fuse_kstatfs {
 	__u32	namelen;
 };
 
+struct fuse_file_lock {
+	__u64	start;
+	__u64	end;
+	__u64	owner;
+	__u32	pid;
+	__u32	type;
+};
+
 #define FATTR_MODE	(1 << 0)
 #define FATTR_UID	(1 << 1)
 #define FATTR_GID	(1 << 2)
@@ -91,7 +99,10 @@ enum fuse_opcode {
 	FUSE_OPENDIR       = 27,
 	FUSE_READDIR       = 28,
 	FUSE_RELEASEDIR    = 29,
-	FUSE_FSYNCDIR      = 30
+	FUSE_FSYNCDIR      = 30,
+	FUSE_GETLK         = 31,
+	FUSE_SETLK         = 32,
+	FUSE_SETLKW        = 33
 };
 
 /* Conservative buffer size for the client */
@@ -212,6 +223,10 @@ struct fuse_getxattr_in {
 struct fuse_getxattr_out {
 	__u32	size;
 	__u32	padding;
+};
+
+struct fuse_lk_in_out {
+	struct fuse_file_lock lk;
 };
 
 struct fuse_init_in_out {

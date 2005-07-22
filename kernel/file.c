@@ -606,6 +606,125 @@ static ssize_t fuse_direct_write(struct file *file, const char __user *buf,
 	return res;
 }
 
+static int default_getlk(struct file *file, struct file_lock *fl)
+{
+	struct file_lock *cfl = posix_test_lock(file, fl);
+	fl->fl_type = F_UNLCK;
+	if (cfl)
+		*fl = *cfl;
+	return 0;
+}
+
+static void convert_file_lock(const struct file_lock *fl,
+			      struct fuse_file_lock *ffl)
+{
+	ffl->start = fl->fl_start;
+	ffl->end   = fl->fl_end;
+	ffl->owner = (unsigned long) fl->fl_owner;
+	ffl->pid   = fl->fl_pid;
+	ffl->type  = fl->fl_type;
+}
+
+static int convert_fuse_file_lock(const struct fuse_file_lock *ffl,
+				  struct file_lock *fl)
+{
+	if (ffl->start < 0 || ffl->end < 0 || ffl->end <= ffl->start)
+		return -EIO;
+
+	if (ffl->type != F_UNLCK && ffl->type != F_RDLCK &&
+	    ffl->type != F_WRLCK)
+		return -EIO;
+
+	fl->fl_start = ffl->start;
+	fl->fl_end   = ffl->end;
+	fl->fl_owner = (fl_owner_t) (unsigned long) ffl->owner;
+	fl->fl_pid   = ffl->pid;
+	fl->fl_type  = ffl->type;
+
+	return 0;
+}
+
+static int fuse_getlk(struct file *file, struct file_lock *fl)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	struct fuse_conn *fc = get_fuse_conn(inode);
+	struct fuse_req *req;
+	struct fuse_lk_in_out arg;
+	int err;
+
+	if (fc->no_lk)
+		return default_getlk(file, fl);
+
+	req = fuse_get_request(fc);
+	if (!req)
+		return -EINTR;
+
+	memset(&arg, 0, sizeof(arg));
+	convert_file_lock(fl, &arg.lk);
+	req->in.h.opcode = FUSE_GETLK;
+	req->in.h.nodeid = get_node_id(inode);
+	req->inode = inode;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(arg);
+	req->in.args[0].value = &arg;
+	req->out.numargs = 1;
+	req->out.args[0].size = sizeof(arg);
+	req->out.args[0].value = &arg;
+	request_send(fc, req);
+	err = req->out.h.error;
+	fuse_put_request(fc, req);
+	if (!err)
+		err = convert_fuse_file_lock(&arg.lk, fl);
+	else if (err == -ENOSYS) {
+		fc->no_lk = 1;
+		err = default_getlk(file, fl);
+	}
+
+	return err;
+}
+
+static int fuse_setlk(struct file *file, struct file_lock *fl)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	struct fuse_conn *fc = get_fuse_conn(inode);
+	struct fuse_req *req;
+	struct fuse_lk_in_out arg;
+	int err;
+
+	if (fc->no_lk)
+		return posix_lock_file_wait(file, fl);
+
+	req = fuse_get_request(fc);
+	if (!req)
+		return -EINTR;
+
+	memset(&arg, 0, sizeof(arg));
+	convert_file_lock(fl, &arg.lk);
+	req->in.h.opcode = (fl->fl_flags & FL_SLEEP) ? FUSE_SETLKW : FUSE_SETLK;
+	req->in.h.nodeid = get_node_id(inode);
+	req->inode = inode;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(arg);
+	req->in.args[0].value = &arg;
+	request_send(fc, req);
+	err = req->out.h.error;
+	fuse_put_request(fc, req);
+	if (err == -ENOSYS) {
+		fc->no_lk = 1;
+		err = posix_lock_file_wait(file, fl);
+	}
+
+	return err;
+}
+
+static int fuse_file_lock(struct file *file, int cmd, struct file_lock *fl)
+{
+	if (cmd == F_GETLK)
+		return fuse_getlk(file, fl);
+	else
+		return fuse_setlk(file, fl);
+}
+
 #ifndef KERNEL_2_6
 static ssize_t fuse_file_read(struct file *file, char __user *buf,
 			      size_t count, loff_t *ppos)
@@ -657,6 +776,7 @@ static struct file_operations fuse_file_operations = {
 	.flush		= fuse_flush,
 	.release	= fuse_release,
 	.fsync		= fuse_fsync,
+	.lock		= fuse_file_lock,
 #ifdef KERNEL_2_6
 	.sendfile	= generic_file_sendfile,
 #endif
@@ -670,6 +790,7 @@ static struct file_operations fuse_direct_io_file_operations = {
 	.flush		= fuse_flush,
 	.release	= fuse_release,
 	.fsync		= fuse_fsync,
+	.lock		= fuse_file_lock,
 	/* no mmap and sendfile */
 };
 
