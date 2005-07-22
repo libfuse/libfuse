@@ -722,7 +722,7 @@ static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 }
 
 /* Look up request on processing list by unique ID */
-static struct fuse_req *request_find(struct fuse_conn *fc, unsigned unique)
+static struct fuse_req *request_find(struct fuse_conn *fc, u64 unique)
 {
 	struct list_head *entry;
 

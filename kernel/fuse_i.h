@@ -304,7 +304,7 @@ struct fuse_conn {
 	struct list_head unused_list;
 
 	/** The next unique request id */
-	int reqctr;
+	u64 reqctr;
 
 	/** Mount is active */
 	unsigned mounted : 1;

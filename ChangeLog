@@ -1,3 +1,10 @@
+2005-07-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix bug, that causes filesystem requests to hang when unique
+	request counter becomes negative.  This happens after
+	2,147,483,648 operations, so most people won't care.  Thanks to
+	Franco Broi for the report and testing.
+
 2005-07-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Don't change mtime/ctime/atime to local time on read/write.
