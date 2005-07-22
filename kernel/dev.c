@@ -679,7 +679,7 @@ static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 	return fuse_dev_readv(file, &iov, 1, off);
 }
 
-static struct fuse_req *request_find(struct fuse_conn *fc, unsigned unique)
+static struct fuse_req *request_find(struct fuse_conn *fc, int unique)
 {
 	struct list_head *entry;
 
