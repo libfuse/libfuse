@@ -37,7 +37,7 @@ if test -z "$kernsrcver"; then
 fi
 AC_MSG_RESULT([$kernsrcver])
 majver=`echo "$kernsrcver" | cut -f-2 -d.`
-kmoduledir=/lib/modules/$kernsrcver
+kmoduledir=${INSTALL_MOD_PATH}/lib/modules/$kernsrcver
 AC_SUBST(kernelsrc)
 AC_SUBST(majver)
 AC_SUBST(kmoduledir)

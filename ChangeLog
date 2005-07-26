@@ -1,3 +1,9 @@
+2005-07-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Make the installation path of fuse.ko and mount.fuse
+	configurable through INSTALL_MOD_PATH and MOUNT_FUSE_PATH
+	environment variables.  Requirement and help from Csaba Henk.
+
 2005-07-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug, that causes filesystem requests to hang when unique

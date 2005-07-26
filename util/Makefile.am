@@ -15,8 +15,10 @@ install-exec-hook:
 
 EXTRA_DIST = mount.fuse
 
+MOUNT_FUSE_PATH = @MOUNT_FUSE_PATH@
+
 install-exec-local:
-	$(INSTALL_PROGRAM) $(srcdir)/mount.fuse $(DESTDIR)/sbin/mount.fuse
+	$(INSTALL_PROGRAM) $(srcdir)/mount.fuse $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
 
 uninstall-local:
-	rm -f $(DESTDIR)/sbin/mount.fuse
+	rm -f $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
