@@ -13,7 +13,7 @@ Homepage: http://owfs.sourceforge.net
 Description:
 
   OWFS uses FUSE to expose all the Dallas 1-wire sensors, iButtons and
-  memory chips as a filesystem. Devices are dynamically included in
+  memory chips as a filesystem.  Devices are dynamically included in
   the directory, and properties like temperature are obtained by
   reading a file.
 
@@ -38,7 +38,7 @@ Homepage: http://pobox.com/~vgough/encfs.html
 
 Description:
 
-  EncFS provides an encrypted filesystem in user-space. The EncFS
+  EncFS provides an encrypted filesystem in user-space.  The EncFS
   module itself runs without any special permissions and uses the FUSE
   library and Linux kernel module to provide the filesystem interface.
 
@@ -78,7 +78,7 @@ Homepage: http://www.runtimeaccess.com
 Description:
 
   RTA is a specialized memory resident interface to the internal data
-  of your application. It is not a stand-alone server but a library
+  of your application.  It is not a stand-alone server but a library
   which attaches to your program and offers up your program's internal
   structures and arrays as tables in a database and as files in a
   virtual file system.
@@ -92,11 +92,11 @@ Homepage: http://www.freenet.org.nz/phonebook
 
 Description:
 
-  PhoneBook is expressly designed for use in situations where someone can
-  be under pressure (legal, military and/or criminal) to disclose
+  PhoneBook is expressly designed for use in situations where someone
+  can be under pressure (legal, military and/or criminal) to disclose
   decryption keys, and has a 'chaffing' scheme whereby the user can
-  disclose only passphrases for non-sensitive material, and credibly deny
-  the existence of anything else.
+  disclose only passphrases for non-sensitive material, and credibly
+  deny the existence of anything else.
 
 ==============================================================================
 Name: KIO Fuse Gateway
@@ -120,7 +120,7 @@ Homepage: http://pobox.com/~vgough/fuse-csharp.html
 
 Description:
 
-  It allows you to write a Linux filesystem in C#. It uses the FUSE
+  It allows you to write a Linux filesystem in C#.  It uses the FUSE
   library to do the actual Linux filesystem integration, and adds an
   interface to the Mono runtime.
 
@@ -133,8 +133,8 @@ Homepage: http://sourceforge.net/project/showfiles.php?group_id=121684&package_i
 
 Description:
 
-  This is a modified LUFS daemon, which uses the FUSE kernel module.  It
-  is binary compatible with existing LUFS filesystems, so no
+  This is a modified LUFS daemon, which uses the FUSE kernel module.
+  It is binary compatible with existing LUFS filesystems, so no
   recompilation is needed.
 
 ==============================================================================
@@ -148,8 +148,8 @@ Description:
 
   Btfs is a simple application to map some basic bluetooth functions
   into the filesystem.  With btfs a simple ls DEVICES shows you all
-  bluetooth devices within range and cp somefile OPUSH/devicename sends
-  the given file to the device.
+  bluetooth devices within range and cp somefile OPUSH/devicename
+  sends the given file to the device.
 
 ==============================================================================
 Name: mcachefs
@@ -160,11 +160,11 @@ Homepage: http://lists.samba.org/archive/linux/2004-March/010211.html
 
 Description:
 
-  mcachefs is a simple caching filesystem for Linux using FUSE. It
+  mcachefs is a simple caching filesystem for Linux using FUSE.  It
   works by copying the file that you asked for when the file is
   opened, and then using that copy for all subsequent requests for the
-  file. This is really a fairly naive approach to caching, and will be
-  improved in the future.
+  file.  This is really a fairly naive approach to caching, and will
+  be improved in the future.
 
 ==============================================================================
 Name: Fusedav
@@ -189,7 +189,7 @@ Homepage: http://relfs.sourceforge.net/
 Description:
 
   This is a linux userspace filesystem using fuse and a relational
-  database to store information about files. Special directories can
+  database to store information about files.  Special directories can
   represent views on the database, and many powerful features, such as
   bayesian classification, are added through plugins.
 
@@ -203,7 +203,7 @@ Homepage: http://richard.jones.name/google-hacks/gmail-filesystem/gmail-filesyst
 Description:
 
   GmailFS provides a mountable Linux filesystem which uses your Gmail
-  account as its storage medium. GmailFS is a Python application and
+  account as its storage medium.  GmailFS is a Python application and
   uses the FUSE userland filesystem infrastructure to help provide the
   filesystem, and libgmail to communicate with Gmail.
 
@@ -243,8 +243,8 @@ Homepage: http://sourceforge.net/projects/cvsfs
 Description:
 
   This provides a package which presents the CVS contents as mountable
-  file system. It allows to view the versioned files as like they were
-  ordinary files on a disk. There is also a possibility to check
+  file system.  It allows to view the versioned files as like they
+  were ordinary files on a disk.  There is also a possibility to check
   in/out some files for editing.
 
 ==============================================================================
@@ -257,11 +257,10 @@ Homepage: http://wayback.sourceforge.net/
 Description:
 
   When you use a Wayback file system, old versions of files are never
-  lost. No matter how much you change a file or directory, everything
+  lost.  No matter how much you change a file or directory, everything
   is always kept in a versioning file so that you never lose important
-  data. Wayback provides the ability to remount any already mounted
-  file system with versioning support under a different
-  directory.
+  data.  Wayback provides the ability to remount any already mounted
+  file system with versioning support under a different directory.
 
 ==============================================================================
 Name: Trivial Rolebased Authorisation & Capability Statemachine (TRACS)
@@ -273,7 +272,7 @@ Homepage: http://www.xs4all.nl/~rmeijer/tracs.html
 Description:
 
   This project is the first spin-off project of the Security Incident
-  Policy Enforcement System project. In the process of designing a
+  Policy Enforcement System project.  In the process of designing a
   SIPES, the need was recognized for the implementation of an
   authorisation server that provides functionality not provided by any
   of the current authorisation solutions.
@@ -303,7 +302,7 @@ Homepage: http://chaos.allsiemens.com/siefs
 Description:
 
   SieFS is a virtual filesystem for accessing Siemens mobile phones'
-  memory (flexmem or MultiMediaCard) from Linux. Now you can mount
+  memory (flexmem or MultiMediaCard) from Linux.  Now you can mount
   your phone (by datacable or IRDA) and work with it like with any
   other removable storage.
 
@@ -318,7 +317,7 @@ Description:
 
   MediaDatabase is database to store filesystem metadata (directory
   structure) and/or audio tracks descriptions of offline media and
-  frontends to database (WWW, GUI and CUI). It was developed to fight
+  frontends to database (WWW, GUI and CUI).  It was developed to fight
   chaos of large compact disk collection but it can help track other
   removable media such as floppy disks and data DVDs.
 
@@ -396,9 +395,10 @@ Homepage: http://linux-ntfs.sf.net/
 
 Description:
 
-  NTFS-FUSE is part of ntfsprogs package (utily name - ntfsmount). It's rely
-  on libntfs. NTFS-FUSE support file overwrite changing it size and can
-  list/read/write/add/remove named data streams via xattr interface.
+  NTFS-FUSE is part of ntfsprogs package (utily name - ntfsmount).
+  It's rely on libntfs.  NTFS-FUSE support file overwrite changing it
+  size and can list/read/write/add/remove named data streams via xattr
+  interface.
 
 ==============================================================================
 Name: BTSlave (BitTorrent File System)
@@ -423,7 +423,7 @@ Description:
 
   GfarmFS-FUSE enables you to mount a Gfarm filesystem in userspace.
   Grid Datafarm is a Petascale data-intensive computing project
-  initiated in Japan. The challenge involves construction of a Peta-
+  initiated in Japan.  The challenge involves construction of a Peta-
   to Exascale parallel filesystem exploiting local storages of PCs
   spread over the world-wide Grid.
 
@@ -437,9 +437,9 @@ Homepage: http://ian.blenke.com/projects/cornfs/cornfs.html
 Description:
 
   CORNFS is an attempt at creating a distributed filesystem that
-  mirrors N copies of files across a group of M number of
-  servers. Everything in CORNFS is stored as a file. At any time, it
-  is possible to reconstruct the entire filesystem via a simple
-  overlay rsync from the remote filesystems.
+  mirrors N copies of files across a group of M number of servers.
+  Everything in CORNFS is stored as a file.  At any time, it is
+  possible to reconstruct the entire filesystem via a simple overlay
+  rsync from the remote filesystems.
 
 ==============================================================================
