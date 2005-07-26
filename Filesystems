@@ -428,3 +428,18 @@ Description:
   spread over the world-wide Grid.
 
 ==============================================================================
+Name: Clustered Ordinary Raid Network File System (CORNFS)
+
+Author: Ian C. Blenke / icblenke at nks net
+
+Homepage: http://ian.blenke.com/projects/cornfs/cornfs.html
+
+Description:
+
+  CORNFS is an attempt at creating a distributed filesystem that
+  mirrors N copies of files across a group of M number of
+  servers. Everything in CORNFS is stored as a file. At any time, it
+  is possible to reconstruct the entire filesystem via a simple
+  overlay rsync from the remote filesystems.
+
+==============================================================================
