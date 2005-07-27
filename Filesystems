@@ -443,3 +443,19 @@ Description:
   rsync from the remote filesystems.
 
 ==============================================================================
+Name: djmount
+
+Author: Rémi Turboult / r3mi at users sourceforge net
+
+Homepage: http://djmount.sourceforge.net
+
+Description:
+
+  Djmount allows to mount as a Linux filesystem the content of
+  MediaServer devices compatible with the UPnP AV protocol.  It
+  discovers automatically all UPnP AV Media Servers on the network,
+  and make the content available in a directory tree.  An Audio or
+  Video file is rendered as a playlist (.m3u or .ram) which contains
+  an URL for the file.
+
+==============================================================================
