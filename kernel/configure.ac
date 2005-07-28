@@ -91,7 +91,7 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	KERNELMAKE_PARAMS=
 	KERNELCPPFLAGS=
 	AC_MSG_CHECKING([if this is user mode linux])
-	if test -f $kernelsrc/include/linux/autoconf.h && grep -q "^#define CONFIG_USERMODE 1" $kernelsrc/include/linux/autoconf.h; then
+	if test -f $kernelsrc/include/linux/autoconf.h && egrep -q "^#define CONFIG_(USERMODE|UML) 1" $kernelsrc/include/linux/autoconf.h; then
 		isuml=yes
 		KERNELMAKE_PARAMS="ARCH=um"
 		KERNELCPPFLAGS="-D__arch_um__ -DSUBARCH=\\\"i386\\\" -D_LARGEFILE64_SOURCE -I${kernelsrc}/arch/um/include -Derrno=kernel_errno -I${kernelsrc}/arch/um/kernel/tt/include -I${kernelsrc}/arch/um/kernel/skas/include"

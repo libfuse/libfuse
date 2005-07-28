@@ -653,7 +653,7 @@ static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid,
                         struct fuse_setxattr_in *arg)
 {
     char *name = PARAM(arg);
-    unsigned char *value = name + strlen(name) + 1;
+    char *value = name + strlen(name) + 1;
 
     if (req->f->op.setxattr)
             req->f->op.setxattr(req, nodeid, name, value, arg->size,

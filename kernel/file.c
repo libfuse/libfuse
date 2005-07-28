@@ -248,8 +248,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 	fuse_put_request(fc, req);
 	if (!err)
 		SetPageUptodate(page);
-	if (!(inode->i_sb->s_flags & MS_NOATIME))
-		fuse_invalidate_attr(inode);
+	fuse_invalidate_attr(inode); /* atime changed */
  out:
 	unlock_page(page);
 	return err;
@@ -270,8 +269,6 @@ static int fuse_send_readpages(struct fuse_req *req, struct file *file,
 			SetPageUptodate(page);
 		unlock_page(page);
 	}
-	if (!(inode->i_sb->s_flags & MS_NOATIME))
-		fuse_invalidate_attr(inode);
 	return req->out.h.error;
 }
 
@@ -321,6 +318,7 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
 	if (!err && data.req->num_pages)
 		err = fuse_send_readpages(data.req, file, inode);
 	fuse_put_request(fc, data.req);
+	fuse_invalidate_attr(inode); /* atime changed */
 	return err;
 }
 #else /* KERNEL_2_6 */
@@ -582,8 +580,7 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 			i_size_write(inode, pos);
 		*ppos = pos;
 	}
-	if (write || !(inode->i_sb->s_flags & MS_NOATIME))
-		fuse_invalidate_attr(inode);
+	fuse_invalidate_attr(inode);
 
 	return res;
 }

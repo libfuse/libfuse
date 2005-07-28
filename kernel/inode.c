@@ -540,7 +540,7 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 	attr.ino = FUSE_ROOT_ID;
 	return fuse_iget(sb, 1, 0, &attr);
 }
-
+#ifndef FUSE_MAINLINE
 #ifdef KERNEL_2_6
 static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 {
@@ -603,6 +603,7 @@ static struct export_operations fuse_export_operations = {
 	.encode_fh      = fuse_encode_fh,
 };
 #endif
+#endif
 
 static struct super_operations fuse_super_operations = {
 	.alloc_inode    = fuse_alloc_inode,
@@ -630,8 +631,10 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_magic = FUSE_SUPER_MAGIC;
 	sb->s_op = &fuse_super_operations;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
+#ifndef FUSE_MAINLINE
 #ifdef KERNEL_2_6
 	sb->s_export_op = &fuse_export_operations;
+#endif
 #endif
 
 	file = fget(d.fd);

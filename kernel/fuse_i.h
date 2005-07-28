@@ -11,6 +11,7 @@
 #else
 #include "fuse_kernel.h"
 #include <linux/version.h>
+#include <linux/utsname.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 #error Kernel version 2.5.* not supported

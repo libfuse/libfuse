@@ -824,8 +824,8 @@ static int mount_fuse(const char *mnt, const char *opts)
     char *dev;
     const char *type = "fuse";
     struct stat stbuf;
-    char *fsname;
-    char *mnt_opts;
+    char *fsname = NULL;
+    char *mnt_opts = NULL;
     const char *real_mnt = mnt;
     int currdir_fd = -1;
     int mountpoint_fd = -1;

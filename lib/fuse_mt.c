@@ -77,8 +77,8 @@ struct procdata {
 
 static void mt_generic_proc(struct fuse_ll *f, struct fuse_cmd *cmd, void *data)
 {
-    (void) f;
     struct procdata *pd = (struct procdata *) data;
+    (void) f;
     pd->proc(pd->f, cmd, pd->data);
 }
 

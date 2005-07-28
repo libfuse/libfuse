@@ -95,7 +95,7 @@ struct node {
 struct fuse_dirhandle {
     pthread_mutex_t lock;
     struct fuse *fuse;
-    unsigned char *contents;
+    char *contents;
     int allocated;
     unsigned len;
     unsigned needlen;
@@ -1231,7 +1231,7 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
     unsigned namelen = strlen(name);
     unsigned entsize;
     unsigned newlen;
-    unsigned char *newptr;
+    char *newptr;
 
     if (stat)
         stbuf = *stat;
