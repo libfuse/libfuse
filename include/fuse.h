@@ -24,7 +24,7 @@
 #define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 3
+#define FUSE_MINOR_VERSION 4
 
 /* This interface uses 64 bit off_t */
 #if _FILE_OFFSET_BITS != 64
@@ -74,10 +74,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  * negated error value (-errno) directly.
  *
  * All methods are optional, but some are essential for a useful
- * filesystem (e.g. getattr).  Flush, release, fsync, opendir,
- * releasedir, fsyncdir, init and destroy are special purpose
- * methods, without which a full featured filesystem can still be
- * implemented.
+ * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
+ * releasedir, fsyncdir, init and destroy are special purpose methods,
+ * without which a full featured filesystem can still be implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -145,7 +144,16 @@ struct fuse_operations {
      * arbitary filehandle in the fuse_file_info structure, which will
      * be passed to all file operations.
      *
+     * Open does not need to check the permission to open the file
+     * with the given flags.  In fact it cannot correctly do that
+     * since it doesn't have a way to determine if the file was just
+     * created (and hence the permission need not be checked).
+     * 
+     * If permission needs to be checked, implement the access()
+     * method, and do the check there.
+     *
      * Changed in version 2.2
+     * Optional from version 2.4
      */
     int (*open) (const char *, struct fuse_file_info *);
 

@@ -18,6 +18,8 @@
 
 	* Perform ACCESS operation in case of open(), if the file wasn't
 	newly created
+
+	* lib (highlevel): make open method optional
  
 2005-07-28  Miklos Szeredi <miklos@szeredi.hu>
 

@@ -982,15 +982,14 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
                       struct fuse_file_info *fi)
 {
     struct fuse *f = req_fuse_prepare(req);
-    char *path;
-    int err;
+    char *path = NULL;
+    int err = 0;
 
-    err = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, ino);
-    if (path != NULL) {
-        err = -ENOSYS;
-        if (f->op.open) {
+    if (f->op.open) {
+        err = -ENOENT;
+        path = get_path(f, ino);
+        if (path != NULL) {
             if (!f->compat)
                 err = f->op.open(path, fi);
             else
@@ -1011,7 +1010,7 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
         pthread_mutex_lock(&f->lock);
         if (fuse_reply_open(req, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
-            if(f->op.release) {
+            if(f->op.release && path != NULL) {
                 if (!f->compat)
                     f->op.release(path, fi);
                 else
