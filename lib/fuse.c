@@ -53,6 +53,12 @@
     'gid' option*/
 #define FUSE_SET_GID (1 << 8)
 
+/** Bypass the page cache for read and write operations  */
+#define FUSE_DIRECT_IO (1 << 9)
+
+/** If the FUSE_KERNEL_CACHE flag is given, then cached data will not
+    be flushed on open */
+#define FUSE_KERNEL_CACHE (1 << 10)
 
 #define FUSE_MAX_PATH 4096
 
@@ -978,6 +984,11 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
             fflush(stdout);
         }
 
+        if (f->flags & FUSE_DIRECT_IO)
+            fi->direct_io = 1;
+        if (f->flags & FUSE_KERNEL_CACHE)
+            fi->keep_cache = 1;
+
         pthread_mutex_lock(&f->lock);
         if (fuse_reply_open(req, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
@@ -1673,6 +1684,8 @@ int fuse_is_lib_option(const char *opt)
         strcmp(opt, "use_ino") == 0 ||
         strcmp(opt, "allow_root") == 0 ||
         strcmp(opt, "readdir_ino") == 0 ||
+        strcmp(opt, "direct_io") == 0 ||
+        strcmp(opt, "kernel_cache") == 0 ||
         begins_with(opt, "umask=") ||
         begins_with(opt, "uid=") ||
         begins_with(opt, "gid="))
@@ -1708,6 +1721,10 @@ static int parse_lib_opts(struct fuse *f, const char *opts, char **llopts)
                 f->flags |= FUSE_USE_INO;
             else if (strcmp(opt, "readdir_ino") == 0)
                 f->flags |= FUSE_READDIR_INO;
+            else if (strcmp(opt, "direct_io") == 0)
+                f->flags |= FUSE_DIRECT_IO;
+            else if (strcmp(opt, "kernel_cache") == 0)
+                f->flags |= FUSE_KERNEL_CACHE;
             else if (sscanf(opt, "umask=%o", &f->umask) == 1)
                 f->flags |= FUSE_SET_MODE;
             else if (sscanf(opt, "uid=%u", &f->uid) == 1)

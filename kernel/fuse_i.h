@@ -90,17 +90,11 @@ static inline void set_page_dirty_lock(struct page *page)
     doing the mount will be allowed to access the filesystem */
 #define FUSE_ALLOW_OTHER         (1 << 1)
 
-/** If the FUSE_KERNEL_CACHE flag is given, then cached data will not
-    be flushed on open */
-#define FUSE_KERNEL_CACHE        (1 << 2)
-
 #ifndef KERNEL_2_6
 /** Allow FUSE to combine reads into 64k chunks.  This is useful if
     the filesystem is better at handling large chunks */
 #define FUSE_LARGE_READ          (1 << 31)
 #endif
-/** Bypass the page cache for read and write operations  */
-#define FUSE_DIRECT_IO           (1 << 3)
 
 /** FUSE inode */
 struct fuse_inode {

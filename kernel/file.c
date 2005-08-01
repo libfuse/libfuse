@@ -16,6 +16,8 @@
 #define PageUptodate(page) Page_Uptodate(page)
 #define clear_page_dirty(page)	ClearPageDirty(page)
 #endif
+static struct file_operations fuse_direct_io_file_operations;
+
 int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
@@ -65,16 +67,19 @@ int fuse_open_common(struct inode *inode, struct file *file, int isdir)
 	req->out.args[0].value = &outarg;
 	request_send(fc, req);
 	err = req->out.h.error;
-	if (!err && !(fc->flags & FUSE_KERNEL_CACHE))
-#ifdef KERNEL_2_6
-		invalidate_inode_pages(inode->i_mapping);
-#else
-		invalidate_inode_pages(inode);
-#endif
 	if (err) {
 		fuse_request_free(ff->release_req);
 		kfree(ff);
 	} else {
+		if (!isdir && (outarg.open_flags & FOPEN_DIRECT_IO))
+			file->f_op = &fuse_direct_io_file_operations;
+		if (!(outarg.open_flags & FOPEN_KEEP_CACHE)) {
+#ifdef KERNEL_2_6
+			invalidate_inode_pages(inode->i_mapping);
+#else
+			invalidate_inode_pages(inode);
+#endif
+		}
 		ff->fh = outarg.fh;
 		file->private_data = ff;
 	}
@@ -814,12 +819,6 @@ static struct address_space_operations fuse_file_aops  = {
 
 void fuse_init_file_inode(struct inode *inode)
 {
-	struct fuse_conn *fc = get_fuse_conn(inode);
-
-	if (fc->flags & FUSE_DIRECT_IO)
-		inode->i_fop = &fuse_direct_io_file_operations;
-	else {
-		inode->i_fop = &fuse_file_operations;
-		inode->i_data.a_ops = &fuse_file_aops;
-	}
+	inode->i_fop = &fuse_file_operations;
+	inode->i_data.a_ops = &fuse_file_aops;
 }

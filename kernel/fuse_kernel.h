@@ -71,6 +71,9 @@ struct fuse_file_lock {
 #define FATTR_MTIME	(1 << 5)
 #define FATTR_CTIME	(1 << 6)
 
+#define FOPEN_DIRECT_IO		(1 << 0)
+#define FOPEN_KEEP_CACHE	(1 << 1)
+
 enum fuse_opcode {
 	FUSE_LOOKUP	   = 1,
 	FUSE_FORGET	   = 2,  /* no reply */

@@ -342,6 +342,10 @@ int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
 
     memset(&arg, 0, sizeof(arg));
     arg.fh = f->fh;
+    if (f->direct_io)
+        arg.open_flags |= FOPEN_DIRECT_IO;
+    if (f->keep_cache)
+        arg.open_flags |= FOPEN_KEEP_CACHE;
 
     return send_reply_req(req, &arg, sizeof(arg));
 }

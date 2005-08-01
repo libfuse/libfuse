@@ -4,6 +4,15 @@
 
 	* Do not limit number of file locks being waited upon
 
+	* kernel: implement two flags, open can set: 'direct_io' and
+	'keep_cache'.  These correspond exactly to mount options
+	'direct_io' and 'kernel_cache', but allow a per-open setting.
+
+	* Move 'direct_io' and 'kernel_cache' mount option handling to
+	userspace.  For both mount options, if the option is given, then
+	the respective open flag is set, otherwise the open flag is left
+	unmodified (so the filesystem can set it).
+ 
 2005-07-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: invalidate attributes for read/readdir/readlink

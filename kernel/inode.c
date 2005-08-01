@@ -402,19 +402,11 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_ALLOW_OTHER;
 			break;
 
-		case OPT_KERNEL_CACHE:
-			d->flags |= FUSE_KERNEL_CACHE;
-			break;
-
 #ifndef KERNEL_2_6
 		case OPT_LARGE_READ:
 			d->flags |= FUSE_LARGE_READ;
 			break;
 #endif
-		case OPT_DIRECT_IO:
-			d->flags |= FUSE_DIRECT_IO;
-			break;
-
 		case OPT_MAX_READ:
 			if (match_int(&args[0], &value))
 				return 0;
@@ -443,14 +435,10 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 		seq_puts(m, ",default_permissions");
 	if (fc->flags & FUSE_ALLOW_OTHER)
 		seq_puts(m, ",allow_other");
-	if (fc->flags & FUSE_KERNEL_CACHE)
-		seq_puts(m, ",kernel_cache");
 #ifndef KERNEL_2_6
 	if (fc->flags & FUSE_LARGE_READ)
 		seq_puts(m, ",large_read");
 #endif
-	if (fc->flags & FUSE_DIRECT_IO)
-		seq_puts(m, ",direct_io");
 	if (fc->max_read != ~0)
 		seq_printf(m, ",max_read=%u", fc->max_read);
 	return 0;

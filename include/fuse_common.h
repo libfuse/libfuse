@@ -28,6 +28,10 @@ struct fuse_file_info {
 
     /** Can be filled in by open, to use direct I/O on this file */
     unsigned int direct_io : 1;
+
+    /** Can be filled in by open, to indicate, that cached file data
+        need not be invalidated */    
+    unsigned int keep_cache : 1;
 };
 
 /** Structure containing a raw command */
