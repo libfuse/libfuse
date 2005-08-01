@@ -686,18 +686,29 @@ static int fuse_setlk(struct file *file, struct file_lock *fl)
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_req *req;
 	struct fuse_lk_in_out arg;
+	int sleep = fl->fl_flags & FL_SLEEP;
 	int err;
 
 	if (fc->no_lk)
 		return posix_lock_file_wait(file, fl);
 
-	req = fuse_get_request(fc);
-	if (!req)
-		return -EINTR;
+	if (!sleep) {
+		req = fuse_get_request(fc);
+		if (!req)
+			return -EINTR;
+	} else {
+		/* SETLKW can wait indefinately so we do not use up a
+		   request from the pool, but allocate an unaccounted
+		   new one */
+		req = fuse_request_alloc();
+		if (!req)
+			return -ENOMEM;
+		req->unaccounted = 1;
+	}
 
 	memset(&arg, 0, sizeof(arg));
 	convert_file_lock(fl, &arg.lk);
-	req->in.h.opcode = (fl->fl_flags & FL_SLEEP) ? FUSE_SETLKW : FUSE_SETLK;
+	req->in.h.opcode = sleep ? FUSE_SETLKW : FUSE_SETLK;
 	req->in.h.nodeid = get_node_id(inode);
 	req->inode = inode;
 	req->in.numargs = 1;

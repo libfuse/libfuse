@@ -202,6 +202,9 @@ struct fuse_req {
 	/** The request is preallocated */
 	unsigned preallocated:1;
 
+	/**  The request is not accounted via outstanding_{sem,debt} */
+	unsigned unaccounted:1;
+
 	/** The request was interrupted */
 	unsigned interrupted:1;
 
@@ -337,6 +340,7 @@ struct fuse_conn {
 	/** Is removexattr not implemented by fs? */
 	unsigned no_removexattr : 1;
 
+	/** Are file locking primitives implemented by fs? */
 	unsigned no_lk : 1;
 
 #ifdef KERNEL_2_6

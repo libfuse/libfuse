@@ -12,6 +12,7 @@ FUSE_2.2 {
 		fuse_ll_destroy;
 		fuse_ll_is_lib_option;
 		fuse_ll_loop;
+		fuse_ll_loop_mnt;
 		fuse_ll_exited;
 		fuse_ll_read_cmd;
 		fuse_ll_process_cmd;
@@ -39,6 +40,7 @@ FUSE_2.2 {
 		fuse_reply_buf;
 		fuse_reply_statfs;
 		fuse_reply_xattr;
+		fuse_req_ctx;
 		fuse_set_getcontext_func;
 		fuse_setup;
 		fuse_setup_compat2;

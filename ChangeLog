@@ -2,6 +2,8 @@
 
 	* Added missing symbols to versionscript (Joshua J. Berry)
 
+	* Do not limit number of file locks being waited upon
+
 2005-07-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: invalidate attributes for read/readdir/readlink
