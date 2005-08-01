@@ -141,10 +141,9 @@ struct fuse_operations {
     /** File open operation
      *
      * No creation, or trunctation flags (O_CREAT, O_EXCL, O_TRUNC)
-     * will be passed to open().  Open should check if the operation
-     * is permitted for the given flags.  Optionally open may also
-     * return an arbitary filehandle in the fuse_file_info structure,
-     * which will be passed to all file operations.
+     * will be passed to open().  Optionally open may return an
+     * arbitary filehandle in the fuse_file_info structure, which will
+     * be passed to all file operations.
      *
      * Changed in version 2.2
      */
@@ -239,10 +238,7 @@ struct fuse_operations {
     /** Remove extended attributes */
     int (*removexattr) (const char *, const char *);
 
-    /** Open direcory
-     *
-     * This method should check if the open operation is permitted for
-     * this  directory
+    /** Open directory
      *
      * Introduced in version 2.3
      */
@@ -311,8 +307,10 @@ struct fuse_operations {
      * Check file access permissions
      * 
      * Need not be implemented.  Will only be called for the access()
-     * system call, and only if 'default_permissions' mount option is
-     * not given.
+     * system call, and for the open() system call, unless a new file
+     * is created (file didn't exist and O_CREAT was given).  If the
+     * 'default_permissions' mount option is given, this method is
+     * never called.
      *
      * Introduced in version 2.4
      */

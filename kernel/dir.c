@@ -552,7 +552,9 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 			return -EACCES;
 
 		err = 0;
-		if (nd->flags & LOOKUP_ACCESS)
+		if (nd && 
+		    ((nd->flags & LOOKUP_ACCESS) ||
+		     ((nd->flags & LOOKUP_OPEN) && mode != 0)))
 			err = fuse_access(inode, mask);
 	}
 	return err;
