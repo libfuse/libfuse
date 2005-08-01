@@ -724,6 +724,25 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
         reply_err(req, err);
 }
 
+static void fuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
+{
+    struct fuse *f = req_fuse_prepare(req);
+    char *path;
+    int err;
+
+    err = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
+    path = get_path(f, ino);
+    if (path != NULL) {
+        err = -ENOSYS;
+        if (f->op.access)
+            err = f->op.access(path, mask);
+        free(path);
+    }
+    pthread_rwlock_unlock(&f->tree_lock);
+    reply_err(req, err);
+}
+
 static void fuse_readlink(fuse_req_t req, fuse_ino_t ino)
 {
     struct fuse *f = req_fuse_prepare(req);
@@ -1589,6 +1608,7 @@ static struct fuse_ll_operations fuse_path_ops = {
     .forget = fuse_forget,
     .getattr = fuse_getattr,
     .setattr = fuse_setattr,
+    .access = fuse_access,
     .readlink = fuse_readlink,
     .mknod = fuse_mknod,
     .mkdir = fuse_mkdir,

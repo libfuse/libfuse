@@ -81,6 +81,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_GETLK:		return "GETLK";
     case FUSE_SETLK:		return "SETLK";
     case FUSE_SETLKW:		return "SETLKW";
+    case FUSE_ACCESS:		return "ACCESS";
     default: 			return "???";
     }
 }
@@ -430,6 +431,14 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid,
         fuse_reply_err(req, ENOSYS);
 }
 
+static void do_access(fuse_req_t req, fuse_ino_t nodeid,
+                      struct fuse_access_in *arg)
+{
+    if (req->f->op.access)
+        req->f->op.access(req, nodeid, arg->mask);
+    else
+        fuse_reply_err(req, ENOSYS);
+}
 static void do_readlink(fuse_req_t req, fuse_ino_t nodeid)
 {
     if (req->f->op.readlink)
@@ -926,6 +935,10 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
 
     case FUSE_SETLKW:
         do_setlk(req, in->nodeid, 1, (struct fuse_lk_in_out *) inarg);
+        break;
+        
+    case FUSE_ACCESS:
+        do_access(req, in->nodeid, (struct fuse_access_in *) inarg);
         break;
 
     default:

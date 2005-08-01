@@ -334,8 +334,11 @@ struct fuse_conn {
 	/** Is removexattr not implemented by fs? */
 	unsigned no_removexattr : 1;
 
-	/** Are file locking primitives implemented by fs? */
+	/** Are file locking primitives not implemented by fs? */
 	unsigned no_lk : 1;
+
+	/** Is access not implemented by fs */
+	unsigned no_access : 1;
 
 #ifdef KERNEL_2_6
 	/** Backing dev info */

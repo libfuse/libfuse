@@ -26,11 +26,12 @@ struct fuse_file_info {
         writepage */
     int writepage;
 
-    /** Can be filled in by open, to use direct I/O on this file */
+    /** Can be filled in by open, to use direct I/O on this file.
+        Introduced in version 2.4 */
     unsigned int direct_io : 1;
 
     /** Can be filled in by open, to indicate, that cached file data
-        need not be invalidated */    
+        need not be invalidated.  Introduced in version 2.4 */
     unsigned int keep_cache : 1;
 };
 

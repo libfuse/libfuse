@@ -306,6 +306,17 @@ struct fuse_operations {
      * Introduced in version 2.3
      */
     void (*destroy) (void *);
+
+    /**
+     * Check file access permissions
+     * 
+     * Need not be implemented.  Will only be called for the access()
+     * system call, and only if 'default_permissions' mount option is
+     * not given.
+     *
+     * Introduced in version 2.4
+     */
+    int (*access) (const char *, int);
 };
 
 /** Extra context that may be needed by some filesystems

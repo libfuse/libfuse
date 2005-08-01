@@ -78,6 +78,7 @@ struct fuse_ll_operations {
     void (*getattr)(fuse_req_t req, fuse_ino_t ino);
     void (*setattr)(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
                      int to_set);
+    void (*access) (fuse_req_t req, fuse_ino_t ino, int mask);
     void (*readlink)(fuse_req_t req, fuse_ino_t ino);
     void (*mknod)  (fuse_req_t req, fuse_ino_t parent, const char *name,
                     mode_t mode, dev_t rdev);
