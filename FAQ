@@ -189,16 +189,19 @@ Subject: 'find' command
 > I'm having trouble getting the find command to search through fuse
 > directories. What settings do I need in 'getattr'?
 
-use the -noleaf option to find
-(find uses the following parameters to determine whether it should recurse
-into a subdirectory)
+The 'st_nlink' member must be set correctly for directories to make
+'find' work.  If it's not set correctly the '-noleaf' option of find
+can be used to make it ignore the hard link count (see 'man find').
 
-nr_links must be >= 3
-size must be > 0
-and must be a directory
+The correct value of 'st_nlink' for directories is NSUB + 2.  Where
+NSUB is the number of subdirectories.  NOTE: regular-file/symlink/etc
+entries _do not_ count into NSUB, only directories.
 
-so just return those in the getattr for your directories and you wont have
-to use -noleaf.
+If calculating NSUB is hard, the filesystem can set st_nlink to 1 for
+directories, and find will still work.  This is not documented
+behavior of find, and it's not clear whether this is intended or just
+by accident.  The NTFS filesysem uses this for example, so it's
+unlikely that this find "feature" will go away.
 
 ---------------------------------------------------------------------------
 Subject: File system interactivity
