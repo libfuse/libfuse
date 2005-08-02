@@ -62,9 +62,6 @@
 
 #define FUSE_MAX_PATH 4096
 
-#define ENTRY_REVALIDATE_TIME 1.0 /* sec */
-#define ATTR_REVALIDATE_TIME 1.0 /* sec */
-
 struct fuse {
     struct fuse_ll *fll;
     int flags;
@@ -83,6 +80,8 @@ struct fuse {
     uid_t uid;
     gid_t gid;
     mode_t umask;
+    double entry_timeout;
+    double attr_timeout;
 };
 
 struct node {
@@ -516,8 +515,8 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
         else {
             e->ino = node->nodeid;
             e->generation = node->generation;
-            e->entry_timeout = ENTRY_REVALIDATE_TIME;
-            e->attr_timeout = ATTR_REVALIDATE_TIME;
+            e->entry_timeout = f->entry_timeout;
+            e->attr_timeout = f->attr_timeout;
             set_stat(f, e->ino, &e->attr);
             if (f->flags & FUSE_DEBUG) {
                 printf("   NODEID: %lu\n", (unsigned long) e->ino);
@@ -634,7 +633,7 @@ static void fuse_getattr(fuse_req_t req, fuse_ino_t ino)
     pthread_rwlock_unlock(&f->tree_lock);
     if (!err) {
         set_stat(f, ino, &buf);
-        fuse_reply_attr(req, &buf, ATTR_REVALIDATE_TIME);
+        fuse_reply_attr(req, &buf, f->attr_timeout);
     } else
         reply_err(req, err);
 }
@@ -719,7 +718,7 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     pthread_rwlock_unlock(&f->tree_lock);
     if (!err) {
         set_stat(f, ino, &buf);
-        fuse_reply_attr(req, &buf, ATTR_REVALIDATE_TIME);
+        fuse_reply_attr(req, &buf, f->attr_timeout);
     } else
         reply_err(req, err);
 }
@@ -1707,7 +1706,9 @@ int fuse_is_lib_option(const char *opt)
         strcmp(opt, "kernel_cache") == 0 ||
         begins_with(opt, "umask=") ||
         begins_with(opt, "uid=") ||
-        begins_with(opt, "gid="))
+        begins_with(opt, "gid=") ||
+        begins_with(opt, "entry_timeout=") ||
+        begins_with(opt, "attr_timeout="))
         return 1;
     else
         return 0;
@@ -1750,6 +1751,10 @@ static int parse_lib_opts(struct fuse *f, const char *opts, char **llopts)
                 f->flags |= FUSE_SET_UID;
             else if(sscanf(opt, "gid=%u", &f->gid) == 1)
                 f->flags |= FUSE_SET_GID;
+            else if (sscanf(opt, "entry_timeout=%lf", &f->entry_timeout) == 1)
+                /* nop */;
+            else if (sscanf(opt, "attr_timeout=%lf", &f->attr_timeout) == 1)
+                /* nop */;
             else
                 fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
         }
@@ -1781,6 +1786,9 @@ struct fuse *fuse_new_common(int fd, const char *opts,
         fprintf(stderr, "fuse: failed to allocate fuse object\n");
         goto out;
     }
+
+    f->entry_timeout = 1.0;
+    f->attr_timeout = 1.0;
 
     if (parse_lib_opts(f, opts, &llopts) == -1)
         goto out_free;

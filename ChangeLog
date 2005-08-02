@@ -1,3 +1,10 @@
+2005-08-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* highlevel-lib: added mount options "attr_timeout" and
+	"entry_timeout".  These options control the length of time file
+	attributes and entries (names) are cached.  Both default to 1.0
+	second.
+	
 2005-08-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added missing symbols to versionscript (Joshua J. Berry)
