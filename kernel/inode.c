@@ -326,11 +326,9 @@ enum {
 	OPT_GROUP_ID,
 	OPT_DEFAULT_PERMISSIONS,
 	OPT_ALLOW_OTHER,
-	OPT_KERNEL_CACHE,
 #ifndef KERNEL_2_6
 	OPT_LARGE_READ,
 #endif
-	OPT_DIRECT_IO,
 	OPT_MAX_READ,
 	OPT_ERR
 };
@@ -342,11 +340,9 @@ static match_table_t tokens = {
 	{OPT_GROUP_ID,			"group_id=%u"},
 	{OPT_DEFAULT_PERMISSIONS,	"default_permissions"},
 	{OPT_ALLOW_OTHER,		"allow_other"},
-	{OPT_KERNEL_CACHE,		"kernel_cache"},
 #ifndef KERNEL_2_6
 	{OPT_LARGE_READ,		"large_read"},
 #endif
-	{OPT_DIRECT_IO,			"direct_io"},
 	{OPT_MAX_READ,			"max_read=%u"},
 	{OPT_ERR,			NULL}
 };
