@@ -112,17 +112,16 @@ Description:
   linux apps.
 
 ==============================================================================
-Name: C# bindings
+Name: SULF - Stackable User-Level Filesystem (C# bindings)
 
 Author: Valient Gough / vgough at pobox com
 
-Homepage: http://pobox.com/~vgough/fuse-csharp.html
+Homepage: http://arg0.net/users/vgough/sulf/index.html
 
 Description:
 
-  It allows you to write a Linux filesystem in C#.  It uses the FUSE
-  library to do the actual Linux filesystem integration, and adds an
-  interface to the Mono runtime.
+  SULF allows you to write a Linux filesystem in C#.  It uses the FUSE
+  library to do the actual Linux filesystem integration in user-space.
 
 ==============================================================================
 Name: LUFS bridge (alpha)
