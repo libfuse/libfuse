@@ -94,7 +94,7 @@ int fuse_ll_loop_mt_proc(struct fuse_ll *f, fuse_ll_processor_t proc, void *data
     struct fuse_worker *w;
     int i;
 
-    w = malloc(sizeof(struct fuse_worker));
+    w = (struct fuse_worker *) malloc(sizeof(struct fuse_worker));
     if (w == NULL) {
         fprintf(stderr, "fuse: failed to allocate worker structure\n");
         return -1;

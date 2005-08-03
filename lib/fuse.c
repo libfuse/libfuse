@@ -745,7 +745,7 @@ static void fuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
 static void fuse_readlink(fuse_req_t req, fuse_ino_t ino)
 {
     struct fuse *f = req_fuse_prepare(req);
-    char link[PATH_MAX + 1];
+    char linkname[PATH_MAX + 1];
     char *path;
     int err;
 
@@ -755,13 +755,13 @@ static void fuse_readlink(fuse_req_t req, fuse_ino_t ino)
     if (path != NULL) {
         err = -ENOSYS;
         if (f->op.readlink)
-            err = f->op.readlink(path, link, sizeof(link));
+            err = f->op.readlink(path, linkname, sizeof(linkname));
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
     if (!err) {
-        link[PATH_MAX] = '\0';
-        fuse_reply_readlink(req, link);
+        linkname[PATH_MAX] = '\0';
+        fuse_reply_readlink(req, linkname);
     } else
         reply_err(req, err);
 }
@@ -878,8 +878,8 @@ static void fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     reply_err(req, err);
 }
 
-static void fuse_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
-                         const char *name)
+static void fuse_symlink(fuse_req_t req, const char *linkname,
+                         fuse_ino_t parent, const char *name)
 {
     struct fuse *f = req_fuse_prepare(req);
     struct fuse_entry_param e;
@@ -896,7 +896,7 @@ static void fuse_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
         }
         err = -ENOSYS;
         if (f->op.symlink && f->op.getattr) {
-            err = f->op.symlink(link, path);
+            err = f->op.symlink(linkname, path);
             if (!err)
                 err = lookup_path(f, parent, name, path, &e);
         }
@@ -1253,7 +1253,7 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
 }
 
 static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
-                           const struct stat *stat, off_t off)
+                           const struct stat *statp, off_t off)
 {
     struct stat stbuf;
     unsigned namelen = strlen(name);
@@ -1261,11 +1261,11 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
     unsigned newlen;
     char *newptr;
 
-    if (stat)
-        stbuf = *stat;
+    if (statp)
+        stbuf = *statp;
     else {
         memset(&stbuf, 0, sizeof(stbuf));
-        stbuf.st_ino = -1;
+        stbuf.st_ino = (ino_t) -1;
     }
 
     if (!(dh->fuse->flags & FUSE_USE_INO)) {
@@ -1289,7 +1289,7 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
             return 1;
     }
 
-    newptr = realloc(dh->contents, newlen);
+    newptr = (char *) realloc(dh->contents, newlen);
     if (!newptr) {
         dh->error = -ENOMEM;
         return 1;
@@ -1300,10 +1300,10 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
     return 0;
 }
 
-static int fill_dir(void *buf, const char *name, const struct stat *stat,
+static int fill_dir(void *buf, const char *name, const struct stat *stbuf,
                     off_t off)
 {
-    return fill_dir_common((struct fuse_dirhandle *) buf, name, stat, off);
+    return fill_dir_common((struct fuse_dirhandle *) buf, name, stbuf, off);
 }
 
 static int fill_dir_old(struct fuse_dirhandle *dh, const char *name, int type,
@@ -1431,15 +1431,15 @@ static int default_statfs(struct statfs *buf)
 }
 
 static void convert_statfs_compat(struct fuse_statfs_compat1 *compatbuf,
-                                  struct statfs *statfs)
+                                  struct statfs *stbuf)
 {
-    statfs->f_bsize   = compatbuf->block_size;
-    statfs->f_blocks  = compatbuf->blocks;
-    statfs->f_bfree   = compatbuf->blocks_free;
-    statfs->f_bavail  = compatbuf->blocks_free;
-    statfs->f_files   = compatbuf->files;
-    statfs->f_ffree   = compatbuf->files_free;
-    statfs->f_namelen = compatbuf->namelen;
+    stbuf->f_bsize   = compatbuf->block_size;
+    stbuf->f_blocks  = compatbuf->blocks;
+    stbuf->f_bfree   = compatbuf->blocks_free;
+    stbuf->f_bavail  = compatbuf->blocks_free;
+    stbuf->f_files   = compatbuf->files;
+    stbuf->f_ffree   = compatbuf->files_free;
+    stbuf->f_namelen = compatbuf->namelen;
 }
 
 static void fuse_statfs(fuse_req_t req)
@@ -1870,7 +1870,7 @@ struct fuse *fuse_new_compat2(int fd, const char *opts,
 struct fuse *fuse_new_compat1(int fd, int flags,
                               const struct fuse_operations_compat1 *op)
 {
-    char *opts = NULL;
+    const char *opts = NULL;
     if (flags & FUSE_DEBUG_COMPAT1)
         opts = "debug";
     return fuse_new_common(fd, opts, (struct fuse_operations *) op,

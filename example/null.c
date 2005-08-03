@@ -12,8 +12,6 @@
 #include <time.h>
 #include <errno.h>
 
-#define UNUSED(x) x __attribute__((unused))
-
 static int null_getattr(const char *path, struct stat *stbuf)
 {
     if(strcmp(path, "/") != 0)
@@ -30,34 +28,46 @@ static int null_getattr(const char *path, struct stat *stbuf)
     return 0;
 }
 
-static int null_truncate(const char *path, off_t UNUSED(size))
+static int null_truncate(const char *path, off_t size)
 {
+    (void) size;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
     return 0;
 }
 
-static int null_open(const char *path, struct fuse_file_info *UNUSED(fi))
+static int null_open(const char *path, struct fuse_file_info *fi)
 {
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
     return 0;
 }
 
-static int null_read(const char *path, char *UNUSED(buf), size_t size,
-                     off_t UNUSED(offset), struct fuse_file_info *UNUSED(fi))
+static int null_read(const char *path, char *buf, size_t size,
+                     off_t offset, struct fuse_file_info *fi)
 {
+    (void) buf;
+    (void) offset;
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 
     return size;
 }
 
-static int null_write(const char *path, const char *UNUSED(buf), size_t size,
-                     off_t UNUSED(offset), struct fuse_file_info *UNUSED(fi))
+static int null_write(const char *path, const char *buf, size_t size,
+                     off_t offset, struct fuse_file_info *fi)
 {
+    (void) buf;
+    (void) offset;
+    (void) fi;
+
     if(strcmp(path, "/") != 0)
         return -ENOENT;
 

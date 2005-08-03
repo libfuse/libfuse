@@ -40,7 +40,7 @@ static void mt_freecontext(void *data)
     free(data);
 }
 
-static int mt_create_context_key()
+static int mt_create_context_key(void)
 {
     int err = 0;
     pthread_mutex_lock(&context_lock);
@@ -58,7 +58,7 @@ static int mt_create_context_key()
     return err;
 }
 
-static void mt_delete_context_key()
+static void mt_delete_context_key(void)
 {
     pthread_mutex_lock(&context_lock);
     context_ref--;

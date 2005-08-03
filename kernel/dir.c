@@ -24,7 +24,7 @@ static inline unsigned long time_to_jiffies(unsigned long sec,
 					    unsigned long nsec)
 {
 	struct timespec ts = {sec, nsec};
-	return jiffies + timespec_to_jiffies(&ts);
+	return jiffies + ((sec || nsec) ? timespec_to_jiffies(&ts) : 0) - 1;
 }
 
 static void fuse_lookup_init(struct fuse_req *req, struct inode *dir,
@@ -552,7 +552,7 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 			return -EACCES;
 
 		err = 0;
-		if (nd && 
+		if (nd &&
 		    ((nd->flags & LOOKUP_ACCESS) ||
 		     ((nd->flags & LOOKUP_OPEN) && mode != 0)))
 			err = fuse_access(inode, mask);

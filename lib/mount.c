@@ -108,7 +108,7 @@ int fuse_mount(const char *mountpoint, const char *opts)
         char env[10];
         const char *argv[32];
         int a = 0;
-        
+
         argv[a++] = mountprog;
         if (opts) {
             argv[a++] = "-o";

@@ -78,7 +78,7 @@ static void dirbuf_add(struct dirbuf *b, const char *name, fuse_ino_t ino)
     struct stat stbuf;
     size_t oldsize = b->size;
     b->size += fuse_dirent_size(strlen(name));
-    b->p = realloc(b->p, b->size);
+    b->p = (char *) realloc(b->p, b->size);
     memset(&stbuf, 0, sizeof(stbuf));
     stbuf.st_ino = ino;
     fuse_add_dirent(b->p + oldsize, name, &stbuf, b->size);

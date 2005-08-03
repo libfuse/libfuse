@@ -63,13 +63,14 @@ static void invalid_option(const char *argv[], int argctr)
     fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
 }
 
-static void exit_handler()
+static void exit_handler(int sig)
 {
+    (void) sig;
     if (fuse_instance != NULL)
         fuse_exit(fuse_instance);
 }
 
-static int set_one_signal_handler(int signal, void (*handler)(int))
+static int set_one_signal_handler(int sig, void (*handler)(int))
 {
     struct sigaction sa;
     struct sigaction old_sa;
@@ -79,20 +80,20 @@ static int set_one_signal_handler(int signal, void (*handler)(int))
     sigemptyset(&(sa.sa_mask));
     sa.sa_flags = 0;
 
-    if (sigaction(signal, NULL, &old_sa) == -1) {
+    if (sigaction(sig, NULL, &old_sa) == -1) {
         perror("FUSE: cannot get old signal handler");
         return -1;
     }
 
     if (old_sa.sa_handler == SIG_DFL &&
-        sigaction(signal, &sa, NULL) == -1) {
+        sigaction(sig, &sa, NULL) == -1) {
         perror("Cannot set signal handler");
         return -1;
     }
     return 0;
 }
 
-static int set_signal_handlers()
+static int set_signal_handlers(void)
 {
     if (set_one_signal_handler(SIGHUP, exit_handler) == -1 ||
         set_one_signal_handler(SIGINT, exit_handler) == -1 ||
@@ -121,13 +122,13 @@ static int add_option_to(const char *opt, char **optp)
     unsigned len = strlen(opt);
     if (*optp) {
         unsigned oldlen = strlen(*optp);
-        *optp = realloc(*optp, oldlen + 1 + len + 1);
+        *optp = (char *) realloc(*optp, oldlen + 1 + len + 1);
         if (*optp == NULL)
             return -1;
         (*optp)[oldlen] = ',';
         strcpy(*optp + oldlen + 1, opt);
     } else {
-        *optp = malloc(len + 1);
+        *optp = (char *) malloc(len + 1);
         if (*optp == NULL)
             return -1;
         strcpy(*optp, opt);
@@ -197,7 +198,7 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
     else if (basename[1] != '\0')
         basename++;
 
-    fsname_opt = malloc(strlen(basename) + 64);
+    fsname_opt = (char *) malloc(strlen(basename) + 64);
     if (fsname_opt == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
         return -1;
@@ -419,7 +420,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 }
 
 #undef fuse_main
-int fuse_main()
+int fuse_main(void)
 {
     fprintf(stderr, "fuse_main(): This function does not exist\n");
     return -1;

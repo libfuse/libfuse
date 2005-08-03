@@ -1,10 +1,17 @@
+2005-08-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fix warnings in fuse.h and fuse_lowlevel.h if -Wshadow compiler
+	option is used (Paul Alfille).
+
 2005-08-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* highlevel-lib: added mount options "attr_timeout" and
 	"entry_timeout".  These options control the length of time file
 	attributes and entries (names) are cached.  Both default to 1.0
 	second.
-	
+
+	* kernel: correctly handle zero timeout for attributes and entries
+
 2005-08-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added missing symbols to versionscript (Joshua J. Berry)
@@ -27,7 +34,7 @@
 	newly created
 
 	* lib (highlevel): make open method optional
- 
+
 2005-07-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: invalidate attributes for read/readdir/readlink

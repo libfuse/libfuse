@@ -58,7 +58,7 @@ struct fuse;
  * @return 1 if buffer is full, zero otherwise
  */
 typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
-                                const struct stat *stat, off_t off);
+                                const struct stat *stbuf, off_t off);
 
 /* Used by deprecated getdir() method */
 typedef struct fuse_dirhandle *fuse_dirh_t;
@@ -148,7 +148,7 @@ struct fuse_operations {
      * with the given flags.  In fact it cannot correctly do that
      * since it doesn't have a way to determine if the file was just
      * created (and hence the permission need not be checked).
-     * 
+     *
      * If permission needs to be checked, implement the access()
      * method, and do the check there.
      *
@@ -313,7 +313,7 @@ struct fuse_operations {
 
     /**
      * Check file access permissions
-     * 
+     *
      * Need not be implemented.  Will only be called for the access()
      * system call, and for the open() system call, unless a new file
      * is created (file didn't exist and O_CREAT was given).  If the

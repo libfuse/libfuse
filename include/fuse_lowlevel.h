@@ -115,7 +115,7 @@ struct fuse_ll_operations {
                      size_t size);
     void (*listxattr)(fuse_req_t req, fuse_ino_t ino, size_t size);
     void (*removexattr)(fuse_req_t req, fuse_ino_t ino, const char *name);
-    void (*getlk)  (fuse_req_t req, fuse_ino_t ino, 
+    void (*getlk)  (fuse_req_t req, fuse_ino_t ino,
                     const struct fuse_lock_param *lk);
     void (*setlk)  (fuse_req_t req, fuse_ino_t ino, int sleep,
                     const struct fuse_lock_param *lk);
@@ -149,7 +149,7 @@ int fuse_reply_write(fuse_req_t req, size_t count);
 int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size);
 
 /* statfs */
-int fuse_reply_statfs(fuse_req_t req, const struct statfs *statfs);
+int fuse_reply_statfs(fuse_req_t req, const struct statfs *stbuf);
 
 /* getxattr, listxattr */
 int fuse_reply_xattr(fuse_req_t req, size_t count);
@@ -163,7 +163,7 @@ int fuse_reply_getlk(fuse_req_t req, const struct fuse_lock_param *lk);
 size_t fuse_dirent_size(size_t namelen);
 
 /* add a directory entry to the buffer */
-char *fuse_add_dirent(char *buf, const char *name, const struct stat *stat,
+char *fuse_add_dirent(char *buf, const char *name, const struct stat *stbuf,
                       off_t off);
 
 /* ------------------------------------------ */

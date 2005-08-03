@@ -51,7 +51,7 @@ static const char *progname;
 static int user_allow_other = 0;
 static int mount_max = 1000;
 
-static const char *get_user_name()
+static const char *get_user_name(void)
 {
     struct passwd *pw = getpwuid(getuid());
     if (pw != NULL && pw->pw_name != NULL)
@@ -95,7 +95,7 @@ static int do_unmount(const char *mnt, int quiet, int lazy)
 #ifndef USE_UCLIBC
 /* use a lock file so that multiple fusermount processes don't try and
    modify the mtab file at once! */
-static int lock_mtab()
+static int lock_mtab(void)
 {
     const char *mtab_lock = _PATH_MOUNTED ".fuselock";
     int mtablock;
@@ -184,18 +184,18 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
 
     found = 0;
     while ((entp = getmntent(fp)) != NULL) {
-        int remove = 0;
+        int removed = 0;
         if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
            strcmp(entp->mnt_type, "fuse") == 0) {
             if (user == NULL)
-                remove = 1;
+                removed = 1;
             else {
                 char *p = strstr(entp->mnt_opts, "user=");
                 if (p != NULL && strcmp(p + 5, user) == 0)
-                    remove = 1;
+                    removed = 1;
             }
         }
-        if (remove)
+        if (removed)
             found = 1;
         else {
             res = addmntent(newfp, entp);
@@ -220,7 +220,7 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
     return 0;
 }
 
-static int count_fuse_fs()
+static int count_fuse_fs(void)
 {
     struct mntent *entp;
     int count = 0;
@@ -424,7 +424,7 @@ static int add_option(char **optsp, const char *opt, unsigned expand)
     else {
         unsigned oldsize = strlen(*optsp);
         unsigned newsize = oldsize + 1 + strlen(opt) + expand + 1;
-        newopts = realloc(*optsp, newsize);
+        newopts = (char *) realloc(*optsp, newsize);
         if (newopts)
             sprintf(newopts + oldsize, ",%s", opt);
     }
@@ -521,7 +521,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     char *fsname = NULL;
     int check_empty = 1;
 
-    optbuf = malloc(strlen(opts) + 128);
+    optbuf = (char *) malloc(strlen(opts) + 128);
     if (!optbuf) {
         fprintf(stderr, "%s: failed to allocate memory\n", progname);
         return -1;
@@ -535,7 +535,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
             unsigned fsname_str_len = strlen(fsname_str);
             if (fsname)
                 free(fsname);
-            fsname = malloc(len - fsname_str_len + 1);
+            fsname = (char *) malloc(len - fsname_str_len + 1);
             if (!fsname) {
                 fprintf(stderr, "%s: failed to allocate memory\n", progname);
                 goto err;

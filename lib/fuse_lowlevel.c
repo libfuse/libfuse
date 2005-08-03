@@ -225,7 +225,7 @@ size_t fuse_dirent_size(size_t namelen)
     return FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + namelen);
 }
 
-char *fuse_add_dirent(char *buf, const char *name, const struct stat *stat,
+char *fuse_add_dirent(char *buf, const char *name, const struct stat *stbuf,
                       off_t off)
 {
     unsigned namelen = strlen(name);
@@ -234,10 +234,10 @@ char *fuse_add_dirent(char *buf, const char *name, const struct stat *stat,
     unsigned padlen = entsize - entlen;
     struct fuse_dirent *dirent = (struct fuse_dirent *) buf;
 
-    dirent->ino = stat->st_ino;
+    dirent->ino = stbuf->st_ino;
     dirent->off = off;
     dirent->namelen = namelen;
-    dirent->type = (stat->st_mode & 0170000) >> 12;
+    dirent->type = (stbuf->st_mode & 0170000) >> 12;
     strncpy(dirent->name, name, namelen);
     if (padlen)
         memset(buf + entlen, 0, padlen);
@@ -245,16 +245,16 @@ char *fuse_add_dirent(char *buf, const char *name, const struct stat *stat,
     return buf + entsize;
 }
 
-static void convert_statfs(const struct statfs *statfs,
+static void convert_statfs(const struct statfs *stbuf,
                            struct fuse_kstatfs *kstatfs)
 {
-    kstatfs->bsize	= statfs->f_bsize;
-    kstatfs->blocks	= statfs->f_blocks;
-    kstatfs->bfree	= statfs->f_bfree;
-    kstatfs->bavail	= statfs->f_bavail;
-    kstatfs->files	= statfs->f_files;
-    kstatfs->ffree	= statfs->f_ffree;
-    kstatfs->namelen	= statfs->f_namelen;
+    kstatfs->bsize	= stbuf->f_bsize;
+    kstatfs->blocks	= stbuf->f_blocks;
+    kstatfs->bfree	= stbuf->f_bfree;
+    kstatfs->bavail	= stbuf->f_bavail;
+    kstatfs->files	= stbuf->f_files;
+    kstatfs->ffree	= stbuf->f_ffree;
+    kstatfs->namelen	= stbuf->f_namelen;
 }
 
 static void free_req(fuse_req_t req)
@@ -332,9 +332,9 @@ int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
     return send_reply_req(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_readlink(fuse_req_t req, const char *link)
+int fuse_reply_readlink(fuse_req_t req, const char *linkname)
 {
-    return send_reply_req(req, link, strlen(link));
+    return send_reply_req(req, linkname, strlen(linkname));
 }
 
 int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
@@ -366,12 +366,12 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
     return send_reply_req(req, buf, size);
 }
 
-int fuse_reply_statfs(fuse_req_t req, const struct statfs *statfs)
+int fuse_reply_statfs(fuse_req_t req, const struct statfs *stbuf)
 {
     struct fuse_statfs_out arg;
 
     memset(&arg, 0, sizeof(arg));
-    convert_statfs(statfs, &arg.st);
+    convert_statfs(stbuf, &arg.st);
 
     return send_reply_req(req, &arg, sizeof(arg));
 }
@@ -389,10 +389,10 @@ int fuse_reply_xattr(fuse_req_t req, size_t count)
 int fuse_reply_getlk(fuse_req_t req, const struct fuse_lock_param *lk)
 {
     struct fuse_lk_in_out arg;
-    
+
     memset(&arg, 0, sizeof(arg));
     convert_lock_param(lk, &arg.lk);
-    
+
     return send_reply_req(req, &arg, sizeof(arg));
 }
 
@@ -482,10 +482,10 @@ static void do_rmdir(fuse_req_t req, fuse_ino_t nodeid, char *name)
 }
 
 static void do_symlink(fuse_req_t req, fuse_ino_t nodeid, char *name,
-                       char *link)
+                       char *linkname)
 {
     if (req->f->op.symlink)
-        req->f->op.symlink(req, link, nodeid, name);
+        req->f->op.symlink(req, linkname, nodeid, name);
     else
         fuse_reply_err(req, ENOSYS);
 }
@@ -706,7 +706,7 @@ static void do_getlk(fuse_req_t req, fuse_ino_t nodeid,
 {
     if (req->f->op.getlk) {
         struct fuse_lock_param lk;
-        
+
         memset(&lk, 0, sizeof(lk));
         convert_file_lock(&arg->lk, &lk);
         req->f->op.getlk(req, nodeid, &lk);
@@ -714,15 +714,15 @@ static void do_getlk(fuse_req_t req, fuse_ino_t nodeid,
         fuse_reply_err(req, ENOSYS);
 }
 
-static void do_setlk(fuse_req_t req, fuse_ino_t nodeid, int sleep, 
+static void do_setlk(fuse_req_t req, fuse_ino_t nodeid, int issleep,
                      struct fuse_lk_in_out *arg)
 {
     if (req->f->op.setlk) {
         struct fuse_lock_param lk;
-        
+
         memset(&lk, 0, sizeof(lk));
         convert_file_lock(&arg->lk, &lk);
-        req->f->op.setlk(req, nodeid, sleep, &lk);
+        req->f->op.setlk(req, nodeid, issleep, &lk);
     } else
         fuse_reply_err(req, ENOSYS);
 }
@@ -781,7 +781,7 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
 
     if (f->debug) {
         printf("unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %i\n",
-               in->unique, opname(in->opcode), in->opcode,
+               in->unique, opname((enum fuse_opcode) in->opcode), in->opcode,
                (unsigned long) in->nodeid, cmd->buflen);
         fflush(stdout);
     }
@@ -936,7 +936,7 @@ void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd)
     case FUSE_SETLKW:
         do_setlk(req, in->nodeid, 1, (struct fuse_lk_in_out *) inarg);
         break;
-        
+
     case FUSE_ACCESS:
         do_access(req, in->nodeid, (struct fuse_access_in *) inarg);
         break;
