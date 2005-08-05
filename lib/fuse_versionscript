@@ -12,7 +12,7 @@ FUSE_2.2 {
 		fuse_ll_destroy;
 		fuse_ll_is_lib_option;
 		fuse_ll_loop;
-		fuse_ll_loop_mnt;
+		fuse_ll_loop_mt;
 		fuse_ll_exited;
 		fuse_ll_read_cmd;
 		fuse_ll_process_cmd;
