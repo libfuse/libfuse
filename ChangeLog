@@ -1,3 +1,8 @@
+2005-08-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: don't allow empty mountpoint argument, which defeats
+	automatic umounting in fuse_main().  Bugreport by Václav Jůza
+
 2005-08-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fix warnings in fuse.h and fuse_lowlevel.h if -Wshadow compiler

@@ -905,6 +905,11 @@ static char *resolve_path(const char *orig)
     char *lastcomp;
     const char *toresolv;
 
+    if (!orig[0]) {
+        fprintf(stderr, "%s: invalid mountpoint '%s'\n", progname, orig);
+        return NULL;
+    }
+
     copy = strdup(orig);
     if (copy == NULL) {
         fprintf(stderr, "%s: failed to allocate memory\n", progname);
