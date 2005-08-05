@@ -870,6 +870,8 @@ int main(int argc, char *argv[])
     err += test_open(0, O_RDWR | O_CREAT, 0000);
     err += test_open(0, O_RDWR | O_CREAT | O_EXCL, 0600);
     err += test_open(1, O_RDWR | O_CREAT | O_EXCL, 0600);
+    err += test_open(0, O_RDWR | O_CREAT | O_EXCL, 0000);
+    err += test_open(1, O_RDWR | O_CREAT | O_EXCL, 0000);
     
     unlink(testfile);
     unlink(testfile2);
