@@ -8,10 +8,7 @@
 
 #include <config.h>
 
-#ifdef linux
-/* For pread()/pwrite() */
-#define _XOPEN_SOURCE 500
-#endif
+#define _GNU_SOURCE
 
 #include <fuse.h>
 #include <stdio.h>
@@ -210,13 +207,13 @@ static int xmp_utime(const char *path, struct utimbuf *buf)
 
 static int xmp_open(const char *path, struct fuse_file_info *fi)
 {
-    int res;
+    int fd;
 
-    res = open(path, fi->flags);
-    if(res == -1)
+    fd = open(path, fi->flags);
+    if(fd == -1)
         return -errno;
 
-    fi->fh = res;
+    fi->fh = fd;
     return 0;
 }
 

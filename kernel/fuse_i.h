@@ -337,7 +337,7 @@ struct fuse_conn {
 	/** Are file locking primitives not implemented by fs? */
 	unsigned no_lk : 1;
 
-	/** Is access not implemented by fs */
+	/** Is access not implemented by fs? */
 	unsigned no_access : 1;
 
 #ifdef KERNEL_2_6

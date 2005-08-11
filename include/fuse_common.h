@@ -13,6 +13,24 @@
 #ifndef _FUSE_COMMON_H_
 #define _FUSE_COMMON_H_
 
+#ifndef FUSE_USE_VERSION
+#define FUSE_USE_VERSION 21
+#endif
+
+/** Major version of FUSE library interface */
+#define FUSE_MAJOR_VERSION 2
+
+/** Minor version of FUSE library interface */
+#define FUSE_MINOR_VERSION 4
+
+#define FUSE_MAKE_VERSION(maj, min)  ((maj) * 10 + (min))
+#define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
+
+/* This interface uses 64 bit off_t */
+#if _FILE_OFFSET_BITS != 64
+#error Please add -D_FILE_OFFSET_BITS=64 to your compile flags!
+#endif
+
 /** Information about open files */
 struct fuse_file_info {
     /** Open flags.  Available in open() and release() */
