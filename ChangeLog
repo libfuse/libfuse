@@ -1,3 +1,8 @@
+2005-08-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: cleaned up (or messed up, depending on your POV) the low
+	level library API.  Hopefully this is close to the final form.
+
 2005-08-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: don't allow empty mountpoint argument, which defeats

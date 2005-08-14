@@ -4,12 +4,14 @@ lib_LTLIBRARIES = libfuse.la
 
 libfuse_la_SOURCES = 		\
 	fuse.c			\
-	fuse_mt.c		\
+	fuse_kern_chan.c	\
+	fuse_loop.c		\
+	fuse_loop_mt.c		\
 	fuse_lowlevel.c		\
-	fuse_lowlevel_mt.c	\
+	fuse_mt.c		\
+	fuse_session.c		\
 	helper.c		\
-	mount.c			\
-	fuse_lowlevel_i.h
+	mount.c
 
 libfuse_la_LDFLAGS = -lpthread -version-number 2:4:0 \
 	-Wl,--version-script,fuse_versionscript

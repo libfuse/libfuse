@@ -63,7 +63,7 @@
 #define FUSE_MAX_PATH 4096
 
 struct fuse {
-    struct fuse_ll *fll;
+    struct fuse_session *se;
     int flags;
     struct fuse_operations op;
     int compat;
@@ -108,6 +108,11 @@ struct fuse_dirhandle {
     unsigned long fh;
     int error;
     fuse_ino_t nodeid;
+};
+
+struct fuse_cmd {
+    char *buf;
+    size_t buflen;
 };
 
 static struct fuse_context *(*fuse_getcontext)(void) = NULL;
@@ -561,14 +566,12 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
         reply_err(req, err);
 }
 
-static void *fuse_data_init(void *data)
+static void fuse_data_init(void *data)
 {
     struct fuse *f = (struct fuse *) data;
 
     if (f->op.init)
         f->user_data = f->op.init();
-
-    return f;
 }
 
 static void fuse_data_destroy(void *data)
@@ -1599,7 +1602,7 @@ static void fuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
     reply_err(req, err);
 }
 
-static struct fuse_ll_operations fuse_path_ops = {
+static struct fuse_lowlevel_ops fuse_path_ops = {
     .init = fuse_data_init,
     .destroy = fuse_data_destroy,
     .lookup = fuse_lookup,
@@ -1632,25 +1635,64 @@ static struct fuse_ll_operations fuse_path_ops = {
     .removexattr = fuse_removexattr,
 };
 
+static void free_cmd(struct fuse_cmd *cmd)
+{
+    free(cmd->buf);
+    free(cmd);
+}
+
 void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
-    fuse_ll_process_cmd(f->fll, cmd);
+    struct fuse_chan *ch = fuse_session_next_chan(f->se, NULL);
+    fuse_session_process(f->se, cmd->buf, cmd->buflen, ch);
 }
 
 int fuse_exited(struct fuse *f)
 {
-    return fuse_ll_exited(f->fll);
+    return fuse_session_exited(f->se);
+}
+
+struct fuse_session *fuse_get_session(struct fuse *f)
+{
+    return f->se;
+}
+
+static struct fuse_cmd *fuse_alloc_cmd(size_t bufsize)
+{
+    struct fuse_cmd *cmd = (struct fuse_cmd *) malloc(sizeof(*cmd));
+    if (cmd == NULL) {
+        fprintf(stderr, "fuse: failed to allocate cmd\n");
+        return NULL;
+    }
+    cmd->buf = (char *) malloc(bufsize);
+    if (cmd->buf == NULL) {
+        fprintf(stderr, "fuse: failed to allocate read buffer\n");
+        free(cmd);
+        return NULL;
+    }
+    return cmd;
 }
 
 struct fuse_cmd *fuse_read_cmd(struct fuse *f)
 {
-    return fuse_ll_read_cmd(f->fll);
+    struct fuse_chan *ch = fuse_session_next_chan(f->se, NULL);
+    size_t bufsize = fuse_chan_bufsize(ch);
+    struct fuse_cmd *cmd = fuse_alloc_cmd(bufsize);
+    if (cmd != NULL) {
+        int res = fuse_chan_receive(ch, cmd->buf, bufsize);
+        if (res <= 0) {
+            free_cmd(cmd);
+            return NULL;
+        }
+        cmd->buflen = res;
+    }
+    return cmd;
 }
 
 int fuse_loop(struct fuse *f)
 {
     if (f)
-        return fuse_ll_loop(f->fll);
+        return fuse_session_loop(f->se);
     else
         return -1;
 }
@@ -1664,7 +1706,7 @@ int fuse_invalidate(struct fuse *f, const char *path)
 
 void fuse_exit(struct fuse *f)
 {
-    fuse_ll_exit(f->fll);
+    fuse_session_exit(f->se);
 }
 
 struct fuse_context *fuse_get_context()
@@ -1681,11 +1723,6 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
     fuse_getcontext = func;
 }
 
-struct fuse_ll *fuse_get_lowlevel(struct fuse *f)
-{
-    return f->fll;
-}
-
 static int begins_with(const char *s, const char *beg)
 {
     if (strncmp(s, beg, strlen(beg)) == 0)
@@ -1696,7 +1733,7 @@ static int begins_with(const char *s, const char *beg)
 
 int fuse_is_lib_option(const char *opt)
 {
-    if (fuse_ll_is_lib_option(opt) ||
+    if (fuse_lowlevel_is_lib_option(opt) ||
         strcmp(opt, "debug") == 0 ||
         strcmp(opt, "hard_remove") == 0 ||
         strcmp(opt, "use_ino") == 0 ||
@@ -1728,7 +1765,7 @@ static int parse_lib_opts(struct fuse *f, const char *opts, char **llopts)
         }
 
         while((opt = strsep(&s, ","))) {
-            if (fuse_ll_is_lib_option(opt)) {
+            if (fuse_lowlevel_is_lib_option(opt)) {
                 size_t optlen = strlen(opt);
                 if (strcmp(opt, "debug") == 0)
                     f->flags |= FUSE_DEBUG;
@@ -1772,6 +1809,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
                              const struct fuse_operations *op,
                              size_t op_size, int compat)
 {
+    struct fuse_chan *ch;
     struct fuse *f;
     struct node *root;
     char *llopts = NULL;
@@ -1793,10 +1831,16 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     if (parse_lib_opts(f, opts, &llopts) == -1)
         goto out_free;
 
-    f->fll = fuse_ll_new(fd, llopts, &fuse_path_ops, sizeof(fuse_path_ops), f);
+    f->se = fuse_lowlevel_new(llopts, &fuse_path_ops, sizeof(fuse_path_ops), f);
     free(llopts);
-    if (f->fll == NULL)
+    if (f->se == NULL)
         goto out_free;
+    
+    ch = fuse_kern_chan_new(fd);
+    if (ch == NULL)
+        goto out_free_session;
+    
+    fuse_session_add_chan(f->se, ch);
 
     f->ctr = 0;
     f->generation = 0;
@@ -1806,7 +1850,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
         calloc(1, sizeof(struct node *) * f->name_table_size);
     if (f->name_table == NULL) {
         fprintf(stderr, "fuse: memory allocation failed\n");
-        goto out_free;
+        goto out_free_session;
     }
 
     f->id_table_size = 14057;
@@ -1848,6 +1892,8 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     free(f->id_table);
  out_free_name_table:
     free(f->name_table);
+ out_free_session:
+    fuse_session_destroy(f->se);
  out_free:
     free(f);
  out:
@@ -1905,7 +1951,7 @@ void fuse_destroy(struct fuse *f)
     free(f->id_table);
     free(f->name_table);
     pthread_mutex_destroy(&f->lock);
-    fuse_ll_destroy(f->fll);
+    fuse_session_destroy(f->se);
     free(f);
 }
 

@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/uio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,7 +30,9 @@ extern "C" {
 
 typedef unsigned long fuse_ino_t;
 typedef struct fuse_req *fuse_req_t;
-struct fuse_ll;
+
+struct fuse_session;
+struct fuse_chan;
 
 struct fuse_entry_param {
     fuse_ino_t ino;
@@ -69,8 +72,8 @@ struct fuse_ctx {
 
 /* ------------------------------------------ */
 
-struct fuse_ll_operations {
-    void* (*init)  (void *);
+struct fuse_lowlevel_ops {
+    void (*init)  (void *);
     void (*destroy)(void *);
 
     void (*lookup) (fuse_req_t req, fuse_ino_t parent, const char *name);
@@ -174,29 +177,73 @@ const struct fuse_ctx *fuse_req_ctx(fuse_req_t req);
 
 /* ------------------------------------------ */
 
-typedef void (*fuse_ll_processor_t)(struct fuse_ll *, struct fuse_cmd *, void *);
+int fuse_lowlevel_is_lib_option(const char *opt);
 
-struct fuse_ll *fuse_ll_new(int fd, const char *opts,
-                            const struct fuse_ll_operations *op,
-                            size_t op_size, void *userdata);
+struct fuse_session *fuse_lowlevel_new(const char *opts,
+                                       const struct fuse_lowlevel_ops *op,
+                                       size_t op_size, void *userdata);
 
-void fuse_ll_destroy(struct fuse_ll *f);
+struct fuse_chan *fuse_kern_chan_new(int fd);
 
-int fuse_ll_is_lib_option(const char *opt);
+/* ------------------------------------------ */
 
-int fuse_ll_loop(struct fuse_ll *f);
+struct fuse_session_ops {
+    void (*process) (void *data, const char *buf, size_t len,
+                     struct fuse_chan *ch);
+    
+    void (*destroy) (void *data);
+};
 
-void fuse_ll_exit(struct fuse_ll *f);
+struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data);
 
-int fuse_ll_exited(struct fuse_ll* f);
+void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch);
 
-struct fuse_cmd *fuse_ll_read_cmd(struct fuse_ll *f);
+struct fuse_chan *fuse_session_next_chan(struct fuse_session *se,
+                                         struct fuse_chan *ch);
 
-void fuse_ll_process_cmd(struct fuse_ll *f, struct fuse_cmd *cmd);
+void fuse_session_process(struct fuse_session *se, const char *buf, size_t len,
+                          struct fuse_chan *ch);
 
-int fuse_ll_loop_mt(struct fuse_ll *f);
+void fuse_session_destroy(struct fuse_session *se);
 
-int fuse_ll_loop_mt_proc(struct fuse_ll *f, fuse_ll_processor_t proc, void *data);
+void fuse_session_exit(struct fuse_session *se);
+
+void fuse_session_reset(struct fuse_session *se);
+
+int fuse_session_exited(struct fuse_session *se);
+
+int fuse_session_loop(struct fuse_session *se);
+
+int fuse_session_loop_mt(struct fuse_session *se);
+
+/* ------------------------------------------ */
+
+struct fuse_chan_ops {
+    int (*receive)(struct fuse_chan *ch, char *buf, size_t size);
+
+    int (*send)(struct fuse_chan *ch, const struct iovec iov[],
+                size_t count);
+
+    void (*destroy)(struct fuse_chan *ch);
+};
+
+struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
+                                size_t bufsize, void *data);
+
+int fuse_chan_fd(struct fuse_chan *ch);
+
+size_t fuse_chan_bufsize(struct fuse_chan *ch);
+
+void *fuse_chan_data(struct fuse_chan *ch);
+
+struct fuse_session *fuse_chan_session(struct fuse_chan *ch);
+
+int fuse_chan_receive(struct fuse_chan *ch, char *buf, size_t size);
+
+int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
+                   size_t count);
+
+void fuse_chan_destroy(struct fuse_chan *ch);
 
 /* ------------------------------------------ */
 

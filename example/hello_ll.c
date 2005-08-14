@@ -134,7 +134,7 @@ static void hello_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
     reply_buf_limited(req, hello_str, strlen(hello_str), off, size);
 }
 
-static struct fuse_ll_operations hello_ll_oper = {
+static struct fuse_lowlevel_ops hello_ll_oper = {
     .lookup     = hello_ll_lookup,
     .getattr	= hello_ll_getattr,
     .readdir    = hello_ll_readdir,
@@ -145,7 +145,6 @@ static struct fuse_ll_operations hello_ll_oper = {
 int main(int argc, char *argv[])
 {
     const char *mountpoint;
-    struct fuse_ll *f;
     int err = -1;
     int fd;
 
@@ -156,10 +155,17 @@ int main(int argc, char *argv[])
     mountpoint = argv[1];
     fd = fuse_mount(mountpoint, NULL);
     if (fd != -1) {
-        f = fuse_ll_new(fd, "debug", &hello_ll_oper, sizeof(hello_ll_oper), NULL);
-        if (f != NULL) {
-            err = fuse_ll_loop(f);
-            fuse_ll_destroy(f);
+        struct fuse_session *se;
+
+        se = fuse_lowlevel_new("debug", &hello_ll_oper, sizeof(hello_ll_oper),
+                               NULL);
+        if (se != NULL) {
+            struct fuse_chan *ch = fuse_kern_chan_new(fd);
+            if (ch != NULL) {
+                fuse_session_add_chan(se, ch);
+                err = fuse_session_loop(se);
+            }
+            fuse_session_destroy(se);
         }
         close(fd);
     }

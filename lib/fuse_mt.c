@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-
+#include <assert.h>
 
 static pthread_key_t context_key;
 static pthread_mutex_t context_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -75,28 +75,73 @@ struct procdata {
     void *data;
 };
 
-static void mt_generic_proc(struct fuse_ll *f, struct fuse_cmd *cmd, void *data)
+static void mt_session_proc(void *data, const char *buf, size_t len,
+                            struct fuse_chan *ch)
 {
     struct procdata *pd = (struct procdata *) data;
-    (void) f;
+    struct fuse_cmd *cmd = *(struct fuse_cmd **) buf;
+
+    (void) len;
+    (void) ch;
     pd->proc(pd->f, cmd, pd->data);
+}
+
+static int mt_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
+{
+    struct fuse_cmd *cmd;
+    struct procdata *pd = (struct procdata *) fuse_chan_data(ch);
+
+    assert(size >= sizeof(cmd));
+    
+    cmd = fuse_read_cmd(pd->f);
+    if (cmd == NULL)
+        return -1;
+    
+    *(struct fuse_cmd **) buf = cmd;
+    
+    return 0;
 }
 
 int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
 {
     int res;
     struct procdata pd;
+    struct fuse_session *prevse = fuse_get_session(f);
+    struct fuse_session *se;
+    struct fuse_chan *prevch = fuse_session_next_chan(prevse, NULL);
+    struct fuse_chan *ch;
+    struct fuse_session_ops sop = {
+        .process = mt_session_proc,
+    };
+    struct fuse_chan_ops cop = {
+        .receive = mt_chan_receive,
+    };
 
     pd.f = f;
     pd.proc = proc;
     pd.data = data;
 
-    if (mt_create_context_key() != 0)
+    se = fuse_session_new(&sop, &pd);
+    if (se == NULL)
         return -1;
 
-    res = fuse_ll_loop_mt_proc(fuse_get_lowlevel(f), mt_generic_proc, &pd);
+    ch = fuse_chan_new(&cop, fuse_chan_fd(prevch), sizeof(struct fuse_cmd *),
+                       &pd);
+    if (ch == NULL) {
+        fuse_session_destroy(se);
+        return -1;
+    }
+    fuse_session_add_chan(se, ch);
+
+    if (mt_create_context_key() != 0) {
+        fuse_session_destroy(se);
+        return -1;
+    }
+
+    res = fuse_session_loop_mt(se);
 
     mt_delete_context_key();
+    fuse_session_destroy(se);
     return res;
 }
 
@@ -107,7 +152,7 @@ int fuse_loop_mt(struct fuse *f)
     if (mt_create_context_key() != 0)
         return -1;
 
-    res = fuse_ll_loop_mt(fuse_get_lowlevel(f));
+    res = fuse_session_loop_mt(fuse_get_session(f));
 
     mt_delete_context_key();
     return res;
