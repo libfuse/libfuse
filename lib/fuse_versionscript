@@ -1,28 +1,14 @@
 FUSE_2.2 {
 	global:
-		fuse_add_dirent;
-		fuse_chan_bufsize;
-		fuse_chan_data;
-		fuse_chan_destroy;
-		fuse_chan_fd;
-		fuse_chan_new;
-		fuse_chan_receive;
-		fuse_chan_send;
-		fuse_chan_session;
 		fuse_destroy;
-		fuse_dirent_size;
 		fuse_exit;
 		fuse_exited;
 		fuse_get_context;
-		fuse_get_session;
 		fuse_invalidate;
 		fuse_is_lib_option;
-		fuse_kern_chan_new;
 		fuse_loop;
 		fuse_loop_mt;
 		fuse_loop_mt_proc;
-		fuse_lowlevel_is_lib_option;
-		fuse_lowlevel_new;
 		fuse_main;
 		fuse_main_compat1;
 		fuse_main_compat2;
@@ -34,6 +20,28 @@ FUSE_2.2 {
 		fuse_new_compat2;
 		fuse_process_cmd;
 		fuse_read_cmd;
+		fuse_set_getcontext_func;
+		fuse_setup;
+		fuse_setup_compat2;
+		fuse_teardown;
+		fuse_unmount;
+};
+
+FUSE_2.4 {
+	global:
+		fuse_add_dirent;
+		fuse_chan_bufsize;
+		fuse_chan_data;
+		fuse_chan_destroy;
+		fuse_chan_fd;
+		fuse_chan_new;
+		fuse_chan_receive;
+		fuse_chan_send;
+		fuse_chan_session;
+		fuse_dirent_size;
+		fuse_kern_chan_new;
+		fuse_lowlevel_is_lib_option;
+		fuse_lowlevel_new;
 		fuse_reply_attr;
 		fuse_reply_buf;
 		fuse_reply_entry;
@@ -57,11 +65,6 @@ FUSE_2.2 {
 		fuse_session_next_chan;
 		fuse_session_process;
 		fuse_session_reset;
-		fuse_set_getcontext_func;
-		fuse_setup;
-		fuse_setup_compat2;
-		fuse_teardown;
-		fuse_unmount;
 	local:
 		 *;
-};
+} FUSE_2.2;
