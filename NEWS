@@ -1,3 +1,32 @@
+What is new in 2.4
+
+ - Simplify device opening.  Now '/dev/fuse' is a requirement
+
+ - Allow module auto-loading if user has access to '/dev/fuse'
+
+ - Allow mounting over a regular file for unprivileged users
+
+ - Allow mounting of arbitrary FUSE filesystems from /etc/fstab
+
+ - New mount options: 'umask=M', 'uid=N', 'gid=N'
+
+ - Check for non-empty mountpoint, and refuse mount by default.  New
+   mount option: 'nonempty'
+
+ - Low level (inode based) API added
+
+ - File locking primitives added to kernel and low level API
+
+ - Add 'access' method to kernel, and library APIs
+
+ - Allow 'direct_io' and 'keep_cache' options to be set on a
+   case-by-case basis on open.
+
+ - Add 'attr_timeout' and 'entry_timeout' mount options to the
+   high-level library.  Until now these timeouts were fixed at 1 sec.
+
+ - Some bugfixes
+
 What is new in 2.3
 
  - Add new directory related operations: opendir(), readdir(),
