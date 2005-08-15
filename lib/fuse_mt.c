@@ -6,7 +6,7 @@
     See the file COPYING.LIB.
 */
 
-#include "fuse.h"
+#include "fuse_i.h"
 #include "fuse_lowlevel.h"
 
 #include <stdio.h>
@@ -71,6 +71,8 @@ static void mt_delete_context_key(void)
 
 struct procdata {
     struct fuse *f;
+    struct fuse_chan *prevch;
+    struct fuse_session *prevse;
     fuse_processor_t proc;
     void *data;
 };
@@ -82,8 +84,23 @@ static void mt_session_proc(void *data, const char *buf, size_t len,
     struct fuse_cmd *cmd = *(struct fuse_cmd **) buf;
 
     (void) len;
-    (void) ch;
+    cmd->ch = ch;
     pd->proc(pd->f, cmd, pd->data);
+}
+
+static void mt_session_exit(void *data, int val)
+{
+    struct procdata *pd = (struct procdata *) data;
+    if (val)
+        fuse_session_exit(pd->prevse);
+    else
+        fuse_session_reset(pd->prevse);
+}
+
+static int mt_session_exited(void *data)
+{
+    struct procdata *pd = (struct procdata *) data;
+    return fuse_session_exited(pd->prevse);
 }
 
 static int mt_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
@@ -95,11 +112,18 @@ static int mt_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
     
     cmd = fuse_read_cmd(pd->f);
     if (cmd == NULL)
-        return -1;
+        return 0;
     
     *(struct fuse_cmd **) buf = cmd;
     
-    return 0;
+    return sizeof(cmd);
+}
+
+static int mt_chan_send(struct fuse_chan *ch, const struct iovec iov[],
+                        size_t count)
+{
+    struct procdata *pd = (struct procdata *) fuse_chan_data(ch);
+    return fuse_chan_send(pd->prevch, iov, count);
 }
 
 int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
@@ -111,13 +135,18 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
     struct fuse_chan *prevch = fuse_session_next_chan(prevse, NULL);
     struct fuse_chan *ch;
     struct fuse_session_ops sop = {
+        .exit = mt_session_exit,
+        .exited = mt_session_exited,
         .process = mt_session_proc,
     };
     struct fuse_chan_ops cop = {
         .receive = mt_chan_receive,
+        .send = mt_chan_send,
     };
 
     pd.f = f;
+    pd.prevch = prevch;
+    pd.prevse = prevse;
     pd.proc = proc;
     pd.data = data;
 
@@ -148,6 +177,9 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
 int fuse_loop_mt(struct fuse *f)
 {
     int res;
+
+    if (f == NULL)
+        return -1;
 
     if (mt_create_context_key() != 0)
         return -1;

@@ -53,7 +53,6 @@ static int fuse_loop_mt_send(struct fuse_chan *ch, const struct iovec iov[],
     return fuse_chan_send(w->prevch, iov, count);
 }
 
-
 static int start_thread(struct fuse_worker *w, pthread_t *thread_id);
 
 static void *do_work(void *data)

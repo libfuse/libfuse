@@ -10,7 +10,7 @@
 /* For pthread_rwlock_t */
 #define _GNU_SOURCE
 
-#include "fuse.h"
+#include "fuse_i.h"
 #include "fuse_lowlevel.h"
 #include "fuse_compat.h"
 
@@ -108,11 +108,6 @@ struct fuse_dirhandle {
     unsigned long fh;
     int error;
     fuse_ino_t nodeid;
-};
-
-struct fuse_cmd {
-    char *buf;
-    size_t buflen;
 };
 
 static struct fuse_context *(*fuse_getcontext)(void) = NULL;
@@ -1643,8 +1638,7 @@ static void free_cmd(struct fuse_cmd *cmd)
 
 void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
-    struct fuse_chan *ch = fuse_session_next_chan(f->se, NULL);
-    fuse_session_process(f->se, cmd->buf, cmd->buflen, ch);
+    fuse_session_process(f->se, cmd->buf, cmd->buflen, cmd->ch);
 }
 
 int fuse_exited(struct fuse *f)
@@ -1685,6 +1679,7 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f)
             return NULL;
         }
         cmd->buflen = res;
+        cmd->ch = ch;
     }
     return cmd;
 }

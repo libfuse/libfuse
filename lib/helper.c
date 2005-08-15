@@ -6,7 +6,7 @@
     See the file COPYING.LIB.
 */
 
-#include "fuse.h"
+#include "fuse_i.h"
 #include "fuse_compat.h"
 
 #include <stdio.h>
@@ -15,10 +15,6 @@
 #include <string.h>
 #include <limits.h>
 #include <signal.h>
-
-struct fuse *fuse_new_common(int fd, const char *opts,
-                             const struct fuse_operations *op,
-                             size_t op_size, int compat);
 
 static struct fuse *fuse_instance;
 

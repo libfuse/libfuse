@@ -37,9 +37,6 @@ struct fuse;
 /** Structure containing a raw command */
 struct fuse_cmd;
 
-/** The lowlevel FUSE session */
-struct fuse_session;
-
 /** Function to add an entry in a readdir() operation
  *
  * @param buf the buffer passed to the readdir() operation
@@ -509,9 +506,6 @@ int fuse_exited(struct fuse *f);
 
 /** Set function which can be used to get the current context */
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
-
-/** Returns the lowlevel FUSE session */
-struct fuse_session *fuse_get_session(struct fuse *f);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff                                         *

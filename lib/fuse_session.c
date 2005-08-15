@@ -85,17 +85,24 @@ void fuse_session_destroy(struct fuse_session *se)
 
 void fuse_session_exit(struct fuse_session *se)
 {
+    if (se->op.exit)
+        se->op.exit(se->data, 1);
     se->exited = 1;
 }
 
 void fuse_session_reset(struct fuse_session *se)
 {
+    if (se->op.exit)
+        se->op.exit(se->data, 0);
     se->exited = 0;
 }
 
 int fuse_session_exited(struct fuse_session *se)
 {
-    return se->exited;
+    if (se->op.exited)
+        return se->op.exited(se->data);
+    else
+        return se->exited;
 }
 
 struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd, 

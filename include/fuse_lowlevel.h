@@ -190,6 +190,10 @@ struct fuse_chan *fuse_kern_chan_new(int fd);
 struct fuse_session_ops {
     void (*process) (void *data, const char *buf, size_t len,
                      struct fuse_chan *ch);
+
+    void (*exit) (void *data, int val);
+
+    int (*exited) (void *data);
     
     void (*destroy) (void *data);
 };
