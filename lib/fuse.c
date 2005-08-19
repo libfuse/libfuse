@@ -1353,6 +1353,11 @@ static void fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     struct fuse_dirhandle *dh = get_dirhandle(llfi, &fi);
 
     pthread_mutex_lock(&dh->lock);
+    /* According to SUS, directory contents need to be refreshed on
+       rewinddir() */
+    if (!off)
+        dh->filled = 0;
+
     if (!dh->filled) {
         int err = readdir_fill(f, ino, size, off, dh, &fi);
         if (err) {
