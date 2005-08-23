@@ -217,6 +217,28 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
+static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+    int fd;
+    struct stat stbuf;
+
+    fd = open(path, fi->flags | O_NOFOLLOW, mode);
+    if(fd == -1)
+        return -errno;
+
+    if (fstat(fd, &stbuf) == -1) {
+        close(fd);
+        return -EIO;
+    }
+    if (!S_ISREG(stbuf.st_mode)) {
+        close(fd);
+        return -EISDIR;
+    }
+
+    fi->fh = fd;
+    return 0;
+}
+
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
                     struct fuse_file_info *fi)
 {
@@ -338,6 +360,7 @@ static struct fuse_operations xmp_oper = {
     .statfs	= xmp_statfs,
     .release	= xmp_release,
     .fsync	= xmp_fsync,
+    .create	= xmp_create,
 #ifdef HAVE_SETXATTR
     .setxattr	= xmp_setxattr,
     .getxattr	= xmp_getxattr,

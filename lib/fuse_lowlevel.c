@@ -73,6 +73,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_SETLK:		return "SETLK";
     case FUSE_SETLKW:		return "SETLKW";
     case FUSE_ACCESS:		return "ACCESS";
+    case FUSE_CREATE:		return "CREATE";
     default: 			return "???";
     }
 }
@@ -258,19 +259,48 @@ static unsigned int calc_timeout_nsec(double t)
         return (unsigned int) (f * 1.0e9);
 }
 
+static void fill_entry(struct fuse_entry_out *arg,
+                       const struct fuse_entry_param *e)
+{
+    arg->nodeid = e->ino;
+    arg->generation = e->generation;
+    arg->entry_valid = calc_timeout_sec(e->entry_timeout);
+    arg->entry_valid_nsec = calc_timeout_nsec(e->entry_timeout);
+    arg->attr_valid = calc_timeout_sec(e->attr_timeout);
+    arg->attr_valid_nsec = calc_timeout_nsec(e->attr_timeout);
+    convert_stat(&e->attr, &arg->attr);
+}
+
+static void fill_open(struct fuse_open_out *arg,
+                      const struct fuse_file_info *f)
+{
+    arg->fh = f->fh;
+    if (f->direct_io)
+        arg->open_flags |= FOPEN_DIRECT_IO;
+    if (f->keep_cache)
+        arg->open_flags |= FOPEN_KEEP_CACHE;
+}
+
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 {
     struct fuse_entry_out arg;
 
     memset(&arg, 0, sizeof(arg));
-    arg.nodeid = e->ino;
-    arg.generation = e->generation;
-    arg.entry_valid = calc_timeout_sec(e->entry_timeout);
-    arg.entry_valid_nsec = calc_timeout_nsec(e->entry_timeout);
-    arg.attr_valid = calc_timeout_sec(e->attr_timeout);
-    arg.attr_valid_nsec = calc_timeout_nsec(e->attr_timeout);
-    convert_stat(&e->attr, &arg.attr);
+    fill_entry(&arg, e);
+    return send_reply_ok(req, &arg, sizeof(arg));
+}
 
+int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
+                      const struct fuse_file_info *f)
+{
+    struct {
+        struct fuse_entry_out e;
+        struct fuse_open_out o;
+    } arg;
+
+    memset(&arg, 0, sizeof(arg));
+    fill_entry(&arg.e, e);
+    fill_open(&arg.o, f);
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
@@ -297,12 +327,7 @@ int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
     struct fuse_open_out arg;
 
     memset(&arg, 0, sizeof(arg));
-    arg.fh = f->fh;
-    if (f->direct_io)
-        arg.open_flags |= FOPEN_DIRECT_IO;
-    if (f->keep_cache)
-        arg.open_flags |= FOPEN_KEEP_CACHE;
-
+    fill_open(&arg, f);
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
@@ -463,6 +488,20 @@ static void do_link(fuse_req_t req, fuse_ino_t nodeid,
     if (req->f->op.link)
         req->f->op.link(req, arg->oldnodeid, nodeid, PARAM(arg));
     else
+        fuse_reply_err(req, ENOSYS);
+}
+
+static void do_create(fuse_req_t req, fuse_ino_t nodeid,
+                      struct fuse_open_in *arg)
+{
+    if (req->f->op.create) {
+        struct fuse_file_info fi;
+        
+        memset(&fi, 0, sizeof(fi));
+        fi.flags = arg->flags;
+
+        req->f->op.create(req, nodeid, PARAM(arg), arg->mode, &fi);
+    } else 
         fuse_reply_err(req, ENOSYS);
 }
 
@@ -884,6 +923,10 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 
     case FUSE_ACCESS:
         do_access(req, in->nodeid, (struct fuse_access_in *) inarg);
+        break;
+
+    case FUSE_CREATE:
+        do_create(req, in->nodeid, (struct fuse_open_in *) inarg);
         break;
 
     default:

@@ -311,6 +311,8 @@ struct fuse_operations {
      * Introduced in version 2.4
      */
     int (*access) (const char *, int);
+
+    int (*create) (const char *, mode_t, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems

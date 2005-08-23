@@ -1,3 +1,7 @@
+2005-08-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: add userspace side of create() method for experimentation
+
 2005-08-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: always refresh directory contents after rewinddir() to
