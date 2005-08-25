@@ -313,6 +313,8 @@ struct fuse_operations {
     int (*access) (const char *, int);
 
     int (*create) (const char *, mode_t, struct fuse_file_info *);
+
+    int (*ftruncate) (const char *, off_t, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems

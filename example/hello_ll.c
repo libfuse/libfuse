@@ -40,9 +40,12 @@ static int hello_stat(fuse_ino_t ino, struct stat *stbuf)
     return 0;
 }
 
-static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino)
+static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino,
+                             struct fuse_file_info *fi)
 {
     struct stat stbuf;
+
+    (void) fi;
 
     memset(&stbuf, 0, sizeof(stbuf));
     if (hello_stat(ino, &stbuf) == -1)

@@ -364,7 +364,6 @@ static int create_dir(const char *path, const char **dir_files)
     return 0;
 }
 
-
 int test_truncate(int len)
 {
     const char *data = testdata;
@@ -381,6 +380,73 @@ int test_truncate(int len)
         PERROR("truncate");
         return -1;
     }
+    res = check_size(testfile, len);
+    if (res == -1)
+        return -1;
+
+    if (len > 0) {
+        if (len <= datalen) {
+            res = check_data(testfile, data, 0, len);
+            if (res == -1)
+                return -1;
+        } else {
+            res = check_data(testfile, data, 0, datalen);
+            if (res == -1)
+                return -1;
+            res = check_data(testfile, zerodata, datalen, len - datalen);
+            if (res == -1)
+                return -1;
+        }
+    }
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile2);
+    if (res == -1)
+        return -1;
+
+    success();
+    return 0;
+}
+
+int test_ftruncate(int len, int mode)
+{
+    const char *data = testdata;
+    int datalen = testdatalen;
+    int res;
+    int fd;
+
+    start_test("ftruncate(%u) mode: 0%03o", len, mode);
+    res = create_file(testfile, data, datalen);
+    if (res == -1)
+        return -1;
+
+    fd = open(testfile, O_WRONLY);
+    if (fd == -1) {
+        PERROR("open");
+        return -1;
+    }
+
+    res = fchmod(fd, mode);
+    if (res == -1) {
+        PERROR("fchmod");
+        close(fd);
+        return -1;
+    }
+    res = check_mode(testfile, mode);
+    if (res == -1) {
+        close(fd);
+        return -1;
+    }
+    res = ftruncate(fd, len);
+    if (res == -1) {
+        PERROR("ftruncate");
+        close(fd);
+        return -1;
+    }
+    close(fd);
     res = check_size(testfile, len);
     if (res == -1)
         return -1;
@@ -612,6 +678,49 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
     return 0;
 }
 
+#define test_open_acc(flags, mode, err)  do_test_open_acc(flags, #flags, mode, err)
+
+static int do_test_open_acc(int flags, const char *flags_str, int mode, int err)
+{
+    const char *data = testdata;
+    int datalen = testdatalen;
+    int res;
+    int fd;
+
+    start_test("open_acc(%s) mode: 0%03o error: '%s'", flags_str, mode,
+               strerror(err));
+    unlink(testfile);
+    res = create_file(testfile, data, datalen);
+    if (res == -1)
+        return -1;
+
+    res = chmod(testfile, mode);
+    if (res == -1) {
+        PERROR("chmod");
+        return -1;
+    }
+    
+    res = check_mode(testfile, mode);
+    if (res == -1)
+        return -1;
+
+    fd = open(testfile, flags);
+    if (fd == -1) {
+        if (err != errno) {
+            PERROR("open");
+            return -1;
+        }
+    } else {
+        if (err) {
+            ERROR("open should have failed");
+            close(fd);
+            return -1;
+        }
+        close(fd);
+    }
+    success();
+    return 0;
+}
 
 static int test_symlink(void)
 {
@@ -849,6 +958,13 @@ int main(int argc, char *argv[])
     err += test_truncate(testdatalen / 2);
     err += test_truncate(testdatalen);
     err += test_truncate(testdatalen + 100);
+    err += test_ftruncate(0, 0600);
+    err += test_ftruncate(testdatalen / 2, 0600);
+    err += test_ftruncate(testdatalen, 0600);
+    err += test_ftruncate(testdatalen + 100, 0600);
+    err += test_ftruncate(0, 0400);
+    err += test_ftruncate(0, 0200);
+    err += test_ftruncate(0, 0000);
     err += test_open(0, O_RDONLY, 0);
     err += test_open(1, O_RDONLY, 0);
     err += test_open(1, O_RDWR, 0);
@@ -872,6 +988,19 @@ int main(int argc, char *argv[])
     err += test_open(1, O_RDWR | O_CREAT | O_EXCL, 0600);
     err += test_open(0, O_RDWR | O_CREAT | O_EXCL, 0000);
     err += test_open(1, O_RDWR | O_CREAT | O_EXCL, 0000);
+    err += test_open_acc(O_RDONLY, 0600, 0);
+    err += test_open_acc(O_WRONLY, 0600, 0);
+    err += test_open_acc(O_RDWR,   0600, 0);
+    err += test_open_acc(O_RDONLY, 0400, 0);
+    err += test_open_acc(O_RDONLY | O_TRUNC, 0400, EACCES);
+    err += test_open_acc(O_WRONLY, 0400, EACCES);
+    err += test_open_acc(O_RDWR,   0400, EACCES);
+    err += test_open_acc(O_RDONLY, 0200, EACCES);
+    err += test_open_acc(O_WRONLY, 0200, 0);
+    err += test_open_acc(O_RDWR,   0200, EACCES);
+    err += test_open_acc(O_RDONLY, 0000, EACCES);
+    err += test_open_acc(O_WRONLY, 0000, EACCES);
+    err += test_open_acc(O_RDWR,   0000, EACCES);
     
     unlink(testfile);
     unlink(testfile2);

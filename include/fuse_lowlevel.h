@@ -78,9 +78,9 @@ struct fuse_lowlevel_ops {
 
     void (*lookup) (fuse_req_t req, fuse_ino_t parent, const char *name);
     void (*forget) (fuse_req_t req, fuse_ino_t ino, unsigned long nlookup);
-    void (*getattr)(fuse_req_t req, fuse_ino_t ino);
+    void (*getattr)(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
     void (*setattr)(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
-                     int to_set);
+                    int to_set, struct fuse_file_info *fi);
     void (*access) (fuse_req_t req, fuse_ino_t ino, int mask);
     void (*readlink)(fuse_req_t req, fuse_ino_t ino);
     void (*mknod)  (fuse_req_t req, fuse_ino_t parent, const char *name,

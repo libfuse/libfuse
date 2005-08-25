@@ -74,6 +74,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_SETLKW:		return "SETLKW";
     case FUSE_ACCESS:		return "ACCESS";
     case FUSE_CREATE:		return "CREATE";
+    case FUSE_FSETATTR:		return "FSETATTR";
     default: 			return "???";
     }
 }
@@ -394,21 +395,31 @@ static void do_forget(fuse_req_t req, fuse_ino_t nodeid,
 static void do_getattr(fuse_req_t req, fuse_ino_t nodeid)
 {
     if (req->f->op.getattr)
-        req->f->op.getattr(req, nodeid);
+        req->f->op.getattr(req, nodeid, NULL);
     else
         fuse_reply_err(req, ENOSYS);
 }
 
 static void do_setattr(fuse_req_t req, fuse_ino_t nodeid,
-                       struct fuse_setattr_in *arg)
+                       struct fuse_setattr_in *arg, struct fuse_file_info *fi)
 {
     if (req->f->op.setattr) {
         struct stat stbuf;
         memset(&stbuf, 0, sizeof(stbuf));
         convert_attr(&arg->attr, &stbuf);
-        req->f->op.setattr(req, nodeid, &stbuf, arg->valid);
+        req->f->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
     } else
         fuse_reply_err(req, ENOSYS);
+}
+
+static void do_fsetattr(fuse_req_t req, fuse_ino_t nodeid,
+                       struct fuse_fsetattr_in *arg)
+{
+    struct fuse_file_info fi;
+
+    memset(&fi, 0, sizeof(fi));
+    fi.fh = arg->fh;
+    do_setattr(req, nodeid, &arg->setattr, &fi);
 }
 
 static void do_access(fuse_req_t req, fuse_ino_t nodeid,
@@ -813,7 +824,11 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
         break;
 
     case FUSE_SETATTR:
-        do_setattr(req, in->nodeid, (struct fuse_setattr_in *) inarg);
+        do_setattr(req, in->nodeid, (struct fuse_setattr_in *) inarg, NULL);
+        break;
+
+    case FUSE_FSETATTR:
+        do_fsetattr(req, in->nodeid, (struct fuse_fsetattr_in *) inarg);
         break;
 
     case FUSE_READLINK:

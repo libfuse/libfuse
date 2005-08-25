@@ -107,7 +107,8 @@ enum fuse_opcode {
 	FUSE_SETLK         = 32,
 	FUSE_SETLKW        = 33,
 	FUSE_ACCESS        = 34,
-	FUSE_CREATE        = 35
+	FUSE_CREATE        = 35,
+	FUSE_FSETATTR      = 36
 };
 
 /* Conservative buffer size for the client */
@@ -161,6 +162,11 @@ struct fuse_setattr_in {
 	__u32	valid;
 	__u32	padding;
 	struct fuse_attr attr;
+};
+
+struct fuse_fsetattr_in {
+	__u64	fh;
+	struct fuse_setattr_in setattr;
 };
 
 struct fuse_open_in {
