@@ -476,6 +476,7 @@ static int fuse_revalidate(struct dentry *entry)
 	return fuse_do_getattr(inode);
 }
 
+#ifdef KERNEL_2_6
 static int fuse_access(struct inode *inode, int mask)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
@@ -507,6 +508,7 @@ static int fuse_access(struct inode *inode, int mask)
 	}
 	return err;
 }
+#endif
 
 static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
@@ -552,8 +554,10 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 			return -EACCES;
 
 		err = 0;
+#ifdef KERNEL_2_6
 		if (nd && (nd->flags & LOOKUP_ACCESS))
 			err = fuse_access(inode, mask);
+#endif
 	}
 	return err;
 }

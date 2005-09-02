@@ -5,6 +5,8 @@
 
 	* Fix compile warning on 2.6.13 and later
 
+	* Fix compilation on 2.4.*
+
 2005-08-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: add userspace side of ftruncate() method for experimentation

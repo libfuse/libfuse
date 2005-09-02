@@ -685,17 +685,16 @@ static int fuse_getlk(struct file *file, struct file_lock *fl)
 	return err;
 }
 
-static int fuse_setlk(struct file *file, struct file_lock *fl)
+static int fuse_setlk(struct file *file, struct file_lock *fl, int sleep)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	struct fuse_req *req;
 	struct fuse_lk_in_out arg;
-	int sleep = fl->fl_flags & FL_SLEEP;
 	int err;
 
 	if (fc->no_lk)
-		return posix_lock_file_wait(file, fl);
+		return -ENOSYS;
 
 	if (!sleep) {
 		req = fuse_get_request(fc);
@@ -722,10 +721,8 @@ static int fuse_setlk(struct file *file, struct file_lock *fl)
 	request_send(fc, req);
 	err = req->out.h.error;
 	fuse_put_request(fc, req);
-	if (err == -ENOSYS) {
+	if (err == -ENOSYS)
 		fc->no_lk = 1;
-		err = posix_lock_file_wait(file, fl);
-	}
 
 	return err;
 }
@@ -734,8 +731,19 @@ static int fuse_file_lock(struct file *file, int cmd, struct file_lock *fl)
 {
 	if (cmd == F_GETLK)
 		return fuse_getlk(file, fl);
-	else
-		return fuse_setlk(file, fl);
+	else {
+#ifdef KERNEL_2_6
+		int err =  fuse_setlk(file, fl, fl->fl_flags & FL_SLEEP);
+		if (err == -ENOSYS)
+			err = posix_lock_file_wait(file, fl);
+#else
+		int err = fuse_setlk(file, fl,
+				     cmd == F_SETLKW || cmd == F_SETLKW64);
+		if (err == -ENOSYS)
+			err = 0;
+#endif
+		return err;
+	}
 }
 
 #ifndef KERNEL_2_6
