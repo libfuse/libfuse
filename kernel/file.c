@@ -734,11 +734,14 @@ static int fuse_file_lock(struct file *file, int cmd, struct file_lock *fl)
 	else {
 #ifdef KERNEL_2_6
 		int err =  fuse_setlk(file, fl, fl->fl_flags & FL_SLEEP);
-		if (err == -ENOSYS)
-			err = posix_lock_file_wait(file, fl);
 #else
 		int err = fuse_setlk(file, fl,
 				     cmd == F_SETLKW || cmd == F_SETLKW64);
+#endif
+#ifdef KERNEL_2_6_9_PLUS
+		if (err == -ENOSYS)
+			err = posix_lock_file_wait(file, fl);
+#else
 		if (err == -ENOSYS)
 			err = 0;
 #endif

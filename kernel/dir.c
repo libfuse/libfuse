@@ -16,7 +16,7 @@
 #include <linux/mm.h>
 #endif
 #include <linux/sched.h>
-#ifdef KERNEL_2_6_8_PLUS
+#ifdef KERNEL_2_6
 #include <linux/namei.h>
 #endif
 
