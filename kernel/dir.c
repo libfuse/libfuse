@@ -552,9 +552,7 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 			return -EACCES;
 
 		err = 0;
-		if (nd &&
-		    ((nd->flags & LOOKUP_ACCESS) ||
-		     ((nd->flags & LOOKUP_OPEN) && mode != 0)))
+		if (nd && (nd->flags & LOOKUP_ACCESS))
 			err = fuse_access(inode, mask);
 	}
 	return err;
@@ -662,7 +660,18 @@ static void free_link(char *link)
 		free_page((unsigned long) link);
 }
 
-#ifdef KERNEL_2_6_8_PLUS
+#ifdef KERNEL_2_6_13_PLUS
+static void *fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
+{
+	nd_set_link(nd, read_link(dentry));
+	return NULL;
+}
+
+static void fuse_put_link(struct dentry *dentry, struct nameidata *nd, void *c)
+{
+	free_link(nd_get_link(nd));
+}
+#elif defined(KERNEL_2_6_8_PLUS)
 static int fuse_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
 	nd_set_link(nd, read_link(dentry));

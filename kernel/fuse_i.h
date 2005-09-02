@@ -28,6 +28,9 @@
 #  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 #    define KERNEL_2_6_10_PLUS
 #  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)
+#    define KERNEL_2_6_13_PLUS
+#  endif
 #endif
 
 #include "config.h"

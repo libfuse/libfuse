@@ -63,6 +63,7 @@ struct fuse_file_lock {
 	__u32	type;
 };
 
+/** Valid attribute mask used in the SETATTR request */
 #define FATTR_MODE	(1 << 0)
 #define FATTR_UID	(1 << 1)
 #define FATTR_GID	(1 << 2)
@@ -71,6 +72,12 @@ struct fuse_file_lock {
 #define FATTR_MTIME	(1 << 5)
 #define FATTR_CTIME	(1 << 6)
 
+/**
+ * Flags returned by the OPEN request
+ *
+ * FOPEN_DIRECT_IO: bypass page cache for this open file
+ * FOPEN_KEEP_CACHE: don't invalidate the data cache on open
+ */
 #define FOPEN_DIRECT_IO		(1 << 0)
 #define FOPEN_KEEP_CACHE	(1 << 1)
 
