@@ -1,5 +1,9 @@
 2005-09-08  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.4.0-pre2
+
+2005-09-08  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Revert lock and access operations.  Postpone these until 2.5.
 
 2005-09-02  Miklos Szeredi <miklos@szeredi.hu>
