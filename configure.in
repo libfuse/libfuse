@@ -13,7 +13,7 @@ if test -z "$mkdir_p"; then
 	AC_SUBST(mkdir_p)
 fi
 
-if test -z "$CFLAGS"; then
+if test "$ac_env_CFLAGS_set" != set; then
 	CFLAGS="-Wall -W -g -O2"
 fi
 CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -D_REENTRANT -DFUSE_USE_VERSION=22"
