@@ -458,3 +458,14 @@ Description:
   an URL for the file.
 
 ==============================================================================
+Name: HTTP-FUSE KNOPPIX
+
+Homepage: http://unit.aist.go.jp/itri/knoppix/http-fuse/index-en.html
+
+Description: 
+
+  HTTP-FUSE-KNOPPIX-4.0 is only 5MB CD image and enables us to use
+  same contents of 3.8GB DVD KNOPPIX 4.0.  We don't need to download
+  3.8GB iso image at one time and burn DVD.
+
+==============================================================================
