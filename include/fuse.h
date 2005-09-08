@@ -298,23 +298,6 @@ struct fuse_operations {
      * Introduced in version 2.3
      */
     void (*destroy) (void *);
-
-    /**
-     * Check file access permissions
-     *
-     * Need not be implemented.  Will only be called for the access()
-     * system call, and for the open() system call, unless a new file
-     * is created (file didn't exist and O_CREAT was given).  If the
-     * 'default_permissions' mount option is given, this method is
-     * never called.
-     *
-     * Introduced in version 2.4
-     */
-    int (*access) (const char *, int);
-
-    int (*create) (const char *, mode_t, struct fuse_file_info *);
-
-    int (*ftruncate) (const char *, off_t, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems

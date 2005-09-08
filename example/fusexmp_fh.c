@@ -193,20 +193,6 @@ static int xmp_truncate(const char *path, off_t size)
     return 0;
 }
 
-static int xmp_ftruncate(const char *path, off_t size,
-                         struct fuse_file_info *fi)
-{
-    int res;
-
-    (void) path;
-
-    res = ftruncate(fi->fh, size);
-    if(res == -1)
-        return -errno;
-
-    return 0;
-}
-
 static int xmp_utime(const char *path, struct utimbuf *buf)
 {
     int res;
@@ -226,28 +212,6 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
     fd = open(path, fi->flags);
     if(fd == -1)
         return -errno;
-
-    fi->fh = fd;
-    return 0;
-}
-
-static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
-{
-    int fd;
-    struct stat stbuf;
-
-    fd = open(path, fi->flags | O_NOFOLLOW, mode);
-    if(fd == -1)
-        return -errno;
-
-    if (fstat(fd, &stbuf) == -1) {
-        close(fd);
-        return -EIO;
-    }
-    if (!S_ISREG(stbuf.st_mode)) {
-        close(fd);
-        return -EISDIR;
-    }
 
     fi->fh = fd;
     return 0;
@@ -367,7 +331,6 @@ static struct fuse_operations xmp_oper = {
     .chmod	= xmp_chmod,
     .chown	= xmp_chown,
     .truncate	= xmp_truncate,
-    .ftruncate	= xmp_ftruncate,
     .utime	= xmp_utime,
     .open	= xmp_open,
     .read	= xmp_read,
@@ -375,7 +338,6 @@ static struct fuse_operations xmp_oper = {
     .statfs	= xmp_statfs,
     .release	= xmp_release,
     .fsync	= xmp_fsync,
-    .create	= xmp_create,
 #ifdef HAVE_SETXATTR
     .setxattr	= xmp_setxattr,
     .getxattr	= xmp_getxattr,
