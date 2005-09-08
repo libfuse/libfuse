@@ -163,13 +163,11 @@ static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 	else
 		fuse_request_free(req);
 
-	if (!req->unaccounted) {
-		/* If we are in debt decrease that first */
-		if (fc->outstanding_debt)
-			fc->outstanding_debt--;
-		else
-			up(&fc->outstanding_sem);
-	}
+	/* If we are in debt decrease that first */
+	if (fc->outstanding_debt)
+		fc->outstanding_debt--;
+	else
+		up(&fc->outstanding_sem);
 	spin_unlock(&fuse_lock);
 }
 
@@ -324,10 +322,9 @@ static void queue_request(struct fuse_conn *fc, struct fuse_req *req)
 	req->in.h.unique = fc->reqctr;
 	req->in.h.len = sizeof(struct fuse_in_header) +
 		len_args(req->in.numargs, (struct fuse_arg *) req->in.args);
-	if (!req->preallocated && !req->unaccounted) {
+	if (!req->preallocated) {
 		/* If request is not preallocated (either FORGET or
-		   RELEASE), and is not unaccounted (SETLKW),
-		   then still decrease outstanding_sem, so
+		   RELEASE), then still decrease outstanding_sem, so
 		   user can't open infinite number of files while not
 		   processing the RELEASE requests.  However for
 		   efficiency do it without blocking, so if down()

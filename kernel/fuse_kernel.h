@@ -55,15 +55,6 @@ struct fuse_kstatfs {
 	__u32	namelen;
 };
 
-struct fuse_file_lock {
-	__u64	start;
-	__u64	end;
-	__u64	owner;
-	__u32	pid;
-	__u32	type;
-};
-
-/** Valid attribute mask used in the SETATTR request */
 #define FATTR_MODE	(1 << 0)
 #define FATTR_UID	(1 << 1)
 #define FATTR_GID	(1 << 2)
@@ -109,13 +100,7 @@ enum fuse_opcode {
 	FUSE_OPENDIR       = 27,
 	FUSE_READDIR       = 28,
 	FUSE_RELEASEDIR    = 29,
-	FUSE_FSYNCDIR      = 30,
-	FUSE_GETLK         = 31,
-	FUSE_SETLK         = 32,
-	FUSE_SETLKW        = 33,
-	FUSE_ACCESS        = 34,
-	FUSE_CREATE        = 35,
-	FUSE_FSETATTR      = 36
+	FUSE_FSYNCDIR      = 30
 };
 
 /* Conservative buffer size for the client */
@@ -171,14 +156,9 @@ struct fuse_setattr_in {
 	struct fuse_attr attr;
 };
 
-struct fuse_fsetattr_in {
-	__u64	fh;
-	struct fuse_setattr_in setattr;
-};
-
 struct fuse_open_in {
 	__u32	flags;
-	__u32	mode;
+	__u32	padding;
 };
 
 struct fuse_open_out {
@@ -240,15 +220,6 @@ struct fuse_getxattr_in {
 
 struct fuse_getxattr_out {
 	__u32	size;
-	__u32	padding;
-};
-
-struct fuse_lk_in_out {
-	struct fuse_file_lock lk;
-};
-
-struct fuse_access_in {
-	__u32	mask;
 	__u32	padding;
 };
 

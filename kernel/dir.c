@@ -24,7 +24,7 @@ static inline unsigned long time_to_jiffies(unsigned long sec,
 					    unsigned long nsec)
 {
 	struct timespec ts = {sec, nsec};
-	return jiffies + ((sec || nsec) ? timespec_to_jiffies(&ts) : 0) - 1;
+	return jiffies + timespec_to_jiffies(&ts);
 }
 
 static void fuse_lookup_init(struct fuse_req *req, struct inode *dir,
@@ -476,52 +476,17 @@ static int fuse_revalidate(struct dentry *entry)
 	return fuse_do_getattr(inode);
 }
 
-#ifdef KERNEL_2_6
-static int fuse_access(struct inode *inode, int mask)
-{
-	struct fuse_conn *fc = get_fuse_conn(inode);
-	struct fuse_req *req;
-	struct fuse_access_in inarg;
-	int err;
-
-	if (fc->no_access)
-		return 0;
-
-	req = fuse_get_request(fc);
-	if (!req)
-		return -EINTR;
-
-	memset(&inarg, 0, sizeof(inarg));
-	inarg.mask = mask;
-	req->in.h.opcode = FUSE_ACCESS;
-	req->in.h.nodeid = get_node_id(inode);
-	req->inode = inode;
-	req->in.numargs = 1;
-	req->in.args[0].size = sizeof(inarg);
-	req->in.args[0].value = &inarg;
-	request_send(fc, req);
-	err = req->out.h.error;
-	fuse_put_request(fc, req);
-	if (err == -ENOSYS) {
-		fc->no_access = 1;
-		err = 0;
-	}
-	return err;
-}
-#endif
-
 static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
-	int err;
 
 	if (!fuse_allow_task(fc, current))
 		return -EACCES;
 	else if (fc->flags & FUSE_DEFAULT_PERMISSIONS) {
 #ifdef KERNEL_2_6_10_PLUS
-		err = generic_permission(inode, mask, NULL);
+		int err = generic_permission(inode, mask, NULL);
 #else
-		err = vfs_permission(inode, mask);
+		int err = vfs_permission(inode, mask);
 #endif
 
 		/* If permission is denied, try to refresh file
@@ -545,6 +510,8 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 		   This is actually not so grave, since the user can
 		   simply keep access to the file/directory anyway by
 		   keeping it open... */
+
+		return err;
 	} else {
 		int mode = inode->i_mode;
 		if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
@@ -552,14 +519,8 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
                         return -EROFS;
 		if ((mask & MAY_EXEC) && !S_ISDIR(mode) && !(mode & S_IXUGO))
 			return -EACCES;
-
-		err = 0;
-#ifdef KERNEL_2_6
-		if (nd && (nd->flags & LOOKUP_ACCESS))
-			err = fuse_access(inode, mask);
-#endif
+		return 0;
 	}
-	return err;
 }
 
 static int parse_dirfile(char *buf, size_t nbytes, struct file *file,

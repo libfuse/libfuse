@@ -15,10 +15,6 @@ What is new in 2.4
 
  - Low level (inode based) API added
 
- - File locking primitives added to kernel and low level API
-
- - Add 'access' method to kernel, and library APIs
-
  - Allow 'direct_io' and 'keep_cache' options to be set on a
    case-by-case basis on open.
 

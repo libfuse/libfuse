@@ -69,12 +69,6 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_READDIR:		return "READDIR";
     case FUSE_RELEASEDIR:	return "RELEASEDIR";
     case FUSE_FSYNCDIR:		return "FSYNCDIR";
-    case FUSE_GETLK:		return "GETLK";
-    case FUSE_SETLK:		return "SETLK";
-    case FUSE_SETLKW:		return "SETLKW";
-    case FUSE_ACCESS:		return "ACCESS";
-    case FUSE_CREATE:		return "CREATE";
-    case FUSE_FSETATTR:		return "FSETATTR";
     default: 			return "???";
     }
 }
@@ -113,26 +107,6 @@ static void convert_attr(const struct fuse_attr *attr, struct stat *stbuf)
     stbuf->st_mtim.tv_nsec = attr->mtimensec;
     stbuf->st_ctim.tv_nsec = attr->ctimensec;
 #endif
-}
-
-static void convert_file_lock(const struct fuse_file_lock *ffl,
-                              struct fuse_lock_param *lk)
-{
-    lk->type  = ffl->type;
-    lk->start = ffl->start;
-    lk->end   = ffl->end;
-    lk->owner = ffl->owner;
-    lk->pid   = ffl->pid;
-}
-
-static void convert_lock_param(const struct fuse_lock_param *lk,
-                               struct fuse_file_lock *ffl)
-{
-    ffl->type  = lk->type;
-    ffl->start = lk->start;
-    ffl->end   = lk->end;
-    ffl->owner = lk->owner;
-    ffl->pid   = lk->pid;
 }
 
 static  size_t iov_length(const struct iovec *iov, size_t count)
@@ -367,16 +341,6 @@ int fuse_reply_xattr(fuse_req_t req, size_t count)
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_getlk(fuse_req_t req, const struct fuse_lock_param *lk)
-{
-    struct fuse_lk_in_out arg;
-
-    memset(&arg, 0, sizeof(arg));
-    convert_lock_param(lk, &arg.lk);
-
-    return send_reply_ok(req, &arg, sizeof(arg));
-}
-
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, char *name)
 {
     if (req->f->op.lookup)
@@ -412,24 +376,6 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid,
         fuse_reply_err(req, ENOSYS);
 }
 
-static void do_fsetattr(fuse_req_t req, fuse_ino_t nodeid,
-                       struct fuse_fsetattr_in *arg)
-{
-    struct fuse_file_info fi;
-
-    memset(&fi, 0, sizeof(fi));
-    fi.fh = arg->fh;
-    do_setattr(req, nodeid, &arg->setattr, &fi);
-}
-
-static void do_access(fuse_req_t req, fuse_ino_t nodeid,
-                      struct fuse_access_in *arg)
-{
-    if (req->f->op.access)
-        req->f->op.access(req, nodeid, arg->mask);
-    else
-        fuse_reply_err(req, ENOSYS);
-}
 static void do_readlink(fuse_req_t req, fuse_ino_t nodeid)
 {
     if (req->f->op.readlink)
@@ -499,20 +445,6 @@ static void do_link(fuse_req_t req, fuse_ino_t nodeid,
     if (req->f->op.link)
         req->f->op.link(req, arg->oldnodeid, nodeid, PARAM(arg));
     else
-        fuse_reply_err(req, ENOSYS);
-}
-
-static void do_create(fuse_req_t req, fuse_ino_t nodeid,
-                      struct fuse_open_in *arg)
-{
-    if (req->f->op.create) {
-        struct fuse_file_info fi;
-        
-        memset(&fi, 0, sizeof(fi));
-        fi.flags = arg->flags;
-
-        req->f->op.create(req, nodeid, PARAM(arg), arg->mode, &fi);
-    } else 
         fuse_reply_err(req, ENOSYS);
 }
 
@@ -706,32 +638,6 @@ static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, char *name)
         fuse_reply_err(req, ENOSYS);
 }
 
-static void do_getlk(fuse_req_t req, fuse_ino_t nodeid,
-                     struct fuse_lk_in_out *arg)
-{
-    if (req->f->op.getlk) {
-        struct fuse_lock_param lk;
-
-        memset(&lk, 0, sizeof(lk));
-        convert_file_lock(&arg->lk, &lk);
-        req->f->op.getlk(req, nodeid, &lk);
-    } else
-        fuse_reply_err(req, ENOSYS);
-}
-
-static void do_setlk(fuse_req_t req, fuse_ino_t nodeid, int issleep,
-                     struct fuse_lk_in_out *arg)
-{
-    if (req->f->op.setlk) {
-        struct fuse_lock_param lk;
-
-        memset(&lk, 0, sizeof(lk));
-        convert_file_lock(&arg->lk, &lk);
-        req->f->op.setlk(req, nodeid, issleep, &lk);
-    } else
-        fuse_reply_err(req, ENOSYS);
-}
-
 static void do_init(fuse_req_t req, struct fuse_init_in_out *arg)
 {
     struct fuse_init_in_out outarg;
@@ -827,10 +733,6 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
         do_setattr(req, in->nodeid, (struct fuse_setattr_in *) inarg, NULL);
         break;
 
-    case FUSE_FSETATTR:
-        do_fsetattr(req, in->nodeid, (struct fuse_fsetattr_in *) inarg);
-        break;
-
     case FUSE_READLINK:
         do_readlink(req, in->nodeid);
         break;
@@ -922,26 +824,6 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 
     case FUSE_FSYNCDIR:
         do_fsyncdir(req, in->nodeid, (struct fuse_fsync_in *) inarg);
-        break;
-
-    case FUSE_GETLK:
-        do_getlk(req, in->nodeid, (struct fuse_lk_in_out *) inarg);
-        break;
-
-    case FUSE_SETLK:
-        do_setlk(req, in->nodeid, 0, (struct fuse_lk_in_out *) inarg);
-        break;
-
-    case FUSE_SETLKW:
-        do_setlk(req, in->nodeid, 1, (struct fuse_lk_in_out *) inarg);
-        break;
-
-    case FUSE_ACCESS:
-        do_access(req, in->nodeid, (struct fuse_access_in *) inarg);
-        break;
-
-    case FUSE_CREATE:
-        do_create(req, in->nodeid, (struct fuse_open_in *) inarg);
         break;
 
     default:

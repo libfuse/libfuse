@@ -81,7 +81,6 @@ struct fuse_lowlevel_ops {
     void (*getattr)(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
     void (*setattr)(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
                     int to_set, struct fuse_file_info *fi);
-    void (*access) (fuse_req_t req, fuse_ino_t ino, int mask);
     void (*readlink)(fuse_req_t req, fuse_ino_t ino);
     void (*mknod)  (fuse_req_t req, fuse_ino_t parent, const char *name,
                     mode_t mode, dev_t rdev);
@@ -95,8 +94,6 @@ struct fuse_lowlevel_ops {
                     fuse_ino_t newparent, const char *newname);
     void (*link)   (fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
                     const char *newname);
-    void (*create) (fuse_req_t req, fuse_ino_t parent, const char *name,
-                    mode_t mode, struct fuse_file_info *fi);
     void (*open)   (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
     void (*read)   (fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                     struct fuse_file_info *fi);
@@ -120,10 +117,6 @@ struct fuse_lowlevel_ops {
                      size_t size);
     void (*listxattr)(fuse_req_t req, fuse_ino_t ino, size_t size);
     void (*removexattr)(fuse_req_t req, fuse_ino_t ino, const char *name);
-    void (*getlk)  (fuse_req_t req, fuse_ino_t ino,
-                    const struct fuse_lock_param *lk);
-    void (*setlk)  (fuse_req_t req, fuse_ino_t ino, int sleep,
-                    const struct fuse_lock_param *lk);
 };
 
 /* ------------------------------------------ */
@@ -134,12 +127,8 @@ int fuse_reply_err(fuse_req_t req, int err);
 /* forget */
 int fuse_reply_none(fuse_req_t req);
 
-/* lookup, create, mknod, mkdir, symlink, link */
+/* lookup, mknod, mkdir, symlink, link */
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
-
-/* create */
-int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
-                      const struct fuse_file_info *fi);
 
 /* getattr, setattr */
 int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
@@ -162,9 +151,6 @@ int fuse_reply_statfs(fuse_req_t req, const struct statfs *stbuf);
 
 /* getxattr, listxattr */
 int fuse_reply_xattr(fuse_req_t req, size_t count);
-
-/* getlk */
-int fuse_reply_getlk(fuse_req_t req, const struct fuse_lock_param *lk);
 
 /* ------------------------------------------ */
 

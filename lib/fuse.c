@@ -727,25 +727,6 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
         reply_err(req, err);
 }
 
-static void fuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
-{
-    struct fuse *f = req_fuse_prepare(req);
-    char *path;
-    int err;
-
-    err = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, ino);
-    if (path != NULL) {
-        err = -ENOSYS;
-        if (f->op.access)
-            err = f->op.access(path, mask);
-        free(path);
-    }
-    pthread_rwlock_unlock(&f->tree_lock);
-    reply_err(req, err);
-}
-
 static void fuse_readlink(fuse_req_t req, fuse_ino_t ino)
 {
     struct fuse *f = req_fuse_prepare(req);
@@ -979,71 +960,6 @@ static void fuse_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
     }
     pthread_rwlock_unlock(&f->tree_lock);
     reply_entry(req, &e, err);
-}
-
-static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
-                        mode_t mode, struct fuse_file_info *fi)
-{
-    struct fuse *f = req_fuse_prepare(req);
-    struct fuse_entry_param e;
-    char *path;
-    int opened = 0;
-    int err;
-
-    err = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path_name(f, parent, name);
-    if (path != NULL) {
-        err = -ENOSYS;
-        if (f->op.create && f->op.getattr) {
-            int oerr = f->op.create(path, mode, fi);
-            if (!oerr)
-                opened = 1;
-            
-            if (f->flags & FUSE_DEBUG) {
-                if (opened)
-                    printf("CREATE[%lu] flags: 0x%x %s\n", fi->fh, fi->flags, path);
-                else
-                    printf("LOOKUP(CREATE) %s\n", path);
-                fflush(stdout);
-            }
-
-            err = lookup_path(f, parent, name, path, &e);
-            if (err) {
-                if (f->op.release && opened)
-                    f->op.release(path, fi);
-            } else if (opened != (S_ISREG(e.attr.st_mode) != 0)) {
-                err = oerr ? oerr : -EIO;
-                if (f->op.release && opened)
-                    f->op.release(path, fi);
-                forget_node(f, e.ino, 1);
-            }
-        }
-    }
-
-    if (!err) {
-        if (f->flags & FUSE_DIRECT_IO)
-            fi->direct_io = 1;
-        if (f->flags & FUSE_KERNEL_CACHE)
-            fi->keep_cache = 1;
-
-        pthread_mutex_lock(&f->lock);
-        if (fuse_reply_create(req, &e, fi) == -ENOENT) {
-            /* The open syscall was interrupted, so it must be cancelled */
-            if(f->op.release && opened)
-                f->op.release(path, fi);
-            forget_node(f, e.ino, 1);
-        } else {
-            struct node *node = get_node(f, e.ino);
-            node->open_count ++;
-        }
-        pthread_mutex_unlock(&f->lock);
-    } else
-        reply_err(req, err);
-
-    if (path)
-        free(path);
-    pthread_rwlock_unlock(&f->tree_lock);
 }
 
 static void fuse_open(fuse_req_t req, fuse_ino_t ino,
@@ -1680,7 +1596,6 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
     .forget = fuse_forget,
     .getattr = fuse_getattr,
     .setattr = fuse_setattr,
-    .access = fuse_access,
     .readlink = fuse_readlink,
     .mknod = fuse_mknod,
     .mkdir = fuse_mkdir,
@@ -1689,7 +1604,6 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
     .symlink = fuse_symlink,
     .rename = fuse_rename,
     .link = fuse_link,
-    .create = fuse_create,
     .open = fuse_open,
     .read = fuse_read,
     .write = fuse_write,

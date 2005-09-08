@@ -1,19 +1,12 @@
-2005-09-02  Miklos Szeredi <miklos@szeredi.hu>
+2005-09-08  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Don't call ACCESS on open.  Will do this properly with atomic
-	open/create
+	* Revert lock and access operations.  Postpone these until 2.5.
+
+2005-09-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compile warning on 2.6.13 and later
 
 	* Fix compilation on old kernels
-
-2005-08-25  Miklos Szeredi <miklos@szeredi.hu>
-
-	* lib: add userspace side of ftruncate() method for experimentation
-
-2005-08-23  Miklos Szeredi <miklos@szeredi.hu>
-
-	* lib: add userspace side of create() method for experimentation
 
 2005-08-19  Miklos Szeredi <miklos@szeredi.hu>
 
@@ -52,8 +45,6 @@
 
 	* Added missing symbols to versionscript (Joshua J. Berry)
 
-	* Do not limit number of file locks being waited upon
-
 	* kernel: implement two flags, open can set: 'direct_io' and
 	'keep_cache'.  These correspond exactly to mount options
 	'direct_io' and 'kernel_cache', but allow a per-open setting.
@@ -62,12 +53,6 @@
 	userspace.  For both mount options, if the option is given, then
 	the respective open flag is set, otherwise the open flag is left
 	unmodified (so the filesystem can set it).
-
-	* Add ACCESS operation.  This is called from the access() system
-	call if 'default_permissions' mount option is not given
-
-	* Perform ACCESS operation in case of open(), if the file wasn't
-	newly created
 
 	* lib (highlevel): make open method optional
 
@@ -90,8 +75,6 @@
 	request counter becomes negative.  This happens after
 	2,147,483,648 operations, so most people won't care.  Thanks to
 	Franco Broi for the report and testing.
-
-	* Added file locking methods to kernel and low-level API.
 
 2005-07-21  Miklos Szeredi <miklos@szeredi.hu>
 
