@@ -128,20 +128,12 @@ struct fuse_operations {
     /** File open operation
      *
      * No creation, or trunctation flags (O_CREAT, O_EXCL, O_TRUNC)
-     * will be passed to open().  Optionally open may return an
-     * arbitary filehandle in the fuse_file_info structure, which will
-     * be passed to all file operations.
-     *
-     * Open does not need to check the permission to open the file
-     * with the given flags.  In fact it cannot correctly do that
-     * since it doesn't have a way to determine if the file was just
-     * created (and hence the permission need not be checked).
-     *
-     * If permission needs to be checked, implement the access()
-     * method, and do the check there.
+     * will be passed to open().  Open should check if the operation
+     * is permitted for the given flags.  Optionally open may also
+     * return an arbitary filehandle in the fuse_file_info structure,
+     * which will be passed to all file operations.
      *
      * Changed in version 2.2
-     * Optional from version 2.4
      */
     int (*open) (const char *, struct fuse_file_info *);
 
@@ -235,6 +227,9 @@ struct fuse_operations {
     int (*removexattr) (const char *, const char *);
 
     /** Open directory
+     *
+     * This method should check if the open operation is permitted for
+     * this  directory
      *
      * Introduced in version 2.3
      */
