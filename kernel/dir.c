@@ -415,7 +415,7 @@ int fuse_do_getattr(struct inode *inode)
 	fuse_put_request(fc, req);
 	if (!err) {
 		if ((inode->i_mode ^ arg.attr.mode) & S_IFMT) {
-#ifndef FUSE_MAINLINE
+#ifndef KERNEL_2_6_12_PLUS
 			if (get_node_id(inode) != FUSE_ROOT_ID)
 				make_bad_inode(inode);
 #else
@@ -769,7 +769,7 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	fuse_put_request(fc, req);
 	if (!err) {
 		if ((inode->i_mode ^ outarg.attr.mode) & S_IFMT) {
-#ifndef FUSE_MAINLINE
+#ifndef KERNEL_2_6_12_PLUS
 			if (get_node_id(inode) != FUSE_ROOT_ID)
 				make_bad_inode(inode);
 #else
