@@ -469,3 +469,14 @@ Description:
   3.8GB iso image at one time and burn DVD.
 
 ==============================================================================
+Name: OCamlFuse
+
+Homepage: http://sourceforge.net/projects/ocamlfuse
+
+Description:
+
+  This is an ocaml binding for fuse enabling you to write your own
+  multithreaded userspace filesystems using the ocaml programming
+  language.
+
+==============================================================================
