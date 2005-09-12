@@ -78,6 +78,7 @@ static void *do_work(void *data)
         if (res == -1) {
             fuse_session_exit(w->se);
             w->error = -1;
+            break;
         }
 
         pthread_mutex_lock(&w->lock);
