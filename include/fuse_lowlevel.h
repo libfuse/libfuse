@@ -42,14 +42,6 @@ struct fuse_entry_param {
     double entry_timeout;
 };
 
-struct fuse_lock_param {
-    int type;
-    off_t start;
-    off_t end;
-    unsigned long long owner;
-    pid_t pid;
-};
-
 struct fuse_ctx {
     /** User ID of the calling process */
     uid_t uid;
