@@ -1,3 +1,7 @@
+2005-09-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add memory cleanup on thread exit
+
 2005-09-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Set umask to zero in fusexmp and fusexmp_fh, so that

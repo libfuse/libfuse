@@ -68,6 +68,7 @@ static void *do_work(void *data)
         return NULL;
     }
 
+    pthread_cleanup_push(free, buf);
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
     pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
@@ -99,6 +100,7 @@ static void *do_work(void *data)
         pthread_mutex_unlock(&w->lock);
         fuse_session_process(w->se, buf, res, w->ch);
     }
+    pthread_cleanup_pop(1);
 
     /* Wait for cancellation */
     if (!is_mainthread)
