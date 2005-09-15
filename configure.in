@@ -55,6 +55,10 @@ if test -z "$MOUNT_FUSE_PATH"; then
 	MOUNT_FUSE_PATH=/sbin
 fi
 AC_SUBST(MOUNT_FUSE_PATH)
+if test -z "$UDEV_RULES_PATH"; then
+	UDEV_RULES_PATH=/etc/udev/rules.d
+fi
+AC_SUBST(UDEV_RULES_PATH)
 
 AC_SUBST(subdirs2)
 

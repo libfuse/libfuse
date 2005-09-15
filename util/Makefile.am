@@ -13,12 +13,17 @@ install-exec-hook:
 		mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229; \
 	fi
 
-EXTRA_DIST = mount.fuse
+EXTRA_DIST = mount.fuse udev.rules
 
 MOUNT_FUSE_PATH = @MOUNT_FUSE_PATH@
+UDEV_RULES_PATH = @UDEV_RULES_PATH@
 
 install-exec-local:
 	$(INSTALL_PROGRAM) $(srcdir)/mount.fuse $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
 
+install-data-local:
+	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/40-fuse.rules
+
 uninstall-local:
 	rm -f $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
+	rm -f $(DESTDIR)$(UDEV_RULES_PATH)/40-fuse.rules
