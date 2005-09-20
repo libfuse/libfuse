@@ -779,35 +779,7 @@ static int try_open_fuse_device(char **devp)
 
 static int open_fuse_device(char **devp)
 {
-    int fd;
-
-    if (1
-#ifndef AUTO_MODPROBE
-        && getuid() == 0
-#endif
-        ) {
-        int status;
-        pid_t pid;
-
-        fd = try_open_fuse_device(devp);
-        if (fd >= 0)
-            return fd;
-
-#ifndef USE_UCLIBC
-        pid = fork();
-#else
-        pid = vfork();
-#endif
-        if (pid == 0) {
-            setuid(0);
-            execl("/sbin/modprobe", "/sbin/modprobe", "fuse", NULL);
-            exit(1);
-        }
-        if (pid != -1)
-            waitpid(pid, &status, 0);
-    }
-
-    fd = try_open_fuse_device(devp);
+    int fd = try_open_fuse_device(devp);
     if (fd >= 0)
         return fd;
 

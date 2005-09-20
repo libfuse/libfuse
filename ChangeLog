@@ -1,3 +1,8 @@
+2005-09-20  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Remove '--enable-auto-modprobe' configure flag.  Module
+	auto-loading is now handled by the kernel.
+
 2005-09-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Install UDEV rule file, so /dev/fuse is created with mode 0666.

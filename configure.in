@@ -26,8 +26,6 @@ AC_ARG_ENABLE(util,
 	[  --enable-util           Compile with util ])
 AC_ARG_ENABLE(example,
 	[  --enable-example        Compile with examples ])
-AC_ARG_ENABLE(auto-modprobe,
-	[  --enable-auto-modprobe  Automatically insert kernel module])
 
 subdirs2="include"
 
@@ -44,10 +42,6 @@ fi
 if test "$enable_example" != "no"; then
 	subdirs2="$subdirs2 example";
 fi
-if test "$enable_auto_modprobe" = "yes"; then
-	AC_DEFINE(AUTO_MODPROBE, 1, [Automatically insert kernel module])
-fi
-
 AC_CHECK_FUNCS([setxattr])
 AC_CHECK_MEMBERS([struct stat.st_atim])
 
