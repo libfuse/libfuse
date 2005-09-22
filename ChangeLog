@@ -1,3 +1,8 @@
+2005-09-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Slight optimization in returning EINVAL error in case of an open
+	with O_DIRECT flag.
+
 2005-09-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove '--enable-auto-modprobe' configure flag.  Module
