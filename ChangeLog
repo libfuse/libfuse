@@ -1,3 +1,7 @@
+2005-09-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Check for special node ID values in LOOKUP/MK*
+
 2005-09-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Slight optimization in returning EINVAL error in case of an open
