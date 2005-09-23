@@ -1,6 +1,6 @@
 2005-09-23  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Check for special node ID values in LOOKUP/MK*
+	* Check for special node ID values in lookup and creation
 
 2005-09-22  Miklos Szeredi <miklos@szeredi.hu>
 

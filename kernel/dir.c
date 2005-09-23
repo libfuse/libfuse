@@ -112,9 +112,9 @@ static int fuse_lookup_iget(struct inode *dir, struct dentry *entry,
 	fuse_lookup_init(req, dir, entry, &outarg);
 	request_send(fc, req);
 	err = req->out.h.error;
-	if (!err && outarg.nodeid == FUSE_ROOT_ID)
+	if (!err && (!outarg.nodeid || outarg.nodeid == FUSE_ROOT_ID))
 		err = -EIO;
-	else if (!err && outarg.nodeid) {
+	if (!err) {
 		inode = fuse_iget(dir->i_sb, outarg.nodeid, outarg.generation,
 				  &outarg.attr);
 		if (!inode) {
