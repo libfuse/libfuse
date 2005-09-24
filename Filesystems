@@ -480,3 +480,23 @@ Description:
   language.
 
 ==============================================================================
+Name: Fuse for FreeBSD
+
+Author: Csaba Henk / csaba-ml at creo hu
+
+Homepage: http://wikitest.freebsd.org/moin.cgi/FuseFilesystem
+
+==============================================================================
+Name: WikipediaFS
+
+Author: Mathieu Blondel
+
+Homepage: http://wikipediafs.sourceforge.net
+
+Description:
+
+  WikipediaFS is a mountable Linux virtual file system that enables
+  you to deal with Wikipedia articles as though they were real files
+  on your hard drive.
+
+==============================================================================
