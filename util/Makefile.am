@@ -19,9 +19,11 @@ MOUNT_FUSE_PATH = @MOUNT_FUSE_PATH@
 UDEV_RULES_PATH = @UDEV_RULES_PATH@
 
 install-exec-local:
+	$(mkdir_p) $(DESTDIR)$(MOUNT_FUSE_PATH)
 	$(INSTALL_PROGRAM) $(srcdir)/mount.fuse $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
 
 install-data-local:
+	$(mkdir_p) $(DESTDIR)$(UDEV_RULES_PATH)
 	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/40-fuse.rules
 
 uninstall-local:
