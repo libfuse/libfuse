@@ -2,6 +2,12 @@ NFS exporting is supported on kernels versions >= 2.6.0.  For 2.4.X
 kernels the exporting infrastructure is not refined enough, so don't
 expect this to work.
 
+Also FUSE module in official kernels (>= 2.6.14) don't support NFS
+exporting.  In this case if you need NFS exporting capability, use the
+'--enable-kernel-module' configure option to compile the module from
+this package.  And make sure, that the FUSE is not compiled into the
+kernel (CONFIG_FUSE_FS must be 'm' or 'n').
+
 You need to add an fsid=NNN option to /etc/exports to make exporting a
 FUSE directory work.
 
@@ -10,3 +16,6 @@ because the current FUSE kernel API and the userspace library cannot
 handle a situation where the kernel forgets about an inode which is
 still referenced by the remote NFS client.  This problem will be
 addressed in a later version.
+
+In the future it planned that NFS exporting will be done solely in
+userspace.
