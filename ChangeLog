@@ -1,5 +1,9 @@
 2005-09-26  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.4.0-rc1
+
+2005-09-26  Miklos Szeredi <miklos@szeredi.hu>
+
 	* fusermount: allow user umount in the case when /etc/mtab is a
 	symlink to /proc/mounts.  Reported by Balázs Pozsár.
 
