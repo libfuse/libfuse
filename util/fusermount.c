@@ -160,6 +160,8 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
     FILE *fp;
     FILE *newfp;
     const char *user = NULL;
+    char uidstr[32];
+    unsigned uidlen = 0;
     int found;
 
     fp = setmntent(mtab, "r");
@@ -180,6 +182,8 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
         user = get_user_name();
         if (user == NULL)
             return -1;
+
+        uidlen = sprintf(uidstr, "%u", getuid());
     }
 
     found = 0;
@@ -191,7 +195,14 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
                 removed = 1;
             else {
                 char *p = strstr(entp->mnt_opts, "user=");
-                if (p != NULL && strcmp(p + 5, user) == 0)
+                if (p && (p == entp->mnt_opts || *(p-1) == ',') &&
+                    strcmp(p + 5, user) == 0)
+                    removed = 1;
+                /* /etc/mtab is a link pointing to /proc/mounts: */
+                else if ((p = strstr(entp->mnt_opts, "user_id=")) && 
+                         (p == entp->mnt_opts || *(p-1) == ',') &&
+                         strncmp(p + 8, uidstr, uidlen) == 0 &&
+                         (*(p+8+uidlen) == ',' || *(p+8+uidlen) == '\0'))
                     removed = 1;
             }
         }

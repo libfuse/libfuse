@@ -1,3 +1,8 @@
+2005-09-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: allow user umount in the case when /etc/mtab is a
+	symlink to /proc/mounts.  Reported by Balázs Pozsár.
+
 2005-09-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check for special node ID values in lookup and creation
