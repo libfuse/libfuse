@@ -1,223 +1,170 @@
-Here are some good questions and answers in no particular order.
+This was generated on 2005/09/27 from
 
----------------------------------------------------------------------------
-Subject: FUSE vs. LUFS
+  http://fuse.sourceforge.net/wiki/index.php/FAQ
 
+For an up to date version please see the above page.  You can also add
+new entries there.
 
-> Can you explain me what are the differences between this two modules
-> and why did you start a new project?
+General
+=======
 
-Well looking at the release dates on SF, the first release of FUSE is
-almost a year older than that of LUFS.  But we probably weren't awere
-of each others project for quite some time.
+How can I umount a filesystem
+-----------------------------
+
+Filesystems mounted without sysadmin privileges can be umounted with
+the command
+
+    fusermount -u mountpoint
+
+What's the difference between FUSE and LUFS?
+--------------------------------------------
 
 The main difference between them is that in LUFS the filesystem is a
 shared object (.so) which is loaded by lufsmount, and in FUSE the
 filesystem is a separate executable, which uses the fuse library.  The
-actual API is very similar, and I've written a translator, that can
-load LUFS modules and run them using the FUSE kernel module (see the
-lufis package on the FUSE page).
+actual API is very similar, and there's a translator, that can load
+LUFS modules and run them using the FUSE kernel module (see the lufis
+package on the FUSE page).
 
 Another difference is that LUFS does some caching of directories and
 file attributes.  FUSE does not do this, so it provides a 'thinner'
 interface.
 
----------------------------------------------------------------------------
-Subject: close() not in struct fuse_operations
+By now LUFS development seems to have completely ceased.
 
+Why is it called FUSE? There's a ZX Spectrum emulator called Fuse too.
+----------------------------------------------------------------------
 
-> Is there a reason for 'close' not being one of the
-> fuse_operations? I'd need to know when files are
-> closed...
+At the time of christening it, the author of FUSE (the filesystem)
+hadn't heard of Fuse (the Speccy emulator).  Which is ironic, since he
+knew Philip Kendall, the author of that other Fuse from earlier times.
+Btw. the author of FUSE (the filesystem) also created a Speccy
+emulator called Spectemu.
 
-It's not easy.  Consider mmap(): if you have a memory file, even after
-closing it, you can read or write the file through memory.
+The name wanted to be a clever acronym for "Filesystem in USErspace",
+but it turned out to be an unfortunate choice.  The author has since
+vowed never to name a project after a common term, not even anything
+found more than a handful of times on Google.
 
-Despite this there are close()-like operations: flush and release.
-Flush gets called on each close() and release gets called when there
-are no more uses of a file, including memory mappings.
+API
+===
 
----------------------------------------------------------------------------
-Subject: overlapping open/release states
+Which method is called on the close() system call?
+--------------------------------------------------
 
+flush() and possibly release().  For details see the documentation of
+these methods in <fuse.h>
 
-> I'm using a fairly current CVS version of Fuse, and have noticed
-> overlapping open / release calls for a file.  In other words a file
-> is opened multiple times and receives multiple release calls.  Is
-> this expected?
+Wouldn't it be simpler if there were a single close() method?
+-------------------------------------------------------------
 
-It has always been like this.  The open / release calls correspond to
-actual file opens / releases.  The release is called when there are no
-more refernces to the file, i.e. on the last close() or munmap().
+No, because the relationship between the close() system call and the
+release of the file (the opposite of open) is not as simple as people
+tend to imagine.  UNIX allows open files to acquire multiple
+references
 
-> This isn't what I expected.  Do I need to keep track of how many
-> open() calls were made to a file and expect that many release() calls?
+    * after fork() two processes refer to the same open file
 
-Yes.  You can also keep track of the number of files opened for
-writing for example, and use that information for finally flushing
-dirty data of a file.
+    * dup() and dup2() make another file descriptor refer to the same
+      file
 
-> So it appears that there may even be additional file operations after
-> one or more of the release calls..
+    * mmap() makes a memory mapping refer to an open file
 
-That is expected also.  It would be a bug if there were reads/writes
-after the last release, or if the number of releases didn't match the
-number of opens.
+This means, that for a single open() system call, there could be more
+than one close() and possibly munmap() calls until the open file is
+finally released.
 
-> I've solved this in my code by counting the number of open / release
-> calls and only dropping information when the last expected release
-> is received.  But I thought I'd point this out in case, as it was
-> unexpected behavior..
+Can I return an error from release()?
+-------------------------------------
 
----------------------------------------------------------------------------
-Subject: return value from release()
+No, it's not possible.
 
+If you need to return errors on close, you must do that from flush().
 
-> Hmm.  So it doesn't matter what I return from my release function?  I
-> understand there is not an exact 1:1 relationship between close() and
-> release, but I had hoped that a error return from release would be
-> carried up as an error return from close().
+How do I know which is the last flush() before release()?
+---------------------------------------------------------
 
-In release() the error value is ignored, and not every close will
-cause a release.  Consider this:
+You can't.  All flush() calls should be treated equally.  Anyway it
+wouldn't be worth optimizing away non-final flushes, since it's fairly
+rare to have multiple write-flush sequences on an open file.
 
-  - process opens a file
-  - process forks
-  - parent closes the file
-  - child closes the file
+Why doesn't FUSE forward ioctl() calls to the filesystem?
+---------------------------------------------------------
 
-The file will only be released on the second close, i.e. when all
-references to the file are closed.  Also memory mapping a file creates
-a reference to the file, that is released when the memory is unmapped.
+Because it's not possible: data passed to ioctl() doesn't have a well
+defined length and structure like read() and write().  Consider using
+getxattr() and setxattr() instead.
 
-There is a flush() operation that is called on every close(), through
-which the filesystem can return an error.
+Is there a way to know the uid, gid or pid of the process performing
+--------------------------------------------------------------------
+the operation?
+--------------
 
-Note: there can be read/write operations even after the last flush()
-but before a release().
+Yes: fuse_get_context()->uid, etc.
 
----------------------------------------------------------------------------
-Subject: FUSE lacks ioctl support
+Problems
+========
 
+Why are some bytes zeroed when reading a file?
+----------------------------------------------
 
->  I'll try to add ioctl support to FUSE, but I am quite new to it, so I
->  would apreciate any suggestions.
+This happens if the filesystem returns a short count from the read()
+method.  If the file wasn't opened in direct I/O mode, the read()
+method must return exactly the requested number of bytes, unless it's
+the end of the file.
 
-It's not clear to me how would you use ioctls since they are
-meaningless on normal files, and on device files the filesystem
-implementation usually does not care about the ioctl operations.  And
-even if you manage to hack fuse to intercept device ioctls, you
-wouldn't be able to do anything with them, because they contain
-arbitrarily structured data (not length/value as in the case of read
-or write).
+If the file was opened in direct I/O mode (with direct_io mount
+option, or by setting the direct_io field of fuse_file_info at open)
+the read can return a smaller value than requested.  In this case the
+end of file can be signalled by returning zero.
 
-[...]
+Why doesn't find work on my filesystem?
+---------------------------------------
 
-Using getxattr() and setxattr() is much cleaner than ioctl(), and is
-actually supported in fuse-2.0.
+The st_nlink member must be set correctly for directories to make find
+work.  If it's not set correctly the -noleaf option of find can be
+used to make it ignore the hard link count (see man find).
 
----------------------------------------------------------------------------
-Subject: Short reads
+The correct value of st_nlink for directories is NSUB + 2.  Where NSUB
+is the number of subdirectories.  NOTE: regular-file/symlink/etc
+entries do not count into NSUB, only directories.
 
-
-> Now for the problem case: I cat the 256k file, the kernel issues a
-> read with length 65536 and offset 0.  My program returns only 10
-> bytes.  What I expected to see was the kernel to then issue a read for
-> length 65536 and offset 10.  Instead what I saw in the result was the
-> 10 bytes I returned, followed by 65526 zero bytes.
->
-> Is this the intended behavior?
-
-Yes.  You can easily program around it with a for-loop in your read
-function.
-
-> Does this simplify things significantly?  If it isn't much of a
-> difference, I'd like to suggest doing it the other way: many people
-> (like me) implement their fuse read function in terms of read(), and
-> read() can return early.
-
-No.  Read from a pipe/socket can be short, but read from a file can't.
-
----------------------------------------------------------------------------
-Subject: protocol error
-
-> I'm having trouble with file writing. I can
-> 'echo something > file' to a file, but
-> 'cp file something' or 'cat something > file'
-> gives a protocol error.
-
-Two possible reasons for this are:
-
-1) A mismatch between the library version and the kernel module
-version.
-
-2) The write() operation returns less than the 'size' parameter.
-Short writes are generally not allowed (as in case of read()).  The
-exception is if the 'direct_io' mount option is used.
-
----------------------------------------------------------------------------
-Subject: FUSE naming
-
-
-> There are a million other projects with the same name.  Why did you
-> call it 'FUSE'?
-
-Because I'm an imbecile.  The lesson is that a common term is not a
-good project name.  A somewhat strange story comes to my mind: I was
-contacted by Philip Kendall shortly after releasing FUSE, blaming me
-for choosing the same name as his ZX Spectrum emulator (Fuse).  We
-have known each other from earlier times, since I have also written a
-ZX Spectrum emulator (Spectemu).
-
----------------------------------------------------------------------------
-Subject: Uid/gid/pid
-
-
-> Is there any easy way to know the uid of a reader?  For example, let's
-> say I wanted to create a file that contained 'foo' for uid 1, but
-> 'bar' for uid 2.
-
-Yes:
-
-fuse_get_context()->uid
-
-
----------------------------------------------------------------------------
-Subject: 'find' command
-
-
-> I'm having trouble getting the find command to search through fuse
-> directories. What settings do I need in 'getattr'?
-
-The 'st_nlink' member must be set correctly for directories to make
-'find' work.  If it's not set correctly the '-noleaf' option of find
-can be used to make it ignore the hard link count (see 'man find').
-
-The correct value of 'st_nlink' for directories is NSUB + 2.  Where
-NSUB is the number of subdirectories.  NOTE: regular-file/symlink/etc
-entries _do not_ count into NSUB, only directories.
-
-If calculating NSUB is hard, the filesystem can set st_nlink to 1 for
-directories, and find will still work.  This is not documented
+If calculating NSUB is hard, the filesystem can set st_nlink of
+directories to 1, and find will still work.  This is not documented
 behavior of find, and it's not clear whether this is intended or just
-by accident.  The NTFS filesysem uses this for example, so it's
-unlikely that this find "feature" will go away.
+by accident.  But for example the NTFS filesysem relies on this, so
+it's unlikely that this "feature" will go away.
 
----------------------------------------------------------------------------
-Subject: File system interactivity
+What is the reason for IO errors?
+---------------------------------
 
-> I need to add interactivity to my user space file system.
-> For example, while executing create(), I need to ask a
-> question to the terminal that issued the request.
->
-> Is there a way I can achieve this goal?
+The kernel part of FUSE returns the EIO error value, whenever the
+userspace filesystem sends a "bad" reply.  Sometimes these are
+unavoidable, and not necessarily a fault of the filesystem.  Possible
+causes of this are (non-exhaustive)
+
+    * the filesystem returned a short count on write()
+
+    * the type of the file has changed (e.g. a directory suddenly
+      became a symlink)
+
+    * a directory entry contained a filename that was too long (no,
+      ENAMETOOLONG is not the right error here)
+
+    * the same node ID value was used for two different directories
+      (i.e. hard-linked directories are not allowed)
+
+Misc
+====
+
+Can the filesystem ask a question on the terminal of the user?
+--------------------------------------------------------------
 
 It would not be possible generally speaking, since it might not be an
-interactive program but rather a daemon, or a GUI program creating the
-file.  However you should be able to get the PID for the caller, and
-by looking in /proc you should be able to find the process tty or
-something similar. Perhaps it would be better to redesign your program
-not to have such interactivity anyway, try to use e.g. extended
-attributes of files to set per-file options, or a configuration file
-for your filesystem.
+interactive program but rather a daemon, or a GUI program doing the
+operation.  However you should be able to get the PID for the caller,
+and by looking in /proc you should be able to find the process tty or
+something similar.
 
+But this is not recommended.  You should rather think about solving
+this another way.

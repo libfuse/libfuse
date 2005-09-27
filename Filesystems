@@ -1,48 +1,23 @@
-Filesystems using FUSE, that I know of.  In order of appearance.
+This was generated on 2005/09/27 from
 
-If you find incorrect or outdated information here, please tell me.
-Also new entries are welcome.
+  http://fuse.sourceforge.net/wiki/index.php/LanguageBindings
+  http://fuse.sourceforge.net/wiki/index.php/FileSystems
+  http://fuse.sourceforge.net/wiki/index.php/OperatingSystems
 
-==============================================================================
-Name: OW
+For an up to date version please see the above pages.  You can also
+add new entries there.
 
-Author: Paul H. Alfille / palfille at partners org
+===============================================================================
+Language Bindings
+===============================================================================
 
-Homepage: http://owfs.sourceforge.net
+C
 
-Description:
+This is the native API
 
-  OWFS uses FUSE to expose all the Dallas 1-wire sensors, iButtons and
-  memory chips as a filesystem.  Devices are dynamically included in
-  the directory, and properties like temperature are obtained by
-  reading a file.
+------------------------------------------------------------------------------
+Java
 
-==============================================================================
-Name: FunFS (status: alpha)
-
-Author: Michael Grigoriev (Net Integration Technologies) / mag at luminal org
-
-Homepage: http://www.luminal.org/wiki/index.php/FunFS/FunFS
-
-Description:
-
-  FunFS is an advanced network file system with a simple goal: to be
-  better than NFS.
-
-==============================================================================
-Name: EncFS
-
-Author:  Valient Gough / vgough at pobox com
-
-Homepage: http://pobox.com/~vgough/encfs.html
-
-Description:
-
-  EncFS provides an encrypted filesystem in user-space.  The EncFS
-  module itself runs without any special permissions and uses the FUSE
-  library and Linux kernel module to provide the filesystem interface.
-
-==============================================================================
 Name: FUSE-J
 
 Author: Peter Levart / peter.levart at select-tech si
@@ -51,283 +26,38 @@ Download: http://www.select-tech.si/fuse/
 
 Alternate download: http://www.cl.cam.ac.uk/~tdm25/fuse-j/
 
-Description:
+Description
 
-  FUSE-J provides Java binding for FUSE.  It comes with the
-  "proof-of-concept" ZIP filesystem which seems to be pretty stable.
+    FUSE-J provides Java binding for FUSE. It comes with the
+    "proof-of-concept" ZIP filesystem which seems to be pretty stable.
 
-==============================================================================
-Name: SMB for FUSE
+------------------------------------------------------------------------------
+C#
 
-Author: Vincent Wagelaar / vincent at ricardis tudelft nl
-
-Homepage: http://hannibal.lr-s.tudelft.nl/fusesmb/
-
-Description:
-
-  With SMB for Fuse you can seamlessly browse your network
-  neighbourhood as were it on your own filesystem.
-
-==============================================================================
-Name: Run-Time-Access
-
-Author: Bob Smith / bsmith at linuxtoys org
-
-Homepage: http://www.runtimeaccess.com
-
-Description:
-
-  RTA is a specialized memory resident interface to the internal data
-  of your application.  It is not a stand-alone server but a library
-  which attaches to your program and offers up your program's internal
-  structures and arrays as tables in a database and as files in a
-  virtual file system.
-
-==============================================================================
-Name: PhoneBook
-
-Author: David McNab / david at rebirthing co nz
-
-Homepage: http://www.freenet.org.nz/phonebook
-
-Description:
-
-  PhoneBook is expressly designed for use in situations where someone
-  can be under pressure (legal, military and/or criminal) to disclose
-  decryption keys, and has a 'chaffing' scheme whereby the user can
-  disclose only passphrases for non-sensitive material, and credibly
-  deny the existence of anything else.
-
-==============================================================================
-Name: KIO Fuse Gateway
-
-Author: Alexander Neundorf / neundorf at kde org
-
-Homepage: http://kde.ground.cz/tiki-index.php?page=KIO+Fuse+Gateway
-
-Description:
-
-  This gateway makes it possible to mount ioslaves or a general
-  ioslave-gateway via fuse and make them this way available to all
-  linux apps.
-
-==============================================================================
-Name: SULF - Stackable User-Level Filesystem (C# bindings)
+Name: SULF - Stackable User-Level Filesystem
 
 Author: Valient Gough / vgough at pobox com
 
 Homepage: http://arg0.net/users/vgough/sulf/index.html
 
-Description:
+Description
 
-  SULF allows you to write a Linux filesystem in C#.  It uses the FUSE
-  library to do the actual Linux filesystem integration in user-space.
+    SULF allows you to write a Linux filesystem in C#. It uses the
+    FUSE library to do the actual Linux filesystem integration in
+    user-space.
 
-==============================================================================
-Name: LUFS bridge (alpha)
+------------------------------------------------------------------------------
+TCL
 
-Author: Miklos Szeredi / miklos at szeredi hu
-
-Homepage: http://sourceforge.net/project/showfiles.php?group_id=121684&package_id=132803
-
-Description:
-
-  This is a modified LUFS daemon, which uses the FUSE kernel module.
-  It is binary compatible with existing LUFS filesystems, so no
-  recompilation is needed.
-
-==============================================================================
-Name: btfs (Bluetooth FileSystemMapping)
-
-Author: Collin R. Mulliner / collin at betaversion net
-
-Homepage: http://www.mulliner.org/bluetooth/btfs.php
-
-Description:
-
-  Btfs is a simple application to map some basic bluetooth functions
-  into the filesystem.  With btfs a simple ls DEVICES shows you all
-  bluetooth devices within range and cp somefile OPUSH/devicename
-  sends the given file to the device.
-
-==============================================================================
-Name: mcachefs
-
-Author: Michael Still / mikal at stillhq com
-
-Homepage: http://lists.samba.org/archive/linux/2004-March/010211.html
-
-Description:
-
-  mcachefs is a simple caching filesystem for Linux using FUSE.  It
-  works by copying the file that you asked for when the file is
-  opened, and then using that copy for all subsequent requests for the
-  file.  This is really a fairly naive approach to caching, and will
-  be improved in the future.
-
-==============================================================================
-Name: Fusedav
-
-Author: Lennart Poettering / mzshfrqni at 0pointer de
-
-Homepage: http://0pointer.de/lennart/projects/fusedav/
-
-Description:
-
-  fusedav is a Linux userspace file system driver for mounting WebDAV
-  shares.  It makes use of FUSE as userspace file system API and neon
-  as WebDAV API.
-
-==============================================================================
-Name: RelFS
-
-Author: Vincenzo Ciancia / vincenzo_ml at yahoo it
-
-Homepage: http://relfs.sourceforge.net/
-
-Description:
-
-  This is a linux userspace filesystem using fuse and a relational
-  database to store information about files.  Special directories can
-  represent views on the database, and many powerful features, such as
-  bayesian classification, are added through plugins.
-
-==============================================================================
-Name: GmailFS
-
-Author: Richard Jones / richard at jones name
-
-Homepage: http://richard.jones.name/google-hacks/gmail-filesystem/gmail-filesystem.html
-
-Description:
-
-  GmailFS provides a mountable Linux filesystem which uses your Gmail
-  account as its storage medium.  GmailFS is a Python application and
-  uses the FUSE userland filesystem infrastructure to help provide the
-  filesystem, and libgmail to communicate with Gmail.
-
-==============================================================================
-Name: DataDraw
-
-Author: Bill Cox / bill at viasic com
-
-Homepage: http://www.viasic.com/opensource/
-
-Description:
-
-  This is an EDA specific data structure diagramming and code
-  generation tool.
-
-==============================================================================
-Name: gphoto2-fuse-fs
-
-Author: Christopher Lester / lester at hep phy cam ac uk
-
-Homepage: http://www.hep.phy.cam.ac.uk/~lester/gphoto2-fuse-fs/
-
-Description:
-
-  This program allows mounting a gphoto2 based digital camera so that
-  you can access the files via "standard" programs like "ls, cat, tar,
-  gthumb, netscape, firefox, etc" rather than just through "gtkam and
-  gphoto2"
-
-==============================================================================
-Name: cvsfs-fuse
-
-Author: Patrick Frank / pfrank at gmx de
-
-Homepage: http://sourceforge.net/projects/cvsfs
-
-Description:
-
-  This provides a package which presents the CVS contents as mountable
-  file system.  It allows to view the versioned files as like they
-  were ordinary files on a disk.  There is also a possibility to check
-  in/out some files for editing.
-
-==============================================================================
-Name: Wayback (User-level Versioning File System for Linux)
-
-Author: Brian Cornell / techie at northwestern edu
-
-Homepage: http://wayback.sourceforge.net/
-
-Description:
-
-  When you use a Wayback file system, old versions of files are never
-  lost.  No matter how much you change a file or directory, everything
-  is always kept in a versioning file so that you never lose important
-  data.  Wayback provides the ability to remount any already mounted
-  file system with versioning support under a different directory.
-
-==============================================================================
-Name: Trivial Rolebased Authorisation & Capability Statemachine (TRACS)
-
-Author: Rob J Meijer / rmeijer at xs4all nl
-
-Homepage: http://www.xs4all.nl/~rmeijer/tracs.html
-
-Description:
-
-  This project is the first spin-off project of the Security Incident
-  Policy Enforcement System project.  In the process of designing a
-  SIPES, the need was recognized for the implementation of an
-  authorisation server that provides functionality not provided by any
-  of the current authorisation solutions.
-
-==============================================================================
-Name: SSHFS-FUSE
-
-Author: Miklos Szeredi / miklos at szeredi hu
-
-Homepage: http://fuse.sourceforge.net/sshfs.html
-
-Description:
-
-  This is a filesystem client based on the SSH File Transfer Protocol.
-  Since most SSH servers already support this protocol it is very easy
-  to set up: i.e. on the server side there's nothing to do.  On the
-  client side mounting the filesystem is as easy as logging into the
-  server with ssh.
-
-==============================================================================
-Name: Siefs
-
-Author: Dmitry Zakharov aka Chaos / dmitry-z at mail ru
-
-Homepage: http://chaos.allsiemens.com/siefs
-
-Description:
-
-  SieFS is a virtual filesystem for accessing Siemens mobile phones'
-  memory (flexmem or MultiMediaCard) from Linux.  Now you can mount
-  your phone (by datacable or IRDA) and work with it like with any
-  other removable storage.
-
-==============================================================================
-Name: Offline Media Content Database (MediaDatabase)
-
-Author: Mediadatabase Team
-
-Homepage: http://mediadatabase.sourceforge.net/
-
-Description:
-
-  MediaDatabase is database to store filesystem metadata (directory
-  structure) and/or audio tracks descriptions of offline media and
-  frontends to database (WWW, GUI and CUI).  It was developed to fight
-  chaos of large compact disk collection but it can help track other
-  removable media such as floppy disks and data DVDs.
-
-==============================================================================
 Name: TCL FUSE interface
 
-Author: Colin McCormack / colin at chinix com
+Author: Colin McCormack? / colin at chinix com
 
 Homepage: http://mini.net/tcl/13853
 
-==============================================================================
+------------------------------------------------------------------------------
+Python
+
 Name: Python interface for FUSE
 
 Author: Jeff Epler
@@ -336,7 +66,9 @@ Maintainer: Sebastien Delafond / sdelafond at gmx net
 
 CVS: cvs -d:pserver:anonymous@cvs.sourceforge.net:/cvsroot/fuse co -P python
 
-==============================================================================
+------------------------------------------------------------------------------
+Perl
+
 Name: Perl interface for FUSE
 
 Author: Mark Glines
@@ -347,156 +79,494 @@ Homepage: http://search.cpan.org/~dpavlin/Fuse-0.05/
 
 CVS: cvs -d:pserver:anonymous@cvs.sourceforge.net:/cvsroot/fuse co -P perl
 
-==============================================================================
-Name: Cddfs
+------------------------------------------------------------------------------
+Sh
 
-Author: Matthieu Castet
-
-Homepage: http://castet.matthieu.free.fr/cddfs/
-
-Description:
-
-  Cddfs [1] is a file system for fuse that use libparanoia in order to
-  mount your audio cd.
-
-==============================================================================
 Name: Fuse-J-shfs
 
 Author: Paul "Joey" Clark / joey at hwi ath cx
 
 Homepage: http://hwi.ath.cx/twiki/bin/view/Neuralyte/FuseJshfs
 
-Description:
+Description
 
-  Fuse-J-shfs lets you easily implement a virtual filesystem in Unix
-  shellscript.  And naturally, it already has some handy vfs
-  implementations you can use straight away: gzip, rar, sparse, ...
+    Fuse-J-shfs lets you easily implement a virtual filesystem in Unix
+    shellscript. And naturally, it already has some handy vfs
+    implementations you can use straight away: gzip, rar, sparse, ...
 
-==============================================================================
-Name:  SMBNetFS
+------------------------------------------------------------------------------
+OCaml
+
+Name: OCamlFuse
+
+Homepage: http://sourceforge.net/projects/ocamlfuse
+
+Description
+
+    This is an ocaml binding for fuse enabling you to write your own
+    multithreaded userspace filesystems using the ocaml programming
+    language.
+
+------------------------------------------------------------------------------
+Pliant
+
+Source: http://fullpliant.org/pliant/browse/file/pliant/linux/storage/fuse.pli?text
+
+===============================================================================
+File Systems
+===============================================================================
+
+Name: OW
+
+Author: Paul H. Alfille / palfille at partners org
+
+Homepage: http://owfs.sourceforge.net
+
+Description
+
+    OWFS uses FUSE to expose all the Dallas 1-wire sensors, iButtons
+    and memory chips as a filesystem. Devices are dynamically included
+    in the directory, and properties like temperature are obtained by
+    reading a file.
+
+------------------------------------------------------------------------------
+FunFS
+
+Status: alpha
+
+Author: Michael Grigoriev (Net Integration Technologies) / mag at luminal org
+
+Homepage: http://www.luminal.org/wiki/index.php/FunFS/FunFS
+
+Description
+
+    FunFS is an advanced network file system with a simple goal: to be
+    better than NFS.
+
+------------------------------------------------------------------------------
+EncFS
+
+Author: Valient Gough / vgough at pobox com
+
+Homepage: http://pobox.com/~vgough/encfs.html
+
+Description
+
+    EncFS provides an encrypted filesystem in user-space. The EncFS
+    module itself runs without any special permissions and uses the
+    FUSE library and Linux kernel module to provide the filesystem
+    interface.
+
+------------------------------------------------------------------------------
+SMB for FUSE
+
+Author: Vincent Wagelaar / vincent at ricardis tudelft nl
+
+Homepage: http://hannibal.lr-s.tudelft.nl/fusesmb/
+
+Description
+
+    With SMB for Fuse you can seamlessly browse your network
+    neighbourhood as were it on your own filesystem.
+
+------------------------------------------------------------------------------
+Run-Time-Access
+
+Author: Bob Smith / bsmith at linuxtoys org
+
+Homepage: http://www.runtimeaccess.com
+
+Description
+
+    RTA is a specialized memory resident interface to the internal
+    data of your application. It is not a stand-alone server but a
+    library which attaches to your program and offers up your
+    program's internal structures and arrays as tables in a database
+    and as files in a virtual file system.
+
+------------------------------------------------------------------------------
+PhoneBook
+
+Author: David McNab / david at rebirthing co nz
+
+Homepage: http://www.freenet.org.nz/phonebook
+
+Description
+
+    PhoneBook? is expressly designed for use in situations where
+    someone can be under pressure (legal, military and/or criminal) to
+    disclose decryption keys, and has a 'chaffing' scheme whereby the
+    user can disclose only passphrases for non-sensitive material, and
+    credibly deny the existence of anything else.
+
+------------------------------------------------------------------------------
+KIO Fuse Gateway
+
+Author: Alexander Neundorf / neundorf at kde org
+
+Homepage: http://kde.ground.cz/tiki-index.php?page=KIO+Fuse+Gateway
+
+Description
+
+    This gateway makes it possible to mount ioslaves or a general
+    ioslave-gateway via fuse and make them this way available to all
+    linux apps.
+
+------------------------------------------------------------------------------
+LUFS bridge
+
+Status: alpha
+
+Author: Miklos Szeredi / miklos at szeredi hu
+
+Homepage: http://sourceforge.net/project/showfiles.php?group_id=121684&package_id=132803
+
+Description
+
+    This is a modified LUFS daemon, which uses the FUSE kernel
+    module. It is binary compatible with existing LUFS filesystems, so
+    no recompilation is needed.
+
+------------------------------------------------------------------------------
+Bluetooth File System
+
+Name: btfs
+
+Author: Collin R. Mulliner / collin at betaversion net
+
+Homepage: http://www.mulliner.org/bluetooth/btfs.php
+
+Description
+
+    Btfs is a simple application to map some basic bluetooth functions
+    into the filesystem. With btfs a simple ls DEVICES shows you all
+    bluetooth devices within range and cp somefile OPUSH/devicename
+    sends the given file to the device.
+
+------------------------------------------------------------------------------
+mcachefs
+
+Author: Michael Still / mikal at stillhq com
+
+Homepage: http://lists.samba.org/archive/linux/2004-March/010211.html
+
+Description
+
+    mcachefs is a simple caching filesystem for Linux using FUSE. It
+    works by copying the file that you asked for when the file is
+    opened, and then using that copy for all subsequent requests for
+    the file. This is really a fairly naive approach to caching, and
+    will be improved in the future.
+
+------------------------------------------------------------------------------
+Fusedav
+
+Author: Lennart Poettering / mzshfrqni at 0pointer de
+
+Homepage: http://0pointer.de/lennart/projects/fusedav/
+
+Description
+
+    fusedav is a Linux userspace file system driver for mounting
+    WebDAV shares. It makes use of FUSE as userspace file system API
+    and neon as WebDAV API.
+
+------------------------------------------------------------------------------
+RelFS
+
+Author: Vincenzo Ciancia / vincenzo_ml at yahoo it
+
+Homepage: http://relfs.sourceforge.net/
+
+Description
+
+    This is a linux userspace filesystem using fuse and a relational
+    database to store information about files. Special directories can
+    represent views on the database, and many powerful features, such
+    as bayesian classification, are added through plugins.
+
+------------------------------------------------------------------------------
+GmailFS
+
+Author: Richard Jones / richard at jones name
+
+Homepage: http://richard.jones.name/google-hacks/gmail-filesystem/gmail-filesystem.html
+
+Description
+
+    GmailFS provides a mountable Linux filesystem which uses your
+    Gmail account as its storage medium. GmailFS is a Python
+    application and uses the FUSE userland filesystem infrastructure
+    to help provide the filesystem, and libgmail to communicate with
+    Gmail.
+
+------------------------------------------------------------------------------
+DataDraw
+
+Author: Bill Cox / bill at viasic com
+
+Homepage: http://www.viasic.com/opensource/
+
+Description
+
+    This is an EDA specific data structure diagramming and code
+    generation tool.
+
+------------------------------------------------------------------------------
+gphoto2-fuse-fs
+
+Author: Christopher Lester / lester at hep phy cam ac uk
+
+Homepage: http://www.hep.phy.cam.ac.uk/~lester/gphoto2-fuse-fs/
+
+Description
+
+    This program allows mounting a gphoto2 based digital camera so
+    that you can access the files via "standard" programs like "ls,
+    cat, tar, gthumb, netscape, firefox, etc" rather than just through
+    "gtkam and gphoto2"
+
+------------------------------------------------------------------------------
+CvsFS
+
+Author: Patrick Frank / pfrank at gmx de
+
+Homepage: http://sourceforge.net/projects/cvsfs
+
+Description
+
+    This provides a package which presents the CVS contents as
+    mountable file system. It allows to view the versioned files as
+    like they were ordinary files on a disk. There is also a
+    possibility to check in/out some files for editing.
+
+------------------------------------------------------------------------------
+User-level Versioning File System
+
+Name: Wayback
+
+Author: Brian Cornell / techie at northwestern edu
+
+Homepage: http://wayback.sourceforge.net/
+
+Description
+
+    When you use a Wayback file system, old versions of files are
+    never lost. No matter how much you change a file or directory,
+    everything is always kept in a versioning file so that you never
+    lose important data. Wayback provides the ability to remount any
+    already mounted file system with versioning support under a
+    different directory.
+
+------------------------------------------------------------------------------
+Trivial Rolebased Authorisation & Capability Statemachine
+
+Name: TRACS
+
+Author: Rob J Meijer / rmeijer at xs4all nl
+
+Homepage: http://www.xs4all.nl/~rmeijer/tracs.html
+
+Description
+
+    This project is the first spin-off project of the Security
+    Incident Policy Enforcement System project. In the process of
+    designing a SIPES, the need was recognized for the implementation
+    of an authorisation server that provides functionality not
+    provided by any of the current authorisation solutions.
+
+------------------------------------------------------------------------------
+SshFS
+
+Author: Miklos Szeredi / miklos at szeredi hu
+
+Homepage: http://fuse.sourceforge.net/sshfs.html
+
+Description
+
+    This is a filesystem client based on the SSH File Transfer
+    Protocol. Since most SSH servers already support this protocol it
+    is very easy to set up: i.e. on the server side there's nothing to
+    do. On the client side mounting the filesystem is as easy as
+    logging into the server with ssh.
+
+------------------------------------------------------------------------------
+Siefs
+
+Author: Dmitry Zakharov aka Chaos / dmitry-z at mail ru
+
+Homepage: http://chaos.allsiemens.com/siefs
+
+Description
+
+    SieFS is a virtual filesystem for accessing Siemens mobile phones'
+    memory (flexmem or MultiMediaCard?) from Linux. Now you can mount
+    your phone (by datacable or IRDA) and work with it like with any
+    other removable storage.
+
+------------------------------------------------------------------------------
+Offline Media Content Database
+
+Name: MediaDatabase?
+
+Author: Mediadatabase Team
+
+Homepage: http://mediadatabase.sourceforge.net/
+
+Description
+
+    MediaDatabase? is database to store filesystem metadata (directory
+    structure) and/or audio tracks descriptions of offline media and
+    frontends to database (WWW, GUI and CUI). It was developed to
+    fight chaos of large compact disk collection but it can help track
+    other removable media such as floppy disks and data DVDs.
+
+------------------------------------------------------------------------------
+Cddfs
+
+Author: Matthieu Castet
+
+Homepage: http://castet.matthieu.free.fr/cddfs/
+
+Description
+
+    Cddfs is a file system for fuse that use libparanoia in order to
+    mount your audio cd.
+
+------------------------------------------------------------------------------
+SMBNetFS
 
 Author: Mikhail Kshevetskiy / kl at laska dorms spbu ru
 
 Homepage: http://smbnetfs.airm.net/
 
-Description:
+Description
 
-  SMBNetFS is a Linux filesystem that allow you to use samba/microsoft
-  network in the same manner as the network neighborhood in Microsoft
-  Windows.
+    SMBNetFS is a Linux filesystem that allow you to use
+    samba/microsoft network in the same manner as the network
+    neighborhood in Microsoft Windows.
 
-==============================================================================
-Name: NTFS-FUSE
+------------------------------------------------------------------------------
+NTFS-FUSE
 
 Author: Yura Pakhuchiy / pakhuchiy at gmail com
 
 Homepage: http://linux-ntfs.sf.net/
 
-Description:
+Description
 
-  NTFS-FUSE is part of ntfsprogs package (utily name - ntfsmount).
-  It's rely on libntfs.  NTFS-FUSE support file overwrite changing it
-  size and can list/read/write/add/remove named data streams via xattr
-  interface.
+    NTFS-FUSE is part of ntfsprogs package (utily name -
+    ntfsmount). It's rely on libntfs. NTFS-FUSE support file overwrite
+    changing it size and can list/read/write/add/remove named data
+    streams via xattr interface.
 
-==============================================================================
-Name: BTSlave (BitTorrent File System)
+------------------------------------------------------------------------------
+BitTorrent File System
+
+Name: BTSlave
 
 Author: Bill Cox / bill at viasic com
 
 Homepage: http://btslave.sourceforge.net/
 
-Description:
+Description
 
-  BTSlave allows users to mount a BitTorrent .torrent file as a file
-  system.
+    BTSlave allows users to mount a BitTorrent? .torrent file as a
+    file system.
 
-==============================================================================
-Name: GfarmFS-FUSE
+------------------------------------------------------------------------------
+GfarmFS
 
 Author: Takuya Ishibashi / takuya at soum co jp
 
 Homepage: http://datafarm.apgrid.org/software/gfarmfs-fuse.en.html
 
-Description:
+Description
 
-  GfarmFS-FUSE enables you to mount a Gfarm filesystem in userspace.
-  Grid Datafarm is a Petascale data-intensive computing project
-  initiated in Japan.  The challenge involves construction of a Peta-
-  to Exascale parallel filesystem exploiting local storages of PCs
-  spread over the world-wide Grid.
+    GfarmFS-FUSE enables you to mount a Gfarm filesystem in
+    userspace. Grid Datafarm is a Petascale data-intensive computing
+    project initiated in Japan. The challenge involves construction of
+    a Peta- to Exascale parallel filesystem exploiting local storages
+    of PCs spread over the world-wide Grid.
 
-==============================================================================
-Name: Clustered Ordinary Raid Network File System (CORNFS)
+------------------------------------------------------------------------------
+Clustered Ordinary Raid Network File System
+
+Name: CORNFS
 
 Author: Ian C. Blenke / icblenke at nks net
 
 Homepage: http://ian.blenke.com/projects/cornfs/cornfs.html
 
-Description:
+Description
 
-  CORNFS is an attempt at creating a distributed filesystem that
-  mirrors N copies of files across a group of M number of servers.
-  Everything in CORNFS is stored as a file.  At any time, it is
-  possible to reconstruct the entire filesystem via a simple overlay
-  rsync from the remote filesystems.
+    CORNFS is an attempt at creating a distributed filesystem that
+    mirrors N copies of files across a group of M number of
+    servers. Everything in CORNFS is stored as a file. At any time, it
+    is possible to reconstruct the entire filesystem via a simple
+    overlay rsync from the remote filesystems.
 
-==============================================================================
-Name: djmount
+------------------------------------------------------------------------------
+djmount
 
 Author: Rémi Turboult / r3mi at users sourceforge net
 
 Homepage: http://djmount.sourceforge.net
 
-Description:
+Description
 
-  Djmount allows to mount as a Linux filesystem the content of
-  MediaServer devices compatible with the UPnP AV protocol.  It
-  discovers automatically all UPnP AV Media Servers on the network,
-  and make the content available in a directory tree.  An Audio or
-  Video file is rendered as a playlist (.m3u or .ram) which contains
-  an URL for the file.
+    Djmount allows to mount as a Linux filesystem the content of
+    MediaServer? devices compatible with the UPnP AV protocol. It
+    discovers automatically all UPnP AV Media Servers on the network,
+    and make the content available in a directory tree. An Audio or
+    Video file is rendered as a playlist (.m3u or .ram) which contains
+    an URL for the file.
 
-==============================================================================
-Name: HTTP-FUSE KNOPPIX
+------------------------------------------------------------------------------
+HTTP-FUSE KNOPPIX
 
 Homepage: http://unit.aist.go.jp/itri/knoppix/http-fuse/index-en.html
 
-Description: 
+Description
 
-  HTTP-FUSE-KNOPPIX-4.0 is only 5MB CD image and enables us to use
-  same contents of 3.8GB DVD KNOPPIX 4.0.  We don't need to download
-  3.8GB iso image at one time and burn DVD.
+    HTTP-FUSE-KNOPPIX-4.0 is only 5MB CD image and enables us to use
+    same contents of 3.8GB DVD KNOPPIX 4.0. We don't need to download
+    3.8GB iso image at one time and burn DVD.
 
-==============================================================================
-Name: OCamlFuse
+------------------------------------------------------------------------------
+WikipediaFS
 
-Homepage: http://sourceforge.net/projects/ocamlfuse
+Author: Mathieu Blondel
 
-Description:
+Homepage: http://wikipediafs.sourceforge.net
 
-  This is an ocaml binding for fuse enabling you to write your own
-  multithreaded userspace filesystems using the ocaml programming
-  language.
+Description
 
-==============================================================================
+    WikipediaFS is a mountable Linux virtual file system that enables
+    you to deal with Wikipedia articles as though they were real files
+    on your hard drive.
+
+===============================================================================
+Operating Systems
+===============================================================================
+
+Linux-2.4.X
+
+Native port. New FUSE versions (2.X) support kernels 2.4.21 or later.
+
+------------------------------------------------------------------------------
+Linux-2.6.X
+
+Native port. New FUSE versions (2.X) support all 2.6 kernels.
+
+2.6.14 and up will have FUSE support included in the official kernel.
+
+------------------------------------------------------------------------------
+FreeBSD
+
 Name: Fuse for FreeBSD
 
 Author: Csaba Henk / csaba-ml at creo hu
 
 Homepage: http://wikitest.freebsd.org/moin.cgi/FuseFilesystem
 
-==============================================================================
-Name: WikipediaFS
-
-Author: Mathieu Blondel
-
-Homepage: http://wikipediafs.sourceforge.net
-
-Description:
-
-  WikipediaFS is a mountable Linux virtual file system that enables
-  you to deal with Wikipedia articles as though they were real files
-  on your hard drive.
-
-==============================================================================
