@@ -1,3 +1,7 @@
+2005-09-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Added NAME="%k" to util/udev.rules.  Fix by Mattias Wadman.
+
 2005-09-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.4.0-rc1
