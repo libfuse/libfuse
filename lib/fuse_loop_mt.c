@@ -33,7 +33,7 @@ struct fuse_worker {
 #ifndef USE_UCLIBC
 #define mutex_init(mut) pthread_mutex_init(mut, NULL)
 #else
-static void mutex_init(pthread_mutex_t mut)
+static void mutex_init(pthread_mutex_t *mut)
 {
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);

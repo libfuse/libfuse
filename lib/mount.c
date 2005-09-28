@@ -92,7 +92,7 @@ int fuse_mount(const char *mountpoint, const char *opts)
         return -1;
     }
 
-#ifndef USE_UCLIBC
+#ifdef HAVE_FORK
     pid = fork();
 #else
     pid = vfork();

@@ -1,3 +1,7 @@
+2005-09-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* UClibc fixes from Christian Magnusson
+
 2005-09-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added NAME="%k" to util/udev.rules.  Fix by Mattias Wadman.

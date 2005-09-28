@@ -92,7 +92,7 @@ static int do_unmount(const char *mnt, int quiet, int lazy)
     return res;
 }
 
-#ifndef USE_UCLIBC
+#ifndef IGNORE_MTAB
 /* use a lock file so that multiple fusermount processes don't try and
    modify the mtab file at once! */
 static int lock_mtab(void)
@@ -291,7 +291,7 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
     }
     return 0;
 }
-#else /* USE_UCLIBC */
+#else /* IGNORE_MTAB */
 static int lock_mtab()
 {
     return 0;
@@ -321,7 +321,7 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
 {
     return do_unmount(mnt, quiet, lazy);
 }
-#endif
+#endif /* IGNORE_MTAB */
 
 static void strip_line(char *line)
 {
@@ -987,6 +987,7 @@ static void usage(void)
             "%s: [options] mountpoint\n"
             "Options:\n"
             " -h                print help\n"
+            " -v                print version\n"
             " -o opt[,opt...]   mount options\n"
             " -u                unmount\n"
             " -q                quiet\n"
