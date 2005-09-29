@@ -774,18 +774,20 @@ static int try_open(const char *dev, char **devp, int silent)
 static int try_open_fuse_device(char **devp)
 {
     int fd;
+    int err;
 
     drop_privs();
-    fd = try_open(FUSE_DEV_NEW, devp, 1);
+    fd = try_open(FUSE_DEV_NEW, devp, 0);
     restore_privs();
     if (fd >= 0)
         return fd;
 
+    err = fd;
     fd = try_open(FUSE_DEV_OLD, devp, 1);
     if (fd >= 0)
         return fd;
 
-    return -1;
+    return err;
 }
 
 static int open_fuse_device(char **devp)
@@ -794,8 +796,10 @@ static int open_fuse_device(char **devp)
     if (fd >= 0)
         return fd;
 
-    fprintf(stderr, "%s: fuse device not found, try 'modprobe fuse' first\n",
-            progname);
+    if (fd == -2)
+        fprintf(stderr,
+                "%s: fuse device not found, try 'modprobe fuse' first\n",
+                progname);
     return -1;
 }
 
