@@ -1,3 +1,8 @@
+2005-09-30  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: NFS exporting leaked dentries.  Bug found and fixed by
+	Akshat Aranya.
+
 2005-09-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: fix error message, when unable to open /dev/fuse.
