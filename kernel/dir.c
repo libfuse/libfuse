@@ -826,6 +826,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 			iput(inode);
 			return ERR_PTR(-EIO);
 		}
+		dput(alias);
 	}
 	return d_splice_alias(inode, entry);
 }
