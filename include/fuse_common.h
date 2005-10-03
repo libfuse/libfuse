@@ -53,4 +53,23 @@ struct fuse_file_info {
     unsigned int keep_cache : 1;
 };
 
+/*
+ * Create a FUSE mountpoint
+ *
+ * Returns a control file descriptor suitable for passing to
+ * fuse_new()
+ *
+ * @param mountpoint the mount point path
+ * @param opts a comma separated list of mount options.  Can be NULL.
+ * @return the control file descriptor on success, -1 on failure
+ */
+int fuse_mount(const char *mountpoint, const char *opts);
+
+/*
+ * Umount a FUSE mountpoint
+ *
+ * @param mountpoint the mount point path
+ */
+void fuse_unmount(const char *mountpoint);
+
 #endif /* _FUSE_COMMON_H_ */

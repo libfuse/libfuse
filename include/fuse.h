@@ -349,25 +349,6 @@ int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
  * More detailed API                                           *
  * ----------------------------------------------------------- */
 
-/*
- * Create a FUSE mountpoint
- *
- * Returns a control file descriptor suitable for passing to
- * fuse_new()
- *
- * @param mountpoint the mount point path
- * @param opts a comma separated list of mount options.  Can be NULL.
- * @return the control file descriptor on success, -1 on failure
- */
-int fuse_mount(const char *mountpoint, const char *opts);
-
-/*
- * Umount a FUSE mountpoint
- *
- * @param mountpoint the mount point path
- */
-void fuse_unmount(const char *mountpoint);
-
 /**
  * Create a new FUSE filesystem.
  *

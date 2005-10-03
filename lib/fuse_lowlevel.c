@@ -207,10 +207,9 @@ int fuse_reply_err(fuse_req_t req, int err)
     return send_reply(req, -err, NULL, 0);
 }
 
-int fuse_reply_none(fuse_req_t req)
+void fuse_reply_none(fuse_req_t req)
 {
     free_req(req);
-    return 0;
 }
 
 static unsigned long calc_timeout_sec(double t)

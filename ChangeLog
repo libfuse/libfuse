@@ -1,3 +1,15 @@
+2005-10-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add documentation to fuse_lowlevel.h
+
+	* API cleanups:
+
+	* Remove definitions of unused FATTR_CTIME / FUSE_SET_ATTR_CTIME
+
+	* Move fuse_mount() and fuse_unmount() to fuse_common.h
+
+	* Change the return type of fuse_reply_none() from int to void.
+
 2005-09-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: NFS exporting leaked dentries.  Bug found and fixed by
