@@ -28,20 +28,47 @@ extern "C" {
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
 
+/** Inode number type */
 typedef unsigned long fuse_ino_t;
+
+/** Request pointer type */
 typedef struct fuse_req *fuse_req_t;
 
+/**
+ * Session
+ *
+ * This provides hooks for processing requests, and exiting
+ */
 struct fuse_session;
+
+/**
+ * Channel
+ *
+ * A communication channel, providing hooks for sending and receiving
+ * messages
+ */
 struct fuse_chan;
 
+/** Directory entry parameters supplied to fuse_reply_entry() */
 struct fuse_entry_param {
+    /** Unique inode number */
     fuse_ino_t ino;
+
+    /** The ino/generation pair should be unique for the filesystem's
+        lifetime */
     unsigned long generation;
+
+    /** Inode attributes */
     struct stat attr;
+
+    /** Validity timeout (in seconds) for the attributes */
     double attr_timeout;
+
+    /** Validity timeout (in seconds) for the name */
     double entry_timeout;
 };
 
+/** Additional context associated with requests */
 struct fuse_ctx {
     /** User ID of the calling process */
     uid_t uid;
