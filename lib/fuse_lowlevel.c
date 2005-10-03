@@ -264,20 +264,6 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
-                      const struct fuse_file_info *f)
-{
-    struct {
-        struct fuse_entry_out e;
-        struct fuse_open_out o;
-    } arg;
-
-    memset(&arg, 0, sizeof(arg));
-    fill_entry(&arg.e, e);
-    fill_open(&arg.o, f);
-    return send_reply_ok(req, &arg, sizeof(arg));
-}
-
 int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
                     double attr_timeout)
 {
