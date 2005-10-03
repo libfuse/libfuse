@@ -1820,11 +1820,11 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     free(llopts);
     if (f->se == NULL)
         goto out_free;
-    
+
     ch = fuse_kern_chan_new(fd);
     if (ch == NULL)
         goto out_free_session;
-    
+
     fuse_session_add_chan(f->se, ch);
 
     f->ctr = 0;

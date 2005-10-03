@@ -109,13 +109,13 @@ static int mt_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
     struct procdata *pd = (struct procdata *) fuse_chan_data(ch);
 
     assert(size >= sizeof(cmd));
-    
+
     cmd = fuse_read_cmd(pd->f);
     if (cmd == NULL)
         return 0;
-    
+
     *(struct fuse_cmd **) buf = cmd;
-    
+
     return sizeof(cmd);
 }
 

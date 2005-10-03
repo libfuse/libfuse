@@ -550,10 +550,10 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
         res = create_file(testfile, testdata2, testdata2len);
         if (res == -1)
             return -1;
-        
+
         currlen = testdata2len;
     }
-    
+
     fd = open(testfile, flags, mode);
     if ((flags & O_CREAT) && (flags & O_EXCL) && exist) {
         if (fd != -1) {
@@ -578,12 +578,12 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
 
     if (flags & O_TRUNC)
         currlen = 0;
-    
+
     err += check_type(testfile, S_IFREG);
     if (exist)
         err += check_mode(testfile, 0644);
     else
-        err += check_mode(testfile, mode);        
+        err += check_mode(testfile, mode);
     err += check_nlink(testfile, 1);
     err += check_size(testfile, currlen);
     if (exist && !(flags & O_TRUNC) && (mode & 0400))
@@ -602,7 +602,7 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
                 currlen = datalen;
 
             err += check_size(testfile, currlen);
-            
+
             if (mode & 0400) {
                 err += check_data(testfile, data, 0, datalen);
                 if (exist && !(flags & O_TRUNC) && testdata2len > datalen)
@@ -699,7 +699,7 @@ static int do_test_open_acc(int flags, const char *flags_str, int mode, int err)
         PERROR("chmod");
         return -1;
     }
-    
+
     res = check_mode(testfile, mode);
     if (res == -1)
         return -1;
@@ -943,7 +943,7 @@ int main(int argc, char *argv[])
     }
     basepath = argv[1];
     assert(strlen(basepath) < 512);
-    
+
     sprintf(testfile, "%s/testfile", basepath);
     sprintf(testfile2, "%s/testfile2", basepath);
     sprintf(testdir, "%s/testdir", basepath);
@@ -1001,7 +1001,7 @@ int main(int argc, char *argv[])
     err += test_open_acc(O_RDONLY, 0000, EACCES);
     err += test_open_acc(O_WRONLY, 0000, EACCES);
     err += test_open_acc(O_RDWR,   0000, EACCES);
-    
+
     unlink(testfile);
     unlink(testfile2);
     rmdir(testdir);

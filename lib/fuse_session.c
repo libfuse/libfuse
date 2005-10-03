@@ -17,7 +17,7 @@ struct fuse_session {
     struct fuse_session_ops op;
 
     void *data;
-    
+
     volatile int exited;
 
     struct fuse_chan *ch;
@@ -31,7 +31,7 @@ struct fuse_chan {
     int fd;
 
     size_t bufsize;
-    
+
     void *data;
 };
 
@@ -105,7 +105,7 @@ int fuse_session_exited(struct fuse_session *se)
         return se->exited;
 }
 
-struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd, 
+struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
                                 size_t bufsize, void *data)
 {
     struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));

@@ -715,7 +715,7 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     case FUSE_INIT:
         do_init(req, (struct fuse_init_in_out *) inarg);
         break;
-        
+
     case FUSE_LOOKUP:
         do_lookup(req, in->nodeid, (char *) inarg);
         break;
@@ -875,7 +875,7 @@ static void fuse_ll_destroy(void *data)
 }
 
 
-struct fuse_session *fuse_lowlevel_new(const char *opts, 
+struct fuse_session *fuse_lowlevel_new(const char *opts,
                                        const struct fuse_lowlevel_ops *op,
                                        size_t op_size, void *userdata)
 {

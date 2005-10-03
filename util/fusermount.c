@@ -199,7 +199,7 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
                     strcmp(p + 5, user) == 0)
                     removed = 1;
                 /* /etc/mtab is a link pointing to /proc/mounts: */
-                else if ((p = strstr(entp->mnt_opts, "user_id=")) && 
+                else if ((p = strstr(entp->mnt_opts, "user_id=")) &&
                          (p == entp->mnt_opts || *(p-1) == ',') &&
                          strncmp(p + 8, uidstr, uidlen) == 0 &&
                          (*(p+8+uidlen) == ',' || *(p+8+uidlen) == '\0'))
