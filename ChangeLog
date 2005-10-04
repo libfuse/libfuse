@@ -1,3 +1,7 @@
+2005-09-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.4.0
+
 2005-10-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add documentation to fuse_lowlevel.h
