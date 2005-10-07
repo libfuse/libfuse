@@ -564,6 +564,10 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
 static void fuse_data_init(void *data)
 {
     struct fuse *f = (struct fuse *) data;
+    struct fuse_context *c = fuse_get_context();
+
+    memset(c, 0, sizeof(*c));
+    c->fuse = f;
 
     if (f->op.init)
         f->user_data = f->op.init();
@@ -572,6 +576,11 @@ static void fuse_data_init(void *data)
 static void fuse_data_destroy(void *data)
 {
     struct fuse *f = (struct fuse *) data;
+    struct fuse_context *c = fuse_get_context();
+
+    memset(c, 0, sizeof(*c));
+    c->fuse = f;
+    c->private_data = f->user_data;
 
     if (f->op.destroy)
         f->op.destroy(f->user_data);
