@@ -31,6 +31,10 @@
 #error Please add -D_FILE_OFFSET_BITS=64 to your compile flags!
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /** Information about open files */
 struct fuse_file_info {
     /** Open flags.  Available in open() and release() */
@@ -71,5 +75,9 @@ int fuse_mount(const char *mountpoint, const char *opts);
  * @param mountpoint the mount point path
  */
 void fuse_unmount(const char *mountpoint);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _FUSE_COMMON_H_ */
