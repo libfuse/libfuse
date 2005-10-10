@@ -185,6 +185,9 @@ struct fuse_operations {
      * should be treated equally.  Multiple write-flush sequences are
      * relatively rare, so this shouldn't be a problem.
      *
+     * Filesystems shouldn't assume that flush will allways be called
+     * after some writes, or that if will be called at all.
+     *
      * Changed in version 2.2
      */
     int (*flush) (const char *, struct fuse_file_info *);

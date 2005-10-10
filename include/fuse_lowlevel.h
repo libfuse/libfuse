@@ -412,6 +412,9 @@ struct fuse_lowlevel_ops {
      * Since file descriptors can be duplicated (dup, dup2, fork), for
      * one open call there may be many flush calls.
      *
+     * Filesystems shouldn't assume that flush will allways be called
+     * after some writes, or that if will be called at all.
+     *
      * fi->fh will contain the value set by the open method, or will
      * be undefined if the open method didn't set any value.
      *
