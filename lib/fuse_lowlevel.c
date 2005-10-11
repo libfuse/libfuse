@@ -873,7 +873,7 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
     };
 
     if (sizeof(struct fuse_lowlevel_ops) < op_size) {
-        fprintf(stderr, "fuse: warning: library too old, some operations may not not work\n");
+        fprintf(stderr, "fuse: warning: library too old, some operations may not work\n");
         op_size = sizeof(struct fuse_lowlevel_ops);
     }
 
@@ -901,4 +901,3 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
  out:
     return NULL;
 }
-

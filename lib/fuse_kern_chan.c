@@ -28,7 +28,7 @@ static int fuse_kern_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
            operation was interrupted */
         if (err == EINTR || err == ENOENT)
             return 0;
-        /* ENODEV means we got unmounted, so we silenty return failure */
+        /* ENODEV means we got unmounted, so we silently return failure */
         if (err != ENODEV)
             perror("fuse: reading device");
         return -1;

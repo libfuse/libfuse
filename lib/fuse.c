@@ -28,7 +28,7 @@
 
 /* FUSE flags: */
 
-/** Enable debuging output */
+/** Enable debugging output */
 #define FUSE_DEBUG       (1 << 1)
 
 /** If a file is removed but it's still open, don't hide the file but

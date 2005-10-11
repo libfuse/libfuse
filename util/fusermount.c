@@ -238,7 +238,7 @@ static int count_fuse_fs(void)
     const char *mtab = _PATH_MOUNTED;
     FILE *fp = setmntent(mtab, "r");
     if (fp == NULL) {
-        fprintf(stderr, "%s: faild to open %s: %s\n", progname, mtab,
+        fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
                 strerror(errno));
         return -1;
     }

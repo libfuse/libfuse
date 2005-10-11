@@ -127,10 +127,10 @@ struct fuse_operations {
 
     /** File open operation
      *
-     * No creation, or trunctation flags (O_CREAT, O_EXCL, O_TRUNC)
+     * No creation, or truncation flags (O_CREAT, O_EXCL, O_TRUNC)
      * will be passed to open().  Open should check if the operation
      * is permitted for the given flags.  Optionally open may also
-     * return an arbitary filehandle in the fuse_file_info structure,
+     * return an arbitrary filehandle in the fuse_file_info structure,
      * which will be passed to all file operations.
      *
      * Changed in version 2.2
@@ -185,7 +185,7 @@ struct fuse_operations {
      * should be treated equally.  Multiple write-flush sequences are
      * relatively rare, so this shouldn't be a problem.
      *
-     * Filesystems shouldn't assume that flush will allways be called
+     * Filesystems shouldn't assume that flush will always be called
      * after some writes, or that if will be called at all.
      *
      * Changed in version 2.2
@@ -376,11 +376,11 @@ void fuse_destroy(struct fuse *f);
 /**
  * FUSE event loop.
  *
- * Requests from the kernel are processed, and the apropriate
+ * Requests from the kernel are processed, and the appropriate
  * operations are called.
  *
  * @param f the FUSE handle
- * @return 0 if no error occured, -1 otherwise
+ * @return 0 if no error occurred, -1 otherwise
  */
 int fuse_loop(struct fuse *f);
 
@@ -394,7 +394,7 @@ void fuse_exit(struct fuse *f);
 /**
  * FUSE event loop with multiple threads
  *
- * Requests from the kernel are processed, and the apropriate
+ * Requests from the kernel are processed, and the appropriate
  * operations are called.  Request are processed in parallel by
  * distributing them between multiple threads.
  *
@@ -402,7 +402,7 @@ void fuse_exit(struct fuse *f);
  * the application.
  *
  * @param f the FUSE handle
- * @return 0 if no error occured, -1 otherwise
+ * @return 0 if no error occurred, -1 otherwise
  */
 int fuse_loop_mt(struct fuse *f);
 

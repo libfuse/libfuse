@@ -412,7 +412,7 @@ struct fuse_lowlevel_ops {
      * Since file descriptors can be duplicated (dup, dup2, fork), for
      * one open call there may be many flush calls.
      *
-     * Filesystems shouldn't assume that flush will allways be called
+     * Filesystems shouldn't assume that flush will always be called
      * after some writes, or that if will be called at all.
      *
      * fi->fh will contain the value set by the open method, or will
@@ -613,7 +613,7 @@ struct fuse_lowlevel_ops {
      * If size is zero, the total size of the attribute list should be
      * sent with fuse_reply_xattr.
      *
-     * If the size is non-zero, and the null charater separated
+     * If the size is non-zero, and the null character separated
      * attribute list fits in the buffer, the list should be sent with
      * fuse_reply_buf.
      *
@@ -991,7 +991,7 @@ int fuse_session_exited(struct fuse_session *se);
 int fuse_session_loop(struct fuse_session *se);
 
 /**
- * Enter a muli-threaded event loop
+ * Enter a multi-threaded event loop
  *
  * @param se the session
  * @return 0 on success, -1 on error
