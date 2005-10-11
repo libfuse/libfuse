@@ -2,7 +2,7 @@ General Information
 ===================
 
 FUSE (Filesystem in Userspace) is a simple interface for userspace
-programs to export a virtual filesystem to the linux kernel.  FUSE
+programs to export a virtual filesystem to the Linux kernel.  FUSE
 also aims to provide a secure method for non privileged users to
 create and mount their own filesystem implementations.
 
@@ -17,6 +17,14 @@ version by setting the cvsroot to
 
 and checking out the 'fuse' module.
 
+Dependencies
+============
+
+Linux kernel version 2.4.X where X >= 21 (some vendor kernels earlier
+than this are also known to work).
+
+Linux kernel version 2.6.X where X >= 0.
+
 Installation
 ============
 
@@ -27,6 +35,11 @@ modprobe fuse
 
 You may also need to add '/usr/local/lib' to '/etc/ld.so.conf' and/or
 run ldconfig.
+
+Linux kernels 2.6.14 or later contain FUSE support out of the box.  If
+FUSE support is detected, the kernel module in this package will not
+be compiled.  It is possible to override this with the
+'--enable-kernel-module' configure option.
 
 For more details see the file 'INSTALL'
 
