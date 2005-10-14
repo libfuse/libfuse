@@ -1056,6 +1056,8 @@ static void fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
             printf("   READ[%lu] %u bytes\n", fi->fh, res);
             fflush(stdout);
         }
+        if ((size_t) res > size)
+            fprintf(stderr, "fuse: read too many bytes");
         fuse_reply_buf(req, buf, res);
     } else
         reply_err(req, res);
@@ -1087,9 +1089,16 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
     }
     pthread_rwlock_unlock(&f->tree_lock);
 
-    if (res >= 0)
+    if (res >= 0) {
+        if (f->flags & FUSE_DEBUG) {
+            printf("   WRITE%s[%lu] %u bytes\n",
+                   fi->writepage ? "PAGE" : "", fi->fh, res);
+            fflush(stdout);
+        }
+        if ((size_t) res > size)
+            fprintf(stderr, "fuse: wrote too many bytes");
         fuse_reply_write(req, res);
-    else
+    } else
         reply_err(req, res);
 }
 
