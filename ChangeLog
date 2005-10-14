@@ -1,7 +1,7 @@
 2005-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
-	* libfuse: add debug for write result and warnings for too large
-	read/write result.
+	* libfuse: add debug for write result (by Shaun Jackman) and
+	warnings for too large read/write result
 
 2005-10-11  Miklos Szeredi <miklos@szeredi.hu>
 
