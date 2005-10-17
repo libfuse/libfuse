@@ -1,3 +1,7 @@
+2005-10-17  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.4.1
+
 2005-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: add debug for write result (by Shaun Jackman) and
