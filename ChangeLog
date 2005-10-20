@@ -1,3 +1,7 @@
+2005-10-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: optimize buffer reallocation in fill_dir.
+
 2005-10-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.4.1

@@ -103,6 +103,7 @@ struct fuse_dirhandle {
     char *contents;
     int allocated;
     unsigned len;
+    unsigned size;
     unsigned needlen;
     int filled;
     unsigned long fh;
@@ -1261,7 +1262,6 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
     unsigned namelen = strlen(name);
     unsigned entsize;
     unsigned newlen;
-    char *newptr;
 
     if (statp)
         stbuf = *statp;
@@ -1291,12 +1291,21 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
             return 1;
     }
 
-    newptr = (char *) realloc(dh->contents, newlen);
-    if (!newptr) {
-        dh->error = -ENOMEM;
-        return 1;
+    if (newlen > dh->size) {
+        char *newptr;
+
+        if (!dh->size)
+            dh->size = 1024;
+        while (newlen > dh->size)
+            dh->size *= 2;
+
+        newptr = (char *) realloc(dh->contents, dh->size);
+        if (!newptr) {
+            dh->error = -ENOMEM;
+            return 1;
+        }
+        dh->contents = newptr;
     }
-    dh->contents = newptr;
     fuse_add_dirent(dh->contents + dh->len, name, &stbuf, off ? off : newlen);
     dh->len = newlen;
     return 0;
