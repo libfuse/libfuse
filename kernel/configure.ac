@@ -104,6 +104,14 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 		AC_MSG_RESULT([no])
 	fi
 
+	AC_MSG_CHECKING([whether lookup_instantiate_filp is defined])
+	if test -f $kernelsrc/include/linux/namei.h && egrep -q "lookup_instantiate_filp" $kernelsrc/include/linux/namei.h; then
+		AC_DEFINE(HAVE_LOOKUP_INSTANTIATE_FILP, 1, [lookup_instantiate_filp() is defined])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+
 	isuml=no
 	KERNELMAKE_PARAMS=
 	KERNELCPPFLAGS=

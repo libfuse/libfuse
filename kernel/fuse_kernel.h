@@ -128,7 +128,8 @@ enum fuse_opcode {
 	FUSE_READDIR       = 28,
 	FUSE_RELEASEDIR    = 29,
 	FUSE_FSYNCDIR      = 30,
-	FUSE_ACCESS        = 34
+	FUSE_ACCESS        = 34,
+	FUSE_CREATE        = 35
 };
 
 /* Conservative buffer size for the client */
@@ -186,7 +187,7 @@ struct fuse_setattr_in {
 
 struct fuse_open_in {
 	__u32	flags;
-	__u32	padding;
+	__u32	mode;
 };
 
 struct fuse_open_out {

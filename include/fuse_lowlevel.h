@@ -643,7 +643,61 @@ struct fuse_lowlevel_ops {
      */
     void (*removexattr) (fuse_req_t req, fuse_ino_t ino, const char *name);
 
+    /**
+     * Check file access permissions
+     *
+     * This will be called for the access() system call.  If the
+     * 'default_permissions' mount option is given, this method is not
+     * called.
+     *
+     * This method is not called under Linux kernel versions 2.4.x
+     *
+     * Introduced in version 2.5
+     *
+     * Valid replies:
+     *   fuse_reply_err
+     *
+     * @param req request handle
+     * @param ino the inode number
+     * @param mask requested access mode
+     */
     void (*access) (fuse_req_t req, fuse_ino_t ino, int mask);
+
+    /**
+     * Create and open a file
+     *
+     * If the file does not exist, first create it with the specified
+     * mode, and then open it.
+     *
+     * Open flags (with the exception of O_NOCTTY) are available in
+     * fi->flags.
+     *
+     * Filesystem may store an arbitrary file handle (pointer, index,
+     * etc) in fi->fh, and use this in other all other file operations
+     * (read, write, flush, release, fsync).
+     *
+     * There are also some flags (direct_io, keep_cache) which the
+     * filesystem may set in fi, to change the way the file is opened.
+     * See fuse_file_info structure in <fuse_common.h> for more details.
+     *
+     * If this method is not implemented or under Linux kernel
+     * versions earlier than 2.6.15, the mknod() and open() methods
+     * will be called instead.
+     *
+     * Introduced in version 2.5
+     *
+     * Valid replies:
+     *   fuse_reply_create
+     *   fuse_reply_err
+     *
+     * @param req request handle
+     * @param parent inode number of the parent directory
+     * @param name to create
+     * @param mode file type and mode with which to create the new file
+     * @param fi file information
+     */
+    void (*create) (fuse_req_t req, fuse_ino_t parent, const char *name,
+                    mode_t mode, struct fuse_file_info *fi);
 };
 
 /**
@@ -682,6 +736,23 @@ void fuse_reply_none(fuse_req_t req);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
+
+/**
+ * Reply with a directory entry and open parameters
+ *
+ * currently the following members of 'fi' are used:
+ *   fh, direct_io, keep_cache
+ *
+ * Possible requests:
+ *   create
+ *
+ * @param req request handle
+ * @param e the entry parameters
+ * @param fi file information
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
+                      const struct fuse_file_info *fi);
 
 /**
  * Reply with attributes

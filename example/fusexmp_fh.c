@@ -215,6 +215,17 @@ static int xmp_utime(const char *path, struct utimbuf *buf)
     return 0;
 }
 
+static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+{
+    int fd;
+
+    fd = open(path, fi->flags, mode);
+    if(fd == -1)
+        return -errno;
+
+    fi->fh = fd;
+    return 0;
+}
 
 static int xmp_open(const char *path, struct fuse_file_info *fi)
 {
@@ -344,6 +355,7 @@ static struct fuse_operations xmp_oper = {
     .chown	= xmp_chown,
     .truncate	= xmp_truncate,
     .utime	= xmp_utime,
+    .create	= xmp_create,
     .open	= xmp_open,
     .read	= xmp_read,
     .write	= xmp_write,

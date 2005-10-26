@@ -1,10 +1,14 @@
 2005-10-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add ACCESS operation.  This is called from the access() system
-	call if 'default_permissions' mount option is not given
+	call if 'default_permissions' mount option is not given, and is
+	not called on kernels 2.4.*
 
 	* Fix kernel module compile if kernel source and build directories
 	differ.  Report and initial patch by John Eastman
+
+	* Add atomic CREATE+OPEN operation.  This will only work with
+	2.6.15 (presumably) or later Linux kernels.
 
 2005-10-18  Miklos Szeredi <miklos@szeredi.hu>
 

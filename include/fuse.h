@@ -63,9 +63,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
- * releasedir, fsyncdir, access, init and destroy are special purpose
- * methods, without which a full featured filesystem can still be
- * implemented.
+ * releasedir, fsyncdir, access, create, init and destroy are special
+ * purpose methods, without which a full featured filesystem can still
+ * be implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -301,13 +301,29 @@ struct fuse_operations {
     /**
      * Check file access permissions
      *
-     * Need not be implemented.  This will be called for the access()
-     * system call.  If the 'default_permissions' mount option is
-     * given, this method is not called.
+     * This will be called for the access() system call.  If the
+     * 'default_permissions' mount option is given, this method is not
+     * called.
+     *
+     * This method is not called under Linux kernel versions 2.4.x
      *
      * Introduced in version 2.5
      */
     int (*access) (const char *, int);
+
+    /**
+     * Create and open a file
+     *
+     * If the file does not exist, first create it with the specified
+     * mode, and then open it.
+     *
+     * If this method is not implemented or under Linux kernel
+     * versions earlier than 2.6.15, the mknod() and open() methods
+     * will be called instead.
+     *
+     * Introduced in version 2.5
+     */
+    int (*create) (const char *, mode_t, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems
