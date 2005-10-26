@@ -36,6 +36,17 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     return 0;
 }
 
+static int xmp_access(const char *path, int mask)
+{
+    int res;
+
+    res = access(path, mask);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
 static int xmp_readlink(const char *path, char *buf, size_t size)
 {
     int res;
@@ -319,6 +330,7 @@ static int xmp_removexattr(const char *path, const char *name)
 
 static struct fuse_operations xmp_oper = {
     .getattr	= xmp_getattr,
+    .access	= xmp_access,
     .readlink	= xmp_readlink,
     .readdir	= xmp_readdir,
     .mknod	= xmp_mknod,

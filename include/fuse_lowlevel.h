@@ -642,6 +642,8 @@ struct fuse_lowlevel_ops {
      * @param name of the extended attribute
      */
     void (*removexattr) (fuse_req_t req, fuse_ino_t ino, const char *name);
+
+    void (*access) (fuse_req_t req, fuse_ino_t ino, int mask);
 };
 
 /**

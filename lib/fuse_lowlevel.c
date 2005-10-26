@@ -69,6 +69,7 @@ static const char *opname(enum fuse_opcode opcode)
     case FUSE_READDIR:		return "READDIR";
     case FUSE_RELEASEDIR:	return "RELEASEDIR";
     case FUSE_FSYNCDIR:		return "FSYNCDIR";
+    case FUSE_ACCESS:		return "ACCESS";
     default: 			return "???";
     }
 }
@@ -358,6 +359,15 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid,
         convert_attr(&arg->attr, &stbuf);
         req->f->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
     } else
+        fuse_reply_err(req, ENOSYS);
+}
+
+static void do_access(fuse_req_t req, fuse_ino_t nodeid,
+                      struct fuse_access_in *arg)
+{
+    if (req->f->op.access)
+        req->f->op.access(req, nodeid, arg->mask);
+    else
         fuse_reply_err(req, ENOSYS);
 }
 
@@ -809,6 +819,10 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 
     case FUSE_FSYNCDIR:
         do_fsyncdir(req, in->nodeid, (struct fuse_fsync_in *) inarg);
+        break;
+
+    case FUSE_ACCESS:
+        do_access(req, in->nodeid, (struct fuse_access_in *) inarg);
         break;
 
     default:
