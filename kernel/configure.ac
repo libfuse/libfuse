@@ -3,17 +3,32 @@ AC_CONFIG_HEADERS([config.h])
 
 AC_PROG_INSTALL
 
-AC_MSG_CHECKING([kernel source directory])
 kernelsrc=
+kernelbuild=
 AC_ARG_WITH(kernel,
 	[  --with-kernel=PATH      Specify location of kernel source ],
-	[kernelsrc="$withval"])
+	[kernelsrc="$withval"; kernelbuild="$withval"])
+AC_ARG_WITH(kernel-build,
+	[  --with-kernel-build=PATH Specify location of kernel build ],
+	[kernelbuild="$withval"])
 
+AC_MSG_CHECKING([kernel source directory])
 if test -z "$kernelsrc"; then
-	buildlink=/lib/modules/`uname -r`/build
+	kernelbuild=
+	runver=`uname -r`
+	sourcelink=/lib/modules/${runver}/source
+	buildlink=/lib/modules/${runver}/build
+
+	if test -e $sourcelink; then
+		kernelsrc=`(cd $sourcelink; /bin/pwd)`
+	fi
 	if test -e $buildlink; then
-		kernelsrc=`(cd $buildlink; /bin/pwd)`
-	else
+		kernelbuild=`(cd $buildlink; /bin/pwd)`
+	fi
+	if test -z "$kernelsrc"; then
+		kernelsrc=$kernelbuild
+	fi
+	if test -z "$kernelsrc" -o -z "$kernelbuild"; then
 		AC_MSG_RESULT([Not found])
 		AC_MSG_ERROR([
 *** Please specify the location of the kernel source with
@@ -21,13 +36,15 @@ if test -z "$kernelsrc"; then
 	fi
 fi
 AC_MSG_RESULT([$kernelsrc])
+AC_MSG_CHECKING([kernel build directory])
+AC_MSG_RESULT([$kernelbuild])
 
 AC_ARG_ENABLE(kernel-module,
 	[  --enable-kernel-module  Compile kernel module ])
 
 AC_MSG_CHECKING([kernel source version])
-if test -r $kernelsrc/include/linux/version.h; then
-	kernsrcver=`(echo "#include <linux/version.h>"; echo "kernsrcver=UTS_RELEASE") | cpp -I $kernelsrc/include | grep "^kernsrcver=" | cut -d \" -f 2`
+if test -r $kernelbuild/include/linux/version.h; then
+	kernsrcver=`(echo "#include <linux/version.h>"; echo "kernsrcver=UTS_RELEASE") | cpp -I $kernelbuild/include | grep "^kernsrcver=" | cut -d \" -f 2`
 fi
 if test -z "$kernsrcver"; then
 	AC_MSG_RESULT([Not found])
@@ -57,7 +74,7 @@ if echo "$kernsrcver" | grep -q "^2.4"; then
 	CFLAGS="$old_cflags"
 else
 	fuse_configured=no
-	kernel_autoconf=$kernelsrc/include/linux/autoconf.h
+	kernel_autoconf=$kernelbuild/include/linux/autoconf.h
 	AC_MSG_CHECKING([if FUSE is configured in the kernel])
 	if test -f $kernel_autoconf; then
 		if grep -q "^#define CONFIG_FUSE_FS 1" $kernel_autoconf || grep -q "^#define CONFIG_FUSE_FS_MODULE 1" $kernel_autoconf; then
@@ -91,12 +108,15 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	KERNELMAKE_PARAMS=
 	KERNELCPPFLAGS=
 	AC_MSG_CHECKING([if this is user mode linux])
-	if test -f $kernelsrc/include/linux/autoconf.h && egrep -q "^#define CONFIG_(USERMODE|UML) 1" $kernelsrc/include/linux/autoconf.h; then
+	if test -f $kernelbuild/include/linux/autoconf.h && egrep -q "^#define CONFIG_(USERMODE|UML) 1" $kernelbuild/include/linux/autoconf.h; then
 		isuml=yes
 		KERNELMAKE_PARAMS="ARCH=um"
 		KERNELCPPFLAGS="-D__arch_um__ -DSUBARCH=\\\"i386\\\" -D_LARGEFILE64_SOURCE -I${kernelsrc}/arch/um/include -Derrno=kernel_errno -I${kernelsrc}/arch/um/kernel/tt/include -I${kernelsrc}/arch/um/kernel/skas/include"
 	fi
 	AC_MSG_RESULT([$isuml])
+	if test "$kernelbuild" != "$kernelsrc"; then
+		KERNELMAKE_PARAMS="$KERNELMAKE_PARAMS O=$kernelbuild"
+	fi
 	AC_SUBST(KERNELMAKE_PARAMS)
 	AC_SUBST(KERNELCPPFLAGS)
 fi
