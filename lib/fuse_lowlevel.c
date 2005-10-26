@@ -95,7 +95,7 @@ static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 #endif
 }
 
-static void convert_attr(const struct fuse_attr *attr, struct stat *stbuf)
+static void convert_attr(const struct fuse_setattr_in *attr, struct stat *stbuf)
 {
     stbuf->st_mode         = attr->mode;
     stbuf->st_uid          = attr->uid;
@@ -103,11 +103,9 @@ static void convert_attr(const struct fuse_attr *attr, struct stat *stbuf)
     stbuf->st_size         = attr->size;
     stbuf->st_atime        = attr->atime;
     stbuf->st_mtime        = attr->mtime;
-    stbuf->st_ctime        = attr->ctime;
 #ifdef HAVE_STRUCT_STAT_ST_ATIM
     stbuf->st_atim.tv_nsec = attr->atimensec;
     stbuf->st_mtim.tv_nsec = attr->mtimensec;
-    stbuf->st_ctim.tv_nsec = attr->ctimensec;
 #endif
 }
 
@@ -366,12 +364,20 @@ static void do_getattr(fuse_req_t req, fuse_ino_t nodeid)
 }
 
 static void do_setattr(fuse_req_t req, fuse_ino_t nodeid,
-                       struct fuse_setattr_in *arg, struct fuse_file_info *fi)
+                       struct fuse_setattr_in *arg)
 {
     if (req->f->op.setattr) {
+        struct fuse_file_info *fi = NULL;
+        struct fuse_file_info fi_store;
         struct stat stbuf;
         memset(&stbuf, 0, sizeof(stbuf));
-        convert_attr(&arg->attr, &stbuf);
+        convert_attr(arg, &stbuf);
+        if (arg->valid & FATTR_FH) {
+            arg->valid &= ~FATTR_FH;
+            memset(&fi_store, 0, sizeof(fi_store));
+            fi = &fi_store;
+            fi->fh = arg->fh;
+        }
         req->f->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
     } else
         fuse_reply_err(req, ENOSYS);
@@ -754,7 +760,7 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
         break;
 
     case FUSE_SETATTR:
-        do_setattr(req, in->nodeid, (struct fuse_setattr_in *) inarg, NULL);
+        do_setattr(req, in->nodeid, (struct fuse_setattr_in *) inarg);
         break;
 
     case FUSE_READLINK:

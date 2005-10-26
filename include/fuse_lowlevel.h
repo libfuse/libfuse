@@ -198,6 +198,13 @@ struct fuse_lowlevel_ops {
      * bitmask contain valid values.  Other members contain undefined
      * values.
      *
+     * If the setattr was invoked from the ftruncate() system call
+     * under Linux kernel versions 2.6.15 or later, the fi->fh will
+     * contain the value set by the open method or will be undefined
+     * if the open method didn't set any value.  Otherwise (not
+     * ftruncate call, or kernel version earlier than 2.6.15) the fi
+     * parameter will be NULL.
+     *
      * Valid replies:
      *   fuse_reply_attr()
      *   fuse_reply_err()
@@ -206,7 +213,10 @@ struct fuse_lowlevel_ops {
      * @param ino the inode number
      * @param attr the attributes
      * @param to_set bit mask of attributes which should be set
-     * @param fi for future use, currently always NULL
+     * @param fi file information, or NULL
+     *
+     * Changed in version 2.5:
+     *     file information filled in for ftruncate
      */
     void (*setattr) (fuse_req_t req, fuse_ino_t ino, struct stat *attr,
                     int to_set, struct fuse_file_info *fi);

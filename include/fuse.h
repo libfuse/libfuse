@@ -63,9 +63,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
- * releasedir, fsyncdir, access, create, init and destroy are special
- * purpose methods, without which a full featured filesystem can still
- * be implemented.
+ * releasedir, fsyncdir, access, create, ftruncate, init and destroy
+ * are special purpose methods, without which a full featured
+ * filesystem can still be implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -324,6 +324,20 @@ struct fuse_operations {
      * Introduced in version 2.5
      */
     int (*create) (const char *, mode_t, struct fuse_file_info *);
+
+    /**
+     * Change the size of an open file
+     *
+     * This method is called instead of the truncate() method if the
+     * truncation was invoked from an ftruncate() system call.
+     *
+     * If this method is not implemented or under Linux kernel
+     * versions earlier than 2.6.15, the truncate() method will be
+     * called instead.
+     *
+     * Introduced in version 2.5
+     */
+    int (*ftruncate) (const char *, off_t, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems

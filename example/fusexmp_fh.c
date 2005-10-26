@@ -204,6 +204,20 @@ static int xmp_truncate(const char *path, off_t size)
     return 0;
 }
 
+static int xmp_ftruncate(const char *path, off_t size,
+                         struct fuse_file_info *fi)
+{
+    int res;
+
+    (void) path;
+
+    res = ftruncate(fi->fh, size);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
 static int xmp_utime(const char *path, struct utimbuf *buf)
 {
     int res;
@@ -354,6 +368,7 @@ static struct fuse_operations xmp_oper = {
     .chmod	= xmp_chmod,
     .chown	= xmp_chown,
     .truncate	= xmp_truncate,
+    .ftruncate	= xmp_ftruncate,
     .utime	= xmp_utime,
     .create	= xmp_create,
     .open	= xmp_open,

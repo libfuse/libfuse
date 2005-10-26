@@ -674,12 +674,15 @@ static int do_chown(struct fuse *f, const char *path, struct stat *attr,
     return err;
 }
 
-static int do_truncate(struct fuse *f, const char *path, struct stat *attr)
+static int do_truncate(struct fuse *f, const char *path, struct stat *attr,
+                       struct fuse_file_info *fi)
 {
     int err;
 
     err = -ENOSYS;
-    if (f->op.truncate)
+    if (fi && f->op.ftruncate)
+        err = f->op.ftruncate(path, attr->st_size, fi);
+    else if (f->op.truncate)
         err = f->op.truncate(path, attr->st_size);
 
     return err;
@@ -706,8 +709,6 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     char *path;
     int err;
 
-    (void) fi;
-
     err = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
@@ -720,7 +721,7 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
             if (!err && (valid & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)))
                 err = do_chown(f, path, attr, valid);
             if (!err && (valid & FUSE_SET_ATTR_SIZE))
-                err = do_truncate(f, path, attr);
+                err = do_truncate(f, path, attr, fi);
             if (!err && (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) == (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME))
                 err = do_utime(f, path, attr);
             if (!err)
