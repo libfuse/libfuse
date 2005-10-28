@@ -50,7 +50,7 @@ if test -z "$kernsrcver"; then
 	AC_MSG_RESULT([Not found])
 	AC_MSG_ERROR([
 *** Cannot determine the version of the linux kernel source. Please
-*** configure the kernel before running this script])
+*** prepare the kernel before running this script])
 fi
 AC_MSG_RESULT([$kernsrcver])
 majver=`echo "$kernsrcver" | cut -f-2 -d.`

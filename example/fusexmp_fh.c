@@ -33,6 +33,20 @@ static int xmp_getattr(const char *path, struct stat *stbuf)
     return 0;
 }
 
+static int xmp_fgetattr(const char *path, struct stat *stbuf,
+                        struct fuse_file_info *fi)
+{
+    int res;
+
+    (void) path;
+
+    res = fstat(fi->fh, stbuf);
+    if(res == -1)
+        return -errno;
+
+    return 0;
+}
+
 static int xmp_access(const char *path, int mask)
 {
     int res;
@@ -353,6 +367,7 @@ static int xmp_removexattr(const char *path, const char *name)
 
 static struct fuse_operations xmp_oper = {
     .getattr	= xmp_getattr,
+    .fgetattr	= xmp_fgetattr,
     .access	= xmp_access,
     .readlink	= xmp_readlink,
     .opendir	= xmp_opendir,

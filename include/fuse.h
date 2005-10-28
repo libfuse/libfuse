@@ -63,8 +63,8 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
- * releasedir, fsyncdir, access, create, ftruncate, init and destroy
- * are special purpose methods, without which a full featured
+ * releasedir, fsyncdir, access, create, ftruncate, fgetattr, init and
+ * destroy are special purpose methods, without which a full featured
  * filesystem can still be implemented.
  */
 struct fuse_operations {
@@ -338,6 +338,20 @@ struct fuse_operations {
      * Introduced in version 2.5
      */
     int (*ftruncate) (const char *, off_t, struct fuse_file_info *);
+
+    /**
+     * Get attributes from an open file
+     *
+     * This method is called instead of the getattr() method if the
+     * file information is available.
+     *
+     * Currently this is only called after the create() method if that
+     * is implemented (see above).  Later it may be called for
+     * invocations of fstat() too.
+     *
+     * Introduced in version 2.5
+     */
+    int (*fgetattr) (const char *, struct stat *, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems

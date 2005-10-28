@@ -41,6 +41,21 @@ FUSE support is detected, the kernel module in this package will not
 be compiled.  It is possible to override this with the
 '--enable-kernel-module' configure option.
 
+If './configure' cannot find the kernel source or it says the kernel
+source should be prepared, you may either try
+
+  ./configure--disable-kernel-module
+
+or if your kernel does not already contain FUSE support, do the
+following:
+
+  - Extract the kernel source to some directory
+
+  - Copy the running kernel's config (usually found in
+    /boot/config-X.Y.Z) to .config at the top of the source tree
+
+  - Run 'make prepare'
+
 For more details see the file 'INSTALL'
 
 How To Use

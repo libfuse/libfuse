@@ -501,12 +501,16 @@ static int hide_node(struct fuse *f, const char *oldpath, fuse_ino_t dir,
 }
 
 static int lookup_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
-                       const char *path, struct fuse_entry_param *e)
+                       const char *path, struct fuse_entry_param *e,
+                       struct fuse_file_info *fi)
 {
     int res;
 
     memset(e, 0, sizeof(struct fuse_entry_param));
-    res = f->op.getattr(path, &e->attr);
+    if (fi && f->op.fgetattr)
+        res = f->op.fgetattr(path, &e->attr, fi);
+    else
+        res = f->op.getattr(path, &e->attr);
     if (res == 0) {
         struct node *node;
 
@@ -604,7 +608,7 @@ static void fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
         }
         err = -ENOSYS;
         if (f->op.getattr)
-            err = lookup_path(f, parent, name, path, &e);
+            err = lookup_path(f, parent, name, path, &e, NULL);
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -804,7 +808,7 @@ static void fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (f->op.mknod && f->op.getattr) {
             err = f->op.mknod(path, mode, rdev);
             if (!err)
-                err = lookup_path(f, parent, name, path, &e);
+                err = lookup_path(f, parent, name, path, &e, NULL);
         }
         free(path);
     }
@@ -832,7 +836,7 @@ static void fuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (f->op.mkdir && f->op.getattr) {
             err = f->op.mkdir(path, mode);
             if (!err)
-                err = lookup_path(f, parent, name, path, &e);
+                err = lookup_path(f, parent, name, path, &e, NULL);
         }
         free(path);
     }
@@ -916,7 +920,7 @@ static void fuse_symlink(fuse_req_t req, const char *linkname,
         if (f->op.symlink && f->op.getattr) {
             err = f->op.symlink(linkname, path);
             if (!err)
-                err = lookup_path(f, parent, name, path, &e);
+                err = lookup_path(f, parent, name, path, &e, NULL);
         }
         free(path);
     }
@@ -985,7 +989,7 @@ static void fuse_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
             if (f->op.link && f->op.getattr) {
                 err = f->op.link(oldpath, newpath);
                 if (!err)
-                    err = lookup_path(f, newparent, newname, newpath, &e);
+                    err = lookup_path(f, newparent, newname, newpath, &e, NULL);
             }
             free(newpath);
         }
@@ -1016,7 +1020,7 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
                            path);
                     fflush(stdout);
                 }
-                err = lookup_path(f, parent, name, path, &e);
+                err = lookup_path(f, parent, name, path, &e, fi);
                 if (err) {
                     if (f->op.release)
                         f->op.release(path, fi);
