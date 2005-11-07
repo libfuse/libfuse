@@ -1569,7 +1569,7 @@ static void fuse_statfs(fuse_req_t req)
     } else if (f->op.statfs_old) {
         if (!f->compat || f->compat > 11) {
             struct statfs oldbuf;
-            err = f->op.statfs_old("/", &oldbuf);
+            err = ((struct fuse_operations_compat22 *) &f->op)->statfs("/", &oldbuf);
             if (!err)
                 convert_statfs_old(&oldbuf, &buf);
         } else {
@@ -1578,7 +1578,7 @@ static void fuse_statfs(fuse_req_t req)
             err = ((struct fuse_operations_compat1 *) &f->op)->statfs(&compatbuf);
             if (!err)
                 convert_statfs_compat(&compatbuf, &buf);
-        }        
+        }
     } else
         err = default_statfs(&buf);
 

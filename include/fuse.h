@@ -12,9 +12,13 @@
 /* This file defines the library interface of FUSE */
 
 /* IMPORTANT: you should define FUSE_USE_VERSION before including this
-   header.  To use the new API define it to 22 (recommended for any
-   new application), to use the old API define it to 21 (this is the
-   default), to use the even older 1.X API define it to 11. */
+   header.  To use the newest API define it to 25 (recommended for any
+   new application), to use the old API define it to 21 (default) or
+   22, to use the even older 1.X API define it to 11. */
+
+#ifndef FUSE_USE_VERSION
+#define FUSE_USE_VERSION 21
+#endif
 
 #include "fuse_common.h"
 
@@ -162,8 +166,8 @@ struct fuse_operations {
     int (*write) (const char *, const char *, size_t, off_t,
                   struct fuse_file_info *);
 
-    /** Old statfs interface, deprecated */
-    int (*statfs_old) (const char *, void *stbuf);
+    /** Just a placeholder, don't set */
+    void (*statfs_old) (void);
 
     /** Possibly flush cached data
      *
@@ -357,7 +361,7 @@ struct fuse_operations {
      * Replaced 'struct statfs' parameter with 'struct statvfs' in
      * version 2.5
      */
-    int (*statfs) (const char *, struct statvfs *stbuf);
+    int (*statfs) (const char *, struct statvfs *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -539,37 +543,42 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
 
-#if FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
+#if FUSE_USE_VERSION == 22 || FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
 #  include "fuse_compat.h"
-#  define fuse_dirfil_t fuse_dirfil_t_compat
-#  define __fuse_read_cmd fuse_read_cmd
-#  define __fuse_process_cmd fuse_process_cmd
-#  define __fuse_loop_mt fuse_loop_mt_proc
-#  undef fuse_main
 #  undef FUSE_MINOR_VERSION
-#  undef FUSE_MAJOR_VERSION
-#  if FUSE_USE_VERSION == 21
-#    define FUSE_MAJOR_VERSION 2
-#    define FUSE_MINOR_VERSION 1
-#    define fuse_operations fuse_operations_compat2
-#    define fuse_main fuse_main_compat2
-#    define fuse_new fuse_new_compat2
-#    define __fuse_setup fuse_setup_compat2
-#    define __fuse_teardown fuse_teardown
-#    define __fuse_exited fuse_exited
-#    define __fuse_set_getcontext_func fuse_set_getcontext_func
+#  undef fuse_main
+#  if FUSE_USE_VERSION == 22
+#    define FUSE_MINOR_VERSION 4
+#    define fuse_main fuse_main_compat22
+#    define fuse_operations fuse_operations_compat22
 #  else
-#    define FUSE_MAJOR_VERSION 1
-#    define FUSE_MINOR_VERSION 1
-#    define fuse_statfs fuse_statfs_compat1
-#    define fuse_operations fuse_operations_compat1
-#    define fuse_main fuse_main_compat1
-#    define fuse_new fuse_new_compat1
-#    define fuse_mount fuse_mount_compat1
-#    define FUSE_DEBUG FUSE_DEBUG_COMPAT1
+#    define fuse_dirfil_t fuse_dirfil_t_compat
+#    define __fuse_read_cmd fuse_read_cmd
+#    define __fuse_process_cmd fuse_process_cmd
+#    define __fuse_loop_mt fuse_loop_mt_proc
+#    if FUSE_USE_VERSION == 21
+#      define FUSE_MAJOR_VERSION 2
+#      define fuse_operations fuse_operations_compat2
+#      define fuse_main fuse_main_compat2
+#      define fuse_new fuse_new_compat2
+#      define __fuse_setup fuse_setup_compat2
+#      define __fuse_teardown fuse_teardown
+#      define __fuse_exited fuse_exited
+#      define __fuse_set_getcontext_func fuse_set_getcontext_func
+#    else
+#      undef FUSE_MAJOR_VERSION
+#      define FUSE_MAJOR_VERSION 1
+#      define FUSE_MINOR_VERSION 1
+#      define fuse_statfs fuse_statfs_compat1
+#      define fuse_operations fuse_operations_compat1
+#      define fuse_main fuse_main_compat1
+#      define fuse_new fuse_new_compat1
+#      define fuse_mount fuse_mount_compat1
+#      define FUSE_DEBUG FUSE_DEBUG_COMPAT1
+#    endif
 #  endif
-#elif FUSE_USE_VERSION < 22
-#  error Compatibility with API version other than 21 and 11 not supported
+#elif FUSE_USE_VERSION < 25
+#  error Compatibility with API version other than 21, 22 and 11 not supported
 #endif
 
 #ifdef __cplusplus

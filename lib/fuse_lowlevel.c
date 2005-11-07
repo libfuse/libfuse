@@ -17,6 +17,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <stdint.h>
+#include <sys/statfs.h>
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 
@@ -197,6 +198,18 @@ static void convert_statfs(const struct statvfs *stbuf,
     kstatfs->namelen	= stbuf->f_namemax;
 }
 
+static void convert_statfs_compat(const struct statfs *stbuf,
+                                  struct fuse_kstatfs *kstatfs)
+{
+    kstatfs->bsize	= stbuf->f_bsize;
+    kstatfs->blocks	= stbuf->f_blocks;
+    kstatfs->bfree	= stbuf->f_bfree;
+    kstatfs->bavail	= stbuf->f_bavail;
+    kstatfs->files	= stbuf->f_files;
+    kstatfs->ffree	= stbuf->f_ffree;
+    kstatfs->namelen	= stbuf->f_namelen;
+}
+
 static int send_reply_ok(fuse_req_t req, const void *arg, size_t argsize)
 {
     return send_reply(req, 0, arg, argsize);
@@ -326,6 +339,16 @@ int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
 
     memset(&arg, 0, sizeof(arg));
     convert_statfs(stbuf, &arg.st);
+
+    return send_reply_ok(req, &arg, sizeof(arg));
+}
+
+int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf)
+{
+    struct fuse_statfs_out arg;
+
+    memset(&arg, 0, sizeof(arg));
+    convert_statfs_compat(stbuf, &arg.st);
 
     return send_reply_ok(req, &arg, sizeof(arg));
 }
@@ -954,3 +977,5 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
  out:
     return NULL;
 }
+
+__asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");

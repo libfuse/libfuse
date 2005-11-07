@@ -13,10 +13,6 @@
 #ifndef _FUSE_COMMON_H_
 #define _FUSE_COMMON_H_
 
-#ifndef FUSE_USE_VERSION
-#define FUSE_USE_VERSION 21
-#endif
-
 /** Major version of FUSE library interface */
 #define FUSE_MAJOR_VERSION 2
 

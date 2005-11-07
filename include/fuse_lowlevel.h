@@ -13,6 +13,14 @@
  * Low level API                                               *
  * =========================================================== */
 
+/* IMPORTANT: you should define FUSE_USE_VERSION before including this
+   header.  To use the newest API define it to 25 (recommended for any
+   new application), to use the old API define it to 24 (default) */
+
+#ifndef FUSE_USE_VERSION
+#define FUSE_USE_VERSION 24
+#endif
+
 #include "fuse_common.h"
 
 #include <utime.h>
@@ -1197,6 +1205,23 @@ int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
  * @param ch the channel
  */
 void fuse_chan_destroy(struct fuse_chan *ch);
+
+/* ----------------------------------------------------------- *
+ * Compatibility stuff                                         *
+ * ----------------------------------------------------------- */
+
+#if FUSE_USE_VERSION == 24
+#include <sys/statfs.h>
+
+int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf);
+
+#undef FUSE_MINOR_VERSION
+#define FUSE_MINOR_VERSION 4
+#define fuse_reply_statfs fuse_reply_statfs_compat
+
+#elif FUSE_USE_VERSION < 25
+#  error Compatibility with low level API version other than 24 not supported
+#endif
 
 #ifdef __cplusplus
 }
