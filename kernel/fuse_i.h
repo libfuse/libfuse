@@ -31,6 +31,9 @@
 #  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 #    define KERNEL_2_6_10_PLUS
 #  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#    define KERNEL_2_6_11_PLUS
+#  endif
 #  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
 #    define KERNEL_2_6_12_PLUS
 #  endif

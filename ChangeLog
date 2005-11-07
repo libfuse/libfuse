@@ -1,3 +1,9 @@
+2005-11-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Change ->statfs() method to use 'struct statvfs' instead of
+	'struct statfs'.  This makes the API more portable since statvfs()
+	is defined by POSIX.
+
 2005-10-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fgetattr() method, which currently will only be called after

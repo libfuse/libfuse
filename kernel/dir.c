@@ -659,9 +659,11 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 		return err;
 	} else {
 		int mode = inode->i_mode;
+#ifndef KERNEL_2_6_11_PLUS
 		if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
                     (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))
                         return -EROFS;
+#endif
 		if ((mask & MAY_EXEC) && !S_ISDIR(mode) && !(mode & S_IXUGO))
 			return -EACCES;
 

@@ -20,7 +20,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/statfs.h>
+#include <sys/statvfs.h>
 #include <utime.h>
 
 #ifdef __cplusplus
@@ -162,11 +162,8 @@ struct fuse_operations {
     int (*write) (const char *, const char *, size_t, off_t,
                   struct fuse_file_info *);
 
-    /** Get file system statistics
-     *
-     * The 'f_type' and 'f_fsid' fields are ignored
-     */
-    int (*statfs) (const char *, struct statfs *);
+    /** Old statfs interface, deprecated */
+    int (*statfs_old) (const char *, void *stbuf);
 
     /** Possibly flush cached data
      *
@@ -352,6 +349,15 @@ struct fuse_operations {
      * Introduced in version 2.5
      */
     int (*fgetattr) (const char *, struct stat *, struct fuse_file_info *);
+
+    /** Get file system statistics
+     *
+     * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
+     *
+     * Replaced 'struct statfs' parameter with 'struct statvfs' in
+     * version 2.5
+     */
+    int (*statfs) (const char *, struct statvfs *stbuf);
 };
 
 /** Extra context that may be needed by some filesystems

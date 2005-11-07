@@ -9,6 +9,8 @@
 /* these definitions provide source compatibility to prior versions.
    Do not include this file directly! */
 
+#include <sys/statfs.h>
+
 typedef int (*fuse_dirfil_t_compat) (fuse_dirh_t h, const char *name, int type);
 struct fuse_operations_compat2 {
     int (*getattr)     (const char *, struct stat *);

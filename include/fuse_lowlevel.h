@@ -18,7 +18,7 @@
 #include <utime.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/statfs.h>
+#include <sys/statvfs.h>
 #include <sys/uio.h>
 
 #ifdef __cplusplus
@@ -840,7 +840,7 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size);
  * @param stbuf filesystem statistics
  * @return zero for success, -errno for failure to send reply
  */
-int fuse_reply_statfs(fuse_req_t req, const struct statfs *stbuf);
+int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf);
 
 /**
  * Reply with needed buffer size

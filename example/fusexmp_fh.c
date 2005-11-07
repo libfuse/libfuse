@@ -17,7 +17,6 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
-#include <sys/statfs.h>
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
@@ -293,11 +292,11 @@ static int xmp_write(const char *path, const char *buf, size_t size,
     return res;
 }
 
-static int xmp_statfs(const char *path, struct statfs *stbuf)
+static int xmp_statfs(const char *path, struct statvfs *stbuf)
 {
     int res;
 
-    res = statfs(path, stbuf);
+    res = statvfs(path, stbuf);
     if(res == -1)
         return -errno;
 

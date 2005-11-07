@@ -77,9 +77,9 @@ struct fuse {
     pthread_mutex_t lock;
     pthread_rwlock_t tree_lock;
     void *user_data;
-    uid_t uid;
-    gid_t gid;
-    mode_t umask;
+    unsigned int uid;
+    unsigned int gid;
+    unsigned int  umask;
     double entry_timeout;
     double attr_timeout;
 };
@@ -1527,15 +1527,15 @@ static void fuse_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
     reply_err(req, err);
 }
 
-static int default_statfs(struct statfs *buf)
+static int default_statfs(struct statvfs *buf)
 {
-    buf->f_namelen = 255;
+    buf->f_namemax = 255;
     buf->f_bsize = 512;
     return 0;
 }
 
 static void convert_statfs_compat(struct fuse_statfs_compat1 *compatbuf,
-                                  struct statfs *stbuf)
+                                  struct statvfs *stbuf)
 {
     stbuf->f_bsize   = compatbuf->block_size;
     stbuf->f_blocks  = compatbuf->blocks;
@@ -1543,28 +1543,43 @@ static void convert_statfs_compat(struct fuse_statfs_compat1 *compatbuf,
     stbuf->f_bavail  = compatbuf->blocks_free;
     stbuf->f_files   = compatbuf->files;
     stbuf->f_ffree   = compatbuf->files_free;
-    stbuf->f_namelen = compatbuf->namelen;
+    stbuf->f_namemax = compatbuf->namelen;
+}
+
+static void convert_statfs_old(struct statfs *oldbuf, struct statvfs *stbuf)
+{
+    stbuf->f_bsize   = oldbuf->f_bsize;
+    stbuf->f_blocks  = oldbuf->f_blocks;
+    stbuf->f_bfree   = oldbuf->f_bfree;
+    stbuf->f_bavail  = oldbuf->f_bavail;
+    stbuf->f_files   = oldbuf->f_files;
+    stbuf->f_ffree   = oldbuf->f_ffree;
+    stbuf->f_namemax = oldbuf->f_namelen;
 }
 
 static void fuse_statfs(fuse_req_t req)
 {
     struct fuse *f = req_fuse_prepare(req);
-    struct statfs buf;
+    struct statvfs buf;
     int err;
 
-    memset(&buf, 0, sizeof(struct statfs));
+    memset(&buf, 0, sizeof(buf));
     if (f->op.statfs) {
-        if (!f->compat || f->compat > 11)
-            err = f->op.statfs("/", &buf);
-        else {
+        err = f->op.statfs("/", &buf);
+    } else if (f->op.statfs_old) {
+        if (!f->compat || f->compat > 11) {
+            struct statfs oldbuf;
+            err = f->op.statfs_old("/", &oldbuf);
+            if (!err)
+                convert_statfs_old(&oldbuf, &buf);
+        } else {
             struct fuse_statfs_compat1 compatbuf;
             memset(&compatbuf, 0, sizeof(struct fuse_statfs_compat1));
             err = ((struct fuse_operations_compat1 *) &f->op)->statfs(&compatbuf);
             if (!err)
                 convert_statfs_compat(&compatbuf, &buf);
-        }
-    }
-    else
+        }        
+    } else
         err = default_statfs(&buf);
 
     if (!err)

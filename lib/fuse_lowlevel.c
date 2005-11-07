@@ -185,7 +185,7 @@ char *fuse_add_dirent(char *buf, const char *name, const struct stat *stbuf,
     return buf + entsize;
 }
 
-static void convert_statfs(const struct statfs *stbuf,
+static void convert_statfs(const struct statvfs *stbuf,
                            struct fuse_kstatfs *kstatfs)
 {
     kstatfs->bsize	= stbuf->f_bsize;
@@ -194,7 +194,7 @@ static void convert_statfs(const struct statfs *stbuf,
     kstatfs->bavail	= stbuf->f_bavail;
     kstatfs->files	= stbuf->f_files;
     kstatfs->ffree	= stbuf->f_ffree;
-    kstatfs->namelen	= stbuf->f_namelen;
+    kstatfs->namelen	= stbuf->f_namemax;
 }
 
 static int send_reply_ok(fuse_req_t req, const void *arg, size_t argsize)
@@ -320,7 +320,7 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
     return send_reply_ok(req, buf, size);
 }
 
-int fuse_reply_statfs(fuse_req_t req, const struct statfs *stbuf)
+int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
 {
     struct fuse_statfs_out arg;
 
