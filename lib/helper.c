@@ -274,12 +274,6 @@ static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
             goto err;
         }
     }
-
-    if (*mountpoint == NULL) {
-        fprintf(stderr, "missing mountpoint\n");
-        fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
-        goto err;
-    }
     return 0;
 
  err:
@@ -371,6 +365,8 @@ struct fuse *fuse_setup_compat2(int argc, char *argv[],
 
 void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
 {
+    (void) fd;
+
     if (fuse_instance != fuse)
         fprintf(stderr, "fuse: fuse_teardown() with unknown fuse object\n");
     else

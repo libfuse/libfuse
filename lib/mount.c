@@ -86,6 +86,11 @@ int fuse_mount(const char *mountpoint, const char *opts)
     int res;
     int rv;
 
+    if (!mountpoint) {
+        fprintf(stderr, "fuse: missing mountpoint\n");
+        return -1;
+    }
+
     res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
     if(res == -1) {
         perror("fuse: socketpair() failed");

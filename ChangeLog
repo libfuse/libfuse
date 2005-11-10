@@ -1,3 +1,8 @@
+2005-11-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Moved mountpoint argument checking from fuse_parse_cmdline() to
+	fuse_mount() in preparation to FreeBSD merge.
+
 2005-11-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove unneeded close() from fuse_teardown().  Spotted by Csaba
