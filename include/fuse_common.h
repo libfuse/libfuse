@@ -13,6 +13,8 @@
 #ifndef _FUSE_COMMON_H_
 #define _FUSE_COMMON_H_
 
+#include <stdint.h>
+
 /** Major version of FUSE library interface */
 #define FUSE_MAJOR_VERSION 2
 
@@ -31,14 +33,17 @@
 extern "C" {
 #endif
 
-/** Information about open files */
+/**
+ * Information about open files
+ *
+ * Changed in version 2.5
+ */
 struct fuse_file_info {
     /** Open flags.  Available in open() and release() */
     int flags;
 
-    /** File handle.  May be filled in by filesystem in open().
-        Available in all other file operations */
-    unsigned long fh;
+    /** Old file handle, don't use */
+    unsigned long fh_old;
 
     /** In case of a write operation indicates if this was caused by a
         writepage */
@@ -51,6 +56,13 @@ struct fuse_file_info {
     /** Can be filled in by open, to indicate, that cached file data
         need not be invalidated.  Introduced in version 2.4 */
     unsigned int keep_cache : 1;
+
+    /** Padding.  Do not use*/
+    unsigned int padding : 30;
+
+    /** File handle.  May be filled in by filesystem in open().
+        Available in all other file operations */
+    uint64_t fh;
 };
 
 /*

@@ -167,7 +167,14 @@ struct fuse_operations {
                   struct fuse_file_info *);
 
     /** Just a placeholder, don't set */
-    void (*statfs_old) (void);
+    /** Get file system statistics
+     *
+     * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
+     *
+     * Replaced 'struct statfs' parameter with 'struct statvfs' in
+     * version 2.5
+     */
+    int (*statfs) (const char *, struct statvfs *);
 
     /** Possibly flush cached data
      *
@@ -353,15 +360,6 @@ struct fuse_operations {
      * Introduced in version 2.5
      */
     int (*fgetattr) (const char *, struct stat *, struct fuse_file_info *);
-
-    /** Get file system statistics
-     *
-     * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
-     *
-     * Replaced 'struct statfs' parameter with 'struct statvfs' in
-     * version 2.5
-     */
-    int (*statfs) (const char *, struct statvfs *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -549,8 +547,12 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #  undef fuse_main
 #  if FUSE_USE_VERSION == 22
 #    define FUSE_MINOR_VERSION 4
-#    define fuse_main fuse_main_compat22
+#    define fuse_main(argc, argv, op) \
+            fuse_main_real_compat22(argc, argv, op, sizeof(*(op)))
+#    define fuse_new fuse_new_compat22
+#    define fuse_setup fuse_setup_compat22
 #    define fuse_operations fuse_operations_compat22
+#    define fuse_file_info fuse_file_info_compat22
 #  else
 #    define fuse_dirfil_t fuse_dirfil_t_compat
 #    define __fuse_read_cmd fuse_read_cmd

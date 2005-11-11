@@ -8,6 +8,7 @@
 
 #include <config.h>
 #include "fuse_lowlevel.h"
+#include "fuse_lowlevel_compat.h"
 #include "fuse_kernel.h"
 
 #include <stdio.h>
@@ -16,7 +17,6 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
-#include <stdint.h>
 #include <sys/statfs.h>
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
@@ -268,6 +268,16 @@ static void fill_open(struct fuse_open_out *arg,
         arg->open_flags |= FOPEN_KEEP_CACHE;
 }
 
+static void fill_open_compat(struct fuse_open_out *arg,
+                      const struct fuse_file_info_compat *f)
+{
+    arg->fh = f->fh;
+    if (f->direct_io)
+        arg->open_flags |= FOPEN_DIRECT_IO;
+    if (f->keep_cache)
+        arg->open_flags |= FOPEN_KEEP_CACHE;
+}
+
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 {
     struct fuse_entry_out arg;
@@ -315,6 +325,16 @@ int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
 
     memset(&arg, 0, sizeof(arg));
     fill_open(&arg, f);
+    return send_reply_ok(req, &arg, sizeof(arg));
+}
+
+int fuse_reply_open_compat(fuse_req_t req,
+                           const struct fuse_file_info_compat *f)
+{
+    struct fuse_open_out arg;
+
+    memset(&arg, 0, sizeof(arg));
+    fill_open_compat(&arg, f);
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
@@ -400,6 +420,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid,
             memset(&fi_store, 0, sizeof(fi_store));
             fi = &fi_store;
             fi->fh = arg->fh;
+            fi->fh_old = fi->fh;
         }
         req->f->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
     } else
@@ -523,6 +544,7 @@ static void do_read(fuse_req_t req, fuse_ino_t nodeid,
 
         memset(&fi, 0, sizeof(fi));
         fi.fh = arg->fh;
+        fi.fh_old = fi.fh;
         req->f->op.read(req, nodeid, arg->size, arg->offset, &fi);
     } else
         fuse_reply_err(req, ENOSYS);
@@ -535,6 +557,7 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid,
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
+    fi.fh_old = fi.fh;
     fi.writepage = arg->write_flags & 1;
 
     if (req->f->op.write)
@@ -551,6 +574,7 @@ static void do_flush(fuse_req_t req, fuse_ino_t nodeid,
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
+    fi.fh_old = fi.fh;
 
     if (req->f->op.flush)
         req->f->op.flush(req, nodeid, &fi);
@@ -566,6 +590,7 @@ static void do_release(fuse_req_t req, fuse_ino_t nodeid,
     memset(&fi, 0, sizeof(fi));
     fi.flags = arg->flags;
     fi.fh = arg->fh;
+    fi.fh_old = fi.fh;
 
     if (req->f->op.release)
         req->f->op.release(req, nodeid, &fi);
@@ -580,6 +605,7 @@ static void do_fsync(fuse_req_t req, fuse_ino_t nodeid,
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = inarg->fh;
+    fi.fh_old = fi.fh;
 
     if (req->f->op.fsync)
         req->f->op.fsync(req, nodeid, inarg->fsync_flags & 1, &fi);
@@ -608,6 +634,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t nodeid,
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
+    fi.fh_old = fi.fh;
 
     if (req->f->op.readdir)
         req->f->op.readdir(req, nodeid, arg->size, arg->offset, &fi);
@@ -623,6 +650,7 @@ static void do_releasedir(fuse_req_t req, fuse_ino_t nodeid,
     memset(&fi, 0, sizeof(fi));
     fi.flags = arg->flags;
     fi.fh = arg->fh;
+    fi.fh_old = fi.fh;
 
     if (req->f->op.releasedir)
         req->f->op.releasedir(req, nodeid, &fi);
@@ -637,6 +665,7 @@ static void do_fsyncdir(fuse_req_t req, fuse_ino_t nodeid,
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = inarg->fh;
+    fi.fh_old = fi.fh;
 
     if (req->f->op.fsyncdir)
         req->f->op.fsyncdir(req, nodeid, inarg->fsync_flags & 1, &fi);
@@ -936,7 +965,6 @@ static void fuse_ll_destroy(void *data)
     free(f);
 }
 
-
 struct fuse_session *fuse_lowlevel_new(const char *opts,
                                        const struct fuse_lowlevel_ops *op,
                                        size_t op_size, void *userdata)
@@ -979,3 +1007,4 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
 }
 
 __asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
+__asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");

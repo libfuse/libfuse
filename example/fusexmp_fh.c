@@ -79,10 +79,15 @@ static int xmp_opendir(const char *path, struct fuse_file_info *fi)
     return 0;
 }
 
+static inline DIR *get_dirp(struct fuse_file_info *fi)
+{
+    return (DIR *) (uintptr_t) fi->fh;
+}
+
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
                        off_t offset, struct fuse_file_info *fi)
 {
-    DIR *dp = (DIR *) fi->fh;
+    DIR *dp = get_dirp(fi);
     struct dirent *de;
 
     (void) path;
@@ -101,7 +106,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int xmp_releasedir(const char *path, struct fuse_file_info *fi)
 {
-    DIR *dp = (DIR *) fi->fh;
+    DIR *dp = get_dirp(fi);
     (void) path;
     closedir(dp);
     return 0;

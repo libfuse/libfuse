@@ -1,3 +1,8 @@
+2005-11-11  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Use 64bit type for file handle, so the full range supported by
+	the kernel interface is available to applications
+
 2005-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Moved mountpoint argument checking from fuse_parse_cmdline() to

@@ -12,16 +12,13 @@ FUSE_2.2 {
 		fuse_main;
 		fuse_main_compat1;
 		fuse_main_compat2;
-		fuse_main_real;
 		fuse_mount;
 		fuse_mount_compat1;
-		fuse_new;
 		fuse_new_compat1;
 		fuse_new_compat2;
 		fuse_process_cmd;
 		fuse_read_cmd;
 		fuse_set_getcontext_func;
-		fuse_setup;
 		fuse_setup_compat2;
 		fuse_teardown;
 		fuse_unmount;
@@ -47,7 +44,6 @@ FUSE_2.4 {
 		fuse_reply_entry;
 		fuse_reply_err;
 		fuse_reply_none;
-		fuse_reply_open;
 		fuse_reply_readlink;
 		fuse_reply_write;
 		fuse_reply_xattr;
@@ -67,9 +63,17 @@ FUSE_2.4 {
 
 FUSE_2.5 {
 	global:
-		fuse_reply_statfs;
+		fuse_main_real;
+		fuse_main_real_compat22;
+		fuse_new;
+		fuse_new_compat22;
 		fuse_reply_create;
+		fuse_reply_open;
+		fuse_reply_open_compat;
+		fuse_reply_statfs;
 		fuse_reply_statfs_compat;
+		fuse_setup;
+		fuse_setup_compat22;
 
 	local:
 		 *;

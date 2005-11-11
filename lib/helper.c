@@ -353,6 +353,15 @@ struct fuse *fuse_setup(int argc, char *argv[],
                              multithreaded, fd, 0);
 }
 
+struct fuse *fuse_setup_compat22(int argc, char *argv[],
+                                 const struct fuse_operations_compat22 *op,
+                                 size_t op_size, char **mountpoint,
+                                 int *multithreaded, int *fd)
+{
+    return fuse_setup_common(argc, argv, (struct fuse_operations *) op,
+                             op_size, mountpoint, multithreaded, fd, 22);
+}
+
 struct fuse *fuse_setup_compat2(int argc, char *argv[],
                                  const struct fuse_operations_compat2 *op,
                                  char **mountpoint, int *multithreaded,
@@ -410,6 +419,14 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
     return fuse_main_common(argc, argv, op, op_size, 0);
 }
 
+int fuse_main_real_compat22(int argc, char *argv[],
+                            const struct fuse_operations_compat22 *op,
+                            size_t op_size)
+{
+    return fuse_main_common(argc, argv, (struct fuse_operations *) op,
+                            op_size, 22);
+}
+
 #undef fuse_main
 int fuse_main(void)
 {
@@ -432,5 +449,7 @@ int fuse_main_compat2(int argc, char *argv[],
 }
 
 __asm__(".symver fuse_setup_compat2,__fuse_setup@");
+__asm__(".symver fuse_setup_compat22,fuse_setup@FUSE_2.2");
 __asm__(".symver fuse_teardown,__fuse_teardown@");
 __asm__(".symver fuse_main_compat2,fuse_main@");
+__asm__(".symver fuse_main_real_compat22,fuse_main_real@FUSE_2.2");

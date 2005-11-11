@@ -1211,13 +1211,12 @@ void fuse_chan_destroy(struct fuse_chan *ch);
  * ----------------------------------------------------------- */
 
 #if FUSE_USE_VERSION == 24
-#include <sys/statfs.h>
-
-int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf);
-
+#include "fuse_lowlevel_compat.h"
 #undef FUSE_MINOR_VERSION
 #define FUSE_MINOR_VERSION 4
+#define fuse_file_info fuse_file_info_compat
 #define fuse_reply_statfs fuse_reply_statfs_compat
+#define fuse_reply_open fuse_reply_open_compat
 
 #elif FUSE_USE_VERSION < 25
 #  error Compatibility with low level API version other than 24 not supported

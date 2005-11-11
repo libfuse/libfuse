@@ -21,7 +21,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <assert.h>
-#include <stdint.h>
 #include <pthread.h>
 #include <sys/param.h>
 #include <sys/uio.h>
@@ -106,7 +105,7 @@ struct fuse_dirhandle {
     unsigned size;
     unsigned needlen;
     int filled;
-    unsigned long fh;
+    uint64_t fh;
     int error;
     fuse_ino_t nodeid;
 };
@@ -142,8 +141,8 @@ static struct node *get_node(struct fuse *f, fuse_ino_t nodeid)
 {
     struct node *node = get_node_nocheck(f, nodeid);
     if (!node) {
-        fprintf(stderr, "fuse internal error: node %lu not found\n",
-                nodeid);
+        fprintf(stderr, "fuse internal error: node %llu not found\n",
+                (unsigned long long) nodeid);
         abort();
     }
     return node;
@@ -203,8 +202,8 @@ static void unhash_name(struct fuse *f, struct node *node)
                 node->parent = 0;
                 return;
             }
-        fprintf(stderr, "fuse internal error: unable to unhash node: %lu\n",
-                node->nodeid);
+        fprintf(stderr, "fuse internal error: unable to unhash node: %llu\n",
+                (unsigned long long) node->nodeid);
         abort();
     }
 }
@@ -227,7 +226,7 @@ static int hash_name(struct fuse *f, struct node *node, fuse_ino_t parent,
 static void delete_node(struct fuse *f, struct node *node)
 {
     if (f->flags & FUSE_DEBUG) {
-        printf("delete: %lu\n", node->nodeid);
+        printf("delete: %llu\n", (unsigned long long) node->nodeid);
         fflush(stdout);
     }
     assert(!node->name);
@@ -619,7 +618,7 @@ static void fuse_forget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 {
     struct fuse *f = req_fuse(req);
     if (f->flags & FUSE_DEBUG) {
-        printf("FORGET %lu/%lu\n", ino, nlookup);
+        printf("FORGET %llu/%lu\n", (unsigned long long) ino, nlookup);
         fflush(stdout);
     }
     forget_node(f, ino, nlookup);
@@ -1016,8 +1015,8 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
             err = f->op.create(path, mode, fi);
             if (!err) {
                 if (f->flags & FUSE_DEBUG) {
-                    printf("CREATE[%lu] flags: 0x%x %s\n", fi->fh, fi->flags,
-                           path);
+                    printf("CREATE[%llu] flags: 0x%x %s\n",
+                           (unsigned long long) fi->fh, fi->flags, path);
                     fflush(stdout);
                 }
                 err = lookup_path(f, parent, name, path, &e, fi);
@@ -1073,13 +1072,20 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
         if (path != NULL) {
             if (!f->compat)
                 err = f->op.open(path, fi);
-            else
+            else if (f->compat == 22) {
+                struct fuse_file_info_compat22 tmp;
+                memcpy(&tmp, fi, sizeof(tmp));
+                err = ((struct fuse_operations_compat22 *) &f->op)->open(path, &tmp);
+                memcpy(fi, &tmp, sizeof(tmp));
+                fi->fh = tmp.fh;
+            } else
                 err = ((struct fuse_operations_compat2 *) &f->op)->open(path, fi->flags);
         }
     }
     if (!err) {
         if (f->flags & FUSE_DEBUG) {
-            printf("OPEN[%lu] flags: 0x%x\n", fi->fh, fi->flags);
+            printf("OPEN[%llu] flags: 0x%x\n", (unsigned long long) fi->fh,
+                   fi->flags);
             fflush(stdout);
         }
 
@@ -1092,7 +1098,7 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
         if (fuse_reply_open(req, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release && path != NULL) {
-                if (!f->compat)
+                if (!f->compat || f->compat >= 22)
                     f->op.release(path, fi);
                 else
                     ((struct fuse_operations_compat2 *) &f->op)->release(path, fi->flags);
@@ -1129,7 +1135,8 @@ static void fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     path = get_path(f, ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("READ[%lu] %u bytes from %llu\n", fi->fh, size, off);
+            printf("READ[%llu] %u bytes from %llu\n",
+                   (unsigned long long) fi->fh, size, off);
             fflush(stdout);
         }
 
@@ -1142,7 +1149,8 @@ static void fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
     if (res >= 0) {
         if (f->flags & FUSE_DEBUG) {
-            printf("   READ[%lu] %u bytes\n", fi->fh, res);
+            printf("   READ[%llu] %u bytes\n", (unsigned long long) fi->fh,
+                   res);
             fflush(stdout);
         }
         if ((size_t) res > size)
@@ -1166,8 +1174,9 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
     path = get_path(f, ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("WRITE%s[%lu] %u bytes to %llu\n",
-                   fi->writepage ? "PAGE" : "", fi->fh, size, off);
+            printf("WRITE%s[%llu] %u bytes to %llu\n",
+                   fi->writepage ? "PAGE" : "", (unsigned long long) fi->fh,
+                   size, off);
             fflush(stdout);
         }
 
@@ -1180,8 +1189,9 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 
     if (res >= 0) {
         if (f->flags & FUSE_DEBUG) {
-            printf("   WRITE%s[%lu] %u bytes\n",
-                   fi->writepage ? "PAGE" : "", fi->fh, res);
+            printf("   WRITE%s[%llu] %u bytes\n",
+                   fi->writepage ? "PAGE" : "", (unsigned long long) fi->fh,
+                   res);
             fflush(stdout);
         }
         if ((size_t) res > size)
@@ -1203,7 +1213,7 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
     path = get_path(f, ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("FLUSH[%lu]\n", fi->fh);
+            printf("FLUSH[%llu]\n", (unsigned long long) fi->fh);
             fflush(stdout);
         }
         err = -ENOSYS;
@@ -1233,11 +1243,12 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (f->flags & FUSE_DEBUG) {
-        printf("RELEASE[%lu] flags: 0x%x\n", fi->fh, fi->flags);
+        printf("RELEASE[%llu] flags: 0x%x\n", (unsigned long long) fi->fh,
+               fi->flags);
         fflush(stdout);
     }
     if (f->op.release) {
-        if (!f->compat)
+        if (!f->compat || f->compat >= 22)
             f->op.release(path ? path : "-", fi);
         else if (path)
             ((struct fuse_operations_compat2 *) &f->op)->release(path, fi->flags);
@@ -1265,7 +1276,7 @@ static void fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
     path = get_path(f, ino);
     if (path != NULL) {
         if (f->flags & FUSE_DEBUG) {
-            printf("FSYNC[%lu]\n", fi->fh);
+            printf("FSYNC[%llu]\n", (unsigned long long) fi->fh);
             fflush(stdout);
         }
         err = -ENOSYS;
@@ -1280,7 +1291,7 @@ static void fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 static struct fuse_dirhandle *get_dirhandle(const struct fuse_file_info *llfi,
                                             struct fuse_file_info *fi)
 {
-    struct fuse_dirhandle *dh = (struct fuse_dirhandle *) llfi->fh;
+    struct fuse_dirhandle *dh = (struct fuse_dirhandle *) (uintptr_t) llfi->fh;
     memset(fi, 0, sizeof(struct fuse_file_info));
     fi->fh = dh->fh;
     return dh;
@@ -1305,7 +1316,7 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
     dh->nodeid = ino;
     mutex_init(&dh->lock);
 
-    llfi->fh = (unsigned long) dh;
+    llfi->fh = (uintptr_t) dh;
 
     if (f->op.opendir) {
         struct fuse_file_info fi;
@@ -1319,8 +1330,15 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
         pthread_rwlock_rdlock(&f->tree_lock);
         path = get_path(f, ino);
         if (path != NULL) {
-            err = f->op.opendir(path, &fi);
-            dh->fh = fi.fh;
+            if (!f->compat) {
+                err = f->op.opendir(path, &fi);
+                dh->fh = fi.fh;
+            } else {
+                struct fuse_file_info_compat22 tmp;
+                memcpy(&tmp, &fi, sizeof(tmp));
+                err = ((struct fuse_operations_compat22 *) &f->op)->opendir(path, &tmp);
+                dh->fh = tmp.fh;
+            }
         }
         if (!err) {
             pthread_mutex_lock(&f->lock);
@@ -1565,9 +1583,9 @@ static void fuse_statfs(fuse_req_t req)
 
     memset(&buf, 0, sizeof(buf));
     if (f->op.statfs) {
-        err = f->op.statfs("/", &buf);
-    } else if (f->op.statfs_old) {
-        if (!f->compat || f->compat > 11) {
+        if (!f->compat) {
+            err = f->op.statfs("/", &buf);
+        } else if (f->compat > 11) {
             struct statfs oldbuf;
             err = ((struct fuse_operations_compat22 *) &f->op)->statfs("/", &oldbuf);
             if (!err)
@@ -2023,6 +2041,14 @@ struct fuse *fuse_new(int fd, const char *opts,
     return fuse_new_common(fd, opts, op, op_size, 0);
 }
 
+struct fuse *fuse_new_compat22(int fd, const char *opts,
+                               const struct fuse_operations_compat22 *op,
+                               size_t op_size)
+{
+    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
+                           op_size, 22);
+}
+
 struct fuse *fuse_new_compat2(int fd, const char *opts,
                               const struct fuse_operations_compat2 *op)
 {
@@ -2077,3 +2103,4 @@ __asm__(".symver fuse_process_cmd,__fuse_process_cmd@");
 __asm__(".symver fuse_read_cmd,__fuse_read_cmd@");
 __asm__(".symver fuse_set_getcontext_func,__fuse_set_getcontext_func@");
 __asm__(".symver fuse_new_compat2,fuse_new@");
+__asm__(".symver fuse_new_compat22,fuse_new@FUSE_2.2");
