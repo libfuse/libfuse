@@ -3,10 +3,11 @@
 fuseincludedir=$(includedir)/fuse
 
 fuseinclude_HEADERS = \
-	fuse.h		\
-	fuse_compat.h	\
-	fuse_common.h	\
-	fuse_lowlevel.h
+	fuse.h			\
+	fuse_compat.h		\
+	fuse_common.h		\
+	fuse_lowlevel.h		\
+	fuse_lowlevel_compat.h
 
 include_HEADERS = old/fuse.h
 
