@@ -10,7 +10,7 @@ EXTRA_DIST =			\
 	doc/how-fuse-works	\
 	doc/kernel.txt
 
-pkgconfigdir = $(libdir)/pkgconfig
+pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = fuse.pc
 
 $(pkgconfig_DATA): config.status

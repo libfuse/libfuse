@@ -787,7 +787,7 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     req->ch = ch;
 
     if (!f->got_init && in->opcode != FUSE_INIT)
-        fuse_reply_err(req, EPROTO);
+        fuse_reply_err(req, EIO);
     else if (f->allow_root && in->uid != f->owner && in->uid != 0 &&
              in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
              in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&

@@ -381,8 +381,8 @@ void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
     else
         fuse_instance = NULL;
 
-    fuse_destroy(fuse);
     fuse_unmount(mountpoint);
+    fuse_destroy(fuse);
     free(mountpoint);
 }
 

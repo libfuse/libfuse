@@ -2,6 +2,12 @@
 
 lib_LTLIBRARIES = libfuse.la
 
+if BSD
+mount_source = mount_bsd.c
+else
+mount_source = mount.c
+endif
+
 libfuse_la_SOURCES = 		\
 	fuse.c			\
 	fuse_i.h		\
@@ -12,7 +18,7 @@ libfuse_la_SOURCES = 		\
 	fuse_mt.c		\
 	fuse_session.c		\
 	helper.c		\
-	mount.c
+	$(mount_source)
 
 libfuse_la_LDFLAGS = -lpthread -version-number 2:5:0 \
 	-Wl,--version-script,fuse_versionscript

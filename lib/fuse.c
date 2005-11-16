@@ -18,6 +18,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <errno.h>
 #include <assert.h>
@@ -804,7 +805,18 @@ static void fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
             fflush(stdout);
         }
         err = -ENOSYS;
-        if (f->op.mknod && f->op.getattr) {
+        if (S_ISREG(mode) && f->op.create && f->op.getattr) {
+            struct fuse_file_info fi;
+
+            memset(&fi, 0, sizeof(fi));
+            fi.flags = O_CREAT | O_EXCL | O_WRONLY;
+            err = f->op.create(path, mode, &fi);
+            if (!err) {
+                err = lookup_path(f, parent, name, path, &e, &fi);
+                if (f->op.release)
+                    f->op.release(path, &fi);
+            }
+        } else if (f->op.mknod && f->op.getattr) {
             err = f->op.mknod(path, mode, rdev);
             if (!err)
                 err = lookup_path(f, parent, name, path, &e, NULL);
@@ -1937,6 +1949,13 @@ static int parse_lib_opts(struct fuse *f, const char *opts, char **llopts)
         else
             free(xopts);
     }
+#ifdef __FreeBSD__
+    /*
+     * In FreeBSD, we always use these settings as inode numbers are needed to
+     * make getcwd(3) work.
+     */
+    f->flags |= FUSE_READDIR_INO;
+#endif
     return 0;
 }
 

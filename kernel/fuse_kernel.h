@@ -36,7 +36,14 @@
 
 /* This file defines the kernel interface of FUSE */
 
+#ifdef __FreeBSD__
+#include <sys/types.h>
+#define __u64 uint64_t
+#define __u32 uint32_t
+#define __s32 int32_t
+#else
 #include <asm/types.h>
+#endif
 
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 7
