@@ -1210,17 +1210,26 @@ void fuse_chan_destroy(struct fuse_chan *ch);
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
 
-#if FUSE_USE_VERSION == 24
-#include "fuse_lowlevel_compat.h"
-#undef FUSE_MINOR_VERSION
-#define FUSE_MINOR_VERSION 4
-#define fuse_file_info fuse_file_info_compat
-#define fuse_reply_statfs fuse_reply_statfs_compat
-#define fuse_reply_open fuse_reply_open_compat
+#ifndef __FreeBSD__
 
+#if FUSE_USE_VERSION == 24
+#  include "fuse_lowlevel_compat.h"
+#  undef FUSE_MINOR_VERSION
+#  define FUSE_MINOR_VERSION 4
+#  define fuse_file_info fuse_file_info_compat
+#  define fuse_reply_statfs fuse_reply_statfs_compat
+#  define fuse_reply_open fuse_reply_open_compat
 #elif FUSE_USE_VERSION < 25
 #  error Compatibility with low level API version other than 24 not supported
 #endif
+
+#else /* __FreeBSD__ */
+
+#if FUSE_USE_VERSION < 25
+#  error On FreeBSD API version 25 or greater must be used
+#endif
+
+#endif /* __FreeBSD__ */
 
 #ifdef __cplusplus
 }

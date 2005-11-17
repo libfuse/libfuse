@@ -12,7 +12,6 @@
 
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
-#include "fuse_compat.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -112,6 +111,11 @@ struct fuse_dirhandle {
 };
 
 static struct fuse_context *(*fuse_getcontext)(void) = NULL;
+
+static int fuse_do_open(struct fuse *, char *, struct fuse_file_info *);
+static void fuse_do_release(struct fuse *, char *, struct fuse_file_info *);
+static int fuse_do_opendir(struct fuse *, char *, struct fuse_file_info *);
+static int fuse_do_statfs(struct fuse *, char *, struct statvfs *);
 
 #ifndef USE_UCLIBC
 #define mutex_init(mut) pthread_mutex_init(mut, NULL)
@@ -1081,18 +1085,8 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
     if (f->op.open) {
         err = -ENOENT;
         path = get_path(f, ino);
-        if (path != NULL) {
-            if (!f->compat)
-                err = f->op.open(path, fi);
-            else if (f->compat == 22) {
-                struct fuse_file_info_compat22 tmp;
-                memcpy(&tmp, fi, sizeof(tmp));
-                err = ((struct fuse_operations_compat22 *) &f->op)->open(path, &tmp);
-                memcpy(fi, &tmp, sizeof(tmp));
-                fi->fh = tmp.fh;
-            } else
-                err = ((struct fuse_operations_compat2 *) &f->op)->open(path, fi->flags);
-        }
+        if (path != NULL)
+            err = fuse_do_open(f, path, fi);
     }
     if (!err) {
         if (f->flags & FUSE_DEBUG) {
@@ -1109,12 +1103,8 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
         pthread_mutex_lock(&f->lock);
         if (fuse_reply_open(req, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
-            if(f->op.release && path != NULL) {
-                if (!f->compat || f->compat >= 22)
-                    f->op.release(path, fi);
-                else
-                    ((struct fuse_operations_compat2 *) &f->op)->release(path, fi->flags);
-            }
+            if(f->op.release && path != NULL)
+                fuse_do_release(f, path, fi);
         } else {
             struct node *node = get_node(f, ino);
             node->open_count ++;
@@ -1259,12 +1249,8 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
                fi->flags);
         fflush(stdout);
     }
-    if (f->op.release) {
-        if (!f->compat || f->compat >= 22)
-            f->op.release(path ? path : "-", fi);
-        else if (path)
-            ((struct fuse_operations_compat2 *) &f->op)->release(path, fi->flags);
-    }
+    if (f->op.release)
+        fuse_do_release(f, path, fi);
 
     if(unlink_hidden && path)
         f->op.unlink(path);
@@ -1342,15 +1328,8 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
         pthread_rwlock_rdlock(&f->tree_lock);
         path = get_path(f, ino);
         if (path != NULL) {
-            if (!f->compat) {
-                err = f->op.opendir(path, &fi);
-                dh->fh = fi.fh;
-            } else {
-                struct fuse_file_info_compat22 tmp;
-                memcpy(&tmp, &fi, sizeof(tmp));
-                err = ((struct fuse_operations_compat22 *) &f->op)->opendir(path, &tmp);
-                dh->fh = tmp.fh;
-            }
+            err = fuse_do_opendir(f, path, &fi);
+            dh->fh = fi.fh;
         }
         if (!err) {
             pthread_mutex_lock(&f->lock);
@@ -1564,29 +1543,6 @@ static int default_statfs(struct statvfs *buf)
     return 0;
 }
 
-static void convert_statfs_compat(struct fuse_statfs_compat1 *compatbuf,
-                                  struct statvfs *stbuf)
-{
-    stbuf->f_bsize   = compatbuf->block_size;
-    stbuf->f_blocks  = compatbuf->blocks;
-    stbuf->f_bfree   = compatbuf->blocks_free;
-    stbuf->f_bavail  = compatbuf->blocks_free;
-    stbuf->f_files   = compatbuf->files;
-    stbuf->f_ffree   = compatbuf->files_free;
-    stbuf->f_namemax = compatbuf->namelen;
-}
-
-static void convert_statfs_old(struct statfs *oldbuf, struct statvfs *stbuf)
-{
-    stbuf->f_bsize   = oldbuf->f_bsize;
-    stbuf->f_blocks  = oldbuf->f_blocks;
-    stbuf->f_bfree   = oldbuf->f_bfree;
-    stbuf->f_bavail  = oldbuf->f_bavail;
-    stbuf->f_files   = oldbuf->f_files;
-    stbuf->f_ffree   = oldbuf->f_ffree;
-    stbuf->f_namemax = oldbuf->f_namelen;
-}
-
 static void fuse_statfs(fuse_req_t req)
 {
     struct fuse *f = req_fuse_prepare(req);
@@ -1595,20 +1551,7 @@ static void fuse_statfs(fuse_req_t req)
 
     memset(&buf, 0, sizeof(buf));
     if (f->op.statfs) {
-        if (!f->compat) {
-            err = f->op.statfs("/", &buf);
-        } else if (f->compat > 11) {
-            struct statfs oldbuf;
-            err = ((struct fuse_operations_compat22 *) &f->op)->statfs("/", &oldbuf);
-            if (!err)
-                convert_statfs_old(&oldbuf, &buf);
-        } else {
-            struct fuse_statfs_compat1 compatbuf;
-            memset(&compatbuf, 0, sizeof(struct fuse_statfs_compat1));
-            err = ((struct fuse_operations_compat1 *) &f->op)->statfs(&compatbuf);
-            if (!err)
-                convert_statfs_compat(&compatbuf, &buf);
-        }
+        err = fuse_do_statfs(f, "/", &buf);
     } else
         err = default_statfs(&buf);
 
@@ -2060,31 +2003,6 @@ struct fuse *fuse_new(int fd, const char *opts,
     return fuse_new_common(fd, opts, op, op_size, 0);
 }
 
-struct fuse *fuse_new_compat22(int fd, const char *opts,
-                               const struct fuse_operations_compat22 *op,
-                               size_t op_size)
-{
-    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           op_size, 22);
-}
-
-struct fuse *fuse_new_compat2(int fd, const char *opts,
-                              const struct fuse_operations_compat2 *op)
-{
-    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           sizeof(struct fuse_operations_compat2), 21);
-}
-
-struct fuse *fuse_new_compat1(int fd, int flags,
-                              const struct fuse_operations_compat1 *op)
-{
-    const char *opts = NULL;
-    if (flags & FUSE_DEBUG_COMPAT1)
-        opts = "debug";
-    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           sizeof(struct fuse_operations_compat1), 11);
-}
-
 void fuse_destroy(struct fuse *f)
 {
     size_t i;
@@ -2117,9 +2035,150 @@ void fuse_destroy(struct fuse *f)
     free(f);
 }
 
+#ifndef __FreeBSD__
+
+#include "fuse_compat.h"
+
+static int fuse_do_open(struct fuse *f, char *path, struct fuse_file_info *fi)
+{
+    if (!f->compat)
+        return f->op.open(path, fi);
+    else if (f->compat == 22) {
+        int err;
+        struct fuse_file_info_compat22 tmp;
+        memcpy(&tmp, fi, sizeof(tmp));
+        err = ((struct fuse_operations_compat22 *) &f->op)->open(path, &tmp);
+        memcpy(fi, &tmp, sizeof(tmp));
+        fi->fh = tmp.fh;
+        return err;
+    } else
+        return 
+            ((struct fuse_operations_compat2 *) &f->op)->open(path, fi->flags);
+}
+
+static void fuse_do_release(struct fuse *f, char *path,
+                           struct fuse_file_info *fi)
+{
+    if (!f->compat || f->compat >= 22)
+        f->op.release(path ? path : "-", fi);
+    else if (path)
+        ((struct fuse_operations_compat2 *) &f->op)->release(path, fi->flags);
+}
+
+static int fuse_do_opendir(struct fuse *f, char *path,
+                           struct fuse_file_info *fi)
+{
+    if (!f->compat) {
+        return f->op.opendir(path, fi);
+    } else {
+        int err;
+        struct fuse_file_info_compat22 tmp;
+        memcpy(&tmp, fi, sizeof(tmp));
+        err = ((struct fuse_operations_compat22 *) &f->op)->opendir(path, &tmp);
+        memcpy(fi, &tmp, sizeof(tmp));
+        fi->fh = tmp.fh;
+        return err;
+    }
+}
+
+static void convert_statfs_compat(struct fuse_statfs_compat1 *compatbuf,
+                                  struct statvfs *stbuf)
+{
+    stbuf->f_bsize   = compatbuf->block_size;
+    stbuf->f_blocks  = compatbuf->blocks;
+    stbuf->f_bfree   = compatbuf->blocks_free;
+    stbuf->f_bavail  = compatbuf->blocks_free;
+    stbuf->f_files   = compatbuf->files;
+    stbuf->f_ffree   = compatbuf->files_free;
+    stbuf->f_namemax = compatbuf->namelen;
+}
+
+static void convert_statfs_old(struct statfs *oldbuf, struct statvfs *stbuf)
+{
+    stbuf->f_bsize   = oldbuf->f_bsize;
+    stbuf->f_blocks  = oldbuf->f_blocks;
+    stbuf->f_bfree   = oldbuf->f_bfree;
+    stbuf->f_bavail  = oldbuf->f_bavail;
+    stbuf->f_files   = oldbuf->f_files;
+    stbuf->f_ffree   = oldbuf->f_ffree;
+    stbuf->f_namemax = oldbuf->f_namelen;
+}
+
+static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)
+{
+    int err;
+
+    if (!f->compat) {
+        err = f->op.statfs(path, buf);
+    } else if (f->compat > 11) {
+        struct statfs oldbuf;
+        err = ((struct fuse_operations_compat22 *) &f->op)->statfs("/", &oldbuf);
+        if (!err)
+            convert_statfs_old(&oldbuf, buf);
+    } else {
+        struct fuse_statfs_compat1 compatbuf;
+        memset(&compatbuf, 0, sizeof(struct fuse_statfs_compat1));
+        err = ((struct fuse_operations_compat1 *) &f->op)->statfs(&compatbuf);
+        if (!err)
+            convert_statfs_compat(&compatbuf, buf);
+    }
+    return err;
+}
+
+struct fuse *fuse_new_compat22(int fd, const char *opts,
+                               const struct fuse_operations_compat22 *op,
+                               size_t op_size)
+{
+    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
+                           op_size, 22);
+}
+
+struct fuse *fuse_new_compat2(int fd, const char *opts,
+                              const struct fuse_operations_compat2 *op)
+{
+    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
+                           sizeof(struct fuse_operations_compat2), 21);
+}
+
+struct fuse *fuse_new_compat1(int fd, int flags,
+                              const struct fuse_operations_compat1 *op)
+{
+    const char *opts = NULL;
+    if (flags & FUSE_DEBUG_COMPAT1)
+        opts = "debug";
+    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
+                           sizeof(struct fuse_operations_compat1), 11);
+}
+
 __asm__(".symver fuse_exited,__fuse_exited@");
 __asm__(".symver fuse_process_cmd,__fuse_process_cmd@");
 __asm__(".symver fuse_read_cmd,__fuse_read_cmd@");
 __asm__(".symver fuse_set_getcontext_func,__fuse_set_getcontext_func@");
 __asm__(".symver fuse_new_compat2,fuse_new@");
 __asm__(".symver fuse_new_compat22,fuse_new@FUSE_2.2");
+
+#else /* __FreeBSD__ */
+
+static int fuse_do_open(struct fuse *f, char *path, struct fuse_file_info *fi)
+{
+    return f->op.open(path, fi);    
+}
+
+static void fuse_do_release(struct fuse *f, char *path,
+                           struct fuse_file_info *fi)
+{
+    f->op.release(path ? path : "-", fi);
+}
+
+static int fuse_do_opendir(struct fuse *f, char *path,
+                           struct fuse_file_info *fi)
+{
+    return f->op.opendir(path, fi);    
+}
+
+static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)
+{
+    return f->op.statfs(path, buf);
+}
+
+#endif /* __FreeBSD__ */

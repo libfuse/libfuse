@@ -24,11 +24,12 @@ void fuse_unmount(const char *mountpoint)
     FILE *sf;
     int rv;
     char *seekscript =
-    "/usr/bin/fstat  /dev/fuse* |\n"
-    "/usr/bin/awk '{if ($3 == %d) print $10}' |\n"
-    "/usr/bin/sort |\n"
-    "/usr/bin/uniq |\n"
-    "/usr/bin/awk '{ i+=1; if(i > 1){ exit (1); }; printf; }; END{if (i==0) exit (1)}'";
+    "/usr/bin/fstat  /dev/fuse* | "
+    "/usr/bin/awk 'BEGIN{ getline; if (! ($3 == \"PID\" && $10 == \"NAME\")) exit 1; }; "
+    "              { if ($3 == %d) print $10; }' | "
+    "/usr/bin/sort | "
+    "/usr/bin/uniq | "
+    "/usr/bin/awk '{ i += 1; if (i > 1){ exit 1; }; printf; }; END{ if (i == 0) exit 1; }'";
 
     asprintf(&ssc, seekscript, getpid());
 
@@ -61,7 +62,7 @@ int fuse_mount(const char *mountpoint, const char *opts)
         fd = strtol(fdnam, &ep, 10);
 
         if (*ep != '\0') {
-            fprintf(stderr, "invalid value given in FUSE_DEV_FD");
+            fprintf(stderr, "invalid value given in FUSE_DEV_FD\n");
             return -1;
         }
 
@@ -118,6 +119,7 @@ mount:
             argv[a++] = mountpoint;
             argv[a++] = NULL;
             setenv("MOUNT_FUSEFS_SAFE", "1", 1);
+            setenv("MOUNT_FUSEFS_NOINTERACTIVE", "1", 1);
             execvp(mountprog, (char **) argv);
             perror("fuse: failed to exec mount program");
             exit(1);

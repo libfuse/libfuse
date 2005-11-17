@@ -541,6 +541,8 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
 
+#ifndef __FreeBSD__
+
 #if FUSE_USE_VERSION == 22 || FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
 #  include "fuse_compat.h"
 #  undef FUSE_MINOR_VERSION
@@ -582,6 +584,14 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #elif FUSE_USE_VERSION < 25
 #  error Compatibility with API version other than 21, 22 and 11 not supported
 #endif
+
+#else /* __FreeBSD__ */
+
+#if FUSE_USE_VERSION < 25
+#  error On FreeBSD API version 25 or greater must be used
+#endif
+
+#endif /* __FreeBSD__ */
 
 #ifdef __cplusplus
 }

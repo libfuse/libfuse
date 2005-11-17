@@ -8,7 +8,6 @@
 
 #include <config.h>
 #include "fuse_lowlevel.h"
-#include "fuse_lowlevel_compat.h"
 #include "fuse_kernel.h"
 
 #include <stdio.h>
@@ -17,7 +16,6 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
-#include <sys/statfs.h>
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 
@@ -198,18 +196,6 @@ static void convert_statfs(const struct statvfs *stbuf,
     kstatfs->namelen	= stbuf->f_namemax;
 }
 
-static void convert_statfs_compat(const struct statfs *stbuf,
-                                  struct fuse_kstatfs *kstatfs)
-{
-    kstatfs->bsize	= stbuf->f_bsize;
-    kstatfs->blocks	= stbuf->f_blocks;
-    kstatfs->bfree	= stbuf->f_bfree;
-    kstatfs->bavail	= stbuf->f_bavail;
-    kstatfs->files	= stbuf->f_files;
-    kstatfs->ffree	= stbuf->f_ffree;
-    kstatfs->namelen	= stbuf->f_namelen;
-}
-
 static int send_reply_ok(fuse_req_t req, const void *arg, size_t argsize)
 {
     return send_reply(req, 0, arg, argsize);
@@ -268,16 +254,6 @@ static void fill_open(struct fuse_open_out *arg,
         arg->open_flags |= FOPEN_KEEP_CACHE;
 }
 
-static void fill_open_compat(struct fuse_open_out *arg,
-                      const struct fuse_file_info_compat *f)
-{
-    arg->fh = f->fh;
-    if (f->direct_io)
-        arg->open_flags |= FOPEN_DIRECT_IO;
-    if (f->keep_cache)
-        arg->open_flags |= FOPEN_KEEP_CACHE;
-}
-
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 {
     struct fuse_entry_out arg;
@@ -328,16 +304,6 @@ int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_open_compat(fuse_req_t req,
-                           const struct fuse_file_info_compat *f)
-{
-    struct fuse_open_out arg;
-
-    memset(&arg, 0, sizeof(arg));
-    fill_open_compat(&arg, f);
-    return send_reply_ok(req, &arg, sizeof(arg));
-}
-
 int fuse_reply_write(fuse_req_t req, size_t count)
 {
     struct fuse_write_out arg;
@@ -359,16 +325,6 @@ int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
 
     memset(&arg, 0, sizeof(arg));
     convert_statfs(stbuf, &arg.st);
-
-    return send_reply_ok(req, &arg, sizeof(arg));
-}
-
-int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf)
-{
-    struct fuse_statfs_out arg;
-
-    memset(&arg, 0, sizeof(arg));
-    convert_statfs_compat(stbuf, &arg.st);
 
     return send_reply_ok(req, &arg, sizeof(arg));
 }
@@ -1006,5 +962,54 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
     return NULL;
 }
 
+#ifndef __FreeBSD__
+
+#include "fuse_lowlevel_compat.h"
+
+static void fill_open_compat(struct fuse_open_out *arg,
+                      const struct fuse_file_info_compat *f)
+{
+    arg->fh = f->fh;
+    if (f->direct_io)
+        arg->open_flags |= FOPEN_DIRECT_IO;
+    if (f->keep_cache)
+        arg->open_flags |= FOPEN_KEEP_CACHE;
+}
+
+static void convert_statfs_compat(const struct statfs *stbuf,
+                                  struct fuse_kstatfs *kstatfs)
+{
+    kstatfs->bsize	= stbuf->f_bsize;
+    kstatfs->blocks	= stbuf->f_blocks;
+    kstatfs->bfree	= stbuf->f_bfree;
+    kstatfs->bavail	= stbuf->f_bavail;
+    kstatfs->files	= stbuf->f_files;
+    kstatfs->ffree	= stbuf->f_ffree;
+    kstatfs->namelen	= stbuf->f_namelen;
+}
+
+int fuse_reply_open_compat(fuse_req_t req,
+                           const struct fuse_file_info_compat *f)
+{
+    struct fuse_open_out arg;
+
+    memset(&arg, 0, sizeof(arg));
+    fill_open_compat(&arg, f);
+    return send_reply_ok(req, &arg, sizeof(arg));
+}
+
+int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf)
+{
+    struct fuse_statfs_out arg;
+
+    memset(&arg, 0, sizeof(arg));
+    convert_statfs_compat(stbuf, &arg.st);
+
+    return send_reply_ok(req, &arg, sizeof(arg));
+}
+
+
 __asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
 __asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
+
+#endif __FreeBSD__
