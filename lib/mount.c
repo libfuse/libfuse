@@ -70,13 +70,32 @@ static int receive_fd(int fd)
 void fuse_unmount(const char *mountpoint)
 {
     const char *mountprog = FUSERMOUNT_PROG;
-    char umount_cmd[1024];
+    int pid;
 
-    snprintf(umount_cmd, sizeof(umount_cmd) - 1, "%s -u -q -z -- %s",
-             mountprog, mountpoint);
+#ifdef HAVE_FORK
+    pid = fork();
+#else
+    pid = vfork();
+#endif
+    if(pid == -1)
+        return;
 
-    umount_cmd[sizeof(umount_cmd) - 1] = '\0';
-    system(umount_cmd);
+    if(pid == 0) {
+        const char *argv[32];
+        int a = 0;
+
+        argv[a++] = mountprog;
+        argv[a++] = "-u";
+        argv[a++] = "-q";
+        argv[a++] = "-z";
+        argv[a++] = "--";
+        argv[a++] = mountpoint;
+        argv[a++] = NULL;
+
+        execvp(mountprog, (char **) argv);
+        exit(1);
+    }
+    waitpid(pid, NULL, 0);
 }
 
 int fuse_mount(const char *mountpoint, const char *opts)

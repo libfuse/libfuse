@@ -2,6 +2,13 @@
 
 	* More FreeBSD merge
 
+	* fusermount: don't allow mountpoints with '\n', '\t', or '\\' in
+	them, because it corrupts /etc/mtab.  Found by Thomas Biege
+
+	* libfuse: don't use system() to invoke 'fusermount -u ...'
+	because it breaks mountpoints with spaces in them into multiple
+	arguments
+
 2005-11-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Merge library part of FreeBSD port.  Patch by Csaba Henk

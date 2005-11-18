@@ -120,6 +120,23 @@ static void unlock_mtab(int mtablock)
     }
 }
 
+/* Glibc addmntent() doesn't encode '\n', misencodes '\t' as '\n'
+   (version 2.3.2), and encodes '\\' differently as mount(8).  So
+   let's not allow those characters, they are not all that usual in
+   filenames. */
+static int check_name(const char *name)
+{
+    char *s;
+    for (s = "\n\t\\"; *s; s++) {
+        if (strchr(name, *s)) {
+            fprintf(stderr, "%s: illegal character 0x%02x in mount entry\n",
+                    progname, *s);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int add_mount(const char *fsname, const char *mnt, const char *type,
                      const char *opts)
 {
@@ -127,6 +144,10 @@ static int add_mount(const char *fsname, const char *mnt, const char *type,
     const char *mtab = _PATH_MOUNTED;
     struct mntent ent;
     FILE *fp;
+
+    if (check_name(fsname) == -1 || check_name(mnt) == -1 || 
+        check_name(type) == -1 || check_name(opts) == -1)
+        return -1;
 
     fp = setmntent(mtab, "a");
     if (fp == NULL) {
