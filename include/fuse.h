@@ -570,6 +570,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #      define __fuse_exited fuse_exited
 #      define __fuse_set_getcontext_func fuse_set_getcontext_func
 #    else
+#      warning Compatibility with API version 11 is deprecated
 #      undef FUSE_MAJOR_VERSION
 #      define FUSE_MAJOR_VERSION 1
 #      define FUSE_MINOR_VERSION 1
