@@ -27,6 +27,7 @@ struct fuse_worker {
     struct fuse_chan *ch;
     struct fuse_chan *prevch;
     pthread_t threads[FUSE_MAX_WORKERS];
+    int exit;
     int error;
 };
 
@@ -70,7 +71,7 @@ static void *do_work(void *data)
 
     pthread_cleanup_push(free, buf);
     pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 
     while (!fuse_session_exited(w->se)) {
         int res = fuse_chan_receive(w->prevch, buf, bufsize);
@@ -83,6 +84,10 @@ static void *do_work(void *data)
         }
 
         pthread_mutex_lock(&w->lock);
+        if (w->exit) {
+            pthread_mutex_unlock(&w->lock);
+            break;
+        }
         w->numavail--;
         if (w->numavail == 0 && w->numworker < FUSE_MAX_WORKERS) {
             if (w->numworker < FUSE_MAX_WORKERS) {
@@ -117,7 +122,6 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id)
         return -1;
     }
 
-    pthread_detach(*thread_id);
     return 0;
 }
 
@@ -153,7 +157,10 @@ int fuse_session_loop_mt(struct fuse_session *se)
     pthread_mutex_lock(&w->lock);
     for (i = 1; i < w->numworker; i++)
         pthread_cancel(w->threads[i]);
+    w->exit = 1;
     pthread_mutex_unlock(&w->lock);
+    for (i = 1; i < w->numworker; i++)
+        pthread_join(w->threads[i], NULL);
     pthread_mutex_destroy(&w->lock);
     err = w->error;
     fuse_chan_destroy(w->ch);

@@ -1,3 +1,9 @@
+2005-11-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't use async cancelation in multithreaded loop.  This makes
+	it more portable to systems where read() is not async cancel safe.
+	Report from Andriy Gapon
+
 2005-11-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Warn if API version 11 compatibility is requested
