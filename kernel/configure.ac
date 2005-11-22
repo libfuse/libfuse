@@ -36,11 +36,12 @@ if test -z "$enable_kernel_module" -a -z "$kernelbuild" && echo "$runver" | grep
 	fi
 	if test "$checkmodule" = yes; then
 		AC_MSG_CHECKING([if FUSE module is from official kernel])
-			if fgrep -q "fuse distribution version: " /lib/modules/${runver}/kernel/fs/fuse/fuse.ko 2> /dev/null; then
-			AC_MSG_RESULT([no])
-		else
+			fusemodule="/lib/modules/${runver}/kernel/fs/fuse/fuse.ko"
+			if test -f $fusemodule && ! fgrep -q "fuse distribution version: " $fusemodule; then
 			AC_MSG_RESULT([yes])
 			ENABLE_FUSE_MODULE=n
+		else
+			AC_MSG_RESULT([no])
 		fi
 	fi
 fi
