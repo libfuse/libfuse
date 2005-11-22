@@ -1,3 +1,30 @@
+2005-11-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.4.2
+
+2005-11-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add detection of mainline FUSE code in running kernel
+
+2005-11-17  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: don't allow mountpoints with '\n', '\t', or '\\' in
+	them, because it corrupts /etc/mtab.  Found by Thomas Biege
+	CVE-2005-3531
+
+	* libfuse: don't use system() to invoke 'fusermount -u ...'
+	because it breaks mountpoints with spaces in them into multiple
+	arguments
+
+2005-10-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix kernel module compile if kernel source and build directories
+	differ.  Report and initial patch by John Eastman
+
+2005-10-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: optimize buffer reallocation in fill_dir.
+
 2005-10-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.4.1
