@@ -1,3 +1,7 @@
+2005-11-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add detection of mainline FUSE code in running kernel
+
 2005-11-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Don't use async cancelation in multithreaded loop.  This makes
@@ -14,6 +18,7 @@
 
 	* fusermount: don't allow mountpoints with '\n', '\t', or '\\' in
 	them, because it corrupts /etc/mtab.  Found by Thomas Biege
+	CVE-2005-3531
 
 	* libfuse: don't use system() to invoke 'fusermount -u ...'
 	because it breaks mountpoints with spaces in them into multiple
