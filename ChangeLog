@@ -1,3 +1,9 @@
+2005-11-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Block TERM, INT, HUP and QUIT signals in all but the main
+	thread.  According to POSIX it's not specified which thread will
+	receive these signals.
+ 
 2005-11-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add detection of mainline FUSE code in running kernel
