@@ -80,6 +80,7 @@ struct fuse {
     unsigned int gid;
     unsigned int  umask;
     double entry_timeout;
+    double negative_timeout;
     double attr_timeout;
 };
 
@@ -611,8 +612,14 @@ static void fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
             fflush(stdout);
         }
         err = -ENOSYS;
-        if (f->op.getattr)
+        if (f->op.getattr) {
             err = lookup_path(f, parent, name, path, &e, NULL);
+            if (err == -ENOENT && f->negative_timeout != 0.0) {
+                e.ino = 0;
+                e.entry_timeout = f->negative_timeout;
+                err = 0;
+            }
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1835,7 +1842,8 @@ int fuse_is_lib_option(const char *opt)
         begins_with(opt, "uid=") ||
         begins_with(opt, "gid=") ||
         begins_with(opt, "entry_timeout=") ||
-        begins_with(opt, "attr_timeout="))
+        begins_with(opt, "attr_timeout=") ||
+        begins_with(opt, "negative_timeout="))
         return 1;
     else
         return 0;
@@ -1882,6 +1890,9 @@ static int parse_lib_opts(struct fuse *f, const char *opts, char **llopts)
                 /* nop */;
             else if (sscanf(opt, "attr_timeout=%lf", &f->attr_timeout) == 1)
                 /* nop */;
+            else if (sscanf(opt, "negative_timeout=%lf",
+                            &f->negative_timeout) == 1)
+                /* nop */;
             else
                 fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
         }
@@ -1924,6 +1935,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
 
     f->entry_timeout = 1.0;
     f->attr_timeout = 1.0;
+    f->negative_timeout = 0.0;
 
     if (parse_lib_opts(f, opts, &llopts) == -1)
         goto out_free;

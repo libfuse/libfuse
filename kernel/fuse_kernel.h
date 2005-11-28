@@ -6,6 +6,9 @@
     See the file COPYING.
 */
 
+/* This file defines the kernel interface of FUSE */
+
+#ifdef __FreeBSD__
 /*
     This -- and only this -- header file may also be distributed under
     the terms of the BSD Licence as follows:
@@ -34,9 +37,6 @@
     SUCH DAMAGE.
 */
 
-/* This file defines the kernel interface of FUSE */
-
-#ifdef __FreeBSD__
 #include <sys/types.h>
 #define __u64 uint64_t
 #define __u32 uint32_t
@@ -49,7 +49,7 @@
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 3
+#define FUSE_KERNEL_MINOR_VERSION 4
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
@@ -88,6 +88,9 @@ struct fuse_kstatfs {
 	__u64	ffree;
 	__u32	bsize;
 	__u32	namelen;
+	__u32	frsize;
+	__u32	padding;
+	__u32	spare[6];
 };
 
 #define FATTR_MODE	(1 << 0)
@@ -247,6 +250,8 @@ struct fuse_write_out {
 	__u32	size;
 	__u32	padding;
 };
+
+#define FUSE_COMPAT_STATFS_SIZE 12
 
 struct fuse_statfs_out {
 	struct fuse_kstatfs st;

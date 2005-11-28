@@ -3,7 +3,30 @@
 	* Block TERM, INT, HUP and QUIT signals in all but the main
 	thread.  According to POSIX it's not specified which thread will
 	receive these signals.
- 
+
+	* Kernel changes:
+
+	* Check for directory aliasing on mkdir, not just on lookup
+
+	* Check for special node ID values in create+open operation
+
+	* Sync with -mm: readv, writev, aio_read and aio_write methods
+	added to file operations
+
+	* Cleanups: lookup code, page offset calculation
+
+	* ABI stepped to 7.4, changes:
+
+	* frsize member added to fuse_kstatfs structure
+
+	* added support for negative entry caching: on lowlevel API if
+	fuse_entry_param::ino is set to zero in reply to a lookup request,
+	the kernel will cache the dentry for the specified amount of time.
+
+	* libfuse: added 'negative_timeout' option: specifies how much
+	negative entries should be cached.  Default is zero, to be
+	compatible with prior versions.
+
 2005-11-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add detection of mainline FUSE code in running kernel

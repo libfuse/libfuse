@@ -188,6 +188,7 @@ static void convert_statfs(const struct statvfs *stbuf,
                            struct fuse_kstatfs *kstatfs)
 {
     kstatfs->bsize	= stbuf->f_bsize;
+    kstatfs->frsize	= stbuf->f_frsize;
     kstatfs->blocks	= stbuf->f_blocks;
     kstatfs->bfree	= stbuf->f_bfree;
     kstatfs->bavail	= stbuf->f_bavail;
@@ -258,6 +259,11 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 {
     struct fuse_entry_out arg;
 
+    /* before ABI 7.4 e->ino == 0 was invalid, only ENOENT meant
+       negative entry */
+    if (!e->ino && req->f->minor < 4)
+        return fuse_reply_err(req, ENOENT);
+
     memset(&arg, 0, sizeof(arg));
     fill_entry(&arg, e);
     return send_reply_ok(req, &arg, sizeof(arg));
@@ -322,11 +328,12 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
 int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
 {
     struct fuse_statfs_out arg;
+    size_t size = req->f->minor < 4 ? FUSE_COMPAT_STATFS_SIZE : sizeof(arg);
 
     memset(&arg, 0, sizeof(arg));
     convert_statfs(stbuf, &arg.st);
 
-    return send_reply_ok(req, &arg, sizeof(arg));
+    return send_reply_ok(req, &arg, size);
 }
 
 int fuse_reply_xattr(fuse_req_t req, size_t count)
@@ -690,11 +697,11 @@ static void do_init(fuse_req_t req, struct fuse_init_in_out *arg)
         f->op.init(f->userdata);
 
     f->major = FUSE_KERNEL_VERSION;
-    f->minor = FUSE_KERNEL_MINOR_VERSION;
+    f->minor = arg->minor;
 
     memset(&outarg, 0, sizeof(outarg));
     outarg.major = f->major;
-    outarg.minor = f->minor;
+    outarg.minor = FUSE_KERNEL_MINOR_VERSION;
 
     if (f->debug) {
         printf("   INIT: %u.%u\n", outarg.major, outarg.minor);
@@ -976,16 +983,16 @@ static void fill_open_compat(struct fuse_open_out *arg,
         arg->open_flags |= FOPEN_KEEP_CACHE;
 }
 
-static void convert_statfs_compat(const struct statfs *stbuf,
-                                  struct fuse_kstatfs *kstatfs)
+static void convert_statfs_compat(const struct statfs *compatbuf,
+                                  struct statvfs *buf)
 {
-    kstatfs->bsize	= stbuf->f_bsize;
-    kstatfs->blocks	= stbuf->f_blocks;
-    kstatfs->bfree	= stbuf->f_bfree;
-    kstatfs->bavail	= stbuf->f_bavail;
-    kstatfs->files	= stbuf->f_files;
-    kstatfs->ffree	= stbuf->f_ffree;
-    kstatfs->namelen	= stbuf->f_namelen;
+    buf->f_bsize	= compatbuf->f_bsize;
+    buf->f_blocks	= compatbuf->f_blocks;
+    buf->f_bfree	= compatbuf->f_bfree;
+    buf->f_bavail	= compatbuf->f_bavail;
+    buf->f_files	= compatbuf->f_files;
+    buf->f_ffree	= compatbuf->f_ffree;
+    buf->f_namemax	= compatbuf->f_namelen;
 }
 
 int fuse_reply_open_compat(fuse_req_t req,
@@ -1000,16 +1007,16 @@ int fuse_reply_open_compat(fuse_req_t req,
 
 int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf)
 {
-    struct fuse_statfs_out arg;
+    struct statvfs newbuf;
 
-    memset(&arg, 0, sizeof(arg));
-    convert_statfs_compat(stbuf, &arg.st);
+    memset(&newbuf, 0, sizeof(newbuf));
+    convert_statfs_compat(stbuf, &newbuf);
 
-    return send_reply_ok(req, &arg, sizeof(arg));
+    return fuse_reply_statfs(req, &newbuf);
 }
 
 
 __asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
 __asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
 
-#endif __FreeBSD__
+#endif /* __FreeBSD__ */

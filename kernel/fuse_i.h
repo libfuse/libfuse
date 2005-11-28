@@ -349,6 +349,9 @@ struct fuse_conn {
 	/** Is create not implemented by fs? */
 	unsigned no_create : 1;
 
+	/** Negotiated minor version */
+	unsigned minor;
+
 #ifdef KERNEL_2_6
 	/** Backing dev info */
 	struct backing_dev_info bdi;

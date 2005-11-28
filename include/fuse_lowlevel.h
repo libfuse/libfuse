@@ -63,7 +63,13 @@ struct fuse_chan;
 
 /** Directory entry parameters supplied to fuse_reply_entry() */
 struct fuse_entry_param {
-    /** Unique inode number */
+    /** Unique inode number
+     *
+     * In lookup, zero means negative entry (from version 2.5)
+     * Returning ENOENT also means negative entry, but by setting zero
+     * ino the kernel may cache negative entries for entry_timeout
+     * seconds.
+     */
     fuse_ino_t ino;
 
     /** The ino/generation pair should be unique for the filesystem's

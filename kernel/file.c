@@ -280,7 +280,6 @@ static int fuse_readpage(struct file *file, struct page *page)
 {
 	struct inode *inode = page->mapping->host;
 	struct fuse_conn *fc = get_fuse_conn(inode);
-	loff_t pos = (loff_t) page->index << PAGE_CACHE_SHIFT;
 	struct fuse_req *req = fuse_get_request(fc);
 	int err = -EINTR;
 	if (!req)
@@ -289,7 +288,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 	req->out.page_zeroing = 1;
 	req->num_pages = 1;
 	req->pages[0] = page;
-	fuse_send_read(req, file, inode, pos, PAGE_CACHE_SIZE);
+	fuse_send_read(req, file, inode, page_offset(page), PAGE_CACHE_SIZE);
 	err = req->out.h.error;
 	fuse_put_request(fc, req);
 	if (!err)
@@ -304,7 +303,7 @@ static int fuse_readpage(struct file *file, struct page *page)
 static int fuse_send_readpages(struct fuse_req *req, struct file *file,
 			       struct inode *inode)
 {
-	loff_t pos = (loff_t) req->pages[0]->index << PAGE_CACHE_SHIFT;
+	loff_t pos = page_offset(req->pages[0]);
 	size_t count = req->num_pages << PAGE_CACHE_SHIFT;
 	unsigned i;
 	req->out.page_zeroing = 1;
@@ -510,7 +509,7 @@ static int fuse_commit_write(struct file *file, struct page *page,
 	unsigned count = to - offset;
 	struct inode *inode = page->mapping->host;
 	struct fuse_conn *fc = get_fuse_conn(inode);
-	loff_t pos = ((loff_t) page->index << PAGE_CACHE_SHIFT) + offset;
+	loff_t pos = page_offset(page) + offset;
 	struct fuse_req *req = fuse_get_request(fc);
 	if (!req)
 		return -EINTR;
@@ -690,11 +689,16 @@ static int fuse_set_page_dirty(struct page *page)
 static struct file_operations fuse_file_operations = {
 	.llseek		= generic_file_llseek,
 #ifdef KERNEL_2_6
-	.read		= generic_file_read,
+	.read		= do_sync_read,
+	.write		= do_sync_write,
+	.readv		= generic_file_readv,
+	.writev		= generic_file_writev,
+	.aio_read	= generic_file_aio_read,
+	.aio_write	= generic_file_aio_write,
 #else
 	.read		= fuse_file_read,
-#endif
 	.write		= generic_file_write,
+#endif
 	.mmap		= fuse_file_mmap,
 	.open		= fuse_open,
 	.flush		= fuse_flush,
