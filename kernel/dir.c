@@ -257,7 +257,6 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry, int mode,
 	req->out.args[1].value = &outopen;
 	request_send(fc, req);
 	err = req->out.h.error;
-	ff->fh = outopen.fh;
 	if (err) {
 		if (err == -ENOSYS)
 			fc->no_create = 1;
@@ -273,15 +272,16 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry, int mode,
 	err = -ENOMEM;
 	if (!inode) {
 		flags &= ~(O_CREAT | O_EXCL | O_TRUNC);
+		ff->fh = outopen.fh;
 		fuse_send_release(fc, ff, outentry.nodeid, NULL, flags, 0);
 		goto out_put_request;
 	}
 	fuse_put_request(fc, req);
-
 	d_instantiate(entry, inode);
 	fuse_change_timeout(entry, &outentry);
 	file = lookup_instantiate_filp(nd, entry, generic_file_open);
 	if (IS_ERR(file)) {
+		ff->fh = outopen.fh;
 		fuse_send_release(fc, ff, outentry.nodeid, inode, flags, 0);
 		return PTR_ERR(file);
 	}
