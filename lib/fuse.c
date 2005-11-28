@@ -1299,6 +1299,7 @@ static struct fuse_dirhandle *get_dirhandle(const struct fuse_file_info *llfi,
     struct fuse_dirhandle *dh = (struct fuse_dirhandle *) (uintptr_t) llfi->fh;
     memset(fi, 0, sizeof(struct fuse_file_info));
     fi->fh = dh->fh;
+    fi->fh_old = dh->fh;
     return dh;
 }
 
@@ -2064,7 +2065,7 @@ static int fuse_do_open(struct fuse *f, char *path, struct fuse_file_info *fi)
         fi->fh = tmp.fh;
         return err;
     } else
-        return 
+        return
             ((struct fuse_operations_compat2 *) &f->op)->open(path, fi->flags);
 }
 
@@ -2173,7 +2174,7 @@ __asm__(".symver fuse_new_compat22,fuse_new@FUSE_2.2");
 
 static int fuse_do_open(struct fuse *f, char *path, struct fuse_file_info *fi)
 {
-    return f->op.open(path, fi);    
+    return f->op.open(path, fi);
 }
 
 static void fuse_do_release(struct fuse *f, char *path,
@@ -2185,7 +2186,7 @@ static void fuse_do_release(struct fuse *f, char *path,
 static int fuse_do_opendir(struct fuse *f, char *path,
                            struct fuse_file_info *fi)
 {
-    return f->op.opendir(path, fi);    
+    return f->op.opendir(path, fi);
 }
 
 static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)

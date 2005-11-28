@@ -145,7 +145,7 @@ static int add_mount(const char *fsname, const char *mnt, const char *type,
     struct mntent ent;
     FILE *fp;
 
-    if (check_name(fsname) == -1 || check_name(mnt) == -1 || 
+    if (check_name(fsname) == -1 || check_name(mnt) == -1 ||
         check_name(type) == -1 || check_name(opts) == -1)
         return -1;
 

@@ -1,3 +1,7 @@
+2005-11-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix bug in 32-bit file handle compatibility
+
 2005-11-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Block TERM, INT, HUP and QUIT signals in all but the main
@@ -25,7 +29,7 @@
 
 	* libfuse: added 'negative_timeout' option: specifies how much
 	negative entries should be cached.  Default is zero, to be
-	compatible with prior versions.
+	compatible with prior versions
 
 2005-11-22  Miklos Szeredi <miklos@szeredi.hu>
 

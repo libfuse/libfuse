@@ -315,7 +315,7 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	req->in.numargs = 0;
 	req->in.h.opcode = FUSE_STATFS;
 	req->out.numargs = 1;
-	req->out.args[0].size = 
+	req->out.args[0].size =
 		fc->minor < 4 ? FUSE_COMPAT_STATFS_SIZE : sizeof(outarg);
 	req->out.args[0].value = &outarg;
 	request_send(fc, req);

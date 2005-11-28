@@ -251,7 +251,7 @@ struct fuse_write_out {
 	__u32	padding;
 };
 
-#define FUSE_COMPAT_STATFS_SIZE 12
+#define FUSE_COMPAT_STATFS_SIZE 48
 
 struct fuse_statfs_out {
 	struct fuse_kstatfs st;
