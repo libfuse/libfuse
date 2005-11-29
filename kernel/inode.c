@@ -290,7 +290,9 @@ static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr
 {
 	stbuf->f_type    = FUSE_SUPER_MAGIC;
 	stbuf->f_bsize   = attr->bsize;
+#ifdef KERNEL_2_6
 	stbuf->f_frsize  = attr->frsize;
+#endif
 	stbuf->f_blocks  = attr->blocks;
 	stbuf->f_bfree   = attr->bfree;
 	stbuf->f_bavail  = attr->bavail;

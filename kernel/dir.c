@@ -1208,7 +1208,11 @@ static int fuse_removexattr(struct dentry *entry, const char *name)
 #endif
 
 static struct inode_operations fuse_dir_inode_operations = {
+#ifdef KERNEL_2_6
 	.lookup		= fuse_lookup,
+#else
+	.lookup		= fuse_lookup_2_4,
+#endif
 	.mkdir		= fuse_mkdir,
 	.symlink	= fuse_symlink,
 	.unlink		= fuse_unlink,

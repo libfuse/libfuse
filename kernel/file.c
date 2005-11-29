@@ -16,6 +16,12 @@
 #define PageUptodate(page) Page_Uptodate(page)
 #define clear_page_dirty(page)	ClearPageDirty(page)
 #endif
+#ifndef KERNEL_2_6_11_PLUS
+static inline loff_t page_offset(struct page *page)
+{
+	return ((loff_t)page->index) << PAGE_CACHE_SHIFT;
+}
+#endif
 static struct file_operations fuse_direct_io_file_operations;
 
 static int fuse_send_open(struct inode *inode, struct file *file, int isdir,
