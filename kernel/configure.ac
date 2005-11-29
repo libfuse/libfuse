@@ -5,6 +5,7 @@ AC_PROG_INSTALL
 
 runver=`uname -r`
 ENABLE_FUSE_MODULE=y
+KERNELCFLAGS=
 
 kernelsrc=
 kernelbuild=
@@ -100,6 +101,14 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 			AC_DEFINE(HAVE_RECALC_SIGPENDING_TSK, 1,
 				[Kernel has recalc_sigpending_tsk() function]),,
 			[#include <linux/sched.h>])
+		AC_MSG_CHECKING([if '-msoft-float' option is valid])
+		CFLAGS="-msoft-float"
+		have_msoft_float=no
+		AC_TRY_COMPILE([], [], [have_msoft_float=yes])
+		AC_MSG_RESULT([$have_msoft_float])
+		if test "$have_msoft_float" = yes; then
+			KERNELCFLAGS="$CFLAGS"
+		fi
 		CFLAGS="$old_cflags"
 	else
 		fuse_configured=no
@@ -161,6 +170,7 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	fi
 	AC_SUBST(KERNELMAKE_PARAMS)
 	AC_SUBST(KERNELCPPFLAGS)
+	AC_SUBST(KERNELCFLAGS)
 fi
 
 AC_CONFIG_FILES([Makefile])

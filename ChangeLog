@@ -1,3 +1,8 @@
+2005-11-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Check if '-msoft-float' option is supported by compiler when
+	configuring for a 2.4.x kernel.  Bug report by Mark Haney
+
 2005-11-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug in 32-bit file handle compatibility

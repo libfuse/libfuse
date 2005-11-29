@@ -56,7 +56,7 @@ ifeq ($(majver), 2.4)
 
 CC = gcc
 LD = ld
-CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe -msoft-float
+CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe @KERNELCFLAGS@
 CPPFLAGS = -I@kernelsrc@/include -I. -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES -DFUSE_VERSION=\"$(VERSION)\" @KERNELCPPFLAGS@
 
 fuse_objs = dev.o dir.o file.o inode.o compat/parser.o
