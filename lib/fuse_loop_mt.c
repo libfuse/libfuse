@@ -27,6 +27,7 @@ struct fuse_worker {
     struct fuse_chan *ch;
     struct fuse_chan *prevch;
     pthread_t threads[FUSE_MAX_WORKERS];
+    pthread_t main_thread;
     int exit;
     int error;
 };
@@ -59,7 +60,6 @@ static int start_thread(struct fuse_worker *w, pthread_t *thread_id);
 static void *do_work(void *data)
 {
     struct fuse_worker *w = (struct fuse_worker *) data;
-    int is_mainthread = (w->numworker == 1);
     size_t bufsize = fuse_chan_bufsize(w->prevch);
     char *buf = (char *) malloc(bufsize);
     if (!buf) {
@@ -107,9 +107,10 @@ static void *do_work(void *data)
     }
     pthread_cleanup_pop(1);
 
-    /* Wait for cancellation */
-    if (!is_mainthread)
+    if (pthread_self() != w->main_thread) {
+        pthread_kill(w->main_thread, SIGTERM);
         pause();
+    }
 
     return NULL;
 }
@@ -162,6 +163,7 @@ int fuse_session_loop_mt(struct fuse_session *se)
     w->error = 0;
     w->numworker = 1;
     w->numavail = 1;
+    w->main_thread = pthread_self();
     mutex_init(&w->lock);
 
     do_work(w);
