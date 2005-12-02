@@ -1,3 +1,10 @@
+2005-12-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix memory leak in fuse_read_cmd()/fuse_process_cmd().  Bug
+	reported by Vincenzo Ciancia
+
+	* Handle exit-by-umount in fuse_read_cmd()
+
 2005-11-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check if '-msoft-float' option is supported by compiler when

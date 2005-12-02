@@ -1742,6 +1742,7 @@ static void free_cmd(struct fuse_cmd *cmd)
 void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
 {
     fuse_session_process(f->se, cmd->buf, cmd->buflen, cmd->ch);
+    free_cmd(cmd);
 }
 
 int fuse_exited(struct fuse *f)
@@ -1779,6 +1780,8 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f)
         int res = fuse_chan_receive(ch, cmd->buf, bufsize);
         if (res <= 0) {
             free_cmd(cmd);
+            if (res == -1)
+                fuse_exit(f);
             return NULL;
         }
         cmd->buflen = res;
