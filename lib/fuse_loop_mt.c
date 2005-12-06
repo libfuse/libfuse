@@ -155,7 +155,7 @@ int fuse_session_loop_mt(struct fuse_session *se)
     memset(w, 0, sizeof(struct fuse_worker));
     w->se = se;
     w->prevch = fuse_session_next_chan(se, NULL);
-    w->ch = fuse_chan_new(&cop, -1, 0, w);
+    w->ch = fuse_chan_new(&cop, -1, fuse_chan_bufsize(w->prevch), w);
     if (w->ch == NULL) {
         free(w);
         return -1;

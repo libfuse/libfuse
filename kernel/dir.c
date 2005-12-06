@@ -202,7 +202,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 	struct dentry *newent;
 #endif
 
-	if (entry->d_name.len > FUSE_NAME_MAX)
+	if (entry->d_name.len > fc->name_max)
 		return ERR_PTR(-ENAMETOOLONG);
 
 	req = fuse_get_request(fc);
@@ -274,7 +274,7 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry, int mode,
 		goto out;
 
 	err = -ENAMETOOLONG;
-	if (entry->d_name.len > FUSE_NAME_MAX)
+	if (entry->d_name.len > fc->name_max)
 		goto out;
 
 	err = -EINTR;
@@ -455,7 +455,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 	unsigned len = strlen(link) + 1;
 	struct fuse_req *req;
 
-	if (len > FUSE_SYMLINK_MAX)
+	if (len > fc->symlink_max)
 		return -ENAMETOOLONG;
 
 	req = fuse_get_request(fc);
@@ -561,7 +561,8 @@ static int fuse_rename(struct inode *olddir, struct dentry *oldent,
 			fuse_invalidate_attr(newdir);
 
 		/* newent will end up negative */
-		fuse_invalidate_entry_cache(newent);
+		if (newent->d_inode)
+			fuse_invalidate_entry_cache(newent);
 	} else if (err == -EINTR) {
 		/* If request was interrupted, DEITY only knows if the
 		   rename actually took place.  If the invalidation
@@ -798,11 +799,13 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 			 void *dstbuf, filldir_t filldir)
 {
+	struct fuse_conn *fc = get_fuse_conn(file->f_dentry->d_inode);
+
 	while (nbytes >= FUSE_NAME_OFFSET) {
 		struct fuse_dirent *dirent = (struct fuse_dirent *) buf;
 		size_t reclen = FUSE_DIRENT_SIZE(dirent);
 		int over;
-		if (!dirent->namelen || dirent->namelen > FUSE_NAME_MAX)
+		if (!dirent->namelen || dirent->namelen > fc->name_max)
 			return -EIO;
 		if (reclen > nbytes)
 			break;
@@ -1125,7 +1128,7 @@ static int fuse_setxattr(struct dentry *entry, const char *name,
 	struct fuse_setxattr_in inarg;
 	int err;
 
-	if (size > FUSE_XATTR_SIZE_MAX)
+	if (size > fc->xattr_size_max)
 		return -E2BIG;
 
 	if (fc->no_setxattr)

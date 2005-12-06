@@ -49,7 +49,7 @@
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 4
+#define FUSE_KERNEL_MINOR_VERSION 5
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
@@ -142,13 +142,6 @@ enum fuse_opcode {
 	FUSE_ACCESS        = 34,
 	FUSE_CREATE        = 35
 };
-
-/* Conservative buffer size for the client */
-#define FUSE_MAX_IN 8192
-
-#define FUSE_NAME_MAX 1024
-#define FUSE_SYMLINK_MAX 4096
-#define FUSE_XATTR_SIZE_MAX 4096
 
 struct fuse_entry_out {
 	__u64	nodeid;		/* Inode ID */
@@ -283,9 +276,18 @@ struct fuse_access_in {
 	__u32	padding;
 };
 
-struct fuse_init_in_out {
+struct fuse_init_in {
 	__u32	major;
 	__u32	minor;
+};
+
+struct fuse_init_out {
+	__u32	major;
+	__u32	minor;
+	__u32	name_max;
+	__u32	symlink_max;
+	__u32	xattr_size_max;
+	__u32	max_write;
 };
 
 struct fuse_in_header {

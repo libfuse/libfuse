@@ -236,7 +236,8 @@ struct fuse_req {
 	union {
 		struct fuse_forget_in forget_in;
 		struct fuse_release_in release_in;
-		struct fuse_init_in_out init_in_out;
+		struct fuse_init_in init_in;
+		struct fuse_init_out init_out;
 	} misc;
 
 	/** page vector */
@@ -283,6 +284,15 @@ struct fuse_conn {
 
 	/** Maximum write size */
 	unsigned max_write;
+
+	/** Maximum path segment length */
+	unsigned name_max;
+
+	/** Maximum symbolic link size */
+	unsigned symlink_max;
+
+	/** Maximum size of xattr data */
+	unsigned xattr_size_max;
 
 	/** Readers of the connection are waiting on this */
 	wait_queue_head_t waitq;

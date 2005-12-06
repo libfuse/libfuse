@@ -516,7 +516,12 @@ static int fuse_commit_write(struct file *file, struct page *page,
 	struct inode *inode = page->mapping->host;
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	loff_t pos = page_offset(page) + offset;
-	struct fuse_req *req = fuse_get_request(fc);
+	struct fuse_req *req;
+
+	if (count > fc->max_write)
+		return -EIO;
+
+	req = fuse_get_request(fc);
 	if (!req)
 		return -EINTR;
 

@@ -1,3 +1,12 @@
+2005-12-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Use bigger request buffer size.  write() did not work on archs
+	with > 4k page size, Bug report by Mark Haney
+
+	* ABI version 7.5:
+
+	* Extend INIT reply with data size limits
+
 2005-12-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix memory leak in fuse_read_cmd()/fuse_process_cmd().  Bug

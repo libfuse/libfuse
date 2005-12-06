@@ -647,7 +647,6 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	if (fc->max_read / PAGE_CACHE_SIZE < fc->bdi.ra_pages)
 		fc->bdi.ra_pages = fc->max_read / PAGE_CACHE_SIZE;
 #endif
-	fc->max_write = FUSE_MAX_IN / 2;
 
 	err = -ENOMEM;
 	root = get_root_inode(sb, d.rootmode);
