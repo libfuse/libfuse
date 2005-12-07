@@ -1,3 +1,9 @@
+2005-12-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Return EIO for file operations (read, write, fsync, flush) on
+	open files whose inode has become "bad".  Inodes will be marked
+	"bad" if their type changes.  Bug report by Csaba Henk
+
 2005-12-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use bigger request buffer size.  write() did not work on archs
