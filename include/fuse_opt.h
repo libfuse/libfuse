@@ -146,23 +146,23 @@ typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key);
  * If 'argv' is NULL, the values pointed by argcout and argvout will
  * be used as input
  *
- * A NULL 'opts' is the same as an 'opts' array containing a single
+ * A NULL 'opts' is equivalent to an 'opts' array containing a single
  * end marker
  *
- * If 'proc' is NULL, then any non-matching options will cause an
- * error to be returned
+ * A NULL 'proc' is equivalent to a processing function always
+ * returning '1'
  *
  * If argvout is NULL, then any output arguments are discarded
  *
  * If argcout is NULL, then the output argument count is not stored
  *
  * @param argc is the input argument count
- * @param argv is the input argument vector, may be NULL
+ * @param argv is the input argument vector
  * @param data is the user data
- * @param opts is the option description array, may be NULL
- * @param proc is the processing function, may be NULL
- * @param argcout is pointer to output argument count, may be NULL
- * @param argvout is pointer to output argument vector, may be NULL
+ * @param opts is the option description array
+ * @param proc is the processing function
+ * @param argcout is pointer to output argument count
+ * @param argvout is pointer to output argument vector
  * @return -1 on error, 0 on success
  */
 int fuse_opt_parse(int argc, char *argv[], void *data,

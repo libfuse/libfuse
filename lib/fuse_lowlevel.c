@@ -925,6 +925,14 @@ static struct fuse_opt fuse_ll_opts[] = {
     FUSE_OPT_END
 };
 
+static int fuse_ll_opt_proc(void *data, const char *arg, int key)
+{
+    (void) data;
+    (void) key;
+    fprintf(stderr, "fuse: unknown option `%s'\n", arg);
+    return -1;
+}
+
 int fuse_lowlevel_is_lib_option(const char *opt)
 {
     return fuse_opt_match(fuse_ll_opts, opt);
@@ -964,8 +972,8 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
 
     if (opts) {
         const char *argv[] = { "", "-o", opts, NULL };
-        if (fuse_opt_parse(3, (char **) argv, f, fuse_ll_opts, NULL,
-                           NULL, NULL) == -1)
+        if (fuse_opt_parse(3, (char **) argv, f, fuse_ll_opts,
+                           fuse_ll_opt_proc, NULL, NULL) == -1)
             goto out_free;
     }
 

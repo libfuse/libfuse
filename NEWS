@@ -1,3 +1,17 @@
+What is new in 2.5
+
+ - Merge library part of FreeBSD port
+
+ - New atomic create+open, access and ftruncate operations
+
+ - On filesystems implementing the new create+open operation, and
+   running on Linux kernels 2.6.15 or later, the 'cp' operation will
+   work correctly when copying read-only files.
+
+ - New option parsing interface added to the library
+
+ - Lots of minor improvements and fixes
+
 What is new in 2.4
 
  - Simplify device opening.  Now '/dev/fuse' is a requirement

@@ -114,17 +114,11 @@ static int insert_arg(struct fuse_opt_context *ctx, int pos, const char *arg)
 static int call_proc(struct fuse_opt_context *ctx, const char *arg, int key,
                      int iso)
 {
-    int res;
-
-    if (!ctx->proc) {
-        fprintf(stderr, "fuse: unknown option `%s'\n", arg);
-        return -1;
+    if (ctx->proc) {
+        int res = ctx->proc(ctx->data, arg, key);
+        if (res == -1 || !res)
+            return res;
     }
-
-    res = ctx->proc(ctx->data, arg, key);
-    if (res == -1 || !res)
-        return res;
-
     if (iso)
         return add_opt(ctx, arg);
     else
