@@ -7,9 +7,11 @@
 */
 
 #include "fuse_i.h"
+#include "fuse_opt.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <unistd.h>
 #include <string.h>
 #include <limits.h>
@@ -50,12 +52,6 @@ static void usage(const char *progname)
             "    uid=N                  set file owner\n"
             "    gid=N                  set file group\n"
             );
-}
-
-static void invalid_option(const char *argv[], int argctr)
-{
-    fprintf(stderr, "fuse: invalid option: %s\n\n", argv[argctr]);
-    fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
 }
 
 static void exit_handler(int sig)
@@ -99,187 +95,140 @@ static int set_signal_handlers(void)
     return 0;
 }
 
-static int opt_member(const char *opts, const char *opt)
+enum  {
+    KEY_HELP,
+    KEY_HELP_NOHEADER,
+    KEY_DEBUG,
+    KEY_KERN,
+    KEY_ALLOW_ROOT,
+    KEY_RO,
+};
+
+struct helper_opts {
+    const char *progname;
+    int singlethread;
+    int foreground;
+    int allow_other;
+    int allow_root;
+    int fsname;
+    char *kernel_opts;
+    char *lib_opts;
+    char *mountpoint;
+};
+
+#define FUSE_HELPER_OPT(t, p) { t, offsetof(struct helper_opts, p), 1 }
+#define FUSE_HELPER_KEY(t, k)    { t, FUSE_OPT_OFFSET_KEY, k }
+
+static const struct fuse_opt fuse_helper_opts[] = {
+    FUSE_HELPER_OPT("-d",                       foreground),
+    FUSE_HELPER_OPT("debug",                    foreground),
+    FUSE_HELPER_OPT("-f",			foreground),
+    FUSE_HELPER_OPT("-s",			singlethread),
+    FUSE_HELPER_OPT("allow_other",              allow_other),
+    FUSE_HELPER_OPT("allow_root",               allow_root),
+    FUSE_HELPER_OPT("fsname=",                  fsname),
+
+    FUSE_HELPER_KEY("-h",                       KEY_HELP),
+    FUSE_HELPER_KEY("--help",                   KEY_HELP),
+    FUSE_HELPER_KEY("-ho",                      KEY_HELP_NOHEADER),
+    FUSE_HELPER_KEY("-d",                       KEY_DEBUG),
+    FUSE_HELPER_KEY("debug",                    KEY_DEBUG),
+    FUSE_HELPER_KEY("allow_other",              KEY_KERN),
+    FUSE_HELPER_KEY("allow_root",               KEY_ALLOW_ROOT),
+    FUSE_HELPER_KEY("nonempty",                 KEY_KERN),
+    FUSE_HELPER_KEY("default_permissions",      KEY_KERN),
+    FUSE_HELPER_KEY("fsname=",                  KEY_KERN),
+    FUSE_HELPER_KEY("large_read",               KEY_KERN),
+    FUSE_HELPER_KEY("max_read=",                KEY_KERN),
+    FUSE_HELPER_KEY("-r",                       KEY_RO),
+    FUSE_HELPER_KEY("ro",                       KEY_KERN),
+    FUSE_HELPER_KEY("rw",                       KEY_KERN),
+    FUSE_HELPER_KEY("suid",                     KEY_KERN),
+    FUSE_HELPER_KEY("nosuid",                   KEY_KERN),
+    FUSE_HELPER_KEY("dev",                      KEY_KERN),
+    FUSE_HELPER_KEY("nodev",                    KEY_KERN),
+    FUSE_HELPER_KEY("exec",                     KEY_KERN),
+    FUSE_HELPER_KEY("noexec",                   KEY_KERN),
+    FUSE_HELPER_KEY("async",                    KEY_KERN),
+    FUSE_HELPER_KEY("sync",                     KEY_KERN),
+    FUSE_HELPER_KEY("atime",                    KEY_KERN),
+    FUSE_HELPER_KEY("noatime",                  KEY_KERN),
+    FUSE_OPT_END
+};
+
+static int fuse_helper_opt_proc(void *data, const char *arg, int key)
 {
-    const char *e, *s = opts;
-    int optlen = strlen(opt);
-    for (s = opts; s; s = e + 1) {
-        if(!(e = strchr(s, ',')))
+    struct helper_opts *hopts = data;
+
+    switch (key) {
+    case KEY_HELP:
+    case KEY_HELP_NOHEADER:
+        usage(key == KEY_HELP ? hopts->progname : NULL);
+        exit(1);
+
+    case FUSE_OPT_KEY_OPT:
+        return fuse_opt_add_opt(&hopts->lib_opts, arg);
+
+    case FUSE_OPT_KEY_NONOPT:
+        if (hopts->mountpoint)
             break;
-        if (e - s == optlen && strncmp(s, opt, optlen) == 0)
-            return 1;
+
+        return fuse_opt_add_opt(&hopts->mountpoint, arg);
+
+    case KEY_DEBUG:
+        return fuse_opt_add_opt(&hopts->lib_opts, "debug");
+
+    case KEY_ALLOW_ROOT:
+        if (fuse_opt_add_opt(&hopts->kernel_opts, "allow_other") == -1 ||
+            fuse_opt_add_opt(&hopts->lib_opts, "allow_root") == -1)
+            return -1;
+        return 0;
+
+    case KEY_RO:
+        arg = "ro";
+        /* fall through */
+
+    case KEY_KERN:
+        return fuse_opt_add_opt(&hopts->kernel_opts, arg);
     }
-    return (s && strcmp(s, opt) == 0);
+
+    fprintf(stderr, "fuse: invalid option `%s'\n", arg);
+    return -1;
 }
 
-static int add_option_to(const char *opt, char **optp)
+static int fuse_parse_cmdline(int argc, const char *argv[],
+                              struct helper_opts *hopts)
 {
-    unsigned len = strlen(opt);
-    if (*optp) {
-        unsigned oldlen = strlen(*optp);
-        *optp = (char *) realloc(*optp, oldlen + 1 + len + 1);
-        if (*optp == NULL)
-            return -1;
-        (*optp)[oldlen] = ',';
-        strcpy(*optp + oldlen + 1, opt);
-    } else {
-        *optp = (char *) malloc(len + 1);
-        if (*optp == NULL)
-            return -1;
-        strcpy(*optp, opt);
-    }
-    return 0;
-}
+    int res;
 
-static int add_options(char **lib_optp, char **kernel_optp, const char *opts)
-{
-    char *xopts = strdup(opts);
-    char *s = xopts;
-    char *opt;
-    int has_allow_other = 0;
-    int has_allow_root = 0;
-
-    if (xopts == NULL) {
-        fprintf(stderr, "fuse: memory allocation failed\n");
+    hopts->progname = argv[0];
+    res = fuse_opt_parse(argc, (char **) argv, hopts, fuse_helper_opts,
+                         fuse_helper_opt_proc, NULL, NULL);
+    if (res == -1)
         return -1;
-    }
 
-    while((opt = strsep(&s, ",")) != NULL) {
-        int res;
-        if (fuse_is_lib_option(opt)) {
-            res = add_option_to(opt, lib_optp);
-            /* Compatibility hack */
-            if (strcmp(opt, "allow_root") == 0 && res != -1) {
-                has_allow_root = 1;
-                res = add_option_to("allow_other", kernel_optp);
-            }
-        }
-        else {
-            res = add_option_to(opt, kernel_optp);
-            if (strcmp(opt, "allow_other") == 0)
-                has_allow_other = 1;
-        }
-        if (res == -1) {
-            fprintf(stderr, "fuse: memory allocation failed\n");
-            return -1;
-        }
-    }
-    if (has_allow_other && has_allow_root) {
+    if (hopts->allow_other && hopts->allow_root) {
         fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
         return -1;
     }
-    free(xopts);
-    return 0;
-}
 
-static int fuse_parse_cmdline(int argc, const char *argv[], char **kernel_opts,
-                              char **lib_opts, char **mountpoint,
-                              int *multithreaded, int *background)
-{
-    int res;
-    int argctr;
-    const char *basename;
-    char *fsname_opt;
+    if (!hopts->fsname) {
+        char *fsname_opt;
+        const char *basename = strrchr(argv[0], '/');
+        if (basename == NULL)
+            basename = argv[0];
+        else if (basename[1] != '\0')
+            basename++;
 
-    *kernel_opts = NULL;
-    *lib_opts = NULL;
-    *mountpoint = NULL;
-    *multithreaded = 1;
-    *background = 1;
-
-    basename = strrchr(argv[0], '/');
-    if (basename == NULL)
-        basename = argv[0];
-    else if (basename[1] != '\0')
-        basename++;
-
-    fsname_opt = (char *) malloc(strlen(basename) + 64);
-    if (fsname_opt == NULL) {
-        fprintf(stderr, "fuse: memory allocation failed\n");
-        return -1;
-    }
-    sprintf(fsname_opt, "fsname=%s", basename);
-    res = add_options(lib_opts, kernel_opts, fsname_opt);
-    free(fsname_opt);
-    if (res == -1)
-        goto err;
-
-    for (argctr = 1; argctr < argc; argctr ++) {
-        if (argv[argctr][0] == '-') {
-            if (strlen(argv[argctr]) == 2)
-                switch (argv[argctr][1]) {
-                case 'o':
-                    if (argctr + 1 == argc || argv[argctr+1][0] == '-') {
-                        fprintf(stderr, "missing option after -o\n");
-                        fprintf(stderr, "see `%s -h' for usage\n", argv[0]);
-                        goto err;
-                    }
-                    argctr ++;
-                    res = add_options(lib_opts, kernel_opts, argv[argctr]);
-                    if (res == -1)
-                        goto err;
-                    break;
-
-                case 'd':
-                    res = add_options(lib_opts, kernel_opts, "debug");
-                    if (res == -1)
-                        goto err;
-                    break;
-
-                case 'r':
-                    res = add_options(lib_opts, kernel_opts, "ro");
-                    if (res == -1)
-                        goto err;
-                    break;
-
-                case 'f':
-                    *background = 0;
-                    break;
-
-                case 's':
-                    *multithreaded = 0;
-                    break;
-
-                case 'h':
-                    usage(argv[0]);
-                    goto err;
-
-                default:
-                    invalid_option(argv, argctr);
-                    goto err;
-                }
-            else {
-                if (argv[argctr][1] == 'o') {
-                    res = add_options(lib_opts, kernel_opts, &argv[argctr][2]);
-                    if (res == -1)
-                        goto err;
-                } else if(strcmp(argv[argctr], "-ho") == 0) {
-                    usage(NULL);
-                    goto err;
-                } else {
-                    invalid_option(argv, argctr);
-                    goto err;
-                }
-            }
-        } else if (*mountpoint == NULL) {
-            *mountpoint = strdup(argv[argctr]);
-            if (*mountpoint == NULL) {
-                fprintf(stderr, "fuse: memory allocation failed\n");
-                goto err;
-            }
+        fsname_opt = (char *) malloc(strlen(basename) + 64);
+        if (fsname_opt == NULL) {
+            fprintf(stderr, "fuse: memory allocation failed\n");
+            return -1;
         }
-        else {
-            invalid_option(argv, argctr);
-            goto err;
-        }
+        sprintf(fsname_opt, "fsname=%s", basename);
+        fuse_opt_add_opt(&hopts->kernel_opts, fsname_opt);
     }
     return 0;
-
- err:
-    free(*kernel_opts);
-    free(*lib_opts);
-    free(*mountpoint);
-    return -1;
 }
 
 static struct fuse *fuse_setup_common(int argc, char *argv[],
@@ -291,9 +240,7 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
                                       int compat)
 {
     struct fuse *fuse;
-    int background;
-    char *kernel_opts;
-    char *lib_opts;
+    struct helper_opts hopts;
     int res;
 
     if (fuse_instance != NULL) {
@@ -301,21 +248,20 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
         return NULL;
     }
 
-    res = fuse_parse_cmdline(argc, (const char **) argv, &kernel_opts,
-                             &lib_opts, mountpoint, multithreaded,
-                             &background);
+    memset(&hopts, 0, sizeof(hopts));
+    res = fuse_parse_cmdline(argc, (const char **) argv, &hopts);
     if (res == -1)
-        return NULL;
+        goto err_free;
 
-    *fd = fuse_mount(*mountpoint, kernel_opts);
+    *fd = fuse_mount(hopts.mountpoint, hopts.kernel_opts);
     if (*fd == -1)
         goto err_free;
 
-    fuse = fuse_new_common(*fd, lib_opts, op, op_size, compat);
+    fuse = fuse_new_common(*fd, hopts.lib_opts, op, op_size, compat);
     if (fuse == NULL)
         goto err_unmount;
 
-    if (background && !opt_member(lib_opts, "debug")) {
+    if (!hopts.foreground) {
         res = daemon(0, 0);
         if (res == -1) {
             perror("fuse: failed to daemonize program\n");
@@ -327,19 +273,21 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
     if (res == -1)
         goto err_destroy;
 
+    *mountpoint = hopts.mountpoint;
+    *multithreaded = !hopts.singlethread;
     fuse_instance = fuse;
-    free(kernel_opts);
-    free(lib_opts);
+    free(hopts.kernel_opts);
+    free(hopts.lib_opts);
     return fuse;
 
  err_destroy:
     fuse_destroy(fuse);
  err_unmount:
-    fuse_unmount(*mountpoint);
+    fuse_unmount(hopts.mountpoint);
  err_free:
-    free(kernel_opts);
-    free(lib_opts);
-    free(*mountpoint);
+    free(hopts.mountpoint);
+    free(hopts.kernel_opts);
+    free(hopts.lib_opts);
     return NULL;
 }
 

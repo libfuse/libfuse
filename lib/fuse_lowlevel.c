@@ -9,10 +9,12 @@
 #include <config.h>
 #include "fuse_lowlevel.h"
 #include "fuse_kernel.h"
+#include "fuse_opt.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
+#include <string.h>
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
@@ -31,8 +33,8 @@
 #define MIN_BUFFER_SIZE (MIN_SYMLINK + HEADER_OVERHEAD)
 
 struct fuse_ll {
-    unsigned int debug : 1;
-    unsigned int allow_root : 1;
+    int debug;
+    int allow_root;
     struct fuse_lowlevel_ops op;
     int got_init;
     void *userdata;
@@ -917,38 +919,15 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     }
 }
 
+static struct fuse_opt fuse_ll_opts[] = {
+    { "debug", offsetof(struct fuse_ll, debug), 1 },
+    { "allow_root", offsetof(struct fuse_ll, allow_root), 1 },
+    FUSE_OPT_END
+};
+
 int fuse_lowlevel_is_lib_option(const char *opt)
 {
-    if (strcmp(opt, "debug") == 0 ||
-        strcmp(opt, "allow_root") == 0)
-        return 1;
-    else
-        return 0;
-}
-
-static int parse_ll_opts(struct fuse_ll *f, const char *opts)
-{
-    if (opts) {
-        char *xopts = strdup(opts);
-        char *s = xopts;
-        char *opt;
-
-        if (xopts == NULL) {
-            fprintf(stderr, "fuse: memory allocation failed\n");
-            return -1;
-        }
-
-        while((opt = strsep(&s, ","))) {
-            if (strcmp(opt, "debug") == 0)
-                f->debug = 1;
-            else if (strcmp(opt, "allow_root") == 0)
-                f->allow_root = 1;
-            else
-                fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
-        }
-        free(xopts);
-    }
-    return 0;
+    return fuse_opt_match(fuse_ll_opts, opt);
 }
 
 static void fuse_ll_destroy(void *data)
@@ -983,8 +962,12 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
         goto out;
     }
 
-    if (parse_ll_opts(f, opts) == -1)
-        goto out_free;
+    if (opts) {
+        const char *argv[] = { "", "-o", opts, NULL };
+        if (fuse_opt_parse(3, (char **) argv, f, fuse_ll_opts, NULL,
+                           NULL, NULL) == -1)
+            goto out_free;
+    }
 
     memcpy(&f->op, op, op_size);
     f->owner = getuid();

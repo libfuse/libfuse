@@ -67,6 +67,11 @@ FUSE_2.5 {
 		fuse_main_real_compat22;
 		fuse_new;
 		fuse_new_compat22;
+		fuse_opt_parse;
+		fuse_opt_add_opt;
+		fuse_opt_add_arg;
+		fuse_opt_free_args;
+		fuse_opt_match;
 		fuse_reply_create;
 		fuse_reply_open;
 		fuse_reply_open_compat;

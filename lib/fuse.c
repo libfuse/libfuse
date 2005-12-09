@@ -12,10 +12,12 @@
 
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
+#include "fuse_opt.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -25,45 +27,29 @@
 #include <sys/param.h>
 #include <sys/uio.h>
 
-/* FUSE flags: */
-
-/** Enable debugging output */
-#define FUSE_DEBUG       (1 << 1)
-
-/** If a file is removed but it's still open, don't hide the file but
-    remove it immediately */
-#define FUSE_HARD_REMOVE (1 << 2)
-
-/** Use st_ino field in getattr instead of generating inode numbers  */
-#define FUSE_USE_INO     (1 << 3)
-
-/** Make a best effort to fill in inode number in a readdir **/
-#define FUSE_READDIR_INO (1 << 5)
-
-/** Ignore file mode supplied by the filesystem, and create one based
-    on the 'umask' option */
-#define FUSE_SET_MODE (1 << 6)
-
-/** Ignore st_uid supplied by the filesystem and set it based on the
-    'uid' option*/
-#define FUSE_SET_UID (1 << 7)
-
-/** Ignore st_gid supplied by the filesystem and set it based on the
-    'gid' option*/
-#define FUSE_SET_GID (1 << 8)
-
-/** Bypass the page cache for read and write operations  */
-#define FUSE_DIRECT_IO (1 << 9)
-
-/** If the FUSE_KERNEL_CACHE flag is given, then cached data will not
-    be flushed on open */
-#define FUSE_KERNEL_CACHE (1 << 10)
-
 #define FUSE_MAX_PATH 4096
+
+struct fuse_config {
+    char *llopts;
+    unsigned int uid;
+    unsigned int gid;
+    unsigned int  umask;
+    double entry_timeout;
+    double negative_timeout;
+    double attr_timeout;
+    int debug;
+    int hard_remove;
+    int use_ino;
+    int readdir_ino;
+    int set_mode;
+    int set_uid;
+    int set_gid;
+    int direct_io;
+    int kernel_cache;
+};
 
 struct fuse {
     struct fuse_session *se;
-    int flags;
     struct fuse_operations op;
     int compat;
     struct node **name_table;
@@ -76,12 +62,7 @@ struct fuse {
     pthread_mutex_t lock;
     pthread_rwlock_t tree_lock;
     void *user_data;
-    unsigned int uid;
-    unsigned int gid;
-    unsigned int  umask;
-    double entry_timeout;
-    double negative_timeout;
-    double attr_timeout;
+    struct fuse_config conf;
 };
 
 struct node {
@@ -231,7 +212,7 @@ static int hash_name(struct fuse *f, struct node *node, fuse_ino_t parent,
 
 static void delete_node(struct fuse *f, struct node *node)
 {
-    if (f->flags & FUSE_DEBUG) {
+    if (f->conf.debug) {
         printf("delete: %llu\n", (unsigned long long) node->nodeid);
         fflush(stdout);
     }
@@ -422,14 +403,14 @@ static int rename_node(struct fuse *f, fuse_ino_t olddir, const char *oldname,
 
 static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
 {
-    if (!(f->flags & FUSE_USE_INO))
+    if (!f->conf.use_ino)
         stbuf->st_ino = nodeid;
-    if (f->flags & FUSE_SET_MODE)
-        stbuf->st_mode = (stbuf->st_mode & S_IFMT) | (0777 & ~f->umask);
-    if (f->flags & FUSE_SET_UID)
-        stbuf->st_uid = f->uid;
-    if (f->flags & FUSE_SET_GID)
-        stbuf->st_gid = f->gid;
+    if (f->conf.set_mode)
+        stbuf->st_mode = (stbuf->st_mode & S_IFMT) | (0777 & ~f->conf.umask);
+    if (f->conf.set_uid)
+        stbuf->st_uid = f->conf.uid;
+    if (f->conf.set_gid)
+        stbuf->st_gid = f->conf.gid;
 }
 
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
@@ -525,10 +506,10 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
         else {
             e->ino = node->nodeid;
             e->generation = node->generation;
-            e->entry_timeout = f->entry_timeout;
-            e->attr_timeout = f->attr_timeout;
+            e->entry_timeout = f->conf.entry_timeout;
+            e->attr_timeout = f->conf.attr_timeout;
             set_stat(f, e->ino, &e->attr);
-            if (f->flags & FUSE_DEBUG) {
+            if (f->conf.debug) {
                 printf("   NODEID: %lu\n", (unsigned long) e->ino);
                 fflush(stdout);
             }
@@ -607,16 +588,16 @@ static void fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, parent, name);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("LOOKUP %s\n", path);
             fflush(stdout);
         }
         err = -ENOSYS;
         if (f->op.getattr) {
             err = lookup_path(f, parent, name, path, &e, NULL);
-            if (err == -ENOENT && f->negative_timeout != 0.0) {
+            if (err == -ENOENT && f->conf.negative_timeout != 0.0) {
                 e.ino = 0;
-                e.entry_timeout = f->negative_timeout;
+                e.entry_timeout = f->conf.negative_timeout;
                 err = 0;
             }
         }
@@ -629,7 +610,7 @@ static void fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void fuse_forget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 {
     struct fuse *f = req_fuse(req);
-    if (f->flags & FUSE_DEBUG) {
+    if (f->conf.debug) {
         printf("FORGET %llu/%lu\n", (unsigned long long) ino, nlookup);
         fflush(stdout);
     }
@@ -659,7 +640,7 @@ static void fuse_getattr(fuse_req_t req, fuse_ino_t ino,
     pthread_rwlock_unlock(&f->tree_lock);
     if (!err) {
         set_stat(f, ino, &buf);
-        fuse_reply_attr(req, &buf, f->attr_timeout);
+        fuse_reply_attr(req, &buf, f->conf.attr_timeout);
     } else
         reply_err(req, err);
 }
@@ -747,7 +728,7 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     pthread_rwlock_unlock(&f->tree_lock);
     if (!err) {
         set_stat(f, ino, &buf);
-        fuse_reply_attr(req, &buf, f->attr_timeout);
+        fuse_reply_attr(req, &buf, f->conf.attr_timeout);
     } else
         reply_err(req, err);
 }
@@ -762,7 +743,7 @@ static void fuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("ACCESS %s 0%o\n", path, mask);
             fflush(stdout);
         }
@@ -811,7 +792,7 @@ static void fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, parent, name);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("MKNOD %s\n", path);
             fflush(stdout);
         }
@@ -850,7 +831,7 @@ static void fuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, parent, name);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("MKDIR %s\n", path);
             fflush(stdout);
         }
@@ -876,13 +857,13 @@ static void fuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     pthread_rwlock_wrlock(&f->tree_lock);
     path = get_path_name(f, parent, name);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("UNLINK %s\n", path);
             fflush(stdout);
         }
         err = -ENOSYS;
         if (f->op.unlink) {
-            if (!(f->flags & FUSE_HARD_REMOVE) && is_open(f, parent, name))
+            if (!f->conf.hard_remove && is_open(f, parent, name))
                 err = hide_node(f, path, parent, name);
             else {
                 err = f->op.unlink(path);
@@ -906,7 +887,7 @@ static void fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     pthread_rwlock_wrlock(&f->tree_lock);
     path = get_path_name(f, parent, name);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("RMDIR %s\n", path);
             fflush(stdout);
         }
@@ -934,7 +915,7 @@ static void fuse_symlink(fuse_req_t req, const char *linkname,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path_name(f, parent, name);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("SYMLINK %s\n", path);
             fflush(stdout);
         }
@@ -964,14 +945,14 @@ static void fuse_rename(fuse_req_t req, fuse_ino_t olddir, const char *oldname,
     if (oldpath != NULL) {
         newpath = get_path_name(f, newdir, newname);
         if (newpath != NULL) {
-            if (f->flags & FUSE_DEBUG) {
+            if (f->conf.debug) {
                 printf("RENAME %s -> %s\n", oldpath, newpath);
                 fflush(stdout);
             }
             err = -ENOSYS;
             if (f->op.rename) {
                 err = 0;
-                if (!(f->flags & FUSE_HARD_REMOVE) &&
+                if (!f->conf.hard_remove &&
                     is_open(f, newdir, newname))
                     err = hide_node(f, newpath, newdir, newname);
                 if (!err) {
@@ -1003,7 +984,7 @@ static void fuse_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
     if (oldpath != NULL) {
         newpath =  get_path_name(f, newparent, newname);
         if (newpath != NULL) {
-            if (f->flags & FUSE_DEBUG) {
+            if (f->conf.debug) {
                 printf("LINK %s\n", newpath);
                 fflush(stdout);
             }
@@ -1037,7 +1018,7 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (f->op.create && f->op.getattr) {
             err = f->op.create(path, mode, fi);
             if (!err) {
-                if (f->flags & FUSE_DEBUG) {
+                if (f->conf.debug) {
                     printf("CREATE[%llu] flags: 0x%x %s\n",
                            (unsigned long long) fi->fh, fi->flags, path);
                     fflush(stdout);
@@ -1057,9 +1038,9 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     }
 
     if (!err) {
-        if (f->flags & FUSE_DIRECT_IO)
+        if (f->conf.direct_io)
             fi->direct_io = 1;
-        if (f->flags & FUSE_KERNEL_CACHE)
+        if (f->conf.kernel_cache)
             fi->keep_cache = 1;
 
         pthread_mutex_lock(&f->lock);
@@ -1096,15 +1077,15 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
             err = fuse_do_open(f, path, fi);
     }
     if (!err) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("OPEN[%llu] flags: 0x%x\n", (unsigned long long) fi->fh,
                    fi->flags);
             fflush(stdout);
         }
 
-        if (f->flags & FUSE_DIRECT_IO)
+        if (f->conf.direct_io)
             fi->direct_io = 1;
-        if (f->flags & FUSE_KERNEL_CACHE)
+        if (f->conf.kernel_cache)
             fi->keep_cache = 1;
 
         pthread_mutex_lock(&f->lock);
@@ -1143,7 +1124,7 @@ static void fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("READ[%llu] %u bytes from %llu\n",
                    (unsigned long long) fi->fh, size, off);
             fflush(stdout);
@@ -1157,7 +1138,7 @@ static void fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     pthread_rwlock_unlock(&f->tree_lock);
 
     if (res >= 0) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("   READ[%llu] %u bytes\n", (unsigned long long) fi->fh,
                    res);
             fflush(stdout);
@@ -1182,7 +1163,7 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("WRITE%s[%llu] %u bytes to %llu\n",
                    fi->writepage ? "PAGE" : "", (unsigned long long) fi->fh,
                    size, off);
@@ -1197,7 +1178,7 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
     pthread_rwlock_unlock(&f->tree_lock);
 
     if (res >= 0) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("   WRITE%s[%llu] %u bytes\n",
                    fi->writepage ? "PAGE" : "", (unsigned long long) fi->fh,
                    res);
@@ -1221,7 +1202,7 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("FLUSH[%llu]\n", (unsigned long long) fi->fh);
             fflush(stdout);
         }
@@ -1251,7 +1232,7 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
 
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
-    if (f->flags & FUSE_DEBUG) {
+    if (f->conf.debug) {
         printf("RELEASE[%llu] flags: 0x%x\n", (unsigned long long) fi->fh,
                fi->flags);
         fflush(stdout);
@@ -1280,7 +1261,7 @@ static void fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        if (f->flags & FUSE_DEBUG) {
+        if (f->conf.debug) {
             printf("FSYNC[%llu]\n", (unsigned long long) fi->fh);
             fflush(stdout);
         }
@@ -1375,9 +1356,9 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
         stbuf.st_ino = (ino_t) -1;
     }
 
-    if (!(dh->fuse->flags & FUSE_USE_INO)) {
+    if (!dh->fuse->conf.use_ino) {
         stbuf.st_ino = (ino_t) -1;
-        if (dh->fuse->flags & FUSE_READDIR_INO) {
+        if (dh->fuse->conf.readdir_ino) {
             struct node *node;
             pthread_mutex_lock(&dh->fuse->lock);
             node = lookup_node(dh->fuse, dh->nodeid, name);
@@ -1824,97 +1805,39 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
     fuse_getcontext = func;
 }
 
-static int begins_with(const char *s, const char *beg)
+static int fuse_lib_opt_proc(void *data, const char *arg, int key)
 {
-    if (strncmp(s, beg, strlen(beg)) == 0)
-        return 1;
-    else
-        return 0;
+    struct fuse_config *conf = data;
+    (void) key;
+    return fuse_opt_add_opt(&conf->llopts, arg);
 }
+
+#define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
+
+static const struct fuse_opt fuse_lib_opts[] = {
+    { "debug", FUSE_OPT_OFFSET_KEY, 0 },
+    FUSE_LIB_OPT("debug",                 debug, 1),
+    FUSE_LIB_OPT("hard_remove",           hard_remove, 1),
+    FUSE_LIB_OPT("use_ino",               use_ino, 1),
+    FUSE_LIB_OPT("readdir_ino",           readdir_ino, 1),
+    FUSE_LIB_OPT("direct_io",             direct_io, 1),
+    FUSE_LIB_OPT("kernel_cache",          kernel_cache, 1),
+    FUSE_LIB_OPT("umask=",                set_mode, 1),
+    FUSE_LIB_OPT("umask=%o",              umask, 0),
+    FUSE_LIB_OPT("uid=",                  set_uid, 1),
+    FUSE_LIB_OPT("uid=%d",                uid, 0),
+    FUSE_LIB_OPT("gid=",                  set_gid, 1),
+    FUSE_LIB_OPT("gid=%d",                gid, 0),
+    FUSE_LIB_OPT("entry_timeout=%lf",     entry_timeout, 0),
+    FUSE_LIB_OPT("attr_timeout=%lf",      attr_timeout, 0),
+    FUSE_LIB_OPT("negative_timeout=%lf",  negative_timeout, 0),
+    FUSE_OPT_END
+};
 
 int fuse_is_lib_option(const char *opt)
 {
-    if (fuse_lowlevel_is_lib_option(opt) ||
-        strcmp(opt, "debug") == 0 ||
-        strcmp(opt, "hard_remove") == 0 ||
-        strcmp(opt, "use_ino") == 0 ||
-        strcmp(opt, "allow_root") == 0 ||
-        strcmp(opt, "readdir_ino") == 0 ||
-        strcmp(opt, "direct_io") == 0 ||
-        strcmp(opt, "kernel_cache") == 0 ||
-        begins_with(opt, "umask=") ||
-        begins_with(opt, "uid=") ||
-        begins_with(opt, "gid=") ||
-        begins_with(opt, "entry_timeout=") ||
-        begins_with(opt, "attr_timeout=") ||
-        begins_with(opt, "negative_timeout="))
-        return 1;
-    else
-        return 0;
-}
-
-static int parse_lib_opts(struct fuse *f, const char *opts, char **llopts)
-{
-    if (opts) {
-        char *xopts = strdup(opts);
-        char *s = xopts;
-        char *opt;
-        char *d = xopts;
-
-        if (xopts == NULL) {
-            fprintf(stderr, "fuse: memory allocation failed\n");
-            return -1;
-        }
-
-        while((opt = strsep(&s, ","))) {
-            if (fuse_lowlevel_is_lib_option(opt)) {
-                size_t optlen = strlen(opt);
-                if (strcmp(opt, "debug") == 0)
-                    f->flags |= FUSE_DEBUG;
-                memmove(d, opt, optlen);
-                d += optlen;
-                *d++ = ',';
-            } else if (strcmp(opt, "hard_remove") == 0)
-                f->flags |= FUSE_HARD_REMOVE;
-            else if (strcmp(opt, "use_ino") == 0)
-                f->flags |= FUSE_USE_INO;
-            else if (strcmp(opt, "readdir_ino") == 0)
-                f->flags |= FUSE_READDIR_INO;
-            else if (strcmp(opt, "direct_io") == 0)
-                f->flags |= FUSE_DIRECT_IO;
-            else if (strcmp(opt, "kernel_cache") == 0)
-                f->flags |= FUSE_KERNEL_CACHE;
-            else if (sscanf(opt, "umask=%o", &f->umask) == 1)
-                f->flags |= FUSE_SET_MODE;
-            else if (sscanf(opt, "uid=%u", &f->uid) == 1)
-                f->flags |= FUSE_SET_UID;
-            else if(sscanf(opt, "gid=%u", &f->gid) == 1)
-                f->flags |= FUSE_SET_GID;
-            else if (sscanf(opt, "entry_timeout=%lf", &f->entry_timeout) == 1)
-                /* nop */;
-            else if (sscanf(opt, "attr_timeout=%lf", &f->attr_timeout) == 1)
-                /* nop */;
-            else if (sscanf(opt, "negative_timeout=%lf",
-                            &f->negative_timeout) == 1)
-                /* nop */;
-            else
-                fprintf(stderr, "fuse: warning: unknown option `%s'\n", opt);
-        }
-        if (d != xopts) {
-            d[-1] = '\0';
-            *llopts = xopts;
-        }
-        else
-            free(xopts);
-    }
-#ifdef __FreeBSD__
-    /*
-     * In FreeBSD, we always use these settings as inode numbers are needed to
-     * make getcwd(3) work.
-     */
-    f->flags |= FUSE_READDIR_INO;
-#endif
-    return 0;
+    return fuse_lowlevel_is_lib_option(opt) ||
+        fuse_opt_match(fuse_lib_opts, opt);
 }
 
 struct fuse *fuse_new_common(int fd, const char *opts,
@@ -1924,7 +1847,6 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     struct fuse_chan *ch;
     struct fuse *f;
     struct node *root;
-    char *llopts = NULL;
 
     if (sizeof(struct fuse_operations) < op_size) {
         fprintf(stderr, "fuse: warning: library too old, some operations may not not work\n");
@@ -1937,15 +1859,28 @@ struct fuse *fuse_new_common(int fd, const char *opts,
         goto out;
     }
 
-    f->entry_timeout = 1.0;
-    f->attr_timeout = 1.0;
-    f->negative_timeout = 0.0;
+    f->conf.entry_timeout = 1.0;
+    f->conf.attr_timeout = 1.0;
+    f->conf.negative_timeout = 0.0;
 
-    if (parse_lib_opts(f, opts, &llopts) == -1)
-        goto out_free;
+    if (opts) {
+        const char *argv[] = { "", "-o", opts, NULL };
+        if (fuse_opt_parse(3, (char **) argv, &f->conf,
+                           fuse_lib_opts, fuse_lib_opt_proc, NULL, NULL) == -1)
+            goto out_free;
+    }
 
-    f->se = fuse_lowlevel_new(llopts, &fuse_path_ops, sizeof(fuse_path_ops), f);
-    free(llopts);
+#ifdef __FreeBSD__
+    /*
+     * In FreeBSD, we always use these settings as inode numbers are needed to
+     * make getcwd(3) work.
+     */
+    f->flags |= FUSE_READDIR_INO;
+#endif
+
+    f->se = fuse_lowlevel_new(f->conf.llopts, &fuse_path_ops,
+                              sizeof(fuse_path_ops), f);
+    free(f->conf.llopts);
     if (f->se == NULL)
         goto out_free;
 
