@@ -104,7 +104,7 @@ static int insert_arg(struct fuse_opt_context *ctx, int pos, const char *arg)
 
     if (pos != ctx->argcout - 1) {
         char *newarg = ctx->argvout[ctx->argcout - 1];
-        memmove(&ctx->argvout[pos+1], &ctx->argvout[pos], 
+        memmove(&ctx->argvout[pos+1], &ctx->argvout[pos],
                 sizeof(char *) * (ctx->argcout - pos - 1));
         ctx->argvout[pos] = newarg;
     }
