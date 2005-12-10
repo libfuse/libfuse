@@ -28,9 +28,8 @@ struct fuse_opt_context {
 
 void fuse_opt_free_args(char *args[])
 {
-    int i;
-
     if (args) {
+        int i;
         for (i = 0; args[i]; i++)
             free(args[i]);
         free(args);
@@ -319,6 +318,9 @@ static int opt_parse(struct fuse_opt_context *ctx)
             insert_arg(ctx, 2, ctx->opts) == -1)
             return -1;
     }
+    if (strcmp(ctx->argv[ctx->argc - 1], "--") == 0)
+        ctx->argv[--ctx->argc] = NULL;
+        
     return 0;
 }
 

@@ -226,7 +226,10 @@ static int fuse_parse_cmdline(int argc, const char *argv[],
             return -1;
         }
         sprintf(fsname_opt, "fsname=%s", basename);
-        fuse_opt_add_opt(&hopts->kernel_opts, fsname_opt);
+        res = fuse_opt_add_opt(&hopts->kernel_opts, fsname_opt);
+        free(fsname_opt);
+        if (res == -1)
+            return -1;
     }
     return 0;
 }
