@@ -64,6 +64,7 @@ static void mt_delete_context_key(void)
     context_ref--;
     if (!context_ref) {
         fuse_set_getcontext_func(NULL);
+        free(pthread_getspecific(context_key));
         pthread_key_delete(context_key);
     }
     pthread_mutex_unlock(&context_lock);
