@@ -103,7 +103,7 @@ static int insert_arg(struct fuse_opt_context *ctx, int pos, const char *arg)
 
     if (pos != ctx->argcout - 1) {
         char *newarg = ctx->argvout[ctx->argcout - 1];
-        memmove(&ctx->argvout[pos+1], &ctx->argvout[pos],
+        memmove(&ctx->argvout[pos + 1], &ctx->argvout[pos],
                 sizeof(char *) * (ctx->argcout - pos - 1));
         ctx->argvout[pos] = newarg;
     }
@@ -296,7 +296,7 @@ static int process_one(struct fuse_opt_context *ctx, const char *arg)
     } else if (arg[1] == '-' && !arg[2]) {
         if (add_arg(ctx, arg) == -1)
             return -1;
-        ctx->nonopt = 1;
+        ctx->nonopt = ctx->argcout;
         return 0;
     } else
         return process_gopt(ctx, arg, 0);
@@ -318,9 +318,9 @@ static int opt_parse(struct fuse_opt_context *ctx)
             insert_arg(ctx, 2, ctx->opts) == -1)
             return -1;
     }
-    if (strcmp(ctx->argv[ctx->argc - 1], "--") == 0)
-        ctx->argv[--ctx->argc] = NULL;
-        
+    if (ctx->nonopt && ctx->nonopt == ctx->argcout)
+        ctx->argvout[--ctx->argcout] = NULL;
+
     return 0;
 }
 
