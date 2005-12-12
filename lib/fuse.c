@@ -1875,7 +1875,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
      * In FreeBSD, we always use these settings as inode numbers are needed to
      * make getcwd(3) work.
      */
-    f->flags |= FUSE_READDIR_INO;
+    f->conf.readdir_ino = 1;
 #endif
 
     f->se = fuse_lowlevel_new(f->conf.llopts, &fuse_path_ops,

@@ -1,3 +1,7 @@
+2005-12-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix stale code in ifdef FreeBSD.  Patch from Csaba Henk
+
 2005-12-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.5.0-pre1
