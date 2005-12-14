@@ -29,6 +29,8 @@
 
 #define FUSE_MAX_PATH 4096
 
+#define FUSE_UNKNOWN_INO 0xffffffff
+
 struct fuse_config {
     char *llopts;
     unsigned int uid;
@@ -1353,11 +1355,11 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
         stbuf = *statp;
     else {
         memset(&stbuf, 0, sizeof(stbuf));
-        stbuf.st_ino = (ino_t) -1;
+        stbuf.st_ino = FUSE_UNKNOWN_INO;
     }
 
     if (!dh->fuse->conf.use_ino) {
-        stbuf.st_ino = (ino_t) -1;
+        stbuf.st_ino = FUSE_UNKNOWN_INO;
         if (dh->fuse->conf.readdir_ino) {
             struct node *node;
             pthread_mutex_lock(&dh->fuse->lock);

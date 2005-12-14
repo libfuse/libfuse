@@ -1,3 +1,9 @@
+2005-12-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix readdir() failure on x86_64, of 32bit programs compiled
+	without largefile support.  Bug report and help from Anthony
+	Kolasny
+
 2005-12-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix stale code in ifdef FreeBSD.  Patch from Csaba Henk
