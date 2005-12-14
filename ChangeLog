@@ -4,6 +4,9 @@
 	without largefile support.  Bug report and help from Anthony
 	Kolasny
 
+	* If lookup returns invalid mode, return -EIO instead of creating
+	a regular file.
+
 2005-12-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix stale code in ifdef FreeBSD.  Patch from Csaba Henk
