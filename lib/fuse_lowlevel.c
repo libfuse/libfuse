@@ -925,10 +925,13 @@ static struct fuse_opt fuse_ll_opts[] = {
     FUSE_OPT_END
 };
 
-static int fuse_ll_opt_proc(void *data, const char *arg, int key)
+static int fuse_ll_opt_proc(void *data, const char *arg, int key,
+                            int *argcp, char **argvp[])
 {
     (void) data;
     (void) key;
+    (void) argcp;
+    (void) argvp;
     fprintf(stderr, "fuse: unknown option `%s'\n", arg);
     return -1;
 }

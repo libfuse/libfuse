@@ -114,7 +114,7 @@ static int call_proc(struct fuse_opt_context *ctx, const char *arg, int key,
                      int iso)
 {
     if (ctx->proc) {
-        int res = ctx->proc(ctx->data, arg, key);
+        int res = ctx->proc(ctx->data, arg, key, &ctx->argcout, &ctx->argvout);
         if (res == -1 || !res)
             return res;
     }

@@ -156,9 +156,13 @@ static const struct fuse_opt fuse_helper_opts[] = {
     FUSE_OPT_END
 };
 
-static int fuse_helper_opt_proc(void *data, const char *arg, int key)
+static int fuse_helper_opt_proc(void *data, const char *arg, int key,
+                                int *argcp, char **argvp[])
 {
     struct helper_opts *hopts = data;
+
+    (void) argcp;
+    (void) argvp;
 
     switch (key) {
     case KEY_HELP:

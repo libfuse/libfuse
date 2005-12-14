@@ -5,7 +5,10 @@
 	Kolasny
 
 	* If lookup returns invalid mode, return -EIO instead of creating
-	a regular file.
+	a regular file
+
+	* Add current output argument vector to option processing
+	function
 
 2005-12-12  Miklos Szeredi <miklos@szeredi.hu>
 

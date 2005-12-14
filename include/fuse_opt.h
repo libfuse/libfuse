@@ -136,9 +136,12 @@ struct fuse_opt {
  * @param data is the user data passed to the fuse_opt_parse() function
  * @param arg is the whole argument or option
  * @param key determines why the processing function was called
+ * @param argcout pointer to output argument count
+ * @param argvout pointer to output argument vector
  * @return -1 on error, 0 if arg is to be discarded, 1 if arg should be kept
  */
-typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key);
+typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key, 
+                               int *argcout, char **argvout[]);
 
 /**
  * Option parsing function

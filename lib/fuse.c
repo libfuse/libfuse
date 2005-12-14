@@ -1807,10 +1807,13 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
     fuse_getcontext = func;
 }
 
-static int fuse_lib_opt_proc(void *data, const char *arg, int key)
+static int fuse_lib_opt_proc(void *data, const char *arg, int key,
+                             int *argcp, char **argvp[])
 {
     struct fuse_config *conf = data;
     (void) key;
+    (void) argcp;
+    (void) argvp;
     return fuse_opt_add_opt(&conf->llopts, arg);
 }
 
