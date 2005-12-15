@@ -173,17 +173,40 @@ static int add_mount(const char *fsname, const char *mnt, const char *type,
     return 0;
 }
 
-static int remove_mount(const char *mnt, int quiet, const char *mtab,
-                        const char *mtab_new)
+static int unmount_rename(const char *mtab, const char *mtab_new)
+{
+    int res;
+    struct stat sbuf;
+
+    if (stat(mtab, &sbuf) == 0)
+        chown(mtab_new, sbuf.st_uid, sbuf.st_gid);
+
+    res = rename(mtab_new, mtab);
+    if (res == -1) {
+        fprintf(stderr, "%s: failed to rename %s to %s: %s\n", progname,
+                mtab_new, mtab, strerror(errno));
+        return -1;
+    }
+    return 0;
+}
+
+static int unmount_fuse(const char *mnt, int quiet, int lazy)
 {
     int res;
     struct mntent *entp;
     FILE *fp;
-    FILE *newfp;
+    FILE *newfp = NULL;
     const char *user = NULL;
     char uidstr[32];
     unsigned uidlen = 0;
     int found;
+    int issymlink = 0;
+    struct stat stbuf;
+    const char *mtab = _PATH_MOUNTED;
+    const char *mtab_new = _PATH_MOUNTED "~fuse~";
+
+    if (lstat(mtab, &stbuf) != -1 && S_ISLNK(stbuf.st_mode))
+        issymlink = 1;
 
     fp = setmntent(mtab, "r");
     if (fp == NULL) {
@@ -192,17 +215,20 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
 	return -1;
     }
 
-    newfp = setmntent(mtab_new, "w");
-    if (newfp == NULL) {
-	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab_new,
-		strerror(errno));
-	return -1;
+    if (!issymlink) {
+        newfp = setmntent(mtab_new, "w");
+        if (newfp == NULL) {
+            fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab_new,
+                    strerror(errno));
+            endmntent(fp);
+            return -1;
+        }
     }
 
     if (getuid() != 0) {
         user = get_user_name();
         if (user == NULL)
-            return -1;
+            goto err_endmntent;
 
         uidlen = sprintf(uidstr, "%u", getuid());
     }
@@ -229,7 +255,7 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
         }
         if (removed)
             found = 1;
-        else {
+        else if (!issymlink) {
             res = addmntent(newfp, entp);
             if (res != 0) {
                 fprintf(stderr, "%s: failed to add entry to %s: %s\n",
@@ -239,17 +265,37 @@ static int remove_mount(const char *mnt, int quiet, const char *mtab,
     }
 
     endmntent(fp);
-    endmntent(newfp);
+    if (!issymlink)
+        endmntent(newfp);
 
     if (!found) {
         if (!quiet)
             fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
                     mnt, mtab);
-        unlink(mtab_new);
-        return -1;
+        goto err;
     }
 
+    drop_privs();
+    res = do_unmount(mnt, quiet, lazy);
+    restore_privs();
+    if (res == -1)
+        goto err;
+
+    if (!issymlink) {
+        res = unmount_rename(mtab, mtab_new);
+        if (res == -1)
+            goto err;
+    }
     return 0;
+
+ err_endmntent:
+    if (!issymlink)
+        endmntent(newfp);
+    endmntent(fp);
+ err:
+    if (!issymlink)
+        unlink(mtab_new);
+    return -1;
 }
 
 static int count_fuse_fs(void)
@@ -271,47 +317,7 @@ static int count_fuse_fs(void)
     return count;
 }
 
-static int unmount_rename(const char *mnt, int quiet, int lazy,
-                          const char *mtab, const char *mtab_new)
-{
-    int res;
-    struct stat sbuf;
 
-    drop_privs();
-    res = do_unmount(mnt, quiet, lazy);
-    restore_privs();
-    if (res == -1)
-        return -1;
-
-    if (stat(mtab, &sbuf) == 0)
-        chown(mtab_new, sbuf.st_uid, sbuf.st_gid);
-
-    res = rename(mtab_new, mtab);
-    if (res == -1) {
-        fprintf(stderr, "%s: failed to rename %s to %s: %s\n", progname,
-                mtab_new, mtab, strerror(errno));
-        return -1;
-    }
-    return 0;
-}
-
-static int unmount_fuse(const char *mnt, int quiet, int lazy)
-{
-    int res;
-    const char *mtab = _PATH_MOUNTED;
-    const char *mtab_new = _PATH_MOUNTED "~fuse~";
-
-    res = remove_mount(mnt, quiet, mtab, mtab_new);
-    if (res == -1)
-        return -1;
-
-    res = unmount_rename(mnt, quiet, lazy, mtab, mtab_new);
-    if (res == -1) {
-        unlink(mtab_new);
-        return -1;
-    }
-    return 0;
-}
 #else /* IGNORE_MTAB */
 static int lock_mtab()
 {
