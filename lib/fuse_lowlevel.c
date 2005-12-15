@@ -21,17 +21,6 @@
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 
-/* PATH_MAX is 4k on Linux, but I don't dare to define it to PATH_MAX,
-   because it may be much larger on other systems */
-#define MIN_SYMLINK 0x1000
-
-/* Generous 4k overhead for headers, includes room for xattr name
-   (XATTR_NAME_MAX = 255) */
-#define HEADER_OVERHEAD 0x1000
-
-/* 8k, the same as the old FUSE_MAX_IN constant */
-#define MIN_BUFFER_SIZE (MIN_SYMLINK + HEADER_OVERHEAD)
-
 struct fuse_ll {
     int debug;
     int allow_root;
@@ -713,30 +702,15 @@ static void do_init(fuse_req_t req, struct fuse_init_in *arg)
     f->major = FUSE_KERNEL_VERSION;
     f->minor = arg->minor;
 
-    if (bufsize < MIN_BUFFER_SIZE) {
+    if (bufsize < FUSE_MIN_READ_BUFFER) {
         fprintf(stderr, "fuse: warning: buffer size too small: %i\n", bufsize);
-        bufsize = MIN_BUFFER_SIZE;
+        bufsize = FUSE_MIN_READ_BUFFER;
     }
-
-    bufsize -= HEADER_OVERHEAD;
 
     memset(&outarg, 0, sizeof(outarg));
     outarg.major = f->major;
     outarg.minor = FUSE_KERNEL_MINOR_VERSION;
-
-    /* The calculated limits may be oversized, but because of the
-       limits in VFS names and symlinks are never larger than PATH_MAX - 1
-       and xattr values never larger than XATTR_SIZE_MAX */
-
-    /* Max two names per request */
-    outarg.symlink_max = outarg.name_max = bufsize / 2;
-    /* But if buffer is small, give more room to link name */
-    if (outarg.symlink_max < MIN_SYMLINK) {
-        outarg.symlink_max = MIN_SYMLINK;
-        /* Borrow from header overhead for the SYMLINK operation */
-        outarg.name_max = HEADER_OVERHEAD / 4;
-    }
-    outarg.xattr_size_max = outarg.max_write = bufsize;
+    outarg.max_write = bufsize - 4096;
 
     if (f->debug) {
         printf("   INIT: %u.%u\n", outarg.major, outarg.minor);

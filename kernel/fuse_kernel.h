@@ -143,6 +143,9 @@ enum fuse_opcode {
 	FUSE_CREATE        = 35
 };
 
+/* The read buffer is required to be at least 8k, but may be much larger */
+#define FUSE_MIN_READ_BUFFER 8192
+
 struct fuse_entry_out {
 	__u64	nodeid;		/* Inode ID */
 	__u64	generation;	/* Inode generation: nodeid:gen must
@@ -284,9 +287,7 @@ struct fuse_init_in {
 struct fuse_init_out {
 	__u32	major;
 	__u32	minor;
-	__u32	name_max;
-	__u32	symlink_max;
-	__u32	xattr_size_max;
+	__u32	unused[3];
 	__u32	max_write;
 };
 

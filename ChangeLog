@@ -3,6 +3,10 @@
 	* fusermount: check if /mnt/mtab is a symlink and don't modify it
 	in that case
 
+	* kernel: simplify request size limiting. INIT only contains
+	maximum write size, maximum path component size remains fixed at
+	1024 bytes, and maximum xattr size depends on read buffer.
+
 2005-12-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix readdir() failure on x86_64, of 32bit programs compiled

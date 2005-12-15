@@ -93,6 +93,9 @@ static inline void set_page_dirty_lock(struct page *page)
 /** If more requests are outstanding, then the operation will block */
 #define FUSE_MAX_OUTSTANDING 10
 
+/** It could be as large as PATH_MAX, but would that have any uses? */
+#define FUSE_NAME_MAX 1024
+
 /** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
     module will check permissions based on the file mode.  Otherwise no
     permission checking is done in the kernel */
@@ -184,9 +187,6 @@ struct fuse_out {
 	/** Array of arguments */
 	struct fuse_arg args[3];
 };
-
-struct fuse_req;
-struct fuse_conn;
 
 /**
  * A request to the client
@@ -284,15 +284,6 @@ struct fuse_conn {
 
 	/** Maximum write size */
 	unsigned max_write;
-
-	/** Maximum path segment length */
-	unsigned name_max;
-
-	/** Maximum symbolic link size */
-	unsigned symlink_max;
-
-	/** Maximum size of xattr data */
-	unsigned xattr_size_max;
 
 	/** Readers of the connection are waiting on this */
 	wait_queue_head_t waitq;

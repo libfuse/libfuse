@@ -197,18 +197,7 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
 		fc->conn_error = 1;
 	else {
 		fc->minor = arg->minor;
-		if (fc->minor >= 5) {
-			fc->name_max = arg->name_max;
-			fc->symlink_max = arg->symlink_max;
-			fc->xattr_size_max = arg->xattr_size_max;
-			fc->max_write = arg->max_write;
-		} else {
-			/* Old fix values */
-			fc->name_max = 1024;
-			fc->symlink_max = 4096;
-			fc->xattr_size_max = 4096;
-			fc->max_write = 4096;
-		}
+		fc->max_write = arg->minor < 5 ? 4096 : arg->max_write;
 	}
 
 	/* After INIT reply is received other requests can go
@@ -691,6 +680,7 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 	struct fuse_copy_state cs;
 	unsigned reqsize;
 
+ restart:
 	spin_lock(&fuse_lock);
 	fc = file->private_data;
 	err = -EPERM;
@@ -706,20 +696,25 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 
 	req = list_entry(fc->pending.next, struct fuse_req, list);
 	list_del_init(&req->list);
-	spin_unlock(&fuse_lock);
 
 	in = &req->in;
-	reqsize = req->in.h.len;
-	fuse_copy_init(&cs, 1, req, iov, nr_segs);
-	err = -EINVAL;
-	if (iov_length(iov, nr_segs) >= reqsize) {
-		err = fuse_copy_one(&cs, &in->h, sizeof(in->h));
-		if (!err)
-			err = fuse_copy_args(&cs, in->numargs, in->argpages,
-					     (struct fuse_arg *) in->args, 0);
+	reqsize = in->h.len;
+	/* If request is too large, reply with an error and restart the read */
+	if (iov_length(iov, nr_segs) < reqsize) {
+		req->out.h.error = -EIO;
+		/* SETXATTR is special, since it may contain too large data */
+		if (in->h.opcode == FUSE_SETXATTR)
+			req->out.h.error = -E2BIG;
+		request_end(fc, req);
+		goto restart;
 	}
+	spin_unlock(&fuse_lock);
+	fuse_copy_init(&cs, 1, req, iov, nr_segs);
+	err = fuse_copy_one(&cs, &in->h, sizeof(in->h));
+	if (!err)
+		err = fuse_copy_args(&cs, in->numargs, in->argpages,
+				     (struct fuse_arg *) in->args, 0);
 	fuse_copy_finish(&cs);
-
 	spin_lock(&fuse_lock);
 	req->locked = 0;
 	if (!err && req->interrupted)

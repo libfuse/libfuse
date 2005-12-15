@@ -202,13 +202,13 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 	int err;
 	struct fuse_entry_out outarg;
 	struct inode *inode = NULL;
-	struct fuse_conn *fc = get_fuse_conn(dir);
-	struct fuse_req *req;
 #if !defined(FUSE_MAINLINE) && defined(KERNEL_2_6)
 	struct dentry *newent;
 #endif
+	struct fuse_conn *fc = get_fuse_conn(dir);
+	struct fuse_req *req;
 
-	if (entry->d_name.len > fc->name_max)
+	if (entry->d_name.len > FUSE_NAME_MAX)
 		return ERR_PTR(-ENAMETOOLONG);
 
 	req = fuse_get_request(fc);
@@ -278,10 +278,6 @@ static int fuse_create_open(struct inode *dir, struct dentry *entry, int mode,
 
 	err = -ENOSYS;
 	if (fc->no_create)
-		goto out;
-
-	err = -ENAMETOOLONG;
-	if (entry->d_name.len > fc->name_max)
 		goto out;
 
 	err = -EINTR;
@@ -466,12 +462,7 @@ static int fuse_symlink(struct inode *dir, struct dentry *entry,
 {
 	struct fuse_conn *fc = get_fuse_conn(dir);
 	unsigned len = strlen(link) + 1;
-	struct fuse_req *req;
-
-	if (len > fc->symlink_max)
-		return -ENAMETOOLONG;
-
-	req = fuse_get_request(fc);
+	struct fuse_req *req = fuse_get_request(fc);
 	if (!req)
 		return -EINTR;
 
@@ -812,13 +803,11 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 static int parse_dirfile(char *buf, size_t nbytes, struct file *file,
 			 void *dstbuf, filldir_t filldir)
 {
-	struct fuse_conn *fc = get_fuse_conn(file->f_dentry->d_inode);
-
 	while (nbytes >= FUSE_NAME_OFFSET) {
 		struct fuse_dirent *dirent = (struct fuse_dirent *) buf;
 		size_t reclen = FUSE_DIRENT_SIZE(dirent);
 		int over;
-		if (!dirent->namelen || dirent->namelen > fc->name_max)
+		if (!dirent->namelen || dirent->namelen > FUSE_NAME_MAX)
 			return -EIO;
 		if (reclen > nbytes)
 			break;
@@ -1145,9 +1134,6 @@ static int fuse_setxattr(struct dentry *entry, const char *name,
 	struct fuse_req *req;
 	struct fuse_setxattr_in inarg;
 	int err;
-
-	if (size > fc->xattr_size_max)
-		return -E2BIG;
 
 	if (fc->no_setxattr)
 		return -EOPNOTSUPP;
