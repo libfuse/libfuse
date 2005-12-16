@@ -94,6 +94,17 @@ struct fuse_opt {
 };
 
 /**
+ * Argument list
+ */
+struct fuse_args {
+    /** Argument count */
+    int argc;
+
+    /* Argument vector.  NULL terminated */
+    char **argv;
+};
+
+/**
  * Last option.  An array of 'struct fuse_opt' must end with a NULL
  * template value
  */
@@ -136,18 +147,16 @@ struct fuse_opt {
  * @param data is the user data passed to the fuse_opt_parse() function
  * @param arg is the whole argument or option
  * @param key determines why the processing function was called
- * @param argcout pointer to output argument count
- * @param argvout pointer to output argument vector
+ * @param outargs the current output argument list
  * @return -1 on error, 0 if arg is to be discarded, 1 if arg should be kept
  */
-typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key, 
-                               int *argcout, char **argvout[]);
+typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key,
+                               struct fuse_args *outargs);
 
 /**
  * Option parsing function
  *
- * If 'argv' is NULL, the values pointed by argcout and argvout will
- * be used as input
+ * If 'argv' is NULL, the contents of 'outargs' will be used as input
  *
  * A NULL 'opts' is equivalent to an 'opts' array containing a single
  * end marker
@@ -155,22 +164,19 @@ typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key,
  * A NULL 'proc' is equivalent to a processing function always
  * returning '1'
  *
- * If argvout is NULL, then any output arguments are discarded
- *
- * If argcout is NULL, then the output argument count is not stored
+ * If outargs is NULL, then any output arguments are discarded
  *
  * @param argc is the input argument count
  * @param argv is the input argument vector
  * @param data is the user data
  * @param opts is the option description array
  * @param proc is the processing function
- * @param argcout is pointer to output argument count
- * @param argvout is pointer to output argument vector
+ * @param outargs is the output argument list
  * @return -1 on error, 0 on success
  */
 int fuse_opt_parse(int argc, char *argv[], void *data,
                    const struct fuse_opt opts[], fuse_opt_proc_t proc,
-                   int *argcout, char **argvout[]);
+                   struct fuse_args *outargs);
 
 /**
  * Add an option to a comma separated option list
@@ -184,19 +190,20 @@ int fuse_opt_add_opt(char **opts, const char *opt);
 /**
  * Add an argument to a NULL terminated argument vector
  *
- * @param argcp is a pointer to argument count
- * @param argvp is a pointer to argument vector
+ * @param args is the structure containing the current argument list
  * @param arg is the new argument to add
  * @return -1 on allocation error, 0 on success
  */
-int fuse_opt_add_arg(int *argcp, char **argvp[], const char *arg);
+int fuse_opt_add_arg(struct fuse_args *args, const char *arg);
 
 /**
- * Free argument vector
+ * Free the contents of argument list
  *
- * @param args is the argument vector
+ * The structure itself is not freed
+ *
+ * @param args is the structure containing the argument list
  */
-void fuse_opt_free_args(char *args[]);
+void fuse_opt_free_args(struct fuse_args *args);
 
 
 /**

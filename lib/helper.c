@@ -157,12 +157,11 @@ static const struct fuse_opt fuse_helper_opts[] = {
 };
 
 static int fuse_helper_opt_proc(void *data, const char *arg, int key,
-                                int *argcp, char **argvp[])
+                                struct fuse_args *outargs)
 {
     struct helper_opts *hopts = data;
 
-    (void) argcp;
-    (void) argvp;
+    (void) outargs;
 
     switch (key) {
     case KEY_HELP:
@@ -207,7 +206,7 @@ static int fuse_parse_cmdline(int argc, const char *argv[],
 
     hopts->progname = argv[0];
     res = fuse_opt_parse(argc, (char **) argv, hopts, fuse_helper_opts,
-                         fuse_helper_opt_proc, NULL, NULL);
+                         fuse_helper_opt_proc, NULL);
     if (res == -1)
         return -1;
 

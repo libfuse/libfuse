@@ -20,19 +20,19 @@ struct fuse_opt_context {
     int argctr;
     int argc;
     char **argv;
-    int argcout;
-    char **argvout;
+    struct fuse_args outargs;
     char *opts;
     int nonopt;
 };
 
-void fuse_opt_free_args(char *args[])
+void fuse_opt_free_args(struct fuse_args *args)
 {
-    if (args) {
+    if (args && args->argv) {
         int i;
-        for (i = 0; args[i]; i++)
-            free(args[i]);
-        free(args);
+        for (i = 0; i < args->argc; i++)
+            free(args->argv[i]);
+        free(args->argv);
+        args->argv = NULL;
     }
 }
 
@@ -42,16 +42,16 @@ static int alloc_failed(void)
     return -1;
 }
 
-int fuse_opt_add_arg(int *argcp, char **argvp[], const char *arg)
+int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
 {
-    char **newargv = realloc(*argvp, (*argcp + 2) * sizeof(char *));
+    char **newargv = realloc(args->argv, (args->argc + 2) * sizeof(char *));
     char *newarg = newargv ? strdup(arg) : NULL;
     if (!newargv || !newarg)
         return alloc_failed();
 
-    newargv[(*argcp)++] = newarg;
-    newargv[*argcp] = NULL;
-    *argvp = newargv;
+    args->argv = newargv;
+    args->argv[args->argc++] = newarg;
+    args->argv[args->argc] = NULL;
     return 0;
 }
 
@@ -67,7 +67,7 @@ static int next_arg(struct fuse_opt_context *ctx, const char *opt)
 
 static int add_arg(struct fuse_opt_context *ctx, const char *arg)
 {
-    return fuse_opt_add_arg(&ctx->argcout, &ctx->argvout, arg);
+    return fuse_opt_add_arg(&ctx->outargs, arg);
 }
 
 int fuse_opt_add_opt(char **opts, const char *opt)
@@ -97,15 +97,15 @@ static int add_opt(struct fuse_opt_context *ctx, const char *opt)
 
 static int insert_arg(struct fuse_opt_context *ctx, int pos, const char *arg)
 {
-    assert(pos <= ctx->argcout);
+    assert(pos <= ctx->outargs.argc);
     if (add_arg(ctx, arg) == -1)
         return -1;
 
-    if (pos != ctx->argcout - 1) {
-        char *newarg = ctx->argvout[ctx->argcout - 1];
-        memmove(&ctx->argvout[pos + 1], &ctx->argvout[pos],
-                sizeof(char *) * (ctx->argcout - pos - 1));
-        ctx->argvout[pos] = newarg;
+    if (pos != ctx->outargs.argc - 1) {
+        char *newarg = ctx->outargs.argv[ctx->outargs.argc - 1];
+        memmove(&ctx->outargs.argv[pos + 1], &ctx->outargs.argv[pos],
+                sizeof(char *) * (ctx->outargs.argc - pos - 1));
+        ctx->outargs.argv[pos] = newarg;
     }
     return 0;
 }
@@ -114,7 +114,7 @@ static int call_proc(struct fuse_opt_context *ctx, const char *arg, int key,
                      int iso)
 {
     if (ctx->proc) {
-        int res = ctx->proc(ctx->data, arg, key, &ctx->argcout, &ctx->argvout);
+        int res = ctx->proc(ctx->data, arg, key, &ctx->outargs);
         if (res == -1 || !res)
             return res;
     }
@@ -296,7 +296,7 @@ static int process_one(struct fuse_opt_context *ctx, const char *arg)
     } else if (arg[1] == '-' && !arg[2]) {
         if (add_arg(ctx, arg) == -1)
             return -1;
-        ctx->nonopt = ctx->argcout;
+        ctx->nonopt = ctx->outargs.argc;
         return 0;
     } else
         return process_gopt(ctx, arg, 0);
@@ -318,42 +318,33 @@ static int opt_parse(struct fuse_opt_context *ctx)
             insert_arg(ctx, 2, ctx->opts) == -1)
             return -1;
     }
-    if (ctx->nonopt && ctx->nonopt == ctx->argcout)
-        ctx->argvout[--ctx->argcout] = NULL;
+    if (ctx->nonopt && ctx->nonopt == ctx->outargs.argc)
+        ctx->outargs.argv[--ctx->outargs.argc] = NULL;
 
     return 0;
 }
 
 int fuse_opt_parse(int argc, char *argv[], void *data,
                    const struct fuse_opt opts[], fuse_opt_proc_t proc,
-                   int *argcout, char **argvout[])
+                   struct fuse_args *outargs)
 {
     int res;
     struct fuse_opt_context ctx = {
-        .argc = argv ? argc : *argcout,
-        .argv = argv ? argv : *argvout,
+        .argc = argv ? argc : outargs->argc,
+        .argv = argv ? argv : outargs->argv,
         .data = data,
         .opt = opts,
         .proc = proc,
-        .argcout = 0,
-        .argvout = NULL,
-        .opts = NULL,
-        .nonopt = 0,
     };
 
     res = opt_parse(&ctx);
     if (!argv)
-        fuse_opt_free_args(ctx.argv);
+        fuse_opt_free_args(outargs);
     free(ctx.opts);
-    if (res == -1)
-        fuse_opt_free_args(ctx.argvout);
-    else {
-        if (argcout)
-            *argcout = ctx.argcout;
-        if (argvout)
-            *argvout = ctx.argvout;
-        else
-            fuse_opt_free_args(ctx.argvout);
-    }
+    if (res != -1 && outargs)
+        *outargs = ctx.outargs;
+    else
+        fuse_opt_free_args(&ctx.outargs);
+
     return res;
 }

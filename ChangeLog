@@ -1,3 +1,9 @@
+2005-12-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Clean up the option parsing interface slightly, by creating an
+	"argument list" structure, that contains the argument vector and
+	count
+
 2005-12-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: check if /mnt/mtab is a symlink and don't modify it

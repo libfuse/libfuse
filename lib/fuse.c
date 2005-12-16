@@ -1808,12 +1808,11 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 }
 
 static int fuse_lib_opt_proc(void *data, const char *arg, int key,
-                             int *argcp, char **argvp[])
+                             struct fuse_args *outargs)
 {
     struct fuse_config *conf = data;
     (void) key;
-    (void) argcp;
-    (void) argvp;
+    (void) outargs;
     return fuse_opt_add_opt(&conf->llopts, arg);
 }
 
@@ -1871,7 +1870,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     if (opts) {
         const char *argv[] = { "", "-o", opts, NULL };
         if (fuse_opt_parse(3, (char **) argv, &f->conf,
-                           fuse_lib_opts, fuse_lib_opt_proc, NULL, NULL) == -1)
+                           fuse_lib_opts, fuse_lib_opt_proc, NULL) == -1)
             goto out_free;
     }
 
