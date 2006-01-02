@@ -1,7 +1,10 @@
 2006-01-02  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Fix mount.fuse so that it ignores the 'user' option.
-	Report and solution from Mattd.
+	* mount.fuse: the 'user' option should be ignored. Report and
+	solution from Mattd.
+
+	* mount.fuse: export PATH in the right place. Report and patch
+	from Hannes Schweizer
 
 2005-12-16  Miklos Szeredi <miklos@szeredi.hu>
 

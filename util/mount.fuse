@@ -26,6 +26,7 @@ function die {
 FSTYPE=${1%%\#*} # for now i have to be same as FUSE mount binary
 		 # should be configurable
 
+export PATH
 FSBIN=`which ${FSTYPE} 2>/dev/null` \
 	|| die "Can not find FUSE mount binary for FS ${FSTYPE}" 1
 
@@ -42,8 +43,4 @@ shift
 
 OPTIONS=`echo $@ | sed 's/,user//'`
 
-export PATH
 ${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}
-
-
-
