@@ -1,3 +1,8 @@
+2006-01-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix mount.fuse so that it ignores the 'user' option.
+	Report and solution from Mattd.
+
 2005-12-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Clean up the option parsing interface slightly, by creating an

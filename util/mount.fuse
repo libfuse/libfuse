@@ -40,7 +40,7 @@ MOUNTPOINT="$2"
 shift
 shift
 
-OPTIONS="$@"
+OPTIONS=`echo $@ | sed 's/,user//'`
 
 export PATH
 ${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}
