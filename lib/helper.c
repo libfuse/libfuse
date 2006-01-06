@@ -273,6 +273,13 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
             perror("fuse: failed to daemonize program\n");
             goto err_destroy;
         }
+    } else {
+        /* Ensure consistant behavior across debug and normal modes */
+        res = chdir("/");
+        if (res == -1) {
+            perror("fuse: failed to change working directory to /\n");
+            goto err_destroy;
+        }
     }
 
     res = set_signal_handlers();
