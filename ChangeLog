@@ -1,5 +1,9 @@
 2006-01-06  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.5.0
+
+2006-01-06  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Change working directory to "/" even if running in the
 	foreground.  Patch from Jonathan Brandmeyer
 
