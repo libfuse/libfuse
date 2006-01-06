@@ -1,17 +1,19 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB.
 */
 
 #include "fuse.h"
+#include "fuse_opt.h"
 #include "fuse_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stddef.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/socket.h>
@@ -21,6 +23,64 @@
 #define FUSERMOUNT_PROG         "fusermount"
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
+enum {
+    KEY_KERN,
+    KEY_ALLOW_ROOT,
+    KEY_RO,
+};
+
+struct mount_opts {
+    int allow_other;
+    int allow_root;
+    char *kernel_opts;
+};
+
+static const struct fuse_opt fuse_mount_opts[] = {
+    { "allow_other", offsetof(struct mount_opts, allow_other), 1 },
+    { "allow_root", offsetof(struct mount_opts, allow_root), 1 },
+    FUSE_OPT_KEY("allow_other",         KEY_KERN),
+    FUSE_OPT_KEY("allow_root",          KEY_ALLOW_ROOT),
+    FUSE_OPT_KEY("nonempty",            KEY_KERN),
+    FUSE_OPT_KEY("default_permissions", KEY_KERN),
+    FUSE_OPT_KEY("fsname=",             KEY_KERN),
+    FUSE_OPT_KEY("large_read",          KEY_KERN),
+    FUSE_OPT_KEY("max_read=",           KEY_KERN),
+    FUSE_OPT_KEY("-r",                  KEY_RO),
+    FUSE_OPT_KEY("ro",                  KEY_KERN),
+    FUSE_OPT_KEY("rw",                  KEY_KERN),
+    FUSE_OPT_KEY("suid",                KEY_KERN),
+    FUSE_OPT_KEY("nosuid",              KEY_KERN),
+    FUSE_OPT_KEY("dev",                 KEY_KERN),
+    FUSE_OPT_KEY("nodev",               KEY_KERN),
+    FUSE_OPT_KEY("exec",                KEY_KERN),
+    FUSE_OPT_KEY("noexec",              KEY_KERN),
+    FUSE_OPT_KEY("async",               KEY_KERN),
+    FUSE_OPT_KEY("sync",                KEY_KERN),
+    FUSE_OPT_KEY("atime",               KEY_KERN),
+    FUSE_OPT_KEY("noatime",             KEY_KERN),
+};
+
+static int fuse_mount_opt_proc(void *data, const char *arg, int key,
+                               struct fuse_args *outargs)
+{
+    struct mount_opts *mo = data;
+
+    switch (key) {
+    case KEY_ALLOW_ROOT:
+        if (fuse_opt_add_opt(&mo->kernel_opts, "allow_other") == -1 ||
+            fuse_opt_add_arg(outargs, "-oallow_root") == -1)
+            return -1;
+        return 0;
+
+    case KEY_RO:
+        arg = "ro";
+        /* fall through */
+
+    case KEY_KERN:
+        return fuse_opt_add_opt(&mo->kernel_opts, arg);
+    }
+    return 1;
+}
 
 /* return value:
  * >= 0  => fd
@@ -98,7 +158,7 @@ void fuse_unmount(const char *mountpoint)
     waitpid(pid, NULL, 0);
 }
 
-int fuse_mount(const char *mountpoint, const char *opts)
+int fuse_mount_compat22(const char *mountpoint, const char *opts)
 {
     const char *mountprog = FUSERMOUNT_PROG;
     int fds[2], pid;
@@ -159,9 +219,33 @@ int fuse_mount(const char *mountpoint, const char *opts)
     return rv;
 }
 
+int fuse_mount(const char *mountpoint, struct fuse_args *args)
+{
+    struct mount_opts mo;
+    int res = -1;
+
+    memset(&mo, 0, sizeof(mo));
+
+    if (args &&
+        fuse_opt_parse(args, &mo, fuse_mount_opts, fuse_mount_opt_proc) == -1)
+        return -1;
+
+    if (mo.allow_other && mo.allow_root) {
+        fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
+        goto out;
+    }
+
+    res = fuse_mount_compat22(mountpoint, mo.kernel_opts);
+ out:
+    free(mo.kernel_opts);
+    return res;
+}
+
 int fuse_mount_compat1(const char *mountpoint, const char *args[])
 {
     /* just ignore mount args for now */
     (void) args;
-    return fuse_mount(mountpoint, NULL);
+    return fuse_mount_compat22(mountpoint, NULL);
 }
+
+__asm__(".symver fuse_mount_compat22,fuse_mount@");

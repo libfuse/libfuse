@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB

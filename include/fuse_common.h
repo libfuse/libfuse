@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB.
@@ -13,6 +13,7 @@
 #ifndef _FUSE_COMMON_H_
 #define _FUSE_COMMON_H_
 
+#include "fuse_opt.h"
 #include <stdint.h>
 
 /** Major version of FUSE library interface */
@@ -65,24 +66,49 @@ struct fuse_file_info {
     uint64_t fh;
 };
 
-/*
+/**
  * Create a FUSE mountpoint
  *
  * Returns a control file descriptor suitable for passing to
  * fuse_new()
  *
  * @param mountpoint the mount point path
- * @param opts a comma separated list of mount options.  Can be NULL.
+ * @param args argument vector
  * @return the control file descriptor on success, -1 on failure
  */
-int fuse_mount(const char *mountpoint, const char *opts);
+int fuse_mount(const char *mountpoint, struct fuse_args *args);
 
-/*
+/**
  * Umount a FUSE mountpoint
  *
  * @param mountpoint the mount point path
  */
 void fuse_unmount(const char *mountpoint);
+
+/**
+ * Parse common options
+ *
+ * The following options are parsed:
+ *
+ *   '-f'            foreground
+ *   '-d' '-odebug'  foreground, but keep the debug option
+ *   '-s'            single threaded
+ *   '-h' '--help'   help
+ *   '-ho'           help without header
+ *   '-ofsname=..'   file system name, if not present, then set to the program
+ *                   name
+ *
+ * All parameters may be NULL
+ *
+ * @param args argument vector
+ * @param mountpoint the returned mountpoint, should be freed after use
+ * @param multithreaded set to 1 unless the '-s' option is present
+ * @param foreground set to 1 if one of the relevant options is present
+ * @return 0 on success, -1 on failure
+ */
+int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
+                       int *multithreaded, int *foreground);
+
 
 #ifdef __cplusplus
 }

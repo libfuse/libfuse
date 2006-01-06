@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -14,12 +14,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * Special 'offset' value.  In case of a match, the processing
- * function will be called with 'value' as the key
- */
-#define FUSE_OPT_OFFSET_KEY -1U
 
 /**
  * Option description
@@ -44,7 +38,7 @@ extern "C" {
  *
  *  - 'offsetof(struct foo, member)'  actions i) and iii)
  *
- *  - FUSE_OPT_OFFSET_KEY             action ii)
+ *  - -1                              action ii)
  *
  * The 'offsetof()' macro is defined in the <stddef.h> header.
  *
@@ -82,7 +76,7 @@ struct fuse_opt {
 
     /**
      * Offset of variable within 'data' parameter of fuse_opt_parse()
-     * or FUSE_OPT_OFFSET_KEY
+     * or -1
      */
     unsigned long offset;
 
@@ -94,15 +88,10 @@ struct fuse_opt {
 };
 
 /**
- * Argument list
+ * Key option.  In case of a match, the processing function will be
+ * called with the specified key.
  */
-struct fuse_args {
-    /** Argument count */
-    int argc;
-
-    /* Argument vector.  NULL terminated */
-    char **argv;
-};
+#define FUSE_OPT_KEY(template, key) { template, -1U, key }
 
 /**
  * Last option.  An array of 'struct fuse_opt' must end with a NULL
@@ -110,6 +99,24 @@ struct fuse_args {
  */
 #define FUSE_OPT_END { .template = NULL }
 
+/**
+ * Argument list
+ */
+struct fuse_args {
+    /** Argument count */
+    int argc;
+
+    /** Argument vector.  NULL terminated */
+    char **argv;
+
+    /** Is 'argv' allocated? */
+    int allocated;
+};
+
+/**
+ * Initializer for 'struct fuse_args'
+ */
+#define FUSE_ARGS_INIT(argc, argv) { argc, argv, 0 }
 
 /**
  * Key value passed to the processing function if an option did not
@@ -131,7 +138,7 @@ struct fuse_args {
  * This function is called if
  *    - option did not match any 'struct fuse_opt'
  *    - argument is a non-option
- *    - option did match and offset was set to FUSE_OPT_OFFSET_KEY
+ *    - option did match and offset was set to -1
  *
  * The 'arg' parameter will always contain the whole argument or
  * option including the parameter if exists.  A two-argument option
@@ -156,7 +163,10 @@ typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key,
 /**
  * Option parsing function
  *
- * If 'argv' is NULL, the contents of 'outargs' will be used as input
+ * If 'args' was returned from a previous call to fuse_opt_parse() or
+ * it was constructed from 
+ *
+ * A NULL 'args' is equivalent to an empty argument vector
  *
  * A NULL 'opts' is equivalent to an 'opts' array containing a single
  * end marker
@@ -164,19 +174,14 @@ typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key,
  * A NULL 'proc' is equivalent to a processing function always
  * returning '1'
  *
- * If outargs is NULL, then any output arguments are discarded
- *
- * @param argc is the input argument count
- * @param argv is the input argument vector
+ * @param args is the input and output argument list
  * @param data is the user data
  * @param opts is the option description array
  * @param proc is the processing function
- * @param outargs is the output argument list
  * @return -1 on error, 0 on success
  */
-int fuse_opt_parse(int argc, char *argv[], void *data,
-                   const struct fuse_opt opts[], fuse_opt_proc_t proc,
-                   struct fuse_args *outargs);
+int fuse_opt_parse(struct fuse_args *args, void *data,
+                   const struct fuse_opt opts[], fuse_opt_proc_t proc);
 
 /**
  * Add an option to a comma separated option list

@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB.
@@ -23,3 +23,7 @@ int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf);
 
 int fuse_reply_open_compat(fuse_req_t req,
                            const struct fuse_file_info_compat *fi);
+
+struct fuse_session *fuse_lowlevel_new_compat(const char *opts,
+                                              const struct fuse_lowlevel_ops *op,
+                                              size_t op_size, void *userdata);

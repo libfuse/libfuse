@@ -1,11 +1,15 @@
 2006-01-06  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Released 2.5.0
-
-2006-01-06  Miklos Szeredi <miklos@szeredi.hu>
-
 	* Change working directory to "/" even if running in the
 	foreground.  Patch from Jonathan Brandmeyer
+
+	* Changed lots of functions to use 'struct fuse_args' instead of
+	separate argc and argv
+
+	* Added fuse_parse_cmdline(), fuse_set_signal_handlers() and
+	fuse_remove_signal_handlers() functions, so that it's now pretty
+	easy to get all the functionality of fuse_main() with a filesystem
+	using the lowlevel API.
 
 2006-01-02  Miklos Szeredi <miklos@szeredi.hu>
 

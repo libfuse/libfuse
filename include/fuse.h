@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB.
@@ -420,12 +420,12 @@ int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
  * Create a new FUSE filesystem.
  *
  * @param fd the control file descriptor
- * @param opts mount options to be used by the library
+ * @param args argument vector
  * @param op the operations
  * @param op_size the size of the fuse_operations structure
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(int fd, const char *opts,
+struct fuse *fuse_new(int fd, struct fuse_args *args,
                       const struct fuse_operations *op, size_t op_size);
 
 /**
@@ -488,13 +488,7 @@ struct fuse_context *fuse_get_context(void);
  */
 int fuse_invalidate(struct fuse *f, const char *path);
 
-/**
- * Check whether a mount option should be passed to the kernel or the
- * library
- *
- * @param opt the option to check
- * @return 1 if it is a library option, 0 otherwise
- */
+/* Deprecated, don't use */
 int fuse_is_lib_option(const char *opt);
 
 /**
@@ -513,9 +507,9 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 
 /** This is the part of fuse_main() before the event loop */
-struct fuse *fuse_setup(int argc, char *argv[],
+struct fuse *fuse_setup(struct fuse_args *args, 
                         const struct fuse_operations *op, size_t op_size,
-                          char **mountpoint, int *multithreaded, int *fd);
+                        char **mountpoint, int *multithreaded, int *fd);
 
 /** This is the part of fuse_main() after the event loop */
 void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);

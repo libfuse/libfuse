@@ -12,7 +12,6 @@ FUSE_2.2 {
 		fuse_main;
 		fuse_main_compat1;
 		fuse_main_compat2;
-		fuse_mount;
 		fuse_mount_compat1;
 		fuse_new_compat1;
 		fuse_new_compat2;
@@ -38,7 +37,6 @@ FUSE_2.4 {
 		fuse_dirent_size;
 		fuse_kern_chan_new;
 		fuse_lowlevel_is_lib_option;
-		fuse_lowlevel_new;
 		fuse_reply_attr;
 		fuse_reply_buf;
 		fuse_reply_entry;
@@ -63,8 +61,12 @@ FUSE_2.4 {
 
 FUSE_2.5 {
 	global:
+		fuse_lowlevel_new;
+		fuse_lowlevel_new_compat;
 		fuse_main_real;
 		fuse_main_real_compat22;
+		fuse_mount;
+		fuse_mount_compat22;
 		fuse_new;
 		fuse_new_compat22;
 		fuse_opt_parse;
@@ -72,6 +74,8 @@ FUSE_2.5 {
 		fuse_opt_add_arg;
 		fuse_opt_free_args;
 		fuse_opt_match;
+		fuse_parse_cmdline;
+		fuse_remove_signal_handlers;
 		fuse_reply_create;
 		fuse_reply_open;
 		fuse_reply_open_compat;
@@ -79,6 +83,7 @@ FUSE_2.5 {
 		fuse_reply_statfs_compat;
 		fuse_setup;
 		fuse_setup_compat22;
+		fuse_set_signal_handlers;
 
 	local:
 		 *;

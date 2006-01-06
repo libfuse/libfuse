@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB.
@@ -928,25 +928,19 @@ const struct fuse_ctx *fuse_req_ctx(fuse_req_t req);
  * Filesystem setup                                            *
  * ----------------------------------------------------------- */
 
-/**
- * Check whether a mount option is claimed by the low level library or
- * not
- *
- * @param opt the option to check
- * @return 1 if it is a low level library option, 0 otherwise
- */
+/* Deprecated, don't use */
 int fuse_lowlevel_is_lib_option(const char *opt);
 
 /**
  * Create a low level session
  *
- * @param opts the comma separated list of options
+ * @param args argument vector
  * @param op the low level filesystem operations
  * @param op_size sizeof(struct fuse_lowlevel_ops)
  * @param userdata user data
  * @return the created session object, or NULL on failure
  */
-struct fuse_session *fuse_lowlevel_new(const char *opts,
+struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
                                        const struct fuse_lowlevel_ops *op,
                                        size_t op_size, void *userdata);
 
@@ -1211,6 +1205,31 @@ int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
  * @param ch the channel
  */
 void fuse_chan_destroy(struct fuse_chan *ch);
+
+/* ----------------------------------------------------------- *
+ * Signal handling                                             *
+ * ----------------------------------------------------------- */
+
+/**
+ * Exit session on HUP, TERM and INT signals and ignore PIPE signal
+ *
+ * Stores session in a global variable.  May only be called once per
+ * process until fuse_remove_signal_handlers() is called.
+ *
+ * @param se the session to exit
+ * @return 0 on success, -1 on failure
+ */
+int fuse_set_signal_handlers(struct fuse_session *se);
+
+/**
+ * Restore default signal handlers
+ *
+ * Resets global session.  After this fuse_set_signal_handlers() may
+ * be called again.
+ *
+ * @param se the same session as given in fuse_set_signal_handlers()
+ */
+void fuse_remove_signal_handlers(struct fuse_session *se);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff                                         *

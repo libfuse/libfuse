@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB
@@ -32,7 +32,6 @@
 #define FUSE_UNKNOWN_INO 0xffffffff
 
 struct fuse_config {
-    char *llopts;
     unsigned int uid;
     unsigned int gid;
     unsigned int  umask;
@@ -1807,20 +1806,13 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
     fuse_getcontext = func;
 }
 
-static int fuse_lib_opt_proc(void *data, const char *arg, int key,
-                             struct fuse_args *outargs)
-{
-    struct fuse_config *conf = data;
-    (void) key;
-    (void) outargs;
-    return fuse_opt_add_opt(&conf->llopts, arg);
-}
-
 #define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
 
 static const struct fuse_opt fuse_lib_opts[] = {
-    { "debug", FUSE_OPT_OFFSET_KEY, 0 },
+    FUSE_OPT_KEY("debug", 0),
+    FUSE_OPT_KEY("-d", 0),
     FUSE_LIB_OPT("debug",                 debug, 1),
+    FUSE_LIB_OPT("-d",                    debug, 1),
     FUSE_LIB_OPT("hard_remove",           hard_remove, 1),
     FUSE_LIB_OPT("use_ino",               use_ino, 1),
     FUSE_LIB_OPT("readdir_ino",           readdir_ino, 1),
@@ -1844,7 +1836,7 @@ int fuse_is_lib_option(const char *opt)
         fuse_opt_match(fuse_lib_opts, opt);
 }
 
-struct fuse *fuse_new_common(int fd, const char *opts,
+struct fuse *fuse_new_common(int fd, struct fuse_args *args,
                              const struct fuse_operations *op,
                              size_t op_size, int compat)
 {
@@ -1867,12 +1859,8 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     f->conf.attr_timeout = 1.0;
     f->conf.negative_timeout = 0.0;
 
-    if (opts) {
-        const char *argv[] = { "", "-o", opts, NULL };
-        if (fuse_opt_parse(3, (char **) argv, &f->conf,
-                           fuse_lib_opts, fuse_lib_opt_proc, NULL) == -1)
+    if (fuse_opt_parse(args, &f->conf, fuse_lib_opts, NULL) == -1)
             goto out_free;
-    }
 
 #ifdef __FreeBSD__
     /*
@@ -1882,9 +1870,7 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     f->conf.readdir_ino = 1;
 #endif
 
-    f->se = fuse_lowlevel_new(f->conf.llopts, &fuse_path_ops,
-                              sizeof(fuse_path_ops), f);
-    free(f->conf.llopts);
+    f->se = fuse_lowlevel_new(args, &fuse_path_ops, sizeof(fuse_path_ops), f);
     if (f->se == NULL)
         goto out_free;
 
@@ -1952,10 +1938,10 @@ struct fuse *fuse_new_common(int fd, const char *opts,
     return NULL;
 }
 
-struct fuse *fuse_new(int fd, const char *opts,
+struct fuse *fuse_new(int fd, struct fuse_args *args,
                       const struct fuse_operations *op, size_t op_size)
 {
-    return fuse_new_common(fd, opts, op, op_size, 0);
+    return fuse_new_common(fd, args, op, op_size, 0);
 }
 
 void fuse_destroy(struct fuse *f)
@@ -2080,19 +2066,39 @@ static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)
     return err;
 }
 
+static struct fuse *fuse_new_common_compat(int fd, const char *opts,
+                                           const struct fuse_operations *op,
+                                           size_t op_size, int compat)
+{
+    struct fuse *f;
+    struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
+
+    if (opts &&
+        (fuse_opt_add_arg(&args, "") == -1 ||
+         fuse_opt_add_arg(&args, "-o") == -1 ||
+         fuse_opt_add_arg(&args, opts) == -1)) {
+        fuse_opt_free_args(&args);
+        return NULL;
+    }
+    f = fuse_new_common(fd, &args, op, op_size, compat);
+    fuse_opt_free_args(&args);
+
+    return f;
+}
+
 struct fuse *fuse_new_compat22(int fd, const char *opts,
                                const struct fuse_operations_compat22 *op,
                                size_t op_size)
 {
-    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           op_size, 22);
+    return fuse_new_common_compat(fd, opts, (struct fuse_operations *) op,
+                                  op_size, 22);
 }
 
 struct fuse *fuse_new_compat2(int fd, const char *opts,
                               const struct fuse_operations_compat2 *op)
 {
-    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           sizeof(struct fuse_operations_compat2), 21);
+    return fuse_new_common_compat(fd, opts, (struct fuse_operations *) op,
+                                  sizeof(struct fuse_operations_compat2), 21);
 }
 
 struct fuse *fuse_new_compat1(int fd, int flags,
@@ -2101,8 +2107,8 @@ struct fuse *fuse_new_compat1(int fd, int flags,
     const char *opts = NULL;
     if (flags & FUSE_DEBUG_COMPAT1)
         opts = "debug";
-    return fuse_new_common(fd, opts, (struct fuse_operations *) op,
-                           sizeof(struct fuse_operations_compat1), 11);
+    return fuse_new_common_compat(fd, opts, (struct fuse_operations *) op,
+                                  sizeof(struct fuse_operations_compat1), 11);
 }
 
 __asm__(".symver fuse_exited,__fuse_exited@");

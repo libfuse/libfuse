@@ -18,6 +18,7 @@ libfuse_la_SOURCES = 		\
 	fuse_mt.c		\
 	fuse_opt.c		\
 	fuse_session.c		\
+	fuse_signals.c		\
 	helper.c		\
 	$(mount_source)
 

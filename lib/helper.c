@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB.
@@ -8,6 +8,7 @@
 
 #include "fuse_i.h"
 #include "fuse_opt.h"
+#include "fuse_lowlevel.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,9 +16,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <limits.h>
-#include <signal.h>
-
-static struct fuse *fuse_instance;
 
 static void usage(const char *progname)
 {
@@ -54,105 +52,33 @@ static void usage(const char *progname)
             );
 }
 
-static void exit_handler(int sig)
-{
-    (void) sig;
-    if (fuse_instance != NULL)
-        fuse_exit(fuse_instance);
-}
-
-static int set_one_signal_handler(int sig, void (*handler)(int))
-{
-    struct sigaction sa;
-    struct sigaction old_sa;
-
-    memset(&sa, 0, sizeof(struct sigaction));
-    sa.sa_handler = handler;
-    sigemptyset(&(sa.sa_mask));
-    sa.sa_flags = 0;
-
-    if (sigaction(sig, NULL, &old_sa) == -1) {
-        perror("FUSE: cannot get old signal handler");
-        return -1;
-    }
-
-    if (old_sa.sa_handler == SIG_DFL &&
-        sigaction(sig, &sa, NULL) == -1) {
-        perror("Cannot set signal handler");
-        return -1;
-    }
-    return 0;
-}
-
-static int set_signal_handlers(void)
-{
-    if (set_one_signal_handler(SIGHUP, exit_handler) == -1 ||
-        set_one_signal_handler(SIGINT, exit_handler) == -1 ||
-        set_one_signal_handler(SIGTERM, exit_handler) == -1 ||
-        set_one_signal_handler(SIGPIPE, SIG_IGN) == -1)
-        return -1;
-
-    return 0;
-}
-
 enum  {
     KEY_HELP,
     KEY_HELP_NOHEADER,
-    KEY_DEBUG,
-    KEY_KERN,
-    KEY_ALLOW_ROOT,
-    KEY_RO,
+    KEY_KEEP,
 };
 
 struct helper_opts {
-    const char *progname;
     int singlethread;
     int foreground;
-    int allow_other;
-    int allow_root;
     int fsname;
-    char *kernel_opts;
-    char *lib_opts;
     char *mountpoint;
 };
 
 #define FUSE_HELPER_OPT(t, p) { t, offsetof(struct helper_opts, p), 1 }
-#define FUSE_HELPER_KEY(t, k)    { t, FUSE_OPT_OFFSET_KEY, k }
 
 static const struct fuse_opt fuse_helper_opts[] = {
-    FUSE_HELPER_OPT("-d",                       foreground),
-    FUSE_HELPER_OPT("debug",                    foreground),
-    FUSE_HELPER_OPT("-f",			foreground),
-    FUSE_HELPER_OPT("-s",			singlethread),
-    FUSE_HELPER_OPT("allow_other",              allow_other),
-    FUSE_HELPER_OPT("allow_root",               allow_root),
-    FUSE_HELPER_OPT("fsname=",                  fsname),
+    FUSE_HELPER_OPT("-d",          foreground),
+    FUSE_HELPER_OPT("debug",       foreground),
+    FUSE_HELPER_OPT("-f",	   foreground),
+    FUSE_HELPER_OPT("-s",	   singlethread),
+    FUSE_HELPER_OPT("fsname=",     fsname),
 
-    FUSE_HELPER_KEY("-h",                       KEY_HELP),
-    FUSE_HELPER_KEY("--help",                   KEY_HELP),
-    FUSE_HELPER_KEY("-ho",                      KEY_HELP_NOHEADER),
-    FUSE_HELPER_KEY("-d",                       KEY_DEBUG),
-    FUSE_HELPER_KEY("debug",                    KEY_DEBUG),
-    FUSE_HELPER_KEY("allow_other",              KEY_KERN),
-    FUSE_HELPER_KEY("allow_root",               KEY_ALLOW_ROOT),
-    FUSE_HELPER_KEY("nonempty",                 KEY_KERN),
-    FUSE_HELPER_KEY("default_permissions",      KEY_KERN),
-    FUSE_HELPER_KEY("fsname=",                  KEY_KERN),
-    FUSE_HELPER_KEY("large_read",               KEY_KERN),
-    FUSE_HELPER_KEY("max_read=",                KEY_KERN),
-    FUSE_HELPER_KEY("-r",                       KEY_RO),
-    FUSE_HELPER_KEY("ro",                       KEY_KERN),
-    FUSE_HELPER_KEY("rw",                       KEY_KERN),
-    FUSE_HELPER_KEY("suid",                     KEY_KERN),
-    FUSE_HELPER_KEY("nosuid",                   KEY_KERN),
-    FUSE_HELPER_KEY("dev",                      KEY_KERN),
-    FUSE_HELPER_KEY("nodev",                    KEY_KERN),
-    FUSE_HELPER_KEY("exec",                     KEY_KERN),
-    FUSE_HELPER_KEY("noexec",                   KEY_KERN),
-    FUSE_HELPER_KEY("async",                    KEY_KERN),
-    FUSE_HELPER_KEY("sync",                     KEY_KERN),
-    FUSE_HELPER_KEY("atime",                    KEY_KERN),
-    FUSE_HELPER_KEY("noatime",                  KEY_KERN),
+    FUSE_OPT_KEY("-h",          KEY_HELP),
+    FUSE_OPT_KEY("--help",      KEY_HELP),
+    FUSE_OPT_KEY("-ho",         KEY_HELP_NOHEADER),
+    FUSE_OPT_KEY("-d",          KEY_KEEP),
+    FUSE_OPT_KEY("debug",       KEY_KEEP),
     FUSE_OPT_END
 };
 
@@ -161,83 +87,78 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 {
     struct helper_opts *hopts = data;
 
-    (void) outargs;
-
     switch (key) {
     case KEY_HELP:
     case KEY_HELP_NOHEADER:
-        usage(key == KEY_HELP ? hopts->progname : NULL);
+        usage(key == KEY_HELP ? outargs->argv[0] : NULL);
         exit(1);
 
-    case FUSE_OPT_KEY_OPT:
-        return fuse_opt_add_opt(&hopts->lib_opts, arg);
-
     case FUSE_OPT_KEY_NONOPT:
-        if (hopts->mountpoint)
-            break;
+        if (!hopts->mountpoint)
+            return fuse_opt_add_opt(&hopts->mountpoint, arg);
 
-        return fuse_opt_add_opt(&hopts->mountpoint, arg);
-
-    case KEY_DEBUG:
-        return fuse_opt_add_opt(&hopts->lib_opts, "debug");
-
-    case KEY_ALLOW_ROOT:
-        if (fuse_opt_add_opt(&hopts->kernel_opts, "allow_other") == -1 ||
-            fuse_opt_add_opt(&hopts->lib_opts, "allow_root") == -1)
-            return -1;
-        return 0;
-
-    case KEY_RO:
-        arg = "ro";
         /* fall through */
 
-    case KEY_KERN:
-        return fuse_opt_add_opt(&hopts->kernel_opts, arg);
+    default:
+    case KEY_KEEP:
+        return 1;
     }
-
-    fprintf(stderr, "fuse: invalid option `%s'\n", arg);
-    return -1;
 }
 
-static int fuse_parse_cmdline(int argc, const char *argv[],
-                              struct helper_opts *hopts)
+static int add_default_fsname(const char *progname, struct fuse_args *args)
 {
     int res;
+    char *fsname_opt;
+    const char *basename = strrchr(progname, '/');
+    if (basename == NULL)
+        basename = progname;
+    else if (basename[1] != '\0')
+        basename++;
 
-    hopts->progname = argv[0];
-    res = fuse_opt_parse(argc, (char **) argv, hopts, fuse_helper_opts,
-                         fuse_helper_opt_proc, NULL);
+    fsname_opt = (char *) malloc(strlen(basename) + 64);
+    if (fsname_opt == NULL) {
+        fprintf(stderr, "fuse: memory allocation failed\n");
+        return -1;
+    }
+    sprintf(fsname_opt, "-ofsname=%s", basename);
+    res = fuse_opt_add_arg(args, fsname_opt);
+    free(fsname_opt);
+    return res;
+}
+
+int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
+                       int *multithreaded, int *foreground)
+{
+    int res;
+    struct helper_opts hopts;
+
+    memset(&hopts, 0, sizeof(hopts));
+    res = fuse_opt_parse(args, &hopts, fuse_helper_opts, fuse_helper_opt_proc);
     if (res == -1)
         return -1;
 
-    if (hopts->allow_other && hopts->allow_root) {
-        fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
-        return -1;
-    }
-
-    if (!hopts->fsname) {
-        char *fsname_opt;
-        const char *basename = strrchr(argv[0], '/');
-        if (basename == NULL)
-            basename = argv[0];
-        else if (basename[1] != '\0')
-            basename++;
-
-        fsname_opt = (char *) malloc(strlen(basename) + 64);
-        if (fsname_opt == NULL) {
-            fprintf(stderr, "fuse: memory allocation failed\n");
-            return -1;
-        }
-        sprintf(fsname_opt, "fsname=%s", basename);
-        res = fuse_opt_add_opt(&hopts->kernel_opts, fsname_opt);
-        free(fsname_opt);
+    if (!hopts.fsname) {
+        res = add_default_fsname(args->argv[0], args);
         if (res == -1)
-            return -1;
+            goto err;
     }
+    if (mountpoint)
+        *mountpoint = hopts.mountpoint;
+    else
+        free(hopts.mountpoint);
+
+    if (multithreaded)
+        *multithreaded = !hopts.singlethread;
+    if (foreground)
+        *foreground = hopts.foreground;
     return 0;
+
+ err:
+    free(hopts.mountpoint);
+    return -1;
 }
 
-static struct fuse *fuse_setup_common(int argc, char *argv[],
+static struct fuse *fuse_setup_common(struct fuse_args *args,
                                       const struct fuse_operations *op,
                                       size_t op_size,
                                       char **mountpoint,
@@ -246,28 +167,22 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
                                       int compat)
 {
     struct fuse *fuse;
-    struct helper_opts hopts;
+    int foreground;
     int res;
 
-    if (fuse_instance != NULL) {
-        fprintf(stderr, "fuse: fuse_setup() called twice\n");
-        return NULL;
-    }
-
-    memset(&hopts, 0, sizeof(hopts));
-    res = fuse_parse_cmdline(argc, (const char **) argv, &hopts);
+    res = fuse_parse_cmdline(args, mountpoint, multithreaded, &foreground);
     if (res == -1)
-        goto err_free;
+        return NULL;
 
-    *fd = fuse_mount(hopts.mountpoint, hopts.kernel_opts);
+    *fd = fuse_mount(*mountpoint, args);
     if (*fd == -1)
         goto err_free;
 
-    fuse = fuse_new_common(*fd, hopts.lib_opts, op, op_size, compat);
+    fuse = fuse_new_common(*fd, args, op, op_size, compat);
     if (fuse == NULL)
         goto err_unmount;
 
-    if (!hopts.foreground) {
+    if (!foreground) {
         res = daemon(0, 0);
         if (res == -1) {
             perror("fuse: failed to daemonize program\n");
@@ -282,52 +197,41 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
         }
     }
 
-    res = set_signal_handlers();
+    res = fuse_set_signal_handlers(fuse_get_session(fuse));
     if (res == -1)
         goto err_destroy;
 
-    *mountpoint = hopts.mountpoint;
-    *multithreaded = !hopts.singlethread;
-    fuse_instance = fuse;
-    free(hopts.kernel_opts);
-    free(hopts.lib_opts);
     return fuse;
 
  err_destroy:
     fuse_destroy(fuse);
  err_unmount:
-    fuse_unmount(hopts.mountpoint);
+    fuse_unmount(*mountpoint);
  err_free:
-    free(hopts.mountpoint);
-    free(hopts.kernel_opts);
-    free(hopts.lib_opts);
+    free(*mountpoint);
     return NULL;
 }
 
-struct fuse *fuse_setup(int argc, char *argv[],
-                          const struct fuse_operations *op,
-                          size_t op_size, char **mountpoint,
-                          int *multithreaded, int *fd)
+struct fuse *fuse_setup(struct fuse_args *args,
+                        const struct fuse_operations *op,
+                        size_t op_size, char **mountpoint,
+                        int *multithreaded, int *fd)
 {
-    return fuse_setup_common(argc, argv, op, op_size, mountpoint,
-                             multithreaded, fd, 0);
+    return fuse_setup_common(args, op, op_size, mountpoint, multithreaded, fd,
+                             0);
 }
 
 void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
 {
     (void) fd;
 
-    if (fuse_instance != fuse)
-        fprintf(stderr, "fuse: fuse_teardown() with unknown fuse object\n");
-    else
-        fuse_instance = NULL;
-
+    fuse_remove_signal_handlers(fuse_get_session(fuse));
     fuse_unmount(mountpoint);
     fuse_destroy(fuse);
     free(mountpoint);
 }
 
-static int fuse_main_common(int argc, char *argv[],
+static int fuse_main_common(struct fuse_args *args,
                             const struct fuse_operations *op, size_t op_size,
                             int compat)
 {
@@ -337,8 +241,8 @@ static int fuse_main_common(int argc, char *argv[],
     int res;
     int fd;
 
-    fuse = fuse_setup_common(argc, argv, op, op_size, &mountpoint,
-                             &multithreaded, &fd, compat);
+    fuse = fuse_setup_common(args, op, op_size, &mountpoint, &multithreaded,
+                             &fd, compat);
     if (fuse == NULL)
         return 1;
 
@@ -357,7 +261,10 @@ static int fuse_main_common(int argc, char *argv[],
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
                    size_t op_size)
 {
-    return fuse_main_common(argc, argv, op, op_size, 0);
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    int res = fuse_main_common(&args, op, op_size, 0);
+    fuse_opt_free_args(&args);
+    return res;
 }
 
 #undef fuse_main
@@ -376,8 +283,12 @@ struct fuse *fuse_setup_compat22(int argc, char *argv[],
                                  size_t op_size, char **mountpoint,
                                  int *multithreaded, int *fd)
 {
-    return fuse_setup_common(argc, argv, (struct fuse_operations *) op,
-                             op_size, mountpoint, multithreaded, fd, 22);
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    struct fuse *f =
+        fuse_setup_common(&args, (struct fuse_operations *) op,
+                          op_size, mountpoint, multithreaded, fd, 22);
+    fuse_opt_free_args(&args);
+    return f;
 }
 
 struct fuse *fuse_setup_compat2(int argc, char *argv[],
@@ -385,31 +296,44 @@ struct fuse *fuse_setup_compat2(int argc, char *argv[],
                                  char **mountpoint, int *multithreaded,
                                  int *fd)
 {
-    return fuse_setup_common(argc, argv, (struct fuse_operations *) op,
-                             sizeof(struct fuse_operations_compat2),
-                             mountpoint, multithreaded, fd, 21);
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    struct fuse *f =
+        fuse_setup_common(&args, (struct fuse_operations *) op,
+                          sizeof(struct fuse_operations_compat2),
+                          mountpoint, multithreaded, fd, 21);
+    fuse_opt_free_args(&args);
+    return f;
 }
 
 int fuse_main_real_compat22(int argc, char *argv[],
                             const struct fuse_operations_compat22 *op,
                             size_t op_size)
 {
-    return fuse_main_common(argc, argv, (struct fuse_operations *) op,
-                            op_size, 22);
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    int res =
+        fuse_main_common(&args, (struct fuse_operations *) op, op_size, 22);
+    fuse_opt_free_args(&args);
+    return res;
 }
 
 void fuse_main_compat1(int argc, char *argv[],
                       const struct fuse_operations_compat1 *op)
 {
-    fuse_main_common(argc, argv, (struct fuse_operations *) op,
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    fuse_main_common(&args, (struct fuse_operations *) op,
                      sizeof(struct fuse_operations_compat1), 11);
+    fuse_opt_free_args(&args);
 }
 
 int fuse_main_compat2(int argc, char *argv[],
                       const struct fuse_operations_compat2 *op)
 {
-    return fuse_main_common(argc, argv, (struct fuse_operations *) op,
-                            sizeof(struct fuse_operations_compat2), 21);
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+    int res =
+        fuse_main_common(&args, (struct fuse_operations *) op,
+                         sizeof(struct fuse_operations_compat2), 21);
+    fuse_opt_free_args(&args);
+    return res;
 }
 
 __asm__(".symver fuse_setup_compat2,__fuse_setup@");

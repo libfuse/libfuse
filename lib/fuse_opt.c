@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB
@@ -27,12 +27,13 @@ struct fuse_opt_context {
 
 void fuse_opt_free_args(struct fuse_args *args)
 {
-    if (args && args->argv) {
+    if (args && args->argv && args->allocated) {
         int i;
         for (i = 0; i < args->argc; i++)
             free(args->argv[i]);
         free(args->argv);
         args->argv = NULL;
+        args->allocated = 0;
     }
 }
 
@@ -44,12 +45,18 @@ static int alloc_failed(void)
 
 int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
 {
-    char **newargv = realloc(args->argv, (args->argc + 2) * sizeof(char *));
-    char *newarg = newargv ? strdup(arg) : NULL;
+    char **newargv;
+    char *newarg;
+
+    assert(!args->argv || args->allocated);
+
+    newargv = realloc(args->argv, (args->argc + 2) * sizeof(char *));
+    newarg = newargv ? strdup(arg) : NULL;
     if (!newargv || !newarg)
         return alloc_failed();
 
     args->argv = newargv;
+    args->allocated = 1;
     args->argv[args->argc++] = newarg;
     args->argv[args->argc] = NULL;
     return 0;
@@ -183,7 +190,7 @@ static int process_opt(struct fuse_opt_context *ctx,
                        const struct fuse_opt *opt, unsigned sep,
                        const char *arg, int iso)
 {
-    if (opt->offset == FUSE_OPT_OFFSET_KEY) {
+    if (opt->offset == -1U) {
         if (call_proc(ctx, arg, opt->value, iso) == -1)
             return -1;
     } else {
@@ -324,27 +331,29 @@ static int opt_parse(struct fuse_opt_context *ctx)
     return 0;
 }
 
-int fuse_opt_parse(int argc, char *argv[], void *data,
-                   const struct fuse_opt opts[], fuse_opt_proc_t proc,
-                   struct fuse_args *outargs)
+int fuse_opt_parse(struct fuse_args *args, void *data,
+                   const struct fuse_opt opts[], fuse_opt_proc_t proc)
 {
     int res;
     struct fuse_opt_context ctx = {
-        .argc = argv ? argc : outargs->argc,
-        .argv = argv ? argv : outargs->argv,
         .data = data,
         .opt = opts,
         .proc = proc,
     };
 
-    res = opt_parse(&ctx);
-    if (!argv)
-        fuse_opt_free_args(outargs);
-    free(ctx.opts);
-    if (res != -1 && outargs)
-        *outargs = ctx.outargs;
-    else
-        fuse_opt_free_args(&ctx.outargs);
+    if (!args || !args->argv || !args->argc)
+        return 0;
 
+    ctx.argc = args->argc;
+    ctx.argv = args->argv;
+
+    res = opt_parse(&ctx);
+    if (res != -1) {
+        struct fuse_args tmp = *args;
+        *args = ctx.outargs;
+        ctx.outargs = tmp;
+    }
+    free(ctx.opts);
+    fuse_opt_free_args(&ctx.outargs);
     return res;
 }

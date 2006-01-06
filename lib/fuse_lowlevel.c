@@ -1,6 +1,6 @@
 /*
     FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2005  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2006  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU LGPL.
     See the file COPYING.LIB
@@ -895,6 +895,7 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 
 static struct fuse_opt fuse_ll_opts[] = {
     { "debug", offsetof(struct fuse_ll, debug), 1 },
+    { "-d", offsetof(struct fuse_ll, debug), 1 },
     { "allow_root", offsetof(struct fuse_ll, allow_root), 1 },
     FUSE_OPT_END
 };
@@ -924,7 +925,7 @@ static void fuse_ll_destroy(void *data)
     free(f);
 }
 
-struct fuse_session *fuse_lowlevel_new(const char *opts,
+struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
                                        const struct fuse_lowlevel_ops *op,
                                        size_t op_size, void *userdata)
 {
@@ -946,12 +947,8 @@ struct fuse_session *fuse_lowlevel_new(const char *opts,
         goto out;
     }
 
-    if (opts) {
-        const char *argv[] = { "", "-o", opts, NULL };
-        if (fuse_opt_parse(3, (char **) argv, f, fuse_ll_opts,
-                           fuse_ll_opt_proc, NULL) == -1)
-            goto out_free;
-    }
+    if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
+        goto out_free;
 
     memcpy(&f->op, op, op_size);
     f->owner = getuid();
@@ -1015,8 +1012,28 @@ int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf)
     return fuse_reply_statfs(req, &newbuf);
 }
 
+struct fuse_session *fuse_lowlevel_new_compat(const char *opts,
+                                              const struct fuse_lowlevel_ops *op,
+                                              size_t op_size, void *userdata)
+{
+    struct fuse_session *se;
+    struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
+
+    if (opts &&
+        (fuse_opt_add_arg(&args, "") == -1 ||
+         fuse_opt_add_arg(&args, "-o") == -1 ||
+         fuse_opt_add_arg(&args, opts) == -1)) {
+        fuse_opt_free_args(&args);
+        return NULL;
+    }
+    se = fuse_lowlevel_new(&args, op, op_size, userdata);
+    fuse_opt_free_args(&args);
+
+    return se;
+}
 
 __asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
 __asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
+__asm__(".symver fuse_lowlevel_new_compat,fuse_lowlevel_new@FUSE_2.4");
 
 #endif /* __FreeBSD__ */
