@@ -687,7 +687,7 @@ static ssize_t fuse_file_read(struct file *file, char __user *buf,
 	struct inode *inode = file->f_dentry->d_inode;
 	struct fuse_conn *fc = get_fuse_conn(inode);
 
-	if (is_bad_inode(file))
+	if (is_bad_inode(inode))
 		return -EIO;
 
 	if (fc->flags & FUSE_LARGE_READ) {
