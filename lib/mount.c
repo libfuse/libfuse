@@ -58,6 +58,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_OPT_KEY("sync",                KEY_KERN),
     FUSE_OPT_KEY("atime",               KEY_KERN),
     FUSE_OPT_KEY("noatime",             KEY_KERN),
+    FUSE_OPT_END
 };
 
 static int fuse_mount_opt_proc(void *data, const char *arg, int key,
