@@ -27,11 +27,14 @@ enum {
     KEY_KERN,
     KEY_ALLOW_ROOT,
     KEY_RO,
+    KEY_HELP,
+    KEY_VERSION,
 };
 
 struct mount_opts {
     int allow_other;
     int allow_root;
+    int ishelp;
     char *kernel_opts;
 };
 
@@ -58,8 +61,31 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_OPT_KEY("sync",                KEY_KERN),
     FUSE_OPT_KEY("atime",               KEY_KERN),
     FUSE_OPT_KEY("noatime",             KEY_KERN),
+    FUSE_OPT_KEY("-h",                  KEY_HELP),
+    FUSE_OPT_KEY("--help",              KEY_HELP),
+    FUSE_OPT_KEY("-V",                  KEY_VERSION),
+    FUSE_OPT_KEY("--version",           KEY_VERSION),
     FUSE_OPT_END
 };
+
+static void mount_help(void)
+{
+    fprintf(stderr,
+            "    -o allow_other         allow access to other users\n"
+            "    -o allow_root          allow access to root\n"
+            "    -o nonempty            allow mounts over non-empty file/dir\n"
+            "    -o default_permissions enable permission checking by kernel\n"
+            "    -o fsname=NAME         set filesystem name\n"
+            "    -o large_read          issue large read requests (2.4 only)\n"
+            "    -o max_read=N          set maximum size of read requests\n"
+            "\n"
+            );
+}
+
+static void mount_version(void)
+{
+    system(FUSERMOUNT_PROG " --version");
+}
 
 static int fuse_mount_opt_proc(void *data, const char *arg, int key,
                                struct fuse_args *outargs)
@@ -79,6 +105,16 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
     case KEY_KERN:
         return fuse_opt_add_opt(&mo->kernel_opts, arg);
+
+    case KEY_HELP:
+        mount_help();
+        mo->ishelp = 1;
+        break;
+
+    case KEY_VERSION:
+        mount_version();
+        mo->ishelp = 1;
+        break;
     }
     return 1;
 }
@@ -132,6 +168,9 @@ void fuse_unmount(const char *mountpoint)
 {
     const char *mountprog = FUSERMOUNT_PROG;
     int pid;
+
+    if (!mountpoint)
+        return;
 
 #ifdef HAVE_FORK
     pid = fork();
@@ -235,6 +274,8 @@ int fuse_mount(const char *mountpoint, struct fuse_args *args)
         fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
         goto out;
     }
+    if (mo.ishelp)
+        return 0;
 
     res = fuse_mount_compat22(mountpoint, mo.kernel_opts);
  out:

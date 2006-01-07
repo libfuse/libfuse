@@ -893,20 +893,45 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     }
 }
 
+enum {
+    KEY_HELP,
+    KEY_VERSION,
+};
+
 static struct fuse_opt fuse_ll_opts[] = {
     { "debug", offsetof(struct fuse_ll, debug), 1 },
     { "-d", offsetof(struct fuse_ll, debug), 1 },
     { "allow_root", offsetof(struct fuse_ll, allow_root), 1 },
+    FUSE_OPT_KEY("-h", KEY_HELP),
+    FUSE_OPT_KEY("--help", KEY_HELP),
+    FUSE_OPT_KEY("-V", KEY_VERSION),
+    FUSE_OPT_KEY("--version", KEY_VERSION),
     FUSE_OPT_END
 };
+
+static void fuse_ll_version(void)
+{
+    fprintf(stderr, "using FUSE kernel interface version %i.%i\n",
+            FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+}
 
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,
                             struct fuse_args *outargs)
 {
-    (void) data;
-    (void) key;
-    (void) outargs;
-    fprintf(stderr, "fuse: unknown option `%s'\n", arg);
+    (void) data; (void) outargs;
+    
+    switch (key) {
+    case KEY_HELP:
+        break;
+        
+    case KEY_VERSION:
+        fuse_ll_version();
+        break;
+
+    default:
+        fprintf(stderr, "fuse: unknown option `%s'\n", arg);
+    }
+    
     return -1;
 }
 

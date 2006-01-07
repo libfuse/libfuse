@@ -1806,11 +1806,18 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
     fuse_getcontext = func;
 }
 
+enum {
+    KEY_HELP,
+    KEY_KEEP
+};
+
 #define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
 
 static const struct fuse_opt fuse_lib_opts[] = {
-    FUSE_OPT_KEY("debug", 0),
-    FUSE_OPT_KEY("-d", 0),
+    FUSE_OPT_KEY("-h",                    KEY_HELP),
+    FUSE_OPT_KEY("--help",                KEY_HELP),
+    FUSE_OPT_KEY("debug",                 KEY_KEEP),
+    FUSE_OPT_KEY("-d",                    KEY_KEEP),
     FUSE_LIB_OPT("debug",                 debug, 1),
     FUSE_LIB_OPT("-d",                    debug, 1),
     FUSE_LIB_OPT("hard_remove",           hard_remove, 1),
@@ -1829,6 +1836,35 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("negative_timeout=%lf",  negative_timeout, 0),
     FUSE_OPT_END
 };
+
+static void fuse_lib_help(void)
+{
+    fprintf(stderr,
+            "    -o hard_remove         immediate removal (don't hide files)\n"
+            "    -o use_ino             let filesystem set inode numbers\n"
+            "    -o readdir_ino         try to fill in d_ino in readdir\n"
+            "    -o direct_io           use direct I/O\n"
+            "    -o kernel_cache        cache files in kernel\n"
+            "    -o umask=M             set file permissions (octal)\n"
+            "    -o uid=N               set file owner\n"
+            "    -o gid=N               set file group\n"
+            "    -o entry_timeout=T     cache timeout for names (1.0s)\n"
+            "    -o negative_timeout=T  cache timeout for deleted names (0.0s)\n"
+            "    -o attr_timeout=T      cache timeout for attributes (1.0s)\n"
+            "\n");
+}
+
+static int fuse_lib_opt_proc(void *data, const char *arg, int key,
+                             struct fuse_args *outargs)
+{
+    (void) data; (void) arg; (void) outargs;
+
+    if (key == KEY_HELP)
+        fuse_lib_help();
+
+    return 1;
+}
+
 
 int fuse_is_lib_option(const char *opt)
 {
@@ -1859,7 +1895,7 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
     f->conf.attr_timeout = 1.0;
     f->conf.negative_timeout = 0.0;
 
-    if (fuse_opt_parse(args, &f->conf, fuse_lib_opts, NULL) == -1)
+    if (fuse_opt_parse(args, &f->conf, fuse_lib_opts, fuse_lib_opt_proc) == -1)
             goto out_free;
 
 #ifdef __FreeBSD__

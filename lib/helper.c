@@ -6,6 +6,7 @@
     See the file COPYING.LIB.
 */
 
+#include "config.h"
 #include "fuse_i.h"
 #include "fuse_opt.h"
 #include "fuse_lowlevel.h"
@@ -17,44 +18,10 @@
 #include <string.h>
 #include <limits.h>
 
-static void usage(const char *progname)
-{
-    if (progname)
-        fprintf(stderr,
-                "usage: %s mountpoint [FUSE options]\n\n", progname);
-
-    fprintf(stderr,
-            "FUSE options:\n"
-            "    -d                     enable debug output (implies -f)\n"
-            "    -f                     foreground operation\n"
-            "    -s                     disable multi-threaded operation\n"
-            "    -r                     mount read only (equivalent to '-o ro')\n"
-            "    -o opt,[opt...]        mount options\n"
-            "    -h                     print help\n"
-            "\n"
-            "Mount options:\n"
-            "    default_permissions    enable permission checking\n"
-            "    allow_other            allow access to other users\n"
-            "    allow_root             allow access to root\n"
-            "    kernel_cache           cache files in kernel\n"
-            "    large_read             issue large read requests (2.4 only)\n"
-            "    direct_io              use direct I/O\n"
-            "    max_read=N             set maximum size of read requests\n"
-            "    hard_remove            immediate removal (don't hide files)\n"
-            "    debug                  enable debug output\n"
-            "    fsname=NAME            set filesystem name in mtab\n"
-            "    use_ino                let filesystem set inode numbers\n"
-            "    readdir_ino            try to fill in d_ino in readdir\n"
-            "    nonempty               allow mounts over non-empty file/dir\n"
-            "    umask=M                set file permissions (octal)\n"
-            "    uid=N                  set file owner\n"
-            "    gid=N                  set file group\n"
-            );
-}
-
 enum  {
     KEY_HELP,
     KEY_HELP_NOHEADER,
+    KEY_VERSION,
     KEY_KEEP,
 };
 
@@ -70,17 +37,47 @@ struct helper_opts {
 static const struct fuse_opt fuse_helper_opts[] = {
     FUSE_HELPER_OPT("-d",          foreground),
     FUSE_HELPER_OPT("debug",       foreground),
-    FUSE_HELPER_OPT("-f",	   foreground),
-    FUSE_HELPER_OPT("-s",	   singlethread),
+    FUSE_HELPER_OPT("-f",          foreground),
+    FUSE_HELPER_OPT("-s",          singlethread),
     FUSE_HELPER_OPT("fsname=",     fsname),
 
     FUSE_OPT_KEY("-h",          KEY_HELP),
     FUSE_OPT_KEY("--help",      KEY_HELP),
     FUSE_OPT_KEY("-ho",         KEY_HELP_NOHEADER),
+    FUSE_OPT_KEY("-V",          KEY_VERSION),
+    FUSE_OPT_KEY("--version",   KEY_VERSION),
     FUSE_OPT_KEY("-d",          KEY_KEEP),
     FUSE_OPT_KEY("debug",       KEY_KEEP),
     FUSE_OPT_END
 };
+
+static void usage(const char *progname)
+{
+    fprintf(stderr,
+            "usage: %s mountpoint [options]\n\n", progname);
+    fprintf(stderr,
+            "general options:\n"
+            "    -o opt,[opt...]        mount options\n"
+            "    -h   --help            print help\n"
+            "    -V   --version         print version\n"
+            "\n");
+}
+
+static void helper_help(void)
+{
+    fprintf(stderr,
+            "FUSE options:\n"
+            "    -d   -o debug          enable debug output (implies -f)\n"
+            "    -f                     foreground operation\n"
+            "    -s                     disable multi-threaded operation\n"
+            "\n"
+            );
+}
+
+static void helper_version(void)
+{
+    fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
+}
 
 static int fuse_helper_opt_proc(void *data, const char *arg, int key,
                                 struct fuse_args *outargs)
@@ -89,9 +86,16 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 
     switch (key) {
     case KEY_HELP:
+        usage(outargs->argv[0]);
+        /* fall through */
+
     case KEY_HELP_NOHEADER:
-        usage(key == KEY_HELP ? outargs->argv[0] : NULL);
-        exit(1);
+        helper_help();
+        return fuse_opt_add_arg(outargs, "-h");
+
+    case KEY_VERSION:
+        helper_version();
+        return 1;
 
     case FUSE_OPT_KEY_NONOPT:
         if (!hopts->mountpoint)

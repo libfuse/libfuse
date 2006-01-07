@@ -1018,7 +1018,7 @@ static void usage(void)
             "%s: [options] mountpoint\n"
             "Options:\n"
             " -h                print help\n"
-            " -v                print version\n"
+            " -V                print version\n"
             " -o opt[,opt...]   mount options\n"
             " -u                unmount\n"
             " -q                quiet\n"
@@ -1029,7 +1029,7 @@ static void usage(void)
 
 static void show_version(void)
 {
-    printf("%s\n", PACKAGE_STRING);
+    printf("fusermount version: %s\n", PACKAGE_VERSION);
     exit(0);
 }
 
@@ -1052,7 +1052,7 @@ int main(int argc, char *argv[])
         {"lazy",    no_argument, NULL, 'z'},
         {"quiet",   no_argument, NULL, 'q'},
         {"help",    no_argument, NULL, 'h'},
-        {"version", no_argument, NULL, 'v'},
+        {"version", no_argument, NULL, 'V'},
         {0, 0, 0, 0}};
 
     progname = strdup(argv[0]);
@@ -1061,13 +1061,13 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    while ((ch = getopt_long(argc, argv, "hvo:uzq", long_opts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "hVo:uzq", long_opts, NULL)) != -1) {
         switch (ch) {
         case 'h':
             usage();
             break;
 
-        case 'v':
+        case 'V':
             show_version();
             break;
 
