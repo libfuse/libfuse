@@ -158,7 +158,28 @@ int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
     return -1;
 }
 
-static struct fuse *fuse_setup_common(struct fuse_args *args,
+static int fuse_daemonize(int foreground)
+{
+    int res;
+
+    if (!foreground) {
+        res = daemon(0, 0);
+        if (res == -1) {
+            perror("fuse: failed to daemonize program\n");
+            return -1;
+        }
+    } else {
+        /* Ensure consistant behavior across debug and normal modes */
+        res = chdir("/");
+        if (res == -1) {
+            perror("fuse: failed to change working directory to /\n");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static struct fuse *fuse_setup_common(int argc, char *argv[],
                                       const struct fuse_operations *op,
                                       size_t op_size,
                                       char **mountpoint,
@@ -166,36 +187,29 @@ static struct fuse *fuse_setup_common(struct fuse_args *args,
                                       int *fd,
                                       int compat)
 {
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse *fuse;
     int foreground;
     int res;
 
-    res = fuse_parse_cmdline(args, mountpoint, multithreaded, &foreground);
+    res = fuse_parse_cmdline(&args, mountpoint, multithreaded, &foreground);
     if (res == -1)
         return NULL;
 
-    *fd = fuse_mount(*mountpoint, args);
-    if (*fd == -1)
+    *fd = fuse_mount(*mountpoint, &args);
+    if (*fd == -1) {
+        fuse_opt_free_args(&args);
         goto err_free;
+    }
 
-    fuse = fuse_new_common(*fd, args, op, op_size, compat);
+    fuse = fuse_new_common(*fd, &args, op, op_size, compat);
+    fuse_opt_free_args(&args);
     if (fuse == NULL)
         goto err_unmount;
 
-    if (!foreground) {
-        res = daemon(0, 0);
-        if (res == -1) {
-            perror("fuse: failed to daemonize program\n");
-            goto err_destroy;
-        }
-    } else {
-        /* Ensure consistant behavior across debug and normal modes */
-        res = chdir("/");
-        if (res == -1) {
-            perror("fuse: failed to change working directory to /\n");
-            goto err_destroy;
-        }
-    }
+    res = fuse_daemonize(foreground);
+    if (res == -1)
+        goto err_destroy;
 
     res = fuse_set_signal_handlers(fuse_get_session(fuse));
     if (res == -1)
@@ -212,13 +226,13 @@ static struct fuse *fuse_setup_common(struct fuse_args *args,
     return NULL;
 }
 
-struct fuse *fuse_setup(struct fuse_args *args,
+struct fuse *fuse_setup(int argc, char *argv[],
                         const struct fuse_operations *op,
                         size_t op_size, char **mountpoint,
                         int *multithreaded, int *fd)
 {
-    return fuse_setup_common(args, op, op_size, mountpoint, multithreaded, fd,
-                             0);
+    return fuse_setup_common(argc, argv, op, op_size, mountpoint,
+                             multithreaded, fd, 0);
 }
 
 void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
@@ -231,7 +245,7 @@ void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
     free(mountpoint);
 }
 
-static int fuse_main_common(struct fuse_args *args,
+static int fuse_main_common(int argc, char *argv[],
                             const struct fuse_operations *op, size_t op_size,
                             int compat)
 {
@@ -241,8 +255,8 @@ static int fuse_main_common(struct fuse_args *args,
     int res;
     int fd;
 
-    fuse = fuse_setup_common(args, op, op_size, &mountpoint, &multithreaded,
-                             &fd, compat);
+    fuse = fuse_setup_common(argc, argv, op, op_size, &mountpoint,
+                             &multithreaded, &fd, compat);
     if (fuse == NULL)
         return 1;
 
@@ -261,10 +275,7 @@ static int fuse_main_common(struct fuse_args *args,
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
                    size_t op_size)
 {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    int res = fuse_main_common(&args, op, op_size, 0);
-    fuse_opt_free_args(&args);
-    return res;
+    return fuse_main_common(argc, argv, op, op_size, 0);
 }
 
 #undef fuse_main
@@ -283,12 +294,8 @@ struct fuse *fuse_setup_compat22(int argc, char *argv[],
                                  size_t op_size, char **mountpoint,
                                  int *multithreaded, int *fd)
 {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    struct fuse *f =
-        fuse_setup_common(&args, (struct fuse_operations *) op,
-                          op_size, mountpoint, multithreaded, fd, 22);
-    fuse_opt_free_args(&args);
-    return f;
+    return fuse_setup_common(argc, argv, (struct fuse_operations *) op,
+                             op_size, mountpoint, multithreaded, fd, 22);
 }
 
 struct fuse *fuse_setup_compat2(int argc, char *argv[],
@@ -296,44 +303,31 @@ struct fuse *fuse_setup_compat2(int argc, char *argv[],
                                  char **mountpoint, int *multithreaded,
                                  int *fd)
 {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    struct fuse *f =
-        fuse_setup_common(&args, (struct fuse_operations *) op,
-                          sizeof(struct fuse_operations_compat2),
-                          mountpoint, multithreaded, fd, 21);
-    fuse_opt_free_args(&args);
-    return f;
+    return fuse_setup_common(argc, argv, (struct fuse_operations *) op,
+                             sizeof(struct fuse_operations_compat2),
+                             mountpoint, multithreaded, fd, 21);
 }
 
 int fuse_main_real_compat22(int argc, char *argv[],
                             const struct fuse_operations_compat22 *op,
                             size_t op_size)
 {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    int res =
-        fuse_main_common(&args, (struct fuse_operations *) op, op_size, 22);
-    fuse_opt_free_args(&args);
-    return res;
+    return fuse_main_common(argc, argv, (struct fuse_operations *) op, op_size,
+                            22);
 }
 
 void fuse_main_compat1(int argc, char *argv[],
                       const struct fuse_operations_compat1 *op)
 {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    fuse_main_common(&args, (struct fuse_operations *) op,
+    fuse_main_common(argc, argv, (struct fuse_operations *) op,
                      sizeof(struct fuse_operations_compat1), 11);
-    fuse_opt_free_args(&args);
 }
 
 int fuse_main_compat2(int argc, char *argv[],
                       const struct fuse_operations_compat2 *op)
 {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    int res =
-        fuse_main_common(&args, (struct fuse_operations *) op,
-                         sizeof(struct fuse_operations_compat2), 21);
-    fuse_opt_free_args(&args);
-    return res;
+    return fuse_main_common(argc, argv, (struct fuse_operations *) op,
+                            sizeof(struct fuse_operations_compat2), 21);
 }
 
 __asm__(".symver fuse_setup_compat2,__fuse_setup@");
