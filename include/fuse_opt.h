@@ -164,7 +164,7 @@ typedef int (*fuse_opt_proc_t)(void *data, const char *arg, int key,
  * Option parsing function
  *
  * If 'args' was returned from a previous call to fuse_opt_parse() or
- * it was constructed from 
+ * it was constructed from
  *
  * A NULL 'args' is equivalent to an empty argument vector
  *

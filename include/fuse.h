@@ -507,7 +507,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 
 /** This is the part of fuse_main() before the event loop */
-struct fuse *fuse_setup(int argc, char *argv[], 
+struct fuse *fuse_setup(int argc, char *argv[],
                         const struct fuse_operations *op, size_t op_size,
                         char **mountpoint, int *multithreaded, int *fd);
 

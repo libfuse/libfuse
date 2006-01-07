@@ -19,6 +19,6 @@ struct fuse_cmd {
 
 struct fuse_session *fuse_get_session(struct fuse *f);
 
-struct fuse *fuse_new_common(int fd, struct fuse_args *args, 
+struct fuse *fuse_new_common(int fd, struct fuse_args *args,
                              const struct fuse_operations *op,
                              size_t op_size, int compat);
