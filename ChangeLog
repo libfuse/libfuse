@@ -1,5 +1,9 @@
 2006-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.5.0-pre2
+
+2006-01-09  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Applied patch from Csaba Henk, to update mount_bsd to new
 	fuse_mount() semantics
 
