@@ -46,6 +46,10 @@
 #define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
 #define FUSE_CONF "/etc/fuse.conf"
 
+#ifndef MS_DIRSYNC
+#define MS_DIRSYNC 128
+#endif
+
 static const char *progname;
 
 static int user_allow_other = 0;
@@ -431,6 +435,7 @@ static struct mount_flags mount_flags[] = {
     {"sync",    MS_SYNCHRONOUS, 1, 1},
     {"atime",   MS_NOATIME,     0, 1},
     {"noatime", MS_NOATIME,     1, 1},
+    {"dirsync", MS_DIRSYNC,     1, 1},
     {NULL,      0,              0, 0}
 };
 

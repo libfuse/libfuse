@@ -59,6 +59,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_OPT_KEY("noexec",              KEY_KERN),
     FUSE_OPT_KEY("async",               KEY_KERN),
     FUSE_OPT_KEY("sync",                KEY_KERN),
+    FUSE_OPT_KEY("dirsync",             KEY_KERN),
     FUSE_OPT_KEY("atime",               KEY_KERN),
     FUSE_OPT_KEY("noatime",             KEY_KERN),
     FUSE_OPT_KEY("-h",                  KEY_HELP),

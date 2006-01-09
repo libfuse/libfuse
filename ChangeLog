@@ -6,6 +6,8 @@
 	* Ignore auto,noauto,... options in mount.fuse.  Reported by Frank
 	Steiner and Don Taber
 
+	* fusermount: add 'dirsync' mount option
+
 2006-01-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Improved help reporting and added version reporting to library
