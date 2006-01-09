@@ -41,6 +41,8 @@ MOUNTPOINT="$2"
 shift
 shift
 
-OPTIONS=`echo $@ | sed 's/,user//'`
+ignore_opts="(user|nouser|users|auto|noauto|_netdev)"
+
+OPTIONS=`echo $@ | sed -r "s/(,${ignore_opts}|${ignore_opts},)//g"`
 
 ${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}

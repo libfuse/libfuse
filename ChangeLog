@@ -3,6 +3,9 @@
 	* Applied patch from Csaba Henk, to update mount_bsd to new
 	fuse_mount() semantics
 
+	* Ignore auto,noauto,... options in mount.fuse.  Reported by Frank
+	Steiner and Don Taber
+
 2006-01-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Improved help reporting and added version reporting to library
