@@ -118,7 +118,7 @@ static void mount_help(void)
 }
 
 static void mount_version(void)
-{   
+{
     system(FUSERMOUNT_PROG " --version");
 }
 

@@ -919,11 +919,11 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
                             struct fuse_args *outargs)
 {
     (void) data; (void) outargs;
-    
+
     switch (key) {
     case KEY_HELP:
         break;
-        
+
     case KEY_VERSION:
         fuse_ll_version();
         break;
@@ -931,7 +931,7 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
     default:
         fprintf(stderr, "fuse: unknown option `%s'\n", arg);
     }
-    
+
     return -1;
 }
 
