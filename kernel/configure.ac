@@ -110,6 +110,12 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 			KERNELCFLAGS="$CFLAGS"
 		fi
 		CFLAGS="$old_cflags"
+		AC_MSG_CHECKING([architecture])
+		arch=`/bin/ls -l ${kernelsrc}/include/asm | sed "s/.*-> asm-//"`
+		AC_MSG_RESULT([$arch])
+		if test "$arch" = x86_64; then
+			KERNELCFLAGS="$KERNELCFLAGS -mno-red-zone -mcmodel=kernel -fno-reorder-blocks -finline-limit=2000"
+		fi
 	else
 		fuse_configured=no
 		kernel_autoconf=$kernelbuild/include/linux/autoconf.h

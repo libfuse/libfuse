@@ -1,3 +1,8 @@
+2006-01-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: add necessary compile flags for 2.4.X/x86_64.
+	Report from Sean Ziegeler
+
 2006-01-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.5.0-pre2
