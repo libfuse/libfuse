@@ -1,3 +1,14 @@
+2006-01-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix a couple of bugs
+
+	* Order of request_end() and fuse_copy_finish() was wrong
+
+	* request_end() used request pointer after decrementing refcount
+
+	* Clearing ->connected or ->mounted connection flags could race
+	with setting other bitfields not protected with a lock
+	
 2006-01-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: add necessary compile flags for 2.4.X/x86_64.

@@ -221,9 +221,7 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
  */
 static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 {
-	int putback;
 	req->finished = 1;
-	putback = atomic_dec_and_test(&req->count);
 	spin_unlock(&fuse_lock);
 	if (req->background) {
 		down_read(&fc->sbput_sem);
@@ -237,13 +235,11 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	else if (req->in.h.opcode == FUSE_RELEASE && req->inode == NULL) {
 		/* Special case for failed iget in CREATE */
 		u64 nodeid = req->in.h.nodeid;
-		__fuse_get_request(req);
 		fuse_reset_request(req);
 		fuse_send_forget(fc, req, nodeid, 1);
-		putback = 0;
+		return;
 	}
-	if (putback)
-		fuse_putback_request(fc, req);
+	fuse_put_request(fc, req);
 }
 
 /*
@@ -824,8 +820,10 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 
 	list_del_init(&req->list);
 	if (req->interrupted) {
-		request_end(fc, req);
+		spin_unlock(&fuse_lock);
 		fuse_copy_finish(&cs);
+		spin_lock(&fuse_lock);
+		request_end(fc, req);
 		return -ENOENT;
 	}
 	req->out.h = oh;

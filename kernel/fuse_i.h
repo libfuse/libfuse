@@ -315,10 +315,10 @@ struct fuse_conn {
 	u64 reqctr;
 
 	/** Mount is active */
-	unsigned mounted : 1;
+	unsigned mounted;
 
 	/** Connection established */
-	unsigned connected : 1;
+	unsigned connected;
 
 	/** Connection failed (version mismatch) */
 	unsigned conn_error : 1;
