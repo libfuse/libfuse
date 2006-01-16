@@ -37,7 +37,9 @@ if test -z "$enable_kernel_module" -a -z "$kernelbuild" && echo "$runver" | grep
 	fi
 	if test "$checkmodule" = yes; then
 		AC_MSG_CHECKING([if FUSE module is from official kernel])
-			if fgrep -q "fuse distribution version: " /lib/modules/${runver}/kernel/fs/fuse/fuse.ko 2> /dev/null; then
+		if test ! -f /lib/modules/${runver}/kernel/fs/fuse/fuse.ko; then
+			AC_MSG_RESULT([no])
+		elif fgrep -q "fuse distribution version: " /lib/modules/${runver}/kernel/fs/fuse/fuse.ko 2> /dev/null; then
 			AC_MSG_RESULT([no])
 		else
 			AC_MSG_RESULT([yes])
@@ -148,6 +150,21 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	AC_MSG_CHECKING([if kernel has extended attribute support])
 	if test -f $kernelsrc/include/linux/xattr.h; then
 		AC_DEFINE(HAVE_KERNEL_XATTR, 1, [Kernel has xattr support])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+	AC_MSG_CHECKING([if kernel defines kzalloc function])
+	if egrep -qw "kzalloc" $kernelsrc/include/linux/slab.h; then
+		AC_DEFINE(HAVE_KZALLOC, 1, [kzalloc() is defined])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+
+	AC_MSG_CHECKING([if kernel defines fs_subsys])
+	if egrep -qw "fs_subsys" $kernelsrc/include/linux/fs.h; then
+		AC_DEFINE(HAVE_FS_SUBSYS, 1, [fs_subsys is defined])
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])

@@ -1,3 +1,17 @@
+2006-01-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Added (again) asynchronous readpages support
+
+	* Each connection now shows up under /sys/fs/fuse/connections
+
+	* Connection attributes exported to sysfs: 'waiting' number of
+	waiting requests; 'abort' abort the connection
+
+	* Connection may be aborted through either the sysfs interface or
+	with 'umount -f mountpoint'
+
+	* 
+
 2006-01-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.5.0
@@ -12,7 +26,7 @@
 
 	* Clearing ->connected or ->mounted connection flags could race
 	with setting other bitfields not protected with a lock
-	
+
 2006-01-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: add necessary compile flags for 2.4.X/x86_64.

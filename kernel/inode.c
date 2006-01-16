@@ -30,6 +30,15 @@ MODULE_LICENSE("GPL");
 
 spinlock_t fuse_lock;
 static kmem_cache_t *fuse_inode_cachep;
+#ifdef KERNEL_2_6
+static struct subsystem connections_subsys;
+
+struct fuse_conn_attr {
+	struct attribute attr;
+	ssize_t (*show)(struct fuse_conn *, char *);
+	ssize_t (*store)(struct fuse_conn *, const char *, size_t);
+};
+#endif
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
@@ -261,6 +270,11 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 }
 #endif
 
+static void fuse_umount_begin(struct super_block *sb)
+{
+	fuse_abort_conn(get_fuse_conn_super(sb));
+}
+
 static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
@@ -272,14 +286,15 @@ static void fuse_put_super(struct super_block *sb)
 
 	spin_lock(&fuse_lock);
 	fc->mounted = 0;
-	fc->user_id = 0;
-	fc->group_id = 0;
-	fc->flags = 0;
+	fc->connected = 0;
+	spin_unlock(&fuse_lock);
+	up_write(&fc->sbput_sem);
 	/* Flush all readers on this fs */
 	wake_up_all(&fc->waitq);
-	up_write(&fc->sbput_sem);
-	fuse_release_conn(fc);
-	spin_unlock(&fuse_lock);
+#ifdef KERNEL_2_6
+	kobject_del(&fc->kobj);
+#endif
+	kobject_put(&fc->kobj);
 }
 
 static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
@@ -445,8 +460,10 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 	return 0;
 }
 
-static void free_conn(struct fuse_conn *fc)
+static void fuse_conn_release(struct kobject *kobj)
 {
+	struct fuse_conn *fc = get_fuse_conn_kobj(kobj);
+
 	while (!list_empty(&fc->unused_list)) {
 		struct fuse_req *req;
 		req = list_entry(fc->unused_list.next, struct fuse_req, list);
@@ -456,33 +473,42 @@ static void free_conn(struct fuse_conn *fc)
 	kfree(fc);
 }
 
-/* Must be called with the fuse lock held */
-void fuse_release_conn(struct fuse_conn *fc)
+#ifndef HAVE_KZALLOC
+static void *kzalloc(size_t size, int flags)
 {
-	fc->count--;
-	if (!fc->count)
-		free_conn(fc);
+	void *ret = kmalloc(size, flags);
+	if (ret)
+		memset(ret, 0, size);
+	return ret;
 }
-
+#endif
 static struct fuse_conn *new_conn(void)
 {
 	struct fuse_conn *fc;
 
-	fc = kmalloc(sizeof(*fc), GFP_KERNEL);
-	if (fc != NULL) {
+	fc = kzalloc(sizeof(*fc), GFP_KERNEL);
+	if (fc) {
 		int i;
-		memset(fc, 0, sizeof(*fc));
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
+		INIT_LIST_HEAD(&fc->io);
 		INIT_LIST_HEAD(&fc->unused_list);
 		INIT_LIST_HEAD(&fc->background);
-		sema_init(&fc->outstanding_sem, 0);
+		sema_init(&fc->outstanding_sem, 1); /* One for INIT */
 		init_rwsem(&fc->sbput_sem);
+#ifdef KERNEL_2_6
+		kobj_set_kset_s(fc, connections_subsys);
+		kobject_init(&fc->kobj);
+#else
+		atomic_set(&fc->kobj.count, 1);
+		fc->kobj.release = fuse_conn_release;
+#endif
+		atomic_set(&fc->num_waiting, 0);
 		for (i = 0; i < FUSE_MAX_OUTSTANDING; i++) {
 			struct fuse_req *req = fuse_request_alloc();
 			if (!req) {
-				free_conn(fc);
+				kobject_put(&fc->kobj);
 				return NULL;
 			}
 			list_add(&req->list, &fc->unused_list);
@@ -499,25 +525,32 @@ static struct fuse_conn *new_conn(void)
 static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
 {
 	struct fuse_conn *fc;
+	int err;
 
+	err = -EINVAL;
 	if (file->f_op != &fuse_dev_operations)
-		return ERR_PTR(-EINVAL);
+		goto out_err;
+
+	err = -ENOMEM;
 	fc = new_conn();
-	if (fc == NULL)
-		return ERR_PTR(-ENOMEM);
+	if (!fc)
+		goto out_err;
+
 	spin_lock(&fuse_lock);
-	if (file->private_data) {
-		free_conn(fc);
-		fc = ERR_PTR(-EINVAL);
-	} else {
-		file->private_data = fc;
-		*get_fuse_conn_super_p(sb) = fc;
-		fc->mounted = 1;
-		fc->connected = 1;
-		fc->count = 2;
-	}
+	err = -EINVAL;
+	if (file->private_data)
+		goto out_unlock;
+
+	kobject_get(&fc->kobj);
+	file->private_data = fc;
 	spin_unlock(&fuse_lock);
 	return fc;
+
+ out_unlock:
+	spin_unlock(&fuse_lock);
+	kobject_put(&fc->kobj);
+ out_err:
+	return ERR_PTR(err);
 }
 
 static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
@@ -600,9 +633,68 @@ static struct super_operations fuse_super_operations = {
 	.read_inode	= fuse_read_inode,
 	.clear_inode	= fuse_clear_inode,
 	.put_super	= fuse_put_super,
+	.umount_begin	= fuse_umount_begin,
 	.statfs		= fuse_statfs,
 	.show_options	= fuse_show_options,
 };
+
+static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
+{
+	int i;
+	struct fuse_init_out *arg = &req->misc.init_out;
+
+	if (req->out.h.error || arg->major != FUSE_KERNEL_VERSION)
+		fc->conn_error = 1;
+	else {
+		fc->minor = arg->minor;
+		fc->max_write = arg->minor < 5 ? 4096 : arg->max_write;
+	}
+
+	/* After INIT reply is received other requests can go
+	   out.  So do (FUSE_MAX_OUTSTANDING - 1) number of
+	   up()s on outstanding_sem.  The last up() is done in
+	   fuse_putback_request() */
+	for (i = 1; i < FUSE_MAX_OUTSTANDING; i++)
+		up(&fc->outstanding_sem);
+
+	fuse_put_request(fc, req);
+}
+
+static void fuse_send_init(struct fuse_conn *fc)
+{
+	/* This is called from fuse_read_super() so there's guaranteed
+	   to be exactly one request available */
+	struct fuse_req *req = fuse_get_request(fc);
+	struct fuse_init_in *arg = &req->misc.init_in;
+
+	arg->major = FUSE_KERNEL_VERSION;
+	arg->minor = FUSE_KERNEL_MINOR_VERSION;
+	req->in.h.opcode = FUSE_INIT;
+	req->in.numargs = 1;
+	req->in.args[0].size = sizeof(*arg);
+	req->in.args[0].value = arg;
+	req->out.numargs = 1;
+	/* Variable length arguement used for backward compatibility
+	   with interface version < 7.5.  Rest of init_out is zeroed
+	   by do_get_request(), so a short reply is not a problem */
+	req->out.argvar = 1;
+	req->out.args[0].size = sizeof(struct fuse_init_out);
+	req->out.args[0].value = &req->misc.init_out;
+	req->end = process_init_reply;
+	request_send_background(fc, req);
+}
+
+#ifdef KERNEL_2_6
+static unsigned long long conn_id(void)
+{
+	static unsigned long long ctr = 1;
+	unsigned long long val;
+	spin_lock(&fuse_lock);
+	val = ctr++;
+	spin_unlock(&fuse_lock);
+	return val;
+}
+#endif
 
 static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 {
@@ -610,6 +702,7 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	struct inode *root;
 	struct fuse_mount_data d;
 	struct file *file;
+	struct dentry *root_dentry;
 	int err;
 
 	if (!parse_fuse_opt((char *) data, &d))
@@ -644,23 +737,46 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 		fc->bdi.ra_pages = fc->max_read / PAGE_CACHE_SIZE;
 #endif
 
+	/* Used by get_root_inode() */
+	sb->s_fs_info = fc;
+
 	err = -ENOMEM;
 	root = get_root_inode(sb, d.rootmode);
-	if (root == NULL)
+	if (!root)
 		goto err;
 
-	sb->s_root = d_alloc_root(root);
-	if (!sb->s_root) {
+	root_dentry = d_alloc_root(root);
+	if (!root_dentry) {
 		iput(root);
 		goto err;
 	}
+
+#ifdef KERNEL_2_6
+	err = kobject_set_name(&fc->kobj, "%llu", conn_id());
+	if (err)
+		goto err_put_root;
+
+	err = kobject_add(&fc->kobj);
+	if (err)
+		goto err_put_root;
+#endif
+
+	sb->s_root = root_dentry;
+	spin_lock(&fuse_lock);
+	fc->mounted = 1;
+	fc->connected = 1;
+	spin_unlock(&fuse_lock);
+
 	fuse_send_init(fc);
+
 	return 0;
 
+#ifdef KERNEL_2_6
+ err_put_root:
+	dput(root_dentry);
+#endif
  err:
-	spin_lock(&fuse_lock);
-	fuse_release_conn(fc);
-	spin_unlock(&fuse_lock);
+	kobject_put(&fc->kobj);
 	return err;
 }
 
@@ -691,6 +807,81 @@ static struct super_block *fuse_read_super_compat(struct super_block *sb,
 
 static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
 #endif
+
+#ifdef KERNEL_2_6
+static ssize_t fuse_conn_waiting_show(struct fuse_conn *fc, char *page)
+{
+	return sprintf(page, "%i\n", atomic_read(&fc->num_waiting));
+}
+
+static ssize_t fuse_conn_abort_store(struct fuse_conn *fc, const char *page,
+				     size_t count)
+{
+	fuse_abort_conn(fc);
+	return count;
+}
+
+#ifndef __ATTR
+#define __ATTR(_name,_mode,_show,_store) { \
+	.attr = {.name = __stringify(_name), .mode = _mode, .owner = THIS_MODULE },	\
+	.show	= _show,					\
+	.store	= _store,					\
+}
+#endif
+static struct fuse_conn_attr fuse_conn_waiting =
+	__ATTR(waiting, 0400, fuse_conn_waiting_show, NULL);
+static struct fuse_conn_attr fuse_conn_abort =
+	__ATTR(abort, 0600, NULL, fuse_conn_abort_store);
+
+static struct attribute *fuse_conn_attrs[] = {
+	&fuse_conn_waiting.attr,
+	&fuse_conn_abort.attr,
+	NULL,
+};
+
+static ssize_t fuse_conn_attr_show(struct kobject *kobj,
+				   struct attribute *attr,
+				   char *page)
+{
+	struct fuse_conn_attr *fca =
+		container_of(attr, struct fuse_conn_attr, attr);
+
+	if (fca->show)
+		return fca->show(get_fuse_conn_kobj(kobj), page);
+	else
+		return -EACCES;
+}
+
+static ssize_t fuse_conn_attr_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *page, size_t count)
+{
+	struct fuse_conn_attr *fca =
+		container_of(attr, struct fuse_conn_attr, attr);
+
+	if (fca->store)
+		return fca->store(get_fuse_conn_kobj(kobj), page, count);
+	else
+		return -EACCES;
+}
+
+static struct sysfs_ops fuse_conn_sysfs_ops = {
+	.show	= &fuse_conn_attr_show,
+	.store	= &fuse_conn_attr_store,
+};
+
+static struct kobj_type ktype_fuse_conn = {
+	.release	= fuse_conn_release,
+	.sysfs_ops	= &fuse_conn_sysfs_ops,
+	.default_attrs	= fuse_conn_attrs,
+};
+
+#ifndef HAVE_FS_SUBSYS
+static decl_subsys(fs, NULL, NULL);
+#endif
+static decl_subsys(fuse, NULL, NULL);
+static decl_subsys(connections, &ktype_fuse_conn, NULL);
+#endif /* KERNEL_2_6 */
 
 static void fuse_inode_init_once(void *foo, kmem_cache_t *cachep,
 				 unsigned long flags)
@@ -729,6 +920,55 @@ static void fuse_fs_cleanup(void)
 	kmem_cache_destroy(fuse_inode_cachep);
 }
 
+#ifdef KERNEL_2_6
+static int fuse_sysfs_init(void)
+{
+	int err;
+
+#ifndef HAVE_FS_SUBSYS
+	err = subsystem_register(&fs_subsys);
+	if (err)
+		return err;
+#endif
+	kset_set_kset_s(&fuse_subsys, fs_subsys);
+	err = subsystem_register(&fuse_subsys);
+	if (err)
+		goto out_err;
+
+	kset_set_kset_s(&connections_subsys, fuse_subsys);
+	err = subsystem_register(&connections_subsys);
+	if (err)
+		goto out_fuse_unregister;
+
+	return 0;
+
+ out_fuse_unregister:
+	subsystem_unregister(&fuse_subsys);
+ out_err:
+#ifndef HAVE_FS_SUBSYS
+	subsystem_unregister(&fs_subsys);
+#endif
+	return err;
+}
+
+static void fuse_sysfs_cleanup(void)
+{
+	subsystem_unregister(&connections_subsys);
+	subsystem_unregister(&fuse_subsys);
+#ifndef HAVE_FS_SUBSYS
+	subsystem_unregister(&fs_subsys);
+#endif
+}
+#else /* KERNEL_2_6 */
+static int fuse_sysfs_init(void)
+{
+	return 0;
+}
+static void fuse_sysfs_cleanup(void)
+{
+}
+#endif /* KERNEL_2_6 */
+
 static int __init fuse_init(void)
 {
 	int res;
@@ -748,8 +988,14 @@ static int __init fuse_init(void)
 	if (res)
 		goto err_fs_cleanup;
 
+	res = fuse_sysfs_init();
+	if (res)
+		goto err_dev_cleanup;
+
 	return 0;
 
+ err_dev_cleanup:
+	fuse_dev_cleanup();
  err_fs_cleanup:
 	fuse_fs_cleanup();
  err:
@@ -760,6 +1006,7 @@ static void __exit fuse_exit(void)
 {
 	printk(KERN_DEBUG "fuse exit\n");
 
+	fuse_sysfs_cleanup();
 	fuse_fs_cleanup();
 	fuse_dev_cleanup();
 }
