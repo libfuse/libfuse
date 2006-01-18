@@ -1,3 +1,15 @@
+2006-01-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix detection of case when fuse is not configured into
+	the kernel either as module or built-in
+
+	* fuse_opt.h: fix incompatibility with C++ compilers by renaming
+	'template' structure member to 'templ'.  Reported by Takashi Iwai
+
+	* fuse.h: fix compatibility bugs.  Patch by Yura Pakhuchiy
+
+	* kernel: support version 2.6.16 (i_sem -> i_mutex)
+
 2006-01-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.5.0
@@ -12,7 +24,7 @@
 
 	* Clearing ->connected or ->mounted connection flags could race
 	with setting other bitfields not protected with a lock
-	
+
 2006-01-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: add necessary compile flags for 2.4.X/x86_64.

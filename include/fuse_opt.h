@@ -72,7 +72,7 @@ extern "C" {
  */
 struct fuse_opt {
     /** Matching template and optional parameter formatting */
-    const char *template;
+    const char *templ;
 
     /**
      * Offset of variable within 'data' parameter of fuse_opt_parse()
@@ -82,7 +82,7 @@ struct fuse_opt {
 
     /**
      * Value to set the variable to, or to be passed as 'key' to the
-     * processing function.  Ignored if template a format
+     * processing function.  Ignored if template has a format
      */
     int value;
 };
@@ -91,13 +91,13 @@ struct fuse_opt {
  * Key option.  In case of a match, the processing function will be
  * called with the specified key.
  */
-#define FUSE_OPT_KEY(template, key) { template, -1U, key }
+#define FUSE_OPT_KEY(templ, key) { templ, -1U, key }
 
 /**
  * Last option.  An array of 'struct fuse_opt' must end with a NULL
  * template value
  */
-#define FUSE_OPT_END { .template = NULL }
+#define FUSE_OPT_END { .templ = NULL }
 
 /**
  * Argument list
@@ -120,7 +120,7 @@ struct fuse_args {
 
 /**
  * Key value passed to the processing function if an option did not
- * match any templated
+ * match any template
  */
 #define FUSE_OPT_KEY_OPT     -1
 

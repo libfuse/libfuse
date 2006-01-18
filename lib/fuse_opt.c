@@ -155,8 +155,8 @@ static int match_template(const char *t, const char *arg, unsigned *sepp)
 static const struct fuse_opt *find_opt(const struct fuse_opt *opt,
                                        const char *arg, unsigned *sepp)
 {
-    for (; opt && opt->template; opt++)
-        if (match_template(opt->template, arg, sepp))
+    for (; opt && opt->templ; opt++)
+        if (match_template(opt->templ, arg, sepp))
             return opt;
     return NULL;
 }
@@ -195,11 +195,11 @@ static int process_opt(struct fuse_opt_context *ctx,
             return -1;
     } else {
         void *var = ctx->data + opt->offset;
-        if (sep && opt->template[sep + 1]) {
+        if (sep && opt->templ[sep + 1]) {
             const char *param = arg + sep;
-            if (opt->template[sep] == '=')
+            if (opt->templ[sep] == '=')
                 param ++;
-            if (process_opt_param(var, opt->template + sep + 1,
+            if (process_opt_param(var, opt->templ + sep + 1,
                                   param, arg) == -1)
                 return -1;
         } else
@@ -239,7 +239,7 @@ static int process_gopt(struct fuse_opt_context *ctx, const char *arg, int iso)
     if (opt) {
         for (; opt; opt = find_opt(opt + 1, arg, &sep)) {
             int res;
-            if (sep && opt->template[sep] == ' ' && !arg[sep])
+            if (sep && opt->templ[sep] == ' ' && !arg[sep])
                 res = process_opt_sep_arg(ctx, opt, sep, arg, iso);
             else
                 res = process_opt(ctx, opt, sep, arg, iso);

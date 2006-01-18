@@ -549,13 +549,14 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #    define fuse_setup fuse_setup_compat22
 #    define fuse_operations fuse_operations_compat22
 #    define fuse_file_info fuse_file_info_compat22
+#    define fuse_mount fuse_mount_compat22
 #  else
 #    define fuse_dirfil_t fuse_dirfil_t_compat
 #    define __fuse_read_cmd fuse_read_cmd
 #    define __fuse_process_cmd fuse_process_cmd
 #    define __fuse_loop_mt fuse_loop_mt_proc
 #    if FUSE_USE_VERSION == 21
-#      define FUSE_MAJOR_VERSION 2
+#      define FUSE_MINOR_VERSION 1
 #      define fuse_operations fuse_operations_compat2
 #      define fuse_main fuse_main_compat2
 #      define fuse_new fuse_new_compat2
@@ -563,6 +564,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #      define __fuse_teardown fuse_teardown
 #      define __fuse_exited fuse_exited
 #      define __fuse_set_getcontext_func fuse_set_getcontext_func
+#      define fuse_mount fuse_mount_compat22
 #    else
 #      warning Compatibility with API version 11 is deprecated
 #      undef FUSE_MAJOR_VERSION
