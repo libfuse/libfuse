@@ -101,8 +101,10 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
     case FUSE_OPT_KEY_NONOPT:
         if (!hopts->mountpoint)
             return fuse_opt_add_opt(&hopts->mountpoint, arg);
-
-        /* fall through */
+        else {
+            fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
+            return -1;
+        }
 
     default:
     case KEY_KEEP:

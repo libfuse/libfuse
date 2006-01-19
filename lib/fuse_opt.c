@@ -62,6 +62,21 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
     return 0;
 }
 
+int fuse_opt_insert_arg(struct fuse_args *args, int pos, const char *arg)
+{
+    assert(pos <= args->argc);
+    if (fuse_opt_add_arg(args, arg) == -1)
+        return -1;
+
+    if (pos != args->argc - 1) {
+        char *newarg = args->argv[args->argc - 1];
+        memmove(&args->argv[pos + 1], &args->argv[pos],
+                sizeof(char *) * (args->argc - pos - 1));
+        args->argv[pos] = newarg;
+    }
+    return 0;
+}
+
 static int next_arg(struct fuse_opt_context *ctx, const char *opt)
 {
     if (ctx->argctr + 1 >= ctx->argc) {
@@ -102,20 +117,6 @@ static int add_opt(struct fuse_opt_context *ctx, const char *opt)
     return fuse_opt_add_opt(&ctx->opts, opt);
 }
 
-static int insert_arg(struct fuse_opt_context *ctx, int pos, const char *arg)
-{
-    assert(pos <= ctx->outargs.argc);
-    if (add_arg(ctx, arg) == -1)
-        return -1;
-
-    if (pos != ctx->outargs.argc - 1) {
-        char *newarg = ctx->outargs.argv[ctx->outargs.argc - 1];
-        memmove(&ctx->outargs.argv[pos + 1], &ctx->outargs.argv[pos],
-                sizeof(char *) * (ctx->outargs.argc - pos - 1));
-        ctx->outargs.argv[pos] = newarg;
-    }
-    return 0;
-}
 
 static int call_proc(struct fuse_opt_context *ctx, const char *arg, int key,
                      int iso)
@@ -321,8 +322,8 @@ static int opt_parse(struct fuse_opt_context *ctx)
             return -1;
 
     if (ctx->opts) {
-        if (insert_arg(ctx, 1, "-o") == -1 ||
-            insert_arg(ctx, 2, ctx->opts) == -1)
+        if (fuse_opt_insert_arg(&ctx->outargs, 1, "-o") == -1 ||
+            fuse_opt_insert_arg(&ctx->outargs, 2, ctx->opts) == -1)
             return -1;
     }
     if (ctx->nonopt && ctx->nonopt == ctx->outargs.argc)
