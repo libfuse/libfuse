@@ -48,6 +48,7 @@ static const struct fuse_opt fuse_helper_opts[] = {
     FUSE_OPT_KEY("--version",   KEY_VERSION),
     FUSE_OPT_KEY("-d",          KEY_KEEP),
     FUSE_OPT_KEY("debug",       KEY_KEEP),
+    FUSE_OPT_KEY("fsname=",     KEY_KEEP),
     FUSE_OPT_END
 };
 

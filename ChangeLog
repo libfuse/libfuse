@@ -1,3 +1,7 @@
+2006-01-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: if "fsname=" option was given, pass it to fusermount
+
 2006-01-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: fix detection of case when fuse is not configured into
