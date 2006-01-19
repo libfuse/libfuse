@@ -326,8 +326,10 @@ static int opt_parse(struct fuse_opt_context *ctx)
             fuse_opt_insert_arg(&ctx->outargs, 2, ctx->opts) == -1)
             return -1;
     }
-    if (ctx->nonopt && ctx->nonopt == ctx->outargs.argc)
+    if (ctx->nonopt && ctx->nonopt == ctx->outargs.argc) {
+        free(ctx->outargs.argv[ctx->outargs.argc - 1]);
         ctx->outargs.argv[--ctx->outargs.argc] = NULL;
+    }
 
     return 0;
 }
