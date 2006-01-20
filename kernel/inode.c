@@ -651,11 +651,10 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
 
 		if (arg->minor >= 6) {
 			ra_pages = arg->max_readahead / PAGE_CACHE_SIZE;
-			fc->async_read = arg->flags & FUSE_ASYNC_READ;
-		} else {
+			if (arg->flags & FUSE_ASYNC_READ)
+				fc->async_read = 1;
+		} else
 			ra_pages = fc->max_read / PAGE_CACHE_SIZE;
-			fc->async_read = 0;
-		}
 
 		fc->bdi.ra_pages = min(fc->bdi.ra_pages, ra_pages);
 #endif
