@@ -133,6 +133,22 @@ struct fuse_args {
 #define FUSE_OPT_KEY_NONOPT  -2
 
 /**
+ * Special key value for options to keep
+ *
+ * Argument is not passed to processing function, but behave as if the
+ * processing function returned 1
+ */
+#define FUSE_OPT_KEY_KEEP -3
+
+/**
+ * Special key value for options to discard
+ *
+ * Argument is not passed to processing function, but behave as if the
+ * processing function returned zero
+ */
+#define FUSE_OPT_KEY_DISCARD -4
+
+/**
  * Processing function
  *
  * This function is called if
