@@ -141,7 +141,7 @@ struct fuse_lowlevel_ops {
      *
      * @param userdata the user data passed to fuse_lowlevel_new()
      */
-    void (*init) (void *userdata);
+    void (*init) (void *userdata, struct fuse_conn_info *conn);
 
     /**
      * Clean up filesystem
@@ -1235,26 +1235,28 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
 
-#ifndef __FreeBSD__
+#ifdef __FreeBSD__
+#  if FUSE_USE_VERSION < 25
+#    error On FreeBSD API version 25 or greater must be used
+#  endif
+#endif
 
-#if FUSE_USE_VERSION == 24
+#if FUSE_USE_VERSION == 25 || FUSE_USE_VERSION == 24
 #  include "fuse_lowlevel_compat.h"
 #  undef FUSE_MINOR_VERSION
-#  define FUSE_MINOR_VERSION 4
-#  define fuse_file_info fuse_file_info_compat
-#  define fuse_reply_statfs fuse_reply_statfs_compat
-#  define fuse_reply_open fuse_reply_open_compat
-#elif FUSE_USE_VERSION < 25
-#  error Compatibility with low level API version other than 24 not supported
+#  if FUSE_USE_VERSION == 25
+#    define FUSE_MINOR_VERSION 6
+#    define fuse_lowlevel_ops fuse_lowlevel_ops_compat25
+#    define fuse_lowlevel_new fuse_lowlevel_new_compat25
+#  else
+#    define FUSE_MINOR_VERSION 4
+#    define fuse_file_info fuse_file_info_compat
+#    define fuse_reply_statfs fuse_reply_statfs_compat
+#    define fuse_reply_open fuse_reply_open_compat
+#  endif
+#elif FUSE_USE_VERSION < 27
+#  error Compatibility with low level API version other than 24 and 25 not supported
 #endif
-
-#else /* __FreeBSD__ */
-
-#if FUSE_USE_VERSION < 25
-#  error On FreeBSD API version 25 or greater must be used
-#endif
-
-#endif /* __FreeBSD__ */
 
 #ifdef __cplusplus
 }

@@ -1,3 +1,45 @@
+2006-01-20  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fuse_opt: add new helper constants FUSE_OPT_KEY_KEEP and
+	FUSE_OPT_KEY_DISCARD
+
+	* Add options 'max_readahead', 'sync_read' and 'async_read'
+
+	* Kernel ABI version 7.6:
+
+	* Negotiate the 'max_readahead' value and 'async_read' flags with
+	userspace in the INIT method
+
+	* Add connection info to ->init() methods to both lowlevel and
+	highlevel API
+
+	* Fall back to synchronous read() behavior if either library or
+	userspace filesystem is using the old interface version.  This is
+	needed so non-updated filesystems won't be confused by the
+	different read() behavior
+
+2006-01-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: if "fsname=" option was given, pass it to fusermount
+
+	* fuse_opt: add new fuse_opt_insert_arg() function, which is
+	needed by filesystems to implement some argument manipulations
+	correctly
+
+	* fuse_opt: fix memory leak in handling "--" option
+
+2006-01-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix detection of case when fuse is not configured into
+	the kernel either as module or built-in
+
+	* fuse_opt.h: fix incompatibility with C++ compilers by renaming
+	'template' structure member to 'templ'.  Reported by Takashi Iwai
+
+	* fuse.h: fix compatibility bugs.  Patch by Yura Pakhuchiy
+
+	* kernel: support version 2.6.16 (i_sem -> i_mutex)
+
 2006-01-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Added (again) asynchronous readpages support

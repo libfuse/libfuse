@@ -20,7 +20,7 @@
 #define FUSE_MAJOR_VERSION 2
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 5
+#define FUSE_MINOR_VERSION 7
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 10 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -64,6 +64,15 @@ struct fuse_file_info {
     /** File handle.  May be filled in by filesystem in open().
         Available in all other file operations */
     uint64_t fh;
+};
+
+struct fuse_conn_info {
+    unsigned proto_major;
+    unsigned proto_minor;
+    unsigned async_read;
+    unsigned max_write;
+    unsigned max_readahead;
+    unsigned reserved[27];
 };
 
 /**

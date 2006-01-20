@@ -48,6 +48,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_OPT_KEY("fsname=",             KEY_KERN),
     FUSE_OPT_KEY("large_read",          KEY_KERN),
     FUSE_OPT_KEY("max_read=",           KEY_KERN),
+    FUSE_OPT_KEY("max_read=",           FUSE_OPT_KEY_KEEP),
     FUSE_OPT_KEY("-r",                  KEY_RO),
     FUSE_OPT_KEY("ro",                  KEY_KERN),
     FUSE_OPT_KEY("rw",                  KEY_KERN),

@@ -553,7 +553,7 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
         reply_err(req, err);
 }
 
-static void fuse_data_init(void *data)
+static void fuse_data_init(void *data, struct fuse_conn_info *conn)
 {
     struct fuse *f = (struct fuse *) data;
     struct fuse_context *c = fuse_get_context();
@@ -562,7 +562,7 @@ static void fuse_data_init(void *data)
     c->fuse = f;
 
     if (f->op.init)
-        f->user_data = f->op.init();
+        f->user_data = f->op.init(conn);
 }
 
 static void fuse_data_destroy(void *data)
@@ -1808,7 +1808,6 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 
 enum {
     KEY_HELP,
-    KEY_KEEP
 };
 
 #define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
@@ -1816,8 +1815,8 @@ enum {
 static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_OPT_KEY("-h",                    KEY_HELP),
     FUSE_OPT_KEY("--help",                KEY_HELP),
-    FUSE_OPT_KEY("debug",                 KEY_KEEP),
-    FUSE_OPT_KEY("-d",                    KEY_KEEP),
+    FUSE_OPT_KEY("debug",                 FUSE_OPT_KEY_KEEP),
+    FUSE_OPT_KEY("-d",                    FUSE_OPT_KEY_KEEP),
     FUSE_LIB_OPT("debug",                 debug, 1),
     FUSE_LIB_OPT("-d",                    debug, 1),
     FUSE_LIB_OPT("hard_remove",           hard_remove, 1),
@@ -1905,6 +1904,11 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
      */
     f->conf.readdir_ino = 1;
 #endif
+
+    if (compat && compat <= 25) {
+        if (fuse_sync_compat_args(args) == -1)
+            goto out_free;
+    }
 
     f->se = fuse_lowlevel_new(args, &fuse_path_ops, sizeof(fuse_path_ops), f);
     if (f->se == NULL)
@@ -2012,13 +2016,13 @@ void fuse_destroy(struct fuse *f)
     free(f);
 }
 
-#ifndef __FreeBSD__
-
 #include "fuse_compat.h"
+
+#ifndef __FreeBSD__
 
 static int fuse_do_open(struct fuse *f, char *path, struct fuse_file_info *fi)
 {
-    if (!f->compat)
+    if (!f->compat || f->compat >= 25)
         return f->op.open(path, fi);
     else if (f->compat == 22) {
         int err;
@@ -2045,7 +2049,7 @@ static void fuse_do_release(struct fuse *f, char *path,
 static int fuse_do_opendir(struct fuse *f, char *path,
                            struct fuse_file_info *fi)
 {
-    if (!f->compat) {
+    if (!f->compat || f->compat >= 25) {
         return f->op.opendir(path, fi);
     } else {
         int err;
@@ -2085,7 +2089,7 @@ static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)
 {
     int err;
 
-    if (!f->compat) {
+    if (!f->compat || f->compat >= 25) {
         err = f->op.statfs(path, buf);
     } else if (f->compat > 11) {
         struct statfs oldbuf;
@@ -2179,3 +2183,13 @@ static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)
 }
 
 #endif /* __FreeBSD__ */
+
+struct fuse *fuse_new_compat25(int fd, struct fuse_args *args,
+                               const struct fuse_operations_compat25 *op,
+                               size_t op_size)
+{
+    return fuse_new_common(fd, args, (struct fuse_operations *) op,
+                           op_size, 25);
+}
+
+__asm__(".symver fuse_new_compat25,fuse_new@FUSE_2.5");

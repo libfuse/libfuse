@@ -22,7 +22,6 @@ enum  {
     KEY_HELP,
     KEY_HELP_NOHEADER,
     KEY_VERSION,
-    KEY_KEEP,
 };
 
 struct helper_opts {
@@ -46,8 +45,9 @@ static const struct fuse_opt fuse_helper_opts[] = {
     FUSE_OPT_KEY("-ho",         KEY_HELP_NOHEADER),
     FUSE_OPT_KEY("-V",          KEY_VERSION),
     FUSE_OPT_KEY("--version",   KEY_VERSION),
-    FUSE_OPT_KEY("-d",          KEY_KEEP),
-    FUSE_OPT_KEY("debug",       KEY_KEEP),
+    FUSE_OPT_KEY("-d",          FUSE_OPT_KEY_KEEP),
+    FUSE_OPT_KEY("debug",       FUSE_OPT_KEY_KEEP),
+    FUSE_OPT_KEY("fsname=",     FUSE_OPT_KEY_KEEP),
     FUSE_OPT_END
 };
 
@@ -100,11 +100,12 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
     case FUSE_OPT_KEY_NONOPT:
         if (!hopts->mountpoint)
             return fuse_opt_add_opt(&hopts->mountpoint, arg);
-
-        /* fall through */
+        else {
+            fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
+            return -1;
+        }
 
     default:
-    case KEY_KEEP:
         return 1;
     }
 }
@@ -289,9 +290,9 @@ int fuse_main(void)
     return -1;
 }
 
-#ifndef __FreeBSD__
-
 #include "fuse_compat.h"
+
+#ifndef __FreeBSD__
 
 struct fuse *fuse_setup_compat22(int argc, char *argv[],
                                  const struct fuse_operations_compat22 *op,
@@ -341,3 +342,24 @@ __asm__(".symver fuse_main_compat2,fuse_main@");
 __asm__(".symver fuse_main_real_compat22,fuse_main_real@FUSE_2.2");
 
 #endif /* __FreeBSD__ */
+
+
+struct fuse *fuse_setup_compat25(int argc, char *argv[],
+                                 const struct fuse_operations_compat25 *op,
+                                 size_t op_size, char **mountpoint,
+                                 int *multithreaded, int *fd)
+{
+    return fuse_setup_common(argc, argv, (struct fuse_operations *) op,
+                             op_size, mountpoint, multithreaded, fd, 25);
+}
+
+int fuse_main_real_compat25(int argc, char *argv[],
+                            const struct fuse_operations_compat25 *op,
+                            size_t op_size)
+{
+    return fuse_main_common(argc, argv, (struct fuse_operations *) op, op_size,
+                            25);
+}
+
+__asm__(".symver fuse_setup_compat25,fuse_setup@FUSE_2.5");
+__asm__(".symver fuse_main_real_compat25,fuse_main_real@FUSE_2.5");

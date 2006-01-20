@@ -61,18 +61,16 @@ FUSE_2.4 {
 
 FUSE_2.5 {
 	global:
-		fuse_lowlevel_new;
 		fuse_lowlevel_new_compat;
-		fuse_main_real;
 		fuse_main_real_compat22;
 		fuse_mount;
 		fuse_mount_compat22;
-		fuse_new;
 		fuse_new_compat22;
 		fuse_opt_parse;
 		fuse_opt_add_opt;
 		fuse_opt_add_arg;
 		fuse_opt_free_args;
+		fuse_opt_insert_arg;
 		fuse_opt_match;
 		fuse_parse_cmdline;
 		fuse_remove_signal_handlers;
@@ -81,10 +79,26 @@ FUSE_2.5 {
 		fuse_reply_open_compat;
 		fuse_reply_statfs;
 		fuse_reply_statfs_compat;
-		fuse_setup;
 		fuse_setup_compat22;
 		fuse_set_signal_handlers;
+} FUSE_2.4;
+
+FUSE_2.6 {
+	global:
+		fuse_opt_insert_arg;
+} FUSE_2.5;
+
+FUSE_2.7 {
+	global:
+		fuse_lowlevel_new;
+		fuse_lowlevel_new_compat25;
+		fuse_main_real;
+		fuse_main_real_compat25;
+		fuse_new;
+		fuse_new_compat25;
+		fuse_setup;
+		fuse_setup_compat25;
 
 	local:
 		 *;
-} FUSE_2.4;
+} FUSE_2.6;

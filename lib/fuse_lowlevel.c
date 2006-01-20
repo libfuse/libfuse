@@ -10,6 +10,7 @@
 #include "fuse_lowlevel.h"
 #include "fuse_kernel.h"
 #include "fuse_opt.h"
+#include "fuse_i.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,9 +28,8 @@ struct fuse_ll {
     struct fuse_lowlevel_ops op;
     int got_init;
     void *userdata;
-    int major;
-    int minor;
     uid_t owner;
+    struct fuse_conn_info conn;
 };
 
 struct fuse_req {
@@ -263,7 +263,7 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 
     /* before ABI 7.4 e->ino == 0 was invalid, only ENOENT meant
        negative entry */
-    if (!e->ino && req->f->minor < 4)
+    if (!e->ino && req->f->conn.proto_minor < 4)
         return fuse_reply_err(req, ENOENT);
 
     memset(&arg, 0, sizeof(arg));
@@ -330,7 +330,7 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
 int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
 {
     struct fuse_statfs_out arg;
-    size_t size = req->f->minor < 4 ? FUSE_COMPAT_STATFS_SIZE : sizeof(arg);
+    size_t size = req->f->conn.proto_minor < 4 ? FUSE_COMPAT_STATFS_SIZE : sizeof(arg);
 
     memset(&arg, 0, sizeof(arg));
     convert_statfs(stbuf, &arg.st);
@@ -693,27 +693,51 @@ static void do_init(fuse_req_t req, struct fuse_init_in *arg)
 
     if (f->debug) {
         printf("INIT: %u.%u\n", arg->major, arg->minor);
+        if (arg->major > 7 || (arg->major == 7 && arg->minor >= 6)) {
+            printf("flags=0x%08x\n", arg->flags);
+            printf("max_readahead=0x%08x\n", arg->max_readahead);
+        }
         fflush(stdout);
     }
-    f->got_init = 1;
-    if (f->op.init)
-        f->op.init(f->userdata);
+    f->conn.proto_major = arg->major;
+    f->conn.proto_minor = arg->minor;
 
-    f->major = FUSE_KERNEL_VERSION;
-    f->minor = arg->minor;
+    if (arg->major > 7 || (arg->major == 7 && arg->minor >= 6)) {
+        if (f->conn.async_read)
+            f->conn.async_read = arg->flags & FUSE_ASYNC_READ;
+        if (arg->max_readahead < f->conn.max_readahead)
+            f->conn.max_readahead = arg->max_readahead;
+    } else {
+        f->conn.async_read = 0;
+        f->conn.max_readahead = 0;
+    }
 
     if (bufsize < FUSE_MIN_READ_BUFFER) {
         fprintf(stderr, "fuse: warning: buffer size too small: %i\n", bufsize);
         bufsize = FUSE_MIN_READ_BUFFER;
     }
 
+    bufsize -= 4096;
+    if (bufsize < f->conn.max_write)
+        f->conn.max_write = bufsize;
+
+    f->got_init = 1;
+    if (f->op.init)
+        f->op.init(f->userdata, &f->conn);
+
     memset(&outarg, 0, sizeof(outarg));
-    outarg.major = f->major;
+    outarg.major = FUSE_KERNEL_VERSION;
     outarg.minor = FUSE_KERNEL_MINOR_VERSION;
-    outarg.max_write = bufsize - 4096;
+    if (f->conn.async_read)
+        outarg.flags |= FUSE_ASYNC_READ;
+    outarg.max_readahead = f->conn.max_readahead;
+    outarg.max_write = f->conn.max_write;
 
     if (f->debug) {
         printf("   INIT: %u.%u\n", outarg.major, outarg.minor);
+        printf("   flags=0x%08x\n", outarg.flags);
+        printf("   max_readahead=0x%08x\n", outarg.max_readahead);
+        printf("   max_write=0x%08x\n", outarg.max_write);
         fflush(stdout);
     }
 
@@ -902,6 +926,11 @@ static struct fuse_opt fuse_ll_opts[] = {
     { "debug", offsetof(struct fuse_ll, debug), 1 },
     { "-d", offsetof(struct fuse_ll, debug), 1 },
     { "allow_root", offsetof(struct fuse_ll, allow_root), 1 },
+    { "max_write=%u", offsetof(struct fuse_ll, conn.max_write), 0 },
+    { "max_readahead=%u", offsetof(struct fuse_ll, conn.max_readahead), 0 },
+    { "async_read", offsetof(struct fuse_ll, conn.async_read), 1 },
+    { "sync_read", offsetof(struct fuse_ll, conn.async_read), 0 },
+    FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
     FUSE_OPT_KEY("-h", KEY_HELP),
     FUSE_OPT_KEY("--help", KEY_HELP),
     FUSE_OPT_KEY("-V", KEY_VERSION),
@@ -915,6 +944,15 @@ static void fuse_ll_version(void)
             FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
 }
 
+static void fuse_ll_help(void)
+{
+    fprintf(stderr,
+"    -o max_write=N         set maximum size of write requests\n"
+"    -o max_readahead=N     set maximum readahead\n"
+"    -o async_read          perform reads asynchronously (default)\n"
+"    -o sync_read           perform reads synchronously\n");
+}
+
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,
                             struct fuse_args *outargs)
 {
@@ -922,6 +960,7 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 
     switch (key) {
     case KEY_HELP:
+        fuse_ll_help();
         break;
 
     case KEY_VERSION:
@@ -972,6 +1011,10 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
         goto out;
     }
 
+    f->conn.async_read = 1;
+    f->conn.max_write = UINT_MAX;
+    f->conn.max_readahead = UINT_MAX;
+
     if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
         goto out_free;
 
@@ -991,9 +1034,9 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
     return NULL;
 }
 
-#ifndef __FreeBSD__
-
 #include "fuse_lowlevel_compat.h"
+
+#ifndef __FreeBSD__
 
 static void fill_open_compat(struct fuse_open_out *arg,
                       const struct fuse_file_info_compat *f)
@@ -1062,3 +1105,49 @@ __asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
 __asm__(".symver fuse_lowlevel_new_compat,fuse_lowlevel_new@FUSE_2.4");
 
 #endif /* __FreeBSD__ */
+
+struct fuse_ll_compat_conf {
+    unsigned max_read;
+    int set_max_read;
+};
+
+static const struct fuse_opt fuse_ll_opts_compat[] = {
+    { "max_read=", offsetof(struct fuse_ll_compat_conf, set_max_read), 1 },
+    { "max_read=%u", offsetof(struct fuse_ll_compat_conf, max_read), 0 },
+    FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_KEEP),
+    FUSE_OPT_END
+};
+
+int fuse_sync_compat_args(struct fuse_args *args)
+{
+    struct fuse_ll_compat_conf conf;
+
+    if (fuse_opt_parse(args, &conf, fuse_ll_opts_compat, NULL) == -1)
+        return -1;
+
+    if (fuse_opt_insert_arg(args, 1, "-osync_read"))
+        return -1;
+
+    if (conf.set_max_read) {
+        char tmpbuf[64];
+
+        sprintf(tmpbuf, "-omax_readahead=%u", conf.max_read);
+        if (fuse_opt_insert_arg(args, 1, tmpbuf) == -1)
+            return -1;
+    }
+    return 0;
+}
+
+struct fuse_session *fuse_lowlevel_new_compat25(struct fuse_args *args,
+                        const struct fuse_lowlevel_ops_compat25 *op,
+                        size_t op_size, void *userdata)
+{
+    if (fuse_sync_compat_args(args) == -1)
+        return NULL;
+
+    return fuse_lowlevel_new(args, (const struct fuse_lowlevel_ops *) op,
+                             op_size, userdata);
+}
+
+
+__asm__(".symver fuse_lowlevel_new_compat25,fuse_lowlevel_new@FUSE_2.5");
