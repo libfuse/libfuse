@@ -84,12 +84,7 @@ FUSE_2.5 {
 		fuse_setup;
 		fuse_setup_compat22;
 		fuse_set_signal_handlers;
-} FUSE_2.4;
-
-FUSE_2.6 {
-	global:
-		fuse_opt_insert_arg;
 
 	local:
 		 *;
-} FUSE_2.5;
+} FUSE_2.4;

@@ -1808,6 +1808,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 
 enum {
     KEY_HELP,
+    KEY_KEEP
 };
 
 #define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
@@ -1815,8 +1816,8 @@ enum {
 static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_OPT_KEY("-h",                    KEY_HELP),
     FUSE_OPT_KEY("--help",                KEY_HELP),
-    FUSE_OPT_KEY("debug",                 FUSE_OPT_KEY_KEEP),
-    FUSE_OPT_KEY("-d",                    FUSE_OPT_KEY_KEEP),
+    FUSE_OPT_KEY("debug",                 KEY_KEEP),
+    FUSE_OPT_KEY("-d",                    KEY_KEEP),
     FUSE_LIB_OPT("debug",                 debug, 1),
     FUSE_LIB_OPT("-d",                    debug, 1),
     FUSE_LIB_OPT("hard_remove",           hard_remove, 1),

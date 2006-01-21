@@ -133,22 +133,6 @@ struct fuse_args {
 #define FUSE_OPT_KEY_NONOPT  -2
 
 /**
- * Special key value for options to keep
- *
- * Argument is not passed to processing function, but behave as if the
- * processing function returned 1
- */
-#define FUSE_OPT_KEY_KEEP -3
-
-/**
- * Special key value for options to discard
- *
- * Argument is not passed to processing function, but behave as if the
- * processing function returned zero
- */
-#define FUSE_OPT_KEY_DISCARD -4
-
-/**
  * Processing function
  *
  * This function is called if
@@ -216,21 +200,6 @@ int fuse_opt_add_opt(char **opts, const char *opt);
  * @return -1 on allocation error, 0 on success
  */
 int fuse_opt_add_arg(struct fuse_args *args, const char *arg);
-
-/**
- * Add an argument at the specified position in a NULL terminated
- * argument vector
- *
- * Adds the argument to the N-th position.  This is useful for adding
- * options at the beggining of the array which must not come after the
- * special '--' option.
- *
- * @param args is the structure containing the current argument list
- * @param pos is the position at which to add the argument
- * @param arg is the new argument to add
- * @return -1 on allocation error, 0 on success
- */
-int fuse_opt_insert_arg(struct fuse_args *args, int pos, const char *arg);
 
 /**
  * Free the contents of argument list

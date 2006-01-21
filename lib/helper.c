@@ -22,6 +22,7 @@ enum  {
     KEY_HELP,
     KEY_HELP_NOHEADER,
     KEY_VERSION,
+    KEY_KEEP,
 };
 
 struct helper_opts {
@@ -45,9 +46,9 @@ static const struct fuse_opt fuse_helper_opts[] = {
     FUSE_OPT_KEY("-ho",         KEY_HELP_NOHEADER),
     FUSE_OPT_KEY("-V",          KEY_VERSION),
     FUSE_OPT_KEY("--version",   KEY_VERSION),
-    FUSE_OPT_KEY("-d",          FUSE_OPT_KEY_KEEP),
-    FUSE_OPT_KEY("debug",       FUSE_OPT_KEY_KEEP),
-    FUSE_OPT_KEY("fsname=",     FUSE_OPT_KEY_KEEP),
+    FUSE_OPT_KEY("-d",          KEY_KEEP),
+    FUSE_OPT_KEY("debug",       KEY_KEEP),
+    FUSE_OPT_KEY("fsname=",     KEY_KEEP),
     FUSE_OPT_END
 };
 
@@ -106,6 +107,7 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
         }
 
     default:
+    case KEY_KEEP:
         return 1;
     }
 }

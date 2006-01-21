@@ -1,18 +1,11 @@
 2006-01-20  Miklos Szeredi <miklos@szeredi.hu>
 
-	* fuse_opt: add new helper constants FUSE_OPT_KEY_KEEP and
-	FUSE_OPT_KEY_DISCARD
-
 	* Sanitize storage type and help message in mount_bsd.c.  Patch
 	from Csaba Henk
 
 2006-01-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: if "fsname=" option was given, pass it to fusermount
-
-	* fuse_opt: add new fuse_opt_insert_arg() function, which is
-	needed by filesystems to implement some argument manipulations
-	correctly
 
 	* fuse_opt: fix memory leak in handling "--" option
 
