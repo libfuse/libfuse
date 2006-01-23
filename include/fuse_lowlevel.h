@@ -1245,7 +1245,7 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
 #  include "fuse_lowlevel_compat.h"
 #  undef FUSE_MINOR_VERSION
 #  if FUSE_USE_VERSION == 25
-#    define FUSE_MINOR_VERSION 6
+#    define FUSE_MINOR_VERSION 5
 #    define fuse_lowlevel_ops fuse_lowlevel_ops_compat25
 #    define fuse_lowlevel_new fuse_lowlevel_new_compat25
 #  else
@@ -1254,7 +1254,7 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
 #    define fuse_reply_statfs fuse_reply_statfs_compat
 #    define fuse_reply_open fuse_reply_open_compat
 #  endif
-#elif FUSE_USE_VERSION < 27
+#elif FUSE_USE_VERSION < 26
 #  error Compatibility with low level API version other than 24 and 25 not supported
 #endif
 

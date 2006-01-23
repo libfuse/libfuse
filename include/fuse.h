@@ -547,7 +547,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #  undef FUSE_MINOR_VERSION
 #  undef fuse_main
 #  if FUSE_USE_VERSION == 25
-#    define FUSE_MINOR_VERSION 6
+#    define FUSE_MINOR_VERSION 5
 #    define fuse_main(argc, argv, op) \
             fuse_main_real_compat25(argc, argv, op, sizeof(*(op)))
 #    define fuse_new fuse_new_compat25
@@ -590,7 +590,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #      define FUSE_DEBUG FUSE_DEBUG_COMPAT1
 #    endif
 #  endif
-#elif FUSE_USE_VERSION < 27
+#elif FUSE_USE_VERSION < 26
 #  error Compatibility with API version other than 21, 22, 25 and 11 not supported
 #endif
 

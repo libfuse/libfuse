@@ -85,20 +85,13 @@ FUSE_2.5 {
 
 FUSE_2.6 {
 	global:
-		fuse_opt_insert_arg;
-} FUSE_2.5;
-
-FUSE_2.7 {
-	global:
 		fuse_lowlevel_new;
 		fuse_lowlevel_new_compat25;
 		fuse_main_real;
 		fuse_main_real_compat25;
 		fuse_new;
 		fuse_new_compat25;
+		fuse_opt_insert_arg;
 		fuse_setup;
 		fuse_setup_compat25;
-
-	local:
-		 *;
-} FUSE_2.6;
+} FUSE_2.5;
