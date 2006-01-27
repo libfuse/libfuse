@@ -60,7 +60,9 @@
 
 	* kernel: fix a couple of bugs
 
-	* Order of request_end() and fuse_copy_finish() was wrong
+	* Order of request_end() and fuse_copy_finish() was wrong.
+	Posthumus note: Franco Broi managed to exploit this, though it
+	seemed quite impossible
 
 	* request_end() used request pointer after decrementing refcount
 
