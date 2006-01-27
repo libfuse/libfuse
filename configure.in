@@ -23,7 +23,7 @@ esac
 if test "$ac_env_CFLAGS_set" != set; then
 	CFLAGS="-Wall -W -g -O2"
 fi
-CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -D_REENTRANT -DFUSE_USE_VERSION=27"
+CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64 -D_REENTRANT -DFUSE_USE_VERSION=26"
 
 AC_ARG_ENABLE(kernel-module,
 	[  --enable-kernel-module  Compile kernel module ])
