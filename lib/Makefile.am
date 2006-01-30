@@ -22,7 +22,7 @@ libfuse_la_SOURCES = 		\
 	helper.c		\
 	$(mount_source)
 
-libfuse_la_LDFLAGS = -lpthread -version-number 2:6:0 \
+libfuse_la_LDFLAGS = $(libfuse_libs) -version-number 2:6:0 \
 	-Wl,--version-script,fuse_versionscript
 
 EXTRA_DIST = fuse_versionscript

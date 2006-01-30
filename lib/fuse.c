@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <time.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <errno.h>
@@ -47,6 +48,7 @@ struct fuse_config {
     int set_gid;
     int direct_io;
     int kernel_cache;
+    int auto_cache;
 };
 
 struct fuse {
@@ -77,6 +79,10 @@ struct node {
     uint64_t nlookup;
     int open_count;
     int is_hidden;
+    struct timespec stat_updated;
+    struct timespec mtime;
+    off_t size;
+    int cache_valid;
 };
 
 struct fuse_dirhandle {
@@ -487,6 +493,48 @@ static int hide_node(struct fuse *f, const char *oldpath, fuse_ino_t dir,
     return err;
 }
 
+static int mtime_eq(const struct stat *stbuf, const struct timespec *ts)
+{
+    return stbuf->st_mtime == ts->tv_sec
+#ifdef HAVE_STRUCT_STAT_ST_ATIM
+        && stbuf->st_mtim.tv_nsec == ts->tv_nsec
+#endif
+        ;
+}
+
+static void mtime_set(const struct stat *stbuf, struct timespec *ts)
+{
+#ifdef HAVE_STRUCT_STAT_ST_ATIM
+    *ts = stbuf->st_mtim;
+#else
+    ts->tv_sec = stbuf->st_mtime;
+#endif
+}
+
+static void curr_time(struct timespec *now)
+{
+    static clockid_t clockid = CLOCK_MONOTONIC;
+    int res = clock_gettime(clockid, now);
+    if (res == -1 && errno == EINVAL) {
+        clockid = CLOCK_REALTIME;
+        res = clock_gettime(clockid, now);
+    }
+    if (res == -1) {
+        perror("fuse: clock_gettime");
+        abort();
+    }
+}
+
+static void update_stat(struct node *node, const struct stat *stbuf)
+{
+    if (node->cache_valid && (!mtime_eq(stbuf, &node->mtime) ||
+                              stbuf->st_size != node->size))
+        node->cache_valid = 0;
+    mtime_set(stbuf, &node->mtime);
+    node->size = stbuf->st_size;
+    curr_time(&node->stat_updated);
+}
+
 static int lookup_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
                        const char *path, struct fuse_entry_param *e,
                        struct fuse_file_info *fi)
@@ -509,6 +557,11 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
             e->generation = node->generation;
             e->entry_timeout = f->conf.entry_timeout;
             e->attr_timeout = f->conf.attr_timeout;
+            if (f->conf.auto_cache) {
+                pthread_mutex_lock(&f->lock);
+                update_stat(node, &e->attr);
+                pthread_mutex_unlock(&f->lock);
+            }
             set_stat(f, e->ino, &e->attr);
             if (f->conf.debug) {
                 printf("   NODEID: %lu\n", (unsigned long) e->ino);
@@ -1063,6 +1116,39 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     pthread_rwlock_unlock(&f->tree_lock);
 }
 
+static double diff_timespec(const struct timespec *t1,
+                            const struct timespec *t2)
+{
+    return (t1->tv_sec - t2->tv_sec) + 
+        ((double) t1->tv_nsec - (double) t2->tv_nsec) / 1000000000.0;
+}
+
+static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
+                            struct fuse_file_info *fi)
+{
+    struct node *node = get_node(f, ino);
+    struct timespec now;
+    curr_time(&now);
+    if (diff_timespec(&now, &node->stat_updated) > f->conf.attr_timeout) {
+        struct stat stbuf;
+        int err;
+
+        if (f->op.fgetattr)
+            err = f->op.fgetattr(path, &stbuf, fi);
+        else
+            err = f->op.getattr(path, &stbuf);
+
+        if (!err)
+            update_stat(node, &stbuf);
+        else
+            node->cache_valid = 0;
+    }
+    if (node->cache_valid)
+        fi->keep_cache = 1;
+    else
+        node->cache_valid = 1;
+}
+
 static void fuse_open(fuse_req_t req, fuse_ino_t ino,
                       struct fuse_file_info *fi)
 {
@@ -1090,6 +1176,9 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
             fi->keep_cache = 1;
 
         pthread_mutex_lock(&f->lock);
+        if (f->conf.auto_cache)
+            open_auto_cache(f, ino, path, fi);
+
         if (fuse_reply_open(req, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release && path != NULL)
@@ -1824,6 +1913,8 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("readdir_ino",           readdir_ino, 1),
     FUSE_LIB_OPT("direct_io",             direct_io, 1),
     FUSE_LIB_OPT("kernel_cache",          kernel_cache, 1),
+    FUSE_LIB_OPT("auto_cache",            auto_cache, 1),
+    FUSE_LIB_OPT("noauto_cache",          auto_cache, 0),
     FUSE_LIB_OPT("umask=",                set_mode, 1),
     FUSE_LIB_OPT("umask=%o",              umask, 0),
     FUSE_LIB_OPT("uid=",                  set_uid, 1),
