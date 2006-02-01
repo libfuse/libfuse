@@ -693,6 +693,11 @@ static void fuse_getattr(fuse_req_t req, fuse_ino_t ino,
     }
     pthread_rwlock_unlock(&f->tree_lock);
     if (!err) {
+        if (f->conf.auto_cache) {
+            pthread_mutex_lock(&f->lock);
+            update_stat(get_node(f, ino), &buf);
+            pthread_mutex_unlock(&f->lock);
+        }
         set_stat(f, ino, &buf);
         fuse_reply_attr(req, &buf, f->conf.attr_timeout);
     } else
@@ -781,6 +786,11 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     }
     pthread_rwlock_unlock(&f->tree_lock);
     if (!err) {
+        if (f->conf.auto_cache) {
+            pthread_mutex_lock(&f->lock);
+            update_stat(get_node(f, ino), &buf);
+            pthread_mutex_unlock(&f->lock);
+        }
         set_stat(f, ino, &buf);
         fuse_reply_attr(req, &buf, f->conf.attr_timeout);
     } else
@@ -1127,26 +1137,29 @@ static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
                             struct fuse_file_info *fi)
 {
     struct node *node = get_node(f, ino);
-    struct timespec now;
-    curr_time(&now);
-    if (diff_timespec(&now, &node->stat_updated) > f->conf.attr_timeout) {
-        struct stat stbuf;
-        int err;
+    if (node->cache_valid) {
+        struct timespec now;
 
-        if (f->op.fgetattr)
-            err = f->op.fgetattr(path, &stbuf, fi);
-        else
-            err = f->op.getattr(path, &stbuf);
+        curr_time(&now);
+        if (diff_timespec(&now, &node->stat_updated) > f->conf.attr_timeout) {
+            struct stat stbuf;
+            int err;
 
-        if (!err)
-            update_stat(node, &stbuf);
-        else
-            node->cache_valid = 0;
+            if (f->op.fgetattr)
+                err = f->op.fgetattr(path, &stbuf, fi);
+            else
+                err = f->op.getattr(path, &stbuf);
+
+            if (!err)
+                update_stat(node, &stbuf);
+            else
+                node->cache_valid = 0;
+        }
     }
     if (node->cache_valid)
         fi->keep_cache = 1;
-    else
-        node->cache_valid = 1;
+
+    node->cache_valid = 1;
 }
 
 static void fuse_open(fuse_req_t req, fuse_ino_t ino,
