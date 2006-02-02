@@ -157,7 +157,6 @@ struct fuse_req *fuse_get_request(struct fuse_conn *fc)
 
 static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 {
-	spin_lock(&fuse_lock);
 	if (req->preallocated)
 		list_add(&req->list, &fc->unused_list);
 	else
@@ -168,10 +167,18 @@ static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 		fc->outstanding_debt--;
 	else
 		up(&fc->outstanding_sem);
-	spin_unlock(&fuse_lock);
 }
 
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
+{
+	if (atomic_dec_and_test(&req->count)) {
+		spin_lock(&fuse_lock);
+		fuse_putback_request(fc, req);
+		spin_unlock(&fuse_lock);
+	}
+}
+
+void fuse_put_request_locked(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (atomic_dec_and_test(&req->count))
 		fuse_putback_request(fc, req);
@@ -222,24 +229,28 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
 static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->finished = 1;
-	spin_unlock(&fuse_lock);
-	if (req->background) {
+	if (!req->background) {
+		wake_up(&req->waitq);
+		fuse_put_request_locked(fc, req);
+		spin_unlock(&fuse_lock);
+	} else {
+		spin_unlock(&fuse_lock);
 		down_read(&fc->sbput_sem);
 		if (fc->mounted)
 			fuse_release_background(req);
 		up_read(&fc->sbput_sem);
+		if (req->in.h.opcode == FUSE_INIT)
+			process_init_reply(fc, req);
+		else if (req->in.h.opcode == FUSE_RELEASE &&
+			 req->inode == NULL) {
+			/* Special case for failed iget in CREATE */
+			u64 nodeid = req->in.h.nodeid;
+			fuse_reset_request(req);
+			fuse_send_forget(fc, req, nodeid, 1);
+			return;
+		}
+		fuse_put_request(fc, req);
 	}
-	wake_up(&req->waitq);
-	if (req->in.h.opcode == FUSE_INIT)
-		process_init_reply(fc, req);
-	else if (req->in.h.opcode == FUSE_RELEASE && req->inode == NULL) {
-		/* Special case for failed iget in CREATE */
-		u64 nodeid = req->in.h.nodeid;
-		fuse_reset_request(req);
-		fuse_send_forget(fc, req, nodeid, 1);
-		return;
-	}
-	fuse_put_request(fc, req);
 }
 
 /*
