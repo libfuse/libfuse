@@ -161,6 +161,7 @@ void fuse_unmount(const char *mountpoint)
     FILE *sf;
     int rv;
     char *seekscript =
+    "exec 2>/dev/null; " /* error message is annoying in help output */
     "/usr/bin/fstat " FUSE_DEV_TRUNK "* | "
     "/usr/bin/awk 'BEGIN{ getline; if (! ($3 == \"PID\" && $10 == \"NAME\")) exit 1; }; "
     "              { if ($3 == %d) print $10; }' | "
@@ -186,7 +187,7 @@ void fuse_unmount(const char *mountpoint)
     system(umount_cmd);
 }
 
-int fuse_mount_core(const char *mountpoint, const char *opts)
+static int fuse_mount_core(const char *mountpoint, const char *opts)
 {
     const char *mountprog = FUSERMOUNT_PROG;
     int fd;

@@ -10,6 +10,9 @@
 
 2006-01-20  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Sanitize storage type and help message in mount_bsd.c.  Patch
+	from Csaba Henk
+
 	* fuse_opt: add new helper constants FUSE_OPT_KEY_KEEP and
 	FUSE_OPT_KEY_DISCARD
 
