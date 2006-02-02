@@ -160,9 +160,9 @@ struct fuse_req *fuse_get_request(struct fuse_conn *fc)
 	return do_get_request(fc);
 }
 
+/* Must be called with fuse_lock held */
 static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 {
-	spin_lock(&fuse_lock);
 	if (req->preallocated) {
 		atomic_dec(&fc->num_waiting);
 		list_add(&req->list, &fc->unused_list);
@@ -174,10 +174,18 @@ static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 		fc->outstanding_debt--;
 	else
 		up(&fc->outstanding_sem);
-	spin_unlock(&fuse_lock);
 }
 
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
+{
+	if (atomic_dec_and_test(&req->count)) {
+		spin_lock(&fuse_lock);
+		fuse_putback_request(fc, req);
+		spin_unlock(&fuse_lock);
+	}
+}
+
+static void fuse_put_request_locked(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (atomic_dec_and_test(&req->count))
 		fuse_putback_request(fc, req);
@@ -216,20 +224,18 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 {
 	list_del(&req->list);
 	req->state = FUSE_REQ_FINISHED;
-	if (req->isreply && !req->background) {
+	if (!req->background) {
 		wake_up(&req->waitq);
-		__fuse_put_request(req);
+		fuse_put_request_locked(fc, req);
 		spin_unlock(&fuse_lock);
 	} else {
 		void (*end) (struct fuse_conn *, struct fuse_req *) = req->end;
 		req->end = NULL;
 		spin_unlock(&fuse_lock);
-		if (req->background) {
-			down_read(&fc->sbput_sem);
-			if (fc->mounted)
-				fuse_release_background(req);
-			up_read(&fc->sbput_sem);
-		}
+		down_read(&fc->sbput_sem);
+		if (fc->mounted)
+			fuse_release_background(req);
+		up_read(&fc->sbput_sem);
 		if (end)
 			end(fc, req);
 		else
@@ -308,7 +314,7 @@ static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 	if (req->state == FUSE_REQ_PENDING) {
 		list_del(&req->list);
 		__fuse_put_request(req);
-	} else if (req->state != FUSE_REQ_FINISHED)
+	} else if (req->state == FUSE_REQ_SENT)
 		background_request(fc, req);
 }
 
