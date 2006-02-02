@@ -1,3 +1,8 @@
+2006-02-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix even bigger bug introduced in fix for request_end() on
+	2006-01-14.  Reported by Gal Rosen
+
 2006-01-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* highlevel-lib: add 'auto_cache' option.  This caches file data

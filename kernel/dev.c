@@ -202,27 +202,39 @@ void fuse_release_background(struct fuse_req *req)
  * stored objects are released.  The requester thread is woken up (if
  * still waiting), the 'end' callback is called if given, else the
  * reference to the request is released
+ * 
+ * Releasing extra reference for foreground requests must be done
+ * within the same locked region as setting state to finished.  This
+ * is because fuse_reset_request() may be called after request is
+ * finished and it must be the sole possessor.  If request is
+ * interrupted and put in the background, it will return with an error
+ * and hence never be reset and reused.
  *
  * Called with fuse_lock, unlocks it
  */
 static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 {
-	void (*end) (struct fuse_conn *, struct fuse_req *) = req->end;
-	req->end = NULL;
 	list_del(&req->list);
 	req->state = FUSE_REQ_FINISHED;
-	spin_unlock(&fuse_lock);
-	if (req->background) {
-		down_read(&fc->sbput_sem);
-		if (fc->mounted)
-			fuse_release_background(req);
-		up_read(&fc->sbput_sem);
+	if (req->isreply && !req->background) {
+		wake_up(&req->waitq);
+		__fuse_put_request(req);
+		spin_unlock(&fuse_lock);
+	} else {
+		void (*end) (struct fuse_conn *, struct fuse_req *) = req->end;
+		req->end = NULL;
+		spin_unlock(&fuse_lock);
+		if (req->background) {
+			down_read(&fc->sbput_sem);
+			if (fc->mounted)
+				fuse_release_background(req);
+			up_read(&fc->sbput_sem);
+		}
+		if (end)
+			end(fc, req);
+		else
+			fuse_put_request(fc, req);
 	}
-	wake_up(&req->waitq);
-	if (end)
-		end(fc, req);
-	else
-		fuse_put_request(fc, req);
 }
 
 /*
@@ -296,7 +308,7 @@ static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 	if (req->state == FUSE_REQ_PENDING) {
 		list_del(&req->list);
 		__fuse_put_request(req);
-	} else if (req->state == FUSE_REQ_SENT)
+	} else if (req->state != FUSE_REQ_FINISHED)
 		background_request(fc, req);
 }
 
