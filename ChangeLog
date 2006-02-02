@@ -1,5 +1,9 @@
 2006-02-02  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.5.2
+
+2006-02-02  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Fix even bigger bug introduced in fix for request_end() on
 	2006-01-14.  Reported by Gal Rosen
 

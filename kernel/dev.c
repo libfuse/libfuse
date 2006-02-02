@@ -178,7 +178,7 @@ void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
 	}
 }
 
-void fuse_put_request_locked(struct fuse_conn *fc, struct fuse_req *req)
+static void fuse_put_request_locked(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (atomic_dec_and_test(&req->count))
 		fuse_putback_request(fc, req);
