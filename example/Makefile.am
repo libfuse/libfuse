@@ -1,5 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
+AM_CPPFLAGS = -I$(top_srcdir)/include
 noinst_PROGRAMS = fusexmp fusexmp_fh null hello hello_ll
 
 fusexmp_SOURCES = fusexmp.c

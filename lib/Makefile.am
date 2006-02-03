@@ -1,5 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
+AM_CPPFLAGS = -I$(top_srcdir)/include
 lib_LTLIBRARIES = libfuse.la
 
 if BSD
@@ -23,6 +24,6 @@ libfuse_la_SOURCES = 		\
 	$(mount_source)
 
 libfuse_la_LDFLAGS = $(libfuse_libs) -version-number 2:6:0 \
-	-Wl,--version-script,fuse_versionscript
+	-Wl,--version-script,$(srcdir)/fuse_versionscript
 
 EXTRA_DIST = fuse_versionscript
