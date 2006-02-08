@@ -1,3 +1,8 @@
+2006-02-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* In some cases udev rule seems to be ineffective when installed
+	as 40-fuse.rules but work as 60-fuse.rules.  Reported by John Hunt
+
 2006-02-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compilation when build directory is different from source

@@ -24,8 +24,8 @@ install-exec-local:
 
 install-data-local:
 	$(mkdir_p) $(DESTDIR)$(UDEV_RULES_PATH)
-	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/40-fuse.rules
+	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/60-fuse.rules
 
 uninstall-local:
 	rm -f $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
-	rm -f $(DESTDIR)$(UDEV_RULES_PATH)/40-fuse.rules
+	rm -f $(DESTDIR)$(UDEV_RULES_PATH)/60-fuse.rules
