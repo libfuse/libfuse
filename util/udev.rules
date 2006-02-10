@@ -1,1 +1,1 @@
-KERNEL="fuse", NAME="%k", MODE="0666"
+KERNEL=="fuse", NAME="%k", MODE="0666"

@@ -3,6 +3,10 @@
 	* Refine clock_gettime() querying so that linker options
 	shall be set as it's appropriate for the target platform.
 
+2006-02-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix udev rule syntax.  Reported by Nix
+
 2006-02-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* In some cases udev rule seems to be ineffective when installed
