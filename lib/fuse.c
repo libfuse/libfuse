@@ -2014,7 +2014,8 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
             goto out_free;
     }
 
-    f->se = fuse_lowlevel_new(args, &fuse_path_ops, sizeof(fuse_path_ops), f);
+    f->se = fuse_lowlevel_new_common(args, &fuse_path_ops,
+                                     sizeof(fuse_path_ops), f);
     if (f->se == NULL)
         goto out_free;
 

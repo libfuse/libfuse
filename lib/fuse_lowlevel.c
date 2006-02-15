@@ -989,7 +989,7 @@ static void fuse_ll_destroy(void *data)
     free(f);
 }
 
-struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
+struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
                                        const struct fuse_lowlevel_ops *op,
                                        size_t op_size, void *userdata)
 {
@@ -1033,6 +1033,20 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
  out:
     return NULL;
 }
+
+
+/*
+ * always call fuse_lowlevel_new_common() internally, to work around a
+ * bug in the FreeBSD runtime linker, which links the old version of a
+ * symbol to internal references.
+ */
+struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
+                                       const struct fuse_lowlevel_ops *op,
+                                       size_t op_size, void *userdata)
+{
+    return fuse_lowlevel_new_common(args, op, op_size, userdata);
+}
+
 
 #include "fuse_lowlevel_compat.h"
 
@@ -1100,12 +1114,6 @@ struct fuse_session *fuse_lowlevel_new_compat(const char *opts,
     return se;
 }
 
-__asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
-__asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
-__asm__(".symver fuse_lowlevel_new_compat,fuse_lowlevel_new@FUSE_2.4");
-
-#endif /* __FreeBSD__ */
-
 struct fuse_ll_compat_conf {
     unsigned max_read;
     int set_max_read;
@@ -1138,6 +1146,20 @@ int fuse_sync_compat_args(struct fuse_args *args)
     return 0;
 }
 
+__asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
+__asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
+__asm__(".symver fuse_lowlevel_new_compat,fuse_lowlevel_new@FUSE_2.4");
+
+#else /* __FreeBSD__ */
+
+int fuse_sync_compat_args(struct fuse_args *args)
+{
+    (void) args;
+    return 0;
+}
+
+#endif /* __FreeBSD__ */
+
 struct fuse_session *fuse_lowlevel_new_compat25(struct fuse_args *args,
                         const struct fuse_lowlevel_ops_compat25 *op,
                         size_t op_size, void *userdata)
@@ -1145,9 +1167,9 @@ struct fuse_session *fuse_lowlevel_new_compat25(struct fuse_args *args,
     if (fuse_sync_compat_args(args) == -1)
         return NULL;
 
-    return fuse_lowlevel_new(args, (const struct fuse_lowlevel_ops *) op,
-                             op_size, userdata);
+    return fuse_lowlevel_new_common(args,
+                                    (const struct fuse_lowlevel_ops *) op,
+                                    op_size, userdata);
 }
-
 
 __asm__(".symver fuse_lowlevel_new_compat25,fuse_lowlevel_new@FUSE_2.5");

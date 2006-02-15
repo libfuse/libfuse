@@ -66,12 +66,8 @@ AC_CHECK_MEMBERS([struct stat.st_atim])
 libfuse_libs=-lpthread
 LIBS=
 AC_SEARCH_LIBS(clock_gettime, [rt])
-rt_libs=$LIBS
-
-AC_SUBST(rt_libs)
+libfuse_libs="$libfuse_libs $LIBS"
 LIBS=
-
-libfuse_libs="$libfuse_libs $rt_libs"
 AC_SUBST(libfuse_libs)
 
 if test -z "$MOUNT_FUSE_PATH"; then

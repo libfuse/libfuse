@@ -10,6 +10,7 @@
 
 struct fuse_session;
 struct fuse_chan;
+struct fuse_lowlevel_ops;
 
 struct fuse_cmd {
     char *buf;
@@ -24,3 +25,7 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
                              size_t op_size, int compat);
 
 int fuse_sync_compat_args(struct fuse_args *args);
+
+struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
+                                       const struct fuse_lowlevel_ops *op,
+                                       size_t op_size, void *userdata);

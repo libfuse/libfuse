@@ -1,3 +1,10 @@
+2006-02-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Work around FreeBSD runtime linker "feature" which binds an old
+	version of a symbol to internal references if the symbol has more
+	than one version.  This resulted in infinite recursion in
+	fuse_lowlevel_new_compat25().
+
 2006-02-10  Csaba Henk <csaba.henk@creo.hu>
 
 	* Refine clock_gettime() querying so that linker options
