@@ -216,7 +216,7 @@ void fuse_release_background(struct fuse_req *req)
  * stored objects are released.  The requester thread is woken up (if
  * still waiting), the 'end' callback is called if given, else the
  * reference to the request is released
- * 
+ *
  * Releasing extra reference for foreground requests must be done
  * within the same locked region as setting state to finished.  This
  * is because fuse_reset_request() may be called after request is
