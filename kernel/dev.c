@@ -106,6 +106,12 @@ static void restore_sigs(sigset_t *oldset)
 #endif
 #endif
 
+/*
+ * Reset request, so that it can be reused
+ *
+ * The caller must be _very_ careful to make sure, that it is holding
+ * the only reference to req
+ */
 void fuse_reset_request(struct fuse_req *req)
 {
 	int preallocated = req->preallocated;

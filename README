@@ -44,7 +44,7 @@ be compiled.  It is possible to override this with the
 If './configure' cannot find the kernel source or it says the kernel
 source should be prepared, you may either try
 
-  ./configure--disable-kernel-module
+  ./configure --disable-kernel-module
 
 or if your kernel does not already contain FUSE support, do the
 following:

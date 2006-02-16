@@ -1,3 +1,8 @@
+2006-02-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix rare race betweeen abort and release caused by failed iget()
+	in fuse_create_open().
+
 2006-02-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Work around FreeBSD runtime linker "feature" which binds an old
