@@ -3,6 +3,9 @@
 	* Fix rare race betweeen abort and release caused by failed iget()
 	in fuse_create_open().
 
+	* Add 'ac_attr_timeout' option e.g. for filesystems which do their
+	own attribute caching.
+
 2006-02-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Work around FreeBSD runtime linker "feature" which binds an old

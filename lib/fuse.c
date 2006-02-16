@@ -39,6 +39,8 @@ struct fuse_config {
     double entry_timeout;
     double negative_timeout;
     double attr_timeout;
+    double ac_attr_timeout;
+    int ac_attr_timeout_set;
     int debug;
     int hard_remove;
     int use_ino;
@@ -1141,7 +1143,7 @@ static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
         struct timespec now;
 
         curr_time(&now);
-        if (diff_timespec(&now, &node->stat_updated) > f->conf.attr_timeout) {
+        if (diff_timespec(&now, &node->stat_updated) > f->conf.ac_attr_timeout) {
             struct stat stbuf;
             int err;
 
@@ -1936,6 +1938,8 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("gid=%d",                gid, 0),
     FUSE_LIB_OPT("entry_timeout=%lf",     entry_timeout, 0),
     FUSE_LIB_OPT("attr_timeout=%lf",      attr_timeout, 0),
+    FUSE_LIB_OPT("ac_attr_timeout=%lf",   ac_attr_timeout, 0),
+    FUSE_LIB_OPT("ac_attr_timeout=",      ac_attr_timeout_set, 1),
     FUSE_LIB_OPT("negative_timeout=%lf",  negative_timeout, 0),
     FUSE_OPT_END
 };
@@ -1954,8 +1958,9 @@ static void fuse_lib_help(void)
 "    -o gid=N               set file group\n"
 "    -o entry_timeout=T     cache timeout for names (1.0s)\n"
 "    -o negative_timeout=T  cache timeout for deleted names (0.0s)\n"
-            "    -o attr_timeout=T      cache timeout for attributes (1.0s)\n"
-            "\n");
+"    -o attr_timeout=T      cache timeout for attributes (1.0s)\n"
+"    -o ac_attr_timeout=T   auto cache timeout for attributes (attr_timeout)\n"
+"\n");
 }
 
 static int fuse_lib_opt_proc(void *data, const char *arg, int key,
@@ -2001,6 +2006,9 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
 
     if (fuse_opt_parse(args, &f->conf, fuse_lib_opts, fuse_lib_opt_proc) == -1)
             goto out_free;
+
+    if (!f->conf.ac_attr_timeout_set)
+        f->conf.ac_attr_timeout = f->conf.attr_timeout;
 
 #ifdef __FreeBSD__
     /*
