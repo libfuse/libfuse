@@ -1943,16 +1943,17 @@ static const struct fuse_opt fuse_lib_opts[] = {
 static void fuse_lib_help(void)
 {
     fprintf(stderr,
-            "    -o hard_remove         immediate removal (don't hide files)\n"
-            "    -o use_ino             let filesystem set inode numbers\n"
-            "    -o readdir_ino         try to fill in d_ino in readdir\n"
-            "    -o direct_io           use direct I/O\n"
-            "    -o kernel_cache        cache files in kernel\n"
-            "    -o umask=M             set file permissions (octal)\n"
-            "    -o uid=N               set file owner\n"
-            "    -o gid=N               set file group\n"
-            "    -o entry_timeout=T     cache timeout for names (1.0s)\n"
-            "    -o negative_timeout=T  cache timeout for deleted names (0.0s)\n"
+"    -o hard_remove         immediate removal (don't hide files)\n"
+"    -o use_ino             let filesystem set inode numbers\n"
+"    -o readdir_ino         try to fill in d_ino in readdir\n"
+"    -o direct_io           use direct I/O\n"
+"    -o kernel_cache        cache files in kernel\n"
+"    -o [no]auto_cache      enable caching based on modification times\n"
+"    -o umask=M             set file permissions (octal)\n"
+"    -o uid=N               set file owner\n"
+"    -o gid=N               set file group\n"
+"    -o entry_timeout=T     cache timeout for names (1.0s)\n"
+"    -o negative_timeout=T  cache timeout for deleted names (0.0s)\n"
             "    -o attr_timeout=T      cache timeout for attributes (1.0s)\n"
             "\n");
 }
