@@ -1,3 +1,9 @@
+2006-02-17  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Lowlevel lib: Unify fuse_dirent_size() and fuse_add_dirent()
+	into a single function fuse_add_direntry().  This cleans up the
+	interface and makes it possible to do stacking.
+
 2006-02-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix rare race betweeen abort and release caused by failed iget()

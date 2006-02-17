@@ -90,6 +90,7 @@ struct node {
 struct fuse_dirhandle {
     pthread_mutex_t lock;
     struct fuse *fuse;
+    fuse_req_t req;
     char *contents;
     int allocated;
     unsigned len;
@@ -1446,13 +1447,32 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
         fuse_reply_open(req, llfi);
 }
 
+static int extend_contents(struct fuse_dirhandle *dh, unsigned minsize)
+{
+    if (minsize > dh->size) {
+        char *newptr;
+        unsigned newsize = dh->size;
+        if (!newsize)
+            newsize = 1024;
+        while (newsize < minsize)
+            newsize *= 2;
+
+        newptr = (char *) realloc(dh->contents, newsize);
+        if (!newptr) {
+            dh->error = -ENOMEM;
+            return -1;
+        }
+        dh->contents = newptr;
+        dh->size = newsize;
+    }
+    return 0;
+}
+
 static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
                            const struct stat *statp, off_t off)
 {
     struct stat stbuf;
-    unsigned namelen = strlen(name);
-    unsigned entsize;
-    unsigned newlen;
+    size_t newlen;
 
     if (statp)
         stbuf = *statp;
@@ -1473,31 +1493,24 @@ static int fill_dir_common(struct fuse_dirhandle *dh, const char *name,
         }
     }
 
-    entsize = fuse_dirent_size(namelen);
-    newlen = dh->len + entsize;
-
     if (off) {
+        if (extend_contents(dh, dh->needlen) == -1)
+            return 1;
+
         dh->filled = 0;
+        newlen = dh->len + fuse_add_direntry(dh->req, dh->contents + dh->len,
+                                             dh->needlen - dh->len, name,
+                                             &stbuf, off);
         if (newlen > dh->needlen)
             return 1;
-    }
-
-    if (newlen > dh->size) {
-        char *newptr;
-
-        if (!dh->size)
-            dh->size = 1024;
-        while (newlen > dh->size)
-            dh->size *= 2;
-
-        newptr = (char *) realloc(dh->contents, dh->size);
-        if (!newptr) {
-            dh->error = -ENOMEM;
+    } else {
+        newlen = dh->len + fuse_add_direntry(dh->req, NULL, 0, name, NULL, 0);
+        if (extend_contents(dh, newlen) == -1)
             return 1;
-        }
-        dh->contents = newptr;
+
+        fuse_add_direntry(dh->req, dh->contents + dh->len, dh->size - dh->len,
+                          name, &stbuf, newlen);
     }
-    fuse_add_dirent(dh->contents + dh->len, name, &stbuf, off ? off : newlen);
     dh->len = newlen;
     return 0;
 }
@@ -1521,8 +1534,8 @@ static int fill_dir_old(struct fuse_dirhandle *dh, const char *name, int type,
     return dh->error;
 }
 
-static int readdir_fill(struct fuse *f, fuse_ino_t ino, size_t size,
-                        off_t off, struct fuse_dirhandle *dh,
+static int readdir_fill(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
+                        size_t size, off_t off, struct fuse_dirhandle *dh,
                         struct fuse_file_info *fi)
 {
     int err = -ENOENT;
@@ -1534,11 +1547,13 @@ static int readdir_fill(struct fuse *f, fuse_ino_t ino, size_t size,
         dh->error = 0;
         dh->needlen = size;
         dh->filled = 1;
+        dh->req = req;
         err = -ENOSYS;
         if (f->op.readdir)
             err = f->op.readdir(path, dh, fill_dir, off, fi);
         else if (f->op.getdir)
             err = f->op.getdir(path, dh, fill_dir_old);
+        dh->req = NULL;
         if (!err)
             err = dh->error;
         if (err)
@@ -1563,7 +1578,7 @@ static void fuse_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         dh->filled = 0;
 
     if (!dh->filled) {
-        int err = readdir_fill(f, ino, size, off, dh, &fi);
+        int err = readdir_fill(f, req, ino, size, off, dh, &fi);
         if (err) {
             reply_err(req, err);
             goto out;

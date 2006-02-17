@@ -186,6 +186,18 @@ char *fuse_add_dirent(char *buf, const char *name, const struct stat *stbuf,
     return buf + entsize;
 }
 
+size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
+                         const char *name, const struct stat *stbuf, off_t off)
+{
+    size_t entsize;
+
+    (void) req;
+    entsize = fuse_dirent_size(strlen(name));
+    if (entsize <= bufsize && buf)
+        fuse_add_dirent(buf, name, stbuf, off);
+    return entsize;
+}
+
 static void convert_statfs(const struct statvfs *stbuf,
                            struct fuse_kstatfs *kstatfs)
 {
@@ -526,8 +538,7 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid,
     fi.writepage = arg->write_flags & 1;
 
     if (req->f->op.write)
-        req->f->op.write(req, nodeid, PARAM(arg), arg->size,
-                                arg->offset, &fi);
+        req->f->op.write(req, nodeid, PARAM(arg), arg->size, arg->offset, &fi);
     else
         fuse_reply_err(req, ENOSYS);
 }
@@ -654,7 +665,7 @@ static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid,
 
     if (req->f->op.setxattr)
             req->f->op.setxattr(req, nodeid, name, value, arg->size,
-                                       arg->flags);
+                                arg->flags);
     else
         fuse_reply_err(req, ENOSYS);
 }

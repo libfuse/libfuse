@@ -525,7 +525,7 @@ struct fuse_lowlevel_ops {
     /**
      * Read directory
      *
-     * Send a buffer filled using fuse_add_dirent(), with size not
+     * Send a buffer filled using fuse_add_direntry(), with size not
      * exceeding the requested size.  Send an empty buffer on end of
      * stream.
      *
@@ -873,17 +873,13 @@ int fuse_reply_xattr(fuse_req_t req, size_t count);
  * ----------------------------------------------------------- */
 
 /**
- * Calculate the number of bytes a directory entry takes up
- *
- * @param namelen the length of the entry name
- * @return the number of bytes needed
- */
-size_t fuse_dirent_size(size_t namelen);
-
-/**
  * Add a directory entry to the buffer
  *
- * Buffer needs to be large enough to hold the entry
+ * Buffer needs to be large enough to hold the entry.  Of it's not,
+ * then the entry is not filled in but the size of the entry is still
+ * returned.  The caller can check this by comparing the bufsize
+ * parameter with the returned entry size.  If the entry size is
+ * larger than the buffer size, the operation failed.
  *
  * From the 'stbuf' argument the st_ino field and bits 12-15 of the
  * st_mode field are used.  The other fields are ignored.
@@ -892,14 +888,17 @@ size_t fuse_dirent_size(size_t namelen);
  * could be any marker, that enables the implementation to find a
  * specific point in the directory stream.
  *
+ * @param req request handle
  * @param buf the point where the new entry will be added to the buffer
+ * @param bufsize remaining size of the buffer
  * @param the name of the entry
  * @param stbuf the file attributes
  * @param off the offset of the next entry
- * @return a pointer to the start of the next entry in the buffer
+ * @return the space needed for the entry
  */
-char *fuse_add_dirent(char *buf, const char *name, const struct stat *stbuf,
-                      off_t off);
+size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
+                         const char *name, const struct stat *stbuf,
+                         off_t off);
 
 /* ----------------------------------------------------------- *
  * Utility functions                                           *

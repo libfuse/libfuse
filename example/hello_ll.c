@@ -75,15 +75,17 @@ struct dirbuf {
     size_t size;
 };
 
-static void dirbuf_add(struct dirbuf *b, const char *name, fuse_ino_t ino)
+static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
+                       fuse_ino_t ino)
 {
     struct stat stbuf;
     size_t oldsize = b->size;
-    b->size += fuse_dirent_size(strlen(name));
+    b->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
     b->p = (char *) realloc(b->p, b->size);
     memset(&stbuf, 0, sizeof(stbuf));
     stbuf.st_ino = ino;
-    fuse_add_dirent(b->p + oldsize, name, &stbuf, b->size);
+    fuse_add_direntry(req, b->p + oldsize, b->size - oldsize, name, &stbuf,
+                      b->size);
 }
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
@@ -108,9 +110,9 @@ static void hello_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         struct dirbuf b;
 
         memset(&b, 0, sizeof(b));
-        dirbuf_add(&b, ".", 1);
-        dirbuf_add(&b, "..", 1);
-        dirbuf_add(&b, hello_name, 2);
+        dirbuf_add(req, &b, ".", 1);
+        dirbuf_add(req, &b, "..", 1);
+        dirbuf_add(req, &b, hello_name, 2);
         reply_buf_limited(req, b.p, b.size, off, size);
         free(b.p);
     }
