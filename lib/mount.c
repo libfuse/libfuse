@@ -291,4 +291,4 @@ int fuse_mount_compat1(const char *mountpoint, const char *args[])
     return fuse_mount_compat22(mountpoint, NULL);
 }
 
-__asm__(".symver fuse_mount_compat22,fuse_mount@");
+__asm__(".symver fuse_mount_compat22,fuse_mount@FUSE_2.2");
