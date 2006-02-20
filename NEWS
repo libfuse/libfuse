@@ -1,3 +1,9 @@
+What is new in 2.6
+
+ - Improved read characteristics (asynchronous reads)
+
+ - Support for aborting filesystem connection
+
 What is new in 2.5
 
  - Merge library part of FreeBSD port
