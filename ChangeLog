@@ -3,8 +3,8 @@
 	* libfuse: fix use-after-free bug in interruptred reply_entry().
 	Patch from John Muir
 
-	* libfuse: fix wrong symbol versioning for fuse_mount.  Found by
-	Stéphane Rosi
+	* libfuse: fix wrong symbol versioning for fuse_mount.  Debian bug
+	ID: 352631.  Found by Stéphane Rosi
 
 2006-02-02  Miklos Szeredi <miklos@szeredi.hu>
 
