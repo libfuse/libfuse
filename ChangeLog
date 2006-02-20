@@ -1,3 +1,11 @@
+2006-02-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix use-after-free bug in interruptred reply_entry().
+	Patch from John Muir
+
+	* libfuse: fix wrong symbol versioning for fuse_mount.  Debian bug
+	ID: 352631.  Found by Stéphane Rosi
+
 2006-02-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Lowlevel lib: Unify fuse_dirent_size() and fuse_add_dirent()
