@@ -1,3 +1,11 @@
+2006-02-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusexmp_fh: implement flush() method and call close() on the
+	open file descriptor.  This is needed if used on an NFS
+	filesystem, which buffers data until file is closed.  Franco Broi
+	spotted the situation when 'cp -p' failed to set the modification
+	time because of this.
+
 2006-02-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0-pre1

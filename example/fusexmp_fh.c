@@ -311,6 +311,23 @@ static int xmp_statfs(const char *path, struct statvfs *stbuf)
     return 0;
 }
 
+static int xmp_flush(const char *path, struct fuse_file_info *fi)
+{
+    int res;
+
+    (void) path;
+    /* This is called from every close on an open file, so call the
+       close on the underlying filesystem.  But since flush may be
+       called multiple times for an open file, this must not really
+       close the file.  This is important if used on a network
+       filesystem like NFS which flush the data/metadata on close() */
+    res = close(dup(fi->fh));
+    if (res == -1)
+        return -errno;
+
+    return 0;
+}
+
 static int xmp_release(const char *path, struct fuse_file_info *fi)
 {
     (void) path;
@@ -401,6 +418,7 @@ static struct fuse_operations xmp_oper = {
     .read	= xmp_read,
     .write	= xmp_write,
     .statfs	= xmp_statfs,
+    .flush	= xmp_flush,
     .release	= xmp_release,
     .fsync	= xmp_fsync,
 #ifdef HAVE_SETXATTR
