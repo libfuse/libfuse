@@ -1232,8 +1232,9 @@ static void fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     path = get_path(f, ino);
     if (path != NULL) {
         if (f->conf.debug) {
-            printf("READ[%llu] %u bytes from %llu\n",
-                   (unsigned long long) fi->fh, size, off);
+            printf("READ[%llu] %lu bytes from %llu\n",
+                   (unsigned long long) fi->fh, (unsigned long) size,
+                   (unsigned long long) off);
             fflush(stdout);
         }
 
@@ -1271,9 +1272,9 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
     path = get_path(f, ino);
     if (path != NULL) {
         if (f->conf.debug) {
-            printf("WRITE%s[%llu] %u bytes to %llu\n",
+            printf("WRITE%s[%llu] %lu bytes to %llu\n",
                    fi->writepage ? "PAGE" : "", (unsigned long long) fi->fh,
-                   size, off);
+                   (unsigned long) size, (unsigned long long) off);
             fflush(stdout);
         }
 
