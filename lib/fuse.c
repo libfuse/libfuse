@@ -1331,6 +1331,7 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     struct node *node;
     int unlink_hidden;
 
+    pthread_rwlock_rdlock(&f->tree_lock);
     pthread_mutex_lock(&f->lock);
     node = get_node(f, ino);
     assert(node->open_count > 0);
@@ -1338,7 +1339,6 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     unlink_hidden = (node->is_hidden && !node->open_count);
     pthread_mutex_unlock(&f->lock);
 
-    pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (f->conf.debug) {
         printf("RELEASE[%llu] flags: 0x%x\n", (unsigned long long) fi->fh,

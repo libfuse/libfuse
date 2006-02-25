@@ -1,3 +1,17 @@
+2006-02-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Lowlevel lib: return all-zero statvfs data if filesystem doesn't
+	implement method.  This is needed on FreeBSD, and nicer on Linux
+	too.  Highlevel lib already did this.  Reported by Csaba Henk
+
+	* Fix negative entry handling.  There was a bug, that negative
+	lookups with timeouts (nodeid == 0) returned -EIO.
+
+2006-02-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix race between RELEASE and UNLINK, which might leave
+	.fuse_hidden* files around
+
 2006-02-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusexmp_fh: implement flush() method and call close() on the

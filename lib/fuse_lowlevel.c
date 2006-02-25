@@ -653,8 +653,13 @@ static void do_statfs(fuse_req_t req)
 {
     if (req->f->op.statfs)
         req->f->op.statfs(req);
-    else
-        fuse_reply_err(req, ENOSYS);
+    else {
+        struct statvfs buf = {
+            .f_namemax = 255,
+            .f_bsize = 512,
+        };
+        fuse_reply_statfs(req, &buf);
+    }
 }
 
 static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid,
