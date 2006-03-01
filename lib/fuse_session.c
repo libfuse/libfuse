@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 
 struct fuse_session {
     struct fuse_session_ops op;
@@ -143,9 +144,15 @@ struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
     return ch->se;
 }
 
-int fuse_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
+int fuse_chan_recv(struct fuse_chan *ch, char *buf, size_t size)
 {
     return ch->op.receive(ch, buf, size);
+}
+
+int fuse_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
+{
+    int res = fuse_chan_recv(ch, buf, size);
+    return res >= 0 ? res : (res != -EINTR && res != -EAGAIN) ? -1 : 0;
 }
 
 int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[], size_t count)

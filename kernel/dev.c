@@ -357,6 +357,7 @@ static void queue_request(struct fuse_conn *fc, struct fuse_req *req)
 	list_add_tail(&req->list, &fc->pending);
 	req->state = FUSE_REQ_PENDING;
 	wake_up(&fc->waitq);
+	kill_fasync(&fc->fasync, SIGIO, POLL_IN);
 }
 
 /*
@@ -669,6 +670,12 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 	err = -EPERM;
 	if (!fc)
 		goto err_unlock;
+
+	err = -EAGAIN;
+	if((file->f_flags & O_NONBLOCK) && fc->connected &&
+	   list_empty(&fc->pending))
+		goto err_unlock;
+
 	request_wait(fc);
 	err = -ENODEV;
 	if (!fc->connected)
@@ -951,6 +958,7 @@ void fuse_abort_conn(struct fuse_conn *fc)
 		end_requests(fc, &fc->pending);
 		end_requests(fc, &fc->processing);
 		wake_up_all(&fc->waitq);
+		kill_fasync(&fc->fasync, SIGIO, POLL_IN);
 	}
 	spin_unlock(&fuse_lock);
 }
@@ -967,10 +975,24 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 		end_requests(fc, &fc->processing);
 	}
 	spin_unlock(&fuse_lock);
-	if (fc)
+	if (fc) {
 		kobject_put(&fc->kobj);
+		fasync_helper(-1, file, 0, &fc->fasync);
+		fc->fasync = NULL;
+	}
 
 	return 0;
+}
+
+static int fuse_dev_fasync(int fd, struct file *file, int on)
+{
+	struct fuse_conn *fc = fuse_get_conn(file);
+
+	if (!fc)
+		return -ENODEV;
+
+	/* No locking - fasync_helper does its own locking */
+	return fasync_helper(fd, file, on, &fc->fasync);
 }
 
 struct file_operations fuse_dev_operations = {
@@ -982,6 +1004,7 @@ struct file_operations fuse_dev_operations = {
 	.writev		= fuse_dev_writev,
 	.poll		= fuse_dev_poll,
 	.release	= fuse_dev_release,
+	.fasync		= fuse_dev_fasync,
 };
 
 static struct miscdevice fuse_miscdevice = {

@@ -10,6 +10,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 int fuse_session_loop(struct fuse_session *se)
 {
@@ -23,16 +24,15 @@ int fuse_session_loop(struct fuse_session *se)
     }
 
     while (!fuse_session_exited(se)) {
-        res = fuse_chan_receive(ch, buf, bufsize);
-        if (!res)
+        res = fuse_chan_recv(ch, buf, bufsize);
+        if (res == -EINTR)
             continue;
-        if (res == -1)
+        if (res <= 0)
             break;
         fuse_session_process(se, buf, res, ch);
-        res = 0;
     }
 
     free(buf);
     fuse_session_reset(se);
-    return res;
+    return res < 0 ? -1 : 0;
 }

@@ -96,6 +96,7 @@ FUSE_2.6 {
 		fuse_setup_compat25;
 		fuse_unmount;
 		fuse_unmount_compat22;
+		fuse_chan_recv;
 
 	local:
 		 *;

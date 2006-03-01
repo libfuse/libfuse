@@ -1,3 +1,11 @@
+2006-03-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add O_ASYNC and O_NONBLOCK support to FUSE device.  Patch by
+	Jeff Dike
+
+	* Renamed fuse_chan_receive() to fuse_chan_recv() and changed
+	interface to return -errno in case of error.
+
 2006-03-01  Csaba Henk <csaba.henk@creo.hu>
 
 	* libfuse: pass device file descriptor to fuse_unmount(), rewrite

@@ -74,12 +74,14 @@ static void *do_work(void *data)
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 
     while (!fuse_session_exited(w->se)) {
-        int res = fuse_chan_receive(w->prevch, buf, bufsize);
-        if (!res)
+        int res = fuse_chan_recv(w->prevch, buf, bufsize);
+        if (res == -EINTR)
             continue;
-        if (res == -1) {
-            fuse_session_exit(w->se);
-            w->error = -1;
+        if (res <= 0) {
+            if (res < 0) {
+                fuse_session_exit(w->se);
+                w->error = -1;
+            }
             break;
         }
 

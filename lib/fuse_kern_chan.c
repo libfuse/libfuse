@@ -16,26 +16,33 @@
 
 static int fuse_kern_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
 {
-    ssize_t res = read(fuse_chan_fd(ch), buf, size);
-    int err = errno;
+    int err;
+    ssize_t res;
     struct fuse_session *se = fuse_chan_session(ch);
-
     assert(se != NULL);
+
+ restart:
+    res = read(fuse_chan_fd(ch), buf, size);
+    err = errno;
+
     if (fuse_session_exited(se))
         return 0;
     if (res == -1) {
-        /* EINTR means, the read() was interrupted, ENOENT means the
-           operation was interrupted */
-        if (err == EINTR || err == ENOENT)
-            return 0;
-        /* ENODEV means we got unmounted, so we silently return failure */
-        if (err != ENODEV)
+        /* ENOENT means the operation was interrupted, it's safe
+           to restart */
+        if (err == ENOENT)
+            goto restart;
+
+        /* Errors occuring during normal operation: EINTR (read
+           interrupted), EAGAIN (nonblocking I/O), ENODEV (filesystem
+           umounted) */
+        if (err != EINTR && err != EAGAIN && err != ENODEV)
             perror("fuse: reading device");
-        return -1;
+        return -err;
     }
     if ((size_t) res < sizeof(struct fuse_in_header)) {
         fprintf(stderr, "short read on fuse device\n");
-        return -1;
+        return -EIO;
     }
     return res;
 }

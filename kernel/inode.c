@@ -21,6 +21,7 @@
 #else
 #include "compat/parser.h"
 #endif
+#include <linux/poll.h>
 
 MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
@@ -290,6 +291,7 @@ static void fuse_put_super(struct super_block *sb)
 	spin_unlock(&fuse_lock);
 	up_write(&fc->sbput_sem);
 	/* Flush all readers on this fs */
+	kill_fasync(&fc->fasync, SIGIO, POLL_IN);
 	wake_up_all(&fc->waitq);
 #ifdef KERNEL_2_6
 	kobject_del(&fc->kobj);
@@ -518,6 +520,7 @@ static struct fuse_conn *new_conn(void)
 		fc->bdi.unplug_io_fn = default_unplug_io_fn;
 #endif
 		fc->reqctr = 0;
+		fc->fasync = NULL;
 	}
 	return fc;
 }

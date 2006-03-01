@@ -1177,12 +1177,14 @@ struct fuse_session *fuse_chan_session(struct fuse_chan *ch);
 /**
  * Receive a raw request
  *
+ * A return value of -ENODEV means, that the filesystem was unmounted
+ *
  * @param ch the channel
  * @param buf the buffer to store the request in
  * @param size the size of the buffer
- * @return the actual size of the raw request, or -1 on error
+ * @return the actual size of the raw request, or -errno on error
  */
-int fuse_chan_receive(struct fuse_chan *ch, char *buf, size_t size);
+int fuse_chan_recv(struct fuse_chan *ch, char *buf, size_t size);
 
 /**
  * Send a raw reply
