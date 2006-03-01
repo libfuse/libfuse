@@ -20,7 +20,6 @@ FUSE_2.2 {
 		fuse_set_getcontext_func;
 		fuse_setup_compat2;
 		fuse_teardown;
-		fuse_unmount;
 };
 
 FUSE_2.4 {
@@ -95,6 +94,8 @@ FUSE_2.6 {
 		fuse_opt_insert_arg;
 		fuse_setup;
 		fuse_setup_compat25;
+		fuse_unmount;
+		fuse_unmount_compat22;
 
 	local:
 		 *;

@@ -166,10 +166,17 @@ static int receive_fd(int fd)
     return *(int*)CMSG_DATA(cmsg);
 }
 
-void fuse_unmount(const char *mountpoint)
+void fuse_unmount_compat22(const char *mountpoint)
+{
+    fuse_unmount(mountpoint, -1);
+}
+
+void fuse_unmount(const char *mountpoint, int fd)
 {
     const char *mountprog = FUSERMOUNT_PROG;
     int pid;
+
+    (void) fd;
 
     if (!mountpoint)
         return;
@@ -293,3 +300,4 @@ int fuse_mount_compat1(const char *mountpoint, const char *args[])
 }
 
 __asm__(".symver fuse_mount_compat22,fuse_mount@FUSE_2.2");
+__asm__(".symver fuse_unmount_compat22,fuse_unmount@FUSE_2.2");

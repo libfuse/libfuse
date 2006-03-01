@@ -562,6 +562,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #    define fuse_operations fuse_operations_compat22
 #    define fuse_file_info fuse_file_info_compat22
 #    define fuse_mount fuse_mount_compat22
+#    define fuse_unmount fuse_unmount_compat22
 #  else
 #    define fuse_dirfil_t fuse_dirfil_t_compat
 #    define __fuse_read_cmd fuse_read_cmd

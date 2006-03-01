@@ -225,7 +225,7 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
  err_destroy:
     fuse_destroy(fuse);
  err_unmount:
-    fuse_unmount(*mountpoint);
+    fuse_unmount(*mountpoint, *fd);
  err_free:
     free(*mountpoint);
     return NULL;
@@ -242,10 +242,8 @@ struct fuse *fuse_setup(int argc, char *argv[],
 
 void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint)
 {
-    (void) fd;
-
     fuse_remove_signal_handlers(fuse_get_session(fuse));
-    fuse_unmount(mountpoint);
+    fuse_unmount(mountpoint, fd);
     fuse_destroy(fuse);
     free(mountpoint);
 }

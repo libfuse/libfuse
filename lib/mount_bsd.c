@@ -9,14 +9,16 @@
 #include "fuse.h"
 #include "fuse_opt.h"
 
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stddef.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/wait.h>
 #include <string.h>
+#include <paths.h>
 
 #define FUSERMOUNT_PROG         "mount_fusefs"
 #define FUSE_DEV_TRUNK          "/dev/fuse"
@@ -154,7 +156,7 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
     return 1;
 }
 
-void fuse_unmount(const char *mountpoint)
+void fuse_unmount_compat22(const char *mountpoint)
 {
     char dev[128];
     char *ssc, *umount_cmd;
@@ -171,6 +173,14 @@ void fuse_unmount(const char *mountpoint)
 
     (void) mountpoint;
 
+    /*
+     * If we don't know the fd, we have to resort to the scripted solution --
+     * iterating over the fd-s is unpractical, as we don't know how many of
+     * open files we have. (This could be looked up in procfs -- however,
+     * that's optional on FBSD; or read out from the kmem --  however, that's
+     * bound to privileges (in fact, that's what happens when we call the
+     * setgid kmem fstat(1) utility).
+     */
     asprintf(&ssc, seekscript, getpid());
 
     errno = 0;
@@ -184,6 +194,29 @@ void fuse_unmount(const char *mountpoint)
         return;
 
     asprintf(&umount_cmd, "/sbin/umount %s", dev);
+    system(umount_cmd);
+}
+
+void fuse_unmount(const char *mountpoint, int fd)
+{
+    char *ep, *umount_cmd, dev[128];
+    struct stat sbuf;
+
+    (void)mountpoint;
+   
+    if (fstat(fd, &sbuf) == -1)
+        return;
+
+    devname_r(sbuf.st_rdev, S_IFCHR, dev, 128);
+    
+    if (strncmp(dev, "fuse", 4))
+        return;
+    
+    strtol(dev + 4, &ep, 10);
+    if (*ep != '\0')
+        return;
+
+    asprintf(&umount_cmd, "/sbin/umount " _PATH_DEV "%s", dev);
     system(umount_cmd);
 }
 
@@ -299,3 +332,5 @@ int fuse_mount(const char *mountpoint, struct fuse_args *args)
     free(mo.kernel_opts);
     return res;
 }
+
+__asm__(".symver fuse_unmount_compat22,fuse_unmount@FUSE_2.2");

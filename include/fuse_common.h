@@ -91,8 +91,9 @@ int fuse_mount(const char *mountpoint, struct fuse_args *args);
  * Umount a FUSE mountpoint
  *
  * @param mountpoint the mount point path
+ * @param the control file descriptor 
  */
-void fuse_unmount(const char *mountpoint);
+void fuse_unmount(const char *mountpoint, int fd);
 
 /**
  * Parse common options

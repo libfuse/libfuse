@@ -1,3 +1,10 @@
+2006-03-01  Csaba Henk <csaba.henk@creo.hu>
+
+	* libfuse: pass device file descriptor to fuse_unmount(), rewrite
+	FreeBSD implementation so that it uses libc (sysctl backed) instead
+	of an embdedded script (kmem backed). Adjust the control flow of
+	hello_ll so that device doesn't get closed before unmount attempt.
+
 2006-02-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Lowlevel lib: return all-zero statvfs data if filesystem doesn't

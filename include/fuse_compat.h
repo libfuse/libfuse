@@ -62,6 +62,8 @@ struct fuse *fuse_setup_compat25(int argc, char *argv[],
                                  size_t op_size, char **mountpoint,
                                  int *multithreaded, int *fd);
 
+void fuse_unmount_compat22(const char *mountpoint);
+
 #ifndef __FreeBSD__
 #include <sys/statfs.h>
 

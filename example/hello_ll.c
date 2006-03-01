@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     char *mountpoint;
     int err = -1;
-    int fd;
+    int fd = -1;
 
     if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
         (fd = fuse_mount(mountpoint, &args)) != -1) {
@@ -168,11 +168,14 @@ int main(int argc, char *argv[])
                 }
                 fuse_remove_signal_handlers(se);
             }
+            fuse_unmount(mountpoint, fd);
             fuse_session_destroy(se);
+            goto out;
         }
         close(fd);
     }
-    fuse_unmount(mountpoint);
+    fuse_unmount(mountpoint, fd);
+out:
     fuse_opt_free_args(&args);
 
     return err ? 1 : 0;
