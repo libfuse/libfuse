@@ -976,9 +976,8 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 	}
 	spin_unlock(&fuse_lock);
 	if (fc) {
-		kobject_put(&fc->kobj);
 		fasync_helper(-1, file, 0, &fc->fasync);
-		fc->fasync = NULL;
+		kobject_put(&fc->kobj);
 	}
 
 	return 0;
