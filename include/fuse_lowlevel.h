@@ -1236,27 +1236,19 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
 
-#ifdef __FreeBSD__
-#  if FUSE_USE_VERSION < 25
-#    error On FreeBSD API version 25 or greater must be used
-#  endif
-#endif
-
-#if FUSE_USE_VERSION == 25 || FUSE_USE_VERSION == 24
+#if FUSE_USE_VERSION < 26
 #  include "fuse_lowlevel_compat.h"
 #  undef FUSE_MINOR_VERSION
 #  if FUSE_USE_VERSION == 25
-#    define FUSE_MINOR_VERSION 5
 #    define fuse_lowlevel_ops fuse_lowlevel_ops_compat25
 #    define fuse_lowlevel_new fuse_lowlevel_new_compat25
-#  else
-#    define FUSE_MINOR_VERSION 4
+#  elif FUSE_USE_VERSION == 24
 #    define fuse_file_info fuse_file_info_compat
 #    define fuse_reply_statfs fuse_reply_statfs_compat
 #    define fuse_reply_open fuse_reply_open_compat
+#  else 
+#    error Compatibility with low-level API version < 24 not supported
 #  endif
-#elif FUSE_USE_VERSION < 26
-#  error Compatibility with low level API version other than 24 and 25 not supported
 #endif
 
 #ifdef __cplusplus

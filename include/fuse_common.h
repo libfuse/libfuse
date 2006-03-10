@@ -120,6 +120,35 @@ int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
                        int *multithreaded, int *foreground);
 
 
+#if FUSE_USE_VERSION < 26
+#    ifdef __FreeBSD__
+#        if FUSE_USE_VERSION < 25
+#            error On FreeBSD API version 25 or greater must be used
+#        endif
+#    endif
+#    include "fuse_common_compat.h"
+#    undef FUSE_MINOR_VERSION
+#    undef fuse_main
+#    define fuse_unmount fuse_unmount_compat22
+#    if FUSE_USE_VERSION == 25
+#        define FUSE_MINOR_VERSION 5
+#    elif FUSE_USE_VERSION == 24 || FUSE_USE_VERSION == 22
+#        define FUSE_MINOR_VERSION 4
+#        define fuse_mount fuse_mount_compat22
+#    elif FUSE_USE_VERSION == 21
+#        define FUSE_MINOR_VERSION 1
+#        define fuse_mount fuse_mount_compat22
+#    elif FUSE_USE_VERSION == 11
+#        warning Compatibility with API version 11 is deprecated
+#        undef FUSE_MAJOR_VERSION
+#        define FUSE_MAJOR_VERSION 1
+#        define FUSE_MINOR_VERSION 1
+#        define fuse_mount fuse_mount_compat1
+#    else
+#        error Compatibility with API version other than 21, 22, 24, 25 and 11 not supported
+#    endif
+#endif
+
 #ifdef __cplusplus
 }
 #endif

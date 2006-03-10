@@ -62,8 +62,6 @@ struct fuse *fuse_setup_compat25(int argc, char *argv[],
                                  size_t op_size, char **mountpoint,
                                  int *multithreaded, int *fd);
 
-void fuse_unmount_compat22(const char *mountpoint);
-
 #ifndef __FreeBSD__
 #include <sys/statfs.h>
 
@@ -124,8 +122,6 @@ struct fuse *fuse_setup_compat22(int argc, char *argv[],
 int fuse_main_real_compat22(int argc, char *argv[],
                             const struct fuse_operations_compat22 *op,
                             size_t op_size);
-
-int fuse_mount_compat22(const char *mountpoint, const char *opts);
 
 typedef int (*fuse_dirfil_t_compat) (fuse_dirh_t h, const char *name, int type);
 struct fuse_operations_compat2 {
@@ -195,8 +191,6 @@ struct fuse_operations_compat1 {
 };
 
 #define FUSE_DEBUG_COMPAT1       (1 << 1)
-
-int fuse_mount_compat1(const char *mountpoint, const char *args[]);
 
 struct fuse *fuse_new_compat1(int fd, int flags, const struct fuse_operations_compat1 *op);
 

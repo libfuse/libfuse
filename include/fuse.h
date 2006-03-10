@@ -535,41 +535,30 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
 
-#ifdef __FreeBSD__
-#  if FUSE_USE_VERSION < 25
-#    error On FreeBSD API version 25 or greater must be used
-#  endif
-#endif
-
-#if FUSE_USE_VERSION == 25 || FUSE_USE_VERSION == 22 || \
-    FUSE_USE_VERSION == 21 || FUSE_USE_VERSION == 11
+#if FUSE_USE_VERSION < 26
 #  include "fuse_compat.h"
-#  undef FUSE_MINOR_VERSION
 #  undef fuse_main
 #  if FUSE_USE_VERSION == 25
-#    define FUSE_MINOR_VERSION 5
 #    define fuse_main(argc, argv, op) \
             fuse_main_real_compat25(argc, argv, op, sizeof(*(op)))
 #    define fuse_new fuse_new_compat25
 #    define fuse_setup fuse_setup_compat25
 #    define fuse_operations fuse_operations_compat25
 #  elif FUSE_USE_VERSION == 22
-#    define FUSE_MINOR_VERSION 4
 #    define fuse_main(argc, argv, op) \
             fuse_main_real_compat22(argc, argv, op, sizeof(*(op)))
 #    define fuse_new fuse_new_compat22
 #    define fuse_setup fuse_setup_compat22
 #    define fuse_operations fuse_operations_compat22
 #    define fuse_file_info fuse_file_info_compat22
-#    define fuse_mount fuse_mount_compat22
-#    define fuse_unmount fuse_unmount_compat22
+#  elif FUSE_USE_VERSION == 24
+#    error Compatibility with high-level API version 24 not supported
 #  else
 #    define fuse_dirfil_t fuse_dirfil_t_compat
 #    define __fuse_read_cmd fuse_read_cmd
 #    define __fuse_process_cmd fuse_process_cmd
 #    define __fuse_loop_mt fuse_loop_mt_proc
 #    if FUSE_USE_VERSION == 21
-#      define FUSE_MINOR_VERSION 1
 #      define fuse_operations fuse_operations_compat2
 #      define fuse_main fuse_main_compat2
 #      define fuse_new fuse_new_compat2
@@ -577,22 +566,14 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 #      define __fuse_teardown fuse_teardown
 #      define __fuse_exited fuse_exited
 #      define __fuse_set_getcontext_func fuse_set_getcontext_func
-#      define fuse_mount fuse_mount_compat22
 #    else
-#      warning Compatibility with API version 11 is deprecated
-#      undef FUSE_MAJOR_VERSION
-#      define FUSE_MAJOR_VERSION 1
-#      define FUSE_MINOR_VERSION 1
 #      define fuse_statfs fuse_statfs_compat1
 #      define fuse_operations fuse_operations_compat1
 #      define fuse_main fuse_main_compat1
 #      define fuse_new fuse_new_compat1
-#      define fuse_mount fuse_mount_compat1
 #      define FUSE_DEBUG FUSE_DEBUG_COMPAT1
 #    endif
 #  endif
-#elif FUSE_USE_VERSION < 26
-#  error Compatibility with API version other than 21, 22, 25 and 11 not supported
 #endif
 
 #ifdef __cplusplus
