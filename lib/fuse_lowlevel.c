@@ -1146,6 +1146,7 @@ int fuse_sync_compat_args(struct fuse_args *args)
 {
     struct fuse_ll_compat_conf conf;
 
+    memset(&conf, 0, sizeof(conf));
     if (fuse_opt_parse(args, &conf, fuse_ll_opts_compat, NULL) == -1)
         return -1;
 

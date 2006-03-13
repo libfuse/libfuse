@@ -1,3 +1,7 @@
+2006-03-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: replace global spinlock with a per-connection spinlock
+
 2006-03-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix source compatibility breakage for fuse_unmount().  Report

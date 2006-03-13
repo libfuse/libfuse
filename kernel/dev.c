@@ -25,13 +25,11 @@ static kmem_cache_t *fuse_req_cachep;
 
 static struct fuse_conn *fuse_get_conn(struct file *file)
 {
-	struct fuse_conn *fc;
-	spin_lock(&fuse_lock);
-	fc = file->private_data;
-	if (fc && !fc->connected)
-		fc = NULL;
-	spin_unlock(&fuse_lock);
-	return fc;
+	/*
+	 * Lockless access is OK, because file->private data is set
+	 * once during mount and is valid until the file is released.
+	 */
+	return file->private_data;
 }
 
 static void fuse_request_init(struct fuse_req *req)
@@ -136,11 +134,11 @@ static struct fuse_req *do_get_request(struct fuse_conn *fc)
 {
 	struct fuse_req *req;
 
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	BUG_ON(list_empty(&fc->unused_list));
 	req = list_entry(fc->unused_list.next, struct fuse_req, list);
 	list_del_init(&req->list);
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 	fuse_request_init(req);
 	req->preallocated = 1;
 	req->in.h.uid = current->fsuid;
@@ -166,7 +164,7 @@ struct fuse_req *fuse_get_request(struct fuse_conn *fc)
 	return do_get_request(fc);
 }
 
-/* Must be called with fuse_lock held */
+/* Must be called with fc->lock held */
 static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (req->preallocated) {
@@ -185,9 +183,9 @@ static void fuse_putback_request(struct fuse_conn *fc, struct fuse_req *req)
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (atomic_dec_and_test(&req->count)) {
-		spin_lock(&fuse_lock);
+		spin_lock(&fc->lock);
 		fuse_putback_request(fc, req);
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 	}
 }
 
@@ -197,15 +195,15 @@ static void fuse_put_request_locked(struct fuse_conn *fc, struct fuse_req *req)
 		fuse_putback_request(fc, req);
 }
 
-void fuse_release_background(struct fuse_req *req)
+void fuse_release_background(struct fuse_conn *fc, struct fuse_req *req)
 {
 	iput(req->inode);
 	iput(req->inode2);
 	if (req->file)
 		fput(req->file);
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	list_del(&req->bg_entry);
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 }
 
 /*
@@ -224,7 +222,7 @@ void fuse_release_background(struct fuse_req *req)
  * interrupted and put in the background, it will return with an error
  * and hence never be reset and reused.
  *
- * Called with fuse_lock, unlocks it
+ * Called with fc->lock, unlocks it
  */
 static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 {
@@ -233,14 +231,14 @@ static void request_end(struct fuse_conn *fc, struct fuse_req *req)
 	if (!req->background) {
 		wake_up(&req->waitq);
 		fuse_put_request_locked(fc, req);
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 	} else {
 		void (*end) (struct fuse_conn *, struct fuse_req *) = req->end;
 		req->end = NULL;
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 		down_read(&fc->sbput_sem);
 		if (fc->mounted)
-			fuse_release_background(req);
+			fuse_release_background(fc, req);
 		up_read(&fc->sbput_sem);
 		if (end)
 			end(fc, req);
@@ -290,16 +288,16 @@ static void background_request(struct fuse_conn *fc, struct fuse_req *req)
 		get_file(req->file);
 }
 
-/* Called with fuse_lock held.  Releases, and then reacquires it. */
+/* Called with fc->lock held.  Releases, and then reacquires it. */
 static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 {
 	sigset_t oldset;
 
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 	block_sigs(&oldset);
 	wait_event_interruptible(req->waitq, req->state == FUSE_REQ_FINISHED);
 	restore_sigs(&oldset);
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	if (req->state == FUSE_REQ_FINISHED && !req->interrupted)
 		return;
 
@@ -313,9 +311,9 @@ static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 		   locked state, there mustn't be any filesystem
 		   operation (e.g. page fault), since that could lead
 		   to deadlock */
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 		wait_event(req->waitq, !req->locked);
-		spin_lock(&fuse_lock);
+		spin_lock(&fc->lock);
 	}
 	if (req->state == FUSE_REQ_PENDING) {
 		list_del(&req->list);
@@ -366,7 +364,7 @@ static void queue_request(struct fuse_conn *fc, struct fuse_req *req)
 void request_send(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->isreply = 1;
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	if (!fc->connected)
 		req->out.h.error = -ENOTCONN;
 	else if (fc->conn_error)
@@ -379,15 +377,15 @@ void request_send(struct fuse_conn *fc, struct fuse_req *req)
 
 		request_wait_answer(fc, req);
 	}
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 }
 
 static void request_send_nowait(struct fuse_conn *fc, struct fuse_req *req)
 {
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	if (fc->connected) {
 		queue_request(fc, req);
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 	} else {
 		req->out.h.error = -ENOTCONN;
 		request_end(fc, req);
@@ -403,9 +401,9 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req)
 void request_send_background(struct fuse_conn *fc, struct fuse_req *req)
 {
 	req->isreply = 1;
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	background_request(fc, req);
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 	request_send_nowait(fc, req);
 }
 
@@ -414,16 +412,16 @@ void request_send_background(struct fuse_conn *fc, struct fuse_req *req)
  * anything that could cause a page-fault.  If the request was already
  * interrupted bail out.
  */
-static int lock_request(struct fuse_req *req)
+static int lock_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	int err = 0;
 	if (req) {
-		spin_lock(&fuse_lock);
+		spin_lock(&fc->lock);
 		if (req->interrupted)
 			err = -ENOENT;
 		else
 			req->locked = 1;
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 	}
 	return err;
 }
@@ -433,18 +431,19 @@ static int lock_request(struct fuse_req *req)
  * requester thread is currently waiting for it to be unlocked, so
  * wake it up.
  */
-static void unlock_request(struct fuse_req *req)
+static void unlock_request(struct fuse_conn *fc, struct fuse_req *req)
 {
 	if (req) {
-		spin_lock(&fuse_lock);
+		spin_lock(&fc->lock);
 		req->locked = 0;
 		if (req->interrupted)
 			wake_up(&req->waitq);
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 	}
 }
 
 struct fuse_copy_state {
+	struct fuse_conn *fc;
 	int write;
 	struct fuse_req *req;
 	const struct iovec *iov;
@@ -457,11 +456,12 @@ struct fuse_copy_state {
 	unsigned len;
 };
 
-static void fuse_copy_init(struct fuse_copy_state *cs, int write,
-			   struct fuse_req *req, const struct iovec *iov,
-			   unsigned long nr_segs)
+static void fuse_copy_init(struct fuse_copy_state *cs, struct fuse_conn *fc,
+			   int write, struct fuse_req *req,
+			   const struct iovec *iov, unsigned long nr_segs)
 {
 	memset(cs, 0, sizeof(*cs));
+	cs->fc = fc;
 	cs->write = write;
 	cs->req = req;
 	cs->iov = iov;
@@ -491,7 +491,7 @@ static int fuse_copy_fill(struct fuse_copy_state *cs)
 	unsigned long offset;
 	int err;
 
-	unlock_request(cs->req);
+	unlock_request(cs->fc, cs->req);
 	fuse_copy_finish(cs);
 	if (!cs->seglen) {
 		BUG_ON(!cs->nr_segs);
@@ -514,7 +514,7 @@ static int fuse_copy_fill(struct fuse_copy_state *cs)
 	cs->seglen -= cs->len;
 	cs->addr += cs->len;
 
-	return lock_request(cs->req);
+	return lock_request(cs->fc, cs->req);
 }
 
 /* Do as much copy to/from userspace buffer as we can */
@@ -626,9 +626,9 @@ static void request_wait(struct fuse_conn *fc)
 		if (signal_pending(current))
 			break;
 
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 		schedule();
-		spin_lock(&fuse_lock);
+		spin_lock(&fc->lock);
 	}
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(&fc->waitq, &wait);
@@ -658,19 +658,16 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 			      unsigned long nr_segs, loff_t *off)
 {
 	int err;
-	struct fuse_conn *fc;
 	struct fuse_req *req;
 	struct fuse_in *in;
 	struct fuse_copy_state cs;
 	unsigned reqsize;
+	struct fuse_conn *fc = fuse_get_conn(file);
+	if (!fc)
+		return -EPERM;
 
  restart:
-	spin_lock(&fuse_lock);
-	fc = file->private_data;
-	err = -EPERM;
-	if (!fc)
-		goto err_unlock;
-
+	spin_lock(&fc->lock);
 	err = -EAGAIN;
 	if((file->f_flags & O_NONBLOCK) && fc->connected &&
 	   list_empty(&fc->pending))
@@ -699,14 +696,14 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 		request_end(fc, req);
 		goto restart;
 	}
-	spin_unlock(&fuse_lock);
-	fuse_copy_init(&cs, 1, req, iov, nr_segs);
+	spin_unlock(&fc->lock);
+	fuse_copy_init(&cs, fc, 1, req, iov, nr_segs);
 	err = fuse_copy_one(&cs, &in->h, sizeof(in->h));
 	if (!err)
 		err = fuse_copy_args(&cs, in->numargs, in->argpages,
 				     (struct fuse_arg *) in->args, 0);
 	fuse_copy_finish(&cs);
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	req->locked = 0;
 	if (!err && req->interrupted)
 		err = -ENOENT;
@@ -721,12 +718,12 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 	else {
 		req->state = FUSE_REQ_SENT;
 		list_move_tail(&req->list, &fc->processing);
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 	}
 	return reqsize;
 
  err_unlock:
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 	return err;
 }
 
@@ -793,9 +790,9 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	struct fuse_copy_state cs;
 	struct fuse_conn *fc = fuse_get_conn(file);
 	if (!fc)
-		return -ENODEV;
+		return -EPERM;
 
-	fuse_copy_init(&cs, 0, NULL, iov, nr_segs);
+	fuse_copy_init(&cs, fc, 0, NULL, iov, nr_segs);
 	if (nbytes < sizeof(struct fuse_out_header))
 		return -EINVAL;
 
@@ -807,7 +804,7 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	    oh.len != nbytes)
 		goto err_finish;
 
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	err = -ENOENT;
 	if (!fc->connected)
 		goto err_unlock;
@@ -818,9 +815,9 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 		goto err_unlock;
 
 	if (req->interrupted) {
-		spin_unlock(&fuse_lock);
+		spin_unlock(&fc->lock);
 		fuse_copy_finish(&cs);
-		spin_lock(&fuse_lock);
+		spin_lock(&fc->lock);
 		request_end(fc, req);
 		return -ENOENT;
 	}
@@ -828,12 +825,12 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	req->out.h = oh;
 	req->locked = 1;
 	cs.req = req;
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 
 	err = copy_out_args(&cs, &req->out, nbytes);
 	fuse_copy_finish(&cs);
 
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	req->locked = 0;
 	if (!err) {
 		if (req->interrupted)
@@ -845,7 +842,7 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	return err ? err : nbytes;
 
  err_unlock:
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
  err_finish:
 	fuse_copy_finish(&cs);
 	return err;
@@ -862,18 +859,19 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 
 static unsigned fuse_dev_poll(struct file *file, poll_table *wait)
 {
-	struct fuse_conn *fc = fuse_get_conn(file);
 	unsigned mask = POLLOUT | POLLWRNORM;
-
+	struct fuse_conn *fc = fuse_get_conn(file);
 	if (!fc)
-		return -ENODEV;
+		return POLLERR;
 
 	poll_wait(file, &fc->waitq, wait);
 
-	spin_lock(&fuse_lock);
-	if (!list_empty(&fc->pending))
-                mask |= POLLIN | POLLRDNORM;
-	spin_unlock(&fuse_lock);
+	spin_lock(&fc->lock);
+	if (!fc->connected)
+		mask = POLLERR;
+	else if (!list_empty(&fc->pending))
+		mask |= POLLIN | POLLRDNORM;
+	spin_unlock(&fc->lock);
 
 	return mask;
 }
@@ -881,7 +879,7 @@ static unsigned fuse_dev_poll(struct file *file, poll_table *wait)
 /*
  * Abort all requests on the given list (pending or processing)
  *
- * This function releases and reacquires fuse_lock
+ * This function releases and reacquires fc->lock
  */
 static void end_requests(struct fuse_conn *fc, struct list_head *head)
 {
@@ -890,7 +888,7 @@ static void end_requests(struct fuse_conn *fc, struct list_head *head)
 		req = list_entry(head->next, struct fuse_req, list);
 		req->out.h.error = -ECONNABORTED;
 		request_end(fc, req);
-		spin_lock(&fuse_lock);
+		spin_lock(&fc->lock);
 	}
 }
 
@@ -921,10 +919,10 @@ static void end_io_requests(struct fuse_conn *fc)
 			req->end = NULL;
 			/* The end function will consume this reference */
 			__fuse_get_request(req);
-			spin_unlock(&fuse_lock);
+			spin_unlock(&fc->lock);
 			wait_event(req->waitq, !req->locked);
 			end(fc, req);
-			spin_lock(&fuse_lock);
+			spin_lock(&fc->lock);
 		}
 	}
 }
@@ -951,7 +949,7 @@ static void end_io_requests(struct fuse_conn *fc)
  */
 void fuse_abort_conn(struct fuse_conn *fc)
 {
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	if (fc->connected) {
 		fc->connected = 0;
 		end_io_requests(fc);
@@ -960,22 +958,18 @@ void fuse_abort_conn(struct fuse_conn *fc)
 		wake_up_all(&fc->waitq);
 		kill_fasync(&fc->fasync, SIGIO, POLL_IN);
 	}
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 }
 
 static int fuse_dev_release(struct inode *inode, struct file *file)
 {
-	struct fuse_conn *fc;
-
-	spin_lock(&fuse_lock);
-	fc = file->private_data;
+	struct fuse_conn *fc = fuse_get_conn(file);
 	if (fc) {
+		spin_lock(&fc->lock);
 		fc->connected = 0;
 		end_requests(fc, &fc->pending);
 		end_requests(fc, &fc->processing);
-	}
-	spin_unlock(&fuse_lock);
-	if (fc) {
+		spin_unlock(&fc->lock);
 		fasync_helper(-1, file, 0, &fc->fasync);
 		kobject_put(&fc->kobj);
 	}
@@ -986,9 +980,8 @@ static int fuse_dev_release(struct inode *inode, struct file *file)
 static int fuse_dev_fasync(int fd, struct file *file, int on)
 {
 	struct fuse_conn *fc = fuse_get_conn(file);
-
 	if (!fc)
-		return -ENODEV;
+		return -EPERM;
 
 	/* No locking - fasync_helper does its own locking */
 	return fasync_helper(fd, file, on, &fc->fasync);

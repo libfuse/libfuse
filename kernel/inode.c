@@ -21,7 +21,6 @@
 #else
 #include "compat/parser.h"
 #endif
-#include <linux/poll.h>
 
 MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
@@ -29,7 +28,6 @@ MODULE_DESCRIPTION("Filesystem in Userspace");
 MODULE_LICENSE("GPL");
 #endif
 
-spinlock_t fuse_lock;
 static kmem_cache_t *fuse_inode_cachep;
 #ifdef KERNEL_2_6
 static struct subsystem connections_subsys;
@@ -282,13 +280,14 @@ static void fuse_put_super(struct super_block *sb)
 
 	down_write(&fc->sbput_sem);
 	while (!list_empty(&fc->background))
-		fuse_release_background(list_entry(fc->background.next,
+		fuse_release_background(fc,
+					list_entry(fc->background.next,
 						   struct fuse_req, bg_entry));
 
-	spin_lock(&fuse_lock);
+	spin_lock(&fc->lock);
 	fc->mounted = 0;
 	fc->connected = 0;
-	spin_unlock(&fuse_lock);
+	spin_unlock(&fc->lock);
 	up_write(&fc->sbput_sem);
 	/* Flush all readers on this fs */
 	kill_fasync(&fc->fasync, SIGIO, POLL_IN);
@@ -491,6 +490,7 @@ static struct fuse_conn *new_conn(void)
 	fc = kzalloc(sizeof(*fc), GFP_KERNEL);
 	if (fc) {
 		int i;
+		spin_lock_init(&fc->lock);
 		init_waitqueue_head(&fc->waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
@@ -520,40 +520,8 @@ static struct fuse_conn *new_conn(void)
 		fc->bdi.unplug_io_fn = default_unplug_io_fn;
 #endif
 		fc->reqctr = 0;
-		fc->fasync = NULL;
 	}
 	return fc;
-}
-
-static struct fuse_conn *get_conn(struct file *file, struct super_block *sb)
-{
-	struct fuse_conn *fc;
-	int err;
-
-	err = -EINVAL;
-	if (file->f_op != &fuse_dev_operations)
-		goto out_err;
-
-	err = -ENOMEM;
-	fc = new_conn();
-	if (!fc)
-		goto out_err;
-
-	spin_lock(&fuse_lock);
-	err = -EINVAL;
-	if (file->private_data)
-		goto out_unlock;
-
-	kobject_get(&fc->kobj);
-	file->private_data = fc;
-	spin_unlock(&fuse_lock);
-	return fc;
-
- out_unlock:
-	spin_unlock(&fuse_lock);
-	kobject_put(&fc->kobj);
- out_err:
-	return ERR_PTR(err);
 }
 
 static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
@@ -706,12 +674,9 @@ static void fuse_send_init(struct fuse_conn *fc)
 #ifdef KERNEL_2_6
 static unsigned long long conn_id(void)
 {
+	/* BKL is held for ->get_sb() */
 	static unsigned long long ctr = 1;
-	unsigned long long val;
-	spin_lock(&fuse_lock);
-	val = ctr++;
-	spin_unlock(&fuse_lock);
-	return val;
+	return ctr++;
 }
 #endif
 
@@ -742,10 +707,17 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	if (!file)
 		return -EINVAL;
 
-	fc = get_conn(file, sb);
-	fput(file);
-	if (IS_ERR(fc))
-		return PTR_ERR(fc);
+	if (file->f_op != &fuse_dev_operations)
+		return -EINVAL;
+
+	/* Setting file->private_data can't race with other mount()
+	   instances, since BKL is held for ->get_sb() */
+	if (file->private_data)
+		return -EINVAL;
+
+	fc = new_conn();
+	if (!fc)
+		return -ENOMEM;
 
 	fc->flags = d.flags;
 	fc->user_id = d.user_id;
@@ -777,10 +749,16 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 #endif
 
 	sb->s_root = root_dentry;
-	spin_lock(&fuse_lock);
 	fc->mounted = 1;
 	fc->connected = 1;
-	spin_unlock(&fuse_lock);
+	kobject_get(&fc->kobj);
+	file->private_data = fc;
+	/*
+	 * atomic_dec_and_test() in fput() provides the necessary
+	 * memory barrier for file->private_data to be visible on all
+	 * CPUs after this
+	 */
+	fput(file);
 
 	fuse_send_init(fc);
 
@@ -791,6 +769,7 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	dput(root_dentry);
 #endif
  err:
+	fput(file);
 	kobject_put(&fc->kobj);
 	return err;
 }
@@ -994,7 +973,6 @@ static int __init fuse_init(void)
 	printk("fuse distribution version: %s\n", FUSE_VERSION);
 #endif
 
-	spin_lock_init(&fuse_lock);
 	res = fuse_fs_init();
 	if (res)
 		goto err;
