@@ -148,7 +148,10 @@ enum fuse_opcode {
 	FUSE_RELEASEDIR    = 29,
 	FUSE_FSYNCDIR      = 30,
 	FUSE_ACCESS        = 34,
-	FUSE_CREATE        = 35
+	FUSE_CREATE        = 35,
+
+	/* Keep at the end: */
+	FUSE_MAXOP
 };
 
 /* The read buffer is required to be at least 8k, but may be much larger */

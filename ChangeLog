@@ -1,3 +1,9 @@
+2006-03-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lowlevel lib: use indirect function calls instead of a
+	switch/case construct.  Besides increased efficiency it helps
+	maintainability & readability too.  Patch from Florin Malita
+
 2006-03-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: replace global spinlock with a per-connection spinlock
