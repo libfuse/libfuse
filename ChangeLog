@@ -1,5 +1,9 @@
 2006-03-16  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.6.0-pre2
+
+2006-03-16  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Don't unmount if already unmounted.  This fixes a problem seen
 	in the following situation: Lazy unmount a busy filesystem; Mount
 	a new one in top; When the first finally unmounts, the second also
