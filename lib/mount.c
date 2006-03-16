@@ -16,6 +16,7 @@
 #include <stddef.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
@@ -174,11 +175,19 @@ void fuse_unmount_compat22(const char *mountpoint)
 void fuse_unmount(const char *mountpoint, int fd)
 {
     const char *mountprog = FUSERMOUNT_PROG;
+    struct pollfd pfd;
+    int res;
     int pid;
 
-    (void) fd;
-
     if (!mountpoint)
+        return;
+
+    pfd.fd = fd;
+    pfd.events = 0;
+    res = poll(&pfd, 1, 0);
+    /* If file poll returns POLLERR on the device file descriptor,
+       then the filesystem is already unmounted */
+    if (res == 1 && (pfd.revents & POLLERR))
         return;
 
 #ifdef HAVE_FORK

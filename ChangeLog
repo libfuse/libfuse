@@ -1,3 +1,10 @@
+2006-03-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't unmount if already unmounted.  This fixes a problem seen
+	in the following situation: Lazy unmount a busy filesystem; Mount
+	a new one in top; When the first finally unmounts, the second also
+	unmounts.  Reported by Franco Broi
+
 2006-03-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lowlevel lib: use indirect function calls instead of a
