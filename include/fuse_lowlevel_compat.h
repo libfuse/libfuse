@@ -88,6 +88,16 @@ struct fuse_session *fuse_lowlevel_new_compat(const char *opts,
                                               const struct fuse_lowlevel_ops *op,
                                               size_t op_size, void *userdata);
 
+#endif /* __FreeBSD__ */
+
+struct fuse_chan_ops_compat24 {
+    int (*receive)(struct fuse_chan *ch, char *buf, size_t size);
+    int (*send)(struct fuse_chan *ch, const struct iovec iov[], size_t count);
+    void (*destroy)(struct fuse_chan *ch);
+};
+
+struct fuse_chan *fuse_chan_new_compat24(struct fuse_chan_ops_compat24 *op,
+                                         int fd, size_t bufsize, void *data);
+
 int fuse_chan_receive(struct fuse_chan *ch, char *buf, size_t size);
 
-#endif /* __FreeBSD__ */

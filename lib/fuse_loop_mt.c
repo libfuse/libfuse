@@ -24,12 +24,16 @@ struct fuse_worker {
     int numworker;
     int numavail;
     struct fuse_session *se;
-    struct fuse_chan *ch;
     struct fuse_chan *prevch;
     pthread_t threads[FUSE_MAX_WORKERS];
     pthread_t main_thread;
     int exit;
     int error;
+};
+
+struct fuse_wchan {
+    struct fuse_worker *w;
+    struct fuse_chan *prevch;
 };
 
 #ifndef USE_UCLIBC
@@ -48,11 +52,15 @@ static void mutex_init(pthread_mutex_t *mut)
 static int fuse_loop_mt_send(struct fuse_chan *ch, const struct iovec iov[],
                              size_t count)
 {
-    struct fuse_worker *w = (struct fuse_worker *) fuse_chan_data(ch);
-    pthread_mutex_lock(&w->lock);
-    w->numavail ++;
-    pthread_mutex_unlock(&w->lock);
-    return fuse_chan_send(w->prevch, iov, count);
+    int res;
+    struct fuse_wchan *wchan_data = (struct fuse_wchan *) fuse_chan_data(ch);
+    pthread_mutex_lock(&wchan_data->w->lock);
+    wchan_data->w->numavail ++;
+    pthread_mutex_unlock(&wchan_data->w->lock);
+    res = fuse_chan_send(wchan_data->prevch, iov, count);
+    fuse_chan_destroy(ch);
+    free(wchan_data);
+    return res;
 }
 
 static int start_thread(struct fuse_worker *w, pthread_t *thread_id);
@@ -74,7 +82,11 @@ static void *do_work(void *data)
     pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 
     while (!fuse_session_exited(w->se)) {
-        int res = fuse_chan_recv(w->prevch, buf, bufsize);
+        struct fuse_chan *ch = w->prevch;
+        struct fuse_chan *wchan;
+        struct fuse_wchan *wchan_data;
+        struct fuse_chan_ops cop = { .send = fuse_loop_mt_send };
+        int res = fuse_chan_recv(&ch, buf, bufsize);
         if (res == -EINTR)
             continue;
         if (res <= 0) {
@@ -105,7 +117,17 @@ static void *do_work(void *data)
             }
         }
         pthread_mutex_unlock(&w->lock);
-        fuse_session_process(w->se, buf, res, w->ch);
+        wchan_data = malloc(sizeof(struct fuse_wchan));
+        wchan = fuse_chan_new(&cop, -1, fuse_chan_bufsize(ch), wchan_data);
+        if (!wchan_data || !wchan) {
+            free(wchan_data);
+            fuse_session_exit(w->se);
+            w->error = -1;
+            break;
+        }
+        wchan_data->w = w;
+        wchan_data->prevch = ch;
+        fuse_session_process(w->se, buf, res, wchan);
     }
     pthread_cleanup_pop(1);
 
@@ -145,10 +167,6 @@ int fuse_session_loop_mt(struct fuse_session *se)
     int i;
     int err;
     struct fuse_worker *w;
-    struct fuse_chan_ops cop = {
-        .send = fuse_loop_mt_send,
-    };
-
     w = (struct fuse_worker *) malloc(sizeof(struct fuse_worker));
     if (w == NULL) {
         fprintf(stderr, "fuse: failed to allocate worker structure\n");
@@ -157,11 +175,6 @@ int fuse_session_loop_mt(struct fuse_session *se)
     memset(w, 0, sizeof(struct fuse_worker));
     w->se = se;
     w->prevch = fuse_session_next_chan(se, NULL);
-    w->ch = fuse_chan_new(&cop, -1, fuse_chan_bufsize(w->prevch), w);
-    if (w->ch == NULL) {
-        free(w);
-        return -1;
-    }
     w->error = 0;
     w->numworker = 1;
     w->numavail = 1;
@@ -179,7 +192,6 @@ int fuse_session_loop_mt(struct fuse_session *se)
         pthread_join(w->threads[i], NULL);
     pthread_mutex_destroy(&w->lock);
     err = w->error;
-    fuse_chan_destroy(w->ch);
     free(w);
     fuse_session_reset(se);
     return err;

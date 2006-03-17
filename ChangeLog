@@ -16,6 +16,9 @@
 	* new exported functions: fuse_session_remove_chan(),
 	fuse_get_session(), fuse_daemonize()
 
+	* fuse_chan_recv() may now return a new channel which will be used
+	to send the reply
+
 2006-03-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0-pre2

@@ -24,12 +24,13 @@ int fuse_session_loop(struct fuse_session *se)
     }
 
     while (!fuse_session_exited(se)) {
-        res = fuse_chan_recv(ch, buf, bufsize);
+        struct fuse_chan *tmpch = ch;
+        res = fuse_chan_recv(&tmpch, buf, bufsize);
         if (res == -EINTR)
             continue;
         if (res <= 0)
             break;
-        fuse_session_process(se, buf, res, ch);
+        fuse_session_process(se, buf, res, tmpch);
     }
 
     free(buf);

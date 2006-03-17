@@ -223,6 +223,7 @@ int fuse_reply_err(fuse_req_t req, int err)
 
 void fuse_reply_none(fuse_req_t req)
 {
+    fuse_chan_send(req->ch, NULL, 0);
     free_req(req);
 }
 

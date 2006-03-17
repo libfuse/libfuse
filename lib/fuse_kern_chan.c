@@ -14,8 +14,10 @@
 #include <unistd.h>
 #include <assert.h>
 
-static int fuse_kern_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
+static int fuse_kern_chan_receive(struct fuse_chan **chp, char *buf,
+                                  size_t size)
 {
+    struct fuse_chan *ch = *chp;
     int err;
     ssize_t res;
     struct fuse_session *se = fuse_chan_session(ch);
@@ -50,18 +52,20 @@ static int fuse_kern_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
 static int fuse_kern_chan_send(struct fuse_chan *ch, const struct iovec iov[],
                                size_t count)
 {
-    ssize_t res = writev(fuse_chan_fd(ch), iov, count);
-    int err = errno;
+    if (iov) {
+        ssize_t res = writev(fuse_chan_fd(ch), iov, count);
+        int err = errno;
 
-    if (res == -1) {
-        struct fuse_session *se = fuse_chan_session(ch);
+        if (res == -1) {
+            struct fuse_session *se = fuse_chan_session(ch);
 
-        assert(se != NULL);
+            assert(se != NULL);
 
-        /* ENOENT means the operation was interrupted */
-        if (!fuse_session_exited(se) && err != ENOENT)
-            perror("fuse: writing device");
-        return -err;
+            /* ENOENT means the operation was interrupted */
+            if (!fuse_session_exited(se) && err != ENOENT)
+                perror("fuse: writing device");
+            return -err;
+        }
     }
     return 0;
 }

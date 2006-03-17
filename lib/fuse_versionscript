@@ -83,6 +83,8 @@ FUSE_2.5 {
 FUSE_2.6 {
 	global:
 		fuse_add_direntry;
+		fuse_chan_new;
+		fuse_chan_new_compat24;
 		fuse_daemonize;
 		fuse_get_session;
 		fuse_lowlevel_new;

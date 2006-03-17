@@ -1881,7 +1881,7 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f)
     size_t bufsize = fuse_chan_bufsize(ch);
     struct fuse_cmd *cmd = fuse_alloc_cmd(bufsize);
     if (cmd != NULL) {
-        int res = fuse_chan_recv(ch, cmd->buf, bufsize);
+        int res = fuse_chan_recv(&ch, cmd->buf, bufsize);
         if (res <= 0) {
             free_cmd(cmd);
             if (res < 0 && res != -EINTR && res != -EAGAIN)

@@ -1102,12 +1102,12 @@ struct fuse_chan_ops {
     /**
      * Hook for receiving a raw request
      *
-     * @param ch the channel
+     * @param ch pointer to the channel
      * @param buf the buffer to store the request in
      * @param size the size of the buffer
      * @return the actual size of the raw request, or -1 on error
      */
-    int (*receive)(struct fuse_chan *ch, char *buf, size_t size);
+    int (*receive)(struct fuse_chan **chp, char *buf, size_t size);
 
     /**
      * Hook for sending a raw reply
@@ -1120,8 +1120,7 @@ struct fuse_chan_ops {
      * @param count the number of blocks in vector
      * @return zero on success, -errno on failure
      */
-    int (*send)(struct fuse_chan *ch, const struct iovec iov[],
-                size_t count);
+    int (*send)(struct fuse_chan *ch, const struct iovec iov[], size_t count);
 
     /**
      * Destroy the channel
@@ -1180,12 +1179,12 @@ struct fuse_session *fuse_chan_session(struct fuse_chan *ch);
  *
  * A return value of -ENODEV means, that the filesystem was unmounted
  *
- * @param ch the channel
+ * @param ch pointer to the channel
  * @param buf the buffer to store the request in
  * @param size the size of the buffer
  * @return the actual size of the raw request, or -errno on error
  */
-int fuse_chan_recv(struct fuse_chan *ch, char *buf, size_t size);
+int fuse_chan_recv(struct fuse_chan **ch, char *buf, size_t size);
 
 /**
  * Send a raw reply
@@ -1218,6 +1217,8 @@ void fuse_chan_destroy(struct fuse_chan *ch);
 #  if FUSE_USE_VERSION == 25
 #    define fuse_lowlevel_ops fuse_lowlevel_ops_compat25
 #    define fuse_lowlevel_new fuse_lowlevel_new_compat25
+#    define fuse_chan_ops fuse_chan_ops_compat25
+#    define fuse_chan_new fuse_chan_new_compat25
 #  elif FUSE_USE_VERSION == 24
 #    define fuse_file_info fuse_file_info_compat
 #    define fuse_reply_statfs fuse_reply_statfs_compat
