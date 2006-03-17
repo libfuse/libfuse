@@ -404,13 +404,15 @@ struct fuse_context {
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
  * @param op the file system operation
+ * @param user_data user data set in context for init() method
  * @return 0 on success, nonzero on failure
  */
 /*
-int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
+int fuse_main(int argc, char *argv[], const struct fuse_operations *op,
+              void *user_data);
 */
-#define fuse_main(argc, argv, op) \
-            fuse_main_real(argc, argv, op, sizeof(*(op)))
+#define fuse_main(argc, argv, op, user_data) \
+            fuse_main_real(argc, argv, op, sizeof(*(op)), user_data)
 
 /* ----------------------------------------------------------- *
  * More detailed API                                           *
@@ -419,14 +421,16 @@ int fuse_main(int argc, char *argv[], const struct fuse_operations *op);
 /**
  * Create a new FUSE filesystem.
  *
- * @param fd the control file descriptor
+ * @param ch the communication channel
  * @param args argument vector
  * @param op the operations
  * @param op_size the size of the fuse_operations structure
+ * @param user_data user data set in context for init() method
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(int fd, struct fuse_args *args,
-                      const struct fuse_operations *op, size_t op_size);
+struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
+                      const struct fuse_operations *op, size_t op_size,
+                      void *user_data);
 
 /**
  * Destroy the FUSE handle.
@@ -497,7 +501,7 @@ int fuse_is_lib_option(const char *opt);
  * Do not call this directly, use fuse_main()
  */
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-                   size_t op_size);
+                   size_t op_size, void *user_data);
 
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
@@ -509,10 +513,11 @@ typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
 /** This is the part of fuse_main() before the event loop */
 struct fuse *fuse_setup(int argc, char *argv[],
                         const struct fuse_operations *op, size_t op_size,
-                        char **mountpoint, int *multithreaded, int *fd);
+                        char **mountpoint, int *multithreaded,
+                        void *user_data);
 
 /** This is the part of fuse_main() after the event loop */
-void fuse_teardown(struct fuse *fuse, int fd, char *mountpoint);
+void fuse_teardown(struct fuse *fuse, char *mountpoint);
 
 /** Read a single command.  If none are read, return NULL */
 struct fuse_cmd *fuse_read_cmd(struct fuse *f);
@@ -531,6 +536,9 @@ int fuse_exited(struct fuse *f);
 /** Set function which can be used to get the current context */
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 
+/** Get session from fuse object */
+struct fuse_session *fuse_get_session(struct fuse *f);
+
 /* ----------------------------------------------------------- *
  * Compatibility stuff                                         *
  * ----------------------------------------------------------- */
@@ -543,6 +551,7 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
             fuse_main_real_compat25(argc, argv, op, sizeof(*(op)))
 #    define fuse_new fuse_new_compat25
 #    define fuse_setup fuse_setup_compat25
+#    define fuse_teardown fuse_teardown_compat25
 #    define fuse_operations fuse_operations_compat25
 #  elif FUSE_USE_VERSION == 22
 #    define fuse_main(argc, argv, op) \

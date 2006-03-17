@@ -943,14 +943,6 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
                                        const struct fuse_lowlevel_ops *op,
                                        size_t op_size, void *userdata);
 
-/**
- * Create a kernel channel
- *
- * @param fd the file descriptor obtained from fuse_mount()
- * @return the created channel object, or NULL on failure
- */
-struct fuse_chan *fuse_kern_chan_new(int fd);
-
 /* ----------------------------------------------------------- *
  * Session interface                                           *
  * ----------------------------------------------------------- */
@@ -1017,6 +1009,15 @@ struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data);
  * @param ch the channel
  */
 void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch);
+
+/**
+ * Remove a channel from a session
+ *
+ * If the channel is not assigned to a session, then this is a no-op
+ *
+ * @param ch the channel to remove
+ */
+void fuse_session_remove_chan(struct fuse_chan *ch);
 
 /**
  * Iterate over the channels assigned to a session
@@ -1206,31 +1207,6 @@ int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
  * @param ch the channel
  */
 void fuse_chan_destroy(struct fuse_chan *ch);
-
-/* ----------------------------------------------------------- *
- * Signal handling                                             *
- * ----------------------------------------------------------- */
-
-/**
- * Exit session on HUP, TERM and INT signals and ignore PIPE signal
- *
- * Stores session in a global variable.  May only be called once per
- * process until fuse_remove_signal_handlers() is called.
- *
- * @param se the session to exit
- * @return 0 on success, -1 on failure
- */
-int fuse_set_signal_handlers(struct fuse_session *se);
-
-/**
- * Restore default signal handlers
- *
- * Resets global session.  After this fuse_set_signal_handlers() may
- * be called again.
- *
- * @param se the same session as given in fuse_set_signal_handlers()
- */
-void fuse_remove_signal_handlers(struct fuse_session *se);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff                                         *

@@ -59,6 +59,16 @@ void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch)
     ch->se = se;
 }
 
+void fuse_session_remove_chan(struct fuse_chan *ch)
+{
+    struct fuse_session *se = ch->se;
+    if (se) {
+        assert(se->ch == ch);
+        se->ch = NULL;
+        ch->se = NULL;
+    }
+}
+
 struct fuse_chan *fuse_session_next_chan(struct fuse_session *se,
                                          struct fuse_chan *ch)
 {
@@ -162,6 +172,7 @@ int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[], size_t count)
 
 void fuse_chan_destroy(struct fuse_chan *ch)
 {
+    fuse_session_remove_chan(ch);
     if (ch->op.destroy)
         ch->op.destroy(ch);
     free(ch);

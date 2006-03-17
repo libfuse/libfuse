@@ -75,6 +75,9 @@ struct fuse_conn_info {
     unsigned reserved[27];
 };
 
+struct fuse_session;
+struct fuse_chan;
+
 /**
  * Create a FUSE mountpoint
  *
@@ -83,17 +86,17 @@ struct fuse_conn_info {
  *
  * @param mountpoint the mount point path
  * @param args argument vector
- * @return the control file descriptor on success, -1 on failure
+ * @return the communication channel on success, NULL on failure
  */
-int fuse_mount(const char *mountpoint, struct fuse_args *args);
+struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args);
 
 /**
  * Umount a FUSE mountpoint
  *
  * @param mountpoint the mount point path
- * @param the control file descriptor 
+ * @param ch the communication channel
  */
-void fuse_unmount(const char *mountpoint, int fd);
+void fuse_unmount(const char *mountpoint, struct fuse_chan *ch);
 
 /**
  * Parse common options
@@ -120,6 +123,37 @@ int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
                        int *multithreaded, int *foreground);
 
 
+int fuse_daemonize(int foreground);
+
+/* ----------------------------------------------------------- *
+ * Signal handling                                             *
+ * ----------------------------------------------------------- */
+
+/**
+ * Exit session on HUP, TERM and INT signals and ignore PIPE signal
+ *
+ * Stores session in a global variable.  May only be called once per
+ * process until fuse_remove_signal_handlers() is called.
+ *
+ * @param se the session to exit
+ * @return 0 on success, -1 on failure
+ */
+int fuse_set_signal_handlers(struct fuse_session *se);
+
+/**
+ * Restore default signal handlers
+ *
+ * Resets global session.  After this fuse_set_signal_handlers() may
+ * be called again.
+ *
+ * @param se the same session as given in fuse_set_signal_handlers()
+ */
+void fuse_remove_signal_handlers(struct fuse_session *se);
+
+/* ----------------------------------------------------------- *
+ * Compatibility stuff                                         *
+ * ----------------------------------------------------------- */
+
 #if FUSE_USE_VERSION < 26
 #    ifdef __FreeBSD__
 #        if FUSE_USE_VERSION < 25
@@ -129,6 +163,7 @@ int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
 #    include "fuse_common_compat.h"
 #    undef FUSE_MINOR_VERSION
 #    undef fuse_main
+#    define fuse_mount fuse_mount_compat25
 #    define fuse_unmount fuse_unmount_compat22
 #    if FUSE_USE_VERSION == 25
 #        define FUSE_MINOR_VERSION 5

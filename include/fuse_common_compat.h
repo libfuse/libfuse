@@ -9,6 +9,8 @@
 /* these definitions provide source compatibility to prior versions.
    Do not include this file directly! */
 
+int fuse_mount_compat25(const char *mountpoint, struct fuse_args *args);
+
 int fuse_mount_compat22(const char *mountpoint, const char *opts);
 
 int fuse_mount_compat1(const char *mountpoint, const char *args[]);

@@ -84,5 +84,5 @@ static struct fuse_operations null_oper = {
 
 int main(int argc, char *argv[])
 {
-    return fuse_main(argc, argv, &null_oper);
+    return fuse_main(argc, argv, &null_oper, NULL);
 }

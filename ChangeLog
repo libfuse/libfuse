@@ -1,3 +1,21 @@
+2006-03-17  Miklos Szeredi <miklos@szeredi.hu>
+
+	* API changes:
+
+	* fuse_main(), fuse_setup() and fuse_new() have an additionl
+	user_data parameter
+
+	* fuse_mount() returns a 'struct fuse_chan' pointer instead of a
+	file descriptor
+
+	* fuse_unmount() receives a 'struct fuse_chan' pointer.  It
+	destroys the given channel
+
+	* fuse_teardown() no longer has a file descriptor parameter
+
+	* new exported functions: fuse_session_remove_chan(),
+	fuse_get_session(), fuse_daemonize()
+
 2006-03-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0-pre2

@@ -6,9 +6,8 @@
     See the file COPYING.LIB.
 */
 
-#include "fuse.h"
+#include "fuse_i.h"
 #include "fuse_opt.h"
-#include "fuse_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -167,28 +166,26 @@ static int receive_fd(int fd)
     return *(int*)CMSG_DATA(cmsg);
 }
 
-void fuse_unmount_compat22(const char *mountpoint)
-{
-    fuse_unmount(mountpoint, -1);
-}
-
-void fuse_unmount(const char *mountpoint, int fd)
+void fuse_kern_unmount(const char *mountpoint, int fd)
 {
     const char *mountprog = FUSERMOUNT_PROG;
-    struct pollfd pfd;
-    int res;
     int pid;
 
     if (!mountpoint)
         return;
 
-    pfd.fd = fd;
-    pfd.events = 0;
-    res = poll(&pfd, 1, 0);
-    /* If file poll returns POLLERR on the device file descriptor,
-       then the filesystem is already unmounted */
-    if (res == 1 && (pfd.revents & POLLERR))
-        return;
+    if (fd != -1) {
+        int res;
+        struct pollfd pfd;
+
+        pfd.fd = fd;
+        pfd.events = 0;
+        res = poll(&pfd, 1, 0);
+        /* If file poll returns POLLERR on the device file descriptor,
+           then the filesystem is already unmounted */
+        if (res == 1 && (pfd.revents & POLLERR))
+            return;
+    }
 
 #ifdef HAVE_FORK
     pid = fork();
@@ -214,6 +211,11 @@ void fuse_unmount(const char *mountpoint, int fd)
         exit(1);
     }
     waitpid(pid, NULL, 0);
+}
+
+void fuse_unmount_compat22(const char *mountpoint)
+{
+    fuse_kern_unmount(mountpoint, -1);
 }
 
 int fuse_mount_compat22(const char *mountpoint, const char *opts)
@@ -277,7 +279,7 @@ int fuse_mount_compat22(const char *mountpoint, const char *opts)
     return rv;
 }
 
-int fuse_mount(const char *mountpoint, struct fuse_args *args)
+int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
 {
     struct mount_opts mo;
     int res = -1;
@@ -299,13 +301,6 @@ int fuse_mount(const char *mountpoint, struct fuse_args *args)
  out:
     free(mo.kernel_opts);
     return res;
-}
-
-int fuse_mount_compat1(const char *mountpoint, const char *args[])
-{
-    /* just ignore mount args for now */
-    (void) args;
-    return fuse_mount_compat22(mountpoint, NULL);
 }
 
 __asm__(".symver fuse_mount_compat22,fuse_mount@FUSE_2.2");

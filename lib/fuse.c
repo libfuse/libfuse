@@ -617,6 +617,7 @@ static void fuse_data_init(void *data, struct fuse_conn_info *conn)
 
     memset(c, 0, sizeof(*c));
     c->fuse = f;
+    c->private_data = f->user_data;
 
     if (f->op.init)
         f->user_data = f->op.init(conn);
@@ -1998,11 +1999,10 @@ int fuse_is_lib_option(const char *opt)
         fuse_opt_match(fuse_lib_opts, opt);
 }
 
-struct fuse *fuse_new_common(int fd, struct fuse_args *args,
+struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
                              const struct fuse_operations *op,
-                             size_t op_size, int compat)
+                             size_t op_size, void *user_data, int compat)
 {
-    struct fuse_chan *ch;
     struct fuse *f;
     struct node *root;
 
@@ -2017,6 +2017,7 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
         goto out;
     }
 
+    f->user_data = user_data;
     f->conf.entry_timeout = 1.0;
     f->conf.attr_timeout = 1.0;
     f->conf.negative_timeout = 0.0;
@@ -2044,10 +2045,6 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
                                      sizeof(fuse_path_ops), f);
     if (f->se == NULL)
         goto out_free;
-
-    ch = fuse_kern_chan_new(fd);
-    if (ch == NULL)
-        goto out_free_session;
 
     fuse_session_add_chan(f->se, ch);
 
@@ -2109,10 +2106,11 @@ struct fuse *fuse_new_common(int fd, struct fuse_args *args,
     return NULL;
 }
 
-struct fuse *fuse_new(int fd, struct fuse_args *args,
-                      const struct fuse_operations *op, size_t op_size)
+struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
+                      const struct fuse_operations *op, size_t op_size,
+                      void *user_data)
 {
-    return fuse_new_common(fd, args, op, op_size, 0);
+    return fuse_new_common(ch, args, op, op_size, user_data, 0);
 }
 
 void fuse_destroy(struct fuse *f)
@@ -2148,6 +2146,19 @@ void fuse_destroy(struct fuse *f)
 }
 
 #include "fuse_compat.h"
+
+static struct fuse *fuse_new_common_compat25(int fd, struct fuse_args *args,
+                                             const struct fuse_operations *op,
+                                             size_t op_size, int compat)
+{
+    struct fuse *f = NULL;
+    struct fuse_chan *ch = fuse_kern_chan_new(fd);
+
+    if (ch)
+        f = fuse_new_common(ch, args, op, op_size, NULL, compat);
+
+    return f;
+}
 
 #ifndef __FreeBSD__
 
@@ -2251,7 +2262,7 @@ static struct fuse *fuse_new_common_compat(int fd, const char *opts,
         fuse_opt_free_args(&args);
         return NULL;
     }
-    f = fuse_new_common(fd, &args, op, op_size, compat);
+    f = fuse_new_common_compat25(fd, &args, op, op_size, compat);
     fuse_opt_free_args(&args);
 
     return f;
@@ -2319,8 +2330,8 @@ struct fuse *fuse_new_compat25(int fd, struct fuse_args *args,
                                const struct fuse_operations_compat25 *op,
                                size_t op_size)
 {
-    return fuse_new_common(fd, args, (struct fuse_operations *) op,
-                           op_size, 25);
+    return fuse_new_common_compat25(fd, args, (struct fuse_operations *) op,
+                                    op_size, 25);
 }
 
 __asm__(".symver fuse_new_compat25,fuse_new@FUSE_2.5");

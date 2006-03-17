@@ -19,7 +19,6 @@ FUSE_2.2 {
 		fuse_read_cmd;
 		fuse_set_getcontext_func;
 		fuse_setup_compat2;
-		fuse_teardown;
 };
 
 FUSE_2.4 {
@@ -62,7 +61,6 @@ FUSE_2.5 {
 	global:
 		fuse_lowlevel_new_compat;
 		fuse_main_real_compat22;
-		fuse_mount;
 		fuse_mount_compat22;
 		fuse_new_compat22;
 		fuse_opt_parse;
@@ -85,15 +83,22 @@ FUSE_2.5 {
 FUSE_2.6 {
 	global:
 		fuse_add_direntry;
+		fuse_daemonize;
+		fuse_get_session;
 		fuse_lowlevel_new;
 		fuse_lowlevel_new_compat25;
 		fuse_main_real;
 		fuse_main_real_compat25;
+		fuse_mount;
+		fuse_mount_compat25;
 		fuse_new;
 		fuse_new_compat25;
 		fuse_opt_insert_arg;
+		fuse_session_remove_chan;
 		fuse_setup;
 		fuse_setup_compat25;
+		fuse_teardown;
+		fuse_teardown_compat22;
 		fuse_unmount;
 		fuse_unmount_compat22;
 		fuse_chan_recv;

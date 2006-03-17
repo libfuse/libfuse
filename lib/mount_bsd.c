@@ -6,7 +6,7 @@
     See the file COPYING.LIB.
 */
 
-#include "fuse.h"
+#include "fuse_i.h"
 #include "fuse_opt.h"
 
 #include <sys/stat.h>
@@ -197,21 +197,21 @@ void fuse_unmount_compat22(const char *mountpoint)
     system(umount_cmd);
 }
 
-void fuse_unmount(const char *mountpoint, int fd)
+void fuse_kern_unmount(const char *mountpoint, int fd)
 {
     char *ep, *umount_cmd, dev[128];
     struct stat sbuf;
 
     (void)mountpoint;
-   
+
     if (fstat(fd, &sbuf) == -1)
         return;
 
     devname_r(sbuf.st_rdev, S_IFCHR, dev, 128);
-    
+
     if (strncmp(dev, "fuse", 4))
         return;
-    
+
     strtol(dev + 4, &ep, 10);
     if (*ep != '\0')
         return;
@@ -305,7 +305,7 @@ out:
     return fd;
 }
 
-int fuse_mount(const char *mountpoint, struct fuse_args *args)
+int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
 {
     struct mount_opts mo;
     int res = -1;
