@@ -1,3 +1,7 @@
+2006-04-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: Add missing rwlock initialization.  Patch by Ryan Bradetich
+
 2006-03-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* API changes:

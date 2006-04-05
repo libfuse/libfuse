@@ -2068,6 +2068,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
     }
 
     mutex_init(&f->lock);
+    pthread_rwlock_init(&f->tree_lock, NULL);
     memcpy(&f->op, op, op_size);
     f->compat = compat;
 
