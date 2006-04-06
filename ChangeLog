@@ -1,3 +1,8 @@
+2006-04-06  Csaba Henk <csaba.henk@creo.hu>
+
+	* lib: Let FreeBSD mount option parsing routine recognize "no"
+	prefixes for FUSE specific options as well
+
 2006-04-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: Add missing rwlock initialization.  Patch by Ryan Bradetich

@@ -71,6 +71,13 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_OPT_KEY("ro",                  KEY_KERN),
     FUSE_OPT_KEY("rw",                  KEY_KERN),
     FUSE_OPT_KEY("auto",                KEY_KERN),
+    /* options supported under both Linux and FBSD */
+    FUSE_OPT_KEY("allow_other",         KEY_KERN),
+    FUSE_OPT_KEY("default_permissions", KEY_KERN),
+    /* FBSD FUSE specific mount options */
+    FUSE_OPT_KEY("private",             KEY_KERN),
+    FUSE_OPT_KEY("neglect_shares",      KEY_KERN),
+    FUSE_OPT_KEY("push_symlinks_in",    KEY_KERN),
     /* stock FBSD mountopt parsing routine lets anything be negated... */
     FUSE_OPT_KEY("nodev",               KEY_KERN),
     FUSE_OPT_KEY("noasync",             KEY_KERN),
@@ -95,13 +102,11 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_OPT_KEY("noro",                KEY_KERN),
     FUSE_OPT_KEY("norw",                KEY_KERN),
     FUSE_OPT_KEY("noauto",              KEY_KERN),
-    /* options supported under both Linux and FBSD */
-    FUSE_OPT_KEY("allow_other",         KEY_KERN),
-    FUSE_OPT_KEY("default_permissions", KEY_KERN),
-    /* FBSD FUSE specific mount options */
-    FUSE_OPT_KEY("private",             KEY_KERN),
-    FUSE_OPT_KEY("neglect_shares",      KEY_KERN),
-    FUSE_OPT_KEY("push_symlinks_in",    KEY_KERN),
+    FUSE_OPT_KEY("noallow_other",       KEY_KERN),
+    FUSE_OPT_KEY("nodefault_permissions", KEY_KERN),
+    FUSE_OPT_KEY("noprivate",           KEY_KERN),
+    FUSE_OPT_KEY("noneglect_shares",    KEY_KERN),
+    FUSE_OPT_KEY("nopush_symlinks_in",  KEY_KERN),
     /* Linux specific mount options, but let just the mount util handle them */
     FUSE_OPT_KEY("fsname=",             KEY_KERN),
     FUSE_OPT_KEY("nonempty",            KEY_KERN),
