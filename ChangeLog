@@ -1,3 +1,21 @@
+2006-04-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.5.3
+
+2006-04-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: Add missing rwlock initialization.  Patch by Ryan Bradetich
+
+2006-02-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix negative entry handling.  There was a bug, that negative
+	lookups with timeouts (nodeid == 0) returned -EIO.
+
+2006-02-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix race between RELEASE and UNLINK, which might leave
+	.fuse_hidden* files around
+
 2006-02-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fix use-after-free bug in interruptred reply_entry().
