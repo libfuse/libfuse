@@ -110,8 +110,8 @@ static inline void kobject_put(struct kobject *kobj)
 /** Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
 
-/** If more requests are outstanding, then the operation will block */
-#define FUSE_MAX_OUTSTANDING 10
+/** Maximum number of outstanding background requests */
+#define FUSE_MAX_BACKGROUND 10
 
 /** It could be as large as PATH_MAX, but would that have any uses? */
 #define FUSE_NAME_MAX 1024
@@ -228,8 +228,8 @@ struct fuse_conn;
  * A request to the client
  */
 struct fuse_req {
-	/** This can be on either unused_list, pending processing or
-	    io lists in fuse_conn */
+	/** This can be on either pending processing or io lists in
+	    fuse_conn */
 	struct list_head list;
 
 	/** Entry on the background list */
@@ -247,9 +247,6 @@ struct fuse_req {
 	/** True if the request has reply */
 	unsigned isreply:1;
 
-	/** The request is preallocated */
-	unsigned preallocated:1;
-
 	/** The request was interrupted */
 	unsigned interrupted:1;
 
@@ -258,6 +255,9 @@ struct fuse_req {
 
 	/** Data is being copied to/from the request */
 	unsigned locked:1;
+
+	/** Request is counted as "waiting" */
+	unsigned waiting:1;
 
 	/** State of the request */
 	enum fuse_req_state state;
@@ -344,24 +344,19 @@ struct fuse_conn {
 	    interrupted request) */
 	struct list_head background;
 
-	/** Controls the maximum number of outstanding requests */
-	struct semaphore outstanding_sem;
+	/** Number of requests currently in the background */
+	unsigned num_background;
 
-	/** This counts the number of outstanding requests if
-	    outstanding_sem would go negative */
-	unsigned outstanding_debt;
+	/** Flag indicating if connection is blocked.  This will be
+	    the case before the INIT reply is received, and if there
+	    are too many outstading backgrounds requests */
+	int blocked;
 
-	/** RW semaphore for exclusion with fuse_put_super() */
-	struct rw_semaphore sbput_sem;
-
-	/** The list of unused requests */
-	struct list_head unused_list;
+	/** waitq for blocked connection */
+	wait_queue_head_t blocked_waitq;
 
 	/** The next unique request id */
 	u64 reqctr;
-
-	/** Mount is active */
-	unsigned mounted;
 
 	/** Connection established, cleared on umount, connection
 	    abort and device release */
@@ -551,11 +546,11 @@ void fuse_reset_request(struct fuse_req *req);
 /**
  * Reserve a preallocated request
  */
-struct fuse_req *fuse_get_request(struct fuse_conn *fc);
+struct fuse_req *fuse_get_req(struct fuse_conn *fc);
 
 /**
- * Decrement reference count of a request.  If count goes to zero put
- * on unused list (preallocated) or free request (not preallocated).
+ * Decrement reference count of a request.  If count goes to zero free
+ * the request.
  */
 void fuse_put_request(struct fuse_conn *fc, struct fuse_req *req);
 
@@ -575,11 +570,11 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
 void request_send_background(struct fuse_conn *fc, struct fuse_req *req);
 
 /**
- * Release inodes and file associated with background request
+ * Remove request from the the background list
  */
-void fuse_release_background(struct fuse_conn *fc, struct fuse_req *req);
+void fuse_remove_background(struct fuse_conn *fc, struct fuse_req *req);
 
-/* Abort all requests */
+/** Abort all requests */
 void fuse_abort_conn(struct fuse_conn *fc);
 
 /**

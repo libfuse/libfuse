@@ -1,3 +1,14 @@
+2006-04-11  Csaba Henk <csaba.henk@creo.hu>
+
+	* kernel: remove request pool, instead allocate requests on
+	demand.  Account the number of background requests, and if they go
+	over a limit, block the allocation of new requests.
+
+	* kernel: fix deadlock if backgrounded request holds the last
+	reference to the super block
+
+	* kernel: don't use fuse_reset_request() during direct I/O
+
 2006-04-06  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib: Let FreeBSD mount option parsing routine recognize "no"
