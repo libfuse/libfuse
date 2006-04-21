@@ -1,4 +1,12 @@
-2006-04-11  Csaba Henk <csaba.henk@creo.hu>
+2006-04-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix fput deadlock fix, the lockless solution could lead
+	to "VFS: busy inodes after umount..."
+
+	* kernel: fix race between checking and setting file->private_data
+	for the device.  Found by Al Viro
+
+2006-04-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: remove request pool, instead allocate requests on
 	demand.  Account the number of background requests, and if they go
