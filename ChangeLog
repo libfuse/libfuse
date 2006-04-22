@@ -1,3 +1,9 @@
+2006-04-23  Csaba Henk <csaba.henk@creo.hu>
+
+	* lib: make FreeBSD mount routine recognize if kernel features
+        backgrounded init and if it does, run the mount util in foreground
+        (similarly to Linux)
+
 2006-04-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: fix fput deadlock fix, the lockless solution could lead

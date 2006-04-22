@@ -11,6 +11,7 @@
 
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/sysctl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -225,6 +226,20 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
     system(umount_cmd);
 }
 
+/* Check if kernel is doing init in background */
+static int init_backgrounded(void)
+{
+    int ibg, len;
+
+    len = sizeof(ibg);
+
+    if (sysctlbyname("vfs.fuse.init_backgrounded", &ibg, &len, NULL, 0))
+        return 0;
+
+    return ibg;
+}
+
+
 static int fuse_mount_core(const char *mountpoint, const char *opts)
 {
     const char *mountprog = FUSERMOUNT_PROG;
@@ -273,12 +288,19 @@ mount:
     }
 
     if (pid == 0) {
-        pid = fork();
+        if (! init_backgrounded()) {
+            /*
+             * If init is not backgrounded, we have to call the mount util
+             * backgrounded, to avoid deadlock.
+             */
 
-        if (pid == -1) {
-            perror("fuse: fork() failed");
-            close(fd);
-            exit(1);
+            pid = fork();
+    
+            if (pid == -1) {
+                perror("fuse: fork() failed");
+                close(fd);
+                exit(1);
+            }
         }
 
         if (pid == 0) {
