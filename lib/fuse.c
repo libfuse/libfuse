@@ -514,6 +514,10 @@ static void mtime_set(const struct stat *stbuf, struct timespec *ts)
 #endif
 }
 
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC CLOCK_REALTIME
+#endif
+
 static void curr_time(struct timespec *now)
 {
     static clockid_t clockid = CLOCK_MONOTONIC;
