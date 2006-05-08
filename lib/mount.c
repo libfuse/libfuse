@@ -6,6 +6,7 @@
     See the file COPYING.LIB.
 */
 
+#include "config.h"
 #include "fuse_i.h"
 #include "fuse_opt.h"
 
@@ -22,6 +23,10 @@
 
 #define FUSERMOUNT_PROG         "fusermount"
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
+
+#ifndef HAVE_FORK
+#define fork() vfork()
+#endif
 
 enum {
     KEY_KERN,
@@ -84,9 +89,21 @@ static void mount_help(void)
             );
 }
 
+static void exec_fusermount(const char *argv[])
+{
+    execv(FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, (char **) argv);
+    execvp(FUSERMOUNT_PROG, (char **) argv);
+}
+
 static void mount_version(void)
 {
-    system(FUSERMOUNT_PROG " --version");
+    int pid = fork();
+    if (!pid) {
+        const char *argv[] = { FUSERMOUNT_PROG, "--version", NULL };
+        exec_fusermount(argv);
+        _exit(1);
+    } else if (pid != -1)
+        waitpid(pid, NULL, 0);
 }
 
 static int fuse_mount_opt_proc(void *data, const char *arg, int key,
@@ -168,7 +185,6 @@ static int receive_fd(int fd)
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
-    const char *mountprog = FUSERMOUNT_PROG;
     int pid;
 
     if (!mountpoint)
@@ -187,28 +203,16 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
             return;
     }
 
-#ifdef HAVE_FORK
     pid = fork();
-#else
-    pid = vfork();
-#endif
     if(pid == -1)
         return;
 
     if(pid == 0) {
-        const char *argv[32];
-        int a = 0;
+        const char *argv[] =
+            { FUSERMOUNT_PROG, "-u", "-q", "-z", "--", mountpoint, NULL };
 
-        argv[a++] = mountprog;
-        argv[a++] = "-u";
-        argv[a++] = "-q";
-        argv[a++] = "-z";
-        argv[a++] = "--";
-        argv[a++] = mountpoint;
-        argv[a++] = NULL;
-
-        execvp(mountprog, (char **) argv);
-        exit(1);
+        exec_fusermount(argv);
+        _exit(1);
     }
     waitpid(pid, NULL, 0);
 }
@@ -220,7 +224,6 @@ void fuse_unmount_compat22(const char *mountpoint)
 
 int fuse_mount_compat22(const char *mountpoint, const char *opts)
 {
-    const char *mountprog = FUSERMOUNT_PROG;
     int fds[2], pid;
     int res;
     int rv;
@@ -236,11 +239,7 @@ int fuse_mount_compat22(const char *mountpoint, const char *opts)
         return -1;
     }
 
-#ifdef HAVE_FORK
     pid = fork();
-#else
-    pid = vfork();
-#endif
     if(pid == -1) {
         perror("fuse: fork() failed");
         close(fds[0]);
@@ -253,7 +252,7 @@ int fuse_mount_compat22(const char *mountpoint, const char *opts)
         const char *argv[32];
         int a = 0;
 
-        argv[a++] = mountprog;
+        argv[a++] = FUSERMOUNT_PROG;
         if (opts) {
             argv[a++] = "-o";
             argv[a++] = opts;
@@ -266,9 +265,9 @@ int fuse_mount_compat22(const char *mountpoint, const char *opts)
         fcntl(fds[0], F_SETFD, 0);
         snprintf(env, sizeof(env), "%i", fds[0]);
         setenv(FUSE_COMMFD_ENV, env, 1);
-        execvp(mountprog, (char **) argv);
+        exec_fusermount(argv);
         perror("fuse: failed to exec fusermount");
-        exit(1);
+        _exit(1);
     }
 
     close(fds[0]);
