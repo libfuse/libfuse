@@ -1,3 +1,7 @@
+2006-05-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Test commit
+
 2006-05-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: search fusermount in installation directory (bindir) as
