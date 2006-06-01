@@ -1,3 +1,11 @@
+2006-06-01  Csaba Henk <csaba.henk@creo.hu>
+
+	* lib: adjust threading related compiler flags.
+	Switch to "-pthread" from "-lpthread" as that's the preferred
+	one on several platforms. Consulted with Terrence Cole and
+	Miklos Szeredi
+	
+
 2006-05-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Test commit

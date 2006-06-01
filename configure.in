@@ -63,7 +63,7 @@ fi
 AC_CHECK_FUNCS([fork setxattr fdatasync])
 AC_CHECK_MEMBERS([struct stat.st_atim])
 
-libfuse_libs=-lpthread
+libfuse_libs=-pthread
 LIBS=
 AC_SEARCH_LIBS(clock_gettime, [rt])
 libfuse_libs="$libfuse_libs $LIBS"
