@@ -1,3 +1,8 @@
+2006-06-04  Csaba Henk <csaba.henk@creo.hu>
+
+	* lib: fix emergency umount in helper.c when malloc fails.
+	(The way it was done would end up in a segfault.)
+
 2006-06-01  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib: adjust threading related compiler flags.

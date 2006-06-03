@@ -195,7 +195,7 @@ static struct fuse_chan *fuse_mount_common(const char *mountpoint,
 
     ch = fuse_kern_chan_new(fd);
     if (!ch)
-        fuse_unmount(mountpoint, NULL);
+        fuse_kern_unmount(mountpoint, fd);
 
     return ch;
 }
