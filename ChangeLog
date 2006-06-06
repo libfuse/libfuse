@@ -1,3 +1,8 @@
+2006-06-05  Remy Blank <remy.blank@pobox.com>
+
+	* lib: canonicalize mount point in fuse_helper_opt_proc() so that
+	unmounting succeeds even if mount point was relative.
+
 2006-06-04  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib: fix emergency umount in helper.c when malloc fails.
@@ -9,11 +14,6 @@
 	Switch to "-pthread" from "-lpthread" as that's the preferred
 	one on several platforms. Consulted with Terrence Cole and
 	Miklos Szeredi
-	
-
-2006-05-16  Miklos Szeredi <miklos@szeredi.hu>
-
-	* Test commit
 
 2006-05-08  Miklos Szeredi <miklos@szeredi.hu>
 

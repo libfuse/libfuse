@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <limits.h>
+#include <errno.h>
 
 enum  {
     KEY_HELP,
@@ -99,9 +100,14 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
         return 1;
 
     case FUSE_OPT_KEY_NONOPT:
-        if (!hopts->mountpoint)
-            return fuse_opt_add_opt(&hopts->mountpoint, arg);
-        else {
+        if (!hopts->mountpoint) {
+            char mountpoint[PATH_MAX];
+            if (realpath(arg, mountpoint) == NULL) {
+                fprintf(stderr, "fuse: bad mount point `%s': %s\n", arg, strerror(errno));
+                return -1;
+            }
+            return fuse_opt_add_opt(&hopts->mountpoint, mountpoint);
+        } else {
             fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
             return -1;
         }
