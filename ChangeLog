@@ -1,3 +1,7 @@
+2006-06-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add missing pthread_rwlock_destroy().  Patch from Remy Blank
+
 2006-06-05  Remy Blank <remy.blank@pobox.com>
 
 	* lib: canonicalize mount point in fuse_helper_opt_proc() so that

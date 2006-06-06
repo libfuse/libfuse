@@ -2147,6 +2147,7 @@ void fuse_destroy(struct fuse *f)
     free(f->id_table);
     free(f->name_table);
     pthread_mutex_destroy(&f->lock);
+    pthread_rwlock_destroy(&f->tree_lock);
     fuse_session_destroy(f->se);
     free(f);
 }
