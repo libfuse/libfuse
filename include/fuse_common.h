@@ -163,10 +163,10 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
 #    include "fuse_common_compat.h"
 #    undef FUSE_MINOR_VERSION
 #    undef fuse_main
-#    define fuse_mount fuse_mount_compat25
 #    define fuse_unmount fuse_unmount_compat22
 #    if FUSE_USE_VERSION == 25
 #        define FUSE_MINOR_VERSION 5
+#        define fuse_mount fuse_mount_compat25
 #    elif FUSE_USE_VERSION == 24 || FUSE_USE_VERSION == 22
 #        define FUSE_MINOR_VERSION 4
 #        define fuse_mount fuse_mount_compat22

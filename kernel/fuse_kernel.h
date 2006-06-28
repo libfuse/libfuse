@@ -43,19 +43,20 @@
 #define __s32 int32_t
 #else
 #include <asm/types.h>
+#include <linux/major.h>
 #endif
 
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 6
+#define FUSE_KERNEL_MINOR_VERSION 7
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
 
 /** The major number of the fuse character device */
-#define FUSE_MAJOR 10
+#define FUSE_MAJOR MISC_MAJOR
 
 /** The minor number of the fuse character device */
 #define FUSE_MINOR 229
@@ -93,6 +94,13 @@ struct fuse_kstatfs {
 	__u32	spare[6];
 };
 
+struct fuse_file_lock {
+	__u64	start;
+	__u64	end;
+	__u32	type;
+	__u32	pid; /* tgid */
+};
+
 /**
  * Bitmasks for fuse_setattr_in.valid
  */
@@ -117,6 +125,7 @@ struct fuse_kstatfs {
  * INIT request/reply flags
  */
 #define FUSE_ASYNC_READ		(1 << 0)
+#define FUSE_POSIX_LOCKS	(1 << 1)
 
 enum fuse_opcode {
 	FUSE_LOOKUP	   = 1,
@@ -147,11 +156,12 @@ enum fuse_opcode {
 	FUSE_READDIR       = 28,
 	FUSE_RELEASEDIR    = 29,
 	FUSE_FSYNCDIR      = 30,
+	FUSE_GETLK         = 31,
+	FUSE_SETLK         = 32,
+	FUSE_SETLKW        = 33,
 	FUSE_ACCESS        = 34,
 	FUSE_CREATE        = 35,
-
-	/* Keep at the end: */
-	FUSE_MAXOP
+	FUSE_INTERRUPT     = 36,
 };
 
 /* The read buffer is required to be at least 8k, but may be much larger */
@@ -237,6 +247,7 @@ struct fuse_flush_in {
 	__u64	fh;
 	__u32	flush_flags;
 	__u32	padding;
+	__u64	lock_owner;
 };
 
 struct fuse_read_in {
@@ -285,6 +296,16 @@ struct fuse_getxattr_out {
 	__u32	padding;
 };
 
+struct fuse_lk_in {
+	__u64	fh;
+	__u64	owner;
+	struct fuse_file_lock lk;
+};
+
+struct fuse_lk_out {
+	struct fuse_file_lock lk;
+};
+
 struct fuse_access_in {
 	__u32	mask;
 	__u32	padding;
@@ -304,6 +325,10 @@ struct fuse_init_out {
 	__u32	flags;
 	__u32	unused;
 	__u32	max_write;
+};
+
+struct fuse_interrupt_in {
+	__u64	unique;
 };
 
 struct fuse_in_header {

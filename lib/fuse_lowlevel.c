@@ -19,8 +19,31 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
+#include <pthread.h>
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
+#define OFFSET_MAX 0x7fffffffffffffffLL
+
+struct fuse_ll;
+
+struct fuse_req {
+    struct fuse_ll *f;
+    uint64_t unique;
+    struct fuse_ctx ctx;
+    struct fuse_chan *ch;
+    int interrupted;
+    union {
+        struct {
+            uint64_t unique;
+        } i;
+        struct {
+            fuse_interrupt_func_t func;
+            void *data;
+        } ni;
+    } u;
+    struct fuse_req *next;
+    struct fuse_req *prev;
+};
 
 struct fuse_ll {
     int debug;
@@ -30,51 +53,24 @@ struct fuse_ll {
     void *userdata;
     uid_t owner;
     struct fuse_conn_info conn;
+    struct fuse_req list;
+    struct fuse_req interrupts;
+    pthread_mutex_t lock;
 };
 
-struct fuse_req {
-    struct fuse_ll *f;
-    uint64_t unique;
-    struct fuse_ctx ctx;
-    struct fuse_chan *ch;
-};
-
-static const char *opname(enum fuse_opcode opcode)
+#ifndef USE_UCLIBC
+#define mutex_init(mut) pthread_mutex_init(mut, NULL)
+#else
+static void mutex_init(pthread_mutex_t *mut)
 {
-    switch (opcode) {
-    case FUSE_LOOKUP:		return "LOOKUP";
-    case FUSE_FORGET:		return "FORGET";
-    case FUSE_GETATTR:		return "GETATTR";
-    case FUSE_SETATTR:		return "SETATTR";
-    case FUSE_READLINK:		return "READLINK";
-    case FUSE_SYMLINK:		return "SYMLINK";
-    case FUSE_MKNOD:		return "MKNOD";
-    case FUSE_MKDIR:		return "MKDIR";
-    case FUSE_UNLINK:		return "UNLINK";
-    case FUSE_RMDIR:		return "RMDIR";
-    case FUSE_RENAME:		return "RENAME";
-    case FUSE_LINK:		return "LINK";
-    case FUSE_OPEN:		return "OPEN";
-    case FUSE_READ:		return "READ";
-    case FUSE_WRITE:		return "WRITE";
-    case FUSE_STATFS:		return "STATFS";
-    case FUSE_FLUSH:		return "FLUSH";
-    case FUSE_RELEASE:		return "RELEASE";
-    case FUSE_FSYNC:		return "FSYNC";
-    case FUSE_SETXATTR:		return "SETXATTR";
-    case FUSE_GETXATTR:		return "GETXATTR";
-    case FUSE_LISTXATTR:	return "LISTXATTR";
-    case FUSE_REMOVEXATTR:	return "REMOVEXATTR";
-    case FUSE_INIT:		return "INIT";
-    case FUSE_OPENDIR:		return "OPENDIR";
-    case FUSE_READDIR:		return "READDIR";
-    case FUSE_RELEASEDIR:	return "RELEASEDIR";
-    case FUSE_FSYNCDIR:		return "FSYNCDIR";
-    case FUSE_ACCESS:		return "ACCESS";
-    case FUSE_CREATE:		return "CREATE";
-    default: 			return "???";
-    }
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+    pthread_mutex_init(mut, &attr);
+    pthread_mutexattr_destroy(&attr);
 }
+#endif
+
 
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 {
@@ -120,8 +116,34 @@ static  size_t iov_length(const struct iovec *iov, size_t count)
     return ret;
 }
 
+static void list_init_req(struct fuse_req *req)
+{
+    req->next = req;
+    req->prev = req;
+}
+
+static void list_del_req(struct fuse_req *req)
+{
+    struct fuse_req *prev = req->prev;
+    struct fuse_req *next = req->next;
+    prev->next = next;
+    next->prev = prev;
+}
+
+static void list_add_req(struct fuse_req *req, struct fuse_req *next)
+{
+    struct fuse_req *prev = next->prev;
+    req->next = next;
+    req->prev = prev;
+    prev->next = req;
+    next->prev = req;
+}
+
 static void free_req(fuse_req_t req)
 {
+    pthread_mutex_lock(&req->f->lock);
+    list_del_req(req);
+    pthread_mutex_unlock(&req->f->lock);
     free(req);
 }
 
@@ -361,10 +383,27 @@ int fuse_reply_xattr(fuse_req_t req, size_t count)
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+int fuse_reply_lock(fuse_req_t req, struct flock *lock)
+{
+    struct fuse_lk_out arg;
+
+    memset(&arg, 0, sizeof(arg));
+    arg.lk.type = lock->l_type;
+    if (lock->l_type != F_UNLCK) {
+        arg.lk.start = lock->l_start;
+        if (lock->l_len == 0)
+            arg.lk.end = OFFSET_MAX;
+        else
+            arg.lk.end = lock->l_start + lock->l_len - 1;
+    }
+    arg.lk.pid = lock->l_pid;
+    return send_reply_ok(req, &arg, sizeof(arg));
+}
+
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     char *name = (char *) inarg;
-    
+
     if (req->f->op.lookup)
         req->f->op.lookup(req, nodeid, name);
     else
@@ -374,7 +413,7 @@ static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_forget(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_forget_in *arg = (struct fuse_forget_in *) inarg;
-    
+
     if (req->f->op.forget)
         req->f->op.forget(req, nodeid, arg->nlookup);
 }
@@ -392,7 +431,7 @@ static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_setattr_in *arg = (struct fuse_setattr_in *) inarg;
-    
+
     if (req->f->op.setattr) {
         struct fuse_file_info *fi = NULL;
         struct fuse_file_info fi_store;
@@ -414,7 +453,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_access(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_access_in *arg = (struct fuse_access_in *) inarg;
-    
+
     if (req->f->op.access)
         req->f->op.access(req, nodeid, arg->mask);
     else
@@ -434,7 +473,7 @@ static void do_readlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_mknod(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_mknod_in *arg = (struct fuse_mknod_in *) inarg;
-    
+
     if (req->f->op.mknod)
         req->f->op.mknod(req, nodeid, PARAM(arg), arg->mode, arg->rdev);
     else
@@ -444,7 +483,7 @@ static void do_mknod(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_mkdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_mkdir_in *arg = (struct fuse_mkdir_in *) inarg;
-    
+
     if (req->f->op.mkdir)
         req->f->op.mkdir(req, nodeid, PARAM(arg), arg->mode);
     else
@@ -454,7 +493,7 @@ static void do_mkdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_unlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     char *name = (char *) inarg;
-    
+
     if (req->f->op.unlink)
         req->f->op.unlink(req, nodeid, name);
     else
@@ -464,7 +503,7 @@ static void do_unlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_rmdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     char *name = (char *) inarg;
-    
+
     if (req->f->op.rmdir)
         req->f->op.rmdir(req, nodeid, name);
     else
@@ -475,7 +514,7 @@ static void do_symlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     char *name = (char *) inarg;
     char *linkname = ((char *) inarg) + strlen((char *) inarg) + 1;
-    
+
     if (req->f->op.symlink)
         req->f->op.symlink(req, linkname, nodeid, name);
     else
@@ -497,7 +536,7 @@ static void do_rename(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_link_in *arg = (struct fuse_link_in *) inarg;
-    
+
     if (req->f->op.link)
         req->f->op.link(req, arg->oldnodeid, nodeid, PARAM(arg));
     else
@@ -507,7 +546,7 @@ static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_create(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_open_in *arg = (struct fuse_open_in *) inarg;
-    
+
     if (req->f->op.create) {
         struct fuse_file_info fi;
 
@@ -536,7 +575,7 @@ static void do_open(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_read(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_read_in *arg = (struct fuse_read_in *) inarg;
-    
+
     if (req->f->op.read) {
         struct fuse_file_info fi;
 
@@ -568,13 +607,17 @@ static void do_flush(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_flush_in *arg = (struct fuse_flush_in *) inarg;
     struct fuse_file_info fi;
+    uint64_t lock_owner = 0;
+
+    if (req->f->conn.proto_minor >= 7)
+        lock_owner = arg->lock_owner;
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
     fi.fh_old = fi.fh;
 
     if (req->f->op.flush)
-        req->f->op.flush(req, nodeid, &fi);
+        req->f->op.flush(req, nodeid, &fi, lock_owner);
     else
         fuse_reply_err(req, ENOSYS);
 }
@@ -702,7 +745,7 @@ static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_getxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_getxattr_in *arg = (struct fuse_getxattr_in *) inarg;
-    
+
     if (req->f->op.getxattr)
         req->f->op.getxattr(req, nodeid, PARAM(arg), arg->size);
     else
@@ -712,7 +755,7 @@ static void do_getxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_listxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_getxattr_in *arg = (struct fuse_getxattr_in *) inarg;
-    
+
     if (req->f->op.listxattr)
         req->f->op.listxattr(req, nodeid, arg->size);
     else
@@ -722,11 +765,124 @@ static void do_listxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     char *name = (char *) inarg;
-    
+
     if (req->f->op.removexattr)
         req->f->op.removexattr(req, nodeid, name);
     else
         fuse_reply_err(req, ENOSYS);
+}
+
+static void convert_fuse_file_lock(struct fuse_file_lock *fl,
+                                   struct flock *flock)
+{
+    memset(flock, 0, sizeof(struct flock));
+    flock->l_type = fl->type;
+    flock->l_whence = SEEK_SET;
+    flock->l_start = fl->start;
+    if (fl->end == OFFSET_MAX)
+        flock->l_len = 0;
+    else
+        flock->l_len = fl->end - fl->start + 1;
+    flock->l_pid = fl->pid;
+}
+
+static void do_getlk(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+    struct fuse_lk_in *arg = (struct fuse_lk_in *) inarg;
+    struct fuse_file_info fi;
+    struct flock flock;
+
+    memset(&fi, 0, sizeof(fi));
+    fi.fh = arg->fh;
+
+    convert_fuse_file_lock(&arg->lk, &flock);
+    if (req->f->op.getlk)
+        req->f->op.getlk(req, nodeid, &fi, &flock, arg->owner);
+    else
+        fuse_reply_err(req, ENOSYS);
+}
+
+static void do_setlk_common(fuse_req_t req, fuse_ino_t nodeid,
+                            const void *inarg, int sleep)
+{
+    struct fuse_lk_in *arg = (struct fuse_lk_in *) inarg;
+    struct fuse_file_info fi;
+    struct flock flock;
+
+    memset(&fi, 0, sizeof(fi));
+    fi.fh = arg->fh;
+
+    convert_fuse_file_lock(&arg->lk, &flock);
+    if (req->f->op.setlk)
+        req->f->op.setlk(req, nodeid, &fi, &flock, arg->owner, sleep);
+    else
+        fuse_reply_err(req, ENOSYS);
+}
+
+static void do_setlk(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+    do_setlk_common(req, nodeid, inarg, 0);
+}
+
+static void do_setlkw(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+    do_setlk_common(req, nodeid, inarg, 1);
+}
+
+static int find_interrupted(struct fuse_ll *f, struct fuse_req *req)
+{
+    struct fuse_req *curr;
+
+    for (curr = f->list.next; curr != &f->list; curr = curr->next) {
+        if (curr->unique == req->u.i.unique) {
+            curr->interrupted = 1;
+            if (curr->u.ni.func)
+                curr->u.ni.func(curr, curr->u.ni.data);
+            return 1;
+        }
+    }
+    for (curr = f->interrupts.next; curr != &f->interrupts; curr = curr->next) {
+        if (curr->u.i.unique == req->u.i.unique)
+            return 1;
+    }
+    return 0;
+}
+
+static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+    struct fuse_interrupt_in *arg = (struct fuse_interrupt_in *) inarg;
+    struct fuse_ll *f = req->f;
+
+    (void) nodeid;
+    if (f->debug) {
+        printf("INTERRUPT: %llu\n", (unsigned long long) arg->unique);
+        fflush(stdout);
+    }
+
+    req->u.i.unique = arg->unique;
+
+    pthread_mutex_lock(&f->lock);
+    if (find_interrupted(f, req))
+        free(req);
+    else
+        list_add_req(req, &f->interrupts);
+    pthread_mutex_unlock(&f->lock);
+}
+
+static void check_interrupt(struct fuse_ll *f, struct fuse_req *req)
+{
+    struct fuse_req *curr;
+
+    for (curr = f->interrupts.next; curr != &f->interrupts; curr = curr->next) {
+        if (curr->u.i.unique == req->unique) {
+            list_del_req(curr);
+            free(curr);
+            return;
+        }
+    }
+    curr = f->interrupts.next;
+    if (curr != &f->interrupts)
+        fuse_reply_err(curr, EAGAIN);
 }
 
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -776,6 +932,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     outarg.minor = FUSE_KERNEL_MINOR_VERSION;
     if (f->conn.async_read)
         outarg.flags |= FUSE_ASYNC_READ;
+    if (f->op.getlk && f->op.setlk)
+        outarg.flags |= FUSE_POSIX_LOCKS;
     outarg.max_readahead = f->conn.max_readahead;
     outarg.max_write = f->conn.max_write;
 
@@ -800,38 +958,68 @@ const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
     return &req->ctx;
 }
 
-static void (*fuse_ll_ops[FUSE_MAXOP])(fuse_req_t, fuse_ino_t, const void *) = {
-    [FUSE_LOOKUP]      = do_lookup,
-    [FUSE_FORGET]      = do_forget,
-    [FUSE_GETATTR]     = do_getattr,
-    [FUSE_SETATTR]     = do_setattr,
-    [FUSE_READLINK]    = do_readlink,
-    [FUSE_SYMLINK]     = do_symlink,
-    [FUSE_MKNOD]       = do_mknod,
-    [FUSE_MKDIR]       = do_mkdir,
-    [FUSE_UNLINK]      = do_unlink,
-    [FUSE_RMDIR]       = do_rmdir,
-    [FUSE_RENAME]      = do_rename,
-    [FUSE_LINK]        = do_link,
-    [FUSE_OPEN]        = do_open,
-    [FUSE_READ]        = do_read,
-    [FUSE_WRITE]       = do_write,
-    [FUSE_STATFS]      = do_statfs,
-    [FUSE_RELEASE]     = do_release,
-    [FUSE_FSYNC]       = do_fsync,
-    [FUSE_SETXATTR]    = do_setxattr,
-    [FUSE_GETXATTR]    = do_getxattr,
-    [FUSE_LISTXATTR]   = do_listxattr,
-    [FUSE_REMOVEXATTR] = do_removexattr,
-    [FUSE_FLUSH]       = do_flush,
-    [FUSE_INIT]        = do_init,
-    [FUSE_OPENDIR]     = do_opendir,
-    [FUSE_READDIR]     = do_readdir,
-    [FUSE_RELEASEDIR]  = do_releasedir,
-    [FUSE_FSYNCDIR]    = do_fsyncdir,
-    [FUSE_ACCESS]      = do_access,
-    [FUSE_CREATE]      = do_create,
+void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
+                             void *data)
+{
+    struct fuse_ll *f = req->f;
+
+    pthread_mutex_lock(&f->lock);
+    req->u.ni.func = func;
+    req->u.ni.data = data;
+    if (req->interrupted && func)
+        func(req, data);
+    pthread_mutex_unlock(&f->lock);
+}
+
+static struct {
+    void (*func)(fuse_req_t, fuse_ino_t, const void *);
+    const char *name;
+} fuse_ll_ops[] = {
+    [FUSE_LOOKUP]      = { do_lookup,      "LOOKUP"      },
+    [FUSE_FORGET]      = { do_forget,      "FORGET"      },
+    [FUSE_GETATTR]     = { do_getattr,     "GETATTR"     },
+    [FUSE_SETATTR]     = { do_setattr,     "SETATTR"     },
+    [FUSE_READLINK]    = { do_readlink,    "READLINK"    },
+    [FUSE_SYMLINK]     = { do_symlink,     "SYMLINK"     },
+    [FUSE_MKNOD]       = { do_mknod,       "MKNOD"       },
+    [FUSE_MKDIR]       = { do_mkdir,       "MKDIR"       },
+    [FUSE_UNLINK]      = { do_unlink,      "UNLINK"      },
+    [FUSE_RMDIR]       = { do_rmdir,       "RMDIR"       },
+    [FUSE_RENAME]      = { do_rename,      "RENAME"      },
+    [FUSE_LINK]        = { do_link,        "LINK"        },
+    [FUSE_OPEN]        = { do_open,        "OPEN"        },
+    [FUSE_READ]        = { do_read,        "READ"        },
+    [FUSE_WRITE]       = { do_write,       "WRITE"       },
+    [FUSE_STATFS]      = { do_statfs,      "STATFS"      },
+    [FUSE_RELEASE]     = { do_release,     "RELEASE"     },
+    [FUSE_FSYNC]       = { do_fsync,       "FSYNC"       },
+    [FUSE_SETXATTR]    = { do_setxattr,    "SETXATTR"    },
+    [FUSE_GETXATTR]    = { do_getxattr,    "GETXATTR"    },
+    [FUSE_LISTXATTR]   = { do_listxattr,   "LISTXATTR"   },
+    [FUSE_REMOVEXATTR] = { do_removexattr, "REMOVEXATTR" },
+    [FUSE_FLUSH]       = { do_flush,       "FLUSH"       },
+    [FUSE_INIT]        = { do_init,        "INIT"        },
+    [FUSE_OPENDIR]     = { do_opendir,     "OPENDIR"     },
+    [FUSE_READDIR]     = { do_readdir,     "READDIR"     },
+    [FUSE_RELEASEDIR]  = { do_releasedir,  "RELEASEDIR"  },
+    [FUSE_FSYNCDIR]    = { do_fsyncdir,    "FSYNCDIR"    },
+    [FUSE_GETLK]       = { do_getlk,       "GETLK"       },
+    [FUSE_SETLK]       = { do_setlk,       "SETLK"       },
+    [FUSE_SETLKW]      = { do_setlkw,      "SETLKW"      },
+    [FUSE_ACCESS]      = { do_access,      "ACCESS"      },
+    [FUSE_CREATE]      = { do_create,      "CREATE"      },
+    [FUSE_INTERRUPT]   = { do_interrupt,   "INTERRUPT"   },
 };
+
+#define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
+
+static const char *opname(enum fuse_opcode opcode)
+{
+    if (opcode >= FUSE_MAXOP || !fuse_ll_ops[opcode].name)
+        return "???";
+    else
+        return fuse_ll_ops[opcode].name;
+}
 
 static void fuse_ll_process(void *data, const char *buf, size_t len,
                      struct fuse_chan *ch)
@@ -843,12 +1031,13 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 
     if (f->debug) {
         printf("unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %i\n",
-               in->unique, opname((enum fuse_opcode) in->opcode), in->opcode,
+               (unsigned long long) in->unique,
+               opname((enum fuse_opcode) in->opcode), in->opcode,
                (unsigned long) in->nodeid, len);
         fflush(stdout);
     }
 
-    req = (struct fuse_req *) malloc(sizeof(struct fuse_req));
+    req = (struct fuse_req *) calloc(1, sizeof(struct fuse_req));
     if (req == NULL) {
         fprintf(stderr, "fuse: failed to allocate request\n");
         return;
@@ -860,6 +1049,7 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     req->ctx.gid = in->gid;
     req->ctx.pid = in->pid;
     req->ch = ch;
+    list_init_req(req);
 
     if (!f->got_init && in->opcode != FUSE_INIT)
         fuse_reply_err(req, EIO);
@@ -869,10 +1059,17 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
              in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
              in->opcode != FUSE_FSYNCDIR && in->opcode != FUSE_RELEASEDIR) {
         fuse_reply_err(req, EACCES);
-    } else if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode])
+    } else if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
         fuse_reply_err(req, ENOSYS);
-    else
-        fuse_ll_ops[in->opcode](req, in->nodeid, inarg);
+    else {
+        if (in->opcode != FUSE_INTERRUPT) {
+            pthread_mutex_lock(&f->lock);
+            check_interrupt(f, req);
+            list_add_req(req, &f->list);
+            pthread_mutex_unlock(&f->lock);
+        }
+        fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
+    }
 }
 
 enum {
@@ -977,6 +1174,9 @@ struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
     f->conn.async_read = 1;
     f->conn.max_write = UINT_MAX;
     f->conn.max_readahead = UINT_MAX;
+    list_init_req(&f->list);
+    list_init_req(&f->interrupts);
+    mutex_init(&f->lock);
 
     if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
         goto out_free;

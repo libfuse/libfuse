@@ -95,8 +95,9 @@ struct fuse_operations {
 
     /** Create a file node
      *
-     * There is no create() operation, mknod() will be called for
-     * creation of all non-directory, non-symlink nodes.
+     * If the filesystem doesn't define a create() operation, mknod()
+     * will be called for creation of all non-directory, non-symlink
+     * nodes.
      */
     int (*mknod) (const char *, mode_t, dev_t);
 

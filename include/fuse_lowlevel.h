@@ -24,6 +24,7 @@
 #include "fuse_common.h"
 
 #include <utime.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
@@ -158,8 +159,8 @@ struct fuse_lowlevel_ops {
      * Look up a directory entry by name
      *
      * Valid replies:
-     *   fuse_reply_entry()
-     *   fuse_reply_err()
+     *   fuse_reply_entry
+     *   fuse_reply_err
      *
      * @param req request handle
      * @param parent inode number of the parent directory
@@ -184,7 +185,7 @@ struct fuse_lowlevel_ops {
      * will receive a forget message.
      *
      * Valid replies:
-     *   fuse_reply_none()
+     *   fuse_reply_none
      *
      * @param req request handle
      * @param ino the inode number
@@ -196,8 +197,8 @@ struct fuse_lowlevel_ops {
      * Get file attributes
      *
      * Valid replies:
-     *   fuse_reply_attr()
-     *   fuse_reply_err()
+     *   fuse_reply_attr
+     *   fuse_reply_err
      *
      * @param req request handle
      * @param ino the inode number
@@ -220,8 +221,8 @@ struct fuse_lowlevel_ops {
      * parameter will be NULL.
      *
      * Valid replies:
-     *   fuse_reply_attr()
-     *   fuse_reply_err()
+     *   fuse_reply_attr
+     *   fuse_reply_err
      *
      * @param req request handle
      * @param ino the inode number
@@ -447,14 +448,19 @@ struct fuse_lowlevel_ops {
      * One reason to flush data, is if the filesystem wants to return
      * write errors.
      *
+     * If the filesystem supports file locking operations (setlk,
+     * getlk) it should remove all locks belonging to 'owner'.
+     *
      * Valid replies:
      *   fuse_reply_err
      *
      * @param req request handle
      * @param ino the inode number
      * @param fi file information
+     * @param owner lock owner id
      */
-    void (*flush) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
+    void (*flush) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
+                   uint64_t owner);
 
     /**
      * Release an open file
@@ -722,6 +728,43 @@ struct fuse_lowlevel_ops {
      */
     void (*create) (fuse_req_t req, fuse_ino_t parent, const char *name,
                     mode_t mode, struct fuse_file_info *fi);
+
+    /**
+     * Test for a POSIX file lock
+     *
+     * Valid replies:
+     *   fuse_reply_lock
+     *   fuse_reply_err
+     *
+     * @param req request handle
+     * @param ino the inode number
+     * @param fi file information
+     * @param lock the region/type to test
+     * @param owner lock owner id of caller
+     */
+    void (*getlk) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
+                   struct flock *lock, uint64_t owner);
+
+    /**
+     * Acquire, modify or release a POSIX file lock
+     *
+     * For POSIX threads (NPTL) there's a 1-1 relation between pid and
+     * owner, but this is not always the case.  For checking lock
+     * ownership, 'owner' must be used.  The l_pid field in 'struct
+     * flock' should only be used to fill in this field in getlk().
+     *
+     * Valid replies:
+     *   fuse_reply_err
+     *
+     * @param req request handle
+     * @param ino the inode number
+     * @param fi file information
+     * @param lock the region/type to test
+     * @param owner lock owner id of caller
+     * @param sleep locking operation may sleep
+     */
+    void (*setlk) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
+                   struct flock *lock, uint64_t owner, int sleep);
 };
 
 /**
@@ -730,8 +773,8 @@ struct fuse_lowlevel_ops {
  * Possible requests:
  *   all except forget
  *
- * unlink, rmdir, rename, flush, release, fsync, fsyncdir, setxattr
- * and removexattr may send a zero code
+ * unlink, rmdir, rename, flush, release, fsync, fsyncdir, setxattr,
+ * removexattr and setlk may send a zero code
  *
  * @param req request handle
  * @param err the positive error value, or zero for success
@@ -868,6 +911,18 @@ int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf);
  */
 int fuse_reply_xattr(fuse_req_t req, size_t count);
 
+/**
+ * Reply with file lock information
+ *
+ * Possible requests:
+ *   getlk
+ *
+ * @param req request handle
+ * @param lock the lock information
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_lock(fuse_req_t req, struct flock *lock);
+
 /* ----------------------------------------------------------- *
  * Filling a buffer in readdir                                 *
  * ----------------------------------------------------------- */
@@ -922,6 +977,28 @@ void *fuse_req_userdata(fuse_req_t req);
  * @return the context structure
  */
 const struct fuse_ctx *fuse_req_ctx(fuse_req_t req);
+
+/**
+ * Callback function for an interrupt
+ *
+ * @param req interrupted request
+ * @param data user data
+ */
+typedef void (*fuse_interrupt_func_t)(fuse_req_t req, void *data);
+
+/**
+ * Register/unregister callback for an interrupt
+ *
+ * If an interrupt has already happened, then the callback function is
+ * called from within this function, hence it's not possible for
+ * interrupts to be lost.
+ *
+ * @param req request handle
+ * @param func the callback function or NULL for unregister
+ * @parm data user data passed to the callback function
+ */
+void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
+                             void *data);
 
 /* ----------------------------------------------------------- *
  * Filesystem setup                                            *

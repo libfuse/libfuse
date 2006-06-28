@@ -1306,12 +1306,13 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 }
 
 static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
-                       struct fuse_file_info *fi)
+                       struct fuse_file_info *fi, uint64_t owner)
 {
     struct fuse *f = req_fuse_prepare(req);
     char *path;
     int err;
 
+    (void) owner;
     err = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
