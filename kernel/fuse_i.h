@@ -43,6 +43,12 @@
 #  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)
 #    define KERNEL_2_6_16_PLUS
 #  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17)
+#    define KERNEL_2_6_17_PLUS
+#  endif
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+#    define KERNEL_2_6_18_PLUS
+#  endif
 #endif
 
 #include "config.h"
@@ -62,6 +68,7 @@
 #endif /* KERNEL_2_6 */
 #endif /* FUSE_MAINLINE */
 #include <linux/fs.h>
+#include <linux/mount.h>
 #include <linux/wait.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
@@ -69,7 +76,14 @@
 #include <linux/mm.h>
 #include <linux/backing-dev.h>
 #endif
+#ifdef KERNEL_2_6_17_PLUS
+#include <linux/mutex.h>
+#else
 #include <asm/semaphore.h>
+#define DEFINE_MUTEX(m) DECLARE_MUTEX(m)
+#define mutex_lock(m) down(m)
+#define mutex_unlock(m) up(m)
+#endif
 
 #ifndef BUG_ON
 #define BUG_ON(x)
@@ -90,22 +104,6 @@ static inline void set_page_dirty_lock(struct page *page)
 	set_page_dirty(page);
 	unlock_page(page);
 }
-
-struct kobject {
-	atomic_t count;
-	void (*release) (struct kobject *);
-};
-
-static inline void kobject_get(struct kobject *kobj)
-{
-	atomic_inc(&kobj->count);
-}
-
-static inline void kobject_put(struct kobject *kobj)
-{
-	if (atomic_dec_and_test(&kobj->count))
-		kobj->release(kobj);
-}
 #endif
 /** Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
@@ -116,6 +114,9 @@ static inline void kobject_put(struct kobject *kobj)
 /** It could be as large as PATH_MAX, but would that have any uses? */
 #define FUSE_NAME_MAX 1024
 
+/** Number of dentries for each connection in the control filesystem */
+#define FUSE_CTL_NUM_DENTRIES 3
+
 /** If the FUSE_DEFAULT_PERMISSIONS flag is given, the filesystem
     module will check permissions based on the file mode.  Otherwise no
     permission checking is done in the kernel */
@@ -125,6 +126,15 @@ static inline void kobject_put(struct kobject *kobj)
     doing the mount will be allowed to access the filesystem */
 #define FUSE_ALLOW_OTHER         (1 << 1)
 
+/** List of active connections */
+extern struct list_head fuse_conn_list;
+
+/** Global mutex protecting fuse_conn_list and the control filesystem */
+#ifdef KERNEL_2_6_17_PLUS
+extern struct mutex fuse_mutex;
+#else
+extern struct semaphore fuse_mutex;
+#endif
 #ifndef KERNEL_2_6
 /** Allow FUSE to combine reads into 64k chunks.  This is useful if
     the filesystem is better at handling large chunks */
@@ -147,13 +157,13 @@ struct fuse_inode {
 	struct fuse_req *forget_req;
 
 	/** Time in jiffies until the file attributes are valid */
-	unsigned long i_time;
+	u64 i_time;
 };
 
 /** FUSE specific file data */
 struct fuse_file {
 	/** Request reserved for flush and release */
-	struct fuse_req *release_req;
+	struct fuse_req *reserved_req;
 
 	/** File handle used by userspace */
 	u64 fh;
@@ -219,6 +229,7 @@ enum fuse_req_state {
 	FUSE_REQ_PENDING,
 	FUSE_REQ_READING,
 	FUSE_REQ_SENT,
+	FUSE_REQ_WRITING,
 	FUSE_REQ_FINISHED
 };
 
@@ -232,11 +243,14 @@ struct fuse_req {
 	    fuse_conn */
 	struct list_head list;
 
-	/** Entry on the background list */
-	struct list_head bg_entry;
+	/** Entry on the interrupts list  */
+	struct list_head intr_entry;
 
 	/** refcount */
 	atomic_t count;
+
+	/** Unique ID for the interrupt request */
+	u64 intr_unique;
 
 	/*
 	 * The following bitfields are either set once before the
@@ -247,11 +261,17 @@ struct fuse_req {
 	/** True if the request has reply */
 	unsigned isreply:1;
 
-	/** The request was interrupted */
-	unsigned interrupted:1;
+	/** Force sending of the request even if interrupted */
+	unsigned force:1;
+
+	/** The request was aborted */
+	unsigned aborted:1;
 
 	/** Request is sent in the background */
 	unsigned background:1;
+
+	/** The request has been interrupted */
+	unsigned interrupted:1;
 
 	/** Data is being copied to/from the request */
 	unsigned locked:1;
@@ -278,6 +298,7 @@ struct fuse_req {
 		struct fuse_init_in init_in;
 		struct fuse_init_out init_out;
 		struct fuse_read_in read_in;
+		struct fuse_lk_in lk_in;
 	} misc;
 
 	/** page vector */
@@ -289,17 +310,20 @@ struct fuse_req {
 	/** offset of data on first page */
 	unsigned page_offset;
 
-	/** Inode used in the request */
-	struct inode *inode;
-
-	/** Second inode used in the request (or NULL) */
-	struct inode *inode2;
-
 	/** File used in the request (or NULL) */
 	struct file *file;
 
+	/** vfsmount used in release */
+	struct vfsmount *vfsmount;
+
+	/** dentry used in release */
+	struct dentry *dentry;
+
 	/** Request completion callback */
 	void (*end)(struct fuse_conn *, struct fuse_req *);
+
+	/** Request is stolen from fuse_file->reserved_req */
+	struct file *stolen_file;
 };
 
 /**
@@ -312,6 +336,9 @@ struct fuse_req {
 struct fuse_conn {
 	/** Lock protecting accessess to  members of this structure */
 	spinlock_t lock;
+
+	/** Refcount */
+	atomic_t count;
 
 	/** The user id for this mount */
 	uid_t user_id;
@@ -340,12 +367,11 @@ struct fuse_conn {
 	/** The list of requests under I/O */
 	struct list_head io;
 
-	/** Requests put in the background (RELEASE or any other
-	    interrupted request) */
-	struct list_head background;
-
 	/** Number of requests currently in the background */
 	unsigned num_background;
+
+	/** Pending interrupts */
+	struct list_head interrupts;
 
 	/** Flag indicating if connection is blocked.  This will be
 	    the case before the INIT reply is received, and if there
@@ -355,14 +381,8 @@ struct fuse_conn {
 	/** waitq for blocked connection */
 	wait_queue_head_t blocked_waitq;
 
-	/** RW semaphore for exclusion with fuse_put_super() */
-	struct rw_semaphore sbput_sem;
-
 	/** The next unique request id */
 	u64 reqctr;
-
-	/** Mount is active */
-	unsigned mounted;
 
 	/** Connection established, cleared on umount, connection
 	    abort and device release */
@@ -402,11 +422,17 @@ struct fuse_conn {
 	/** Is removexattr not implemented by fs? */
 	unsigned no_removexattr : 1;
 
+	/** Are file locking primitives not implemented by fs? */
+	unsigned no_lock : 1;
+
 	/** Is access not implemented by fs? */
 	unsigned no_access : 1;
 
 	/** Is create not implemented by fs? */
 	unsigned no_create : 1;
+
+	/** Is interrupt not implemented by fs? */
+	unsigned no_interrupt : 1;
 
 	/** The number of requests waiting for completion */
 	atomic_t num_waiting;
@@ -419,11 +445,23 @@ struct fuse_conn {
 	struct backing_dev_info bdi;
 #endif
 
-	/** kobject */
-	struct kobject kobj;
+	/** Entry on the fuse_conn_list */
+	struct list_head entry;
+
+	/** Unique ID */
+	u64 id;
+
+	/** Dentries in the control filesystem */
+	struct dentry *ctl_dentry[FUSE_CTL_NUM_DENTRIES];
+
+	/** number of dentries used in the above array */
+	int ctl_ndents;
 
 	/** O_ASYNC requests */
 	struct fasync_struct *fasync;
+
+	/** Key for lock owner ID scrambling */
+	u32 scramble_key[4];
 };
 
 static inline struct fuse_conn *get_fuse_conn_super(struct super_block *sb)
@@ -434,11 +472,6 @@ static inline struct fuse_conn *get_fuse_conn_super(struct super_block *sb)
 static inline struct fuse_conn *get_fuse_conn(struct inode *inode)
 {
 	return get_fuse_conn_super(inode->i_sb);
-}
-
-static inline struct fuse_conn *get_fuse_conn_kobj(struct kobject *obj)
-{
-	return container_of(obj, struct fuse_conn, kobj);
 }
 
 static inline struct fuse_inode *get_fuse_inode(struct inode *inode)
@@ -482,12 +515,9 @@ void fuse_file_free(struct fuse_file *ff);
 void fuse_finish_open(struct inode *inode, struct file *file,
 		      struct fuse_file *ff, struct fuse_open_out *outarg);
 
-/**
- * Send a RELEASE request
- */
-void fuse_send_release(struct fuse_conn *fc, struct fuse_file *ff,
-		       u64 nodeid, struct inode *inode, int flags, int isdir);
-
+/** */
+struct fuse_req *fuse_release_fill(struct fuse_file *ff, u64 nodeid, int flags,
+				   int opcode);
 /**
  * Send RELEASE or RELEASEDIR request
  */
@@ -534,6 +564,9 @@ int fuse_dev_init(void);
  */
 void fuse_dev_cleanup(void);
 
+int fuse_ctl_init(void);
+void fuse_ctl_cleanup(void);
+
 /**
  * Allocate a request
  */
@@ -545,14 +578,14 @@ struct fuse_req *fuse_request_alloc(void);
 void fuse_request_free(struct fuse_req *req);
 
 /**
- * Reinitialize a request, the preallocated flag is left unmodified
- */
-void fuse_reset_request(struct fuse_req *req);
-
-/**
- * Reserve a preallocated request
+ * Get a request, may fail with -ENOMEM
  */
 struct fuse_req *fuse_get_req(struct fuse_conn *fc);
+
+/**
+ * Gets a requests for a file operation, always succeeds
+ */
+struct fuse_req *fuse_get_req_nofail(struct fuse_conn *fc, struct file *file);
 
 /**
  * Decrement reference count of a request.  If count goes to zero free
@@ -575,12 +608,7 @@ void request_send_noreply(struct fuse_conn *fc, struct fuse_req *req);
  */
 void request_send_background(struct fuse_conn *fc, struct fuse_req *req);
 
-/**
- * Release inodes and file associated with background request
- */
-void fuse_release_background(struct fuse_conn *fc, struct fuse_req *req);
-
-/** Abort all requests */
+/* Abort all requests */
 void fuse_abort_conn(struct fuse_conn *fc);
 
 /**
@@ -592,3 +620,23 @@ int fuse_do_getattr(struct inode *inode);
  * Invalidate inode attributes
  */
 void fuse_invalidate_attr(struct inode *inode);
+
+/**
+ * Acquire reference to fuse_conn
+ */
+struct fuse_conn *fuse_conn_get(struct fuse_conn *fc);
+
+/**
+ * Release reference to fuse_conn
+ */
+void fuse_conn_put(struct fuse_conn *fc);
+
+/**
+ * Add connection to control filesystem
+ */
+int fuse_ctl_add_conn(struct fuse_conn *fc);
+
+/**
+ * Remove connection from control filesystem
+ */
+void fuse_ctl_remove_conn(struct fuse_conn *fc);

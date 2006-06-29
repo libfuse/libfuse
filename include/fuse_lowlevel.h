@@ -749,9 +749,10 @@ struct fuse_lowlevel_ops {
      * Acquire, modify or release a POSIX file lock
      *
      * For POSIX threads (NPTL) there's a 1-1 relation between pid and
-     * owner, but this is not always the case.  For checking lock
-     * ownership, 'owner' must be used.  The l_pid field in 'struct
-     * flock' should only be used to fill in this field in getlk().
+     * owner, but otherwise this is not always the case.  For checking
+     * lock ownership, 'owner' must be used.  The l_pid field in
+     * 'struct flock' should only be used to fill in this field in
+     * getlk().
      *
      * Valid replies:
      *   fuse_reply_err

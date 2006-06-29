@@ -11,13 +11,13 @@
 #include <linux/pagemap.h>
 #include <linux/slab.h>
 #include <linux/file.h>
-#include <linux/mount.h>
 #include <linux/seq_file.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #ifdef KERNEL_2_6
 #include <linux/parser.h>
 #include <linux/statfs.h>
+#include <linux/random.h>
 #else
 #include "compat/parser.h"
 #endif
@@ -29,15 +29,8 @@ MODULE_LICENSE("GPL");
 #endif
 
 static kmem_cache_t *fuse_inode_cachep;
-#ifdef KERNEL_2_6
-static struct subsystem connections_subsys;
-
-struct fuse_conn_attr {
-	struct attribute attr;
-	ssize_t (*show)(struct fuse_conn *, char *);
-	ssize_t (*store)(struct fuse_conn *, const char *, size_t);
-};
-#endif
+struct list_head fuse_conn_list;
+DEFINE_MUTEX(fuse_mutex);
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
@@ -73,7 +66,7 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 	inode->u.generic_ip = NULL;
 #endif
 	fi = get_fuse_inode(inode);
-	fi->i_time = jiffies - 1;
+	fi->i_time = 0;
 	fi->nodeid = 0;
 	fi->nlookup = 0;
 	fi->forget_req = fuse_request_alloc();
@@ -119,6 +112,14 @@ static void fuse_clear_inode(struct inode *inode)
 		fuse_send_forget(fc, fi->forget_req, fi->nodeid, fi->nlookup);
 		fi->forget_req = NULL;
 	}
+}
+
+static int fuse_remount_fs(struct super_block *sb, int *flags, char *data)
+{
+	if (*flags & MS_MANDLOCK)
+		return -EINVAL;
+
+	return 0;
 }
 
 void fuse_change_attributes(struct inode *inode, struct fuse_attr *attr)
@@ -278,24 +279,19 @@ static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
-	down_write(&fc->sbput_sem);
-	while (!list_empty(&fc->background))
-		fuse_release_background(fc,
-					list_entry(fc->background.next,
-						   struct fuse_req, bg_entry));
-
 	spin_lock(&fc->lock);
-	fc->mounted = 0;
 	fc->connected = 0;
+	fc->blocked = 0;
 	spin_unlock(&fc->lock);
-	up_write(&fc->sbput_sem);
 	/* Flush all readers on this fs */
 	kill_fasync(&fc->fasync, SIGIO, POLL_IN);
 	wake_up_all(&fc->waitq);
-#ifdef KERNEL_2_6
-	kobject_del(&fc->kobj);
-#endif
-	kobject_put(&fc->kobj);
+	wake_up_all(&fc->blocked_waitq);
+	mutex_lock(&fuse_mutex);
+	list_del(&fc->entry);
+	fuse_ctl_remove_conn(fc);
+	mutex_unlock(&fuse_mutex);
+	fuse_conn_put(fc);
 }
 
 static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr)
@@ -314,8 +310,16 @@ static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr
 	/* fsid is left zero */
 }
 
-static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
+#ifdef KERNEL_2_6_18_PLUS
+static int fuse_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
+#else
+static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
+#endif
+{
+#ifdef KERNEL_2_6_18_PLUS
+	struct super_block *sb = dentry->d_sb;
+#endif
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 	struct fuse_req *req;
 	struct fuse_statfs_out outarg;
@@ -328,6 +332,9 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	memset(&outarg, 0, sizeof(outarg));
 	req->in.numargs = 0;
 	req->in.h.opcode = FUSE_STATFS;
+#ifdef KERNEL_2_6_18_PLUS
+	req->in.h.nodeid = get_node_id(dentry->d_inode);
+#endif
 	req->out.numargs = 1;
 	req->out.args[0].size =
 		fc->minor < 4 ? FUSE_COMPAT_STATFS_SIZE : sizeof(outarg);
@@ -461,11 +468,6 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 	return 0;
 }
 
-static void fuse_conn_release(struct kobject *kobj)
-{
-	kfree(get_fuse_conn_kobj(kobj));
-}
-
 #ifndef HAVE_KZALLOC
 static void *kzalloc(size_t size, int flags)
 {
@@ -482,20 +484,13 @@ static struct fuse_conn *new_conn(void)
 	fc = kzalloc(sizeof(*fc), GFP_KERNEL);
 	if (fc) {
 		spin_lock_init(&fc->lock);
+		atomic_set(&fc->count, 1);
 		init_waitqueue_head(&fc->waitq);
 		init_waitqueue_head(&fc->blocked_waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
 		INIT_LIST_HEAD(&fc->io);
-		INIT_LIST_HEAD(&fc->background);
-		init_rwsem(&fc->sbput_sem);
-#ifdef KERNEL_2_6
-		kobj_set_kset_s(fc, connections_subsys);
-		kobject_init(&fc->kobj);
-#else
-		atomic_set(&fc->kobj.count, 1);
-		fc->kobj.release = fuse_conn_release;
-#endif
+		INIT_LIST_HEAD(&fc->interrupts);
 		atomic_set(&fc->num_waiting, 0);
 #ifdef KERNEL_2_6_6_PLUS
 		fc->bdi.ra_pages = (VM_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
@@ -503,7 +498,20 @@ static struct fuse_conn *new_conn(void)
 #endif
 		fc->reqctr = 0;
 		fc->blocked = 1;
+		get_random_bytes(&fc->scramble_key, sizeof(fc->scramble_key));
 	}
+	return fc;
+}
+
+void fuse_conn_put(struct fuse_conn *fc)
+{
+	if (atomic_dec_and_test(&fc->count))
+		kfree(fc);
+}
+
+struct fuse_conn *fuse_conn_get(struct fuse_conn *fc)
+{
+	atomic_inc(&fc->count);
 	return fc;
 }
 
@@ -586,6 +594,7 @@ static struct super_operations fuse_super_operations = {
 	.destroy_inode  = fuse_destroy_inode,
 	.read_inode	= fuse_read_inode,
 	.clear_inode	= fuse_clear_inode,
+	.remount_fs	= fuse_remount_fs,
 	.put_super	= fuse_put_super,
 	.umount_begin	= fuse_umount_begin,
 	.statfs		= fuse_statfs,
@@ -606,8 +615,12 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
 			ra_pages = arg->max_readahead / PAGE_CACHE_SIZE;
 			if (arg->flags & FUSE_ASYNC_READ)
 				fc->async_read = 1;
-		} else
+			if (!(arg->flags & FUSE_POSIX_LOCKS))
+				fc->no_lock = 1;
+		} else {
 			ra_pages = fc->max_read / PAGE_CACHE_SIZE;
+			fc->no_lock = 1;
+		}
 
 		fc->bdi.ra_pages = min(fc->bdi.ra_pages, ra_pages);
 #endif
@@ -627,7 +640,7 @@ static void fuse_send_init(struct fuse_conn *fc, struct fuse_req *req)
 	arg->minor = FUSE_KERNEL_MINOR_VERSION;
 #ifdef KERNEL_2_6
 	arg->max_readahead = fc->bdi.ra_pages * PAGE_CACHE_SIZE;
-	arg->flags |= FUSE_ASYNC_READ;
+	arg->flags |= FUSE_ASYNC_READ | FUSE_POSIX_LOCKS;
 #endif
 	req->in.h.opcode = FUSE_INIT;
 	req->in.numargs = 1;
@@ -644,14 +657,11 @@ static void fuse_send_init(struct fuse_conn *fc, struct fuse_req *req)
 	request_send_background(fc, req);
 }
 
-#ifdef KERNEL_2_6
-static unsigned long long conn_id(void)
+static u64 conn_id(void)
 {
-	/* BKL is held for ->get_sb() */
-	static unsigned long long ctr = 1;
+	static u64 ctr = 1;
 	return ctr++;
 }
-#endif
 
 static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 {
@@ -662,6 +672,9 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	struct dentry *root_dentry;
 	struct fuse_req *init_req;
 	int err;
+
+	if (sb->s_flags & MS_MANDLOCK)
+		return -EINVAL;
 
 	if (!parse_fuse_opt((char *) data, &d))
 		return -EINVAL;
@@ -711,27 +724,21 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	if (!init_req)
 		goto err_put_root;
 
-#ifdef KERNEL_2_6
-	err = kobject_set_name(&fc->kobj, "%llu", conn_id());
-	if (err)
-		goto err_free_req;
-
-	err = kobject_add(&fc->kobj);
-	if (err)
-		goto err_free_req;
-#endif
-
-	/* Setting file->private_data can't race with other mount()
-	   instances, since BKL is held for ->get_sb() */
+	mutex_lock(&fuse_mutex);
 	err = -EINVAL;
 	if (file->private_data)
-		goto err_kobject_del;
+		goto err_unlock;
 
+	fc->id = conn_id();
+	err = fuse_ctl_add_conn(fc);
+	if (err)
+		goto err_unlock;
+
+	list_add_tail(&fc->entry, &fuse_conn_list);
 	sb->s_root = root_dentry;
-	fc->mounted = 1;
 	fc->connected = 1;
-	kobject_get(&fc->kobj);
-	file->private_data = fc;
+	file->private_data = fuse_conn_get(fc);
+	mutex_unlock(&fuse_mutex);
 	/*
 	 * atomic_dec_and_test() in fput() provides the necessary
 	 * memory barrier for file->private_data to be visible on all
@@ -743,17 +750,14 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 
 	return 0;
 
- err_kobject_del:
-#ifdef KERNEL_2_6
-	kobject_del(&fc->kobj);
- err_free_req:
+ err_unlock:
+	mutex_unlock(&fuse_mutex);
 	fuse_request_free(init_req);
-#endif
  err_put_root:
 	dput(root_dentry);
  err:
 	fput(file);
-	kobject_put(&fc->kobj);
+	fuse_conn_put(fc);
 	return err;
 }
 
@@ -786,78 +790,11 @@ static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
 #endif
 
 #ifdef KERNEL_2_6
-static ssize_t fuse_conn_waiting_show(struct fuse_conn *fc, char *page)
-{
-	return sprintf(page, "%i\n", atomic_read(&fc->num_waiting));
-}
-
-static ssize_t fuse_conn_abort_store(struct fuse_conn *fc, const char *page,
-				     size_t count)
-{
-	fuse_abort_conn(fc);
-	return count;
-}
-
-#ifndef __ATTR
-#define __ATTR(_name,_mode,_show,_store) { \
-	.attr = {.name = __stringify(_name), .mode = _mode, .owner = THIS_MODULE },	\
-	.show	= _show,					\
-	.store	= _store,					\
-}
-#endif
-static struct fuse_conn_attr fuse_conn_waiting =
-	__ATTR(waiting, 0400, fuse_conn_waiting_show, NULL);
-static struct fuse_conn_attr fuse_conn_abort =
-	__ATTR(abort, 0600, NULL, fuse_conn_abort_store);
-
-static struct attribute *fuse_conn_attrs[] = {
-	&fuse_conn_waiting.attr,
-	&fuse_conn_abort.attr,
-	NULL,
-};
-
-static ssize_t fuse_conn_attr_show(struct kobject *kobj,
-				   struct attribute *attr,
-				   char *page)
-{
-	struct fuse_conn_attr *fca =
-		container_of(attr, struct fuse_conn_attr, attr);
-
-	if (fca->show)
-		return fca->show(get_fuse_conn_kobj(kobj), page);
-	else
-		return -EACCES;
-}
-
-static ssize_t fuse_conn_attr_store(struct kobject *kobj,
-				    struct attribute *attr,
-				    const char *page, size_t count)
-{
-	struct fuse_conn_attr *fca =
-		container_of(attr, struct fuse_conn_attr, attr);
-
-	if (fca->store)
-		return fca->store(get_fuse_conn_kobj(kobj), page, count);
-	else
-		return -EACCES;
-}
-
-static struct sysfs_ops fuse_conn_sysfs_ops = {
-	.show	= &fuse_conn_attr_show,
-	.store	= &fuse_conn_attr_store,
-};
-
-static struct kobj_type ktype_fuse_conn = {
-	.release	= fuse_conn_release,
-	.sysfs_ops	= &fuse_conn_sysfs_ops,
-	.default_attrs	= fuse_conn_attrs,
-};
-
 #ifndef HAVE_FS_SUBSYS
 static decl_subsys(fs, NULL, NULL);
 #endif
 static decl_subsys(fuse, NULL, NULL);
-static decl_subsys(connections, &ktype_fuse_conn, NULL);
+static decl_subsys(connections, NULL, NULL);
 #endif /* KERNEL_2_6 */
 
 static void fuse_inode_init_once(void *foo, kmem_cache_t *cachep,
@@ -956,6 +893,7 @@ static int __init fuse_init(void)
 	printk("fuse distribution version: %s\n", FUSE_VERSION);
 #endif
 
+	INIT_LIST_HEAD(&fuse_conn_list);
 	res = fuse_fs_init();
 	if (res)
 		goto err;
@@ -968,8 +906,14 @@ static int __init fuse_init(void)
 	if (res)
 		goto err_dev_cleanup;
 
+	res = fuse_ctl_init();
+	if (res)
+		goto err_sysfs_cleanup;
+
 	return 0;
 
+ err_sysfs_cleanup:
+	fuse_sysfs_cleanup();
  err_dev_cleanup:
 	fuse_dev_cleanup();
  err_fs_cleanup:
@@ -982,6 +926,7 @@ static void __exit fuse_exit(void)
 {
 	printk(KERN_DEBUG "fuse exit\n");
 
+	fuse_ctl_cleanup();
 	fuse_sysfs_cleanup();
 	fuse_fs_cleanup();
 	fuse_dev_cleanup();
