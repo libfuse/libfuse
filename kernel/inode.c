@@ -270,10 +270,18 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 }
 #endif
 
+#ifdef KERNEL_2_6_18_PLUS
+static void fuse_umount_begin(struct vfsmount *vfsmnt, int flags)
+{
+	if (flags & MNT_FORCE)
+		fuse_abort_conn(get_fuse_conn_super(vfsmnt->mnt_sb));
+}
+#else
 static void fuse_umount_begin(struct super_block *sb)
 {
 	fuse_abort_conn(get_fuse_conn_super(sb));
 }
+#endif
 
 static void fuse_put_super(struct super_block *sb)
 {
@@ -312,7 +320,6 @@ static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr
 
 #ifdef KERNEL_2_6_18_PLUS
 static int fuse_statfs(struct dentry *dentry, struct kstatfs *buf)
-{
 #else
 static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 #endif
@@ -762,12 +769,21 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 }
 
 #ifdef KERNEL_2_6
+#ifdef KERNEL_2_6_18_PLUS
+static int fuse_get_sb(struct file_system_type *fs_type,
+		       int flags, const char *dev_name,
+		       void *raw_data, struct vfsmount *mnt)
+{
+	return get_sb_nodev(fs_type, flags, raw_data, fuse_fill_super, mnt);
+}
+#else
 static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
 				       int flags, const char *dev_name,
 				       void *raw_data)
 {
 	return get_sb_nodev(fs_type, flags, raw_data, fuse_fill_super);
 }
+#endif
 
 static struct file_system_type fuse_fs_type = {
 	.owner		= THIS_MODULE,

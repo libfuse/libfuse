@@ -183,12 +183,22 @@ static int fuse_ctl_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 }
 
+#ifdef KERNEL_2_6_18_PLUS
+static int fuse_ctl_get_sb(struct file_system_type *fs_type, int flags,
+			const char *dev_name, void *raw_data,
+			struct vfsmount *mnt)
+{
+	return get_sb_single(fs_type, flags, raw_data,
+				fuse_ctl_fill_super, mnt);
+}
+#else
 static struct super_block *fuse_ctl_get_sb(struct file_system_type *fs_type,
 					   int flags, const char *dev_name,
 					   void *raw_data)
 {
 	return get_sb_single(fs_type, flags, raw_data, fuse_ctl_fill_super);
 }
+#endif
 
 static void fuse_ctl_kill_sb(struct super_block *sb)
 {
