@@ -148,8 +148,7 @@ static int receive_fd(int fd)
     struct iovec iov;
     char buf[1];
     int rv;
-    int connfd = -1;
-    char ccmsg[CMSG_SPACE(sizeof(connfd))];
+    char ccmsg[CMSG_SPACE(sizeof(int))];
     struct cmsghdr *cmsg;
 
     iov.iov_base = buf;

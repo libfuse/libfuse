@@ -1,3 +1,9 @@
+2006-07-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: if /dev/fuse doesn't exist, suggest moddprobing
+	fuse; this makes sense on systems using udev.  Reported by
+	Szakacsits Szabolcs
+
 2006-06-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0-pre3

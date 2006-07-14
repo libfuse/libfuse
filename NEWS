@@ -4,6 +4,10 @@ What is new in 2.6
 
  - Support for aborting filesystem connection
 
+ - POSIX file locking support
+
+ - Request interruption support
+
 What is new in 2.5
 
  - Merge library part of FreeBSD port

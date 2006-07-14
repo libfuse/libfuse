@@ -794,7 +794,8 @@ static int try_open(const char *dev, char **devp, int silent)
             close(fd);
             fd = -1;
         }
-    } else if (errno == ENODEV)
+    } else if (errno == ENODEV ||
+               errno == ENOENT) /* check for ENOENT too, for the udev case */
         return -2;
     else if (!silent) {
         fprintf(stderr, "%s: failed to open %s: %s\n", progname, dev,
