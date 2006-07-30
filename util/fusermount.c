@@ -39,6 +39,10 @@
 #include <sys/utsname.h>
 #include <sys/sysmacros.h>
 
+#ifdef HAVE_SELINUX_SELINUX_H
+#include <selinux/selinux.h>
+#endif
+
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
 #define FUSE_DEV_OLD "/proc/fs/fuse/dev"
@@ -184,6 +188,18 @@ static int unmount_rename(const char *mtab, const char *mtab_new)
 
     if (stat(mtab, &sbuf) == 0)
         chown(mtab_new, sbuf.st_uid, sbuf.st_gid);
+
+#ifdef HAVE_LIBSELINUX
+    {
+        security_context_t filecon;
+
+        if (getfilecon(mtab, &filecon) > 0) {
+            setfilecon(mtab_new, filecon);
+            if (filecon != NULL)
+                freecon(filecon);
+        }
+    }
+#endif
 
     res = rename(mtab_new, mtab);
     if (res == -1) {

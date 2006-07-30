@@ -22,10 +22,11 @@
 
 #include "fuse_common.h"
 
+#include <fcntl.h>
+#include <utime.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-#include <utime.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -361,6 +362,9 @@ struct fuse_operations {
      * Introduced in version 2.5
      */
     int (*fgetattr) (const char *, struct stat *, struct fuse_file_info *);
+
+    int (*lock) (const char *, struct fuse_file_info *, int cmd,
+                 struct flock *, uint64_t owner);
 };
 
 /** Extra context that may be needed by some filesystems

@@ -1312,7 +1312,6 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
     char *path;
     int err;
 
-    (void) owner;
     err = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
@@ -1325,6 +1324,15 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
         if (f->op.flush)
             err = f->op.flush(path, fi);
         free(path);
+    }
+    if (f->op.lock) {
+        struct flock lock;
+        memset(&lock, 0, sizeof(lock));
+        lock.l_type = F_UNLCK;
+        lock.l_whence = SEEK_SET;
+        f->op.lock(path, fi, F_SETLK, &lock, owner);
+        if (err == -ENOSYS)
+            err = 0;
     }
     pthread_rwlock_unlock(&f->tree_lock);
     reply_err(req, err);
@@ -1339,13 +1347,6 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     int unlink_hidden;
 
     pthread_rwlock_rdlock(&f->tree_lock);
-    pthread_mutex_lock(&f->lock);
-    node = get_node(f, ino);
-    assert(node->open_count > 0);
-    --node->open_count;
-    unlink_hidden = (node->is_hidden && !node->open_count);
-    pthread_mutex_unlock(&f->lock);
-
     path = get_path(f, ino);
     if (f->conf.debug) {
         printf("RELEASE[%llu] flags: 0x%x\n", (unsigned long long) fi->fh,
@@ -1354,6 +1355,13 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     }
     if (f->op.release)
         fuse_do_release(f, path, fi);
+
+    pthread_mutex_lock(&f->lock);
+    node = get_node(f, ino);
+    assert(node->open_count > 0);
+    --node->open_count;
+    unlink_hidden = (node->is_hidden && !node->open_count);
+    pthread_mutex_unlock(&f->lock);
 
     if(unlink_hidden && path)
         f->op.unlink(path);
@@ -1809,6 +1817,44 @@ static void fuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
     reply_err(req, err);
 }
 
+static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
+                            struct fuse_file_info *fi, struct flock *lock,
+                            uint64_t owner, int cmd)
+{
+    struct fuse *f = req_fuse_prepare(req);
+    char *path;
+    int err;
+
+    err = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
+    path = get_path(f, ino);
+    if (path != NULL) {
+        err = f->op.lock(path, fi, cmd, lock, owner);
+        free(path);
+    }
+    pthread_rwlock_unlock(&f->tree_lock);
+    return err;
+}
+
+static void fuse_getlk(fuse_req_t req, fuse_ino_t ino,
+                       struct fuse_file_info *fi, struct flock *lock,
+                       uint64_t owner)
+{
+    int err = fuse_lock_common(req, ino, fi, lock, owner, F_GETLK);
+    if (!err)
+        fuse_reply_lock(req, lock);
+    else
+        reply_err(req, err);
+}
+
+static void fuse_setlk(fuse_req_t req, fuse_ino_t ino,
+                       struct fuse_file_info *fi, struct flock *lock,
+                       uint64_t owner, int sleep)
+{
+    reply_err(req, fuse_lock_common(req, ino, fi, lock, owner,
+                                    sleep ? F_SETLKW : F_SETLK));
+}
+
 static struct fuse_lowlevel_ops fuse_path_ops = {
     .init = fuse_data_init,
     .destroy = fuse_data_destroy,
@@ -1841,6 +1887,8 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
     .getxattr = fuse_getxattr,
     .listxattr = fuse_listxattr,
     .removexattr = fuse_removexattr,
+    .getlk = fuse_getlk,
+    .setlk = fuse_setlk,
 };
 
 static void free_cmd(struct fuse_cmd *cmd)
@@ -2011,6 +2059,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 {
     struct fuse *f;
     struct node *root;
+    struct fuse_lowlevel_ops llop = fuse_path_ops;
 
     if (sizeof(struct fuse_operations) < op_size) {
         fprintf(stderr, "fuse: warning: library too old, some operations may not not work\n");
@@ -2047,8 +2096,13 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
             goto out_free;
     }
 
-    f->se = fuse_lowlevel_new_common(args, &fuse_path_ops,
-                                     sizeof(fuse_path_ops), f);
+    memcpy(&f->op, op, op_size);
+    if (!f->op.lock) {
+        llop.getlk = NULL;
+        llop.setlk = NULL;
+    }
+
+    f->se = fuse_lowlevel_new_common(args, &llop,sizeof(llop), f);
     if (f->se == NULL)
         goto out_free;
 
@@ -2075,7 +2129,6 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 
     mutex_init(&f->lock);
     pthread_rwlock_init(&f->tree_lock, NULL);
-    memcpy(&f->op, op, op_size);
     f->compat = compat;
 
     root = (struct node *) calloc(1, sizeof(struct node));

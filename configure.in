@@ -3,9 +3,7 @@ AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE
 AM_CONFIG_HEADER(include/config.h)
 
-m4_ifdef([LT_INIT],
-	[LT_INIT],
-	[AC_PROG_LIBTOOL])
+AC_PROG_LIBTOOL
 AC_PROG_CC
 
 # compatibility for automake < 1.8
@@ -83,6 +81,8 @@ AC_SUBST(subdirs2)
 
 AM_CONDITIONAL(LINUX, test "$arch" = linux)
 AM_CONDITIONAL(BSD, test "$arch" = bsd)
+
+AC_CHECK_HEADERS(selinux/selinux.h, AC_CHECK_LIB(selinux, getfilecon))
 
 AC_CONFIG_FILES([fuse.pc Makefile lib/Makefile util/Makefile example/Makefile include/Makefile])
 AC_OUTPUT

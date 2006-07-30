@@ -1,8 +1,22 @@
+2006-07-30  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: if selinux is active, restore the original file's
+	security context in unmount_rename().  Redhat bugzilla id 188561.
+	Patch from Yves Perrenoud
+
+	* Add POSIX file locking operation to high level library
+
+2006-07-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Multiple release() calls can race with each other, resulting in
+	the hidden file being deleted before the last release finishes.
+	Bug found and patch tested by Mark Huijgen
+
 2006-07-05  Miklos Szeredi <miklos@szeredi.hu>
 
-	* fusermount: if /dev/fuse doesn't exist, suggest moddprobing
-	fuse; this makes sense on systems using udev.  Reported by
-	Szakacsits Szabolcs
+	* fusermount: if /dev/fuse doesn't exist, suggest modprobing fuse;
+	this makes sense on systems using udev.  Reported by Szakacsits
+	Szabolcs
 
 2006-06-29  Miklos Szeredi <miklos@szeredi.hu>
 
