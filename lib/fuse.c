@@ -2176,6 +2176,12 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 void fuse_destroy(struct fuse *f)
 {
     size_t i;
+    struct fuse_context *c = fuse_get_context();
+
+    memset(c, 0, sizeof(*c));
+    c->fuse = f;
+    c->private_data = f->user_data;
+
     for (i = 0; i < f->id_table_size; i++) {
         struct node *node;
 

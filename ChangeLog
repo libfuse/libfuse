@@ -6,6 +6,9 @@
 
 	* Add POSIX file locking operation to high level library
 
+	* Initialize context for unlink of hidden files on umount.  Bug
+	reported by Tim Stoakes
+
 2006-07-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Multiple release() calls can race with each other, resulting in
