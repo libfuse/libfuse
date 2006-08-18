@@ -393,21 +393,32 @@ static int fuse_readpages_fill(void *_data, struct page *page)
 	struct fuse_req *req = data->req;
 	struct inode *inode = data->inode;
 	struct fuse_conn *fc = get_fuse_conn(inode);
+	int err;
 
-	if (req->num_pages &&
+	if (req && req->num_pages &&
 	    (req->num_pages == FUSE_MAX_PAGES_PER_REQ ||
 	     (req->num_pages + 1) * PAGE_CACHE_SIZE > fc->max_read ||
 	     req->pages[req->num_pages - 1]->index + 1 != page->index)) {
 		fuse_send_readpages(req, data->file, inode);
+		req = NULL;
+	}
+	if (!req) {
+		err = -EIO;
+		if (is_bad_inode(inode))
+			goto out_unlock_page;
+
 		data->req = req = fuse_get_req(fc);
-		if (IS_ERR(req)) {
-			unlock_page(page);
-			return PTR_ERR(req);
-		}
+		err = PTR_ERR(req);
+		if (IS_ERR(req))
+			goto out_unlock_page;
 	}
 	req->pages[req->num_pages] = page;
 	req->num_pages ++;
 	return 0;
+
+ out_unlock_page:
+	unlock_page(page);
+	return err;
 }
 
 static int fuse_readpages(struct file *file, struct address_space *mapping,
@@ -418,14 +429,9 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
 	struct fuse_readpages_data data;
 	int err;
 
-	if (is_bad_inode(inode))
-		return -EIO;
-
 	data.file = file;
 	data.inode = inode;
-	data.req = fuse_get_req(fc);
-	if (IS_ERR(data.req))
-		return PTR_ERR(data.req);
+	data.req = NULL;
 
 	err = read_cache_pages(mapping, pages, fuse_readpages_fill, &data);
 	if (!err) {

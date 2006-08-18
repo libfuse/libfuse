@@ -1,3 +1,9 @@
+2006-08-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix page leak if fuse_readpages() failed in it's
+	initialization.  Bug found and original patch from Alexander
+	Zarochentsev
+
 2006-07-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: if selinux is active, restore the original file's
