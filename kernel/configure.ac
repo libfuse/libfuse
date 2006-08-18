@@ -76,8 +76,10 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	AC_MSG_RESULT([$kernelbuild])
 
 	AC_MSG_CHECKING([kernel source version])
-	if test -r $kernelbuild/include/linux/version.h; then
+	if test -r $kernelbuild/include/linux/version.h && fgrep -q UTS_RELEASE $kernelbuild/include/linux/version.h; then
 		kernsrcver=`(echo "#include <linux/version.h>"; echo "kernsrcver=UTS_RELEASE") | cpp -I $kernelbuild/include | grep "^kernsrcver=" | cut -d \" -f 2`
+	elif test -r $kernelbuild/include/linux/utsrelease.h && fgrep -q UTS_RELEASE $kernelbuild/include/linux/utsrelease.h; then
+		kernsrcver=`(echo "#include <linux/utsrelease.h>"; echo "kernsrcver=UTS_RELEASE") | cpp -I $kernelbuild/include | grep "^kernsrcver=" | cut -d \" -f 2`
 	fi
 	if test -z "$kernsrcver"; then
 		AC_MSG_RESULT([Not found])

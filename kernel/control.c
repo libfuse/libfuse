@@ -74,7 +74,12 @@ static struct dentry *fuse_ctl_add_dentry(struct dentry *parent,
 					  const char *name,
 					  int mode, int nlink,
 					  struct inode_operations *iop,
-					  struct file_operations *fop)
+#ifdef KERNEL_2_6_17_PLUS
+					  const struct file_operations *fop
+#else
+					  struct file_operations *fop
+#endif
+)
 {
 	struct dentry *dentry;
 	struct inode *inode;

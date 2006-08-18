@@ -68,9 +68,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
- * releasedir, fsyncdir, access, create, ftruncate, fgetattr, init and
- * destroy are special purpose methods, without which a full featured
- * filesystem can still be implemented.
+ * releasedir, fsyncdir, access, create, ftruncate, fgetattr, lock,
+ * init and destroy are special purpose methods, without which a full
+ * featured filesystem can still be implemented.
  */
 struct fuse_operations {
     /** Get file attributes.
@@ -363,6 +363,27 @@ struct fuse_operations {
      */
     int (*fgetattr) (const char *, struct stat *, struct fuse_file_info *);
 
+    /**
+     * Perform POSIX file locking operation
+     *
+     * The cmd argument will be either F_GETLK, F_SETLK or F_SETLKW.
+     *
+     * For the meaning of fields in 'struct flock' see the man page
+     * for fcntl(2).  The l_whence field will always be set to
+     * SEEK_SET.
+     *
+     * Unlike fcntl, the l_pid will be set in F_SETLK and F_SETLKW,
+     * and should be used by the filesystem to initialize this field
+     * in F_GETLK.
+     *
+     * For checking lock ownership, the 'owner' argument must be used.
+     *
+     * Note: if this method is not implemented, the kernel will still
+     * allow file locking to work locally.  Hence it is only
+     * interesting for network filesystems and similar.
+     *
+     * Introduced in version 2.6
+     */
     int (*lock) (const char *, struct fuse_file_info *, int cmd,
                  struct flock *, uint64_t owner);
 };

@@ -108,7 +108,7 @@ static struct fuse_context *(*fuse_getcontext)(void) = NULL;
 static int fuse_do_open(struct fuse *, char *, struct fuse_file_info *);
 static void fuse_do_release(struct fuse *, char *, struct fuse_file_info *);
 static int fuse_do_opendir(struct fuse *, char *, struct fuse_file_info *);
-static int fuse_do_statfs(struct fuse *, char *, struct statvfs *);
+static int fuse_do_statfs(struct fuse *, struct statvfs *);
 
 #ifndef USE_UCLIBC
 #define mutex_init(mut) pthread_mutex_init(mut, NULL)
@@ -1669,7 +1669,7 @@ static int default_statfs(struct statvfs *buf)
     return 0;
 }
 
-static void fuse_statfs(fuse_req_t req)
+static void fuse_statfs(fuse_req_t req, fuse_ino_t ino)
 {
     struct fuse *f = req_fuse_prepare(req);
     struct statvfs buf;
@@ -1677,7 +1677,18 @@ static void fuse_statfs(fuse_req_t req)
 
     memset(&buf, 0, sizeof(buf));
     if (f->op.statfs) {
-        err = fuse_do_statfs(f, "/", &buf);
+        if (ino && (!f->compat || f->compat >= 26)) {
+            char *path;
+            pthread_rwlock_rdlock(&f->tree_lock);
+            err = -ENOENT;
+            path = get_path(f, ino);
+            if (path) {
+                err = f->op.statfs(path, &buf);
+                free(path);
+            }
+            pthread_rwlock_unlock(&f->tree_lock);
+        } else
+            err = fuse_do_statfs(f, &buf);
     } else
         err = default_statfs(&buf);
 
@@ -2294,12 +2305,12 @@ static void convert_statfs_old(struct statfs *oldbuf, struct statvfs *stbuf)
     stbuf->f_namemax = oldbuf->f_namelen;
 }
 
-static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)
+static int fuse_do_statfs(struct fuse *f, struct statvfs *buf)
 {
     int err;
 
     if (!f->compat || f->compat >= 25) {
-        err = f->op.statfs(path, buf);
+        err = f->op.statfs("/", buf);
     } else if (f->compat > 11) {
         struct statfs oldbuf;
         err = ((struct fuse_operations_compat22 *) &f->op)->statfs("/", &oldbuf);
@@ -2386,9 +2397,9 @@ static int fuse_do_opendir(struct fuse *f, char *path,
     return f->op.opendir(path, fi);
 }
 
-static int fuse_do_statfs(struct fuse *f, char *path, struct statvfs *buf)
+static int fuse_do_statfs(struct fuse *f, struct statvfs *buf)
 {
-    return f->op.statfs(path, buf);
+    return f->op.statfs("/", buf);
 }
 
 #endif /* __FreeBSD__ */

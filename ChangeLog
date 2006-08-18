@@ -4,6 +4,10 @@
 	initialization.  Bug found and original patch from Alexander
 	Zarochentsev
 
+	* For linux kernels >=2.6.18 (2.6.19 if using the fuse module from
+	the kernel tree) the statfs method will receive the path within
+	the filesystem on which the stat(v)fs syscall was called.
+
 2006-07-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: if selinux is active, restore the original file's

@@ -600,8 +600,9 @@ struct fuse_lowlevel_ops {
      *   fuse_reply_err
      *
      * @param req request handle
+     * @param ino the inode number, zero means "undefined"
      */
-    void (*statfs) (fuse_req_t req);
+    void (*statfs) (fuse_req_t req, fuse_ino_t ino);
 
     /**
      * Set an extended attribute
@@ -753,6 +754,10 @@ struct fuse_lowlevel_ops {
      * lock ownership, 'owner' must be used.  The l_pid field in
      * 'struct flock' should only be used to fill in this field in
      * getlk().
+     *
+     * Note: if the locking methods are not implemented, the kernel
+     * will still allow file locking to work locally.  Hence these are
+     * only interesting for network filesystems and similar.
      *
      * Valid replies:
      *   fuse_reply_err

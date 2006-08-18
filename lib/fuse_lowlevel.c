@@ -719,7 +719,7 @@ static void do_statfs(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     (void) inarg;
 
     if (req->f->op.statfs)
-        req->f->op.statfs(req);
+        req->f->op.statfs(req, nodeid);
     else {
         struct statvfs buf = {
             .f_namemax = 255,

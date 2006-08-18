@@ -9,3 +9,4 @@ config.*
 *.s
 .tmp_versions
 .*.d
+*.symvers
