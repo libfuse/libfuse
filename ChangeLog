@@ -8,6 +8,11 @@
 	the kernel tree) the statfs method will receive the path within
 	the filesystem on which the stat(v)fs syscall was called.
 
+	* fusermount: try to modprobe fuse module if invoked by root and
+	unable to open device.  This is needed with udev, since the device
+	node will be created only when the module is inserted, hence
+	module autoloading won't work.  Reported by Szakacsits Szabolcs
+
 2006-07-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: if selinux is active, restore the original file's

@@ -841,14 +841,23 @@ static int try_open_fuse_device(char **devp)
 
 static int open_fuse_device(char **devp)
 {
-    int fd = try_open_fuse_device(devp);
-    if (fd >= 0)
+    int fd;
+
+    if (getuid() == 0) {
+        fd = try_open_fuse_device(devp);
+        if (fd >= -1)
+            return fd;
+
+        system("modprobe fuse");
+    }
+
+    fd = try_open_fuse_device(devp);
+    if (fd >= -1)
         return fd;
 
-    if (fd == -2)
-        fprintf(stderr,
-                "%s: fuse device not found, try 'modprobe fuse' first\n",
-                progname);
+    fprintf(stderr, "%s: fuse device not found, try 'modprobe fuse' first\n",
+            progname);
+
     return -1;
 }
 
