@@ -6,7 +6,7 @@
 
 	* For linux kernels >=2.6.18 (2.6.19 if using the fuse module from
 	the kernel tree) the statfs method will receive the path within
-	the filesystem on which the stat(v)fs syscall was called.
+	the filesystem on which the stat(v)fs syscall was called
 
 	* fusermount: try to modprobe fuse module if invoked by root and
 	unable to open device.  This is needed with udev, since the device

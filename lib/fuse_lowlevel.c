@@ -736,8 +736,7 @@ static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     char *value = name + strlen(name) + 1;
 
     if (req->f->op.setxattr)
-            req->f->op.setxattr(req, nodeid, name, value, arg->size,
-                                arg->flags);
+        req->f->op.setxattr(req, nodeid, name, value, arg->size, arg->flags);
     else
         fuse_reply_err(req, ENOSYS);
 }
