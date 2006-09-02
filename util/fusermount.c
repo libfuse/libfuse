@@ -544,7 +544,7 @@ static int check_mountpoint_empty(const char *mnt, mode_t rootmode,
         struct dirent *ent;
         DIR *dp = opendir(mnt);
         if (dp == NULL) {
-            fprintf(stderr, "%s: failed to mountpoint for reading: %s\n",
+            fprintf(stderr, "%s: failed to open mountpoint for reading: %s\n",
                     progname, strerror(errno));
             return -1;
         }

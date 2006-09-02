@@ -691,6 +691,7 @@ static void fuse_getattr(fuse_req_t req, fuse_ino_t ino,
     int err;
 
     (void) fi;
+    memset(&buf, 0, sizeof(buf));
 
     err = -ENOENT;
     pthread_rwlock_rdlock(&f->tree_lock);
