@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 #include <errno.h>
+#include <sys/time.h>
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
@@ -239,11 +240,17 @@ static int xmp_ftruncate(const char *path, off_t size,
     return 0;
 }
 
-static int xmp_utime(const char *path, struct utimbuf *buf)
+static int xmp_utimes(const char *path, const struct timespec ts[2])
 {
     int res;
+    struct timeval tv[2];
 
-    res = utime(path, buf);
+    tv[0].tv_sec = ts[0].tv_sec;
+    tv[0].tv_usec = ts[0].tv_nsec / 1000;
+    tv[1].tv_sec = ts[1].tv_sec;
+    tv[1].tv_usec = ts[1].tv_nsec / 1000;
+
+    res = utimes(path, tv);
     if (res == -1)
         return -errno;
 
@@ -412,7 +419,7 @@ static struct fuse_operations xmp_oper = {
     .chown	= xmp_chown,
     .truncate	= xmp_truncate,
     .ftruncate	= xmp_ftruncate,
-    .utime	= xmp_utime,
+    .utimes	= xmp_utimes,
     .create	= xmp_create,
     .open	= xmp_open,
     .read	= xmp_read,

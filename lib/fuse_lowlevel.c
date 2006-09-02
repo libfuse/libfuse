@@ -868,20 +868,25 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     pthread_mutex_unlock(&f->lock);
 }
 
-static void check_interrupt(struct fuse_ll *f, struct fuse_req *req)
+static struct fuse_req *check_interrupt(struct fuse_ll *f, struct fuse_req *req)
 {
     struct fuse_req *curr;
 
     for (curr = f->interrupts.next; curr != &f->interrupts; curr = curr->next) {
         if (curr->u.i.unique == req->unique) {
+            req->interrupted = 1;
             list_del_req(curr);
             free(curr);
-            return;
+            return NULL;
         }
     }
     curr = f->interrupts.next;
-    if (curr != &f->interrupts)
-        fuse_reply_err(curr, EAGAIN);
+    if (curr != &f->interrupts) {
+        list_del_req(curr);
+        list_init_req(curr);
+        return curr;
+    } else
+        return NULL;
 }
 
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -1062,10 +1067,13 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
         fuse_reply_err(req, ENOSYS);
     else {
         if (in->opcode != FUSE_INTERRUPT) {
+            struct fuse_req *intr;
             pthread_mutex_lock(&f->lock);
-            check_interrupt(f, req);
+            intr = check_interrupt(f, req);
             list_add_req(req, &f->list);
             pthread_mutex_unlock(&f->lock);
+            if (intr)
+                fuse_reply_err(intr, EAGAIN);
         }
         fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
     }

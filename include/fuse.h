@@ -23,6 +23,7 @@
 #include "fuse_common.h"
 
 #include <fcntl.h>
+#include <time.h>
 #include <utime.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -129,7 +130,10 @@ struct fuse_operations {
     /** Change the size of a file */
     int (*truncate) (const char *, off_t);
 
-    /** Change the access and/or modification times of a file */
+    /** Change the access and/or modification times of a file
+     *
+     * Deprecated, use utimes() instead.
+     */
     int (*utime) (const char *, struct utimbuf *);
 
     /** File open operation
@@ -386,6 +390,9 @@ struct fuse_operations {
      */
     int (*lock) (const char *, struct fuse_file_info *, int cmd,
                  struct flock *, uint64_t owner);
+
+    /** Change the access and modification times of a file */
+    int (*utimes) (const char *, const struct timespec tv[2]);
 };
 
 /** Extra context that may be needed by some filesystems

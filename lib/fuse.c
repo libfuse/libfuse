@@ -753,15 +753,22 @@ static int do_truncate(struct fuse *f, const char *path, struct stat *attr,
     return err;
 }
 
-static int do_utime(struct fuse *f, const char *path, struct stat *attr)
+static int do_utimes(struct fuse *f, const char *path, struct stat *attr)
 {
     int err;
-    struct utimbuf buf;
-    buf.actime = attr->st_atime;
-    buf.modtime = attr->st_mtime;
+
     err = -ENOSYS;
-    if (f->op.utime)
+    if (f->op.utimes) {
+        struct timespec tv[2];
+        tv[0] = attr->st_atim;
+        tv[1] = attr->st_mtim;
+        err = f->op.utimes(path, tv);
+    } else if (f->op.utime) {
+        struct utimbuf buf;
+        buf.actime = attr->st_atime;
+        buf.modtime = attr->st_mtime;
         err = f->op.utime(path, &buf);
+    }
 
     return err;
 }
@@ -788,7 +795,7 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
             if (!err && (valid & FUSE_SET_ATTR_SIZE))
                 err = do_truncate(f, path, attr, fi);
             if (!err && (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) == (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME))
-                err = do_utime(f, path, attr);
+                err = do_utimes(f, path, attr);
             if (!err)
                 err = f->op.getattr(path, &buf);
         }
