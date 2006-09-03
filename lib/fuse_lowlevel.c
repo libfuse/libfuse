@@ -6,11 +6,11 @@
     See the file COPYING.LIB
 */
 
-#include "config.h"
 #include "fuse_lowlevel.h"
 #include "fuse_kernel.h"
 #include "fuse_opt.h"
 #include "fuse_i.h"
+#include "fuse_misc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +19,6 @@
 #include <unistd.h>
 #include <limits.h>
 #include <errno.h>
-#include <pthread.h>
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 #define OFFSET_MAX 0x7fffffffffffffffLL
@@ -57,20 +56,6 @@ struct fuse_ll {
     struct fuse_req interrupts;
     pthread_mutex_t lock;
 };
-
-#ifndef USE_UCLIBC
-#define mutex_init(mut) pthread_mutex_init(mut, NULL)
-#else
-static void mutex_init(pthread_mutex_t *mut)
-{
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-    pthread_mutex_init(mut, &attr);
-    pthread_mutexattr_destroy(&attr);
-}
-#endif
-
 
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 {
@@ -1183,7 +1168,7 @@ struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
     f->conn.max_readahead = UINT_MAX;
     list_init_req(&f->list);
     list_init_req(&f->interrupts);
-    mutex_init(&f->lock);
+    fuse_mutex_init(&f->lock);
 
     if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
         goto out_free;

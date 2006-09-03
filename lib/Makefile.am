@@ -16,6 +16,7 @@ libfuse_la_SOURCES = 		\
 	fuse_loop.c		\
 	fuse_loop_mt.c		\
 	fuse_lowlevel.c		\
+	fuse_misc.h		\
 	fuse_mt.c		\
 	fuse_opt.c		\
 	fuse_session.c		\

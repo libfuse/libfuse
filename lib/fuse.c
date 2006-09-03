@@ -10,10 +10,10 @@
 /* For pthread_rwlock_t */
 #define _GNU_SOURCE
 
-#include "config.h"
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
 #include "fuse_opt.h"
+#include "fuse_misc.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -25,7 +25,6 @@
 #include <limits.h>
 #include <errno.h>
 #include <assert.h>
-#include <pthread.h>
 #include <sys/param.h>
 #include <sys/uio.h>
 
@@ -109,19 +108,6 @@ static int fuse_do_open(struct fuse *, char *, struct fuse_file_info *);
 static void fuse_do_release(struct fuse *, char *, struct fuse_file_info *);
 static int fuse_do_opendir(struct fuse *, char *, struct fuse_file_info *);
 static int fuse_do_statfs(struct fuse *, struct statvfs *);
-
-#ifndef USE_UCLIBC
-#define mutex_init(mut) pthread_mutex_init(mut, NULL)
-#else
-static void mutex_init(pthread_mutex_t *mut)
-{
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-    pthread_mutex_init(mut, &attr);
-    pthread_mutexattr_destroy(&attr);
-}
-#endif
 
 static struct node *get_node_nocheck(struct fuse *f, fuse_ino_t nodeid)
 {
@@ -1432,7 +1418,7 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
     dh->len = 0;
     dh->filled = 0;
     dh->nodeid = ino;
-    mutex_init(&dh->lock);
+    fuse_mutex_init(&dh->lock);
 
     llfi->fh = (uintptr_t) dh;
 
@@ -2146,7 +2132,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
         goto out_free_name_table;
     }
 
-    mutex_init(&f->lock);
+    fuse_mutex_init(&f->lock);
     pthread_rwlock_init(&f->tree_lock, NULL);
     f->compat = compat;
 
