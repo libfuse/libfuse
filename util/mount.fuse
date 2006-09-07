@@ -9,6 +9,11 @@
 VERSION="0.0.1"
 PRGNAME=`basename $0`
 
+if [ -z "$HOME" ]; then
+    HOME=/root
+fi
+export HOME
+
 USAGE="${PRGNAME} version ${VERSION}
 usage: ${PRGNAME} fusefs_type#[mountpath] mountpoint [FUSE options]
 

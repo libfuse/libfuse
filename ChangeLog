@@ -12,6 +12,8 @@
 	* The filesystem may query interrupt status (regardless of 'intr')
 	with the fuse_interrupted() function.
 
+	* mount.fuse: initialize $HOME if not set.  Report from Sven Goldt
+
 2006-09-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: Multithreaded loop now allows unlimited number of threads.
