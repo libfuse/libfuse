@@ -2430,15 +2430,13 @@ static int fuse_init_intr_signal(int signum, int *installed)
     return 0;
 }
 
-static void fuse_restore_intr_signal(int signum, int installed)
+static void fuse_restore_intr_signal(int signum)
 {
-    if (installed) {
-        struct sigaction sa;
+    struct sigaction sa;
 
-        memset(&sa, 0, sizeof(struct sigaction));
-        sa.sa_handler = SIG_DFL;
-        sigaction(signum, &sa, NULL);
-    }
+    memset(&sa, 0, sizeof(struct sigaction));
+    sa.sa_handler = SIG_DFL;
+    sigaction(signum, &sa, NULL);
 }
 
 struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
