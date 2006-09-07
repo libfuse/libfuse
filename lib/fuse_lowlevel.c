@@ -28,6 +28,8 @@ struct fuse_ll;
 struct fuse_req {
     struct fuse_ll *f;
     uint64_t unique;
+    int ctr;
+    pthread_mutex_t lock;
     struct fuse_ctx ctx;
     struct fuse_chan *ch;
     int interrupted;
@@ -124,12 +126,28 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
     next->prev = req;
 }
 
+static void destroy_req(fuse_req_t req)
+{
+    pthread_mutex_destroy(&req->lock);
+    free(req);
+}
+
 static void free_req(fuse_req_t req)
 {
-    pthread_mutex_lock(&req->f->lock);
+    int ctr;
+    struct fuse_ll *f = req->f;
+
+    pthread_mutex_lock(&req->lock);
+    req->u.ni.func = NULL;
+    req->u.ni.data = NULL;
+    pthread_mutex_unlock(&req->lock);
+
+    pthread_mutex_lock(&f->lock);
     list_del_req(req);
-    pthread_mutex_unlock(&req->f->lock);
-    free(req);
+    ctr = --req->ctr;
+    pthread_mutex_unlock(&f->lock);
+    if (!ctr)
+        destroy_req(req);
 }
 
 static int send_reply(fuse_req_t req, int error, const void *arg,
@@ -819,13 +837,28 @@ static int find_interrupted(struct fuse_ll *f, struct fuse_req *req)
 
     for (curr = f->list.next; curr != &f->list; curr = curr->next) {
         if (curr->unique == req->u.i.unique) {
+            curr->ctr++;
+            pthread_mutex_unlock(&f->lock);
+
+            /* Ugh, ugly locking */
+            pthread_mutex_lock(&curr->lock);
+            pthread_mutex_lock(&f->lock);
             curr->interrupted = 1;
+            pthread_mutex_unlock(&f->lock);
             if (curr->u.ni.func)
                 curr->u.ni.func(curr, curr->u.ni.data);
+            pthread_mutex_unlock(&curr->lock);
+
+            pthread_mutex_lock(&f->lock);
+            curr->ctr--;
+            if (!curr->ctr)
+                destroy_req(curr);
+
             return 1;
         }
     }
-    for (curr = f->interrupts.next; curr != &f->interrupts; curr = curr->next) {
+    for (curr = f->interrupts.next; curr != &f->interrupts;
+         curr = curr->next) {
         if (curr->u.i.unique == req->u.i.unique)
             return 1;
     }
@@ -847,7 +880,7 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
     pthread_mutex_lock(&f->lock);
     if (find_interrupted(f, req))
-        free(req);
+        destroy_req(req);
     else
         list_add_req(req, &f->interrupts);
     pthread_mutex_unlock(&f->lock);
@@ -950,14 +983,23 @@ const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
 void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
                              void *data)
 {
-    struct fuse_ll *f = req->f;
-
-    pthread_mutex_lock(&f->lock);
+    pthread_mutex_lock(&req->lock);
     req->u.ni.func = func;
     req->u.ni.data = data;
     if (req->interrupted && func)
         func(req, data);
-    pthread_mutex_unlock(&f->lock);
+    pthread_mutex_unlock(&req->lock);
+}
+
+int fuse_req_interrupted(fuse_req_t req)
+{
+    int interrupted;
+
+    pthread_mutex_lock(&req->f->lock);
+    interrupted = req->interrupted;
+    pthread_mutex_unlock(&req->f->lock);
+
+    return interrupted;
 }
 
 static struct {
@@ -1038,7 +1080,9 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     req->ctx.gid = in->gid;
     req->ctx.pid = in->pid;
     req->ch = ch;
+    req->ctr = 1;
     list_init_req(req);
+    fuse_mutex_init(&req->lock);
 
     if (!f->got_init && in->opcode != FUSE_INIT)
         fuse_reply_err(req, EIO);
@@ -1133,6 +1177,7 @@ static void fuse_ll_destroy(void *data)
     if (f->op.destroy)
         f->op.destroy(f->userdata);
 
+    pthread_mutex_destroy(&f->lock);
     free(f);
 }
 

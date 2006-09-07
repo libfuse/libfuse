@@ -1006,6 +1006,14 @@ typedef void (*fuse_interrupt_func_t)(fuse_req_t req, void *data);
 void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
                              void *data);
 
+/**
+ * Check if a request has already been interrupted
+ *
+ * @param req request handle
+ * @return 1 if the request has been interrupted, 0 otherwise
+ */
+int fuse_req_interrupted(fuse_req_t req);
+
 /* ----------------------------------------------------------- *
  * Filesystem setup                                            *
  * ----------------------------------------------------------- */

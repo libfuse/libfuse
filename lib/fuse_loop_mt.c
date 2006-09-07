@@ -179,21 +179,24 @@ int fuse_session_loop_mt(struct fuse_session *se)
     fuse_mutex_init(&mt.lock);
 
     pthread_mutex_lock(&mt.lock);
-    fuse_start_thread(&mt);
+    err = fuse_start_thread(&mt);
     pthread_mutex_unlock(&mt.lock);
-    while (!fuse_session_exited(se))
-        pause();
+    if (!err) {
+        while (!fuse_session_exited(se))
+            pause();
 
-    for (w = mt.main.next; w != &mt.main; w = w->next)
-        pthread_cancel(w->thread_id);
-    mt.exit = 1;
-    pthread_mutex_unlock(&mt.lock);
+        for (w = mt.main.next; w != &mt.main; w = w->next)
+            pthread_cancel(w->thread_id);
+        mt.exit = 1;
+        pthread_mutex_unlock(&mt.lock);
 
-    while (mt.main.next != &mt.main)
-        fuse_join_worker(&mt, mt.main.next);
+        while (mt.main.next != &mt.main)
+            fuse_join_worker(&mt, mt.main.next);
+
+        err = mt.error;
+    }
 
     pthread_mutex_destroy(&mt.lock);
-    err = mt.error;
     fuse_session_reset(se);
     return err;
 }

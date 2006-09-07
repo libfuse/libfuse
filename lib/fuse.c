@@ -24,11 +24,14 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <errno.h>
+#include <signal.h>
 #include <assert.h>
 #include <sys/param.h>
 #include <sys/uio.h>
+#include <sys/time.h>
 
 #define FUSE_MAX_PATH 4096
+#define FUSE_DEFAULT_INTR_SIGNAL SIGUSR1
 
 #define FUSE_UNKNOWN_INO 0xffffffff
 
@@ -51,6 +54,8 @@ struct fuse_config {
     int direct_io;
     int kernel_cache;
     int auto_cache;
+    int intr;
+    int intr_signal;
 };
 
 struct fuse {
@@ -68,6 +73,7 @@ struct fuse {
     pthread_rwlock_t tree_lock;
     void *user_data;
     struct fuse_config conf;
+    int intr_installed;
 };
 
 struct node {
@@ -102,12 +108,22 @@ struct fuse_dirhandle {
     fuse_ino_t nodeid;
 };
 
-static struct fuse_context *(*fuse_getcontext)(void) = NULL;
+struct fuse_context_i {
+    struct fuse_context ctx;
+    fuse_req_t req;
+};
 
-static int fuse_do_open(struct fuse *, char *, struct fuse_file_info *);
-static void fuse_do_release(struct fuse *, char *, struct fuse_file_info *);
-static int fuse_do_opendir(struct fuse *, char *, struct fuse_file_info *);
-static int fuse_do_statfs(struct fuse *, struct statvfs *);
+static pthread_key_t fuse_context_key;
+static pthread_mutex_t fuse_context_lock = PTHREAD_MUTEX_INITIALIZER;
+static int fuse_context_ref;
+
+static int fuse_compat_open(struct fuse *, fuse_req_t, char *,
+                            struct fuse_file_info *);
+static void fuse_compat_release(struct fuse *, fuse_req_t, char *,
+                                struct fuse_file_info *);
+static int fuse_compat_opendir(struct fuse *, fuse_req_t, char *,
+                               struct fuse_file_info *);
+static int fuse_compat_statfs(struct fuse *, fuse_req_t, struct statvfs *);
 
 static struct node *get_node_nocheck(struct fuse *f, fuse_ino_t nodeid)
 {
@@ -410,6 +426,195 @@ static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
         stbuf->st_gid = f->conf.gid;
 }
 
+static struct fuse *req_fuse(fuse_req_t req)
+{
+    return (struct fuse *) fuse_req_userdata(req);
+}
+
+static void fuse_intr_sighandler(int sig)
+{
+    (void) sig;
+    /* Nothing to do */
+}
+
+struct fuse_intr_data {
+    pthread_t id;
+    pthread_cond_t cond;
+    int finished;
+};
+
+static void fuse_interrupt(fuse_req_t req, void *d_)
+{
+    struct fuse_intr_data *d = d_;
+    struct fuse *f = req_fuse(req);
+
+    if (d->id == pthread_self())
+        return;
+
+    pthread_mutex_lock(&f->lock);
+    while (!d->finished) {
+        struct timeval now;
+        struct timespec timeout;
+
+        pthread_kill(d->id, f->conf.intr_signal);
+        gettimeofday(&now, NULL);
+        timeout.tv_sec = now.tv_sec + 1;
+        timeout.tv_nsec = now.tv_usec * 1000;
+        pthread_cond_timedwait(&d->cond, &f->lock, &timeout);
+    }
+    pthread_mutex_unlock(&f->lock);
+}
+
+static void fuse_do_finish_interrupt(struct fuse *f, fuse_req_t req,
+                                     struct fuse_intr_data *d)
+{
+    pthread_mutex_lock(&f->lock);
+    d->finished = 1;
+    pthread_cond_broadcast(&d->cond);
+    pthread_mutex_unlock(&f->lock);
+    fuse_req_interrupt_func(req, NULL, NULL);
+    pthread_cond_destroy(&d->cond);
+}
+
+static void fuse_do_prepare_interrupt(fuse_req_t req, struct fuse_intr_data *d)
+{
+    d->id = pthread_self();
+    pthread_cond_init(&d->cond, NULL);
+    d->finished = 0;
+    fuse_req_interrupt_func(req, fuse_interrupt, d);
+}
+
+static inline void fuse_finish_interrupt(struct fuse *f, fuse_req_t req,
+                                         struct fuse_intr_data *d)
+{
+    if (f->conf.intr)
+        fuse_do_finish_interrupt(f, req, d);
+}
+
+static inline void fuse_prepare_interrupt(struct fuse *f, fuse_req_t req,
+                                          struct fuse_intr_data *d)
+{
+    if (f->conf.intr)
+        fuse_do_prepare_interrupt(req, d);
+}
+
+static int fuse_do_getattr(struct fuse *f, fuse_req_t req, const char *path,
+                           struct stat *buf)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.getattr(path, buf);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static int fuse_do_fgetattr(struct fuse *f, fuse_req_t req, const char *path,
+                            struct stat *buf, struct fuse_file_info *fi)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.fgetattr(path, buf, fi);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static int fuse_do_rename(struct fuse *f, fuse_req_t req, const char *oldpath,
+                          const char *newpath)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.rename(oldpath, newpath);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static int fuse_do_unlink(struct fuse *f, fuse_req_t req, const char *path)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.unlink(path);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static void fuse_do_release(struct fuse *f, fuse_req_t req, const char *path,
+                            struct fuse_file_info *fi)
+{
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    f->op.release(path, fi);
+    fuse_finish_interrupt(f, req, &d);
+}
+
+static int fuse_do_opendir(struct fuse *f, fuse_req_t req, char *path,
+                           struct fuse_file_info *fi)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.opendir(path, fi);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static int fuse_do_open(struct fuse *f, fuse_req_t req, char *path,
+                           struct fuse_file_info *fi)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.open(path, fi);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static int fuse_do_statfs(struct fuse *f, fuse_req_t req, const char *path,
+                          struct statvfs *buf)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.statfs(path, buf);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static void fuse_do_releasedir(struct fuse *f, fuse_req_t req,
+                               const char *path, struct fuse_file_info *fi)
+{
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    f->op.releasedir(path, fi);
+    fuse_finish_interrupt(f, req, &d);
+}
+
+static int fuse_do_create(struct fuse *f, fuse_req_t req, const char *path,
+                          mode_t mode, struct fuse_file_info *fi)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.create(path, mode, fi);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
+static int fuse_do_lock(struct fuse *f, fuse_req_t req, const char *path,
+                        struct fuse_file_info *fi, int cmd, struct flock *lock,
+                        uint64_t owner)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.lock(path, fi, cmd, lock, owner);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
     struct node *node;
@@ -422,8 +627,8 @@ static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
     return isopen;
 }
 
-static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
-                        char *newname, size_t bufsize)
+static char *hidden_name(struct fuse *f, fuse_req_t req, fuse_ino_t dir,
+                         const char *oldname, char *newname, size_t bufsize)
 {
     struct stat buf;
     struct node *node;
@@ -454,7 +659,7 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
         if (!newpath)
             break;
 
-        res = f->op.getattr(newpath, &buf);
+        res = fuse_do_getattr(f, req, newpath, &buf);
         if (res != 0)
             break;
         free(newpath);
@@ -464,17 +669,17 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
     return newpath;
 }
 
-static int hide_node(struct fuse *f, const char *oldpath, fuse_ino_t dir,
-                     const char *oldname)
+static int hide_node(struct fuse *f, fuse_req_t req, const char *oldpath,
+                     fuse_ino_t dir, const char *oldname)
 {
     char newname[64];
     char *newpath;
     int err = -EBUSY;
 
     if (f->op.rename && f->op.unlink) {
-        newpath = hidden_name(f, dir, oldname, newname, sizeof(newname));
+        newpath = hidden_name(f, req, dir, oldname, newname, sizeof(newname));
         if (newpath) {
-            int res = f->op.rename(oldpath, newpath);
+            int res = fuse_do_rename(f, req, oldpath, newpath);
             if (res == 0)
                 err = rename_node(f, dir, oldname, dir, newname, 1);
             free(newpath);
@@ -529,17 +734,17 @@ static void update_stat(struct node *node, const struct stat *stbuf)
     curr_time(&node->stat_updated);
 }
 
-static int lookup_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
-                       const char *path, struct fuse_entry_param *e,
-                       struct fuse_file_info *fi)
+static int lookup_path(struct fuse *f, fuse_req_t req, fuse_ino_t nodeid,
+                       const char *name, const char *path,
+                       struct fuse_entry_param *e, struct fuse_file_info *fi)
 {
     int res;
 
     memset(e, 0, sizeof(struct fuse_entry_param));
     if (fi && f->op.fgetattr)
-        res = f->op.fgetattr(path, &e->attr, fi);
+        res = fuse_do_fgetattr(f, req, path, &e->attr, fi);
     else
-        res = f->op.getattr(path, &e->attr);
+        res = fuse_do_getattr(f, req, path, &e->attr);
     if (res == 0) {
         struct node *node;
 
@@ -566,22 +771,70 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
     return res;
 }
 
-static struct fuse *req_fuse(fuse_req_t req)
+static struct fuse_context_i *fuse_get_context_internal(void)
 {
-    return (struct fuse *) fuse_req_userdata(req);
+    struct fuse_context_i *c;
+
+    c = (struct fuse_context_i *) pthread_getspecific(fuse_context_key);
+    if (c == NULL) {
+        c = (struct fuse_context_i *) malloc(sizeof(struct fuse_context_i));
+        if (c == NULL) {
+            /* This is hard to deal with properly, so just abort.  If
+               memory is so low that the context cannot be allocated,
+               there's not much hope for the filesystem anyway */ 
+            fprintf(stderr, "fuse: failed to allocate thread specific data\n");
+            abort();
+        }
+        pthread_setspecific(fuse_context_key, c);
+    }
+    return c;
+}
+
+static void fuse_freecontext(void *data)
+{
+    free(data);
+}
+
+static int fuse_create_context_key(void)
+{
+    int err = 0;
+    pthread_mutex_lock(&fuse_context_lock);
+    if (!fuse_context_ref) {
+        err = pthread_key_create(&fuse_context_key, fuse_freecontext);
+        if (err) {
+            fprintf(stderr, "fuse: failed to create thread specific key: %s\n",
+                    strerror(err));
+            pthread_mutex_unlock(&fuse_context_lock);
+            return -1;
+        }
+    }
+    fuse_context_ref++;
+    pthread_mutex_unlock(&fuse_context_lock);
+    return 0;
+}
+
+static void fuse_delete_context_key(void)
+{
+    pthread_mutex_lock(&fuse_context_lock);
+    fuse_context_ref--;
+    if (!fuse_context_ref) {
+        free(pthread_getspecific(fuse_context_key));
+        pthread_key_delete(fuse_context_key);
+    }
+    pthread_mutex_unlock(&fuse_context_lock);
 }
 
 static struct fuse *req_fuse_prepare(fuse_req_t req)
 {
-    struct fuse_context *c = fuse_get_context();
+    struct fuse_context_i *c = fuse_get_context_internal();
     const struct fuse_ctx *ctx = fuse_req_ctx(req);
-    c->fuse = req_fuse(req);
-    c->uid = ctx->uid;
-    c->gid = ctx->gid;
-    c->pid = ctx->pid;
-    c->private_data = c->fuse->user_data;
-
-    return c->fuse;
+    c->req = req;
+    c->ctx.fuse = req_fuse(req);
+    c->ctx.uid = ctx->uid;
+    c->ctx.gid = ctx->gid;
+    c->ctx.pid = ctx->pid;
+    c->ctx.private_data = c->ctx.fuse->user_data;
+    return c->ctx.fuse;
 }
 
 static inline void reply_err(fuse_req_t req, int err)
@@ -604,11 +857,11 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
 static void fuse_data_init(void *data, struct fuse_conn_info *conn)
 {
     struct fuse *f = (struct fuse *) data;
-    struct fuse_context *c = fuse_get_context();
+    struct fuse_context_i *c = fuse_get_context_internal();
 
     memset(c, 0, sizeof(*c));
-    c->fuse = f;
-    c->private_data = f->user_data;
+    c->ctx.fuse = f;
+    c->ctx.private_data = f->user_data;
 
     if (f->op.init)
         f->user_data = f->op.init(conn);
@@ -617,11 +870,11 @@ static void fuse_data_init(void *data, struct fuse_conn_info *conn)
 static void fuse_data_destroy(void *data)
 {
     struct fuse *f = (struct fuse *) data;
-    struct fuse_context *c = fuse_get_context();
+    struct fuse_context_i *c = fuse_get_context_internal();
 
     memset(c, 0, sizeof(*c));
-    c->fuse = f;
-    c->private_data = f->user_data;
+    c->ctx.fuse = f;
+    c->ctx.private_data = f->user_data;
 
     if (f->op.destroy)
         f->op.destroy(f->user_data);
@@ -644,7 +897,7 @@ static void fuse_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
         }
         err = -ENOSYS;
         if (f->op.getattr) {
-            err = lookup_path(f, parent, name, path, &e, NULL);
+            err = lookup_path(f, req, parent, name, path, &e, NULL);
             if (err == -ENOENT && f->conf.negative_timeout != 0.0) {
                 e.ino = 0;
                 e.entry_timeout = f->conf.negative_timeout;
@@ -685,7 +938,7 @@ static void fuse_getattr(fuse_req_t req, fuse_ino_t ino,
     if (path != NULL) {
         err = -ENOSYS;
         if (f->op.getattr)
-            err = f->op.getattr(path, &buf);
+            err = fuse_do_getattr(f, req, path, &buf);
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -701,60 +954,80 @@ static void fuse_getattr(fuse_req_t req, fuse_ino_t ino,
         reply_err(req, err);
 }
 
-static int do_chmod(struct fuse *f, const char *path, struct stat *attr)
+static int do_chmod(struct fuse *f, fuse_req_t req, const char *path,
+                    struct stat *attr)
 {
     int err;
 
     err = -ENOSYS;
-    if (f->op.chmod)
+    if (f->op.chmod) {
+        struct fuse_intr_data d;
+        fuse_prepare_interrupt(f, req, &d);
         err = f->op.chmod(path, attr->st_mode);
+        fuse_finish_interrupt(f, req, &d);
+    }
 
     return err;
 }
 
-static int do_chown(struct fuse *f, const char *path, struct stat *attr,
-                    int valid)
+static int do_chown(struct fuse *f, fuse_req_t req, const char *path,
+                    struct stat *attr, int valid)
 {
     int err;
     uid_t uid = (valid & FUSE_SET_ATTR_UID) ? attr->st_uid : (uid_t) -1;
     gid_t gid = (valid & FUSE_SET_ATTR_GID) ? attr->st_gid : (gid_t) -1;
 
     err = -ENOSYS;
-    if (f->op.chown)
+    if (f->op.chown) {
+        struct fuse_intr_data d;
+        fuse_prepare_interrupt(f, req, &d);
         err = f->op.chown(path, uid, gid);
+        fuse_finish_interrupt(f, req, &d);
+    }
 
     return err;
 }
 
-static int do_truncate(struct fuse *f, const char *path, struct stat *attr,
-                       struct fuse_file_info *fi)
+static int do_truncate(struct fuse *f, fuse_req_t req,  const char *path,
+                       struct stat *attr, struct fuse_file_info *fi)
 {
     int err;
+    struct fuse_intr_data d;
 
     err = -ENOSYS;
-    if (fi && f->op.ftruncate)
+    if (fi && f->op.ftruncate) {
+        fuse_prepare_interrupt(f, req, &d);
         err = f->op.ftruncate(path, attr->st_size, fi);
-    else if (f->op.truncate)
+        fuse_finish_interrupt(f, req, &d);
+    } else if (f->op.truncate) {
+        fuse_prepare_interrupt(f, req, &d);
         err = f->op.truncate(path, attr->st_size);
-
+        fuse_finish_interrupt(f, req, &d);
+    }
     return err;
 }
 
-static int do_utimes(struct fuse *f, const char *path, struct stat *attr)
+static int do_utimes(struct fuse *f, fuse_req_t req, const char *path,
+                     struct stat *attr)
 {
     int err;
+    struct fuse_intr_data d;
 
     err = -ENOSYS;
     if (f->op.utimes) {
         struct timespec tv[2];
         tv[0] = attr->st_atim;
         tv[1] = attr->st_mtim;
+        fuse_prepare_interrupt(f, req, &d);
         err = f->op.utimes(path, tv);
+        fuse_finish_interrupt(f, req, &d);
     } else if (f->op.utime) {
         struct utimbuf buf;
         buf.actime = attr->st_atime;
         buf.modtime = attr->st_mtime;
+        fuse_prepare_interrupt(f, req, &d);
         err = f->op.utime(path, &buf);
+        fuse_finish_interrupt(f, req, &d);
     }
 
     return err;
@@ -776,15 +1049,15 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
         if (f->op.getattr) {
             err = 0;
             if (!err && (valid & FUSE_SET_ATTR_MODE))
-                err = do_chmod(f, path, attr);
+                err = do_chmod(f, req, path, attr);
             if (!err && (valid & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)))
-                err = do_chown(f, path, attr, valid);
+                err = do_chown(f, req, path, attr, valid);
             if (!err && (valid & FUSE_SET_ATTR_SIZE))
-                err = do_truncate(f, path, attr, fi);
+                err = do_truncate(f, req, path, attr, fi);
             if (!err && (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) == (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME))
-                err = do_utimes(f, path, attr);
+                err = do_utimes(f, req, path, attr);
             if (!err)
-                err = f->op.getattr(path, &buf);
+                err = fuse_do_getattr(f, req, path, &buf);
         }
         free(path);
     }
@@ -816,8 +1089,12 @@ static void fuse_access(fuse_req_t req, fuse_ino_t ino, int mask)
             fflush(stdout);
         }
         err = -ENOSYS;
-        if (f->op.access)
+        if (f->op.access) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.access(path, mask);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -836,8 +1113,12 @@ static void fuse_readlink(fuse_req_t req, fuse_ino_t ino)
     path = get_path(f, ino);
     if (path != NULL) {
         err = -ENOSYS;
-        if (f->op.readlink)
+        if (f->op.readlink) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.readlink(path, linkname, sizeof(linkname));
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -870,16 +1151,19 @@ static void fuse_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 
             memset(&fi, 0, sizeof(fi));
             fi.flags = O_CREAT | O_EXCL | O_WRONLY;
-            err = f->op.create(path, mode, &fi);
+            err = fuse_do_create(f, req, path, mode, &fi);
             if (!err) {
-                err = lookup_path(f, parent, name, path, &e, &fi);
+                err = lookup_path(f, req, parent, name, path, &e, &fi);
                 if (f->op.release)
-                    f->op.release(path, &fi);
+                    fuse_do_release(f, req, path, &fi);
             }
         } else if (f->op.mknod && f->op.getattr) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.mknod(path, mode, rdev);
+            fuse_finish_interrupt(f, req, &d);
             if (!err)
-                err = lookup_path(f, parent, name, path, &e, NULL);
+                err = lookup_path(f, req, parent, name, path, &e, NULL);
         }
         free(path);
     }
@@ -905,9 +1189,12 @@ static void fuse_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
         }
         err = -ENOSYS;
         if (f->op.mkdir && f->op.getattr) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.mkdir(path, mode);
+            fuse_finish_interrupt(f, req, &d);
             if (!err)
-                err = lookup_path(f, parent, name, path, &e, NULL);
+                err = lookup_path(f, req, parent, name, path, &e, NULL);
         }
         free(path);
     }
@@ -932,9 +1219,9 @@ static void fuse_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
         err = -ENOSYS;
         if (f->op.unlink) {
             if (!f->conf.hard_remove && is_open(f, parent, name))
-                err = hide_node(f, path, parent, name);
+                err = hide_node(f, req, path, parent, name);
             else {
-                err = f->op.unlink(path);
+                err = fuse_do_unlink(f, req, path);
                 if (!err)
                     remove_node(f, parent, name);
             }
@@ -961,7 +1248,10 @@ static void fuse_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
         }
         err = -ENOSYS;
         if (f->op.rmdir) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.rmdir(path);
+            fuse_finish_interrupt(f, req, &d);
             if (!err)
                 remove_node(f, parent, name);
         }
@@ -989,9 +1279,12 @@ static void fuse_symlink(fuse_req_t req, const char *linkname,
         }
         err = -ENOSYS;
         if (f->op.symlink && f->op.getattr) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.symlink(linkname, path);
+            fuse_finish_interrupt(f, req, &d);
             if (!err)
-                err = lookup_path(f, parent, name, path, &e, NULL);
+                err = lookup_path(f, req, parent, name, path, &e, NULL);
         }
         free(path);
     }
@@ -1022,9 +1315,9 @@ static void fuse_rename(fuse_req_t req, fuse_ino_t olddir, const char *oldname,
                 err = 0;
                 if (!f->conf.hard_remove &&
                     is_open(f, newdir, newname))
-                    err = hide_node(f, newpath, newdir, newname);
+                    err = hide_node(f, req, newpath, newdir, newname);
                 if (!err) {
-                    err = f->op.rename(oldpath, newpath);
+                    fuse_do_rename(f, req, oldpath, newpath);
                     if (!err)
                         err = rename_node(f, olddir, oldname, newdir, newname, 0);
                 }
@@ -1058,9 +1351,13 @@ static void fuse_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
             }
             err = -ENOSYS;
             if (f->op.link && f->op.getattr) {
+                struct fuse_intr_data d;
+                fuse_prepare_interrupt(f, req, &d);
                 err = f->op.link(oldpath, newpath);
+                fuse_finish_interrupt(f, req, &d);
                 if (!err)
-                    err = lookup_path(f, newparent, newname, newpath, &e, NULL);
+                    err = lookup_path(f, req, newparent, newname, newpath, &e,
+                                      NULL);
             }
             free(newpath);
         }
@@ -1084,21 +1381,21 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     if (path != NULL) {
         err = -ENOSYS;
         if (f->op.create && f->op.getattr) {
-            err = f->op.create(path, mode, fi);
+            err = fuse_do_create(f, req, path, mode, fi);
             if (!err) {
                 if (f->conf.debug) {
                     printf("CREATE[%llu] flags: 0x%x %s\n",
                            (unsigned long long) fi->fh, fi->flags, path);
                     fflush(stdout);
                 }
-                err = lookup_path(f, parent, name, path, &e, fi);
+                err = lookup_path(f, req, parent, name, path, &e, fi);
                 if (err) {
                     if (f->op.release)
-                        f->op.release(path, fi);
+                        fuse_do_release(f, req, path, fi);
                 } else if (!S_ISREG(e.attr.st_mode)) {
                     err = -EIO;
                     if (f->op.release)
-                        f->op.release(path, fi);
+                        fuse_do_release(f, req, path, fi);
                     forget_node(f, e.ino, 1);
                 }
             }
@@ -1115,7 +1412,7 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (fuse_reply_create(req, &e, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release)
-                f->op.release(path, fi);
+                fuse_do_release(f, req, path, fi);
             forget_node(f, e.ino, 1);
         } else {
             struct node *node = get_node(f, e.ino);
@@ -1137,8 +1434,8 @@ static double diff_timespec(const struct timespec *t1,
         ((double) t1->tv_nsec - (double) t2->tv_nsec) / 1000000000.0;
 }
 
-static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
-                            struct fuse_file_info *fi)
+static void open_auto_cache(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
+                            const char *path, struct fuse_file_info *fi)
 {
     struct node *node = get_node(f, ino);
     if (node->cache_valid) {
@@ -1150,9 +1447,9 @@ static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
             int err;
 
             if (f->op.fgetattr)
-                err = f->op.fgetattr(path, &stbuf, fi);
+                err = fuse_do_fgetattr(f, req, path, &stbuf, fi);
             else
-                err = f->op.getattr(path, &stbuf);
+                err = fuse_do_getattr(f, req, path, &stbuf);
 
             if (!err)
                 update_stat(node, &stbuf);
@@ -1178,7 +1475,7 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
         err = -ENOENT;
         path = get_path(f, ino);
         if (path != NULL)
-            err = fuse_do_open(f, path, fi);
+            err = fuse_compat_open(f, req, path, fi);
     }
     if (!err) {
         if (f->conf.debug) {
@@ -1194,12 +1491,12 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
 
         pthread_mutex_lock(&f->lock);
         if (f->conf.auto_cache)
-            open_auto_cache(f, ino, path, fi);
+            open_auto_cache(f, req, ino, path, fi);
 
         if (fuse_reply_open(req, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release && path != NULL)
-                fuse_do_release(f, path, fi);
+                fuse_compat_release(f, req, path, fi);
         } else {
             struct node *node = get_node(f, ino);
             node->open_count ++;
@@ -1239,8 +1536,12 @@ static void fuse_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
         }
 
         res = -ENOSYS;
-        if (f->op.read)
+        if (f->op.read) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             res = f->op.read(path, buf, size, off, fi);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1279,8 +1580,12 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
         }
 
         res = -ENOSYS;
-        if (f->op.write)
+        if (f->op.write) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             res = f->op.write(path, buf, size, off, fi);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1315,8 +1620,12 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
             fflush(stdout);
         }
         err = -ENOSYS;
-        if (f->op.flush)
+        if (f->op.flush) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.flush(path, fi);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     if (f->op.lock) {
@@ -1324,7 +1633,7 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
         memset(&lock, 0, sizeof(lock));
         lock.l_type = F_UNLCK;
         lock.l_whence = SEEK_SET;
-        f->op.lock(path, fi, F_SETLK, &lock, owner);
+        fuse_do_lock(f, req, path, fi, F_SETLK, &lock, owner);
         if (err == -ENOSYS)
             err = 0;
     }
@@ -1348,7 +1657,7 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
         fflush(stdout);
     }
     if (f->op.release)
-        fuse_do_release(f, path, fi);
+        fuse_compat_release(f, req, path, fi);
 
     pthread_mutex_lock(&f->lock);
     node = get_node(f, ino);
@@ -1358,7 +1667,7 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     pthread_mutex_unlock(&f->lock);
 
     if(unlink_hidden && path)
-        f->op.unlink(path);
+        fuse_do_unlink(f, req, path);
 
     if (path)
         free(path);
@@ -1383,8 +1692,12 @@ static void fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
             fflush(stdout);
         }
         err = -ENOSYS;
-        if (f->op.fsync)
+        if (f->op.fsync) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.fsync(path, datasync, fi);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1434,7 +1747,7 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
         pthread_rwlock_rdlock(&f->tree_lock);
         path = get_path(f, ino);
         if (path != NULL) {
-            err = fuse_do_opendir(f, path, &fi);
+            err = fuse_compat_opendir(f, req, path, &fi);
             dh->fh = fi.fh;
         }
         if (!err) {
@@ -1443,7 +1756,7 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
                 /* The opendir syscall was interrupted, so it must be
                    cancelled */
                 if(f->op.releasedir)
-                    f->op.releasedir(path, &fi);
+                    fuse_do_releasedir(f, req, path, &fi);
                 pthread_mutex_destroy(&dh->lock);
                 free(dh);
             }
@@ -1560,10 +1873,17 @@ static int readdir_fill(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
         dh->filled = 1;
         dh->req = req;
         err = -ENOSYS;
-        if (f->op.readdir)
+        if (f->op.readdir) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.readdir(path, dh, fill_dir, off, fi);
-        else if (f->op.getdir)
+            fuse_finish_interrupt(f, req, &d);
+        } else if (f->op.getdir) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.getdir(path, dh, fill_dir_old);
+            fuse_finish_interrupt(f, req, &d);
+        }
         dh->req = NULL;
         if (!err)
             err = dh->error;
@@ -1621,7 +1941,7 @@ static void fuse_releasedir(fuse_req_t req, fuse_ino_t ino,
 
         pthread_rwlock_rdlock(&f->tree_lock);
         path = get_path(f, ino);
-        f->op.releasedir(path ? path : "-", &fi);
+        fuse_do_releasedir(f, req, path ? path : "-", &fi);
         free(path);
         pthread_rwlock_unlock(&f->tree_lock);
     }
@@ -1648,8 +1968,12 @@ static void fuse_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
     path = get_path(f, ino);
     if (path != NULL) {
         err = -ENOSYS;
-        if (f->op.fsyncdir)
+        if (f->op.fsyncdir) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.fsyncdir(path, datasync, &fi);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1677,12 +2001,12 @@ static void fuse_statfs(fuse_req_t req, fuse_ino_t ino)
             err = -ENOENT;
             path = get_path(f, ino);
             if (path) {
-                err = f->op.statfs(path, &buf);
+                err = fuse_do_statfs(f, req, path, &buf);
                 free(path);
             }
             pthread_rwlock_unlock(&f->tree_lock);
         } else
-            err = fuse_do_statfs(f, &buf);
+            err = fuse_compat_statfs(f, req, &buf);
     } else
         err = default_statfs(&buf);
 
@@ -1704,16 +2028,20 @@ static void fuse_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
     path = get_path(f, ino);
     if (path != NULL) {
         err = -ENOSYS;
-        if (f->op.setxattr)
+        if (f->op.setxattr) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.setxattr(path, name, value, size, flags);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
     reply_err(req, err);
 }
 
-static int common_getxattr(struct fuse *f, fuse_ino_t ino, const char *name,
-                           char *value, size_t size)
+static int common_getxattr(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
+                           const char *name, char *value, size_t size)
 {
     int err;
     char *path;
@@ -1723,8 +2051,12 @@ static int common_getxattr(struct fuse *f, fuse_ino_t ino, const char *name,
     path = get_path(f, ino);
     if (path != NULL) {
         err = -ENOSYS;
-        if (f->op.getxattr)
+        if (f->op.getxattr) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.getxattr(path, name, value, size);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1743,14 +2075,14 @@ static void fuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
             reply_err(req, -ENOMEM);
             return;
         }
-        res = common_getxattr(f, ino, name, value, size);
+        res = common_getxattr(f, req, ino, name, value, size);
         if (res > 0)
             fuse_reply_buf(req, value, res);
         else
             reply_err(req, res);
         free(value);
     } else {
-        res = common_getxattr(f, ino, name, NULL, 0);
+        res = common_getxattr(f, req, ino, name, NULL, 0);
         if (res >= 0)
             fuse_reply_xattr(req, res);
         else
@@ -1758,8 +2090,8 @@ static void fuse_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
     }
 }
 
-static int common_listxattr(struct fuse *f, fuse_ino_t ino, char *list,
-                            size_t size)
+static int common_listxattr(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
+                            char *list, size_t size)
 {
     char *path;
     int err;
@@ -1769,8 +2101,12 @@ static int common_listxattr(struct fuse *f, fuse_ino_t ino, char *list,
     path = get_path(f, ino);
     if (path != NULL) {
         err = -ENOSYS;
-        if (f->op.listxattr)
+        if (f->op.listxattr) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.listxattr(path, list, size);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1788,14 +2124,14 @@ static void fuse_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
             reply_err(req, -ENOMEM);
             return;
         }
-        res = common_listxattr(f, ino, list, size);
+        res = common_listxattr(f, req, ino, list, size);
         if (res > 0)
             fuse_reply_buf(req, list, res);
         else
             reply_err(req, res);
         free(list);
     } else {
-        res = common_listxattr(f, ino, NULL, 0);
+        res = common_listxattr(f, req, ino, NULL, 0);
         if (res >= 0)
             fuse_reply_xattr(req, res);
         else
@@ -1814,8 +2150,12 @@ static void fuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
     path = get_path(f, ino);
     if (path != NULL) {
         err = -ENOSYS;
-        if (f->op.removexattr)
+        if (f->op.removexattr) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
             err = f->op.removexattr(path, name);
+            fuse_finish_interrupt(f, req, &d);
+        }
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1834,7 +2174,7 @@ static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        err = f->op.lock(path, fi, cmd, lock, owner);
+        fuse_do_lock(f, req, path, fi, cmd, lock, owner);
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -1973,18 +2313,20 @@ void fuse_exit(struct fuse *f)
     fuse_session_exit(f->se);
 }
 
-struct fuse_context *fuse_get_context()
+struct fuse_context *fuse_get_context(void)
 {
-    static struct fuse_context context;
-    if (fuse_getcontext)
-        return fuse_getcontext();
-    else
-        return &context;
+    return &fuse_get_context_internal()->ctx;
+}
+
+int fuse_interrupted(void)
+{
+    return fuse_req_interrupted(fuse_get_context_internal()->req);
 }
 
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
 {
-    fuse_getcontext = func;
+    (void) func;
+    /* no-op */
 }
 
 enum {
@@ -2018,6 +2360,8 @@ static const struct fuse_opt fuse_lib_opts[] = {
     FUSE_LIB_OPT("ac_attr_timeout=%lf",   ac_attr_timeout, 0),
     FUSE_LIB_OPT("ac_attr_timeout=",      ac_attr_timeout_set, 1),
     FUSE_LIB_OPT("negative_timeout=%lf",  negative_timeout, 0),
+    FUSE_LIB_OPT("intr",                  intr, 1),
+    FUSE_LIB_OPT("intr_signal=%d",        intr_signal, 0),
     FUSE_OPT_END
 };
 
@@ -2037,7 +2381,9 @@ static void fuse_lib_help(void)
 "    -o negative_timeout=T  cache timeout for deleted names (0.0s)\n"
 "    -o attr_timeout=T      cache timeout for attributes (1.0s)\n"
 "    -o ac_attr_timeout=T   auto cache timeout for attributes (attr_timeout)\n"
-"\n");
+"    -o intr                allow requests to be interrupted\n"
+"    -o intr_signal=NUM     signal to send on interrupt (%i)\n"
+"\n", FUSE_DEFAULT_INTR_SIGNAL);
 }
 
 static int fuse_lib_opt_proc(void *data, const char *arg, int key,
@@ -2058,6 +2404,43 @@ int fuse_is_lib_option(const char *opt)
         fuse_opt_match(fuse_lib_opts, opt);
 }
 
+static int fuse_init_intr_signal(int signum, int *installed)
+{
+    struct sigaction old_sa;
+
+    if (sigaction(signum, NULL, &old_sa) == -1) {
+        perror("fuse: cannot get old signal handler");
+        return -1;
+    }
+
+    if (old_sa.sa_handler == SIG_DFL) {
+        struct sigaction sa;
+
+        memset(&sa, 0, sizeof(struct sigaction));
+        sa.sa_handler = fuse_intr_sighandler;
+        sigemptyset(&(sa.sa_mask));
+        sa.sa_flags = 0;
+
+        if (sigaction(signum, &sa, NULL) == -1) {
+            perror("fuse: cannot set interrupt signal handler");
+            return -1;
+        }
+        *installed = 1;
+    }
+    return 0;
+}
+
+static void fuse_restore_intr_signal(int signum, int installed)
+{
+    if (installed) {
+        struct sigaction sa;
+
+        memset(&sa, 0, sizeof(struct sigaction));
+        sa.sa_handler = SIG_DFL;
+        sigaction(signum, &sa, NULL);
+    }
+}
+
 struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
                              const struct fuse_operations *op,
                              size_t op_size, void *user_data, int compat)
@@ -2071,16 +2454,20 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
         op_size = sizeof(struct fuse_operations);
     }
 
+    if (fuse_create_context_key() == -1)
+        goto out;
+
     f = (struct fuse *) calloc(1, sizeof(struct fuse));
     if (f == NULL) {
         fprintf(stderr, "fuse: failed to allocate fuse object\n");
-        goto out;
+        goto out_delete_context_key;
     }
 
     f->user_data = user_data;
     f->conf.entry_timeout = 1.0;
     f->conf.attr_timeout = 1.0;
     f->conf.negative_timeout = 0.0;
+    f->conf.intr_signal = FUSE_DEFAULT_INTR_SIGNAL;
 
     if (fuse_opt_parse(args, &f->conf, fuse_lib_opts, fuse_lib_opt_proc) == -1)
             goto out_free;
@@ -2107,7 +2494,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
         llop.setlk = NULL;
     }
 
-    f->se = fuse_lowlevel_new_common(args, &llop,sizeof(llop), f);
+    f->se = fuse_lowlevel_new_common(args, &llop, sizeof(llop), f);
     if (f->se == NULL)
         goto out_free;
 
@@ -2148,6 +2535,10 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
         goto out_free_root;
     }
 
+    if (f->conf.intr &&
+        fuse_init_intr_signal(f->conf.intr_signal, &f->intr_installed) == -1)
+        goto out_free_root_name;
+
     root->parent = 0;
     root->nodeid = FUSE_ROOT_ID;
     root->generation = 0;
@@ -2157,6 +2548,8 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 
     return f;
 
+ out_free_root_name:
+    free(root->name);
  out_free_root:
     free(root);
  out_free_id_table:
@@ -2167,6 +2560,8 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
     fuse_session_destroy(f->se);
  out_free:
     free(f);
+ out_delete_context_key:
+    fuse_delete_context_key();
  out:
     return NULL;
 }
@@ -2181,11 +2576,14 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 void fuse_destroy(struct fuse *f)
 {
     size_t i;
-    struct fuse_context *c = fuse_get_context();
+    struct fuse_context_i *c = fuse_get_context_internal();
+
+    if (f->conf.intr && f->intr_installed)
+        fuse_restore_intr_signal(f->conf.intr_signal);
 
     memset(c, 0, sizeof(*c));
-    c->fuse = f;
-    c->private_data = f->user_data;
+    c->ctx.fuse = f;
+    c->ctx.private_data = f->user_data;
 
     for (i = 0; i < f->id_table_size; i++) {
         struct node *node;
@@ -2215,6 +2613,7 @@ void fuse_destroy(struct fuse *f)
     pthread_rwlock_destroy(&f->tree_lock);
     fuse_session_destroy(f->se);
     free(f);
+    fuse_delete_context_key();
 }
 
 #include "fuse_compat.h"
@@ -2234,42 +2633,56 @@ static struct fuse *fuse_new_common_compat25(int fd, struct fuse_args *args,
 
 #ifndef __FreeBSD__
 
-static int fuse_do_open(struct fuse *f, char *path, struct fuse_file_info *fi)
+static int fuse_compat_open(struct fuse *f, fuse_req_t req, char *path,
+                            struct fuse_file_info *fi)
 {
+    int err;
+    struct fuse_intr_data d;
     if (!f->compat || f->compat >= 25)
-        return f->op.open(path, fi);
+        err = fuse_do_open(f, req, path, fi);
     else if (f->compat == 22) {
-        int err;
         struct fuse_file_info_compat22 tmp;
         memcpy(&tmp, fi, sizeof(tmp));
+        fuse_prepare_interrupt(f, req, &d);
         err = ((struct fuse_operations_compat22 *) &f->op)->open(path, &tmp);
+        fuse_finish_interrupt(f, req, &d);
         memcpy(fi, &tmp, sizeof(tmp));
         fi->fh = tmp.fh;
-        return err;
-    } else
-        return
+    } else {
+        fuse_prepare_interrupt(f, req, &d);
+        err =
             ((struct fuse_operations_compat2 *) &f->op)->open(path, fi->flags);
+        fuse_finish_interrupt(f, req, &d);
+    }
+    return err;
 }
 
-static void fuse_do_release(struct fuse *f, char *path,
-                           struct fuse_file_info *fi)
+static void fuse_compat_release(struct fuse *f, fuse_req_t req, char *path,
+                                struct fuse_file_info *fi)
 {
     if (!f->compat || f->compat >= 22)
-        f->op.release(path ? path : "-", fi);
-    else if (path)
+        fuse_do_release(f, req, path ? path : "-", fi);
+    else if (path) {
+        struct fuse_intr_data d;
+        fuse_prepare_interrupt(f, req, &d);
         ((struct fuse_operations_compat2 *) &f->op)->release(path, fi->flags);
+        fuse_finish_interrupt(f, req, &d);
+    }
 }
 
-static int fuse_do_opendir(struct fuse *f, char *path,
-                           struct fuse_file_info *fi)
+static int fuse_compat_opendir(struct fuse *f, fuse_req_t req, char *path,
+                               struct fuse_file_info *fi)
 {
     if (!f->compat || f->compat >= 25) {
-        return f->op.opendir(path, fi);
+        return fuse_do_opendir(f, req, path, fi);
     } else {
         int err;
         struct fuse_file_info_compat22 tmp;
+        struct fuse_intr_data d;
         memcpy(&tmp, fi, sizeof(tmp));
+        fuse_prepare_interrupt(f, req, &d);
         err = ((struct fuse_operations_compat22 *) &f->op)->opendir(path, &tmp);
+        fuse_finish_interrupt(f, req, &d);
         memcpy(fi, &tmp, sizeof(tmp));
         fi->fh = tmp.fh;
         return err;
@@ -2299,21 +2712,27 @@ static void convert_statfs_old(struct statfs *oldbuf, struct statvfs *stbuf)
     stbuf->f_namemax = oldbuf->f_namelen;
 }
 
-static int fuse_do_statfs(struct fuse *f, struct statvfs *buf)
+static int fuse_compat_statfs(struct fuse *f, fuse_req_t req,
+                              struct statvfs *buf)
 {
     int err;
+    struct fuse_intr_data d;
 
     if (!f->compat || f->compat >= 25) {
-        err = f->op.statfs("/", buf);
+        err = fuse_do_statfs(f, req, "/", buf);
     } else if (f->compat > 11) {
         struct statfs oldbuf;
+        fuse_prepare_interrupt(f, req, &d);
         err = ((struct fuse_operations_compat22 *) &f->op)->statfs("/", &oldbuf);
+        fuse_finish_interrupt(f, req, &d);
         if (!err)
             convert_statfs_old(&oldbuf, buf);
     } else {
         struct fuse_statfs_compat1 compatbuf;
         memset(&compatbuf, 0, sizeof(struct fuse_statfs_compat1));
+        fuse_prepare_interrupt(f, req, &d);
         err = ((struct fuse_operations_compat1 *) &f->op)->statfs(&compatbuf);
+        fuse_finish_interrupt(f, req, &d);
         if (!err)
             convert_statfs_compat(&compatbuf, buf);
     }
@@ -2374,26 +2793,27 @@ __asm__(".symver fuse_new_compat22,fuse_new@FUSE_2.2");
 
 #else /* __FreeBSD__ */
 
-static int fuse_do_open(struct fuse *f, char *path, struct fuse_file_info *fi)
+static int fuse_compat_open(struct fuse *f, fuse_req_t req, char *path,
+                            struct fuse_file_info *fi)
 {
-    return f->op.open(path, fi);
+    return fuse_do_open(f, req, path, fi);
 }
 
-static void fuse_do_release(struct fuse *f, char *path,
-                           struct fuse_file_info *fi)
+static void fuse_compat_release(struct fuse *f, fuse_req_t req, char *path,
+                                struct fuse_file_info *fi)
 {
-    f->op.release(path ? path : "-", fi);
+    fuse_do_release(f, req, path ? path : "-", fi);
 }
 
-static int fuse_do_opendir(struct fuse *f, char *path,
-                           struct fuse_file_info *fi)
+static int fuse_compat_opendir(struct fuse *f, fuse_req_t req, char *path,
+                               struct fuse_file_info *fi)
 {
-    return f->op.opendir(path, fi);
+    return fuse_do_opendir(f, req, path, fi);
 }
 
-static int fuse_do_statfs(struct fuse *f, struct statvfs *buf)
+static int fuse_do_statfs(struct fuse *f, fuse_req_t req, struct statvfs *buf)
 {
-    return f->op.statfs("/", buf);
+    return fuse_do_statfs(f, req, "/", buf);
 }
 
 #endif /* __FreeBSD__ */

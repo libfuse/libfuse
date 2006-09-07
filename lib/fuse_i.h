@@ -11,6 +11,7 @@
 struct fuse_session;
 struct fuse_chan;
 struct fuse_lowlevel_ops;
+struct fuse_req;
 
 struct fuse_cmd {
     char *buf;

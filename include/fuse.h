@@ -513,10 +513,17 @@ int fuse_loop_mt(struct fuse *f);
  * The context is only valid for the duration of a filesystem
  * operation, and thus must not be stored and used later.
  *
- * @param f the FUSE handle
  * @return the context
  */
 struct fuse_context *fuse_get_context(void);
+
+/**
+ * Check if a request has already been interrupted
+ *
+ * @param req request handle
+ * @return 1 if the request has been interrupted, 0 otherwise
+ */
+int fuse_interrupted(void);
 
 /**
  * Obsolete, doesn't do anything
@@ -539,6 +546,9 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
  * ----------------------------------------------------------- */
+
+/* NOTE: the following functions are deprecated, and will be removed
+   from the 3.0 API.  Use the lowlevel session functions instead */
 
 /** Function type used to process commands */
 typedef void (*fuse_processor_t)(struct fuse *, struct fuse_cmd *, void *);
@@ -566,7 +576,7 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data);
     called */
 int fuse_exited(struct fuse *f);
 
-/** Set function which can be used to get the current context */
+/** This function is obsolete and implemented as a no-op */
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 
 /** Get session from fuse object */

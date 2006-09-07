@@ -32,13 +32,13 @@ static int set_one_signal_handler(int sig, void (*handler)(int))
     sa.sa_flags = 0;
 
     if (sigaction(sig, NULL, &old_sa) == -1) {
-        perror("FUSE: cannot get old signal handler");
+        perror("fuse: cannot get old signal handler");
         return -1;
     }
 
     if (old_sa.sa_handler == SIG_DFL &&
         sigaction(sig, &sa, NULL) == -1) {
-        perror("Cannot set signal handler");
+        perror("fuse: cannot set signal handler");
         return -1;
     }
     return 0;

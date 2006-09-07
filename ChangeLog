@@ -1,3 +1,17 @@
+2006-09-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: Add interrupt support to high level library, which may be
+	enabled with the 'intr' mount option.
+
+	* When an operation is interrupted the thread handling that
+	operation will receive SIGUSR1 (or other signal specified with the
+	'intr_signal=N' option).  The library installs a no-op signal
+	handler for this signal, unless there's already a handler
+	installed.
+
+	* The filesystem may query interrupt status (regardless of 'intr')
+	with the fuse_interrupted() function.
+
 2006-09-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: Multithreaded loop now allows unlimited number of threads.
