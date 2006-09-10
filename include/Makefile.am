@@ -11,6 +11,6 @@ fuseinclude_HEADERS = \
 	fuse_lowlevel_compat.h	\
 	fuse_opt.h
 
-include_HEADERS = old/fuse.h
+include_HEADERS = old/fuse.h ulockmgr.h
 
 noinst_HEADERS = fuse_kernel.h

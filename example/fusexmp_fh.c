@@ -11,6 +11,7 @@
 #define _GNU_SOURCE
 
 #include <fuse.h>
+#include <ulockmgr.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -400,6 +401,14 @@ static int xmp_removexattr(const char *path, const char *name)
 }
 #endif /* HAVE_SETXATTR */
 
+static int xmp_lock(const char *path, struct fuse_file_info *fi, int cmd,
+                    struct flock *lock, uint64_t owner)
+{
+    (void) path;
+
+    return ulockmgr_op(fi->fh, cmd, lock, &owner, sizeof(owner));
+}
+
 static struct fuse_operations xmp_oper = {
     .getattr	= xmp_getattr,
     .fgetattr	= xmp_fgetattr,
@@ -434,6 +443,7 @@ static struct fuse_operations xmp_oper = {
     .listxattr	= xmp_listxattr,
     .removexattr= xmp_removexattr,
 #endif
+    .lock	= xmp_lock,
 };
 
 int main(int argc, char *argv[])

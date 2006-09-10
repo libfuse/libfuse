@@ -83,6 +83,13 @@ static void fuse_destroy_inode(struct inode *inode)
 	struct fuse_inode *fi = get_fuse_inode(inode);
 	if (fi->forget_req)
 		fuse_request_free(fi->forget_req);
+#ifndef KERNEL_2_6_18_PLUS
+	if (inode->i_flock) {
+		WARN_ON(inode->i_flock->fl_next);
+		kfree(inode->i_flock);
+		inode->i_flock = NULL;
+	}
+#endif
 	kmem_cache_free(fuse_inode_cachep, inode);
 }
 

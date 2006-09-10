@@ -1,4 +1,4 @@
-AC_INIT(fuse-kernel, 2.6.0-pre3)
+AC_INIT(fuse-kernel, 2.6.0-rc1)
 AC_CONFIG_HEADERS([config.h])
 
 AC_PROG_INSTALL

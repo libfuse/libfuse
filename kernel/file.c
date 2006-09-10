@@ -867,9 +867,32 @@ static int fuse_setlk(struct file *file, struct file_lock *fl)
 	/* Unlock on close is handled by the flush method */
 	if (fl->fl_flags & FL_CLOSE)
 		return 0;
-#endif
 
 	req = fuse_get_req(fc);
+#else
+	/* If it's (possibly) unlock on close, don't fail the allocation */
+	if (fl->fl_type == F_UNLCK && fl->fl_start == 0 &&
+	    fl->fl_end == OFFSET_MAX)
+		req = fuse_get_req_nofail(fc, file);
+	else {
+		/* Hack: add dummy lock, otherwise unlock on close is
+		   optimized away */
+		struct file_lock **flp;
+		for (flp = &inode->i_flock;
+		     *flp && !((*flp)->fl_flags & FL_POSIX);
+		     flp = &(*flp)->fl_next);
+		if (!*flp) {
+			struct file_lock *dummy =
+				kmalloc(sizeof(struct file_lock), GFP_KERNEL);
+			if (!dummy)
+				return -ENOLCK;
+			locks_init_lock(dummy);
+			dummy->fl_flags |= FL_POSIX;
+			*flp = dummy;
+		}
+		req = fuse_get_req(fc);
+	}
+#endif
 	if (IS_ERR(req))
 		return PTR_ERR(req);
 

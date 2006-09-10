@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
 AM_CPPFLAGS = -I$(top_srcdir)/include -DFUSERMOUNT_DIR=\"$(bindir)\"
-lib_LTLIBRARIES = libfuse.la
+lib_LTLIBRARIES = libfuse.la libulockmgr.la
 
 if BSD
 mount_source = mount_bsd.c
@@ -26,5 +26,8 @@ libfuse_la_SOURCES = 		\
 
 libfuse_la_LDFLAGS = $(libfuse_libs) -version-number 2:6:0 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
+
+libulockmgr_la_SOURCES = ulockmgr.c
+libulockmgr_la_LDFLAGS = -version-number 1:0:0
 
 EXTRA_DIST = fuse_versionscript

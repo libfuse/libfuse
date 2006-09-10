@@ -3,4 +3,5 @@ Makefile
 .deps
 .libs
 fusermount
+ulockmgr_server
 fuse_ioslave

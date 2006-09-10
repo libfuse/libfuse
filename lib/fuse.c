@@ -34,6 +34,7 @@
 #define FUSE_DEFAULT_INTR_SIGNAL SIGUSR1
 
 #define FUSE_UNKNOWN_INO 0xffffffff
+#define OFFSET_MAX 0x7fffffffffffffffLL
 
 struct fuse_config {
     unsigned int uid;
@@ -76,6 +77,15 @@ struct fuse {
     int intr_installed;
 };
 
+struct lock {
+    int type;
+    off_t start;
+    off_t end;
+    pid_t pid;
+    uint64_t owner;
+    struct lock *next;
+};
+
 struct node {
     struct node *name_next;
     struct node *id_next;
@@ -91,6 +101,7 @@ struct node {
     struct timespec mtime;
     off_t size;
     int cache_valid;
+    struct lock *locks;
 };
 
 struct fuse_dirhandle {
@@ -1604,43 +1615,6 @@ static void fuse_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
         reply_err(req, res);
 }
 
-static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
-                       struct fuse_file_info *fi, uint64_t owner)
-{
-    struct fuse *f = req_fuse_prepare(req);
-    char *path;
-    int err;
-
-    err = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, ino);
-    if (path != NULL) {
-        if (f->conf.debug) {
-            printf("FLUSH[%llu]\n", (unsigned long long) fi->fh);
-            fflush(stdout);
-        }
-        err = -ENOSYS;
-        if (f->op.flush) {
-            struct fuse_intr_data d;
-            fuse_prepare_interrupt(f, req, &d);
-            err = f->op.flush(path, fi);
-            fuse_finish_interrupt(f, req, &d);
-        }
-        free(path);
-    }
-    if (f->op.lock) {
-        struct flock lock;
-        memset(&lock, 0, sizeof(lock));
-        lock.l_type = F_UNLCK;
-        lock.l_whence = SEEK_SET;
-        fuse_do_lock(f, req, path, fi, F_SETLK, &lock, owner);
-        if (err == -ENOSYS)
-            err = 0;
-    }
-    pthread_rwlock_unlock(&f->tree_lock);
-    reply_err(req, err);
-}
-
 static void fuse_release(fuse_req_t req, fuse_ino_t ino,
                          struct fuse_file_info *fi)
 {
@@ -2162,6 +2136,167 @@ static void fuse_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
     reply_err(req, err);
 }
 
+static struct lock *locks_conflict(struct node *node, const struct lock *lock)
+{
+    struct lock *l;
+
+    for (l = node->locks; l; l = l->next)
+        if (l->owner != lock->owner &&
+            lock->start <= l->end && l->start <= lock->end &&
+            (l->type == F_WRLCK || lock->type == F_WRLCK))
+            break;
+
+    return l;
+}
+
+static void delete_lock(struct lock **lockp)
+{
+    struct lock *l = *lockp;
+    *lockp = l->next;
+    free(l);
+}
+
+static void insert_lock(struct lock **pos, struct lock *lock)
+{
+    lock->next = *pos;
+    *pos = lock;
+}
+
+static int locks_insert(struct node *node, struct lock *lock)
+{
+    struct lock **lp;
+    struct lock *newl1 = NULL;
+    struct lock *newl2 = NULL;
+
+    if (lock->type != F_UNLCK || lock->start != 0 || lock->end != OFFSET_MAX) {
+        newl1 = malloc(sizeof(struct lock));
+        newl2 = malloc(sizeof(struct lock));
+
+        if (!newl1 || !newl2) {
+            free(newl1);
+            free(newl2);
+            return -ENOLCK;
+        }
+    }
+
+    for (lp = &node->locks; *lp;) {
+        struct lock *l = *lp;
+        if (l->owner != lock->owner)
+            goto skip;
+
+        if (lock->type == l->type) {
+            if (l->end < lock->start - 1)
+                goto skip;
+            if (lock->end < l->start - 1)
+                break;
+            if (l->start <= lock->start && lock->end <= l->end)
+                goto out;
+            if (l->start < lock->start)
+                lock->start = l->start;
+            if (lock->end < l->end)
+                lock->end = l->end;
+            goto delete;
+        } else {
+            if (l->end < lock->start)
+                goto skip;
+            if (lock->end < l->start)
+                break;
+            if (lock->start <= l->start && l->end <= lock->end)
+                goto delete;
+            if (l->end <= lock->end) {
+                l->end = lock->start - 1;
+                goto skip;
+            }
+            if (lock->start <= l->start) {
+                l->start = lock->end + 1;
+                break;
+            }
+            *newl2 = *l;
+            newl2->start = lock->end + 1;
+            l->end = lock->start - 1;
+            insert_lock(&l->next, newl2);
+            newl2 = NULL;
+        }
+    skip:
+        lp = &l->next;
+        continue;
+
+    delete:
+        delete_lock(lp);
+    }
+    if (lock->type != F_UNLCK) {
+        *newl1 = *lock;
+        insert_lock(lp, newl1);
+        newl1 = NULL;
+    }
+out:
+    free(newl1);
+    free(newl2);
+    return 0;
+}
+
+static void flock_to_lock(struct flock *flock, struct lock *lock)
+{
+    memset(lock, 0, sizeof(struct lock));
+    lock->type = flock->l_type;
+    lock->start = flock->l_start;
+    lock->end = flock->l_len ? flock->l_start + flock->l_len - 1 : OFFSET_MAX;
+    lock->pid = flock->l_pid;
+}
+
+static void lock_to_flock(struct lock *lock, struct flock *flock)
+{
+    flock->l_type = lock->type;
+    flock->l_start = lock->start;
+    flock->l_len = (lock->end == OFFSET_MAX) ? 0 : lock->end - lock->start + 1;
+    flock->l_pid = lock->pid;
+}
+
+static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
+                       struct fuse_file_info *fi, uint64_t owner)
+{
+    struct fuse *f = req_fuse_prepare(req);
+    char *path;
+    int err;
+
+    err = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
+    path = get_path(f, ino);
+    if (path != NULL) {
+        if (f->conf.debug) {
+            printf("FLUSH[%llu]\n", (unsigned long long) fi->fh);
+            fflush(stdout);
+        }
+        err = -ENOSYS;
+        if (f->op.flush) {
+            struct fuse_intr_data d;
+            fuse_prepare_interrupt(f, req, &d);
+            err = f->op.flush(path, fi);
+            fuse_finish_interrupt(f, req, &d);
+        }
+        free(path);
+    }
+    if (f->op.lock) {
+        struct flock lock;
+        struct lock l;
+        memset(&lock, 0, sizeof(lock));
+        lock.l_type = F_UNLCK;
+        lock.l_whence = SEEK_SET;
+        fuse_do_lock(f, req, path, fi, F_SETLK, &lock, owner);
+        flock_to_lock(&lock, &l);
+        l.owner = owner;
+        pthread_mutex_lock(&f->lock);
+        locks_insert(get_node(f, ino), &l);
+        pthread_mutex_unlock(&f->lock);
+
+        /* if op.lock() is defined FLUSH is needed regardless of op.flush() */
+        if (err == -ENOSYS)
+            err = 0;
+    }
+    pthread_rwlock_unlock(&f->tree_lock);
+    reply_err(req, err);
+}
+
 static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
                             struct fuse_file_info *fi, struct flock *lock,
                             uint64_t owner, int cmd)
@@ -2174,7 +2309,7 @@ static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        fuse_do_lock(f, req, path, fi, cmd, lock, owner);
+        err = fuse_do_lock(f, req, path, fi, cmd, lock, owner);
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -2185,7 +2320,23 @@ static void fuse_getlk(fuse_req_t req, fuse_ino_t ino,
                        struct fuse_file_info *fi, struct flock *lock,
                        uint64_t owner)
 {
-    int err = fuse_lock_common(req, ino, fi, lock, owner, F_GETLK);
+    int err;
+    struct lock l;
+    struct lock *conflict;
+    struct fuse *f = req_fuse(req);
+
+    flock_to_lock(lock, &l);
+    l.owner = owner;
+    pthread_mutex_lock(&f->lock);
+    conflict = locks_conflict(get_node(f, ino), &l);
+    if (conflict)
+        lock_to_flock(conflict, lock);
+    pthread_mutex_unlock(&f->lock);
+    if (!conflict)
+        err = fuse_lock_common(req, ino, fi, lock, owner, F_GETLK);
+    else
+        err = 0;
+
     if (!err)
         fuse_reply_lock(req, lock);
     else
@@ -2196,8 +2347,18 @@ static void fuse_setlk(fuse_req_t req, fuse_ino_t ino,
                        struct fuse_file_info *fi, struct flock *lock,
                        uint64_t owner, int sleep)
 {
-    reply_err(req, fuse_lock_common(req, ino, fi, lock, owner,
-                                    sleep ? F_SETLKW : F_SETLK));
+    int err = fuse_lock_common(req, ino, fi, lock, owner,
+                               sleep ? F_SETLKW : F_SETLK);
+    if (!err) {
+        struct fuse *f = req_fuse(req);
+        struct lock l;
+        flock_to_lock(lock, &l);
+        l.owner = owner;
+        pthread_mutex_lock(&f->lock);
+        locks_insert(get_node(f, ino), &l);
+        pthread_mutex_unlock(&f->lock);
+    }
+    reply_err(req, err);
 }
 
 static struct fuse_lowlevel_ops fuse_path_ops = {
@@ -2418,8 +2579,7 @@ static int fuse_init_intr_signal(int signum, int *installed)
 
         memset(&sa, 0, sizeof(struct sigaction));
         sa.sa_handler = fuse_intr_sighandler;
-        sigemptyset(&(sa.sa_mask));
-        sa.sa_flags = 0;
+        sigemptyset(&sa.sa_mask);
 
         if (sigaction(signum, &sa, NULL) == -1) {
             perror("fuse: cannot set interrupt signal handler");

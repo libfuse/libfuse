@@ -1,3 +1,16 @@
+2006-09-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.6.0-rc1
+
+2006-09-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: Fix unlock on close for kernels < 2.6.18
+
+	* Add ulockmgr library & server.  This can be used for handling
+	file locking requests either directly from libfuse or over a
+	network, etc.  This first version is not optimized and the number
+	of file descriptors it uses may get out of hand
+
 2006-09-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: Add interrupt support to high level library, which may be

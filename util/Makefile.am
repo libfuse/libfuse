@@ -1,8 +1,11 @@
 ## Process this file with automake to produce Makefile.in
 
-bin_PROGRAMS = fusermount
+bin_PROGRAMS = fusermount ulockmgr_server
 
 fusermount_SOURCES = fusermount.c
+
+ulockmgr_server_SOURCES = ulockmgr_server.c
+ulockmgr_server_LDFLAGS = -pthread
 
 install-exec-hook:
 	-chown root $(DESTDIR)$(bindir)/fusermount
