@@ -376,11 +376,21 @@ struct fuse_operations {
      * for fcntl(2).  The l_whence field will always be set to
      * SEEK_SET.
      *
-     * Unlike fcntl, the l_pid will be set in F_SETLK and F_SETLKW,
-     * and should be used by the filesystem to initialize this field
-     * in F_GETLK.
-     *
      * For checking lock ownership, the 'owner' argument must be used.
+     *
+     * For F_GETLK operation, the library will first check currently
+     * held locks, and if a conflicting lock is found it will return
+     * information without calling this method.  This ensures, that
+     * for local locks the l_pid field is correctly filled in.  The
+     * results may not be accurate in case of race conditions and in
+     * the presence of hard links, but it's unlikly that an
+     * application would rely on accurate GETLK results in these
+     * cases.  If a conflicting lock is not found, this method will be
+     * called, and the filesystem may fill out l_pid by a meaningful
+     * value, or it may leave this field zero.
+     *
+     * For F_SETLK and F_SETLKW the l_pid field will be set to the pid
+     * of the process performing the locking operation.
      *
      * Note: if this method is not implemented, the kernel will still
      * allow file locking to work locally.  Hence it is only
@@ -391,7 +401,12 @@ struct fuse_operations {
     int (*lock) (const char *, struct fuse_file_info *, int cmd,
                  struct flock *, uint64_t owner);
 
-    /** Change the access and modification times of a file */
+    /**
+     * Change the access and modification times of a file with
+     * nanosecond resolution
+     *
+     * Introduced in version 2.6
+     */
     int (*utimes) (const char *, const struct timespec tv[2]);
 };
 
