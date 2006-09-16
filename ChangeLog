@@ -1,3 +1,12 @@
+2006-09-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Rename new utimes() method to more logical utimens()
+
+2006-09-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fuse tried to unlink already unlinked hidden files.  Bug
+	reported by Milan Svoboda
+
 2006-09-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0-rc1

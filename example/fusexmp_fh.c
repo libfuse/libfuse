@@ -241,7 +241,7 @@ static int xmp_ftruncate(const char *path, off_t size,
     return 0;
 }
 
-static int xmp_utimes(const char *path, const struct timespec ts[2])
+static int xmp_utimens(const char *path, const struct timespec ts[2])
 {
     int res;
     struct timeval tv[2];
@@ -428,7 +428,7 @@ static struct fuse_operations xmp_oper = {
     .chown	= xmp_chown,
     .truncate	= xmp_truncate,
     .ftruncate	= xmp_ftruncate,
-    .utimes	= xmp_utimes,
+    .utimens	= xmp_utimens,
     .create	= xmp_create,
     .open	= xmp_open,
     .read	= xmp_read,

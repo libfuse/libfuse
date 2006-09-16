@@ -11,11 +11,10 @@ You can download the source code releases from
   http://sourceforge.net/projects/fuse
 
 or alternatively you can use CVS to get the very latest development
-version by setting the cvsroot to
+version:
 
-  :pserver:anonymous@cvs.sourceforge.net:/cvsroot/fuse
+  cvs -d :pserver:anonymous@fuse.cvs.sourceforge.net:/cvsroot/fuse co fuse
 
-and checking out the 'fuse' module.
 
 Dependencies
 ============

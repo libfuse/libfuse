@@ -407,7 +407,7 @@ struct fuse_operations {
      *
      * Introduced in version 2.6
      */
-    int (*utimes) (const char *, const struct timespec tv[2]);
+    int (*utimens) (const char *, const struct timespec tv[2]);
 };
 
 /** Extra context that may be needed by some filesystems

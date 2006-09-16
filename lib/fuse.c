@@ -1018,19 +1018,19 @@ static int do_truncate(struct fuse *f, fuse_req_t req,  const char *path,
     return err;
 }
 
-static int do_utimes(struct fuse *f, fuse_req_t req, const char *path,
-                     struct stat *attr)
+static int do_utimens(struct fuse *f, fuse_req_t req, const char *path,
+                      struct stat *attr)
 {
     int err;
     struct fuse_intr_data d;
 
     err = -ENOSYS;
-    if (f->op.utimes) {
+    if (f->op.utimens) {
         struct timespec tv[2];
         tv[0] = attr->st_atim;
         tv[1] = attr->st_mtim;
         fuse_prepare_interrupt(f, req, &d);
-        err = f->op.utimes(path, tv);
+        err = f->op.utimens(path, tv);
         fuse_finish_interrupt(f, req, &d);
     } else if (f->op.utime) {
         struct utimbuf buf;
@@ -1066,7 +1066,7 @@ static void fuse_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
             if (!err && (valid & FUSE_SET_ATTR_SIZE))
                 err = do_truncate(f, req, path, attr, fi);
             if (!err && (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) == (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME))
-                err = do_utimes(f, req, path, attr);
+                err = do_utimens(f, req, path, attr);
             if (!err)
                 err = fuse_do_getattr(f, req, path, &buf);
         }
@@ -1621,7 +1621,7 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     struct fuse *f = req_fuse_prepare(req);
     char *path;
     struct node *node;
-    int unlink_hidden;
+    int unlink_hidden = 0;
 
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
@@ -1637,7 +1637,10 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     node = get_node(f, ino);
     assert(node->open_count > 0);
     --node->open_count;
-    unlink_hidden = (node->is_hidden && !node->open_count);
+    if (node->is_hidden && !node->open_count) {
+        unlink_hidden = 1;
+        node->is_hidden = 0;
+    }
     pthread_mutex_unlock(&f->lock);
 
     if(unlink_hidden && path)

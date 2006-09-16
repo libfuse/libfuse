@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <utime.h>
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
@@ -104,6 +105,29 @@ static int check_mode(const char *path, mode_t mode)
         ERROR("mode 0%o instead of 0%o", stbuf.st_mode & 07777, mode);
         return -1;
     }
+    return 0;
+}
+
+static int check_times(const char *path, time_t atime, time_t mtime)
+{
+    int err = 0;
+    struct stat stbuf;
+    int res = lstat(path, &stbuf);
+    if (res == -1) {
+        PERROR("lstat");
+        return -1;
+    }
+    if (stbuf.st_atime != atime) {
+        ERROR("atime %li instead of %li", stbuf.st_atime, atime);
+        err--;
+    }
+    if (stbuf.st_mtime != mtime) {
+        ERROR("mtime %li instead of %li", stbuf.st_mtime, mtime);
+        err--;
+    }
+    if (err)
+        return -1;
+
     return 0;
 }
 
@@ -271,16 +295,18 @@ static int create_file(const char *path, const char *data, int len)
         PERROR("creat");
         return -1;
     }
-    res = write(fd, data, len);
-    if (res == -1) {
-        PERROR("write");
-        close(fd);
-        return -1;
-    }
-    if (res != len) {
-        ERROR("write is short: %u instead of %u", res, len);
-        close(fd);
-        return -1;
+    if (len) {
+        res = write(fd, data, len);
+        if (res == -1) {
+            PERROR("write");
+            close(fd);
+            return -1;
+        }
+        if (res != len) {
+            ERROR("write is short: %u instead of %u", res, len);
+            close(fd);
+            return -1;
+        }
     }
     res = close(fd);
     if (res == -1) {
@@ -300,9 +326,11 @@ static int create_file(const char *path, const char *data, int len)
     if (res == -1)
         return -1;
 
-    res = check_data(path, data, 0, len);
-    if (res == -1)
-        return -1;
+    if (len) {
+        res = check_data(path, data, 0, len);
+        if (res == -1)
+            return -1;
+    }
 
     return 0;
 }
@@ -364,7 +392,7 @@ static int create_dir(const char *path, const char **dir_files)
     return 0;
 }
 
-int test_truncate(int len)
+static int test_truncate(int len)
 {
     const char *data = testdata;
     int datalen = testdatalen;
@@ -403,7 +431,7 @@ int test_truncate(int len)
         PERROR("unlink");
         return -1;
     }
-    res = check_nonexist(testfile2);
+    res = check_nonexist(testfile);
     if (res == -1)
         return -1;
 
@@ -411,7 +439,7 @@ int test_truncate(int len)
     return 0;
 }
 
-int test_ftruncate(int len, int mode)
+static int test_ftruncate(int len, int mode)
 {
     const char *data = testdata;
     int datalen = testdatalen;
@@ -470,7 +498,43 @@ int test_ftruncate(int len, int mode)
         PERROR("unlink");
         return -1;
     }
-    res = check_nonexist(testfile2);
+    res = check_nonexist(testfile);
+    if (res == -1)
+        return -1;
+
+    success();
+    return 0;
+}
+
+static int test_utime(void)
+{
+    struct utimbuf utm;
+    time_t atime = 987631200;
+    time_t mtime = 123116400;
+    int res;
+
+    start_test("utime");
+    res = create_file(testfile, NULL, 0);
+    if (res == -1)
+        return -1;
+
+    utm.actime = atime;
+    utm.modtime = mtime;
+    res = utime(testfile, &utm);
+    if (res == -1) {
+        PERROR("utime");
+        return -1;
+    }
+    res = check_times(testfile, atime, mtime);
+    if (res == -1) {
+        return -1;
+    }
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile);
     if (res == -1)
         return -1;
 
@@ -865,7 +929,7 @@ static int test_rename_dir(void)
     return 0;
 }
 
-int test_mkfifo(void)
+static int test_mkfifo(void)
 {
     int res;
     int err = 0;
@@ -897,7 +961,7 @@ int test_mkfifo(void)
     return 0;
 }
 
-int test_mkdir(void)
+static int test_mkdir(void)
 {
     int res;
     int err = 0;
@@ -954,6 +1018,7 @@ int main(int argc, char *argv[])
     err += test_mkdir();
     err += test_rename_file();
     err += test_rename_dir();
+    err += test_utime();
     err += test_truncate(0);
     err += test_truncate(testdatalen / 2);
     err += test_truncate(testdatalen);
@@ -1007,8 +1072,10 @@ int main(int argc, char *argv[])
     rmdir(testdir);
     rmdir(testdir2);
 
-    if (err)
+    if (err) {
+        fprintf(stderr, "%i tests failed\n", -err);
         return 1;
+    }
 
     return 0;
 }
