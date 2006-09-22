@@ -51,6 +51,10 @@
 #  endif
 #endif
 
+#ifdef __arm__
+#define DCACHE_BUG
+#endif
+
 #include "config.h"
 #ifndef KERNEL_2_6
 #  include <linux/config.h>
