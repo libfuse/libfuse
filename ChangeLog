@@ -1,3 +1,10 @@
+2006-09-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix compatibility bugs in low level interface.  Reported by
+	Ricardo Correia
+
+	* Add workaround for ARM caching bug
+
 2006-09-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Rename new utimes() method to more logical utimens()

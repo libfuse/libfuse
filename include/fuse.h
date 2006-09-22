@@ -617,7 +617,7 @@ struct fuse_session *fuse_get_session(struct fuse *f);
 #    define fuse_new fuse_new_compat22
 #    define fuse_setup fuse_setup_compat22
 #    define fuse_operations fuse_operations_compat22
-#    define fuse_file_info fuse_file_info_compat22
+#    define fuse_file_info fuse_file_info_compat
 #  elif FUSE_USE_VERSION == 24
 #    error Compatibility with high-level API version 24 not supported
 #  else

@@ -7,6 +7,7 @@
 */
 
 #include "fuse_lowlevel.h"
+#include "fuse_common_compat.h"
 #include "fuse_lowlevel_compat.h"
 
 #include <stdio.h>

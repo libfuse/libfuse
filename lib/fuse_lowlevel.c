@@ -1243,6 +1243,7 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 }
 
 
+#include "fuse_common_compat.h"
 #include "fuse_lowlevel_compat.h"
 
 #ifndef __FreeBSD__
@@ -1290,8 +1291,8 @@ int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf)
 }
 
 struct fuse_session *fuse_lowlevel_new_compat(const char *opts,
-                                              const struct fuse_lowlevel_ops *op,
-                                              size_t op_size, void *userdata)
+                            const struct fuse_lowlevel_ops_compat *op,
+                            size_t op_size, void *userdata)
 {
     struct fuse_session *se;
     struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
@@ -1303,7 +1304,8 @@ struct fuse_session *fuse_lowlevel_new_compat(const char *opts,
         fuse_opt_free_args(&args);
         return NULL;
     }
-    se = fuse_lowlevel_new(&args, op, op_size, userdata);
+    se = fuse_lowlevel_new(&args, (const struct fuse_lowlevel_ops *) op,
+                           op_size, userdata);
     fuse_opt_free_args(&args);
 
     return se;

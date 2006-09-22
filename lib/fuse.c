@@ -2777,6 +2777,7 @@ void fuse_destroy(struct fuse *f)
     fuse_delete_context_key();
 }
 
+#include "fuse_common_compat.h"
 #include "fuse_compat.h"
 
 static struct fuse *fuse_new_common_compat25(int fd, struct fuse_args *args,
@@ -2802,7 +2803,7 @@ static int fuse_compat_open(struct fuse *f, fuse_req_t req, char *path,
     if (!f->compat || f->compat >= 25)
         err = fuse_do_open(f, req, path, fi);
     else if (f->compat == 22) {
-        struct fuse_file_info_compat22 tmp;
+        struct fuse_file_info_compat tmp;
         memcpy(&tmp, fi, sizeof(tmp));
         fuse_prepare_interrupt(f, req, &d);
         err = ((struct fuse_operations_compat22 *) &f->op)->open(path, &tmp);
@@ -2838,7 +2839,7 @@ static int fuse_compat_opendir(struct fuse *f, fuse_req_t req, char *path,
         return fuse_do_opendir(f, req, path, fi);
     } else {
         int err;
-        struct fuse_file_info_compat22 tmp;
+        struct fuse_file_info_compat tmp;
         struct fuse_intr_data d;
         memcpy(&tmp, fi, sizeof(tmp));
         fuse_prepare_interrupt(f, req, &d);
