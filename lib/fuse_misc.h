@@ -22,6 +22,16 @@ static inline void fuse_mutex_init(pthread_mutex_t *mut)
 }
 #endif
 
-
-
-
+#ifdef HAVE_STRUCT_STAT_ST_ATIM
+/* Linux */
+#define ST_ATIM(stbuf) (stbuf)->st_atim
+#define ST_CTIM(stbuf) (stbuf)->st_ctim
+#define ST_MTIM(stbuf) (stbuf)->st_mtim
+#define FUSE_STAT_HAS_NANOSEC 1 
+#elif defined(HAVE_STRUCT_STAT_ST_ATIMESPEC)
+/* FreeBSD */
+#define ST_ATIM(stbuf) (stbuf)->st_atimespec
+#define ST_CTIM(stbuf) (stbuf)->st_ctimespec
+#define ST_MTIM(stbuf) (stbuf)->st_mtimespec
+#define FUSE_STAT_HAS_NANOSEC 1
+#endif

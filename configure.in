@@ -60,6 +60,7 @@ if test "$enable_mtab" = "no"; then
 fi
 AC_CHECK_FUNCS([fork setxattr fdatasync])
 AC_CHECK_MEMBERS([struct stat.st_atim])
+AC_CHECK_MEMBERS([struct stat.st_atimespec])
 
 libfuse_libs=-pthread
 LIBS=

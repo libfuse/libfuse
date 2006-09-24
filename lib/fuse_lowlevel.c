@@ -72,10 +72,10 @@ static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
     attr->atime     = stbuf->st_atime;
     attr->mtime     = stbuf->st_mtime;
     attr->ctime     = stbuf->st_ctime;
-#ifdef HAVE_STRUCT_STAT_ST_ATIM
-    attr->atimensec = stbuf->st_atim.tv_nsec;
-    attr->mtimensec = stbuf->st_mtim.tv_nsec;
-    attr->ctimensec = stbuf->st_ctim.tv_nsec;
+#ifdef FUSE_STAT_HAS_NANOSEC
+    attr->atimensec = ST_ATIM(stbuf).tv_nsec;
+    attr->mtimensec = ST_MTIM(stbuf).tv_nsec;
+    attr->ctimensec = ST_CTIM(stbuf).tv_nsec;
 #endif
 }
 
@@ -87,9 +87,9 @@ static void convert_attr(const struct fuse_setattr_in *attr, struct stat *stbuf)
     stbuf->st_size         = attr->size;
     stbuf->st_atime        = attr->atime;
     stbuf->st_mtime        = attr->mtime;
-#ifdef HAVE_STRUCT_STAT_ST_ATIM
-    stbuf->st_atim.tv_nsec = attr->atimensec;
-    stbuf->st_mtim.tv_nsec = attr->mtimensec;
+#ifdef FUSE_STAT_HAS_NANOSEC
+    ST_ATIM(stbuf).tv_nsec = attr->atimensec;
+    ST_MTIM(stbuf).tv_nsec = attr->mtimensec;
 #endif
 }
 

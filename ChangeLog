@@ -1,3 +1,9 @@
+2006-09-24  Csaba Henk <csaba.henk@creo.hu>
+
+	* Add support for nanosec times on FreeBSD
+
+	* Fix FreeBSD compatibility issues
+
 2006-09-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compatibility bugs in low level interface.  Reported by

@@ -702,16 +702,16 @@ static int hide_node(struct fuse *f, fuse_req_t req, const char *oldpath,
 static int mtime_eq(const struct stat *stbuf, const struct timespec *ts)
 {
     return stbuf->st_mtime == ts->tv_sec
-#ifdef HAVE_STRUCT_STAT_ST_ATIM
-        && stbuf->st_mtim.tv_nsec == ts->tv_nsec
+#ifdef FUSE_STAT_HAS_NANOSEC
+        && ST_MTIM(stbuf).tv_nsec == ts->tv_nsec
 #endif
         ;
 }
 
 static void mtime_set(const struct stat *stbuf, struct timespec *ts)
 {
-#ifdef HAVE_STRUCT_STAT_ST_ATIM
-    *ts = stbuf->st_mtim;
+#ifdef FUSE_STAT_HAS_NANOSEC
+    *ts = ST_MTIM(stbuf);
 #else
     ts->tv_sec = stbuf->st_mtime;
 #endif
@@ -1027,8 +1027,15 @@ static int do_utimens(struct fuse *f, fuse_req_t req, const char *path,
     err = -ENOSYS;
     if (f->op.utimens) {
         struct timespec tv[2];
-        tv[0] = attr->st_atim;
-        tv[1] = attr->st_mtim;
+#ifdef FUSE_STAT_HAS_NANOSEC
+        tv[0] = ST_ATIM(attr);
+        tv[1] = ST_MTIM(attr);
+#else
+        tv[0].tv_sec = attr->st_atime;
+        tv[0].tv_nsec = 0;
+        tv[1].tv_sec = attr->st_mtime;
+        tv[1].tv_nsec = 0;
+#endif
         fuse_prepare_interrupt(f, req, &d);
         err = f->op.utimens(path, tv);
         fuse_finish_interrupt(f, req, &d);
@@ -2973,7 +2980,7 @@ static int fuse_compat_opendir(struct fuse *f, fuse_req_t req, char *path,
     return fuse_do_opendir(f, req, path, fi);
 }
 
-static int fuse_do_statfs(struct fuse *f, fuse_req_t req, struct statvfs *buf)
+static int fuse_compat_statfs(struct fuse *f, fuse_req_t req, struct statvfs *buf)
 {
     return fuse_do_statfs(f, req, "/", buf);
 }

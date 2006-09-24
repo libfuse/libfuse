@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <fcntl.h>
+#include <sys/types.h>
 
 /**
  * Perform POSIX locking operation

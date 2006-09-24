@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <assert.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
