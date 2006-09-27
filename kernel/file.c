@@ -434,7 +434,7 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
 	data.req = NULL;
 
 	err = read_cache_pages(mapping, pages, fuse_readpages_fill, &data);
-	if (!err) {
+	if (!err && data.req) {
 		if (data.req->num_pages)
 			fuse_send_readpages(data.req, file, inode);
 		else

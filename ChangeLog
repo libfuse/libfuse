@@ -1,13 +1,23 @@
+2006-09-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix Oops in fuse_readpages().  Reported by David Shaw
+
 2006-09-24  Csaba Henk <csaba.henk@creo.hu>
 
 	* Add support for nanosec times on FreeBSD
 
 	* Fix FreeBSD compatibility issues
 
+2006-09-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix one more compatibility bug.  Thanks to Ricardo Correia
+
+	* Fix utimens compilation with uClibc.  Patch from Jamie Guinan
+
 2006-09-22  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Fix compatibility bugs in low level interface.  Reported by
-	Ricardo Correia
+	* Fixed several compatibility bugs in low level interface.
+	Reported by Ricardo Correia
 
 	* Add workaround for ARM caching bug
 

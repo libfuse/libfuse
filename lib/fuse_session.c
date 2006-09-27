@@ -120,8 +120,8 @@ int fuse_session_exited(struct fuse_session *se)
         return se->exited;
 }
 
-struct fuse_chan *fuse_chan_new_common(struct fuse_chan_ops *op, int fd,
-                                       size_t bufsize, void *data, int compat)
+static struct fuse_chan *fuse_chan_new_common(struct fuse_chan_ops *op, int fd,
+                                size_t bufsize, void *data, int compat)
 {
     struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
     if (ch == NULL) {
@@ -186,7 +186,6 @@ int fuse_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
 {
     int res;
 
-    assert(ch->compat);
     res = fuse_chan_recv(&ch, buf, size);
     return res >= 0 ? res : (res != -EINTR && res != -EAGAIN) ? -1 : 0;
 }
