@@ -54,7 +54,6 @@ void fuse_request_free(struct fuse_req *req)
 	kmem_cache_free(fuse_req_cachep, req);
 }
 
-#ifdef KERNEL_2_6
 static void block_sigs(sigset_t *oldset)
 {
 	sigset_t mask;
@@ -67,43 +66,6 @@ static void restore_sigs(sigset_t *oldset)
 {
 	sigprocmask(SIG_SETMASK, oldset, NULL);
 }
-#else
-#ifdef HAVE_RECALC_SIGPENDING_TSK
-static void block_sigs(sigset_t *oldset)
-{
-	spin_lock_irq(&current->sighand->siglock);
-	*oldset = current->blocked;
-	siginitsetinv(&current->blocked, sigmask(SIGKILL) & ~oldset->sig[0]);
-	recalc_sigpending();
-	spin_unlock_irq(&current->sighand->siglock);
-}
-
-static void restore_sigs(sigset_t *oldset)
-{
-	spin_lock_irq(&current->sighand->siglock);
-	current->blocked = *oldset;
-	recalc_sigpending();
-	spin_unlock_irq(&current->sighand->siglock);
-}
-#else
-static void block_sigs(sigset_t *oldset)
-{
-	spin_lock_irq(&current->sigmask_lock);
-	*oldset = current->blocked;
-	siginitsetinv(&current->blocked, sigmask(SIGKILL) & ~oldset->sig[0]);
-	recalc_sigpending(current);
-	spin_unlock_irq(&current->sigmask_lock);
-}
-
-static void restore_sigs(sigset_t *oldset)
-{
-	spin_lock_irq(&current->sigmask_lock);
-	current->blocked = *oldset;
-	recalc_sigpending(current);
-	spin_unlock_irq(&current->sigmask_lock);
-}
-#endif
-#endif
 
 static void __fuse_get_request(struct fuse_req *req)
 {
@@ -681,17 +643,6 @@ static void request_wait(struct fuse_conn *fc)
 	remove_wait_queue(&fc->waitq, &wait);
 }
 
-#ifndef KERNEL_2_6
-static size_t iov_length(const struct iovec *iov, unsigned long nr_segs)
-{
-	unsigned long seg;
-	size_t ret = 0;
-
-	for (seg = 0; seg < nr_segs; seg++)
-		ret += iov[seg].iov_len;
-	return ret;
-}
-#endif
 /*
  * Transfer an interrupt request to userspace
  *

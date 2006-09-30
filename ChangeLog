@@ -1,3 +1,9 @@
+2006-09-30  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Drop support for kernels earlier than 2.6.9.  Kernel module from
+	previous (2.5.x) release can be used with library from this
+	release
+
 2006-09-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix compilation on 2.6.9.  Report from Troy Ayers

@@ -13,42 +13,30 @@
 #include <linux/version.h>
 #include <linux/utsname.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-#error Kernel version 2.5.* not supported
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
+#error Kernel versions earlier than 2.6.9 are not supported
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
-#  define KERNEL_2_6
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,6)
-#    define KERNEL_2_6_6_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,8)
-#    define KERNEL_2_6_8_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9)
-#    define KERNEL_2_6_9_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
-#    define KERNEL_2_6_10_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
-#    define KERNEL_2_6_11_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
-#    define KERNEL_2_6_12_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)
-#    define KERNEL_2_6_13_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)
-#    define KERNEL_2_6_16_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17)
-#    define KERNEL_2_6_17_PLUS
-#  endif
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
-#    define KERNEL_2_6_18_PLUS
-#  endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
+#  define KERNEL_2_6_10_PLUS
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+#  define KERNEL_2_6_11_PLUS
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
+#  define KERNEL_2_6_12_PLUS
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,13)
+#  define KERNEL_2_6_13_PLUS
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)
+#  define KERNEL_2_6_16_PLUS
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17)
+#  define KERNEL_2_6_17_PLUS
+#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
+#  define KERNEL_2_6_18_PLUS
 #endif
 
 #ifdef __arm__
@@ -56,30 +44,14 @@
 #endif
 
 #include "config.h"
-#ifndef KERNEL_2_6
-#  include <linux/config.h>
-#  ifdef CONFIG_MODVERSIONS
-#     define MODVERSIONS
-#     include <linux/modversions.h>
-#  endif
-#  ifndef HAVE_I_SIZE_FUNC
-#     define i_size_read(inode) ((inode)->i_size)
-#     define i_size_write(inode, size) do { (inode)->i_size = size; } while(0)
-#  endif
-#  define new_decode_dev(x) (x)
-#  define new_encode_dev(x) (x)
-#  define s_fs_info u.generic_sbp
-#endif /* KERNEL_2_6 */
 #endif /* FUSE_MAINLINE */
 #include <linux/fs.h>
 #include <linux/mount.h>
 #include <linux/wait.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
-#ifdef KERNEL_2_6
 #include <linux/mm.h>
 #include <linux/backing-dev.h>
-#endif
 #ifdef KERNEL_2_6_17_PLUS
 #include <linux/mutex.h>
 #else
@@ -99,15 +71,6 @@
 #endif
 #ifndef __user
 #define __user
-#endif
-#ifndef KERNEL_2_6
-#include <linux/pagemap.h>
-static inline void set_page_dirty_lock(struct page *page)
-{
-	lock_page(page);
-	set_page_dirty(page);
-	unlock_page(page);
-}
 #endif
 /** Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
@@ -138,11 +101,6 @@ extern struct list_head fuse_conn_list;
 extern struct mutex fuse_mutex;
 #else
 extern struct semaphore fuse_mutex;
-#endif
-#ifndef KERNEL_2_6
-/** Allow FUSE to combine reads into 64k chunks.  This is useful if
-    the filesystem is better at handling large chunks */
-#define FUSE_LARGE_READ          (1 << 31)
 #endif
 
 /** FUSE inode */
@@ -444,10 +402,8 @@ struct fuse_conn {
 	/** Negotiated minor version */
 	unsigned minor;
 
-#ifdef KERNEL_2_6
 	/** Backing dev info */
 	struct backing_dev_info bdi;
-#endif
 
 	/** Entry on the fuse_conn_list */
 	struct list_head entry;

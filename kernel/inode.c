@@ -14,13 +14,9 @@
 #include <linux/seq_file.h>
 #include <linux/init.h>
 #include <linux/module.h>
-#ifdef KERNEL_2_6
 #include <linux/parser.h>
 #include <linux/statfs.h>
 #include <linux/random.h>
-#else
-#include "compat/parser.h"
-#endif
 
 MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
@@ -34,9 +30,6 @@ DEFINE_MUTEX(fuse_mutex);
 
 #define FUSE_SUPER_MAGIC 0x65735546
 
-#ifndef KERNEL_2_6
-#define kstatfs statfs
-#endif
 #ifndef MAX_LFS_FILESIZE
 #define MAX_LFS_FILESIZE (((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1)
 #endif
@@ -62,9 +55,6 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 	if (!inode)
 		return NULL;
 
-#ifndef KERNEL_2_6
-	inode->u.generic_ip = NULL;
-#endif
 	fi = get_fuse_inode(inode);
 	fi->i_time = 0;
 	fi->nodeid = 0;
@@ -132,11 +122,7 @@ static int fuse_remount_fs(struct super_block *sb, int *flags, char *data)
 void fuse_change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
 	if (S_ISREG(inode->i_mode) && i_size_read(inode) != attr->size)
-#ifdef KERNEL_2_6
 		invalidate_inode_pages(inode->i_mapping);
-#else
-		invalidate_inode_pages(inode);
-#endif
 
 	inode->i_ino     = attr->ino;
 	inode->i_mode    = (inode->i_mode & S_IFMT) + (attr->mode & 07777);
@@ -146,18 +132,12 @@ void fuse_change_attributes(struct inode *inode, struct fuse_attr *attr)
 	i_size_write(inode, attr->size);
 	inode->i_blksize = PAGE_CACHE_SIZE;
 	inode->i_blocks  = attr->blocks;
-#ifdef KERNEL_2_6
 	inode->i_atime.tv_sec   = attr->atime;
 	inode->i_atime.tv_nsec  = attr->atimensec;
 	inode->i_mtime.tv_sec   = attr->mtime;
 	inode->i_mtime.tv_nsec  = attr->mtimensec;
 	inode->i_ctime.tv_sec   = attr->ctime;
 	inode->i_ctime.tv_nsec  = attr->ctimensec;
-#else
-	inode->i_atime   = attr->atime;
-	inode->i_mtime   = attr->mtime;
-	inode->i_ctime   = attr->ctime;
-#endif
 }
 
 static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
@@ -180,7 +160,6 @@ static void fuse_init_inode(struct inode *inode, struct fuse_attr *attr)
 		BUG();
 }
 
-#ifdef KERNEL_2_6
 static int fuse_inode_eq(struct inode *inode, void *_nodeidp)
 {
 	unsigned long nodeid = *(unsigned long *) _nodeidp;
@@ -211,11 +190,7 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 		return NULL;
 
 	if ((inode->i_state & I_NEW)) {
-#ifdef KERNEL_2_6_8_PLUS
 		inode->i_flags |= S_NOATIME|S_NOCMTIME;
-#else
-		inode->i_flags |= S_NOATIME;
-#endif
 		inode->i_generation = generation;
 		inode->i_data.backing_dev_info = &fc->bdi;
 		fuse_init_inode(inode, attr);
@@ -234,48 +209,6 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 	fuse_change_attributes(inode, attr);
 	return inode;
 }
-#else
-static int fuse_inode_eq(struct inode *inode, unsigned long ino, void *_nodeidp){
-	unsigned long nodeid = *(unsigned long *) _nodeidp;
-	if (inode->u.generic_ip && get_node_id(inode) == nodeid)
-		return 1;
-	else
-		return 0;
-}
-
-struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
-			int generation, struct fuse_attr *attr)
-{
-	struct inode *inode;
-	struct fuse_inode *fi;
-	int retried = 0;
-
- retry:
-	inode = iget4(sb, attr->ino, fuse_inode_eq, &nodeid);
-	if (!inode)
-		return NULL;
-
-	if (!inode->u.generic_ip) {
-		get_fuse_inode(inode)->nodeid = nodeid;
-		inode->u.generic_ip = inode;
-		inode->i_generation = generation;
-		fuse_init_inode(inode, attr);
-	} else if ((inode->i_mode ^ attr->mode) & S_IFMT) {
-		BUG_ON(retried);
-		/* Inode has changed type, any I/O on the old should fail */
-		remove_inode_hash(inode);
-		make_bad_inode(inode);
-		iput(inode);
-		retried = 1;
-		goto retry;
-	}
-
-	fi = get_fuse_inode(inode);
-	fi->nlookup ++;
-	fuse_change_attributes(inode, attr);
-	return inode;
-}
-#endif
 
 #ifdef KERNEL_2_6_18_PLUS
 static void fuse_umount_begin(struct vfsmount *vfsmnt, int flags)
@@ -313,9 +246,7 @@ static void convert_fuse_statfs(struct kstatfs *stbuf, struct fuse_kstatfs *attr
 {
 	stbuf->f_type    = FUSE_SUPER_MAGIC;
 	stbuf->f_bsize   = attr->bsize;
-#ifdef KERNEL_2_6
 	stbuf->f_frsize  = attr->frsize;
-#endif
 	stbuf->f_blocks  = attr->blocks;
 	stbuf->f_bfree   = attr->bfree;
 	stbuf->f_bavail  = attr->bavail;
@@ -368,9 +299,6 @@ enum {
 	OPT_GROUP_ID,
 	OPT_DEFAULT_PERMISSIONS,
 	OPT_ALLOW_OTHER,
-#ifndef KERNEL_2_6
-	OPT_LARGE_READ,
-#endif
 	OPT_MAX_READ,
 	OPT_ERR
 };
@@ -382,9 +310,6 @@ static match_table_t tokens = {
 	{OPT_GROUP_ID,			"group_id=%u"},
 	{OPT_DEFAULT_PERMISSIONS,	"default_permissions"},
 	{OPT_ALLOW_OTHER,		"allow_other"},
-#ifndef KERNEL_2_6
-	{OPT_LARGE_READ,		"large_read"},
-#endif
 	{OPT_MAX_READ,			"max_read=%u"},
 	{OPT_ERR,			NULL}
 };
@@ -440,11 +365,6 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d)
 			d->flags |= FUSE_ALLOW_OTHER;
 			break;
 
-#ifndef KERNEL_2_6
-		case OPT_LARGE_READ:
-			d->flags |= FUSE_LARGE_READ;
-			break;
-#endif
 		case OPT_MAX_READ:
 			if (match_int(&args[0], &value))
 				return 0;
@@ -473,10 +393,6 @@ static int fuse_show_options(struct seq_file *m, struct vfsmount *mnt)
 		seq_puts(m, ",default_permissions");
 	if (fc->flags & FUSE_ALLOW_OTHER)
 		seq_puts(m, ",allow_other");
-#ifndef KERNEL_2_6
-	if (fc->flags & FUSE_LARGE_READ)
-		seq_puts(m, ",large_read");
-#endif
 	if (fc->max_read != ~0)
 		seq_printf(m, ",max_read=%u", fc->max_read);
 	return 0;
@@ -506,10 +422,8 @@ static struct fuse_conn *new_conn(void)
 		INIT_LIST_HEAD(&fc->io);
 		INIT_LIST_HEAD(&fc->interrupts);
 		atomic_set(&fc->num_waiting, 0);
-#ifdef KERNEL_2_6_6_PLUS
 		fc->bdi.ra_pages = (VM_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
 		fc->bdi.unplug_io_fn = default_unplug_io_fn;
-#endif
 		fc->reqctr = 0;
 		fc->blocked = 1;
 		get_random_bytes(&fc->scramble_key, sizeof(fc->scramble_key));
@@ -539,7 +453,6 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 	return fuse_iget(sb, 1, 0, &attr);
 }
 #ifndef FUSE_MAINLINE
-#ifdef KERNEL_2_6
 static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 {
 	__u32 *objp = vobjp;
@@ -601,7 +514,6 @@ static struct export_operations fuse_export_operations = {
 	.encode_fh      = fuse_encode_fh,
 };
 #endif
-#endif
 
 static struct super_operations fuse_super_operations = {
 	.alloc_inode    = fuse_alloc_inode,
@@ -622,7 +534,6 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
 	if (req->out.h.error || arg->major != FUSE_KERNEL_VERSION)
 		fc->conn_error = 1;
 	else {
-#ifdef KERNEL_2_6
 		unsigned long ra_pages;
 
 		if (arg->minor >= 6) {
@@ -637,7 +548,6 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
 		}
 
 		fc->bdi.ra_pages = min(fc->bdi.ra_pages, ra_pages);
-#endif
 		fc->minor = arg->minor;
 		fc->max_write = arg->minor < 5 ? 4096 : arg->max_write;
 	}
@@ -652,10 +562,8 @@ static void fuse_send_init(struct fuse_conn *fc, struct fuse_req *req)
 
 	arg->major = FUSE_KERNEL_VERSION;
 	arg->minor = FUSE_KERNEL_MINOR_VERSION;
-#ifdef KERNEL_2_6
 	arg->max_readahead = fc->bdi.ra_pages * PAGE_CACHE_SIZE;
 	arg->flags |= FUSE_ASYNC_READ | FUSE_POSIX_LOCKS;
-#endif
 	req->in.h.opcode = FUSE_INIT;
 	req->in.numargs = 1;
 	req->in.args[0].size = sizeof(*arg);
@@ -699,9 +607,7 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_op = &fuse_super_operations;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 #ifndef FUSE_MAINLINE
-#ifdef KERNEL_2_6
 	sb->s_export_op = &fuse_export_operations;
-#endif
 #endif
 
 	file = fget(d.fd);
@@ -775,7 +681,6 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	return err;
 }
 
-#ifdef KERNEL_2_6
 #ifdef KERNEL_2_6_18_PLUS
 static int fuse_get_sb(struct file_system_type *fs_type,
 		       int flags, const char *dev_name,
@@ -798,27 +703,12 @@ static struct file_system_type fuse_fs_type = {
 	.get_sb		= fuse_get_sb,
 	.kill_sb	= kill_anon_super,
 };
-#else
-static struct super_block *fuse_read_super_compat(struct super_block *sb,
-						  void *data, int silent)
-{
-	int err = fuse_fill_super(sb, data, silent);
-	if (err)
-		return NULL;
-	else
-		return sb;
-}
 
-static DECLARE_FSTYPE(fuse_fs_type, "fuse", fuse_read_super_compat, 0);
-#endif
-
-#ifdef KERNEL_2_6
 #ifndef HAVE_FS_SUBSYS
 static decl_subsys(fs, NULL, NULL);
 #endif
 static decl_subsys(fuse, NULL, NULL);
 static decl_subsys(connections, NULL, NULL);
-#endif /* KERNEL_2_6 */
 
 static void fuse_inode_init_once(void *foo, kmem_cache_t *cachep,
 				 unsigned long flags)
@@ -857,7 +747,6 @@ static void fuse_fs_cleanup(void)
 	kmem_cache_destroy(fuse_inode_cachep);
 }
 
-#ifdef KERNEL_2_6
 static int fuse_sysfs_init(void)
 {
 	int err;
@@ -896,15 +785,6 @@ static void fuse_sysfs_cleanup(void)
 	subsystem_unregister(&fs_subsys);
 #endif
 }
-#else /* KERNEL_2_6 */
-static int fuse_sysfs_init(void)
-{
-	return 0;
-}
-static void fuse_sysfs_cleanup(void)
-{
-}
-#endif /* KERNEL_2_6 */
 
 static int __init fuse_init(void)
 {

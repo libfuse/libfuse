@@ -12,10 +12,6 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 
-#ifndef KERNEL_2_6
-#define PageUptodate(page) Page_Uptodate(page)
-#define clear_page_dirty(page)	ClearPageDirty(page)
-#endif
 #ifndef KERNEL_2_6_11_PLUS
 static inline loff_t page_offset(struct page *page)
 {
@@ -79,11 +75,7 @@ void fuse_finish_open(struct inode *inode, struct file *file,
 	if (outarg->open_flags & FOPEN_DIRECT_IO)
 		file->f_op = &fuse_direct_io_file_operations;
 	if (!(outarg->open_flags & FOPEN_KEEP_CACHE))
-#ifdef KERNEL_2_6
 		invalidate_inode_pages(inode->i_mapping);
-#else
-		invalidate_inode_pages(inode);
-#endif
 	ff->fh = outarg->fh;
 	file->private_data = ff;
 }
@@ -344,7 +336,6 @@ static int fuse_readpage(struct file *file, struct page *page)
 	return err;
 }
 
-#ifdef KERNEL_2_6
 static void fuse_readpages_end(struct fuse_conn *fc, struct fuse_req *req)
 {
 	int i;
@@ -442,105 +433,6 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
 	}
 	return err;
 }
-#else /* KERNEL_2_6 */
-#define FUSE_BLOCK_SHIFT 16
-#define FUSE_BLOCK_SIZE (1UL << FUSE_BLOCK_SHIFT)
-#define FUSE_BLOCK_MASK (~(FUSE_BLOCK_SIZE-1))
-#if (1UL << (FUSE_BLOCK_SHIFT - PAGE_CACHE_SHIFT)) > FUSE_MAX_PAGES_PER_REQ
-#error FUSE_BLOCK_SHIFT too large
-#endif
-
-static int fuse_is_block_uptodate(struct inode *inode, unsigned start,
-				  unsigned end)
-{
-	int index;
-
-	for (index = start; index < end; index++) {
-		struct page *page = find_get_page(inode->i_mapping, index);
-		if (!page)
-			return 0;
-		if (!PageUptodate(page)) {
-			page_cache_release(page);
-			return 0;
-		}
-		page_cache_release(page);
-	}
-	return 1;
-}
-
-static int fuse_file_read_block(struct fuse_req *req, struct file *file,
-				struct inode *inode, unsigned start,
-				unsigned end)
-{
-	loff_t pos;
-	size_t count;
-	int index;
-	int err = -EBUSY;
-	int i;
-
-	for (index = start; index < end; index++) {
-		struct page *page = grab_cache_page(inode->i_mapping, index);
-		if (!page)
-			goto out;
-		if (PageUptodate(page)) {
-			unlock_page(page);
-			page_cache_release(page);
-			page = NULL;
-		}
-		req->pages[req->num_pages++] = page;
-	}
-	pos = (loff_t) start << PAGE_CACHE_SHIFT;
-	count = req->num_pages << PAGE_CACHE_SHIFT;
-	fuse_send_read(req, file, inode, pos, count);
-	err = req->out.h.error;
- out:
-	for (i = 0; i < req->num_pages; i++) {
-		struct page *page = req->pages[i];
-		if (page) {
-			if (!err)
-				SetPageUptodate(page);
-			unlock_page(page);
-			page_cache_release(page);
-		}
-	}
-	return err;
-}
-
-static int fuse_file_bigread(struct file *file, struct inode *inode,
-			     loff_t pos, size_t count)
-{
-	struct fuse_conn *fc = get_fuse_conn(inode);
-	unsigned starti;
-	unsigned endi;
-	unsigned nexti;
-	struct fuse_req *req;
-	loff_t size = i_size_read(inode);
-	loff_t end = (pos + count + FUSE_BLOCK_SIZE - 1) & FUSE_BLOCK_MASK;
-	end = min(end, size);
-	if (end <= pos)
-		return 0;
-
-	starti = (pos & FUSE_BLOCK_MASK) >> PAGE_CACHE_SHIFT;
-	endi = (end + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
-
-	req = fuse_get_req(fc);
-	if (IS_ERR(req))
-		return PTR_ERR(req);
-
-	for (; starti < endi; starti = nexti) {
-		nexti = starti + (FUSE_BLOCK_SIZE >> PAGE_CACHE_SHIFT);
-		nexti = min(nexti, endi);
-		if (!fuse_is_block_uptodate(inode, starti, nexti)) {
-			if (fuse_file_read_block(req, file, inode, starti, nexti))
-				break;
-
-			fuse_reset_request(req);
-		}
-	}
-	fuse_put_request(fc, req);
-	return 0;
-}
-#endif /* KERNEL_2_6 */
 
 static size_t fuse_send_write(struct fuse_req *req, struct file *file,
 			      struct inode *inode, loff_t pos, size_t count)
@@ -742,27 +634,6 @@ static ssize_t fuse_direct_write(struct file *file, const char __user *buf,
 	return res;
 }
 
-#ifndef KERNEL_2_6
-static ssize_t fuse_file_read(struct file *file, char __user *buf,
-			      size_t count, loff_t *ppos)
-{
-	struct inode *inode = file->f_dentry->d_inode;
-	struct fuse_conn *fc = get_fuse_conn(inode);
-
-	if (is_bad_inode(inode))
-		return -EIO;
-
-	if (fc->flags & FUSE_LARGE_READ) {
-		int res;
-		down(&inode->i_sem);
-		res = fuse_file_bigread(file, inode, *ppos, count);
-		up(&inode->i_sem);
-		if (res)
-			return res;
-	}
-	return generic_file_read(file, buf, count, ppos);
-}
-#endif
 static int fuse_file_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	if ((vma->vm_flags & VM_SHARED)) {
@@ -774,14 +645,12 @@ static int fuse_file_mmap(struct file *file, struct vm_area_struct *vma)
 	return generic_file_mmap(file, vma);
 }
 
-#ifdef KERNEL_2_6
 static int fuse_set_page_dirty(struct page *page)
 {
 	printk("fuse_set_page_dirty: should not happen\n");
 	dump_stack();
 	return 0;
 }
-#endif
 
 static int convert_fuse_file_lock(const struct fuse_file_lock *ffl,
 				  struct file_lock *fl)
@@ -938,22 +807,15 @@ static int fuse_file_lock(struct file *file, int cmd, struct file_lock *fl)
 
 static struct file_operations fuse_file_operations = {
 	.llseek		= generic_file_llseek,
-#ifdef KERNEL_2_6
 	.read		= generic_file_read,
 	.write		= generic_file_write,
-#else
-	.read		= fuse_file_read,
-	.write		= generic_file_write,
-#endif
 	.mmap		= fuse_file_mmap,
 	.open		= fuse_open,
 	.flush		= fuse_flush,
 	.release	= fuse_release,
 	.fsync		= fuse_fsync,
 	.lock		= fuse_file_lock,
-#ifdef KERNEL_2_6
 	.sendfile	= generic_file_sendfile,
-#endif
 };
 
 static struct file_operations fuse_direct_io_file_operations = {
@@ -972,10 +834,8 @@ static struct address_space_operations fuse_file_aops  = {
 	.readpage	= fuse_readpage,
 	.prepare_write	= fuse_prepare_write,
 	.commit_write	= fuse_commit_write,
-#ifdef KERNEL_2_6
 	.readpages	= fuse_readpages,
 	.set_page_dirty	= fuse_set_page_dirty,
-#endif
 };
 
 void fuse_init_file_inode(struct inode *inode)

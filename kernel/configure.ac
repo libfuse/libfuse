@@ -4,6 +4,7 @@ AC_CONFIG_HEADERS([config.h])
 AC_PROG_INSTALL
 
 runver=`uname -r`
+bad_kernel_version=no
 ENABLE_FUSE_MODULE=y
 KERNELCFLAGS=
 
@@ -88,38 +89,17 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	*** prepare the kernel before running this script])
 	fi
 	AC_MSG_RESULT([$kernsrcver])
-	majver=`echo "$kernsrcver" | cut -f-2 -d.`
 	kmoduledir=${INSTALL_MOD_PATH}/lib/modules/$kernsrcver
 	AC_SUBST(kernelsrc)
-	AC_SUBST(majver)
 	AC_SUBST(kmoduledir)
 
-	if echo "$kernsrcver" | grep -q "^2.4"; then
-	       	old_cflags="$CFLAGS"
-	       	CFLAGS="-I${kernelsrc}/include -Wall -O2 -fno-strict-aliasing -D__KERNEL__"
-		AC_CHECK_DECL(i_size_read,
-			AC_DEFINE(HAVE_I_SIZE_FUNC, 1,
-				[Kernel has i_size_read() and i_size_write() functions]),,
-			[#include <linux/fs.h>])
-		AC_CHECK_DECL(recalc_sigpending_tsk,
-			AC_DEFINE(HAVE_RECALC_SIGPENDING_TSK, 1,
-				[Kernel has recalc_sigpending_tsk() function]),,
-			[#include <linux/sched.h>])
-		AC_MSG_CHECKING([if '-msoft-float' option is valid])
-		CFLAGS="-msoft-float"
-		have_msoft_float=no
-		AC_TRY_COMPILE([], [], [have_msoft_float=yes])
-		AC_MSG_RESULT([$have_msoft_float])
-		if test "$have_msoft_float" = yes; then
-			KERNELCFLAGS="$CFLAGS"
-		fi
-		CFLAGS="$old_cflags"
-		AC_MSG_CHECKING([architecture])
-		arch=`/bin/ls -l ${kernelsrc}/include/asm | sed "s/.*-> asm-//"`
-		AC_MSG_RESULT([$arch])
-		if test "$arch" = x86_64; then
-			KERNELCFLAGS="$KERNELCFLAGS -mno-red-zone -mcmodel=kernel -fno-reorder-blocks -finline-limit=2000"
-		fi
+	if echo "$kernsrcver" | egrep -q ["^(2.4|2.6.[0-8]([^0-9]|\$))"]; then
+		bad_kernel_version=yes
+		AC_MSG_NOTICE([
+NOTE:    Disabled building the kernel module, because this release only
+NOTE:    supports Linux versions 2.6.9 or later.  You can use the kernel
+NOTE:    module from an earlier FUSE release with the library from this
+NOTE:    release.])
 	else
 		fuse_configured=no
 		kernel_autoconf=$kernelbuild/include/linux/autoconf.h
@@ -137,25 +117,22 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 fi
 
 if test "$ENABLE_FUSE_MODULE" = n; then
-	AC_MSG_NOTICE([NOTE:     Detected that FUSE is already present in the kernel, so])
-	AC_MSG_NOTICE([NOTE:     building of kernel module is disabled.  To force building])
-	AC_MSG_NOTICE([NOTE:     of kernel module use the '--enable-kernel-module' option.])
+	AC_MSG_NOTICE([
+NOTE:     Detected that FUSE is already present in the kernel, so
+NOTE:     building of kernel module is disabled.  To force building
+NOTE:     of kernel module use the '--enable-kernel-module' option.])
 fi
 
 if test "$enable_kernel_module" = no; then
+	ENABLE_FUSE_MODULE=n
+fi
+if test "$bad_kernel_version" = yes; then
 	ENABLE_FUSE_MODULE=n
 fi
 
 AC_SUBST(ENABLE_FUSE_MODULE)
 
 if test "$ENABLE_FUSE_MODULE" = y; then
-	AC_MSG_CHECKING([if kernel has extended attribute support])
-	if test -f $kernelsrc/include/linux/xattr.h; then
-		AC_DEFINE(HAVE_KERNEL_XATTR, 1, [Kernel has xattr support])
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-	fi
 	AC_MSG_CHECKING([if kernel defines kzalloc function])
 	if egrep -qw "kzalloc" $kernelsrc/include/linux/slab.h; then
 		AC_DEFINE(HAVE_KZALLOC, 1, [kzalloc() is defined])

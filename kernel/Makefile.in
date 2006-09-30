@@ -3,7 +3,6 @@
 SHELL = /bin/sh
 INSTALL = @INSTALL@
 mkdir_p = mkdir -p
-majver = @majver@
 VERSION = @PACKAGE_VERSION@
 
 DISTFILES = Makefile.in configure.ac configure config.h.in ../install-sh \
@@ -12,11 +11,7 @@ COMPATDISTFILES = compat/parser.c compat/parser.h
 
 fusemoduledir = @kmoduledir@/kernel/fs/fuse
 
-ifeq ($(majver), 2.4)
-fusemodule := fuse.o
-else
 fusemodule := fuse.ko
-endif
 
 all: all-@ENABLE_FUSE_MODULE@
 install: install-@ENABLE_FUSE_MODULE@
@@ -52,35 +47,6 @@ distdir: $(DISTFILES) $(COMPATDISTFILES)
 	mkdir $(distdir)/compat
 	cp -p $(COMPATDISTFILES) $(distdir)/compat
 
-ifeq ($(majver), 2.4)
-
-CC = gcc
-LD = ld
-CFLAGS = -O2 -Wall -Wstrict-prototypes -fno-strict-aliasing -pipe @KERNELCFLAGS@
-CPPFLAGS = -I@kernelsrc@/include -I. -D__KERNEL__ -DMODULE -D_LOOSE_KERNEL_NAMES -DFUSE_VERSION=\"$(VERSION)\" @KERNELCPPFLAGS@
-
-fuse_objs = dev.o dir.o file.o inode.o compat/parser.o control.o
-
-SUFFIXES = .c .o .s
-
-all-spec: fuse.o
-
-.c.o:
-	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
-
-fuse.o: $(fuse_objs)
-	$(LD) -r -o fuse.o $(fuse_objs)
-
-fuse_headers = fuse_i.h fuse_kernel.h
-
-dev.o: $(fuse_headers)
-dir.o: $(fuse_headers)
-file.o: $(fuse_headers)
-inode.o: $(fuse_headers)
-control.o: $(fuse_headers)
-
-else
-
 EXTRA_CFLAGS += -DFUSE_VERSION=\"$(VERSION)\"
 
 obj-m := fuse.o
@@ -88,4 +54,3 @@ fuse-objs := dev.o dir.o file.o inode.o control.o
 
 all-spec:
 	$(MAKE) -C @kernelsrc@ SUBDIRS=$(PWD) @KERNELMAKE_PARAMS@ modules
-endif
