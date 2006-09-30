@@ -851,17 +851,7 @@ static int try_open_fuse_device(char **devp)
 
 static int open_fuse_device(char **devp)
 {
-    int fd;
-
-    if (getuid() == 0) {
-        fd = try_open_fuse_device(devp);
-        if (fd >= -1)
-            return fd;
-
-        system("modprobe fuse");
-    }
-
-    fd = try_open_fuse_device(devp);
+    int fd = try_open_fuse_device(devp);
     if (fd >= -1)
         return fd;
 

@@ -1,5 +1,8 @@
 2006-09-30  Miklos Szeredi <miklos@szeredi.hu>
 
+	* fusermount: revert modprobe change (2006-08-18) since it
+	doesn't work reliably with udev
+
 	* Add support for block device backed filesystems.  This mode is
 	selected with the 'blkdev' option, which is privileged.
 
