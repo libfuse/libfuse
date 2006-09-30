@@ -1,5 +1,13 @@
 2006-09-30  Miklos Szeredi <miklos@szeredi.hu>
 
+	* API changes:
+
+	* Move lock_owner from a separate argument into fuse_file_info
+
+	* Add a flag to fuse_file_info indicating (1) a highlevel lock
+	operation (unlock all) was initiated by a flush, (2) a lowlevel
+	release operation should perform a flush as well.
+
 	* fusermount: revert modprobe change (2006-08-18) since it
 	doesn't work reliably with udev
 

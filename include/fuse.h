@@ -376,7 +376,8 @@ struct fuse_operations {
      * for fcntl(2).  The l_whence field will always be set to
      * SEEK_SET.
      *
-     * For checking lock ownership, the 'owner' argument must be used.
+     * For checking lock ownership, the 'fuse_file_info->owner'
+     * argument must be used.
      *
      * For F_GETLK operation, the library will first check currently
      * held locks, and if a conflicting lock is found it will return
@@ -399,7 +400,7 @@ struct fuse_operations {
      * Introduced in version 2.6
      */
     int (*lock) (const char *, struct fuse_file_info *, int cmd,
-                 struct flock *, uint64_t owner);
+                 struct flock *);
 
     /**
      * Change the access and modification times of a file with

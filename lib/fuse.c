@@ -615,13 +615,12 @@ static int fuse_do_create(struct fuse *f, fuse_req_t req, const char *path,
 }
 
 static int fuse_do_lock(struct fuse *f, fuse_req_t req, const char *path,
-                        struct fuse_file_info *fi, int cmd, struct flock *lock,
-                        uint64_t owner)
+                        struct fuse_file_info *fi, int cmd, struct flock *lock)
 {
     int res;
     struct fuse_intr_data d;
     fuse_prepare_interrupt(f, req, &d);
-    res = f->op.lock(path, fi, cmd, lock, owner);
+    res = f->op.lock(path, fi, cmd, lock);
     fuse_finish_interrupt(f, req, &d);
     return res;
 }
@@ -2263,7 +2262,7 @@ static void lock_to_flock(struct lock *lock, struct flock *flock)
 }
 
 static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
-                       struct fuse_file_info *fi, uint64_t owner)
+                       struct fuse_file_info *fi)
 {
     struct fuse *f = req_fuse_prepare(req);
     char *path;
@@ -2292,9 +2291,9 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
         memset(&lock, 0, sizeof(lock));
         lock.l_type = F_UNLCK;
         lock.l_whence = SEEK_SET;
-        fuse_do_lock(f, req, path, fi, F_SETLK, &lock, owner);
+        fuse_do_lock(f, req, path, fi, F_SETLK, &lock);
         flock_to_lock(&lock, &l);
-        l.owner = owner;
+        l.owner = fi->lock_owner;
         pthread_mutex_lock(&f->lock);
         locks_insert(get_node(f, ino), &l);
         pthread_mutex_unlock(&f->lock);
@@ -2309,7 +2308,7 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
 
 static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
                             struct fuse_file_info *fi, struct flock *lock,
-                            uint64_t owner, int cmd)
+                            int cmd)
 {
     struct fuse *f = req_fuse_prepare(req);
     char *path;
@@ -2319,7 +2318,7 @@ static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (path != NULL) {
-        err = fuse_do_lock(f, req, path, fi, cmd, lock, owner);
+        err = fuse_do_lock(f, req, path, fi, cmd, lock);
         free(path);
     }
     pthread_rwlock_unlock(&f->tree_lock);
@@ -2327,8 +2326,7 @@ static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void fuse_getlk(fuse_req_t req, fuse_ino_t ino,
-                       struct fuse_file_info *fi, struct flock *lock,
-                       uint64_t owner)
+                       struct fuse_file_info *fi, struct flock *lock)
 {
     int err;
     struct lock l;
@@ -2336,14 +2334,14 @@ static void fuse_getlk(fuse_req_t req, fuse_ino_t ino,
     struct fuse *f = req_fuse(req);
 
     flock_to_lock(lock, &l);
-    l.owner = owner;
+    l.owner = fi->lock_owner;
     pthread_mutex_lock(&f->lock);
     conflict = locks_conflict(get_node(f, ino), &l);
     if (conflict)
         lock_to_flock(conflict, lock);
     pthread_mutex_unlock(&f->lock);
     if (!conflict)
-        err = fuse_lock_common(req, ino, fi, lock, owner, F_GETLK);
+        err = fuse_lock_common(req, ino, fi, lock, F_GETLK);
     else
         err = 0;
 
@@ -2355,15 +2353,14 @@ static void fuse_getlk(fuse_req_t req, fuse_ino_t ino,
 
 static void fuse_setlk(fuse_req_t req, fuse_ino_t ino,
                        struct fuse_file_info *fi, struct flock *lock,
-                       uint64_t owner, int sleep)
+                       int sleep)
 {
-    int err = fuse_lock_common(req, ino, fi, lock, owner,
-                               sleep ? F_SETLKW : F_SETLK);
+    int err = fuse_lock_common(req, ino, fi, lock, sleep ? F_SETLKW : F_SETLK);
     if (!err) {
         struct fuse *f = req_fuse(req);
         struct lock l;
         flock_to_lock(lock, &l);
-        l.owner = owner;
+        l.owner = fi->lock_owner;
         pthread_mutex_lock(&f->lock);
         locks_insert(get_node(f, ino), &l);
         pthread_mutex_unlock(&f->lock);

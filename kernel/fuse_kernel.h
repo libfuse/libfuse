@@ -246,7 +246,7 @@ struct fuse_release_in {
 
 struct fuse_flush_in {
 	__u64	fh;
-	__u32	flush_flags;
+	__u32	unused;
 	__u32	padding;
 	__u64	lock_owner;
 };

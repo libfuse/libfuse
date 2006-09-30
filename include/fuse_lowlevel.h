@@ -449,7 +449,7 @@ struct fuse_lowlevel_ops {
      * write errors.
      *
      * If the filesystem supports file locking operations (setlk,
-     * getlk) it should remove all locks belonging to 'owner'.
+     * getlk) it should remove all locks belonging to 'fi->owner'.
      *
      * Valid replies:
      *   fuse_reply_err
@@ -457,10 +457,8 @@ struct fuse_lowlevel_ops {
      * @param req request handle
      * @param ino the inode number
      * @param fi file information
-     * @param owner lock owner id
      */
-    void (*flush) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
-                   uint64_t owner);
+    void (*flush) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi);
 
     /**
      * Release an open file
@@ -743,17 +741,16 @@ struct fuse_lowlevel_ops {
      * @param ino the inode number
      * @param fi file information
      * @param lock the region/type to test
-     * @param owner lock owner id of caller
      */
     void (*getlk) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
-                   struct flock *lock, uint64_t owner);
+                   struct flock *lock);
 
     /**
      * Acquire, modify or release a POSIX file lock
      *
      * For POSIX threads (NPTL) there's a 1-1 relation between pid and
      * owner, but otherwise this is not always the case.  For checking
-     * lock ownership, 'owner' must be used.  The l_pid field in
+     * lock ownership, 'fi->owner' must be used.  The l_pid field in
      * 'struct flock' should only be used to fill in this field in
      * getlk().
      *
@@ -770,11 +767,10 @@ struct fuse_lowlevel_ops {
      * @param ino the inode number
      * @param fi file information
      * @param lock the region/type to test
-     * @param owner lock owner id of caller
      * @param sleep locking operation may sleep
      */
     void (*setlk) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
-                   struct flock *lock, uint64_t owner, int sleep);
+                   struct flock *lock, int sleep);
 
     /**
      * Map block index within file to block index within device

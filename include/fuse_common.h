@@ -58,12 +58,20 @@ struct fuse_file_info {
         need not be invalidated.  Introduced in version 2.4 */
     unsigned int keep_cache : 1;
 
+    /** Indicates a flush operation.  Set in flush operation, also
+        maybe set in highlevel lock operation and lowlevel release
+        operation.  Introduced in version 2.6 */
+    unsigned int flush : 1;
+
     /** Padding.  Do not use*/
-    unsigned int padding : 30;
+    unsigned int padding : 29;
 
     /** File handle.  May be filled in by filesystem in open().
         Available in all other file operations */
     uint64_t fh;
+
+    /** Lock owner id.  Available in locking operations and flush */
+    uint64_t lock_owner;
 };
 
 struct fuse_conn_info {

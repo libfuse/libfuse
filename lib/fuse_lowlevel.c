@@ -620,17 +620,16 @@ static void do_flush(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_flush_in *arg = (struct fuse_flush_in *) inarg;
     struct fuse_file_info fi;
-    uint64_t lock_owner = 0;
-
-    if (req->f->conn.proto_minor >= 7)
-        lock_owner = arg->lock_owner;
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
     fi.fh_old = fi.fh;
+    fi.flush = 1;
+    if (req->f->conn.proto_minor >= 7)
+        fi.lock_owner = arg->lock_owner;
 
     if (req->f->op.flush)
-        req->f->op.flush(req, nodeid, &fi, lock_owner);
+        req->f->op.flush(req, nodeid, &fi);
     else
         fuse_reply_err(req, ENOSYS);
 }
@@ -806,10 +805,11 @@ static void do_getlk(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
+    fi.lock_owner = arg->owner;
 
     convert_fuse_file_lock(&arg->lk, &flock);
     if (req->f->op.getlk)
-        req->f->op.getlk(req, nodeid, &fi, &flock, arg->owner);
+        req->f->op.getlk(req, nodeid, &fi, &flock);
     else
         fuse_reply_err(req, ENOSYS);
 }
@@ -823,10 +823,11 @@ static void do_setlk_common(fuse_req_t req, fuse_ino_t nodeid,
 
     memset(&fi, 0, sizeof(fi));
     fi.fh = arg->fh;
+    fi.lock_owner = arg->owner;
 
     convert_fuse_file_lock(&arg->lk, &flock);
     if (req->f->op.setlk)
-        req->f->op.setlk(req, nodeid, &fi, &flock, arg->owner, sleep);
+        req->f->op.setlk(req, nodeid, &fi, &flock, sleep);
     else
         fuse_reply_err(req, ENOSYS);
 }
