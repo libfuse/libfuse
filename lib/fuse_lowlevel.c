@@ -403,6 +403,16 @@ int fuse_reply_lock(fuse_req_t req, struct flock *lock)
     return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+int fuse_reply_bmap(fuse_req_t req, uint64_t idx)
+{
+    struct fuse_bmap_out arg;
+
+    memset(&arg, 0, sizeof(arg));
+    arg.block = idx;
+
+    return send_reply_ok(req, &arg, sizeof(arg));
+}
+
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     char *name = (char *) inarg;
@@ -907,6 +917,16 @@ static struct fuse_req *check_interrupt(struct fuse_ll *f, struct fuse_req *req)
         return NULL;
 }
 
+static void do_bmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+    struct fuse_bmap_in *arg = (struct fuse_bmap_in *) inarg;
+
+    if (req->f->op.bmap)
+        req->f->op.bmap(req, nodeid, arg->blocksize, arg->block);
+    else
+        fuse_reply_err(req, ENOSYS);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
     struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -1040,6 +1060,7 @@ static struct {
     [FUSE_ACCESS]      = { do_access,      "ACCESS"      },
     [FUSE_CREATE]      = { do_create,      "CREATE"      },
     [FUSE_INTERRUPT]   = { do_interrupt,   "INTERRUPT"   },
+    [FUSE_BMAP]        = { do_bmap,        "BMAP"        },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))

@@ -733,6 +733,8 @@ struct fuse_lowlevel_ops {
     /**
      * Test for a POSIX file lock
      *
+     * Introduced in version 2.6
+     *
      * Valid replies:
      *   fuse_reply_lock
      *   fuse_reply_err
@@ -759,6 +761,8 @@ struct fuse_lowlevel_ops {
      * will still allow file locking to work locally.  Hence these are
      * only interesting for network filesystems and similar.
      *
+     * Introduced in version 2.6
+     *
      * Valid replies:
      *   fuse_reply_err
      *
@@ -771,6 +775,26 @@ struct fuse_lowlevel_ops {
      */
     void (*setlk) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
                    struct flock *lock, uint64_t owner, int sleep);
+
+    /**
+     * Map block index within file to block index within device
+     *
+     * Note: This makes sense only for block device backed filesystems
+     * mounted with the 'blkdev' option
+     *
+     * Introduced in version 2.6
+     *
+     * Valid replies:
+     *   fuse_reply_bmap
+     *   fuse_reply_err
+     *
+     * @param req request handle
+     * @param ino the inode number
+     * @param blocksize unit of block index
+     * @param idx block index within file
+     */
+    void (*bmap) (fuse_req_t req, fuse_ino_t ino, size_t blocksize,
+                  uint64_t idx);
 };
 
 /**
@@ -928,6 +952,18 @@ int fuse_reply_xattr(fuse_req_t req, size_t count);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_lock(fuse_req_t req, struct flock *lock);
+
+/**
+ * Reply with block index
+ *
+ * Possible requests:
+ *   bmap
+ *
+ * @param req request handle
+ * @param idx block index within device 
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
 
 /* ----------------------------------------------------------- *
  * Filling a buffer in readdir                                 *

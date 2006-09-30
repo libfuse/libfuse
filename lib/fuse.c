@@ -2371,6 +2371,29 @@ static void fuse_setlk(fuse_req_t req, fuse_ino_t ino,
     reply_err(req, err);
 }
 
+static void fuse_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
+                      uint64_t idx)
+{
+    struct fuse *f = req_fuse_prepare(req);
+    char *path;
+    int err;
+
+    err = -ENOENT;
+    pthread_rwlock_rdlock(&f->tree_lock);
+    path = get_path(f, ino);
+    if (path != NULL) {
+        err = -ENOSYS;
+        if (f->op.bmap)
+            err = f->op.bmap(path, blocksize, &idx);
+        free(path);
+    }
+    pthread_rwlock_unlock(&f->tree_lock);
+    if (!err)
+        fuse_reply_bmap(req, idx);
+    else
+        reply_err(req, err);
+}
+
 static struct fuse_lowlevel_ops fuse_path_ops = {
     .init = fuse_data_init,
     .destroy = fuse_data_destroy,
@@ -2405,6 +2428,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
     .removexattr = fuse_removexattr,
     .getlk = fuse_getlk,
     .setlk = fuse_setlk,
+    .bmap = fuse_bmap,
 };
 
 static void free_cmd(struct fuse_cmd *cmd)

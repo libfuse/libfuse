@@ -1,5 +1,12 @@
 2006-09-30  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Add support for block device backed filesystems.  This mode is
+	selected with the 'blkdev' option, which is privileged.
+
+	* Add support for the bmap (FIBMAP ioctl) operation on block
+	device backed filesystems.  This allows swapon and lilo to work on
+	such filesystems.
+
 	* kernel changes:
 
 	* Drop support for kernels earlier than 2.6.9.  Kernel module from

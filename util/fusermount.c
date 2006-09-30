@@ -257,7 +257,8 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
     while ((entp = getmntent(fp)) != NULL) {
         int removed = 0;
         if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
-           strcmp(entp->mnt_type, "fuse") == 0) {
+            (strcmp(entp->mnt_type, "fuse") == 0 ||
+             strcmp(entp->mnt_type, "fuseblk") == 0)) {
             if (user == NULL)
                 removed = 1;
             else {
@@ -567,7 +568,7 @@ static int check_mountpoint_empty(const char *mnt, mode_t rootmode,
     return 0;
 }
 
-static int do_mount(const char *mnt, const char *type, mode_t rootmode,
+static int do_mount(const char *mnt, const char **type, mode_t rootmode,
                     int fd, const char *opts, const char *dev, char **fsnamep,
                     char **mnt_optsp, off_t rootsize)
 {
@@ -579,6 +580,7 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     char *d;
     char *fsname = NULL;
     int check_empty = 1;
+    int blkdev = 0;
 
     optbuf = (char *) malloc(strlen(opts) + 128);
     if (!optbuf) {
@@ -601,6 +603,12 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
             }
             memcpy(fsname, s + fsname_str_len, len - fsname_str_len);
             fsname[len - fsname_str_len] = '\0';
+        } else if (opt_eq(s, len, "blkdev")) {
+            if (getuid() != 0) {
+                fprintf(stderr, "%s: option blkdev is privileged\n", progname);
+                goto err;
+            }
+            blkdev = 1;
         } else if (opt_eq(s, len, "nonempty")) {
             check_empty = 0;
         } else if (!begins_with(s, "fd=") &&
@@ -662,11 +670,13 @@ static int do_mount(const char *mnt, const char *type, mode_t rootmode,
     if (check_empty && check_mountpoint_empty(mnt, rootmode, rootsize) == -1)
         goto err;
 
-    res = mount(fsname, mnt, type, flags, optbuf);
+    if (blkdev)
+        *type = "fuseblk";
+    res = mount(fsname, mnt, *type, flags, optbuf);
     if (res == -1 && errno == EINVAL) {
         /* It could be an old version not supporting group_id */
         sprintf(d, "fd=%i,rootmode=%o,user_id=%i", fd, rootmode, getuid());
-        res = mount(fsname, mnt, type, flags, optbuf);
+        res = mount(fsname, mnt, *type, flags, optbuf);
     }
     if (res == -1) {
         fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
@@ -906,7 +916,7 @@ static int mount_fuse(const char *mnt, const char *opts)
         res = check_perm(&real_mnt, &stbuf, &currdir_fd, &mountpoint_fd);
         restore_privs();
         if (res != -1)
-            res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT, fd, opts,
+            res = do_mount(real_mnt, &type, stbuf.st_mode & S_IFMT, fd, opts,
                            dev, &fsname, &mnt_opts, stbuf.st_size);
     } else
         restore_privs();

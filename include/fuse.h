@@ -408,6 +408,16 @@ struct fuse_operations {
      * Introduced in version 2.6
      */
     int (*utimens) (const char *, const struct timespec tv[2]);
+
+    /**
+     * Map block index within file to block index within device
+     *
+     * Note: This makes sense only for block device backed filesystems
+     * mounted with the 'blkdev' option
+     *
+     * Introduced in version 2.6
+     */
+    int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
 };
 
 /** Extra context that may be needed by some filesystems

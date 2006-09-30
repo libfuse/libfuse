@@ -259,3 +259,8 @@ uid=N
 gid=N
 
   Override the 'st_gid' field set by the filesystem.
+
+blkdev
+
+  Mount a filesystem backed by a block device.  This is a privileged
+  option.  The device must be specified with the 'fsname=NAME' option.

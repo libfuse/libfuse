@@ -49,6 +49,8 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_OPT_KEY("allow_other",         KEY_KERN),
     FUSE_OPT_KEY("allow_root",          KEY_ALLOW_ROOT),
     FUSE_OPT_KEY("nonempty",            KEY_KERN),
+    FUSE_OPT_KEY("blkdev",              KEY_KERN),
+    FUSE_OPT_KEY("blksize=",            KEY_KERN),
     FUSE_OPT_KEY("default_permissions", KEY_KERN),
     FUSE_OPT_KEY("fsname=",             KEY_KERN),
     FUSE_OPT_KEY("large_read",          KEY_KERN),
