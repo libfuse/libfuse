@@ -138,9 +138,7 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 		struct fuse_entry_out outarg;
 		struct fuse_conn *fc;
 		struct fuse_req *req;
-
-		/* Doesn't hurt to "reset" the validity timeout */
-		fuse_invalidate_entry_cache(entry);
+		struct dentry *parent;
 
 		/* For negative dentries, always do a fresh lookup */
 		if (!inode)
@@ -151,7 +149,13 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 		if (IS_ERR(req))
 			return 0;
 
-		fuse_lookup_init(req, entry->d_parent->d_inode, entry, &outarg);
+		parent = dget_parent(entry);
+		if (!parent->d_inode) {
+			dput(parent);
+			return 0;
+		}
+		fuse_lookup_init(req, parent->d_inode, entry, &outarg);
+		dput(parent);
 		request_send(fc, req);
 		err = req->out.h.error;
 		/* Zero nodeid is same as -ENOENT */
@@ -163,7 +167,9 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 				fuse_send_forget(fc, req, outarg.nodeid, 1);
 				return 0;
 			}
+			spin_lock(&fc->lock);
 			fi->nlookup ++;
+			spin_unlock(&fc->lock);
 		}
 		fuse_put_request(fc, req);
 		if (err || (outarg.attr.mode ^ inode->i_mode) & S_IFMT)
@@ -173,30 +179,6 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 		fuse_change_timeout(entry, &outarg);
 	}
 	return 1;
-}
-
-/*
- * Check if there's already a hashed alias of this directory inode.
- * If yes, then lookup and mkdir must not create a new alias.
- */
-static int dir_alias(struct inode *inode)
-{
-	if (S_ISDIR(inode->i_mode)) {
-		struct dentry *alias = d_find_alias(inode);
-#if defined(FUSE_MAINLINE)
-		if (alias) {
-			dput(alias);
-			return 1;
-		}
-#else
-		if (alias && !(alias->d_flags & DCACHE_DISCONNECTED)) {
-			dput(alias);
-			return 1;
-		}
-		dput(alias);
-#endif
-	}
-	return 0;
 }
 
 static int invalid_nodeid(u64 nodeid)
@@ -220,9 +202,7 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 	int err;
 	struct fuse_entry_out outarg;
 	struct inode *inode = NULL;
-#if !defined(FUSE_MAINLINE)
 	struct dentry *newent;
-#endif
 	struct fuse_conn *fc = get_fuse_conn(dir);
 	struct fuse_req *req;
 
@@ -252,26 +232,32 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 	if (err && err != -ENOENT)
 		return ERR_PTR(err);
 
-	if (inode && dir_alias(inode)) {
-		iput(inode);
-		return ERR_PTR(-EIO);
-	}
-#if defined(FUSE_MAINLINE)
-	d_add(entry, inode);
-#else
-	newent = d_splice_alias(inode, entry);
+	if (inode && S_ISDIR(inode->i_mode)) {
+		struct dentry *alias;
+		mutex_lock(&fc->inst_mutex);
+		alias = d_find_alias(inode);
+		if (alias && !(alias->d_flags & DCACHE_DISCONNECTED)) {
+			fuse_invalidate_entry(alias);
+			dput(alias);
+			if (!list_empty(&inode->i_dentry)) {
+				mutex_unlock(&fc->inst_mutex);
+				iput(inode);
+				return ERR_PTR(-EBUSY);
+			}
+		} else
+			dput(alias);
+		newent = d_splice_alias(inode, entry);
+		mutex_unlock(&fc->inst_mutex);
+	} else
+		newent = d_splice_alias(inode, entry);
+
 	entry = newent ? newent : entry;
-#endif
 	entry->d_op = &fuse_dentry_operations;
 	if (!err)
 		fuse_change_timeout(entry, &outarg);
 	else
 		fuse_invalidate_entry_cache(entry);
-#if defined(FUSE_MAINLINE)
-	return NULL;
-#else
 	return newent;
-#endif
 }
 
 #ifdef HAVE_LOOKUP_INSTANTIATE_FILP
@@ -423,12 +409,23 @@ static int create_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 	}
 	fuse_put_request(fc, req);
 
-	if (dir_alias(inode)) {
-		iput(inode);
-		return -EIO;
-	}
+	if (S_ISDIR(inode->i_mode)) {
+		struct dentry *alias;
+		mutex_lock(&fc->inst_mutex);
+		alias = d_find_alias(inode);
+		if (alias) {
+			/* New directory must have moved since mkdir */
+			mutex_unlock(&fc->inst_mutex);
+			dput(alias);
+			iput(inode);
+			fuse_invalidate_entry(entry);
+			return 0;
+		}
+		d_instantiate(entry, inode);
+		mutex_unlock(&fc->inst_mutex);
+	} else
+		d_instantiate(entry, inode);
 
-	d_instantiate(entry, inode);
 	fuse_change_timeout(entry, &outarg);
 	fuse_invalidate_attr(dir);
 	return 0;

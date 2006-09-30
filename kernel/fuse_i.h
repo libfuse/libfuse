@@ -57,8 +57,11 @@
 #else
 #include <asm/semaphore.h>
 #define DEFINE_MUTEX(m) DECLARE_MUTEX(m)
+#define mutex_init(m) init_MUTEX(m)
+#define mutex_destroy(m) do { } while (0)
 #define mutex_lock(m) down(m)
 #define mutex_unlock(m) up(m)
+#define mutex semaphore
 #endif
 
 #ifndef BUG_ON
@@ -97,11 +100,7 @@
 extern struct list_head fuse_conn_list;
 
 /** Global mutex protecting fuse_conn_list and the control filesystem */
-#ifdef KERNEL_2_6_17_PLUS
 extern struct mutex fuse_mutex;
-#else
-extern struct semaphore fuse_mutex;
-#endif
 
 /** FUSE inode */
 struct fuse_inode {
@@ -298,6 +297,9 @@ struct fuse_req {
 struct fuse_conn {
 	/** Lock protecting accessess to  members of this structure */
 	spinlock_t lock;
+
+	/** Mutex protecting against directory alias creation */
+	struct mutex inst_mutex;
 
 	/** Refcount */
 	atomic_t count;

@@ -106,8 +106,11 @@ static void fuse_clear_inode(struct inode *inode)
 	if (inode->i_sb->s_flags & MS_ACTIVE) {
 		struct fuse_conn *fc = get_fuse_conn(inode);
 		struct fuse_inode *fi = get_fuse_inode(inode);
-		fuse_send_forget(fc, fi->forget_req, fi->nodeid, fi->nlookup);
-		fi->forget_req = NULL;
+		if (fi->nlookup) {
+			fuse_send_forget(fc, fi->forget_req, fi->nodeid,
+					 fi->nlookup);
+			fi->forget_req = NULL;
+		}
 	}
 }
 
@@ -182,7 +185,6 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 	struct inode *inode;
 	struct fuse_inode *fi;
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
-	int retried = 0;
 
  retry:
 	inode = iget5_locked(sb, nodeid, fuse_inode_eq, fuse_inode_set, &nodeid);
@@ -196,16 +198,16 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 		fuse_init_inode(inode, attr);
 		unlock_new_inode(inode);
 	} else if ((inode->i_mode ^ attr->mode) & S_IFMT) {
-		BUG_ON(retried);
 		/* Inode has changed type, any I/O on the old should fail */
 		make_bad_inode(inode);
 		iput(inode);
-		retried = 1;
 		goto retry;
 	}
 
 	fi = get_fuse_inode(inode);
+	spin_lock(&fc->lock);
 	fi->nlookup ++;
+	spin_unlock(&fc->lock);
 	fuse_change_attributes(inode, attr);
 	return inode;
 }
@@ -414,6 +416,7 @@ static struct fuse_conn *new_conn(void)
 	fc = kzalloc(sizeof(*fc), GFP_KERNEL);
 	if (fc) {
 		spin_lock_init(&fc->lock);
+		mutex_init(&fc->inst_mutex);
 		atomic_set(&fc->count, 1);
 		init_waitqueue_head(&fc->waitq);
 		init_waitqueue_head(&fc->blocked_waitq);
@@ -433,8 +436,10 @@ static struct fuse_conn *new_conn(void)
 
 void fuse_conn_put(struct fuse_conn *fc)
 {
-	if (atomic_dec_and_test(&fc->count))
+	if (atomic_dec_and_test(&fc->count)) {
+		mutex_destroy(&fc->inst_mutex);
 		kfree(fc);
+	}
 }
 
 struct fuse_conn *fuse_conn_get(struct fuse_conn *fc)

@@ -1,8 +1,27 @@
 2006-09-30  Miklos Szeredi <miklos@szeredi.hu>
 
+	* kernel changes:
+
 	* Drop support for kernels earlier than 2.6.9.  Kernel module from
 	previous (2.5.x) release can be used with library from this
 	release
+
+	* In fuse_dentry_revalidate() use dget_parent() instead of
+	dereferencing d_parent, since there's no protection against parent
+	changing and going away
+
+	* Protect nlookup from concurrent updates
+
+	* In lookup if a directory alias exists but is unused,
+	then get rid of it, otherwise return -EBUSY.
+
+	* In mkdir if a directory alias exists, return success, but leave
+	dentry negative.  In reality this could happen if a remote rename
+	immediately followed the mkdir.
+
+	* Don't BUG in fuse_iget() if multiple retries are needed to get a
+	good inode.  This could happen if several lookups are racing for
+	the same inode.
 
 2006-09-29  Miklos Szeredi <miklos@szeredi.hu>
 
