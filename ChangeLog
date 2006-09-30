@@ -1,3 +1,7 @@
+2006-09-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix compilation on 2.6.9.  Report from Troy Ayers
+
 2006-09-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix Oops in fuse_readpages().  Reported by David Shaw

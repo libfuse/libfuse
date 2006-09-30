@@ -69,6 +69,17 @@ static struct file_operations fuse_ctl_waiting_ops = {
 	.read = fuse_conn_waiting_read,
 };
 
+#ifndef KERNEL_2_6_10_PLUS
+struct dentry *d_alloc_name(struct dentry *parent, const char *name)
+{
+	struct qstr q;
+
+	q.name = name;
+	q.len = strlen(name);
+	q.hash = full_name_hash(q.name, q.len);
+	return d_alloc(parent, &q);
+}
+#endif
 static struct dentry *fuse_ctl_add_dentry(struct dentry *parent,
 					  struct fuse_conn *fc,
 					  const char *name,
