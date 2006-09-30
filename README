@@ -19,10 +19,10 @@ version:
 Dependencies
 ============
 
-Linux kernel version 2.4.X where X >= 21 (some vendor kernels earlier
-than this are also known to work).
+Linux kernel version 2.6.X where X >= 9.
 
-Linux kernel version 2.6.X where X >= 0.
+Alternatively a kernel module from FUSE release 2.5.* can be used with
+this release, which supports kernels >= 2.4.21.
 
 Installation
 ============

@@ -1,8 +1,4 @@
-NFS exporting is supported on kernels versions >= 2.6.0.  For 2.4.X
-kernels the exporting infrastructure is not refined enough, so don't
-expect this to work.
-
-Also FUSE module in official kernels (>= 2.6.14) don't support NFS
+FUSE module in official kernels (>= 2.6.14) don't support NFS
 exporting.  In this case if you need NFS exporting capability, use the
 '--enable-kernel-module' configure option to compile the module from
 this package.  And make sure, that the FUSE is not compiled into the
