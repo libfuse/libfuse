@@ -1,0 +1,53 @@
+#! /bin/sh
+#
+# fuse		Init script for Filesystem in Userspace
+#
+# Author:	Miklos Szeredi <miklos@szeredi.hu>
+
+set -e
+
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+SCRIPTNAME=/etc/init.d/fuse
+DESC="FUSE"
+MOUNTPOINT=/sys/fs/fuse/connections
+
+# Gracefully exit if the package has been removed.
+test -x `which fusermount` || exit 0
+
+error()
+{
+	echo "Error $1" >&2
+	exit 1
+}
+
+case "$1" in
+  start)
+	echo -n "Starting $DESC: "
+	if ! grep -qw fuse /proc/filesystems; then
+		modprobe fuse >/dev/null 2>&1 || error "loading fuse module"
+	fi
+	if grep -qw fusectl /proc/filesystems && \
+	   ! grep -qw $MOUNTPOINT /proc/mounts; then
+		mount -t fusectl none $MOUNTPOINT >/dev/null 2>&1 || \
+			error "mounting control filesystem"
+	fi
+	echo "done."
+	;;
+  stop)
+	echo -n "Stopping $DESC: "
+	if grep -qw $MOUNTPOINT /proc/mounts; then
+		umount $MOUNTPOINT >/dev/null 2>&1 || \
+			error "unmounting control filesystem"
+	fi
+	if grep -qw "^fuse" /proc/modules; then
+		rmmod fuse >/dev/null 2>&1 || error "unloading fuse module"
+	fi
+	echo "done."
+	;;
+  *)
+	echo "Usage: $SCRIPTNAME {start|stop}" >&2
+	exit 1
+	;;
+esac
+
+exit 0

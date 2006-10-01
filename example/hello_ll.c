@@ -4,7 +4,11 @@
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
+
+    gcc -Wall `pkg-config fuse --cflags --libs` hello_ll.c -o hello_ll
 */
+
+#define FUSE_USE_VERSION 26
 
 #include <fuse_lowlevel.h>
 #include <stdio.h>

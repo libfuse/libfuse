@@ -10,6 +10,8 @@ What is new in 2.6
 
  - Building module for Linux kernels earlier than 2.6.9 not supported
 
+ - Allow block device based filesystems to support swap files
+
 What is new in 2.5
 
  - Merge library part of FreeBSD port
