@@ -643,6 +643,10 @@ static void do_release(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     fi.flags = arg->flags;
     fi.fh = arg->fh;
     fi.fh_old = fi.fh;
+    if (req->f->conn.proto_minor >= 8) {
+        fi.flush = (arg->release_flags & FUSE_RELEASE_FLUSH) ? 1 : 0;
+        fi.lock_owner = arg->lock_owner;
+    }
 
     if (req->f->op.release)
         req->f->op.release(req, nodeid, &fi);

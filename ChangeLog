@@ -1,5 +1,8 @@
 2006-10-01  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Add support for FLUSH+RELEASE operation for FreeBSD.  Original
+	patch by Csaba Henk
+
 	* Add init script to insert fuse module and mount the control
 	filesystem.  The script is installed as /etc/init.d/fuse and on
 	debian based systems (where update-rc.d is available) symlinks

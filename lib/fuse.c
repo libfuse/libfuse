@@ -583,6 +583,17 @@ static int fuse_do_open(struct fuse *f, fuse_req_t req, char *path,
     return res;
 }
 
+static int fuse_do_flush(struct fuse *f, fuse_req_t req, const char *path,
+                         struct fuse_file_info *fi)
+{
+    int res;
+    struct fuse_intr_data d;
+    fuse_prepare_interrupt(f, req, &d);
+    res = f->op.flush(path, fi);
+    fuse_finish_interrupt(f, req, &d);
+    return res;
+}
+
 static int fuse_do_statfs(struct fuse *f, fuse_req_t req, const char *path,
                           struct statvfs *buf)
 {
@@ -1628,14 +1639,17 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
     char *path;
     struct node *node;
     int unlink_hidden = 0;
+    int err = 0;
 
     pthread_rwlock_rdlock(&f->tree_lock);
     path = get_path(f, ino);
     if (f->conf.debug) {
-        printf("RELEASE[%llu] flags: 0x%x\n", (unsigned long long) fi->fh,
-               fi->flags);
+        printf("RELEASE%s[%llu] flags: 0x%x\n", fi->flush ? "+FLUSH" : "", 
+               (unsigned long long) fi->fh, fi->flags);
         fflush(stdout);
     }
+    if (fi->flush && path && f->op.flush)
+        err = fuse_do_flush(f, req, path, fi);
     if (f->op.release)
         fuse_compat_release(f, req, path, fi);
 
@@ -1656,7 +1670,7 @@ static void fuse_release(fuse_req_t req, fuse_ino_t ino,
         free(path);
     pthread_rwlock_unlock(&f->tree_lock);
 
-    reply_err(req, 0);
+    reply_err(req, err);
 }
 
 static void fuse_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
@@ -2277,12 +2291,8 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
             fflush(stdout);
         }
         err = -ENOSYS;
-        if (f->op.flush) {
-            struct fuse_intr_data d;
-            fuse_prepare_interrupt(f, req, &d);
-            err = f->op.flush(path, fi);
-            fuse_finish_interrupt(f, req, &d);
-        }
+        if (f->op.flush)
+            err = fuse_do_flush(f, req, path, fi);
         free(path);
     }
     if (f->op.lock) {
