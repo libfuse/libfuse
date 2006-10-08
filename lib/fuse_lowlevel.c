@@ -57,6 +57,7 @@ struct fuse_ll {
     struct fuse_req list;
     struct fuse_req interrupts;
     pthread_mutex_t lock;
+    int got_destroy;
 };
 
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
@@ -995,6 +996,20 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     send_reply_ok(req, &outarg, arg->minor < 5 ? 8 : sizeof(outarg));
 }
 
+static void do_destroy(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+    struct fuse_ll *f = req->f;
+
+    (void) nodeid;
+    (void) inarg;
+
+    f->got_destroy = 1;
+    if (f->op.destroy)
+        f->op.destroy(f->userdata);
+
+    send_reply_ok(req, NULL, 0);
+}
+
 void *fuse_req_userdata(fuse_req_t req)
 {
     return req->f->userdata;
@@ -1066,6 +1081,7 @@ static struct {
     [FUSE_CREATE]      = { do_create,      "CREATE"      },
     [FUSE_INTERRUPT]   = { do_interrupt,   "INTERRUPT"   },
     [FUSE_BMAP]        = { do_bmap,        "BMAP"        },
+    [FUSE_DESTROY]     = { do_destroy,     "DESTROY"     },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
@@ -1200,8 +1216,10 @@ static void fuse_ll_destroy(void *data)
 {
     struct fuse_ll *f = (struct fuse_ll *) data;
 
-    if (f->op.destroy)
-        f->op.destroy(f->userdata);
+    if (f->got_init && !f->got_destroy) {
+        if (f->op.destroy)
+            f->op.destroy(f->userdata);
+    }
 
     pthread_mutex_destroy(&f->lock);
     free(f);

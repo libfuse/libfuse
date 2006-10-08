@@ -226,10 +226,23 @@ static void fuse_umount_begin(struct super_block *sb)
 }
 #endif
 
+static void fuse_send_destroy(struct fuse_conn *fc)
+{
+	struct fuse_req *req = fc->destroy_req;
+	if (req && fc->conn_init) {
+		fc->destroy_req = NULL;
+		req->in.h.opcode = FUSE_DESTROY;
+		req->force = 1;
+		request_send(fc, req);
+		fuse_put_request(fc, req);
+	}
+}
+
 static void fuse_put_super(struct super_block *sb)
 {
 	struct fuse_conn *fc = get_fuse_conn_super(sb);
 
+	fuse_send_destroy(fc);
 	spin_lock(&fc->lock);
 	fc->connected = 0;
 	fc->blocked = 0;
@@ -447,6 +460,8 @@ static struct fuse_conn *new_conn(void)
 void fuse_conn_put(struct fuse_conn *fc)
 {
 	if (atomic_dec_and_test(&fc->count)) {
+		if (fc->destroy_req)
+			fuse_request_free(fc->destroy_req);
 		mutex_destroy(&fc->inst_mutex);
 		kfree(fc);
 	}
@@ -565,6 +580,7 @@ static void process_init_reply(struct fuse_conn *fc, struct fuse_req *req)
 		fc->bdi.ra_pages = min(fc->bdi.ra_pages, ra_pages);
 		fc->minor = arg->minor;
 		fc->max_write = arg->minor < 5 ? 4096 : arg->max_write;
+		fc->conn_init = 1;
 	}
 	fuse_put_request(fc, req);
 	fc->blocked = 0;
@@ -664,6 +680,12 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	init_req = fuse_request_alloc();
 	if (!init_req)
 		goto err_put_root;
+
+	if (is_bdev) {
+		fc->destroy_req = fuse_request_alloc();
+		if (!fc->destroy_req)
+			goto err_put_root;
+	}
 
 	mutex_lock(&fuse_mutex);
 	err = -EINVAL;

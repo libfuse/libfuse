@@ -19,6 +19,15 @@
 
 	* Minor clean up of udev rules
 
+	* Add a synchronous DESTROY message to kernel interface.  This is
+	invoked from umount, when the final instance of the filesystem is
+	released.  It is only sent for filesystems mounted with the
+	'blkdev' option for security reasons.
+
+	* If the DESTROY message is received, call the filesystem's
+	->destroy() method.  In this case it's not called from session
+	destruction as it would be otherwise.
+
 2006-10-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0-rc2
