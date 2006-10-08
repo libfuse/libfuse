@@ -1,10 +1,12 @@
 ## Process this file with automake to produce Makefile.in
 
+AM_CPPFLAGS = -D_FILE_OFFSET_BITS=64 
 bin_PROGRAMS = fusermount ulockmgr_server
 
 fusermount_SOURCES = fusermount.c
 
 ulockmgr_server_SOURCES = ulockmgr_server.c
+ulockmgr_server_CPPFLAGS = -D_FILE_OFFSET_BITS=64 -D_REENTRANT 
 ulockmgr_server_LDFLAGS = -pthread
 
 install-exec-hook:
@@ -34,11 +36,11 @@ install-exec-local:
 
 install-data-local:
 	$(mkdir_p) $(DESTDIR)$(UDEV_RULES_PATH)
-	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/60-fuse.rules
+	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/99-fuse.rules
 
 uninstall-local:
 	rm -f $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
-	rm -f $(DESTDIR)$(UDEV_RULES_PATH)/60-fuse.rules
+	rm -f $(DESTDIR)$(UDEV_RULES_PATH)/99-fuse.rules
 	rm -f $(DESTDIR)$(INIT_D_PATH)/fuse
 	@if test -x /usr/sbin/update-rc.d; then \
 		echo "/usr/sbin/update-rc.d fuse remove"; \

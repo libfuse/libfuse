@@ -23,7 +23,8 @@
 #include <sys/wait.h>
 
 struct message {
-    int intr;
+    unsigned intr : 1;
+    unsigned nofd : 1;
     pthread_t thr;
     int cmd;
     int fd;
@@ -35,7 +36,7 @@ struct fd_store {
     struct fd_store *next;
     int fd;
     int origfd;
-    int finished;
+    int inuse;
 };
 
 struct owner {
@@ -53,19 +54,21 @@ struct req_data {
 #define MAX_SEND_FDS 2
 
 static int receive_message(int sock, void *buf, size_t buflen, int *fdp,
-                           int numfds)
+                           int *numfds)
 {
     struct msghdr msg;
     struct iovec iov;
     char ccmsg[CMSG_SPACE(sizeof(int)) * MAX_SEND_FDS];
     struct cmsghdr *cmsg;
     int res;
+    int i;
 
-    assert(numfds <= MAX_SEND_FDS);
+    assert(*numfds <= MAX_SEND_FDS);
     iov.iov_base = buf;
     iov.iov_len = buflen;
 
     memset(&msg, 0, sizeof(msg));
+    memset(ccmsg, -1, sizeof(ccmsg));
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
     msg.msg_control = ccmsg;
@@ -90,7 +93,26 @@ static int receive_message(int sock, void *buf, size_t buflen, int *fdp,
                     cmsg->cmsg_type);
             return -1;
         }
-        memcpy(fdp, CMSG_DATA(cmsg), sizeof(int) * numfds);
+        memcpy(fdp, CMSG_DATA(cmsg), sizeof(int) * *numfds);
+        if (msg.msg_flags & MSG_CTRUNC) {
+            fprintf(stderr, "ulockmgr_server: control message truncated\n");
+            for (i = 0; i < *numfds; i++)
+                close(fdp[i]);
+            *numfds = 0;
+        }
+    } else {
+        if (msg.msg_flags & MSG_CTRUNC) {
+            fprintf(stderr, "ulockmgr_server: control message truncated(*)\n");
+
+            /* There's a bug in the Linux kernel, that if not all file
+               descriptors were allocated, then the cmsg header is not
+               filled in */
+            cmsg = (struct cmsghdr *) ccmsg;
+            memcpy(fdp, CMSG_DATA(cmsg), sizeof(int) * *numfds);
+            for (i = 0; i < *numfds; i++)
+                close(fdp[i]);
+        }
+        *numfds = 0;
     }
     return res;
 }
@@ -137,7 +159,7 @@ static void *process_request(void *d_)
     }
     d->msg.error = (res == -1) ? errno : 0;
     pthread_mutex_lock(&d->o->lock);
-    d->f->finished = 1;
+    d->f->inuse--;
     pthread_mutex_unlock(&d->o->lock);
     send_reply(d->cfd, &d->msg);
     close(d->cfd);
@@ -149,7 +171,9 @@ static void *process_request(void *d_)
 static void process_message(struct owner *o, struct message *msg, int cfd,
                             int fd)
 {
-    struct fd_store *f;
+    struct fd_store *f = NULL;
+    struct fd_store *newf = NULL;
+    struct fd_store **fp;
     struct req_data *d;
     pthread_t tid;
     int res;
@@ -162,18 +186,17 @@ static void process_message(struct owner *o, struct message *msg, int cfd,
 
     if (msg->cmd == F_SETLK  && msg->lock.l_type == F_UNLCK && 
         msg->lock.l_start == 0 && msg->lock.l_len == 0) {
-        struct fd_store **fp;
-
         for (fp = &o->fds; *fp;) {
-            struct fd_store *f = *fp;
-            if (f->origfd == msg->fd && f->finished) {
+            f = *fp;
+            if (f->origfd == msg->fd && !f->inuse) {
                 close(f->fd);
                 *fp = f->next;
                 free(f);
             } else
                 fp = &f->next;
         }
-        close(fd);
+        if (!msg->nofd)
+            close(fd);
 
         msg->error = 0;
         send_reply(cfd, msg);
@@ -181,16 +204,32 @@ static void process_message(struct owner *o, struct message *msg, int cfd,
         return;
     }
 
-    f = malloc(sizeof(struct fd_store));
-    if (!f) {
-        msg->error = ENOLCK;
-        send_reply(cfd, msg);
-        close(cfd);
-        return;
-    }
+    if (msg->nofd) {
+        for (fp = &o->fds; *fp; fp = &(*fp)->next) {
+            f = *fp;
+            if (f->origfd == msg->fd)
+                break;
+        }
+        if (!*fp) {
+            fprintf(stderr, "ulockmgr_server: fd %i not found\n", msg->fd);
+            msg->error = EIO;
+            send_reply(cfd, msg);
+            close(cfd);
+            return;
+        }
+    } else {
+        newf = f = malloc(sizeof(struct fd_store));
+        if (!f) {
+            msg->error = ENOLCK;
+            send_reply(cfd, msg);
+            close(cfd);
+            return;
+        }
 
-    f->fd = fd;
-    f->origfd = msg->fd;
+        f->fd = fd;
+        f->origfd = msg->fd;
+        f->inuse = 0;
+    }
 
     if (msg->cmd == F_GETLK || msg->cmd == F_SETLK ||
         msg->lock.l_type == F_UNLCK) {
@@ -198,9 +237,10 @@ static void process_message(struct owner *o, struct message *msg, int cfd,
         msg->error = (res == -1) ? errno : 0;
         send_reply(cfd, msg);
         close(cfd);
-        f->next = o->fds;
-        o->fds = f;
-        f->finished = 1;
+        if (newf) {
+            newf->next = o->fds;
+            o->fds = newf;
+        }
         return;
     }
 
@@ -209,10 +249,11 @@ static void process_message(struct owner *o, struct message *msg, int cfd,
         msg->error = ENOLCK;
         send_reply(cfd, msg);
         close(cfd);
-        free(f);
+        free(newf);
         return;
     }
 
+    f->inuse++;
     d->o = o;
     d->cfd = cfd;
     d->f = f;
@@ -223,12 +264,15 @@ static void process_message(struct owner *o, struct message *msg, int cfd,
         send_reply(cfd, msg);
         close(cfd);
         free(d);
-        free(f);
+        f->inuse--;
+        free(newf);
         return;
     }
 
-    f->next = o->fds;
-    o->fds = f;
+    if (newf) {
+        newf->next = o->fds;
+        o->fds = newf;
+    }
     pthread_detach(tid);
 }
 
@@ -258,16 +302,22 @@ static void process_owner(int cfd)
         struct message msg;
         int rfds[2];
         int res;
+        int numfds = 2;
 
-        res  = receive_message(cfd, &msg, sizeof(msg), rfds, 2);
+        res  = receive_message(cfd, &msg, sizeof(msg), rfds, &numfds);
         if (!res)
             break;
         if (res == -1)
             exit(1);
 
-        if (msg.intr)
+        if (msg.intr) {
+            if (numfds != 0)
+                fprintf(stderr, "ulockmgr_server: too many fds for intr\n");
             pthread_kill(msg.thr, SIGUSR1);
-        else {
+        } else {
+            if (numfds != 2)
+                continue;
+
             pthread_mutex_lock(&o.lock);
             process_message(&o, &msg, rfds[0], rfds[1]);
             pthread_mutex_unlock(&o.lock);
@@ -313,11 +363,13 @@ int main(int argc, char *argv[])
         char c;
         int sock;
         int pid;
-        int res = receive_message(cfd, &c, sizeof(c), &sock, 1);
+        int numfds = 1;
+        int res = receive_message(cfd, &c, sizeof(c), &sock, &numfds);
         if (!res)
             break;
         if (res == -1)
             exit(1);
+        assert(numfds == 1);
 
         pid = fork();
         if (pid == -1) {

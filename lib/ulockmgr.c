@@ -22,7 +22,8 @@
 #include <sys/wait.h>
 
 struct message {
-    int intr;
+    unsigned intr : 1;
+    unsigned nofd : 1;
     pthread_t thr;
     int cmd;
     int fd;
@@ -33,7 +34,7 @@ struct message {
 struct fd_store {
     struct fd_store *next;
     int fd;
-    int finished;
+    int inuse;
 };
 
 struct owner {
@@ -176,7 +177,9 @@ static int ulockmgr_send_request(struct message *msg, const void *id,
     int sv[2];
     int cfd;
     struct owner *o;
-    struct fd_store *f;
+    struct fd_store *f = NULL;
+    struct fd_store *newf = NULL;
+    struct fd_store **fp;
     int fd = msg->fd;
     int cmd = msg->cmd;
     int res;
@@ -203,32 +206,51 @@ static int ulockmgr_send_request(struct message *msg, const void *id,
             return -ENOLCK;
     }
 
-    f = calloc(1, sizeof(struct fd_store));
-    if (!f) {
-        fprintf(stderr, "libulockmgr: failed to allocate memory\n");
-        return -ENOLCK;
+    if (unlockall)
+        msg->nofd = 1;
+    else {
+        for (fp = &o->fds; *fp; fp = &(*fp)->next) {
+            f = *fp;
+            if (f->fd == fd) {
+                msg->nofd = 1;
+                break;
+            }
+        }
+    }
+
+    if (!msg->nofd) {
+        newf = f = calloc(1, sizeof(struct fd_store));
+        if (!f) {
+            fprintf(stderr, "libulockmgr: failed to allocate memory\n");
+            return -ENOLCK;
+        }
     }
 
     res = socketpair(AF_UNIX, SOCK_STREAM, 0, sv);
     if (res == -1) {
         perror("libulockmgr: socketpair");
-        free(f);
+        free(newf);
         return -ENOLCK;
     }
 
     cfd = sv[1];
     sv[1] = msg->fd;
-    res = ulockmgr_send_message(o->cfd, msg, sizeof(struct message), sv, 2);
+    res = ulockmgr_send_message(o->cfd, msg, sizeof(struct message), sv,
+                                msg->nofd ? 1 : 2);
     close(sv[0]);
     if (res == -1) {
-        free(f);
+        free(newf);
         close(cfd);
         return -EIO;
     }
 
-    f->fd = msg->fd;
-    f->next = o->fds;
-    o->fds = f;
+    if (newf) {
+        newf->fd = msg->fd;
+        newf->next = o->fds;
+        o->fds = newf;
+    }
+    if (f)
+        f->inuse++;
 
     res = recv(cfd, msg, sizeof(struct message), MSG_WAITALL);
     if (res == -1) {
@@ -278,15 +300,13 @@ static int ulockmgr_send_request(struct message *msg, const void *id,
         pthread_mutex_lock(&ulockmgr_lock);
 
     }
-
-    f->finished = 1;
+    if (f)
+        f->inuse--;
     close(cfd);
     if (unlockall) {
-        struct fd_store **fp;
-
         for (fp = &o->fds; *fp;) {
             f = *fp;
-            if (f->fd == fd && f->finished) {
+            if (f->fd == fd && !f->inuse) {
                 *fp = f->next;
                 free(f);
             } else

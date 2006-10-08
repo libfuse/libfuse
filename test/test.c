@@ -841,6 +841,56 @@ static int test_symlink(void)
     return 0;
 }
 
+static int test_link(void)
+{
+    const char *data = testdata;
+    int datalen = testdatalen;
+    int err = 0;
+    int res;
+
+    start_test("link");
+    res = create_file(testfile, data, datalen);
+    if (res == -1)
+        return -1;
+
+    unlink(testfile2);
+    res = link(testfile, testfile2);
+    if (res == -1) {
+        PERROR("link");
+        return -1;
+    }
+    res = check_type(testfile2, S_IFREG);
+    if (res == -1)
+        return -1;
+    err += check_mode(testfile2, 0644);
+    err += check_nlink(testfile2, 2);
+    err += check_size(testfile2, datalen);
+    err += check_data(testfile2, data, 0, datalen);
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile);
+    if (res == -1)
+        return -1;
+
+    err += check_nlink(testfile2, 1);
+    res = unlink(testfile2);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile2);
+    if (res == -1)
+        return -1;
+    if (err)
+        return -1;
+
+    success();
+    return 0;
+}
+
 static int test_rename_file(void)
 {
     const char *data = testdata;
@@ -1014,6 +1064,7 @@ int main(int argc, char *argv[])
     sprintf(testdir2, "%s/testdir2", basepath);
     err += test_create();
     err += test_symlink();
+    err += test_link();
     err += test_mkfifo();
     err += test_mkdir();
     err += test_rename_file();

@@ -1,3 +1,24 @@
+2006-10-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Make sure inode numers wrap around at 2^32.  This is needed on
+	dual 64bit/32bit architectures, because 32bit applications using
+	the non-largefile interface would otherwise break (EOVERFLOW error
+	would be returned by the stat() system call family)
+
+	* ulockmgr: handle the case, when a locking operation fails
+	because no more file desctriptors are available in
+	ulockmgr_server.  Also work around a Linux kernel bug (known to
+	exist for all Linux kernel versions <= 2.6.19) which may cause
+	sent file descriptors to be lost in the above case
+
+	* ulockmgr: optimize file descriptor use
+
+	* restore needed cpp flags to util/Makefile.am
+
+	* Install udev rules as 99-fuse.rules instead of 60-fuse.rules
+
+	* Minor clean up of udev rules
+
 2006-10-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0-rc2
