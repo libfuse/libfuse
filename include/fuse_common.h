@@ -74,12 +74,42 @@ struct fuse_file_info {
     uint64_t lock_owner;
 };
 
+/**
+ * Connection information, passed to the ->init() method
+ *
+ * Some of the elements are read-write, these can be changed to
+ * indicate the value requested by the filesystem.  The requested
+ * value must usually be smaller than the indicated value.
+ */
 struct fuse_conn_info {
+    /**
+     * Major version of the protocol (read-only)
+     */
     unsigned proto_major;
+
+    /**
+     * Minor version of the protocol (read-only)
+     */
     unsigned proto_minor;
+
+    /**
+     * Is asynchronous read supported (read-write)
+     */
     unsigned async_read;
+
+    /**
+     * Maximum size of the write buffer
+     */
     unsigned max_write;
+
+    /**
+     * Maximum readahead
+     */
     unsigned max_readahead;
+
+    /**
+     * For future use.
+     */
     unsigned reserved[27];
 };
 

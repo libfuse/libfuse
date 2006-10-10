@@ -8,7 +8,7 @@
 	* ulockmgr: handle the case, when a locking operation fails
 	because no more file desctriptors are available in
 	ulockmgr_server.  Also work around a Linux kernel bug (known to
-	exist for all Linux kernel versions <= 2.6.19) which may cause
+	exist for all Linux kernel versions <= 2.6.18) which may cause
 	sent file descriptors to be lost in the above case
 
 	* ulockmgr: optimize file descriptor use

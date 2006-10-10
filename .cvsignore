@@ -9,6 +9,7 @@ missing
 *.cache
 config.*
 depcomp
+compile
 libtool
 INSTALL
 fuse.pc

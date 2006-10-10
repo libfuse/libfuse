@@ -300,6 +300,7 @@ struct fuse_operations {
      * destroy() method.
      *
      * Introduced in version 2.3
+     * Changed in version 2.6
      */
     void *(*init) (struct fuse_conn_info *conn);
 
