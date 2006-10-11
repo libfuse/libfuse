@@ -1,3 +1,9 @@
+2006-10-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: Check for signature of super_operations->umount_begin().
+	Ubuntu kernel 2.6.17 seems to use the new signature found in
+	2.6.18.  Thanks to Florent Mertens for the report
+
 2006-10-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make sure inode numers wrap around at 2^32.  This is needed on

@@ -213,7 +213,7 @@ struct inode *fuse_iget(struct super_block *sb, unsigned long nodeid,
 	return inode;
 }
 
-#ifdef KERNEL_2_6_18_PLUS
+#ifdef UMOUNT_BEGIN_VFSMOUNT
 static void fuse_umount_begin(struct vfsmount *vfsmnt, int flags)
 {
 	if (flags & MNT_FORCE)
