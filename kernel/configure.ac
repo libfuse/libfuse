@@ -149,6 +149,14 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 		AC_MSG_RESULT([no])
 	fi
 
+	AC_MSG_CHECKING([whether lookup_instantiate_filp is defined])
+	if test -f $kernelsrc/include/linux/namei.h && egrep -q "lookup_instantiate_filp" $kernelsrc/include/linux/namei.h; then
+		AC_DEFINE(HAVE_LOOKUP_INSTANTIATE_FILP, 1, [lookup_instantiate_filp() is defined])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+
 	AC_MSG_CHECKING([if umount_begin is passed a vfsmount])
 	if egrep -q "\(\*umount_begin\) *\(struct vfsmount \*" $kernelsrc/include/linux/fs.h; then
 		AC_DEFINE(UMOUNT_BEGIN_VFSMOUNT, 1, [umount_begin is passed a vfsmount])
@@ -157,9 +165,16 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 		AC_MSG_RESULT([no])
 	fi
 
-	AC_MSG_CHECKING([whether lookup_instantiate_filp is defined])
-	if test -f $kernelsrc/include/linux/namei.h && egrep -q "lookup_instantiate_filp" $kernelsrc/include/linux/namei.h; then
-		AC_DEFINE(HAVE_LOOKUP_INSTANTIATE_FILP, 1, [lookup_instantiate_filp() is defined])
+	AC_MSG_CHECKING([if inode has i_blksize field])
+	if egrep -qw "i_blksize" $kernelsrc/include/linux/fs.h; then
+		AC_DEFINE(HAVE_I_BLKSIZE, 1, [inode has i_blksize field])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+	AC_MSG_CHECKING([if inode has i_private field])
+	if egrep -qw "i_private" $kernelsrc/include/linux/fs.h; then
+		AC_DEFINE(HAVE_I_PRIVATE, 1, [inode has i_private field])
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])

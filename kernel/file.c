@@ -843,8 +843,15 @@ static sector_t fuse_bmap(struct address_space *mapping, sector_t block)
 
 static struct file_operations fuse_file_operations = {
 	.llseek		= generic_file_llseek,
+#ifndef KERNEL_2_6_19_PLUS
 	.read		= generic_file_read,
 	.write		= generic_file_write,
+#else
+	.read           = do_sync_read,
+	.aio_read       = generic_file_aio_read,
+	.write          = do_sync_write,
+	.aio_write      = generic_file_aio_write,
+#endif
 	.mmap		= fuse_file_mmap,
 	.open		= fuse_open,
 	.flush		= fuse_flush,

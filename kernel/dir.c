@@ -529,7 +529,7 @@ static int fuse_unlink(struct inode *dir, struct dentry *entry)
 		/* Set nlink to zero so the inode can be cleared, if
                    the inode does have more links this will be
                    discovered at the next lookup/getattr */
-		inode->i_nlink = 0;
+		clear_nlink(inode);
 		fuse_invalidate_attr(inode);
 		fuse_invalidate_attr(dir);
 		fuse_invalidate_entry_cache(entry);
@@ -555,7 +555,7 @@ static int fuse_rmdir(struct inode *dir, struct dentry *entry)
 	err = req->out.h.error;
 	fuse_put_request(fc, req);
 	if (!err) {
-		entry->d_inode->i_nlink = 0;
+		clear_nlink(entry->d_inode);
 		fuse_invalidate_attr(dir);
 		fuse_invalidate_entry_cache(entry);
 	} else if (err == -EINTR)
@@ -815,7 +815,10 @@ static int fuse_permission(struct inode *inode, int mask, struct nameidata *nd)
 		if ((mask & MAY_EXEC) && !S_ISDIR(mode) && !(mode & S_IXUGO))
 			return -EACCES;
 
-		if (nd && (nd->flags & LOOKUP_ACCESS))
+#ifndef LOOKUP_CHDIR
+#define LOOKUP_CHDIR 0
+#endif
+		if (nd && (nd->flags & (LOOKUP_ACCESS | LOOKUP_CHDIR)))
 			return fuse_access(inode, mask);
 		return 0;
 	}
@@ -1078,6 +1081,8 @@ static int fuse_getattr(struct vfsmount *mnt, struct dentry *entry,
 	struct inode *inode = entry->d_inode;
 	int err = fuse_revalidate(entry);
 	if (!err)
+		/* FIXME: may want specialized function because of
+		   st_blksize on block devices on 2.6.19+ */
 		generic_fillattr(inode, stat);
 
 	return err;

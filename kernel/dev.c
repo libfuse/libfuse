@@ -772,6 +772,7 @@ static ssize_t fuse_dev_readv(struct file *file, const struct iovec *iov,
 	return err;
 }
 
+#ifndef KERNEL_2_6_19_PLUS
 static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 			     size_t nbytes, loff_t *off)
 {
@@ -780,6 +781,13 @@ static ssize_t fuse_dev_read(struct file *file, char __user *buf,
 	iov.iov_base = buf;
 	return fuse_dev_readv(file, &iov, 1, off);
 }
+#else
+static ssize_t fuse_dev_read(struct kiocb *iocb, const struct iovec *iov,
+			     unsigned long nr_segs, loff_t pos)
+{
+	return fuse_dev_readv(iocb->ki_filp, iov, nr_segs, &pos);
+}
+#endif
 
 /* Look up request on processing list by unique ID */
 static struct fuse_req *request_find(struct fuse_conn *fc, u64 unique)
@@ -909,6 +917,7 @@ static ssize_t fuse_dev_writev(struct file *file, const struct iovec *iov,
 	return err;
 }
 
+#ifndef KERNEL_2_6_19_PLUS
 static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 			      size_t nbytes, loff_t *off)
 {
@@ -917,6 +926,13 @@ static ssize_t fuse_dev_write(struct file *file, const char __user *buf,
 	iov.iov_base = (char __user *) buf;
 	return fuse_dev_writev(file, &iov, 1, off);
 }
+#else
+static ssize_t fuse_dev_write(struct kiocb *iocb, const struct iovec *iov,
+			      unsigned long nr_segs, loff_t pos)
+{
+	return fuse_dev_writev(iocb->ki_filp, iov, nr_segs, &pos);
+}
+#endif
 
 static unsigned fuse_dev_poll(struct file *file, poll_table *wait)
 {
@@ -1052,10 +1068,17 @@ static int fuse_dev_fasync(int fd, struct file *file, int on)
 struct file_operations fuse_dev_operations = {
 	.owner		= THIS_MODULE,
 	.llseek		= no_llseek,
+#ifndef KERNEL_2_6_19_PLUS
 	.read		= fuse_dev_read,
 	.readv		= fuse_dev_readv,
 	.write		= fuse_dev_write,
 	.writev		= fuse_dev_writev,
+#else
+	.read           = do_sync_read,
+	.aio_read       = fuse_dev_read,
+	.write          = do_sync_write,
+	.aio_write      = fuse_dev_write,
+#endif
 	.poll		= fuse_dev_poll,
 	.release	= fuse_dev_release,
 	.fasync		= fuse_dev_fasync,

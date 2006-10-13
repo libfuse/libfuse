@@ -1,3 +1,8 @@
+2006-10-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: Fix compilation on patched 2.6.18 (fc6) and 2.6.9.
+	Report from David Shaw
+
 2006-10-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: Check for signature of super_operations->umount_begin().

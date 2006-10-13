@@ -12,6 +12,9 @@
 #include <linux/module.h>
 
 #define FUSE_CTL_SUPER_MAGIC 0x65735543
+#ifndef HAVE_I_PRIVATE
+#define i_private u.generic_ip
+#endif
 
 /*
  * This is non-NULL when the single instance of the control filesystem
@@ -23,7 +26,7 @@ static struct fuse_conn *fuse_ctl_file_conn_get(struct file *file)
 {
 	struct fuse_conn *fc;
 	mutex_lock(&fuse_mutex);
-	fc = file->f_dentry->d_inode->u.generic_ip;
+	fc = file->f_dentry->d_inode->i_private;
 	if (fc)
 		fc = fuse_conn_get(fc);
 	mutex_unlock(&fuse_mutex);
@@ -114,7 +117,7 @@ static struct dentry *fuse_ctl_add_dentry(struct dentry *parent,
 		inode->i_op = iop;
 	inode->i_fop = fop;
 	inode->i_nlink = nlink;
-	inode->u.generic_ip = fc;
+	inode->i_private = fc;
 	d_add(dentry, inode);
 	return dentry;
 }
@@ -132,7 +135,7 @@ int fuse_ctl_add_conn(struct fuse_conn *fc)
 		return 0;
 
 	parent = fuse_control_sb->s_root;
-	parent->d_inode->i_nlink++;
+	inc_nlink(parent->d_inode);
 	sprintf(name, "%llu", (unsigned long long) fc->id);
 	parent = fuse_ctl_add_dentry(parent, fc, name, S_IFDIR | 0500, 2,
 				     &simple_dir_inode_operations,
@@ -166,7 +169,7 @@ void fuse_ctl_remove_conn(struct fuse_conn *fc)
 
 	for (i = fc->ctl_ndents - 1; i >= 0; i--) {
 		struct dentry *dentry = fc->ctl_dentry[i];
-		dentry->d_inode->u.generic_ip = NULL;
+		dentry->d_inode->i_private = NULL;
 		d_drop(dentry);
 		dput(dentry);
 	}

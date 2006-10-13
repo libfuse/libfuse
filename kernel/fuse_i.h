@@ -38,6 +38,9 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
 #  define KERNEL_2_6_18_PLUS
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
+#  define KERNEL_2_6_19_PLUS
+#endif
 
 #ifdef __arm__
 #define DCACHE_BUG
@@ -62,6 +65,10 @@
 #define mutex_lock(m) down(m)
 #define mutex_unlock(m) up(m)
 #define mutex semaphore
+#endif
+#ifndef KERNEL_2_6_19_PLUS
+#define clear_nlink(inode) (inode)->i_nlink = 0
+#define inc_nlink(inode) (inode)->i_nlink++
 #endif
 
 #ifndef BUG_ON
