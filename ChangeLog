@@ -1,7 +1,22 @@
 2006-10-13  Miklos Szeredi <miklos@szeredi.hu>
 
-	* kernel: Fix compilation on patched 2.6.18 (fc6) and 2.6.9.
+	* kernel: Fix compilation on patched 2.6.18 (fc6) and 2.6.19.
 	Report from David Shaw
+
+	* lib: Fix lost error on renaming a file.  Introduced in version
+	2.4.1. Report from David Shaw
+
+	* kernel: Fix a rare hang on SMP/32bit on heavy filesystem
+	activity.  The cause of the bug was that some calls to
+	i_size_write() were not protected by a lock, and hence
+	i_size_seqcount could become corrupted.  This caused subsequent
+	calls to i_size_read() to spin forever.  This is a long standing
+	bug was probably introduced in version 2.2, and thought to be
+	related to NFS exporting (it's not).  It was reported by various
+	people, but Dana Henriksen has finally helped me to track it down,
+	so big thanks to him
+
+	* kernel: Protect against truncation of a swapfile
 
 2006-10-10  Miklos Szeredi <miklos@szeredi.hu>
 

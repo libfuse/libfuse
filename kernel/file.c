@@ -495,8 +495,11 @@ static int fuse_commit_write(struct file *file, struct page *page,
 		err = -EIO;
 	if (!err) {
 		pos += count;
-		if (pos > i_size_read(inode))
+		if (pos > i_size_read(inode)) {
+			spin_lock(&fc->lock);
 			i_size_write(inode, pos);
+			spin_unlock(&fc->lock);
+		}
 
 		if (offset == 0 && to == PAGE_CACHE_SIZE) {
 			clear_page_dirty(page);
@@ -601,8 +604,11 @@ static ssize_t fuse_direct_io(struct file *file, const char __user *buf,
 	}
 	fuse_put_request(fc, req);
 	if (res > 0) {
-		if (write && pos > i_size_read(inode))
+		if (write && pos > i_size_read(inode)) {
+			spin_lock(&fc->lock);
 			i_size_write(inode, pos);
+			spin_unlock(&fc->lock);
+		}
 		*ppos = pos;
 	}
 	fuse_invalidate_attr(inode);

@@ -701,8 +701,8 @@ static int hide_node(struct fuse *f, fuse_req_t req, const char *oldpath,
     if (f->op.rename && f->op.unlink) {
         newpath = hidden_name(f, req, dir, oldname, newname, sizeof(newname));
         if (newpath) {
-            int res = fuse_do_rename(f, req, oldpath, newpath);
-            if (res == 0)
+            err = fuse_do_rename(f, req, oldpath, newpath);
+            if (!err)
                 err = rename_node(f, dir, oldname, dir, newname, 1);
             free(newpath);
         }
@@ -1346,7 +1346,7 @@ static void fuse_rename(fuse_req_t req, fuse_ino_t olddir, const char *oldname,
                     is_open(f, newdir, newname))
                     err = hide_node(f, req, newpath, newdir, newname);
                 if (!err) {
-                    fuse_do_rename(f, req, oldpath, newpath);
+                    err = fuse_do_rename(f, req, oldpath, newpath);
                     if (!err)
                         err = rename_node(f, olddir, oldname, newdir, newname, 0);
                 }
