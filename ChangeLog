@@ -3,8 +3,10 @@
 	* kernel: Fix compilation on patched 2.6.18 (fc6) and 2.6.19.
 	Report from David Shaw
 
-	* lib: Fix lost error on renaming a file.  Introduced in version
-	2.4.1. Report from David Shaw
+	* lib: Fix lost error on renaming a file. Report from David Shaw
+
+	* lib: Fix lost error on hiding open files (renaming to
+	.fuse_hiddenXXXX)
 
 	* kernel: Fix a rare hang on SMP/32bit on heavy filesystem
 	activity.  The cause of the bug was that some calls to
