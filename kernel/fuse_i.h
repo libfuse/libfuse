@@ -71,17 +71,6 @@
 #define inc_nlink(inode) (inode)->i_nlink++
 #endif
 
-#ifndef BUG_ON
-#define BUG_ON(x)
-#endif
-#ifndef container_of
-#define container_of(ptr, type, member) ({			\
-        const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
-        (type *)( (char *)__mptr - offsetof(type,member) );})
-#endif
-#ifndef __user
-#define __user
-#endif
 /** Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
 

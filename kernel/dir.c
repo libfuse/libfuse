@@ -196,6 +196,20 @@ static int valid_mode(int m)
 		S_ISBLK(m) || S_ISFIFO(m) || S_ISSOCK(m);
 }
 
+static struct dentry *fuse_d_add_directory(struct dentry *entry,
+					   struct inode *inode)
+{
+	struct dentry *alias = d_find_alias(inode);
+	if (alias && !(alias->d_flags & DCACHE_DISCONNECTED)) {
+		fuse_invalidate_entry(alias);
+		dput(alias);
+		if (!list_empty(&inode->i_dentry))
+			return ERR_PTR(-EBUSY);
+	} else
+		dput(alias);
+	return d_splice_alias(inode, entry);
+}
+
 static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 				  struct nameidata *nd)
 {
@@ -233,21 +247,13 @@ static struct dentry *fuse_lookup(struct inode *dir, struct dentry *entry,
 		return ERR_PTR(err);
 
 	if (inode && S_ISDIR(inode->i_mode)) {
-		struct dentry *alias;
 		mutex_lock(&fc->inst_mutex);
-		alias = d_find_alias(inode);
-		if (alias && !(alias->d_flags & DCACHE_DISCONNECTED)) {
-			fuse_invalidate_entry(alias);
-			dput(alias);
-			if (!list_empty(&inode->i_dentry)) {
-				mutex_unlock(&fc->inst_mutex);
-				iput(inode);
-				return ERR_PTR(-EBUSY);
-			}
-		} else
-			dput(alias);
-		newent = d_splice_alias(inode, entry);
+		newent = fuse_d_add_directory(entry, inode);
 		mutex_unlock(&fc->inst_mutex);
+		if (IS_ERR(newent)) {
+			iput(inode);
+			return newent;
+		}
 	} else
 		newent = d_splice_alias(inode, entry);
 
@@ -418,8 +424,7 @@ static int create_new_entry(struct fuse_conn *fc, struct fuse_req *req,
 			mutex_unlock(&fc->inst_mutex);
 			dput(alias);
 			iput(inode);
-			fuse_invalidate_entry(entry);
-			return 0;
+			return -EBUSY;
 		}
 		d_instantiate(entry, inode);
 		mutex_unlock(&fc->inst_mutex);
@@ -1036,6 +1041,8 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 	if (attr->ia_valid & ATTR_SIZE) {
 		unsigned long limit;
 		is_truncate = 1;
+		if (IS_SWAPFILE(inode))
+			return -ETXTBSY;
 #ifdef KERNEL_2_6_10_PLUS
 		limit = current->signal->rlim[RLIMIT_FSIZE].rlim_cur;
 #else
@@ -1045,8 +1052,6 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 			send_sig(SIGXFSZ, current, 0);
 			return -EFBIG;
 		}
-		if (IS_SWAPFILE(inode))
-			return -ETXTBSY;
 	}
 
 	req = fuse_get_req(fc);

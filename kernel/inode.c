@@ -107,11 +107,8 @@ static void fuse_clear_inode(struct inode *inode)
 	if (inode->i_sb->s_flags & MS_ACTIVE) {
 		struct fuse_conn *fc = get_fuse_conn(inode);
 		struct fuse_inode *fi = get_fuse_inode(inode);
-		if (fi->nlookup) {
-			fuse_send_forget(fc, fi->forget_req, fi->nodeid,
-					 fi->nlookup);
-			fi->forget_req = NULL;
-		}
+		fuse_send_forget(fc, fi->forget_req, fi->nodeid, fi->nlookup);
+		fi->forget_req = NULL;
 	}
 }
 

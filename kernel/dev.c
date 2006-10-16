@@ -1074,10 +1074,10 @@ struct file_operations fuse_dev_operations = {
 	.write		= fuse_dev_write,
 	.writev		= fuse_dev_writev,
 #else
-	.read           = do_sync_read,
-	.aio_read       = fuse_dev_read,
-	.write          = do_sync_write,
-	.aio_write      = fuse_dev_write,
+	.read		= do_sync_read,
+	.aio_read	= fuse_dev_read,
+	.write		= do_sync_write,
+	.aio_write	= fuse_dev_write,
 #endif
 	.poll		= fuse_dev_poll,
 	.release	= fuse_dev_release,
