@@ -12,6 +12,8 @@ What is new in 2.6
 
  - Allow block device based filesystems to support swap files
 
+ - Several bugs fixed, including a rare system hang on SMP
+
 What is new in 2.5
 
  - Merge library part of FreeBSD port

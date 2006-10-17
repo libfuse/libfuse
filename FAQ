@@ -1,4 +1,4 @@
-This was generated on 2006/01/09 from
+This was generated on 2006/10/17 from
 
   http://fuse.sourceforge.net/wiki/index.php/FAQ
 
@@ -11,10 +11,16 @@ General
 How can I umount a filesystem?
 ------------------------------
 
-Filesystems mounted without sysadmin privileges can be umounted with
-the command
+FUSE filesystems can be unmounted either with:
 
-    fusermount -u mountpoint
+  umount mountpoint
+
+or
+
+  fusermount -u mountpoint
+
+The later does not need root privileges if the filesystem was mounted by the
+user doing the unmounting.
 
 What's the difference between FUSE and LUFS?
 --------------------------------------------
@@ -50,12 +56,14 @@ Is it possible to mount a fuse filesystem from fstab?
 -----------------------------------------------------
 
 Yes, from version 2.4.0 this is possible.  The filesystem must adhere
-to some rules about command line options to be able to work this
-way.  Here's an example of mounting an sshfs filesystem:
+to some rules about command line options to be able to work this way.
+Here's an example of mounting an sshfs filesystem:
 
 sshfs#user@host:/    /mnt/host    fuse    defaults    0 0
 
-The mounting is performed by the /sbin/mount.fuse helper script.
+The mounting is performed by the /sbin/mount.fuse helper script.  In
+this example the FUSE-linked binary must be called sshfs and must
+reside somewhere in $PATH.
 
 Licensing issues
 ~~~~~~~~~~~~~~~~
@@ -67,7 +75,8 @@ The kernel part is released under the GNU GPL.
 
 Libfuse is released under the GNU LGPL.
 
-All other parts (examples, fusermount, etc) are released under the GNU GPL.
+All other parts (examples, fusermount, etc) are released under the GNU
+GPL.
 
 Under what conditions may I modify or distribute FUSE?
 ------------------------------------------------------
@@ -262,6 +271,29 @@ option, or by setting the direct_io field of fuse_file_info at open)
 the read can return a smaller value than requested.  In this case the
 end of file can be signalled by returning zero.
 
+What do I do if /dev/fuse does not exist?
+-----------------------------------------
+
+Maybe the FUSE module is not loaded. As root, try:
+
+    modprobe fuse
+
+If nothing changes, as root run:
+
+    mknod /dev/fuse c 10 229
+
+What do I do if you don't have access to /dev/fuse?
+---------------------------------------------------
+
+As root run:
+
+    chmod o+rw /dev/fuse
+
+Remember that this will allow ordinary users to mount their own user
+space filesystems.
+
+If that's not what you want then use different permissions.
+
 Why does cp return operation not permitted when copying a file with no
 ----------------------------------------------------------------------
 write permissions for the owner?
@@ -270,23 +302,25 @@ write permissions for the owner?
 "cp" calls open(2) with read-only permissions and O_CREAT, the purpose
 being to atomically obtain a read/write file handle and make the file
 read-only.  Unfortunately, this does not work very well in fuse, since
-you first get a mknod, and then an open call.  At the time of open, you
-can't distinguish easily wether this is the first open issued by cp,
-or another process trying to write a read-only file.
+you first get a mknod, and then an open call.  At the time of open,
+you can't distinguish easily wether this is the first open issued by
+cp, or another process trying to write a read-only file.
 
 Defining the 'create' method solves this problem, however this
 requires a Linux kernel version of at least 2.6.15 and libfuse version
-2.5 or greater.
+2.5 or greater (on FreeBSD you'll need fuse4bsd-0.3.0-pre1 or newer
+for this).
 
 There can be other workarounds, however the easy one is to use the
 "default_permissions" mount option, and to avoid checking permissions
-on open. If you store files on a filesystem, this can get tricky
+on open.  If you store files on a filesystem, this can get tricky
 because you will have to change the file mode to allow writing.  Using
 the stateful API (i.e. returning an handle on open) will simplify
 things.  In this case, and using "-o default_permissions", when
 implementing the open call you have to:
 
-1. check if the open is in write mode (i.e. mode has O_RDWR or O_WRONLY)
+1. check if the open is in write mode (i.e. mode has O_RDWR or
+   O_WRONLY)
 
 2. in that case (in mutual exclusion with other open, getattr
    etc. calls on the same file) change the mode from "M" to "M OR
@@ -331,6 +365,16 @@ causes of this are (non-exhaustive)
     * the same node ID value was used for two different directories
       (i.e. hard-linked directories are not allowed)
 
+    * In the GETATTR function, st_mode needs to have a valid filetype
+      bit set, like S_IFREG or S_IFDIR, see the stat manual for more
+
+    * You are running a 64 bit kernel but using a 32 bit libfuse. In this case
+      you will need to install a 64 bit version of the FUSE userspace library,
+      64 bit versions of all of the FUSE filesystems or language bindings that
+      link to it, and 64 bit versions of all of their dependancies. Your
+      distribution may provide 64 bit versions of the basic dependancies like
+      libc even in its 32 bit environment
+
 Misc
 ====
 
@@ -345,3 +389,31 @@ something similar.
 
 But this is not recommended.  You should rather think about solving
 this another way.
+
+If a filesystem is mounted over a directory, how can I access the old
+---------------------------------------------------------------------
+contents?
+---------
+
+There are two possibilities:
+
+The first is to use 'mount --bind DIR TMPDIR' to create a copy of the
+namespace under DIR.  After mounting the FUSE filesystem over DIR,
+files can still be accessed through TMDIR.  This needs root privileges.
+
+The second is to set the working directory to DIR after mounting the FUSE
+filesystem.  For example before fuse_main() do
+
+     save_dir = open(DIR, O_RDONLY);
+
+And from the init() method do
+
+     fchdir(save_dir);
+     close(save_dir);
+
+Then access the files with relative paths (with newer LIBC versions
+the *at() functions may also be used instead of changing the CWD).
+
+This method doesn't need root privileges, but only works on Linux
+(FreeBSD does path resolving in a different way), and it's not even
+guaranteed to work on future Linux versions.

@@ -150,13 +150,9 @@ static int fuse_dentry_revalidate(struct dentry *entry, struct nameidata *nd)
 			return 0;
 
 		parent = dget_parent(entry);
-		if (!parent->d_inode) {
-			dput(parent);
-			return 0;
-		}
 		fuse_lookup_init(req, parent->d_inode, entry, &outarg);
-		dput(parent);
 		request_send(fc, req);
+		dput(parent);
 		err = req->out.h.error;
 		/* Zero nodeid is same as -ENOENT */
 		if (!err && !outarg.nodeid)
@@ -196,11 +192,16 @@ static int valid_mode(int m)
 		S_ISBLK(m) || S_ISFIFO(m) || S_ISSOCK(m);
 }
 
+/*
+ * Add a directory inode to a dentry, ensuring that no other dentry
+ * refers to this inode.  Called with fc->inst_mutex.
+ */
 static struct dentry *fuse_d_add_directory(struct dentry *entry,
 					   struct inode *inode)
 {
 	struct dentry *alias = d_find_alias(inode);
 	if (alias && !(alias->d_flags & DCACHE_DISCONNECTED)) {
+		/* This tries to shrink the subtree below alias */
 		fuse_invalidate_entry(alias);
 		dput(alias);
 		if (!list_empty(&inode->i_dentry))
@@ -1000,13 +1001,14 @@ static void iattr_to_fattr(struct iattr *iattr, struct fuse_setattr_in *arg)
 static void fuse_vmtruncate(struct inode *inode, loff_t offset)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
-	loff_t origsize = i_size_read(inode);
-	if (origsize != offset) {
-		spin_lock(&fc->lock);
-		i_size_write(inode, offset);
-		spin_unlock(&fc->lock);
-	}
-	if (origsize > offset) {
+	int need_trunc;
+
+	spin_lock(&fc->lock);
+	need_trunc = inode->i_size > offset;
+	i_size_write(inode, offset);
+	spin_unlock(&fc->lock);
+
+	if (need_trunc) {
 		struct address_space *mapping = inode->i_mapping;
 		unmap_mapping_range(mapping, offset + PAGE_SIZE - 1, 0, 1);
 		truncate_inode_pages(mapping, offset);
