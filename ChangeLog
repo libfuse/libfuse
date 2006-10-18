@@ -1,3 +1,9 @@
+2006-10-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: don't try to create a lock file if /etc/mtab is a
+	symlink.  Report and patch from Alexei Sheplyakov (debian bug
+	#393693)
+
 2006-10-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Minor changes, sync with mainline tree

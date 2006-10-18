@@ -108,6 +108,13 @@ static int lock_mtab(void)
     const char *mtab_lock = _PATH_MOUNTED ".fuselock";
     int mtablock;
     int res;
+    struct stat mtab_stat;
+
+    /* /etc/mtab could be a symlink to /proc/mounts */
+    if (!lstat(_PATH_MOUNTED, &mtab_stat)) {
+        if (S_ISLNK(mtab_stat.st_mode))
+            return -1;
+    }
 
     mtablock = open(mtab_lock, O_RDWR | O_CREAT, 0600);
     if (mtablock >= 0) {
@@ -880,13 +887,8 @@ static int mount_fuse(const char *mnt, const char *opts)
     if (fd == -1)
         return -1;
 
-    if (geteuid() == 0) {
+    if (geteuid() == 0)
         mtablock = lock_mtab();
-        if (mtablock < 0) {
-            close(fd);
-            return -1;
-        }
-    }
 
     drop_privs();
     read_conf();
