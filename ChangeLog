@@ -1,3 +1,7 @@
+2006-10-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.6.0
+
 2006-10-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: don't try to create a lock file if /etc/mtab is a
