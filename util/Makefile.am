@@ -14,8 +14,8 @@ install-exec-hook:
 	-chmod u+s $(DESTDIR)$(bindir)/fusermount
 	@if test ! -e $(DESTDIR)/dev/fuse; then \
 		$(mkdir_p) $(DESTDIR)/dev; \
-		echo "mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229"; \
-		mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229; \
+		echo "mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229 || true"; \
+		mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229 || true; \
 	fi
 
 EXTRA_DIST = mount.fuse udev.rules init_script
@@ -30,8 +30,8 @@ install-exec-local:
 	$(mkdir_p) $(DESTDIR)$(INIT_D_PATH)
 	$(INSTALL_PROGRAM) $(srcdir)/init_script $(DESTDIR)$(INIT_D_PATH)/fuse
 	@if test -x /usr/sbin/update-rc.d; then \
-		echo "/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 ."; \
-		/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 .; \
+		echo "/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 . || true"; \
+		/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 . || true; \
 	fi
 
 install-data-local:
@@ -43,6 +43,6 @@ uninstall-local:
 	rm -f $(DESTDIR)$(UDEV_RULES_PATH)/99-fuse.rules
 	rm -f $(DESTDIR)$(INIT_D_PATH)/fuse
 	@if test -x /usr/sbin/update-rc.d; then \
-		echo "/usr/sbin/update-rc.d fuse remove"; \
-		/usr/sbin/update-rc.d fuse remove; \
+		echo "/usr/sbin/update-rc.d fuse remove || true"; \
+		/usr/sbin/update-rc.d fuse remove || true; \
 	fi

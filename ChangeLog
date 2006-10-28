@@ -1,3 +1,16 @@
+2006-10-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix automake problem.  Patch from Nix
+
+2006-10-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix mount.fuse to use /bin/sh instead of /bin/bash, which is not
+	always available on embedded systems.  Patch from Paul Smith
+
+	* Fix util/Makefile.am, so that failure to run update-rc.d or
+	device creation doesn't cause make to fail.  Reported by Paul
+	Smith
+
 2006-10-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.0

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 #
 # FUSE mount helper
 # Petr Klima <qaxi@seznam.cz>
@@ -28,14 +28,13 @@ function die {
 
 [ "$#" -ge 2 ] || die "${USAGE}"
 
-FSTYPE=${1%%\#*} # for now i have to be same as FUSE mount binary
-		 # should be configurable
+# for now i have to be same as FUSE mount binary
+# should be configurable
+eval `echo "$1" | sed -n 's,\(^[^#][^#]*\)\(#\(.*\)\)*,FSTYPE="\1" MOUNTPATH="\3",p'`
 
 export PATH
 FSBIN=`which ${FSTYPE} 2>/dev/null` \
 	|| die "Can not find FUSE mount binary for FS ${FSTYPE}" 1
-
-MOUNTPATH=${1#*#}
 
 # was there an # in $1
 [ "$1" = "$MOUNTPATH" ] && MOUNTPATH=""
@@ -46,8 +45,8 @@ MOUNTPOINT="$2"
 shift
 shift
 
-ignore_opts="(user|nouser|users|auto|noauto|_netdev)"
+ignore_opts='\(user\|nouser\|users\|auto\|noauto\|_netdev\)'
 
-OPTIONS=`echo $@ | sed -r "s/(,${ignore_opts}|${ignore_opts},)//g"`
+OPTIONS=`echo $@ | sed "s/,${ignore_opts}\|${ignore_opts},//g"`
 
 ${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}

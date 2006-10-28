@@ -5,6 +5,7 @@ AM_CONFIG_HEADER(include/config.h)
 
 AC_PROG_LIBTOOL
 AC_PROG_CC
+AM_PROG_CC_C_O
 
 # compatibility for automake < 1.8
 if test -z "$mkdir_p"; then

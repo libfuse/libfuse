@@ -126,6 +126,12 @@ user_allow_other
 Mount options
 =============
 
+Most of the generic mount options described in 'man mount' are
+supported (ro, rw, suid, nosuid, dev, nodev, exec, noexec, atime,
+noatime, sync async, dirsync).  Filesystems are mounted with
+'-onodev,nosuid' by default, which can only be overridden by a
+privileged user.
+
 These are FUSE specific mount options that can be specified for all
 filesystems:
 
@@ -264,3 +270,12 @@ blkdev
 
   Mount a filesystem backed by a block device.  This is a privileged
   option.  The device must be specified with the 'fsname=NAME' option.
+
+
+Reporting bugs
+==============
+
+Please send bug reports to the <fuse-devel@lists.sourceforge.net>
+mailing list.
+
+The list is open, you need not be subscribed to post.
