@@ -255,21 +255,21 @@ static struct fuse *fuse_setup_common(int argc, char *argv[],
 
     res = fuse_daemonize(foreground);
     if (res == -1)
-        goto err_destroy;
+        goto err_unmount;
 
     res = fuse_set_signal_handlers(fuse_get_session(fuse));
     if (res == -1)
-        goto err_destroy;
+        goto err_unmount;
 
     if (fd)
         *fd = fuse_chan_fd(ch);
 
     return fuse;
 
- err_destroy:
-    fuse_destroy(fuse);
  err_unmount:
     fuse_unmount_common(*mountpoint, ch);
+    if (fuse)
+        fuse_destroy(fuse);
  err_free:
     free(*mountpoint);
     return NULL;

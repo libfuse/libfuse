@@ -1442,12 +1442,13 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release)
                 fuse_do_release(f, req, path, fi);
+            pthread_mutex_unlock(&f->lock);
             forget_node(f, e.ino, 1);
         } else {
             struct node *node = get_node(f, e.ino);
             node->open_count ++;
+            pthread_mutex_unlock(&f->lock);
         }
-        pthread_mutex_unlock(&f->lock);
     } else
         reply_err(req, err);
 

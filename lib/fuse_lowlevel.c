@@ -952,6 +952,13 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     f->conn.proto_major = arg->major;
     f->conn.proto_minor = arg->minor;
 
+    if (arg->major < 7) {
+        fprintf(stderr, "fuse: unsupported protocol version: %u.%u\n",
+                arg->major, arg->minor);
+        fuse_reply_err(req, EPROTO);
+        return;
+    }
+
     if (arg->major > 7 || (arg->major == 7 && arg->minor >= 6)) {
         if (f->conn.async_read)
             f->conn.async_read = arg->flags & FUSE_ASYNC_READ;

@@ -1,3 +1,17 @@
+2006-11-11  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Print an error if an incompatible kernel interface version is
+	detected in INIT.  This will only show if filesystem is started
+	with -d or -f
+
+	* Fix order of fuse_destroy()/fuse_unmount() in error cleanup of
+	fuse_setup_common().  Reported by Szakacsits Szabolcs
+
+2006-11-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix recursive locking in fuse_create().  Thanks to Takuya
+	Ishibashi for the bug report
+
 2006-10-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix automake problem.  Patch from Nix

@@ -495,7 +495,10 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 /**
  * Destroy the FUSE handle.
  *
- * The filesystem is not unmounted.
+ * The communication channel attached to the handle is also destroyed.
+ *
+ * NOTE: This function does not unmount the filesystem.  If this is
+ * needed, call fuse_unmount() before calling this function.
  *
  * @param f the FUSE handle
  */
