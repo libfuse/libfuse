@@ -14,8 +14,9 @@
  * =========================================================== */
 
 /* IMPORTANT: you should define FUSE_USE_VERSION before including this
-   header.  To use the newest API define it to 25 (recommended for any
-   new application), to use the old API define it to 24 (default) */
+   header.  To use the newest API define it to 26 (recommended for any
+   new application), to use the old API define it to 24 (default) or
+   25 */
 
 #ifndef FUSE_USE_VERSION
 #define FUSE_USE_VERSION 24
