@@ -1,3 +1,11 @@
+2006-11-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix bug in certain error paths of lookup routines.  The request
+	object was reused for sending FORGET, which is illegal.  This bug
+	could cause an Oops in linux-2.6.18 or in fuse-2.6.0, and might
+	silently corrupt memory in earlier versions.  Report and test
+	program by Russ Cox
+
 2006-11-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Print an error if an incompatible kernel interface version is
