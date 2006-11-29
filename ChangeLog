@@ -1,3 +1,9 @@
+2006-11-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount: Print a more helpful message in case the kernel
+	doesn't support the 'fuseblk' filesystem type.  This has been
+	biting ntfs-3g users.  Reported by Yura Pakhuchiy
+
 2006-11-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix bug in certain error paths of lookup routines.  The request

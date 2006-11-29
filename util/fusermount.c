@@ -575,6 +575,23 @@ static int check_mountpoint_empty(const char *mnt, mode_t rootmode,
     return 0;
 }
 
+static int has_fuseblk(void)
+{
+    char buf[256];
+    FILE *f = fopen("/proc/filesystems", "r");
+    if (!f)
+        return 1;
+
+    while (fgets(buf, sizeof(buf), f))
+        if (strcmp(buf, "fuseblk\n") == 0) {
+            fclose(f);
+            return 1;
+        }
+
+    fclose(f);
+    return 0;
+}
+
 static int do_mount(const char *mnt, const char **type, mode_t rootmode,
                     int fd, const char *opts, const char *dev, char **fsnamep,
                     char **mnt_optsp, off_t rootsize)
@@ -686,7 +703,11 @@ static int do_mount(const char *mnt, const char **type, mode_t rootmode,
         res = mount(fsname, mnt, *type, flags, optbuf);
     }
     if (res == -1) {
-        fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno));
+        int errno_save = errno;
+        if (blkdev && errno == ENODEV && !has_fuseblk())
+            fprintf(stderr, "%s: 'fuseblk' support missing; try the kernel module from fuse-2.6.0 or later\n", progname);
+        else
+            fprintf(stderr, "%s: mount failed: %s\n", progname, strerror(errno_save));
         goto err;
     } else {
         *fsnamep = fsname;

@@ -1086,6 +1086,9 @@ static int fuse_setattr(struct dentry *entry, struct iattr *attr)
 
 	memset(&inarg, 0, sizeof(inarg));
 	iattr_to_fattr(attr, &inarg);
+	/* Defend against future expansion of ATTR_FILE use */
+	if (S_ISDIR(inode->i_mode))
+		inarg.valid &= ~FATTR_FH;
 	req->in.h.opcode = FUSE_SETATTR;
 	req->in.h.nodeid = get_node_id(inode);
 	req->in.numargs = 1;
