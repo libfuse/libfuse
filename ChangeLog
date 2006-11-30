@@ -1,3 +1,8 @@
+2006-11-30  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix API version 21 and 22 compatibility for fuse_teardown.
+	Reported by Bgs
+
 2006-11-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: Print a more helpful message in case the kernel
