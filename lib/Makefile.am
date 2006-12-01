@@ -26,7 +26,7 @@ libfuse_la_SOURCES = 		\
 	helper.c		\
 	$(mount_source)
 
-libfuse_la_LDFLAGS = $(libfuse_libs) -version-number 2:6:0 \
+libfuse_la_LDFLAGS = $(libfuse_libs) -version-number 2:6:1 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
 
 libulockmgr_la_SOURCES = ulockmgr.c
