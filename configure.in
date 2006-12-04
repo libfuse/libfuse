@@ -20,7 +20,7 @@ case $target_os in
 esac
 
 if test "$ac_env_CFLAGS_set" != set; then
-	CFLAGS="-Wall -W -g -O2"
+	CFLAGS="-Wall -W -Wno-sign-compare -Wstrict-prototypes -Wmissing-declarations -Wwrite-strings -g -O2 -fno-strict-aliasing"
 fi
 
 AC_ARG_ENABLE(kernel-module,

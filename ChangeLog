@@ -1,3 +1,12 @@
+2006-12-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix warnings with gcc-4.1 on 64bit archs.  Report from
+	Harshavardhana
+
+	* Add extra warning options, and fix resulting warnings
+
+	* Really fix fuse_teardown problem
+
 2006-12-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add -lrt to fuse.pc (if needed) to fix static linking against

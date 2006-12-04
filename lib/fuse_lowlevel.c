@@ -11,6 +11,8 @@
 #include "fuse_opt.h"
 #include "fuse_i.h"
 #include "fuse_misc.h"
+#include "fuse_common_compat.h"
+#include "fuse_lowlevel_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -970,7 +972,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     }
 
     if (bufsize < FUSE_MIN_READ_BUFFER) {
-        fprintf(stderr, "fuse: warning: buffer size too small: %i\n", bufsize);
+        fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
+                bufsize);
         bufsize = FUSE_MIN_READ_BUFFER;
     }
 
@@ -1110,7 +1113,7 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     struct fuse_req *req;
 
     if (f->debug) {
-        printf("unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %i\n",
+        printf("unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu\n",
                (unsigned long long) in->unique,
                opname((enum fuse_opcode) in->opcode), in->opcode,
                (unsigned long) in->nodeid, len);
@@ -1293,9 +1296,6 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
     return fuse_lowlevel_new_common(args, op, op_size, userdata);
 }
 
-
-#include "fuse_common_compat.h"
-#include "fuse_lowlevel_compat.h"
 
 #ifndef __FreeBSD__
 

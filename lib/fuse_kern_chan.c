@@ -8,6 +8,7 @@
 
 #include "fuse_lowlevel.h"
 #include "fuse_kernel.h"
+#include "fuse_i.h"
 
 #include <stdio.h>
 #include <errno.h>

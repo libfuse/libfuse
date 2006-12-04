@@ -624,14 +624,14 @@ struct fuse_session *fuse_get_session(struct fuse *f);
             fuse_main_real_compat25(argc, argv, op, sizeof(*(op)))
 #    define fuse_new fuse_new_compat25
 #    define fuse_setup fuse_setup_compat25
-#    define fuse_teardown fuse_teardown_compat25
+#    define fuse_teardown fuse_teardown_compat22
 #    define fuse_operations fuse_operations_compat25
 #  elif FUSE_USE_VERSION == 22
 #    define fuse_main(argc, argv, op) \
             fuse_main_real_compat22(argc, argv, op, sizeof(*(op)))
 #    define fuse_new fuse_new_compat22
 #    define fuse_setup fuse_setup_compat22
-#    define fuse_teardown fuse_teardown_compat25
+#    define fuse_teardown fuse_teardown_compat22
 #    define fuse_operations fuse_operations_compat22
 #    define fuse_file_info fuse_file_info_compat
 #  elif FUSE_USE_VERSION == 24
@@ -646,7 +646,7 @@ struct fuse_session *fuse_get_session(struct fuse *f);
 #      define fuse_main fuse_main_compat2
 #      define fuse_new fuse_new_compat2
 #      define __fuse_setup fuse_setup_compat2
-#      define __fuse_teardown fuse_teardown_compat25
+#      define __fuse_teardown fuse_teardown_compat22
 #      define __fuse_exited fuse_exited
 #      define __fuse_set_getcontext_func fuse_set_getcontext_func
 #    else
