@@ -141,7 +141,7 @@ static void unlock_mtab(int mtablock)
    filenames. */
 static int check_name(const char *name)
 {
-    char *s;
+    const char *s;
     for (s = "\n\t\\"; *s; s++) {
         if (strchr(name, *s)) {
             fprintf(stderr, "%s: illegal character 0x%02x in mount entry\n",

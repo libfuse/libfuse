@@ -9,6 +9,7 @@
 #include "config.h"
 #include "fuse_i.h"
 #include "fuse_opt.h"
+#include "fuse_common_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
