@@ -7,15 +7,6 @@
 */
 /* This program does the mounting and unmounting of FUSE filesystems */
 
-/*
- * NOTE: This program should be part of (or be called from) /bin/mount
- *
- * Unless that is done, operations on /etc/mtab are not under lock, and so
- * data in this file may be lost. (I will _not_ reimplement that locking,
- * and anyway that should be done in libc, if possible.  But probably it
- * isn't).
- */
-
 #include <config.h>
 
 #include <stdio.h>
@@ -29,19 +20,12 @@
 #include <pwd.h>
 #include <mntent.h>
 #include <dirent.h>
-#include <sys/param.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <sys/fsuid.h>
 #include <sys/socket.h>
-#include <sys/un.h>
 #include <sys/utsname.h>
-#include <sys/sysmacros.h>
-
-#ifdef HAVE_SELINUX_SELINUX_H
-#include <selinux/selinux.h>
-#endif
 
 #define FUSE_COMMFD_ENV         "_FUSE_COMMFD"
 
@@ -91,239 +75,119 @@ static void restore_privs(void)
 
 static int do_unmount(const char *mnt, int quiet, int lazy)
 {
-    int res = umount2(mnt, lazy ? 2 : 0);
-    if (res == -1) {
-        if (!quiet)
-            fprintf(stderr, "%s: failed to unmount %s: %s\n",
-                    progname, mnt, strerror(errno));
-    }
-    return res;
-}
-
-#ifndef IGNORE_MTAB
-/* use a lock file so that multiple fusermount processes don't try and
-   modify the mtab file at once! */
-static int lock_mtab(void)
-{
-    const char *mtab_lock = _PATH_MOUNTED ".fuselock";
-    int mtablock;
     int res;
-    struct stat mtab_stat;
+    int status;
 
-    /* /etc/mtab could be a symlink to /proc/mounts */
-    if (!lstat(_PATH_MOUNTED, &mtab_stat)) {
-        if (S_ISLNK(mtab_stat.st_mode))
-            return -1;
+    (void) quiet;
+    res = fork();
+    if (res == -1) {
+        perror("fork");
+        return -1;
     }
-
-    mtablock = open(mtab_lock, O_RDWR | O_CREAT, 0600);
-    if (mtablock >= 0) {
-        res = lockf(mtablock, F_LOCK, 0);
-        if (res < 0)
-            fprintf(stderr, "%s: error getting lock", progname);
-    } else
-        fprintf(stderr, "%s: unable to open fuse lock file\n", progname);
-
-    return mtablock;
-}
-
-static void unlock_mtab(int mtablock)
-{
-    if (mtablock >= 0) {
-	lockf(mtablock, F_ULOCK, 0);
-	close(mtablock);
+    if (res == 0) {
+        setuid(geteuid());
+        execl("/bin/umount", "/bin/umount", "-i", mnt, lazy ? "-l" : NULL,
+              NULL);
+        perror("execl /bin/umount");
+        exit(1);
     }
-}
-
-/* Glibc addmntent() doesn't encode '\n', misencodes '\t' as '\n'
-   (version 2.3.2), and encodes '\\' differently as mount(8).  So
-   let's not allow those characters, they are not all that usual in
-   filenames. */
-static int check_name(const char *name)
-{
-    const char *s;
-    for (s = "\n\t\\"; *s; s++) {
-        if (strchr(name, *s)) {
-            fprintf(stderr, "%s: illegal character 0x%02x in mount entry\n",
-                    progname, *s);
-            return -1;
-        }
+    res = waitpid(res, &status, 0);
+    if (res == -1) {
+        perror("waitpid");
+        return -1;
     }
+    if (status != 0)
+        return -1;
+
     return 0;
 }
 
+#ifndef IGNORE_MTAB
 static int add_mount(const char *fsname, const char *mnt, const char *type,
                      const char *opts)
 {
     int res;
-    const char *mtab = _PATH_MOUNTED;
-    struct mntent ent;
-    FILE *fp;
+    int status;
 
-    if (check_name(fsname) == -1 || check_name(mnt) == -1 ||
-        check_name(type) == -1 || check_name(opts) == -1)
-        return -1;
-
-    fp = setmntent(mtab, "a");
-    if (fp == NULL) {
-	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
-		strerror(errno));
-	return -1;
-    }
-
-    ent.mnt_fsname = (char *) fsname;
-    ent.mnt_dir = (char *) mnt;
-    ent.mnt_type = (char *) type;
-    ent.mnt_opts = (char *) opts;
-    ent.mnt_freq = 0;
-    ent.mnt_passno = 0;
-    res = addmntent(fp, &ent);
-    if (res != 0) {
-        fprintf(stderr, "%s: failed to add entry to %s: %s\n", progname,
-                mtab, strerror(errno));
-        return -1;
-    }
-
-    endmntent(fp);
-    return 0;
-}
-
-static int unmount_rename(const char *mtab, const char *mtab_new)
-{
-    int res;
-    struct stat sbuf;
-
-    if (stat(mtab, &sbuf) == 0)
-        chown(mtab_new, sbuf.st_uid, sbuf.st_gid);
-
-#ifdef HAVE_LIBSELINUX
-    {
-        security_context_t filecon;
-
-        if (getfilecon(mtab, &filecon) > 0) {
-            setfilecon(mtab_new, filecon);
-            if (filecon != NULL)
-                freecon(filecon);
-        }
-    }
-#endif
-
-    res = rename(mtab_new, mtab);
+    res = fork();
     if (res == -1) {
-        fprintf(stderr, "%s: failed to rename %s to %s: %s\n", progname,
-                mtab_new, mtab, strerror(errno));
+        perror("fork");
         return -1;
     }
+    if (res == 0) {
+        setuid(geteuid());
+        execl("/bin/mount", "/bin/mount", "-i", "-f", "-t", type, "-o", opts,
+              fsname, mnt, NULL);
+        perror("execl /bin/mount");
+        exit(1);
+    }
+    res = waitpid(res, &status, 0);
+    if (res == -1) {
+        perror("waitpid");
+        return -1;
+    }
+    if (status != 0)
+        return -1;
+
     return 0;
 }
 
 static int unmount_fuse(const char *mnt, int quiet, int lazy)
 {
-    int res;
-    struct mntent *entp;
-    FILE *fp;
-    FILE *newfp = NULL;
-    const char *user = NULL;
-    char uidstr[32];
-    unsigned uidlen = 0;
-    int found;
-    int issymlink = 0;
-    struct stat stbuf;
-    const char *mtab = _PATH_MOUNTED;
-    const char *mtab_new = _PATH_MOUNTED "~fuse~";
-
-    if (lstat(mtab, &stbuf) != -1 && S_ISLNK(stbuf.st_mode))
-        issymlink = 1;
-
-    fp = setmntent(mtab, "r");
-    if (fp == NULL) {
-	fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
-		strerror(errno));
-	return -1;
-    }
-
-    if (!issymlink) {
-        newfp = setmntent(mtab_new, "w");
-        if (newfp == NULL) {
-            fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab_new,
-                    strerror(errno));
-            endmntent(fp);
-            return -1;
-        }
-    }
-
     if (getuid() != 0) {
+        struct mntent *entp;
+        FILE *fp;
+        const char *user = NULL;
+        char uidstr[32];
+        unsigned uidlen = 0;
+        int found;
+        const char *mtab = _PATH_MOUNTED;
+
         user = get_user_name();
         if (user == NULL)
-            goto err_endmntent;
+            return -1;
+
+        fp = setmntent(mtab, "r");
+        if (fp == NULL) {
+            fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
+                    strerror(errno));
+            return -1;
+        }
 
         uidlen = sprintf(uidstr, "%u", getuid());
-    }
 
-    found = 0;
-    while ((entp = getmntent(fp)) != NULL) {
-        int removed = 0;
-        if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
-            (strcmp(entp->mnt_type, "fuse") == 0 ||
-             strcmp(entp->mnt_type, "fuseblk") == 0)) {
-            if (user == NULL)
-                removed = 1;
-            else {
+        found = 0;
+        while ((entp = getmntent(fp)) != NULL) {
+            if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
+                (strcmp(entp->mnt_type, "fuse") == 0 ||
+                 strcmp(entp->mnt_type, "fuseblk") == 0)) {
                 char *p = strstr(entp->mnt_opts, "user=");
                 if (p && (p == entp->mnt_opts || *(p-1) == ',') &&
-                    strcmp(p + 5, user) == 0)
-                    removed = 1;
+                    strcmp(p + 5, user) == 0) {
+                    found = 1;
+                    break;
+                }
                 /* /etc/mtab is a link pointing to /proc/mounts: */
                 else if ((p = strstr(entp->mnt_opts, "user_id=")) &&
                          (p == entp->mnt_opts || *(p-1) == ',') &&
                          strncmp(p + 8, uidstr, uidlen) == 0 &&
-                         (*(p+8+uidlen) == ',' || *(p+8+uidlen) == '\0'))
-                    removed = 1;
+                         (*(p+8+uidlen) == ',' || *(p+8+uidlen) == '\0')) {
+                    found = 1;
+                    break;
+                }
             }
         }
-        if (removed)
-            found = 1;
-        else if (!issymlink) {
-            res = addmntent(newfp, entp);
-            if (res != 0) {
-                fprintf(stderr, "%s: failed to add entry to %s: %s\n",
-                        progname, mtab_new, strerror(errno));
-            }
+        endmntent(fp);
+
+        if (!found) {
+            if (!quiet)
+                fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
+                        mnt, mtab);
+            return -1;
         }
     }
 
-    endmntent(fp);
-    if (!issymlink)
-        endmntent(newfp);
-
-    if (!found) {
-        if (!quiet)
-            fprintf(stderr, "%s: entry for %s not found in %s\n", progname,
-                    mnt, mtab);
-        goto err;
-    }
-
-    drop_privs();
-    res = do_unmount(mnt, quiet, lazy);
-    restore_privs();
-    if (res == -1)
-        goto err;
-
-    if (!issymlink) {
-        res = unmount_rename(mtab, mtab_new);
-        if (res == -1)
-            goto err;
-    }
-    return 0;
-
- err_endmntent:
-    if (!issymlink)
-        endmntent(newfp);
-    endmntent(fp);
- err:
-    if (!issymlink)
-        unlink(mtab_new);
-    return -1;
+    return do_unmount(mnt, quiet, lazy);
 }
 
 static int count_fuse_fs(void)
@@ -347,16 +211,6 @@ static int count_fuse_fs(void)
 
 
 #else /* IGNORE_MTAB */
-static int lock_mtab()
-{
-    return 0;
-}
-
-static void unlock_mtab(int mtablock)
-{
-    (void) mtablock;
-}
-
 static int count_fuse_fs()
 {
     return 0;
@@ -902,14 +756,10 @@ static int mount_fuse(const char *mnt, const char *opts)
     const char *real_mnt = mnt;
     int currdir_fd = -1;
     int mountpoint_fd = -1;
-    int mtablock = -1;
 
     fd = open_fuse_device(&dev);
     if (fd == -1)
         return -1;
-
-    if (geteuid() == 0)
-        mtablock = lock_mtab();
 
     drop_privs();
     read_conf();
@@ -919,7 +769,6 @@ static int mount_fuse(const char *mnt, const char *opts)
         if (mount_count >= mount_max) {
             fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in /etc/fuse.conf\n", progname);
             close(fd);
-            unlock_mtab(mtablock);
             return -1;
         }
     }
@@ -943,13 +792,11 @@ static int mount_fuse(const char *mnt, const char *opts)
 
     if (res == -1) {
         close(fd);
-        unlock_mtab(mtablock);
         return -1;
     }
 
     if (geteuid() == 0) {
         res = add_mount(fsname, mnt, type, mnt_opts);
-        unlock_mtab(mtablock);
         if (res == -1) {
             umount2(mnt, 2); /* lazy umount */
             close(fd);
@@ -1166,12 +1013,14 @@ int main(int argc, char *argv[])
 
     umask(033);
     if (unmount) {
-        if (geteuid() == 0) {
-            int mtablock = lock_mtab();
+        if (geteuid() == 0)
             res = unmount_fuse(mnt, quiet, lazy);
-            unlock_mtab(mtablock);
-        } else
-            res = do_unmount(mnt, quiet, lazy);
+        else {
+            res = umount2(mnt, lazy ? 2 : 0);
+            if (res == -1 && !quiet)
+                fprintf(stderr, "%s: failed to unmount %s: %s\n", progname,
+                        mnt, strerror(errno));
+        }
         if (res == -1)
             exit(1);
         return 0;

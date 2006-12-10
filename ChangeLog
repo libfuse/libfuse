@@ -1,3 +1,14 @@
+2006-12-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* mount.fuse: add "setuid=USER" option which does a "su - USER"
+	for the filesystem
+
+	* fusermount: use "/bin/mount -f" to add entry to /etc/mtab, and
+	"/bin/umount" to remove entry from /etc/mtab.  This gets rid of
+	the ugly code dealing with mtab, as well as a possible race
+	between fusermount and mount trying to modify /etc/mtab at the
+	same time
+
 2006-12-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix warnings with gcc-4.1 on 64bit archs.  Report from

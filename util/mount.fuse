@@ -45,8 +45,14 @@ MOUNTPOINT="$2"
 shift
 shift
 
-ignore_opts='\(user\|nouser\|users\|auto\|noauto\|_netdev\)'
+eval `echo $@ | sed -n "s/\([^,]*,\)*setuid=\([^,]*\).*/SETUID=\2/p"`
+
+ignore_opts='\(user\|nouser\|users\|auto\|noauto\|_netdev\|setuid=[^,]*\)'
 
 OPTIONS=`echo $@ | sed "s/,${ignore_opts}\|${ignore_opts},//g"`
 
-${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}
+if test -z "$SETUID"; then
+    ${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}
+else
+    su - "$SETUID" -c "${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}"
+fi
