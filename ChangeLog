@@ -9,6 +9,9 @@
 	between fusermount and mount trying to modify /etc/mtab at the
 	same time
 
+	* Fix "buffer size too small: 4" warning for users of the
+	fuse_loop_mt_proc() function.
+
 2006-12-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix warnings with gcc-4.1 on 64bit archs.  Report from

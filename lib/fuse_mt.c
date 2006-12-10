@@ -30,7 +30,7 @@ static void mt_session_proc(void *data, const char *buf, size_t len,
     struct fuse_cmd *cmd = *(struct fuse_cmd **) buf;
 
     (void) len;
-    cmd->ch = ch;
+    (void) ch;
     pd->proc(pd->f, cmd, pd->data);
 }
 
@@ -65,13 +65,6 @@ static int mt_chan_receive(struct fuse_chan **chp, char *buf, size_t size)
     return sizeof(cmd);
 }
 
-static int mt_chan_send(struct fuse_chan *ch, const struct iovec iov[],
-                        size_t count)
-{
-    struct procdata *pd = (struct procdata *) fuse_chan_data(ch);
-    return fuse_chan_send(pd->prevch, iov, count);
-}
-
 int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
 {
     int res;
@@ -87,7 +80,6 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data)
     };
     struct fuse_chan_ops cop = {
         .receive = mt_chan_receive,
-        .send = mt_chan_send,
     };
 
     pd.f = f;
