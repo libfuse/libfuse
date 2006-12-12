@@ -556,8 +556,6 @@ struct fuse_lowlevel_ops {
      * For every opendir call there will be exactly one releasedir
      * call.
      *
-     * Any errors sent by releasedir will be ignored.
-     *
      * fi->fh will contain the value set by the opendir method, or
      * will be undefined if the opendir method didn't set any value.
      *
