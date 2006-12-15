@@ -2295,7 +2295,6 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
         err = -ENOSYS;
         if (f->op.flush)
             err = fuse_do_flush(f, req, path, fi);
-        free(path);
     }
     if (f->op.lock) {
         struct flock lock;
@@ -2314,6 +2313,7 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
         if (err == -ENOSYS)
             err = 0;
     }
+    free(path);
     pthread_rwlock_unlock(&f->tree_lock);
     reply_err(req, err);
 }
