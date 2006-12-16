@@ -1,3 +1,7 @@
+2006-12-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: don't keep unreferenced inodes in the icache.
+
 2006-12-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* mount.fuse: add "setuid=USER" option which does a "su - USER"
