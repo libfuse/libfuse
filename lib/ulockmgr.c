@@ -75,7 +75,7 @@ static int ulockmgr_send_message(int sock, void *buf, size_t buflen,
     struct msghdr msg;
     struct cmsghdr *p_cmsg;
     struct iovec vec;
-    char cmsgbuf[CMSG_SPACE(sizeof(int) * MAX_SEND_FDS)];
+    size_t cmsgbuf[CMSG_SPACE(sizeof(int) * MAX_SEND_FDS) / sizeof(size_t)];
     int res;
 
     assert(numfds <= MAX_SEND_FDS);

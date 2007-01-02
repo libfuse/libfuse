@@ -1036,7 +1036,7 @@ static int send_fd(int sock_fd, int fd)
     struct msghdr msg;
     struct cmsghdr *p_cmsg;
     struct iovec vec;
-    char cmsgbuf[CMSG_SPACE(sizeof(fd))];
+    size_t cmsgbuf[CMSG_SPACE(sizeof(fd)) / sizeof(size_t)];
     int *p_fds;
     char sendchar = 0;
 

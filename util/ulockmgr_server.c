@@ -58,7 +58,7 @@ static int receive_message(int sock, void *buf, size_t buflen, int *fdp,
 {
     struct msghdr msg;
     struct iovec iov;
-    char ccmsg[CMSG_SPACE(sizeof(int)) * MAX_SEND_FDS];
+    size_t ccmsg[CMSG_SPACE(sizeof(int) * MAX_SEND_FDS) / sizeof(size_t)];
     struct cmsghdr *cmsg;
     int res;
     int i;

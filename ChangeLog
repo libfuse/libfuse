@@ -1,3 +1,9 @@
+2007-01-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix unaligned access in file desctriptor passing in libfuse,
+	fusermount and ulockmgr.  Debian bug ID: 404904.  Reported and
+	tested by Sebastian Fontius
+
 2006-12-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fusermount: Fix detection of fuseblk.  Reported by Szakacsits
