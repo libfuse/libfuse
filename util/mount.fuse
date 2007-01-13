@@ -6,7 +6,7 @@
 # to kick me to the right way
 #
 
-VERSION="0.0.1"
+VERSION="0.0.2"
 PRGNAME=`basename $0`
 
 if [ -z "$HOME" ]; then
@@ -47,9 +47,19 @@ shift
 
 eval `echo $@ | sed -n "s/\([^,]*,\)*setuid=\([^,]*\).*/SETUID=\2/p"`
 
-ignore_opts='\(user\|nouser\|users\|auto\|noauto\|_netdev\|setuid=[^,]*\)'
+ignore_opts='\(-o\|user\|nouser\|users\|auto\|noauto\|_netdev\|setuid=[^,]*\)'
 
-OPTIONS=`echo $@ | sed "s/,${ignore_opts}\|${ignore_opts},//g"`
+# loop over each mount option and skip all that should be ignored
+IFS=","
+for OPT in $@; do
+	OPT=`echo $OPT | sed "s/^$ignore_opts$/IGNORE/"`
+	if [ "$OPT" == "IGNORE" ]; then continue; fi
+	OPTIONS="$OPTIONS$OPT,"
+done
+IFS=" "
+
+# add "-o " and remove trailing comma
+OPTIONS="-o `echo $OPTIONS | sed "s/,$//"`"
 
 if test -z "$SETUID"; then
     ${FSTYPE} ${MOUNTPATH} ${MOUNTPOINT} ${OPTIONS}
