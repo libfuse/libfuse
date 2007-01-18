@@ -1,3 +1,8 @@
+2007-01-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix abort in fuse_new() compatibility API for opts == NULL case.
+	Novell bugzilla #233870.  Patch from Takashi Iwai.
+
 2007-01-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix unaligned access in file desctriptor passing in libfuse,

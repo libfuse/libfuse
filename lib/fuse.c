@@ -2948,9 +2948,10 @@ static struct fuse *fuse_new_common_compat(int fd, const char *opts,
     struct fuse *f;
     struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 
+    if (fuse_opt_add_arg(&args, "") == -1)
+	return NULL;
     if (opts &&
-        (fuse_opt_add_arg(&args, "") == -1 ||
-         fuse_opt_add_arg(&args, "-o") == -1 ||
+        (fuse_opt_add_arg(&args, "-o") == -1 ||
          fuse_opt_add_arg(&args, opts) == -1)) {
         fuse_opt_free_args(&args);
         return NULL;
