@@ -628,15 +628,9 @@ static ssize_t fuse_direct_write(struct file *file, const char __user *buf,
 	struct inode *inode = file->f_dentry->d_inode;
 	ssize_t res;
 	/* Don't allow parallel writes to the same file */
-#ifdef KERNEL_2_6_16_PLUS
 	mutex_lock(&inode->i_mutex);
 	res = fuse_direct_io(file, buf, count, ppos, 1);
 	mutex_unlock(&inode->i_mutex);
-#else
-	down(&inode->i_sem);
-	res = fuse_direct_io(file, buf, count, ppos, 1);
-	up(&inode->i_sem);
-#endif
 	return res;
 }
 

@@ -1,3 +1,8 @@
+2007-01-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Build fix for 2.6.16 vanila and 2.6.15 FC5 kernels.  Patch from
+	Ian Abbott
+
 2007-01-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix abort in fuse_new() compatibility API for opts == NULL case.
