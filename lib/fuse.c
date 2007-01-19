@@ -1437,16 +1437,14 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (f->conf.kernel_cache)
             fi->keep_cache = 1;
 
-        pthread_mutex_lock(&f->lock);
         if (fuse_reply_create(req, &e, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
             if(f->op.release)
                 fuse_do_release(f, req, path, fi);
-            pthread_mutex_unlock(&f->lock);
             forget_node(f, e.ino, 1);
         } else {
-            struct node *node = get_node(f, e.ino);
-            node->open_count ++;
+            pthread_mutex_lock(&f->lock);
+            get_node(f, e.ino)->open_count ++;
             pthread_mutex_unlock(&f->lock);
         }
     } else
@@ -1476,10 +1474,12 @@ static void open_auto_cache(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
             struct stat stbuf;
             int err;
 
+            pthread_mutex_unlock(&f->lock);
             if (f->op.fgetattr)
                 err = fuse_do_fgetattr(f, req, path, &stbuf, fi);
             else
                 err = fuse_do_getattr(f, req, path, &stbuf);
+            pthread_mutex_lock(&f->lock);
 
             if (!err)
                 update_stat(node, &stbuf);
@@ -1750,7 +1750,6 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
             dh->fh = fi.fh;
         }
         if (!err) {
-            pthread_mutex_lock(&f->lock);
             if (fuse_reply_open(req, llfi) == -ENOENT) {
                 /* The opendir syscall was interrupted, so it must be
                    cancelled */
@@ -1759,7 +1758,6 @@ static void fuse_opendir(fuse_req_t req, fuse_ino_t ino,
                 pthread_mutex_destroy(&dh->lock);
                 free(dh);
             }
-            pthread_mutex_unlock(&f->lock);
         } else {
             reply_err(req, err);
             free(dh);
