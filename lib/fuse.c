@@ -1465,8 +1465,10 @@ static double diff_timespec(const struct timespec *t1,
 static void open_auto_cache(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
                             const char *path, struct fuse_file_info *fi)
 {
+    struct node *node;
+
     pthread_mutex_lock(&f->lock);
-    struct node *node = get_node(f, ino);
+    node = get_node(f, ino);
     if (node->cache_valid) {
         struct timespec now;
 
