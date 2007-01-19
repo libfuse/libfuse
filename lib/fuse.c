@@ -1444,7 +1444,7 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
             forget_node(f, e.ino, 1);
         } else {
             pthread_mutex_lock(&f->lock);
-            get_node(f, e.ino)->open_count ++;
+            get_node(f, e.ino)->open_count++;
             pthread_mutex_unlock(&f->lock);
         }
     } else
@@ -1465,6 +1465,7 @@ static double diff_timespec(const struct timespec *t1,
 static void open_auto_cache(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
                             const char *path, struct fuse_file_info *fi)
 {
+    pthread_mutex_lock(&f->lock);
     struct node *node = get_node(f, ino);
     if (node->cache_valid) {
         struct timespec now;
@@ -1491,6 +1492,7 @@ static void open_auto_cache(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
         fi->keep_cache = 1;
 
     node->cache_valid = 1;
+    pthread_mutex_unlock(&f->lock);
 }
 
 static void fuse_open(fuse_req_t req, fuse_ino_t ino,
@@ -1519,7 +1521,6 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
         if (f->conf.kernel_cache)
             fi->keep_cache = 1;
 
-        pthread_mutex_lock(&f->lock);
         if (f->conf.auto_cache)
             open_auto_cache(f, req, ino, path, fi);
 
@@ -1528,10 +1529,10 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
             if(f->op.release && path != NULL)
                 fuse_compat_release(f, req, path, fi);
         } else {
-            struct node *node = get_node(f, ino);
-            node->open_count ++;
+            pthread_mutex_lock(&f->lock);
+            get_node(f, ino)->open_count++;
+            pthread_mutex_unlock(&f->lock);
         }
-        pthread_mutex_unlock(&f->lock);
     } else
         reply_err(req, err);
 
