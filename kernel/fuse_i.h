@@ -55,16 +55,14 @@
 #include <linux/spinlock.h>
 #include <linux/mm.h>
 #include <linux/backing-dev.h>
-#ifdef KERNEL_2_6_17_PLUS
-#include <linux/mutex.h>
-#else
-#include <asm/semaphore.h>
+#ifndef DEFINE_MUTEX
 #define DEFINE_MUTEX(m) DECLARE_MUTEX(m)
 #define mutex_init(m) init_MUTEX(m)
 #define mutex_destroy(m) do { } while (0)
 #define mutex_lock(m) down(m)
 #define mutex_unlock(m) up(m)
 #define mutex semaphore
+#define i_mutex i_sem	/* Hack for struct inode */
 #endif
 #ifndef KERNEL_2_6_19_PLUS
 #define clear_nlink(inode) (inode)->i_nlink = 0

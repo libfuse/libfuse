@@ -437,7 +437,7 @@ static int has_fuseblk(void)
         return 1;
 
     while (fgets(buf, sizeof(buf), f))
-        if (strcmp(buf, "fuseblk\n") == 0) {
+        if (strstr(buf, "fuseblk\n")) {
             fclose(f);
             return 1;
         }
@@ -883,7 +883,7 @@ static int send_fd(int sock_fd, int fd)
     struct msghdr msg;
     struct cmsghdr *p_cmsg;
     struct iovec vec;
-    char cmsgbuf[CMSG_SPACE(sizeof(fd))];
+    size_t cmsgbuf[CMSG_SPACE(sizeof(fd)) / sizeof(size_t)];
     int *p_fds;
     char sendchar = 0;
 

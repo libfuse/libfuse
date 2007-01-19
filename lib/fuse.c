@@ -2295,7 +2295,6 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
         err = -ENOSYS;
         if (f->op.flush)
             err = fuse_do_flush(f, req, path, fi);
-        free(path);
     }
     if (f->op.lock) {
         struct flock lock;
@@ -2314,6 +2313,7 @@ static void fuse_flush(fuse_req_t req, fuse_ino_t ino,
         if (err == -ENOSYS)
             err = 0;
     }
+    free(path);
     pthread_rwlock_unlock(&f->tree_lock);
     reply_err(req, err);
 }
@@ -2948,9 +2948,10 @@ static struct fuse *fuse_new_common_compat(int fd, const char *opts,
     struct fuse *f;
     struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 
+    if (fuse_opt_add_arg(&args, "") == -1)
+	return NULL;
     if (opts &&
-        (fuse_opt_add_arg(&args, "") == -1 ||
-         fuse_opt_add_arg(&args, "-o") == -1 ||
+        (fuse_opt_add_arg(&args, "-o") == -1 ||
          fuse_opt_add_arg(&args, opts) == -1)) {
         fuse_opt_free_args(&args);
         return NULL;
