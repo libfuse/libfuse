@@ -1,3 +1,8 @@
+2007-01-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Small fix for lib/Makefile.am: actually link libfuse against
+	libfuse_libs
+
 2007-01-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Build fix for 2.6.16 vanila and 2.6.15 FC5 kernels.  Patch from
