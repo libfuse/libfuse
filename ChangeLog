@@ -1,7 +1,6 @@
 2007-01-22  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Small fix for lib/Makefile.am: actually link libfuse against
-	libfuse_libs
+	* lib/Makefile.am: actually link libfuse against libfuse_libs
 
 2007-01-19  Miklos Szeredi <miklos@szeredi.hu>
 
