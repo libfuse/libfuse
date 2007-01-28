@@ -26,10 +26,10 @@ libfuse_la_SOURCES = 		\
 	helper.c		\
 	$(mount_source)
 
-libfuse_la_LDFLAGS = @libfuse_libs@ -version-number 2:6:1 \
+libfuse_la_LDFLAGS = @libfuse_libs@ -version-number 2:6:2 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
 
 libulockmgr_la_SOURCES = ulockmgr.c
-libulockmgr_la_LDFLAGS = -version-number 1:0:0
+libulockmgr_la_LDFLAGS = -version-number 1:0:1
 
 EXTRA_DIST = fuse_versionscript

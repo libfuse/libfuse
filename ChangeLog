@@ -4,6 +4,8 @@
 	mounted again, while some fuse filesystems are present.
 	Bugreport from Florent Mertens
 
+	* kernel: sync with mainline, support 2.6.20
+
 2007-01-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib/Makefile.am: actually link libfuse against libfuse_libs

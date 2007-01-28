@@ -1,4 +1,4 @@
-AC_INIT(fuse-kernel, 2.6.1)
+AC_INIT(fuse-kernel, 2.6.2)
 AC_CONFIG_HEADERS([config.h])
 
 AC_PROG_INSTALL
@@ -175,6 +175,13 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	AC_MSG_CHECKING([if inode has i_private field])
 	if egrep -qw "i_private" $kernelsrc/include/linux/fs.h; then
 		AC_DEFINE(HAVE_I_PRIVATE, 1, [inode has i_private field])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+	AC_MSG_CHECKING([if kernel has mutex.h ])
+	if test -f $kernelsrc/include/linux/mutex.h; then
+		AC_DEFINE(HAVE_MUTEX_H, 1, [kernel has mutex.h])
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])
