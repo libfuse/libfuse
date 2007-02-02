@@ -1437,13 +1437,15 @@ static void fuse_create(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (f->conf.kernel_cache)
             fi->keep_cache = 1;
 
+        /* see comment for open */
+        pthread_mutex_lock(&f->lock);
         if (fuse_reply_create(req, &e, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
+            pthread_mutex_unlock(&f->lock);
             if(f->op.release)
                 fuse_do_release(f, req, path, fi);
             forget_node(f, e.ino, 1);
         } else {
-            pthread_mutex_lock(&f->lock);
             get_node(f, e.ino)->open_count++;
             pthread_mutex_unlock(&f->lock);
         }
@@ -1526,12 +1528,16 @@ static void fuse_open(fuse_req_t req, fuse_ino_t ino,
         if (f->conf.auto_cache)
             open_auto_cache(f, req, ino, path, fi);
 
+        /* The reply and the open count increase needs to be under a
+           single locked section, otherwise a release could come in
+           between and screw up the accounting */
+        pthread_mutex_lock(&f->lock);
         if (fuse_reply_open(req, fi) == -ENOENT) {
             /* The open syscall was interrupted, so it must be cancelled */
+            pthread_mutex_unlock(&f->lock);
             if(f->op.release && path != NULL)
                 fuse_compat_release(f, req, path, fi);
         } else {
-            pthread_mutex_lock(&f->lock);
             get_node(f, ino)->open_count++;
             pthread_mutex_unlock(&f->lock);
         }
