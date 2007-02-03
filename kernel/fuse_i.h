@@ -65,6 +65,8 @@
 #define mutex_lock(m) down(m)
 #define mutex_unlock(m) up(m)
 #define mutex semaphore
+#endif
+#ifndef HAVE_I_MUTEX
 #define i_mutex i_sem	/* Hack for struct inode */
 #endif
 #ifndef KERNEL_2_6_19_PLUS

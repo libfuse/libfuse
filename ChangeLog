@@ -4,6 +4,10 @@
 	cases if request is interrupted" on 2007-01-19.  Reported by José
 	Antonio Sánchez
 
+	* kernel: make it compile on "strange" kernels which have emulated
+	mutexes via <linux/mutex.h> but no i_mutex.  Reported by Tomasz
+	Mateja
+
 2007-01-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.2
