@@ -42,7 +42,7 @@
 #  define KERNEL_2_6_19_PLUS
 #endif
 
-#ifdef __arm__
+#if defined(__arm__) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #define DCACHE_BUG
 #endif
 
@@ -55,13 +55,18 @@
 #include <linux/spinlock.h>
 #include <linux/mm.h>
 #include <linux/backing-dev.h>
-#ifndef DEFINE_MUTEX
+#ifdef HAVE_MUTEX_H
+#include <linux/mutex.h>
+#else
+#include <asm/semaphore.h>
 #define DEFINE_MUTEX(m) DECLARE_MUTEX(m)
 #define mutex_init(m) init_MUTEX(m)
 #define mutex_destroy(m) do { } while (0)
 #define mutex_lock(m) down(m)
 #define mutex_unlock(m) up(m)
 #define mutex semaphore
+#endif
+#ifndef HAVE_I_MUTEX
 #define i_mutex i_sem	/* Hack for struct inode */
 #endif
 #ifndef KERNEL_2_6_19_PLUS

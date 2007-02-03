@@ -1,3 +1,21 @@
+2007-02-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: make it compile on "strange" kernels which have emulated
+	mutexes via <linux/mutex.h> but no i_mutex.  Reported by Tomasz
+	Mateja
+
+2007-01-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: fix BUG in control filesystem if it is umounted and
+	mounted again, while some fuse filesystems are present.
+	Bugreport from Florent Mertens
+
+	* kernel: sync with mainline, support 2.6.20
+
+2007-01-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib/Makefile.am: actually link libfuse against libfuse_libs
+
 2007-01-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Build fix for 2.6.16 vanila and 2.6.15 FC5 kernels.  Patch from

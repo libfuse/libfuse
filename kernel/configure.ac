@@ -179,6 +179,20 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	else
 		AC_MSG_RESULT([no])
 	fi
+	AC_MSG_CHECKING([if inode has i_mutex field ])
+	if egrep -qw "i_mutex" $kernelsrc/include/linux/fs.h; then
+		AC_DEFINE(HAVE_I_MUTEX, 1, [inode has i_mutex field])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+	AC_MSG_CHECKING([if kernel has mutex.h ])
+	if test -f $kernelsrc/include/linux/mutex.h; then
+		AC_DEFINE(HAVE_MUTEX_H, 1, [kernel has mutex.h])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
 
 	isuml=no
 	KERNELMAKE_PARAMS=

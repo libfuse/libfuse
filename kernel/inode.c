@@ -52,7 +52,7 @@ static struct inode *fuse_alloc_inode(struct super_block *sb)
 	struct inode *inode;
 	struct fuse_inode *fi;
 
-	inode = kmem_cache_alloc(fuse_inode_cachep, SLAB_KERNEL);
+	inode = kmem_cache_alloc(fuse_inode_cachep, GFP_KERNEL);
 	if (!inode)
 		return NULL;
 
@@ -637,8 +637,10 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 		return -EINVAL;
 
 	if (is_bdev) {
+#ifdef CONFIG_BLOCK
 		if (!sb_set_blocksize(sb, d.blksize))
 			return -EINVAL;
+#endif
 	} else {
 		sb->s_blocksize = PAGE_CACHE_SIZE;
 		sb->s_blocksize_bits = PAGE_CACHE_SHIFT;
@@ -734,28 +736,12 @@ static int fuse_get_sb(struct file_system_type *fs_type,
 {
 	return get_sb_nodev(fs_type, flags, raw_data, fuse_fill_super, mnt);
 }
-
-static int fuse_get_sb_blk(struct file_system_type *fs_type,
-			   int flags, const char *dev_name,
-			   void *raw_data, struct vfsmount *mnt)
-{
-	return get_sb_bdev(fs_type, flags, dev_name, raw_data, fuse_fill_super,
-			   mnt);
-}
 #else
 static struct super_block *fuse_get_sb(struct file_system_type *fs_type,
 				       int flags, const char *dev_name,
 				       void *raw_data)
 {
 	return get_sb_nodev(fs_type, flags, raw_data, fuse_fill_super);
-}
-
-static struct super_block *fuse_get_sb_blk(struct file_system_type *fs_type,
-					   int flags, const char *dev_name,
-					   void *raw_data)
-{
-	return get_sb_bdev(fs_type, flags, dev_name, raw_data,
-			   fuse_fill_super);
 }
 #endif
 
@@ -766,6 +752,25 @@ static struct file_system_type fuse_fs_type = {
 	.kill_sb	= kill_anon_super,
 };
 
+#ifdef CONFIG_BLOCK
+#ifdef KERNEL_2_6_18_PLUS
+static int fuse_get_sb_blk(struct file_system_type *fs_type,
+			   int flags, const char *dev_name,
+			   void *raw_data, struct vfsmount *mnt)
+{
+	return get_sb_bdev(fs_type, flags, dev_name, raw_data, fuse_fill_super,
+			   mnt);
+}
+#else
+static struct super_block *fuse_get_sb_blk(struct file_system_type *fs_type,
+					   int flags, const char *dev_name,
+					   void *raw_data)
+{
+	return get_sb_bdev(fs_type, flags, dev_name, raw_data,
+			   fuse_fill_super);
+}
+#endif
+
 static struct file_system_type fuseblk_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "fuseblk",
@@ -773,6 +778,26 @@ static struct file_system_type fuseblk_fs_type = {
 	.kill_sb	= kill_block_super,
 	.fs_flags	= FS_REQUIRES_DEV,
 };
+
+static inline int register_fuseblk(void)
+{
+	return register_filesystem(&fuseblk_fs_type);
+}
+
+static inline void unregister_fuseblk(void)
+{
+	unregister_filesystem(&fuseblk_fs_type);
+}
+#else
+static inline int register_fuseblk(void)
+{
+	return 0;
+}
+
+static inline void unregister_fuseblk(void)
+{
+}
+#endif
 
 #ifndef HAVE_FS_SUBSYS
 static decl_subsys(fs, NULL, NULL);
@@ -798,7 +823,7 @@ static int __init fuse_fs_init(void)
 	if (err)
 		goto out;
 
-	err = register_filesystem(&fuseblk_fs_type);
+	err = register_fuseblk();
 	if (err)
 		goto out_unreg;
 
@@ -813,7 +838,7 @@ static int __init fuse_fs_init(void)
 	return 0;
 
  out_unreg2:
-	unregister_filesystem(&fuseblk_fs_type);
+	unregister_fuseblk();
  out_unreg:
 	unregister_filesystem(&fuse_fs_type);
  out:
@@ -823,7 +848,7 @@ static int __init fuse_fs_init(void)
 static void fuse_fs_cleanup(void)
 {
 	unregister_filesystem(&fuse_fs_type);
-	unregister_filesystem(&fuseblk_fs_type);
+	unregister_fuseblk();
 	kmem_cache_destroy(fuse_inode_cachep);
 }
 

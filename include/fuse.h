@@ -172,7 +172,6 @@ struct fuse_operations {
     int (*write) (const char *, const char *, size_t, off_t,
                   struct fuse_file_info *);
 
-    /** Just a placeholder, don't set */
     /** Get file system statistics
      *
      * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
