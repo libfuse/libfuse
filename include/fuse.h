@@ -572,6 +572,93 @@ int fuse_is_lib_option(const char *opt);
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
                    size_t op_size, void *user_data);
 
+/*
+ *
+ */
+
+struct fuse_fs;
+int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf);
+int fuse_fs_fgetattr(struct fuse_fs *fs, const char *path, struct stat *buf,
+                     struct fuse_file_info *fi);
+int fuse_fs_rename(struct fuse_fs *fs, const char *oldpath,
+                   const char *newpath);
+int fuse_fs_unlink(struct fuse_fs *fs, const char *path);
+int fuse_fs_rmdir(struct fuse_fs *fs, const char *path);
+int fuse_fs_symlink(struct fuse_fs *fs, const char *linkname,
+                    const char *path);
+int fuse_fs_link(struct fuse_fs *fs, const char *oldpath, const char *newpath);
+int fuse_fs_release(struct fuse_fs *fs,  const char *path,
+                     struct fuse_file_info *fi);
+int fuse_fs_open(struct fuse_fs *fs, const char *path,
+                 struct fuse_file_info *fi);
+int fuse_fs_read(struct fuse_fs *fs, const char *path, char *buf, size_t size,
+                 off_t off, struct fuse_file_info *fi);
+int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *buf,
+                  size_t size, off_t off, struct fuse_file_info *fi);
+int fuse_fs_fsync(struct fuse_fs *fs, const char *path, int datasync,
+                  struct fuse_file_info *fi);
+int fuse_fs_flush(struct fuse_fs *fs, const char *path,
+                  struct fuse_file_info *fi);
+int fuse_fs_statfs(struct fuse_fs *fs, const char *path, struct statvfs *buf);
+int fuse_fs_opendir(struct fuse_fs *fs, const char *path,
+                    struct fuse_file_info *fi);
+int fuse_fs_readdir(struct fuse_fs *fs, const char *path, void *buf,
+                    fuse_fill_dir_t filler, off_t off,
+                    struct fuse_file_info *fi);
+int fuse_fs_fsyncdir(struct fuse_fs *fs, const char *path, int datasync,
+                     struct fuse_file_info *fi);
+int fuse_fs_releasedir(struct fuse_fs *fs, const char *path,
+                        struct fuse_file_info *fi);
+int fuse_fs_create(struct fuse_fs *fs, const char *path, mode_t mode,
+                   struct fuse_file_info *fi);
+int fuse_fs_lock(struct fuse_fs *fs, const char *path,
+                 struct fuse_file_info *fi, int cmd, struct flock *lock);
+int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode);
+int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid, gid_t gid);
+int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size);
+int fuse_fs_ftruncate(struct fuse_fs *fs, const char *path, off_t size,
+                      struct fuse_file_info *fi);
+int fuse_fs_utimens(struct fuse_fs *fs, const char *path,
+                    const struct timespec tv[2]);
+int fuse_fs_access(struct fuse_fs *fs, const char *path, int mask);
+int fuse_fs_readlink(struct fuse_fs *fs, const char *path, char *buf,
+                     size_t len);
+int fuse_fs_mknod(struct fuse_fs *fs, const char *path, mode_t mode,
+                  dev_t rdev);
+int fuse_fs_mkdir(struct fuse_fs *fs, const char *path, mode_t mode);
+int fuse_fs_setxattr(struct fuse_fs *fs, const char *path, const char *name,
+                     const char *value, size_t size, int flags);
+int fuse_fs_getxattr(struct fuse_fs *fs, const char *path, const char *name,
+                     char *value, size_t size);
+int fuse_fs_listxattr(struct fuse_fs *fs, const char *path, char *list,
+                      size_t size);
+int fuse_fs_removexattr(struct fuse_fs *fs, const char *path,
+                        const char *name);
+int fuse_fs_bmap(struct fuse_fs *fs, const char *path, size_t blocksize,
+                 uint64_t *idx);
+void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn);
+void fuse_fs_destroy(struct fuse_fs *fs);
+
+struct fuse_fs *fuse_fs_new(const struct fuse_operations *op, size_t op_size,
+                            void *user_data);
+
+struct fuse_module {
+    const char *name;
+    struct fuse_fs *(*factory)(struct fuse_args *, struct fuse_fs *[]);
+    struct fuse_module *next;
+    struct fusemod_so *so;
+    int ctr;
+};
+
+void fuse_register_module(struct fuse_module *mod);
+#define FUSE_REGISTER_MODULE(name_, factory_) \
+static __attribute__((constructor)) void name_ ## _register(void) \
+{ \
+    static struct fuse_module mod = { .name = #name_, .factory = factory_ }; \
+    fuse_register_module(&mod); \
+}
+
+
 /* ----------------------------------------------------------- *
  * Advanced API for event handling, don't worry about this...  *
  * ----------------------------------------------------------- */

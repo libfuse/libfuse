@@ -1,3 +1,13 @@
+2007-02-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add filesystem stacking support to high level API.  Filesystem
+	modules can be built into libfuse or loaded from shared object
+	(.so) files
+
+	* Add 'subdir' and 'iconv' built in modules
+
+	* lib/fuse.c: Fix locking for the reply code in create and open
+
 2007-02-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: make it compile on "strange" kernels which have emulated

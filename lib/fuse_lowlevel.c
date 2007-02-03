@@ -75,11 +75,9 @@ static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
     attr->atime     = stbuf->st_atime;
     attr->mtime     = stbuf->st_mtime;
     attr->ctime     = stbuf->st_ctime;
-#ifdef FUSE_STAT_HAS_NANOSEC
-    attr->atimensec = ST_ATIM(stbuf).tv_nsec;
-    attr->mtimensec = ST_MTIM(stbuf).tv_nsec;
-    attr->ctimensec = ST_CTIM(stbuf).tv_nsec;
-#endif
+    attr->atimensec = ST_ATIM_NSEC(stbuf);
+    attr->mtimensec = ST_MTIM_NSEC(stbuf);
+    attr->ctimensec = ST_CTIM_NSEC(stbuf);
 }
 
 static void convert_attr(const struct fuse_setattr_in *attr, struct stat *stbuf)
@@ -90,10 +88,8 @@ static void convert_attr(const struct fuse_setattr_in *attr, struct stat *stbuf)
     stbuf->st_size         = attr->size;
     stbuf->st_atime        = attr->atime;
     stbuf->st_mtime        = attr->mtime;
-#ifdef FUSE_STAT_HAS_NANOSEC
-    ST_ATIM(stbuf).tv_nsec = attr->atimensec;
-    ST_MTIM(stbuf).tv_nsec = attr->mtimensec;
-#endif
+    ST_ATIM_NSEC_SET(stbuf, attr->atimensec);
+    ST_MTIM_NSEC_SET(stbuf, attr->mtimensec);
 }
 
 static  size_t iov_length(const struct iovec *iov, size_t count)

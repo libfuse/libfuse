@@ -24,14 +24,22 @@ static inline void fuse_mutex_init(pthread_mutex_t *mut)
 
 #ifdef HAVE_STRUCT_STAT_ST_ATIM
 /* Linux */
-#define ST_ATIM(stbuf) (stbuf)->st_atim
-#define ST_CTIM(stbuf) (stbuf)->st_ctim
-#define ST_MTIM(stbuf) (stbuf)->st_mtim
-#define FUSE_STAT_HAS_NANOSEC 1 
+#define ST_ATIM_NSEC(stbuf) ((stbuf)->st_atim.tv_nsec)
+#define ST_CTIM_NSEC(stbuf) ((stbuf)->st_ctim.tv_nsec)
+#define ST_MTIM_NSEC(stbuf) ((stbuf)->st_mtim.tv_nsec)
+#define ST_ATIM_NSEC_SET(stbuf, val) (stbuf)->st_atim.tv_nsec = (val)
+#define ST_MTIM_NSEC_SET(stbuf, val) (stbuf)->st_mtim.tv_nsec = (val)
 #elif defined(HAVE_STRUCT_STAT_ST_ATIMESPEC)
 /* FreeBSD */
-#define ST_ATIM(stbuf) (stbuf)->st_atimespec
-#define ST_CTIM(stbuf) (stbuf)->st_ctimespec
-#define ST_MTIM(stbuf) (stbuf)->st_mtimespec
-#define FUSE_STAT_HAS_NANOSEC 1
+#define ST_ATIM(stbuf) ((stbuf)->st_atimespec.tv_nsec)
+#define ST_CTIM(stbuf) ((stbuf)->st_ctimespec.tv_nsec)
+#define ST_MTIM(stbuf) ((stbuf)->st_mtimespec.tv_nsec)
+#define ST_ATIM_NSEC_SET(stbuf, val) (stbuf)->st_atimespec.tv_nsec = (val)
+#define ST_MTIM_NSEC_SET(stbuf, val) (stbuf)->st_mtimespec.tv_nsec = (val)
+#else
+#define ST_ATIM_NSEC(stbuf) 0
+#define ST_CTIM_NSEC(stbuf) 0
+#define ST_MTIM_NSEC(stbuf) 0
+#define ST_ATIM_NSEC_SET(stbuf, val) do { } while (0)
+#define ST_MTIM_NSEC_SET(stbuf, val) do { } while (0)
 #endif

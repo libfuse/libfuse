@@ -108,7 +108,49 @@ FUSE_2.6 {
 		fuse_teardown_compat22;
 		fuse_unmount;
 		fuse_unmount_compat22;
+} FUSE_2.5;
+
+FUSE_2.7 {
+	global:
+		fuse_fs_access;
+		fuse_fs_bmap;
+		fuse_fs_chmod;
+		fuse_fs_chown;
+		fuse_fs_create;
+		fuse_fs_destroy;
+		fuse_fs_fgetattr;
+		fuse_fs_flush;
+		fuse_fs_fsync;
+		fuse_fs_fsyncdir;
+		fuse_fs_ftruncate;
+		fuse_fs_getattr;
+		fuse_fs_getxattr;
+		fuse_fs_init;
+		fuse_fs_link;
+		fuse_fs_listxattr;
+		fuse_fs_lock;
+		fuse_fs_mkdir;
+		fuse_fs_mknod;
+		fuse_fs_new;
+		fuse_fs_open;
+		fuse_fs_opendir;
+		fuse_fs_read;
+		fuse_fs_readdir;
+		fuse_fs_readlink;
+		fuse_fs_release;
+		fuse_fs_releasedir;
+		fuse_fs_removexattr;
+		fuse_fs_rename;
+		fuse_fs_rmdir;
+		fuse_fs_setxattr;
+		fuse_fs_statfs;
+		fuse_fs_symlink;
+		fuse_fs_truncate;
+		fuse_fs_unlink;
+		fuse_fs_utimens;
+		fuse_fs_write;
+		fuse_register_module;
 
 	local:
-		 *;
-} FUSE_2.5;
+		*;
+} FUSE_2.6;
