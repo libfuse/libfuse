@@ -73,6 +73,9 @@
 #define clear_nlink(inode) (inode)->i_nlink = 0
 #define inc_nlink(inode) (inode)->i_nlink++
 #endif
+#ifndef HAVE_CONFIG_BLOCK
+#define CONFIG_BLOCK
+#endif
 
 /** Max number of pages that can be used in a single read request */
 #define FUSE_MAX_PAGES_PER_REQ 32
