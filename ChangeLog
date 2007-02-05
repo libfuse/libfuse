@@ -1,3 +1,10 @@
+2007-02-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix 2.6.9 RHEL kernels, which have compatibility mutex.h, but
+	don't define mutex_destroy(), bummer.  Patch from Phil Schwan
+
+	* Fix option parsing in mount.fuse.  Patch from Jens M. Noedler
+
 2007-02-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.3

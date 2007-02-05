@@ -67,6 +67,10 @@
 #define mutex semaphore
 #endif
 #ifndef HAVE_I_MUTEX
+#ifndef mutex_destroy
+/* Some RHEL kernels include a backported mutex.h, which lacks mutex_destroy */
+#define mutex_destroy(m) do { } while (0)
+#endif
 #define i_mutex i_sem	/* Hack for struct inode */
 #endif
 #ifndef KERNEL_2_6_19_PLUS
