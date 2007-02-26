@@ -48,8 +48,8 @@ shift
 # loop over each mount option and skip all that should be ignored
 IFS=","
 for OPT in $@; do
-	OPT=`echo $OPT | sed "s/^\(-o\|user\|nouser\|users\|auto\|noauto\|_netdev\)$/ignore/"`
-	if [ "$OPT" == "ignore" ]; then continue; fi
+	OPT=`echo $OPT | sed "s/^\(-o\|user\|nouser\|users\|auto\|noauto\|_netdev\)$/IGNORE/"`
+	if [ "$OPT" == "IGNORE" ]; then continue; fi
 	OPTIONS="$OPTIONS$OPT,"
 done
 IFS=" "
