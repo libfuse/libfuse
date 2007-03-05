@@ -1,3 +1,8 @@
+2007-03-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* mount.fuse should use /bin/bash.  Debian Bug#413403.  Reported
+	by Thomas Weinbrenner
+
 2007-02-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix detection of installed fuse in init script.  Reported and

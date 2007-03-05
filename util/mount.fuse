@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # FUSE mount helper
 # Petr Klima <qaxi@seznam.cz>
