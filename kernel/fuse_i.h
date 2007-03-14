@@ -67,11 +67,18 @@
 #define mutex semaphore
 #endif
 #ifndef HAVE_I_MUTEX
+#ifndef mutex_destroy
+/* Some RHEL kernels include a backported mutex.h, which lacks mutex_destroy */
+#define mutex_destroy(m) do { } while (0)
+#endif
 #define i_mutex i_sem	/* Hack for struct inode */
 #endif
 #ifndef KERNEL_2_6_19_PLUS
 #define clear_nlink(inode) (inode)->i_nlink = 0
 #define inc_nlink(inode) (inode)->i_nlink++
+#endif
+#ifndef HAVE_CONFIG_BLOCK
+#define CONFIG_BLOCK
 #endif
 
 /** Max number of pages that can be used in a single read request */

@@ -1,7 +1,34 @@
+2007-03-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.7.0-pre1
+
 2007-03-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Correctly handle O_APPEND in direct IO mode.  Reported by Greg
 	Bruno
+
+	* mount.fuse should use /bin/bash.  Debian Bug#413403.  Reported
+	by Thomas Weinbrenner
+
+2007-02-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix detection of installed fuse in init script.  Reported and
+	fix suggested by Davide Canova
+
+2007-02-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix 2.6.9 RHEL kernels, which have compatibility mutex.h, but
+	don't define mutex_destroy(), bummer.  Patch from Phil Schwan
+
+2007-02-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.6.3
+
+2007-02-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Compile fuseblk for kernels which don't have an option to turn
+	off the block layer (CONFIG_BLOCK).  Reported by Szakacsits
+	Szabolcs
 
 2007-02-03  Miklos Szeredi <miklos@szeredi.hu>
 

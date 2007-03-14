@@ -12,7 +12,7 @@ DESC="FUSE"
 MOUNTPOINT=/sys/fs/fuse/connections
 
 # Gracefully exit if the package has been removed.
-test -x `which fusermount` || exit 0
+which fusermount &>/dev/null || exit 0
 
 error()
 {
