@@ -3266,6 +3266,7 @@ static struct fuse *fuse_new_common_compat25(int fd, struct fuse_args *args,
    main() has been called) */
 void fuse_register_module(struct fuse_module *mod)
 {
+    mod->ctr = 0;
     mod->so = fuse_current_so;
     if (mod->so)
         mod->so->ctr++;

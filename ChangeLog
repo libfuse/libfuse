@@ -1,3 +1,8 @@
+2007-03-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Correctly handle O_APPEND in direct IO mode.  Reported by Greg
+	Bruno
+
 2007-02-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add filesystem stacking support to high level API.  Filesystem
