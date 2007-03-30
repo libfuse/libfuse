@@ -22,10 +22,6 @@
 
 2007-02-04  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Released 2.6.3
-
-2007-02-04  Miklos Szeredi <miklos@szeredi.hu>
-
 	* Compile fuseblk for kernels which don't have an option to turn
 	off the block layer (CONFIG_BLOCK).  Reported by Szakacsits
 	Szabolcs

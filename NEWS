@@ -1,3 +1,9 @@
+What is new in 2.7
+
+ - Stacking support for the high level API
+
+ - Fix problems with mtab writing
+
 What is new in 2.6
 
  - Improved read characteristics (asynchronous reads)
