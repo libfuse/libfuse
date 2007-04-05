@@ -68,6 +68,16 @@ AC_SEARCH_LIBS(dlopen, [dl])
 AC_SEARCH_LIBS(clock_gettime, [rt])
 libfuse_libs="$libfuse_libs $LIBS"
 LIBS=
+AC_ARG_WITH([libiconv-prefix],
+[  --with-libiconv-prefix=DIR  search for libiconv in DIR/include and DIR/lib], [
+    for dir in `echo "$withval" | tr : ' '`; do
+      if test -d $dir/include; then CPPFLAGS="$CPPFLAGS -I$dir/include"; fi
+      if test -d $dir/lib; then LDFLAGS="$LDFLAGS -L$dir/lib"; fi
+    done
+   ])
+AM_ICONV
+libfuse_libs="$libfuse_libs $LIBICONV"
+AM_CONDITIONAL(ICONV, test "$am_cv_func_iconv" = yes)
 AC_SUBST(libfuse_libs)
 
 if test -z "$MOUNT_FUSE_PATH"; then

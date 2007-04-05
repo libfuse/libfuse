@@ -1,4 +1,11 @@
-2006-04-01  Csaba Henk <csaba.henk@creo.hu>
+2007-04-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Check for iconv.  Patch by Csaba Henk
+
+	* Add direct umounting
+
+2007-04-01  Csaba Henk <csaba.henk@creo.hu>
+
 	* Fix some FreeBSD related macros.
 
 2007-03-30  Miklos Szeredi <miklos@szeredi.hu>

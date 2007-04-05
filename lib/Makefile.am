@@ -11,6 +11,12 @@ else
 mount_source = mount.c
 endif
 
+if ICONV
+iconv_source = modules/iconv.c
+else
+iconv_source =
+endif
+
 libfuse_la_SOURCES = 		\
 	fuse.c			\
 	fuse_i.h		\
@@ -25,7 +31,7 @@ libfuse_la_SOURCES = 		\
 	fuse_signals.c		\
 	helper.c		\
 	modules/subdir.c	\
-	modules/iconv.c		\
+	$(iconv_source)		\
 	$(mount_source)
 
 libfuse_la_LDFLAGS = @libfuse_libs@ -version-number 2:7:0 \

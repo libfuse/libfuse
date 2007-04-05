@@ -259,13 +259,13 @@ static int receive_fd(int fd)
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
+    int res;
     int pid;
 
     if (!mountpoint)
         return;
 
     if (fd != -1) {
-        int res;
         struct pollfd pfd;
 
         pfd.fd = fd;
@@ -276,6 +276,10 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
         if (res == 1 && (pfd.revents & POLLERR))
             return;
     }
+
+    res = umount2(mountpoint, 2);
+    if (res == 0)
+        return;
 
     pid = fork();
     if(pid == -1)

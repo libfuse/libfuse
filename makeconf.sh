@@ -3,6 +3,8 @@
 echo Running libtoolize...
 libtoolize --automake -c -f
 
+cp /usr/share/gettext/config.rpath .
+
 if test ! -z "`which autoreconf`"; then
     echo Running autoreconf...
     autoreconf -i -f
