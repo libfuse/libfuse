@@ -3,6 +3,9 @@
 	* mount.fuse should handle spaces in paths.  Debian Bug#417834.
 	Reported by Alexander Blazej
 
+	* Use "fusectl" as the device for the fusectl filesystem.  Debian
+	Bug#417945.  Reported by Laurent Bonnaud
+
 2007-03-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* mount.fuse should use /bin/bash.  Debian Bug#413403.  Reported
