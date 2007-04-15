@@ -1,3 +1,7 @@
+2007-04-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add -lulockmgr to compilation comment in fusexmp_fh.c
+
 2007-04-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* mount.fuse should handle spaces in paths.  Debian Bug#417834.

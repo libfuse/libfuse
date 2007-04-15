@@ -57,4 +57,8 @@ IFS=" "
 # add "-o " and remove trailing comma
 OPTIONS="-o `echo $OPTIONS | sed "s/,$//"`"
 
-"${FSTYPE}" "${MOUNTPATH}" "${MOUNTPOINT}" ${OPTIONS}
+if test -z "$MOUNTPATH"; then
+    "${FSTYPE}" "${MOUNTPOINT}" ${OPTIONS}
+else
+    "${FSTYPE}" "${MOUNTPATH}" "${MOUNTPOINT}" ${OPTIONS}
+fi
