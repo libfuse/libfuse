@@ -2,8 +2,10 @@
 
 AM_CPPFLAGS = -D_FILE_OFFSET_BITS=64 
 bin_PROGRAMS = fusermount ulockmgr_server
+noinst_PROGRAMS = mount.fuse
 
 fusermount_SOURCES = fusermount.c
+mount_fuse_SOURCES = mount.fuse.c
 
 ulockmgr_server_SOURCES = ulockmgr_server.c
 ulockmgr_server_CPPFLAGS = -D_FILE_OFFSET_BITS=64 -D_REENTRANT 
@@ -18,7 +20,7 @@ install-exec-hook:
 		mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229 || true; \
 	fi
 
-EXTRA_DIST = mount.fuse udev.rules init_script
+EXTRA_DIST = udev.rules init_script
 
 MOUNT_FUSE_PATH = @MOUNT_FUSE_PATH@
 UDEV_RULES_PATH = @UDEV_RULES_PATH@

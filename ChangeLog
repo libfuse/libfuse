@@ -1,3 +1,7 @@
+2007-04-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Replace utils/mount.fuse "sh" script with a "C" program
+
 2007-04-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check for iconv.  Patch by Csaba Henk
