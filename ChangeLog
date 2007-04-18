@@ -1,3 +1,7 @@
+2007-04-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Use patch from Debian Bug#413403 to fix problems with bash
+
 2007-04-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add -lulockmgr to compilation comment in fusexmp_fh.c
