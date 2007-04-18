@@ -1,6 +1,7 @@
 2007-04-18  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Use patch from Debian Bug#413403 to fix problems with bash
+	* Use patch from Debian Bug#413403 to fix problems with bash in
+	mount.fuse
 
 2007-04-15  Miklos Szeredi <miklos@szeredi.hu>
 
