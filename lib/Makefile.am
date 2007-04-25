@@ -8,7 +8,7 @@ lib_LTLIBRARIES = libfuse.la libulockmgr.la
 if BSD
 mount_source = mount_bsd.c
 else
-mount_source = mount.c
+mount_source = mount.c mount_util.c mount_util.h
 endif
 
 if ICONV

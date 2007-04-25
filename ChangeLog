@@ -1,3 +1,14 @@
+2007-04-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Improve mounting support in libfuse:
+	 - check non-empty mountpoint
+	 - only fall back to fusermount when necessary
+
+2007-04-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't chdir to "/" in foreground mode, it causes more trouble
+	than it's worth
+
 2007-04-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Replace utils/mount.fuse "sh" script with a "C" program

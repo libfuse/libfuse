@@ -9,6 +9,7 @@
 
 #include <config.h>
 
+#include "mount_util.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +20,6 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <mntent.h>
-#include <dirent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/mount.h>
@@ -106,30 +106,7 @@ static int do_unmount(const char *mnt, int quiet, int lazy)
 static int add_mount(const char *fsname, const char *mnt, const char *type,
                      const char *opts)
 {
-    int res;
-    int status;
-
-    res = fork();
-    if (res == -1) {
-        perror("fork");
-        return -1;
-    }
-    if (res == 0) {
-        setuid(geteuid());
-        execl("/bin/mount", "/bin/mount", "-i", "-f", "-t", type, "-o", opts,
-              fsname, mnt, NULL);
-        perror("execl /bin/mount");
-        exit(1);
-    }
-    res = waitpid(res, &status, 0);
-    if (res == -1) {
-        perror("waitpid");
-        return -1;
-    }
-    if (status != 0)
-        return -1;
-
-    return 0;
+    return fuse_mnt_add_mount(progname, fsname, mnt, type, opts);
 }
 
 static int unmount_fuse(const char *mnt, int quiet, int lazy)
@@ -397,38 +374,6 @@ static int opt_eq(const char *s, unsigned len, const char *opt)
         return 0;
 }
 
-static int check_mountpoint_empty(const char *mnt, mode_t rootmode,
-                                  off_t rootsize)
-{
-    int isempty = 1;
-
-    if (S_ISDIR(rootmode)) {
-        struct dirent *ent;
-        DIR *dp = opendir(mnt);
-        if (dp == NULL) {
-            fprintf(stderr, "%s: failed to open mountpoint for reading: %s\n",
-                    progname, strerror(errno));
-            return -1;
-        }
-        while ((ent = readdir(dp)) != NULL) {
-            if (strcmp(ent->d_name, ".") != 0 &&
-                strcmp(ent->d_name, "..") != 0) {
-                isempty = 0;
-                break;
-            }
-        }
-        closedir(dp);
-    } else if (rootsize)
-        isempty = 0;
-
-    if (!isempty) {
-        fprintf(stderr, "%s: mountpoint is not empty\n", progname);
-        fprintf(stderr, "%s: if you are sure this is safe, use the 'nonempty' mount option\n", progname);
-        return -1;
-    }
-    return 0;
-}
-
 static int has_fuseblk(void)
 {
     char buf[256];
@@ -545,7 +490,8 @@ static int do_mount(const char *mnt, const char **type, mode_t rootmode,
         }
     }
 
-    if (check_empty && check_mountpoint_empty(mnt, rootmode, rootsize) == -1)
+    if (check_empty &&
+        fuse_mnt_check_empty(progname, mnt, rootmode, rootsize) == -1)
         goto err;
 
     if (blkdev)
@@ -811,72 +757,6 @@ static int mount_fuse(const char *mnt, const char *opts)
     return fd;
 }
 
-static char *resolve_path(const char *orig)
-{
-    char buf[PATH_MAX];
-    char *copy;
-    char *dst;
-    char *end;
-    char *lastcomp;
-    const char *toresolv;
-
-    if (!orig[0]) {
-        fprintf(stderr, "%s: invalid mountpoint '%s'\n", progname, orig);
-        return NULL;
-    }
-
-    copy = strdup(orig);
-    if (copy == NULL) {
-        fprintf(stderr, "%s: failed to allocate memory\n", progname);
-        return NULL;
-    }
-
-    toresolv = copy;
-    lastcomp = NULL;
-    for (end = copy + strlen(copy) - 1; end > copy && *end == '/'; end --);
-    if (end[0] != '/') {
-        char *tmp;
-        end[1] = '\0';
-        tmp = strrchr(copy, '/');
-        if (tmp == NULL) {
-            lastcomp = copy;
-            toresolv = ".";
-        } else {
-            lastcomp = tmp + 1;
-            if (tmp == copy)
-                toresolv = "/";
-        }
-        if (strcmp(lastcomp, ".") == 0 || strcmp(lastcomp, "..") == 0) {
-            lastcomp = NULL;
-            toresolv = copy;
-        }
-        else if (tmp)
-            tmp[0] = '\0';
-    }
-    if (realpath(toresolv, buf) == NULL) {
-        fprintf(stderr, "%s: bad mount point %s: %s\n", progname, orig,
-                strerror(errno));
-        free(copy);
-        return NULL;
-    }
-    if (lastcomp == NULL)
-        dst = strdup(buf);
-    else {
-        dst = (char *) malloc(strlen(buf) + 1 + strlen(lastcomp) + 1);
-        if (dst) {
-            unsigned buflen = strlen(buf);
-            if (buflen && buf[buflen-1] == '/')
-                sprintf(dst, "%s%s", buf, lastcomp);
-            else
-                sprintf(dst, "%s/%s", buf, lastcomp);
-        }
-    }
-    free(copy);
-    if (dst == NULL)
-        fprintf(stderr, "%s: failed to allocate memory\n", progname);
-    return dst;
-}
-
 static int send_fd(int sock_fd, int fd)
 {
     int retval;
@@ -1006,7 +886,7 @@ int main(int argc, char *argv[])
     origmnt = argv[optind];
 
     drop_privs();
-    mnt = resolve_path(origmnt);
+    mnt = fuse_mnt_resolve_path(progname, origmnt);
     restore_privs();
     if (mnt == NULL)
         exit(1);

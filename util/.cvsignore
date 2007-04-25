@@ -5,3 +5,4 @@ Makefile
 fusermount
 ulockmgr_server
 fuse_ioslave
+mount.fuse

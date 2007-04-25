@@ -180,13 +180,6 @@ int fuse_daemonize(int foreground)
             perror("fuse: failed to daemonize program\n");
             return -1;
         }
-    } else {
-        /* Ensure consistant behavior across debug and normal modes */
-        res = chdir("/");
-        if (res == -1) {
-            perror("fuse: failed to change working directory to /\n");
-            return -1;
-        }
     }
     return 0;
 }

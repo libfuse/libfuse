@@ -10,6 +10,7 @@
 #include "fuse_i.h"
 #include "fuse_opt.h"
 #include "fuse_common_compat.h"
+#include "mount_util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,7 +53,6 @@ struct mount_opts {
     int flags;
     int nonempty;
     int blkdev;
-    int large_read;
     char *fsname;
     char *mtab_opts;
     char *fusermount_opts;
@@ -67,13 +67,12 @@ static const struct fuse_opt fuse_mount_opts[] = {
     FUSE_MOUNT_OPT("nonempty",          nonempty),
     FUSE_MOUNT_OPT("blkdev",            blkdev),
     FUSE_MOUNT_OPT("fsname=%s",         fsname),
-    FUSE_MOUNT_OPT("large_read",        large_read),
     FUSE_OPT_KEY("allow_other",         KEY_KERN_OPT),
     FUSE_OPT_KEY("allow_root",          KEY_ALLOW_ROOT),
     FUSE_OPT_KEY("nonempty",            KEY_FUSERMOUNT_OPT),
     FUSE_OPT_KEY("blkdev",              KEY_FUSERMOUNT_OPT),
     FUSE_OPT_KEY("fsname=",             KEY_FUSERMOUNT_OPT),
-    FUSE_OPT_KEY("large_read",          KEY_FUSERMOUNT_OPT),
+    FUSE_OPT_KEY("large_read",          KEY_KERN_OPT),
     FUSE_OPT_KEY("blksize=",            KEY_KERN_OPT),
     FUSE_OPT_KEY("default_permissions", KEY_KERN_OPT),
     FUSE_OPT_KEY("max_read=",           KEY_KERN_OPT),
@@ -356,34 +355,6 @@ int fuse_mount_compat22(const char *mountpoint, const char *opts)
     return rv;
 }
 
-static int add_mount(const char *fsname, const char *mnt, const char *type,
-                     const char *opts)
-{
-    int res;
-    int status;
-
-    res = fork();
-    if (res == -1) {
-        perror("fork");
-        return -1;
-    }
-    if (res == 0) {
-        setuid(geteuid());
-        execl("/bin/mount", "/bin/mount", "-i", "-f", "-t", type, "-o", opts,
-              fsname, mnt, NULL);
-        perror("execl /bin/mount");
-        exit(1);
-    }
-    res = waitpid(res, &status, 0);
-    if (res == -1) {
-        perror("waitpid");
-        return -1;
-    }
-    if (status != 0)
-        return -1;
-
-    return 0;
-}
 
 static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
                           const char *mnt_opts)
@@ -395,20 +366,29 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
     int fd;
     int res;
 
-    /* For now silently fall back to fusermount if something doesn't work */
-
-    /* FIXME: check non-empty mountpoint*/
-
-    if (mo->large_read)
-        return -1;
-
     res = lstat(mnt, &stbuf);
-    if (res == -1)
+    if (res == -1) {
+        fprintf(stderr ,"fuse: failed to access mountpoint %s: %s\n",
+                mnt, strerror(errno));
         return -1;
+    }
+
+    if (!mo->nonempty) {
+        res = fuse_mnt_check_empty("fuse", mnt, stbuf.st_mode, stbuf.st_size);
+        if (res == -1)
+            return -1;
+    }
 
     fd = open(devname, O_RDWR);
-    if (fd == -1)
+    if (fd == -1) {
+        if (errno == ENODEV || errno == ENOENT)
+            fprintf(stderr,
+                    "fuse: device not found, try 'modprobe fuse' first\n");
+        else
+            fprintf(stderr, "fuse: failed to open %s: %s\n", devname,
+                    strerror(errno));
         return -1;
+    }
 
     if (mo->fsname)
         devname = mo->fsname;
@@ -416,24 +396,42 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
     snprintf(tmp, sizeof(tmp),  "fd=%i,rootmode=%o,user_id=%i,group_id=%i", fd,
              stbuf.st_mode & S_IFMT, getuid(), getgid());
 
-    if (fuse_opt_add_opt(&mo->kernel_opts, tmp) == -1) {
-        close(fd);
-        return -1;
-    }
+    res = fuse_opt_add_opt(&mo->kernel_opts, tmp);
+    if (res == -1)
+        goto out_close;
+
     res = mount(devname, mnt, type, mo->flags, mo->kernel_opts);
     if (res == -1) {
-        close(fd);
-        return -1;
+        /*
+         * Maybe kernel doesn't support unprivileged mounts, in this
+         * case try falling back to fusermount
+         */
+        if (errno == EPERM)
+            res = -2;
+        else
+            perror("fuse: mount failed");
+        goto out_close;
     }
+
     if (geteuid() == 0) {
-        res = add_mount(devname, mnt, type, mnt_opts);
-        if (res == -1) {
-            umount2(mnt, 2); /* lazy umount */
-            close(fd);
-            return -1;
-        }
+        char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
+        res = -1;
+        if (!newmnt)
+            goto out_umount;
+
+        res = fuse_mnt_add_mount("fuse", devname, newmnt, type, mnt_opts);
+        free(newmnt);
+        if (res == -1)
+            goto out_umount;
     }
+
     return fd;
+
+ out_umount:
+    umount2(mnt, 2); /* lazy umount */
+ out_close:
+    close(fd);
+    return res;
 }
 
 static int get_mnt_flag_opts(char **mnt_optsp, int flags)
@@ -481,7 +479,7 @@ int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
         goto out;
 
     res = fuse_mount_sys(mountpoint, &mo, mnt_opts);
-    if (res == -1) {
+    if (res == -2) {
         if (mo.fusermount_opts && 
             fuse_opt_add_opt(&mnt_opts, mo.fusermount_opts) == -1)
             goto out;
