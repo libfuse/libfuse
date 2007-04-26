@@ -14,6 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <semaphore.h>
 #include <errno.h>
 #include <sys/time.h>
 
@@ -33,6 +34,7 @@ struct fuse_mt {
     struct fuse_session *se;
     struct fuse_chan *prevch;
     struct fuse_worker main;
+    sem_t finish;
     int exit;
     int error;
 };
@@ -106,7 +108,7 @@ static void *fuse_do_work(void *data)
         pthread_mutex_unlock(&mt->lock);
     }
 
-    pthread_kill(mt->main.thread_id, SIGHUP);
+    sem_post(&mt->finish);
     pause();
 
     return NULL;
@@ -176,14 +178,16 @@ int fuse_session_loop_mt(struct fuse_session *se)
     mt.numavail = 0;
     mt.main.thread_id = pthread_self();
     mt.main.prev = mt.main.next = &mt.main;
+    sem_init(&mt.finish, 0, 0);
     fuse_mutex_init(&mt.lock);
 
     pthread_mutex_lock(&mt.lock);
     err = fuse_start_thread(&mt);
     pthread_mutex_unlock(&mt.lock);
     if (!err) {
+        /* sem_wait() is interruptible */
         while (!fuse_session_exited(se))
-            pause();
+            sem_wait(&mt.finish);
 
         for (w = mt.main.next; w != &mt.main; w = w->next)
             pthread_cancel(w->thread_id);
@@ -197,6 +201,7 @@ int fuse_session_loop_mt(struct fuse_session *se)
     }
 
     pthread_mutex_destroy(&mt.lock);
+    sem_destroy(&mt.finish);
     fuse_session_reset(se);
     return err;
 }

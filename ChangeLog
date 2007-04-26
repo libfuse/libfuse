@@ -1,3 +1,9 @@
+2007-04-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* In multithreaded loop, use a semaphore instead of SIGHUP to wake
+	up the main thread on umount.  This is more elegant, and works
+	even if signals are blocked.
+
 2007-04-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Improve mounting support in libfuse:
