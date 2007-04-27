@@ -1,3 +1,8 @@
+2007-04-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Ublock SIGHUP in multithreaded loop, since it's needed for
+	exiting on unmount.  Reported by Elena
+
 2007-04-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use patch from Debian Bug#413403 to fix problems with bash in

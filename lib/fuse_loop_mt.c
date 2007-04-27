@@ -182,6 +182,13 @@ int fuse_session_loop_mt(struct fuse_session *se)
     err = fuse_start_thread(&mt);
     pthread_mutex_unlock(&mt.lock);
     if (!err) {
+        sigset_t set;
+
+        /* We need SIGHUP for exiting */
+        sigemptyset(&set);
+        sigaddset(&set, SIGHUP);
+        pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+
         while (!fuse_session_exited(se))
             pause();
 
