@@ -73,35 +73,6 @@ static void restore_privs(void)
     }
 }
 
-static int do_unmount(const char *mnt, int quiet, int lazy)
-{
-    int res;
-    int status;
-
-    (void) quiet;
-    res = fork();
-    if (res == -1) {
-        perror("fork");
-        return -1;
-    }
-    if (res == 0) {
-        setuid(geteuid());
-        execl("/bin/umount", "/bin/umount", "-i", mnt, lazy ? "-l" : NULL,
-              NULL);
-        perror("execl /bin/umount");
-        exit(1);
-    }
-    res = waitpid(res, &status, 0);
-    if (res == -1) {
-        perror("waitpid");
-        return -1;
-    }
-    if (status != 0)
-        return -1;
-
-    return 0;
-}
-
 #ifndef IGNORE_MTAB
 static int add_mount(const char *fsname, const char *mnt, const char *type,
                      const char *opts)
@@ -164,7 +135,7 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
         }
     }
 
-    return do_unmount(mnt, quiet, lazy);
+    return fuse_mnt_umount(progname, mnt, lazy);
 }
 
 static int count_fuse_fs(void)
@@ -205,7 +176,7 @@ static int add_mount(const char *fsname, const char *mnt, const char *type,
 
 static int unmount_fuse(const char *mnt, int quiet, int lazy)
 {
-    return do_unmount(mnt, quiet, lazy);
+    return fuse_mnt_umount(progname, mnt, lazy);
 }
 #endif /* IGNORE_MTAB */
 

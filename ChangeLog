@@ -1,3 +1,8 @@
+2007-04-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: call umount(8) directly instead of fusermount if
+	possible
+
 2007-04-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* In multithreaded loop, use a semaphore instead of SIGHUP to wake

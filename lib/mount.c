@@ -276,6 +276,11 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
             return;
     }
 
+    if (geteuid() == 0) {
+        fuse_mnt_umount("fuse", mountpoint, 1);
+        return;
+    }
+
     res = umount2(mountpoint, 2);
     if (res == 0)
         return;

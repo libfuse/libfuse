@@ -72,6 +72,35 @@ int fuse_mnt_add_mount(const char *progname, const char *fsname,
     return 0;
 }
 
+int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
+{
+    int res;
+    int status;
+
+    res = fork();
+    if (res == -1) {
+        fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
+        return -1;
+    }
+    if (res == 0) {
+        setuid(geteuid());
+        execl("/bin/umount", "/bin/umount", "-i", mnt, lazy ? "-l" : NULL,
+              NULL);
+        fprintf(stderr, "%s: failed to execute /bin/umount: %s\n", progname,
+                strerror(errno));
+        exit(1);
+    }
+    res = waitpid(res, &status, 0);
+    if (res == -1) {
+        fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
+        return -1;
+    }
+    if (status != 0)
+        return -1;
+
+    return 0;
+}
+
 char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 {
     char buf[PATH_MAX];
