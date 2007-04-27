@@ -1,3 +1,7 @@
+2007-04-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.6.4
+
 2007-04-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Ublock SIGHUP in multithreaded loop, since it's needed for
