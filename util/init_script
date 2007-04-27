@@ -28,7 +28,7 @@ case "$1" in
 	fi
 	if grep -qw fusectl /proc/filesystems && \
 	   ! grep -qw $MOUNTPOINT /proc/mounts; then
-		mount -t fusectl none $MOUNTPOINT >/dev/null 2>&1 || \
+		mount -t fusectl fusectl $MOUNTPOINT >/dev/null 2>&1 || \
 			error "mounting control filesystem"
 	fi
 	echo "done."

@@ -24,11 +24,18 @@
 
 	* Replace utils/mount.fuse "sh" script with a "C" program
 
+2007-04-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add -lulockmgr to compilation comment in fusexmp_fh.c
+
 2007-04-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check for iconv.  Patch by Csaba Henk
 
 	* Add direct umounting
+
+	* Use "fusectl" as the device for the fusectl filesystem.  Debian
+	Bug#417945.  Reported by Laurent Bonnaud
 
 2007-04-01  Csaba Henk <csaba.henk@creo.hu>
 
