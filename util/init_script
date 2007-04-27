@@ -1,51 +1,87 @@
 #! /bin/sh
-#
-# fuse		Init script for Filesystem in Userspace
-#
-# Author:	Miklos Szeredi <miklos@szeredi.hu>
+### BEGIN INIT INFO
+# Provides:          fuse
+# Required-Start:    
+# Should-Start:      udev
+# Required-Stop:     
+# Default-Start:     S
+# Default-Stop:
+# Short-Description: Start and stop fuse.
+# Description:       Load the fuse module and mount the fuse control
+#	filesystem.
+### END INIT INFO
 
 set -e
 
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-SCRIPTNAME=/etc/init.d/fuse
-DESC="FUSE"
 MOUNTPOINT=/sys/fs/fuse/connections
 
 # Gracefully exit if the package has been removed.
-which fusermount &>/dev/null || exit 0
-
-error()
-{
-	echo "Error $1" >&2
-	exit 1
-}
+which fusermount &>/dev/null || exit 5
 
 case "$1" in
-  start)
-	echo -n "Starting $DESC: "
+    start|restart|force-reload)
 	if ! grep -qw fuse /proc/filesystems; then
-		modprobe fuse >/dev/null 2>&1 || error "loading fuse module"
+		echo -n "Loading fuse module"
+		if ! modprobe fuse >/dev/null 2>&1; then
+			echo " failed!"
+			exit 1
+		else
+			echo "."
+		fi
+	else
+		echo "Fuse filesystem already available."
 	fi
 	if grep -qw fusectl /proc/filesystems && \
 	   ! grep -qw $MOUNTPOINT /proc/mounts; then
-		mount -t fusectl fusectl $MOUNTPOINT >/dev/null 2>&1 || \
-			error "mounting control filesystem"
+		echo -n "Mounting fuse control filesystem"
+		if ! mount -t fusectl fusectl $MOUNTPOINT >/dev/null 2>&1; then
+			echo " failed!"
+			exit 1
+		else
+			echo "."
+		fi
+	else
+		echo "Fuse control filesystem already available."
 	fi
-	echo "done."
 	;;
-  stop)
-	echo -n "Stopping $DESC: "
+    stop)
+	if ! grep -qw fuse /proc/filesystems; then
+		echo "Fuse filesystem not loaded."
+		exit 7
+	fi
 	if grep -qw $MOUNTPOINT /proc/mounts; then
-		umount $MOUNTPOINT >/dev/null 2>&1 || \
-			error "unmounting control filesystem"
+		echo -n "Unmounting fuse control filesystem"
+		if ! umount $MOUNTPOINT >/dev/null 2>&1; then
+			echo " failed!"
+		else
+			echo "."
+		fi
+	else
+		echo "Fuse control filesystem not mounted."
 	fi
 	if grep -qw "^fuse" /proc/modules; then
-		rmmod fuse >/dev/null 2>&1 || error "unloading fuse module"
+		echo -n "Unloading fuse module"
+		if ! rmmod fuse >/dev/null 2>&1; then
+			echo " failed!"
+		else
+			echo "."
+		fi
+	else
+		echo "Fuse module not loaded."
 	fi
-	echo "done."
+	;;
+    status)
+	echo -n "Checking fuse filesystem"
+	if ! grep -qw fuse /proc/filesystems; then
+		echo " not available."
+		exit 3
+	else
+		echo " ok."
+	fi
 	;;
   *)
-	echo "Usage: $SCRIPTNAME {start|stop}" >&2
+	echo "Usage: $0 {start|stop|restart|force-reload|status}"
 	exit 1
 	;;
 esac
