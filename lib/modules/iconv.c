@@ -1,5 +1,12 @@
+/*
+    fuse iconv module: file name charset conversion
+    Copyright (C) 2007  Miklos Szeredi <miklos@szeredi.hu>
+
+    This program can be distributed under the terms of the GNU LGPL.
+    See the file COPYING.LIB
+*/
+
 #define FUSE_USE_VERSION 26
-#define _FILE_OFFSET_BITS 64
 
 #include <fuse.h>
 #include <stdio.h>
@@ -36,7 +43,7 @@ static int iconv_convpath(struct iconv *ic, const char *path, char **newpathp,
                           int fromfs)
 {
     size_t pathlen = strlen(path);
-    size_t newpathlen = pathlen; /* FIXME after testing */
+    size_t newpathlen = pathlen * 4;
     char *newpath = malloc(newpathlen + 1);
     size_t plen = newpathlen;
     char *p = newpath;

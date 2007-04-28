@@ -777,7 +777,6 @@ int fuse_fs_rename(struct fuse_fs *fs, const char *oldpath,
         return -ENOSYS;
 }
 
-
 int fuse_fs_unlink(struct fuse_fs *fs, const char *path)
 {
     fuse_get_context()->private_data = fs->user_data;

@@ -1,5 +1,12 @@
+/*
+    fuse subdir module: offset paths with a base directory
+    Copyright (C) 2007  Miklos Szeredi <miklos@szeredi.hu>
+
+    This program can be distributed under the terms of the GNU LGPL.
+    See the file COPYING.LIB
+*/
+
 #define FUSE_USE_VERSION 26
-#define _FILE_OFFSET_BITS 64
 
 #include <fuse.h>
 #include <stdio.h>

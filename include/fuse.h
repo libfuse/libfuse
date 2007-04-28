@@ -463,7 +463,7 @@ struct fuse_context {
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
  * @param op the file system operation
- * @param user_data user data set in context for init() method
+ * @param user_data user data supplied in the context during the init() method
  * @return 0 on success, nonzero on failure
  */
 /*
@@ -482,9 +482,9 @@ int fuse_main(int argc, char *argv[], const struct fuse_operations *op,
  *
  * @param ch the communication channel
  * @param args argument vector
- * @param op the operations
+ * @param op the filesystem operations
  * @param op_size the size of the fuse_operations structure
- * @param user_data user data set in context for init() method
+ * @param user_data user data supplied in the context during the init() method
  * @return the created FUSE handle
  */
 struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
@@ -573,10 +573,25 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
                    size_t op_size, void *user_data);
 
 /*
- *
+ * Stacking API
  */
 
+/**
+ * Fuse filesystem object
+ *
+ * This is opaque object represents a filesystem layer
+ */
 struct fuse_fs;
+
+/*
+ * These functions call the relevant filesystem operation, and return
+ * the result.
+ *
+ * If the operation is not defined, they return -ENOSYS, with the
+ * exception of fuse_fs_open, fuse_fs_release, fuse_fs_opendir,
+ * fuse_fs_releasedir and fuse_fs_statfs, which return 0.
+ */
+
 int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf);
 int fuse_fs_fgetattr(struct fuse_fs *fs, const char *path, struct stat *buf,
                      struct fuse_file_info *fi);
@@ -639,18 +654,71 @@ int fuse_fs_bmap(struct fuse_fs *fs, const char *path, size_t blocksize,
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn);
 void fuse_fs_destroy(struct fuse_fs *fs);
 
+/**
+ * Create a new fuse filesystem object
+ *
+ * This is usually called from the factory of a fuse module to create
+ * a new instance of a filesystem.
+ *
+ * @param op the filesystem operations
+ * @param op_size the size of the fuse_operations structure
+ * @param user_data user data supplied in the context during the init() method
+ * @return a new filesystem object
+ */
 struct fuse_fs *fuse_fs_new(const struct fuse_operations *op, size_t op_size,
                             void *user_data);
 
+/**
+ * Filesystem module
+ *
+ * Filesystem modules are registered with the FUSE_REGISTER_MODULE()
+ * macro.
+ *
+ * If the "-omodules=modname:..." option is present, filesystem
+ * objects are created and pushed onto the stack with the 'factory'
+ * function.
+ */
 struct fuse_module {
+    /**
+     * Name of filesystem
+     */
     const char *name;
-    struct fuse_fs *(*factory)(struct fuse_args *, struct fuse_fs *[]);
+
+    /**
+     * Factory for creating filesystem objects
+     *
+     * The function may use and remove options from 'args' that belong
+     * to this module.
+     *
+     * For now the 'fs' vector always contains exactly one filesystem.
+     * This is the filesystem which will be below the newly created
+     * filesystem in the stack.
+     *
+     * @param args the command line arguments
+     * @param fs NULL terminated filesystem object vector
+     * @return the new filesystem object
+     */
+    struct fuse_fs *(*factory)(struct fuse_args *args, struct fuse_fs *fs[]);
+
     struct fuse_module *next;
     struct fusemod_so *so;
     int ctr;
 };
 
+/**
+ * Register a filesystem module
+ *
+ * This function is used by FUSE_REGISTER_MODULE and there's usually
+ * no need to call it directly
+ */
 void fuse_register_module(struct fuse_module *mod);
+
+/**
+ * Register filesystem module
+ *
+ * For the parameters, see description of the fields in 'struct
+ * fuse_module'
+ */
 #define FUSE_REGISTER_MODULE(name_, factory_) \
 static __attribute__((constructor)) void name_ ## _register(void) \
 { \
