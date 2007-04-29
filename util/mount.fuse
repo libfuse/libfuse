@@ -20,7 +20,7 @@ usage: ${PRGNAME} fusefs_type#[mountpath] mountpoint [FUSE options]
 	example: ${PRGNAME} sshfs#root@tux:/ /mnt/tuxssh -o rw
 "
 
-die {
+die() {
 	echo "$PRGNAME# $1" >&2
 	[ -z "$2" ] && exit 128
 	exit "$2"
