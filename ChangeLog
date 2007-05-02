@@ -1,3 +1,12 @@
+2007-05-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: sync with mainline:
+
+	* Use invalidate_mapping_pages() if available
+
+	* Fix BUG when invalid file type is supplied in mount. Patch by
+	Timo Savola
+
 2007-04-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: call umount(8) directly instead of fusermount if

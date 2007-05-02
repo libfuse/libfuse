@@ -41,9 +41,15 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
 #  define KERNEL_2_6_19_PLUS
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
+#  define KERNEL_2_6_21_PLUS
+#endif
 
 #if defined(__arm__) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #define DCACHE_BUG
+#endif
+#ifndef KERNEL_2_6_15_PLUS
+#define kmem_cache kmem_cache_s
 #endif
 
 #include "config.h"
@@ -617,3 +623,8 @@ int fuse_ctl_add_conn(struct fuse_conn *fc);
  * Remove connection from control filesystem
  */
 void fuse_ctl_remove_conn(struct fuse_conn *fc);
+
+/**
+ * Is file type valid?
+ */
+int fuse_valid_type(int m);

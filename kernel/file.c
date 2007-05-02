@@ -75,7 +75,11 @@ void fuse_finish_open(struct inode *inode, struct file *file,
 	if (outarg->open_flags & FOPEN_DIRECT_IO)
 		file->f_op = &fuse_direct_io_file_operations;
 	if (!(outarg->open_flags & FOPEN_KEEP_CACHE))
+#ifdef KERNEL_2_6_21_PLUS
+		invalidate_mapping_pages(inode->i_mapping, 0, -1);
+#else
 		invalidate_inode_pages(inode->i_mapping);
+#endif
 	ff->fh = outarg->fh;
 	file->private_data = ff;
 }

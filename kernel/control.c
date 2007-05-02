@@ -77,7 +77,7 @@ struct dentry *d_alloc_name(struct dentry *parent, const char *name)
 {
 	struct qstr q;
 
-	q.name = name;
+	q.name = (const unsigned char *) name;
 	q.len = strlen(name);
 	q.hash = full_name_hash(q.name, q.len);
 	return d_alloc(parent, &q);
@@ -87,7 +87,11 @@ static struct dentry *fuse_ctl_add_dentry(struct dentry *parent,
 					  struct fuse_conn *fc,
 					  const char *name,
 					  int mode, int nlink,
+#ifdef KERNEL_2_6_21_PLUS
+					  const struct inode_operations *iop,
+#else
 					  struct inode_operations *iop,
+#endif
 #ifdef KERNEL_2_6_17_PLUS
 					  const struct file_operations *fop
 #else

@@ -21,7 +21,7 @@
 MODULE_ALIAS_MISCDEV(FUSE_MINOR);
 #endif
 
-static kmem_cache_t *fuse_req_cachep;
+static struct kmem_cache *fuse_req_cachep;
 
 static struct fuse_conn *fuse_get_conn(struct file *file)
 {

@@ -24,7 +24,7 @@ MODULE_DESCRIPTION("Filesystem in Userspace");
 MODULE_LICENSE("GPL");
 #endif
 
-static kmem_cache_t *fuse_inode_cachep;
+static struct kmem_cache *fuse_inode_cachep;
 struct list_head fuse_conn_list;
 DEFINE_MUTEX(fuse_mutex);
 
@@ -124,7 +124,11 @@ void fuse_change_attributes(struct inode *inode, struct fuse_attr *attr)
 {
 	struct fuse_conn *fc = get_fuse_conn(inode);
 	if (S_ISREG(inode->i_mode) && i_size_read(inode) != attr->size)
+#ifdef KERNEL_2_6_21_PLUS
+		invalidate_mapping_pages(inode->i_mapping, 0, -1);
+#else
 		invalidate_inode_pages(inode->i_mapping);
+#endif
 
 	inode->i_ino     = attr->ino;
 	inode->i_mode    = (inode->i_mode & S_IFMT) + (attr->mode & 07777);
@@ -359,6 +363,8 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d, int is_bdev)
 
 		case OPT_ROOTMODE:
 			if (match_octal(&args[0], &value))
+				return 0;
+			if (!fuse_valid_type(value))
 				return 0;
 			d->rootmode = value;
 			d->rootmode_present = 1;
@@ -805,7 +811,7 @@ static decl_subsys(fs, NULL, NULL);
 static decl_subsys(fuse, NULL, NULL);
 static decl_subsys(connections, NULL, NULL);
 
-static void fuse_inode_init_once(void *foo, kmem_cache_t *cachep,
+static void fuse_inode_init_once(void *foo, struct kmem_cache *cachep,
 				 unsigned long flags)
 {
 	struct inode * inode = foo;
