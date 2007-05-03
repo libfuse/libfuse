@@ -44,11 +44,6 @@ int fuse_mnt_add_mount(const char *progname, const char *fsname,
                     progname);
             exit(1);
         }
-        if (mkdir(tmp, 0) == -1) {
-            fprintf(stderr, "%s: failed to mkdir %s: %s\n", progname, tmp,
-                    strerror(errno));
-            exit(1);
-        }
         if (chdir(tmp)) {
             fprintf(stderr, "%s: failed to chdir to %s: %s\n",
                     progname, tmp, strerror(errno));
