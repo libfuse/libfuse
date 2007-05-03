@@ -9,9 +9,7 @@
 #ifdef FUSE_MAINLINE
 #include <linux/fuse.h>
 #else
-#include "fuse_kernel.h"
 #include <linux/version.h>
-#include <linux/utsname.h>
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
 #error Kernel versions earlier than 2.6.9 are not supported
@@ -48,10 +46,11 @@
 #if defined(__arm__) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #define DCACHE_BUG
 #endif
-#ifndef KERNEL_2_6_15_PLUS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
 #define kmem_cache kmem_cache_s
 #endif
 
+#include "fuse_kernel.h"
 #include "config.h"
 #endif /* FUSE_MAINLINE */
 #include <linux/fs.h>
