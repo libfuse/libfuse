@@ -1,7 +1,9 @@
 2007-05-11  Csaba Henk <csaba.henk@creo.hu>
 
-	* Fix return value of fuse_loop()/fuse_loop_mt().
-	Error reported by Csaba Henk, fix by Miklos Szeredi.
+	* libfuse: fix return value of fuse_loop()/fuse_loop_mt().
+	Error reported by Csaba Henk, fix by Miklos Szeredi
+
+	* libfuse: various flush related fixes
  
 2007-05-03  Miklos Szeredi <miklos@szeredi.hu>
 
