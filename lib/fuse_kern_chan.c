@@ -36,10 +36,14 @@ static int fuse_kern_chan_receive(struct fuse_chan **chp, char *buf,
         if (err == ENOENT)
             goto restart;
 
+        if (err == ENODEV) {
+            fuse_session_exit(se);
+            return 0;
+        }
         /* Errors occuring during normal operation: EINTR (read
            interrupted), EAGAIN (nonblocking I/O), ENODEV (filesystem
            umounted) */
-        if (err != EINTR && err != EAGAIN && err != ENODEV)
+        if (err != EINTR && err != EAGAIN)
             perror("fuse: reading device");
         return -err;
     }
