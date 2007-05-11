@@ -118,7 +118,7 @@ static void transform_symlink(struct subdir *d, const char *path,
         return;
 
     strip_common(&l, &path);
-    if (l - buf < d->baselen)
+    if (l - buf < (long) d->baselen)
         return;
 
     dotdots = count_components(path);

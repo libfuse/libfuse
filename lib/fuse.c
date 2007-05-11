@@ -2579,84 +2579,23 @@ static void lock_to_flock(struct lock *lock, struct flock *flock)
     flock->l_pid = lock->pid;
 }
 
-static void fuse_flush_common(struct fuse_fs *fs, const char *path,
-                              struct fuse_file_info *fi,
-                              struct flock *lock, int *err, int *errlock)
+static int fuse_flush_common(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
+                             const char *path, struct fuse_file_info *fi)
 {
-    *err = fuse_fs_flush(fs, path, fi);
-
-    memset(lock, 0, sizeof(*lock));
-    lock->l_type = F_UNLCK;
-    lock->l_whence = SEEK_SET;
-    *errlock = fuse_fs_lock(fs, path, fi, F_SETLK, lock);
-}
-
-static void fuse_lib_release(fuse_req_t req, fuse_ino_t ino,
-                             struct fuse_file_info *fi)
-{
-    struct fuse *f = req_fuse_prepare(req);
     struct fuse_intr_data d;
     struct flock lock;
     struct lock l;
-    char *path;
-    int err = 0;
-    int errlock = -ENOSYS;
-
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, ino);
-    if (!path)
-        path = "-";
-    if (f->conf.debug) {
-        printf("RELEASE%s[%llu] flags: 0x%x\n", fi->flush ? "+FLUSH" : "", 
-               (unsigned long long) fi->fh, fi->flags);
-        fflush(stdout);
-    }
-    fuse_prepare_interrupt(f, req, &d);
-    if (fi->flush) {
-        fuse_flush_common(f->fs, path, fi, &lock, &err, &errlock);
-        if (err == -ENOSYS && errlock == -ENOSYS)
-            err = 0;
-        else if (err == -ENOSYS || !err)
-            err = errlock;
-    }
-    fuse_do_release(f, ino, path, fi);
-    fuse_finish_interrupt(f, req, &d);
-    if (errlock != -ENOSYS) {
-        flock_to_lock(&lock, &l);
-        l.owner = fi->lock_owner;
-        pthread_mutex_lock(&f->lock);
-        locks_insert(get_node(f, ino), &l);
-        pthread_mutex_unlock(&f->lock);
-    }
-
-    if (path)
-        free(path);
-    pthread_rwlock_unlock(&f->tree_lock);
-
-    reply_err(req, err);
-}
-
-static void fuse_lib_flush(fuse_req_t req, fuse_ino_t ino,
-                       struct fuse_file_info *fi)
-{
-    struct fuse *f = req_fuse_prepare(req);
-    struct fuse_intr_data d;
-    struct flock lock;
-    struct lock l;
-    char *path;
     int err;
     int errlock;
 
-    err = -ENOENT;
-    pthread_rwlock_rdlock(&f->tree_lock);
-    path = get_path(f, ino);
-    if (path && f->conf.debug) {
-        printf("FLUSH[%llu]\n", (unsigned long long) fi->fh);
-        fflush(stdout);
-    }
     fuse_prepare_interrupt(f, req, &d);
-    fuse_flush_common(f->fs, path ? path : "-" , fi, &lock, &err, &errlock);
+    memset(&lock, 0, sizeof(lock));
+    lock.l_type = F_UNLCK;
+    lock.l_whence = SEEK_SET;
+    err = fuse_fs_flush(f->fs, path, fi);
+    errlock = fuse_fs_lock(f->fs, path, fi, F_SETLK, &lock);
     fuse_finish_interrupt(f, req, &d);
+
     if (errlock != -ENOSYS) {
         flock_to_lock(&lock, &l);
         l.owner = fi->lock_owner;
@@ -2668,8 +2607,55 @@ static void fuse_lib_flush(fuse_req_t req, fuse_ino_t ino,
         if (err == -ENOSYS)
             err = 0;
     }
-    if (path)
-        free(path);
+    return err;
+}
+
+static void fuse_lib_release(fuse_req_t req, fuse_ino_t ino,
+                             struct fuse_file_info *fi)
+{
+    struct fuse *f = req_fuse_prepare(req);
+    struct fuse_intr_data d;
+    char *path;
+    int err = 0;
+
+    pthread_rwlock_rdlock(&f->tree_lock);
+    path = get_path(f, ino);
+    if (f->conf.debug) {
+        printf("RELEASE%s[%llu] flags: 0x%x\n", fi->flush ? "+FLUSH" : "", 
+               (unsigned long long) fi->fh, fi->flags);
+        fflush(stdout);
+    }
+
+    if (fi->flush) {
+        err = fuse_flush_common(f, req, ino, path, fi);
+        if (err == -ENOSYS)
+            err = 0;
+    }
+
+    fuse_prepare_interrupt(f, req, &d);
+    fuse_do_release(f, ino, path, fi);
+    fuse_finish_interrupt(f, req, &d);
+    free(path);
+    pthread_rwlock_unlock(&f->tree_lock);
+
+    reply_err(req, err);
+}
+
+static void fuse_lib_flush(fuse_req_t req, fuse_ino_t ino,
+                       struct fuse_file_info *fi)
+{
+    struct fuse *f = req_fuse_prepare(req);
+    char *path;
+    int err;
+
+    pthread_rwlock_rdlock(&f->tree_lock);
+    path = get_path(f, ino);
+    if (path && f->conf.debug) {
+        printf("FLUSH[%llu]\n", (unsigned long long) fi->fh);
+        fflush(stdout);
+    }
+    err = fuse_flush_common(f, req, ino, path, fi);
+    free(path);
     pthread_rwlock_unlock(&f->tree_lock);
     reply_err(req, err);
 }

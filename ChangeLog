@@ -3,7 +3,9 @@
 	* libfuse: fix return value of fuse_loop()/fuse_loop_mt().
 	Error reported by Csaba Henk, fix by Miklos Szeredi
 
-	* libfuse: various flush related fixes
+	* libfuse: fix unlock in flush
+
+	* libfuse: do unlocking on RELEASE+FLUSH
  
 2007-05-03  Miklos Szeredi <miklos@szeredi.hu>
 
