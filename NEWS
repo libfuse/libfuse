@@ -2,6 +2,8 @@ What is new in 2.7
 
  - Stacking support for the high level API
 
+ - Add filename charset conversion module
+
  - Improved mounting
 
 What is new in 2.6

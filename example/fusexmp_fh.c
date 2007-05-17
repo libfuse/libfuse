@@ -10,7 +10,9 @@
 
 #define FUSE_USE_VERSION 26
 
+#ifdef HAVE_CONFIG_H
 #include <config.h>
+#endif
 
 #define _GNU_SOURCE
 
