@@ -1,3 +1,8 @@
+2007-05-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix one more bashism in mount.fuse.  Debian Bug#424435.
+	Reported by Soeren Sonnenburg
+
 2007-04-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.6.5

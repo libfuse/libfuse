@@ -49,7 +49,7 @@ shift
 IFS=","
 for OPT in $@; do
 	OPT=`echo $OPT | sed "s/^\(-o\|user\|nouser\|users\|auto\|noauto\|_netdev\)$/IGNORE/"`
-	if [ "$OPT" == "IGNORE" ]; then continue; fi
+	if [ "$OPT" = "IGNORE" ]; then continue; fi
 	OPTIONS="$OPTIONS$OPT,"
 done
 IFS=" "
