@@ -595,6 +595,39 @@ static int test_create(void)
     return 0;
 }
 
+static int test_mknod(void)
+{
+    int err = 0;
+    int res;
+
+    start_test("mknod");
+    unlink(testfile);
+    res = mknod(testfile, 0644, 0);
+    if (res == -1) {
+        PERROR("mknod");
+        return -1;
+    }
+    res = check_type(testfile, S_IFREG);
+    if (res == -1)
+        return -1;
+    err += check_mode(testfile, 0644);
+    err += check_nlink(testfile, 1);
+    err += check_size(testfile, 0);
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        return -1;
+    }
+    res = check_nonexist(testfile);
+    if (res == -1)
+        return -1;
+    if (err)
+        return -1;
+
+    success();
+    return 0;
+}
+
 #define test_open(exist, flags, mode)  do_test_open(exist, flags, #flags, mode)
 
 static int do_test_open(int exist, int flags, const char *flags_str, int mode)
@@ -1063,6 +1096,7 @@ int main(int argc, char *argv[])
     sprintf(testdir, "%s/testdir", basepath);
     sprintf(testdir2, "%s/testdir2", basepath);
     err += test_create();
+    err += test_mknod();
     err += test_symlink();
     err += test_link();
     err += test_mkfifo();
