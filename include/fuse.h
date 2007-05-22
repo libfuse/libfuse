@@ -132,7 +132,7 @@ struct fuse_operations {
 
     /** Change the access and/or modification times of a file
      *
-     * Deprecated, use utimes() instead.
+     * Deprecated, use utimens() instead.
      */
     int (*utime) (const char *, struct utimbuf *);
 

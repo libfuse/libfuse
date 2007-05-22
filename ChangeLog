@@ -1,3 +1,9 @@
+2007-05-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix Oops or error if a regular file is created with mknod(2) on
+	a fuse filesystem.  Kernels 2.6.18 onward are affected.  Thanks to
+	J. Cameijo Cerdeira for the report
+
 2007-05-11  Csaba Henk <csaba.henk@creo.hu>
 
 	* libfuse: fix return value of fuse_loop()/fuse_loop_mt().
