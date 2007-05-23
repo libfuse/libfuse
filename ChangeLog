@@ -1,3 +1,9 @@
+2007-05-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lowlevel lib: add fuse_reply_iov function, which is similar to
+	fuse_reply_buf, but accepts a vector of buffers.  Patch by Roger
+	Willcocks
+
 2007-05-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix Oops or error if a regular file is created with mknod(2) on

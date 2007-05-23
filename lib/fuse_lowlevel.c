@@ -149,12 +149,10 @@ static void free_req(fuse_req_t req)
         destroy_req(req);
 }
 
-static int send_reply(fuse_req_t req, int error, const void *arg,
-                      size_t argsize)
+static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
+                          int count)
 {
     struct fuse_out_header out;
-    struct iovec iov[2];
-    size_t count;
     int res;
 
     if (error <= -1000 || error > 0) {
@@ -164,23 +162,49 @@ static int send_reply(fuse_req_t req, int error, const void *arg,
 
     out.unique = req->unique;
     out.error = error;
-    count = 1;
     iov[0].iov_base = &out;
     iov[0].iov_len = sizeof(struct fuse_out_header);
-    if (argsize && !error) {
-        count++;
-        iov[1].iov_base = (void *) arg;
-        iov[1].iov_len = argsize;
-    }
     out.len = iov_length(iov, count);
 
     if (req->f->debug) {
         printf("   unique: %llu, error: %i (%s), outsize: %i\n",
-               out.unique, out.error, strerror(-out.error), out.len);
+               (unsigned long long) out.unique, out.error,
+               strerror(-out.error), out.len);
         fflush(stdout);
     }
     res = fuse_chan_send(req->ch, iov, count);
     free_req(req);
+
+    return res;
+}
+
+static int send_reply(fuse_req_t req, int error, const void *arg,
+                      size_t argsize)
+{
+    struct iovec iov[2];
+    int count = 1;
+    if (argsize) {
+        iov[1].iov_base = (void *) arg;
+        iov[1].iov_len = argsize;
+        count++;
+    }
+    return send_reply_iov(req, error, iov, count);
+}
+
+int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
+{
+    int res;
+    struct iovec *padded_iov;
+
+    padded_iov = malloc((count + 1) * sizeof(struct iovec));
+    if (padded_iov == NULL)
+        return fuse_reply_err(req, -ENOMEM);
+
+    memcpy(padded_iov + 1, iov, count * sizeof(struct iovec));
+    count++;
+
+    res = send_reply_iov(req, 0, padded_iov, count);
+    free(padded_iov);
 
     return res;
 }
