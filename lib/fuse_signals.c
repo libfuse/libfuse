@@ -36,7 +36,8 @@ static int set_one_signal_handler(int sig, void (*handler)(int))
         return -1;
     }
 
-    if (old_sa.sa_handler == SIG_DFL &&
+    if ((old_sa.sa_handler == SIG_DFL ||
+         (sig == SIGHUP && old_sa.sa_handler == SIG_IGN)) &&
         sigaction(sig, &sa, NULL) == -1) {
         perror("fuse: cannot set signal handler");
         return -1;

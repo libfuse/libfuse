@@ -1,3 +1,12 @@
+2007-05-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: fix memory leak on thread creation failure in multithreaded
+	event loop.  Found by Chris AtLee
+
+	* Filesystems (e.g. sshfs) failed to exit if SIGHUP handler is
+	SIG_IGN in the parent process.  So install handler for SIGHUP even
+	in this case.  Reported by Tim Walberg
+
 2007-05-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix Oops or error if a regular file is created with mknod(2) on
