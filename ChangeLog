@@ -1,3 +1,8 @@
+2007-05-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: fix memory leak on thread creation failure in multithreaded
+	event loop.  Found by Chris AtLee
+
 2007-05-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lowlevel lib: add fuse_reply_iov function, which is similar to

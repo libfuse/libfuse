@@ -145,6 +145,8 @@ static int fuse_start_thread(struct fuse_mt *mt)
     pthread_sigmask(SIG_SETMASK, &oldset, NULL);
     if (res != 0) {
         fprintf(stderr, "fuse: error creating thread: %s\n", strerror(res));
+        free(w->buf);
+        free(w);
         return -1;
     }
     list_add_worker(w, &mt->main);
