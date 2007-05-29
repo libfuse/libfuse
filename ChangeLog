@@ -1,3 +1,8 @@
+2007-05-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: optimization: store parent pointer in node instead of
+	parent id
+
 2007-05-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: don't create new thread for each FORGET request.  FORGET

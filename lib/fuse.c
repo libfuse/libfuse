@@ -107,7 +107,7 @@ struct node {
     fuse_ino_t nodeid;
     unsigned int generation;
     int refctr;
-    fuse_ino_t parent;
+    struct node *parent;
     char *name;
     uint64_t nlookup;
     int open_count;
@@ -315,17 +315,17 @@ static void unref_node(struct fuse *f, struct node *node);
 static void unhash_name(struct fuse *f, struct node *node)
 {
     if (node->name) {
-        size_t hash = name_hash(f, node->parent, node->name);
+        size_t hash = name_hash(f, node->parent->nodeid, node->name);
         struct node **nodep = &f->name_table[hash];
 
         for (; *nodep != NULL; nodep = &(*nodep)->name_next)
             if (*nodep == node) {
                 *nodep = node->name_next;
                 node->name_next = NULL;
-                unref_node(f, get_node(f, node->parent));
+                unref_node(f, node->parent);
                 free(node->name);
                 node->name = NULL;
-                node->parent = 0;
+                node->parent = NULL;
                 return;
             }
         fprintf(stderr, "fuse internal error: unable to unhash node: %llu\n",
@@ -334,15 +334,16 @@ static void unhash_name(struct fuse *f, struct node *node)
     }
 }
 
-static int hash_name(struct fuse *f, struct node *node, fuse_ino_t parent,
+static int hash_name(struct fuse *f, struct node *node, fuse_ino_t parentid,
                      const char *name)
 {
-    size_t hash = name_hash(f, parent, name);
+    size_t hash = name_hash(f, parentid, name);
+    struct node *parent = get_node(f, parentid);
     node->name = strdup(name);
     if (node->name == NULL)
         return -1;
 
-    get_node(f, parent)->refctr ++;
+    parent->refctr ++;
     node->parent = parent;
     node->name_next = f->name_table[hash];
     f->name_table[hash] = node;
@@ -386,7 +387,7 @@ static struct node *lookup_node(struct fuse *f, fuse_ino_t parent,
     struct node *node;
 
     for (node = f->name_table[hash]; node != NULL; node = node->name_next)
-        if (node->parent == parent && strcmp(node->name, name) == 0)
+        if (node->parent->nodeid == parent && strcmp(node->name, name) == 0)
             return node;
 
     return NULL;
@@ -453,7 +454,7 @@ static char *get_path_name(struct fuse *f, fuse_ino_t nodeid, const char *name)
 
     pthread_mutex_lock(&f->lock);
     for (node = get_node(f, nodeid); node && node->nodeid != FUSE_ROOT_ID;
-         node = get_node(f, node->parent)) {
+         node = node->parent) {
         if (node->name == NULL) {
             s = NULL;
             break;
@@ -3170,7 +3171,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
         fuse_init_intr_signal(f->conf.intr_signal, &f->intr_installed) == -1)
         goto out_free_root_name;
 
-    root->parent = 0;
+    root->parent = NULL;
     root->nodeid = FUSE_ROOT_ID;
     root->generation = 0;
     root->refctr = 1;
