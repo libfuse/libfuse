@@ -8,6 +8,7 @@
 
 #include "fuse_lowlevel.h"
 #include "fuse_misc.h"
+#include "fuse_kernel.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -64,6 +65,7 @@ static void *fuse_do_work(void *data)
     struct fuse_mt *mt = w->mt;
 
     while (!fuse_session_exited(mt->se)) {
+        int isforget = 0;
         struct fuse_chan *ch = mt->prevch;
         int res = fuse_chan_recv(&ch, w->buf, w->bufsize);
         if (res == -EINTR)
@@ -81,7 +83,16 @@ static void *fuse_do_work(void *data)
             pthread_mutex_unlock(&mt->lock);
             return NULL;
         }
-        mt->numavail--;
+
+        /*
+         * This disgusting hack is needed so that zillions of threads
+         * are not created on a burst of FORGET messages
+         */
+        if (((struct fuse_in_header *) w->buf)->opcode == FUSE_FORGET)
+            isforget = 1;
+
+        if (!isforget)
+            mt->numavail--;
         if (mt->numavail == 0)
             fuse_start_thread(mt);
         pthread_mutex_unlock(&mt->lock);
@@ -89,7 +100,8 @@ static void *fuse_do_work(void *data)
         fuse_session_process(mt->se, w->buf, res, ch);
 
         pthread_mutex_lock(&mt->lock);
-        mt->numavail ++;
+        if (!isforget)
+            mt->numavail++;
         if (mt->numavail > 10) {
             if (mt->exit) {
                 pthread_mutex_unlock(&mt->lock);

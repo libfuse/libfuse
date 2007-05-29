@@ -1,3 +1,9 @@
+2007-05-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lib: don't create new thread for each FORGET request.  FORGET
+	messages sometimes caused so many threads to be created, that
+	process virtual memory space ran out.  Reported by Chris AtLee
+
 2007-05-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: fix memory leak on thread creation failure in multithreaded
