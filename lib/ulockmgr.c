@@ -69,6 +69,21 @@ static void list_add_owner(struct owner *owner, struct owner *next)
     next->prev = owner;
 }
 
+/*
+ * There's a bug in the linux kernel (< 2.6.22) recv() implementation
+ * on AF_UNIX, SOCK_STREAM sockets, that could cause it to return
+ * zero, even if data was available.  Retrying the recv will return
+ * the data in this case.
+*/
+static int do_recv(int sock, void *buf, size_t len, int flags)
+{
+    int res = recv(sock, buf, len, flags);
+    if (res == 0)
+        res = recv(sock, buf, len, flags);
+
+    return res;
+}
+
 static int ulockmgr_send_message(int sock, void *buf, size_t buflen,
                                  int *fdp, int numfds)
 {
@@ -252,7 +267,7 @@ static int ulockmgr_send_request(struct message *msg, const void *id,
     if (f)
         f->inuse++;
 
-    res = recv(cfd, msg, sizeof(struct message), MSG_WAITALL);
+    res = do_recv(cfd, msg, sizeof(struct message), MSG_WAITALL);
     if (res == -1) {
         perror("libulockmgr: recv");
         msg->error = EIO;
@@ -269,7 +284,7 @@ static int ulockmgr_send_request(struct message *msg, const void *id,
             sigemptyset(&unblock);
             sigaddset(&unblock, SIGUSR1);
             pthread_sigmask(SIG_UNBLOCK, &unblock, &old);
-            res = recv(cfd, msg, sizeof(struct message), MSG_WAITALL);
+            res = do_recv(cfd, msg, sizeof(struct message), MSG_WAITALL);
             errno_save = errno;
             pthread_sigmask(SIG_SETMASK, &old, NULL);
             if (res == sizeof(struct message))

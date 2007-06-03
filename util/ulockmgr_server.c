@@ -75,8 +75,12 @@ static int receive_message(int sock, void *buf, size_t buflen, int *fdp,
     msg.msg_controllen = sizeof(ccmsg);
 
     res = recvmsg(sock, &msg, MSG_WAITALL);
-    if (!res)
-        return 0;
+    if (!res) {
+        /* retry on zero return, see do_recv() in ulockmgr.c */
+        res = recvmsg(sock, &msg, MSG_WAITALL);
+        if (!res)
+            return 0;
+    }
     if (res == -1) {
         perror("ulockmgr_server: recvmsg");
         return -1;

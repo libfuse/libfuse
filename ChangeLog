@@ -1,3 +1,8 @@
+2007-06-03  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libulockmgr: Work around a kernel bug in recv(), causing it to
+	sometimes return zero even if data was available on the socket.
+
 2007-05-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: optimization: store parent pointer in node instead of
