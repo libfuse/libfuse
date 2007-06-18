@@ -166,12 +166,10 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
     iov[0].iov_len = sizeof(struct fuse_out_header);
     out.len = iov_length(iov, count);
 
-    if (req->f->debug) {
-        printf("   unique: %llu, error: %i (%s), outsize: %i\n",
-               (unsigned long long) out.unique, out.error,
-               strerror(-out.error), out.len);
-        fflush(stdout);
-    }
+    if (req->f->debug)
+        fprintf(stderr, "   unique: %llu, error: %i (%s), outsize: %i\n",
+                (unsigned long long) out.unique, out.error,
+                strerror(-out.error), out.len);
     res = fuse_chan_send(req->ch, iov, count);
     free_req(req);
 
@@ -909,10 +907,8 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     struct fuse_ll *f = req->f;
 
     (void) nodeid;
-    if (f->debug) {
-        printf("INTERRUPT: %llu\n", (unsigned long long) arg->unique);
-        fflush(stdout);
-    }
+    if (f->debug)
+        fprintf(stderr, "INTERRUPT: %llu\n", (unsigned long long) arg->unique);
 
     req->u.i.unique = arg->unique;
 
@@ -964,12 +960,11 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
     (void) nodeid;
     if (f->debug) {
-        printf("INIT: %u.%u\n", arg->major, arg->minor);
+        fprintf(stderr, "INIT: %u.%u\n", arg->major, arg->minor);
         if (arg->major > 7 || (arg->major == 7 && arg->minor >= 6)) {
-            printf("flags=0x%08x\n", arg->flags);
-            printf("max_readahead=0x%08x\n", arg->max_readahead);
+            fprintf(stderr, "flags=0x%08x\n", arg->flags);
+            fprintf(stderr, "max_readahead=0x%08x\n", arg->max_readahead);
         }
-        fflush(stdout);
     }
     f->conn.proto_major = arg->major;
     f->conn.proto_minor = arg->minor;
@@ -1016,11 +1011,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
     outarg.max_write = f->conn.max_write;
 
     if (f->debug) {
-        printf("   INIT: %u.%u\n", outarg.major, outarg.minor);
-        printf("   flags=0x%08x\n", outarg.flags);
-        printf("   max_readahead=0x%08x\n", outarg.max_readahead);
-        printf("   max_write=0x%08x\n", outarg.max_write);
-        fflush(stdout);
+        fprintf(stderr, "   INIT: %u.%u\n", outarg.major, outarg.minor);
+        fprintf(stderr, "   flags=0x%08x\n", outarg.flags);
+        fprintf(stderr, "   max_readahead=0x%08x\n", outarg.max_readahead);
+        fprintf(stderr, "   max_write=0x%08x\n", outarg.max_write);
     }
 
     send_reply_ok(req, &outarg, arg->minor < 5 ? 8 : sizeof(outarg));
@@ -1132,13 +1126,11 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
     const void *inarg = buf + sizeof(struct fuse_in_header);
     struct fuse_req *req;
 
-    if (f->debug) {
-        printf("unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu\n",
-               (unsigned long long) in->unique,
-               opname((enum fuse_opcode) in->opcode), in->opcode,
-               (unsigned long) in->nodeid, len);
-        fflush(stdout);
-    }
+    if (f->debug)
+        fprintf(stderr, "unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu\n",
+                (unsigned long long) in->unique,
+                opname((enum fuse_opcode) in->opcode), in->opcode,
+                (unsigned long) in->nodeid, len);
 
     req = (struct fuse_req *) calloc(1, sizeof(struct fuse_req));
     if (req == NULL) {
