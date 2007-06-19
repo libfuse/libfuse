@@ -11,6 +11,7 @@
 #include <linux/pagemap.h>
 #include <linux/slab.h>
 #include <linux/kernel.h>
+#include <linux/sched.h>
 
 #ifndef KERNEL_2_6_11_PLUS
 static inline loff_t page_offset(struct page *page)
@@ -787,7 +788,9 @@ static int fuse_file_lock(struct file *file, int cmd, struct file_lock *fl)
 
 	if (cmd == F_GETLK) {
 		if (fc->no_lock) {
-#ifdef KERNEL_2_6_17_PLUS
+#ifdef KERNEL_2_6_22_PLUS
+			posix_test_lock(file, fl);
+#elif defined(KERNEL_2_6_17_PLUS)
 			if (!posix_test_lock(file, fl, fl))
 				fl->fl_type = F_UNLCK;
 #else

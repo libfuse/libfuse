@@ -1,3 +1,12 @@
+2007-06-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* kernel: sync with mainline (2.6.22)
+
+2007-06-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Send debug output to stderr instead of stdout.  Patch by Jan
+	Engelhardt
+
 2007-06-03  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libulockmgr: Work around a kernel bug in recv(), causing it to

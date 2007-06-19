@@ -42,6 +42,9 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,21)
 #  define KERNEL_2_6_21_PLUS
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+#  define KERNEL_2_6_22_PLUS
+#endif
 
 #if defined(__arm__) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #define DCACHE_BUG
@@ -84,6 +87,12 @@
 #endif
 #ifndef HAVE_CONFIG_BLOCK
 #define CONFIG_BLOCK
+#endif
+#ifndef FS_HAS_SUBTYPE
+#define FS_HAS_SUBTYPE 0
+#endif
+#ifndef FS_SAFE
+#define FS_SAFE 0
 #endif
 
 /** Max number of pages that can be used in a single read request */

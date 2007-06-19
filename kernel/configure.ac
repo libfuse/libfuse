@@ -193,8 +193,15 @@ if test "$ENABLE_FUSE_MODULE" = y; then
 	else
 		AC_MSG_RESULT([no])
 	fi
+	AC_MSG_CHECKING([if kernel has exportfs.h ])
+	if test -f $kernelsrc/include/linux/exportfs.h; then
+		AC_DEFINE(HAVE_EXPORTFS_H, 1, [kernel has exportfs.h])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
 	AC_MSG_CHECKING([if kernel has BLOCK option ])
-	if test -f $kernelsrc/block/Kconfig && egrep -wq "config *BLOCK" $kernelsrc/block/Kconfig; then
+	if test -f $kernelsrc/block/Kconfig && egrep -q "config *BLOCK" $kernelsrc/block/Kconfig; then
 		AC_DEFINE(HAVE_CONFIG_BLOCK, 1, [kernel has BLOCK option])
 		AC_MSG_RESULT([yes])
 	else

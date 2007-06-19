@@ -17,6 +17,7 @@
 #include <linux/parser.h>
 #include <linux/statfs.h>
 #include <linux/random.h>
+#include <linux/sched.h>
 
 MODULE_AUTHOR("Miklos Szeredi <miklos@szeredi.hu>");
 MODULE_DESCRIPTION("Filesystem in Userspace");
@@ -345,6 +346,19 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d, int is_bdev)
 	d->max_read = ~0;
 	d->blksize = 512;
 
+	/*
+	 * For unprivileged mounts use current uid/gid.  Still allow
+	 * "user_id" and "group_id" options for compatibility, but
+	 * only if they match these values.
+	 */
+	if (!capable(CAP_SYS_ADMIN)) {
+		d->user_id = current->uid;
+		d->user_id_present = 1;
+		d->group_id = current->gid;
+		d->group_id_present = 1;
+
+	}
+
 	while ((p = strsep(&opt, ",")) != NULL) {
 		int token;
 		int value;
@@ -373,12 +387,16 @@ static int parse_fuse_opt(char *opt, struct fuse_mount_data *d, int is_bdev)
 		case OPT_USER_ID:
 			if (match_int(&args[0], &value))
 				return 0;
+			if (d->user_id_present && d->user_id != value)
+				return 0;
 			d->user_id = value;
 			d->user_id_present = 1;
 			break;
 
 		case OPT_GROUP_ID:
 			if (match_int(&args[0], &value))
+				return 0;
+			if (d->group_id_present && d->group_id != value)
 				return 0;
 			d->group_id = value;
 			d->group_id_present = 1;
@@ -491,6 +509,9 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 	return fuse_iget(sb, 1, 0, &attr);
 }
 #ifndef FUSE_MAINLINE
+#ifdef HAVE_EXPORTFS_H
+#include <linux/exportfs.h>
+#endif
 static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 {
 	__u32 *objp = vobjp;
@@ -642,6 +663,10 @@ static int fuse_fill_super(struct super_block *sb, void *data, int silent)
 	if (!parse_fuse_opt((char *) data, &d, is_bdev))
 		return -EINVAL;
 
+	/* This is a privileged option */
+	if ((d.flags & FUSE_ALLOW_OTHER) && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+
 	if (is_bdev) {
 #ifdef CONFIG_BLOCK
 		if (!sb_set_blocksize(sb, d.blksize))
@@ -756,6 +781,7 @@ static struct file_system_type fuse_fs_type = {
 	.name		= "fuse",
 	.get_sb		= fuse_get_sb,
 	.kill_sb	= kill_anon_super,
+	.fs_flags	= FS_HAS_SUBTYPE | FS_SAFE,
 };
 
 #ifdef CONFIG_BLOCK
@@ -782,7 +808,7 @@ static struct file_system_type fuseblk_fs_type = {
 	.name		= "fuseblk",
 	.get_sb		= fuse_get_sb_blk,
 	.kill_sb	= kill_block_super,
-	.fs_flags	= FS_REQUIRES_DEV,
+	.fs_flags	= FS_REQUIRES_DEV | FS_HAS_SUBTYPE,
 };
 
 static inline int register_fuseblk(void)
@@ -816,9 +842,11 @@ static void fuse_inode_init_once(void *foo, struct kmem_cache *cachep,
 {
 	struct inode * inode = foo;
 
+#ifndef KERNEL_2_6_22_PLUS
 	if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
 	    SLAB_CTOR_CONSTRUCTOR)
-		inode_init_once(inode);
+#endif
+	inode_init_once(inode);
 }
 
 static int __init fuse_fs_init(void)
@@ -867,12 +895,20 @@ static int fuse_sysfs_init(void)
 	if (err)
 		return err;
 #endif
+#ifdef KERNEL_2_6_22_PLUS
+	kobj_set_kset_s(&fuse_subsys, fs_subsys);
+#else
 	kset_set_kset_s(&fuse_subsys, fs_subsys);
+#endif
 	err = subsystem_register(&fuse_subsys);
 	if (err)
 		goto out_err;
 
+#ifdef KERNEL_2_6_22_PLUS
+	kobj_set_kset_s(&connections_subsys, fuse_subsys);
+#else
 	kset_set_kset_s(&connections_subsys, fuse_subsys);
+#endif
 	err = subsystem_register(&connections_subsys);
 	if (err)
 		goto out_fuse_unregister;
