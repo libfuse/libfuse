@@ -1,3 +1,7 @@
+2007-06-20  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fs subtype support to libfuse and fusermount
+
 2007-06-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* kernel: sync with mainline (2.6.22)

@@ -160,8 +160,20 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch);
 int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
                        int *multithreaded, int *foreground);
 
-
+/**
+ * Go into the background
+ *
+ * @param foreground if true, stay in the foreground
+ * @return 0 on success, -1 on failure
+ */
 int fuse_daemonize(int foreground);
+
+/**
+ * Get the version of the library
+ *
+ * @return the version
+ */
+int fuse_version(void);
 
 /* ----------------------------------------------------------- *
  * Signal handling                                             *
