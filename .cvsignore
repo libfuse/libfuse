@@ -13,3 +13,5 @@ compile
 libtool
 INSTALL
 fuse.pc
+.pc
+patches
