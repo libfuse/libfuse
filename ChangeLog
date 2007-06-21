@@ -1,3 +1,7 @@
+2007-06-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fs subtype support to mount.fuse
+
 2007-06-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fs subtype support to libfuse and fusermount

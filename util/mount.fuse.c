@@ -6,7 +6,6 @@
 
 static char *progname;
 
-
 static char *xstrdup(const char *s)
 {
     char *t = strdup(s);
@@ -54,37 +53,66 @@ static void add_arg(char **cmdp, const char *opt)
 
 int main(int argc, char *argv[])
 {
-    char *type;
+    char *type = NULL;
     char *source;
     const char *mountpoint;
+    char *basename;
     char *options = NULL;
     char *command = NULL;
     char *setuid = NULL;
     int i;
 
     progname = argv[0];
+    basename = strrchr(argv[0], '/');
+    if (basename)
+        basename++;
+    else
+        basename = argv[0];
+
+    if (strncmp(basename, "mount.fuse.", 11) == 0)
+        type = basename + 11;
+    if (strncmp(basename, "mount.fuseblk.", 14) == 0)
+        type = basename + 14;
+
+    if (type && !type[0])
+        type = NULL;
+
     if (argc < 3) {
-        fprintf(stderr,
-                "usage: %s type#[source] mountpoint [-o opt[,opts...]]\n",
-                progname);
+        fprintf(stderr, "usage: %s %s destination [-t type] [-o opt[,opts...]]\n",
+                progname, type ? "source" : "type#[source]");
         exit(1);
     }
 
-    type = xstrdup(argv[1]);
-    source = strchr(type, '#');
-    if (source)
-        *source++ = '\0';
+    source = argv[1];
+    if (!source[0])
+        source = NULL;
 
-    if (!type[0]) {
-        fprintf(stderr, "%s: empty filesystem type\n", progname);
-        exit(1);
-    }
     mountpoint = argv[2];
 
     for (i = 3; i < argc; i++) {
-        if (strcmp(argv[i], "-v") == 0)
+        if (strcmp(argv[i], "-v") == 0) {
             continue;
-        if (strcmp(argv[i], "-o") == 0) {
+        } else if (strcmp(argv[i], "-t") == 0) {
+            i++;
+
+            if (i == argc) {
+                fprintf(stderr,
+                        "%s: missing argument to option '-t'\n", progname);
+                exit(1);
+            }
+            type = argv[i];
+            if (strncmp(type, "fuse.", 5) == 0)
+                type += 5;
+            else if (strncmp(type, "fuseblk.", 8) == 0)
+                type += 8;
+
+            if (!type[0]) {
+                fprintf(stderr,
+                        "%s: empty type given as argument to option '-t'\n",
+                        progname);
+                exit(1);
+            }
+        } else  if (strcmp(argv[i], "-o") == 0) {
             char *opts;
             char *opt;
             i++;
@@ -119,6 +147,18 @@ int main(int argc, char *argv[])
                 }
                 opt = strtok(NULL, ",");
             }
+        }
+    }
+
+    if (!type) {
+        type = xstrdup(source);
+        source = strchr(type, '#');
+        if (source)
+            *source++ = '\0';
+
+        if (!type[0]) {
+            fprintf(stderr, "%s: empty filesystem type\n", progname);
+            exit(1);
         }
     }
 
