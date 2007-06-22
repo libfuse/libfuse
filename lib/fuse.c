@@ -161,11 +161,9 @@ static int fuse_load_so_name(const char *soname)
         return -1;
     }
 
-    pthread_mutex_lock(&fuse_context_lock);
     fuse_current_so = so;
     so->handle = dlopen(soname, RTLD_NOW);
     fuse_current_so = NULL;
-    pthread_mutex_unlock(&fuse_context_lock);
     if (!so->handle) {
         fprintf(stderr, "fuse: %s\n", dlerror());
         goto err;
@@ -191,9 +189,7 @@ static int fuse_load_so_module(const char *module)
         fprintf(stderr, "fuse: memory allocation failed\n");
         return -1;
     }
-    if (soname)
-        sprintf(soname, "libfusemod_%s.so", module);
-
+    sprintf(soname, "libfusemod_%s.so", module);
     res = fuse_load_so_name(soname);
     free(soname);
     return res;
@@ -3157,6 +3153,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
        called on the filesystem without init being called first */
     fs->op.destroy = NULL;
     fuse_fs_destroy(f->fs);
+    free(f->conf.modules);
  out_free:
     free(f);
  out_delete_context_key:
@@ -3213,6 +3210,7 @@ void fuse_destroy(struct fuse *f)
     pthread_mutex_destroy(&f->lock);
     pthread_rwlock_destroy(&f->tree_lock);
     fuse_session_destroy(f->se);
+    free(f->conf.modules);
     free(f);
     fuse_delete_context_key();
 }

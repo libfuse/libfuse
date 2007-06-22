@@ -97,9 +97,9 @@ struct fuse_operations {
 
     /** Create a file node
      *
-     * If the filesystem doesn't define a create() operation, mknod()
-     * will be called for creation of all non-directory, non-symlink
-     * nodes.
+     * This is called for creation of all non-directory, non-symlink
+     * nodes.  If the filesystem defines a create() method, then for
+     * regular files that will be called instead.
      */
     int (*mknod) (const char *, mode_t, dev_t);
 
@@ -722,7 +722,7 @@ void fuse_register_module(struct fuse_module *mod);
 #define FUSE_REGISTER_MODULE(name_, factory_) \
 static __attribute__((constructor)) void name_ ## _register(void) \
 { \
-    static struct fuse_module mod = { .name = #name_, .factory = factory_ }; \
+    static struct fuse_module mod = { #name_, factory_, NULL, NULL, 0 }; \
     fuse_register_module(&mod); \
 }
 

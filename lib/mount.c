@@ -392,6 +392,11 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
     int fd;
     int res;
 
+    if (!mnt) {
+        fprintf(stderr, "fuse: missing mountpoint\n");
+        return -1;
+    }
+
     res = lstat(mnt, &stbuf);
     if (res == -1) {
         fprintf(stderr ,"fuse: failed to access mountpoint %s: %s\n",
@@ -515,11 +520,6 @@ int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
     struct mount_opts mo;
     int res = -1;
     char *mnt_opts = NULL;
-
-    if (!mountpoint) {
-        fprintf(stderr, "fuse: missing mountpoint\n");
-        return -1;
-    }
 
     memset(&mo, 0, sizeof(mo));
     mo.flags = MS_NOSUID | MS_NODEV;
