@@ -3009,7 +3009,8 @@ struct fuse_fs *fuse_fs_new(const struct fuse_operations *op, size_t op_size,
     }
 
     fs->user_data = user_data;
-    memcpy(&fs->op, op, op_size);
+    if (op)
+        memcpy(&fs->op, op, op_size);
     return fs;
 }
 

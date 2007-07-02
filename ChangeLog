@@ -1,3 +1,13 @@
+2007-07-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.7.0
+
+2007-07-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Accept a NULL "op" for fuse_main(), etc.  This is useful if
+	filesystem is only invoking fuse to print a help message, or
+	version.  Fixes RedHat bugzilla #217343
+
 2007-06-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* lib: fix locking when loading a filesystem module
