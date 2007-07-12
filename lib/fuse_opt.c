@@ -32,6 +32,7 @@ void fuse_opt_free_args(struct fuse_args *args)
         for (i = 0; i < args->argc; i++)
             free(args->argv[i]);
         free(args->argv);
+        args->argc = 0;
         args->argv = NULL;
         args->allocated = 0;
     }
