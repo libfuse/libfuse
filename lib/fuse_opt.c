@@ -27,11 +27,13 @@ struct fuse_opt_context {
 
 void fuse_opt_free_args(struct fuse_args *args)
 {
-    if (args && args->argv && args->allocated) {
-        int i;
-        for (i = 0; i < args->argc; i++)
-            free(args->argv[i]);
-        free(args->argv);
+    if (args) {
+        if (args->argv && args->allocated) {
+            int i;
+            for (i = 0; i < args->argc; i++)
+                free(args->argv[i]);
+            free(args->argv);
+        }
         args->argc = 0;
         args->argv = NULL;
         args->allocated = 0;

@@ -1,3 +1,8 @@
+2007-07-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't call /bin/[u]mount if /etc/mtab is a symlink.  Reported by
+	Tomas M
+
 2007-07-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Reset args->argc in fuse_opt_free_args().  Patch by Lucas
