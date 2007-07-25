@@ -170,6 +170,12 @@ kernel_cache
   is still cached after the open(), so a read() system call will not
   always initiate a read operation.
 
+auto_cache
+
+  This option enables automatic flushing of the data cache on open().
+  The cache will only be flushed if the modification time or the size
+  of the file has changed.
+
 large_read
 
   Issue large read requests.  This can improve performance for some
@@ -196,6 +202,27 @@ max_read=N
   With this option the maximum size of read operations can be set.
   The default is infinite.  Note that the size of read requests is
   limited anyway to 32 pages (which is 128kbyte on i386).
+
+max_readahead=N
+
+  Set the maximum number of bytes to read-ahead.  The default is
+  determined by the kernel.  On linux-2.6.22 or earlier it's 131072
+  (128kbytes)
+
+max_write=N
+
+  Set the maximum number of bytes in a single write operation.  The
+  default is 128kbytes.  Note, that due to various limitations, the
+  size of write requests can be much smaller (4kbytes).  This
+  limitation will be removed in the future.
+
+async_read
+
+  Perform reads asynchronously. This is the default
+
+sync_read
+
+  Perform all reads (even read-ahead) synchronously.
 
 hard_remove
 
@@ -226,7 +253,19 @@ debug
 
 fsname=NAME
 
-  Sets the filesystem name.  The default is the program name.
+  Sets the filesystem source (first field in /etc/mtab).  The default
+  is the program name.
+
+subtype=TYPE
+
+  Sets the filesystem type (third field in /etc/mtab).  The default is
+  the program name.
+
+  If the kernel suppports it, /etc/mtab and /proc/mounts will show the
+  filesystem type as "fuse.TYPE"
+
+  If the kernel doesn't support subtypes, the source filed will be
+  "TYPE#NAME", or if fsname option is not specified, just "TYPE".
 
 use_ino
 
@@ -270,6 +309,83 @@ blkdev
 
   Mount a filesystem backed by a block device.  This is a privileged
   option.  The device must be specified with the 'fsname=NAME' option.
+
+entry_timeout=T
+
+  The timeout in seconds for which name lookups will be cached. The
+  default is 1.0 second.  For all the timeout options, it is possible
+  to give fractions of a second as well (e.g. "-oentry_timeout=2.8")
+
+negative_timeout=T
+
+  The timeout in seconds for which a negative lookup will be cached.
+  This means, that if file did not exist (lookup retuned ENOENT), the
+  lookup will only be redone after the timeout, and the file/directory
+  will be assumed to not exist until then.  The default is 0.0 second,
+  meaning that caching negative lookups are disabled.
+
+attr_timeout=T
+
+  The timeout in seconds for which file/directory attributes are
+  cached.  The default is 1.0 second.
+
+ac_attr_timeout=T
+
+  The timeout in seconds for which file attributes are cached for the
+  purpose of checking if "auto_cache" should flush the file data on
+  open.   The default is the value of 'attr_timeout'
+
+intr
+
+  Allow requests to be interrupted.  Turning on this option may result
+  in unexpected behavior, if the filesystem does not support request
+  interruption.
+
+intr_signal=NUM
+
+  Specify which signal number to send to the filesystem when a request
+  is interrupted.  The default is 10 (USR1).
+
+modules=M1[:M2...]
+
+  Add modules to the filesystem stack.  Modules are pushed in the
+  order they are specified, with the original filesystem being on the
+  bottom of the stack.
+
+
+Modules distributed with fuse
+-----------------------------
+
+iconv
+`````
+Perform file name character set conversion.  Options are:
+
+from_code=CHARSET
+
+  Character set to convert from (see iconv -l for a list of possible
+  values).  Default is UTF-8.
+
+to_code=CHARSET
+
+  Character set to convert to.  Default is determined by the current
+  locale.
+
+
+subdir
+``````
+Prepend a given directory to each path. Options are:
+
+subdir=DIR
+
+  Directory to prepend to all paths.  This option is mandatory.
+
+rellinks
+
+  Transform absolute symlinks into relative
+
+norellinks
+
+  Do not transform absolute symlinks into relative.  This is the default.
 
 
 Reporting bugs
