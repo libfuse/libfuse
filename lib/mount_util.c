@@ -18,14 +18,19 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 
-static int mtab_is_symlink(void)
+static int mtab_needs_update(const char *mnt)
 {
     struct stat stbuf;
 
-    if (lstat(_PATH_MOUNTED, &stbuf) != -1 && S_ISLNK(stbuf.st_mode))
-        return 1;
-    else
+    /* If mtab is within new mount, don't touch it */
+    if (strncmp(mnt, _PATH_MOUNTED, strlen(mnt)) == 0 &&
+        _PATH_MOUNTED[strlen(mnt)] == '/')
         return 0;
+
+    if (lstat(_PATH_MOUNTED, &stbuf) != -1 && S_ISLNK(stbuf.st_mode))
+        return 0;
+
+    return 1;
 }
 
 int fuse_mnt_add_mount(const char *progname, const char *fsname,
@@ -34,7 +39,7 @@ int fuse_mnt_add_mount(const char *progname, const char *fsname,
     int res;
     int status;
 
-    if (mtab_is_symlink())
+    if (!mtab_needs_update(mnt))
         return 0;
 
     res = fork();
@@ -86,7 +91,7 @@ int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
     int res;
     int status;
 
-    if (mtab_is_symlink())
+    if (!mtab_needs_update(mnt))
         return 0;
 
     res = fork();

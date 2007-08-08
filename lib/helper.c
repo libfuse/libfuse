@@ -190,7 +190,19 @@ static struct fuse_chan *fuse_mount_common(const char *mountpoint,
                                            struct fuse_args *args)
 {
     struct fuse_chan *ch;
-    int fd = fuse_mount_compat25(mountpoint, args);
+    int fd;
+
+    /*
+     * Make sure file descriptors 0, 1 and 2 are open, otherwise chaos
+     * would ensue.
+     */
+    do {
+        fd = open("/dev/null", O_RDWR);
+        if (fd > 2)
+            close(fd);
+    } while (fd >= 0 && fd <= 2);
+
+    fd = fuse_mount_compat25(mountpoint, args);
     if (fd == -1)
         return NULL;
 

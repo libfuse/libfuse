@@ -1,7 +1,15 @@
+2007-07-31  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Work around hotplug issue, that it calls filesystem with file
+	descriptors 0, 1 and 2 not open.  Tracked down by Leif Johnson
+
 2007-07-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Don't call /bin/[u]mount if /etc/mtab is a symlink.  Reported by
 	Tomas M
+
+	* Also don't touch /etc/mtab if it is within the mounted
+	filesystem.  Suggested by Jeffrey Law
 
 2007-07-12  Miklos Szeredi <miklos@szeredi.hu>
 
