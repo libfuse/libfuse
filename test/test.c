@@ -140,7 +140,7 @@ static int check_nlink(const char *path, nlink_t nlink)
         return -1;
     }
     if (stbuf.st_nlink != nlink) {
-        ERROR("nlink %li instead of %li", stbuf.st_nlink, nlink);
+        ERROR("nlink %li instead of %li", (long) stbuf.st_nlink, (long) nlink);
         return -1;
     }
     return 0;
