@@ -450,6 +450,8 @@ static void do_forget(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
     if (req->f->op.forget)
         req->f->op.forget(req, nodeid, arg->nlookup);
+    else
+        fuse_reply_none(req);
 }
 
 static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
