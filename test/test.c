@@ -78,6 +78,21 @@ static int check_size(const char *path, int len)
     return 0;
 }
 
+static int fcheck_size(int fd, int len)
+{
+    struct stat stbuf;
+    int res = fstat(fd, &stbuf);
+    if (res == -1) {
+        PERROR("fstat");
+        return -1;
+    }
+    if (stbuf.st_size != len) {
+        ERROR("length %u instead of %u", (int) stbuf.st_size, (int) len);
+        return -1;
+    }
+    return 0;
+}
+
 static int check_type(const char *path, mode_t type)
 {
     struct stat stbuf;
@@ -93,12 +108,42 @@ static int check_type(const char *path, mode_t type)
     return 0;
 }
 
+static int fcheck_type(int fd, mode_t type)
+{
+    struct stat stbuf;
+    int res = fstat(fd, &stbuf);
+    if (res == -1) {
+        PERROR("fstat");
+        return -1;
+    }
+    if ((stbuf.st_mode & S_IFMT) != type) {
+        ERROR("type 0%o instead of 0%o", stbuf.st_mode & S_IFMT, type);
+        return -1;
+    }
+    return 0;
+}
+
 static int check_mode(const char *path, mode_t mode)
 {
     struct stat stbuf;
     int res = lstat(path, &stbuf);
     if (res == -1) {
         PERROR("lstat");
+        return -1;
+    }
+    if ((stbuf.st_mode & 07777) != mode) {
+        ERROR("mode 0%o instead of 0%o", stbuf.st_mode & 07777, mode);
+        return -1;
+    }
+    return 0;
+}
+
+static int fcheck_mode(int fd, mode_t mode)
+{
+    struct stat stbuf;
+    int res = fstat(fd, &stbuf);
+    if (res == -1) {
+        PERROR("fstat");
         return -1;
     }
     if ((stbuf.st_mode & 07777) != mode) {
@@ -131,12 +176,50 @@ static int check_times(const char *path, time_t atime, time_t mtime)
     return 0;
 }
 
+static int fcheck_times(int fd, time_t atime, time_t mtime)
+{
+    int err = 0;
+    struct stat stbuf;
+    int res = fstat(fd, &stbuf);
+    if (res == -1) {
+        PERROR("fstat");
+        return -1;
+    }
+    if (stbuf.st_atime != atime) {
+        ERROR("atime %li instead of %li", stbuf.st_atime, atime);
+        err--;
+    }
+    if (stbuf.st_mtime != mtime) {
+        ERROR("mtime %li instead of %li", stbuf.st_mtime, mtime);
+        err--;
+    }
+    if (err)
+        return -1;
+
+    return 0;
+}
+
 static int check_nlink(const char *path, nlink_t nlink)
 {
     struct stat stbuf;
     int res = lstat(path, &stbuf);
     if (res == -1) {
         PERROR("lstat");
+        return -1;
+    }
+    if (stbuf.st_nlink != nlink) {
+        ERROR("nlink %li instead of %li", (long) stbuf.st_nlink, (long) nlink);
+        return -1;
+    }
+    return 0;
+}
+
+static int fcheck_nlink(int fd, nlink_t nlink)
+{
+    struct stat stbuf;
+    int res = fstat(fd, &stbuf);
+    if (res == -1) {
+        PERROR("fstat");
         return -1;
     }
     if (stbuf.st_nlink != nlink) {
@@ -209,6 +292,35 @@ static int check_data(const char *path, const char *data, int offset,
     if (res == -1) {
         PERROR("close");
         return -1;
+    }
+    return 0;
+}
+
+static int fcheck_data(int fd, const char *data, int offset,
+                       unsigned len)
+{
+    char buf[4096];
+    int res;
+    if (lseek(fd, offset, SEEK_SET) == (off_t) -1) {
+        PERROR("lseek");
+        return -1;
+    }
+    while (len) {
+        int rdlen = len < sizeof(buf) ? len : sizeof(buf);
+        res = read(fd, buf, rdlen);
+        if (res == -1) {
+            PERROR("read");
+            return -1;
+        }
+        if (res != rdlen) {
+            ERROR("short read: %u instead of %u", res, rdlen);
+            return -1;
+        }
+        if (check_buffer(buf, data, rdlen) != 0) {
+            return -1;
+        }
+        data += rdlen;
+        len -= rdlen;
     }
     return 0;
 }
@@ -588,6 +700,58 @@ static int test_create(void)
     res = check_nonexist(testfile);
     if (res == -1)
         return -1;
+    if (err)
+        return -1;
+
+    success();
+    return 0;
+}
+
+static int test_create_unlink(void)
+{
+    const char *data = testdata;
+    int datalen = testdatalen;
+    int err = 0;
+    int res;
+    int fd;
+
+    start_test("create+unlink");
+    unlink(testfile);
+    fd = open(testfile, O_CREAT | O_RDWR | O_TRUNC, 0644);
+    if (fd == -1) {
+        PERROR("creat");
+        return -1;
+    }
+    res = unlink(testfile);
+    if (res == -1) {
+        PERROR("unlink");
+        close(fd);
+        return -1;
+    }
+    res = check_nonexist(testfile);
+    if (res == -1)
+        return -1;
+    res = write(fd, data, datalen);
+    if (res == -1) {
+        PERROR("write");
+        close(fd);
+        return -1;
+    }
+    if (res != datalen) {
+        ERROR("write is short: %u instead of %u", res, datalen);
+        close(fd);
+        return -1;
+    }
+    err += fcheck_type(fd, S_IFREG);
+    err += fcheck_mode(fd, 0644);
+    err += fcheck_nlink(fd, 0);
+    err += fcheck_size(fd, datalen);
+    err += fcheck_data(fd, data, 0, datalen);
+    res = close(fd);
+    if (res == -1) {
+        PERROR("close");
+        err--;
+    }
     if (err)
         return -1;
 
@@ -1096,6 +1260,7 @@ int main(int argc, char *argv[])
     sprintf(testdir, "%s/testdir", basepath);
     sprintf(testdir2, "%s/testdir2", basepath);
     err += test_create();
+    err += test_create_unlink();
     err += test_mknod();
     err += test_symlink();
     err += test_link();
