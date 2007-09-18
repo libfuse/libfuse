@@ -45,6 +45,9 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
 #  define KERNEL_2_6_22_PLUS
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,23)
+#  define KERNEL_2_6_23_PLUS
+#endif
 
 #if defined(__arm__) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #define DCACHE_BUG

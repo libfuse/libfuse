@@ -865,7 +865,11 @@ static struct file_operations fuse_file_operations = {
 	.release	= fuse_release,
 	.fsync		= fuse_fsync,
 	.lock		= fuse_file_lock,
+#ifdef KERNEL_2_6_23_PLUS
+	.splice_read	= generic_file_splice_read,
+#else
 	.sendfile	= generic_file_sendfile,
+#endif
 };
 
 static struct file_operations fuse_direct_io_file_operations = {

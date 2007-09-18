@@ -1093,9 +1093,15 @@ static struct miscdevice fuse_miscdevice = {
 int __init fuse_dev_init(void)
 {
 	int err = -ENOMEM;
+#ifdef KERNEL_2_6_23_PLUS
+	fuse_req_cachep = kmem_cache_create("fuse_request",
+					    sizeof(struct fuse_req),
+					    0, 0, NULL);
+#else
 	fuse_req_cachep = kmem_cache_create("fuse_request",
 					    sizeof(struct fuse_req),
 					    0, 0, NULL, NULL);
+#endif
 	if (!fuse_req_cachep)
 		goto out;
 
