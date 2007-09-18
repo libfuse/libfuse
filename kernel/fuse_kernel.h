@@ -1,19 +1,14 @@
 /*
-    FUSE: Filesystem in Userspace
+    This file defines the kernel interface of FUSE
     Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
-*/
 
-/* This file defines the kernel interface of FUSE */
-
-#ifdef __FreeBSD__
-/*
     This -- and only this -- header file may also be distributed under
     the terms of the BSD Licence as follows:
 
-    Copyright (C) 2001-2006 Miklos Szeredi. All rights reserved.
+    Copyright (C) 2001-2007 Miklos Szeredi. All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
@@ -37,6 +32,7 @@
     SUCH DAMAGE.
 */
 
+#ifndef linux
 #include <sys/types.h>
 #define __u64 uint64_t
 #define __u32 uint32_t
