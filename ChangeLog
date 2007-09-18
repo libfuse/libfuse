@@ -1,3 +1,8 @@
+2007-09-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add missing context initialization in fuse_fs_chmod().  Bug
+	found by "iohead"
+
 2007-09-04  Philippe Elie  <phil.el@wanadoo.fr>
 
 	* lib/fuse_lowlevel.c: fix a fuse_req leak in do_forget()
