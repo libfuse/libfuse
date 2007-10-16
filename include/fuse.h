@@ -9,12 +9,15 @@
 #ifndef _FUSE_H_
 #define _FUSE_H_
 
-/* This file defines the library interface of FUSE */
-
-/* IMPORTANT: you should define FUSE_USE_VERSION before including this
-   header.  To use the newest API define it to 26 (recommended for any
-   new application), to use the old API define it to 21 (default) 22
-   or 25, to use the even older 1.X API define it to 11. */
+/** @file
+ *
+ * This file defines the library interface of FUSE
+ *
+ * IMPORTANT: you should define FUSE_USE_VERSION before including this
+ * header.  To use the newest API define it to 26 (recommended for any
+ * new application), to use the old API define it to 21 (default) 22
+ * or 25, to use the even older 1.X API define it to 11.
+ */
 
 #ifndef FUSE_USE_VERSION
 #define FUSE_USE_VERSION 21
@@ -443,7 +446,7 @@ struct fuse_context {
     void *private_data;
 };
 
-/*
+/**
  * Main function of FUSE.
  *
  * This is for the lazy.  This is all that has to be called from the

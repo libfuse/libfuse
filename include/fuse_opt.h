@@ -9,7 +9,10 @@
 #ifndef _FUSE_OPT_H_
 #define _FUSE_OPT_H_
 
-/* This file defines the option parsing interface of FUSE */
+/** @file
+ *
+ * This file defines the option parsing interface of FUSE
+ */
 
 #ifdef __cplusplus
 extern "C" {
