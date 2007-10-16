@@ -258,6 +258,7 @@ static void fuse_put_super(struct super_block *sb)
 	kill_fasync(&fc->fasync, SIGIO, POLL_IN);
 	wake_up_all(&fc->waitq);
 	wake_up_all(&fc->blocked_waitq);
+	wake_up_all(&fc->reserved_req_waitq);
 	mutex_lock(&fuse_mutex);
 	list_del(&fc->entry);
 	fuse_ctl_remove_conn(fc);
@@ -292,6 +293,11 @@ static int fuse_statfs(struct super_block *sb, struct kstatfs *buf)
 	struct fuse_req *req;
 	struct fuse_statfs_out outarg;
 	int err;
+
+	if (!fuse_allow_task(fc, current)) {
+		buf->f_type = FUSE_SUPER_MAGIC;
+		return 0;
+	}
 
 	req = fuse_get_req(fc);
 	if (IS_ERR(req))
@@ -469,6 +475,7 @@ static struct fuse_conn *new_conn(void)
 		atomic_set(&fc->count, 1);
 		init_waitqueue_head(&fc->waitq);
 		init_waitqueue_head(&fc->blocked_waitq);
+		init_waitqueue_head(&fc->reserved_req_waitq);
 		INIT_LIST_HEAD(&fc->pending);
 		INIT_LIST_HEAD(&fc->processing);
 		INIT_LIST_HEAD(&fc->io);
@@ -506,6 +513,7 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 
 	attr.mode = mode;
 	attr.ino = FUSE_ROOT_ID;
+	attr.nlink = 1;
 	return fuse_iget(sb, 1, 0, &attr);
 }
 #ifndef FUSE_MAINLINE
