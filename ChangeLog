@@ -1,5 +1,9 @@
 2007-10-16  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.7.1
+
+2007-10-16  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Clarify licence version to be "LGPLv2" for the library
 
 	* kernel fixes:
