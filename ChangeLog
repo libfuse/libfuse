@@ -1,3 +1,7 @@
+2007-10-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Clarify licence version to be "LGPLv2" for the library
+
 2007-09-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add missing context initialization in fuse_fs_chmod().  Bug

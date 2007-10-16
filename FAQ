@@ -73,7 +73,7 @@ Under what license is FUSE released?
 
 The kernel part is released under the GNU GPL.
 
-Libfuse is released under the GNU LGPL.
+Libfuse is released under the GNU LGPLv2.
 
 All other parts (examples, fusermount, etc) are released under the GNU
 GPL.

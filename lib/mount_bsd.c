@@ -2,7 +2,7 @@
     FUSE: Filesystem in Userspace
     Copyright (C) 2005-2006 Csaba Henk <csaba.henk@creo.hu>
 
-    This program can be distributed under the terms of the GNU LGPL.
+    This program can be distributed under the terms of the GNU LGPLv2.
     See the file COPYING.LIB.
 */
 
