@@ -1,3 +1,9 @@
+2007-11-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* 'fusermount -u' did not umount the filesystem if /etc/mtab was a
+	symlink.  This bug was introduced in 2.7.1 by "Don't call
+	/bin/[u]mount if /etc/mtab is a symlink".  Found by robertsong.
+
 2007-10-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.7.1

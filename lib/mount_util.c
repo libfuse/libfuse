@@ -17,6 +17,7 @@
 #include <mntent.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/mount.h>
 
 static int mtab_needs_update(const char *mnt)
 {
@@ -91,8 +92,13 @@ int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
     int res;
     int status;
 
-    if (!mtab_needs_update(mnt))
-        return 0;
+    if (!mtab_needs_update(mnt)) {
+        res = umount2(mnt, lazy ? 2 : 0);
+        if (res == -1)
+            fprintf(stderr, "%s: failed to unmount %s: %s\n", progname,
+                    mnt, strerror(errno));
+        return res;
+    }
 
     res = fork();
     if (res == -1) {
