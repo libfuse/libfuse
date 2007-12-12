@@ -48,6 +48,9 @@
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,23)
 #  define KERNEL_2_6_23_PLUS
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
+#  define KERNEL_2_6_24_PLUS
+#endif
 
 #if defined(__arm__) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 #define DCACHE_BUG
@@ -647,3 +650,5 @@ int fuse_valid_type(int m);
  * Is task allowed to perform filesystem operation?
  */
 int fuse_allow_task(struct fuse_conn *fc, struct task_struct *task);
+
+extern struct dentry_operations fuse_dentry_operations;

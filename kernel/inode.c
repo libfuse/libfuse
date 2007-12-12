@@ -520,21 +520,26 @@ static struct inode *get_root_inode(struct super_block *sb, unsigned mode)
 #ifdef HAVE_EXPORTFS_H
 #include <linux/exportfs.h>
 #endif
-static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
+
+struct fuse_inode_handle
 {
-	__u32 *objp = vobjp;
-	unsigned long nodeid = objp[0];
-	__u32 generation = objp[1];
+	u64 nodeid;
+	u32 generation;
+};
+
+static struct dentry *fuse_get_dentry(struct super_block *sb,
+				      struct fuse_inode_handle *handle)
+{
 	struct inode *inode;
 	struct dentry *entry;
 
-	if (nodeid == 0)
+	if (handle->nodeid == 0)
 		return ERR_PTR(-ESTALE);
 
-	inode = ilookup5(sb, nodeid, fuse_inode_eq, &nodeid);
+	inode = ilookup5(sb, handle->nodeid, fuse_inode_eq, &handle->nodeid);
 	if (!inode)
 		return ERR_PTR(-ESTALE);
-	if (inode->i_generation != generation) {
+	if (inode->i_generation != handle->generation) {
 		iput(inode);
 		return ERR_PTR(-ESTALE);
 	}
@@ -544,42 +549,130 @@ static struct dentry *fuse_get_dentry(struct super_block *sb, void *vobjp)
 		iput(inode);
 		return ERR_PTR(-ENOMEM);
 	}
+	entry->d_op = &fuse_dentry_operations;
 
 	return entry;
 }
 
-static int fuse_encode_fh(struct dentry *dentry, __u32 *fh, int *max_len,
-			  int connectable)
+static int fuse_encode_fh(struct dentry *dentry, u32 *fh, int *max_len,
+			   int connectable)
 {
 	struct inode *inode = dentry->d_inode;
 	int len = *max_len;
 	int type = 1;
+	u64 nodeid;
+	u32 generation;
 
-	if (len < 2 || (connectable && len < 4))
-		return 255;
+	if (len < 3 || (connectable && len < 6))
+		return  255;
 
-	len = 2;
-	fh[0] = get_fuse_inode(inode)->nodeid;
-	fh[1] = inode->i_generation;
+	nodeid = get_fuse_inode(inode)->nodeid;
+	generation = inode->i_generation;
+
+	len = 3;
+	fh[0] = (u32)(nodeid >> 32);
+	fh[1] = (u32)(nodeid & 0xffffffff);
+	fh[2] = generation;
+
 	if (connectable && !S_ISDIR(inode->i_mode)) {
 		struct inode *parent;
 
 		spin_lock(&dentry->d_lock);
 		parent = dentry->d_parent->d_inode;
-		fh[2] = get_fuse_inode(parent)->nodeid;
-		fh[3] = parent->i_generation;
+		nodeid = get_fuse_inode(parent)->nodeid;
+		generation = parent->i_generation;
+
+		fh[3] = (u32)(nodeid >> 32);
+		fh[4] = (u32)(nodeid & 0xffffffff);
+		fh[5] = generation;
 		spin_unlock(&dentry->d_lock);
-		len = 4;
+
+		len = 6;
 		type = 2;
 	}
+
 	*max_len = len;
 	return type;
 }
 
-static struct export_operations fuse_export_operations = {
-	.get_dentry	= fuse_get_dentry,
-	.encode_fh      = fuse_encode_fh,
+#ifdef KERNEL_2_6_24_PLUS
+static struct dentry *fuse_fh_to_dentry(struct super_block *sb,
+		struct fid *fid, int fh_len, int fh_type)
+{
+	struct fuse_inode_handle handle;
+
+	if (fh_len < 3 || fh_type > 2)
+		return NULL;
+
+	handle.nodeid = (u64) fid->raw[0] << 32;
+	handle.nodeid |= (u64) fid->raw[1];
+	handle.generation = fid->raw[2];
+	return fuse_get_dentry(sb, &handle);
+}
+
+static struct dentry *fuse_fh_to_parent(struct super_block *sb,
+		struct fid *fid, int fh_len, int fh_type)
+{
+	struct fuse_inode_handle parent;
+
+	if (fh_type != 2 || fh_len < 6)
+		return NULL;
+
+	parent.nodeid = (u64) fid->raw[3] << 32;
+	parent.nodeid |= (u64) fid->raw[4];
+	parent.generation = fid->raw[5];
+	return fuse_get_dentry(sb, &parent);
+}
+
+
+static const struct export_operations fuse_export_operations = {
+	.fh_to_dentry	= fuse_fh_to_dentry,
+	.fh_to_parent	= fuse_fh_to_parent,
+	.encode_fh	= fuse_encode_fh,
 };
+#else
+static struct dentry *fuse_get_dentry_old(struct super_block *sb, void *objp)
+{
+	return fuse_get_dentry(sb, objp);
+}
+
+static struct dentry *fuse_decode_fh(struct super_block *sb, u32 *fh,
+			int fh_len, int fileid_type,
+			int (*acceptable)(void *context, struct dentry *de),
+			void *context)
+{
+	struct fuse_inode_handle handle;
+	struct fuse_inode_handle parent;
+
+	if (fh_len < 3 || fileid_type > 2)
+		return NULL;
+
+	if (fileid_type == 2) {
+		if (fh_len < 6)
+			return NULL;
+
+		parent.nodeid = (u64) fh[3] << 32;
+		parent.nodeid |= (u64) fh[4];
+		parent.generation = fh[5];
+	} else {
+		parent.nodeid = 0;
+		parent.generation = 0;
+	}
+
+	handle.nodeid = (u64) fh[0] << 32;
+	handle.nodeid |= (u64) fh[1];
+	handle.generation = fh[2];
+
+	return ret = fuse_export_operations.
+		find_exported_dentry(sb, &handle, &parent, acceptable, context);
+}
+
+static struct export_operations fuse_export_operations = {
+	.get_dentry	= fuse_get_dentry_old,
+	.encode_fh      = fuse_encode_fh,
+	.decode_fh	= fuse_decode_fh,
+};
+#endif
 #endif
 
 static struct super_operations fuse_super_operations = {
@@ -845,8 +938,12 @@ static decl_subsys(fs, NULL, NULL);
 static decl_subsys(fuse, NULL, NULL);
 static decl_subsys(connections, NULL, NULL);
 
+#ifdef KERNEL_2_6_24_PLUS
+static void fuse_inode_init_once(struct kmem_cache *cachep, void *foo)
+#else
 static void fuse_inode_init_once(void *foo, struct kmem_cache *cachep,
 				 unsigned long flags)
+#endif
 {
 	struct inode * inode = foo;
 

@@ -1,8 +1,13 @@
 2007-12-12  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Released 2.7.2
+	* Fix kernel module compile for 2.6.24
 
-2007-12-12  Miklos Szeredi <miklos@szeredi.hu>
+	* Invalidate attributes of parent directory after create(), since
+	the modification time changes.  Invalidate attributes on rename,
+	since some filesystems may update st_ctime.  Reported by Szabolcs
+	Szakacsits
+
+	* Fix NFS exporting to handle 64bit node IDs
 
 	* Disable old symbol versions if __UCLIBC__ is defined.  If a
 	symbol in a library has multiple versions, the runtime linker in
