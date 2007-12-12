@@ -636,6 +636,8 @@ static struct dentry *fuse_get_dentry_old(struct super_block *sb, void *objp)
 	return fuse_get_dentry(sb, objp);
 }
 
+static struct export_operations fuse_export_operations;
+
 static struct dentry *fuse_decode_fh(struct super_block *sb, u32 *fh,
 			int fh_len, int fileid_type,
 			int (*acceptable)(void *context, struct dentry *de),
@@ -663,7 +665,7 @@ static struct dentry *fuse_decode_fh(struct super_block *sb, u32 *fh,
 	handle.nodeid |= (u64) fh[1];
 	handle.generation = fh[2];
 
-	return ret = fuse_export_operations.
+	return fuse_export_operations.
 		find_exported_dentry(sb, &handle, &parent, acceptable, context);
 }
 
