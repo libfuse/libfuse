@@ -1,9 +1,9 @@
 /*
-    FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-    This program can be distributed under the terms of the GNU LGPLv2.
-    See the file COPYING.LIB
+  This program can be distributed under the terms of the GNU LGPLv2.
+  See the file COPYING.LIB
 */
 
 #include "config.h"
@@ -22,11 +22,11 @@
 /* Is this hack still needed? */
 static inline void fuse_mutex_init(pthread_mutex_t *mut)
 {
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-    pthread_mutex_init(mut, &attr);
-    pthread_mutexattr_destroy(&attr);
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
+	pthread_mutex_init(mut, &attr);
+	pthread_mutexattr_destroy(&attr);
 }
 #endif
 

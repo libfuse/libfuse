@@ -1,9 +1,9 @@
 /*
-    libulockmgr: Userspace Lock Manager Library
-    Copyright (C) 2006  Miklos Szeredi <miklos@szeredi.hu>
+  libulockmgr: Userspace Lock Manager Library
+  Copyright (C) 2006  Miklos Szeredi <miklos@szeredi.hu>
 
-    This program can be distributed under the terms of the GNU LGPLv2.
-    See the file COPYING.LIB.
+  This program can be distributed under the terms of the GNU LGPLv2.
+  See the file COPYING.LIB.
 */
 
 #include <stdint.h>
@@ -21,4 +21,4 @@
  * @return 0 on success -errno on error
  */
 int ulockmgr_op(int fd, int cmd, struct flock *lock, const void *owner,
-                size_t owner_len);
+		size_t owner_len);

@@ -1,9 +1,9 @@
 /*
-    FUSE: Filesystem in Userspace
-    Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-    This program can be distributed under the terms of the GNU LGPLv2.
-    See the file COPYING.LIB.
+  This program can be distributed under the terms of the GNU LGPLv2.
+  See the file COPYING.LIB.
 */
 
 /** @file */
@@ -42,38 +42,38 @@ extern "C" {
  * Changed in version 2.5
  */
 struct fuse_file_info {
-    /** Open flags.  Available in open() and release() */
-    int flags;
+	/** Open flags.	 Available in open() and release() */
+	int flags;
 
-    /** Old file handle, don't use */
-    unsigned long fh_old;
+	/** Old file handle, don't use */
+	unsigned long fh_old;
 
-    /** In case of a write operation indicates if this was caused by a
-        writepage */
-    int writepage;
+	/** In case of a write operation indicates if this was caused by a
+	    writepage */
+	int writepage;
 
-    /** Can be filled in by open, to use direct I/O on this file.
-        Introduced in version 2.4 */
-    unsigned int direct_io : 1;
+	/** Can be filled in by open, to use direct I/O on this file.
+	    Introduced in version 2.4 */
+	unsigned int direct_io : 1;
 
-    /** Can be filled in by open, to indicate, that cached file data
-        need not be invalidated.  Introduced in version 2.4 */
-    unsigned int keep_cache : 1;
+	/** Can be filled in by open, to indicate, that cached file data
+	    need not be invalidated.  Introduced in version 2.4 */
+	unsigned int keep_cache : 1;
 
-    /** Indicates a flush operation.  Set in flush operation, also
-        maybe set in highlevel lock operation and lowlevel release
-        operation.  Introduced in version 2.6 */
-    unsigned int flush : 1;
+	/** Indicates a flush operation.  Set in flush operation, also
+	    maybe set in highlevel lock operation and lowlevel release
+	    operation.	Introduced in version 2.6 */
+	unsigned int flush : 1;
 
-    /** Padding.  Do not use*/
-    unsigned int padding : 29;
+	/** Padding.  Do not use*/
+	unsigned int padding : 29;
 
-    /** File handle.  May be filled in by filesystem in open().
-        Available in all other file operations */
-    uint64_t fh;
+	/** File handle.  May be filled in by filesystem in open().
+	    Available in all other file operations */
+	uint64_t fh;
 
-    /** Lock owner id.  Available in locking operations and flush */
-    uint64_t lock_owner;
+	/** Lock owner id.  Available in locking operations and flush */
+	uint64_t lock_owner;
 };
 
 /**
@@ -84,35 +84,35 @@ struct fuse_file_info {
  * value must usually be smaller than the indicated value.
  */
 struct fuse_conn_info {
-    /**
-     * Major version of the protocol (read-only)
-     */
-    unsigned proto_major;
+	/**
+	 * Major version of the protocol (read-only)
+	 */
+	unsigned proto_major;
 
-    /**
-     * Minor version of the protocol (read-only)
-     */
-    unsigned proto_minor;
+	/**
+	 * Minor version of the protocol (read-only)
+	 */
+	unsigned proto_minor;
 
-    /**
-     * Is asynchronous read supported (read-write)
-     */
-    unsigned async_read;
+	/**
+	 * Is asynchronous read supported (read-write)
+	 */
+	unsigned async_read;
 
-    /**
-     * Maximum size of the write buffer
-     */
-    unsigned max_write;
+	/**
+	 * Maximum size of the write buffer
+	 */
+	unsigned max_write;
 
-    /**
-     * Maximum readahead
-     */
-    unsigned max_readahead;
+	/**
+	 * Maximum readahead
+	 */
+	unsigned max_readahead;
 
-    /**
-     * For future use.
-     */
-    unsigned reserved[27];
+	/**
+	 * For future use.
+	 */
+	unsigned reserved[27];
 };
 
 struct fuse_session;
@@ -143,13 +143,13 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch);
  *
  * The following options are parsed:
  *
- *   '-f'            foreground
+ *   '-f'	     foreground
  *   '-d' '-odebug'  foreground, but keep the debug option
- *   '-s'            single threaded
+ *   '-s'	     single threaded
  *   '-h' '--help'   help
- *   '-ho'           help without header
+ *   '-ho'	     help without header
  *   '-ofsname=..'   file system name, if not present, then set to the program
- *                   name
+ *		     name
  *
  * All parameters may be NULL
  *
@@ -160,7 +160,7 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch);
  * @return 0 on success, -1 on failure
  */
 int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
-                       int *multithreaded, int *foreground);
+		       int *multithreaded, int *foreground);
 
 /**
  * Go into the background
@@ -178,13 +178,13 @@ int fuse_daemonize(int foreground);
 int fuse_version(void);
 
 /* ----------------------------------------------------------- *
- * Signal handling                                             *
+ * Signal handling					       *
  * ----------------------------------------------------------- */
 
 /**
  * Exit session on HUP, TERM and INT signals and ignore PIPE signal
  *
- * Stores session in a global variable.  May only be called once per
+ * Stores session in a global variable.	 May only be called once per
  * process until fuse_remove_signal_handlers() is called.
  *
  * @param se the session to exit
@@ -203,36 +203,36 @@ int fuse_set_signal_handlers(struct fuse_session *se);
 void fuse_remove_signal_handlers(struct fuse_session *se);
 
 /* ----------------------------------------------------------- *
- * Compatibility stuff                                         *
+ * Compatibility stuff					       *
  * ----------------------------------------------------------- */
 
 #if FUSE_USE_VERSION < 26
 #    ifdef __FreeBSD__
-#        if FUSE_USE_VERSION < 25
-#            error On FreeBSD API version 25 or greater must be used
-#        endif
+#	 if FUSE_USE_VERSION < 25
+#	     error On FreeBSD API version 25 or greater must be used
+#	 endif
 #    endif
 #    include "fuse_common_compat.h"
 #    undef FUSE_MINOR_VERSION
 #    undef fuse_main
 #    define fuse_unmount fuse_unmount_compat22
 #    if FUSE_USE_VERSION == 25
-#        define FUSE_MINOR_VERSION 5
-#        define fuse_mount fuse_mount_compat25
+#	 define FUSE_MINOR_VERSION 5
+#	 define fuse_mount fuse_mount_compat25
 #    elif FUSE_USE_VERSION == 24 || FUSE_USE_VERSION == 22
-#        define FUSE_MINOR_VERSION 4
-#        define fuse_mount fuse_mount_compat22
+#	 define FUSE_MINOR_VERSION 4
+#	 define fuse_mount fuse_mount_compat22
 #    elif FUSE_USE_VERSION == 21
-#        define FUSE_MINOR_VERSION 1
-#        define fuse_mount fuse_mount_compat22
+#	 define FUSE_MINOR_VERSION 1
+#	 define fuse_mount fuse_mount_compat22
 #    elif FUSE_USE_VERSION == 11
-#        warning Compatibility with API version 11 is deprecated
-#        undef FUSE_MAJOR_VERSION
-#        define FUSE_MAJOR_VERSION 1
-#        define FUSE_MINOR_VERSION 1
-#        define fuse_mount fuse_mount_compat1
+#	 warning Compatibility with API version 11 is deprecated
+#	 undef FUSE_MAJOR_VERSION
+#	 define FUSE_MAJOR_VERSION 1
+#	 define FUSE_MINOR_VERSION 1
+#	 define fuse_mount fuse_mount_compat1
 #    else
-#        error Compatibility with API version other than 21, 22, 24, 25 and 11 not supported
+#	 error Compatibility with API version other than 21, 22, 24, 25 and 11 not supported
 #    endif
 #endif
 
