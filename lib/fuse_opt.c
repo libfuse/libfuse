@@ -7,6 +7,7 @@
 */
 
 #include "fuse_opt.h"
+#include "fuse_misc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,7 +66,8 @@ int fuse_opt_add_arg(struct fuse_args *args, const char *arg)
     return 0;
 }
 
-int fuse_opt_insert_arg(struct fuse_args *args, int pos, const char *arg)
+static int fuse_opt_insert_arg_common(struct fuse_args *args, int pos,
+				      const char *arg)
 {
     assert(pos <= args->argc);
     if (fuse_opt_add_arg(args, arg) == -1)
@@ -78,6 +80,18 @@ int fuse_opt_insert_arg(struct fuse_args *args, int pos, const char *arg)
         args->argv[pos] = newarg;
     }
     return 0;
+}
+
+int fuse_opt_insert_arg(struct fuse_args *args, int pos, const char *arg)
+{
+	return fuse_opt_insert_arg_common(args, pos, arg);
+}
+
+int fuse_opt_insert_arg_compat(struct fuse_args *args, int pos,
+			       const char *arg);
+int fuse_opt_insert_arg_compat(struct fuse_args *args, int pos, const char *arg)
+{
+	return fuse_opt_insert_arg_common(args, pos, arg);
 }
 
 static int next_arg(struct fuse_opt_context *ctx, const char *opt)
@@ -365,3 +379,6 @@ int fuse_opt_parse(struct fuse_args *args, void *data,
     fuse_opt_free_args(&ctx.outargs);
     return res;
 }
+
+/* This symbol version was mistakenly added to the version script */
+FUSE_SYMVER(".symver fuse_opt_insert_arg_compat,fuse_opt_insert_arg@FUSE_2.5");

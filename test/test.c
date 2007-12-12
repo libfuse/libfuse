@@ -1254,6 +1254,10 @@ int main(int argc, char *argv[])
     }
     basepath = argv[1];
     assert(strlen(basepath) < 512);
+    if (basepath[0] != '/') {
+        fprintf(stderr, "testdir must be an absolute path\n");
+        return 1;
+    }
 
     sprintf(testfile, "%s/testfile", basepath);
     sprintf(testfile2, "%s/testfile2", basepath);

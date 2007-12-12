@@ -7,6 +7,7 @@
 */
 
 #include "fuse_i.h"
+#include "fuse_misc.h"
 #include "fuse_opt.h"
 
 #include <sys/stat.h>
@@ -360,4 +361,4 @@ int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
     return res;
 }
 
-__asm__(".symver fuse_unmount_compat22,fuse_unmount@FUSE_2.2");
+FUSE_SYMVER(".symver fuse_unmount_compat22,fuse_unmount@FUSE_2.2");

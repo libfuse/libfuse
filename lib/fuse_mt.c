@@ -7,6 +7,7 @@
 */
 
 #include "fuse_i.h"
+#include "fuse_misc.h"
 #include "fuse_lowlevel.h"
 
 #include <stdio.h>
@@ -112,4 +113,4 @@ int fuse_loop_mt(struct fuse *f)
     return fuse_session_loop_mt(fuse_get_session(f));
 }
 
-__asm__(".symver fuse_loop_mt_proc,__fuse_loop_mt@");
+FUSE_SYMVER(".symver fuse_loop_mt_proc,__fuse_loop_mt@");

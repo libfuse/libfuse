@@ -1,3 +1,16 @@
+2007-12-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Disable old symbol versions if __UCLIBC__ is defined.  If a
+	symbol in a library has multiple versions, the runtime linker in
+	uClibc seems to randomly choose between them.
+
+	* Remove erroneous 'fuse_opt_insert_arg@FUSE_2_5' from
+	fuse_version_script.  fuse_opt_free_args() was added in fuse-2.6.
+
+	* Close fuse device file descriptor before calling umount(),
+	preventing a deadlock when umount is synchronous.  Reported by
+	Szabolcs Szakacsits
+
 2007-11-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* 'fusermount -u' did not umount the filesystem if /etc/mtab was a

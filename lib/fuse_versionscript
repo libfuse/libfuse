@@ -67,7 +67,6 @@ FUSE_2.5 {
 		fuse_opt_add_opt;
 		fuse_opt_add_arg;
 		fuse_opt_free_args;
-		fuse_opt_insert_arg;
 		fuse_opt_match;
 		fuse_parse_cmdline;
 		fuse_remove_signal_handlers;

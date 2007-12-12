@@ -7,6 +7,7 @@
 */
 
 #include "fuse_lowlevel.h"
+#include "fuse_misc.h"
 #include "fuse_common_compat.h"
 #include "fuse_lowlevel_compat.h"
 
@@ -204,5 +205,5 @@ void fuse_chan_destroy(struct fuse_chan *ch)
 }
 
 #ifndef __FreeBSD__
-__asm__(".symver fuse_chan_new_compat24,fuse_chan_new@FUSE_2.4");
+FUSE_SYMVER(".symver fuse_chan_new_compat24,fuse_chan_new@FUSE_2.4");
 #endif

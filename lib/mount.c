@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "fuse_i.h"
+#include "fuse_misc.h"
 #include "fuse_opt.h"
 #include "fuse_common_compat.h"
 #include "mount_util.h"
@@ -283,6 +284,10 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
            then the filesystem is already unmounted */
         if (res == 1 && (pfd.revents & POLLERR))
             return;
+
+        /* Need to close file descriptor, otherwise synchronous umount
+           would recurse into filesystem, and deadlock */
+        close(fd);
     }
 
     if (geteuid() == 0) {
@@ -579,5 +584,5 @@ int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
     return res;
 }
 
-__asm__(".symver fuse_mount_compat22,fuse_mount@FUSE_2.2");
-__asm__(".symver fuse_unmount_compat22,fuse_unmount@FUSE_2.2");
+FUSE_SYMVER(".symver fuse_mount_compat22,fuse_mount@FUSE_2.2");
+FUSE_SYMVER(".symver fuse_unmount_compat22,fuse_unmount@FUSE_2.2");

@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "fuse_i.h"
+#include "fuse_misc.h"
 #include "fuse_opt.h"
 #include "fuse_lowlevel.h"
 #include "fuse_common_compat.h"
@@ -402,11 +403,11 @@ int fuse_mount_compat1(const char *mountpoint, const char *args[])
     return fuse_mount_compat22(mountpoint, NULL);
 }
 
-__asm__(".symver fuse_setup_compat2,__fuse_setup@");
-__asm__(".symver fuse_setup_compat22,fuse_setup@FUSE_2.2");
-__asm__(".symver fuse_teardown,__fuse_teardown@");
-__asm__(".symver fuse_main_compat2,fuse_main@");
-__asm__(".symver fuse_main_real_compat22,fuse_main_real@FUSE_2.2");
+FUSE_SYMVER(".symver fuse_setup_compat2,__fuse_setup@");
+FUSE_SYMVER(".symver fuse_setup_compat22,fuse_setup@FUSE_2.2");
+FUSE_SYMVER(".symver fuse_teardown,__fuse_teardown@");
+FUSE_SYMVER(".symver fuse_main_compat2,fuse_main@");
+FUSE_SYMVER(".symver fuse_main_real_compat22,fuse_main_real@FUSE_2.2");
 
 #endif /* __FreeBSD__ */
 
@@ -439,7 +440,7 @@ int fuse_mount_compat25(const char *mountpoint, struct fuse_args *args)
     return fuse_kern_mount(mountpoint, args);
 }
 
-__asm__(".symver fuse_setup_compat25,fuse_setup@FUSE_2.5");
-__asm__(".symver fuse_teardown_compat22,fuse_teardown@FUSE_2.2");
-__asm__(".symver fuse_main_real_compat25,fuse_main_real@FUSE_2.5");
-__asm__(".symver fuse_mount_compat25,fuse_mount@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_setup_compat25,fuse_setup@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_teardown_compat22,fuse_teardown@FUSE_2.2");
+FUSE_SYMVER(".symver fuse_main_real_compat25,fuse_main_real@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_mount_compat25,fuse_mount@FUSE_2.5");

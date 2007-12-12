@@ -1409,9 +1409,9 @@ int fuse_sync_compat_args(struct fuse_args *args)
     return 0;
 }
 
-__asm__(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
-__asm__(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
-__asm__(".symver fuse_lowlevel_new_compat,fuse_lowlevel_new@FUSE_2.4");
+FUSE_SYMVER(".symver fuse_reply_statfs_compat,fuse_reply_statfs@FUSE_2.4");
+FUSE_SYMVER(".symver fuse_reply_open_compat,fuse_reply_open@FUSE_2.4");
+FUSE_SYMVER(".symver fuse_lowlevel_new_compat,fuse_lowlevel_new@FUSE_2.4");
 
 #else /* __FreeBSD__ */
 
@@ -1435,4 +1435,4 @@ struct fuse_session *fuse_lowlevel_new_compat25(struct fuse_args *args,
                                     op_size, userdata);
 }
 
-__asm__(".symver fuse_lowlevel_new_compat25,fuse_lowlevel_new@FUSE_2.5");
+FUSE_SYMVER(".symver fuse_lowlevel_new_compat25,fuse_lowlevel_new@FUSE_2.5");
