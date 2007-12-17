@@ -1,3 +1,7 @@
+2007-12-17  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.7.2
+
 2007-12-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix kernel module compile for 2.6.24

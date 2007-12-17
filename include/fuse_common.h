@@ -9,7 +9,7 @@
 /** @file */
 
 #if !defined(_FUSE_H_) && !defined(_FUSE_LOWLEVEL_H_)
-#error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h instead."
+#error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h> instead."
 #endif
 
 #ifndef _FUSE_COMMON_H_
