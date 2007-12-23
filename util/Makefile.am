@@ -5,7 +5,7 @@ bin_PROGRAMS = fusermount ulockmgr_server
 noinst_PROGRAMS = mount.fuse
 
 fusermount_SOURCES = fusermount.c
-fusermount_LDADD = ../lib/mount_util.o
+fusermount_LDADD = ../lib/mount_util.lo
 fusermount_CPPFLAGS = -I../lib
 mount_fuse_SOURCES = mount.fuse.c
 

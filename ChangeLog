@@ -1,3 +1,7 @@
+2007-12-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix './configure --disable-static'.  Patch from Ismail Dönmez
+
 2007-12-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.7.2
