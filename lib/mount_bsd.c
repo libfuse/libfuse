@@ -172,7 +172,7 @@ void fuse_unmount_compat22(const char *mountpoint)
 	char *ssc, *umount_cmd;
 	FILE *sf;
 	int rv;
-	char *seekscript =
+	char seekscript[] =
 		/* error message is annoying in help output */
 		"exec 2>/dev/null; "
 		"/usr/bin/fstat " FUSE_DEV_TRUNK "* | "
@@ -235,7 +235,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 /* Check if kernel is doing init in background */
 static int init_backgrounded(void)
 {
-	int ibg, len;
+	unsigned ibg, len;
 
 	len = sizeof(ibg);
 
@@ -251,7 +251,7 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 	const char *mountprog = FUSERMOUNT_PROG;
 	int fd;
 	char *fdnam, *dev;
-	int pid;
+	pid_t pid;
 
 	fdnam = getenv("FUSE_DEV_FD");
 
@@ -274,7 +274,7 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 	dev = getenv("FUSE_DEV_NAME");
 
 	if (! dev)
-		dev = FUSE_DEV_TRUNK;
+		dev = (char *)FUSE_DEV_TRUNK;
 
 	if ((fd = open(dev, O_RDWR)) < 0) {
 		perror("fuse: failed to open fuse device");
