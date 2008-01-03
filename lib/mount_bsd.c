@@ -1,6 +1,6 @@
 /*
   FUSE: Filesystem in Userspace
-  Copyright (C) 2005-2006 Csaba Henk <csaba.henk@creo.hu>
+  Copyright (C) 2005-2008 Csaba Henk <csaba.henk@creo.hu>
 
   This program can be distributed under the terms of the GNU LGPLv2.
   See the file COPYING.LIB.
@@ -206,6 +206,7 @@ void fuse_unmount_compat22(const char *mountpoint)
 		return;
 
 	asprintf(&umount_cmd, "/sbin/umount %s", dev);
+	close(fd);
 	system(umount_cmd);
 }
 
@@ -229,6 +230,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 		return;
 
 	asprintf(&umount_cmd, "/sbin/umount " _PATH_DEV "%s", dev);
+	close(fd);
 	system(umount_cmd);
 }
 

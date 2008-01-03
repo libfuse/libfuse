@@ -1,3 +1,8 @@
+2008-01-03  Csaba Henk <csaba.henk@creo.hu>
+
+	* lib/mount_bsd.c: close device before unmount
+	(cf. lib/mount.c rev. 1.43) and fix some warnings 
+
 2007-12-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix './configure --disable-static'.  Patch from Ismail Dönmez
