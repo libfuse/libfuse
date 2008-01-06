@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/sysctl.h>
+#include <sys/user.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -21,9 +22,12 @@
 #include <errno.h>
 #include <string.h>
 #include <paths.h>
+#include <limits.h>
+#include <kvm.h>
 
 #define FUSERMOUNT_PROG		"mount_fusefs"
 #define FUSE_DEV_TRUNK		"/dev/fuse"
+#define FUSE_ANS_WCHAN          "fu_ans"
 
 enum {
 	KEY_ALLOW_ROOT,
@@ -206,13 +210,83 @@ void fuse_unmount_compat22(const char *mountpoint)
 		return;
 
 	asprintf(&umount_cmd, "/sbin/umount %s", dev);
-	close(fd);
 	system(umount_cmd);
+}
+
+static void do_unmount(char *dev, int fd)
+{
+	char *device_path;
+	const char *argv[3];
+	const char umount_cmd[] = "/sbin/umount";
+	pid_t pid, rpid = 0;
+
+	asprintf(&device_path, _PATH_DEV "%s", dev);
+
+	argv[0] = umount_cmd;
+	argv[1] = device_path;
+	argv[2] = NULL;
+
+	pid = fork();
+
+	if (pid == -1)
+		return;
+
+	/*
+	 * We don't simply close the device fd, because that's what
+	 * guarantees us exclusive access to the device.
+	 *
+	 * OTOH, unmount(2) might get stuck if the device is kept
+	 * open.
+	 *
+	 * So after we have spawn the umount process, we monitor it
+	 * using the kvm(3) interface, and if we see it's waiting
+	 * for an answer from us -- which implies the umount process
+	 * still keeps the device occupied, regardless of the fd --
+	 * _then_ we close the device, interrupting thus unmount(2)
+         * in its futile waiting.
+	 */
+	if (pid) {
+		kvm_t    *kd;
+		struct kinfo_proc *kp;
+		char errbuf[_POSIX2_LINE_MAX];
+		int nentries;
+
+		kd = kvm_openfiles(_PATH_DEVNULL, _PATH_DEVNULL, NULL,
+			           O_RDONLY, errbuf);
+		if (!kd)
+			goto out;
+
+		for (;;) {
+			kp = kvm_getprocs(kd, KERN_PROC_PID, pid, &nentries);
+
+			if (kp && nentries == 1 &&
+			    strcmp(kp->ki_wmesg, FUSE_ANS_WCHAN) == 0) {
+				close(fd);
+
+				break;
+			}
+
+			rpid = waitpid(pid, NULL, WNOHANG);
+			if (rpid)
+				break;
+			usleep(10000);
+		}
+
+		kvm_close(kd);
+	} else {
+		close(fd);
+		execvp(umount_cmd, (char **)argv);
+		exit(1);
+	}
+
+out:
+	if (!rpid)
+		waitpid(pid, NULL, 0);
 }
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
-	char *ep, *umount_cmd, dev[128];
+	char *ep, dev[128];
 	struct stat sbuf;
 
 	(void)mountpoint;
@@ -229,9 +303,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	if (*ep != '\0')
 		return;
 
-	asprintf(&umount_cmd, "/sbin/umount " _PATH_DEV "%s", dev);
-	close(fd);
-	system(umount_cmd);
+	do_unmount(dev, fd);
 }
 
 /* Check if kernel is doing init in background */
