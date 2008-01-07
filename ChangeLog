@@ -1,3 +1,11 @@
+2008-01-07  Csaba Henk <csaba.henk@creo.hu>
+
+	* lib/mount_bsd.c:
+	- refine device closing in a race-free way
+	- add support for "-osubtype" on FreeBSD
+
+	* makeconf.sh: make it work under FreeBSD
+
 2008-01-03  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c: close device before unmount
