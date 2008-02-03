@@ -6,8 +6,9 @@
 	  (in FreeBSD a mount failure is not critical per se, as the daemon
 	  still could be mounted externally, but waiting for such an event
 	  is more confusing than fruitful)
-	- ditch the kvm(8) stuff and fix unmounting in a simple and sensible
-	  way
+	- ditch the kvm(8) stuff and simply use forced unmount which just
+	  won't block
+	- prettify option specifications
 
 2008-01-07  Csaba Henk <csaba.henk@creo.hu>
 
