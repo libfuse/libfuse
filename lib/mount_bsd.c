@@ -80,6 +80,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	/* options supported under both Linux and FBSD */
 	FUSE_OPT_KEY("allow_other",	    KEY_KERN),
 	FUSE_OPT_KEY("default_permissions", KEY_KERN),
+	FUSE_OPT_KEY("subtype=",	    KEY_KERN),
 	/* FBSD FUSE specific mount options */
 	FUSE_OPT_KEY("private",		    KEY_KERN),
 	FUSE_OPT_KEY("neglect_shares",	    KEY_KERN),
@@ -118,7 +119,6 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	 * handle them
 	 */
 	FUSE_OPT_KEY("fsname=",		    KEY_KERN),
-	FUSE_OPT_KEY("subtype=",	    KEY_KERN),
 	FUSE_OPT_KEY("nonempty",	    KEY_KERN),
 	FUSE_OPT_KEY("large_read",	    KEY_KERN),
 	FUSE_OPT_KEY("max_read=",	    KEY_KERN),
@@ -198,10 +198,12 @@ void fuse_unmount_compat22(const char *mountpoint)
 	 * privileges (in fact, that's what happens when we call the
 	 * setgid kmem fstat(1) utility).
 	 */
-	asprintf(&ssc, seekscript, getpid());
+	if (asprintf(&ssc, seekscript, getpid()) == -1)
+		return;
 
 	errno = 0;
 	sf = popen(ssc, "r");
+	free(ssc);
 	if (! sf)
 		return;
 
@@ -210,18 +212,20 @@ void fuse_unmount_compat22(const char *mountpoint)
 	if (rv)
 		return;
 
-	asprintf(&umount_cmd, "/sbin/umount %s", dev);
+	if (asprintf(&umount_cmd, "/sbin/umount %s", dev) == -1)
+		return;
 	system(umount_cmd);
+	free(umount_cmd);
 }
 
 static void do_unmount(char *dev, int fd)
 {
-	char *device_path;
+	char device_path[SPECNAMELEN + 12];
 	const char *argv[3];
 	const char umount_cmd[] = "/sbin/umount";
 	pid_t pid, rpid = 0;
 
-	asprintf(&device_path, _PATH_DEV "%s", dev);
+	snprintf(device_path, SPECNAMELEN + 12, _PATH_DEV "%s", dev);
 
 	argv[0] = umount_cmd;
 	argv[1] = device_path;
@@ -244,7 +248,7 @@ static void do_unmount(char *dev, int fd)
 	 * for an answer from us -- which implies the umount process
 	 * still keeps the device occupied, regardless of the fd --
 	 * _then_ we close the device, interrupting thus unmount(2)
-         * in its futile waiting.
+	 * in its futile waiting.
 	 */
 	if (pid) {
 		kvm_t    *kd;
@@ -326,7 +330,8 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 	const char *mountprog = FUSERMOUNT_PROG;
 	int fd;
 	char *fdnam, *dev;
-	pid_t pid;
+	pid_t pid, cpid;
+	int status;
 
 	fdnam = getenv("FUSE_DEV_FD");
 
@@ -361,6 +366,7 @@ mount:
 		goto out;
 
 	pid = fork();
+	cpid = pid;
 
 	if (pid == -1) {
 		perror("fuse: fork() failed");
@@ -389,8 +395,10 @@ mount:
 			const char *argv[32];
 			int a = 0;
 
-			if (! fdnam)
-				asprintf(&fdnam, "%d", fd);
+			if (! fdnam && asprintf(&fdnam, "%d", fd) == -1) {
+				perror("fuse: failed to assemble mount arguments");
+				exit(1);
+			}
 
 			argv[a++] = mountprog;
 			if (opts) {
@@ -408,7 +416,11 @@ mount:
 		exit(0);
 	}
 
-	waitpid(pid, NULL, 0);
+	if (waitpid(cpid, &status, 0) == -1 || WEXITSTATUS(status) != 0) {
+		perror("fuse: failed to mount file system");
+		close(fd);
+		return -1;
+	}
 
 out:
 	return fd;

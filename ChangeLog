@@ -1,3 +1,12 @@
+2008-02-03  Csaba Henk <csaba.henk@creo.hu>
+
+	* lib/mount_bsd.c:
+	- string formatting fixes
+	- exit if mounting has failed
+	  (in FreeBSD a mount failure is not critical per se, as the daemon
+	  still could be mounted externally, but waiting for such an event
+	  is more confusing than fruitful)
+
 2008-01-07  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c:
