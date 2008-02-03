@@ -235,17 +235,7 @@ static void do_unmount(char *dev, int fd)
 	if (pid == -1)
 		return;
 
-	if (pid) {
-		char c;
-
-		/*
-		 * This will get us banned by the kernel so if
-		 * unmount(2) is waiting for us (ie., for an answer
-		 * to DESTROY), then it will be interrupted and can
-		 * go on.
-		 */
-		read(fd, &c, 1);
-	} else {
+	if (pid == 0) {
 		close(fd);
 		execvp(umount_cmd, (char **)argv);
 		exit(1);
