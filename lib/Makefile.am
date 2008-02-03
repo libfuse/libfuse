@@ -36,9 +36,6 @@ libfuse_la_SOURCES = 		\
 
 libfuse_la_LDFLAGS = @libfuse_libs@ -version-number 2:7:2 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
-if BSD
-libfuse_la_LDFLAGS += -lkvm
-endif
 
 libulockmgr_la_SOURCES = ulockmgr.c
 libulockmgr_la_LDFLAGS = -version-number 1:0:1

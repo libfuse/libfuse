@@ -23,11 +23,9 @@
 #include <string.h>
 #include <paths.h>
 #include <limits.h>
-#include <kvm.h>
 
 #define FUSERMOUNT_PROG		"mount_fusefs"
 #define FUSE_DEV_TRUNK		"/dev/fuse"
-#define FUSE_ANS_WCHAN          "fu_ans"
 
 enum {
 	KEY_ALLOW_ROOT,
@@ -221,72 +219,39 @@ void fuse_unmount_compat22(const char *mountpoint)
 static void do_unmount(char *dev, int fd)
 {
 	char device_path[SPECNAMELEN + 12];
-	const char *argv[3];
+	const char *argv[4];
 	const char umount_cmd[] = "/sbin/umount";
-	pid_t pid, rpid = 0;
+	pid_t pid;
 
 	snprintf(device_path, SPECNAMELEN + 12, _PATH_DEV "%s", dev);
 
 	argv[0] = umount_cmd;
-	argv[1] = device_path;
-	argv[2] = NULL;
+	argv[1] = "-f";
+	argv[2] = device_path;
+	argv[3] = NULL;
 
 	pid = fork();
 
 	if (pid == -1)
 		return;
 
-	/*
-	 * We don't simply close the device fd, because that's what
-	 * guarantees us exclusive access to the device.
-	 *
-	 * OTOH, unmount(2) might get stuck if the device is kept
-	 * open.
-	 *
-	 * So after we have spawn the umount process, we monitor it
-	 * using the kvm(3) interface, and if we see it's waiting
-	 * for an answer from us -- which implies the umount process
-	 * still keeps the device occupied, regardless of the fd --
-	 * _then_ we close the device, interrupting thus unmount(2)
-	 * in its futile waiting.
-	 */
 	if (pid) {
-		kvm_t    *kd;
-		struct kinfo_proc *kp;
-		char errbuf[_POSIX2_LINE_MAX];
-		int nentries;
+		char c;
 
-		kd = kvm_openfiles(_PATH_DEVNULL, _PATH_DEVNULL, NULL,
-			           O_RDONLY, errbuf);
-		if (!kd)
-			goto out;
-
-		for (;;) {
-			kp = kvm_getprocs(kd, KERN_PROC_PID, pid, &nentries);
-
-			if (kp && nentries == 1 &&
-			    strcmp(kp->ki_wmesg, FUSE_ANS_WCHAN) == 0) {
-				close(fd);
-
-				break;
-			}
-
-			rpid = waitpid(pid, NULL, WNOHANG);
-			if (rpid)
-				break;
-			usleep(10000);
-		}
-
-		kvm_close(kd);
+		/*
+		 * This will get us banned by the kernel so if
+		 * unmount(2) is waiting for us (ie., for an answer
+		 * to DESTROY), then it will be interrupted and can
+		 * go on.
+		 */
+		read(fd, &c, 1);
 	} else {
 		close(fd);
 		execvp(umount_cmd, (char **)argv);
 		exit(1);
 	}
 
-out:
-	if (!rpid)
-		waitpid(pid, NULL, 0);
+	waitpid(pid, NULL, 0);
 }
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
