@@ -9,6 +9,7 @@
 	- ditch the kvm(8) stuff and simply use forced unmount which just
 	  won't block
 	- prettify option specifications
+	- add "-onosync_unmount" kernel option
 
 2008-01-07  Csaba Henk <csaba.henk@creo.hu>
 
