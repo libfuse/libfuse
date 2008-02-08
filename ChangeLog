@@ -15,6 +15,9 @@
 
 	* Support the st_blksize field in struct stat
 
+	* If the "FUSE_THREAD_STACK" environment is set, initialize the
+	stack size of threads by this value.  Patch by Florin Malita
+
 2008-02-03  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c:

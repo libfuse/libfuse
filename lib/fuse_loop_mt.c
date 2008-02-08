@@ -19,6 +19,9 @@
 #include <errno.h>
 #include <sys/time.h>
 
+/* Environment var controlling the thread stack size */
+#define ENVNAME_THREAD_STACK "FUSE_THREAD_STACK"
+
 struct fuse_worker {
 	struct fuse_worker *prev;
 	struct fuse_worker *next;
@@ -131,6 +134,8 @@ static int fuse_start_thread(struct fuse_mt *mt)
 	sigset_t oldset;
 	sigset_t newset;
 	int res;
+	pthread_attr_t attr;
+	char *stack_size;
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
 	if (!w) {
 		fprintf(stderr, "fuse: failed to allocate worker structure\n");
@@ -146,6 +151,12 @@ static int fuse_start_thread(struct fuse_mt *mt)
 		return -1;
 	}
 
+	/* Override default stack size */
+	pthread_attr_init(&attr);
+	stack_size = getenv(ENVNAME_THREAD_STACK);
+	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
+		fprintf(stderr, "fuse: invalid stack size: %s\n", stack_size);
+
 	/* Disallow signal reception in worker threads */
 	sigemptyset(&newset);
 	sigaddset(&newset, SIGTERM);
@@ -153,8 +164,9 @@ static int fuse_start_thread(struct fuse_mt *mt)
 	sigaddset(&newset, SIGHUP);
 	sigaddset(&newset, SIGQUIT);
 	pthread_sigmask(SIG_BLOCK, &newset, &oldset);
-	res = pthread_create(&w->thread_id, NULL, fuse_do_work, w);
+	res = pthread_create(&w->thread_id, &attr, fuse_do_work, w);
 	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
+	pthread_attr_destroy(&attr);
 	if (res != 0) {
 		fprintf(stderr, "fuse: error creating thread: %s\n",
 			strerror(res));
