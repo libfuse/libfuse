@@ -27,11 +27,17 @@ static struct subdir *subdir_get(void)
 	return fuse_get_context()->private_data;
 }
 
-static char *subdir_addpath(struct subdir *d, const char *path)
+static int subdir_addpath(struct subdir *d, const char *path, char **newpathp)
 {
-	unsigned newlen = d->baselen + strlen(path);
-	char *newpath = malloc(newlen + 2);
-	if (newpath) {
+	char *newpath = NULL;
+
+	if (path != NULL) {
+		unsigned newlen = d->baselen + strlen(path);
+
+		newpath = malloc(newlen + 2);
+		if (!newpath)
+			return -ENOMEM;
+
 		if (path[0] == '/')
 			path++;
 		strcpy(newpath, d->base);
@@ -39,15 +45,17 @@ static char *subdir_addpath(struct subdir *d, const char *path)
 		if (!newpath[0])
 			strcpy(newpath, ".");
 	}
-	return newpath;
+	*newpathp = newpath;
+
+	return 0;
 }
 
 static int subdir_getattr(const char *path, struct stat *stbuf)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_getattr(d->next, newpath, stbuf);
 		free(newpath);
 	}
@@ -58,9 +66,9 @@ static int subdir_fgetattr(const char *path, struct stat *stbuf,
 			   struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_fgetattr(d->next, newpath, stbuf, fi);
 		free(newpath);
 	}
@@ -70,9 +78,9 @@ static int subdir_fgetattr(const char *path, struct stat *stbuf,
 static int subdir_access(const char *path, int mask)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_access(d->next, newpath, mask);
 		free(newpath);
 	}
@@ -146,9 +154,9 @@ static void transform_symlink(struct subdir *d, const char *path,
 static int subdir_readlink(const char *path, char *buf, size_t size)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_readlink(d->next, newpath, buf, size);
 		if (!err && d->rellinks)
 			transform_symlink(d, newpath, buf, size);
@@ -160,9 +168,9 @@ static int subdir_readlink(const char *path, char *buf, size_t size)
 static int subdir_opendir(const char *path, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_opendir(d->next, newpath, fi);
 		free(newpath);
 	}
@@ -174,9 +182,9 @@ static int subdir_readdir(const char *path, void *buf,
 			  struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_readdir(d->next, newpath, buf, filler, offset,
 				      fi);
 		free(newpath);
@@ -187,9 +195,9 @@ static int subdir_readdir(const char *path, void *buf,
 static int subdir_releasedir(const char *path, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_releasedir(d->next, newpath, fi);
 		free(newpath);
 	}
@@ -199,9 +207,9 @@ static int subdir_releasedir(const char *path, struct fuse_file_info *fi)
 static int subdir_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_mknod(d->next, newpath, mode, rdev);
 		free(newpath);
 	}
@@ -211,9 +219,9 @@ static int subdir_mknod(const char *path, mode_t mode, dev_t rdev)
 static int subdir_mkdir(const char *path, mode_t mode)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_mkdir(d->next, newpath, mode);
 		free(newpath);
 	}
@@ -223,9 +231,9 @@ static int subdir_mkdir(const char *path, mode_t mode)
 static int subdir_unlink(const char *path)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_unlink(d->next, newpath);
 		free(newpath);
 	}
@@ -235,9 +243,9 @@ static int subdir_unlink(const char *path)
 static int subdir_rmdir(const char *path)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_rmdir(d->next, newpath);
 		free(newpath);
 	}
@@ -247,9 +255,9 @@ static int subdir_rmdir(const char *path)
 static int subdir_symlink(const char *from, const char *path)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_symlink(d->next, from, newpath);
 		free(newpath);
 	}
@@ -259,35 +267,43 @@ static int subdir_symlink(const char *from, const char *path)
 static int subdir_rename(const char *from, const char *to)
 {
 	struct subdir *d = subdir_get();
-	char *newfrom = subdir_addpath(d, from);
-	char *newto = subdir_addpath(d, to);
-	int err = -ENOMEM;
-	if (newfrom && newto)
-		err = fuse_fs_rename(d->next, newfrom, newto);
-	free(newfrom);
-	free(newto);
+	char *newfrom;
+	char *newto;
+	int err = subdir_addpath(d, from, &newfrom);
+	if (!err) {
+		err = subdir_addpath(d, to, &newto);
+		if (!err) {
+			err = fuse_fs_rename(d->next, newfrom, newto);
+			free(newto);
+		}
+		free(newfrom);
+	}
 	return err;
 }
 
 static int subdir_link(const char *from, const char *to)
 {
 	struct subdir *d = subdir_get();
-	char *newfrom = subdir_addpath(d, from);
-	char *newto = subdir_addpath(d, to);
-	int err = -ENOMEM;
-	if (newfrom && newto)
-		err = fuse_fs_link(d->next, newfrom, newto);
-	free(newfrom);
-	free(newto);
+	char *newfrom;
+	char *newto;
+	int err = subdir_addpath(d, from, &newfrom);
+	if (!err) {
+		err = subdir_addpath(d, to, &newto);
+		if (!err) {
+			err = fuse_fs_link(d->next, newfrom, newto);
+			free(newto);
+		}
+		free(newfrom);
+	}
 	return err;
 }
 
 static int subdir_chmod(const char *path, mode_t mode)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_chmod(d->next, newpath, mode);
 		free(newpath);
 	}
@@ -297,9 +313,9 @@ static int subdir_chmod(const char *path, mode_t mode)
 static int subdir_chown(const char *path, uid_t uid, gid_t gid)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_chown(d->next, newpath, uid, gid);
 		free(newpath);
 	}
@@ -309,9 +325,9 @@ static int subdir_chown(const char *path, uid_t uid, gid_t gid)
 static int subdir_truncate(const char *path, off_t size)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_truncate(d->next, newpath, size);
 		free(newpath);
 	}
@@ -322,9 +338,9 @@ static int subdir_ftruncate(const char *path, off_t size,
 			    struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_ftruncate(d->next, newpath, size, fi);
 		free(newpath);
 	}
@@ -334,9 +350,9 @@ static int subdir_ftruncate(const char *path, off_t size,
 static int subdir_utimens(const char *path, const struct timespec ts[2])
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_utimens(d->next, newpath, ts);
 		free(newpath);
 	}
@@ -347,9 +363,9 @@ static int subdir_create(const char *path, mode_t mode,
 			 struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_create(d->next, newpath, mode, fi);
 		free(newpath);
 	}
@@ -359,9 +375,9 @@ static int subdir_create(const char *path, mode_t mode,
 static int subdir_open(const char *path, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_open(d->next, newpath, fi);
 		free(newpath);
 	}
@@ -372,9 +388,9 @@ static int subdir_read(const char *path, char *buf, size_t size, off_t offset,
 		       struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_read(d->next, newpath, buf, size, offset, fi);
 		free(newpath);
 	}
@@ -385,9 +401,9 @@ static int subdir_write(const char *path, const char *buf, size_t size,
 			off_t offset, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_write(d->next, newpath, buf, size, offset, fi);
 		free(newpath);
 	}
@@ -397,9 +413,9 @@ static int subdir_write(const char *path, const char *buf, size_t size,
 static int subdir_statfs(const char *path, struct statvfs *stbuf)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_statfs(d->next, newpath, stbuf);
 		free(newpath);
 	}
@@ -409,9 +425,9 @@ static int subdir_statfs(const char *path, struct statvfs *stbuf)
 static int subdir_flush(const char *path, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_flush(d->next, newpath, fi);
 		free(newpath);
 	}
@@ -421,9 +437,9 @@ static int subdir_flush(const char *path, struct fuse_file_info *fi)
 static int subdir_release(const char *path, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_release(d->next, newpath, fi);
 		free(newpath);
 	}
@@ -434,9 +450,9 @@ static int subdir_fsync(const char *path, int isdatasync,
 			struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_fsync(d->next, newpath, isdatasync, fi);
 		free(newpath);
 	}
@@ -447,9 +463,9 @@ static int subdir_fsyncdir(const char *path, int isdatasync,
 			   struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_fsyncdir(d->next, newpath, isdatasync, fi);
 		free(newpath);
 	}
@@ -460,9 +476,9 @@ static int subdir_setxattr(const char *path, const char *name,
 			   const char *value, size_t size, int flags)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_setxattr(d->next, newpath, name, value, size,
 				       flags);
 		free(newpath);
@@ -474,9 +490,9 @@ static int subdir_getxattr(const char *path, const char *name, char *value,
 			   size_t size)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_getxattr(d->next, newpath, name, value, size);
 		free(newpath);
 	}
@@ -486,9 +502,9 @@ static int subdir_getxattr(const char *path, const char *name, char *value,
 static int subdir_listxattr(const char *path, char *list, size_t size)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_listxattr(d->next, newpath, list, size);
 		free(newpath);
 	}
@@ -498,9 +514,9 @@ static int subdir_listxattr(const char *path, char *list, size_t size)
 static int subdir_removexattr(const char *path, const char *name)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_removexattr(d->next, newpath, name);
 		free(newpath);
 	}
@@ -511,9 +527,9 @@ static int subdir_lock(const char *path, struct fuse_file_info *fi, int cmd,
 		       struct flock *lock)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_lock(d->next, newpath, fi, cmd, lock);
 		free(newpath);
 	}
@@ -523,9 +539,9 @@ static int subdir_lock(const char *path, struct fuse_file_info *fi, int cmd,
 static int subdir_bmap(const char *path, size_t blocksize, uint64_t *idx)
 {
 	struct subdir *d = subdir_get();
-	char *newpath = subdir_addpath(d, path);
-	int err = -ENOMEM;
-	if (newpath) {
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
 		err = fuse_fs_bmap(d->next, newpath, blocksize, idx);
 		free(newpath);
 	}
@@ -584,6 +600,8 @@ static struct fuse_operations subdir_oper = {
 	.removexattr	= subdir_removexattr,
 	.lock		= subdir_lock,
 	.bmap		= subdir_bmap,
+
+	.flag_nullpath_ok = 1,
 };
 
 static struct fuse_opt subdir_opts[] = {

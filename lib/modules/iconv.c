@@ -42,17 +42,27 @@ static struct iconv *iconv_get(void)
 static int iconv_convpath(struct iconv *ic, const char *path, char **newpathp,
 			  int fromfs)
 {
-	size_t pathlen = strlen(path);
-	size_t newpathlen = pathlen * 4;
-	char *newpath = malloc(newpathlen + 1);
-	size_t plen = newpathlen;
-	char *p = newpath;
+	size_t pathlen;
+	size_t newpathlen;
+	char *newpath;
+	size_t plen;
+	char *p;
 	size_t res;
 	int err;
 
+	if (path == NULL) {
+		*newpathp = NULL;
+		return 0;
+	}
+
+	pathlen = strlen(path);
+	newpathlen = pathlen * 4;
+	newpath = malloc(newpathlen + 1);
 	if (!newpath)
 		return -ENOMEM;
 
+	plen = newpathlen;
+	p = newpath;
 	pthread_mutex_lock(&ic->lock);
 	do {
 		res = iconv(fromfs ? ic->fromfs : ic->tofs, (char **) &path,
@@ -607,6 +617,8 @@ static struct fuse_operations iconv_oper = {
 	.removexattr	= iconv_removexattr,
 	.lock		= iconv_lock,
 	.bmap		= iconv_bmap,
+
+	.flag_nullpath_ok = 1,
 };
 
 static struct fuse_opt iconv_opts[] = {

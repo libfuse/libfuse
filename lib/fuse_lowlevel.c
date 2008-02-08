@@ -458,10 +458,22 @@ static void do_forget(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	(void) inarg;
+	struct fuse_file_info *fip = NULL;
+	struct fuse_file_info fi;
+
+	if (req->f->conn.proto_minor >= 9) {
+		struct fuse_getattr_in *arg = (struct fuse_getattr_in *) inarg;
+
+		if (arg->getattr_flags & FUSE_GETATTR_FH) {
+			memset(&fi, 0, sizeof(fi));
+			fi.fh = arg->fh;
+			fi.fh_old = fi.fh;
+			fip = &fi;
+		}
+	}
 
 	if (req->f->op.getattr)
-		req->f->op.getattr(req, nodeid, NULL);
+		req->f->op.getattr(req, nodeid, fip);
 	else
 		fuse_reply_err(req, ENOSYS);
 }

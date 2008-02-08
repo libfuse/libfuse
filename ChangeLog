@@ -6,6 +6,11 @@
 
 	* Update kernel interface to 7.9
 
+	* Support receiving file handle from kernel in GETATTR request
+
+	* Allow operations with a NULL path argument, if the filesystem
+	supports it
+
 2008-02-03  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c:

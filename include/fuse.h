@@ -423,6 +423,20 @@ struct fuse_operations {
 	 * Introduced in version 2.6
 	 */
 	int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
+
+	/**
+	 * Flag indicating, that the filesystem can accept a NULL path
+	 * as the first argument for the following operations:
+	 *
+	 * read, write, flush, release, fsync, readdir, releasedir,
+	 * fsyncdir, ftruncate, fgetattr and lock
+	 */
+	unsigned int flag_nullpath_ok : 1;
+
+	/**
+	 * Reserved flags, don't set
+	 */
+	unsigned int flag_reserved : 31;
 };
 
 /** Extra context that may be needed by some filesystems
