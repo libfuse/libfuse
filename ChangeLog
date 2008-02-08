@@ -1,3 +1,7 @@
+2008-02-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Block SIGCHLD when executing mount and umount
+
 2008-02-03  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c:
