@@ -4,14 +4,16 @@
 
 	* fusexmp_fh: avoid unnecessary seeking in readdir
 
-	* Update kernel interface to 7.9
+	* Update kernel interface to 7.9:
 
 	* Support receiving file handle from kernel in GETATTR request
 
 	* Allow operations with a NULL path argument, if the filesystem
 	supports it
 
-	* Add support for atomic open(O_TRUNC)
+	* Add support atomic open(O_TRUNC)
+
+	* Support the st_blksize field in struct stat
 
 2008-02-03  Csaba Henk <csaba.henk@creo.hu>
 

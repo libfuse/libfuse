@@ -71,6 +71,7 @@ static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 	attr->gid	= stbuf->st_gid;
 	attr->rdev	= stbuf->st_rdev;
 	attr->size	= stbuf->st_size;
+	attr->blksize	= stbuf->st_blksize;
 	attr->blocks	= stbuf->st_blocks;
 	attr->atime	= stbuf->st_atime;
 	attr->mtime	= stbuf->st_mtime;
@@ -320,6 +321,8 @@ static void fill_open(struct fuse_open_out *arg,
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 {
 	struct fuse_entry_out arg;
+	size_t size = req->f->conn.proto_minor < 9 ?
+		FUSE_COMPAT_ENTRY_OUT_SIZE : sizeof(arg);
 
 	/* before ABI 7.4 e->ino == 0 was invalid, only ENOENT meant
 	   negative entry */
@@ -328,34 +331,38 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 
 	memset(&arg, 0, sizeof(arg));
 	fill_entry(&arg, e);
-	return send_reply_ok(req, &arg, sizeof(arg));
+	return send_reply_ok(req, &arg, size);
 }
 
 int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 		      const struct fuse_file_info *f)
 {
-	struct {
-		struct fuse_entry_out e;
-		struct fuse_open_out o;
-	} arg;
+	char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_open_out)];
+	size_t entrysize = req->f->conn.proto_minor < 9 ?
+		FUSE_COMPAT_ENTRY_OUT_SIZE : sizeof(struct fuse_entry_out);
+	struct fuse_entry_out *earg = (struct fuse_entry_out *) buf;
+	struct fuse_open_out *oarg = (struct fuse_open_out *) (buf + entrysize);
 
-	memset(&arg, 0, sizeof(arg));
-	fill_entry(&arg.e, e);
-	fill_open(&arg.o, f);
-	return send_reply_ok(req, &arg, sizeof(arg));
+	memset(buf, 0, sizeof(buf));
+	fill_entry(earg, e);
+	fill_open(oarg, f);
+	return send_reply_ok(req, buf,
+			     entrysize + sizeof(struct fuse_open_out));
 }
 
 int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 		    double attr_timeout)
 {
 	struct fuse_attr_out arg;
+	size_t size = req->f->conn.proto_minor < 9 ?
+		FUSE_COMPAT_ATTR_OUT_SIZE : sizeof(arg);
 
 	memset(&arg, 0, sizeof(arg));
 	arg.attr_valid = calc_timeout_sec(attr_timeout);
 	arg.attr_valid_nsec = calc_timeout_nsec(attr_timeout);
 	convert_stat(attr, &arg.attr);
 
-	return send_reply_ok(req, &arg, sizeof(arg));
+	return send_reply_ok(req, &arg, size);
 }
 
 int fuse_reply_readlink(fuse_req_t req, const char *linkname)
