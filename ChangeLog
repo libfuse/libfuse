@@ -2,6 +2,8 @@
 
 	* Block SIGCHLD when executing mount and umount
 
+	* fusexmp_fh: avoid unnecessary seeking in readdir
+
 2008-02-03  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c:

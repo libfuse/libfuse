@@ -19,6 +19,7 @@
 #include <fuse.h>
 #include <ulockmgr.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -77,36 +78,67 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 	return 0;
 }
 
+struct xmp_dirp {
+	DIR *dp;
+	struct dirent *entry;
+	off_t offset;
+};
+
 static int xmp_opendir(const char *path, struct fuse_file_info *fi)
 {
-	DIR *dp = opendir(path);
-	if (dp == NULL)
-		return -errno;
+	int res;
+	struct xmp_dirp *d = malloc(sizeof(struct xmp_dirp));
+	if (d == NULL)
+		return -ENOMEM;
 
-	fi->fh = (unsigned long) dp;
+	d->dp = opendir(path);
+	if (d->dp == NULL) {
+		res = -errno;
+		free(d);
+		return res;
+	}
+	d->offset = 0;
+	d->entry = NULL;
+
+	fi->fh = (unsigned long) d;
 	return 0;
 }
 
-static inline DIR *get_dirp(struct fuse_file_info *fi)
+static inline struct xmp_dirp *get_dirp(struct fuse_file_info *fi)
 {
-	return (DIR *) (uintptr_t) fi->fh;
+	return (struct xmp_dirp *) (uintptr_t) fi->fh;
 }
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-	DIR *dp = get_dirp(fi);
-	struct dirent *de;
+	struct xmp_dirp *d = get_dirp(fi);
 
 	(void) path;
-	seekdir(dp, offset);
-	while ((de = readdir(dp)) != NULL) {
+	if (offset != d->offset) {
+		seekdir(d->dp, offset);
+		d->entry = NULL;
+		d->offset = offset;
+	}
+	while (1) {
 		struct stat st;
+		off_t nextoff;
+
+		if (!d->entry) {
+			d->entry = readdir(d->dp);
+			if (!d->entry)
+				break;
+		}
+
 		memset(&st, 0, sizeof(st));
-		st.st_ino = de->d_ino;
-		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, telldir(dp)))
+		st.st_ino = d->entry->d_ino;
+		st.st_mode = d->entry->d_type << 12;
+		nextoff = telldir(d->dp);
+		if (filler(buf, d->entry->d_name, &st, nextoff))
 			break;
+
+		d->entry = NULL;
+		d->offset = nextoff;
 	}
 
 	return 0;
@@ -114,9 +146,10 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 static int xmp_releasedir(const char *path, struct fuse_file_info *fi)
 {
-	DIR *dp = get_dirp(fi);
+	struct xmp_dirp *d = get_dirp(fi);
 	(void) path;
-	closedir(dp);
+	closedir(d->dp);
+	free(d);
 	return 0;
 }
 
