@@ -11,6 +11,8 @@
 	* Allow operations with a NULL path argument, if the filesystem
 	supports it
 
+	* Add support for atomic open(O_TRUNC)
+
 2008-02-03  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c:

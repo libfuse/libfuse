@@ -37,22 +37,22 @@ struct helper_opts {
 #define FUSE_HELPER_OPT(t, p) { t, offsetof(struct helper_opts, p), 1 }
 
 static const struct fuse_opt fuse_helper_opts[] = {
-	FUSE_HELPER_OPT("-d",	       foreground),
-	FUSE_HELPER_OPT("debug",       foreground),
-	FUSE_HELPER_OPT("-f",	       foreground),
-	FUSE_HELPER_OPT("-s",	       singlethread),
-	FUSE_HELPER_OPT("fsname=",     nodefault_subtype),
-	FUSE_HELPER_OPT("subtype=",    nodefault_subtype),
+	FUSE_HELPER_OPT("-d",		foreground),
+	FUSE_HELPER_OPT("debug",	foreground),
+	FUSE_HELPER_OPT("-f",		foreground),
+	FUSE_HELPER_OPT("-s",		singlethread),
+	FUSE_HELPER_OPT("fsname=",	nodefault_subtype),
+	FUSE_HELPER_OPT("subtype=",	nodefault_subtype),
 
-	FUSE_OPT_KEY("-h",	    KEY_HELP),
-	FUSE_OPT_KEY("--help",	    KEY_HELP),
-	FUSE_OPT_KEY("-ho",	    KEY_HELP_NOHEADER),
-	FUSE_OPT_KEY("-V",	    KEY_VERSION),
-	FUSE_OPT_KEY("--version",   KEY_VERSION),
-	FUSE_OPT_KEY("-d",	    FUSE_OPT_KEY_KEEP),
-	FUSE_OPT_KEY("debug",	    FUSE_OPT_KEY_KEEP),
-	FUSE_OPT_KEY("fsname=",	    FUSE_OPT_KEY_KEEP),
-	FUSE_OPT_KEY("subtype=",    FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_KEY("-h",		KEY_HELP),
+	FUSE_OPT_KEY("--help",		KEY_HELP),
+	FUSE_OPT_KEY("-ho",		KEY_HELP_NOHEADER),
+	FUSE_OPT_KEY("-V",		KEY_VERSION),
+	FUSE_OPT_KEY("--version",	KEY_VERSION),
+	FUSE_OPT_KEY("-d",		FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_KEY("debug",		FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_KEY("fsname=",		FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_KEY("subtype=",	FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_END
 };
 
@@ -62,9 +62,9 @@ static void usage(const char *progname)
 		"usage: %s mountpoint [options]\n\n", progname);
 	fprintf(stderr,
 		"general options:\n"
-		"    -o opt,[opt...]	    mount options\n"
-		"    -h	  --help	    print help\n"
-		"    -V	  --version	    print version\n"
+		"    -o opt,[opt...]        mount options\n"
+		"    -h   --help            print help\n"
+		"    -V   --version         print version\n"
 		"\n");
 }
 
@@ -72,9 +72,9 @@ static void helper_help(void)
 {
 	fprintf(stderr,
 		"FUSE options:\n"
-		"    -d	  -o debug	    enable debug output (implies -f)\n"
-		"    -f			    foreground operation\n"
-		"    -s			    disable multi-threaded operation\n"
+		"    -d   -o debug          enable debug output (implies -f)\n"
+		"    -f                     foreground operation\n"
+		"    -s                     disable multi-threaded operation\n"
 		"\n"
 		);
 }

@@ -110,9 +110,14 @@ struct fuse_conn_info {
 	unsigned max_readahead;
 
 	/**
+	 * Is atomic open+truncate supported
+	 */
+	unsigned atomic_o_trunc;
+
+	/**
 	 * For future use.
 	 */
-	unsigned reserved[27];
+	unsigned reserved[26];
 };
 
 struct fuse_session;

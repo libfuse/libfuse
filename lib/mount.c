@@ -66,56 +66,56 @@ struct mount_opts {
 #define FUSE_MOUNT_OPT(t, p) { t, offsetof(struct mount_opts, p), 1 }
 
 static const struct fuse_opt fuse_mount_opts[] = {
-	FUSE_MOUNT_OPT("allow_other",	    allow_other),
-	FUSE_MOUNT_OPT("allow_root",	    allow_root),
-	FUSE_MOUNT_OPT("nonempty",	    nonempty),
-	FUSE_MOUNT_OPT("blkdev",	    blkdev),
-	FUSE_MOUNT_OPT("fsname=%s",	    fsname),
-	FUSE_MOUNT_OPT("subtype=%s",	    subtype),
-	FUSE_OPT_KEY("allow_other",	    KEY_KERN_OPT),
-	FUSE_OPT_KEY("allow_root",	    KEY_ALLOW_ROOT),
-	FUSE_OPT_KEY("nonempty",	    KEY_FUSERMOUNT_OPT),
-	FUSE_OPT_KEY("blkdev",		    KEY_FUSERMOUNT_OPT),
-	FUSE_OPT_KEY("fsname=",		    KEY_FUSERMOUNT_OPT),
-	FUSE_OPT_KEY("subtype=",	    KEY_SUBTYPE_OPT),
-	FUSE_OPT_KEY("large_read",	    KEY_KERN_OPT),
-	FUSE_OPT_KEY("blksize=",	    KEY_KERN_OPT),
-	FUSE_OPT_KEY("default_permissions", KEY_KERN_OPT),
-	FUSE_OPT_KEY("max_read=",	    KEY_KERN_OPT),
-	FUSE_OPT_KEY("max_read=",	    FUSE_OPT_KEY_KEEP),
-	FUSE_OPT_KEY("user=",		    KEY_MTAB_OPT),
-	FUSE_OPT_KEY("-r",		    KEY_RO),
-	FUSE_OPT_KEY("ro",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("rw",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("suid",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("nosuid",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("dev",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("nodev",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("exec",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("noexec",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("async",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("sync",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("dirsync",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("atime",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("noatime",		    KEY_KERN_FLAG),
-	FUSE_OPT_KEY("-h",		    KEY_HELP),
-	FUSE_OPT_KEY("--help",		    KEY_HELP),
-	FUSE_OPT_KEY("-V",		    KEY_VERSION),
-	FUSE_OPT_KEY("--version",	    KEY_VERSION),
+	FUSE_MOUNT_OPT("allow_other",		allow_other),
+	FUSE_MOUNT_OPT("allow_root",		allow_root),
+	FUSE_MOUNT_OPT("nonempty",		nonempty),
+	FUSE_MOUNT_OPT("blkdev",		blkdev),
+	FUSE_MOUNT_OPT("fsname=%s",		fsname),
+	FUSE_MOUNT_OPT("subtype=%s",		subtype),
+	FUSE_OPT_KEY("allow_other",		KEY_KERN_OPT),
+	FUSE_OPT_KEY("allow_root",		KEY_ALLOW_ROOT),
+	FUSE_OPT_KEY("nonempty",		KEY_FUSERMOUNT_OPT),
+	FUSE_OPT_KEY("blkdev",			KEY_FUSERMOUNT_OPT),
+	FUSE_OPT_KEY("fsname=",			KEY_FUSERMOUNT_OPT),
+	FUSE_OPT_KEY("subtype=",		KEY_SUBTYPE_OPT),
+	FUSE_OPT_KEY("large_read",		KEY_KERN_OPT),
+	FUSE_OPT_KEY("blksize=",		KEY_KERN_OPT),
+	FUSE_OPT_KEY("default_permissions",	KEY_KERN_OPT),
+	FUSE_OPT_KEY("max_read=",		KEY_KERN_OPT),
+	FUSE_OPT_KEY("max_read=",		FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_KEY("user=",			KEY_MTAB_OPT),
+	FUSE_OPT_KEY("-r",			KEY_RO),
+	FUSE_OPT_KEY("ro",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("rw",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("suid",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("nosuid",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("dev",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("nodev",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("exec",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("noexec",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("async",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("sync",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("dirsync",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("atime",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("-h",			KEY_HELP),
+	FUSE_OPT_KEY("--help",			KEY_HELP),
+	FUSE_OPT_KEY("-V",			KEY_VERSION),
+	FUSE_OPT_KEY("--version",		KEY_VERSION),
 	FUSE_OPT_END
 };
 
 static void mount_help(void)
 {
 	fprintf(stderr,
-"    -o allow_other	    allow access to other users\n"
-"    -o allow_root	    allow access to root\n"
-"    -o nonempty	    allow mounts over non-empty file/dir\n"
+"    -o allow_other         allow access to other users\n"
+"    -o allow_root          allow access to root\n"
+"    -o nonempty            allow mounts over non-empty file/dir\n"
 "    -o default_permissions enable permission checking by kernel\n"
-"    -o fsname=NAME	    set filesystem name\n"
-"    -o subtype=NAME	    set filesystem type\n"
-"    -o large_read	    issue large read requests (2.4 only)\n"
-"    -o max_read=N	    set maximum size of read requests\n"
+"    -o fsname=NAME         set filesystem name\n"
+"    -o subtype=NAME        set filesystem type\n"
+"    -o large_read          issue large read requests (2.4 only)\n"
+"    -o max_read=N          set maximum size of read requests\n"
 "\n");
 }
 
