@@ -1,3 +1,9 @@
+2008-02-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add missing bdi_init() and bdi_destroy() calls for 2.6.24
+	kernel.  Lack of bdi_init() could cause write to hang.  Report
+	forwarded by Szakacsits Szabolcs from the NTFS-3G forum.
+
 2008-02-03  Csaba Henk <csaba.henk@creo.hu>
 
 	* lib/mount_bsd.c:

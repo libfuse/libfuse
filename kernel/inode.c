@@ -470,6 +470,13 @@ static struct fuse_conn *new_conn(void)
 
 	fc = kzalloc(sizeof(*fc), GFP_KERNEL);
 	if (fc) {
+#ifdef KERNEL_2_6_24_PLUS
+		int err = bdi_init(&fc->bdi);
+		if (err) {
+			kfree(fc);
+			return NULL;
+		}
+#endif
 		spin_lock_init(&fc->lock);
 		mutex_init(&fc->inst_mutex);
 		atomic_set(&fc->count, 1);
@@ -496,6 +503,9 @@ void fuse_conn_put(struct fuse_conn *fc)
 		if (fc->destroy_req)
 			fuse_request_free(fc->destroy_req);
 		mutex_destroy(&fc->inst_mutex);
+#ifdef KERNEL_2_6_24_PLUS
+		bdi_destroy(&fc->bdi);
+#endif
 		kfree(fc);
 	}
 }
