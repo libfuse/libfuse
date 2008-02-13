@@ -102,7 +102,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 static void mount_help(void)
 {
 	fprintf(stderr,
-		"    -o allow_root	    allow access to root\n"
+		"    -o allow_root          allow access to root\n"
 		);
 	system(FUSERMOUNT_PROG " --help");
 	fputc('\n', stderr);
@@ -156,7 +156,7 @@ void fuse_unmount_compat22(const char *mountpoint)
 		"exec 2>/dev/null; "
 		"/usr/bin/fstat " FUSE_DEV_TRUNK "* | "
 		"/usr/bin/awk 'BEGIN{ getline; if (! ($3 == \"PID\" && $10 == \"NAME\")) exit 1; }; "
-		"	       { if ($3 == %d) print $10; }' | "
+		"              { if ($3 == %d) print $10; }' | "
 		"/usr/bin/sort | "
 		"/usr/bin/uniq | "
 		"/usr/bin/awk '{ i += 1; if (i > 1){ exit 1; }; printf; }; END{ if (i == 0) exit 1; }'";

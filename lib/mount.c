@@ -108,14 +108,14 @@ static const struct fuse_opt fuse_mount_opts[] = {
 static void mount_help(void)
 {
 	fprintf(stderr,
-"    -o allow_other	    allow access to other users\n"
-"    -o allow_root	    allow access to root\n"
-"    -o nonempty	    allow mounts over non-empty file/dir\n"
+"    -o allow_other         allow access to other users\n"
+"    -o allow_root          allow access to root\n"
+"    -o nonempty            allow mounts over non-empty file/dir\n"
 "    -o default_permissions enable permission checking by kernel\n"
-"    -o fsname=NAME	    set filesystem name\n"
-"    -o subtype=NAME	    set filesystem type\n"
-"    -o large_read	    issue large read requests (2.4 only)\n"
-"    -o max_read=N	    set maximum size of read requests\n"
+"    -o fsname=NAME         set filesystem name\n"
+"    -o subtype=NAME        set filesystem type\n"
+"    -o large_read          issue large read requests (2.4 only)\n"
+"    -o max_read=N          set maximum size of read requests\n"
 "\n");
 }
 

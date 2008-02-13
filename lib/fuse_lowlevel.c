@@ -1213,10 +1213,11 @@ static void fuse_ll_version(void)
 static void fuse_ll_help(void)
 {
 	fprintf(stderr,
-"    -o max_write=N	    set maximum size of write requests\n"
-"    -o max_readahead=N	    set maximum readahead\n"
-"    -o async_read	    perform reads asynchronously (default)\n"
-"    -o sync_read	    perform reads synchronously\n");
+"    -o max_write=N         set maximum size of write requests\n"
+"    -o max_readahead=N     set maximum readahead\n"
+"    -o async_read          perform reads asynchronously (default)\n"
+"    -o sync_read           perform reads synchronously\n"
+"    -o atomic_o_trunc      enable atomic open+truncate support\n");
 }
 
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,
