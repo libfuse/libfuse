@@ -62,6 +62,9 @@ static int null_read(const char *path, char *buf, size_t size,
 	if(strcmp(path, "/") != 0)
 		return -ENOENT;
 
+	if (offset >= (1ULL << 32))
+		return 0;
+
 	return size;
 }
 
