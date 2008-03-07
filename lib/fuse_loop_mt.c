@@ -70,7 +70,11 @@ static void *fuse_do_work(void *data)
 	while (!fuse_session_exited(mt->se)) {
 		int isforget = 0;
 		struct fuse_chan *ch = mt->prevch;
-		int res = fuse_chan_recv(&ch, w->buf, w->bufsize);
+		int res;
+
+		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+		res = fuse_chan_recv(&ch, w->buf, w->bufsize);
+		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
 		if (res <= 0) {
@@ -124,6 +128,7 @@ static void *fuse_do_work(void *data)
 	}
 
 	sem_post(&mt->finish);
+	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 	pause();
 
 	return NULL;

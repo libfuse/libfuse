@@ -1,3 +1,12 @@
+2008-03-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add queuing on contention to per-node lock algorithm, to avoid
+	starvation.
+
+	* Only enable cancelation when reading a request, otherwise
+	cancellation could happen with a mutex held, which could hang the
+	process on umount
+
 2008-02-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Block SIGCHLD when executing mount and umount
