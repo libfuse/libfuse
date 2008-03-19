@@ -1,3 +1,8 @@
+2008-03-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix missing pthread_mutex_destroy in error path of
+	fuse_lib_opendir().  Patch by Szabolcs Szakacsits
+
 2008-03-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add queuing on contention to per-node lock algorithm, to avoid
