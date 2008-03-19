@@ -2097,6 +2097,7 @@ static void fuse_lib_opendir(fuse_req_t req, fuse_ino_t ino,
 		}
 	} else {
 		reply_err(req, err);
+		pthread_mutex_destroy(&dh->lock);
 		free(dh);
 	}
 	free(path);
