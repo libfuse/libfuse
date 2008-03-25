@@ -496,6 +496,8 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		if (res == -1)
 			goto out_umount;
 	}
+	free(type);
+	free(source);
 
 	return fd;
 

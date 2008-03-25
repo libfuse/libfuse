@@ -526,6 +526,7 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 		*typep = type;
 		*mnt_optsp = mnt_opts;
 	}
+	free(fsname);
 	free(optbuf);
 
 	return res;
