@@ -33,7 +33,6 @@
 #include <sys/uio.h>
 #include <sys/time.h>
 
-#define FUSE_MAX_PATH 4096
 #define FUSE_DEFAULT_INTR_SIGNAL SIGUSR1
 
 #define FUSE_UNKNOWN_INO 0xffffffff
@@ -434,14 +433,28 @@ out_err:
 	return node;
 }
 
-static char *add_name(char *buf, char *s, const char *name)
+static char *add_name(char **buf, unsigned *bufsize, char *s, const char *name)
 {
 	size_t len = strlen(name);
-	s -= len;
-	if (s <= buf) {
-		fprintf(stderr, "fuse: path too long: ...%s\n", s + len);
-		return NULL;
+
+	if (s - len <= *buf) {
+		unsigned pathlen = *bufsize - (s - *buf);
+		unsigned newbufsize = *bufsize;
+		char *newbuf;
+
+		while (newbufsize < pathlen + len + 1)
+			newbufsize *= 2;
+
+		newbuf = realloc(*buf, newbufsize);
+		if (newbuf == NULL)
+			return NULL;
+
+		*buf = newbuf;
+		s = newbuf + newbufsize - pathlen;
+		memmove(s, newbuf + *bufsize - pathlen, pathlen);
+		*bufsize = newbufsize;
 	}
+	s -= len;
 	strncpy(s, name, len);
 	s--;
 	*s = '/';
@@ -473,19 +486,27 @@ static void unlock_path(struct fuse *f, fuse_ino_t nodeid, struct node *wnode,
 static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 			char **path, struct node **wnodep, int ticket)
 {
-	char buf[FUSE_MAX_PATH];
-	char *s = buf + FUSE_MAX_PATH - 1;
+	unsigned bufsize = 256;
+	char *buf;
+	char *s;
 	struct node *node;
 	struct node *wnode = NULL;
 	int err;
 
 	*path = NULL;
+
+	buf = malloc(bufsize);
+	if (buf == NULL)
+		return -ENOMEM;
+
+	s = buf + bufsize - 1;
 	*s = '\0';
 
 	if (name != NULL) {
-		s = add_name(buf, s, name);
+		s = add_name(&buf, &bufsize, s, name);
+		err = -ENOMEM;
 		if (s == NULL)
-			return -ENAMETOOLONG;
+			goto out_free;
 	}
 
 	if (wnodep) {
@@ -496,7 +517,8 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 			    (wnode->ticket && wnode->ticket != ticket)) {
 				if (!wnode->ticket)
 					wnode->ticket = ticket;
-				return -EAGAIN;
+				err = -EAGAIN;
+				goto out_free;
 			}
 			wnode->treelock = -1;
 			wnode->ticket = 0;
@@ -508,38 +530,40 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 	     node = node->parent) {
 		err = -ENOENT;
 		if (node->name == NULL || node->parent == NULL)
-			break;
+			goto out_unlock;
 
-		err = -ENAMETOOLONG;
-		s = add_name(buf, s, node->name);
+		err = -ENOMEM;
+		s = add_name(&buf, &bufsize, s, node->name);
 		if (s == NULL)
-			break;
+			goto out_unlock;
 
 		if (ticket) {
 			err = -EAGAIN;
 			if (node->treelock == -1 ||
 			    (node->ticket && node->ticket != ticket))
-				break;
+				goto out_unlock;
 
 			node->treelock++;
 			node->ticket = 0;
 		}
-		err = 0;
 	}
 
-	if (!err) {
-		s = strdup(s[0] ? s : "/");
-		if (s != NULL)
-			*path = s;
-		else
-			err = -ENOMEM;
-	}
+	if (s[0])
+		memmove(buf, s, bufsize - (s - buf));
+	else
+		strcpy(buf, "/");
 
-	if (err && ticket)
-		unlock_path(f, nodeid, wnode, node, ticket);
-
-	if (wnodep && !err)
+	*path = buf;
+	if (wnodep)
 		*wnodep = wnode;
+
+	return 0;
+
+ out_unlock:
+	if (ticket)
+		unlock_path(f, nodeid, wnode, node, ticket);
+ out_free:
+	free(buf);
 
 	return err;
 }
@@ -3302,9 +3326,6 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 		}
 	}
 
-	if (f->conf.debug)
-		fprintf(stderr, "nullpath_ok: %i\n", f->nullpath_ok);
-
 	if (!f->conf.ac_attr_timeout_set)
 		f->conf.ac_attr_timeout = f->conf.attr_timeout;
 
@@ -3329,6 +3350,9 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	}
 
 	fuse_session_add_chan(f->se, ch);
+
+	if (f->conf.debug)
+		fprintf(stderr, "nullpath_ok: %i\n", f->nullpath_ok);
 
 	f->ctr = 0;
 	f->generation = 0;

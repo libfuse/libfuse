@@ -1328,6 +1328,9 @@ struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
 	if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
 		goto out_free;
 
+	if (f->debug)
+		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
+
 	memcpy(&f->op, op, op_size);
 	f->owner = getuid();
 	f->userdata = userdata;
