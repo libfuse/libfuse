@@ -1,3 +1,8 @@
+2008-04-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Update error message for missing mountpoint parameter.  Reported
+	by Allen Pulsifer
+
 2008-04-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Print library version information to debug output

@@ -325,7 +325,7 @@ static int fuse_mount_fusermount(const char *mountpoint, const char *opts,
 	int rv;
 
 	if (!mountpoint) {
-		fprintf(stderr, "fuse: missing mountpoint\n");
+		fprintf(stderr, "fuse: missing mountpoint parameter\n");
 		return -1;
 	}
 
@@ -397,7 +397,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	int res;
 
 	if (!mnt) {
-		fprintf(stderr, "fuse: missing mountpoint\n");
+		fprintf(stderr, "fuse: missing mountpoint parameter\n");
 		return -1;
 	}
 
