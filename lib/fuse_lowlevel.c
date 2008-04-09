@@ -167,11 +167,18 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 	out.len = iov_length(iov, count);
 
-	if (req->f->debug)
-		fprintf(stderr,
-			"   unique: %llu, error: %i (%s), outsize: %i\n",
-			(unsigned long long) out.unique, out.error,
-			strerror(-out.error), out.len);
+	if (req->f->debug) {
+		if (out.error) {
+			fprintf(stderr,
+				"   unique: %llu, error: %i (%s), outsize: %i\n",
+				(unsigned long long) out.unique, out.error,
+				strerror(-out.error), out.len);
+		} else {
+			fprintf(stderr,
+				"   unique: %llu, success, outsize: %i\n",
+				(unsigned long long) out.unique, out.len);
+		}
+	}
 	res = fuse_chan_send(req->ch, iov, count);
 	free_req(req);
 

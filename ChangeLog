@@ -1,3 +1,10 @@
+2008-04-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Update warning message for missing newline at end of fuse.conf
+
+	* Update debug message for successful operation to not include the
+	string "error:"
+
 2008-04-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Update error message for missing mountpoint parameter.  Reported

@@ -229,14 +229,19 @@ static void read_conf(void)
 					strip_line(line);
 					parse_line(line, linenum);
 				} else {
-					fprintf(stderr, "%s: reading %s: line %i too long\n",
-						progname, FUSE_CONF, linenum);
 					isnewline = 0;
 				}
-			} else if(line[strlen(line)-1] == '\n')
+			} else if(line[strlen(line)-1] == '\n') {
+				fprintf(stderr, "%s: reading %s: line %i too long\n", progname, FUSE_CONF, linenum);
+
 				isnewline = 1;
+			}
 			if (isnewline)
 				linenum ++;
+		}
+		if (!isnewline) {
+			fprintf(stderr, "%s: reading %s: missing newline at end of file\n", progname, FUSE_CONF);
+
 		}
 		fclose(fp);
 	} else if (errno != ENOENT) {
