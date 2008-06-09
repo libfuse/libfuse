@@ -1,3 +1,7 @@
+2008-05-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix mounting over symlink.  Reported by Szabolcs Szakacsits
+
 2008-04-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Update warning message for missing newline at end of fuse.conf

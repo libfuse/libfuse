@@ -401,7 +401,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		return -1;
 	}
 
-	res = lstat(mnt, &stbuf);
+	res = stat(mnt, &stbuf);
 	if (res == -1) {
 		fprintf(stderr ,"fuse: failed to access mountpoint %s: %s\n",
 			mnt, strerror(errno));
