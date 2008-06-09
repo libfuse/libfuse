@@ -2,6 +2,14 @@
 
 	* Fix mounting over symlink.  Reported by Szabolcs Szakacsits
 
+2008-05-09  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't allow bigger than 4kB writes by default on 2.6.26 and
+	later kernels, so that filesystems not expecting this are not
+	broken on a kernel upgrade.  Provide a 'big_writes' mount option
+	to enable this feature.  In future API revisions this may become
+	the default.
+
 2008-04-09  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Update warning message for missing newline at end of fuse.conf

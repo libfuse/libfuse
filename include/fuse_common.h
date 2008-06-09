@@ -77,6 +77,19 @@ struct fuse_file_info {
 };
 
 /**
+ * Capability bits for 'fuse_conn_info.capable' and 'fuse_conn_info.want'
+ *
+ * FUSE_CAP_ASYNC_READ: filesystem supports asynchronous read requests
+ * FUSE_CAP_POSIX_LOCKS: filesystem supports "remote" locking
+ * FUSE_CAP_ATOMIC_O_TRUNC: filesystem handles the O_TRUNC open flag
+ * FUSE_CAP_BIG_WRITES: filesystem can handle write size larger than 4kB
+ */
+#define FUSE_CAP_ASYNC_READ	(1 << 0)
+#define FUSE_CAP_POSIX_LOCKS	(1 << 1)
+#define FUSE_CAP_ATOMIC_O_TRUNC	(1 << 3)
+#define FUSE_CAP_BIG_WRITES	(1 << 5)
+
+/**
  * Connection information, passed to the ->init() method
  *
  * Some of the elements are read-write, these can be changed to
@@ -110,14 +123,19 @@ struct fuse_conn_info {
 	unsigned max_readahead;
 
 	/**
-	 * Is atomic open+truncate supported
+	 * Capability flags, that the kernel supports
 	 */
-	unsigned atomic_o_trunc;
+	unsigned capable;
+
+	/**
+	 * Capability flags, that the filesystem wants to enable
+	 */
+	unsigned want;
 
 	/**
 	 * For future use.
 	 */
-	unsigned reserved[26];
+	unsigned reserved[25];
 };
 
 struct fuse_session;

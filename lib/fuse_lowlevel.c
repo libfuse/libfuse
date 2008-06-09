@@ -51,6 +51,8 @@ struct fuse_req {
 struct fuse_ll {
 	int debug;
 	int allow_root;
+	int atomic_o_trunc;
+	int big_writes;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	void *userdata;
@@ -1009,6 +1011,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 	f->conn.proto_major = arg->major;
 	f->conn.proto_minor = arg->minor;
+	f->conn.capable = 0;
+	f->conn.want = 0;
 
 	if (arg->major < 7) {
 		fprintf(stderr, "fuse: unsupported protocol version: %u.%u\n",
@@ -1022,13 +1026,25 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.async_read = arg->flags & FUSE_ASYNC_READ;
 		if (arg->max_readahead < f->conn.max_readahead)
 			f->conn.max_readahead = arg->max_readahead;
-		if (f->conn.atomic_o_trunc)
-			f->conn.atomic_o_trunc = arg->flags & FUSE_ATOMIC_O_TRUNC;
+		if (arg->flags & FUSE_ASYNC_READ)
+			f->conn.capable |= FUSE_CAP_ASYNC_READ;
+		if (arg->flags & FUSE_POSIX_LOCKS)
+			f->conn.capable |= FUSE_CAP_POSIX_LOCKS;
+		if (arg->flags & FUSE_ATOMIC_O_TRUNC)
+			f->conn.capable |= FUSE_CAP_ATOMIC_O_TRUNC;
+		if (arg->flags & FUSE_BIG_WRITES)
+			f->conn.capable |= FUSE_CAP_BIG_WRITES;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
-		f->conn.atomic_o_trunc = 0;
 	}
+
+	if (f->atomic_o_trunc)
+		f->conn.want |= FUSE_CAP_ATOMIC_O_TRUNC;
+	if (f->op.getlk && f->op.setlk)
+		f->conn.want |= FUSE_CAP_POSIX_LOCKS;
+	if (f->big_writes)
+		f->conn.want |= FUSE_CAP_BIG_WRITES;
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
@@ -1047,12 +1063,14 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&outarg, 0, sizeof(outarg));
 	outarg.major = FUSE_KERNEL_VERSION;
 	outarg.minor = FUSE_KERNEL_MINOR_VERSION;
-	if (f->conn.async_read)
+	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
 		outarg.flags |= FUSE_ASYNC_READ;
-	if (f->op.getlk && f->op.setlk)
+	if (f->conn.want & FUSE_CAP_POSIX_LOCKS)
 		outarg.flags |= FUSE_POSIX_LOCKS;
-	if (f->conn.atomic_o_trunc)
+	if (f->conn.want & FUSE_CAP_ATOMIC_O_TRUNC)
 		outarg.flags |= FUSE_ATOMIC_O_TRUNC;
+	if (f->conn.want & FUSE_CAP_BIG_WRITES)
+		outarg.flags |= FUSE_BIG_WRITES;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
 
@@ -1233,7 +1251,8 @@ static struct fuse_opt fuse_ll_opts[] = {
 	{ "max_readahead=%u", offsetof(struct fuse_ll, conn.max_readahead), 0 },
 	{ "async_read", offsetof(struct fuse_ll, conn.async_read), 1 },
 	{ "sync_read", offsetof(struct fuse_ll, conn.async_read), 0 },
-	{ "atomic_o_trunc", offsetof(struct fuse_ll, conn.atomic_o_trunc), 1},
+	{ "atomic_o_trunc", offsetof(struct fuse_ll, atomic_o_trunc), 1},
+	{ "big_writes", offsetof(struct fuse_ll, big_writes), 1},
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
@@ -1255,7 +1274,8 @@ static void fuse_ll_help(void)
 "    -o max_readahead=N     set maximum readahead\n"
 "    -o async_read          perform reads asynchronously (default)\n"
 "    -o sync_read           perform reads synchronously\n"
-"    -o atomic_o_trunc      enable atomic open+truncate support\n");
+"    -o atomic_o_trunc      enable atomic open+truncate support\n"
+"    -o big_writes          enable larger than 4kB writes\n");
 }
 
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,
@@ -1327,7 +1347,7 @@ struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
 	f->conn.async_read = 1;
 	f->conn.max_write = UINT_MAX;
 	f->conn.max_readahead = UINT_MAX;
-	f->conn.atomic_o_trunc = 0;
+	f->atomic_o_trunc = 0;
 	list_init_req(&f->list);
 	list_init_req(&f->interrupts);
 	fuse_mutex_init(&f->lock);
