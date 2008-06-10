@@ -20,6 +20,7 @@
 #include <string.h>
 #include <limits.h>
 #include <errno.h>
+#include <sys/param.h>
 
 enum  {
 	KEY_HELP,

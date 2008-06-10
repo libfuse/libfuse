@@ -3,6 +3,9 @@
 	* Fix theoretical infinite loops in libfuse.  Reported by Szabolcs
 	Szakacsits
 
+	* Fix missing <sys/param.h> include for PATH_MAX.  Reported by
+	Szabolcs Szakacsits
+
 2008-05-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix mounting over symlink.  Reported by Szabolcs Szakacsits
