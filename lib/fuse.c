@@ -442,8 +442,12 @@ static char *add_name(char **buf, unsigned *bufsize, char *s, const char *name)
 		unsigned newbufsize = *bufsize;
 		char *newbuf;
 
-		while (newbufsize < pathlen + len + 1)
-			newbufsize *= 2;
+		while (newbufsize < pathlen + len + 1) {
+			if (newbufsize >= 0x80000000)
+				newbufsize = 0xffffffff;
+			else
+				newbufsize *= 2;
+		}
 
 		newbuf = realloc(*buf, newbufsize);
 		if (newbuf == NULL)
@@ -2364,8 +2368,12 @@ static int extend_contents(struct fuse_dh *dh, unsigned minsize)
 		unsigned newsize = dh->size;
 		if (!newsize)
 			newsize = 1024;
-		while (newsize < minsize)
-			newsize *= 2;
+		while (newsize < minsize) {
+			if (newsize >= 0x80000000)
+				newsize = 0xffffffff;
+			else
+				newsize *= 2;
+		}
 
 		newptr = (char *) realloc(dh->contents, newsize);
 		if (!newptr) {
