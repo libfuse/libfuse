@@ -35,25 +35,8 @@ modprobe fuse
 You may also need to add '/usr/local/lib' to '/etc/ld.so.conf' and/or
 run ldconfig.
 
-Linux kernels 2.6.14 or later contain FUSE support out of the box.  If
-FUSE support is detected, the kernel module in this package will not
-be compiled.  It is possible to override this with the
-'--enable-kernel-module' configure option.
-
-If './configure' cannot find the kernel source or it says the kernel
-source should be prepared, you may either try
-
-  ./configure --disable-kernel-module
-
-or if your kernel does not already contain FUSE support, do the
-following:
-
-  - Extract the kernel source to some directory
-
-  - Copy the running kernel's config (usually found in
-    /boot/config-X.Y.Z) to .config at the top of the source tree
-
-  - Run 'make prepare'
+You'll also need a fuse kernel module, Linux kernels 2.6.14 or later
+contain FUSE support.
 
 For more details see the file 'INSTALL'
 

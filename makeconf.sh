@@ -40,8 +40,6 @@ else
 	autoconf
     )
 fi
-echo Linking kernel header file...
-ln -sf ../kernel/fuse_kernel.h `dirname $0`/include
 
 rm -f config.cache config.status
 echo "To compile run './configure', and then 'make'."
