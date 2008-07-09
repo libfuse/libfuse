@@ -142,7 +142,8 @@ struct fuse_operations {
 	/** File open operation
 	 *
 	 * No creation, or truncation flags (O_CREAT, O_EXCL, O_TRUNC)
-	 * will be passed to open().  Open should check if the operation
+	 * will be passed to open().  Unless the 'default_permissions'
+	 * mount option is given, open should check if the operation
 	 * is permitted for the given flags.  Optionally open may also
 	 * return an arbitrary filehandle in the fuse_file_info structure,
 	 * which will be passed to all file operations.
