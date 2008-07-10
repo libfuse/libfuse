@@ -1,3 +1,7 @@
+2008-07-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.8.0-pre1
+
 2008-06-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix handling of (no)suid and (no)dev options if filesystem is
