@@ -59,6 +59,20 @@ static void add_arg(char **cmdp, const char *opt)
 	*cmdp = cmd;
 }
 
+static char *add_option(const char *opt, char *options)
+{
+	int oldlen = options ? strlen(options) : 0;
+
+	options = xrealloc(options, oldlen + 1 + strlen(opt) + 1);
+	if (!oldlen)
+		strcpy(options, opt);
+	else {
+		strcat(options, ",");
+		strcat(options, opt);
+	}
+	return options;
+}
+
 int main(int argc, char *argv[])
 {
 	char *type = NULL;
@@ -69,6 +83,8 @@ int main(int argc, char *argv[])
 	char *command = NULL;
 	char *setuid = NULL;
 	int i;
+	int dev = 1;
+	int suid = 1;
 
 	progname = argv[0];
 	basename = strrchr(argv[0], '/');
@@ -151,20 +167,22 @@ int main(int argc, char *argv[])
 						ignore = 1;
 
 				if (!ignore) {
-					int oldlen =
-						options ? strlen(options) : 0;
-					options = xrealloc(options, oldlen + 1 + strlen(opt) + 1);
-					if (!oldlen)
-						strcpy(options, opt);
-					else {
-						strcat(options, ",");
-						strcat(options, opt);
-					}
+					if (strcmp(opt, "nodev") == 0)
+						dev = 0;
+					else if (strcmp(opt, "nosuid") == 0)
+						suid = 0;
+
+					options = add_option(opt, options);
 				}
 				opt = strtok(NULL, ",");
 			}
 		}
 	}
+
+	if (dev)
+		options = add_option("dev", options);
+	if (suid)
+		options = add_option("suid", options);
 
 	if (!type) {
 		type = xstrdup(source);

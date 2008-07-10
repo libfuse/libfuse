@@ -1,3 +1,8 @@
+2008-06-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix handling of (no)suid and (no)dev options if filesystem is
+	mounted from /etc/fstab or via mount(8).  Reported by Jan Ondrej.
+
 2008-06-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove fuse kernel module sources.  Linux 2.6.27 will support
