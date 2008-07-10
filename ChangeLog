@@ -3,6 +3,10 @@
 	* Fix handling of (no)suid and (no)dev options if filesystem is
 	mounted from /etc/fstab or via mount(8).  Reported by Jan Ondrej.
 
+	* Skip calling mount(8) if /etc/mtab doesn't exist or if it's on a
+	read-only filesystem.  This works around issues with certain mount
+	implementations.  Reported by Szabolcs Szakacsits.
+
 2008-06-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove fuse kernel module sources.  Linux 2.6.27 will support

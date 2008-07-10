@@ -22,6 +22,7 @@
 
 static int mtab_needs_update(const char *mnt)
 {
+	int res;
 	struct stat stbuf;
 
 	/* If mtab is within new mount, don't touch it */
@@ -29,8 +30,25 @@ static int mtab_needs_update(const char *mnt)
 	    _PATH_MOUNTED[strlen(mnt)] == '/')
 		return 0;
 
-	if (lstat(_PATH_MOUNTED, &stbuf) != -1 && S_ISLNK(stbuf.st_mode))
-		return 0;
+	/*
+	 * Skip mtab update if /etc/mtab:
+	 *
+	 *  - doesn't exist,
+	 *  - is a symlink,
+	 *  - is on a read-only filesystem.
+	 */
+	res = lstat(_PATH_MOUNTED, &stbuf);
+	if (res == -1) {
+		if (errno == ENOENT)
+			return 0;
+	} else {
+		if (S_ISLNK(stbuf.st_mode))
+			return 0;
+
+		res = access(_PATH_MOUNTED, W_OK);
+		if (res == -1 && errno == EROFS)
+			return 0;
+	}
 
 	return 1;
 }
