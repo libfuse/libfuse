@@ -106,7 +106,12 @@ struct fuse_operations {
 	 */
 	int (*mknod) (const char *, mode_t, dev_t);
 
-	/** Create a directory */
+	/** Create a directory 
+	 *
+	 * Note that the mode argument may not have the type specification
+	 * bits set, i.e. S_ISDIR(mode) can be false.  To obtain the
+	 * correct directory type bits use  mode|S_IFDIR
+	 * */
 	int (*mkdir) (const char *, mode_t);
 
 	/** Remove a file */
@@ -141,12 +146,18 @@ struct fuse_operations {
 
 	/** File open operation
 	 *
-	 * No creation, or truncation flags (O_CREAT, O_EXCL, O_TRUNC)
-	 * will be passed to open().  Unless the 'default_permissions'
-	 * mount option is given, open should check if the operation
-	 * is permitted for the given flags.  Optionally open may also
-	 * return an arbitrary filehandle in the fuse_file_info structure,
-	 * which will be passed to all file operations.
+	 * No creation (O_CREAT, O_EXCL) and by default also no
+	 * truncation (O_TRUNC) flags will be passed to open(). If an
+	 * application specifies O_TRUNC, fuse first calls truncate()
+	 * and then open(). Only if 'atomic_o_trunc' has been
+	 * specified and kernel version is 2.6.24 or later, O_TRUNC is
+	 * passed on to open.
+	 *
+	 * Unless the 'default_permissions' mount option is given,
+	 * open should check if the operation is permitted for the
+	 * given flags. Optionally open may also return an arbitrary
+	 * filehandle in the fuse_file_info structure, which will be
+	 * passed to all file operations.
 	 *
 	 * Changed in version 2.2
 	 */

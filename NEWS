@@ -1,3 +1,15 @@
+What is new in 2.8
+
+ - More scalable directory tree locking
+
+ - Atomic open(O_TRUNC) support
+
+ - Support big write requests on kernels 2.6.26 and newer
+
+ - Kernel module is removed
+
+ - Bugfixes and small improvements
+
 What is new in 2.7
 
  - Stacking support for the high level API
