@@ -1,3 +1,11 @@
+2008-07-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.7.4
+
+2008-07-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Update kernel module to compile with 2.6.26
+
 2008-03-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix missing pthread_mutex_destroy in error path of

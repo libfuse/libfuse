@@ -85,10 +85,12 @@ static void fuse_destroy_inode(struct inode *inode)
 	kmem_cache_free(fuse_inode_cachep, inode);
 }
 
+#ifndef KERNEL_2_6_25_PLUS
 static void fuse_read_inode(struct inode *inode)
 {
 	/* No op */
 }
+#endif
 
 void fuse_send_forget(struct fuse_conn *fc, struct fuse_req *req,
 		      unsigned long nodeid, u64 nlookup)
@@ -690,7 +692,9 @@ static struct export_operations fuse_export_operations = {
 static struct super_operations fuse_super_operations = {
 	.alloc_inode    = fuse_alloc_inode,
 	.destroy_inode  = fuse_destroy_inode,
+#ifndef KERNEL_2_6_25_PLUS
 	.read_inode	= fuse_read_inode,
+#endif
 	.clear_inode	= fuse_clear_inode,
 	.drop_inode	= generic_delete_inode,
 	.remount_fs	= fuse_remount_fs,
@@ -944,11 +948,16 @@ static inline void unregister_fuseblk(void)
 }
 #endif
 
+#ifdef KERNEL_2_6_25_PLUS
+static struct kobject *fuse_kobj;
+static struct kobject *connections_kobj;
+#else
 #ifndef HAVE_FS_SUBSYS
 static decl_subsys(fs, NULL, NULL);
 #endif
 static decl_subsys(fuse, NULL, NULL);
 static decl_subsys(connections, NULL, NULL);
+#endif
 
 #ifdef KERNEL_2_6_24_PLUS
 static void fuse_inode_init_once(struct kmem_cache *cachep, void *foo)
@@ -1015,6 +1024,25 @@ static int fuse_sysfs_init(void)
 {
 	int err;
 
+#ifdef KERNEL_2_6_25_PLUS
+	fuse_kobj = kobject_create_and_add("fuse", fs_kobj);
+	if (!fuse_kobj) {
+		err = -ENOMEM;
+		goto out_err;
+	}
+
+	connections_kobj = kobject_create_and_add("connections", fuse_kobj);
+	if (!connections_kobj) {
+		err = -ENOMEM;
+		goto out_fuse_unregister;
+	}
+
+	return 0;
+
+ out_fuse_unregister:
+	kobject_put(fuse_kobj);
+ out_err:
+#else
 #ifndef HAVE_FS_SUBSYS
 	err = subsystem_register(&fs_subsys);
 	if (err)
@@ -1046,15 +1074,21 @@ static int fuse_sysfs_init(void)
 #ifndef HAVE_FS_SUBSYS
 	subsystem_unregister(&fs_subsys);
 #endif
+#endif
 	return err;
 }
 
 static void fuse_sysfs_cleanup(void)
 {
+#ifdef KERNEL_2_6_25_PLUS
+	kobject_put(connections_kobj);
+	kobject_put(fuse_kobj);
+#else
 	subsystem_unregister(&connections_subsys);
 	subsystem_unregister(&fuse_subsys);
 #ifndef HAVE_FS_SUBSYS
 	subsystem_unregister(&fs_subsys);
+#endif
 #endif
 }
 
