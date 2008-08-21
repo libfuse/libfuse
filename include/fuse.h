@@ -75,6 +75,11 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  * releasedir, fsyncdir, access, create, ftruncate, fgetattr, lock,
  * init and destroy are special purpose methods, without which a full
  * featured filesystem can still be implemented.
+ *
+ * Almost all operations take a path which can be of any length.
+ *
+ * Changed in fuse 2.8.0 (regardless of API version)
+ * Previously, paths were limited to a length of PATH_MAX.
  */
 struct fuse_operations {
 	/** Get file attributes.
