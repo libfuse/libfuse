@@ -648,6 +648,10 @@ static void do_read(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		memset(&fi, 0, sizeof(fi));
 		fi.fh = arg->fh;
 		fi.fh_old = fi.fh;
+		if (req->f->conn.proto_minor >= 9) {
+			fi.lock_owner = arg->lock_owner;
+			fi.flags = arg->flags;
+		}
 		req->f->op.read(req, nodeid, arg->size, arg->offset, &fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
@@ -664,10 +668,13 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	fi.fh_old = fi.fh;
 	fi.writepage = arg->write_flags & 1;
 
-	if (req->f->conn.proto_minor < 9)
+	if (req->f->conn.proto_minor < 9) {
 		param = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
-	else
+	} else {
+		fi.lock_owner = arg->lock_owner;
+		fi.flags = arg->flags;
 		param = PARAM(arg);
+	}
 
 	if (req->f->op.write)
 		req->f->op.write(req, nodeid, param, arg->size,

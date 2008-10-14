@@ -1,3 +1,7 @@
+2008-10-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Pass current file flags to read and write operations
+
 2008-07-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Clean up debug output in highlevel lib

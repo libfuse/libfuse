@@ -1230,9 +1230,11 @@ int fuse_fs_read(struct fuse_fs *fs, const char *path, char *buf, size_t size,
 		int res;
 
 		if (fs->debug)
-			fprintf(stderr, "read[%llu] %lu bytes from %llu\n",
+			fprintf(stderr,
+				"read[%llu] %lu bytes from %llu flags: 0x%x\n",
 				(unsigned long long) fi->fh,
-				(unsigned long) size, (unsigned long long) off);
+				(unsigned long) size, (unsigned long long) off,
+				fi->flags);
 
 		res = fs->op.read(path, buf, size, off, fi);
 
@@ -1257,10 +1259,12 @@ int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *buf,
 		int res;
 
 		if (fs->debug)
-			fprintf(stderr, "write%s[%llu] %lu bytes to %llu\n",
+			fprintf(stderr,
+				"write%s[%llu] %lu bytes to %llu flags: 0x%x\n",
 				fi->writepage ? "page" : "",
 				(unsigned long long) fi->fh,
-				(unsigned long) size, (unsigned long long) off);
+				(unsigned long) size, (unsigned long long) off,
+				fi->flags);
 
 		res = fs->op.write(path, buf, size, off, fi);
 

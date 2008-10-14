@@ -80,6 +80,9 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  *
  * Changed in fuse 2.8.0 (regardless of API version)
  * Previously, paths were limited to a length of PATH_MAX.
+ *
+ * See http://fuse.sourceforge.net/wiki/ for more information.  There
+ * is also a snapshot of the relevant wiki pages in the doc/ folder.
  */
 struct fuse_operations {
 	/** Get file attributes.
