@@ -212,6 +212,15 @@ int fuse_opt_parse(struct fuse_args *args, void *data,
 int fuse_opt_add_opt(char **opts, const char *opt);
 
 /**
+ * Add an option, escaping commas, to a comma separated option list
+ *
+ * @param opts is a pointer to an option list, may point to a NULL value
+ * @param opt is the option to add
+ * @return -1 on allocation error, 0 on success
+ */
+int fuse_opt_add_opt_escaped(char **opts, const char *opt);
+
+/**
  * Add an argument to a NULL terminated argument vector
  *
  * @param args is the structure containing the current argument list

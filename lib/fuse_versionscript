@@ -151,7 +151,13 @@ FUSE_2.7 {
 		fuse_register_module;
 		fuse_reply_iov;
 		fuse_version;
+} FUSE_2.6;
+
+FUSE_2.8 {
+	global:
+		fuse_opt_add_opt_escaped;
+		fuse_reply_bmap;
 
 	local:
 		*;
-} FUSE_2.6;
+} FUSE_2.7;
