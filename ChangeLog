@@ -1,3 +1,8 @@
+2008-11-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* lowlevel lib: fix deadlock if fuse_reply_* is called from the
+	interrupt handling function.  Reported by Tero Marttila
+
 2008-10-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Allow commas in options to be escaped with a backslash

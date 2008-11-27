@@ -139,12 +139,9 @@ static void free_req(fuse_req_t req)
 	int ctr;
 	struct fuse_ll *f = req->f;
 
-	pthread_mutex_lock(&req->lock);
+	pthread_mutex_lock(&f->lock);
 	req->u.ni.func = NULL;
 	req->u.ni.data = NULL;
-	pthread_mutex_unlock(&req->lock);
-
-	pthread_mutex_lock(&f->lock);
 	list_del_req(req);
 	ctr = --req->ctr;
 	pthread_mutex_unlock(&f->lock);
@@ -920,6 +917,9 @@ static int find_interrupted(struct fuse_ll *f, struct fuse_req *req)
 
 	for (curr = f->list.next; curr != &f->list; curr = curr->next) {
 		if (curr->unique == req->u.i.unique) {
+			fuse_interrupt_func_t func;
+			void *data;
+
 			curr->ctr++;
 			pthread_mutex_unlock(&f->lock);
 
@@ -927,9 +927,11 @@ static int find_interrupted(struct fuse_ll *f, struct fuse_req *req)
 			pthread_mutex_lock(&curr->lock);
 			pthread_mutex_lock(&f->lock);
 			curr->interrupted = 1;
+			func = curr->u.ni.func;
+			data = curr->u.ni.data;
 			pthread_mutex_unlock(&f->lock);
-			if (curr->u.ni.func)
-				curr->u.ni.func(curr, curr->u.ni.data);
+			if (func)
+				func(curr, data);
 			pthread_mutex_unlock(&curr->lock);
 
 			pthread_mutex_lock(&f->lock);
@@ -1120,8 +1122,10 @@ void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
 			     void *data)
 {
 	pthread_mutex_lock(&req->lock);
+	pthread_mutex_lock(&req->f->lock);
 	req->u.ni.func = func;
 	req->u.ni.data = data;
+	pthread_mutex_unlock(&req->f->lock);
 	if (req->interrupted && func)
 		func(req, data);
 	pthread_mutex_unlock(&req->lock);
