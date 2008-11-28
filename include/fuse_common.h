@@ -65,8 +65,12 @@ struct fuse_file_info {
 	    operation.	Introduced in version 2.6 */
 	unsigned int flush : 1;
 
+	/** Can be filled in by open, to indicate that the file is not
+	    seekable.  Introduced in version 2.9 */
+	unsigned int nonseekable : 1;
+
 	/** Padding.  Do not use*/
-	unsigned int padding : 29;
+	unsigned int padding : 28;
 
 	/** File handle.  May be filled in by filesystem in open().
 	    Available in all other file operations */
