@@ -1,3 +1,11 @@
+2008-12-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Implement ioctl support.  On high level interface only
+	"restricted" ioctls are supported (which are defined with the
+	_IO(), _IOR(), _IOW() or _IOWR() macros).  Unrestricted ioctls
+	will only be allwed to CUSE (Character Device in Userspace)
+	servers.  Patch by Tejun Heo
+
 2008-11-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* If open sets fi->nonseekable, libfuse will tell the kernel that

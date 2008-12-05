@@ -31,6 +31,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
+#include <sys/uio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -457,6 +458,22 @@ struct fuse_operations {
 	 * Reserved flags, don't set
 	 */
 	unsigned int flag_reserved : 31;
+
+	/**
+	 * Ioctl
+	 *
+	 * @flags will have FUSE_IOCTL_COMPAT set for 32bit ioctls in
+	 * 64bit environment.  The size and direction of @data is
+	 * determined by _IOC_*() decoding of @cmd.  For _IOC_NONE,
+	 * @data will be NULL, for _IOC_WRITE @data is out area, for
+	 * _IOC_READ in area and if both are set in/out area.  In all
+	 * non-NULL cases, the area is of _IOC_SIZE(@cmd) bytes.
+	 *
+	 * Introduced in version 2.9
+	 */
+	int (*ioctl) (const char *, int cmd, void *arg,
+		      struct fuse_file_info *, unsigned int flags, void *data);
+
 };
 
 /** Extra context that may be needed by some filesystems
@@ -689,6 +706,8 @@ int fuse_fs_removexattr(struct fuse_fs *fs, const char *path,
 			const char *name);
 int fuse_fs_bmap(struct fuse_fs *fs, const char *path, size_t blocksize,
 		 uint64_t *idx);
+int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd, void *arg,
+		  struct fuse_file_info *fi, unsigned int flags, void *data);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn);
 void fuse_fs_destroy(struct fuse_fs *fs);
 

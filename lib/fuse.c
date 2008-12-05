@@ -16,6 +16,7 @@
 #include "fuse_misc.h"
 #include "fuse_common_compat.h"
 #include "fuse_compat.h"
+#include "fuse_kernel.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -1652,6 +1653,20 @@ int fuse_fs_removexattr(struct fuse_fs *fs, const char *path, const char *name)
 	}
 }
 
+int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd, void *arg,
+		  struct fuse_file_info *fi, unsigned int flags, void *data)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.ioctl) {
+		if (fs->debug)
+			fprintf(stderr, "ioctl[%llu] 0x%x flags: 0x%x\n",
+				(unsigned long long) fi->fh, cmd, flags);
+
+		return fs->op.ioctl(path, cmd, arg, fi, flags, data);
+	} else
+		return -ENOSYS;
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -3169,6 +3184,57 @@ static void fuse_lib_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 		reply_err(req, err);
 }
 
+static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+			   struct fuse_file_info *fi, unsigned int *flagsp,
+			   const void *in_buf, size_t in_bufsz,
+			   size_t out_bufsz)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	struct fuse_intr_data d;
+	char *path, *out_buf = NULL;
+	struct iovec *in_iov = NULL, *out_iov = NULL;
+	int err;
+
+	if (*flagsp & FUSE_IOCTL_UNRESTRICTED) {
+		reply_err(req, -EPERM);
+		return;
+	}
+
+	if (out_bufsz) {
+		out_buf = malloc(out_bufsz);
+		if (!out_buf)
+			goto enomem;
+	}
+
+	assert(!in_bufsz || !out_bufsz || in_bufsz == out_bufsz);
+	if (out_buf)
+		memcpy(out_buf, in_buf, in_bufsz);
+
+	err = get_path(f, ino, &path);
+	if (err)
+		goto out;
+
+	fuse_prepare_interrupt(f, req, &d);
+
+	err = fuse_fs_ioctl(f->fs, path, cmd, arg, fi, *flagsp,
+			    out_buf ?: (void *)in_buf);
+
+	fuse_finish_interrupt(f, req, &d);
+	free_path(f, ino, path);
+
+	fuse_reply_ioctl(req, err, out_buf, out_bufsz);
+
+out:
+	free(out_buf);
+	free(in_iov);
+	free(out_iov);
+	return;
+
+enomem:
+	reply_err(req, -ENOMEM);
+	goto out;
+}
+
 static struct fuse_lowlevel_ops fuse_path_ops = {
 	.init = fuse_lib_init,
 	.destroy = fuse_lib_destroy,
@@ -3204,6 +3270,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.getlk = fuse_lib_getlk,
 	.setlk = fuse_lib_setlk,
 	.bmap = fuse_lib_bmap,
+	.ioctl = fuse_lib_ioctl,
 };
 
 static void free_cmd(struct fuse_cmd *cmd)

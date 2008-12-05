@@ -451,6 +451,58 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+int fuse_reply_ioctl_retry(fuse_req_t req,
+			   const struct iovec *in_iov, size_t in_count,
+			   const struct iovec *out_iov, size_t out_count)
+{
+	struct fuse_ioctl_out arg;
+	struct iovec iov[4];
+	size_t count = 1;
+
+	memset(&arg, 0, sizeof(arg));
+	arg.flags |= FUSE_IOCTL_RETRY;
+	arg.in_iovs = in_count;
+	arg.out_iovs = out_count;
+	iov[count].iov_base = &arg;
+	iov[count].iov_len = sizeof(arg);
+	count++;
+
+	if (in_count) {
+		iov[count].iov_base = (void *)in_iov;
+		iov[count].iov_len = sizeof(in_iov[0]) * in_count;
+		count++;
+	}
+
+	if (out_count) {
+		iov[count].iov_base = (void *)out_iov;
+		iov[count].iov_len = sizeof(out_iov[0]) * out_count;
+		count++;
+	}
+
+	return send_reply_iov(req, 0, iov, count);
+}
+
+int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size)
+{
+	struct fuse_ioctl_out arg;
+	struct iovec iov[3];
+	size_t count = 1;
+
+	memset(&arg, 0, sizeof(arg));
+	arg.result = result;
+	iov[count].iov_base = &arg;
+	iov[count].iov_len = sizeof(arg);
+	count++;
+
+	if (size) {
+		iov[count].iov_base = (char *) buf;
+		iov[count].iov_len = size;
+		count++;
+	}
+
+	return send_reply_iov(req, 0, iov, count);
+}
+
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
@@ -1004,6 +1056,25 @@ static void do_bmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
+static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_ioctl_in *arg = (struct fuse_ioctl_in *) inarg;
+	unsigned int flags = arg->flags;
+	void *in_buf = arg->in_size ? PARAM(arg) : NULL;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+	fi.fh_old = fi.fh;
+
+	if (req->f->op.ioctl)
+		req->f->op.ioctl(req, nodeid, arg->cmd,
+				 (void *)(uintptr_t)arg->arg, &fi, &flags,
+				 in_buf, arg->in_size, arg->out_size);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -1183,6 +1254,7 @@ static struct {
 	[FUSE_CREATE]	   = { do_create,      "CREATE"	     },
 	[FUSE_INTERRUPT]   = { do_interrupt,   "INTERRUPT"   },
 	[FUSE_BMAP]	   = { do_bmap,	       "BMAP"	     },
+	[FUSE_IOCTL]	   = { do_ioctl,       "IOCTL"	     },
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
 };
 

@@ -155,8 +155,11 @@ FUSE_2.7 {
 
 FUSE_2.8 {
 	global:
+		fuse_fs_ioctl;
 		fuse_opt_add_opt_escaped;
 		fuse_reply_bmap;
+		fuse_reply_ioctl;
+		fuse_reply_ioctl_retry;
 
 	local:
 		*;

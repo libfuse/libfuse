@@ -807,6 +807,36 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*bmap) (fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 		      uint64_t idx);
+
+	/**
+	 * Ioctl
+	 *
+	 * Note: For unrestricted ioctls (not allowed for FUSE
+	 * servers), data in and out areas can be discovered by giving
+	 * iovs and setting FUSE_IOCTL_RETRY in *@flagsp.  For
+	 * restricted ioctls, kernel prepares in/out data area
+	 * according to the information encoded in @cmd.
+	 *
+	 * Introduced in version 2.9
+	 *
+	 * Valid replies:
+	 *   fuse_reply_ioctl_retry
+	 *   fuse_reply_ioctl
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param cmd ioctl command
+	 * @param arg ioctl argument
+	 * @param fi file information
+	 * @param flagsp io/out parameter for FUSE_IOCTL_* flags
+	 * @param in_buf data fetched from the caller
+	 * @param in_size number of fetched bytes
+	 * @param out_size maximum size of output data
+	 */
+	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+		       struct fuse_file_info *fi, unsigned *flagsp,
+		       const void *in_buf, size_t in_bufsz, size_t out_bufszp);
 };
 
 /**
@@ -1021,6 +1051,38 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
 size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 			 const char *name, const struct stat *stbuf,
 			 off_t off);
+
+/**
+ * Reply to ask for data fetch and output buffer preparation.  ioctl
+ * will be retried with the specified input data fetched and output
+ * buffer prepared.
+ *
+ * Possible requests:
+ *   ioctl
+ *
+ * @param req request handle
+ * @param in_iov iovec specifying data to fetch from the caller
+ * @param in_count number of entries in @in_iov
+ * @param out_iov iovec specifying addresses to write output to
+ * @param out_count number of entries in @out_iov
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_ioctl_retry(fuse_req_t req,
+			   const struct iovec *in_iov, size_t in_count,
+			   const struct iovec *out_iov, size_t out_count);
+
+/**
+ * Reply to finish ioctl
+ *
+ * Possible requests:
+ *   ioctl
+ *
+ * @param req request handle
+ * @param result result to be passed to the caller
+ * @param buf buffer containing output data
+ * @param size length of output data
+ */
+int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size);
 
 /* ----------------------------------------------------------- *
  * Utility functions					       *

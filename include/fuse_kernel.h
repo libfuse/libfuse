@@ -1,6 +1,6 @@
 /*
     This file defines the kernel interface of FUSE
-    Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+    Copyright (C) 2001-2008  Miklos Szeredi <miklos@szeredi.hu>
 
     This program can be distributed under the terms of the GNU GPL.
     See the file COPYING.
@@ -46,35 +46,27 @@
  *
  * 7.10
  *  - add nonseekable open flag
+ *
+ * 7.11
+ *  - add IOCTL message
  */
 
 #ifndef _LINUX_FUSE_H
 #define _LINUX_FUSE_H
 
-#ifndef linux
 #include <sys/types.h>
 #define __u64 uint64_t
 #define __u32 uint32_t
 #define __s32 int32_t
-#else
-#include <asm/types.h>
-#include <linux/major.h>
-#endif
 
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 10
+#define FUSE_KERNEL_MINOR_VERSION 11
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
-
-/** The major number of the fuse character device */
-#define FUSE_MAJOR MISC_MAJOR
-
-/** The minor number of the fuse character device */
-#define FUSE_MINOR 229
 
 /* Make sure all structures are padded to 64bit boundary, so 32bit
    userspace works under 64bit kernels */
@@ -184,6 +176,21 @@ struct fuse_file_lock {
  */
 #define FUSE_READ_LOCKOWNER	(1 << 1)
 
+/**
+ * Ioctl flags
+ *
+ * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
+ * FUSE_IOCTL_UNRESTRICTED: not restricted to well-formed ioctls, retry allowed
+ * FUSE_IOCTL_RETRY: retry with new iovecs
+ *
+ * FUSE_IOCTL_MAX_IOV: maximum of in_iovecs + out_iovecs
+ */
+#define FUSE_IOCTL_COMPAT	(1 << 0)
+#define FUSE_IOCTL_UNRESTRICTED	(1 << 1)
+#define FUSE_IOCTL_RETRY	(1 << 2)
+
+#define FUSE_IOCTL_MAX_IOV	256
+
 enum fuse_opcode {
 	FUSE_LOOKUP	   = 1,
 	FUSE_FORGET	   = 2,  /* no reply */
@@ -221,6 +228,7 @@ enum fuse_opcode {
 	FUSE_INTERRUPT     = 36,
 	FUSE_BMAP          = 37,
 	FUSE_DESTROY       = 38,
+	FUSE_IOCTL         = 39,
 };
 
 /* The read buffer is required to be at least 8k, but may be much larger */
@@ -419,6 +427,22 @@ struct fuse_bmap_in {
 
 struct fuse_bmap_out {
 	__u64	block;
+};
+
+struct fuse_ioctl_in {
+	__u64	fh;
+	__u32	flags;
+	__u32	cmd;
+	__u64	arg;
+	__u32	in_size;
+	__u32	out_size;
+};
+
+struct fuse_ioctl_out {
+	__s32	result;
+	__u32	flags;
+	__u32	in_iovs;
+	__u32	out_iovs;
 };
 
 struct fuse_in_header {
