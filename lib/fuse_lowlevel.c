@@ -578,6 +578,16 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			fi->fh = arg->fh;
 			fi->fh_old = fi->fh;
 		}
+		arg->valid &=
+			FUSE_SET_ATTR_MODE	|
+			FUSE_SET_ATTR_UID	|
+			FUSE_SET_ATTR_GID	|
+			FUSE_SET_ATTR_SIZE	|
+			FUSE_SET_ATTR_ATIME	|
+			FUSE_SET_ATTR_MTIME	|
+			FUSE_SET_ATTR_ATIME_NOW	|
+			FUSE_SET_ATTR_MTIME_NOW;
+
 		req->f->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
 	} else
 		fuse_reply_err(req, ENOSYS);

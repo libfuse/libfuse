@@ -118,6 +118,8 @@ struct fuse_ctx {
 #define FUSE_SET_ATTR_SIZE	(1 << 3)
 #define FUSE_SET_ATTR_ATIME	(1 << 4)
 #define FUSE_SET_ATTR_MTIME	(1 << 5)
+#define FUSE_SET_ATTR_ATIME_NOW	(1 << 7)
+#define FUSE_SET_ATTR_MTIME_NOW	(1 << 8)
 
 /* ----------------------------------------------------------- *
  * Request methods and replies				       *

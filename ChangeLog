@@ -2,6 +2,10 @@
 
 	* Implement poll support.  Patch by Tejun Heo
 
+	* Add missing setattr flags to <fuse_lowlevel.h>.
+
+	* Only pass valid flags to ->setattr().
+
 2008-12-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Implement ioctl support.  On high level interface only
