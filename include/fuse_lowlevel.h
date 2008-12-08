@@ -817,7 +817,7 @@ struct fuse_lowlevel_ops {
 	 * restricted ioctls, kernel prepares in/out data area
 	 * according to the information encoded in @cmd.
 	 *
-	 * Introduced in version 2.9
+	 * Introduced in version 2.8
 	 *
 	 * Valid replies:
 	 *   fuse_reply_ioctl_retry
@@ -837,6 +837,35 @@ struct fuse_lowlevel_ops {
 	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 		       struct fuse_file_info *fi, unsigned *flagsp,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufszp);
+
+	/**
+	 * Poll for IO readiness
+	 *
+	 * Introduced in version 2.8
+	 *
+	 * Note: If @ph is non-NULL, the client should notify
+	 * when IO readiness events occur by calling
+	 * fuse_lowelevel_notify_poll() with the specified @ph.
+	 *
+	 * Regardless of the number of times poll with a non-NULL @ph
+	 * is received, single notification is enough to clear all.
+	 * Notifying more times incurs overhead but doesn't harm
+	 * correctness.
+	 *
+	 * The callee is responsible for destroying @ph with
+	 * fuse_pollhandle_destroy() when no longer in use.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_poll
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param fi file information
+	 * @param ph poll handle to be used for notification
+	 */
+	void (*poll) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
+		      struct fuse_pollhandle *ph);
 };
 
 /**
@@ -1083,6 +1112,27 @@ int fuse_reply_ioctl_retry(fuse_req_t req,
  * @param size length of output data
  */
 int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size);
+
+/**
+ * Reply with poll result event mask
+ *
+ * @param req request handle
+ * @param revents poll result event mask
+ */
+int fuse_reply_poll(fuse_req_t req, unsigned revents);
+
+/* ----------------------------------------------------------- *
+ * Notification						       *
+ * ----------------------------------------------------------- */
+
+/**
+ * Notify IO readiness event
+ *
+ * For more information, please read comment for poll operation.
+ *
+ * @param ph poll handle to notify IO readiness event for
+ */
+int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph);
 
 /* ----------------------------------------------------------- *
  * Utility functions					       *

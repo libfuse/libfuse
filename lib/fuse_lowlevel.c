@@ -64,6 +64,12 @@ struct fuse_ll {
 	int got_destroy;
 };
 
+struct fuse_pollhandle {
+	uint64_t kh;
+	struct fuse_chan *ch;
+	struct fuse_ll *f;
+};
+
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 {
 	attr->ino	= stbuf->st_ino;
@@ -501,6 +507,16 @@ int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size)
 	}
 
 	return send_reply_iov(req, 0, iov, count);
+}
+
+int fuse_reply_poll(fuse_req_t req, unsigned revents)
+{
+	struct fuse_poll_out arg;
+
+	memset(&arg, 0, sizeof(arg));
+	arg.revents = revents;
+
+	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -1075,6 +1091,40 @@ static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
+void fuse_pollhandle_destroy(struct fuse_pollhandle *ph)
+{
+	free(ph);
+}
+
+static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_poll_in *arg = (struct fuse_poll_in *) inarg;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+	fi.fh_old = fi.fh;
+
+	if (req->f->op.poll) {
+		struct fuse_pollhandle *ph = NULL;
+
+		if (arg->flags & FUSE_POLL_SCHEDULE_NOTIFY) {
+			ph = malloc(sizeof(struct fuse_pollhandle));
+			if (ph == NULL) {
+				fuse_reply_err(req, ENOMEM);
+				return;
+			}
+			ph->kh = arg->kh;
+			ph->ch = req->ch;
+			ph->f = req->f;
+		}
+
+		req->f->op.poll(req, nodeid, &fi, ph);
+	} else {
+		fuse_reply_err(req, ENOSYS);
+	}
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -1181,6 +1231,41 @@ static void do_destroy(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	send_reply_ok(req, NULL, 0);
 }
 
+static int send_notify_iov(struct fuse_ll *f, struct fuse_chan *ch,
+			   int notify_code, struct iovec *iov, int count)
+{
+	struct fuse_out_header out;
+
+	out.unique = 0;
+	out.error = notify_code;
+	iov[0].iov_base = &out;
+	iov[0].iov_len = sizeof(struct fuse_out_header);
+	out.len = iov_length(iov, count);
+
+	if (f->debug)
+		fprintf(stderr, "NOTIFY: code=%d count=%d length=%u\n",
+			notify_code, count, out.len);
+
+	return fuse_chan_send(ch, iov, count);
+}
+
+int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
+{
+	if (ph != NULL) {
+		struct fuse_notify_poll_wakeup_out outarg;
+		struct iovec iov[2];
+
+		outarg.kh = ph->kh;
+
+		iov[1].iov_base = &outarg;
+		iov[1].iov_len = sizeof(outarg);
+
+		return send_notify_iov(ph->f, ph->ch, FUSE_NOTIFY_POLL, iov, 2);
+	} else {
+		return 0;
+	}
+}
+
 void *fuse_req_userdata(fuse_req_t req)
 {
 	return req->f->userdata;
@@ -1255,6 +1340,7 @@ static struct {
 	[FUSE_INTERRUPT]   = { do_interrupt,   "INTERRUPT"   },
 	[FUSE_BMAP]	   = { do_bmap,	       "BMAP"	     },
 	[FUSE_IOCTL]	   = { do_ioctl,       "IOCTL"	     },
+	[FUSE_POLL]	   = { do_poll,        "POLL"	     },
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
 };
 

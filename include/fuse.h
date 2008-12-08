@@ -469,11 +469,30 @@ struct fuse_operations {
 	 * _IOC_READ in area and if both are set in/out area.  In all
 	 * non-NULL cases, the area is of _IOC_SIZE(@cmd) bytes.
 	 *
-	 * Introduced in version 2.9
+	 * Introduced in version 2.8
 	 */
 	int (*ioctl) (const char *, int cmd, void *arg,
 		      struct fuse_file_info *, unsigned int flags, void *data);
 
+	/**
+	 * Poll for IO readiness events
+	 *
+	 * Note: If @ph is non-NULL, the client should notify
+	 * when IO readiness events occur by calling
+	 * fuse_notify_poll() with the specified @ph.
+	 *
+	 * Regardless of the number of times poll with a non-NULL @ph
+	 * is received, single notification is enough to clear all.
+	 * Notifying more times incurs overhead but doesn't harm
+	 * correctness.
+	 *
+	 * The callee is responsible for destroying @ph with
+	 * fuse_pollhandle_destroy() when no longer in use.
+	 *
+	 * Introduced in version 2.8
+	 */
+	int (*poll) (const char *, struct fuse_file_info *,
+		     struct fuse_pollhandle *ph, unsigned *reventsp);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -708,8 +727,13 @@ int fuse_fs_bmap(struct fuse_fs *fs, const char *path, size_t blocksize,
 		 uint64_t *idx);
 int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd, void *arg,
 		  struct fuse_file_info *fi, unsigned int flags, void *data);
+int fuse_fs_poll(struct fuse_fs *fs, const char *path,
+		 struct fuse_file_info *fi, struct fuse_pollhandle *ph,
+		 unsigned *reventsp);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn);
 void fuse_fs_destroy(struct fuse_fs *fs);
+
+int fuse_notify_poll(struct fuse_pollhandle *ph);
 
 /**
  * Create a new fuse filesystem object

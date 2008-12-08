@@ -1667,6 +1667,29 @@ int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd, void *arg,
 		return -ENOSYS;
 }
 
+int fuse_fs_poll(struct fuse_fs *fs, const char *path,
+		 struct fuse_file_info *fi, struct fuse_pollhandle *ph,
+		 unsigned *reventsp)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.poll) {
+		int res;
+
+		if (fs->debug)
+			fprintf(stderr, "poll[%llu] ph: %p\n",
+				(unsigned long long) fi->fh, ph);
+
+		res = fs->op.poll(path, fi, ph, reventsp);
+
+		if (fs->debug && !res)
+			fprintf(stderr, "   poll[%llu] revents: 0x%x\n",
+				(unsigned long long) fi->fh, *reventsp);
+
+		return res;
+	} else
+		return -ENOSYS;
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -3235,6 +3258,28 @@ enomem:
 	goto out;
 }
 
+static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,
+			  struct fuse_file_info *fi, struct fuse_pollhandle *ph)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	struct fuse_intr_data d;
+	char *path;
+	int ret;
+	unsigned revents = 0;
+
+	ret = get_path(f, ino, &path);
+	if (!ret) {
+		fuse_prepare_interrupt(f, req, &d);
+		ret = fuse_fs_poll(f->fs, path, fi, ph, &revents);
+		fuse_finish_interrupt(f, req, &d);
+		free_path(f, ino, path);
+	}
+	if (!ret)
+		fuse_reply_poll(req, revents);
+	else
+		reply_err(req, ret);
+}
+
 static struct fuse_lowlevel_ops fuse_path_ops = {
 	.init = fuse_lib_init,
 	.destroy = fuse_lib_destroy,
@@ -3271,7 +3316,13 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.setlk = fuse_lib_setlk,
 	.bmap = fuse_lib_bmap,
 	.ioctl = fuse_lib_ioctl,
+	.poll = fuse_lib_poll,
 };
+
+int fuse_notify_poll(struct fuse_pollhandle *ph)
+{
+	return fuse_lowlevel_notify_poll(ph);
+}
 
 static void free_cmd(struct fuse_cmd *cmd)
 {

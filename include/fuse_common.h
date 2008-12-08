@@ -159,6 +159,7 @@ struct fuse_conn_info {
 
 struct fuse_session;
 struct fuse_chan;
+struct fuse_pollhandle;
 
 /**
  * Create a FUSE mountpoint
@@ -218,6 +219,13 @@ int fuse_daemonize(int foreground);
  * @return the version
  */
 int fuse_version(void);
+
+/**
+ * Destroy poll handle
+ *
+ * @param ph the poll handle
+ */
+void fuse_pollhandle_destroy(struct fuse_pollhandle *ph);
 
 /* ----------------------------------------------------------- *
  * Signal handling					       *
