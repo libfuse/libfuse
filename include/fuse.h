@@ -270,8 +270,11 @@ struct fuse_operations {
 
 	/** Open directory
 	 *
-	 * This method should check if the open operation is permitted for
-	 * this  directory
+	 * Unless the 'default_permissions' mount option is given,
+	 * this method should check if opendir is permitted for this
+	 * directory. Optionally opendir may also return an arbitrary
+	 * filehandle in the fuse_file_info structure, which will be
+	 * passed to readdir, closedir and fsyncdir.
 	 *
 	 * Introduced in version 2.3
 	 */
@@ -462,12 +465,12 @@ struct fuse_operations {
 	/**
 	 * Ioctl
 	 *
-	 * @flags will have FUSE_IOCTL_COMPAT set for 32bit ioctls in
-	 * 64bit environment.  The size and direction of @data is
-	 * determined by _IOC_*() decoding of @cmd.  For _IOC_NONE,
-	 * @data will be NULL, for _IOC_WRITE @data is out area, for
+	 * flags will have FUSE_IOCTL_COMPAT set for 32bit ioctls in
+	 * 64bit environment.  The size and direction of data is
+	 * determined by _IOC_*() decoding of cmd.  For _IOC_NONE,
+	 * data will be NULL, for _IOC_WRITE data is out area, for
 	 * _IOC_READ in area and if both are set in/out area.  In all
-	 * non-NULL cases, the area is of _IOC_SIZE(@cmd) bytes.
+	 * non-NULL cases, the area is of _IOC_SIZE(cmd) bytes.
 	 *
 	 * Introduced in version 2.8
 	 */
@@ -477,16 +480,16 @@ struct fuse_operations {
 	/**
 	 * Poll for IO readiness events
 	 *
-	 * Note: If @ph is non-NULL, the client should notify
+	 * Note: If ph is non-NULL, the client should notify
 	 * when IO readiness events occur by calling
-	 * fuse_notify_poll() with the specified @ph.
+	 * fuse_notify_poll() with the specified ph.
 	 *
-	 * Regardless of the number of times poll with a non-NULL @ph
+	 * Regardless of the number of times poll with a non-NULL ph
 	 * is received, single notification is enough to clear all.
 	 * Notifying more times incurs overhead but doesn't harm
 	 * correctness.
 	 *
-	 * The callee is responsible for destroying @ph with
+	 * The callee is responsible for destroying ph with
 	 * fuse_pollhandle_destroy() when no longer in use.
 	 *
 	 * Introduced in version 2.8
@@ -621,9 +624,8 @@ int fuse_loop_mt(struct fuse *f);
 struct fuse_context *fuse_get_context(void);
 
 /**
- * Check if a request has already been interrupted
+ * Check if the current request has already been interrupted
  *
- * @param req request handle
  * @return 1 if the request has been interrupted, 0 otherwise
  */
 int fuse_interrupted(void);

@@ -815,9 +815,9 @@ struct fuse_lowlevel_ops {
 	 *
 	 * Note: For unrestricted ioctls (not allowed for FUSE
 	 * servers), data in and out areas can be discovered by giving
-	 * iovs and setting FUSE_IOCTL_RETRY in *@flagsp.  For
+	 * iovs and setting FUSE_IOCTL_RETRY in *flagsp.  For
 	 * restricted ioctls, kernel prepares in/out data area
-	 * according to the information encoded in @cmd.
+	 * according to the information encoded in cmd.
 	 *
 	 * Introduced in version 2.8
 	 *
@@ -845,16 +845,16 @@ struct fuse_lowlevel_ops {
 	 *
 	 * Introduced in version 2.8
 	 *
-	 * Note: If @ph is non-NULL, the client should notify
+	 * Note: If ph is non-NULL, the client should notify
 	 * when IO readiness events occur by calling
-	 * fuse_lowelevel_notify_poll() with the specified @ph.
+	 * fuse_lowelevel_notify_poll() with the specified ph.
 	 *
-	 * Regardless of the number of times poll with a non-NULL @ph
+	 * Regardless of the number of times poll with a non-NULL ph
 	 * is received, single notification is enough to clear all.
 	 * Notifying more times incurs overhead but doesn't harm
 	 * correctness.
 	 *
-	 * The callee is responsible for destroying @ph with
+	 * The callee is responsible for destroying ph with
 	 * fuse_pollhandle_destroy() when no longer in use.
 	 *
 	 * Valid replies:
@@ -931,7 +931,7 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
  *   getattr, setattr
  *
  * @param req request handle
- * @param the attributes
+ * @param attr the attributes
  * @param attr_timeout	validity timeout (in seconds) for the attributes
  * @return zero for success, -errno for failure to send reply
  */
@@ -1074,7 +1074,7 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
  * @param req request handle
  * @param buf the point where the new entry will be added to the buffer
  * @param bufsize remaining size of the buffer
- * @param the name of the entry
+ * @param name the name of the entry
  * @param stbuf the file attributes
  * @param off the offset of the next entry
  * @return the space needed for the entry
@@ -1093,9 +1093,9 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
  *
  * @param req request handle
  * @param in_iov iovec specifying data to fetch from the caller
- * @param in_count number of entries in @in_iov
+ * @param in_count number of entries in in_iov
  * @param out_iov iovec specifying addresses to write output to
- * @param out_count number of entries in @out_iov
+ * @param out_count number of entries in out_iov
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_ioctl_retry(fuse_req_t req,
@@ -1176,7 +1176,7 @@ typedef void (*fuse_interrupt_func_t)(fuse_req_t req, void *data);
  *
  * @param req request handle
  * @param func the callback function or NULL for unregister
- * @parm data user data passed to the callback function
+ * @param data user data passed to the callback function
  */
 void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
 			     void *data);
