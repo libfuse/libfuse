@@ -179,7 +179,7 @@ static int fuse_load_so_name(const char *soname)
 		goto err;
 	}
 	if (!so->ctr) {
-		fprintf(stderr, "fuse: %s did not register any modules",
+		fprintf(stderr, "fuse: %s did not register any modules\n",
 			soname);
 		goto err;
 	}
@@ -1243,8 +1243,8 @@ int fuse_fs_read(struct fuse_fs *fs, const char *path, char *buf, size_t size,
 			fprintf(stderr, "   read[%llu] %u bytes from %llu\n",
 				(unsigned long long) fi->fh, res,
 				(unsigned long long) off);
-		if ((size_t) res > size)
-			fprintf(stderr, "fuse: read too many bytes");
+		if (res > (int) size)
+			fprintf(stderr, "fuse: read too many bytes\n");
 
 		return res;
 	} else {
@@ -1274,8 +1274,8 @@ int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *buf,
 				fi->writepage ? "page" : "",
 				(unsigned long long) fi->fh, res,
 				(unsigned long long) off);
-		if ((size_t) res > size)
-			fprintf(stderr, "fuse: wrote too many bytes");
+		if (res > (int) size)
+			fprintf(stderr, "fuse: wrote too many bytes\n");
 
 		return res;
 	} else {
