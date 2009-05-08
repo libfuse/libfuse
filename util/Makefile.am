@@ -32,7 +32,7 @@ install-exec-local:
 	$(mkdir_p) $(DESTDIR)$(MOUNT_FUSE_PATH)
 	$(INSTALL_PROGRAM) $(srcdir)/mount.fuse $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
 	$(mkdir_p) $(DESTDIR)$(INIT_D_PATH)
-	$(INSTALL_PROGRAM) $(srcdir)/init_script $(DESTDIR)$(INIT_D_PATH)/fuse
+	$(INSTALL_SCRIPT) $(srcdir)/init_script $(DESTDIR)$(INIT_D_PATH)/fuse
 	@if test -x /usr/sbin/update-rc.d; then \
 		echo "/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 . || true"; \
 		/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 . || true; \

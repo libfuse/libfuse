@@ -2,6 +2,8 @@
 
 	* Fix missing newlines in some printfs
 
+	* Fix 'make install-strip'.  Reported by Dominick Layfield
+
 2009-01-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.8.0-pre2
