@@ -1174,6 +1174,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_POSIX_LOCKS;
 		if (arg->flags & FUSE_ATOMIC_O_TRUNC)
 			f->conn.capable |= FUSE_CAP_ATOMIC_O_TRUNC;
+		if (arg->flags & FUSE_EXPORT_SUPPORT)
+			f->conn.capable |= FUSE_CAP_EXPORT_SUPPORT;
 		if (arg->flags & FUSE_BIG_WRITES)
 			f->conn.capable |= FUSE_CAP_BIG_WRITES;
 	} else {
@@ -1211,6 +1213,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_POSIX_LOCKS;
 	if (f->conn.want & FUSE_CAP_ATOMIC_O_TRUNC)
 		outarg.flags |= FUSE_ATOMIC_O_TRUNC;
+	if (f->conn.want & FUSE_CAP_EXPORT_SUPPORT)
+		outarg.flags |= FUSE_EXPORT_SUPPORT;
 	if (f->conn.want & FUSE_CAP_BIG_WRITES)
 		outarg.flags |= FUSE_BIG_WRITES;
 	outarg.max_readahead = f->conn.max_readahead;

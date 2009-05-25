@@ -1,3 +1,7 @@
+2009-05-25  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add FUSE_CAP_EXPORT_SUPPORT to fuse_common.h
+
 2009-05-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix missing newlines in some printfs
