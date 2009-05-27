@@ -1,3 +1,8 @@
+2009-05-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Don't call forget_node() if the lookup was negative and write()
+	for the reply returned ENOENT.  Reported by John Haxby
+
 2009-05-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add FUSE_CAP_EXPORT_SUPPORT to fuse_common.h

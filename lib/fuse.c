@@ -1908,8 +1908,11 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
 {
 	if (!err) {
 		struct fuse *f = req_fuse(req);
-		if (fuse_reply_entry(req, e) == -ENOENT)
-			forget_node(f, e->ino, 1);
+		if (fuse_reply_entry(req, e) == -ENOENT) {
+			/* Skip forget for negative result */
+			if  (e->ino != 0)
+				forget_node(f, e->ino, 1);
+		}
 	} else
 		reply_err(req, err);
 }
