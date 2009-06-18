@@ -153,6 +153,11 @@ FUSE_2.7 {
 		fuse_version;
 } FUSE_2.6;
 
+FUSE_2.7.5 {
+	global:
+		fuse_reply_bmap;
+} FUSE_2.7;
+
 FUSE_2.8 {
 	global:
 		fuse_fs_ioctl;
@@ -161,11 +166,10 @@ FUSE_2.8 {
 		fuse_notify_poll;
 		fuse_opt_add_opt_escaped;
 		fuse_pollhandle_destroy;
-		fuse_reply_bmap;
 		fuse_reply_ioctl;
 		fuse_reply_ioctl_retry;
 		fuse_reply_poll;
 
 	local:
 		*;
-} FUSE_2.7;
+} FUSE_2.7.5;

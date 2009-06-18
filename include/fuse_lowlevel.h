@@ -1058,7 +1058,7 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
 /**
  * Add a directory entry to the buffer
  *
- * Buffer needs to be large enough to hold the entry.  Of it's not,
+ * Buffer needs to be large enough to hold the entry.  If it's not,
  * then the entry is not filled in but the size of the entry is still
  * returned.  The caller can check this by comparing the bufsize
  * parameter with the returned entry size.  If the entry size is

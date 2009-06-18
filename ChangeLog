@@ -1,3 +1,8 @@
+2009-06-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add missing fuse_reply_bmap to versionscript.  Debian
+	Bug#531329.  Reported by Goswin Brederlow
+
 2009-05-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Don't call forget_node() if the lookup was negative and write()
