@@ -47,6 +47,7 @@ struct fuse_ll {
 	int debug;
 	int allow_root;
 	int atomic_o_trunc;
+	int no_remote_lock;
 	int big_writes;
 	struct fuse_lowlevel_ops op;
 	int got_init;

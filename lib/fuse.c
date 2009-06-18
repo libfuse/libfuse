@@ -48,6 +48,7 @@ struct fuse_config {
 	double attr_timeout;
 	double ac_attr_timeout;
 	int ac_attr_timeout_set;
+	int noforget;
 	int debug;
 	int hard_remove;
 	int use_ino;
@@ -409,12 +410,17 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 	struct node *node;
 
 	pthread_mutex_lock(&f->lock);
-	node = lookup_node(f, parent, name);
+	if (!name)
+		node = get_node(f, parent);
+	else
+		node = lookup_node(f, parent, name);
 	if (node == NULL) {
 		node = (struct node *) calloc(1, sizeof(struct node));
 		if (node == NULL)
 			goto out_err;
 
+		if (f->conf.noforget)
+			node->nlookup = 1;
 		node->refctr = 1;
 		node->nodeid = next_id(f);
 		node->generation = f->generation;
@@ -807,6 +813,15 @@ static void forget_node(struct fuse *f, fuse_ino_t nodeid, uint64_t nlookup)
 	pthread_mutex_unlock(&f->lock);
 }
 
+static void unlink_node(struct fuse *f, struct node *node)
+{
+	if (f->conf.noforget) {
+		assert(node->nlookup > 1);
+		node->nlookup--;
+	}
+	unhash_name(f, node);
+}
+
 static void remove_node(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -814,7 +829,7 @@ static void remove_node(struct fuse *f, fuse_ino_t dir, const char *name)
 	pthread_mutex_lock(&f->lock);
 	node = lookup_node(f, dir, name);
 	if (node != NULL)
-		unhash_name(f, node);
+		unlink_node(f, node);
 	pthread_mutex_unlock(&f->lock);
 }
 
@@ -837,7 +852,7 @@ static int rename_node(struct fuse *f, fuse_ino_t olddir, const char *oldname,
 			err = -EBUSY;
 			goto out;
 		}
-		unhash_name(f, newnode);
+		unlink_node(f, newnode);
 	}
 
 	unhash_name(f, node);
@@ -1931,6 +1946,7 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 
 	memset(c, 0, sizeof(*c));
 	c->ctx.fuse = f;
+	conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 	fuse_fs_init(f->fs, conn);
 }
 
@@ -1962,6 +1978,32 @@ static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 	struct fuse_entry_param e;
 	char *path;
 	int err;
+	struct node *dot = NULL;
+
+	if (name[0] == '.') {
+		int len = strlen(name);
+
+		if (len == 1 || (name[1] == '.' && len == 2)) {
+			pthread_mutex_lock(&f->lock);
+			if (len == 1) {
+				if (f->conf.debug)
+					fprintf(stderr, "LOOKUP-DOT\n");
+				dot = get_node_nocheck(f, parent);
+				if (dot == NULL) {
+					pthread_mutex_unlock(&f->lock);
+					reply_entry(req, &e, -ESTALE);
+					return;
+				}
+				dot->refctr++;
+			} else {
+				if (f->conf.debug)
+					fprintf(stderr, "LOOKUP-DOTDOT\n");
+				parent = get_node(f, parent)->parent->nodeid;
+			}
+			pthread_mutex_unlock(&f->lock);
+			name = NULL;
+		}
+	}
 
 	err = get_path_name(f, parent, name, &path);
 	if (!err) {
@@ -1977,6 +2019,11 @@ static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 		}
 		fuse_finish_interrupt(f, req, &d);
 		free_path(f, parent, path);
+	}
+	if (dot) {
+		pthread_mutex_lock(&f->lock);
+		unref_node(f, dot);
+		pthread_mutex_unlock(&f->lock);
 	}
 	reply_entry(req, &e, err);
 }
@@ -3445,6 +3492,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_LIB_OPT("ac_attr_timeout=%lf",   ac_attr_timeout, 0),
 	FUSE_LIB_OPT("ac_attr_timeout=",      ac_attr_timeout_set, 1),
 	FUSE_LIB_OPT("negative_timeout=%lf",  negative_timeout, 0),
+	FUSE_LIB_OPT("noforget",              noforget, 1),
 	FUSE_LIB_OPT("intr",		      intr, 1),
 	FUSE_LIB_OPT("intr_signal=%d",	      intr_signal, 0),
 	FUSE_LIB_OPT("modules=%s",	      modules, 0),

@@ -1175,7 +1175,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	if (f->atomic_o_trunc)
 		f->conn.want |= FUSE_CAP_ATOMIC_O_TRUNC;
-	if (f->op.getlk && f->op.setlk)
+	if (f->op.getlk && f->op.setlk && !f->no_remote_lock)
 		f->conn.want |= FUSE_CAP_POSIX_LOCKS;
 	if (f->big_writes)
 		f->conn.want |= FUSE_CAP_BIG_WRITES;
@@ -1442,6 +1442,7 @@ static struct fuse_opt fuse_ll_opts[] = {
 	{ "async_read", offsetof(struct fuse_ll, conn.async_read), 1 },
 	{ "sync_read", offsetof(struct fuse_ll, conn.async_read), 0 },
 	{ "atomic_o_trunc", offsetof(struct fuse_ll, atomic_o_trunc), 1},
+	{ "no_remote_lock", offsetof(struct fuse_ll, no_remote_lock), 1},
 	{ "big_writes", offsetof(struct fuse_ll, big_writes), 1},
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
@@ -1465,7 +1466,8 @@ static void fuse_ll_help(void)
 "    -o async_read          perform reads asynchronously (default)\n"
 "    -o sync_read           perform reads synchronously\n"
 "    -o atomic_o_trunc      enable atomic open+truncate support\n"
-"    -o big_writes          enable larger than 4kB writes\n");
+"    -o big_writes          enable larger than 4kB writes\n"
+"    -o no_remote_lock      disable remote file locking\n");
 }
 
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,
