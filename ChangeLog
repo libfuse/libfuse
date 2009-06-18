@@ -1,5 +1,14 @@
 2009-06-18  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Add "noforget" option to high level lib to prevent ESTALE errors
+	on NFS exported filesystems.  This result in paths being cached
+	forever, resulting in ever growing memory usage.  Use with care.
+
+	* Add "no_remote_lock" option to disable remote file locking even
+	if the filesystem implements it.  With this option locking
+	primitives (flock, lockf, fcntl(F_SETLK)) will still work, but
+	will ignore remotely locked files.
+
 	* CUSE patches from Tejun Heo:
 
 	* Unrestricted ioctl support left some debris.  Clean them up:
