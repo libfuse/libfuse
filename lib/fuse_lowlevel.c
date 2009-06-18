@@ -6,10 +6,9 @@
   See the file COPYING.LIB
 */
 
-#include "fuse_lowlevel.h"
+#include "fuse_i.h"
 #include "fuse_kernel.h"
 #include "fuse_opt.h"
-#include "fuse_i.h"
 #include "fuse_misc.h"
 #include "fuse_common_compat.h"
 #include "fuse_lowlevel_compat.h"
@@ -24,45 +23,6 @@
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 #define OFFSET_MAX 0x7fffffffffffffffLL
-
-struct fuse_ll;
-
-struct fuse_req {
-	struct fuse_ll *f;
-	uint64_t unique;
-	int ctr;
-	pthread_mutex_t lock;
-	struct fuse_ctx ctx;
-	struct fuse_chan *ch;
-	int interrupted;
-	union {
-		struct {
-			uint64_t unique;
-		} i;
-		struct {
-			fuse_interrupt_func_t func;
-			void *data;
-		} ni;
-	} u;
-	struct fuse_req *next;
-	struct fuse_req *prev;
-};
-
-struct fuse_ll {
-	int debug;
-	int allow_root;
-	int atomic_o_trunc;
-	int big_writes;
-	struct fuse_lowlevel_ops op;
-	int got_init;
-	void *userdata;
-	uid_t owner;
-	struct fuse_conn_info conn;
-	struct fuse_req list;
-	struct fuse_req interrupts;
-	pthread_mutex_t lock;
-	int got_destroy;
-};
 
 struct fuse_pollhandle {
 	uint64_t kh;
@@ -140,7 +100,7 @@ static void destroy_req(fuse_req_t req)
 	free(req);
 }
 
-static void free_req(fuse_req_t req)
+void free_req(fuse_req_t req)
 {
 	int ctr;
 	struct fuse_ll *f = req->f;
@@ -155,11 +115,10 @@ static void free_req(fuse_req_t req)
 		destroy_req(req);
 }
 
-static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
+int send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			  int count)
 {
 	struct fuse_out_header out;
-	int res;
 
 	if (error <= -1000 || error > 0) {
 		fprintf(stderr, "fuse: bad error value: %i\n",	error);
@@ -184,9 +143,16 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 				(unsigned long long) out.unique, out.len);
 		}
 	}
-	res = fuse_chan_send(req->ch, iov, count);
-	free_req(req);
 
+	return fuse_chan_send(req->ch, iov, count);
+}
+
+int send_reply_iov(fuse_req_t req, int error, struct iovec *iov, int count)
+{
+	int res;
+
+	res = send_reply_iov_nofree(req, error, iov, count);
+	free_req(req);
 	return res;
 }
 
@@ -507,6 +473,30 @@ int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size)
 	}
 
 	return send_reply_iov(req, 0, iov, count);
+}
+
+int fuse_reply_ioctl_iov(fuse_req_t req, int result, const struct iovec *iov,
+			 int count)
+{
+	struct iovec *padded_iov;
+	struct fuse_ioctl_out arg;
+	int res;
+
+	padded_iov = malloc((count + 2) * sizeof(struct iovec));
+	if (padded_iov == NULL)
+		return fuse_reply_err(req, -ENOMEM);
+
+	memset(&arg, 0, sizeof(arg));
+	arg.result = result;
+	padded_iov[1].iov_base = &arg;
+	padded_iov[1].iov_len = sizeof(arg);
+
+	memcpy(&padded_iov[2], iov, count * sizeof(struct iovec));
+
+	res = send_reply_iov(req, 0, padded_iov, count + 2);
+	free(padded_iov);
+
+	return res;
 }
 
 int fuse_reply_poll(fuse_req_t req, unsigned revents)
@@ -1095,7 +1085,7 @@ static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	if (req->f->op.ioctl)
 		req->f->op.ioctl(req, nodeid, arg->cmd,
-				 (void *)(uintptr_t)arg->arg, &fi, &flags,
+				 (void *)(uintptr_t)arg->arg, &fi, flags,
 				 in_buf, arg->in_size, arg->out_size);
 	else
 		fuse_reply_err(req, ENOSYS);
@@ -1356,6 +1346,7 @@ static struct {
 	[FUSE_IOCTL]	   = { do_ioctl,       "IOCTL"	     },
 	[FUSE_POLL]	   = { do_poll,        "POLL"	     },
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
+	[CUSE_INIT]	   = { do_cuse_init,   "CUSE_INIT"   },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
@@ -1375,6 +1366,7 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 	struct fuse_in_header *in = (struct fuse_in_header *) buf;
 	const void *inarg = buf + sizeof(struct fuse_in_header);
 	struct fuse_req *req;
+	int err;
 
 	if (f->debug)
 		fprintf(stderr,
@@ -1399,28 +1391,41 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 	list_init_req(req);
 	fuse_mutex_init(&req->lock);
 
-	if (!f->got_init && in->opcode != FUSE_INIT)
-		fuse_reply_err(req, EIO);
-	else if (f->allow_root && in->uid != f->owner && in->uid != 0 &&
+	err = EIO;
+	if (!f->got_init) {
+		enum fuse_opcode expected;
+
+		expected = f->cuse_data ? CUSE_INIT : FUSE_INIT;
+		if (in->opcode != expected)
+			goto reply_err;
+	} else if (in->opcode == FUSE_INIT || in->opcode == CUSE_INIT)
+		goto reply_err;
+
+	err = EACCES;
+	if (f->allow_root && in->uid != f->owner && in->uid != 0 &&
 		 in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
 		 in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&
 		 in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
-		 in->opcode != FUSE_FSYNCDIR && in->opcode != FUSE_RELEASEDIR) {
-		fuse_reply_err(req, EACCES);
-	} else if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
-		fuse_reply_err(req, ENOSYS);
-	else {
-		if (in->opcode != FUSE_INTERRUPT) {
-			struct fuse_req *intr;
-			pthread_mutex_lock(&f->lock);
-			intr = check_interrupt(f, req);
-			list_add_req(req, &f->list);
-			pthread_mutex_unlock(&f->lock);
-			if (intr)
-				fuse_reply_err(intr, EAGAIN);
-		}
-		fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
+		 in->opcode != FUSE_FSYNCDIR && in->opcode != FUSE_RELEASEDIR)
+		goto reply_err;
+
+	err = ENOSYS;
+	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
+		goto reply_err;
+	if (in->opcode != FUSE_INTERRUPT) {
+		struct fuse_req *intr;
+		pthread_mutex_lock(&f->lock);
+		intr = check_interrupt(f, req);
+		list_add_req(req, &f->list);
+		pthread_mutex_unlock(&f->lock);
+		if (intr)
+			fuse_reply_err(intr, EAGAIN);
 	}
+	fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
+	return;
+
+ reply_err:
+	fuse_reply_err(req, err);
 }
 
 enum {
@@ -1499,6 +1504,7 @@ static void fuse_ll_destroy(void *data)
 	}
 
 	pthread_mutex_destroy(&f->lock);
+	free(f->cuse_data);
 	free(f);
 }
 

@@ -9,7 +9,8 @@ fuseinclude_HEADERS = \
 	fuse_common_compat.h    \
 	fuse_lowlevel.h		\
 	fuse_lowlevel_compat.h	\
-	fuse_opt.h
+	fuse_opt.h		\
+	cuse_lowlevel.h
 
 include_HEADERS = old/fuse.h ulockmgr.h
 

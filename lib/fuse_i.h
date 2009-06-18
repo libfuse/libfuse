@@ -7,11 +7,58 @@
 */
 
 #include "fuse.h"
+#include "fuse_lowlevel.h"
 
-struct fuse_session;
 struct fuse_chan;
-struct fuse_lowlevel_ops;
-struct fuse_req;
+struct fuse_ll;
+
+struct fuse_session {
+	struct fuse_session_ops op;
+
+	void *data;
+
+	volatile int exited;
+
+	struct fuse_chan *ch;
+};
+
+struct fuse_req {
+	struct fuse_ll *f;
+	uint64_t unique;
+	int ctr;
+	pthread_mutex_t lock;
+	struct fuse_ctx ctx;
+	struct fuse_chan *ch;
+	int interrupted;
+	union {
+		struct {
+			uint64_t unique;
+		} i;
+		struct {
+			fuse_interrupt_func_t func;
+			void *data;
+		} ni;
+	} u;
+	struct fuse_req *next;
+	struct fuse_req *prev;
+};
+
+struct fuse_ll {
+	int debug;
+	int allow_root;
+	int atomic_o_trunc;
+	int big_writes;
+	struct fuse_lowlevel_ops op;
+	int got_init;
+	struct cuse_data *cuse_data;
+	void *userdata;
+	uid_t owner;
+	struct fuse_conn_info conn;
+	struct fuse_req list;
+	struct fuse_req interrupts;
+	pthread_mutex_t lock;
+	int got_destroy;
+};
 
 struct fuse_cmd {
 	char *buf;
@@ -34,3 +81,19 @@ struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
 void fuse_kern_unmount_compat22(const char *mountpoint);
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct fuse_args *args);
+
+int send_reply_iov(fuse_req_t req, int error, struct iovec *iov, int count);
+int send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov, int count);
+void free_req(fuse_req_t req);
+
+
+struct fuse *fuse_setup_common(int argc, char *argv[],
+			       const struct fuse_operations *op,
+			       size_t op_size,
+			       char **mountpoint,
+			       int *multithreaded,
+			       int *fd,
+			       void *user_data,
+			       int compat);
+
+void do_cuse_init(fuse_req_t req, fuse_ino_t nodeide, const void *inarg);

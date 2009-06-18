@@ -3211,25 +3211,24 @@ static void fuse_lib_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 }
 
 static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
-			   struct fuse_file_info *fi, unsigned int *flagsp,
+			   struct fuse_file_info *fi, unsigned int flags,
 			   const void *in_buf, size_t in_bufsz,
 			   size_t out_bufsz)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_intr_data d;
 	char *path, *out_buf = NULL;
-	struct iovec *in_iov = NULL, *out_iov = NULL;
 	int err;
 
-	if (*flagsp & FUSE_IOCTL_UNRESTRICTED) {
-		reply_err(req, -EPERM);
-		return;
-	}
+	err = -EPERM;
+	if (flags & FUSE_IOCTL_UNRESTRICTED)
+		goto err;
 
 	if (out_bufsz) {
+		err = -ENOMEM;
 		out_buf = malloc(out_bufsz);
 		if (!out_buf)
-			goto enomem;
+			goto err;
 	}
 
 	assert(!in_bufsz || !out_bufsz || in_bufsz == out_bufsz);
@@ -3238,27 +3237,22 @@ static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 
 	err = get_path(f, ino, &path);
 	if (err)
-		goto out;
+		goto err;
 
 	fuse_prepare_interrupt(f, req, &d);
 
-	err = fuse_fs_ioctl(f->fs, path, cmd, arg, fi, *flagsp,
+	err = fuse_fs_ioctl(f->fs, path, cmd, arg, fi, flags,
 			    out_buf ?: (void *)in_buf);
 
 	fuse_finish_interrupt(f, req, &d);
 	free_path(f, ino, path);
 
 	fuse_reply_ioctl(req, err, out_buf, out_bufsz);
-
+	goto out;
+err:
+	reply_err(req, err);
 out:
 	free(out_buf);
-	free(in_iov);
-	free(out_iov);
-	return;
-
-enomem:
-	reply_err(req, -ENOMEM);
-	goto out;
 }
 
 static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,

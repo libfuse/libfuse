@@ -235,14 +235,14 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
 	fuse_unmount_common(mountpoint, ch);
 }
 
-static struct fuse *fuse_setup_common(int argc, char *argv[],
-				      const struct fuse_operations *op,
-				      size_t op_size,
-				      char **mountpoint,
-				      int *multithreaded,
-				      int *fd,
-				      void *user_data,
-				      int compat)
+struct fuse *fuse_setup_common(int argc, char *argv[],
+			       const struct fuse_operations *op,
+			       size_t op_size,
+			       char **mountpoint,
+			       int *multithreaded,
+			       int *fd,
+			       void *user_data,
+			       int compat)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_chan *ch;

@@ -160,6 +160,10 @@ FUSE_2.7.5 {
 
 FUSE_2.8 {
 	global:
+		cuse_lowlevel_new;
+		cuse_lowlevel_main;
+		cuse_lowlevel_setup;
+		cuse_lowlevel_teardown;
 		fuse_fs_ioctl;
 		fuse_fs_poll;
 		fuse_lowlevel_notify_poll;
@@ -167,6 +171,7 @@ FUSE_2.8 {
 		fuse_opt_add_opt_escaped;
 		fuse_pollhandle_destroy;
 		fuse_reply_ioctl;
+		fuse_reply_ioctl_iov;
 		fuse_reply_ioctl_retry;
 		fuse_reply_poll;
 

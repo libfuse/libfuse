@@ -1,3 +1,34 @@
+2009-06-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* CUSE patches from Tejun Heo:
+
+	* Unrestricted ioctl support left some debris.  Clean them up:
+	  o No reason to pass around pointer to flags.  Pass flags directly.
+	  o Clean up comment and prototype parameter names.
+	  o fuse_lib_ioctl() didn't reply when get_path() failed.  Fix it.
+	  o Remove unused variables {in|out}_iov from fuse_lib_ioctl().
+
+	* Add fuse_reply_ioctl_iov()
+
+	* Move fuse_session, fuse_req and fuse_ll definitions to fuse_i.h
+	and make send_reply_iov() and fuse_setup_common() global (also in
+	fuse_i.h).  These will be used by CUSE support.
+
+	* Restructure fuse_ll_process()
+
+	* Implement libfuse side of CUSE support.  CUSE uses subset of FUSE
+	operations as dir operations don't make sense for CUSE where one
+	instance implements single character device.
+
+	CUSE support comes with its own cuse_lowevel_ops and related
+	initialization and helper functions.  Except for initialization, it
+	usage is basically identical to FUSE.
+
+	This patch also adds example/cusexmp.c which can create a character
+	device with name and device number specified on command line.  The
+	created device itself is pretty boring.  It's a bit bucket supporting
+	read, write and access via ioctl.
+
 2009-06-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add missing fuse_reply_bmap to versionscript.  Debian

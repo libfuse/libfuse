@@ -815,7 +815,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * Note: For unrestricted ioctls (not allowed for FUSE
 	 * servers), data in and out areas can be discovered by giving
-	 * iovs and setting FUSE_IOCTL_RETRY in *flagsp.  For
+	 * iovs and setting FUSE_IOCTL_RETRY in @flags.  For
 	 * restricted ioctls, kernel prepares in/out data area
 	 * according to the information encoded in cmd.
 	 *
@@ -824,6 +824,7 @@ struct fuse_lowlevel_ops {
 	 * Valid replies:
 	 *   fuse_reply_ioctl_retry
 	 *   fuse_reply_ioctl
+	 *   fuse_reply_ioctl_iov
 	 *   fuse_reply_err
 	 *
 	 * @param req request handle
@@ -831,14 +832,14 @@ struct fuse_lowlevel_ops {
 	 * @param cmd ioctl command
 	 * @param arg ioctl argument
 	 * @param fi file information
-	 * @param flagsp io/out parameter for FUSE_IOCTL_* flags
+	 * @param flags for FUSE_IOCTL_* flags
 	 * @param in_buf data fetched from the caller
-	 * @param in_size number of fetched bytes
-	 * @param out_size maximum size of output data
+	 * @param in_bufsz number of fetched bytes
+	 * @param out_bufsz maximum size of output data
 	 */
 	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
-		       struct fuse_file_info *fi, unsigned *flagsp,
-		       const void *in_buf, size_t in_bufsz, size_t out_bufszp);
+		       struct fuse_file_info *fi, unsigned flags,
+		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
 
 	/**
 	 * Poll for IO readiness
@@ -1114,6 +1115,20 @@ int fuse_reply_ioctl_retry(fuse_req_t req,
  * @param size length of output data
  */
 int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size);
+
+/**
+ * Reply to finish ioctl with iov buffer
+ *
+ * Possible requests:
+ *   ioctl
+ *
+ * @param req request handle
+ * @param result result to be passed to the caller
+ * @param iov the vector containing the data
+ * @param count the size of vector
+ */
+int fuse_reply_ioctl_iov(fuse_req_t req, int result, const struct iovec *iov,
+			 int count);
 
 /**
  * Reply with poll result event mask
