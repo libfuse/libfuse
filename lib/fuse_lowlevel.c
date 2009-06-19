@@ -1575,6 +1575,74 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 	return fuse_lowlevel_new_common(args, op, op_size, userdata);
 }
 
+#ifdef linux
+int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
+{
+	char *buf;
+	size_t bufsize = 1024;
+	char path[128];
+	int ret;
+	int fd;
+	unsigned long pid = req->ctx.pid;
+	char *s;
+
+	sprintf(path, "/proc/%lu/task/%lu/status", pid, pid);
+
+retry:
+	buf = malloc(bufsize);
+	if (buf == NULL)
+		return -ENOMEM;
+
+	ret = -EIO;
+	fd = open(path, O_RDONLY);
+	if (fd == -1)
+		goto out_free;
+
+	ret = read(fd, buf, bufsize);
+	close(fd);
+	if (ret == -1) {
+		ret = -EIO;
+		goto out_free;
+	}
+
+	if (ret == bufsize) {
+		free(buf);
+		bufsize *= 4;
+		goto retry;
+	}
+
+	ret = -EIO;
+	s = strstr(buf, "\nGroups:");
+	if (s == NULL)
+		goto out_free;
+
+	s += 8;
+	ret = 0;
+	while (1) {
+		char *end;
+		unsigned long val = strtoul(s, &end, 0);
+		if (end == s)
+			break;
+
+		s = end;
+		if (ret < size)
+			list[ret] = val;
+		ret++;
+	}
+
+out_free:
+	free(buf);
+	return ret;
+}
+#else /* linux */
+/*
+ * This is currently not implemented on other than Linux...
+ */
+int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[]);
+{
+	return -ENOSYS;
+}
+#endif
 
 #ifndef __FreeBSD__
 

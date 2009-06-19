@@ -3450,6 +3450,12 @@ struct fuse_context *fuse_get_context(void)
 	return &fuse_get_context_internal()->ctx;
 }
 
+int fuse_getgroups(int size, gid_t list[])
+{
+	fuse_req_t req = fuse_get_context_internal()->req;
+	return fuse_req_getgroups(req, size, list);
+}
+
 int fuse_interrupted(void)
 {
 	return fuse_req_interrupted(fuse_get_context_internal()->req);

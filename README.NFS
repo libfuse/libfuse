@@ -2,3 +2,32 @@ NFS exporting is supported in Linux kernels 2.6.27 or later.
 
 You need to add an fsid=NNN option to /etc/exports to make exporting a
 FUSE directory work.
+
+Filesystem support
+------------------
+
+NFS exporting works to some extent on all fuse filesystems, but not
+perfectly.  This is due to the stateless nature of the protocol, the
+server has no way of knowing whether the client is keeping a reference
+to a file or not, and hence that file may be removed from the server's
+cache.  In that case there has to be a way to look up that object
+using the inode number, otherwise an ESTALE error will be returned.
+
+1) low-level interface
+
+Filesystems need to implement special lookups for the names "." and
+"..".  The former may be requested on any inode, including
+non-directories, while the latter is only requested for directories.
+Otherwise these special lookups should behave identically to ordinary
+lookups.
+
+2) high-level interface
+
+Because the high-level interface is path based, it is not possible to
+delegate looking up by inode to the filesystem.
+
+To work around this, currently a "noforget" option is provided, which
+makes the library remember nodes forever.  This will make the NFS
+server happy, but also results in an ever growing memory footprint for
+the filesystem.  For this reason if the filesystem is large (or the
+memory is small), then this option is not recommended.

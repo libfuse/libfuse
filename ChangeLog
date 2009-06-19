@@ -1,3 +1,10 @@
+2009-06-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fuse_getgroups (high level lib) and fuse_req_getgroups (low
+	level lib) functions to query the supplementary group IDs for the
+	current request.  Currently this is implemented on Linux by
+	reading from the /proc filesystem.
+
 2009-06-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add "noforget" option to high level lib to prevent ESTALE errors
