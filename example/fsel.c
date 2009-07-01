@@ -241,6 +241,8 @@ static void *fsel_producer(void *data)
 
 		nanosleep(&interval, NULL);
 	}
+
+	return NULL;
 }
 
 int main(int argc, char *argv[])
