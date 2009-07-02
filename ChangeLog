@@ -14,6 +14,9 @@
 
 	* Kernel interface version is now 7.12
 
+	* fusermount: Do not silently ignore command line arguments.
+	Patch by Sebastian Harl
+
 2009-06-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fuse_getgroups (high level lib) and fuse_req_getgroups (low

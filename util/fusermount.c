@@ -915,6 +915,10 @@ int main(int argc, char *argv[])
 	if (optind >= argc) {
 		fprintf(stderr, "%s: missing mountpoint argument\n", progname);
 		exit(1);
+	} else if (argc > optind + 1) {
+		fprintf(stderr, "%s: extra arguments after the mountpoint\n",
+			progname);
+		exit(1);
 	}
 
 	origmnt = argv[optind];
