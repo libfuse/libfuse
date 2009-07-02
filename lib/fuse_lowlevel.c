@@ -606,9 +606,15 @@ static void do_readlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_mknod(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_mknod_in *arg = (struct fuse_mknod_in *) inarg;
+	char *name = PARAM(arg);
+
+	if (req->f->conn.proto_minor >= 12)
+		req->ctx.umask = arg->umask;
+	else
+		name = (char *) inarg + FUSE_COMPAT_MKNOD_IN_SIZE;
 
 	if (req->f->op.mknod)
-		req->f->op.mknod(req, nodeid, PARAM(arg), arg->mode, arg->rdev);
+		req->f->op.mknod(req, nodeid, name, arg->mode, arg->rdev);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -616,6 +622,9 @@ static void do_mknod(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_mkdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_mkdir_in *arg = (struct fuse_mkdir_in *) inarg;
+
+	if (req->f->conn.proto_minor >= 12)
+		req->ctx.umask = arg->umask;
 
 	if (req->f->op.mkdir)
 		req->f->op.mkdir(req, nodeid, PARAM(arg), arg->mode);
@@ -678,15 +687,21 @@ static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 static void do_create(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	struct fuse_open_in *arg = (struct fuse_open_in *) inarg;
+	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
 
 	if (req->f->op.create) {
 		struct fuse_file_info fi;
+		char *name = PARAM(arg);
 
 		memset(&fi, 0, sizeof(fi));
 		fi.flags = arg->flags;
 
-		req->f->op.create(req, nodeid, PARAM(arg), arg->mode, &fi);
+		if (req->f->conn.proto_minor >= 12)
+			req->ctx.umask = arg->umask;
+		else
+			name = (char *) inarg + sizeof(struct fuse_open_in);
+
+		req->f->op.create(req, nodeid, name, arg->mode, &fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1168,6 +1183,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_EXPORT_SUPPORT;
 		if (arg->flags & FUSE_BIG_WRITES)
 			f->conn.capable |= FUSE_CAP_BIG_WRITES;
+		if (arg->flags & FUSE_DONT_MASK)
+			f->conn.capable |= FUSE_CAP_DONT_MASK;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
@@ -1207,6 +1224,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_EXPORT_SUPPORT;
 	if (f->conn.want & FUSE_CAP_BIG_WRITES)
 		outarg.flags |= FUSE_BIG_WRITES;
+	if (f->conn.want & FUSE_CAP_DONT_MASK)
+		outarg.flags |= FUSE_DONT_MASK;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
 
@@ -1270,6 +1289,56 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
 	}
 }
 
+int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
+                                     off_t off, off_t len)
+{
+	struct fuse_notify_inval_inode_out outarg;
+	struct fuse_ll *f;
+	struct iovec iov[2];
+
+	if (!ch)
+		return -EINVAL;
+
+	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	if (!f)
+		return -ENODEV;
+
+	outarg.ino = ino;
+	outarg.off = off;
+	outarg.len = len;
+
+	iov[1].iov_base = &outarg;
+	iov[1].iov_len = sizeof(outarg);
+
+	return send_notify_iov(f, ch, FUSE_NOTIFY_INVAL_INODE, iov, 2);
+}
+
+int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
+                                     const char *name, size_t namelen)
+{
+	struct fuse_notify_inval_entry_out outarg;
+	struct fuse_ll *f;
+	struct iovec iov[3];
+
+	if (!ch)
+		return -EINVAL;
+
+	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	if (!f)
+		return -ENODEV;
+
+	outarg.parent = parent;
+	outarg.namelen = namelen;
+	outarg.padding = 0;
+
+	iov[1].iov_base = &outarg;
+	iov[1].iov_len = sizeof(outarg);
+	iov[2].iov_base = (void *)name;
+	iov[2].iov_len = namelen + 1;
+
+	return send_notify_iov(f, ch, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
+}
+
 void *fuse_req_userdata(fuse_req_t req)
 {
 	return req->f->userdata;
@@ -1279,6 +1348,19 @@ const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
 {
 	return &req->ctx;
 }
+
+/*
+ * The size of fuse_ctx got extended, so need to be careful about
+ * incompatibility (i.e. a new binary cannot work with an old
+ * library).
+ */
+const struct fuse_ctx *fuse_req_ctx_compat24(fuse_req_t req);
+const struct fuse_ctx *fuse_req_ctx_compat24(fuse_req_t req)
+{
+	return fuse_req_ctx(req);
+}
+FUSE_SYMVER(".symver fuse_req_ctx_compat24,fuse_req_ctx@FUSE_2.4");
+
 
 void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
 			     void *data)

@@ -1,3 +1,19 @@
+2009-07-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* The context is extended with a 'umask' field.  The umask is sent
+	for mknod, mkdir and create requests by linux kernel version
+	2.6.31 or later, otherwise the umask is set to zero.  Also
+	introduce a new feature flag: FUSE_CAP_DONT_MASK.  If the kernel
+	supports this feature, then this flag will be set in conn->capable
+	in the ->init() method.  If the filesystem sets this flag in in
+	conn->want, then the create modes will not be masked.
+
+	* Add low level interfaces for lookup cache and attribute
+	invalidation.  This feature is available in linux kernels 2.6.31
+	or later.  Patch by John Muir
+
+	* Kernel interface version is now 7.12
+
 2009-06-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fuse_getgroups (high level lib) and fuse_req_getgroups (low

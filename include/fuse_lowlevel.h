@@ -109,6 +109,9 @@ struct fuse_ctx {
 
 	/** Thread ID of the calling process */
 	pid_t pid;
+
+	/** Umask of the calling process (introduced in version 2.8) */
+	mode_t umask;
 };
 
 /* 'to_set' flags in setattr */
@@ -1151,6 +1154,32 @@ int fuse_reply_poll(fuse_req_t req, unsigned revents);
  */
 int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph);
 
+/**
+ * Notify to invalidate cache for an inode
+ *
+ * @param ch the channel through which to send the invalidation
+ * @param ino the inode number
+ * @param off the offset in the inode where to start invalidating
+ *            or negative to invalidate attributes only
+ * @param len the amount of cache to invalidate or 0 for all
+ * @return zero for success, -errno for failure
+ */
+int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
+                                     off_t off, off_t len);
+
+/**
+ * Notify to invalidate parent attributes and the dentry matching
+ * parent/name
+ *
+ * @param ch the channel through which to send the invalidation
+ * @param parent inode number
+ * @param name file name
+ * @param namelen strlen() of file name
+ * @return zero for success, -errno for failure
+ */
+int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
+                                     const char *name, size_t namelen);
+
 /* ----------------------------------------------------------- *
  * Utility functions					       *
  * ----------------------------------------------------------- */
@@ -1374,6 +1403,14 @@ void fuse_session_reset(struct fuse_session *se);
  * @return 1 if exited, 0 if not exited
  */
 int fuse_session_exited(struct fuse_session *se);
+
+/**
+ * Get the user data provided to the session
+ *
+ * @param se the session
+ * @return the user data
+ */
+void *fuse_session_data(struct fuse_session *se);
 
 /**
  * Enter a single threaded event loop

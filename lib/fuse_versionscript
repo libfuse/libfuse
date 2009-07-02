@@ -3,7 +3,6 @@ FUSE_2.2 {
 		fuse_destroy;
 		fuse_exit;
 		fuse_exited;
-		fuse_get_context;
 		fuse_invalidate;
 		fuse_is_lib_option;
 		fuse_loop;
@@ -43,7 +42,6 @@ FUSE_2.4 {
 		fuse_reply_readlink;
 		fuse_reply_write;
 		fuse_reply_xattr;
-		fuse_req_ctx;
 		fuse_req_userdata;
 		fuse_session_add_chan;
 		fuse_session_destroy;
@@ -176,6 +174,10 @@ FUSE_2.8 {
 		fuse_reply_poll;
 		fuse_req_getgroups;
 		fuse_getgroups;
+		fuse_req_ctx;
+		fuse_get_context;
+		fuse_lowlevel_notify_inval_inode;
+		fuse_lowlevel_notify_inval_entry;
 
 	local:
 		*;

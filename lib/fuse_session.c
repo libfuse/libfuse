@@ -111,6 +111,11 @@ int fuse_session_exited(struct fuse_session *se)
 		return se->exited;
 }
 
+void *fuse_session_data(struct fuse_session *se)
+{
+	return se->data;
+}
+
 static struct fuse_chan *fuse_chan_new_common(struct fuse_chan_ops *op, int fd,
 					      size_t bufsize, void *data,
 					      int compat)

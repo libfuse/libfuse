@@ -88,12 +88,14 @@ struct fuse_file_info {
  * FUSE_CAP_ATOMIC_O_TRUNC: filesystem handles the O_TRUNC open flag
  * FUSE_CAP_EXPORT_SUPPORT: filesystem handles lookups of "." and ".."
  * FUSE_CAP_BIG_WRITES: filesystem can handle write size larger than 4kB
+ * FUSE_CAP_DONT_MASK: don't apply umask to file mode on create operations
  */
 #define FUSE_CAP_ASYNC_READ	(1 << 0)
 #define FUSE_CAP_POSIX_LOCKS	(1 << 1)
 #define FUSE_CAP_ATOMIC_O_TRUNC	(1 << 3)
 #define FUSE_CAP_EXPORT_SUPPORT	(1 << 4)
 #define FUSE_CAP_BIG_WRITES	(1 << 5)
+#define FUSE_CAP_DONT_MASK	(1 << 6)
 
 /**
  * Ioctl flags

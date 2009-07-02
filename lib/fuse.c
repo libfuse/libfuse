@@ -1422,8 +1422,10 @@ int fuse_fs_create(struct fuse_fs *fs, const char *path, mode_t mode,
 		int err;
 
 		if (fs->debug)
-			fprintf(stderr, "create flags: 0x%x %s\n", fi->flags,
-				path);
+			fprintf(stderr,
+				"create flags: 0x%x %s 0%o umask=0%03o\n",
+				fi->flags, path, mode,
+				fuse_get_context()->umask);
 
 		err = fs->op.create(path, mode, fi);
 
@@ -1572,8 +1574,9 @@ int fuse_fs_mknod(struct fuse_fs *fs, const char *path, mode_t mode,
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.mknod) {
 		if (fs->debug)
-			fprintf(stderr, "mknod %s 0%o 0x%llx\n", path,
-				mode, (unsigned long long) rdev);
+			fprintf(stderr, "mknod %s 0%o 0x%llx umask=0%03o\n",
+				path, mode, (unsigned long long) rdev,
+				fuse_get_context()->umask);
 
 		return fs->op.mknod(path, mode, rdev);
 	} else {
@@ -1586,7 +1589,8 @@ int fuse_fs_mkdir(struct fuse_fs *fs, const char *path, mode_t mode)
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.mkdir) {
 		if (fs->debug)
-			fprintf(stderr, "mkdir %s 0%o\n", path, mode);
+			fprintf(stderr, "mkdir %s 0%o umask=0%03o\n",
+				path, mode, fuse_get_context()->umask);
 
 		return fs->op.mkdir(path, mode);
 	} else {
@@ -1909,6 +1913,7 @@ static struct fuse *req_fuse_prepare(fuse_req_t req)
 	c->ctx.uid = ctx->uid;
 	c->ctx.gid = ctx->gid;
 	c->ctx.pid = ctx->pid;
+	c->ctx.umask = ctx->umask;
 	return c->ctx.fuse;
 }
 
