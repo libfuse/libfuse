@@ -19,6 +19,10 @@
 
 2009-06-19  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.8.0-pre3
+
+2009-06-19  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Add fuse_getgroups (high level lib) and fuse_req_getgroups (low
 	level lib) functions to query the supplementary group IDs for the
 	current request.  Currently this is implemented on Linux by
