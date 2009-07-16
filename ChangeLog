@@ -4,6 +4,8 @@
 	kernel and userspace.  Notably libfuse didn't correctly handle the
 	case when the supported major versions didn't match
 
+	* Add missing pthread link for libulockmgr.  Patch by  Petr Salinger
+
 2009-07-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* The context is extended with a 'umask' field.  The umask is sent
