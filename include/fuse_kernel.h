@@ -67,6 +67,26 @@
 #define __u32 uint32_t
 #define __s32 int32_t
 
+/*
+ * Version negotiation:
+ *
+ * Both the kernel and userspace send the version they support in the
+ * INIT request and reply respectively.
+ *
+ * If the major versions match then both shall use the smallest
+ * of the two minor versions for communication.
+ *
+ * If the kernel supports a larger major version, then userspace shall
+ * reply with the major version it supports, ignore the rest of the
+ * INIT message and expect a new INIT message from the kernel with a
+ * matching major version.
+ *
+ * If the library supports a larger major version, then it shall fall
+ * back to the major protocol version sent by the kernel for
+ * communication and reply with that major version (and an arbitrary
+ * supported minor version).
+ */
+
 /** Version number of this interface */
 #define FUSE_KERNEL_VERSION 7
 

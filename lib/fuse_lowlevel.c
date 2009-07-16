@@ -1150,7 +1150,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	(void) nodeid;
 	if (f->debug) {
 		fprintf(stderr, "INIT: %u.%u\n", arg->major, arg->minor);
-		if (arg->major > 7 || (arg->major == 7 && arg->minor >= 6)) {
+		if (arg->major == 7 && arg->minor >= 6) {
 			fprintf(stderr, "flags=0x%08x\n", arg->flags);
 			fprintf(stderr, "max_readahead=0x%08x\n",
 				arg->max_readahead);
@@ -1161,6 +1161,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	f->conn.capable = 0;
 	f->conn.want = 0;
 
+	memset(&outarg, 0, sizeof(outarg));
+	outarg.major = FUSE_KERNEL_VERSION;
+	outarg.minor = FUSE_KERNEL_MINOR_VERSION;
+
 	if (arg->major < 7) {
 		fprintf(stderr, "fuse: unsupported protocol version: %u.%u\n",
 			arg->major, arg->minor);
@@ -1168,7 +1172,13 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		return;
 	}
 
-	if (arg->major > 7 || (arg->major == 7 && arg->minor >= 6)) {
+	if (arg->major > 7) {
+		/* Wait for a second INIT request with a 7.X version */
+		send_reply_ok(req, &outarg, sizeof(outarg));
+		return;
+	}
+
+	if (arg->minor >= 6) {
 		if (f->conn.async_read)
 			f->conn.async_read = arg->flags & FUSE_ASYNC_READ;
 		if (arg->max_readahead < f->conn.max_readahead)
@@ -1211,9 +1221,6 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (f->op.init)
 		f->op.init(f->userdata, &f->conn);
 
-	memset(&outarg, 0, sizeof(outarg));
-	outarg.major = FUSE_KERNEL_VERSION;
-	outarg.minor = FUSE_KERNEL_MINOR_VERSION;
 	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
 		outarg.flags |= FUSE_ASYNC_READ;
 	if (f->conn.want & FUSE_CAP_POSIX_LOCKS)
