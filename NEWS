@@ -6,7 +6,17 @@ What is new in 2.8
 
  - Support big write requests on kernels 2.6.26 and newer
 
- - Kernel module is removed
+ - Out-of-tree fuse module removed
+
+ - Better NFS exporting support
+
+ - New ioctl and poll requests
+
+ - New CUSE (Character Device in Userspace) interface
+
+ - Allow umask processing in userspace
+
+ - Added cache invalidation notifications
 
  - Bugfixes and small improvements
 

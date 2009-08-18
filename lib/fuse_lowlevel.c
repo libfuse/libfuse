@@ -100,7 +100,7 @@ static void destroy_req(fuse_req_t req)
 	free(req);
 }
 
-void free_req(fuse_req_t req)
+void fuse_free_req(fuse_req_t req)
 {
 	int ctr;
 	struct fuse_ll *f = req->f;
@@ -115,8 +115,8 @@ void free_req(fuse_req_t req)
 		destroy_req(req);
 }
 
-int send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
-			  int count)
+int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
+			       int count)
 {
 	struct fuse_out_header out;
 
@@ -147,12 +147,13 @@ int send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 	return fuse_chan_send(req->ch, iov, count);
 }
 
-int send_reply_iov(fuse_req_t req, int error, struct iovec *iov, int count)
+static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
+			  int count)
 {
 	int res;
 
-	res = send_reply_iov_nofree(req, error, iov, count);
-	free_req(req);
+	res = fuse_send_reply_iov_nofree(req, error, iov, count);
+	fuse_free_req(req);
 	return res;
 }
 
@@ -250,7 +251,7 @@ int fuse_reply_err(fuse_req_t req, int err)
 void fuse_reply_none(fuse_req_t req)
 {
 	fuse_chan_send(req->ch, NULL, 0);
-	free_req(req);
+	fuse_free_req(req);
 }
 
 static unsigned long calc_timeout_sec(double t)
@@ -1435,7 +1436,7 @@ static struct {
 	[FUSE_IOCTL]	   = { do_ioctl,       "IOCTL"	     },
 	[FUSE_POLL]	   = { do_poll,        "POLL"	     },
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
-	[CUSE_INIT]	   = { do_cuse_init,   "CUSE_INIT"   },
+	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))

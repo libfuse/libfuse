@@ -83,9 +83,9 @@ void fuse_kern_unmount_compat22(const char *mountpoint);
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct fuse_args *args);
 
-int send_reply_iov(fuse_req_t req, int error, struct iovec *iov, int count);
-int send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov, int count);
-void free_req(fuse_req_t req);
+int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
+			       int count);
+void fuse_free_req(fuse_req_t req);
 
 
 struct fuse *fuse_setup_common(int argc, char *argv[],
@@ -97,4 +97,4 @@ struct fuse *fuse_setup_common(int argc, char *argv[],
 			       void *user_data,
 			       int compat);
 
-void do_cuse_init(fuse_req_t req, fuse_ino_t nodeide, const void *inarg);
+void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeide, const void *inarg);

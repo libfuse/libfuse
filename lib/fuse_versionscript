@@ -164,6 +164,10 @@ FUSE_2.8 {
 		cuse_lowlevel_teardown;
 		fuse_fs_ioctl;
 		fuse_fs_poll;
+		fuse_get_context;
+		fuse_getgroups;
+		fuse_lowlevel_notify_inval_entry;
+		fuse_lowlevel_notify_inval_inode;
 		fuse_lowlevel_notify_poll;
 		fuse_notify_poll;
 		fuse_opt_add_opt_escaped;
@@ -172,12 +176,9 @@ FUSE_2.8 {
 		fuse_reply_ioctl_iov;
 		fuse_reply_ioctl_retry;
 		fuse_reply_poll;
-		fuse_req_getgroups;
-		fuse_getgroups;
 		fuse_req_ctx;
-		fuse_get_context;
-		fuse_lowlevel_notify_inval_inode;
-		fuse_lowlevel_notify_inval_entry;
+		fuse_req_getgroups;
+		fuse_session_data;
 
 	local:
 		*;

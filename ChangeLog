@@ -1,3 +1,13 @@
+2009-08-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.8.0
+
+2009-08-18  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add missing fuse_session_data to versionscript
+
+	* Make sure all global symbols are prefixed with "fuse_" or "cuse_"
+
 2009-07-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Clarify how the protocol version should be negotiated between

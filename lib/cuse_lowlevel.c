@@ -191,10 +191,10 @@ static int cuse_reply_init(fuse_req_t req, struct cuse_init_out *arg,
 	iov[2].iov_base = dev_info;
 	iov[2].iov_len = dev_info_len;
 
-	return send_reply_iov_nofree(req, 0, iov, 3);
+	return fuse_send_reply_iov_nofree(req, 0, iov, 3);
 }
 
-void do_cuse_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
 	struct cuse_init_out outarg;
@@ -260,7 +260,7 @@ void do_cuse_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (clop->init_done)
 		clop->init_done(f->userdata);
 
-	free_req(req);
+	fuse_free_req(req);
 }
 
 struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
