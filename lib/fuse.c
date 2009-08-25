@@ -3455,6 +3455,18 @@ struct fuse_context *fuse_get_context(void)
 	return &fuse_get_context_internal()->ctx;
 }
 
+/*
+ * The size of fuse_context got extended, so need to be careful about
+ * incompatibility (i.e. a new binary cannot work with an old
+ * library).
+ */
+struct fuse_context *fuse_get_context_compat22(void);
+struct fuse_context *fuse_get_context_compat22(void)
+{
+	return &fuse_get_context_internal()->ctx;
+}
+FUSE_SYMVER(".symver fuse_get_context_compat22,fuse_get_context@FUSE_2.2");
+
 int fuse_getgroups(int size, gid_t list[])
 {
 	fuse_req_t req = fuse_get_context_internal()->req;
