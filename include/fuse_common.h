@@ -66,7 +66,7 @@ struct fuse_file_info {
 	unsigned int flush : 1;
 
 	/** Can be filled in by open, to indicate that the file is not
-	    seekable.  Introduced in version 2.9 */
+	    seekable.  Introduced in version 2.8 */
 	unsigned int nonseekable : 1;
 
 	/** Padding.  Do not use*/
