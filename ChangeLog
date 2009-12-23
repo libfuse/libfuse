@@ -1,3 +1,12 @@
+2009-12-17  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Use '--no-canonicalize' option of mount(8) (available in
+	util-linux-ng version 2.17 or greater) to avoid calling
+	readling(2) on the newly mounted filesystem before the mount
+	procedure is finished.  This has caused a deadlock if "audit" was
+	enabled in the kernel.  Also use '--no-canonicalize' for umount to
+	avoid touching the mounted filesystem.
+
 2009-09-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.8.1

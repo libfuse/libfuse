@@ -13,6 +13,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <mntent.h>
 #include <sys/stat.h>
@@ -53,16 +54,13 @@ static int mtab_needs_update(const char *mnt)
 	return 1;
 }
 
-int fuse_mnt_add_mount(const char *progname, const char *fsname,
-		       const char *mnt, const char *type, const char *opts)
+static int add_mount_legacy(const char *progname, const char *fsname,
+			    const char *mnt, const char *type, const char *opts)
 {
 	int res;
 	int status;
 	sigset_t blockmask;
 	sigset_t oldmask;
-
-	if (!mtab_needs_update(mnt))
-		return 0;
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -116,23 +114,17 @@ int fuse_mnt_add_mount(const char *progname, const char *fsname,
 
  out_restore:
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+
 	return res;
 }
 
-int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
+static int add_mount(const char *progname, const char *fsname,
+		       const char *mnt, const char *type, const char *opts)
 {
 	int res;
 	int status;
 	sigset_t blockmask;
 	sigset_t oldmask;
-
-	if (!mtab_needs_update(mnt)) {
-		res = umount2(mnt, lazy ? 2 : 0);
-		if (res == -1)
-			fprintf(stderr, "%s: failed to unmount %s: %s\n",
-				progname, mnt, strerror(errno));
-		return res;
-	}
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -148,10 +140,91 @@ int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
 		goto out_restore;
 	}
 	if (res == 0) {
+		/*
+		 * Hide output, because old versions don't support
+		 * --no-canonicalize
+		 */
+		int fd = open("/dev/null", O_RDONLY);
+		dup2(fd, 1);
+		dup2(fd, 2);
+
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
-		execl("/bin/umount", "/bin/umount", "-i", mnt,
-		      lazy ? "-l" : NULL, NULL);
+		execl("/bin/mount", "/bin/mount", "--no-canonicalize", "-i",
+		      "-f", "-t", type, "-o", opts, fsname, mnt, NULL);
+		fprintf(stderr, "%s: failed to execute /bin/mount: %s\n",
+			progname, strerror(errno));
+		exit(1);
+	}
+	res = waitpid(res, &status, 0);
+	if (res == -1)
+		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
+
+	if (status != 0)
+		res = -1;
+
+ out_restore:
+	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+
+	return res;
+}
+
+int fuse_mnt_add_mount(const char *progname, const char *fsname,
+		       const char *mnt, const char *type, const char *opts)
+{
+	int res;
+
+	if (!mtab_needs_update(mnt))
+		return 0;
+
+	res = add_mount(progname, fsname, mnt, type, opts);
+	if (res == -1)
+		res = add_mount_legacy(progname, fsname, mnt, type, opts);
+
+	return res;
+}
+
+static int exec_umount(const char *progname, const char *mnt, int lazy,
+		       int legacy)
+{
+	int res;
+	int status;
+	sigset_t blockmask;
+	sigset_t oldmask;
+
+	sigemptyset(&blockmask);
+	sigaddset(&blockmask, SIGCHLD);
+	res = sigprocmask(SIG_BLOCK, &blockmask, &oldmask);
+	if (res == -1) {
+		fprintf(stderr, "%s: sigprocmask: %s\n", progname, strerror(errno));
+		return -1;
+	}
+
+	res = fork();
+	if (res == -1) {
+		fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
+		goto out_restore;
+	}
+	if (res == 0) {
+		/*
+		 * Hide output, because old versions don't support
+		 * --no-canonicalize
+		 */
+		if (!legacy) {
+			int fd = open("/dev/null", O_RDONLY);
+			dup2(fd, 1);
+			dup2(fd, 2);
+		}
+
+		sigprocmask(SIG_SETMASK, &oldmask, NULL);
+		setuid(geteuid());
+		if (legacy) {
+			execl("/bin/umount", "/bin/umount", "-i", mnt,
+			      lazy ? "-l" : NULL, NULL);
+		} else {
+			execl("/bin/umount", "/bin/umount", "--no-canonicalize",
+			      "-i", mnt, lazy ? "-l" : NULL, NULL);
+		}
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));
 		exit(1);
@@ -165,6 +238,26 @@ int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
 
  out_restore:
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+	return res;
+
+}
+
+int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
+{
+	int res;
+
+	if (!mtab_needs_update(mnt)) {
+		res = umount2(mnt, lazy ? 2 : 0);
+		if (res == -1)
+			fprintf(stderr, "%s: failed to unmount %s: %s\n",
+				progname, mnt, strerror(errno));
+		return res;
+	}
+
+	res = exec_umount(progname, mnt, lazy, 0);
+	if (res == -1)
+		res = exec_umount(progname, mnt, lazy, 1);
+
 	return res;
 }
 
