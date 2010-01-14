@@ -1728,7 +1728,7 @@ out_free:
 /*
  * This is currently not implemented on other than Linux...
  */
-int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[]);
+int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 {
 	return -ENOSYS;
 }
