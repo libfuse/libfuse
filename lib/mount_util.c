@@ -184,13 +184,13 @@ int fuse_mnt_add_mount(const char *progname, const char *fsname,
 	return res;
 }
 
-static int exec_umount(const char *progname, const char *mnt, int lazy,
-		       int legacy)
+static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 {
 	int res;
 	int status;
 	sigset_t blockmask;
 	sigset_t oldmask;
+	int legacy = 0;
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -200,6 +200,7 @@ static int exec_umount(const char *progname, const char *mnt, int lazy,
 		return -1;
 	}
 
+retry_umount:
 	res = fork();
 	if (res == -1) {
 		fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
@@ -219,11 +220,11 @@ static int exec_umount(const char *progname, const char *mnt, int lazy,
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
 		if (legacy) {
-			execl("/bin/umount", "/bin/umount", "-i", mnt,
+			execl("/bin/umount", "/bin/umount", "-i", rel_mnt,
 			      lazy ? "-l" : NULL, NULL);
 		} else {
 			execl("/bin/umount", "/bin/umount", "--no-canonicalize",
-			      "-i", mnt, lazy ? "-l" : NULL, NULL);
+			      "-i", rel_mnt, lazy ? "-l" : NULL, NULL);
 		}
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));
@@ -233,8 +234,13 @@ static int exec_umount(const char *progname, const char *mnt, int lazy,
 	if (res == -1)
 		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
 
-	if (status != 0)
+	if (status != 0) {
+		if (!legacy) {
+			legacy = 1;
+			goto retry_umount;
+		}
 		res = -1;
+	}
 
  out_restore:
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
@@ -242,23 +248,20 @@ static int exec_umount(const char *progname, const char *mnt, int lazy,
 
 }
 
-int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
+int fuse_mnt_umount(const char *progname, const char *abs_mnt,
+		    const char *rel_mnt, int lazy)
 {
 	int res;
 
-	if (!mtab_needs_update(mnt)) {
-		res = umount2(mnt, lazy ? 2 : 0);
+	if (!mtab_needs_update(abs_mnt)) {
+		res = umount2(rel_mnt, lazy ? 2 : 0);
 		if (res == -1)
 			fprintf(stderr, "%s: failed to unmount %s: %s\n",
-				progname, mnt, strerror(errno));
+				progname, abs_mnt, strerror(errno));
 		return res;
 	}
 
-	res = exec_umount(progname, mnt, lazy, 0);
-	if (res == -1)
-		res = exec_umount(progname, mnt, lazy, 1);
-
-	return res;
+	return exec_umount(progname, rel_mnt, lazy);
 }
 
 char *fuse_mnt_resolve_path(const char *progname, const char *orig)

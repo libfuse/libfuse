@@ -26,6 +26,7 @@
 #include <sys/fsuid.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
+#include <sched.h>
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
@@ -36,6 +37,12 @@
 
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC 128
+#endif
+#ifndef MS_REC
+#define MS_REC 16384
+#endif
+#ifndef MS_SLAVE
+#define MS_SLAVE (1<<19)
 #endif
 
 static const char *progname;
@@ -74,77 +81,336 @@ static void restore_privs(void)
 }
 
 #ifndef IGNORE_MTAB
+/*
+ * Make sure that /etc/mtab is checked and updated atomically
+ */
+static int lock_umount(void)
+{
+	const char *mtab_lock = _PATH_MOUNTED ".fuselock";
+	int mtablock;
+	int res;
+	struct stat mtab_stat;
+
+	/* /etc/mtab could be a symlink to /proc/mounts */
+	if (lstat(_PATH_MOUNTED, &mtab_stat) == 0 && S_ISLNK(mtab_stat.st_mode))
+		return -1;
+
+	mtablock = open(mtab_lock, O_RDWR | O_CREAT, 0600);
+	if (mtablock == -1) {
+		fprintf(stderr, "%s: unable to open fuse lock file: %s\n",
+			progname, strerror(errno));
+		return -1;
+	}
+	res = lockf(mtablock, F_LOCK, 0);
+	if (res < 0) {
+		fprintf(stderr, "%s: error getting lock: %s\n", progname,
+			strerror(errno));
+		close(mtablock);
+		return -1;
+	}
+
+	return mtablock;
+}
+
+static void unlock_umount(int mtablock)
+{
+	lockf(mtablock, F_ULOCK, 0);
+	close(mtablock);
+}
+
 static int add_mount(const char *source, const char *mnt, const char *type,
 		     const char *opts)
 {
 	return fuse_mnt_add_mount(progname, source, mnt, type, opts);
 }
 
-static int unmount_fuse(const char *mnt, int quiet, int lazy)
+static int may_unmount(const char *mnt, int quiet)
 {
-	if (getuid() != 0) {
-		struct mntent *entp;
-		FILE *fp;
-		const char *user = NULL;
-		char uidstr[32];
-		unsigned uidlen = 0;
-		int found;
-		const char *mtab = _PATH_MOUNTED;
+	struct mntent *entp;
+	FILE *fp;
+	const char *user = NULL;
+	char uidstr[32];
+	unsigned uidlen = 0;
+	int found;
+	const char *mtab = _PATH_MOUNTED;
 
-		user = get_user_name();
-		if (user == NULL)
-			return -1;
+	user = get_user_name();
+	if (user == NULL)
+		return -1;
 
-		fp = setmntent(mtab, "r");
-		if (fp == NULL) {
-			fprintf(stderr,
-				"%s: failed to open %s: %s\n", progname, mtab,
-				strerror(errno));
-			return -1;
-		}
-
-		uidlen = sprintf(uidstr, "%u", getuid());
-
-		found = 0;
-		while ((entp = getmntent(fp)) != NULL) {
-			if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
-			    (strcmp(entp->mnt_type, "fuse") == 0 ||
-			     strcmp(entp->mnt_type, "fuseblk") == 0 ||
-			     strncmp(entp->mnt_type, "fuse.", 5) == 0 ||
-			     strncmp(entp->mnt_type, "fuseblk.", 8) == 0)) {
-				char *p = strstr(entp->mnt_opts, "user=");
-				if (p &&
-				    (p == entp->mnt_opts || *(p-1) == ',') &&
-				    strcmp(p + 5, user) == 0) {
-					found = 1;
-					break;
-				}
-				/* /etc/mtab is a link pointing to
-				   /proc/mounts: */
-				else if ((p =
-					  strstr(entp->mnt_opts, "user_id=")) &&
-					 (p == entp->mnt_opts ||
-					  *(p-1) == ',') &&
-					 strncmp(p + 8, uidstr, uidlen) == 0 &&
-					 (*(p+8+uidlen) == ',' ||
-					  *(p+8+uidlen) == '\0')) {
-					found = 1;
-					break;
-				}
-			}
-		}
-		endmntent(fp);
-
-		if (!found) {
-			if (!quiet)
-				fprintf(stderr,
-					"%s: entry for %s not found in %s\n",
-					progname, mnt, mtab);
-			return -1;
-		}
+	fp = setmntent(mtab, "r");
+	if (fp == NULL) {
+		fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
+			strerror(errno));
+		return -1;
 	}
 
-	return fuse_mnt_umount(progname, mnt, lazy);
+	uidlen = sprintf(uidstr, "%u", getuid());
+
+	found = 0;
+	while ((entp = getmntent(fp)) != NULL) {
+		if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
+		    (strcmp(entp->mnt_type, "fuse") == 0 ||
+		     strcmp(entp->mnt_type, "fuseblk") == 0 ||
+		     strncmp(entp->mnt_type, "fuse.", 5) == 0 ||
+		     strncmp(entp->mnt_type, "fuseblk.", 8) == 0)) {
+			char *p = strstr(entp->mnt_opts, "user=");
+			if (p &&
+			    (p == entp->mnt_opts || *(p-1) == ',') &&
+			    strcmp(p + 5, user) == 0) {
+				found = 1;
+				break;
+			}
+			/* /etc/mtab is a link pointing to
+			   /proc/mounts: */
+			else if ((p =
+				  strstr(entp->mnt_opts, "user_id=")) &&
+				 (p == entp->mnt_opts ||
+				  *(p-1) == ',') &&
+				 strncmp(p + 8, uidstr, uidlen) == 0 &&
+				 (*(p+8+uidlen) == ',' ||
+				  *(p+8+uidlen) == '\0')) {
+				found = 1;
+				break;
+			}
+		}
+	}
+	endmntent(fp);
+
+	if (!found) {
+		if (!quiet)
+			fprintf(stderr,
+				"%s: entry for %s not found in %s\n",
+				progname, mnt, mtab);
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * Check whether the file specified in "fusermount -u" is really a
+ * mountpoint and not a symlink.  This is necessary otherwise the user
+ * could move the mountpoint away and replace it with a symlink
+ * pointing to an arbitrary mount, thereby tricking fusermount into
+ * unmounting that (umount(2) will follow symlinks).
+ *
+ * This is the child process running in a separate mount namespace, so
+ * we don't mess with the global namespace and if the process is
+ * killed for any reason, mounts are automatically cleaned up.
+ *
+ * First make sure nothing is propagated back into the parent
+ * namespace by marking all mounts "slave".
+ *
+ * Then bind mount parent onto a stable base where the user can't move
+ * it around.  Use "/tmp", since it will almost certainly exist, but
+ * anything similar would do as well.
+ *
+ * Finally check /proc/mounts for an entry matching the requested
+ * mountpoint.  If it's found then we are OK, and the user can't move
+ * it around within the parent directory as rename() will return EBUSY.
+ */
+static int check_is_mount_child(void *p)
+{
+	const char **a = p;
+	const char *last = a[0];
+	const char *mnt = a[1];
+	int res;
+	const char *procmounts = "/proc/mounts";
+	int found;
+	FILE *fp;
+	struct mntent *entp;
+
+	res = mount("", "/", "", MS_SLAVE | MS_REC, NULL);
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to mark mounts slave: %s\n",
+			progname, strerror(errno));
+		return 1;
+	}
+
+	res = mount(".", "/tmp", "", MS_BIND | MS_REC, NULL);
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to bind parent to /tmp: %s\n",
+			progname, strerror(errno));
+		return 1;
+	}
+
+	fp = setmntent(procmounts, "r");
+	if (fp == NULL) {
+		fprintf(stderr, "%s: failed to open %s: %s\n", progname,
+			procmounts, strerror(errno));
+		return 1;
+	}
+
+	found = 0;
+	while ((entp = getmntent(fp)) != NULL) {
+		if (strncmp(entp->mnt_dir, "/tmp/", 5) == 0 &&
+		    strcmp(entp->mnt_dir + 5, last) == 0) {
+			found = 1;
+			break;
+		}
+	}
+	endmntent(fp);
+
+	if (!found) {
+		fprintf(stderr, "%s: %s not mounted\n", progname, mnt);
+		return 1;
+	}
+
+	return 0;
+}
+
+static pid_t clone_newns(void *a)
+{
+	long long buf[16384];
+	size_t stacksize = sizeof(buf) / 2;
+	char *stack = ((char *) buf) + stacksize;
+
+#ifdef __ia64__
+	extern int __clone2(int (*fn)(void *),
+			    void *child_stack_base, size_t stack_size,
+			    int flags, void *arg, pid_t *ptid,
+			    void *tls, pid_t *ctid);
+
+	return __clone2(check_is_mount_child, stack, stacksize, CLONE_NEWNS, a,
+			NULL, NULL, NULL);
+#else
+	return clone(check_is_mount_child, stack, CLONE_NEWNS, a);
+#endif
+}
+
+static int check_is_mount(const char *last, const char *mnt)
+{
+	pid_t pid, p;
+	int status;
+	const char *a[2] = { last, mnt };
+
+	pid = clone_newns((void *) a);
+	if (pid == (pid_t) -1) {
+		fprintf(stderr, "%s: failed to clone namespace: %s\n",
+			progname, strerror(errno));
+		return -1;
+	}
+	p = waitpid(pid, &status, __WCLONE);
+	if (p == (pid_t) -1) {
+		fprintf(stderr, "%s: waitpid failed: %s\n",
+			progname, strerror(errno));
+		return -1;
+	}
+	if (!WIFEXITED(status)) {
+		fprintf(stderr, "%s: child terminated abnormally (status %i)\n",
+			progname, status);
+		return -1;
+	}
+	if (WEXITSTATUS(status) != 0)
+		return -1;
+
+	return 0;
+}
+
+static int chdir_to_parent(char *copy, const char **lastp, int *currdir_fd)
+{
+	char *tmp;
+	const char *parent;
+	char buf[65536];
+	int res;
+
+	tmp = strrchr(copy, '/');
+	if (tmp == NULL || tmp[1] == '\0') {
+		fprintf(stderr, "%s: internal error: invalid abs path: <%s>\n",
+			progname, copy);
+		return -1;
+	}
+	if (tmp != copy) {
+		*tmp = '\0';
+		parent = copy;
+		*lastp = tmp + 1;
+	} else if (tmp[1] != '\0') {
+		*lastp = tmp + 1;
+		parent = "/";
+	} else {
+		*lastp = ".";
+		parent = "/";
+	}
+
+	*currdir_fd = open(".", O_RDONLY);
+	if (*currdir_fd == -1) {
+		fprintf(stderr,
+			"%s: failed to open current directory: %s\n",
+			progname, strerror(errno));
+		return -1;
+	}
+
+	res = chdir(parent);
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to chdir to %s: %s\n",
+			progname, parent, strerror(errno));
+		return -1;
+	}
+
+	if (getcwd(buf, sizeof(buf)) == NULL) {
+		fprintf(stderr, "%s: failed to obtain current directory: %s\n",
+			progname, strerror(errno));
+		return -1;
+	}
+	if (strcmp(buf, parent) != 0) {
+		fprintf(stderr, "%s: mountpoint moved (%s -> %s)\n", progname,
+			parent, buf);
+		return -1;
+
+	}
+
+	return 0;
+}
+
+static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
+{
+	int currdir_fd = -1;
+	char *copy;
+	const char *last;
+	int res;
+
+	if (getuid() != 0) {
+		res = may_unmount(mnt, quiet);
+		if (res == -1)
+			return -1;
+	}
+
+	copy = strdup(mnt);
+	if (copy == NULL) {
+		fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		return -1;
+	}
+
+	res = chdir_to_parent(copy, &last, &currdir_fd);
+	if (res == -1)
+		goto out;
+
+	res = check_is_mount(last, mnt);
+	if (res == -1)
+		goto out;
+
+	res = fuse_mnt_umount(progname, mnt, last, lazy);
+
+out:
+	free(copy);
+	if (currdir_fd != -1) {
+		fchdir(currdir_fd);
+		close(currdir_fd);
+	}
+
+	return res;
+}
+
+static int unmount_fuse(const char *mnt, int quiet, int lazy)
+{
+	int res;
+	int mtablock = lock_umount();
+
+	res = unmount_fuse_locked(mnt, quiet, lazy);
+	unlock_umount(mtablock);
+
+	return res;
 }
 
 static int count_fuse_fs(void)
@@ -186,7 +452,7 @@ static int add_mount(const char *source, const char *mnt, const char *type,
 
 static int unmount_fuse(const char *mnt, int quiet, int lazy)
 {
-	return fuse_mnt_umount(progname, mnt, lazy);
+	return fuse_mnt_umount(progname, mnt, mnt, lazy);
 }
 #endif /* IGNORE_MTAB */
 
