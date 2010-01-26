@@ -88,16 +88,17 @@ int fuse_mnt_add_mount(const char *progname, const char *fsname,
 	return 0;
 }
 
-int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
+int fuse_mnt_umount(const char *progname, const char *abs_mnt,
+		    const char *rel_mnt, int lazy)
 {
 	int res;
 	int status;
 
-	if (!mtab_needs_update(mnt)) {
-		res = umount2(mnt, lazy ? 2 : 0);
+	if (!mtab_needs_update(abs_mnt)) {
+		res = umount2(rel_mnt, lazy ? 2 : 0);
 		if (res == -1)
 			fprintf(stderr, "%s: failed to unmount %s: %s\n",
-				progname, mnt, strerror(errno));
+				progname, abs_mnt, strerror(errno));
 		return res;
 	}
 
@@ -108,7 +109,7 @@ int fuse_mnt_umount(const char *progname, const char *mnt, int lazy)
 	}
 	if (res == 0) {
 		setuid(geteuid());
-		execl("/bin/umount", "/bin/umount", "-i", mnt,
+		execl("/bin/umount", "/bin/umount", "-i", rel_mnt,
 		      lazy ? "-l" : NULL, NULL);
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));

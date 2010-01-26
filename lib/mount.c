@@ -290,7 +290,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	}
 
 	if (geteuid() == 0) {
-		fuse_mnt_umount("fuse", mountpoint, 1);
+		fuse_mnt_umount("fuse", mountpoint, mountpoint,  1);
 		return;
 	}
 
