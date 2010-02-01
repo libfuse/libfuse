@@ -6,7 +6,8 @@
 
 	* Using "--no-canonicalize" with umount(8) conflicts with the race
 	fix, sinceit assumes the supplied path is absolute, while the race
-	fix relies on the path being relative to the current directory
+	fix relies on the path being relative to the current directory.
+	Reported by Tom Rindborg
 
 2010-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
