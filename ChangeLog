@@ -1,3 +1,13 @@
+2010-02-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.8.3
+
+2010-02-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Using "--no-canonicalize" with umount(8) conflicts with the race
+	fix, sinceit assumes the supplied path is absolute, while the race
+	fix relies on the path being relative to the current directory
+
 2010-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.8.2

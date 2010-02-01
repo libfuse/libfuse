@@ -190,7 +190,6 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 	int status;
 	sigset_t blockmask;
 	sigset_t oldmask;
-	int legacy = 0;
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -200,32 +199,16 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 		return -1;
 	}
 
-retry_umount:
 	res = fork();
 	if (res == -1) {
 		fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
 		goto out_restore;
 	}
 	if (res == 0) {
-		/*
-		 * Hide output, because old versions don't support
-		 * --no-canonicalize
-		 */
-		if (!legacy) {
-			int fd = open("/dev/null", O_RDONLY);
-			dup2(fd, 1);
-			dup2(fd, 2);
-		}
-
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
-		if (legacy) {
-			execl("/bin/umount", "/bin/umount", "-i", rel_mnt,
-			      lazy ? "-l" : NULL, NULL);
-		} else {
-			execl("/bin/umount", "/bin/umount", "--no-canonicalize",
-			      "-i", rel_mnt, lazy ? "-l" : NULL, NULL);
-		}
+		execl("/bin/umount", "/bin/umount", "-i", rel_mnt,
+		      lazy ? "-l" : NULL, NULL);
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));
 		exit(1);
@@ -235,10 +218,6 @@ retry_umount:
 		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
 
 	if (status != 0) {
-		if (!legacy) {
-			legacy = 1;
-			goto retry_umount;
-		}
 		res = -1;
 	}
 
