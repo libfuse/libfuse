@@ -411,6 +411,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * Valid replies:
 	 *   fuse_reply_buf
+	 *   fuse_reply_iov
 	 *   fuse_reply_err
 	 *
 	 * @param req request handle

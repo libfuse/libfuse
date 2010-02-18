@@ -262,9 +262,8 @@ static int check_is_mount_child(void *p)
 
 static pid_t clone_newns(void *a)
 {
-	long long buf[16384];
-	size_t stacksize = sizeof(buf) / 2;
-	char *stack = ((char *) buf) + stacksize;
+	char buf[131072];
+	char *stack = buf + (sizeof(buf) / 2 - ((size_t) buf & 15));
 
 #ifdef __ia64__
 	extern int __clone2(int (*fn)(void *),
@@ -272,8 +271,8 @@ static pid_t clone_newns(void *a)
 			    int flags, void *arg, pid_t *ptid,
 			    void *tls, pid_t *ctid);
 
-	return __clone2(check_is_mount_child, stack, stacksize, CLONE_NEWNS, a,
-			NULL, NULL, NULL);
+	return __clone2(check_is_mount_child, stack, sizeof(buf) / 2,
+			CLONE_NEWNS, a, NULL, NULL, NULL);
 #else
 	return clone(check_is_mount_child, stack, CLONE_NEWNS, a);
 #endif
