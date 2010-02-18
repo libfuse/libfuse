@@ -1,6 +1,6 @@
 2010-02-18  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Fix definition of FUSE_OPT_ENT for C++.  Reported by Tim
+	* Fix definition of FUSE_OPT_END for C++.  Reported by Tim
 	Bruylants
 
 2010-02-03  Miklos Szeredi <miklos@szeredi.hu>
