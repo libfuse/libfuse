@@ -100,7 +100,7 @@ struct fuse_opt {
  * Last option.	 An array of 'struct fuse_opt' must end with a NULL
  * template value
  */
-#define FUSE_OPT_END { .templ = NULL }
+#define FUSE_OPT_END { NULL, 0, 0 }
 
 /**
  * Argument list
