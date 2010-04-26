@@ -41,8 +41,8 @@
 #ifndef MS_REC
 #define MS_REC 16384
 #endif
-#ifndef MS_SLAVE
-#define MS_SLAVE (1<<19)
+#ifndef MS_PRIVATE
+#define MS_PRIVATE (1<<18)
 #endif
 
 static const char *progname;
@@ -200,15 +200,16 @@ static int may_unmount(const char *mnt, int quiet)
  * killed for any reason, mounts are automatically cleaned up.
  *
  * First make sure nothing is propagated back into the parent
- * namespace by marking all mounts "slave".
+ * namespace by marking all mounts "private".
  *
  * Then bind mount parent onto a stable base where the user can't move
- * it around.  Use "/tmp", since it will almost certainly exist, but
- * anything similar would do as well.
+ * it around.
  *
  * Finally check /proc/mounts for an entry matching the requested
  * mountpoint.  If it's found then we are OK, and the user can't move
- * it around within the parent directory as rename() will return EBUSY.
+ * it around within the parent directory as rename() will return
+ * EBUSY.  Be careful to ignore any mounts that existed before the
+ * bind.
  */
 static int check_is_mount_child(void *p)
 {
@@ -220,17 +221,11 @@ static int check_is_mount_child(void *p)
 	int found;
 	FILE *fp;
 	struct mntent *entp;
+	int count;
 
-	res = mount("", "/", "", MS_SLAVE | MS_REC, NULL);
+	res = mount("", "/", "", MS_PRIVATE | MS_REC, NULL);
 	if (res == -1) {
-		fprintf(stderr, "%s: failed to mark mounts slave: %s\n",
-			progname, strerror(errno));
-		return 1;
-	}
-
-	res = mount(".", "/tmp", "", MS_BIND | MS_REC, NULL);
-	if (res == -1) {
-		fprintf(stderr, "%s: failed to bind parent to /tmp: %s\n",
+		fprintf(stderr, "%s: failed to mark mounts private: %s\n",
 			progname, strerror(errno));
 		return 1;
 	}
@@ -242,10 +237,33 @@ static int check_is_mount_child(void *p)
 		return 1;
 	}
 
+	count = 0;
+	while ((entp = getmntent(fp)) != NULL)
+		count++;
+	endmntent(fp);
+
+	fp = setmntent(procmounts, "r");
+	if (fp == NULL) {
+		fprintf(stderr, "%s: failed to open %s: %s\n", progname,
+			procmounts, strerror(errno));
+		return 1;
+	}
+
+	res = mount(".", "/", "", MS_BIND | MS_REC, NULL);
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to bind parent to /: %s\n",
+			progname, strerror(errno));
+		return 1;
+	}
+
 	found = 0;
 	while ((entp = getmntent(fp)) != NULL) {
-		if (strncmp(entp->mnt_dir, "/tmp/", 5) == 0 &&
-		    strcmp(entp->mnt_dir + 5, last) == 0) {
+		if (count > 0) {
+			count--;
+			continue;
+		}
+		if (entp->mnt_dir[0] == '/' &&
+		    strcmp(entp->mnt_dir + 1, last) == 0) {
 			found = 1;
 			break;
 		}

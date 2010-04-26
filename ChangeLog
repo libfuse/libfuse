@@ -1,3 +1,14 @@
+2010-04-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.8.4
+
+2010-04-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix checking for symlinks in umount from /tmp.  Reported by Al
+	Viro
+
+	* Fix umounting if /tmp is a symlink.  Reported by Franco Broi
+
 2010-02-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix definition of FUSE_OPT_END for C++.  Reported by Tim
