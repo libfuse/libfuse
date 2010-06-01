@@ -1,3 +1,8 @@
+2010-05-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Remove "chmod root" from install of fusermount.  Reported by
+	Lucas C. Villa Real
+
 2010-04-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.8.4

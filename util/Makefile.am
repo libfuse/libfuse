@@ -14,7 +14,6 @@ ulockmgr_server_CPPFLAGS = -D_FILE_OFFSET_BITS=64 -D_REENTRANT
 ulockmgr_server_LDFLAGS = -pthread
 
 install-exec-hook:
-	-chown root $(DESTDIR)$(bindir)/fusermount
 	-chmod u+s $(DESTDIR)$(bindir)/fusermount
 	@if test ! -e $(DESTDIR)/dev/fuse; then \
 		$(mkdir_p) $(DESTDIR)/dev; \
