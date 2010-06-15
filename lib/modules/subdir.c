@@ -602,6 +602,7 @@ static struct fuse_operations subdir_oper = {
 	.bmap		= subdir_bmap,
 
 	.flag_nullpath_ok = 1,
+	.flag_nopath = 1,
 };
 
 static struct fuse_opt subdir_opts[] = {

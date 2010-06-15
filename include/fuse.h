@@ -449,18 +449,35 @@ struct fuse_operations {
 	int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
 
 	/**
-	 * Flag indicating, that the filesystem can accept a NULL path
+	 * Flag indicating that the filesystem can accept a NULL path
 	 * as the first argument for the following operations:
 	 *
 	 * read, write, flush, release, fsync, readdir, releasedir,
-	 * fsyncdir, ftruncate, fgetattr and lock
+	 * fsyncdir, ftruncate, fgetattr, lock, ioctl and poll
+	 *
+	 * If this flag is set these operations continue to work on
+	 * unlinked files even if "-ohard_remove" option was specified.
 	 */
-	unsigned int flag_nullpath_ok : 1;
+	unsigned int flag_nullpath_ok:1;
+
+	/**
+	 * Flag indicating that the path need not be calculated for
+	 * the following operations:
+	 *
+	 * read, write, flush, release, fsync, readdir, releasedir,
+	 * fsyncdir, ftruncate, fgetattr, lock, ioctl and poll
+	 *
+	 * Closely related to flag_nullpath_ok, but if this flag is
+	 * set then the path will not be calculaged even if the file
+	 * wasn't unlinked.  However the path can still be non-NULL if
+	 * it needs to be calculated for some other reason.
+	 */
+	unsigned int flag_nopath:1;
 
 	/**
 	 * Reserved flags, don't set
 	 */
-	unsigned int flag_reserved : 31;
+	unsigned int flag_reserved:30;
 
 	/**
 	 * Ioctl

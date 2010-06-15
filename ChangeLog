@@ -2,6 +2,11 @@
 
 	* Fix out-of-source build.  Patch by Jörg Faschingbauer
 
+	* Add a "nopath" option and flag, indicating that path argument
+	need not be calculated for the following operations: read, write,
+	flush, release, fsync, readdir, releasedir, fsyncdir, ftruncate,
+	fgetattr, lock, ioctl and poll.
+
 2010-05-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove "chmod root" from install of fusermount.  Reported by
