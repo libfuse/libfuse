@@ -1,3 +1,15 @@
+2010-06-17  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fuse_reply_fd() reply function to the low level interface.
+	On linux version 2.6.35 or greater this will use splice() to move
+	data directly from a file descriptor to the fuse device without
+	needing to go though a userspace buffer.  With the
+	FUSE_REPLY_FD_MOVE flag the kernel will attempt to move the data
+	directly into the filesystem's cache.  On earlier kernels it will
+	fall back to an intermediate buffer.  The options
+	"no_splice_write" and "no_splice_move" can be used to disable
+	splicing and moving respectively.
+ 
 2010-06-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix out-of-source build.  Patch by Jörg Faschingbauer

@@ -49,6 +49,8 @@ struct fuse_ll {
 	int atomic_o_trunc;
 	int no_remote_lock;
 	int big_writes;
+	int no_splice_write;
+	int no_splice_move;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	struct cuse_data *cuse_data;
@@ -59,6 +61,7 @@ struct fuse_ll {
 	struct fuse_req interrupts;
 	pthread_mutex_t lock;
 	int got_destroy;
+	pthread_key_t pipe_key;
 };
 
 struct fuse_cmd {

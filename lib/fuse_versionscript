@@ -179,7 +179,12 @@ FUSE_2.8 {
 		fuse_req_ctx;
 		fuse_req_getgroups;
 		fuse_session_data;
+} FUSE_2.7.5;
+
+FUSE_2.9 {
+	global:
+		fuse_reply_fd;
 
 	local:
 		*;
-} FUSE_2.7.5;
+} FUSE_2.8;
