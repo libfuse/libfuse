@@ -1,3 +1,10 @@
+2010-06-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Make the number of max background requests and congestion
+	threshold tunable.  New options are "max_background" and
+	"congestion_threshold".  Only effective on linux kernel versions
+	2.6.32 or greater.  Patch by Csaba Henk
+
 2010-06-17  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fuse_reply_fd() reply function to the low level interface.

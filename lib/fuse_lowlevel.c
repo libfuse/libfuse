@@ -1416,6 +1416,19 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_DONT_MASK;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
+	if (f->conn.proto_minor >= 13) {
+		if (f->conn.max_background >= (1 << 16))
+			f->conn.max_background = (1 << 16) - 1;
+		if (f->conn.congestion_threshold > f->conn.max_background)
+			f->conn.congestion_threshold = f->conn.max_background;
+		if (!f->conn.congestion_threshold) {
+			f->conn.congestion_threshold =
+				f->conn.max_background * 3 / 4;
+		}
+
+		outarg.max_background = f->conn.max_background;
+		outarg.congestion_threshold = f->conn.congestion_threshold;
+	}
 
 	if (f->debug) {
 		fprintf(stderr, "   INIT: %u.%u\n", outarg.major, outarg.minor);
@@ -1423,6 +1436,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fprintf(stderr, "   max_readahead=0x%08x\n",
 			outarg.max_readahead);
 		fprintf(stderr, "   max_write=0x%08x\n", outarg.max_write);
+		fprintf(stderr, "   max_background=%i\n",
+			outarg.max_background);
+		fprintf(stderr, "   congestion_threshold=%i\n",
+		        outarg.congestion_threshold);
 	}
 
 	send_reply_ok(req, &outarg, arg->minor < 5 ? 8 : sizeof(outarg));
@@ -1709,6 +1726,9 @@ static struct fuse_opt fuse_ll_opts[] = {
 	{ "allow_root", offsetof(struct fuse_ll, allow_root), 1 },
 	{ "max_write=%u", offsetof(struct fuse_ll, conn.max_write), 0 },
 	{ "max_readahead=%u", offsetof(struct fuse_ll, conn.max_readahead), 0 },
+	{ "max_background=%u", offsetof(struct fuse_ll, conn.max_background), 0 },
+	{ "congestion_threshold=%u",
+	  offsetof(struct fuse_ll, conn.congestion_threshold), 0 },
 	{ "async_read", offsetof(struct fuse_ll, conn.async_read), 1 },
 	{ "sync_read", offsetof(struct fuse_ll, conn.async_read), 0 },
 	{ "atomic_o_trunc", offsetof(struct fuse_ll, atomic_o_trunc), 1},
@@ -1735,6 +1755,8 @@ static void fuse_ll_help(void)
 	fprintf(stderr,
 "    -o max_write=N         set maximum size of write requests\n"
 "    -o max_readahead=N     set maximum readahead\n"
+"    -o max_background=N    set number of maximum background requests\n"
+"    -o congestion_threshold=N  set kernel's congestion threshold\n"
 "    -o async_read          perform reads asynchronously (default)\n"
 "    -o sync_read           perform reads synchronously\n"
 "    -o atomic_o_trunc      enable atomic open+truncate support\n"
