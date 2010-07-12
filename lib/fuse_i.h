@@ -62,6 +62,7 @@ struct fuse_ll {
 	pthread_mutex_t lock;
 	int got_destroy;
 	pthread_key_t pipe_key;
+	int broken_splice_nonblock;
 };
 
 struct fuse_cmd {

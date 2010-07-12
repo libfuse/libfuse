@@ -29,6 +29,7 @@ libfuse_la_SOURCES = 		\
 	fuse_opt.c		\
 	fuse_session.c		\
 	fuse_signals.c		\
+	buffer.c		\
 	cuse_lowlevel.c		\
 	helper.c		\
 	modules/subdir.c	\

@@ -183,7 +183,9 @@ FUSE_2.8 {
 
 FUSE_2.9 {
 	global:
-		fuse_reply_fd;
+		fuse_buf_copy;
+		fuse_buf_size;
+		fuse_reply_data;
 
 	local:
 		*;

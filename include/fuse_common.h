@@ -17,6 +17,7 @@
 
 #include "fuse_opt.h"
 #include <stdint.h>
+#include <sys/types.h>
 
 /** Major version of FUSE library interface */
 #define FUSE_MAJOR_VERSION 2
@@ -244,6 +245,169 @@ int fuse_version(void);
  * @param ph the poll handle
  */
 void fuse_pollhandle_destroy(struct fuse_pollhandle *ph);
+
+/* ----------------------------------------------------------- *
+ * Data buffer						       *
+ * ----------------------------------------------------------- */
+
+/**
+ * Buffer flags
+ */
+enum fuse_buf_flags {
+	/**
+	 * Buffer contains a file descriptor
+	 *
+	 * If this flag is set, the .fd field is valid, otherwise the
+	 * .mem fields is valid.
+	 */
+	FUSE_BUF_IS_FD		= (1 << 1),
+
+	/**
+	 * Seek on the file descriptor
+	 *
+	 * If this flag is set then the .pos field is valid and is
+	 * used to seek to the given offset before performing
+	 * operation on file descriptor.
+	 */
+	FUSE_BUF_FD_SEEK	= (1 << 2),
+
+	/**
+	 * Retry operation on file descriptor
+	 *
+	 * If this flag is set then retry operation on file descriptor
+	 * until .size bytes have been copied or an error or EOF is
+	 * detetected.
+	 */
+	FUSE_BUF_FD_RETRY	= (1 << 3),
+};
+
+/**
+ * Buffer copy flags
+ */
+enum fuse_buf_copy_flags {
+	/**
+	 * Don't use splice(2)
+	 *
+	 * Always fall back to using read and write instead of
+	 * splice(2) to copy data from one file descriptor to another.
+	 *
+	 * If this flag is not set, then only fall back if splice is
+	 * unavailable.
+	 */
+	FUSE_BUF_NO_SPLICE	= (1 << 1),
+
+	/**
+	 * Force splice
+	 *
+	 * Always use splice(2) to copy data from one file descriptor
+	 * to another.  If splice is not available, return -EINVAL.
+	 */
+	FUSE_BUF_FORCE_SPLICE	= (1 << 2),
+
+	/**
+	 * Try to move data with splice.
+	 *
+	 * If splice is used, try to move pages from the source to the
+	 * destination instead of copying.  See documentation of
+	 * SPLICE_F_MOVE in splice(2) man page.
+	 */
+	FUSE_BUF_SPLICE_MOVE	= (1 << 2),
+
+	/**
+	 * Don't block on the pipe when copying data with splice
+	 *
+	 * Makes the operations on the pipe non-blocking (if the pipe
+	 * is full or empty).  See SPLICE_F_NONBLOCK in the splice(2)
+	 * man page.
+	 */
+	FUSE_BUF_SPLICE_NONBLOCK= (1 << 3),
+};
+
+/**
+ * Single data buffer
+ *
+ * Generic data buffer for I/O, extended attributes, etc...  Data may
+ * be supplied as a memory pointer or as a file descriptor
+ */
+struct fuse_buf {
+	/**
+	 * Size of data in bytes
+	 */
+	size_t size;
+
+	/**
+	 * Buffer flags
+	 */
+	enum fuse_buf_flags flags;
+
+	/**
+	 * Memory pointer
+	 *
+	 * Used unless FUSE_BUF_IS_FD flag is set.
+	 */
+	void *mem;
+
+	/**
+	 * File descriptor
+	 *
+	 * Used if FUSE_BUF_IS_FD flag is set.
+	 */
+	int fd;
+
+	/**
+	 * File position
+	 *
+	 * Used if FUSE_BUF_FD_SEEK flag is set.
+	 */
+	off_t pos;
+};
+
+/**
+ * Data buffer vector
+ *
+ * An array of data buffers, each containing a memory pointer or a
+ * file descriptor.
+ */
+struct fuse_bufvec {
+	/**
+	 * Array of buffers
+	 */
+	const struct fuse_buf *buf;
+
+	/**
+	 * Number of buffers in the array
+	 */
+	size_t count;
+
+	/**
+	 * Index of current buffer within the array
+	 */
+	size_t idx;
+
+	/**
+	 * Current offset within the current buffer
+	 */
+	size_t off;
+};
+
+/**
+ * Get total size of data in a fuse buffer vector
+ *
+ * @param bufv buffer vector
+ * @return size of data
+ */
+size_t fuse_buf_size(const struct fuse_bufvec *bufv);
+
+/**
+ * Copy data from one buffer vector to another
+ *
+ * @param dst destination buffer vector
+ * @param src source buffer vector
+ * @param flags flags controlling the copy
+ * @return actual number of bytes copied or -errno on error
+ */
+ssize_t fuse_buf_copy(struct fuse_bufvec *dst, struct fuse_bufvec *src,
+		      enum fuse_buf_copy_flags flags);
 
 /* ----------------------------------------------------------- *
  * Signal handling					       *

@@ -413,7 +413,17 @@ static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
 			free(llp);
 			return NULL;
 		}
-		/* the default size is 16 pages on linux
+
+		if (fcntl(llp->pipe[0], F_SETFL, O_NONBLOCK) == -1 ||
+		    fcntl(llp->pipe[1], F_SETFL, O_NONBLOCK) == -1) {
+			close(llp->pipe[0]);
+			close(llp->pipe[1]);
+			free(llp);
+			return NULL;
+		}
+
+		/*
+		 *the default size is 16 pages on linux
 		 */
 		llp->size = getpagesize() * 16;
 		llp->can_grow = 1;
@@ -424,20 +434,80 @@ static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
 	return llp;
 }
 
-int fuse_reply_fd(fuse_req_t req, int fd, loff_t *off, size_t len,
-		  unsigned int flags)
+static int send_reply_iov_buf(fuse_req_t req, const struct iovec *iov,
+			      int count, const char *buf, size_t len)
 {
 	int res;
-	void *buf;
+	struct iovec *new_iov;
+
+	new_iov = malloc((count + 1) * sizeof(struct iovec));
+	if (new_iov == NULL)
+		return fuse_reply_err(req, ENOMEM);
+
+	memcpy(new_iov, iov, count * sizeof(struct iovec));
+	new_iov[count].iov_base = (void *) buf;
+	new_iov[count].iov_len = len;
+	count++;
+
+	res = send_reply_iov(req, 0, new_iov, count);
+	free(new_iov);
+
+	return res;
+}
+
+static int read_back(int fd, char *buf, size_t len)
+{
+	int res;
+
+	res = read(fd, buf, len);
+	if (res == -1) {
+		fprintf(stderr, "fuse: internal error: failed to read back from pipe: %s\n", strerror(errno));
+		return -EIO;
+	}
+	if (res != len) {
+		fprintf(stderr, "fuse: internal error: short read back from pipe: %i from %zi\n", res, len);
+		return -EIO;
+	}
+	return 0;
+}
+
+static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
+			       struct fuse_bufvec *buf, unsigned int flags)
+{
+	int res;
+	size_t len = fuse_buf_size(buf);
 	struct fuse_out_header out;
-	struct iovec iov;
 	struct fuse_ll_pipe *llp;
 	int splice_flags;
 	size_t pipesize;
+	size_t total_fd_size;
+	size_t idx;
+	size_t headerlen;
+	struct fuse_buf pbuf = {
+		.size = len,
+	};
+	struct fuse_bufvec pipe_buf = {
+		.buf = &pbuf,
+		.count = 1,
+	};
 
 	static size_t pagesize = 0;
 	if (!pagesize)
 		pagesize = getpagesize();
+
+	if (req->f->broken_splice_nonblock)
+		goto fallback;
+
+	total_fd_size = 0;
+	for (idx = buf->idx; idx < buf->count; idx++) {
+		if (buf->buf[idx].flags & FUSE_BUF_IS_FD) {
+			total_fd_size = buf->buf[idx].size;
+			if (idx == buf->idx)
+				total_fd_size -= buf->off;
+		}
+	}
+	if (total_fd_size < 2 * pagesize)
+		goto fallback;
 
 	if (req->f->conn.proto_minor < 14 ||
 	    !(req->f->conn.want & FUSE_CAP_SPLICE_WRITE))
@@ -447,12 +517,20 @@ int fuse_reply_fd(fuse_req_t req, int fd, loff_t *off, size_t len,
 	if (llp == NULL)
 		goto fallback;
 
+	iov[0].iov_base = &out;
+	iov[0].iov_len = sizeof(struct fuse_out_header);
+
+	headerlen = iov_length(iov, iov_count);
+
+	out.unique = req->unique;
+	out.error = 0;
+	out.len = headerlen + len;
 
 	/*
 	 * Heuristic for the required pipe size, does not work if the
 	 * source contains less than page size fragments
 	 */
-	pipesize = pagesize * 2 + len;
+	pipesize = pagesize * (iov_count + buf->count + 1) + out.len;
 
 	if (llp->size < pipesize) {
 		if (llp->can_grow) {
@@ -467,14 +545,8 @@ int fuse_reply_fd(fuse_req_t req, int fd, loff_t *off, size_t len,
 			goto fallback;
 	}
 
-	out.unique = req->unique;
-	out.error = 0;
-	out.len = len + sizeof(struct fuse_out_header);
 
-	iov.iov_base = &out;
-	iov.iov_len = sizeof(struct fuse_out_header);
-
-	res = vmsplice(llp->pipe[1], &iov, 1, 0);
+	res = vmsplice(llp->pipe[1], iov, iov_count, SPLICE_F_NONBLOCK);
 	if (res == -1) {
 		res = -errno;
 		perror("fuse: vmsplice to pipe");
@@ -487,10 +559,93 @@ int fuse_reply_fd(fuse_req_t req, int fd, loff_t *off, size_t len,
 		goto clear_pipe;
 	}
 
-	res = splice(fd, off, llp->pipe[1], NULL, len, 0);
-	if (res == -1) {
+	pbuf.flags = FUSE_BUF_IS_FD;
+	pbuf.fd = llp->pipe[1];
+
+	res = fuse_buf_copy(&pipe_buf, buf,
+			    FUSE_BUF_FORCE_SPLICE | FUSE_BUF_SPLICE_NONBLOCK);
+	if (res < 0) {
+		if (res == -EAGAIN || res == -EINVAL) {
+			/*
+			 * Should only get EAGAIN on kernels with
+			 * broken SPLICE_F_NONBLOCK support (<=
+			 * 2.6.35) where this error or a short read is
+			 * returned even if the pipe itself is not
+			 * full
+			 *
+			 * EINVAL might mean that splice can't handle
+			 * this combination of input and output.
+			 */
+			if (res == -EAGAIN)
+				req->f->broken_splice_nonblock = 1;
+
+			pthread_setspecific(req->f->pipe_key, NULL);
+			fuse_ll_pipe_free(llp);
+			goto fallback;
+		}
 		res = fuse_reply_err(req, errno);
 		goto clear_pipe;
+	}
+
+	if (res != 0 && res < len) {
+		struct fuse_buf mbuf = {
+			.size = len,
+		};
+		struct fuse_bufvec mem_buf = {
+			.buf = &mbuf,
+			.count = 1,
+		};
+		size_t now_len = res;
+		/*
+		 * For regular files a short count is either
+		 *  1) due to EOF, or
+		 *  2) because of broken SPLICE_F_NONBLOCK (see above)
+		 *
+		 * For other inputs it's possible that we overflowed
+		 * the pipe because of small buffer fragments.
+		 */
+
+		res = posix_memalign(&mbuf.mem, pagesize, len);
+		if (res != 0) {
+			res = fuse_reply_err(req, res);
+			goto clear_pipe;
+		}
+
+		mem_buf.off = now_len;
+		res = fuse_buf_copy(&mem_buf, buf, 0);
+		if (res > 0) {
+			char *tmpbuf;
+			size_t extra_len = res;
+			/*
+			 * Trickiest case: got more data.  Need to get
+			 * back the data from the pipe and then fall
+			 * back to regular write.
+			 */
+			tmpbuf = malloc(headerlen);
+			if (tmpbuf == NULL) {
+				free(mbuf.mem);
+				res = fuse_reply_err(req, ENOMEM);
+				goto clear_pipe;
+			}
+			res = read_back(llp->pipe[0], tmpbuf, headerlen);
+			if (res != 0) {
+				free(mbuf.mem);
+				goto clear_pipe;
+			}
+			free(tmpbuf);
+			res = read_back(llp->pipe[0], mbuf.mem, now_len);
+			if (res != 0) {
+				free(mbuf.mem);
+				goto clear_pipe;
+			}
+			len = now_len + extra_len;
+			res = send_reply_iov_buf(req, iov, iov_count,
+						 mbuf.mem, len);
+			free(mbuf.mem);
+			return res;
+		}
+		free(mbuf.mem);
+		res = now_len;
 	}
 	len = res;
 	out.len = len + sizeof(struct fuse_out_header);
@@ -502,12 +657,12 @@ int fuse_reply_fd(fuse_req_t req, int fd, loff_t *off, size_t len,
 	}
 
 	splice_flags = 0;
-	if ((flags & FUSE_REPLY_FD_MOVE) &&
+	if ((flags & FUSE_BUF_SPLICE_MOVE) &&
 	    (req->f->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
 	res = splice(llp->pipe[0], NULL,
-		     fuse_chan_fd(req->ch), NULL, out.len, flags);
+		     fuse_chan_fd(req->ch), NULL, out.len, splice_flags);
 	if (res == -1) {
 		res = -errno;
 		perror("fuse: splice from pipe");
@@ -527,24 +682,37 @@ clear_pipe:
 	return res;
 
 fallback:
-	res = posix_memalign(&buf, pagesize, len);
-	if (res != 0)
-		return fuse_reply_err(req, res);
+	{
+		struct fuse_buf mbuf = {
+			.size = len,
+		};
+		struct fuse_bufvec mem_buf = {
+			.buf = &mbuf,
+			.count = 1,
+		};
 
-	if (off != NULL) {
-		res = pread(fd, buf, len, *off);
-		if (res > 0)
-			*off += res;
-	} else {
-		res = read(fd, buf, len);
+		res = posix_memalign(&mbuf.mem, pagesize, len);
+		if (res != 0)
+			return fuse_reply_err(req, res);
+
+		res = fuse_buf_copy(&mem_buf, buf, 0);
+		if (res < 0) {
+			free(mbuf.mem);
+			return fuse_reply_err(req, -res);
+		}
+		len = res;
+		res = send_reply_iov_buf(req, iov, iov_count, mbuf.mem, len);
+		free(mbuf.mem);
+
+		return res;
 	}
-	if (res == -1)
-		res = fuse_reply_err(req, errno);
-	else
-		res = fuse_reply_buf(req, buf, res);
-	free(buf);
+}
 
-	return res;
+int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
+		    enum fuse_buf_copy_flags flags)
+{
+	struct iovec iov[1];
+	return fuse_reply_data_iov(req, iov, 1, bufv, flags);
 }
 
 int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)

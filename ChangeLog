@@ -1,3 +1,11 @@
+2010-07-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: add buffer interface.  Add a generic buffer interface
+	for use with I/O.  Buffer vectors are supplied and each buffer in
+	the vector may be a memory pointer or a file descriptor.
+
+	* The fuse_reply_fd() interface is converted to using buffers.
+
 2010-06-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make the number of max background requests and congestion
