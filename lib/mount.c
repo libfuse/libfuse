@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stddef.h>
+#include <string.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/poll.h>
@@ -24,6 +25,19 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
+
+#ifdef __NetBSD__
+#include <perfuse.h>
+
+#define MS_RDONLY 	MNT_RDONLY
+#define MS_NOSUID 	MNT_NOSUID
+#define MS_NODEV 	MNT_NODEV
+#define MS_NOEXEC 	MNT_NOEXEC
+#define MS_SYNCHRONOUS 	MNT_SYNCHRONOUS
+#define MS_NOATIME 	MNT_NOATIME
+
+#define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
+#endif
 
 #define FUSERMOUNT_PROG		"fusermount"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
@@ -155,7 +169,9 @@ static struct mount_flags mount_flags[] = {
 	{"sync",    MS_SYNCHRONOUS, 1},
 	{"atime",   MS_NOATIME,	    0},
 	{"noatime", MS_NOATIME,	    1},
+#ifndef __NetBSD__
 	{"dirsync", MS_DIRSYNC,	    1},
+#endif
 	{NULL,	    0,		    0}
 };
 
@@ -484,6 +500,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		goto out_close;
 	}
 
+#ifndef __NetBSD__
 	if (geteuid() == 0) {
 		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
 		res = -1;
@@ -496,6 +513,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		if (res == -1)
 			goto out_umount;
 	}
+#endif /* __NetBSD__ */
 	free(type);
 	free(source);
 

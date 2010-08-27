@@ -960,7 +960,7 @@ static inline void fuse_prepare_interrupt(struct fuse *f, fuse_req_t req,
 		fuse_do_prepare_interrupt(req, d);
 }
 
-#ifndef __FreeBSD__
+#if !defined(__FreeBSD__) && !defined(__NetBSD__)
 
 static int fuse_compat_open(struct fuse_fs *fs, const char *path,
 			    struct fuse_file_info *fi)
@@ -1055,7 +1055,7 @@ static int fuse_compat_statfs(struct fuse_fs *fs, const char *path,
 	return err;
 }
 
-#else /* __FreeBSD__ */
+#else /* __FreeBSD__ || __NetBSD__ */
 
 static inline int fuse_compat_open(struct fuse_fs *fs, char *path,
 				   struct fuse_file_info *fi)
@@ -1081,7 +1081,7 @@ static inline int fuse_compat_statfs(struct fuse_fs *fs, const char *path,
 	return fs->op.statfs(fs->compat == 25 ? "/" : path, buf);
 }
 
-#endif /* __FreeBSD__ */
+#endif /* __FreeBSD__ || __NetBSD__ */
 
 int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf)
 {
@@ -3763,7 +3763,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	if (!f->conf.ac_attr_timeout_set)
 		f->conf.ac_attr_timeout = f->conf.attr_timeout;
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__NetBSD__)
 	/*
 	 * In FreeBSD, we always use these settings as inode numbers
 	 * are needed to make getcwd(3) work.
@@ -3941,7 +3941,7 @@ void fuse_register_module(struct fuse_module *mod)
 	fuse_modules = mod;
 }
 
-#ifndef __FreeBSD__
+#if !defined(__FreeBSD__) && !defined(__NetBSD__)
 
 static struct fuse *fuse_new_common_compat(int fd, const char *opts,
 					   const struct fuse_operations *op,
@@ -3998,7 +3998,7 @@ FUSE_SYMVER(".symver fuse_set_getcontext_func,__fuse_set_getcontext_func@");
 FUSE_SYMVER(".symver fuse_new_compat2,fuse_new@");
 FUSE_SYMVER(".symver fuse_new_compat22,fuse_new@FUSE_2.2");
 
-#endif /* __FreeBSD__ */
+#endif /* __FreeBSD__ || __NetBSD__  */
 
 struct fuse *fuse_new_compat25(int fd, struct fuse_args *args,
 			       const struct fuse_operations_compat25 *op,

@@ -11,16 +11,23 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#ifndef __NetBSD__
 #include <mntent.h>
+#endif
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/mount.h>
 #include <sys/param.h>
 
+#ifdef __NetBSD__
+#define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
+#define mtab_needs_update(mnt) 0
+#else
 static int mtab_needs_update(const char *mnt)
 {
 	int res;
@@ -53,6 +60,7 @@ static int mtab_needs_update(const char *mnt)
 
 	return 1;
 }
+#endif /* __NetBSD__ */
 
 static int add_mount_legacy(const char *progname, const char *fsname,
 			    const char *mnt, const char *type, const char *opts)

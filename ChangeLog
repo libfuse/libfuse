@@ -1,3 +1,7 @@
+2010-08-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add NetBSD support.  Patch from Emmanuel Dreyfus
+
 2010-07-12  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: add buffer interface.  Add a generic buffer interface

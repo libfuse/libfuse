@@ -39,6 +39,10 @@ libfuse_la_SOURCES = 		\
 libfuse_la_LDFLAGS = @libfuse_libs@ -version-number 2:8:4 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
 
+if NETBSD
+libfuse_la_LIBADD = -lperfuse -lpuffs
+endif
+
 libulockmgr_la_SOURCES = ulockmgr.c
 libulockmgr_la_LDFLAGS = -pthread -version-number 1:0:1
 

@@ -16,6 +16,7 @@ fi
 
 case $target_os in
      *linux*)	arch=linux;;
+     *netbsd*)  arch=netbsd;;
      *bsd*)	arch=bsd;;
      *)		arch=unknown;;
 esac
@@ -91,6 +92,7 @@ AC_SUBST(INIT_D_PATH)
 AC_SUBST(subdirs2)
 
 AM_CONDITIONAL(LINUX, test "$arch" = linux)
+AM_CONDITIONAL(NETBSD, test "$arch" = netbsd)
 AM_CONDITIONAL(BSD, test "$arch" = bsd)
 
 AC_CONFIG_FILES([fuse.pc Makefile lib/Makefile util/Makefile example/Makefile include/Makefile])
