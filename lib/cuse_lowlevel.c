@@ -214,14 +214,14 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	f->conn.want = 0;
 
 	if (arg->major < 7) {
-		fprintf(stderr, "fuse: unsupported protocol version: %u.%u\n",
+		fprintf(stderr, "cuse: unsupported protocol version: %u.%u\n",
 			arg->major, arg->minor);
 		fuse_reply_err(req, EPROTO);
 		return;
 	}
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
-		fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
+		fprintf(stderr, "cuse: warning: buffer size too small: %zu\n",
 			bufsize);
 		bufsize = FUSE_MIN_READ_BUFFER;
 	}
@@ -306,9 +306,9 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	fd = open(devname, O_RDWR);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
-			fprintf(stderr, "fuse: device not found, try 'modprobe cuse' first\n");
+			fprintf(stderr, "cuse: device not found, try 'modprobe cuse' first\n");
 		else
-			fprintf(stderr, "fuse: failed to open %s: %s\n",
+			fprintf(stderr, "cuse: failed to open %s: %s\n",
 				devname, strerror(errno));
 		goto err_se;
 	}
