@@ -12,6 +12,9 @@
 *.lo
 *.la
 *.gz
+\#*#
+*.orig
+*~
 Makefile.in
 Makefile
 *.m4

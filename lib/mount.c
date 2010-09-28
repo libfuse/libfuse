@@ -216,7 +216,7 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 		return fuse_opt_add_opt(&mo->kernel_opts, arg);
 
 	case KEY_FUSERMOUNT_OPT:
-		return fuse_opt_add_opt(&mo->fusermount_opts, arg);
+		return fuse_opt_add_opt_escaped(&mo->fusermount_opts, arg);
 
 	case KEY_SUBTYPE_OPT:
 		return fuse_opt_add_opt(&mo->subtype_opt, arg);

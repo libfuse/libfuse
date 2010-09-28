@@ -649,7 +649,9 @@ static int opt_eq(const char *s, unsigned len, const char *opt)
 static int get_string_opt(const char *s, unsigned len, const char *opt,
 			  char **val)
 {
+	int i;
 	unsigned opt_len = strlen(opt);
+	char *d;
 
 	if (*val)
 		free(*val);
@@ -659,8 +661,15 @@ static int get_string_opt(const char *s, unsigned len, const char *opt,
 		return 0;
 	}
 
-	memcpy(*val, s + opt_len, len - opt_len);
-	(*val)[len - opt_len] = '\0';
+	d = *val;
+	s += opt_len;
+	len -= opt_len;
+	for (i = 0; i < len; i++) {
+		if (s[i] == '\\' && i + 1 < len)
+			i++;
+		*d++ = s[i];
+	}
+	*d = '\0';
 	return 1;
 }
 
@@ -691,7 +700,12 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 		unsigned len;
 		const char *fsname_str = "fsname=";
 		const char *subtype_str = "subtype=";
-		for (len = 0; s[len] && s[len] != ','; len++);
+		for (len = 0; s[len]; len++) {
+			if (s[len] == '\\' && s[len + 1])
+				len++;
+			else if (s[len] == ',')
+				break;
+		}
 		if (begins_with(s, fsname_str)) {
 			if (!get_string_opt(s, len, fsname_str, &fsname))
 				goto err;

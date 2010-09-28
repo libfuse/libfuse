@@ -1,3 +1,10 @@
+2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix option escaping for fusermount.  If the "fsname=" option
+	contained a comma then the option parser in fusermount was
+	confused (Novell bugzilla #641480).  Fix by escaping commas when
+	passing them over to fusermount.  Reported by Jan Engelhardt
+
 2010-08-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add NetBSD support.  Patch from Emmanuel Dreyfus
