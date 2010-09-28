@@ -1,5 +1,9 @@
 2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.8.5
+
+2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Fix option escaping for fusermount.  If the "fsname=" option
 	contained a comma then the option parser in fusermount was
 	confused (Novell bugzilla #641480).  Fix by escaping commas when
