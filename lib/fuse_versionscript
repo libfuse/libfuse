@@ -27,7 +27,6 @@ FUSE_2.4 {
 		fuse_chan_data;
 		fuse_chan_destroy;
 		fuse_chan_fd;
-		fuse_chan_new;
 		fuse_chan_receive;
 		fuse_chan_send;
 		fuse_chan_session;
