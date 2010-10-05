@@ -1,3 +1,11 @@
+2010-10-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add missing argument check in ulockmgr.c to prevent calling
+	ulockmgr_server with illegal arguments. This would cause an ever
+	growing list of ulockmgr_server processes with an endless list of
+	open files which finally exceeds the open file handle limit.
+	Patch by Markus Ammer
+
 2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix option escaping for fusermount.  If the "fsname=" option
