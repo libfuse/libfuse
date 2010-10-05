@@ -400,6 +400,10 @@ int ulockmgr_op(int fd, int cmd, struct flock *lock, const void *owner,
 	if (cmd != F_GETLK && cmd != F_SETLK && cmd != F_SETLKW)
 		return -EINVAL;
 
+	if (lock->l_type != F_RDLCK && lock->l_type != F_WRLCK &&
+	    lock->l_type != F_UNLCK)
+		return -EINVAL;
+
 	if (lock->l_whence != SEEK_SET && lock->l_whence != SEEK_CUR &&
 	    lock->l_whence != SEEK_END)
 		return -EINVAL;
