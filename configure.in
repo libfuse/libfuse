@@ -72,7 +72,7 @@ AC_ARG_WITH([libiconv-prefix],
     done
    ])
 AM_ICONV
-libfuse_libs="$libfuse_libs $LIBICONV"
+libfuse_libs="$libfuse_libs $LTLIBICONV"
 AM_CONDITIONAL(ICONV, test "$am_cv_func_iconv" = yes)
 AC_SUBST(libfuse_libs)
 
