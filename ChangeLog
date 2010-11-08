@@ -26,6 +26,9 @@
 	which may be used in event loop implementations to replace
 	fuse_chan_recv() and fuse_session_process() respectively.
 
+	* Remove unnecessary restoring of current working directory in
+	"fusermount -u"
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against

@@ -335,7 +335,7 @@ static int check_is_mount(const char *last, const char *mnt)
 	return 0;
 }
 
-static int chdir_to_parent(char *copy, const char **lastp, int *currdir_fd)
+static int chdir_to_parent(char *copy, const char **lastp)
 {
 	char *tmp;
 	const char *parent;
@@ -358,14 +358,6 @@ static int chdir_to_parent(char *copy, const char **lastp, int *currdir_fd)
 	} else {
 		*lastp = ".";
 		parent = "/";
-	}
-
-	*currdir_fd = open(".", O_RDONLY);
-	if (*currdir_fd == -1) {
-		fprintf(stderr,
-			"%s: failed to open current directory: %s\n",
-			progname, strerror(errno));
-		return -1;
 	}
 
 	res = chdir(parent);
@@ -392,7 +384,6 @@ static int chdir_to_parent(char *copy, const char **lastp, int *currdir_fd)
 
 static int unmount_fuse_legacy(const char *mnt, int lazy)
 {
-	int currdir_fd = -1;
 	char *copy;
 	const char *last;
 	int res;
@@ -403,7 +394,7 @@ static int unmount_fuse_legacy(const char *mnt, int lazy)
 		return -1;
 	}
 
-	res = chdir_to_parent(copy, &last, &currdir_fd);
+	res = chdir_to_parent(copy, &last);
 	if (res == -1)
 		goto out;
 
@@ -415,10 +406,6 @@ static int unmount_fuse_legacy(const char *mnt, int lazy)
 
 out:
 	free(copy);
-	if (currdir_fd != -1) {
-		fchdir(currdir_fd);
-		close(currdir_fd);
-	}
 
 	return res;
 }
