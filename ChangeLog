@@ -2,6 +2,9 @@
 
 	* Fix check for read-only fs in mtab update
 
+	* Open /dev/null for write instead of read for redirecting stdout
+	and stderr
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against

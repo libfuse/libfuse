@@ -163,7 +163,7 @@ static int add_mount(const char *progname, const char *fsname,
 		 * Hide output, because old versions don't support
 		 * --no-canonicalize
 		 */
-		int fd = open("/dev/null", O_RDONLY);
+		int fd = open("/dev/null", O_WRONLY);
 		dup2(fd, 1);
 		dup2(fd, 2);
 
