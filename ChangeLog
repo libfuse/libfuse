@@ -16,6 +16,8 @@
 	with this option then "fusermount -u" will fail if umount(8)
 	doesn't support the --fake and --no-canonicalize options.
 
+	* Fix fuse_buf_copy() if already at the end of the buffers
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against

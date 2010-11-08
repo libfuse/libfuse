@@ -232,7 +232,10 @@ static ssize_t fuse_buf_copy_one(const struct fuse_buf *dst, size_t dst_off,
 
 static const struct fuse_buf *fuse_bufvec_current(struct fuse_bufvec *bufv)
 {
-	return &bufv->buf[bufv->idx];
+	if (bufv->idx < bufv->count)
+		return &bufv->buf[bufv->idx];
+	else
+		return NULL;
 }
 
 static int fuse_bufvec_advance(struct fuse_bufvec *bufv, size_t len)
@@ -259,10 +262,17 @@ ssize_t fuse_buf_copy(struct fuse_bufvec *dstv, struct fuse_bufvec *srcv,
 	for (;;) {
 		const struct fuse_buf *src = fuse_bufvec_current(srcv);
 		const struct fuse_buf *dst = fuse_bufvec_current(dstv);
-		size_t src_len = src->size - srcv->off;
-		size_t dst_len = dst->size - dstv->off;
-		size_t len = min_size(src_len, dst_len);
+		size_t src_len;
+		size_t dst_len;
+		size_t len;
 		ssize_t res;
+
+		if (src == NULL || dst == NULL)
+			break;
+
+		src_len = src->size - srcv->off;
+		dst_len = dst->size - dstv->off;
+		len = min_size(src_len, dst_len);
 
 		res = fuse_buf_copy_one(dst, dstv->off, src, srcv->off, len, flags);
 		if (res < 0) {
