@@ -37,6 +37,9 @@
 	* libfuse: add store request.  Request data to be stored in the
 	kernel buffers for a given inode.
 
+	* libfuse: add retrieve request.  Retrieve data stored in the
+	kernel buffers for a given inode.
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against

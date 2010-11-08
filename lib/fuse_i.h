@@ -49,6 +49,14 @@ struct fuse_req {
 	struct fuse_req *prev;
 };
 
+struct fuse_notify_req {
+	uint64_t unique;
+	void (*reply)(struct fuse_notify_req *, fuse_req_t, fuse_ino_t,
+		      const void *, const struct fuse_buf *);
+	struct fuse_notify_req *next;
+	struct fuse_notify_req *prev;
+};
+
 struct fuse_ll {
 	int debug;
 	int allow_root;
@@ -70,6 +78,8 @@ struct fuse_ll {
 	int got_destroy;
 	pthread_key_t pipe_key;
 	int broken_splice_nonblock;
+	uint64_t notify_ctr;
+	struct fuse_notify_req notify_list;
 };
 
 struct fuse_cmd {

@@ -902,6 +902,17 @@ struct fuse_lowlevel_ops {
 	void (*write_buf) (fuse_req_t req, fuse_ino_t ino,
 			   struct fuse_bufvec *bufv, off_t off,
 			   struct fuse_file_info *fi);
+
+	/**
+	 * Callback function for the retrieve request
+	 *
+	 * @param cookie user data supplied to fuse_lowlevel_notify_retrieve()
+	 * @param ino the inode number supplied to fuse_lowlevel_notify_retrieve()
+	 * @param offset the offset supplied to fuse_lowlevel_notify_retrieve()
+	 * @param bufv the buffer containing the returned data
+	 */
+	void (*retrieve_reply) (void *cookie, fuse_ino_t ino, off_t offset,
+				struct fuse_bufvec *bufv);
 };
 
 /**
@@ -1248,6 +1259,34 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
 int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
 			       off_t offset, struct fuse_bufvec *bufv,
 			       enum fuse_buf_copy_flags flags);
+/**
+ * Retrieve data from the kernel buffers
+ *
+ * Retrieve data in the kernel buffers belonging to the given inode.
+ * If successful then the retrieve_reply() method will be called with
+ * the returned data.
+ *
+ * Only present pages are returned in the retrieve reply.  Retrieving
+ * stops when it finds a non-present page and only data prior to that is
+ * returned.
+ *
+ * If this function returns an error, then the retrieve will not be
+ * completed and no reply will be sent.
+ *
+ * This function doesn't change the dirty state of pages in the kernel
+ * buffer.  For dirty pages the write() method will be called
+ * regardless of having been retrieved previously.
+ *
+ * @param ch the channel through which to send the invalidation
+ * @param ino the inode number
+ * @param size the number of bytes to retrieve
+ * @param offset the starting offset into the file to retrieve from
+ * @param cookie user data to supply to the reply callback
+ * @return zero for success, -errno for failure
+ */
+int fuse_lowlevel_notify_retrieve(struct fuse_chan *ch, fuse_ino_t ino,
+				  size_t size, off_t offset, void *cookie);
+
 
 /* ----------------------------------------------------------- *
  * Utility functions					       *
