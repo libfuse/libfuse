@@ -5,6 +5,17 @@
 	* Open /dev/null for write instead of read for redirecting stdout
 	and stderr
 
+	* If umount(8) supports --fake and --no-canonicalize (util-linux-ng
+	version 2.18 or later), and umount(2) supports the
+	UMOUNT_NOFOLLOW flag (linux kernel version 2.6.35 or later)  then,
+	"fusermount -u" will call the umount(2) system call and use
+	"umount --fake ..." to update /etc/mtab
+
+	* Added --disable-legacy-umount option to configure.  This
+	disables the runtime checking of umount(8) version.  When built
+	with this option then "fusermount -u" will fail if umount(8)
+	doesn't support the --fake and --no-canonicalize options.
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against

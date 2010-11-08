@@ -45,6 +45,16 @@
 #define MS_PRIVATE (1<<18)
 #endif
 
+#ifndef UMOUNT_DETACH
+#define UMOUNT_DETACH	0x00000002	/* Just detach from the tree */
+#endif
+#ifndef UMOUNT_NOFOLLOW
+#define UMOUNT_NOFOLLOW	0x00000008	/* Don't follow symlink on umount */
+#endif
+#ifndef UMOUNT_UNUSED
+#define UMOUNT_UNUSED	0x80000000	/* Flag guaranteed to be unused */
+#endif
+
 static const char *progname;
 
 static int user_allow_other = 0;
@@ -380,18 +390,12 @@ static int chdir_to_parent(char *copy, const char **lastp, int *currdir_fd)
 	return 0;
 }
 
-static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
+static int unmount_fuse_legacy(const char *mnt, int lazy)
 {
 	int currdir_fd = -1;
 	char *copy;
 	const char *last;
 	int res;
-
-	if (getuid() != 0) {
-		res = may_unmount(mnt, quiet);
-		if (res == -1)
-			return -1;
-	}
 
 	copy = strdup(mnt);
 	if (copy == NULL) {
@@ -415,6 +419,140 @@ out:
 		fchdir(currdir_fd);
 		close(currdir_fd);
 	}
+
+	return res;
+}
+
+static int unmount_fuse_nofollow(const char *mnt, int quiet, int lazy)
+{
+	int res;
+	int umount_flags = UMOUNT_NOFOLLOW;
+
+	if (lazy)
+		umount_flags |= UMOUNT_DETACH;
+
+	res = umount2(mnt, umount_flags);
+	if (res == -1) {
+		if (!quiet) {
+			fprintf(stderr, "%s: failed to unmount %s: %s\n",
+				progname, mnt, strerror(errno));
+		}
+		return -1;
+	}
+
+	return fuse_mnt_remove_mount(progname, mnt);
+}
+
+/* Check whether the kernel supports UMOUNT_NOFOLLOW flag */
+static int umount_nofollow_support(void)
+{
+	int res = umount2("", UMOUNT_UNUSED);
+	if (res != -1 || errno != EINVAL)
+		return 0;
+
+	res = umount2("", UMOUNT_NOFOLLOW);
+	if (res != -1 || errno != ENOENT)
+		return 0;
+
+	return 1;
+}
+
+#ifdef LEGACY_UMOUNT
+/* Check if umount(8) supports "--fake" and "--no-canonicalize" options */
+static int umount_fake_support(void)
+{
+	int res;
+	int status;
+	sigset_t blockmask;
+	sigset_t oldmask;
+	int pip[2];
+	char buf[1024];
+	char *s;
+	unsigned majver;
+	unsigned minver;
+	int supported = 0;
+	int pid;
+
+	res = pipe(pip);
+	if (res == -1)
+		return 0;
+
+	sigemptyset(&blockmask);
+	sigaddset(&blockmask, SIGCHLD);
+	res = sigprocmask(SIG_BLOCK, &blockmask, &oldmask);
+	if (res == -1)
+		goto out_close;
+
+	pid = fork();
+	if (pid == -1)
+		goto out_restore;
+
+	if (pid == 0) {
+		int nullfd;
+
+		close(pip[0]);
+		dup2(pip[1], 1);
+		if (pip[1] != 1)
+			close(pip[1]);
+		nullfd = open("/dev/null", O_WRONLY);
+		dup2(nullfd, 2);
+		sigprocmask(SIG_SETMASK, &oldmask, NULL);
+		setuid(getuid());
+		execl("/bin/umount", "/bin/umount", "--version", NULL);
+		exit(1);
+	}
+	res = read(pip[0], buf, sizeof(buf));
+	if (res == -1 || res == sizeof(buf))
+		buf[0] = '\0';
+	else
+		buf[res] = '\0';
+
+	res = waitpid(pid, &status, 0);
+	if (res == -1 || status != 0)
+		goto out_restore;
+
+	s = strstr(buf, "util-linux-ng ");
+	if (s == NULL)
+		goto out_restore;
+
+	s += 14;
+	if (sscanf(s, "%u.%u", &majver, &minver) < 2)
+		goto out_restore;
+
+	if (majver < 2 || (majver == 2 && minver < 18))
+		goto out_restore;
+
+	supported = 1;
+
+out_restore:
+	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+out_close:
+	close(pip[0]);
+	close(pip[1]);
+
+	return supported;
+}
+#else
+static int umount_fake_support(void)
+{
+	return 1;
+}
+#endif
+
+static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
+{
+	int res;
+
+	if (getuid() != 0) {
+		res = may_unmount(mnt, quiet);
+		if (res == -1)
+			return -1;
+	}
+
+	if (umount_nofollow_support() && umount_fake_support())
+		res = unmount_fuse_nofollow(mnt, quiet, lazy);
+	else
+		res = unmount_fuse_legacy(mnt, lazy);
 
 	return res;
 }
@@ -1073,7 +1211,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 	if (geteuid() == 0) {
 		res = add_mount(source, mnt, type, mnt_opts);
 		if (res == -1) {
-			umount2(mnt, 2); /* lazy umount */
+			umount2(mnt, UMOUNT_DETACH); /* lazy umount */
 			close(fd);
 			return -1;
 		}
@@ -1231,7 +1369,7 @@ int main(int argc, char *argv[])
 		if (geteuid() == 0)
 			res = unmount_fuse(mnt, quiet, lazy);
 		else {
-			res = umount2(mnt, lazy ? 2 : 0);
+			res = umount2(mnt, lazy ? UMOUNT_DETACH : 0);
 			if (res == -1 && !quiet)
 				fprintf(stderr,
 					"%s: failed to unmount %s: %s\n",
