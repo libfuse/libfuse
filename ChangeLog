@@ -34,6 +34,9 @@
 	* Fix st_nlink value in high level lib if file is unlinked but
 	still open
 
+	* libfuse: add store request.  Request data to be stored in the
+	kernel buffers for a given inode.
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against
@@ -65,9 +68,6 @@
 	the vector may be a memory pointer or a file descriptor.
 
 	* The fuse_reply_fd() interface is converted to using buffers.
-
-	* libfuse: add store request.  Request data to be stored in the
-	kernel buffers for a given inode.
 
 2010-06-23  Miklos Szeredi <miklos@szeredi.hu>
 
