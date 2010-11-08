@@ -80,6 +80,34 @@ void fuse_session_process(struct fuse_session *se, const char *buf, size_t len,
 	se->op.process(se->data, buf, len, ch);
 }
 
+void fuse_session_process_buf(struct fuse_session *se,
+			      const struct fuse_buf *buf, struct fuse_chan *ch)
+{
+	if (se->process_buf) {
+		se->process_buf(se->data, buf, ch);
+	} else {
+		assert(!(buf->flags & FUSE_BUF_IS_FD));
+		fuse_session_process(se->data, buf->mem, buf->size, ch);
+	}
+}
+
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
+			     struct fuse_chan **chp)
+{
+	int res;
+
+	if (se->receive_buf) {
+		res = se->receive_buf(se, buf, chp);
+	} else {
+		res = fuse_chan_recv(chp, buf->mem, buf->size);
+		if (res > 0)
+			buf->size = res;
+	}
+
+	return res;
+}
+
+
 void fuse_session_destroy(struct fuse_session *se)
 {
 	if (se->op.destroy)

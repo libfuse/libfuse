@@ -15,6 +15,12 @@ struct fuse_ll;
 struct fuse_session {
 	struct fuse_session_ops op;
 
+	int (*receive_buf)(struct fuse_session *se, struct fuse_buf *buf,
+			   struct fuse_chan **chp);
+
+	void (*process_buf)(void *data, const struct fuse_buf *buf,
+			    struct fuse_chan *ch);
+
 	void *data;
 
 	volatile int exited;
@@ -51,6 +57,7 @@ struct fuse_ll {
 	int big_writes;
 	int no_splice_write;
 	int no_splice_move;
+	int no_splice_read;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	struct cuse_data *cuse_data;

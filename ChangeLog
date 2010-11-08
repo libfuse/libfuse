@@ -18,6 +18,14 @@
 
 	* Fix fuse_buf_copy() if already at the end of the buffers
 
+	* Add new ->write_buf() method to low level interface.  This
+	allows passig a generic buffer, either containing a memory buffer
+	or a file descriptor.  This allows implementing zero copy writes.
+
+	* Add fuse_session_receive_buf() and fuse_session_process_buf()
+	which may be used in event loop implementations to replace
+	fuse_chan_recv() and fuse_session_process() respectively.
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against

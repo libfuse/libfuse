@@ -70,10 +70,14 @@ static void *fuse_do_work(void *data)
 	while (!fuse_session_exited(mt->se)) {
 		int isforget = 0;
 		struct fuse_chan *ch = mt->prevch;
+		struct fuse_buf fbuf = {
+			.mem = w->buf,
+			.size = w->bufsize,
+		};
 		int res;
 
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		res = fuse_chan_recv(&ch, w->buf, w->bufsize);
+		res = fuse_session_receive_buf(mt->se, &fbuf, &ch);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
@@ -95,7 +99,8 @@ static void *fuse_do_work(void *data)
 		 * This disgusting hack is needed so that zillions of threads
 		 * are not created on a burst of FORGET messages
 		 */
-		if (((struct fuse_in_header *) w->buf)->opcode == FUSE_FORGET)
+		if (!(fbuf.flags & FUSE_BUF_IS_FD) &&
+		    ((struct fuse_in_header *) fbuf.mem)->opcode == FUSE_FORGET)
 			isforget = 1;
 
 		if (!isforget)
@@ -104,7 +109,7 @@ static void *fuse_do_work(void *data)
 			fuse_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
-		fuse_session_process(mt->se, w->buf, res, ch);
+		fuse_session_process_buf(mt->se, &fbuf, ch);
 
 		pthread_mutex_lock(&mt->lock);
 		if (!isforget)

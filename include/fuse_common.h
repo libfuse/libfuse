@@ -101,6 +101,7 @@ struct fuse_file_info {
 #define FUSE_CAP_DONT_MASK	(1 << 6)
 #define FUSE_CAP_SPLICE_WRITE	(1 << 7)
 #define FUSE_CAP_SPLICE_MOVE	(1 << 8)
+#define FUSE_CAP_SPLICE_READ	(1 << 9)
 
 /**
  * Ioctl flags

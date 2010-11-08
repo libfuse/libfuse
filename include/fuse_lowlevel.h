@@ -877,6 +877,31 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*poll) (fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
 		      struct fuse_pollhandle *ph);
+
+	/**
+	 * Write data made available in a buffer
+	 *
+	 * This is a more generic version of the ->write() method.  If
+	 * FUSE_CAP_SPLICE_READ is set in fuse_conn_info.want and the
+	 * kernel supports splicing from the fuse device, then the
+	 * data will be made available in pipe for supporting zero
+	 * copy data transfer.
+	 *
+	 * Introduced in version 2.9
+	 *
+	 * Valid replies:
+	 *   fuse_reply_write
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param bufv buffer containing the data
+	 * @param off offset to write to
+	 * @param fi file information
+	 */
+	void (*write_buf) (fuse_req_t req, fuse_ino_t ino,
+			   struct fuse_bufvec *bufv, off_t off,
+			   struct fuse_file_info *fi);
 };
 
 /**
@@ -1393,6 +1418,34 @@ struct fuse_chan *fuse_session_next_chan(struct fuse_session *se,
  */
 void fuse_session_process(struct fuse_session *se, const char *buf, size_t len,
 			  struct fuse_chan *ch);
+
+/**
+ * Process a raw request supplied in a generic buffer
+ *
+ * This is a more generic version of fuse_session_process().  The
+ * fuse_buf may contain a memory buffer or a pipe file descriptor.
+ *
+ * @param se the session
+ * @param buf the fuse_buf containing the request
+ * @param ch channel on which the request was received
+ */
+void fuse_session_process_buf(struct fuse_session *se,
+			      const struct fuse_buf *buf, struct fuse_chan *ch);
+
+/**
+ * Receive a raw request supplied in a generic buffer
+ *
+ * This is a more generic version of fuse_chan_recv().  The fuse_buf
+ * supplied to this function contains a suitably allocated memory
+ * buffer.  This may be overwritten with a file descriptor buffer.
+ *
+ * @param se the session
+ * @param buf the fuse_buf to store the request in
+ * @param chp pointer to the channel
+ * @return the actual size of the raw request, or -errno on error
+ */
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
+			     struct fuse_chan **chp);
 
 /**
  * Destroy a session
