@@ -50,11 +50,22 @@ static int mtab_needs_update(const char *mnt)
 		if (errno == ENOENT)
 			return 0;
 	} else {
+		uid_t ruid;
+		int err;
+
 		if (S_ISLNK(stbuf.st_mode))
 			return 0;
 
+		ruid = getuid();
+		if (ruid != 0)
+			setreuid(0, -1);
+
 		res = access(_PATH_MOUNTED, W_OK);
-		if (res == -1 && errno == EROFS)
+		err = (res == -1) ? errno : 0;
+		if (ruid != 0)
+			setreuid(ruid, -1);
+
+		if (err == EROFS)
 			return 0;
 	}
 

@@ -1,6 +1,10 @@
+2010-11-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix check for read-only fs in mtab update
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
-	Use LTLIBICONV when linking libfuse.  This fixes building against
+	* Use LTLIBICONV when linking libfuse.  This fixes building against
 	uclibc + libiconv.  Patch by Natanael Copa
 
 2010-10-05  Miklos Szeredi <miklos@szeredi.hu>
