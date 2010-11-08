@@ -2075,11 +2075,15 @@ static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 		free_path(f, ino, path);
 	}
 	if (!err) {
-		if (f->conf.auto_cache) {
-			pthread_mutex_lock(&f->lock);
-			update_stat(get_node(f, ino), &buf);
-			pthread_mutex_unlock(&f->lock);
-		}
+		struct node *node;
+
+		pthread_mutex_lock(&f->lock);
+		node = get_node(f, ino);
+		if (node->is_hidden && buf.st_nlink > 0)
+			buf.st_nlink--;
+		if (f->conf.auto_cache)
+			update_stat(node, &buf);
+		pthread_mutex_unlock(&f->lock);
 		set_stat(f, ino, &buf);
 		fuse_reply_attr(req, &buf, f->conf.attr_timeout);
 	} else

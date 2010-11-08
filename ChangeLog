@@ -31,6 +31,9 @@
 
 	* Add ctx->pid to debug output
 
+	* Fix st_nlink value in high level lib if file is unlinked but
+	still open
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against
