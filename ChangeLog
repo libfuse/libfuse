@@ -29,6 +29,8 @@
 	* Remove unnecessary restoring of current working directory in
 	"fusermount -u"
 
+	* Add ctx->pid to debug output
+
 2010-10-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LTLIBICONV when linking libfuse.  This fixes building against

@@ -1984,10 +1984,10 @@ static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
 
 	if (f->debug)
 		fprintf(stderr,
-			"unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu\n",
+			"unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu, pid: %u\n",
 			(unsigned long long) in->unique,
 			opname((enum fuse_opcode) in->opcode), in->opcode,
-			(unsigned long) in->nodeid, buf->size);
+			(unsigned long) in->nodeid, buf->size, in->pid);
 
 
 	err = EIO;
