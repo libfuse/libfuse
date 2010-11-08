@@ -133,6 +133,31 @@ void fuse_free_req(fuse_req_t req)
 		destroy_req(req);
 }
 
+static int fuse_send_msg(struct fuse_ll *f, struct fuse_chan *ch,
+			 struct iovec *iov, int count)
+{
+	struct fuse_out_header *out = iov[0].iov_base;
+
+	out->len = iov_length(iov, count);
+	if (f->debug) {
+		if (out->unique == 0) {
+			fprintf(stderr, "NOTIFY: code=%d length=%u\n",
+				out->error, out->len);
+		} else if (out->error) {
+			fprintf(stderr,
+				"   unique: %llu, error: %i (%s), outsize: %i\n",
+				(unsigned long long) out->unique, out->error,
+				strerror(-out->error), out->len);
+		} else {
+			fprintf(stderr,
+				"   unique: %llu, success, outsize: %i\n",
+				(unsigned long long) out->unique, out->len);
+		}
+	}
+
+	return fuse_chan_send(ch, iov, count);
+}
+
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count)
 {
@@ -145,24 +170,11 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 
 	out.unique = req->unique;
 	out.error = error;
+
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
-	out.len = iov_length(iov, count);
 
-	if (req->f->debug) {
-		if (out.error) {
-			fprintf(stderr,
-				"   unique: %llu, error: %i (%s), outsize: %i\n",
-				(unsigned long long) out.unique, out.error,
-				strerror(-out.error), out.len);
-		} else {
-			fprintf(stderr,
-				"   unique: %llu, success, outsize: %i\n",
-				(unsigned long long) out.unique, out.len);
-		}
-	}
-
-	return fuse_chan_send(req->ch, iov, count);
+	return fuse_send_msg(req->f, req->ch, iov, count);
 }
 
 static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
@@ -451,27 +463,6 @@ static void fuse_ll_clear_pipe(struct fuse_ll *f)
 	}
 }
 
-static int send_reply_iov_buf(fuse_req_t req, const struct iovec *iov,
-			      int count, const char *buf, size_t len)
-{
-	int res;
-	struct iovec *new_iov;
-
-	new_iov = malloc((count + 1) * sizeof(struct iovec));
-	if (new_iov == NULL)
-		return fuse_reply_err(req, ENOMEM);
-
-	memcpy(new_iov, iov, count * sizeof(struct iovec));
-	new_iov[count].iov_base = (void *) buf;
-	new_iov[count].iov_len = len;
-	count++;
-
-	res = send_reply_iov(req, 0, new_iov, count);
-	free(new_iov);
-
-	return res;
-}
-
 static int read_back(int fd, char *buf, size_t len)
 {
 	int res;
@@ -488,12 +479,13 @@ static int read_back(int fd, char *buf, size_t len)
 	return 0;
 }
 
-static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
+static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
+			       struct iovec *iov, int iov_count,
 			       struct fuse_bufvec *buf, unsigned int flags)
 {
 	int res;
 	size_t len = fuse_buf_size(buf);
-	struct fuse_out_header out;
+	struct fuse_out_header *out = iov[0].iov_base;
 	struct fuse_ll_pipe *llp;
 	int splice_flags;
 	size_t pipesize;
@@ -508,7 +500,10 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 		.count = 1,
 	};
 
-	if (req->f->broken_splice_nonblock)
+	if (f->broken_splice_nonblock)
+		goto fallback;
+
+	if (flags & FUSE_BUF_NO_SPLICE)
 		goto fallback;
 
 	total_fd_size = 0;
@@ -522,28 +517,24 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 	if (total_fd_size < 2 * pagesize)
 		goto fallback;
 
-	if (req->f->conn.proto_minor < 14 ||
-	    !(req->f->conn.want & FUSE_CAP_SPLICE_WRITE))
+	if (f->conn.proto_minor < 14 ||
+	    !(f->conn.want & FUSE_CAP_SPLICE_WRITE))
 		goto fallback;
 
-	llp = fuse_ll_get_pipe(req->f);
+	llp = fuse_ll_get_pipe(f);
 	if (llp == NULL)
 		goto fallback;
 
-	iov[0].iov_base = &out;
-	iov[0].iov_len = sizeof(struct fuse_out_header);
 
 	headerlen = iov_length(iov, iov_count);
 
-	out.unique = req->unique;
-	out.error = 0;
-	out.len = headerlen + len;
+	out->len = headerlen + len;
 
 	/*
 	 * Heuristic for the required pipe size, does not work if the
 	 * source contains less than page size fragments
 	 */
-	pipesize = pagesize * (iov_count + buf->count + 1) + out.len;
+	pipesize = pagesize * (iov_count + buf->count + 1) + out->len;
 
 	if (llp->size < pipesize) {
 		if (llp->can_grow) {
@@ -560,15 +551,13 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 
 
 	res = vmsplice(llp->pipe[1], iov, iov_count, SPLICE_F_NONBLOCK);
-	if (res == -1) {
-		res = -errno;
-		perror("fuse: vmsplice to pipe");
-		return res;
-	}
-	if (res != sizeof(struct fuse_out_header)) {
+	if (res == -1)
+		goto fallback;
+
+	if (res != headerlen) {
 		res = -EIO;
 		fprintf(stderr, "fuse: short vmsplice to pipe: %u/%zu\n", res,
-			sizeof(struct fuse_out_header));
+			headerlen);
 		goto clear_pipe;
 	}
 
@@ -590,13 +579,13 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 			 * this combination of input and output.
 			 */
 			if (res == -EAGAIN)
-				req->f->broken_splice_nonblock = 1;
+				f->broken_splice_nonblock = 1;
 
-			pthread_setspecific(req->f->pipe_key, NULL);
+			pthread_setspecific(f->pipe_key, NULL);
 			fuse_ll_pipe_free(llp);
 			goto fallback;
 		}
-		res = fuse_reply_err(req, errno);
+		res = -res;
 		goto clear_pipe;
 	}
 
@@ -619,10 +608,8 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 		 */
 
 		res = posix_memalign(&mbuf.mem, pagesize, len);
-		if (res != 0) {
-			res = fuse_reply_err(req, res);
+		if (res != 0)
 			goto clear_pipe;
-		}
 
 		mem_buf.off = now_len;
 		res = fuse_buf_copy(&mem_buf, buf, 0);
@@ -637,7 +624,7 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 			tmpbuf = malloc(headerlen);
 			if (tmpbuf == NULL) {
 				free(mbuf.mem);
-				res = fuse_reply_err(req, ENOMEM);
+				res = ENOMEM;
 				goto clear_pipe;
 			}
 			res = read_back(llp->pipe[0], tmpbuf, headerlen);
@@ -652,8 +639,10 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 				goto clear_pipe;
 			}
 			len = now_len + extra_len;
-			res = send_reply_iov_buf(req, iov, iov_count,
-						 mbuf.mem, len);
+			iov[iov_count].iov_base = mbuf.mem;
+			iov[iov_count].iov_len = len;
+			iov_count++;
+			res = fuse_send_msg(f, ch, iov, iov_count);
 			free(mbuf.mem);
 			return res;
 		}
@@ -661,36 +650,36 @@ static int fuse_reply_data_iov(fuse_req_t req, struct iovec *iov, int iov_count,
 		res = now_len;
 	}
 	len = res;
-	out.len = len + sizeof(struct fuse_out_header);
+	out->len = headerlen + len;
 
-	if (req->f->debug) {
+	if (f->debug) {
 		fprintf(stderr,
 			"   unique: %llu, success, outsize: %i (splice)\n",
-			(unsigned long long) out.unique, out.len);
+			(unsigned long long) out->unique, out->len);
 	}
 
 	splice_flags = 0;
 	if ((flags & FUSE_BUF_SPLICE_MOVE) &&
-	    (req->f->conn.want & FUSE_CAP_SPLICE_MOVE))
+	    (f->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
 	res = splice(llp->pipe[0], NULL,
-		     fuse_chan_fd(req->ch), NULL, out.len, splice_flags);
+		     fuse_chan_fd(ch), NULL, out->len, splice_flags);
 	if (res == -1) {
 		res = -errno;
 		perror("fuse: splice from pipe");
 		goto clear_pipe;
 	}
-	if (res != out.len) {
+	if (res != out->len) {
 		res = -EIO;
 		fprintf(stderr, "fuse: short splice from pipe: %u/%u\n",
-			res, out.len);
+			res, out->len);
 		goto clear_pipe;
 	}
 	return 0;
 
 clear_pipe:
-	fuse_ll_clear_pipe(req->f);
+	fuse_ll_clear_pipe(f);
 	return res;
 
 fallback:
@@ -705,15 +694,19 @@ fallback:
 
 		res = posix_memalign(&mbuf.mem, pagesize, len);
 		if (res != 0)
-			return fuse_reply_err(req, res);
+			return res;
 
 		res = fuse_buf_copy(&mem_buf, buf, 0);
 		if (res < 0) {
 			free(mbuf.mem);
-			return fuse_reply_err(req, -res);
+			return -res;
 		}
 		len = res;
-		res = send_reply_iov_buf(req, iov, iov_count, mbuf.mem, len);
+
+		iov[iov_count].iov_base = mbuf.mem;
+		iov[iov_count].iov_len = len;
+		iov_count++;
+		res = fuse_send_msg(f, ch, iov, iov_count);
 		free(mbuf.mem);
 
 		return res;
@@ -723,8 +716,21 @@ fallback:
 int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 		    enum fuse_buf_copy_flags flags)
 {
-	struct iovec iov[1];
-	return fuse_reply_data_iov(req, iov, 1, bufv, flags);
+	struct iovec iov[2];
+	struct fuse_out_header out;
+	int res;
+
+	iov[0].iov_base = &out;
+	iov[0].iov_len = sizeof(struct fuse_out_header);
+
+	out.unique = req->unique;
+	out.error = 0;
+
+	res = fuse_send_data_iov(req->f, req->ch, iov, 1, bufv, flags);
+	if (res <= 0)
+		return res;
+	else
+		return fuse_reply_err(req, res);
 }
 
 int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
@@ -1695,13 +1701,8 @@ static int send_notify_iov(struct fuse_ll *f, struct fuse_chan *ch,
 	out.error = notify_code;
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
-	out.len = iov_length(iov, count);
 
-	if (f->debug)
-		fprintf(stderr, "NOTIFY: code=%d count=%d length=%u\n",
-			notify_code, count, out.len);
-
-	return fuse_chan_send(ch, iov, count);
+	return fuse_send_msg(f, ch, iov, count);
 }
 
 int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
@@ -1769,6 +1770,43 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
 	iov[2].iov_len = namelen + 1;
 
 	return send_notify_iov(f, ch, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
+}
+
+int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
+			       off_t offset, struct fuse_bufvec *bufv,
+			       enum fuse_buf_copy_flags flags)
+{
+	struct fuse_out_header out;
+	struct fuse_notify_store_out outarg;
+	struct fuse_ll *f;
+	struct iovec iov[3];
+	size_t size = fuse_buf_size(bufv);
+	int res;
+
+	if (!ch)
+		return -EINVAL;
+
+	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	if (!f)
+		return -ENODEV;
+
+	out.unique = 0;
+	out.error = FUSE_NOTIFY_STORE;
+
+	outarg.nodeid = ino;
+	outarg.offset = offset;
+	outarg.size = size;
+
+	iov[0].iov_base = &out;
+	iov[0].iov_len = sizeof(out);
+	iov[1].iov_base = &outarg;
+	iov[1].iov_len = sizeof(outarg);
+
+	res = fuse_send_data_iov(f, ch, iov, 2, bufv, flags);
+	if (res > 0)
+		res = -res;
+
+	return res;
 }
 
 void *fuse_req_userdata(fuse_req_t req)

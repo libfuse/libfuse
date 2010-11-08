@@ -61,6 +61,9 @@
 
 	* The fuse_reply_fd() interface is converted to using buffers.
 
+	* libfuse: add store request.  Request data to be stored in the
+	kernel buffers for a given inode.
+
 2010-06-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Make the number of max background requests and congestion

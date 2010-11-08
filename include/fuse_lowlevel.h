@@ -1224,6 +1224,31 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
 int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
                                      const char *name, size_t namelen);
 
+/**
+ * Store data to the kernel buffers
+ *
+ * Synchronously store data in the kernel buffers belonging to the
+ * given inode.  The stored data is marked up-to-date (no read will be
+ * performed against it, unless it's invalidated or evicted from the
+ * cache).
+ *
+ * If the stored data overflows the current file size, then the size
+ * is extended, similarly to a write(2) on the filesystem.
+ *
+ * If this function returns an error, then the store wasn't fully
+ * completed, but it may have been partially completed.
+ *
+ * @param ch the channel through which to send the invalidation
+ * @param ino the inode number
+ * @param offset the starting offset into the file to store to
+ * @param bufv buffer vector
+ * @param flags flags controlling the copy
+ * @return zero for success, -errno for failure
+ */
+int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
+			       off_t offset, struct fuse_bufvec *bufv,
+			       enum fuse_buf_copy_flags flags);
+
 /* ----------------------------------------------------------- *
  * Utility functions					       *
  * ----------------------------------------------------------- */
