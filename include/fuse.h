@@ -524,6 +524,25 @@ struct fuse_operations {
 	 */
 	int (*write_buf) (const char *, struct fuse_bufvec *buf, off_t off,
 			  struct fuse_file_info *);
+
+	/** Store data from an open file in a buffer
+	 *
+	 * Similar to the read() method, but data is stored and
+	 * returned in a generic buffer.
+	 *
+	 * No actual copying of data has to take place, the source
+	 * file descriptor may simply be stored in the buffer for
+	 * later data transfer.
+	 *
+	 * The buffer must be allocated dynamically and stored at the
+	 * location pointed to by bufp.  If the buffer contains memory
+	 * regions, they too must be allocated using malloc().  The
+	 * allocated memory will be freed by the caller.
+	 *
+	 * Introduced in version 2.9
+	 */
+	int (*read_buf) (const char *, struct fuse_bufvec **bufp,
+			 size_t size, off_t off, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -735,6 +754,9 @@ int fuse_fs_open(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi);
 int fuse_fs_read(struct fuse_fs *fs, const char *path, char *buf, size_t size,
 		 off_t off, struct fuse_file_info *fi);
+int fuse_fs_read_buf(struct fuse_fs *fs, const char *path,
+		     struct fuse_bufvec **bufp, size_t size, off_t off,
+		     struct fuse_file_info *fi);
 int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *buf,
 		  size_t size, off_t off, struct fuse_file_info *fi);
 int fuse_fs_write_buf(struct fuse_fs *fs, const char *path,

@@ -184,6 +184,7 @@ FUSE_2.9 {
 	global:
 		fuse_buf_copy;
 		fuse_buf_size;
+		fuse_fs_read_buf;
 		fuse_fs_write_buf;
 		fuse_lowlevel_notify_retrieve;
 		fuse_lowlevel_notify_store;

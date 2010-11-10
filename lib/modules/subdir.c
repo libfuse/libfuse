@@ -384,14 +384,14 @@ static int subdir_open(const char *path, struct fuse_file_info *fi)
 	return err;
 }
 
-static int subdir_read(const char *path, char *buf, size_t size, off_t offset,
-		       struct fuse_file_info *fi)
+static int subdir_read_buf(const char *path, struct fuse_bufvec **bufp,
+			   size_t size, off_t offset, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
 	int err = subdir_addpath(d, path, &newpath);
 	if (!err) {
-		err = fuse_fs_read(d->next, newpath, buf, size, offset, fi);
+		err = fuse_fs_read_buf(d->next, newpath, bufp, size, offset, fi);
 		free(newpath);
 	}
 	return err;
@@ -587,7 +587,7 @@ static struct fuse_operations subdir_oper = {
 	.utimens	= subdir_utimens,
 	.create		= subdir_create,
 	.open		= subdir_open,
-	.read		= subdir_read,
+	.read_buf	= subdir_read_buf,
 	.write_buf	= subdir_write_buf,
 	.statfs		= subdir_statfs,
 	.flush		= subdir_flush,
