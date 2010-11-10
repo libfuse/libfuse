@@ -1273,23 +1273,55 @@ int fuse_fs_read(struct fuse_fs *fs, const char *path, char *buf, size_t size,
 	}
 }
 
-int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *buf,
-		  size_t size, off_t off, struct fuse_file_info *fi)
+int fuse_fs_write_buf(struct fuse_fs *fs, const char *path,
+		      struct fuse_bufvec *buf, off_t off,
+		      struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
-	if (fs->op.write) {
+	if (fs->op.write_buf || fs->op.write) {
 		int res;
+		size_t size = fuse_buf_size(buf);
 
+		assert(buf->idx = 0 && buf->off == 0);
 		if (fs->debug)
 			fprintf(stderr,
-				"write%s[%llu] %lu bytes to %llu flags: 0x%x\n",
+				"write%s[%llu] %zu bytes to %llu flags: 0x%x\n",
 				fi->writepage ? "page" : "",
 				(unsigned long long) fi->fh,
-				(unsigned long) size, (unsigned long long) off,
+				size,
+				(unsigned long long) off,
 				fi->flags);
 
-		res = fs->op.write(path, buf, size, off, fi);
+		if (fs->op.write_buf) {
+			res = fs->op.write_buf(path, buf, off, fi);
+		} else {
+			void *mem = NULL;
+			struct fuse_buf *flatbuf;
+			struct fuse_bufvec tmp = FUSE_BUFVEC_INIT(size);
 
+			if (buf->count == 1 &&
+			    !(buf->buf[0].flags & FUSE_BUF_IS_FD)) {
+				flatbuf = &buf->buf[0];
+			} else {
+				mem = malloc(size);
+				if (mem == NULL)
+					goto out;
+
+				tmp.buf[0].mem = mem;
+				res = fuse_buf_copy(&tmp, buf, 0);
+				if (res <= 0)
+					goto out_free;
+
+				tmp.buf[0].size = res;
+				flatbuf = &tmp.buf[0];
+			}
+
+			res = fs->op.write(path, flatbuf->mem, flatbuf->size,
+					   off, fi);
+out_free:
+			free(mem);
+		}
+out:
 		if (fs->debug && res >= 0)
 			fprintf(stderr, "   write%s[%llu] %u bytes to %llu\n",
 				fi->writepage ? "page" : "",
@@ -1302,6 +1334,16 @@ int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *buf,
 	} else {
 		return -ENOSYS;
 	}
+}
+
+int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *mem,
+		  size_t size, off_t off, struct fuse_file_info *fi)
+{
+	struct fuse_bufvec bufv = FUSE_BUFVEC_INIT(size);
+
+	bufv.buf[0].mem = (void *) mem;
+
+	return fuse_fs_write_buf(fs, path, &bufv, off, fi);
 }
 
 int fuse_fs_fsync(struct fuse_fs *fs, const char *path, int datasync,
@@ -1946,6 +1988,8 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn)
 {
 	fuse_get_context()->private_data = fs->user_data;
+	if (!fs->op.write_buf)
+		conn->want &= ~FUSE_CAP_SPLICE_READ;
 	if (fs->op.init)
 		fs->user_data = fs->op.init(conn);
 }
@@ -2588,8 +2632,9 @@ static void fuse_lib_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	free(buf);
 }
 
-static void fuse_lib_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
-			   size_t size, off_t off, struct fuse_file_info *fi)
+static void fuse_lib_write_buf(fuse_req_t req, fuse_ino_t ino,
+			       struct fuse_bufvec *buf, off_t off,
+			       struct fuse_file_info *fi)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	char *path;
@@ -2600,7 +2645,7 @@ static void fuse_lib_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 		struct fuse_intr_data d;
 
 		fuse_prepare_interrupt(f, req, &d);
-		res = fuse_fs_write(f->fs, path, buf, size, off, fi);
+		res = fuse_fs_write_buf(f->fs, path, buf, off, fi);
 		fuse_finish_interrupt(f, req, &d);
 		free_path(f, ino, path);
 	}
@@ -3391,7 +3436,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.create = fuse_lib_create,
 	.open = fuse_lib_open,
 	.read = fuse_lib_read,
-	.write = fuse_lib_write,
+	.write_buf = fuse_lib_write_buf,
 	.flush = fuse_lib_flush,
 	.release = fuse_lib_release,
 	.fsync = fuse_lib_fsync,

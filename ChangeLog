@@ -1,3 +1,9 @@
+2010-11-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add new write_buf() method to the highlevel API.  Similarly to
+	the lowlevel write_buf() method, this allows implementing zero
+	copy writes.
+
 2010-11-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix check for read-only fs in mtab update

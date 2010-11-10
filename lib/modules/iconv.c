@@ -410,14 +410,14 @@ static int iconv_read(const char *path, char *buf, size_t size, off_t offset,
 	return err;
 }
 
-static int iconv_write(const char *path, const char *buf, size_t size,
-		       off_t offset, struct fuse_file_info *fi)
+static int iconv_write_buf(const char *path, struct fuse_bufvec *buf,
+			   off_t offset, struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;
 	int err = iconv_convpath(ic, path, &newpath, 0);
 	if (!err) {
-		err = fuse_fs_write(ic->next, newpath, buf, size, offset, fi);
+		err = fuse_fs_write_buf(ic->next, newpath, buf, offset, fi);
 		free(newpath);
 	}
 	return err;
@@ -605,7 +605,7 @@ static struct fuse_operations iconv_oper = {
 	.create		= iconv_create,
 	.open		= iconv_open_file,
 	.read		= iconv_read,
-	.write		= iconv_write,
+	.write_buf	= iconv_write_buf,
 	.statfs		= iconv_statfs,
 	.flush		= iconv_flush,
 	.release	= iconv_release,
