@@ -217,7 +217,16 @@ static ssize_t fuse_buf_copy_one(const struct fuse_buf *dst, size_t dst_off,
 	int dst_is_fd = dst->flags & FUSE_BUF_IS_FD;
 
 	if (!src_is_fd && !dst_is_fd) {
-		memcpy(dst->mem + dst_off, src->mem + src_off, len);
+		void *dstmem = dst->mem + dst_off;
+		void *srcmem = src->mem + src_off;
+
+		if (dstmem != srcmem) {
+			if (dstmem + len <= srcmem || srcmem + len <= dstmem)
+				memcpy(dstmem, srcmem, len);
+			else
+				memmove(dstmem, srcmem, len);
+		}
+
 		return len;
 	} else if (!src_is_fd) {
 		return fuse_buf_write(dst, dst_off, src, src_off, len);
@@ -258,6 +267,9 @@ ssize_t fuse_buf_copy(struct fuse_bufvec *dstv, struct fuse_bufvec *srcv,
 		      enum fuse_buf_copy_flags flags)
 {
 	size_t copied = 0;
+
+	if (dstv == srcv)
+		return fuse_buf_size(dstv);
 
 	for (;;) {
 		const struct fuse_buf *src = fuse_bufvec_current(srcv);
