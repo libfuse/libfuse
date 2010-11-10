@@ -496,13 +496,7 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 	size_t total_fd_size;
 	size_t idx;
 	size_t headerlen;
-	struct fuse_buf pbuf = {
-		.size = len,
-	};
-	struct fuse_bufvec pipe_buf = {
-		.buf = &pbuf,
-		.count = 1,
-	};
+	struct fuse_bufvec pipe_buf = FUSE_BUFVEC_INIT(len);
 
 	if (f->broken_splice_nonblock)
 		goto fallback;
@@ -565,8 +559,8 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 		goto clear_pipe;
 	}
 
-	pbuf.flags = FUSE_BUF_IS_FD;
-	pbuf.fd = llp->pipe[1];
+	pipe_buf.buf[0].flags = FUSE_BUF_IS_FD;
+	pipe_buf.buf[0].fd = llp->pipe[1];
 
 	res = fuse_buf_copy(&pipe_buf, buf,
 			    FUSE_BUF_FORCE_SPLICE | FUSE_BUF_SPLICE_NONBLOCK);
@@ -594,13 +588,8 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 	}
 
 	if (res != 0 && res < len) {
-		struct fuse_buf mbuf = {
-			.size = len,
-		};
-		struct fuse_bufvec mem_buf = {
-			.buf = &mbuf,
-			.count = 1,
-		};
+		struct fuse_bufvec mem_buf = FUSE_BUFVEC_INIT(len);
+		void *mbuf;
 		size_t now_len = res;
 		/*
 		 * For regular files a short count is either
@@ -611,10 +600,11 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 		 * the pipe because of small buffer fragments.
 		 */
 
-		res = posix_memalign(&mbuf.mem, pagesize, len);
+		res = posix_memalign(&mbuf, pagesize, len);
 		if (res != 0)
 			goto clear_pipe;
 
+		mem_buf.buf[0].mem = mbuf;
 		mem_buf.off = now_len;
 		res = fuse_buf_copy(&mem_buf, buf, 0);
 		if (res > 0) {
@@ -627,30 +617,30 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 			 */
 			tmpbuf = malloc(headerlen);
 			if (tmpbuf == NULL) {
-				free(mbuf.mem);
+				free(mbuf);
 				res = ENOMEM;
 				goto clear_pipe;
 			}
 			res = read_back(llp->pipe[0], tmpbuf, headerlen);
 			if (res != 0) {
-				free(mbuf.mem);
+				free(mbuf);
 				goto clear_pipe;
 			}
 			free(tmpbuf);
-			res = read_back(llp->pipe[0], mbuf.mem, now_len);
+			res = read_back(llp->pipe[0], mbuf, now_len);
 			if (res != 0) {
-				free(mbuf.mem);
+				free(mbuf);
 				goto clear_pipe;
 			}
 			len = now_len + extra_len;
-			iov[iov_count].iov_base = mbuf.mem;
+			iov[iov_count].iov_base = mbuf;
 			iov[iov_count].iov_len = len;
 			iov_count++;
 			res = fuse_send_msg(f, ch, iov, iov_count);
-			free(mbuf.mem);
+			free(mbuf);
 			return res;
 		}
-		free(mbuf.mem);
+		free(mbuf);
 		res = now_len;
 	}
 	len = res;
@@ -688,30 +678,26 @@ clear_pipe:
 
 fallback:
 	{
-		struct fuse_buf mbuf = {
-			.size = len,
-		};
-		struct fuse_bufvec mem_buf = {
-			.buf = &mbuf,
-			.count = 1,
-		};
+		struct fuse_bufvec mem_buf = FUSE_BUFVEC_INIT(len);
+		void *mbuf;
 
-		res = posix_memalign(&mbuf.mem, pagesize, len);
+		res = posix_memalign(&mbuf, pagesize, len);
 		if (res != 0)
 			return res;
 
+		mem_buf.buf[0].mem = mbuf;
 		res = fuse_buf_copy(&mem_buf, buf, 0);
 		if (res < 0) {
-			free(mbuf.mem);
+			free(mbuf);
 			return -res;
 		}
 		len = res;
 
-		iov[iov_count].iov_base = mbuf.mem;
+		iov[iov_count].iov_base = mbuf;
 		iov[iov_count].iov_len = len;
 		iov_count++;
 		res = fuse_send_msg(f, ch, iov, iov_count);
-		free(mbuf.mem);
+		free(mbuf);
 
 		return res;
 	}
@@ -1132,9 +1118,8 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 			 const struct fuse_buf *ibuf)
 {
 	struct fuse_ll *f = req->f;
-	struct fuse_buf buf = *ibuf;
 	struct fuse_bufvec bufv = {
-		.buf = &buf,
+		.buf[0] = *ibuf,
 		.count = 1,
 	};
 	struct fuse_write_in *arg = (struct fuse_write_in *) inarg;
@@ -1146,25 +1131,25 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 	fi.writepage = arg->write_flags & 1;
 
 	if (req->f->conn.proto_minor < 9) {
-		buf.mem = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
-		buf.size -= sizeof(struct fuse_in_header) +
+		bufv.buf[0].mem = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
+		bufv.buf[0].size -= sizeof(struct fuse_in_header) +
 			FUSE_COMPAT_WRITE_IN_SIZE;
-		assert(!(buf.flags & FUSE_BUF_IS_FD));
+		assert(!(bufv.buf[0].flags & FUSE_BUF_IS_FD));
 	} else {
 		fi.lock_owner = arg->lock_owner;
 		fi.flags = arg->flags;
-		if (!(buf.flags & FUSE_BUF_IS_FD))
-			buf.mem = PARAM(arg);
+		if (!(bufv.buf[0].flags & FUSE_BUF_IS_FD))
+			bufv.buf[0].mem = PARAM(arg);
 
-		buf.size -= sizeof(struct fuse_in_header) +
+		bufv.buf[0].size -= sizeof(struct fuse_in_header) +
 			sizeof(struct fuse_write_in);
 	}
-	if (buf.size < arg->size) {
+	if (bufv.buf[0].size < arg->size) {
 		fprintf(stderr, "fuse: do_write_buf: buffer size too small\n");
 		fuse_reply_err(req, EIO);
 		goto out;
 	}
-	buf.size = arg->size;
+	bufv.buf[0].size = arg->size;
 
 	req->f->op.write_buf(req, nodeid, &bufv, arg->offset, &fi);
 
@@ -1878,24 +1863,23 @@ static void fuse_ll_retrieve_reply(struct fuse_notify_req *nreq,
 	struct fuse_retrieve_req *rreq =
 		container_of(nreq, struct fuse_retrieve_req, nreq);
 	const struct fuse_notify_retrieve_in *arg = inarg;
-	struct fuse_buf buf = *ibuf;
 	struct fuse_bufvec bufv = {
-		.buf = &buf,
+		.buf[0] = *ibuf,
 		.count = 1,
 	};
 
-	if (!(buf.flags & FUSE_BUF_IS_FD))
-		buf.mem = PARAM(arg);
+	if (!(bufv.buf[0].flags & FUSE_BUF_IS_FD))
+		bufv.buf[0].mem = PARAM(arg);
 
-	buf.size -= sizeof(struct fuse_in_header) +
+	bufv.buf[0].size -= sizeof(struct fuse_in_header) +
 		sizeof(struct fuse_notify_retrieve_in);
 
-	if (buf.size < arg->size) {
+	if (bufv.buf[0].size < arg->size) {
 		fprintf(stderr, "fuse: retrieve reply: buffer size too small\n");
 		fuse_reply_none(req);
 		goto out;
 	}
-	buf.size = arg->size;
+	bufv.buf[0].size = arg->size;
 
 	if (req->f->op.retrieve_reply)
 		req->f->op.retrieve_reply(rreq->cookie, ino, arg->offset, &bufv);
@@ -2058,18 +2042,15 @@ static const char *opname(enum fuse_opcode opcode)
 		return fuse_ll_ops[opcode].name;
 }
 
-static int fuse_ll_copy_from_pipe(struct fuse_buf *dst,
-				  struct fuse_bufvec *srcv)
+static int fuse_ll_copy_from_pipe(struct fuse_bufvec *dst,
+				  struct fuse_bufvec *src)
 {
-	int res;
-	struct fuse_bufvec dstv = { .buf = dst, .count = 1 };
-
-	res = fuse_buf_copy(&dstv, srcv, 0);
+	int res = fuse_buf_copy(dst, src, 0);
 	if (res < 0) {
 		fprintf(stderr, "fuse: copy from pipe: %s\n", strerror(-res));
 		return res;
 	}
-	if (res < dst->size) {
+	if (res < fuse_buf_size(dst)) {
 		fprintf(stderr, "fuse: copy from pipe: short read\n");
 		return -1;
 	}
@@ -2082,8 +2063,8 @@ static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
 	struct fuse_ll *f = (struct fuse_ll *) data;
 	const size_t write_header_size = sizeof(struct fuse_in_header) +
 		sizeof(struct fuse_write_in);
-	struct fuse_bufvec bufv = { .buf = buf, .count = 1 };
-	struct fuse_buf tmpbuf = { .size = write_header_size };
+	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
+	struct fuse_bufvec tmpbuf = FUSE_BUFVEC_INIT(write_header_size);
 	struct fuse_in_header *in;
 	const void *inarg;
 	struct fuse_req *req;
@@ -2092,15 +2073,15 @@ static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
 	int res;
 
 	if (buf->flags & FUSE_BUF_IS_FD) {
-		if (buf->size < tmpbuf.size)
-			tmpbuf.size = buf->size;
+		if (buf->size < tmpbuf.buf[0].size)
+			tmpbuf.buf[0].size = buf->size;
 
-		mbuf = malloc(tmpbuf.size);
+		mbuf = malloc(tmpbuf.buf[0].size);
 		if (mbuf == NULL) {
 			fprintf(stderr, "fuse: failed to allocate header\n");
 			goto clear_pipe;
 		}
-		tmpbuf.mem = mbuf;
+		tmpbuf.buf[0].mem = mbuf;
 
 		res = fuse_ll_copy_from_pipe(&tmpbuf, &bufv);
 		if (res < 0)
@@ -2178,10 +2159,9 @@ static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
 			goto reply_err;
 		mbuf = newmbuf;
 
-		tmpbuf = (struct fuse_buf) {
-			.size = buf->size - write_header_size,
-			.mem = mbuf + write_header_size,
-		};
+		tmpbuf = FUSE_BUFVEC_INIT(buf->size - write_header_size);
+		tmpbuf.buf[0].mem = mbuf + write_header_size;
+
 		res = fuse_ll_copy_from_pipe(&tmpbuf, &bufv);
 		err = -res;
 		if (res < 0)
@@ -2390,8 +2370,8 @@ static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 	 */
 	if (res < sizeof(struct fuse_in_header) +
 	    sizeof(struct fuse_write_in) + pagesize) {
-		struct fuse_bufvec src = { .buf = &tmpbuf, .count = 1 };
-		struct fuse_bufvec dst = { .buf = buf, .count = 1 };
+		struct fuse_bufvec src = { .buf[0] = tmpbuf, .count = 1 };
+		struct fuse_bufvec dst = { .buf[0] = *buf, .count = 1 };
 
 		res = fuse_buf_copy(&dst, &src, 0);
 		if (res < 0) {

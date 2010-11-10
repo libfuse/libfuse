@@ -368,13 +368,10 @@ struct fuse_buf {
  *
  * An array of data buffers, each containing a memory pointer or a
  * file descriptor.
+ *
+ * Allocate dynamically to add more than one buffer.
  */
 struct fuse_bufvec {
-	/**
-	 * Array of buffers
-	 */
-	const struct fuse_buf *buf;
-
 	/**
 	 * Number of buffers in the array
 	 */
@@ -389,7 +386,27 @@ struct fuse_bufvec {
 	 * Current offset within the current buffer
 	 */
 	size_t off;
+
+	/**
+	 * Array of buffers
+	 */
+	struct fuse_buf buf[1];
 };
+
+/* Initialize bufvec with a single buffer of given size */
+#define FUSE_BUFVEC_INIT(size__) 				\
+	((struct fuse_bufvec) {					\
+		/* .count= */ 1,				\
+		/* .idx =  */ 0,				\
+		/* .off =  */ 0,				\
+		/* .buf =  */ { /* [0] = */ {			\
+			/* .size =  */ (size__),		\
+			/* .flags = */ (enum fuse_buf_flags) 0,	\
+			/* .mem =   */ NULL,			\
+			/* .fd =    */ -1,			\
+			/* .pos =   */ 0,			\
+		} }						\
+	} )
 
 /**
  * Get total size of data in a fuse buffer vector
