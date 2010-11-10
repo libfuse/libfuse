@@ -8,6 +8,10 @@
 	returning a generic buffer from the read method, which in turn
 	allows zero copy reads.
 
+	* In fusexmp_fh implement the ->read_buf() and ->write_buf()
+	methods.  Leave the ->read() and ->write() implementations for
+	reference, even though they are not necessary.
+
 2010-11-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix check for read-only fs in mtab update

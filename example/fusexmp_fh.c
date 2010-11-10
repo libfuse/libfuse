@@ -334,6 +334,28 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	return res;
 }
 
+static int xmp_read_buf(const char *path, struct fuse_bufvec **bufp,
+			size_t size, off_t offset, struct fuse_file_info *fi)
+{
+	struct fuse_bufvec *src;
+
+	(void) path;
+
+	src = malloc(sizeof(struct fuse_bufvec));
+	if (src == NULL)
+		return -ENOMEM;
+
+	*src = FUSE_BUFVEC_INIT(size);
+
+	src->buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	src->buf[0].fd = fi->fh;
+	src->buf[0].pos = offset;
+
+	*bufp = src;
+
+	return 0;
+}
+
 static int xmp_write(const char *path, const char *buf, size_t size,
 		     off_t offset, struct fuse_file_info *fi)
 {
@@ -345,6 +367,20 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 		res = -errno;
 
 	return res;
+}
+
+static int xmp_write_buf(const char *path, struct fuse_bufvec *buf,
+		     off_t offset, struct fuse_file_info *fi)
+{
+	struct fuse_bufvec dst = FUSE_BUFVEC_INIT(fuse_buf_size(buf));
+
+	(void) path;
+
+	dst.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	dst.buf[0].fd = fi->fh;
+	dst.buf[0].pos = offset;
+
+	return fuse_buf_copy(&dst, buf, FUSE_BUF_SPLICE_NONBLOCK);
 }
 
 static int xmp_statfs(const char *path, struct statvfs *stbuf)
@@ -472,7 +508,9 @@ static struct fuse_operations xmp_oper = {
 	.create		= xmp_create,
 	.open		= xmp_open,
 	.read		= xmp_read,
+	.read_buf	= xmp_read_buf,
 	.write		= xmp_write,
+	.write_buf	= xmp_write_buf,
 	.statfs		= xmp_statfs,
 	.flush		= xmp_flush,
 	.release	= xmp_release,
