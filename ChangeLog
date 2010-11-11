@@ -1,5 +1,11 @@
 2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Fix ambiguous symbol version for fuse_chan_new.
+	fuse_versionscript included fuse_chan_new in both FUSE_2.4 and
+	FUSE_2.6.  Remove the FUSE_2.4, which is invalid.
+
+2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Released 2.8.5
 
 2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
