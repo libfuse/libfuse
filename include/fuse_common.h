@@ -312,7 +312,7 @@ enum fuse_buf_copy_flags {
 	 * destination instead of copying.  See documentation of
 	 * SPLICE_F_MOVE in splice(2) man page.
 	 */
-	FUSE_BUF_SPLICE_MOVE	= (1 << 2),
+	FUSE_BUF_SPLICE_MOVE	= (1 << 3),
 
 	/**
 	 * Don't block on the pipe when copying data with splice
@@ -321,7 +321,7 @@ enum fuse_buf_copy_flags {
 	 * is full or empty).  See SPLICE_F_NONBLOCK in the splice(2)
 	 * man page.
 	 */
-	FUSE_BUF_SPLICE_NONBLOCK= (1 << 3),
+	FUSE_BUF_SPLICE_NONBLOCK= (1 << 4),
 };
 
 /**
