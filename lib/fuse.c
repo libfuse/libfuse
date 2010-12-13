@@ -84,12 +84,17 @@ struct lock_queue_element {
        pthread_cond_t cond;
 };
 
+struct node_table {
+	struct node **array;
+	size_t use;
+	size_t size;
+	size_t split;
+};
+
 struct fuse {
 	struct fuse_session *se;
-	struct node **name_table;
-	size_t name_table_size;
-	struct node **id_table;
-	size_t id_table_size;
+	struct node_table name_table;
+	struct node_table id_table;
 	fuse_ino_t ctr;
 	unsigned int generation;
 	unsigned int hidectr;
@@ -259,12 +264,23 @@ static void fuse_put_module(struct fuse_module *m)
 	pthread_mutex_unlock(&fuse_context_lock);
 }
 
+static size_t id_hash(struct fuse *f, fuse_ino_t ino)
+{
+	uint64_t hash = ((uint32_t) ino * 2654435761) % f->id_table.size;
+	uint64_t oldhash = hash % (f->id_table.size / 2);
+
+	if (oldhash >= f->id_table.split)
+		return oldhash;
+	else
+		return hash;
+}
+
 static struct node *get_node_nocheck(struct fuse *f, fuse_ino_t nodeid)
 {
-	size_t hash = nodeid % f->id_table_size;
+	size_t hash = id_hash(f, nodeid);
 	struct node *node;
 
-	for (node = f->id_table[hash]; node != NULL; node = node->id_next)
+	for (node = f->id_table.array[hash]; node != NULL; node = node->id_next)
 		if (node->nodeid == nodeid)
 			return node;
 
@@ -290,33 +306,88 @@ static void free_node(struct node *node)
 
 static void unhash_id(struct fuse *f, struct node *node)
 {
-	size_t hash = node->nodeid % f->id_table_size;
-	struct node **nodep = &f->id_table[hash];
+	struct node **nodep = &f->id_table.array[id_hash(f, node->nodeid)];
 
 	for (; *nodep != NULL; nodep = &(*nodep)->id_next)
 		if (*nodep == node) {
 			*nodep = node->id_next;
+			f->id_table.use--;
 			return;
 		}
 }
 
-static void hash_id(struct fuse *f, struct node *node)
+static int node_table_resize(struct node_table *t)
 {
-	size_t hash = node->nodeid % f->id_table_size;
-	node->id_next = f->id_table[hash];
-	f->id_table[hash] = node;
+	size_t newsize = t->size * 2;
+	void *newarray;
+
+	newarray = realloc(t->array, sizeof(struct node *) * newsize);
+	if (newarray == NULL)
+		return -1;
+
+	t->array = newarray;
+	memset(t->array + t->size, 0, t->size * sizeof(struct node *));
+	t->size = newsize;
+	t->split = 0;
+
+	return 0;
 }
 
-static unsigned int name_hash(struct fuse *f, fuse_ino_t parent,
-			      const char *name)
+static void rehash_id(struct fuse *f)
 {
-	unsigned int hash = *name;
+	struct node_table *t = &f->id_table;
+	struct node **nodep;
+	struct node **next;
+	size_t hash;
 
-	if (hash)
-		for (name += 1; *name != '\0'; name++)
-			hash = (hash << 5) - hash + *name;
+	if (t->split == t->size / 2)
+		return;
 
-	return (hash + parent) % f->name_table_size;
+	hash = t->split;
+	t->split++;
+	for (nodep = &t->array[hash]; *nodep != NULL; nodep = next) {
+		struct node *node = *nodep;
+		size_t newhash = id_hash(f, node->nodeid);
+
+		if (newhash != hash) {
+			next = nodep;
+			*nodep = node->id_next;
+			node->id_next = t->array[newhash];
+			t->array[newhash] = node;
+		} else {
+			next = &node->id_next;
+		}
+	}
+	if (t->split == t->size / 2)
+		node_table_resize(t);
+}
+
+static void hash_id(struct fuse *f, struct node *node)
+{
+	size_t hash = id_hash(f, node->nodeid);
+	node->id_next = f->id_table.array[hash];
+	f->id_table.array[hash] = node;
+	f->id_table.use++;
+
+	if (f->id_table.use >= f->id_table.size / 2)
+		rehash_id(f);
+}
+
+static size_t name_hash(struct fuse *f, fuse_ino_t parent,
+			const char *name)
+{
+	uint64_t hash = parent;
+	uint64_t oldhash;
+
+	for (; *name; name++)
+		hash = hash * 31 + (unsigned char) *name;
+
+	hash %= f->name_table.size;
+	oldhash = hash % (f->name_table.size / 2);
+	if (oldhash >= f->name_table.split)
+		return oldhash;
+	else
+		return hash;
 }
 
 static void unref_node(struct fuse *f, struct node *node);
@@ -325,7 +396,7 @@ static void unhash_name(struct fuse *f, struct node *node)
 {
 	if (node->name) {
 		size_t hash = name_hash(f, node->parent->nodeid, node->name);
-		struct node **nodep = &f->name_table[hash];
+		struct node **nodep = &f->name_table.array[hash];
 
 		for (; *nodep != NULL; nodep = &(*nodep)->name_next)
 			if (*nodep == node) {
@@ -335,6 +406,7 @@ static void unhash_name(struct fuse *f, struct node *node)
 				free(node->name);
 				node->name = NULL;
 				node->parent = NULL;
+				f->name_table.use--;
 				return;
 			}
 		fprintf(stderr,
@@ -342,6 +414,35 @@ static void unhash_name(struct fuse *f, struct node *node)
 			(unsigned long long) node->nodeid);
 		abort();
 	}
+}
+
+static void rehash_name(struct fuse *f)
+{
+	struct node_table *t = &f->name_table;
+	struct node **nodep;
+	struct node **next;
+	size_t hash;
+
+	if (t->split == t->size / 2)
+		return;
+
+	hash = t->split;
+	t->split++;
+	for (nodep = &t->array[hash]; *nodep != NULL; nodep = next) {
+		struct node *node = *nodep;
+		size_t newhash = name_hash(f, node->parent->nodeid, node->name);
+
+		if (newhash != hash) {
+			next = nodep;
+			*nodep = node->name_next;
+			node->name_next = t->array[newhash];
+			t->array[newhash] = node;
+		} else {
+			next = &node->name_next;
+		}
+	}
+	if (t->split == t->size / 2)
+		node_table_resize(t);
 }
 
 static int hash_name(struct fuse *f, struct node *node, fuse_ino_t parentid,
@@ -355,8 +456,13 @@ static int hash_name(struct fuse *f, struct node *node, fuse_ino_t parentid,
 
 	parent->refctr ++;
 	node->parent = parent;
-	node->name_next = f->name_table[hash];
-	f->name_table[hash] = node;
+	node->name_next = f->name_table.array[hash];
+	f->name_table.array[hash] = node;
+	f->name_table.use++;
+
+	if (f->name_table.use >= f->name_table.size / 2)
+		rehash_name(f);
+
 	return 0;
 }
 
@@ -397,7 +503,7 @@ static struct node *lookup_node(struct fuse *f, fuse_ino_t parent,
 	size_t hash = name_hash(f, parent, name);
 	struct node *node;
 
-	for (node = f->name_table[hash]; node != NULL; node = node->name_next)
+	for (node = f->name_table.array[hash]; node != NULL; node = node->name_next)
 		if (node->parent->nodeid == parent &&
 		    strcmp(node->name, name) == 0)
 			return node;
@@ -3802,6 +3908,20 @@ struct fuse_fs *fuse_fs_new(const struct fuse_operations *op, size_t op_size,
 	return fs;
 }
 
+static int node_table_init(struct node_table *t)
+{
+	t->size = 8192;
+	t->array = (struct node **) calloc(1, sizeof(struct node *) * t->size);
+	if (t->array == NULL) {
+		fprintf(stderr, "fuse: memory allocation failed\n");
+		return -1;
+	}
+	t->use = 0;
+	t->split = 0;
+
+	return 0;
+}
+
 struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 			     const struct fuse_operations *op,
 			     size_t op_size, void *user_data, int compat)
@@ -3893,22 +4013,11 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	f->fs->debug = f->conf.debug;
 	f->ctr = 0;
 	f->generation = 0;
-	/* FIXME: Dynamic hash table */
-	f->name_table_size = 14057;
-	f->name_table = (struct node **)
-		calloc(1, sizeof(struct node *) * f->name_table_size);
-	if (f->name_table == NULL) {
-		fprintf(stderr, "fuse: memory allocation failed\n");
+	if (node_table_init(&f->name_table) == -1)
 		goto out_free_session;
-	}
 
-	f->id_table_size = 14057;
-	f->id_table = (struct node **)
-		calloc(1, sizeof(struct node *) * f->id_table_size);
-	if (f->id_table == NULL) {
-		fprintf(stderr, "fuse: memory allocation failed\n");
+	if (node_table_init(&f->id_table) == -1)
 		goto out_free_name_table;
-	}
 
 	fuse_mutex_init(&f->lock);
 
@@ -3943,9 +4052,9 @@ out_free_root_name:
 out_free_root:
 	free(root);
 out_free_id_table:
-	free(f->id_table);
+	free(f->id_table.array);
 out_free_name_table:
-	free(f->name_table);
+	free(f->name_table.array);
 out_free_session:
 	fuse_session_destroy(f->se);
 out_free_fs:
@@ -3982,10 +4091,10 @@ void fuse_destroy(struct fuse *f)
 		memset(c, 0, sizeof(*c));
 		c->ctx.fuse = f;
 
-		for (i = 0; i < f->id_table_size; i++) {
+		for (i = 0; i < f->id_table.size; i++) {
 			struct node *node;
 
-			for (node = f->id_table[i]; node != NULL;
+			for (node = f->id_table.array[i]; node != NULL;
 			     node = node->id_next) {
 				if (node->is_hidden) {
 					char *path;
@@ -3997,17 +4106,18 @@ void fuse_destroy(struct fuse *f)
 			}
 		}
 	}
-	for (i = 0; i < f->id_table_size; i++) {
+	for (i = 0; i < f->id_table.size; i++) {
 		struct node *node;
 		struct node *next;
 
-		for (node = f->id_table[i]; node != NULL; node = next) {
+		for (node = f->id_table.array[i]; node != NULL; node = next) {
 			next = node->id_next;
 			free_node(node);
 		}
 	}
-	free(f->id_table);
-	free(f->name_table);
+
+	free(f->id_table.array);
+	free(f->name_table.array);
 	pthread_mutex_destroy(&f->lock);
 	fuse_session_destroy(f->se);
 	free(f->conf.modules);
