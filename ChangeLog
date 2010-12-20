@@ -1,3 +1,7 @@
+2010-12-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Highlevel lib: allow hash tables to shrink
+
 2010-12-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Highlevel lib: use dynamically resized hash table for looking up

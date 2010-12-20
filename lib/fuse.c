@@ -39,6 +39,8 @@
 #define FUSE_UNKNOWN_INO 0xffffffff
 #define OFFSET_MAX 0x7fffffffffffffffLL
 
+#define NODE_TABLE_MIN_SIZE 8192
+
 struct fuse_config {
 	unsigned int uid;
 	unsigned int gid;
@@ -304,6 +306,48 @@ static void free_node(struct node *node)
 	free(node);
 }
 
+static void node_table_reduce(struct node_table *t)
+{
+	size_t newsize = t->size / 2;
+	void *newarray;
+
+	if (newsize < NODE_TABLE_MIN_SIZE)
+		return;
+
+	newarray = realloc(t->array, sizeof(struct node *) * newsize);
+	if (newarray != NULL)
+		t->array = newarray;
+
+	t->size = newsize;
+	t->split = t->size / 2;
+}
+
+static void remerge_id(struct fuse *f)
+{
+	struct node_table *t = &f->id_table;
+	int iter;
+
+	if (t->split == 0)
+		node_table_reduce(t);
+
+	for (iter = 4; t->split > 0 && iter; iter--) {
+		struct node **upper;
+
+		t->split--;
+		upper = &t->array[t->split + t->size / 2];
+		if (*upper) {
+			struct node **nodep;
+
+			for (nodep = &t->array[t->split]; *nodep;
+			     nodep = &(*nodep)->id_next);
+
+			*nodep = *upper;
+			*upper = NULL;
+			break;
+		}
+	}
+}
+
 static void unhash_id(struct fuse *f, struct node *node)
 {
 	struct node **nodep = &f->id_table.array[id_hash(f, node->nodeid)];
@@ -312,6 +356,9 @@ static void unhash_id(struct fuse *f, struct node *node)
 		if (*nodep == node) {
 			*nodep = node->id_next;
 			f->id_table.use--;
+
+			if(f->id_table.use < f->id_table.size / 4)
+				remerge_id(f);
 			return;
 		}
 }
@@ -392,6 +439,32 @@ static size_t name_hash(struct fuse *f, fuse_ino_t parent,
 
 static void unref_node(struct fuse *f, struct node *node);
 
+static void remerge_name(struct fuse *f)
+{
+	struct node_table *t = &f->name_table;
+	int iter;
+
+	if (t->split == 0)
+		node_table_reduce(t);
+
+	for (iter = 4; t->split > 0 && iter; iter--) {
+		struct node **upper;
+
+		t->split--;
+		upper = &t->array[t->split + t->size / 2];
+		if (*upper) {
+			struct node **nodep;
+
+			for (nodep = &t->array[t->split]; *nodep;
+			     nodep = &(*nodep)->name_next);
+
+			*nodep = *upper;
+			*upper = NULL;
+			break;
+		}
+	}
+}
+
 static void unhash_name(struct fuse *f, struct node *node)
 {
 	if (node->name) {
@@ -407,6 +480,9 @@ static void unhash_name(struct fuse *f, struct node *node)
 				node->name = NULL;
 				node->parent = NULL;
 				f->name_table.use--;
+
+				if (f->name_table.use < f->name_table.size / 4)
+					remerge_name(f);
 				return;
 			}
 		fprintf(stderr,
@@ -3910,7 +3986,7 @@ struct fuse_fs *fuse_fs_new(const struct fuse_operations *op, size_t op_size,
 
 static int node_table_init(struct node_table *t)
 {
-	t->size = 8192;
+	t->size = NODE_TABLE_MIN_SIZE;
 	t->array = (struct node **) calloc(1, sizeof(struct node *) * t->size);
 	if (t->array == NULL) {
 		fprintf(stderr, "fuse: memory allocation failed\n");
