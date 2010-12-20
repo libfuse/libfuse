@@ -136,6 +136,7 @@ struct node {
 	unsigned int cache_valid : 1;
 	int treelock;
 	int ticket;
+	char inline_name[32];
 };
 
 struct fuse_dh {
@@ -302,7 +303,8 @@ static struct node *get_node(struct fuse *f, fuse_ino_t nodeid)
 
 static void free_node(struct node *node)
 {
-	free(node->name);
+	if (node->name != node->inline_name)
+		free(node->name);
 	free(node);
 }
 
@@ -476,7 +478,8 @@ static void unhash_name(struct fuse *f, struct node *node)
 				*nodep = node->name_next;
 				node->name_next = NULL;
 				unref_node(f, node->parent);
-				free(node->name);
+				if (node->name != node->inline_name)
+					free(node->name);
 				node->name = NULL;
 				node->parent = NULL;
 				f->name_table.use--;
@@ -526,9 +529,14 @@ static int hash_name(struct fuse *f, struct node *node, fuse_ino_t parentid,
 {
 	size_t hash = name_hash(f, parentid, name);
 	struct node *parent = get_node(f, parentid);
-	node->name = strdup(name);
-	if (node->name == NULL)
-		return -1;
+	if (strlen(name) < sizeof(node->inline_name)) {
+		strcpy(node->inline_name, name);
+		node->name = node->inline_name;
+	} else {
+		node->name = strdup(name);
+		if (node->name == NULL)
+			return -1;
+	}
 
 	parent->refctr ++;
 	node->parent = parent;
@@ -4103,16 +4111,13 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 		goto out_free_id_table;
 	}
 
-	root->name = strdup("/");
-	if (root->name == NULL) {
-		fprintf(stderr, "fuse: memory allocation failed\n");
-		goto out_free_root;
-	}
+	strcpy(root->inline_name, "/");
+	root->name = root->inline_name;
 
 	if (f->conf.intr &&
 	    fuse_init_intr_signal(f->conf.intr_signal,
 				  &f->intr_installed) == -1)
-		goto out_free_root_name;
+		goto out_free_root;
 
 	root->parent = NULL;
 	root->nodeid = FUSE_ROOT_ID;
@@ -4123,8 +4128,6 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 
 	return f;
 
-out_free_root_name:
-	free(root->name);
 out_free_root:
 	free(root);
 out_free_id_table:
