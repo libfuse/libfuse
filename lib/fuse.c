@@ -33,6 +33,13 @@
 #include <sys/param.h>
 #include <sys/uio.h>
 #include <sys/time.h>
+#include <sys/mman.h>
+
+#define FUSE_NODE_SLAB 1
+
+#ifndef MAP_ANONYMOUS
+#undef FUSE_NODE_SLAB
+#endif
 
 #define FUSE_DEFAULT_INTR_SIGNAL SIGUSR1
 
@@ -93,6 +100,17 @@ struct node_table {
 	size_t split;
 };
 
+struct list_head {
+	struct list_head *next;
+	struct list_head *prev;
+};
+
+struct node_slab {
+	struct list_head list;  /* must be the first member */
+	struct list_head freelist;
+	int used;
+};
+
 struct fuse {
 	struct fuse_session *se;
 	struct node_table name_table;
@@ -107,6 +125,9 @@ struct fuse {
 	int nullpath_ok;
 	int curr_ticket;
 	struct lock_queue_element *lockq;
+	int pagesize;
+	struct list_head partial_slabs;
+	struct list_head full_slabs;
 };
 
 struct lock {
@@ -267,6 +288,149 @@ static void fuse_put_module(struct fuse_module *m)
 	pthread_mutex_unlock(&fuse_context_lock);
 }
 
+static void init_list_head(struct list_head *list)
+{
+	list->next = list;
+	list->prev = list;
+}
+
+static int list_empty(const struct list_head *head)
+{
+	return head->next == head;
+}
+
+#ifdef FUSE_NODE_SLAB
+static void list_add(struct list_head *new, struct list_head *prev,
+		     struct list_head *next)
+{
+	next->prev = new;
+	new->next = next;
+	new->prev = prev;
+	prev->next = new;
+}
+
+static void list_add_head(struct list_head *new, struct list_head *head)
+{
+	list_add(new, head, head->next);
+}
+
+static void list_add_tail(struct list_head *new, struct list_head *head)
+{
+	list_add(new, head->prev, head);
+}
+
+static inline void list_del(struct list_head *entry)
+{
+	struct list_head *prev = entry->prev;
+	struct list_head *next = entry->next;
+
+	next->prev = prev;
+	prev->next = next;
+}
+
+static struct node_slab *list_to_slab(struct list_head *head)
+{
+	return (struct node_slab *) head;
+}
+
+static struct node_slab *node_to_slab(struct fuse *f, struct node *node)
+{
+	return (struct node_slab *) (((uintptr_t) node) & ~((uintptr_t) f->pagesize - 1));
+}
+
+static int alloc_slab(struct fuse *f)
+{
+	void *mem;
+	struct node_slab *slab;
+	char *start;
+	size_t num;
+	size_t i;
+
+	mem = mmap(NULL, f->pagesize, PROT_READ | PROT_WRITE,
+		   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+	if (mem == MAP_FAILED)
+		return -1;
+
+	slab = mem;
+	init_list_head(&slab->freelist);
+	slab->used = 0;
+	num = (f->pagesize - sizeof(struct node_slab)) / sizeof(struct node);
+
+	start = (char *) mem + f->pagesize - num * sizeof(struct node);
+	for (i = 0; i < num; i++) {
+		struct list_head *n;
+
+		n = (struct list_head *) (start + i * sizeof(struct node));
+		list_add_tail(n, &slab->freelist);
+	}
+	list_add_tail(&slab->list, &f->partial_slabs);
+
+	return 0;
+}
+
+static struct node *alloc_node(struct fuse *f)
+{
+	struct node_slab *slab;
+	struct list_head *node;
+
+	if (list_empty(&f->partial_slabs)) {
+		int res = alloc_slab(f);
+		if (res != 0)
+			return NULL;
+	}
+	slab = list_to_slab(f->partial_slabs.next);
+	slab->used++;
+	node = slab->freelist.next;
+	list_del(node);
+	if (list_empty(&slab->freelist)) {
+		list_del(&slab->list);
+		list_add_tail(&slab->list, &f->full_slabs);
+	}
+
+	return (struct node *) node;
+}
+
+static void free_slab(struct fuse *f, struct node_slab *slab)
+{
+	int res;
+
+	list_del(&slab->list);
+	res = munmap(slab, f->pagesize);
+	if (res == -1)
+		fprintf(stderr, "fuse warning: munmap(%p) failed\n", slab);
+}
+
+static void free_node_mem(struct fuse *f, struct node *node)
+{
+	struct node_slab *slab = node_to_slab(f, node);
+	struct list_head *n = (struct list_head *) node;
+
+	slab->used--;
+	if (slab->used) {
+		if (list_empty(&slab->freelist)) {
+			list_del(&slab->list);
+			list_add_tail(&slab->list, &f->partial_slabs);
+		}
+		list_add_head(n, &slab->freelist);
+	} else {
+		free_slab(f, slab);
+	}
+}
+#else
+static struct node *alloc_node(struct fuse *f)
+{
+	(void) f;
+	return (struct node *) calloc(1, sizeof(struct node));
+}
+
+static void free_node_mem(struct fuse *f, struct node *node)
+{
+	(void) f;
+	free(node);
+}
+#endif
+
 static size_t id_hash(struct fuse *f, fuse_ino_t ino)
 {
 	uint64_t hash = ((uint32_t) ino * 2654435761) % f->id_table.size;
@@ -301,11 +465,11 @@ static struct node *get_node(struct fuse *f, fuse_ino_t nodeid)
 	return node;
 }
 
-static void free_node(struct node *node)
+static void free_node(struct fuse *f, struct node *node)
 {
 	if (node->name != node->inline_name)
 		free(node->name);
-	free(node);
+	free_node_mem(f, node);
 }
 
 static void node_table_reduce(struct node_table *t)
@@ -332,7 +496,7 @@ static void remerge_id(struct fuse *f)
 	if (t->split == 0)
 		node_table_reduce(t);
 
-	for (iter = 4; t->split > 0 && iter; iter--) {
+	for (iter = 8; t->split > 0 && iter; iter--) {
 		struct node **upper;
 
 		t->split--;
@@ -449,7 +613,7 @@ static void remerge_name(struct fuse *f)
 	if (t->split == 0)
 		node_table_reduce(t);
 
-	for (iter = 4; t->split > 0 && iter; iter--) {
+	for (iter = 8; t->split > 0 && iter; iter--) {
 		struct node **upper;
 
 		t->split--;
@@ -559,7 +723,7 @@ static void delete_node(struct fuse *f, struct node *node)
 	assert(node->treelock == 0);
 	assert(!node->name);
 	unhash_id(f, node);
-	free_node(node);
+	free_node(f, node);
 }
 
 static void unref_node(struct fuse *f, struct node *node)
@@ -606,7 +770,7 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 	else
 		node = lookup_node(f, parent, name);
 	if (node == NULL) {
-		node = (struct node *) calloc(1, sizeof(struct node));
+		node = alloc_node(f);
 		if (node == NULL)
 			goto out_err;
 
@@ -620,7 +784,7 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 		node->treelock = 0;
 		node->ticket = 0;
 		if (hash_name(f, node, parent, name) == -1) {
-			free(node);
+			free_node(f, node);
 			node = NULL;
 			goto out_err;
 		}
@@ -4044,6 +4208,10 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	f->conf.negative_timeout = 0.0;
 	f->conf.intr_signal = FUSE_DEFAULT_INTR_SIGNAL;
 
+	f->pagesize = getpagesize();
+	init_list_head(&f->partial_slabs);
+	init_list_head(&f->full_slabs);
+
 	if (fuse_opt_parse(args, &f->conf, fuse_lib_opts,
 			   fuse_lib_opt_proc) == -1)
 		goto out_free_fs;
@@ -4105,7 +4273,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 
 	fuse_mutex_init(&f->lock);
 
-	root = (struct node *) calloc(1, sizeof(struct node));
+	root = alloc_node(f);
 	if (root == NULL) {
 		fprintf(stderr, "fuse: memory allocation failed\n");
 		goto out_free_id_table;
@@ -4191,9 +4359,12 @@ void fuse_destroy(struct fuse *f)
 
 		for (node = f->id_table.array[i]; node != NULL; node = next) {
 			next = node->id_next;
-			free_node(node);
+			free_node(f, node);
+			f->id_table.use--;
 		}
 	}
+	assert(list_empty(&f->partial_slabs));
+	assert(list_empty(&f->full_slabs));
 
 	free(f->id_table.array);
 	free(f->name_table.array);

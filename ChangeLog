@@ -2,6 +2,10 @@
 
 	* Highlevel lib: allow hash tables to shrink
 
+	* Highlevel lib: add slab allocation for node cache.  This will
+	allow the memory used by the filesystem to grow and shrink
+	depending on how many inodes are currently cached.
+
 2010-12-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Highlevel lib: use dynamically resized hash table for looking up
