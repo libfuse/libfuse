@@ -1,5 +1,9 @@
 2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.8.6
+
+2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Always call umount with --no-canonicalize --fake options to
 	prevent symlink attacks at umount.  util-linux >= 2.18 or a
 	suitably patched version is required.
