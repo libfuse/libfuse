@@ -4,6 +4,9 @@
 	prevent symlink attacks at umount.  util-linux >= 2.18 or a
 	suitably patched version is required.
 
+	* Always call mount with --no-canonicalize option to prevent
+	symlink attacks on mount.
+
 2010-11-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Open /dev/null for write instead of read for redirecting stdout
