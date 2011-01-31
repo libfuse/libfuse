@@ -3,6 +3,8 @@
 	* In case of failure to add to /etc/mtab use same mountpoint for
 	cleanup as for mounting.  Reported by Marc Deslauriers
 
+	* fusermount: chdir to / before performing mount/umount
+
 2010-12-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Highlevel lib: allow hash tables to shrink

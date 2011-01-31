@@ -999,7 +999,7 @@ static int check_version(const char *dev)
 	return 0;
 }
 
-static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd,
+static int check_perm(const char **mntp, struct stat *stbuf,
 		      int *mountpoint_fd, int *isdir)
 {
 	int res;
@@ -1019,13 +1019,6 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *currdir_fd,
 
 	if (S_ISDIR(stbuf->st_mode)) {
 		*isdir = 1;
-		*currdir_fd = open(".", O_RDONLY);
-		if (*currdir_fd == -1) {
-			fprintf(stderr,
-				"%s: failed to open current directory: %s\n",
-				progname, strerror(errno));
-			return -1;
-		}
 		*mountpoint_fd = open(mnt, O_RDONLY);
 		if (*mountpoint_fd == -1) {
 			fprintf(stderr, "%s: failed to open %s: %s\n",
@@ -1159,7 +1152,6 @@ static int mount_fuse(const char *mnt, const char *opts)
 	char *source = NULL;
 	char *mnt_opts = NULL;
 	const char *real_mnt = mnt;
-	int currdir_fd = -1;
 	int mountpoint_fd = -1;
 	int isdir = 0;
 
@@ -1181,8 +1173,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 
 	res = check_version(dev);
 	if (res != -1) {
-		res = check_perm(&real_mnt, &stbuf, &currdir_fd,
-				 &mountpoint_fd, &isdir);
+		res = check_perm(&real_mnt, &stbuf, &mountpoint_fd, &isdir);
 		restore_privs();
 		if (res != -1)
 			res = do_mount(real_mnt, &type, stbuf.st_mode & S_IFMT,
@@ -1191,10 +1182,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 	} else
 		restore_privs();
 
-	if (currdir_fd != -1) {
-		fchdir(currdir_fd);
-		close(currdir_fd);
-	}
+	chdir("/");
 	if (mountpoint_fd != -1)
 		fcntl(mountpoint_fd, F_SETFD, FD_CLOEXEC);
 
@@ -1370,6 +1358,13 @@ int main(int argc, char *argv[])
 
 	drop_privs();
 	mnt = fuse_mnt_resolve_path(progname, origmnt);
+	if (mnt != NULL) {
+		res = chdir("/");
+		if (res == -1) {
+			fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
+			exit(1);
+		}
+	}
 	restore_privs();
 	if (mnt == NULL)
 		exit(1);
