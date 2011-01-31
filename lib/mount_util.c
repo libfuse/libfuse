@@ -73,70 +73,6 @@ static int mtab_needs_update(const char *mnt)
 }
 #endif /* __NetBSD__ */
 
-static int add_mount_legacy(const char *progname, const char *fsname,
-			    const char *mnt, const char *type, const char *opts)
-{
-	int res;
-	int status;
-	sigset_t blockmask;
-	sigset_t oldmask;
-
-	sigemptyset(&blockmask);
-	sigaddset(&blockmask, SIGCHLD);
-	res = sigprocmask(SIG_BLOCK, &blockmask, &oldmask);
-	if (res == -1) {
-		fprintf(stderr, "%s: sigprocmask: %s\n", progname, strerror(errno));
-		return -1;
-	}
-
-	res = fork();
-	if (res == -1) {
-		fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
-		goto out_restore;
-	}
-	if (res == 0) {
-		char templ[] = "/tmp/fusermountXXXXXX";
-		char *tmp;
-
-		sigprocmask(SIG_SETMASK, &oldmask, NULL);
-		setuid(geteuid());
-
-		/*
-		 * hide in a directory, where mount isn't able to resolve
-		 * fsname as a valid path
-		 */
-		tmp = mkdtemp(templ);
-		if (!tmp) {
-			fprintf(stderr,
-				"%s: failed to create temporary directory\n",
-				progname);
-			exit(1);
-		}
-		if (chdir(tmp)) {
-			fprintf(stderr, "%s: failed to chdir to %s: %s\n",
-				progname, tmp, strerror(errno));
-			exit(1);
-		}
-		rmdir(tmp);
-		execl("/bin/mount", "/bin/mount", "-i", "-f", "-t", type,
-		      "-o", opts, fsname, mnt, NULL);
-		fprintf(stderr, "%s: failed to execute /bin/mount: %s\n",
-			progname, strerror(errno));
-		exit(1);
-	}
-	res = waitpid(res, &status, 0);
-	if (res == -1)
-		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
-
-	if (status != 0)
-		res = -1;
-
- out_restore:
-	sigprocmask(SIG_SETMASK, &oldmask, NULL);
-
-	return res;
-}
-
 static int add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts)
 {
@@ -191,16 +127,10 @@ static int add_mount(const char *progname, const char *fsname,
 int fuse_mnt_add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts)
 {
-	int res;
-
 	if (!mtab_needs_update(mnt))
 		return 0;
 
-	res = add_mount(progname, fsname, mnt, type, opts);
-	if (res == -1)
-		res = add_mount_legacy(progname, fsname, mnt, type, opts);
-
-	return res;
+	return add_mount(progname, fsname, mnt, type, opts);
 }
 
 static int exec_umount(const char *progname, const char *rel_mnt, int lazy)

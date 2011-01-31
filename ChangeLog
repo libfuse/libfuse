@@ -5,6 +5,9 @@
 
 	* fusermount: chdir to / before performing mount/umount
 
+	* fusermount: only allow mount and umount if util-linux supports
+	--no-canonicalize
+
 2010-12-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Highlevel lib: allow hash tables to shrink

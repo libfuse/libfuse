@@ -33,8 +33,6 @@ AC_ARG_ENABLE(example,
 	[  --enable-example        Compile with examples ])
 AC_ARG_ENABLE(mtab,
 	[  --disable-mtab          Disable and ignore usage of /etc/mtab ])
-AC_ARG_ENABLE(legacy-umount,
-	[  --disable-legacy-umount If umount(8) is util-linux-ng >= 2.18 ])
 
 AC_ARG_WITH(pkgconfigdir,
             [  --with-pkgconfigdir=DIR      pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@],
@@ -55,10 +53,6 @@ if test "$enable_example" != "no"; then
 fi
 if test "$enable_mtab" = "no"; then
 	AC_DEFINE(IGNORE_MTAB, 1, [Don't update /etc/mtab])
-fi
-
-if test "$enable_legacy_umount" != "no"; then
-	AC_DEFINE(LEGACY_UMOUNT, 1, [Enable legacy umount support])
 fi
 
 AC_CHECK_FUNCS([fork setxattr fdatasync])

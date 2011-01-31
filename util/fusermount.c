@@ -382,54 +382,6 @@ static int chdir_to_parent(char *copy, const char **lastp)
 	return 0;
 }
 
-static int unmount_fuse_legacy(const char *mnt, int lazy)
-{
-	char *copy;
-	const char *last;
-	int res;
-
-	copy = strdup(mnt);
-	if (copy == NULL) {
-		fprintf(stderr, "%s: failed to allocate memory\n", progname);
-		return -1;
-	}
-
-	res = chdir_to_parent(copy, &last);
-	if (res == -1)
-		goto out;
-
-	res = check_is_mount(last, mnt);
-	if (res == -1)
-		goto out;
-
-	res = fuse_mnt_umount(progname, mnt, last, lazy);
-
-out:
-	free(copy);
-
-	return res;
-}
-
-static int unmount_fuse_nofollow(const char *mnt, int quiet, int lazy)
-{
-	int res;
-	int umount_flags = UMOUNT_NOFOLLOW;
-
-	if (lazy)
-		umount_flags |= UMOUNT_DETACH;
-
-	res = umount2(mnt, umount_flags);
-	if (res == -1) {
-		if (!quiet) {
-			fprintf(stderr, "%s: failed to unmount %s: %s\n",
-				progname, mnt, strerror(errno));
-		}
-		return -1;
-	}
-
-	return fuse_mnt_remove_mount(progname, mnt);
-}
-
 /* Check whether the kernel supports UMOUNT_NOFOLLOW flag */
 static int umount_nofollow_support(void)
 {
@@ -444,91 +396,12 @@ static int umount_nofollow_support(void)
 	return 1;
 }
 
-#ifdef LEGACY_UMOUNT
-/* Check if umount(8) supports "--fake" and "--no-canonicalize" options */
-static int umount_fake_support(void)
-{
-	int res;
-	int status;
-	sigset_t blockmask;
-	sigset_t oldmask;
-	int pip[2];
-	char buf[1024];
-	char *s;
-	unsigned majver;
-	unsigned minver;
-	int supported = 0;
-	int pid;
-
-	res = pipe(pip);
-	if (res == -1)
-		return 0;
-
-	sigemptyset(&blockmask);
-	sigaddset(&blockmask, SIGCHLD);
-	res = sigprocmask(SIG_BLOCK, &blockmask, &oldmask);
-	if (res == -1)
-		goto out_close;
-
-	pid = fork();
-	if (pid == -1)
-		goto out_restore;
-
-	if (pid == 0) {
-		int nullfd;
-
-		close(pip[0]);
-		dup2(pip[1], 1);
-		if (pip[1] != 1)
-			close(pip[1]);
-		nullfd = open("/dev/null", O_WRONLY);
-		dup2(nullfd, 2);
-		sigprocmask(SIG_SETMASK, &oldmask, NULL);
-		setuid(getuid());
-		execl("/bin/umount", "/bin/umount", "--version", NULL);
-		exit(1);
-	}
-	res = read(pip[0], buf, sizeof(buf));
-	if (res == -1 || res == sizeof(buf))
-		buf[0] = '\0';
-	else
-		buf[res] = '\0';
-
-	res = waitpid(pid, &status, 0);
-	if (res == -1 || status != 0)
-		goto out_restore;
-
-	s = strstr(buf, "util-linux-ng ");
-	if (s == NULL)
-		goto out_restore;
-
-	s += 14;
-	if (sscanf(s, "%u.%u", &majver, &minver) < 2)
-		goto out_restore;
-
-	if (majver < 2 || (majver == 2 && minver < 18))
-		goto out_restore;
-
-	supported = 1;
-
-out_restore:
-	sigprocmask(SIG_SETMASK, &oldmask, NULL);
-out_close:
-	close(pip[0]);
-	close(pip[1]);
-
-	return supported;
-}
-#else
-static int umount_fake_support(void)
-{
-	return 1;
-}
-#endif
-
 static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 {
 	int res;
+	char *copy;
+	const char *last;
+	int umount_flags = lazy ? UMOUNT_DETACH : 0;
 
 	if (getuid() != 0) {
 		res = may_unmount(mnt, quiet);
@@ -536,12 +409,36 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 			return -1;
 	}
 
-	if (umount_nofollow_support() && umount_fake_support())
-		res = unmount_fuse_nofollow(mnt, quiet, lazy);
-	else
-		res = unmount_fuse_legacy(mnt, lazy);
+	copy = strdup(mnt);
+	if (copy == NULL) {
+		fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		return -1;
+	}
 
-	return res;
+	res = chdir_to_parent(copy, &last);
+	if (res == -1)
+		goto out;
+
+	if (umount_nofollow_support()) {
+		umount_flags |= UMOUNT_NOFOLLOW;
+	} else {
+		res = check_is_mount(last, mnt);
+		if (res == -1)
+			goto out;
+	}
+
+	res = umount2(last, umount_flags);
+	if (res == -1 && !quiet) {
+		fprintf(stderr, "%s: failed to unmount %s: %s\n",
+			progname, mnt, strerror(errno));
+	}
+
+out:
+	chdir("/");
+	if (res == -1)
+		return -1;
+
+	return fuse_mnt_remove_mount(progname, mnt);
 }
 
 static int unmount_fuse(const char *mnt, int quiet, int lazy)
