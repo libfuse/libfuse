@@ -7,6 +7,9 @@
 	* Always call mount with --no-canonicalize option to prevent
 	symlink attacks on mount.
 
+	* In case of failure to add to /etc/mtab use same mountpoint for
+	cleanup as for mounting.  Reported by Marc Deslauriers
+
 2010-11-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Open /dev/null for write instead of read for redirecting stdout
