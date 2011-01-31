@@ -407,8 +407,15 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 	if (res == -1)
 		goto out;
 
-	res = fuse_mnt_umount(progname, mnt, last, lazy);
+	res = umount2(last, lazy ? 2 : 0);
+	if (res == -1 && !quiet) {
+		fprintf(stderr,
+			"%s: failed to unmount %s: %s\n",
+			progname, mnt, strerror(errno));
+	}
 
+	if (res == 0)
+		res = fuse_mnt_remove_mount(progname, mnt);
 out:
 	free(copy);
 	if (currdir_fd != -1) {

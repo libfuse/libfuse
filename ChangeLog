@@ -1,3 +1,9 @@
+2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Always call umount with --no-canonicalize --fake options to
+	prevent symlink attacks at umount.  util-linux >= 2.18 or a
+	suitably patched version is required.
+
 2010-11-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Open /dev/null for write instead of read for redirecting stdout
