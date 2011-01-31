@@ -1,3 +1,8 @@
+2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
+
+	* In case of failure to add to /etc/mtab use same mountpoint for
+	cleanup as for mounting.  Reported by Marc Deslauriers
+
 2010-12-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Highlevel lib: allow hash tables to shrink
