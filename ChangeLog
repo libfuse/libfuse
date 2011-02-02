@@ -1,3 +1,11 @@
+2011-02-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: In fuse_session_loop_mt() don't pause when exiting the
+	worker threads.  The pause() was added in 2.2.1 to prevent
+	segfault on pthread_cancel() on an exited, detached thread.  Now
+	worker threads are not detached and pthread_cancel() should work
+	fine even after the thread exited.  Reported by Boris Protopopov
+
 2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
 
 	* In case of failure to add to /etc/mtab use same mountpoint for

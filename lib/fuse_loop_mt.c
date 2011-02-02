@@ -133,8 +133,6 @@ static void *fuse_do_work(void *data)
 	}
 
 	sem_post(&mt->finish);
-	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-	pause();
 
 	return NULL;
 }
