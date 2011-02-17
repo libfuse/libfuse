@@ -4031,6 +4031,7 @@ static void fuse_lib_help(void)
 "    -o negative_timeout=T  cache timeout for deleted names (0.0s)\n"
 "    -o attr_timeout=T      cache timeout for attributes (1.0s)\n"
 "    -o ac_attr_timeout=T   auto cache timeout for attributes (attr_timeout)\n"
+"    -o noforget            remember inode numbers (increases memory use)\n"
 "    -o intr                allow requests to be interrupted\n"
 "    -o intr_signal=NUM     signal to send on interrupt (%i)\n"
 "    -o modules=M1[:M2...]  names of modules to push onto filesystem stack\n"
