@@ -124,8 +124,10 @@ static int lock_umount(void)
 
 static void unlock_umount(int mtablock)
 {
-	lockf(mtablock, F_ULOCK, 0);
-	close(mtablock);
+	if (mtablock >= 0) {
+		lockf(mtablock, F_ULOCK, 0);
+		close(mtablock);
+	}
 }
 
 static int add_mount(const char *source, const char *mnt, const char *type,
