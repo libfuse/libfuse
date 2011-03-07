@@ -2314,7 +2314,7 @@ static struct fuse_context_i *fuse_get_context_internal(void)
 	c = (struct fuse_context_i *) pthread_getspecific(fuse_context_key);
 	if (c == NULL) {
 		c = (struct fuse_context_i *)
-			malloc(sizeof(struct fuse_context_i));
+			calloc(1, sizeof(struct fuse_context_i));
 		if (c == NULL) {
 			/* This is hard to deal with properly, so just
 			   abort.  If memory is so low that the
