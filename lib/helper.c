@@ -227,7 +227,8 @@ static void fuse_unmount_common(const char *mountpoint, struct fuse_chan *ch)
 {
 	int fd = ch ? fuse_chan_fd(ch) : -1;
 	fuse_kern_unmount(mountpoint, fd);
-	fuse_chan_destroy(ch);
+	if (ch)
+		fuse_chan_destroy(ch);
 }
 
 void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
