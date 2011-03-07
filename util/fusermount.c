@@ -248,7 +248,7 @@ static int check_is_mount_child(void *p)
 	}
 
 	count = 0;
-	while ((entp = getmntent(fp)) != NULL)
+	while (getmntent(fp) != NULL)
 		count++;
 	endmntent(fp);
 
