@@ -253,6 +253,7 @@ static int receive_fd(int fd)
 	iov.iov_base = buf;
 	iov.iov_len = 1;
 
+	memset(&msg, 0, sizeof(msg));
 	msg.msg_name = 0;
 	msg.msg_namelen = 0;
 	msg.msg_iov = &iov;
