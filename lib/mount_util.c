@@ -100,8 +100,10 @@ static int add_mount(const char *progname, const char *fsname,
 		 * --no-canonicalize
 		 */
 		int fd = open("/dev/null", O_WRONLY);
-		dup2(fd, 1);
-		dup2(fd, 2);
+		if (fd >= 0) {
+			dup2(fd, 1);
+			dup2(fd, 2);
+		}
 
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
