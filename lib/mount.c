@@ -366,8 +366,10 @@ static int fuse_mount_fusermount(const char *mountpoint, const char *opts,
 
 		if (quiet) {
 			int fd = open("/dev/null", O_RDONLY);
-			dup2(fd, 1);
-			dup2(fd, 2);
+			if (fd != -1) {
+				dup2(fd, 1);
+				dup2(fd, 2);
+			}
 		}
 
 		argv[a++] = FUSERMOUNT_PROG;
