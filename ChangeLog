@@ -8,9 +8,6 @@
 
 2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
 
-	* In case of failure to add to /etc/mtab use same mountpoint for
-	cleanup as for mounting.  Reported by Marc Deslauriers
-
 	* fusermount: chdir to / before performing mount/umount
 
 	* fusermount: only allow mount and umount if util-linux supports

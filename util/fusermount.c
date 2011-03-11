@@ -896,8 +896,7 @@ static int check_version(const char *dev)
 	return 0;
 }
 
-static int check_perm(const char **mntp, struct stat *stbuf,
-		      int *mountpoint_fd, int *isdir)
+static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 {
 	int res;
 	const char *mnt = *mntp;
@@ -915,17 +914,10 @@ static int check_perm(const char **mntp, struct stat *stbuf,
 		return 0;
 
 	if (S_ISDIR(stbuf->st_mode)) {
-		*isdir = 1;
-		*mountpoint_fd = open(mnt, O_RDONLY);
-		if (*mountpoint_fd == -1) {
-			fprintf(stderr, "%s: failed to open %s: %s\n",
-				progname, mnt, strerror(errno));
-			return -1;
-		}
-		res = fchdir(*mountpoint_fd);
+		res = chdir(mnt);
 		if (res == -1) {
 			fprintf(stderr,
-				"%s: failed to fchdir to mountpoint: %s\n",
+				"%s: failed to chdir to mountpoint: %s\n",
 				progname, strerror(errno));
 			return -1;
 		}
@@ -1050,7 +1042,6 @@ static int mount_fuse(const char *mnt, const char *opts)
 	char *mnt_opts = NULL;
 	const char *real_mnt = mnt;
 	int mountpoint_fd = -1;
-	int isdir = 0;
 
 	fd = open_fuse_device(&dev);
 	if (fd == -1)
@@ -1070,7 +1061,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 
 	res = check_version(dev);
 	if (res != -1) {
-		res = check_perm(&real_mnt, &stbuf, &mountpoint_fd, &isdir);
+		res = check_perm(&real_mnt, &stbuf, &mountpoint_fd);
 		restore_privs();
 		if (res != -1)
 			res = do_mount(real_mnt, &type, stbuf.st_mode & S_IFMT,
@@ -1081,36 +1072,21 @@ static int mount_fuse(const char *mnt, const char *opts)
 
 	chdir("/");
 	if (mountpoint_fd != -1)
-		fcntl(mountpoint_fd, F_SETFD, FD_CLOEXEC);
+		close(mountpoint_fd);
 
 	if (res == -1) {
 		close(fd);
-		if (mountpoint_fd != -1)
-			close(mountpoint_fd);
 		return -1;
 	}
 
 	if (geteuid() == 0) {
 		res = add_mount(source, mnt, type, mnt_opts);
 		if (res == -1) {
-			if (isdir && mountpoint_fd != -1) {
-				res = fchdir(mountpoint_fd);
-				if (res == -1) {
-					close(mountpoint_fd);
-					close(fd);
-					return -1;
-				}
-			}
-			umount2(real_mnt, UMOUNT_DETACH); /* lazy umount */
-			if (mountpoint_fd != -1)
-				close(mountpoint_fd);
+			umount2(mnt, UMOUNT_DETACH); /* lazy umount */
 			close(fd);
 			return -1;
 		}
 	}
-
-	if (mountpoint_fd != -1)
-		close(mountpoint_fd);
 
 	free(source);
 	free(type);
