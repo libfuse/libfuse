@@ -1082,7 +1082,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 	if (geteuid() == 0) {
 		res = add_mount(source, mnt, type, mnt_opts);
 		if (res == -1) {
-			umount2(mnt, UMOUNT_DETACH); /* lazy umount */
+			/* Can't clean up mount in a non-racy way */
 			close(fd);
 			return -1;
 		}

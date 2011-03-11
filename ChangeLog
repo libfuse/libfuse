@@ -1,3 +1,8 @@
+2011-03-11  Miklos Szeredi <miklos@szeredi.hu>
+
+	* In case of failure to add to /etc/mtab don't umount.  Reported
+	by Marc Deslauriers
+
 2011-02-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: In fuse_session_loop_mt() don't pause when exiting the
