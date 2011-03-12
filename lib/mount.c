@@ -68,6 +68,7 @@ struct mount_opts {
 	int ishelp;
 	int flags;
 	int nonempty;
+	int auto_unmount;
 	int blkdev;
 	char *fsname;
 	char *subtype;
@@ -84,11 +85,13 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_MOUNT_OPT("allow_root",		allow_root),
 	FUSE_MOUNT_OPT("nonempty",		nonempty),
 	FUSE_MOUNT_OPT("blkdev",		blkdev),
+	FUSE_MOUNT_OPT("auto_unmount",		auto_unmount),
 	FUSE_MOUNT_OPT("fsname=%s",		fsname),
 	FUSE_MOUNT_OPT("subtype=%s",		subtype),
 	FUSE_OPT_KEY("allow_other",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("allow_root",		KEY_ALLOW_ROOT),
 	FUSE_OPT_KEY("nonempty",		KEY_FUSERMOUNT_OPT),
+	FUSE_OPT_KEY("auto_unmount",		KEY_FUSERMOUNT_OPT),
 	FUSE_OPT_KEY("blkdev",			KEY_FUSERMOUNT_OPT),
 	FUSE_OPT_KEY("fsname=",			KEY_FUSERMOUNT_OPT),
 	FUSE_OPT_KEY("subtype=",		KEY_SUBTYPE_OPT),
@@ -124,6 +127,7 @@ static void mount_help(void)
 	fprintf(stderr,
 "    -o allow_other         allow access to other users\n"
 "    -o allow_root          allow access to root\n"
+"    -o auto_unmount        auto unmount on process termination\n"
 "    -o nonempty            allow mounts over non-empty file/dir\n"
 "    -o default_permissions enable permission checking by kernel\n"
 "    -o fsname=NAME         set filesystem name\n"
@@ -334,8 +338,8 @@ void fuse_unmount_compat22(const char *mountpoint)
 	fuse_kern_unmount(mountpoint, -1);
 }
 
-static int fuse_mount_fusermount(const char *mountpoint, const char *opts,
-				 int quiet)
+static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
+		const char *opts, int quiet)
 {
 	int fds[2], pid;
 	int res;
@@ -393,15 +397,24 @@ static int fuse_mount_fusermount(const char *mountpoint, const char *opts,
 
 	close(fds[0]);
 	rv = receive_fd(fds[1]);
-	close(fds[1]);
-	waitpid(pid, NULL, 0); /* bury zombie */
+
+	if (!mo->auto_unmount) {
+		/* with auto_unmount option fusermount will not exit until 
+		   this socket is closed */
+		close(fds[1]);
+		waitpid(pid, NULL, 0); /* bury zombie */
+	}
 
 	return rv;
 }
 
 int fuse_mount_compat22(const char *mountpoint, const char *opts)
 {
-	return fuse_mount_fusermount(mountpoint, opts, 0);
+	struct mount_opts mo;
+	memset(&mo, 0, sizeof(mo));
+	mo.flags = MS_NOSUID | MS_NODEV;
+
+	return fuse_mount_fusermount(mountpoint, &mo, opts, 0);
 }
 
 static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
@@ -432,6 +445,12 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 					   stbuf.st_size);
 		if (res == -1)
 			return -1;
+	}
+
+	if (mo->auto_unmount) {
+		/* Tell the caller to fallback to fusermount because
+		   auto-unmount does not work otherwise. */
+		return -2;
 	}
 
 	fd = open(devname, O_RDWR);
@@ -591,13 +610,13 @@ int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
 				goto out;
 			}
 
-			res = fuse_mount_fusermount(mountpoint, tmp_opts, 1);
+			res = fuse_mount_fusermount(mountpoint, &mo, tmp_opts, 1);
 			free(tmp_opts);
 			if (res == -1)
-				res = fuse_mount_fusermount(mountpoint,
+				res = fuse_mount_fusermount(mountpoint, &mo,
 							    mnt_opts, 0);
 		} else {
-			res = fuse_mount_fusermount(mountpoint, mnt_opts, 0);
+			res = fuse_mount_fusermount(mountpoint, &mo, mnt_opts, 0);
 		}
 	}
 out:
