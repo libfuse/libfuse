@@ -60,6 +60,8 @@ static const char *progname;
 static int user_allow_other = 0;
 static int mount_max = 1000;
 
+static int auto_unmount = 0;
+
 static const char *get_user_name(void)
 {
 	struct passwd *pw = getpwuid(getuid());
@@ -746,6 +748,8 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 			blkdev = 1;
 		} else if (opt_eq(s, len, "nonempty")) {
 			check_empty = 0;
+		} else if (opt_eq(s, len, "auto_unmount")) {
+			auto_unmount = 1;
 		} else if (!begins_with(s, "fd=") &&
 			   !begins_with(s, "rootmode=") &&
 			   !begins_with(s, "user_id=") &&
@@ -1158,6 +1162,7 @@ static void show_version(void)
 
 int main(int argc, char *argv[])
 {
+	sigset_t sigset;
 	int ch;
 	int fd;
 	int res;
@@ -1246,20 +1251,8 @@ int main(int argc, char *argv[])
 		exit(1);
 
 	umask(033);
-	if (unmount) {
-		if (geteuid() == 0)
-			res = unmount_fuse(mnt, quiet, lazy);
-		else {
-			res = umount2(mnt, lazy ? UMOUNT_DETACH : 0);
-			if (res == -1 && !quiet)
-				fprintf(stderr,
-					"%s: failed to unmount %s: %s\n",
-					progname, mnt, strerror(errno));
-		}
-		if (res == -1)
-			exit(1);
-		return 0;
-	}
+	if (unmount)
+		goto do_unmount;
 
 	commfd = getenv(FUSE_COMMFD_ENV);
 	if (commfd == NULL) {
@@ -1276,6 +1269,48 @@ int main(int argc, char *argv[])
 	res = send_fd(cfd, fd);
 	if (res == -1)
 		exit(1);
+	close(fd);
 
+	if (!auto_unmount)
+		return 0;
+
+	/* Decome a daemon and wait for the parent to exit or die.
+	   ie For the control socket to get closed. 
+	   btw We don't want to use daemon() function here because
+	   it forks and messes with the file descriptors. */
+	setsid();
+	chdir("/");
+
+	sigfillset(&sigset);
+	sigprocmask(SIG_BLOCK, &sigset, NULL);
+
+	lazy  = 1;
+	quiet = 1;
+
+	while (1) {
+		unsigned char buf[16];
+		int n = recv(cfd, buf, sizeof(buf), 0);
+		if (!n)
+			break;
+
+		if (n < 0) {
+			if (errno == EINTR)
+				continue;
+			break;
+		}
+	}
+
+do_unmount:
+	if (geteuid() == 0)
+		res = unmount_fuse(mnt, quiet, lazy);
+	else {
+		res = umount2(mnt, lazy ? UMOUNT_DETACH : 0);
+		if (res == -1 && !quiet)
+			fprintf(stderr,
+				"%s: failed to unmount %s: %s\n",
+				progname, mnt, strerror(errno));
+	}
+	if (res == -1)
+		exit(1);
 	return 0;
 }
