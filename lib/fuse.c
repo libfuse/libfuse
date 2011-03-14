@@ -1071,9 +1071,11 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 	err = try_get_path(f, nodeid1, name1, path1, wnode1, ticket);
 	if (!err) {
 		err = try_get_path(f, nodeid2, name2, path2, wnode2, ticket);
-		if (err)
+		if (err) {
 			unlock_path(f, nodeid1, wnode1 ? *wnode1 : NULL, NULL,
 				    ticket);
+			free(path1);
+		}
 	}
 	return err;
 }
