@@ -185,14 +185,18 @@ int main(int argc, char *argv[])
 		options = add_option("suid", options);
 
 	if (!type) {
-		type = xstrdup(source);
-		source = strchr(type, '#');
-		if (source)
-			*source++ = '\0';
-
-		if (!type[0]) {
-			fprintf(stderr, "%s: empty filesystem type\n",
-				progname);
+		if (source) {
+			type = xstrdup(source);
+			source = strchr(type, '#');
+			if (source)
+				*source++ = '\0';
+			if (!type[0]) {
+				fprintf(stderr, "%s: empty filesystem type\n",
+					progname);
+				exit(1);
+			}
+		} else {
+			fprintf(stderr, "%s: empty source\n", progname);
 			exit(1);
 		}
 	}
