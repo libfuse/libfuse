@@ -1054,8 +1054,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 		int mount_count = count_fuse_fs();
 		if (mount_count >= mount_max) {
 			fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in /etc/fuse.conf\n", progname);
-			close(fd);
-			return -1;
+			goto fail_close_fd;
 		}
 	}
 
@@ -1074,26 +1073,29 @@ static int mount_fuse(const char *mnt, const char *opts)
 	if (mountpoint_fd != -1)
 		close(mountpoint_fd);
 
-	if (res == -1) {
-		close(fd);
-		return -1;
-	}
+	if (res == -1)
+		goto fail_close_fd;
 
 	if (geteuid() == 0) {
 		res = add_mount(source, mnt, type, mnt_opts);
 		if (res == -1) {
 			/* Can't clean up mount in a non-racy way */
-			close(fd);
-			return -1;
+			goto fail_close_fd;
 		}
 	}
 
+out_free:
 	free(source);
 	free(type);
 	free(mnt_opts);
 	free(dev);
 
 	return fd;
+
+fail_close_fd:
+	close(fd);
+	fd = -1;
+	goto out_free;
 }
 
 static int send_fd(int sock_fd, int fd)
