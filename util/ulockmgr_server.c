@@ -366,8 +366,10 @@ int main(int argc, char *argv[])
 	}
 	cfd = 4;
 	nullfd = open("/dev/null", O_RDWR);
-	dup2(nullfd, 0);
-	dup2(nullfd, 1);
+	if (nullfd >= 0) {
+		dup2(nullfd, 0);
+		dup2(nullfd, 1);
+	}
 	close(3);
 	closefrom(5);
 	while (1) {
