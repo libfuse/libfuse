@@ -2203,10 +2203,9 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 			newnode = lookup_node(f, dir, newname);
 		} while(newnode);
 
-		try_get_path(f, dir, newname, &newpath, NULL, 0);
+		res = try_get_path(f, dir, newname, &newpath, NULL, 0);
 		pthread_mutex_unlock(&f->lock);
-
-		if (!newpath)
+		if (res)
 			break;
 
 		res = fuse_fs_getattr(f->fs, newpath, &buf);
