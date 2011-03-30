@@ -845,15 +845,14 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 			fprintf(stderr, "%s: mount failed: %s\n", progname,
 				strerror(errno_save));
 		goto err;
-	} else {
-		*sourcep = source;
-		*typep = type;
-		*mnt_optsp = mnt_opts;
 	}
+	*sourcep = source;
+	*typep = type;
+	*mnt_optsp = mnt_opts;
 	free(fsname);
 	free(optbuf);
 
-	return res;
+	return 0;
 
 err:
 	free(fsname);
