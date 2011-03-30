@@ -2921,9 +2921,7 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 		if (fuse_reply_create(req, &e, fi) == -ENOENT) {
 			/* The open syscall was interrupted, so it
 			   must be cancelled */
-			fuse_prepare_interrupt(f, req, &d);
 			fuse_do_release(f, e.ino, path, fi);
-			fuse_finish_interrupt(f, req, &d);
 			forget_node(f, e.ino, 1);
 		}
 	} else {
@@ -3001,9 +2999,7 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 		if (fuse_reply_open(req, fi) == -ENOENT) {
 			/* The open syscall was interrupted, so it
 			   must be cancelled */
-			fuse_prepare_interrupt(f, req, &d);
 			fuse_do_release(f, ino, path, fi);
-			fuse_finish_interrupt(f, req, &d);
 		}
 	} else
 		reply_err(req, err);
@@ -3129,9 +3125,7 @@ static void fuse_lib_opendir(fuse_req_t req, fuse_ino_t ino,
 		if (fuse_reply_open(req, llfi) == -ENOENT) {
 			/* The opendir syscall was interrupted, so it
 			   must be cancelled */
-			fuse_prepare_interrupt(f, req, &d);
 			fuse_fs_releasedir(f->fs, path, &fi);
-			fuse_finish_interrupt(f, req, &d);
 			pthread_mutex_destroy(&dh->lock);
 			free(dh);
 		}
