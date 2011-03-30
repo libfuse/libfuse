@@ -1,3 +1,8 @@
+2011-03-30  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Patches by Laszlo Papp fixing various issues found by the
+	Coverity checker
+
 2011-03-11  Miklos Szeredi <miklos@szeredi.hu>
 
 	* In case of failure to add to /etc/mtab don't umount.  Reported
