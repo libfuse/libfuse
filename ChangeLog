@@ -1,3 +1,7 @@
+2011-04-15  Max Krasnyansky <maxk@kernel.org>
+	* Added support for "auto_unmount" option which unmounts the
+	filesystem automatically on process exit (or crash).
+
 2011-03-30  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Patches by Laszlo Papp fixing various issues found by the
