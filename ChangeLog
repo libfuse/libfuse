@@ -1,3 +1,7 @@
+2011-05-20  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Cleaner build output.  Patch by Reuben Hawkins
+
 2011-05-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Disable splice by default, add "splice_read", "splice_write" and
