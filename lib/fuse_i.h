@@ -36,6 +36,7 @@ struct fuse_req {
 	struct fuse_ctx ctx;
 	struct fuse_chan *ch;
 	int interrupted;
+	unsigned int ioctl_64bit : 1;
 	union {
 		struct {
 			uint64_t unique;

@@ -56,6 +56,9 @@
 	filesystem may implement this to process multiple forget requests
 	in one call
 
+	* Fix the ambiguity of ioctl ABI on the kernel/userspace boundary
+	for 32bit vs. 64bit userspace
+
 2010-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add new write_buf() method to the highlevel API.  Similarly to

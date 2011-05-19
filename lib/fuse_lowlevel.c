@@ -791,13 +791,34 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+static struct fuse_ioctl_iovec *fuse_ioctl_iovec_copy(const struct iovec *iov,
+						      size_t count)
+{
+	struct fuse_ioctl_iovec *fiov;
+	size_t i;
+
+	fiov = malloc(sizeof(fiov[0]) * count);
+	if (!fiov)
+		return NULL;
+
+	for (i = 0; i < count; i++) {
+		fiov[i].base = (uintptr_t) iov[i].iov_base;
+		fiov[i].len = iov[i].iov_len;
+	}
+
+	return fiov;
+}
+
 int fuse_reply_ioctl_retry(fuse_req_t req,
 			   const struct iovec *in_iov, size_t in_count,
 			   const struct iovec *out_iov, size_t out_count)
 {
 	struct fuse_ioctl_out arg;
+	struct fuse_ioctl_iovec *in_fiov = NULL;
+	struct fuse_ioctl_iovec *out_fiov = NULL;
 	struct iovec iov[4];
 	size_t count = 1;
+	int res;
 
 	memset(&arg, 0, sizeof(arg));
 	arg.flags |= FUSE_IOCTL_RETRY;
@@ -807,19 +828,55 @@ int fuse_reply_ioctl_retry(fuse_req_t req,
 	iov[count].iov_len = sizeof(arg);
 	count++;
 
-	if (in_count) {
-		iov[count].iov_base = (void *)in_iov;
-		iov[count].iov_len = sizeof(in_iov[0]) * in_count;
-		count++;
+	if (req->f->conn.proto_minor < 16) {
+		if (in_count) {
+			iov[count].iov_base = (void *)in_iov;
+			iov[count].iov_len = sizeof(in_iov[0]) * in_count;
+			count++;
+		}
+
+		if (out_count) {
+			iov[count].iov_base = (void *)out_iov;
+			iov[count].iov_len = sizeof(out_iov[0]) * out_count;
+			count++;
+		}
+	} else {
+		/* Can't handle non-compat 64bit ioctls on 32bit */
+		if (sizeof(void *) == 4 && req->ioctl_64bit) {
+			res = fuse_reply_err(req, EINVAL);
+			goto out;
+		}
+
+		if (in_count) {
+			in_fiov = fuse_ioctl_iovec_copy(in_iov, in_count);
+			if (!in_fiov)
+				goto enomem;
+
+			iov[count].iov_base = (void *)in_fiov;
+			iov[count].iov_len = sizeof(in_fiov[0]) * in_count;
+			count++;
+		}
+		if (out_count) {
+			out_fiov = fuse_ioctl_iovec_copy(out_iov, out_count);
+			if (!out_fiov)
+				goto enomem;
+
+			iov[count].iov_base = (void *)out_fiov;
+			iov[count].iov_len = sizeof(out_fiov[0]) * out_count;
+			count++;
+		}
 	}
 
-	if (out_count) {
-		iov[count].iov_base = (void *)out_iov;
-		iov[count].iov_len = sizeof(out_iov[0]) * out_count;
-		count++;
-	}
+	res = send_reply_iov(req, 0, iov, count);
+out:
+	free(in_fiov);
+	free(out_fiov);
 
-	return send_reply_iov(req, 0, iov, count);
+	return res;
+
+enomem:
+	res = fuse_reply_err(req, ENOMEM);
+	goto out;
 }
 
 int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size)
@@ -1544,6 +1601,11 @@ static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.fh_old = fi.fh;
+
+	if (sizeof(void *) == 4 && req->f->conn.proto_minor >= 16 &&
+	    !(flags & FUSE_IOCTL_32BIT)) {
+		req->ioctl_64bit = 1;
+	}
 
 	if (req->f->op.ioctl)
 		req->f->op.ioctl(req, nodeid, arg->cmd,
