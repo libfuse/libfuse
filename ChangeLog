@@ -46,6 +46,12 @@
 	* Highlevel lib: use dynamically resized hash table for looking up
 	by name and node ID.
 
+2010-12-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Allow batching of forget requests.  This allows forget requests
+	to be processed faster and doesn't require a modification to fuse
+	filesystems.  Reported by Terje Malmedal
+
 2010-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add new write_buf() method to the highlevel API.  Similarly to

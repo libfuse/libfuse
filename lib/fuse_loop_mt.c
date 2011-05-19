@@ -99,9 +99,13 @@ static void *fuse_do_work(void *data)
 		 * This disgusting hack is needed so that zillions of threads
 		 * are not created on a burst of FORGET messages
 		 */
-		if (!(fbuf.flags & FUSE_BUF_IS_FD) &&
-		    ((struct fuse_in_header *) fbuf.mem)->opcode == FUSE_FORGET)
-			isforget = 1;
+		if (!(fbuf.flags & FUSE_BUF_IS_FD)) {
+			struct fuse_in_header *in = fbuf.mem;
+
+			if (in->opcode == FUSE_FORGET ||
+			    in->opcode == FUSE_BATCH_FORGET)
+				isforget = 1;
+		}
 
 		if (!isforget)
 			mt->numavail--;

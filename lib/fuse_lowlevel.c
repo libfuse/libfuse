@@ -137,6 +137,24 @@ void fuse_free_req(fuse_req_t req)
 		destroy_req(req);
 }
 
+static struct fuse_req *fuse_ll_alloc_req(struct fuse_ll *f)
+{
+	struct fuse_req *req;
+
+	req = (struct fuse_req *) calloc(1, sizeof(struct fuse_req));
+	if (req == NULL) {
+		fprintf(stderr, "fuse: failed to allocate request\n");
+	} else {
+		req->f = f;
+		req->ctr = 1;
+		list_init_req(req);
+		fuse_mutex_init(&req->lock);
+	}
+
+	return req;
+}
+
+
 static int fuse_send_msg(struct fuse_ll *f, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
 {
@@ -284,7 +302,8 @@ int fuse_reply_err(fuse_req_t req, int err)
 
 void fuse_reply_none(fuse_req_t req)
 {
-	fuse_chan_send(req->ch, NULL, 0);
+	if (req->ch)
+		fuse_chan_send(req->ch, NULL, 0);
 	fuse_free_req(req);
 }
 
@@ -876,6 +895,35 @@ static void do_forget(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		req->f->op.forget(req, nodeid, arg->nlookup);
 	else
 		fuse_reply_none(req);
+}
+
+static void do_batch_forget(fuse_req_t req, fuse_ino_t nodeid,
+			    const void *inarg)
+{
+	struct fuse_batch_forget_in *arg = (void *) inarg;
+	struct fuse_forget_one *param = (void *) PARAM(arg);
+	unsigned int i;
+
+	(void) nodeid;
+
+	if (req->f->op.forget) {
+		for (i = 0; i < arg->count; i++) {
+			struct fuse_forget_one *forget = &param[i];
+			struct fuse_req *dummy_req;
+
+			dummy_req = fuse_ll_alloc_req(req->f);
+			if (dummy_req == NULL)
+				break;
+
+			dummy_req->unique = req->unique;
+			dummy_req->ctx = req->ctx;
+			dummy_req->ch = NULL;
+
+			req->f->op.forget(dummy_req, forget->nodeid,
+					  forget->nlookup);
+		}
+	}
+	fuse_reply_none(req);
 }
 
 static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -2035,6 +2083,7 @@ static struct {
 	[FUSE_POLL]	   = { do_poll,        "POLL"	     },
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
 	[FUSE_NOTIFY_REPLY] = { (void *) 1,    "NOTIFY_REPLY" },
+	[FUSE_BATCH_FORGET] = { do_batch_forget, "BATCH_FORGET" },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
@@ -2098,21 +2147,15 @@ static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
 		in = buf->mem;
 	}
 
-	req = (struct fuse_req *) calloc(1, sizeof(struct fuse_req));
-	if (req == NULL) {
-		fprintf(stderr, "fuse: failed to allocate request\n");
+	req = fuse_ll_alloc_req(f);
+	if (req == NULL)
 		goto clear_pipe;
-	}
 
-	req->f = f;
 	req->unique = in->unique;
 	req->ctx.uid = in->uid;
 	req->ctx.gid = in->gid;
 	req->ctx.pid = in->pid;
 	req->ch = ch;
-	req->ctr = 1;
-	list_init_req(req);
-	fuse_mutex_init(&req->lock);
 
 	if (f->debug)
 		fprintf(stderr,
