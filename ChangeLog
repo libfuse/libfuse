@@ -1,3 +1,9 @@
+2011-05-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Disable splice by default, add "splice_read", "splice_write" and
+	"splice_move" options.  Keep the "no_splice_*" variants, which can
+	disable splice even if the filesystem explicitly enables it.
+
 2011-04-15  Max Krasnyansky <maxk@kernel.org>
 	* Added support for "auto_unmount" option which unmounts the
 	filesystem automatically on process exit (or crash).

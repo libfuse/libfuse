@@ -1597,11 +1597,11 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (req->f->conn.proto_minor >= 14) {
 		f->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
 		f->conn.capable |= FUSE_CAP_SPLICE_READ;
-		if (!f->no_splice_write)
+		if (f->splice_write)
 			f->conn.want |= FUSE_CAP_SPLICE_WRITE;
-		if (!f->no_splice_move)
+		if (f->splice_move)
 			f->conn.want |= FUSE_CAP_SPLICE_MOVE;
-		if (!f->no_splice_read &&
+		if (f->splice_read &&
 		    (f->op.write_buf || f->op.retrieve_reply))
 			f->conn.want |= FUSE_CAP_SPLICE_READ;
 	}
@@ -1626,6 +1626,13 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	f->got_init = 1;
 	if (f->op.init)
 		f->op.init(f->userdata, &f->conn);
+
+	if (f->no_splice_read)
+		f->conn.want &= ~FUSE_CAP_SPLICE_READ;
+	if (f->no_splice_write)
+		f->conn.want &= ~FUSE_CAP_SPLICE_WRITE;
+	if (f->no_splice_move)
+		f->conn.want &= ~FUSE_CAP_SPLICE_MOVE;
 
 	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
 		outarg.flags |= FUSE_ASYNC_READ;
@@ -2220,8 +2227,11 @@ static struct fuse_opt fuse_ll_opts[] = {
 	{ "atomic_o_trunc", offsetof(struct fuse_ll, atomic_o_trunc), 1},
 	{ "no_remote_lock", offsetof(struct fuse_ll, no_remote_lock), 1},
 	{ "big_writes", offsetof(struct fuse_ll, big_writes), 1},
+	{ "splice_write", offsetof(struct fuse_ll, splice_write), 1},
 	{ "no_splice_write", offsetof(struct fuse_ll, no_splice_write), 1},
+	{ "splice_move", offsetof(struct fuse_ll, splice_move), 1},
 	{ "no_splice_move", offsetof(struct fuse_ll, no_splice_move), 1},
+	{ "splice_read", offsetof(struct fuse_ll, splice_read), 1},
 	{ "no_splice_read", offsetof(struct fuse_ll, no_splice_read), 1},
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
@@ -2249,9 +2259,9 @@ static void fuse_ll_help(void)
 "    -o atomic_o_trunc      enable atomic open+truncate support\n"
 "    -o big_writes          enable larger than 4kB writes\n"
 "    -o no_remote_lock      disable remote file locking\n"
-"    -o no_splice_write     don't use splice to write to the fuse device\n"
-"    -o no_splice_move      don't move data while splicing to the fuse device\n"
-"    -o no_splice_read      don't use splice to read from the fuse device\n"
+"    -o [no_]splice_write   use splice to write to the fuse device\n"
+"    -o [no_]splice_move    move data while splicing to the fuse device\n"
+"    -o [no_]splice_read    use splice to read from the fuse device\n"
 );
 }
 
