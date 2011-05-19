@@ -92,6 +92,7 @@ struct fuse_file_info {
  * FUSE_CAP_DONT_MASK: don't apply umask to file mode on create operations
  * FUSE_CAP_SPLICE_WRITE: ability to use splice() to write to the fuse device
  * FUSE_CAP_SPLICE_MOVE: ability to move data to the fuse device with splice()
+ * FUSE_CAP_SPLICE_READ: ability to use splice() to read from the fuse device
  */
 #define FUSE_CAP_ASYNC_READ	(1 << 0)
 #define FUSE_CAP_POSIX_LOCKS	(1 << 1)

@@ -1601,8 +1601,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.want |= FUSE_CAP_SPLICE_WRITE;
 		if (f->splice_move)
 			f->conn.want |= FUSE_CAP_SPLICE_MOVE;
-		if (f->splice_read &&
-		    (f->op.write_buf || f->op.retrieve_reply))
+		if (f->splice_read)
 			f->conn.want |= FUSE_CAP_SPLICE_READ;
 	}
 
