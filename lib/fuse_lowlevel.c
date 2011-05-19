@@ -906,7 +906,10 @@ static void do_batch_forget(fuse_req_t req, fuse_ino_t nodeid,
 
 	(void) nodeid;
 
-	if (req->f->op.forget) {
+	if (req->f->op.forget_multi) {
+		req->f->op.forget_multi(req, arg->count,
+				     (struct fuse_forget_data *) param);
+	} else if (req->f->op.forget) {
 		for (i = 0; i < arg->count; i++) {
 			struct fuse_forget_one *forget = &param[i];
 			struct fuse_req *dummy_req;
@@ -922,8 +925,10 @@ static void do_batch_forget(fuse_req_t req, fuse_ino_t nodeid,
 			req->f->op.forget(dummy_req, forget->nodeid,
 					  forget->nlookup);
 		}
+		fuse_reply_none(req);
+	} else {
+		fuse_reply_none(req);
 	}
-	fuse_reply_none(req);
 }
 
 static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)

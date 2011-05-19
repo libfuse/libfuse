@@ -2493,16 +2493,33 @@ static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 	reply_entry(req, &e, err);
 }
 
+static void do_forget(struct fuse *f, fuse_ino_t ino, uint64_t nlookup)
+{
+	if (f->conf.debug)
+		fprintf(stderr, "FORGET %llu/%llu\n", (unsigned long long)ino,
+			(unsigned long long) nlookup);
+	forget_node(f, ino, nlookup);
+}
+
 static void fuse_lib_forget(fuse_req_t req, fuse_ino_t ino,
 			    unsigned long nlookup)
 {
-	struct fuse *f = req_fuse(req);
-	if (f->conf.debug)
-		fprintf(stderr, "FORGET %llu/%lu\n", (unsigned long long)ino,
-			nlookup);
-	forget_node(f, ino, nlookup);
+	do_forget(req_fuse(req), ino, nlookup);
 	fuse_reply_none(req);
 }
+
+static void fuse_lib_forget_multi(fuse_req_t req, size_t count,
+				  struct fuse_forget_data *forgets)
+{
+	struct fuse *f = req_fuse(req);
+	size_t i;
+
+	for (i = 0; i < count; i++)
+		do_forget(f, forgets[i].ino, forgets[i].nlookup);
+
+	fuse_reply_none(req);
+}
+
 
 static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
@@ -3820,6 +3837,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.destroy = fuse_lib_destroy,
 	.lookup = fuse_lib_lookup,
 	.forget = fuse_lib_forget,
+	.forget_multi = fuse_lib_forget_multi,
 	.getattr = fuse_lib_getattr,
 	.setattr = fuse_lib_setattr,
 	.access = fuse_lib_access,

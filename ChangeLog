@@ -52,6 +52,10 @@
 	to be processed faster and doesn't require a modification to fuse
 	filesystems.  Reported by Terje Malmedal
 
+	* Add ->forget_multi() operation to the lowlevel API.  The
+	filesystem may implement this to process multiple forget requests
+	in one call
+
 2010-11-10  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add new write_buf() method to the highlevel API.  Similarly to
