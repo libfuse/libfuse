@@ -95,16 +95,6 @@ static int add_mount(const char *progname, const char *fsname,
 		goto out_restore;
 	}
 	if (res == 0) {
-		/*
-		 * Hide output, because old versions don't support
-		 * --no-canonicalize
-		 */
-		int fd = open("/dev/null", O_WRONLY);
-		if (fd >= 0) {
-			dup2(fd, 1);
-			dup2(fd, 2);
-		}
-
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
 		execl("/bin/mount", "/bin/mount", "--no-canonicalize", "-i",
