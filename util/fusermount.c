@@ -127,7 +127,13 @@ static int lock_umount(void)
 static void unlock_umount(int mtablock)
 {
 	if (mtablock >= 0) {
-		lockf(mtablock, F_ULOCK, 0);
+		int res;
+
+		res = lockf(mtablock, F_ULOCK, 0);
+		if (res < 0) {
+			fprintf(stderr, "%s: error releasing lock: %s\n",
+				progname, strerror(errno));
+		}
 		close(mtablock);
 	}
 }
@@ -438,9 +444,14 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 	}
 
 out:
-	chdir("/");
 	if (res == -1)
 		return -1;
+
+	res = chdir("/");
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
+		return -1;
+	}
 
 	return fuse_mnt_remove_mount(progname, mnt);
 }
@@ -1074,12 +1085,17 @@ static int mount_fuse(const char *mnt, const char *opts)
 	} else
 		restore_privs();
 
-	chdir("/");
 	if (mountpoint_fd != -1)
 		close(mountpoint_fd);
 
 	if (res == -1)
 		goto fail_close_fd;
+
+	res = chdir("/");
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
+		goto fail_close_fd;
+	}
 
 	if (geteuid() == 0) {
 		res = add_mount(source, mnt, type, mnt_opts);
@@ -1279,7 +1295,11 @@ int main(int argc, char *argv[])
 	   btw We don't want to use daemon() function here because
 	   it forks and messes with the file descriptors. */
 	setsid();
-	chdir("/");
+	res = chdir("/");
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
+		exit(1);
+	}
 
 	sigfillset(&sigset);
 	sigprocmask(SIG_BLOCK, &sigset, NULL);
