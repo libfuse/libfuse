@@ -93,7 +93,7 @@ See COPYING.LIB in the distribution.
 In simple terms as long as you are linking dynamically (the default)
 there are no limitations on linking with libfuse.  For example you may
 distribute the filesystem itself in binary form, without source code,
-under any propriatery license.
+under any proprietary license.
 
 Under what conditions may I distribute a filesystem that uses the raw
 ---------------------------------------------------------------------
@@ -303,7 +303,7 @@ write permissions for the owner?
 being to atomically obtain a read/write file handle and make the file
 read-only.  Unfortunately, this does not work very well in fuse, since
 you first get a mknod, and then an open call.  At the time of open,
-you can't distinguish easily wether this is the first open issued by
+you can't distinguish easily whether this is the first open issued by
 cp, or another process trying to write a read-only file.
 
 Defining the 'create' method solves this problem, however this
@@ -371,8 +371,8 @@ causes of this are (non-exhaustive)
     * You are running a 64 bit kernel but using a 32 bit libfuse. In this case
       you will need to install a 64 bit version of the FUSE userspace library,
       64 bit versions of all of the FUSE filesystems or language bindings that
-      link to it, and 64 bit versions of all of their dependancies. Your
-      distribution may provide 64 bit versions of the basic dependancies like
+      link to it, and 64 bit versions of all of their dependencies. Your
+      distribution may provide 64 bit versions of the basic dependencies like
       libc even in its 32 bit environment
 
 Misc

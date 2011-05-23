@@ -1290,7 +1290,7 @@ int main(int argc, char *argv[])
 	if (!auto_unmount)
 		return 0;
 
-	/* Decome a daemon and wait for the parent to exit or die.
+	/* Become a daemon and wait for the parent to exit or die.
 	   ie For the control socket to get closed. 
 	   btw We don't want to use daemon() function here because
 	   it forks and messes with the file descriptors. */

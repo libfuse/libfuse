@@ -40,7 +40,7 @@ restart:
 			fuse_session_exit(se);
 			return 0;
 		}
-		/* Errors occuring during normal operation: EINTR (read
+		/* Errors occurring during normal operation: EINTR (read
 		   interrupted), EAGAIN (nonblocking I/O), ENODEV (filesystem
 		   umounted) */
 		if (err != EINTR && err != EAGAIN)

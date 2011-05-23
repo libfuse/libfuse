@@ -412,7 +412,7 @@ struct fuse_operations {
 	 * information without calling this method.	 This ensures, that
 	 * for local locks the l_pid field is correctly filled in.	The
 	 * results may not be accurate in case of race conditions and in
-	 * the presence of hard links, but it's unlikly that an
+	 * the presence of hard links, but it's unlikely that an
 	 * application would rely on accurate GETLK results in these
 	 * cases.  If a conflicting lock is not found, this method will be
 	 * called, and the filesystem may fill out l_pid by a meaningful

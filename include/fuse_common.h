@@ -278,7 +278,7 @@ enum fuse_buf_flags {
 	 *
 	 * If this flag is set then retry operation on file descriptor
 	 * until .size bytes have been copied or an error or EOF is
-	 * detetected.
+	 * detected.
 	 */
 	FUSE_BUF_FD_RETRY	= (1 << 3),
 };
