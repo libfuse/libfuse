@@ -434,6 +434,11 @@ struct fuse_operations {
 	 * Change the access and modification times of a file with
 	 * nanosecond resolution
 	 *
+	 * This supersedes the old utime() interface.  New applications
+	 * should use this.
+	 *
+	 * See the utimensat(2) man page for details.
+	 *
 	 * Introduced in version 2.6
 	 */
 	int (*utimens) (const char *, const struct timespec tv[2]);
