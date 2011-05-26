@@ -1,3 +1,9 @@
+2011-05-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Remove -lrt -ldl from fuse.pc for dynamic linking since
+	libfuse.so is already linked with these libraries.  Reported by:
+	Nikolaus Rath
+
 2011-05-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Cleaner build output.  Patch by Reuben Hawkins
