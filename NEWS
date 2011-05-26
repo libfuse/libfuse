@@ -1,3 +1,33 @@
+What is new in 2.9
+
+ - Add "zero copy" support for kernel 2.6.35 or newer
+
+ - Make maximum background requests tunable on kernel 2.6.32 or newer
+
+ - Require --no-canonicalize in (u)mount (util-linux version 2.18 or
+   newer) to fix security problems with fusermount
+
+ - Use dynamically sized hash tables in high level library
+
+ - Memory use of filesystem daemon can shrink more easily
+
+ - Add "auto_unmount" option
+
+ - API changes:
+
+    o Introduce "store" and "retrieve" for accessing kernel buffers on
+      kernel 2.6.36 or newer
+
+    o Introduce abstract buffer for zero copy operations
+
+    o Allow path calculation to be omitted on certain operations
+
+    o Allow batching forget requests
+
+ - Bug fixes and small improvements
+
+============================================================================
+
 What is new in 2.8
 
  - More scalable directory tree locking
@@ -20,6 +50,8 @@ What is new in 2.8
 
  - Bugfixes and small improvements
 
+============================================================================
+
 What is new in 2.7
 
  - Stacking support for the high level API
@@ -27,6 +59,8 @@ What is new in 2.7
  - Add filename charset conversion module
 
  - Improved mounting
+
+============================================================================
 
 What is new in 2.6
 
@@ -44,6 +78,8 @@ What is new in 2.6
 
  - Several bugs fixed, including a rare system hang on SMP
 
+============================================================================
+
 What is new in 2.5
 
  - Merge library part of FreeBSD port
@@ -57,6 +93,8 @@ What is new in 2.5
  - New option parsing interface added to the library
 
  - Lots of minor improvements and fixes
+
+============================================================================
 
 What is new in 2.4
 
@@ -83,6 +121,8 @@ What is new in 2.4
 
  - Some bugfixes
 
+============================================================================
+
 What is new in 2.3
 
  - Add new directory related operations: opendir(), readdir(),
@@ -95,6 +135,8 @@ What is new in 2.3
    binaries work under a 64bit kernel
 
  - Bugfixes
+
+============================================================================
 
 What is new in 2.2
 
