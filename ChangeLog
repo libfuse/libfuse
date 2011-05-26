@@ -140,6 +140,12 @@
 
 2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Fix ambiguous symbol version for fuse_chan_new.
+	fuse_versionscript included fuse_chan_new in both FUSE_2.4 and
+	FUSE_2.6.  Remove the FUSE_2.4, which is invalid.
+
+2010-09-28  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Fix option escaping for fusermount.  If the "fsname=" option
 	contained a comma then the option parser in fusermount was
 	confused (Novell bugzilla #641480).  Fix by escaping commas when
