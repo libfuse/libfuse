@@ -428,6 +428,37 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
 	return send_reply_ok(req, buf, size);
 }
 
+static int fuse_send_data_iov_fallback(struct fuse_ll *f, struct fuse_chan *ch,
+				       struct iovec *iov, int iov_count,
+				       struct fuse_bufvec *buf,
+				       size_t len)
+{
+	struct fuse_bufvec mem_buf = FUSE_BUFVEC_INIT(len);
+	void *mbuf;
+	int res;
+
+	/* FIXME: Avoid memory copy if none of the buffers contain an fd */
+	res = posix_memalign(&mbuf, pagesize, len);
+	if (res != 0)
+		return res;
+
+	mem_buf.buf[0].mem = mbuf;
+	res = fuse_buf_copy(&mem_buf, buf, 0);
+	if (res < 0) {
+		free(mbuf);
+		return -res;
+	}
+	len = res;
+
+	iov[iov_count].iov_base = mbuf;
+	iov[iov_count].iov_len = len;
+	iov_count++;
+	res = fuse_send_msg(f, ch, iov, iov_count);
+	free(mbuf);
+
+	return res;
+}
+
 struct fuse_ll_pipe {
 	size_t size;
 	int can_grow;
@@ -441,6 +472,7 @@ static void fuse_ll_pipe_free(struct fuse_ll_pipe *llp)
 	free(llp);
 }
 
+#ifdef HAVE_SPLICE
 static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
 {
 	struct fuse_ll_pipe *llp = pthread_getspecific(f->pipe_key);
@@ -476,6 +508,7 @@ static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
 
 	return llp;
 }
+#endif
 
 static void fuse_ll_clear_pipe(struct fuse_ll *f)
 {
@@ -486,6 +519,7 @@ static void fuse_ll_clear_pipe(struct fuse_ll *f)
 	}
 }
 
+#if defined(HAVE_SPLICE) && defined(HAVE_VMSPLICE)
 static int read_back(int fd, char *buf, size_t len)
 {
 	int res;
@@ -696,31 +730,19 @@ clear_pipe:
 	return res;
 
 fallback:
-	{
-		struct fuse_bufvec mem_buf = FUSE_BUFVEC_INIT(len);
-		void *mbuf;
-
-		res = posix_memalign(&mbuf, pagesize, len);
-		if (res != 0)
-			return res;
-
-		mem_buf.buf[0].mem = mbuf;
-		res = fuse_buf_copy(&mem_buf, buf, 0);
-		if (res < 0) {
-			free(mbuf);
-			return -res;
-		}
-		len = res;
-
-		iov[iov_count].iov_base = mbuf;
-		iov[iov_count].iov_len = len;
-		iov_count++;
-		res = fuse_send_msg(f, ch, iov, iov_count);
-		free(mbuf);
-
-		return res;
-	}
+	return fuse_send_data_iov_fallback(f, ch, iov, iov_count, buf, len);
 }
+#else
+static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
+			       struct iovec *iov, int iov_count,
+			       struct fuse_bufvec *buf, unsigned int flags)
+{
+	size_t len = fuse_buf_size(buf);
+	(void) flags;
+
+	return fuse_send_data_iov_fallback(f, ch, iov, iov_count, buf, len);
+}
+#endif
 
 int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 		    enum fuse_buf_copy_flags flags)
@@ -1710,14 +1732,18 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 
 	if (req->f->conn.proto_minor >= 14) {
+#ifdef HAVE_SPLICE
+#ifdef HAVE_VMSPLICE
 		f->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
-		f->conn.capable |= FUSE_CAP_SPLICE_READ;
 		if (f->splice_write)
 			f->conn.want |= FUSE_CAP_SPLICE_WRITE;
 		if (f->splice_move)
 			f->conn.want |= FUSE_CAP_SPLICE_MOVE;
+#endif
+		f->conn.capable |= FUSE_CAP_SPLICE_READ;
 		if (f->splice_read)
 			f->conn.want |= FUSE_CAP_SPLICE_READ;
+#endif
 	}
 
 	if (f->atomic_o_trunc)
@@ -2424,6 +2450,7 @@ static void fuse_ll_pipe_destructor(void *data)
 	fuse_ll_pipe_free(llp);
 }
 
+#ifdef HAVE_SPLICE
 static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 			       struct fuse_chan **chp)
 {
@@ -2521,6 +2548,22 @@ fallback:
 
 	return res;
 }
+#else
+static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
+			       struct fuse_chan **chp)
+{
+	(void) se;
+
+	int res = fuse_chan_recv(chp, buf->mem, buf->size);
+	if (res <= 0)
+		return res;
+
+	buf->size = res;
+
+	return res;
+}
+#endif
+
 
 /*
  * always call fuse_lowlevel_new_common() internally, to work around a

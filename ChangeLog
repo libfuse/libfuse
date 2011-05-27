@@ -1,3 +1,7 @@
+2011-05-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Check if splice/vmsplice are supported
+
 2011-05-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Remove -lrt -ldl from fuse.pc for dynamic linking since

@@ -153,6 +153,7 @@ static ssize_t fuse_buf_fd_to_fd(const struct fuse_buf *dst, size_t dst_off,
 	return copied;
 }
 
+#ifdef HAVE_SPLICE
 static ssize_t fuse_buf_splice(const struct fuse_buf *dst, size_t dst_off,
 			       const struct fuse_buf *src, size_t src_off,
 			       size_t len, enum fuse_buf_copy_flags flags)
@@ -207,6 +208,16 @@ static ssize_t fuse_buf_splice(const struct fuse_buf *dst, size_t dst_off,
 
 	return copied;
 }
+#else
+static ssize_t fuse_buf_splice(const struct fuse_buf *dst, size_t dst_off,
+			       const struct fuse_buf *src, size_t src_off,
+			       size_t len, enum fuse_buf_copy_flags flags)
+{
+	(void) flags;
+
+	return fuse_buf_fd_to_fd(dst, dst_off, src, src_off, len);
+}
+#endif
 
 
 static ssize_t fuse_buf_copy_one(const struct fuse_buf *dst, size_t dst_off,
