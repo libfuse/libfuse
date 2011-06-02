@@ -30,6 +30,7 @@
 #include <signal.h>
 #include <dlfcn.h>
 #include <assert.h>
+#include <poll.h>
 #include <sys/param.h>
 #include <sys/uio.h>
 #include <sys/time.h>
@@ -57,7 +58,7 @@ struct fuse_config {
 	double attr_timeout;
 	double ac_attr_timeout;
 	int ac_attr_timeout_set;
-	int noforget;
+	int remember;
 	int nopath;
 	int debug;
 	int hard_remove;
@@ -128,6 +129,7 @@ struct fuse {
 	int pagesize;
 	struct list_head partial_slabs;
 	struct list_head full_slabs;
+	pthread_t prune_thread;
 };
 
 struct lock {
@@ -151,6 +153,7 @@ struct node {
 	int open_count;
 	struct timespec stat_updated;
 	struct timespec mtime;
+	struct timespec forget_time;
 	off_t size;
 	struct lock *locks;
 	unsigned int is_hidden : 1;
@@ -465,6 +468,10 @@ static struct node *get_node(struct fuse *f, fuse_ino_t nodeid)
 	return node;
 }
 
+static void curr_time(struct timespec *now);
+static double diff_timespec(const struct timespec *t1,
+			   const struct timespec *t2);
+
 static void free_node(struct fuse *f, struct node *node)
 {
 	if (node->name != node->inline_name)
@@ -774,7 +781,7 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 		if (node == NULL)
 			goto out_err;
 
-		if (f->conf.noforget)
+		if (f->conf.remember)
 			node->nlookup = 1;
 		node->refctr = 1;
 		node->nodeid = next_id(f);
@@ -1170,13 +1177,16 @@ static void forget_node(struct fuse *f, fuse_ino_t nodeid, uint64_t nlookup)
 	if (!node->nlookup) {
 		unhash_name(f, node);
 		unref_node(f, node);
+	} else if (node->nlookup == 1 && f->conf.remember &&
+		   f->conf.remember != -1) {
+		curr_time(&node->forget_time);
 	}
 	pthread_mutex_unlock(&f->lock);
 }
 
 static void unlink_node(struct fuse *f, struct node *node)
 {
-	if (f->conf.noforget) {
+	if (f->conf.remember) {
 		assert(node->nlookup > 1);
 		node->nlookup--;
 	}
@@ -3832,6 +3842,68 @@ static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,
 		reply_err(req, err);
 }
 
+static int clean_delay(struct fuse *f)
+{
+	/*
+	 * This is calculating the delay between clean runs.  To
+	 * reduce the number of cleans we are doing them 10 times
+	 * within the remember window.
+	 */
+	int min_sleep = 60;
+	int max_sleep = 3600;
+	int sleep_time = f->conf.remember / 10;
+
+	if (sleep_time > max_sleep)
+		return max_sleep;
+	if (sleep_time < min_sleep)
+		return min_sleep;
+	return sleep_time;
+}
+
+int fuse_clean_cache(struct fuse *f)
+{
+	int i;
+	struct node *node, *next;
+	struct timespec now;
+	static int next_clean;
+
+	pthread_mutex_lock(&f->lock);
+	next_clean = clean_delay(f);
+
+	curr_time(&now);
+	for (i = 0; i < f->name_table.size; ++i) {
+		for (node = f->name_table.array[i]; node; node = next) {
+			double age;
+
+			next = node->name_next;
+
+			if (node->nodeid == FUSE_ROOT_ID)
+				continue;
+
+			/* Don't forget active directories */
+			if (node->refctr > 1)
+				continue;
+
+			/*
+			 * Only want to try the forget after the lookup count
+			 * has been reduced to 1 and the time to keep the node
+			 * around has expired
+			 */
+			if (node->nlookup != 1)
+				continue;
+
+			age = diff_timespec(&now, &node->forget_time);
+			if (age > f->conf.remember) {
+				node->nlookup = 0;
+				unhash_name(f, node);
+				unref_node(f, node);
+			}
+		}
+	}
+	pthread_mutex_unlock(&f->lock);
+	return next_clean;
+}
+
 static struct fuse_lowlevel_ops fuse_path_ops = {
 	.init = fuse_lib_init,
 	.destroy = fuse_lib_destroy,
@@ -3934,12 +4006,77 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f)
 	return cmd;
 }
 
+static int fuse_session_loop_remember(struct fuse *f)
+{
+	struct fuse_session *se = f->se;
+	int res = 0;
+	struct timespec now;
+	time_t next_clean;
+	struct fuse_chan *ch = fuse_session_next_chan(se, NULL);
+	size_t bufsize = fuse_chan_bufsize(ch);
+	char *buf = (char *) malloc(bufsize);
+	struct pollfd fds = {
+		.fd = fuse_chan_fd(ch),
+		.events = POLLIN
+	};
+
+	if (!buf) {
+		fprintf(stderr, "fuse: failed to allocate read buffer\n");
+		return -1;
+	}
+
+	curr_time(&now);
+	next_clean = now.tv_sec;
+	while (!fuse_session_exited(se)) {
+		struct fuse_chan *tmpch = ch;
+		struct fuse_buf fbuf = {
+			.mem = buf,
+			.size = bufsize,
+		};
+		unsigned timeout;
+
+		curr_time(&now);
+		if (now.tv_sec < next_clean)
+			timeout = next_clean - now.tv_sec;
+		else
+			timeout = 0;
+
+		res = poll(&fds, 1, timeout * 1000);
+		if (res == -1) {
+			if (errno == -EINTR)
+				continue;
+			else
+				break;
+		} else if (res > 0) {
+			res = fuse_session_receive_buf(se, &fbuf, &tmpch);
+
+			if (res == -EINTR)
+				continue;
+			if (res <= 0)
+				break;
+
+			fuse_session_process_buf(se, &fbuf, tmpch);
+		} else {
+			timeout = fuse_clean_cache(f);
+			curr_time(&now);
+			next_clean = now.tv_sec + timeout;
+		}
+	}
+
+	free(buf);
+	fuse_session_reset(se);
+	return res < 0 ? -1 : 0;
+}
+
 int fuse_loop(struct fuse *f)
 {
-	if (f)
-		return fuse_session_loop(f->se);
-	else
+	if (!f)
 		return -1;
+
+	if (f->conf.remember && f->conf.remember != -1)
+		return fuse_session_loop_remember(f);
+
+	return fuse_session_loop(f->se);
 }
 
 int fuse_invalidate(struct fuse *f, const char *path)
@@ -4019,7 +4156,8 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_LIB_OPT("ac_attr_timeout=%lf",   ac_attr_timeout, 0),
 	FUSE_LIB_OPT("ac_attr_timeout=",      ac_attr_timeout_set, 1),
 	FUSE_LIB_OPT("negative_timeout=%lf",  negative_timeout, 0),
-	FUSE_LIB_OPT("noforget",              noforget, 1),
+	FUSE_LIB_OPT("noforget",              remember, -1),
+	FUSE_LIB_OPT("remember=%u",           remember, 0),
 	FUSE_LIB_OPT("nopath",                nopath, 1),
 	FUSE_LIB_OPT("intr",		      intr, 1),
 	FUSE_LIB_OPT("intr_signal=%d",	      intr_signal, 0),
@@ -4043,7 +4181,8 @@ static void fuse_lib_help(void)
 "    -o negative_timeout=T  cache timeout for deleted names (0.0s)\n"
 "    -o attr_timeout=T      cache timeout for attributes (1.0s)\n"
 "    -o ac_attr_timeout=T   auto cache timeout for attributes (attr_timeout)\n"
-"    -o noforget            remember inode numbers (increases memory use)\n"
+"    -o noforget            never forget cached inodes\n"
+"    -o remember=T          remember cached inodes for T seconds (0s)\n"
 "    -o intr                allow requests to be interrupted\n"
 "    -o intr_signal=NUM     signal to send on interrupt (%i)\n"
 "    -o modules=M1[:M2...]  names of modules to push onto filesystem stack\n"
@@ -4181,6 +4320,36 @@ static int node_table_init(struct node_table *t)
 	t->split = 0;
 
 	return 0;
+}
+
+static void *fuse_prune_nodes(void *fuse)
+{
+	struct fuse *f = fuse;
+	int sleep_time;
+
+	while(1) {
+		sleep_time = fuse_clean_cache(f);
+		sleep(sleep_time);
+	}
+	return NULL;
+}
+
+int fuse_start_cleanup_thread(struct fuse *f)
+{
+	if (f->conf.remember && f->conf.remember != -1)
+		return fuse_start_thread(&f->prune_thread, fuse_prune_nodes, f);
+
+	return 0;
+}
+
+void fuse_stop_cleanup_thread(struct fuse *f)
+{
+	if (f->conf.remember && f->conf.remember != -1) {
+		pthread_mutex_lock(&f->lock);
+		pthread_cancel(f->prune_thread);
+		pthread_mutex_unlock(&f->lock);
+		pthread_join(f->prune_thread, NULL);
+	}
 }
 
 struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,

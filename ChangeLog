@@ -1,3 +1,9 @@
+2011-06-02  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add "remember" option.  This works similar to "noforget" except
+	that eventually the node will be allowed to expire from the cache.
+	Patch by therealneworld@gmail.com
+
 2011-05-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Check if splice/vmsplice are supported

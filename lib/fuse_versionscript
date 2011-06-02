@@ -191,6 +191,9 @@ FUSE_2.9 {
 		fuse_reply_data;
 		fuse_session_process_buf;
 		fuse_session_receive_buf;
+		fuse_start_cleanup_thread;
+		fuse_stop_cleanup_thread;
+		fuse_clean_cache;
 
 	local:
 		*;

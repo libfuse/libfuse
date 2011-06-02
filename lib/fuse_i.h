@@ -123,3 +123,5 @@ struct fuse *fuse_setup_common(int argc, char *argv[],
 			       int compat);
 
 void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeide, const void *inarg);
+
+int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg);

@@ -9,6 +9,7 @@
 #include "fuse_lowlevel.h"
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
+#include "fuse_i.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,7 +61,7 @@ static void list_del_worker(struct fuse_worker *w)
 	next->prev = prev;
 }
 
-static int fuse_start_thread(struct fuse_mt *mt);
+static int fuse_loop_start_thread(struct fuse_mt *mt);
 
 static void *fuse_do_work(void *data)
 {
@@ -110,7 +111,7 @@ static void *fuse_do_work(void *data)
 		if (!isforget)
 			mt->numavail--;
 		if (mt->numavail == 0)
-			fuse_start_thread(mt);
+			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
 		fuse_session_process_buf(mt->se, &fbuf, ch);
@@ -141,13 +142,42 @@ static void *fuse_do_work(void *data)
 	return NULL;
 }
 
-static int fuse_start_thread(struct fuse_mt *mt)
+int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 {
 	sigset_t oldset;
 	sigset_t newset;
 	int res;
 	pthread_attr_t attr;
 	char *stack_size;
+
+	/* Override default stack size */
+	pthread_attr_init(&attr);
+	stack_size = getenv(ENVNAME_THREAD_STACK);
+	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
+		fprintf(stderr, "fuse: invalid stack size: %s\n", stack_size);
+
+	/* Disallow signal reception in worker threads */
+	sigemptyset(&newset);
+	sigaddset(&newset, SIGTERM);
+	sigaddset(&newset, SIGINT);
+	sigaddset(&newset, SIGHUP);
+	sigaddset(&newset, SIGQUIT);
+	pthread_sigmask(SIG_BLOCK, &newset, &oldset);
+	res = pthread_create(thread_id, &attr, func, arg);
+	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
+	pthread_attr_destroy(&attr);
+	if (res != 0) {
+		fprintf(stderr, "fuse: error creating thread: %s\n",
+			strerror(res));
+		return -1;
+	}
+
+	return 0;
+}
+
+static int fuse_loop_start_thread(struct fuse_mt *mt)
+{
+	int res;
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
 	if (!w) {
 		fprintf(stderr, "fuse: failed to allocate worker structure\n");
@@ -163,25 +193,8 @@ static int fuse_start_thread(struct fuse_mt *mt)
 		return -1;
 	}
 
-	/* Override default stack size */
-	pthread_attr_init(&attr);
-	stack_size = getenv(ENVNAME_THREAD_STACK);
-	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
-		fprintf(stderr, "fuse: invalid stack size: %s\n", stack_size);
-
-	/* Disallow signal reception in worker threads */
-	sigemptyset(&newset);
-	sigaddset(&newset, SIGTERM);
-	sigaddset(&newset, SIGINT);
-	sigaddset(&newset, SIGHUP);
-	sigaddset(&newset, SIGQUIT);
-	pthread_sigmask(SIG_BLOCK, &newset, &oldset);
-	res = pthread_create(&w->thread_id, &attr, fuse_do_work, w);
-	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
-	pthread_attr_destroy(&attr);
-	if (res != 0) {
-		fprintf(stderr, "fuse: error creating thread: %s\n",
-			strerror(res));
+	res = fuse_start_thread(&w->thread_id, fuse_do_work, w);
+	if (res == -1) {
 		free(w->buf);
 		free(w);
 		return -1;
@@ -221,7 +234,7 @@ int fuse_session_loop_mt(struct fuse_session *se)
 	fuse_mutex_init(&mt.lock);
 
 	pthread_mutex_lock(&mt.lock);
-	err = fuse_start_thread(&mt);
+	err = fuse_loop_start_thread(&mt);
 	pthread_mutex_unlock(&mt.lock);
 	if (!err) {
 		/* sem_wait() is interruptible */
