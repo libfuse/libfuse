@@ -1,3 +1,8 @@
+2011-07-02  Sebastian Pipping <sebastian@pipping.org>
+
+	* Make xmp_utimens of examples "fusexmp" and "fusexmp_fh"
+	not follow symlinks as other layers do that already.
+
 2011-06-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add "remember" option.  This works similar to "noforget" except
