@@ -1322,6 +1322,10 @@ static void do_release(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fi.flush = (arg->release_flags & FUSE_RELEASE_FLUSH) ? 1 : 0;
 		fi.lock_owner = arg->lock_owner;
 	}
+	if (arg->release_flags & FUSE_RELEASE_FLOCK_UNLOCK) {
+		fi.flock_release = 1;
+		fi.lock_owner = arg->lock_owner;
+	}
 
 	if (req->f->op.release)
 		req->f->op.release(req, nodeid, &fi);
@@ -1505,11 +1509,34 @@ static void do_setlk_common(fuse_req_t req, fuse_ino_t nodeid,
 	fi.fh = arg->fh;
 	fi.lock_owner = arg->owner;
 
-	convert_fuse_file_lock(&arg->lk, &flock);
-	if (req->f->op.setlk)
-		req->f->op.setlk(req, nodeid, &fi, &flock, sleep);
-	else
-		fuse_reply_err(req, ENOSYS);
+	if (arg->lk_flags & FUSE_LK_FLOCK) {
+		int op = 0;
+
+		switch (arg->lk.type) {
+		case F_RDLCK:
+			op = LOCK_SH;
+			break;
+		case F_WRLCK:
+			op = LOCK_EX;
+			break;
+		case F_UNLCK:
+			op = LOCK_UN;
+			break;
+		}
+		if (!sleep)
+			op |= LOCK_NB;
+
+		if (req->f->op.flock)
+			req->f->op.flock(req, nodeid, &fi, op);
+		else
+			fuse_reply_err(req, ENOSYS);
+	} else {
+		convert_fuse_file_lock(&arg->lk, &flock);
+		if (req->f->op.setlk)
+			req->f->op.setlk(req, nodeid, &fi, &flock, sleep);
+		else
+			fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_setlk(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -1726,6 +1753,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_BIG_WRITES;
 		if (arg->flags & FUSE_DONT_MASK)
 			f->conn.capable |= FUSE_CAP_DONT_MASK;
+		if (arg->flags & FUSE_FLOCK_LOCKS)
+			f->conn.capable |= FUSE_CAP_FLOCK_LOCKS;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
@@ -1748,8 +1777,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	if (f->atomic_o_trunc)
 		f->conn.want |= FUSE_CAP_ATOMIC_O_TRUNC;
-	if (f->op.getlk && f->op.setlk && !f->no_remote_lock)
+	if (f->op.getlk && f->op.setlk && !f->no_remote_posix_lock)
 		f->conn.want |= FUSE_CAP_POSIX_LOCKS;
+	if (f->op.flock && !f->no_remote_flock)
+		f->conn.want |= FUSE_CAP_FLOCK_LOCKS;
 	if (f->big_writes)
 		f->conn.want |= FUSE_CAP_BIG_WRITES;
 
@@ -1786,6 +1817,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_BIG_WRITES;
 	if (f->conn.want & FUSE_CAP_DONT_MASK)
 		outarg.flags |= FUSE_DONT_MASK;
+	if (f->conn.want & FUSE_CAP_FLOCK_LOCKS)
+		outarg.flags |= FUSE_FLOCK_LOCKS;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
 	if (f->conn.proto_minor >= 13) {
@@ -2360,7 +2393,10 @@ static struct fuse_opt fuse_ll_opts[] = {
 	{ "async_read", offsetof(struct fuse_ll, conn.async_read), 1 },
 	{ "sync_read", offsetof(struct fuse_ll, conn.async_read), 0 },
 	{ "atomic_o_trunc", offsetof(struct fuse_ll, atomic_o_trunc), 1},
-	{ "no_remote_lock", offsetof(struct fuse_ll, no_remote_lock), 1},
+	{ "no_remote_lock", offsetof(struct fuse_ll, no_remote_posix_lock), 1},
+	{ "no_remote_lock", offsetof(struct fuse_ll, no_remote_flock), 1},
+	{ "no_remote_flock", offsetof(struct fuse_ll, no_remote_flock), 1},
+	{ "no_remote_posix_lock", offsetof(struct fuse_ll, no_remote_posix_lock), 1},
 	{ "big_writes", offsetof(struct fuse_ll, big_writes), 1},
 	{ "splice_write", offsetof(struct fuse_ll, splice_write), 1},
 	{ "no_splice_write", offsetof(struct fuse_ll, no_splice_write), 1},
@@ -2394,6 +2430,8 @@ static void fuse_ll_help(void)
 "    -o atomic_o_trunc      enable atomic open+truncate support\n"
 "    -o big_writes          enable larger than 4kB writes\n"
 "    -o no_remote_lock      disable remote file locking\n"
+"    -o no_remote_flock     disable remote file locking (BSD)\n"
+"    -o no_remote_posix_lock disable remove file locking (POSIX)\n"
 "    -o [no_]splice_write   use splice to write to the fuse device\n"
 "    -o [no_]splice_move    move data while splicing to the fuse device\n"
 "    -o [no_]splice_read    use splice to read from the fuse device\n"

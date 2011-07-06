@@ -796,7 +796,7 @@ struct fuse_lowlevel_ops {
 	 * @param req request handle
 	 * @param ino the inode number
 	 * @param fi file information
-	 * @param lock the region/type to test
+	 * @param lock the region/type to set
 	 * @param sleep locking operation may sleep
 	 */
 	void (*setlk) (fuse_req_t req, fuse_ino_t ino,
@@ -932,6 +932,25 @@ struct fuse_lowlevel_ops {
 	void (*forget_multi) (fuse_req_t req, size_t count,
 			      struct fuse_forget_data *forgets);
 
+	/**
+	 * Acquire, modify or release a BSD file lock
+	 *
+	 * Note: if the locking methods are not implemented, the kernel
+	 * will still allow file locking to work locally.  Hence these are
+	 * only interesting for network filesystems and similar.
+	 *
+	 * Introduced in version 2.9
+	 *
+	 * Valid replies:
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param fi file information
+	 * @param op the locking operation, see flock(2)
+	 */
+	void (*flock) (fuse_req_t req, fuse_ino_t ino,
+		       struct fuse_file_info *fi, int op);
 };
 
 /**

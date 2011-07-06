@@ -1,3 +1,13 @@
+2011-07-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add ->flock() operation to low and high level interfaces.  This
+	fixes problems with emulating flock() with POSIX locking.
+	Reported by Sebastian Pipping.  As with lock/setlk/getlk most
+	filesystems don't need to implement this, as the kernel takes care
+	of file locking.  The only reason to implement locking operations
+	is for network filesystems which want file locking to work between
+	clients.
+
 2011-07-02  Sebastian Pipping <sebastian@pipping.org>
 
 	* Make xmp_utimens of examples "fusexmp" and "fusexmp_fh"

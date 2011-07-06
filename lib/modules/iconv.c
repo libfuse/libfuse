@@ -549,6 +549,18 @@ static int iconv_lock(const char *path, struct fuse_file_info *fi, int cmd,
 	return err;
 }
 
+static int iconv_flock(const char *path, struct fuse_file_info *fi, int op)
+{
+	struct iconv *ic = iconv_get();
+	char *newpath;
+	int err = iconv_convpath(ic, path, &newpath, 0);
+	if (!err) {
+		err = fuse_fs_flock(ic->next, newpath, fi, op);
+		free(newpath);
+	}
+	return err;
+}
+
 static int iconv_bmap(const char *path, size_t blocksize, uint64_t *idx)
 {
 	struct iconv *ic = iconv_get();
@@ -616,6 +628,7 @@ static struct fuse_operations iconv_oper = {
 	.listxattr	= iconv_listxattr,
 	.removexattr	= iconv_removexattr,
 	.lock		= iconv_lock,
+	.flock		= iconv_flock,
 	.bmap		= iconv_bmap,
 
 	.flag_nullpath_ok = 1,

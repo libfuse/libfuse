@@ -31,6 +31,7 @@
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
+#include <sys/file.h> /* flock(2) */
 
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
@@ -481,6 +482,18 @@ static int xmp_lock(const char *path, struct fuse_file_info *fi, int cmd,
 			   sizeof(fi->lock_owner));
 }
 
+static int xmp_flock(const char *path, struct fuse_file_info *fi, int op)
+{
+	int res;
+	(void) path;
+
+	res = flock(fi->fh, op);
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+
 static struct fuse_operations xmp_oper = {
 	.getattr	= xmp_getattr,
 	.fgetattr	= xmp_fgetattr,
@@ -518,6 +531,7 @@ static struct fuse_operations xmp_oper = {
 	.removexattr	= xmp_removexattr,
 #endif
 	.lock		= xmp_lock,
+	.flock		= xmp_flock,
 
 	.flag_nullpath_ok = 1,
 };

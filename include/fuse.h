@@ -548,6 +548,27 @@ struct fuse_operations {
 	 */
 	int (*read_buf) (const char *, struct fuse_bufvec **bufp,
 			 size_t size, off_t off, struct fuse_file_info *);
+	/**
+	 * Perform BSD file locking operation
+	 *
+	 * The op argument will be either LOCK_SH, LOCK_EX or LOCK_UN
+	 *
+	 * Nonblocking requests will be indicated by ORing LOCK_NB to
+	 * the above operations
+	 *
+	 * For more information see the flock(2) manual page.
+	 *
+	 * Additionally fi->owner will be set to a value unique to
+	 * this open file.  This same value will be supplied to
+	 * ->release() when the file is released.
+	 *
+	 * Note: if this method is not implemented, the kernel will still
+	 * allow file locking to work locally.  Hence it is only
+	 * interesting for network filesystems and similar.
+	 *
+	 * Introduced in version 2.9
+	 */
+	int (*flock) (const char *, struct fuse_file_info *, int op);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -813,6 +834,8 @@ int fuse_fs_create(struct fuse_fs *fs, const char *path, mode_t mode,
 		   struct fuse_file_info *fi);
 int fuse_fs_lock(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi, int cmd, struct flock *lock);
+int fuse_fs_flock(struct fuse_fs *fs, const char *path,
+		  struct fuse_file_info *fi, int op);
 int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode);
 int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid, gid_t gid);
 int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size);

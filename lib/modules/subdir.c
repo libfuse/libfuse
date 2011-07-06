@@ -536,6 +536,18 @@ static int subdir_lock(const char *path, struct fuse_file_info *fi, int cmd,
 	return err;
 }
 
+static int subdir_flock(const char *path, struct fuse_file_info *fi, int op)
+{
+	struct subdir *d = subdir_get();
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
+		err = fuse_fs_flock(d->next, newpath, fi, op);
+		free(newpath);
+	}
+	return err;
+}
+
 static int subdir_bmap(const char *path, size_t blocksize, uint64_t *idx)
 {
 	struct subdir *d = subdir_get();
@@ -599,6 +611,7 @@ static struct fuse_operations subdir_oper = {
 	.listxattr	= subdir_listxattr,
 	.removexattr	= subdir_removexattr,
 	.lock		= subdir_lock,
+	.flock		= subdir_flock,
 	.bmap		= subdir_bmap,
 
 	.flag_nullpath_ok = 1,

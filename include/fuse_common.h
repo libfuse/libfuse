@@ -70,8 +70,14 @@ struct fuse_file_info {
 	    seekable.  Introduced in version 2.8 */
 	unsigned int nonseekable : 1;
 
+	/* Indicates that flock locks for this file should be
+	   released.  If set, lock_owner shall contain a valid value.
+	   May only be set in ->release().  Introduced in version
+	   2.9 */
+	unsigned int flock_release : 1;
+
 	/** Padding.  Do not use*/
-	unsigned int padding : 28;
+	unsigned int padding : 27;
 
 	/** File handle.  May be filled in by filesystem in open().
 	    Available in all other file operations */
@@ -103,6 +109,7 @@ struct fuse_file_info {
 #define FUSE_CAP_SPLICE_WRITE	(1 << 7)
 #define FUSE_CAP_SPLICE_MOVE	(1 << 8)
 #define FUSE_CAP_SPLICE_READ	(1 << 9)
+#define FUSE_CAP_FLOCK_LOCKS	(1 << 10)
 
 /**
  * Ioctl flags

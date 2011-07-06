@@ -1933,6 +1933,27 @@ int fuse_fs_lock(struct fuse_fs *fs, const char *path,
 	}
 }
 
+int fuse_fs_flock(struct fuse_fs *fs, const char *path,
+		  struct fuse_file_info *fi, int op)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.flock) {
+		if (fs->debug) {
+			int xop = op & ~LOCK_NB;
+
+			fprintf(stderr, "lock[%llu] %s%s\n",
+				(unsigned long long) fi->fh,
+				xop == LOCK_SH ? "LOCK_SH" :
+				(xop == LOCK_EX ? "LOCK_EX" :
+				 (xop == LOCK_UN ? "LOCK_UN" : "???")),
+				(op & LOCK_NB) ? "|LOCK_NB" : "");
+		}
+		return fs->op.flock(path, fi, op);
+	} else {
+		return -ENOSYS;
+	}
+}
+
 int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid, gid_t gid)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -2410,6 +2431,10 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn)
 	fuse_get_context()->private_data = fs->user_data;
 	if (!fs->op.write_buf)
 		conn->want &= ~FUSE_CAP_SPLICE_READ;
+	if (!fs->op.lock)
+		conn->want &= ~FUSE_CAP_POSIX_LOCKS;
+	if (!fs->op.flock)
+		conn->want &= ~FUSE_CAP_FLOCK_LOCKS;
 	if (fs->op.init)
 		fs->user_data = fs->op.init(conn);
 }
@@ -3754,6 +3779,24 @@ static void fuse_lib_setlk(fuse_req_t req, fuse_ino_t ino,
 	reply_err(req, err);
 }
 
+static void fuse_lib_flock(fuse_req_t req, fuse_ino_t ino,
+			   struct fuse_file_info *fi, int op)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	char *path;
+	int err;
+
+	err = get_path_nullok(f, ino, &path);
+	if (err == 0) {
+		struct fuse_intr_data d;
+		fuse_prepare_interrupt(f, req, &d);
+		err = fuse_fs_flock(f->fs, path, fi, op);
+		fuse_finish_interrupt(f, req, &d);
+		free_path(f, ino, path);
+	}
+	reply_err(req, err);
+}
+
 static void fuse_lib_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 			  uint64_t idx)
 {
@@ -3939,6 +3982,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.removexattr = fuse_lib_removexattr,
 	.getlk = fuse_lib_getlk,
 	.setlk = fuse_lib_setlk,
+	.flock = fuse_lib_flock,
 	.bmap = fuse_lib_bmap,
 	.ioctl = fuse_lib_ioctl,
 	.poll = fuse_lib_poll,
