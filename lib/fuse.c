@@ -101,6 +101,13 @@ struct node_table {
 	size_t split;
 };
 
+#define container_of(ptr, type, member) ({                              \
+                        const typeof( ((type *)0)->member ) *__mptr = (ptr); \
+                        (type *)( (char *)__mptr - offsetof(type,member) );})
+
+#define list_entry(ptr, type, member)           \
+        container_of(ptr, type, member)
+
 struct list_head {
 	struct list_head *next;
 	struct list_head *prev;
@@ -116,6 +123,7 @@ struct fuse {
 	struct fuse_session *se;
 	struct node_table name_table;
 	struct node_table id_table;
+	struct list_head lru_table;
 	fuse_ino_t ctr;
 	unsigned int generation;
 	unsigned int hidectr;
@@ -153,7 +161,6 @@ struct node {
 	int open_count;
 	struct timespec stat_updated;
 	struct timespec mtime;
-	struct timespec forget_time;
 	off_t size;
 	struct lock *locks;
 	unsigned int is_hidden : 1;
@@ -161,6 +168,12 @@ struct node {
 	int treelock;
 	int ticket;
 	char inline_name[32];
+};
+
+struct node_lru {
+	struct node node;
+	struct list_head lru;
+	struct timespec forget_time;
 };
 
 struct fuse_dh {
@@ -302,7 +315,6 @@ static int list_empty(const struct list_head *head)
 	return head->next == head;
 }
 
-#ifdef FUSE_NODE_SLAB
 static void list_add(struct list_head *new, struct list_head *prev,
 		     struct list_head *next)
 {
@@ -331,6 +343,7 @@ static inline void list_del(struct list_head *entry)
 	prev->next = next;
 }
 
+#ifdef FUSE_NODE_SLAB
 static struct node_slab *list_to_slab(struct list_head *head)
 {
 	return (struct node_slab *) head;
@@ -341,6 +354,24 @@ static struct node_slab *node_to_slab(struct fuse *f, struct node *node)
 	return (struct node_slab *) (((uintptr_t) node) & ~((uintptr_t) f->pagesize - 1));
 }
 
+static inline int lru_enabled(struct fuse *f)
+{
+	return f->conf.remember > 0;
+}
+
+static struct node_lru *node_lru(struct node *node)
+{
+	return (struct node_lru *) node;
+}
+
+static size_t get_node_size(struct fuse *f)
+{
+	if (lru_enabled(f))
+		return sizeof(struct node_lru);
+	else
+		return sizeof(struct node);
+}
+
 static int alloc_slab(struct fuse *f)
 {
 	void *mem;
@@ -348,6 +379,7 @@ static int alloc_slab(struct fuse *f)
 	char *start;
 	size_t num;
 	size_t i;
+	size_t node_size = get_node_size(f);
 
 	mem = mmap(NULL, f->pagesize, PROT_READ | PROT_WRITE,
 		   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -358,13 +390,13 @@ static int alloc_slab(struct fuse *f)
 	slab = mem;
 	init_list_head(&slab->freelist);
 	slab->used = 0;
-	num = (f->pagesize - sizeof(struct node_slab)) / sizeof(struct node);
+	num = (f->pagesize - sizeof(struct node_slab)) / node_size;
 
-	start = (char *) mem + f->pagesize - num * sizeof(struct node);
+	start = (char *) mem + f->pagesize - num * node_size;
 	for (i = 0; i < num; i++) {
 		struct list_head *n;
 
-		n = (struct list_head *) (start + i * sizeof(struct node));
+		n = (struct list_head *) (start + i * node_size);
 		list_add_tail(n, &slab->freelist);
 	}
 	list_add_tail(&slab->list, &f->partial_slabs);
@@ -423,8 +455,7 @@ static void free_node_mem(struct fuse *f, struct node *node)
 #else
 static struct node *alloc_node(struct fuse *f)
 {
-	(void) f;
-	return (struct node *) calloc(1, sizeof(struct node));
+	return (struct node *) calloc(1, get_node_size(f));
 }
 
 static void free_node_mem(struct fuse *f, struct node *node)
@@ -471,6 +502,22 @@ static struct node *get_node(struct fuse *f, fuse_ino_t nodeid)
 static void curr_time(struct timespec *now);
 static double diff_timespec(const struct timespec *t1,
 			   const struct timespec *t2);
+
+static void remove_node_lru(struct node *node)
+{
+	struct node_lru *lnode = node_lru(node);
+	list_del(&lnode->lru);
+	init_list_head(&lnode->lru);
+}
+
+static void set_forget_time(struct fuse *f, struct node *node)
+{
+	struct node_lru *lnode = node_lru(node);
+
+	list_del(&lnode->lru);
+	list_add_tail(&lnode->lru, &f->lru_table);
+	curr_time(&lnode->forget_time);
+}
 
 static void free_node(struct fuse *f, struct node *node)
 {
@@ -729,6 +776,8 @@ static void delete_node(struct fuse *f, struct node *node)
 
 	assert(node->treelock == 0);
 	assert(!node->name);
+	if (lru_enabled(f))
+		remove_node_lru(node);
 	unhash_id(f, node);
 	free_node(f, node);
 }
@@ -796,6 +845,12 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 			goto out_err;
 		}
 		hash_id(f, node);
+		if (lru_enabled(f)) {
+			struct node_lru *lnode = node_lru(node);
+			init_list_head(&lnode->lru);
+		}
+	} else if (lru_enabled(f) && node->nlookup == 1) {
+		remove_node_lru(node);
 	}
 	node->nlookup ++;
 out_err:
@@ -1177,9 +1232,8 @@ static void forget_node(struct fuse *f, fuse_ino_t nodeid, uint64_t nlookup)
 	if (!node->nlookup) {
 		unhash_name(f, node);
 		unref_node(f, node);
-	} else if (node->nlookup == 1 && f->conf.remember &&
-		   f->conf.remember != -1) {
-		curr_time(&node->forget_time);
+	} else if (lru_enabled(f) && node->nlookup == 1) {
+		set_forget_time(f, node);
 	}
 	pthread_mutex_unlock(&f->lock);
 }
@@ -3905,46 +3959,39 @@ static int clean_delay(struct fuse *f)
 
 int fuse_clean_cache(struct fuse *f)
 {
-	int i;
-	struct node *node, *next;
+	struct node_lru *lnode;
+	struct list_head *curr, *next;
+	struct node *node;
 	struct timespec now;
-	static int next_clean;
 
 	pthread_mutex_lock(&f->lock);
-	next_clean = clean_delay(f);
 
 	curr_time(&now);
-	for (i = 0; i < f->name_table.size; ++i) {
-		for (node = f->name_table.array[i]; node; node = next) {
-			double age;
 
-			next = node->name_next;
+	for (curr = f->lru_table.next; curr != &f->lru_table; curr = next) {
+		double age;
 
-			if (node->nodeid == FUSE_ROOT_ID)
-				continue;
+		next = curr->next;
+		lnode = list_entry(curr, struct node_lru, lru);
+		node = &lnode->node;
 
-			/* Don't forget active directories */
-			if (node->refctr > 1)
-				continue;
+		age = diff_timespec(&now, &lnode->forget_time);
+		if (age <= f->conf.remember)
+			break;
 
-			/*
-			 * Only want to try the forget after the lookup count
-			 * has been reduced to 1 and the time to keep the node
-			 * around has expired
-			 */
-			if (node->nlookup != 1)
-				continue;
+		assert(node->nlookup == 1);
 
-			age = diff_timespec(&now, &node->forget_time);
-			if (age > f->conf.remember) {
-				node->nlookup = 0;
-				unhash_name(f, node);
-				unref_node(f, node);
-			}
-		}
+		/* Don't forget active directories */
+		if (node->refctr > 1)
+			continue;
+
+		node->nlookup = 0;
+		unhash_name(f, node);
+		unref_node(f, node);
 	}
 	pthread_mutex_unlock(&f->lock);
-	return next_clean;
+
+	return clean_delay(f);
 }
 
 static struct fuse_lowlevel_ops fuse_path_ops = {
@@ -4117,7 +4164,7 @@ int fuse_loop(struct fuse *f)
 	if (!f)
 		return -1;
 
-	if (f->conf.remember && f->conf.remember != -1)
+	if (lru_enabled(f))
 		return fuse_session_loop_remember(f);
 
 	return fuse_session_loop(f->se);
@@ -4380,7 +4427,7 @@ static void *fuse_prune_nodes(void *fuse)
 
 int fuse_start_cleanup_thread(struct fuse *f)
 {
-	if (f->conf.remember && f->conf.remember != -1)
+	if (lru_enabled(f))
 		return fuse_start_thread(&f->prune_thread, fuse_prune_nodes, f);
 
 	return 0;
@@ -4388,7 +4435,7 @@ int fuse_start_cleanup_thread(struct fuse *f)
 
 void fuse_stop_cleanup_thread(struct fuse *f)
 {
-	if (f->conf.remember && f->conf.remember != -1) {
+	if (lru_enabled(f)) {
 		pthread_mutex_lock(&f->lock);
 		pthread_cancel(f->prune_thread);
 		pthread_mutex_unlock(&f->lock);
@@ -4437,6 +4484,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	f->pagesize = getpagesize();
 	init_list_head(&f->partial_slabs);
 	init_list_head(&f->full_slabs);
+	init_list_head(&f->lru_table);
 
 	if (fuse_opt_parse(args, &f->conf, fuse_lib_opts,
 			   fuse_lib_opt_proc) == -1)

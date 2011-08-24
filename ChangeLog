@@ -1,3 +1,8 @@
+2011-08-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Use LRU list for cleaning up the cache if the "remember=T"
+	option was given.  Patch by therealneworld@gmail.com
+
 2011-07-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add ->flock() operation to low and high level interfaces.  This
