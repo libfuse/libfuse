@@ -523,6 +523,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	}
 
 #ifndef __NetBSD__
+#ifndef IGNORE_MTAB
 	if (geteuid() == 0) {
 		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
 		res = -1;
@@ -535,6 +536,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		if (res == -1)
 			goto out_umount;
 	}
+#endif /* IGNORE_MTAB */
 #endif /* __NetBSD__ */
 	free(type);
 	free(source);

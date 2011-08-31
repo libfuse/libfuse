@@ -1,3 +1,8 @@
+2011-08-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* If configured with --disable-mtab then don't call mount(8) from
+	libfuse to update the mtab.  Reported by: James Sierp
+
 2011-08-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Use LRU list for cleaning up the cache if the "remember=T"
