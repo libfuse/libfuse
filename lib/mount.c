@@ -484,6 +484,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		goto out_close;
 	}
 
+#ifndef IGNORE_MTAB
 	if (geteuid() == 0) {
 		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
 		res = -1;
@@ -496,6 +497,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		if (res == -1)
 			goto out_umount;
 	}
+#endif /* IGNORE_MTAB */
 	free(type);
 	free(source);
 
