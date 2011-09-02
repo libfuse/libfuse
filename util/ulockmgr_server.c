@@ -352,10 +352,23 @@ int main(int argc, char *argv[])
 	if (*end)
 		goto out_inval;
 
-	if (daemon(0, 1) == -1) {
-		perror("ulockmgr_server: daemon");
+	/* demonize current process */
+	switch(fork()) {
+	case -1:
+		perror("ulockmgr_server: fork");
+		exit(1);
+	case 0:
+		break;
+	default:
+		_exit(0);
+	}
+
+	if (setsid() == -1) {
+		perror("ulockmgr_server: setsid");
 		exit(1);
 	}
+
+	(void) chdir("/");
 
 	sigemptyset(&empty);
 	sigprocmask(SIG_SETMASK, &empty, NULL);

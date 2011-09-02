@@ -179,13 +179,37 @@ err:
 
 int fuse_daemonize(int foreground)
 {
-	int res;
-
 	if (!foreground) {
-		res = daemon(0, 0);
-		if (res == -1) {
-			perror("fuse: failed to daemonize program\n");
+		int nullfd;
+
+		/*
+		 * demonize current process by forking it and killing the
+		 * parent.  This makes current process as a child of 'init'.
+		 */
+		switch(fork()) {
+		case -1:
+			perror("fuse_daemonize: fork");
 			return -1;
+		case 0:
+			break;
+		default:
+			_exit(0);
+		}
+
+		if (setsid() == -1) {
+			perror("fuse_daemonize: setsid");
+			return -1;
+		}
+
+		(void) chdir("/");
+
+		nullfd = open("/dev/null", O_RDWR, 0);
+		if (nullfd != -1) {
+			(void) dup2(nullfd, 0);
+			(void) dup2(nullfd, 1);
+			(void) dup2(nullfd, 2);
+			if (nullfd > 2)
+				close(nullfd);
 		}
 	}
 	return 0;
