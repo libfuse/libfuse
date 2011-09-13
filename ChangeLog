@@ -1,11 +1,11 @@
+2011-09-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.8.6
+
 2011-08-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* If configured with --disable-mtab then don't call mount(8) from
 	libfuse to update the mtab.  Reported by: James Sierp
-
-2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
-
-	* Released 2.8.6
 
 2011-01-31  Miklos Szeredi <miklos@szeredi.hu>
 
