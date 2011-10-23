@@ -1,3 +1,10 @@
+2011-10-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Reply to request with ENOMEM in case of failure to allocate
+	request structure.  Otherwise the task issuing the request will
+	just freeze up until the filesystem daemon is killed.  Reported by
+	Stephan Kulow
+
 2011-09-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Replace daemon() function with fork().  Patch by Anatol Pomozov

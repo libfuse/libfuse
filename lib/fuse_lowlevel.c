@@ -2273,23 +2273,34 @@ static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
 		in = buf->mem;
 	}
 
+	if (f->debug) {
+		fprintf(stderr,
+			"unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu, pid: %u\n",
+			(unsigned long long) in->unique,
+			opname((enum fuse_opcode) in->opcode), in->opcode,
+			(unsigned long) in->nodeid, buf->size, in->pid);
+	}
+
 	req = fuse_ll_alloc_req(f);
-	if (req == NULL)
+	if (req == NULL) {
+		struct fuse_out_header out = {
+			.unique = in->unique,
+			.error = -ENOMEM,
+		};
+		struct iovec iov = {
+			.iov_base = &out,
+			.iov_len = sizeof(struct fuse_out_header),
+		};
+
+		fuse_send_msg(f, ch, &iov, 1);
 		goto clear_pipe;
+	}
 
 	req->unique = in->unique;
 	req->ctx.uid = in->uid;
 	req->ctx.gid = in->gid;
 	req->ctx.pid = in->pid;
 	req->ch = ch;
-
-	if (f->debug)
-		fprintf(stderr,
-			"unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu, pid: %u\n",
-			(unsigned long long) in->unique,
-			opname((enum fuse_opcode) in->opcode), in->opcode,
-			(unsigned long) in->nodeid, buf->size, in->pid);
-
 
 	err = EIO;
 	if (!f->got_init) {
