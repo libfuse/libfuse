@@ -1467,7 +1467,18 @@ static void fuse_ll_process(void *data, const char *buf, size_t len,
 
 	req = (struct fuse_req *) calloc(1, sizeof(struct fuse_req));
 	if (req == NULL) {
+		struct fuse_out_header out = {
+			.unique = in->unique,
+			.error = -ENOMEM,
+			.len = sizeof(struct fuse_out_header),
+		};
+		struct iovec iov = {
+			.iov_base = &out,
+			.iov_len = sizeof(struct fuse_out_header),
+		};
+
 		fprintf(stderr, "fuse: failed to allocate request\n");
+		fuse_chan_send(ch, &iov, 1);
 		return;
 	}
 
