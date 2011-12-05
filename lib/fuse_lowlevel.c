@@ -786,7 +786,7 @@ int fuse_reply_xattr(fuse_req_t req, size_t count)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_lock(fuse_req_t req, struct flock *lock)
+int fuse_reply_lock(fuse_req_t req, const struct flock *lock)
 {
 	struct fuse_lk_out arg;
 

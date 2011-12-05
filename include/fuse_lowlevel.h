@@ -1134,7 +1134,7 @@ int fuse_reply_xattr(fuse_req_t req, size_t count);
  * @param lock the lock information
  * @return zero for success, -errno for failure to send reply
  */
-int fuse_reply_lock(fuse_req_t req, struct flock *lock);
+int fuse_reply_lock(fuse_req_t req, const struct flock *lock);
 
 /**
  * Reply with block index

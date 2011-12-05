@@ -1,3 +1,8 @@
+2011-12-05  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Low level API: lock argument of fuse_reply_lock should have a
+	'const' qualifier.  Reported by Shachar Sharon
+
 2011-10-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Reply to request with ENOMEM in case of failure to allocate
