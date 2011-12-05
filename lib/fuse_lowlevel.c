@@ -1647,6 +1647,12 @@ static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	void *in_buf = arg->in_size ? PARAM(arg) : NULL;
 	struct fuse_file_info fi;
 
+	if (flags & FUSE_IOCTL_DIR &&
+	    !(req->f->conn.want & FUSE_CAP_IOCTL_DIR)) {
+		fuse_reply_err(req, ENOTTY);
+		return;
+	}
+
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.fh_old = fi.fh;
@@ -1774,6 +1780,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.want |= FUSE_CAP_SPLICE_READ;
 #endif
 	}
+	if (req->f->conn.proto_minor >= 18)
+		f->conn.capable |= FUSE_CAP_IOCTL_DIR;
 
 	if (f->atomic_o_trunc)
 		f->conn.want |= FUSE_CAP_ATOMIC_O_TRUNC;

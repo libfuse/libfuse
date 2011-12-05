@@ -99,6 +99,7 @@ struct fuse_file_info {
  * FUSE_CAP_SPLICE_WRITE: ability to use splice() to write to the fuse device
  * FUSE_CAP_SPLICE_MOVE: ability to move data to the fuse device with splice()
  * FUSE_CAP_SPLICE_READ: ability to use splice() to read from the fuse device
+ * FUSE_CAP_IOCTL_DIR: ioctl support on directories
  */
 #define FUSE_CAP_ASYNC_READ	(1 << 0)
 #define FUSE_CAP_POSIX_LOCKS	(1 << 1)
@@ -110,6 +111,7 @@ struct fuse_file_info {
 #define FUSE_CAP_SPLICE_MOVE	(1 << 8)
 #define FUSE_CAP_SPLICE_READ	(1 << 9)
 #define FUSE_CAP_FLOCK_LOCKS	(1 << 10)
+#define FUSE_CAP_IOCTL_DIR	(1 << 11)
 
 /**
  * Ioctl flags
@@ -117,12 +119,14 @@ struct fuse_file_info {
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
  * FUSE_IOCTL_UNRESTRICTED: not restricted to well-formed ioctls, retry allowed
  * FUSE_IOCTL_RETRY: retry with new iovecs
+ * FUSE_IOCTL_DIR: is a directory
  *
  * FUSE_IOCTL_MAX_IOV: maximum of in_iovecs + out_iovecs
  */
 #define FUSE_IOCTL_COMPAT	(1 << 0)
 #define FUSE_IOCTL_UNRESTRICTED	(1 << 1)
 #define FUSE_IOCTL_RETRY	(1 << 2)
+#define FUSE_IOCTL_DIR		(1 << 4)
 
 #define FUSE_IOCTL_MAX_IOV	256
 
