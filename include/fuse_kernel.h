@@ -79,6 +79,7 @@
  *
  * 7.18
  *  - add FUSE_IOCTL_DIR flag
+ *  - add FUSE_MMAP and FUSE_MUNMAP
  */
 
 #ifndef _LINUX_FUSE_H
@@ -308,6 +309,8 @@ enum fuse_opcode {
 	FUSE_POLL          = 40,
 	FUSE_NOTIFY_REPLY  = 41,
 	FUSE_BATCH_FORGET  = 42,
+	FUSE_MMAP          = 43,
+	FUSE_MUNMAP        = 44,
 
 	/* CUSE specific operations */
 	CUSE_INIT          = 4096,
@@ -598,6 +601,28 @@ struct fuse_poll_out {
 
 struct fuse_notify_poll_wakeup_out {
 	__u64	kh;
+};
+
+struct fuse_mmap_in {
+	__u64	fh;
+	__u64	addr;
+	__u64	len;
+	__u32	prot;
+	__u32	flags;
+	__u64	offset;
+};
+
+struct fuse_mmap_out {
+	__u64	mapid;		/* Mmap ID, same namespace as Inode ID */
+	__u64	size;		/* Size of memory region */
+	__u64	reserved;
+};
+
+struct fuse_munmap_in {
+	__u64	fh;
+	__u64	mapid;
+	__u64	size;		/* Size of memory region */
+	__u64	reserved;
 };
 
 struct fuse_in_header {

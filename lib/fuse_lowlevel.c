@@ -437,7 +437,18 @@ static int fuse_send_data_iov_fallback(struct fuse_ll *f, struct fuse_chan *ch,
 	void *mbuf;
 	int res;
 
-	/* FIXME: Avoid memory copy if none of the buffers contain an fd */
+	/* Optimize common case */
+	if (buf->count == 1 && buf->idx == 0 && buf->off == 0 &&
+	    !(buf->buf[0].flags & FUSE_BUF_IS_FD)) {
+		/* FIXME: also avoid memory copy if there are multiple buffers
+		   but none of them contain an fd */
+
+		iov[iov_count].iov_base = buf->buf[0].mem;
+		iov[iov_count].iov_len = len;
+		iov_count++;
+		return fuse_send_msg(f, ch, iov, iov_count);
+	}
+
 	res = posix_memalign(&mbuf, pagesize, len);
 	if (res != 0)
 		return res;
@@ -952,6 +963,17 @@ int fuse_reply_poll(fuse_req_t req, unsigned revents)
 
 	memset(&arg, 0, sizeof(arg));
 	arg.revents = revents;
+
+	return send_reply_ok(req, &arg, sizeof(arg));
+}
+
+int fuse_reply_mmap(fuse_req_t req, uint64_t map_id, size_t length)
+{
+	struct fuse_mmap_out arg;
+
+	memset(&arg, 0, sizeof(arg));
+	arg.mapid = map_id;
+	arg.size = length;
 
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
@@ -1704,6 +1726,38 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 }
 
+static void do_mmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_mmap_in *arg = (struct fuse_mmap_in *) inarg;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+	fi.fh_old = fi.fh;
+
+	if (req->f->op.mmap)
+		req->f->op.mmap(req, nodeid, arg->addr, arg->len, arg->prot,
+				arg->flags, arg->offset, &fi);
+	else
+		fuse_reply_err(req, ENOSYS);
+
+}
+
+static void do_munmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_munmap_in *arg = (struct fuse_munmap_in *) inarg;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+	fi.fh_old = fi.fh;
+
+	if (req->f->op.munmap)
+		req->f->op.munmap(req, nodeid, arg->mapid, arg->size, &fi);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -2069,12 +2123,14 @@ static void fuse_ll_retrieve_reply(struct fuse_notify_req *nreq,
 	}
 	bufv.buf[0].size = arg->size;
 
-	if (req->f->op.retrieve_reply)
-		req->f->op.retrieve_reply(rreq->cookie, ino, arg->offset, &bufv);
-	fuse_reply_none(req);
-	free(rreq);
-
+	if (req->f->op.retrieve_reply) {
+		req->f->op.retrieve_reply(req, rreq->cookie, ino,
+					  arg->offset, &bufv);
+	} else {
+		fuse_reply_none(req);
+	}
 out:
+	free(rreq);
 	if ((ibuf->flags & FUSE_BUF_IS_FD) && bufv.idx < bufv.count)
 		fuse_ll_clear_pipe(f);
 }
@@ -2218,6 +2274,8 @@ static struct {
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
 	[FUSE_NOTIFY_REPLY] = { (void *) 1,    "NOTIFY_REPLY" },
 	[FUSE_BATCH_FORGET] = { do_batch_forget, "BATCH_FORGET" },
+	[FUSE_MMAP]        = { do_mmap, "MMAP" },
+	[FUSE_MUNMAP]      = { do_munmap, "MUNMAP" },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 

@@ -63,6 +63,13 @@ struct cuse_lowlevel_ops {
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
 	void (*poll) (fuse_req_t req, struct fuse_file_info *fi,
 		      struct fuse_pollhandle *ph);
+	void (*mmap) (fuse_req_t req, uint64_t addr, size_t length,
+		      int prot, int flags, off_t offset,
+		      struct fuse_file_info *fi);
+	void (*munmap) (fuse_req_t req, uint64_t map_id, size_t length,
+			struct fuse_file_info *fi);
+	void (*retrieve_reply) (fuse_req_t req, void *cookie, uint64_t map_id,
+				off_t offset, struct fuse_bufvec *bufv);
 };
 
 struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,

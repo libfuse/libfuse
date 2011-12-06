@@ -1,3 +1,10 @@
+2011-12-06  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add mmap() and munmap() methods to low level API.  Currently
+	this is only useful for CUSE
+
+	* Update retrieve_reply() method
+
 2011-12-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Low level API: lock argument of fuse_reply_lock should have a
