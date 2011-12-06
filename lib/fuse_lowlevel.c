@@ -2054,6 +2054,34 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
 	return send_notify_iov(f, ch, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
 }
 
+int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
+				fuse_ino_t parent, fuse_ino_t child,
+				const char *name, size_t namelen)
+{
+	struct fuse_notify_delete_out outarg;
+	struct fuse_ll *f;
+	struct iovec iov[3];
+
+	if (!ch)
+		return -EINVAL;
+
+	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	if (!f)
+		return -ENODEV;
+
+	outarg.parent = parent;
+	outarg.child = child;
+	outarg.namelen = namelen;
+	outarg.padding = 0;
+
+	iov[1].iov_base = &outarg;
+	iov[1].iov_len = sizeof(outarg);
+	iov[2].iov_base = (void *)name;
+	iov[2].iov_len = namelen + 1;
+
+	return send_notify_iov(f, ch, FUSE_NOTIFY_DELETE, iov, 3);
+}
+
 int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
 			       off_t offset, struct fuse_bufvec *bufv,
 			       enum fuse_buf_copy_flags flags)

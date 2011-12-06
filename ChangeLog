@@ -1,3 +1,8 @@
+2011-12-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fuse_lowlevel_notify_delete() which tells the kernel that a
+	file or directory is deleted.  Patch by John Muir
+
 2011-12-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add mmap() and munmap() methods to low level API.  Currently

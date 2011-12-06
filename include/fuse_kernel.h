@@ -79,6 +79,7 @@
  *
  * 7.18
  *  - add FUSE_IOCTL_DIR flag
+ *  - add FUSE_NOTIFY_DELETE
  *  - add FUSE_MMAP and FUSE_MUNMAP
  */
 
@@ -322,6 +323,7 @@ enum fuse_notify_code {
 	FUSE_NOTIFY_INVAL_ENTRY = 3,
 	FUSE_NOTIFY_STORE = 4,
 	FUSE_NOTIFY_RETRIEVE = 5,
+	FUSE_NOTIFY_DELETE = 6,
 	FUSE_NOTIFY_CODE_MAX,
 };
 
@@ -663,6 +665,13 @@ struct fuse_notify_inval_inode_out {
 
 struct fuse_notify_inval_entry_out {
 	__u64	parent;
+	__u32	namelen;
+	__u32	padding;
+};
+
+struct fuse_notify_delete_out {
+	__u64	parent;
+	__u64	child;
 	__u32	namelen;
 	__u32	padding;
 };

@@ -1323,6 +1323,22 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
                                      const char *name, size_t namelen);
 
 /**
+ * Notify to invalidate parent attributes and delete the dentry matching
+ * parent/name if the dentry's inode number matches child (otherwise it
+ * will invalidate the matching dentry).
+ *
+ * @param ch the channel through which to send the notification
+ * @param parent inode number
+ * @param child inode number
+ * @param name file name
+ * @param namelen strlen() of file name
+ * @return zero for success, -errno for failure
+ */
+int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
+				fuse_ino_t parent, fuse_ino_t child,
+				const char *name, size_t namelen);
+
+/**
  * Store data to the kernel buffers
  *
  * Synchronously store data in the kernel buffers belonging to the
