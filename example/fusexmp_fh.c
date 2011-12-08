@@ -283,16 +283,19 @@ static int xmp_ftruncate(const char *path, off_t size,
 	return 0;
 }
 
+#ifdef HAVE_UTIMENSAT
 static int xmp_utimens(const char *path, const struct timespec ts[2])
 {
 	int res;
 
+	/* don't use utime/utimes since they follow symlinks */
 	res = utimensat(0, path, ts, AT_SYMLINK_NOFOLLOW);
 	if (res == -1)
 		return -errno;
 
 	return 0;
 }
+#endif
 
 static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
@@ -513,7 +516,9 @@ static struct fuse_operations xmp_oper = {
 	.chown		= xmp_chown,
 	.truncate	= xmp_truncate,
 	.ftruncate	= xmp_ftruncate,
+#ifdef HAVE_UTIMENSAT
 	.utimens	= xmp_utimens,
+#endif
 	.create		= xmp_create,
 	.open		= xmp_open,
 	.read		= xmp_read,
