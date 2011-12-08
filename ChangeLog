@@ -1,3 +1,8 @@
+2011-12-08  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix build if FUSE_NODE_SLAB is not defined.  Patch by Emmanuel
+	Dreyfus
+
 2011-12-07  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fuse_lowlevel_notify_delete() which tells the kernel that a

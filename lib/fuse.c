@@ -343,17 +343,6 @@ static inline void list_del(struct list_head *entry)
 	prev->next = next;
 }
 
-#ifdef FUSE_NODE_SLAB
-static struct node_slab *list_to_slab(struct list_head *head)
-{
-	return (struct node_slab *) head;
-}
-
-static struct node_slab *node_to_slab(struct fuse *f, struct node *node)
-{
-	return (struct node_slab *) (((uintptr_t) node) & ~((uintptr_t) f->pagesize - 1));
-}
-
 static inline int lru_enabled(struct fuse *f)
 {
 	return f->conf.remember > 0;
@@ -370,6 +359,17 @@ static size_t get_node_size(struct fuse *f)
 		return sizeof(struct node_lru);
 	else
 		return sizeof(struct node);
+}
+
+#ifdef FUSE_NODE_SLAB
+static struct node_slab *list_to_slab(struct list_head *head)
+{
+	return (struct node_slab *) head;
+}
+
+static struct node_slab *node_to_slab(struct fuse *f, struct node *node)
+{
+	return (struct node_slab *) (((uintptr_t) node) & ~((uintptr_t) f->pagesize - 1));
 }
 
 static int alloc_slab(struct fuse *f)
