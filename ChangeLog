@@ -6,6 +6,8 @@
 	returned for unlinked but still open files if the kernel sent a
 	FORGET request for the parent directory.
 
+	* Free request in fuse_reply_data().
+
 2011-12-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix build if FUSE_NODE_SLAB is not defined.  Patch by Emmanuel

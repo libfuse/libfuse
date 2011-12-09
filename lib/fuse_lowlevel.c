@@ -769,10 +769,12 @@ int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 	out.error = 0;
 
 	res = fuse_send_data_iov(req->f, req->ch, iov, 1, bufv, flags);
-	if (res <= 0)
+	if (res <= 0) {
+		fuse_free_req(req);
 		return res;
-	else
+	} else {
 		return fuse_reply_err(req, res);
+	}
 }
 
 int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
