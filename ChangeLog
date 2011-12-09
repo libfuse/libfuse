@@ -2,6 +2,10 @@
 
 	* Fix hang in wait_on_path().  Reported by Ville Silventoinen
 
+	* Don't unhash name in FORGET.  This resulted in ENOENT being
+	returned for unlinked but still open files if the kernel sent a
+	FORGET request for the parent directory.
+
 2011-12-08  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix build if FUSE_NODE_SLAB is not defined.  Patch by Emmanuel

@@ -775,7 +775,7 @@ static void delete_node(struct fuse *f, struct node *node)
 			(unsigned long long) node->nodeid);
 
 	assert(node->treelock == 0);
-	assert(!node->name);
+	unhash_name(f, node);
 	if (lru_enabled(f))
 		remove_node_lru(node);
 	unhash_id(f, node);
@@ -1258,7 +1258,6 @@ static void forget_node(struct fuse *f, fuse_ino_t nodeid, uint64_t nlookup)
 	assert(node->nlookup >= nlookup);
 	node->nlookup -= nlookup;
 	if (!node->nlookup) {
-		unhash_name(f, node);
 		unref_node(f, node);
 	} else if (lru_enabled(f) && node->nlookup == 1) {
 		set_forget_time(f, node);
