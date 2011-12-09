@@ -912,6 +912,26 @@ static void unlock_path(struct fuse *f, fuse_ino_t nodeid, struct node *wnode,
 	}
 }
 
+static void release_tickets(struct fuse *f, fuse_ino_t nodeid,
+			    struct node *wnode, int ticket)
+{
+	struct node *node;
+
+	if (wnode) {
+		if (wnode->ticket != ticket)
+			return;
+
+		wnode->ticket = 0;
+	}
+
+	for (node = get_node(f, nodeid);
+	     node->nodeid != FUSE_ROOT_ID; node = node->parent) {
+		if (node->ticket != ticket)
+			return;
+		node->ticket = 0;
+	}
+}
+
 static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 			char **path, struct node **wnodep, int ticket)
 {
@@ -924,9 +944,10 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 
 	*path = NULL;
 
+	err = -ENOMEM;
 	buf = malloc(bufsize);
 	if (buf == NULL)
-		return -ENOMEM;
+		goto out_err;
 
 	s = buf + bufsize - 1;
 	*s = '\0';
@@ -992,6 +1013,10 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 		unlock_path(f, nodeid, wnode, node, ticket);
  out_free:
 	free(buf);
+
+ out_err:
+	if (ticket && err != -EAGAIN)
+		release_tickets(f, nodeid, wnode, ticket);
 
 	return err;
 }
@@ -1133,9 +1158,12 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 	if (!err) {
 		err = try_get_path(f, nodeid2, name2, path2, wnode2, ticket);
 		if (err) {
-			unlock_path(f, nodeid1, wnode1 ? *wnode1 : NULL, NULL,
-				    ticket);
+			struct node *wn1 = wnode1 ? *wnode1 : NULL;
+
+			unlock_path(f, nodeid1, wn1, NULL, ticket);
 			free(path1);
+			if (ticket && err != -EAGAIN)
+				release_tickets(f, nodeid1, wn1, ticket);
 		}
 	}
 	return err;
