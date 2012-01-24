@@ -969,17 +969,6 @@ int fuse_reply_poll(fuse_req_t req, unsigned revents)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_mmap(fuse_req_t req, uint64_t map_id, size_t length)
-{
-	struct fuse_mmap_out arg;
-
-	memset(&arg, 0, sizeof(arg));
-	arg.mapid = map_id;
-	arg.size = length;
-
-	return send_reply_ok(req, &arg, sizeof(arg));
-}
-
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
@@ -1728,38 +1717,6 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 }
 
-static void do_mmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
-{
-	struct fuse_mmap_in *arg = (struct fuse_mmap_in *) inarg;
-	struct fuse_file_info fi;
-
-	memset(&fi, 0, sizeof(fi));
-	fi.fh = arg->fh;
-	fi.fh_old = fi.fh;
-
-	if (req->f->op.mmap)
-		req->f->op.mmap(req, nodeid, arg->addr, arg->len, arg->prot,
-				arg->flags, arg->offset, &fi);
-	else
-		fuse_reply_err(req, ENOSYS);
-
-}
-
-static void do_munmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
-{
-	struct fuse_munmap_in *arg = (struct fuse_munmap_in *) inarg;
-	struct fuse_file_info fi;
-
-	memset(&fi, 0, sizeof(fi));
-	fi.fh = arg->fh;
-	fi.fh_old = fi.fh;
-
-	if (req->f->op.munmap)
-		req->f->op.munmap(req, nodeid, arg->mapid, arg->size, &fi);
-	else
-		fuse_reply_err(req, ENOSYS);
-}
-
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -2304,8 +2261,6 @@ static struct {
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
 	[FUSE_NOTIFY_REPLY] = { (void *) 1,    "NOTIFY_REPLY" },
 	[FUSE_BATCH_FORGET] = { do_batch_forget, "BATCH_FORGET" },
-	[FUSE_MMAP]        = { do_mmap, "MMAP" },
-	[FUSE_MUNMAP]      = { do_munmap, "MUNMAP" },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 

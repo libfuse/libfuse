@@ -93,28 +93,6 @@ static void cuse_fll_poll(fuse_req_t req, fuse_ino_t ino,
 	req_clop(req)->poll(req, fi, ph);
 }
 
-static void cuse_fll_mmap(fuse_req_t req, fuse_ino_t ino, uint64_t addr,
-			  size_t length, int prot, int flags, off_t offset,
-			  struct fuse_file_info *fi)
-{
-	(void)ino;
-	req_clop(req)->mmap(req, addr, length, prot, flags, offset, fi);
-}
-
-static void cuse_fll_munmap(fuse_req_t req, fuse_ino_t ino, uint64_t map_id,
-			    size_t length, struct fuse_file_info *fi)
-{
-	(void)ino;
-	req_clop(req)->munmap(req, map_id, length, fi);
-}
-
-static void cuse_fll_retrieve_reply(fuse_req_t req, void *cookie,
-				    fuse_ino_t ino, off_t offset,
-				    struct fuse_bufvec *bufv)
-{
-	req_clop(req)->retrieve_reply(req, cookie, ino, offset, bufv);
-}
-
 static size_t cuse_pack_info(int argc, const char **argv, char *buf)
 {
 	size_t size = 0;
@@ -191,10 +169,6 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 	lop.fsync	= clop->fsync		? cuse_fll_fsync	: NULL;
 	lop.ioctl	= clop->ioctl		? cuse_fll_ioctl	: NULL;
 	lop.poll	= clop->poll		? cuse_fll_poll		: NULL;
-	lop.mmap	= clop->mmap		? cuse_fll_mmap		: NULL;
-	lop.munmap	= clop->munmap		? cuse_fll_munmap	: NULL;
-	lop.retrieve_reply = clop->retrieve_reply ?
-		cuse_fll_retrieve_reply : NULL;
 
 	se = fuse_lowlevel_new_common(args, &lop, sizeof(lop), userdata);
 	if (!se) {

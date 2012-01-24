@@ -996,37 +996,6 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*flock) (fuse_req_t req, fuse_ino_t ino,
 		       struct fuse_file_info *fi, int op);
-
-	/**
-	 * Direct mmap (CUSE only for now)
-	 *
-	 * @param req request handle
-	 * @param ino the inode number
-	 * @param addr starting address (in clients address space)
-	 * @param length length of the mapping
-	 * @param prot desired memory protection of the mapping
-	 * @param flags mmap flags
-	 * @param fi file information
-	 *
-	 * Introduced in version 2.9
-	 */
-	void (*mmap) (fuse_req_t req, fuse_ino_t ino, uint64_t addr,
-		      size_t length, int prot, int flags, off_t offset,
-		      struct fuse_file_info *fi);
-
-	/**
-	 * Direct munmap (CUSE only for now)
-	 *
-	 * @param req request handle
-	 * @param ino the inode number
-	 * @param map_id identifies the mapping
-	 * @param length length of the mapping
-	 * @param fi file information
-	 *
-	 * Introduced in version 2.9
-	 */
-	void (*munmap) (fuse_req_t req, fuse_ino_t ino, uint64_t map_id,
-			size_t length, struct fuse_file_info *fi);
 };
 
 /**
@@ -1315,18 +1284,6 @@ int fuse_reply_ioctl_iov(fuse_req_t req, int result, const struct iovec *iov,
  * @param revents poll result event mask
  */
 int fuse_reply_poll(fuse_req_t req, unsigned revents);
-
-/**
- * Reply to an mmap request
- *
- * Possible requests:
- *   mmap
- *
- * @param req request handle
- * @param map_id identifies the mapping
- * @param length length of the mapping (from zero offset)
- */
-int fuse_reply_mmap(fuse_req_t req, uint64_t map_id, size_t length);
 
 /* ----------------------------------------------------------- *
  * Notification						       *

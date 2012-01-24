@@ -194,7 +194,6 @@ FUSE_2.9 {
 		fuse_start_cleanup_thread;
 		fuse_stop_cleanup_thread;
 		fuse_clean_cache;
-		fuse_reply_mmap;
 		fuse_lowlevel_notify_delete;
 
 	local:
