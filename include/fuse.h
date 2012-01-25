@@ -597,6 +597,11 @@ int fuse_loop(struct fuse *f);
 /**
  * Exit from event loop
  *
+ * This sets the exit flag on the event loop.  Note: this will only
+ * cause immediate exit if called from a signal handler or from a
+ * filesystem operation.  Otherwise the loop will exit on the next
+ * event (filesystem operation or signal).
+ *
  * @param f the FUSE handle
  */
 void fuse_exit(struct fuse *f);
