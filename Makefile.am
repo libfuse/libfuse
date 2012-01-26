@@ -13,6 +13,8 @@ EXTRA_DIST =			\
 	doc/kernel.txt		\
 	doc/Doxyfile
 
+man_MANS = doc/fusermount.1 doc/mount.fuse.8 doc/ulockmgr_server.1
+
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = fuse.pc
 

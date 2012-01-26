@@ -1,3 +1,9 @@
+2012-01-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add man pages for fusermount, mount.fuse and ulockmgr_server.
+	Lifted from the Debian package.  The man pages were written by
+	Daniel Baumann and Bastien Roucaries
+
 2012-01-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Disable symbol versions on MacOSX.  Patch by Anatol Pomozov
