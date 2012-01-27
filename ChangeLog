@@ -1,3 +1,8 @@
+2012-01-27  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Interpret octal escape codes in options.  Requested by Jan
+	Engelhardt
+
 2012-01-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add man pages for fusermount, mount.fuse and ulockmgr_server.

@@ -309,9 +309,21 @@ static int process_real_option_group(struct fuse_opt_context *ctx, char *opts)
 				return -1;
 			d = opts;
 		} else {
-			if (s[0] == '\\' && s[1] != '\0')
+			if (s[0] == '\\' && s[1] != '\0') {
 				s++;
-			*d++ = *s;
+				if (s[0] >= '0' && s[0] <= '3' &&
+				    s[1] >= '0' && s[1] <= '7' &&
+				    s[2] >= '0' && s[2] <= '7') {
+					*d++ = (s[0] - '0') * 0100 +
+						(s[1] - '0') * 0010 +
+						(s[2] - '0');
+					s += 2;
+				} else {
+					*d++ = *s;
+				}
+			} else {
+				*d++ = *s;
+			}
 		}
 		s++;
 	}
