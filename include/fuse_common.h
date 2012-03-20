@@ -27,11 +27,6 @@
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 10 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
 
-/* This interface uses 64 bit off_t */
-#if _FILE_OFFSET_BITS != 64
-#error Please add -D_FILE_OFFSET_BITS=64 to your compile flags!
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -481,6 +476,20 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
 
 #ifdef __cplusplus
 }
+#endif
+
+
+/*
+ * This interface uses 64 bit off_t.
+ *
+ * On 32bit systems please add -D_FILE_OFFSET_BITS=64 to your compile flags!
+ */
+
+#if defined(__GNUC__) && (__GNUC__ > 4 || __GNUC__ == 4 && __GNUC_MINOR__ >= 6) && !defined __cplusplus
+_Static_assert(sizeof(off_t) == 8, "fuse: off_t must be 64bit");
+#else
+struct _fuse_off_t_must_be_64bit_dummy_struct \
+	{ unsigned _fuse_off_t_must_be_64bit:((sizeof(off_t) == 8) ? 1 : -1); };
 #endif
 
 #endif /* _FUSE_COMMON_H_ */

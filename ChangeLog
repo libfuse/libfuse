@@ -6,6 +6,9 @@
 	* libfuse: use O_CLOEXEC flag when opening /dev/fuse device.
 	Patch by Richard W.M. Jones
 
+	* libfuse: don't force -D_FILE_OFFSET_BITS=64 in pkgconfig file.
+	Patch by Richard W.M. Jones
+
 2013-02-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fuse_daemonize(): chdir to "/" even if not running in the
