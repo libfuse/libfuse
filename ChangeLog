@@ -3,6 +3,9 @@
 	* libfuse: change the type of fuse_ino_t from 'unsigned long' to
 	'uint64_t'
 
+	* libfuse: use O_CLOEXEC flag when opening /dev/fuse device.
+	Patch by Richard W.M. Jones
+
 2013-02-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fuse_daemonize(): chdir to "/" even if not running in the

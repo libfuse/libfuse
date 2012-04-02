@@ -406,6 +406,10 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	return rv;
 }
 
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
 static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			  const char *mnt_opts)
 {
@@ -442,7 +446,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		return -2;
 	}
 
-	fd = open(devname, O_RDWR);
+	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
 			fprintf(stderr, "fuse: device not found, try 'modprobe fuse' first\n");
@@ -451,6 +455,8 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 				devname, strerror(errno));
 		return -1;
 	}
+	if (!O_CLOEXEC)
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
 
 	snprintf(tmp, sizeof(tmp),  "fd=%i,rootmode=%o,user_id=%i,group_id=%i",
 		 fd, stbuf.st_mode & S_IFMT, getuid(), getgid());
