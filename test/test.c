@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
@@ -15,6 +16,7 @@ static char testfile[1024];
 static char testfile2[1024];
 static char testdir[1024];
 static char testdir2[1024];
+static char subfile[1024];
 static char testname[256];
 static char testdata[] = "abcdefghijklmnopqrstuvwxyz";
 static char testdata2[] = "1234567890-=qwertyuiop[]\asdfghjkl;'zxcvbnm,./";
@@ -22,25 +24,28 @@ static const char *testdir_files[] = { "f1", "f2", NULL};
 static char zerodata[4096];
 static int testdatalen = sizeof(testdata) - 1;
 static int testdata2len = sizeof(testdata2) - 1;
+static unsigned int testnum = 1;
+static unsigned int select_test = 0;
+static unsigned int skip_test = 0;
 
 #define MAX_ENTRIES 1024
 
 static void test_perror(const char *func, const char *msg)
 {
-	fprintf(stderr, "[%s] %s() - %s: %s\n", testname, func, msg,
+	fprintf(stderr, "%s %s() - %s: %s\n", testname, func, msg,
 		strerror(errno));
 }
 
 static void test_error(const char *func, const char *msg, ...)
 	__attribute__ ((format (printf, 2, 3)));
 
-static void start_test(const char *fmt, ...)
+static void __start_test(const char *fmt, ...)
 	__attribute__ ((format (printf, 1, 2)));
 
 static void test_error(const char *func, const char *msg, ...)
 {
 	va_list ap;
-	fprintf(stderr, "[%s] %s() - ", testname, func);
+	fprintf(stderr, "%s %s() - ", testname, func);
 	va_start(ap, msg);
 	vfprintf(stderr, msg, ap);
 	va_end(ap);
@@ -49,15 +54,27 @@ static void test_error(const char *func, const char *msg, ...)
 
 static void success(void)
 {
-	fprintf(stderr, "[%s] OK\n", testname);
+	fprintf(stderr, "%s OK\n", testname);
 }
 
-static void start_test(const char *fmt, ...)
+static void __start_test(const char *fmt, ...)
 {
+	unsigned int n;
 	va_list ap;
+	n = sprintf(testname, "%3i [", testnum++);
 	va_start(ap, fmt);
-	vsprintf(testname, fmt, ap);
+	n += vsprintf(testname + n, fmt, ap);
 	va_end(ap);
+	sprintf(testname + n, "]");
+}
+
+#define start_test(msg, args...) { \
+	if ((select_test && testnum != select_test) || \
+	    (testnum == skip_test)) { \
+		testnum++; \
+		return 0; \
+	} \
+	__start_test(msg, ##args);		\
 }
 
 #define PERROR(msg) test_perror(__FUNCTION__, msg)
@@ -178,6 +195,7 @@ static int check_times(const char *path, time_t atime, time_t mtime)
 	return 0;
 }
 
+#if 0
 static int fcheck_times(int fd, time_t atime, time_t mtime)
 {
 	int err = 0;
@@ -200,6 +218,7 @@ static int fcheck_times(int fd, time_t atime, time_t mtime)
 
 	return 0;
 }
+#endif
 
 static int check_nlink(const char *path, nlink_t nlink)
 {
@@ -1104,6 +1123,65 @@ static int test_link(void)
 	return 0;
 }
 
+static int test_link2(void)
+{
+	const char *data = testdata;
+	int datalen = testdatalen;
+	int err = 0;
+	int res;
+
+	start_test("link-unlink-link");
+	res = create_file(testfile, data, datalen);
+	if (res == -1)
+		return -1;
+
+	unlink(testfile2);
+	res = link(testfile, testfile2);
+	if (res == -1) {
+		PERROR("link");
+		return -1;
+	}
+	res = unlink(testfile);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testfile);
+	if (res == -1)
+		return -1;
+	res = link(testfile2, testfile);
+	if (res == -1) {
+		PERROR("link");
+	}
+	res = check_type(testfile, S_IFREG);
+	if (res == -1)
+		return -1;
+	err += check_mode(testfile, 0644);
+	err += check_nlink(testfile, 2);
+	err += check_size(testfile, datalen);
+	err += check_data(testfile, data, 0, datalen);
+
+	res = unlink(testfile2);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	err += check_nlink(testfile, 1);
+	res = unlink(testfile);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testfile);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	success();
+	return 0;
+}
+
 static int test_rename_file(void)
 {
 	const char *data = testdata;
@@ -1258,17 +1336,74 @@ static int test_mkdir(void)
 	return 0;
 }
 
+#define test_create_ro_dir(flags)	 \
+	do_test_create_ro_dir(flags, #flags)
+
+static int do_test_create_ro_dir(int flags, const char *flags_str)
+{
+	int res;
+	int err = 0;
+	int fd;
+
+	start_test("open(%s) in read-only directory", flags_str);
+	rmdir(testdir);
+	res = mkdir(testdir, 0555);
+	if (res == -1) {
+		PERROR("mkdir");
+		return -1;
+	}
+	fd = open(subfile, flags, 0644);
+	if (fd != -1) {
+		close(fd);
+		unlink(subfile);
+		ERROR("open should have failed");
+		err--;
+	} else {
+		res = check_nonexist(subfile);
+		if (res == -1)
+			err--;
+	}
+	unlink(subfile);
+	res = rmdir(testdir);
+	if (res == -1) {
+		PERROR("rmdir");
+		return -1;
+	}
+	res = check_nonexist(testdir);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	success();
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	const char *basepath;
 	int err = 0;
 
 	umask(0);
-	if (argc != 2) {
-		fprintf(stderr, "usage: %s testdir\n", argv[0]);
+	if (argc < 2 || argc > 3) {
+		fprintf(stderr, "usage: %s testdir [test#]\n", argv[0]);
 		return 1;
 	}
 	basepath = argv[1];
+	if (argc == 3) {
+		char *endptr;
+		char *arg = argv[2];
+		if (arg[0] == '-') {
+			arg++;
+			skip_test = strtoul(arg, &endptr, 10);
+		} else {
+			select_test = strtoul(argv[2], &endptr, 10);
+		}
+		if (arg[0] == '\0' || *endptr != '\0') {
+			fprintf(stderr, "invalid number: '%s'\n", arg);
+			return 1;
+		}
+	}
 	assert(strlen(basepath) < 512);
 	if (basepath[0] != '/') {
 		fprintf(stderr, "testdir must be an absolute path\n");
@@ -1279,11 +1414,13 @@ int main(int argc, char *argv[])
 	sprintf(testfile2, "%s/testfile2", basepath);
 	sprintf(testdir, "%s/testdir", basepath);
 	sprintf(testdir2, "%s/testdir2", basepath);
+	sprintf(subfile, "%s/subfile", testdir2);
 	err += test_create();
 	err += test_create_unlink();
 	err += test_mknod();
 	err += test_symlink();
 	err += test_link();
+	err += test_link2();
 	err += test_mkfifo();
 	err += test_mkdir();
 	err += test_rename_file();
@@ -1336,6 +1473,10 @@ int main(int argc, char *argv[])
 	err += test_open_acc(O_RDONLY, 0000, EACCES);
 	err += test_open_acc(O_WRONLY, 0000, EACCES);
 	err += test_open_acc(O_RDWR,   0000, EACCES);
+	err += test_create_ro_dir(O_CREAT);
+	err += test_create_ro_dir(O_CREAT | O_EXCL);
+	err += test_create_ro_dir(O_CREAT | O_WRONLY);
+	err += test_create_ro_dir(O_CREAT | O_TRUNC);
 
 	unlink(testfile);
 	unlink(testfile2);
