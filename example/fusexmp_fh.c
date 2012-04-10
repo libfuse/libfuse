@@ -539,6 +539,9 @@ static struct fuse_operations xmp_oper = {
 	.flock		= xmp_flock,
 
 	.flag_nullpath_ok = 1,
+#if HAVE_UTIMENSAT
+	.flag_utime_omit_ok = 1,
+#endif
 };
 
 int main(int argc, char *argv[])

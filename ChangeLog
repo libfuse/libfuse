@@ -3,6 +3,10 @@
 	* Check protocol version before sending notifications and return
 	-ENOSYS if a particular notification is not supported.
 
+	* Add 'flag_utime_omit_ok' flag to fuse_operations.  If the
+	filesystem sets this flag then ->utimens() will receive UTIME_OMIT
+	and UTIME_NOW values as specified in utimensat(2).
+
 2012-01-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Interpret octal escape codes in options.  Requested by Jan

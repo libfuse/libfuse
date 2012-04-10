@@ -132,6 +132,7 @@ struct fuse {
 	int intr_installed;
 	struct fuse_fs *fs;
 	int nullpath_ok;
+	int utime_omit_ok;
 	int curr_ticket;
 	struct lock_queue_element *lockq;
 	int pagesize;
@@ -2720,6 +2721,29 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 				err = fuse_fs_truncate(f->fs, path,
 						       attr->st_size);
 		}
+#ifdef HAVE_UTIMENSAT
+		if (!err && f->utime_omit_ok &&
+		    (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME))) {
+			struct timespec tv[2];
+
+			tv[0].tv_sec = 0;
+			tv[1].tv_sec = 0;
+			tv[0].tv_nsec = UTIME_OMIT;
+			tv[1].tv_nsec = UTIME_OMIT;
+
+			if (valid & FUSE_SET_ATTR_ATIME_NOW)
+				tv[0].tv_nsec = UTIME_NOW;
+			else if (valid & FUSE_SET_ATTR_ATIME)
+				tv[0] = attr->st_atim;
+
+			if (valid & FUSE_SET_ATTR_MTIME_NOW)
+				tv[1].tv_nsec = UTIME_NOW;
+			else if (valid & FUSE_SET_ATTR_MTIME)
+				tv[1] = attr->st_mtim;
+
+			err = fuse_fs_utimens(f->fs, path, tv);
+		} else
+#endif
 		if (!err &&
 		    (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) ==
 		    (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) {
@@ -4401,6 +4425,7 @@ static int fuse_push_module(struct fuse *f, const char *module,
 	f->fs = newfs;
 	f->nullpath_ok = newfs->op.flag_nullpath_ok && f->nullpath_ok;
 	f->conf.nopath = newfs->op.flag_nopath && f->conf.nopath;
+	f->utime_omit_ok = newfs->op.flag_utime_omit_ok && f->utime_omit_ok;
 	return 0;
 }
 
@@ -4496,6 +4521,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	f->fs = fs;
 	f->nullpath_ok = fs->op.flag_nullpath_ok;
 	f->conf.nopath = fs->op.flag_nopath;
+	f->utime_omit_ok = fs->op.flag_utime_omit_ok;
 
 	/* Oh f**k, this is ugly! */
 	if (!fs->op.lock) {
@@ -4560,6 +4586,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	if (f->conf.debug) {
 		fprintf(stderr, "nullpath_ok: %i\n", f->nullpath_ok);
 		fprintf(stderr, "nopath: %i\n", f->conf.nopath);
+		fprintf(stderr, "utime_omit_ok: %i\n", f->utime_omit_ok);
 	}
 
 	/* Trace topmost layer by default */
