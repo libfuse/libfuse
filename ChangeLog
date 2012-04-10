@@ -1,3 +1,8 @@
+2012-04-10  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Check protocol version before sending notifications and return
+	-ENOSYS if a particular notification is not supported.
+
 2012-01-27  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Interpret octal escape codes in options.  Requested by Jan

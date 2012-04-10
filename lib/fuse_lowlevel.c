@@ -2028,6 +2028,9 @@ int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
 	if (!f)
 		return -ENODEV;
 
+	if (f->conn.proto_minor < 18)
+		return -ENOSYS;
+
 	outarg.parent = parent;
 	outarg.child = child;
 	outarg.namelen = namelen;
@@ -2058,6 +2061,9 @@ int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
 	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
 	if (!f)
 		return -ENODEV;
+
+	if (f->conn.proto_minor < 15)
+		return -ENOSYS;
 
 	out.unique = 0;
 	out.error = FUSE_NOTIFY_STORE;
@@ -2137,6 +2143,9 @@ int fuse_lowlevel_notify_retrieve(struct fuse_chan *ch, fuse_ino_t ino,
 	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
 	if (!f)
 		return -ENODEV;
+
+	if (f->conn.proto_minor < 15)
+		return -ENOSYS;
 
 	rreq = malloc(sizeof(*rreq));
 	if (rreq == NULL)
