@@ -1,5 +1,9 @@
 2012-04-20  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.9.0
+
+2012-04-20  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Add missing fuse_fs_flock to fuse_versionscript
 
 2012-04-10  Miklos Szeredi <miklos@szeredi.hu>
