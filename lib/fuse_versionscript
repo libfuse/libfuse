@@ -195,6 +195,7 @@ FUSE_2.9 {
 		fuse_stop_cleanup_thread;
 		fuse_clean_cache;
 		fuse_lowlevel_notify_delete;
+		fuse_fs_flock;
 
 	local:
 		*;
