@@ -13,6 +13,10 @@ What is new in 2.9
 
  - Add "auto_unmount" option
 
+ - Add "remember" option
+
+ - Add man pages for fusermount, mount.fuse and ulockmgr_server
+
  - API changes:
 
     o Introduce "store" and "retrieve" for accessing kernel buffers on
@@ -23,6 +27,12 @@ What is new in 2.9
     o Allow path calculation to be omitted on certain operations
 
     o Allow batching forget requests
+
+    o Add "flock" method
+
+    o Add support for ioctl on directories
+
+    o Add delete notification
 
  - Bug fixes and small improvements
 
