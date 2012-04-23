@@ -2281,6 +2281,23 @@ int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 		return -ENOSYS;
 }
 
+int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
+		off_t offset, off_t length, struct fuse_file_info *fi)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.fallocate) {
+		if (fs->debug)
+			fprintf(stderr, "fallocate %s mode %x, offset: %llu, length: %llu\n",
+				path,
+				mode,
+				(unsigned long long) offset,
+				(unsigned long long) length);
+
+		return fs->op.fallocate(path, mode, offset, length, fi);
+	} else
+		return -ENOSYS;
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -3990,6 +4007,24 @@ static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,
 		reply_err(req, err);
 }
 
+static void fuse_lib_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
+		off_t offset, off_t length, struct fuse_file_info *fi)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	struct fuse_intr_data d;
+	char *path;
+	int err;
+
+	err = get_path_nullok(f, ino, &path);
+	if (!err) {
+		fuse_prepare_interrupt(f, req, &d);
+		err = fuse_fs_fallocate(f->fs, path, mode, offset, length, fi);
+		fuse_finish_interrupt(f, req, &d);
+		free_path(f, ino, path);
+	}
+	reply_err(req, err);
+}
+
 static int clean_delay(struct fuse *f)
 {
 	/*
@@ -4084,6 +4119,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.bmap = fuse_lib_bmap,
 	.ioctl = fuse_lib_ioctl,
 	.poll = fuse_lib_poll,
+	.fallocate = fuse_lib_fallocate,
 };
 
 int fuse_notify_poll(struct fuse_pollhandle *ph)

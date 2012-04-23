@@ -575,6 +575,19 @@ struct fuse_operations {
 	 * Introduced in version 2.9
 	 */
 	int (*flock) (const char *, struct fuse_file_info *, int op);
+
+	/**
+	 * Allocates space for an open file
+	 *
+	 * This function ensures that required space is allocated for specified
+	 * file.  If this function returns success then any subsequent write
+	 * request to specified range is guaranteed not to fail because of lack
+	 * of space on the file system media.
+	 *
+	 * Introduced in version 2.9.1
+	 */
+	int (*fallocate) (const char *, int, off_t, off_t,
+			  struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -870,6 +883,8 @@ int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd, void *arg,
 int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi, struct fuse_pollhandle *ph,
 		 unsigned *reventsp);
+int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
+		 off_t offset, off_t length, struct fuse_file_info *fi);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn);
 void fuse_fs_destroy(struct fuse_fs *fs);
 

@@ -310,6 +310,29 @@ static int xmp_fsync(const char *path, int isdatasync,
 	return 0;
 }
 
+#ifdef HAVE_POSIX_FALLOCATE
+static int xmp_fallocate(const char *path, int mode,
+			off_t offset, off_t length, struct fuse_file_info *fi)
+{
+	int fd;
+	int res;
+
+	(void) fi;
+
+	if (mode)
+		return -EOPNOTSUPP;
+
+	fd = open(path, O_WRONLY);
+	if (fd == -1)
+		return -errno;
+
+	res = -posix_fallocate(fd, offset, length);
+
+	close(fd);
+	return res;
+}
+#endif
+
 #ifdef HAVE_SETXATTR
 /* xattr operations are optional and can safely be left unimplemented */
 static int xmp_setxattr(const char *path, const char *name, const char *value,
@@ -371,6 +394,9 @@ static struct fuse_operations xmp_oper = {
 	.statfs		= xmp_statfs,
 	.release	= xmp_release,
 	.fsync		= xmp_fsync,
+#ifdef HAVE_POSIX_FALLOCATE
+	.fallocate	= xmp_fallocate,
+#endif
 #ifdef HAVE_SETXATTR
 	.setxattr	= xmp_setxattr,
 	.getxattr	= xmp_getxattr,

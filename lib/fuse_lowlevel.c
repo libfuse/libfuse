@@ -1717,6 +1717,20 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 }
 
+static void do_fallocate(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_fallocate_in *arg = (struct fuse_fallocate_in *) inarg;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+
+	if (req->f->op.fallocate)
+		req->f->op.fallocate(req, nodeid, arg->mode, arg->offset, arg->length, &fi);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -2267,6 +2281,7 @@ static struct {
 	[FUSE_BMAP]	   = { do_bmap,	       "BMAP"	     },
 	[FUSE_IOCTL]	   = { do_ioctl,       "IOCTL"	     },
 	[FUSE_POLL]	   = { do_poll,        "POLL"	     },
+	[FUSE_FALLOCATE]   = { do_fallocate,   "FALLOCATE"   },
 	[FUSE_DESTROY]	   = { do_destroy,     "DESTROY"     },
 	[FUSE_NOTIFY_REPLY] = { (void *) 1,    "NOTIFY_REPLY" },
 	[FUSE_BATCH_FORGET] = { do_batch_forget, "BATCH_FORGET" },

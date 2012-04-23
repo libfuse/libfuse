@@ -196,7 +196,12 @@ FUSE_2.9 {
 		fuse_clean_cache;
 		fuse_lowlevel_notify_delete;
 		fuse_fs_flock;
+} FUSE_2.8;
+
+FUSE_2.9.1 {
+	global:
+		fuse_fs_fallocate;
 
 	local:
 		*;
-} FUSE_2.8;
+} FUSE_2.9;

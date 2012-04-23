@@ -996,6 +996,26 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*flock) (fuse_req_t req, fuse_ino_t ino,
 		       struct fuse_file_info *fi, int op);
+
+	/**
+	 * Allocate requested space. If this function returns success then
+	 * subsequent writes to the specified range shall not fail due to the lack
+	 * of free space on the file system storage media.
+	 *
+	 * Introduced in version 2.9
+	 *
+	 * Valid replies:
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param offset starting point for allocated region
+	 * @param length size of allocated region
+	 * @param mode determines the operation to be performed on the given range,
+	 *             see fallocate(2)
+	 */
+	void (*fallocate) (fuse_req_t req, fuse_ino_t ino, int mode,
+		       off_t offset, off_t length, struct fuse_file_info *fi);
 };
 
 /**

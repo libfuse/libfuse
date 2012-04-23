@@ -1,3 +1,7 @@
+2012-04-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Add fallocate operation.  Patch by Anatol Pomozov
+
 2012-05-16  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Linking to a library that uses threads requires the application
