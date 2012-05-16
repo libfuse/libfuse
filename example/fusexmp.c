@@ -6,7 +6,7 @@
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 
-  gcc -Wall `pkg-config fuse --cflags --libs` fusexmp.c -o fusexmp
+  gcc -Wall fusexmp.c `pkg-config fuse --cflags --libs` -o fusexmp
 */
 
 #define FUSE_USE_VERSION 26

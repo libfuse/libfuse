@@ -5,6 +5,9 @@
 	be linked to stubs in glibc.  So move -pthread from Libs.private
 	to Libs in fuse.pc.  Reported by Werner Fink
 
+	* Fix the compile command in the examples. Reported by Luciano
+	Dalle Ore
+
 2012-04-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.9.0

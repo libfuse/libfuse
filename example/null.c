@@ -5,7 +5,7 @@
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 
-  gcc -Wall `pkg-config fuse --cflags --libs` null.c -o null
+  gcc -Wall null.c `pkg-config fuse --cflags --libs` -o null
 */
 
 #define FUSE_USE_VERSION 26

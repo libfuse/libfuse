@@ -5,7 +5,7 @@
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 
-  gcc -Wall `pkg-config fuse --cflags --libs` hello.c -o hello
+  gcc -Wall hello.c `pkg-config fuse --cflags --libs` -o hello
 */
 
 #define FUSE_USE_VERSION 26
