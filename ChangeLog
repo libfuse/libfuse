@@ -1,3 +1,10 @@
+2012-05-16  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Linking to a library that uses threads requires the application
+	to be linked with -pthreads otherwise some pthread functions will
+	be linked to stubs in glibc.  So move -pthread from Libs.private
+	to Libs in fuse.pc.  Reported by Werner Fink
+
 2012-04-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.9.0
