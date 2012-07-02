@@ -3,6 +3,8 @@
 	* Fix install of mount.fuse from out-of-tree build.  Patch by
 	Olivier Blin
 
+	* Fix build with automake >= 1.12.1.  Patch by Olivier Blin
+
 2012-04-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fallocate operation.  Patch by Anatol Pomozov

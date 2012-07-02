@@ -1,4 +1,5 @@
 AC_INIT(fuse, 2.9.0)
+AC_PREREQ(2.59d)
 AC_CONFIG_MACRO_DIR([m4])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE
@@ -7,13 +8,8 @@ AM_CONFIG_HEADER(include/config.h)
 
 AC_PROG_LIBTOOL
 AC_PROG_CC
+AC_PROG_MKDIR_P
 AM_PROG_CC_C_O
-
-# compatibility for automake < 1.8
-if test -z "$mkdir_p"; then
-	mkdir_p="../mkinstalldirs"
-	AC_SUBST(mkdir_p)
-fi
 
 case $target_os in
      *linux*)	arch=linux;;
