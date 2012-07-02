@@ -1,3 +1,8 @@
+2012-07-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix install of mount.fuse from out-of-tree build.  Patch by
+	Olivier Blin
+
 2012-04-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Add fallocate operation.  Patch by Anatol Pomozov

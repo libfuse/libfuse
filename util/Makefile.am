@@ -36,7 +36,7 @@ INIT_D_PATH = @INIT_D_PATH@
 
 install-exec-local:
 	$(mkdir_p) $(DESTDIR)$(MOUNT_FUSE_PATH)
-	$(INSTALL_PROGRAM) $(srcdir)/mount.fuse $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
+	$(INSTALL_PROGRAM) $(builddir)/mount.fuse $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
 	$(mkdir_p) $(DESTDIR)$(INIT_D_PATH)
 	$(INSTALL_SCRIPT) $(srcdir)/init_script $(DESTDIR)$(INIT_D_PATH)/fuse
 	@if test -x /usr/sbin/update-rc.d; then \
