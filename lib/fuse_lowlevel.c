@@ -2467,7 +2467,7 @@ enum {
 	KEY_VERSION,
 };
 
-static struct fuse_opt fuse_ll_opts[] = {
+static const struct fuse_opt fuse_ll_opts[] = {
 	{ "debug", offsetof(struct fuse_ll, debug), 1 },
 	{ "-d", offsetof(struct fuse_ll, debug), 1 },
 	{ "allow_root", offsetof(struct fuse_ll, allow_root), 1 },

@@ -575,7 +575,7 @@ static void subdir_destroy(void *data)
 	free(d);
 }
 
-static struct fuse_operations subdir_oper = {
+static const struct fuse_operations subdir_oper = {
 	.destroy	= subdir_destroy,
 	.init		= subdir_init,
 	.getattr	= subdir_getattr,
@@ -618,7 +618,7 @@ static struct fuse_operations subdir_oper = {
 	.flag_nopath = 1,
 };
 
-static struct fuse_opt subdir_opts[] = {
+static const struct fuse_opt subdir_opts[] = {
 	FUSE_OPT_KEY("-h", 0),
 	FUSE_OPT_KEY("--help", 0),
 	{ "subdir=%s", offsetof(struct subdir, base), 0 },

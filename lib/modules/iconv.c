@@ -592,7 +592,7 @@ static void iconv_destroy(void *data)
 	free(ic);
 }
 
-static struct fuse_operations iconv_oper = {
+static const struct fuse_operations iconv_oper = {
 	.destroy	= iconv_destroy,
 	.init		= iconv_init,
 	.getattr	= iconv_getattr,
@@ -635,7 +635,7 @@ static struct fuse_operations iconv_oper = {
 	.flag_nopath = 1,
 };
 
-static struct fuse_opt iconv_opts[] = {
+static const struct fuse_opt iconv_opts[] = {
 	FUSE_OPT_KEY("-h", 0),
 	FUSE_OPT_KEY("--help", 0),
 	{ "from_code=%s", offsetof(struct iconv, from_code), 0 },

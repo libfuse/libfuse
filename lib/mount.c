@@ -160,7 +160,7 @@ struct mount_flags {
 	int on;
 };
 
-static struct mount_flags mount_flags[] = {
+static const struct mount_flags mount_flags[] = {
 	{"rw",	    MS_RDONLY,	    0},
 	{"ro",	    MS_RDONLY,	    1},
 	{"suid",    MS_NOSUID,	    0},
