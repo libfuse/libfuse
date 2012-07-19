@@ -9,7 +9,7 @@
   gcc -Wall fsel.c `pkg-config fuse --cflags --libs` -o fsel
 */
 
-#define FUSE_USE_VERSION 29
+#define FUSE_USE_VERSION 30
 
 #include <fuse.h>
 #include <unistd.h>

@@ -1,5 +1,4 @@
-/*
-  FUSE: Filesystem in Userspace
+/*  FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
   This program can be distributed under the terms of the GNU LGPLv2.
@@ -20,10 +19,10 @@
 #include <sys/types.h>
 
 /** Major version of FUSE library interface */
-#define FUSE_MAJOR_VERSION 2
+#define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 9
+#define FUSE_MINOR_VERSION 0
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 10 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -468,34 +467,8 @@ void fuse_remove_signal_handlers(struct fuse_session *se);
  * Compatibility stuff					       *
  * ----------------------------------------------------------- */
 
-#if FUSE_USE_VERSION < 26
-#    ifdef __FreeBSD__
-#	 if FUSE_USE_VERSION < 25
-#	     error On FreeBSD API version 25 or greater must be used
-#	 endif
-#    endif
-#    include "fuse_common_compat.h"
-#    undef FUSE_MINOR_VERSION
-#    undef fuse_main
-#    define fuse_unmount fuse_unmount_compat22
-#    if FUSE_USE_VERSION == 25
-#	 define FUSE_MINOR_VERSION 5
-#	 define fuse_mount fuse_mount_compat25
-#    elif FUSE_USE_VERSION == 24 || FUSE_USE_VERSION == 22
-#	 define FUSE_MINOR_VERSION 4
-#	 define fuse_mount fuse_mount_compat22
-#    elif FUSE_USE_VERSION == 21
-#	 define FUSE_MINOR_VERSION 1
-#	 define fuse_mount fuse_mount_compat22
-#    elif FUSE_USE_VERSION == 11
-#	 warning Compatibility with API version 11 is deprecated
-#	 undef FUSE_MAJOR_VERSION
-#	 define FUSE_MAJOR_VERSION 1
-#	 define FUSE_MINOR_VERSION 1
-#	 define fuse_mount fuse_mount_compat1
-#    else
-#	 error Compatibility with API version other than 21, 22, 24, 25 and 11 not supported
-#    endif
+#if !defined(FUSE_USE_VERSION) || FUSE_USE_VERSION < 30
+#  error only API version 30 or greater is supported
 #endif
 
 #ifdef __cplusplus

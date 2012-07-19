@@ -9,7 +9,7 @@
   gcc -Wall cusexmp.c `pkg-config fuse --cflags --libs` -o cusexmp
 */
 
-#define FUSE_USE_VERSION 29
+#define FUSE_USE_VERSION 30
 
 #include <cuse_lowlevel.h>
 #include <fuse_opt.h>

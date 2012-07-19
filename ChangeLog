@@ -1,5 +1,11 @@
 2012-07-19  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Start of 3.0 series.  This is going to be a new major version of
+	the library breaking backward compatibility on the binary level as
+	well as the source level.
+
+2012-07-19  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Released 2.9.1
 
 2012-07-19  Miklos Szeredi <miklos@szeredi.hu>

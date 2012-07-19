@@ -9,7 +9,7 @@
   gcc -Wall fioc.c `pkg-config fuse --cflags --libs` -o fioc
 */
 
-#define FUSE_USE_VERSION 26
+#define FUSE_USE_VERSION 30
 
 #include <fuse.h>
 #include <stdlib.h>

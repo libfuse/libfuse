@@ -9,7 +9,7 @@
   gcc -Wall fusexmp_fh.c `pkg-config fuse --cflags --libs` -lulockmgr -o fusexmp_fh
 */
 
-#define FUSE_USE_VERSION 26
+#define FUSE_USE_VERSION 30
 
 #ifdef HAVE_CONFIG_H
 #include <config.h>

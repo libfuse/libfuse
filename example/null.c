@@ -8,7 +8,7 @@
   gcc -Wall null.c `pkg-config fuse --cflags --libs` -o null
 */
 
-#define FUSE_USE_VERSION 26
+#define FUSE_USE_VERSION 30
 
 #include <fuse.h>
 #include <string.h>
