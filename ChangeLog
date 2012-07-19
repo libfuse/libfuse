@@ -1,5 +1,9 @@
 2012-07-19  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.9.1
+
+2012-07-19  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Fix crash caused by freeing a stack address.  Reported by Itay
 	Perl
 
