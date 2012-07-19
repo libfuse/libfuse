@@ -4284,7 +4284,6 @@ struct fuse_context *fuse_get_context_compat22(void)
 {
 	return &fuse_get_context_internal()->ctx;
 }
-FUSE_SYMVER(".symver fuse_get_context_compat22,fuse_get_context@FUSE_2.2");
 
 int fuse_getgroups(int size, gid_t list[])
 {
@@ -4814,13 +4813,6 @@ struct fuse *fuse_new_compat1(int fd, int flags,
 				      11);
 }
 
-FUSE_SYMVER(".symver fuse_exited,__fuse_exited@");
-FUSE_SYMVER(".symver fuse_process_cmd,__fuse_process_cmd@");
-FUSE_SYMVER(".symver fuse_read_cmd,__fuse_read_cmd@");
-FUSE_SYMVER(".symver fuse_set_getcontext_func,__fuse_set_getcontext_func@");
-FUSE_SYMVER(".symver fuse_new_compat2,fuse_new@");
-FUSE_SYMVER(".symver fuse_new_compat22,fuse_new@FUSE_2.2");
-
 #endif /* __FreeBSD__ || __NetBSD__  */
 
 struct fuse *fuse_new_compat25(int fd, struct fuse_args *args,
@@ -4830,5 +4822,3 @@ struct fuse *fuse_new_compat25(int fd, struct fuse_args *args,
 	return fuse_new_common_compat25(fd, args, (struct fuse_operations *) op,
 					op_size, 25);
 }
-
-FUSE_SYMVER(".symver fuse_new_compat25,fuse_new@FUSE_2.5");

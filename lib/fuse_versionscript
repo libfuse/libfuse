@@ -1,4 +1,4 @@
-FUSE_2.2 {
+FUSE_3.0 {
 	global:
 		fuse_destroy;
 		fuse_exit;
@@ -9,19 +9,9 @@ FUSE_2.2 {
 		fuse_loop_mt;
 		fuse_loop_mt_proc;
 		fuse_main;
-		fuse_main_compat1;
-		fuse_main_compat2;
-		fuse_mount_compat1;
-		fuse_new_compat1;
-		fuse_new_compat2;
 		fuse_process_cmd;
 		fuse_read_cmd;
 		fuse_set_getcontext_func;
-		fuse_setup_compat2;
-};
-
-FUSE_2.4 {
-	global:
 		fuse_add_dirent;
 		fuse_chan_bufsize;
 		fuse_chan_data;
@@ -52,14 +42,6 @@ FUSE_2.4 {
 		fuse_session_next_chan;
 		fuse_session_process;
 		fuse_session_reset;
-} FUSE_2.2;
-
-FUSE_2.5 {
-	global:
-		fuse_lowlevel_new_compat;
-		fuse_main_real_compat22;
-		fuse_mount_compat22;
-		fuse_new_compat22;
 		fuse_opt_parse;
 		fuse_opt_add_opt;
 		fuse_opt_add_arg;
@@ -69,45 +51,26 @@ FUSE_2.5 {
 		fuse_remove_signal_handlers;
 		fuse_reply_create;
 		fuse_reply_open;
-		fuse_reply_open_compat;
 		fuse_reply_statfs;
-		fuse_reply_statfs_compat;
-		fuse_setup_compat22;
 		fuse_set_signal_handlers;
-} FUSE_2.4;
-
-FUSE_2.6 {
-	global:
 		fuse_add_direntry;
 		fuse_chan_new;
-		fuse_chan_new_compat24;
 		fuse_chan_recv;
 		fuse_daemonize;
 		fuse_get_session;
 		fuse_interrupted;
 		fuse_lowlevel_new;
-		fuse_lowlevel_new_compat25;
 		fuse_main_real;
-		fuse_main_real_compat25;
 		fuse_mount;
-		fuse_mount_compat25;
 		fuse_new;
-		fuse_new_compat25;
 		fuse_opt_insert_arg;
 		fuse_reply_lock;
 		fuse_req_interrupt_func;
 		fuse_req_interrupted;
 		fuse_session_remove_chan;
 		fuse_setup;
-		fuse_setup_compat25;
 		fuse_teardown;
-		fuse_teardown_compat22;
 		fuse_unmount;
-		fuse_unmount_compat22;
-} FUSE_2.5;
-
-FUSE_2.7 {
-	global:
 		fuse_fs_access;
 		fuse_fs_bmap;
 		fuse_fs_chmod;
@@ -148,15 +111,7 @@ FUSE_2.7 {
 		fuse_register_module;
 		fuse_reply_iov;
 		fuse_version;
-} FUSE_2.6;
-
-FUSE_2.7.5 {
-	global:
 		fuse_reply_bmap;
-} FUSE_2.7;
-
-FUSE_2.8 {
-	global:
 		cuse_lowlevel_new;
 		cuse_lowlevel_main;
 		cuse_lowlevel_setup;
@@ -178,10 +133,6 @@ FUSE_2.8 {
 		fuse_req_ctx;
 		fuse_req_getgroups;
 		fuse_session_data;
-} FUSE_2.7.5;
-
-FUSE_2.9 {
-	global:
 		fuse_buf_copy;
 		fuse_buf_size;
 		fuse_fs_read_buf;
@@ -196,12 +147,8 @@ FUSE_2.9 {
 		fuse_clean_cache;
 		fuse_lowlevel_notify_delete;
 		fuse_fs_flock;
-} FUSE_2.8;
-
-FUSE_2.9.1 {
-	global:
 		fuse_fs_fallocate;
 
 	local:
 		*;
-} FUSE_2.9;
+};

@@ -227,7 +227,3 @@ void fuse_chan_destroy(struct fuse_chan *ch)
 		ch->op.destroy(ch);
 	free(ch);
 }
-
-#ifndef __FreeBSD__
-FUSE_SYMVER(".symver fuse_chan_new_compat24,fuse_chan_new@FUSE_2.4");
-#endif

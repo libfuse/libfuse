@@ -118,5 +118,3 @@ int fuse_loop_mt(struct fuse *f)
 	fuse_stop_cleanup_thread(f);
 	return res;
 }
-
-FUSE_SYMVER(".symver fuse_loop_mt_proc,__fuse_loop_mt@");
