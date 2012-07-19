@@ -92,13 +92,6 @@ int fuse_opt_insert_arg(struct fuse_args *args, int pos, const char *arg)
 	return fuse_opt_insert_arg_common(args, pos, arg);
 }
 
-int fuse_opt_insert_arg_compat(struct fuse_args *args, int pos,
-			       const char *arg);
-int fuse_opt_insert_arg_compat(struct fuse_args *args, int pos, const char *arg)
-{
-	return fuse_opt_insert_arg_common(args, pos, arg);
-}
-
 static int next_arg(struct fuse_opt_context *ctx, const char *opt)
 {
 	if (ctx->argctr + 1 >= ctx->argc) {

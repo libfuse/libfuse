@@ -997,53 +997,6 @@ void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
 /** Get session from fuse object */
 struct fuse_session *fuse_get_session(struct fuse *f);
 
-/* ----------------------------------------------------------- *
- * Compatibility stuff					       *
- * ----------------------------------------------------------- */
-
-#if FUSE_USE_VERSION < 26
-#  include "fuse_compat.h"
-#  undef fuse_main
-#  if FUSE_USE_VERSION == 25
-#    define fuse_main(argc, argv, op)				\
-	fuse_main_real_compat25(argc, argv, op, sizeof(*(op)))
-#    define fuse_new fuse_new_compat25
-#    define fuse_setup fuse_setup_compat25
-#    define fuse_teardown fuse_teardown_compat22
-#    define fuse_operations fuse_operations_compat25
-#  elif FUSE_USE_VERSION == 22
-#    define fuse_main(argc, argv, op)				\
-	fuse_main_real_compat22(argc, argv, op, sizeof(*(op)))
-#    define fuse_new fuse_new_compat22
-#    define fuse_setup fuse_setup_compat22
-#    define fuse_teardown fuse_teardown_compat22
-#    define fuse_operations fuse_operations_compat22
-#    define fuse_file_info fuse_file_info_compat
-#  elif FUSE_USE_VERSION == 24
-#    error Compatibility with high-level API version 24 not supported
-#  else
-#    define fuse_dirfil_t fuse_dirfil_t_compat
-#    define __fuse_read_cmd fuse_read_cmd
-#    define __fuse_process_cmd fuse_process_cmd
-#    define __fuse_loop_mt fuse_loop_mt_proc
-#    if FUSE_USE_VERSION == 21
-#      define fuse_operations fuse_operations_compat2
-#      define fuse_main fuse_main_compat2
-#      define fuse_new fuse_new_compat2
-#      define __fuse_setup fuse_setup_compat2
-#      define __fuse_teardown fuse_teardown_compat22
-#      define __fuse_exited fuse_exited
-#      define __fuse_set_getcontext_func fuse_set_getcontext_func
-#    else
-#      define fuse_statfs fuse_statfs_compat1
-#      define fuse_operations fuse_operations_compat1
-#      define fuse_main fuse_main_compat1
-#      define fuse_new fuse_new_compat1
-#      define FUSE_DEBUG FUSE_DEBUG_COMPAT1
-#    endif
-#  endif
-#endif
-
 #ifdef __cplusplus
 }
 #endif

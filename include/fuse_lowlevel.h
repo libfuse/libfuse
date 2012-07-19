@@ -1808,28 +1808,6 @@ int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
  */
 void fuse_chan_destroy(struct fuse_chan *ch);
 
-/* ----------------------------------------------------------- *
- * Compatibility stuff					       *
- * ----------------------------------------------------------- */
-
-#if FUSE_USE_VERSION < 26
-#  include "fuse_lowlevel_compat.h"
-#  define fuse_chan_ops fuse_chan_ops_compat24
-#  define fuse_chan_new fuse_chan_new_compat24
-#  if FUSE_USE_VERSION == 25
-#    define fuse_lowlevel_ops fuse_lowlevel_ops_compat25
-#    define fuse_lowlevel_new fuse_lowlevel_new_compat25
-#  elif FUSE_USE_VERSION == 24
-#    define fuse_lowlevel_ops fuse_lowlevel_ops_compat
-#    define fuse_lowlevel_new fuse_lowlevel_new_compat
-#    define fuse_file_info fuse_file_info_compat
-#    define fuse_reply_statfs fuse_reply_statfs_compat
-#    define fuse_reply_open fuse_reply_open_compat
-#  else
-#    error Compatibility with low-level API version < 24 not supported
-#  endif
-#endif
-
 #ifdef __cplusplus
 }
 #endif

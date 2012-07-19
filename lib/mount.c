@@ -10,7 +10,6 @@
 #include "fuse_i.h"
 #include "fuse_misc.h"
 #include "fuse_opt.h"
-#include "fuse_common_compat.h"
 #include "mount_util.h"
 
 #include <stdio.h>
@@ -333,11 +332,6 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	waitpid(pid, NULL, 0);
 }
 
-void fuse_unmount_compat22(const char *mountpoint)
-{
-	fuse_kern_unmount(mountpoint, -1);
-}
-
 static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		const char *opts, int quiet)
 {
@@ -406,15 +400,6 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	}
 
 	return rv;
-}
-
-int fuse_mount_compat22(const char *mountpoint, const char *opts)
-{
-	struct mount_opts mo;
-	memset(&mo, 0, sizeof(mo));
-	mo.flags = MS_NOSUID | MS_NODEV;
-
-	return fuse_mount_fusermount(mountpoint, &mo, opts, 0);
 }
 
 static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,

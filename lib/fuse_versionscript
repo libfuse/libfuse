@@ -12,7 +12,6 @@ FUSE_3.0 {
 		fuse_process_cmd;
 		fuse_read_cmd;
 		fuse_set_getcontext_func;
-		fuse_add_dirent;
 		fuse_chan_bufsize;
 		fuse_chan_data;
 		fuse_chan_destroy;
@@ -20,8 +19,6 @@ FUSE_3.0 {
 		fuse_chan_receive;
 		fuse_chan_send;
 		fuse_chan_session;
-		fuse_dirent_size;
-		fuse_kern_chan_new;
 		fuse_lowlevel_is_lib_option;
 		fuse_reply_attr;
 		fuse_reply_buf;

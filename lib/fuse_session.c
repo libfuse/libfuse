@@ -8,8 +8,6 @@
 
 #include "fuse_i.h"
 #include "fuse_misc.h"
-#include "fuse_common_compat.h"
-#include "fuse_lowlevel_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,8 +25,6 @@ struct fuse_chan {
 	size_t bufsize;
 
 	void *data;
-
-	int compat;
 };
 
 struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data)
@@ -144,9 +140,8 @@ void *fuse_session_data(struct fuse_session *se)
 	return se->data;
 }
 
-static struct fuse_chan *fuse_chan_new_common(struct fuse_chan_ops *op, int fd,
-					      size_t bufsize, void *data,
-					      int compat)
+struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
+				size_t bufsize, void *data)
 {
 	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
 	if (ch == NULL) {
@@ -159,22 +154,8 @@ static struct fuse_chan *fuse_chan_new_common(struct fuse_chan_ops *op, int fd,
 	ch->fd = fd;
 	ch->bufsize = bufsize;
 	ch->data = data;
-	ch->compat = compat;
 
 	return ch;
-}
-
-struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
-				size_t bufsize, void *data)
-{
-	return fuse_chan_new_common(op, fd, bufsize, data, 0);
-}
-
-struct fuse_chan *fuse_chan_new_compat24(struct fuse_chan_ops_compat24 *op,
-					 int fd, size_t bufsize, void *data)
-{
-	return fuse_chan_new_common((struct fuse_chan_ops *) op, fd, bufsize,
-				    data, 24);
 }
 
 int fuse_chan_fd(struct fuse_chan *ch)
@@ -200,19 +181,8 @@ struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
 int fuse_chan_recv(struct fuse_chan **chp, char *buf, size_t size)
 {
 	struct fuse_chan *ch = *chp;
-	if (ch->compat)
-		return ((struct fuse_chan_ops_compat24 *) &ch->op)
-			->receive(ch, buf, size);
-	else
-		return ch->op.receive(chp, buf, size);
-}
 
-int fuse_chan_receive(struct fuse_chan *ch, char *buf, size_t size)
-{
-	int res;
-
-	res = fuse_chan_recv(&ch, buf, size);
-	return res >= 0 ? res : (res != -EINTR && res != -EAGAIN) ? -1 : 0;
+	return ch->op.receive(chp, buf, size);
 }
 
 int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[], size_t count)

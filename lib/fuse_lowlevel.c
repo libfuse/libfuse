@@ -12,8 +12,6 @@
 #include "fuse_kernel.h"
 #include "fuse_opt.h"
 #include "fuse_misc.h"
-#include "fuse_common_compat.h"
-#include "fuse_lowlevel_compat.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -240,13 +238,13 @@ int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
 	return res;
 }
 
-size_t fuse_dirent_size(size_t namelen)
+static size_t fuse_dirent_size(size_t namelen)
 {
 	return FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + namelen);
 }
 
-char *fuse_add_dirent(char *buf, const char *name, const struct stat *stbuf,
-		      off_t off)
+static char *fuse_add_dirent(char *buf, const char *name,
+			     const struct stat *stbuf, off_t off)
 {
 	unsigned namelen = strlen(name);
 	unsigned entlen = FUSE_NAME_OFFSET + namelen;
@@ -2201,17 +2199,6 @@ const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
 	return &req->ctx;
 }
 
-/*
- * The size of fuse_ctx got extended, so need to be careful about
- * incompatibility (i.e. a new binary cannot work with an old
- * library).
- */
-const struct fuse_ctx *fuse_req_ctx_compat24(fuse_req_t req);
-const struct fuse_ctx *fuse_req_ctx_compat24(fuse_req_t req)
-{
-	return fuse_req_ctx(req);
-}
-
 void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
 			     void *data)
 {
@@ -2685,14 +2672,9 @@ static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 #endif
 
 
-/*
- * always call fuse_lowlevel_new_common() internally, to work around a
- * misfeature in the FreeBSD runtime linker, which links the old
- * version of a symbol to internal references.
- */
-struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
-					      const struct fuse_lowlevel_ops *op,
-					      size_t op_size, void *userdata)
+struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
+				       const struct fuse_lowlevel_ops *op,
+				       size_t op_size, void *userdata)
 {
 	int err;
 	struct fuse_ll *f;
@@ -2756,14 +2738,6 @@ out_free:
 	free(f);
 out:
 	return NULL;
-}
-
-
-struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
-				       const struct fuse_lowlevel_ops *op,
-				       size_t op_size, void *userdata)
-{
-	return fuse_lowlevel_new_common(args, op, op_size, userdata);
 }
 
 #ifdef linux
@@ -2834,123 +2808,3 @@ int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 	return -ENOSYS;
 }
 #endif
-
-#if !defined(__FreeBSD__) && !defined(__NetBSD__)
-
-static void fill_open_compat(struct fuse_open_out *arg,
-			     const struct fuse_file_info_compat *f)
-{
-	arg->fh = f->fh;
-	if (f->direct_io)
-		arg->open_flags |= FOPEN_DIRECT_IO;
-	if (f->keep_cache)
-		arg->open_flags |= FOPEN_KEEP_CACHE;
-}
-
-static void convert_statfs_compat(const struct statfs *compatbuf,
-				  struct statvfs *buf)
-{
-	buf->f_bsize	= compatbuf->f_bsize;
-	buf->f_blocks	= compatbuf->f_blocks;
-	buf->f_bfree	= compatbuf->f_bfree;
-	buf->f_bavail	= compatbuf->f_bavail;
-	buf->f_files	= compatbuf->f_files;
-	buf->f_ffree	= compatbuf->f_ffree;
-	buf->f_namemax	= compatbuf->f_namelen;
-}
-
-int fuse_reply_open_compat(fuse_req_t req,
-			   const struct fuse_file_info_compat *f)
-{
-	struct fuse_open_out arg;
-
-	memset(&arg, 0, sizeof(arg));
-	fill_open_compat(&arg, f);
-	return send_reply_ok(req, &arg, sizeof(arg));
-}
-
-int fuse_reply_statfs_compat(fuse_req_t req, const struct statfs *stbuf)
-{
-	struct statvfs newbuf;
-
-	memset(&newbuf, 0, sizeof(newbuf));
-	convert_statfs_compat(stbuf, &newbuf);
-
-	return fuse_reply_statfs(req, &newbuf);
-}
-
-struct fuse_session *fuse_lowlevel_new_compat(const char *opts,
-				const struct fuse_lowlevel_ops_compat *op,
-				size_t op_size, void *userdata)
-{
-	struct fuse_session *se;
-	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
-
-	if (opts &&
-	    (fuse_opt_add_arg(&args, "") == -1 ||
-	     fuse_opt_add_arg(&args, "-o") == -1 ||
-	     fuse_opt_add_arg(&args, opts) == -1)) {
-		fuse_opt_free_args(&args);
-		return NULL;
-	}
-	se = fuse_lowlevel_new(&args, (const struct fuse_lowlevel_ops *) op,
-			       op_size, userdata);
-	fuse_opt_free_args(&args);
-
-	return se;
-}
-
-struct fuse_ll_compat_conf {
-	unsigned max_read;
-	int set_max_read;
-};
-
-static const struct fuse_opt fuse_ll_opts_compat[] = {
-	{ "max_read=", offsetof(struct fuse_ll_compat_conf, set_max_read), 1 },
-	{ "max_read=%u", offsetof(struct fuse_ll_compat_conf, max_read), 0 },
-	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_KEEP),
-	FUSE_OPT_END
-};
-
-int fuse_sync_compat_args(struct fuse_args *args)
-{
-	struct fuse_ll_compat_conf conf;
-
-	memset(&conf, 0, sizeof(conf));
-	if (fuse_opt_parse(args, &conf, fuse_ll_opts_compat, NULL) == -1)
-		return -1;
-
-	if (fuse_opt_insert_arg(args, 1, "-osync_read"))
-		return -1;
-
-	if (conf.set_max_read) {
-		char tmpbuf[64];
-
-		sprintf(tmpbuf, "-omax_readahead=%u", conf.max_read);
-		if (fuse_opt_insert_arg(args, 1, tmpbuf) == -1)
-			return -1;
-	}
-	return 0;
-}
-
-#else /* __FreeBSD__ || __NetBSD__ */
-
-int fuse_sync_compat_args(struct fuse_args *args)
-{
-	(void) args;
-	return 0;
-}
-
-#endif /* __FreeBSD__ || __NetBSD__ */
-
-struct fuse_session *fuse_lowlevel_new_compat25(struct fuse_args *args,
-				const struct fuse_lowlevel_ops_compat25 *op,
-				size_t op_size, void *userdata)
-{
-	if (fuse_sync_compat_args(args) == -1)
-		return NULL;
-
-	return fuse_lowlevel_new_common(args,
-					(const struct fuse_lowlevel_ops *) op,
-					op_size, userdata);
-}
