@@ -7,7 +7,8 @@
 
 2012-04-24  Miklos Szeredi <miklos@szeredi.hu>
 
-	* Add fallocate operation.  Patch by Anatol Pomozov
+	* Add fallocate operation.  Only works on linux kernels 3.5 or
+	later.  Patch by Anatol Pomozov
 
 2012-05-16  Miklos Szeredi <miklos@szeredi.hu>
 

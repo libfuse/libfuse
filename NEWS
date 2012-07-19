@@ -34,6 +34,8 @@ What is new in 2.9
 
     o Add delete notification
 
+    o Add fallocate operation (linux kernel 3.5 or newer)
+
  - Bug fixes and small improvements
 
 ============================================================================
