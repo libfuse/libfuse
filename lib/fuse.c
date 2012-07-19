@@ -1162,7 +1162,7 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 			struct node *wn1 = wnode1 ? *wnode1 : NULL;
 
 			unlock_path(f, nodeid1, wn1, NULL, ticket);
-			free(path1);
+			free(*path1);
 			if (ticket && err != -EAGAIN)
 				release_tickets(f, nodeid1, wn1, ticket);
 		}

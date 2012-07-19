@@ -1,3 +1,8 @@
+2012-07-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix crash caused by freeing a stack address.  Reported by Itay
+	Perl
+
 2012-07-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix install of mount.fuse from out-of-tree build.  Patch by
