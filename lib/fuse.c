@@ -128,7 +128,6 @@ struct fuse {
 	struct fuse_config conf;
 	int intr_installed;
 	struct fuse_fs *fs;
-	int nullpath_ok;
 	int utime_omit_ok;
 	int curr_ticket;
 	struct lock_queue_element *lockq;
@@ -1124,7 +1123,7 @@ static int get_path_nullok(struct fuse *f, fuse_ino_t nodeid, char **path)
 		*path = NULL;
 	} else {
 		err = get_path_common(f, nodeid, NULL, path, NULL);
-		if (err == -ENOENT && f->nullpath_ok)
+		if (err == -ENOENT)
 			err = 0;
 	}
 
@@ -2896,14 +2895,8 @@ static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
 {
 	struct node *node;
 	int unlink_hidden = 0;
-	const char *compatpath;
 
-	if (path != NULL || f->nullpath_ok || f->conf.nopath)
-		compatpath = path;
-	else
-		compatpath = "-";
-
-	fuse_fs_release(f->fs, compatpath, fi);
+	fuse_fs_release(f->fs, path, fi);
 
 	pthread_mutex_lock(&f->lock);
 	node = get_node(f, ino);
@@ -3334,16 +3327,11 @@ static void fuse_lib_releasedir(fuse_req_t req, fuse_ino_t ino,
 	struct fuse_file_info fi;
 	struct fuse_dh *dh = get_dirhandle(llfi, &fi);
 	char *path;
-	const char *compatpath;
 
 	get_path_nullok(f, ino, &path);
-	if (path != NULL || f->nullpath_ok || f->conf.nopath)
-		compatpath = path;
-	else
-		compatpath = "-";
 
 	fuse_prepare_interrupt(f, req, &d);
-	fuse_fs_releasedir(f->fs, compatpath, &fi);
+	fuse_fs_releasedir(f->fs, path, &fi);
 	fuse_finish_interrupt(f, req, &d);
 	free_path(f, ino, path);
 
@@ -4321,7 +4309,6 @@ static int fuse_push_module(struct fuse *f, const char *module,
 	}
 	newfs->m = m;
 	f->fs = newfs;
-	f->nullpath_ok = newfs->op.flag_nullpath_ok && f->nullpath_ok;
 	f->conf.nopath = newfs->op.flag_nopath && f->conf.nopath;
 	f->utime_omit_ok = newfs->op.flag_utime_omit_ok && f->utime_omit_ok;
 	return 0;
@@ -4416,7 +4403,6 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 		goto out_free;
 
 	f->fs = fs;
-	f->nullpath_ok = fs->op.flag_nullpath_ok;
 	f->conf.nopath = fs->op.flag_nopath;
 	f->utime_omit_ok = fs->op.flag_utime_omit_ok;
 
@@ -4476,7 +4462,6 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 	fuse_session_add_chan(f->se, ch);
 
 	if (f->conf.debug) {
-		fprintf(stderr, "nullpath_ok: %i\n", f->nullpath_ok);
 		fprintf(stderr, "nopath: %i\n", f->conf.nopath);
 		fprintf(stderr, "utime_omit_ok: %i\n", f->utime_omit_ok);
 	}

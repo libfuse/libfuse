@@ -614,7 +614,6 @@ static const struct fuse_operations subdir_oper = {
 	.flock		= subdir_flock,
 	.bmap		= subdir_bmap,
 
-	.flag_nullpath_ok = 1,
 	.flag_nopath = 1,
 };
 
