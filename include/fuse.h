@@ -79,6 +79,30 @@ typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
  * is also a snapshot of the relevant wiki pages in the doc/ folder.
  */
 struct fuse_operations {
+	/**
+	 * Flag indicating that the path need not be calculated for
+	 * the following operations:
+	 *
+	 * read, write, flush, release, fsync, readdir, releasedir,
+	 * fsyncdir, ftruncate, fgetattr, lock, ioctl and poll
+	 *
+	 * If this flag is set then the path will not be calculaged even if the
+	 * file wasn't unlinked.  However the path can still be non-NULL if it
+	 * needs to be calculated for some other reason.
+	 */
+	unsigned int flag_nopath:1;
+
+	/**
+	 * Flag indicating that the filesystem accepts special
+	 * UTIME_NOW and UTIME_OMIT values in its utimens operation.
+	 */
+	unsigned int flag_utime_omit_ok:1;
+
+	/**
+	 * Reserved flags, don't set
+	 */
+	unsigned int flag_reserved:30;
+
 	/** Get file attributes.
 	 *
 	 * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
@@ -445,30 +469,6 @@ struct fuse_operations {
 	 * Introduced in version 2.6
 	 */
 	int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
-
-	/**
-	 * Flag indicating that the path need not be calculated for
-	 * the following operations:
-	 *
-	 * read, write, flush, release, fsync, readdir, releasedir,
-	 * fsyncdir, ftruncate, fgetattr, lock, ioctl and poll
-	 *
-	 * If this flag is set then the path will not be calculaged even if the
-	 * file wasn't unlinked.  However the path can still be non-NULL if it
-	 * needs to be calculated for some other reason.
-	 */
-	unsigned int flag_nopath:1;
-
-	/**
-	 * Flag indicating that the filesystem accepts special
-	 * UTIME_NOW and UTIME_OMIT values in its utimens operation.
-	 */
-	unsigned int flag_utime_omit_ok:1;
-
-	/**
-	 * Reserved flags, don't set
-	 */
-	unsigned int flag_reserved:30;
 
 	/**
 	 * Ioctl
