@@ -7,6 +7,9 @@
 
 	* libfuse: fix fs cleanup.  Reported by Eric Wong
 
+	* libfuse: pass security context options to kernel.  Patch by
+	Dalvik Khertel
+
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: set close-on-exec flag on pipe file descriptors.  Patch
