@@ -1,3 +1,7 @@
+2012-08-13  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix linking against GNU libiconv.  Patch by Natanael Copa
+
 2012-07-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.9.1
