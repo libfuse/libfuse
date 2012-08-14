@@ -1,3 +1,11 @@
+2012-08-14  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Not unhashing the name in forget (commit on 2011-12-09) broke
+	the forget logic in a subtle way, resulting in "fuse internal
+	error: node NNN not found" and causing the filesystem daemon to
+	abort.  Fix by incrementing the node refcount if nlookup goes from
+	zero to one.  Reported by Kyle Lippincott
+
 2012-08-13  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix linking against GNU libiconv.  Patch by Natanael Copa

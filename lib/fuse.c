@@ -816,6 +816,13 @@ static struct node *lookup_node(struct fuse *f, fuse_ino_t parent,
 	return NULL;
 }
 
+static void inc_nlookup(struct node *node)
+{
+	if (!node->nlookup)
+		node->refctr++;
+	node->nlookup++;
+}
+
 static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 			      const char *name)
 {
@@ -831,15 +838,16 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 		if (node == NULL)
 			goto out_err;
 
-		if (f->conf.remember)
-			node->nlookup = 1;
-		node->refctr = 1;
+		node->refctr = 0;
 		node->nodeid = next_id(f);
 		node->generation = f->generation;
 		node->open_count = 0;
 		node->is_hidden = 0;
 		node->treelock = 0;
 		node->ticket = 0;
+		if (f->conf.remember)
+			inc_nlookup(node);
+
 		if (hash_name(f, node, parent, name) == -1) {
 			free_node(f, node);
 			node = NULL;
@@ -853,7 +861,7 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 	} else if (lru_enabled(f) && node->nlookup == 1) {
 		remove_node_lru(node);
 	}
-	node->nlookup ++;
+	inc_nlookup(node);
 out_err:
 	pthread_mutex_unlock(&f->lock);
 	return node;
