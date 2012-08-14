@@ -325,12 +325,12 @@ static void list_add(struct list_head *new, struct list_head *prev,
 	prev->next = new;
 }
 
-static void list_add_head(struct list_head *new, struct list_head *head)
+static inline void list_add_head(struct list_head *new, struct list_head *head)
 {
 	list_add(new, head, head->next);
 }
 
-static void list_add_tail(struct list_head *new, struct list_head *head)
+static inline void list_add_tail(struct list_head *new, struct list_head *head)
 {
 	list_add(new, head->prev, head);
 }
@@ -423,6 +423,7 @@ static struct node *alloc_node(struct fuse *f)
 		list_del(&slab->list);
 		list_add_tail(&slab->list, &f->full_slabs);
 	}
+	memset(node, 0, sizeof(struct node));
 
 	return (struct node *) node;
 }
@@ -838,13 +839,8 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 		if (node == NULL)
 			goto out_err;
 
-		node->refctr = 0;
 		node->nodeid = next_id(f);
 		node->generation = f->generation;
-		node->open_count = 0;
-		node->is_hidden = 0;
-		node->treelock = 0;
-		node->ticket = 0;
 		if (f->conf.remember)
 			inc_nlookup(node);
 
@@ -4661,9 +4657,7 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 
 	root->parent = NULL;
 	root->nodeid = FUSE_ROOT_ID;
-	root->generation = 0;
-	root->refctr = 1;
-	root->nlookup = 1;
+	inc_nlookup(root);
 	hash_id(f, root);
 
 	return f;
