@@ -1,3 +1,7 @@
+2012-08-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix missing config.h in buffer.c.  Reported by Matthew Gabeler-Lee
+
 2012-08-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Not unhashing the name in forget (commit on 2011-12-09) broke
