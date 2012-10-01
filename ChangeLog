@@ -1,3 +1,9 @@
+2012-10-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix deadlock in libfuse.  Running "svn update" on a fuse
+	filesystem could deadlock because of a bug in the way the paths
+	are locked.  Reported by Kazuaki Anami
+
 2012-08-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Fix missing config.h in buffer.c.  Reported by Matthew Gabeler-Lee
