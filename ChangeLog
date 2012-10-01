@@ -1,5 +1,9 @@
 2012-10-01  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.9.2
+
+2012-10-01  Miklos Szeredi <miklos@szeredi.hu>
+
 	* Fix deadlock in libfuse.  Running "svn update" on a fuse
 	filesystem could deadlock because of a bug in the way the paths
 	are locked.  Reported by Kazuaki Anami
