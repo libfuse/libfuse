@@ -51,6 +51,7 @@ FUSE_3.0 {
 		fuse_reply_statfs;
 		fuse_set_signal_handlers;
 		fuse_add_direntry;
+		fuse_add_direntry_plus;
 		fuse_chan_new;
 		fuse_chan_recv;
 		fuse_daemonize;

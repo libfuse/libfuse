@@ -1,3 +1,8 @@
+2013-02-07  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: add readdirplus support in fuse_lowlevel_ops.  Patch by
+	Feng Shuo
+
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: set close-on-exec flag on pipe file descriptors.  Patch

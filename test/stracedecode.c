@@ -41,6 +41,7 @@ static struct {
 	[FUSE_INTERRUPT]   = { "INTERRUPT"   },
 	[FUSE_BMAP]	   = { "BMAP"	     },
 	[FUSE_DESTROY]	   = { "DESTROY"     },
+	[FUSE_READDIRPLUS] = { "READDIRPLUS" },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))

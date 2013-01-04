@@ -112,6 +112,7 @@ struct fuse_file_info {
 #define FUSE_CAP_FLOCK_LOCKS		(1 << 10)
 #define FUSE_CAP_IOCTL_DIR		(1 << 11)
 #define FUSE_CAP_AUTO_INVAL_DATA 	(1 << 12)
+#define FUSE_CAP_READDIRPLUS		(1 << 13)
 
 /**
  * Ioctl flags

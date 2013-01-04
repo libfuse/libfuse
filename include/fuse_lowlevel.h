@@ -1016,6 +1016,32 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*fallocate) (fuse_req_t req, fuse_ino_t ino, int mode,
 		       off_t offset, off_t length, struct fuse_file_info *fi);
+
+	/**
+	 * Read directory with attributes
+	 *
+	 * Send a buffer filled using fuse_add_direntry_plus(), with size not
+	 * exceeding the requested size.  Send an empty buffer on end of
+	 * stream.
+	 *
+	 * fi->fh will contain the value set by the opendir method, or
+	 * will be undefined if the opendir method didn't set any value.
+	 *
+	 * Introduced in version 3.0
+	 *
+	 * Valid replies:
+	 *   fuse_reply_buf
+	 *   fuse_reply_data
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param size maximum number of bytes to send
+	 * @param off offset to continue reading the directory stream
+	 * @param fi file information
+	 */
+	void (*readdirplus) (fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
+			 struct fuse_file_info *fi);
 };
 
 /**
@@ -1250,6 +1276,34 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
 size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 			 const char *name, const struct stat *stbuf,
 			 off_t off);
+
+/**
+ * Add a directory entry to the buffer with the attributes
+ *
+ * Buffer needs to be large enough to hold the entry.  If it's not,
+ * then the entry is not filled in but the size of the entry is still
+ * returned.  The caller can check this by comparing the bufsize
+ * parameter with the returned entry size.  If the entry size is
+ * larger than the buffer size, the operation failed.
+ *
+ * From the 'stbuf' argument the st_ino field and bits 12-15 of the
+ * st_mode field are used.  The other fields are ignored.
+ *
+ * Note: offsets do not necessarily represent physical offsets, and
+ * could be any marker, that enables the implementation to find a
+ * specific point in the directory stream.
+ *
+ * @param req request handle
+ * @param buf the point where the new entry will be added to the buffer
+ * @param bufsize remaining size of the buffer
+ * @param name the name of the entry
+ * @param e the directory entry
+ * @param off the offset of the next entry
+ * @return the space needed for the entry
+ */
+size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
+			      const char *name,
+			      const struct fuse_entry_param *e, off_t off);
 
 /**
  * Reply to ask for data fetch and output buffer preparation.  ioctl
