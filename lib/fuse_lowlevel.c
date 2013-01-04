@@ -1804,6 +1804,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_DONT_MASK;
 		if (arg->flags & FUSE_FLOCK_LOCKS)
 			f->conn.capable |= FUSE_CAP_FLOCK_LOCKS;
+		if (arg->flags & FUSE_AUTO_INVAL_DATA)
+			f->conn.capable |= FUSE_CAP_AUTO_INVAL_DATA;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
@@ -1834,6 +1836,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want |= FUSE_CAP_FLOCK_LOCKS;
 	if (f->big_writes)
 		f->conn.want |= FUSE_CAP_BIG_WRITES;
+	if (f->auto_inval_data)
+		f->conn.want |= FUSE_CAP_AUTO_INVAL_DATA;
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
@@ -1855,6 +1859,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want &= ~FUSE_CAP_SPLICE_WRITE;
 	if (f->no_splice_move)
 		f->conn.want &= ~FUSE_CAP_SPLICE_MOVE;
+	if (f->no_auto_inval_data)
+		f->conn.want &= ~FUSE_CAP_AUTO_INVAL_DATA;
 
 	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
 		outarg.flags |= FUSE_ASYNC_READ;
@@ -1870,6 +1876,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_DONT_MASK;
 	if (f->conn.want & FUSE_CAP_FLOCK_LOCKS)
 		outarg.flags |= FUSE_FLOCK_LOCKS;
+	if (f->conn.want & FUSE_CAP_AUTO_INVAL_DATA)
+		outarg.flags |= FUSE_AUTO_INVAL_DATA;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
 	if (f->conn.proto_minor >= 13) {
@@ -2491,6 +2499,8 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "no_splice_move", offsetof(struct fuse_ll, no_splice_move), 1},
 	{ "splice_read", offsetof(struct fuse_ll, splice_read), 1},
 	{ "no_splice_read", offsetof(struct fuse_ll, no_splice_read), 1},
+	{ "auto_inval_data", offsetof(struct fuse_ll, auto_inval_data), 1},
+	{ "no_auto_inval_data", offsetof(struct fuse_ll, no_auto_inval_data), 1},
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
@@ -2522,6 +2532,7 @@ static void fuse_ll_help(void)
 "    -o [no_]splice_write   use splice to write to the fuse device\n"
 "    -o [no_]splice_move    move data while splicing to the fuse device\n"
 "    -o [no_]splice_read    use splice to read from the fuse device\n"
+"    -o [no_]auto_inval_data  use automatic kernel cache invalidation logic\n"
 );
 }
 
