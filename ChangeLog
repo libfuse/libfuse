@@ -8,6 +8,9 @@
 
 	* libfuse: configure: detect new util-linux
 
+	* libfuse: Use AC_CONFIG_HEADERS instead of AM_CONFIG_HEADER.
+	Patch by Anatol Pomozov
+
 2012-10-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.9.2
