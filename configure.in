@@ -103,8 +103,12 @@ if test "$arch" = linux -a "$cross_compiling" != "yes"; then
 		AC_MSG_RESULT([yes])
 	else
 		firstline=`umount --fake --no-canonicalize 2>&1 | head -1`
-		AC_MSG_RESULT([$firstline])
-		util_linux_ok=no
+		if test "$firstline" = 'umount: only root can use "--fake" option'; then
+			AC_MSG_RESULT([yes])
+		else
+			AC_MSG_RESULT([$firstline])
+			util_linux_ok=no
+		fi
 	fi
 fi
 
