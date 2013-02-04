@@ -4,7 +4,7 @@ AC_CONFIG_MACRO_DIR([m4])
 AC_CANONICAL_TARGET
 AM_INIT_AUTOMAKE
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES(yes)])
-AM_CONFIG_HEADER(include/config.h)
+AC_CONFIG_HEADERS(include/config.h)
 
 AC_PROG_LIBTOOL
 AC_PROG_CC
@@ -102,8 +102,12 @@ if test "$arch" = linux -a "$cross_compiling" != "yes"; then
 		AC_MSG_RESULT([yes])
 	else
 		firstline=`umount --fake --no-canonicalize 2>&1 | head -1`
-		AC_MSG_RESULT([$firstline])
-		util_linux_ok=no
+		if test "$firstline" = 'umount: only root can use "--fake" option'; then
+			AC_MSG_RESULT([yes])
+		else
+			AC_MSG_RESULT([$firstline])
+			util_linux_ok=no
+		fi
 	fi
 fi
 

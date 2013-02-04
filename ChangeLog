@@ -1,3 +1,33 @@
+2013-02-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix crash in unlock_path().  Patch by Ratna Manoj
+
+	* libfuse: fix the 'remember' option.  The lru list was not
+	initialized for the "/" path.  This resulted in remove_node_lru()
+	crashing on LOOKUP-DOTDOT.  Patch by Madan Valluri
+
+	* libfuse: configure: detect new util-linux
+
+	* libfuse: Use AC_CONFIG_HEADERS instead of AM_CONFIG_HEADER.
+	Patch by Anatol Pomozov
+
+	* libfuse: rename ./configure.in to ./configure.ac.  Patch by
+	Anatol Pomozov
+
+2012-10-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Released 2.9.2
+
+2012-10-01  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix deadlock in libfuse.  Running "svn update" on a fuse
+	filesystem could deadlock because of a bug in the way the paths
+	are locked.  Reported by Kazuaki Anami
+
+2012-08-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Fix missing config.h in buffer.c.  Reported by Matthew Gabeler-Lee
+
 2012-08-14  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Not unhashing the name in forget (commit on 2011-12-09) broke
