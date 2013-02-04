@@ -2,6 +2,10 @@
 
 	* libfuse: fix crash in unlock_path().  Patch by Ratna Manoj
 
+	* libfuse: fix the 'remember' option.  The lru list was not
+	initialized for the "/" path.  This resulted in remove_node_lru()
+	crashing on LOOKUP-DOTDOT.  Patch by Madan Valluri
+
 2012-10-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.9.2

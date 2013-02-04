@@ -4698,6 +4698,10 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 		fprintf(stderr, "fuse: memory allocation failed\n");
 		goto out_free_id_table;
 	}
+	if (lru_enabled(f)) {
+		struct node_lru *lnode = node_lru(root);
+		init_list_head(&lnode->lru);
+	}
 
 	strcpy(root->inline_name, "/");
 	root->name = root->inline_name;
