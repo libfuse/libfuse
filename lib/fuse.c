@@ -1021,10 +1021,12 @@ static void queue_element_unlock(struct fuse *f, struct lock_queue_element *qe)
 	if (qe->first_locked) {
 		wnode = qe->wnode1 ? *qe->wnode1 : NULL;
 		unlock_path(f, qe->nodeid1, wnode, NULL);
+		qe->first_locked = false;
 	}
 	if (qe->second_locked) {
 		wnode = qe->wnode2 ? *qe->wnode2 : NULL;
 		unlock_path(f, qe->nodeid2, wnode, NULL);
+		qe->second_locked = false;
 	}
 }
 
