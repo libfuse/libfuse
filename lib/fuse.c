@@ -2368,9 +2368,12 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid,
 
 static struct fuse_context_i *fuse_get_context_internal(void)
 {
-	struct fuse_context_i *c;
+	return (struct fuse_context_i *) pthread_getspecific(fuse_context_key);
+}
 
-	c = (struct fuse_context_i *) pthread_getspecific(fuse_context_key);
+static struct fuse_context_i *fuse_create_context(struct fuse *f)
+{
+	struct fuse_context_i *c = fuse_get_context_internal();
 	if (c == NULL) {
 		c = (struct fuse_context_i *)
 			calloc(1, sizeof(struct fuse_context_i));
@@ -2383,7 +2386,11 @@ static struct fuse_context_i *fuse_get_context_internal(void)
 			abort();
 		}
 		pthread_setspecific(fuse_context_key, c);
+	} else {
+		memset(c, 0, sizeof(*c));
 	}
+	c->ctx.fuse = f;
+
 	return c;
 }
 
@@ -2423,10 +2430,9 @@ static void fuse_delete_context_key(void)
 
 static struct fuse *req_fuse_prepare(fuse_req_t req)
 {
-	struct fuse_context_i *c = fuse_get_context_internal();
+	struct fuse_context_i *c = fuse_create_context(req_fuse(req));
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	c->req = req;
-	c->ctx.fuse = req_fuse(req);
 	c->ctx.uid = ctx->uid;
 	c->ctx.gid = ctx->gid;
 	c->ctx.pid = ctx->pid;
@@ -2470,10 +2476,8 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn)
 static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 {
 	struct fuse *f = (struct fuse *) data;
-	struct fuse_context_i *c = fuse_get_context_internal();
 
-	memset(c, 0, sizeof(*c));
-	c->ctx.fuse = f;
+	fuse_create_context(f);
 	conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 	fuse_fs_init(f->fs, conn);
 }
@@ -2491,10 +2495,8 @@ void fuse_fs_destroy(struct fuse_fs *fs)
 static void fuse_lib_destroy(void *data)
 {
 	struct fuse *f = (struct fuse *) data;
-	struct fuse_context_i *c = fuse_get_context_internal();
 
-	memset(c, 0, sizeof(*c));
-	c->ctx.fuse = f;
+	fuse_create_context(f);
 	fuse_fs_destroy(f->fs);
 	f->fs = NULL;
 }
@@ -4189,18 +4191,31 @@ void fuse_exit(struct fuse *f)
 
 struct fuse_context *fuse_get_context(void)
 {
-	return &fuse_get_context_internal()->ctx;
+	struct fuse_context_i *c = fuse_get_context_internal();
+
+	if (c)
+		return &c->ctx;
+	else
+		return NULL;
 }
 
 int fuse_getgroups(int size, gid_t list[])
 {
-	fuse_req_t req = fuse_get_context_internal()->req;
-	return fuse_req_getgroups(req, size, list);
+	struct fuse_context_i *c = fuse_get_context_internal();
+	if (!c)
+		return -EINVAL;
+
+	return fuse_req_getgroups(c->req, size, list);
 }
 
 int fuse_interrupted(void)
 {
-	return fuse_req_interrupted(fuse_get_context_internal()->req);
+	struct fuse_context_i *c = fuse_get_context_internal();
+
+	if (c)
+		return fuse_req_interrupted(c->req);
+	else
+		return 0;
 }
 
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
@@ -4589,10 +4604,7 @@ void fuse_destroy(struct fuse *f)
 		fuse_restore_intr_signal(f->conf.intr_signal);
 
 	if (f->fs) {
-		struct fuse_context_i *c = fuse_get_context_internal();
-
-		memset(c, 0, sizeof(*c));
-		c->ctx.fuse = f;
+		fuse_create_context(f);
 
 		for (i = 0; i < f->id_table.size; i++) {
 			struct node *node;
