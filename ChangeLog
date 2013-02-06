@@ -3,6 +3,8 @@
 	* libfuse: set close-on-exec flag on pipe file descriptors.  Patch
 	by Eric Wong
 
+	* libfuse: add missing INIT flags
+
 2013-02-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fix fuse_get_context() in non fuse threads.  Reported
