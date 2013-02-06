@@ -52,7 +52,7 @@ if test "$enable_mtab" = "no"; then
 	AC_DEFINE(IGNORE_MTAB, 1, [Don't update /etc/mtab])
 fi
 
-AC_CHECK_FUNCS([fork setxattr fdatasync splice vmsplice utimensat])
+AC_CHECK_FUNCS([fork setxattr fdatasync splice vmsplice utimensat pipe2])
 AC_CHECK_FUNCS([posix_fallocate])
 AC_CHECK_MEMBERS([struct stat.st_atim])
 AC_CHECK_MEMBERS([struct stat.st_atimespec])

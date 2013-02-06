@@ -483,6 +483,31 @@ static void fuse_ll_pipe_free(struct fuse_ll_pipe *llp)
 }
 
 #ifdef HAVE_SPLICE
+#if !defined(HAVE_PIPE2) || !defined(O_CLOEXEC)
+static int fuse_pipe(int fds[2])
+{
+	int rv = pipe(fds);
+
+	if (rv == -1)
+		return rv;
+
+	if (fcntl(fds[0], F_SETFL, O_NONBLOCK) == -1 ||
+	    fcntl(fds[1], F_SETFL, O_NONBLOCK) == -1 ||
+	    fcntl(fds[0], F_SETFD, FD_CLOEXEC) == -1 ||
+	    fcntl(fds[1], F_SETFD, FD_CLOEXEC) == -1) {
+		close(fds[0]);
+		close(fds[1]);
+		rv = -1;
+	}
+	return rv;
+}
+#else
+static int fuse_pipe(int fds[2])
+{
+	return pipe2(fds, O_CLOEXEC | O_NONBLOCK);
+}
+#endif
+
 static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
 {
 	struct fuse_ll_pipe *llp = pthread_getspecific(f->pipe_key);
@@ -493,16 +518,8 @@ static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
 		if (llp == NULL)
 			return NULL;
 
-		res = pipe(llp->pipe);
+		res = fuse_pipe(llp->pipe);
 		if (res == -1) {
-			free(llp);
-			return NULL;
-		}
-
-		if (fcntl(llp->pipe[0], F_SETFL, O_NONBLOCK) == -1 ||
-		    fcntl(llp->pipe[1], F_SETFL, O_NONBLOCK) == -1) {
-			close(llp->pipe[0]);
-			close(llp->pipe[1]);
 			free(llp);
 			return NULL;
 		}
