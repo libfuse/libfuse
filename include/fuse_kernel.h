@@ -91,12 +91,16 @@
 #ifndef _LINUX_FUSE_H
 #define _LINUX_FUSE_H
 
-#include <sys/types.h>
+#ifdef __linux__
+#include <linux/types.h>
+#else
+#include <stdint.h>
 #define __u64 uint64_t
 #define __s64 int64_t
 #define __u32 uint32_t
 #define __s32 int32_t
 #define __u16 uint16_t
+#endif
 
 /*
  * Version negotiation:
