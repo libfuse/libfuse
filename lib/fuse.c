@@ -4584,10 +4584,9 @@ out_free_name_table:
 out_free_session:
 	fuse_session_destroy(f->se);
 out_free_fs:
-	/* Horrible compatibility hack to stop the destructor from being
-	   called on the filesystem without init being called first */
-	fs->op.destroy = NULL;
-	fuse_fs_destroy(f->fs);
+	if (f->fs->m)
+		fuse_put_module(f->fs->m);
+	free(f->fs);
 	free(f->conf.modules);
 out_free:
 	free(f);
