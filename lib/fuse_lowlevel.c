@@ -1746,6 +1746,7 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.fh_old = fi.fh;
+	fi.poll_events = arg->events;
 
 	if (req->f->op.poll) {
 		struct fuse_pollhandle *ph = NULL;

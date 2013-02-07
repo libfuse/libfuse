@@ -2196,8 +2196,9 @@ int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 		int res;
 
 		if (fs->debug)
-			fprintf(stderr, "poll[%llu] ph: %p\n",
-				(unsigned long long) fi->fh, ph);
+			fprintf(stderr, "poll[%llu] ph: %p, events 0x%x\n",
+				(unsigned long long) fi->fh, ph,
+				fi->poll_events);
 
 		res = fs->op.poll(path, fi, ph, reventsp);
 

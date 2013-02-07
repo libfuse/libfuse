@@ -3,6 +3,8 @@
 	* libfuse: add readdirplus support in fuse_lowlevel_ops.  Patch by
 	Feng Shuo
 
+	* libfuse: add poll_events to fuse_file_info.  Patch by Enke Chen
+
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: set close-on-exec flag on pipe file descriptors.  Patch

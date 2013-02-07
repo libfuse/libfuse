@@ -84,6 +84,11 @@ struct fuse_file_info {
 
 	/** Lock owner id.  Available in locking operations and flush */
 	uint64_t lock_owner;
+
+	/** Requested poll events.  Available in ->poll.  Only set on kernels
+	    which support it.  If unsupported, this field is set to zero.
+	    Introduced in version 3.0 */
+	uint32_t poll_events;
 };
 
 /**
