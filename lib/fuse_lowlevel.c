@@ -1843,6 +1843,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_AUTO_INVAL_DATA;
 		if (arg->flags & FUSE_DO_READDIRPLUS)
 			f->conn.capable |= FUSE_CAP_READDIRPLUS;
+		if (arg->flags & FUSE_READDIRPLUS_AUTO)
+			f->conn.capable |= FUSE_CAP_READDIRPLUS_AUTO;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
@@ -1875,8 +1877,11 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want |= FUSE_CAP_BIG_WRITES;
 	if (f->auto_inval_data)
 		f->conn.want |= FUSE_CAP_AUTO_INVAL_DATA;
-	if (f->op.readdirplus && !f->no_readdirplus)
+	if (f->op.readdirplus && !f->no_readdirplus) {
 		f->conn.want |= FUSE_CAP_READDIRPLUS;
+		if (!f->no_readdirplus_auto)
+			f->conn.want |= FUSE_CAP_READDIRPLUS_AUTO;
+	}
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
@@ -1902,7 +1907,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want &= ~FUSE_CAP_AUTO_INVAL_DATA;
 	if (f->no_readdirplus)
 		f->conn.want &= ~FUSE_CAP_READDIRPLUS;
-
+	if (f->no_readdirplus_auto)
+		f->conn.want &= ~FUSE_CAP_READDIRPLUS_AUTO;
 	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
 		outarg.flags |= FUSE_ASYNC_READ;
 	if (f->conn.want & FUSE_CAP_POSIX_LOCKS)
@@ -1921,6 +1927,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_AUTO_INVAL_DATA;
 	if (f->conn.want & FUSE_CAP_READDIRPLUS)
 		outarg.flags |= FUSE_DO_READDIRPLUS;
+	if (f->conn.want & FUSE_CAP_READDIRPLUS_AUTO)
+		outarg.flags |= FUSE_READDIRPLUS_AUTO;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
 	if (f->conn.proto_minor >= 13) {
@@ -2546,7 +2554,11 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "no_splice_read", offsetof(struct fuse_ll, no_splice_read), 1},
 	{ "auto_inval_data", offsetof(struct fuse_ll, auto_inval_data), 1},
 	{ "no_auto_inval_data", offsetof(struct fuse_ll, no_auto_inval_data), 1},
-	{ "no_readdirplus", offsetof(struct fuse_ll, no_readdirplus), 1},
+	{ "readdirplus=no", offsetof(struct fuse_ll, no_readdirplus), 1},
+	{ "readdirplus=yes", offsetof(struct fuse_ll, no_readdirplus), 0},
+	{ "readdirplus=yes", offsetof(struct fuse_ll, no_readdirplus_auto), 1},
+	{ "readdirplus=auto", offsetof(struct fuse_ll, no_readdirplus), 0},
+	{ "readdirplus=auto", offsetof(struct fuse_ll, no_readdirplus_auto), 0},
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
@@ -2579,7 +2591,7 @@ static void fuse_ll_help(void)
 "    -o [no_]splice_move    move data while splicing to the fuse device\n"
 "    -o [no_]splice_read    use splice to read from the fuse device\n"
 "    -o [no_]auto_inval_data  use automatic kernel cache invalidation logic\n"
-"    -o [no_]readdirplus   use readdirplus if possible.\n"
+"    -o readdirplus=S       control readdirplus use (yes|no|auto)\n"
 );
 }
 

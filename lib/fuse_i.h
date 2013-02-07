@@ -74,6 +74,7 @@ struct fuse_ll {
 	int auto_inval_data;
 	int no_auto_inval_data;
 	int no_readdirplus;
+	int no_readdirplus_auto;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	struct cuse_data *cuse_data;
