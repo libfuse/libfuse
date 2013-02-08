@@ -4048,18 +4048,6 @@ int fuse_notify_poll(struct fuse_pollhandle *ph)
 	return fuse_lowlevel_notify_poll(ph);
 }
 
-static void free_cmd(struct fuse_cmd *cmd)
-{
-	free(cmd->buf);
-	free(cmd);
-}
-
-void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd)
-{
-	fuse_session_process(f->se, cmd->buf, cmd->buflen, cmd->ch);
-	free_cmd(cmd);
-}
-
 int fuse_exited(struct fuse *f)
 {
 	return fuse_session_exited(f->se);
@@ -4068,41 +4056,6 @@ int fuse_exited(struct fuse *f)
 struct fuse_session *fuse_get_session(struct fuse *f)
 {
 	return f->se;
-}
-
-static struct fuse_cmd *fuse_alloc_cmd(size_t bufsize)
-{
-	struct fuse_cmd *cmd = (struct fuse_cmd *) malloc(sizeof(*cmd));
-	if (cmd == NULL) {
-		fprintf(stderr, "fuse: failed to allocate cmd\n");
-		return NULL;
-	}
-	cmd->buf = (char *) malloc(bufsize);
-	if (cmd->buf == NULL) {
-		fprintf(stderr, "fuse: failed to allocate read buffer\n");
-		free(cmd);
-		return NULL;
-	}
-	return cmd;
-}
-
-struct fuse_cmd *fuse_read_cmd(struct fuse *f)
-{
-	struct fuse_chan *ch = fuse_session_next_chan(f->se, NULL);
-	size_t bufsize = fuse_chan_bufsize(ch);
-	struct fuse_cmd *cmd = fuse_alloc_cmd(bufsize);
-	if (cmd != NULL) {
-		int res = fuse_chan_recv(&ch, cmd->buf, bufsize);
-		if (res <= 0) {
-			free_cmd(cmd);
-			if (res < 0 && res != -EINTR && res != -EAGAIN)
-				fuse_exit(f);
-			return NULL;
-		}
-		cmd->buflen = res;
-		cmd->ch = ch;
-	}
-	return cmd;
 }
 
 static int fuse_session_loop_remember(struct fuse *f)

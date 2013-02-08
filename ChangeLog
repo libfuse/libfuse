@@ -15,6 +15,8 @@
 	- fuse_invalidate()
 	- fuse_set_getcontext_func()
 	- fuse_loop_mt_proc()
+	- fuse_read_cmd()
+	- fuse_process_cmd()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
