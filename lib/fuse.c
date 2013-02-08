@@ -4178,13 +4178,6 @@ int fuse_loop(struct fuse *f)
 	return fuse_session_loop(f->se);
 }
 
-int fuse_invalidate(struct fuse *f, const char *path)
-{
-	(void) f;
-	(void) path;
-	return -EINVAL;
-}
-
 void fuse_exit(struct fuse *f)
 {
 	fuse_session_exit(f->se);

@@ -726,13 +726,6 @@ int fuse_getgroups(int size, gid_t list[]);
 int fuse_interrupted(void);
 
 /**
- * Obsolete, doesn't do anything
- *
- * @return -EINVAL
- */
-int fuse_invalidate(struct fuse *f, const char *path);
-
-/**
  * The real main function
  *
  * Do not call this directly, use fuse_main()

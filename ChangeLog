@@ -12,6 +12,7 @@
 
 	* libfuse: remove deprecated features:
 	- fuse_is_lib_option()
+	- fuse_invalidate()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 

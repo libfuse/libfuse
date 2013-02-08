@@ -3,7 +3,6 @@ FUSE_3.0 {
 		fuse_destroy;
 		fuse_exit;
 		fuse_exited;
-		fuse_invalidate;
 		fuse_loop;
 		fuse_loop_mt;
 		fuse_loop_mt_proc;
