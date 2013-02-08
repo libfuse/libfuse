@@ -23,6 +23,7 @@
 	- fuse_lowlevel_is_lib_option()
 	- fuse_operations.getdir()
 	- fuse_operations.utime()
+	- fuse_operations.utime_omit_ok
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 

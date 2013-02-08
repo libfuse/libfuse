@@ -88,15 +88,9 @@ struct fuse_operations {
 	unsigned int flag_nopath:1;
 
 	/**
-	 * Flag indicating that the filesystem accepts special
-	 * UTIME_NOW and UTIME_OMIT values in its utimens operation.
-	 */
-	unsigned int flag_utime_omit_ok:1;
-
-	/**
 	 * Reserved flags, don't set
 	 */
-	unsigned int flag_reserved:30;
+	unsigned int flag_reserved:31;
 
 	/** Get file attributes.
 	 *

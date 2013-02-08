@@ -142,7 +142,6 @@ struct fuse {
 	struct fuse_config conf;
 	int intr_installed;
 	struct fuse_fs *fs;
-	int utime_omit_ok;
 	struct lock_queue_element *lockq;
 	int pagesize;
 	struct list_head partial_slabs;
@@ -2631,7 +2630,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 						       attr->st_size);
 		}
 #ifdef HAVE_UTIMENSAT
-		if (!err && f->utime_omit_ok &&
+		if (!err &&
 		    (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME))) {
 			struct timespec tv[2];
 
@@ -4271,7 +4270,6 @@ static int fuse_push_module(struct fuse *f, const char *module,
 	newfs->m = m;
 	f->fs = newfs;
 	f->conf.nopath = newfs->op.flag_nopath && f->conf.nopath;
-	f->utime_omit_ok = newfs->op.flag_utime_omit_ok && f->utime_omit_ok;
 	return 0;
 }
 
@@ -4365,7 +4363,6 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 
 	f->fs = fs;
 	f->conf.nopath = fs->op.flag_nopath;
-	f->utime_omit_ok = fs->op.flag_utime_omit_ok;
 
 	/* Oh f**k, this is ugly! */
 	if (!fs->op.lock) {
@@ -4424,7 +4421,6 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 
 	if (f->conf.debug) {
 		fprintf(stderr, "nopath: %i\n", f->conf.nopath);
-		fprintf(stderr, "utime_omit_ok: %i\n", f->utime_omit_ok);
 	}
 
 	/* Trace topmost layer by default */
