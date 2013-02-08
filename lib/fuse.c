@@ -4323,12 +4323,6 @@ static int fuse_lib_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
-int fuse_is_lib_option(const char *opt)
-{
-	return fuse_lowlevel_is_lib_option(opt) ||
-		fuse_opt_match(fuse_lib_opts, opt);
-}
-
 static int fuse_init_intr_signal(int signum, int *installed)
 {
 	struct sigaction old_sa;

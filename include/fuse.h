@@ -732,9 +732,6 @@ int fuse_interrupted(void);
  */
 int fuse_invalidate(struct fuse *f, const char *path);
 
-/* Deprecated, don't use */
-int fuse_is_lib_option(const char *opt);
-
 /**
  * The real main function
  *

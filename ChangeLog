@@ -10,6 +10,9 @@
 	* libfuse: pass security context options to kernel.  Patch by
 	Dalvik Khertel
 
+	* libfuse: remove deprecated features:
+	- fuse_is_lib_option()
+
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: set close-on-exec flag on pipe file descriptors.  Patch
