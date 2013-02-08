@@ -5,7 +5,6 @@ FUSE_3.0 {
 		fuse_exited;
 		fuse_loop;
 		fuse_loop_mt;
-		fuse_loop_mt_proc;
 		fuse_main;
 		fuse_process_cmd;
 		fuse_read_cmd;

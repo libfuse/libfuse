@@ -960,10 +960,6 @@ struct fuse_cmd *fuse_read_cmd(struct fuse *f);
 /** Process a single command */
 void fuse_process_cmd(struct fuse *f, struct fuse_cmd *cmd);
 
-/** Multi threaded event loop, which calls the custom command
-    processor function */
-int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data);
-
 /** Return the exited flag, which indicates if fuse_exit() has been
     called */
 int fuse_exited(struct fuse *f);

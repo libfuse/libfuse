@@ -14,6 +14,7 @@
 	- fuse_is_lib_option()
 	- fuse_invalidate()
 	- fuse_set_getcontext_func()
+	- fuse_loop_mt_proc()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
