@@ -19,6 +19,7 @@
 	- fuse_process_cmd()
 	- fuse_setup()
 	- fuse_teardown()
+	- fuse_exited()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 

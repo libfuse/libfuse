@@ -4048,11 +4048,6 @@ int fuse_notify_poll(struct fuse_pollhandle *ph)
 	return fuse_lowlevel_notify_poll(ph);
 }
 
-int fuse_exited(struct fuse *f)
-{
-	return fuse_session_exited(f->se);
-}
-
 struct fuse_session *fuse_get_session(struct fuse *f)
 {
 	return f->se;

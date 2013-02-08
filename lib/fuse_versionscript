@@ -2,7 +2,6 @@ FUSE_3.0 {
 	global:
 		fuse_destroy;
 		fuse_exit;
-		fuse_exited;
 		fuse_loop;
 		fuse_loop_mt;
 		fuse_main;

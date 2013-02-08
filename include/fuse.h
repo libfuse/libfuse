@@ -934,18 +934,6 @@ void fuse_register_module(struct fuse_module *mod);
 		fuse_register_module(&mod);				  \
 	}
 
-
-/* ----------------------------------------------------------- *
- * Advanced API for event handling, don't worry about this...  *
- * ----------------------------------------------------------- */
-
-/* NOTE: the following functions are deprecated, and will be removed
-   from the 3.0 API.  Use the lowlevel session functions instead */
-
-/** Return the exited flag, which indicates if fuse_exit() has been
-    called */
-int fuse_exited(struct fuse *f);
-
 /** Get session from fuse object */
 struct fuse_session *fuse_get_session(struct fuse *f);
 
