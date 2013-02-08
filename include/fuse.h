@@ -942,15 +942,6 @@ void fuse_register_module(struct fuse_module *mod);
 /* NOTE: the following functions are deprecated, and will be removed
    from the 3.0 API.  Use the lowlevel session functions instead */
 
-/** This is the part of fuse_main() before the event loop */
-struct fuse *fuse_setup(int argc, char *argv[],
-			const struct fuse_operations *op, size_t op_size,
-			char **mountpoint, int *multithreaded,
-			void *user_data);
-
-/** This is the part of fuse_main() after the event loop */
-void fuse_teardown(struct fuse *fuse, char *mountpoint);
-
 /** Return the exited flag, which indicates if fuse_exit() has been
     called */
 int fuse_exited(struct fuse *f);

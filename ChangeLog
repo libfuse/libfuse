@@ -17,6 +17,8 @@
 	- fuse_loop_mt_proc()
 	- fuse_read_cmd()
 	- fuse_process_cmd()
+	- fuse_setup()
+	- fuse_teardown()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 

@@ -248,7 +248,7 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
 		fuse_chan_destroy(ch);
 }
 
-struct fuse *fuse_setup(int argc, char *argv[],
+static struct fuse *fuse_setup(int argc, char *argv[],
 			const struct fuse_operations *op, size_t op_size,
 			char **mountpoint, int *multithreaded, void *user_data)
 {
@@ -292,7 +292,7 @@ err_free:
 	return NULL;
 }
 
-void fuse_teardown(struct fuse *fuse, char *mountpoint)
+static void fuse_teardown(struct fuse *fuse, char *mountpoint)
 {
 	struct fuse_session *se = fuse_get_session(fuse);
 	struct fuse_chan *ch = fuse_session_next_chan(se, NULL);

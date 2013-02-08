@@ -60,8 +60,6 @@ FUSE_3.0 {
 		fuse_req_interrupt_func;
 		fuse_req_interrupted;
 		fuse_session_remove_chan;
-		fuse_setup;
-		fuse_teardown;
 		fuse_unmount;
 		fuse_fs_access;
 		fuse_fs_bmap;
