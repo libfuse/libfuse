@@ -4212,12 +4212,6 @@ int fuse_interrupted(void)
 		return 0;
 }
 
-void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
-{
-	(void) func;
-	/* no-op */
-}
-
 enum {
 	KEY_HELP,
 };

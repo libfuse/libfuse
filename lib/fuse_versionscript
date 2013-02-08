@@ -9,7 +9,6 @@ FUSE_3.0 {
 		fuse_main;
 		fuse_process_cmd;
 		fuse_read_cmd;
-		fuse_set_getcontext_func;
 		fuse_chan_bufsize;
 		fuse_chan_data;
 		fuse_chan_destroy;

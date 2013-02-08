@@ -968,9 +968,6 @@ int fuse_loop_mt_proc(struct fuse *f, fuse_processor_t proc, void *data);
     called */
 int fuse_exited(struct fuse *f);
 
-/** This function is obsolete and implemented as a no-op */
-void fuse_set_getcontext_func(struct fuse_context *(*func)(void));
-
 /** Get session from fuse object */
 struct fuse_session *fuse_get_session(struct fuse *f);
 

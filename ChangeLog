@@ -13,6 +13,7 @@
 	* libfuse: remove deprecated features:
 	- fuse_is_lib_option()
 	- fuse_invalidate()
+	- fuse_set_getcontext_func()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 
