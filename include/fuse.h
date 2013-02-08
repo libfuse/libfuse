@@ -37,9 +37,6 @@ extern "C" {
 /** Handle for a FUSE filesystem */
 struct fuse;
 
-/** Structure containing a raw command */
-struct fuse_cmd;
-
 /** Function to add an entry in a readdir() operation
  *
  * @param buf the buffer passed to the readdir() operation

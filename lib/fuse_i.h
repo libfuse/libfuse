@@ -91,12 +91,6 @@ struct fuse_ll {
 	struct fuse_notify_req notify_list;
 };
 
-struct fuse_cmd {
-	char *buf;
-	size_t buflen;
-	struct fuse_chan *ch;
-};
-
 struct fuse_chan *fuse_kern_chan_new(int fd);
 
 void fuse_kern_unmount(const char *mountpoint, int fd);
