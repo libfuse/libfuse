@@ -51,11 +51,6 @@ struct fuse_cmd;
 typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
 				const struct stat *stbuf, off_t off);
 
-/* Used by deprecated getdir() method */
-typedef struct fuse_dirhandle *fuse_dirh_t;
-typedef int (*fuse_dirfil_t) (fuse_dirh_t h, const char *name, int type,
-			      ino_t ino);
-
 /**
  * The file system operations:
  *
@@ -120,9 +115,6 @@ struct fuse_operations {
 	 * for success.
 	 */
 	int (*readlink) (const char *, char *, size_t);
-
-	/* Deprecated, use readdir() instead */
-	int (*getdir) (const char *, fuse_dirh_t, fuse_dirfil_t);
 
 	/** Create a file node
 	 *
@@ -299,16 +291,12 @@ struct fuse_operations {
 
 	/** Read directory
 	 *
-	 * This supersedes the old getdir() interface.  New applications
-	 * should use this.
-	 *
 	 * The filesystem may choose between two modes of operation:
 	 *
 	 * 1) The readdir implementation ignores the offset parameter, and
 	 * passes zero to the filler function's offset.  The filler
 	 * function will not return '1' (unless an error happens), so the
-	 * whole directory is read in a single readdir operation.  This
-	 * works just like the old getdir() method.
+	 * whole directory is read in a single readdir operation.
 	 *
 	 * 2) The readdir implementation keeps track of the offsets of the
 	 * directory entries.  It uses the offset parameter and always

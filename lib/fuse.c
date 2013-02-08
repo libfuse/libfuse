@@ -203,12 +203,6 @@ struct fuse_dh {
 	fuse_ino_t nodeid;
 };
 
-/* old dir handle */
-struct fuse_dirhandle {
-	fuse_fill_dir_t filler;
-	void *buf;
-};
-
 struct fuse_context_i {
 	struct fuse_context ctx;
 	fuse_req_t req;
@@ -1853,20 +1847,6 @@ int fuse_fs_releasedir(struct fuse_fs *fs, const char *path,
 	}
 }
 
-static int fill_dir_old(struct fuse_dirhandle *dh, const char *name, int type,
-			ino_t ino)
-{
-	int res;
-	struct stat stbuf;
-
-	memset(&stbuf, 0, sizeof(stbuf));
-	stbuf.st_mode = type << 12;
-	stbuf.st_ino = ino;
-
-	res = dh->filler(dh->buf, name, &stbuf, 0);
-	return res ? -ENOMEM : 0;
-}
-
 int fuse_fs_readdir(struct fuse_fs *fs, const char *path, void *buf,
 		    fuse_fill_dir_t filler, off_t off,
 		    struct fuse_file_info *fi)
@@ -1879,16 +1859,6 @@ int fuse_fs_readdir(struct fuse_fs *fs, const char *path, void *buf,
 				(unsigned long long) off);
 
 		return fs->op.readdir(path, buf, filler, off, fi);
-	} else if (fs->op.getdir) {
-		struct fuse_dirhandle dh;
-
-		if (fs->debug)
-			fprintf(stderr, "getdir[%llu]\n",
-				(unsigned long long) fi->fh);
-
-		dh.filler = filler;
-		dh.buf = buf;
-		return fs->op.getdir(path, &dh, fill_dir_old);
 	} else {
 		return -ENOSYS;
 	}
