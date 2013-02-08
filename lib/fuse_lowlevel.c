@@ -2616,11 +2616,6 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 	return -1;
 }
 
-int fuse_lowlevel_is_lib_option(const char *opt)
-{
-	return fuse_opt_match(fuse_ll_opts, opt);
-}
-
 static void fuse_ll_destroy(void *data)
 {
 	struct fuse_ll *f = (struct fuse_ll *) data;

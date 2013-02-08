@@ -1545,9 +1545,6 @@ int fuse_req_interrupted(fuse_req_t req);
  * Filesystem setup					       *
  * ----------------------------------------------------------- */
 
-/* Deprecated, don't use */
-int fuse_lowlevel_is_lib_option(const char *opt);
-
 /**
  * Create a low level session
  *

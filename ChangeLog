@@ -20,6 +20,7 @@
 	- fuse_setup()
 	- fuse_teardown()
 	- fuse_exited()
+	- fuse_lowlevel_is_lib_option()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 

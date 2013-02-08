@@ -12,7 +12,6 @@ FUSE_3.0 {
 		fuse_chan_receive;
 		fuse_chan_send;
 		fuse_chan_session;
-		fuse_lowlevel_is_lib_option;
 		fuse_reply_attr;
 		fuse_reply_buf;
 		fuse_reply_entry;
