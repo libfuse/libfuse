@@ -22,6 +22,7 @@
 	- fuse_exited()
 	- fuse_lowlevel_is_lib_option()
 	- fuse_operations.getdir()
+	- fuse_operations.utime()
 
 2013-02-06  Miklos Szeredi <miklos@szeredi.hu>
 

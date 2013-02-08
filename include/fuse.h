@@ -156,12 +156,6 @@ struct fuse_operations {
 	/** Change the size of a file */
 	int (*truncate) (const char *, off_t);
 
-	/** Change the access and/or modification times of a file
-	 *
-	 * Deprecated, use utimens() instead.
-	 */
-	int (*utime) (const char *, struct utimbuf *);
-
 	/** File open operation
 	 *
 	 * No creation (O_CREAT, O_EXCL) and by default also no
