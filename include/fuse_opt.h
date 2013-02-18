@@ -70,8 +70,9 @@ extern "C" {
  *
  * 6) "-x %s", etc.  Combination of 4) and 5)
  *
- * If the format is "%s", memory is allocated for the string unlike
- * with scanf().
+ * If the format is "%s", memory is allocated for the string unlike with
+ * scanf().  The previous value (if non-NULL) stored at the this location is
+ * freed.
  */
 struct fuse_opt {
 	/** Matching template and optional parameter formatting */

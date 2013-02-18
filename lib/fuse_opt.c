@@ -204,11 +204,13 @@ static int process_opt_param(void *var, const char *format, const char *param,
 {
 	assert(format[0] == '%');
 	if (format[1] == 's') {
+		char **s = var;
 		char *copy = strdup(param);
 		if (!copy)
 			return alloc_failed();
 
-		*(char **) var = copy;
+		free(*s);
+		*s = copy;
 	} else {
 		if (sscanf(param, format, var) != 1) {
 			fprintf(stderr, "fuse: invalid parameter in option `%s'\n", arg);
