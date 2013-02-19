@@ -1,3 +1,8 @@
+2013-02-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fuse_daemonize(): chdir to "/" even if not running in the
+	background for consistency.  Reported by Vladimir Rutsky
+
 2013-02-18  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fuse_opt_parse(): when storing a newly allocated string for

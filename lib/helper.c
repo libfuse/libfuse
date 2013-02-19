@@ -210,6 +210,8 @@ int fuse_daemonize(int foreground)
 			if (nullfd > 2)
 				close(nullfd);
 		}
+	} else {
+		(void) chdir("/");
 	}
 	return 0;
 }
