@@ -1,3 +1,8 @@
+2013-02-20  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: change the type of fuse_ino_t from 'unsigned long' to
+	'uint64_t'
+
 2013-02-19  Miklos Szeredi <miklos@szeredi.hu>
 
 	* fuse_daemonize(): chdir to "/" even if not running in the

@@ -44,7 +44,7 @@ extern "C" {
 #define FUSE_ROOT_ID 1
 
 /** Inode number type */
-typedef unsigned long fuse_ino_t;
+typedef uint64_t fuse_ino_t;
 
 /** Request pointer type */
 typedef struct fuse_req *fuse_req_t;
@@ -122,7 +122,7 @@ struct fuse_ctx {
 };
 
 struct fuse_forget_data {
-	uint64_t ino;
+	fuse_ino_t ino;
 	uint64_t nlookup;
 };
 
