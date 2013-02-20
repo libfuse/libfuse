@@ -1092,10 +1092,13 @@ static void debug_path(struct fuse *f, const char *msg, fuse_ino_t nodeid,
 		if (wr)
 			wnode = lookup_node(f, nodeid, name);
 
-		if (wnode)
-			fprintf(stderr, "%s %li (w)\n",	msg, wnode->nodeid);
-		else
-			fprintf(stderr, "%s %li\n", msg, nodeid);
+		if (wnode) {
+			fprintf(stderr, "%s %llu (w)\n",
+				msg, (unsigned long long) wnode->nodeid);
+		} else {
+			fprintf(stderr, "%s %llu\n",
+				msg, (unsigned long long) nodeid);
+		}
 	}
 }
 
@@ -2319,8 +2322,8 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid,
 			}
 			set_stat(f, e->ino, &e->attr);
 			if (f->conf.debug)
-				fprintf(stderr, "   NODEID: %lu\n",
-					(unsigned long) e->ino);
+				fprintf(stderr, "   NODEID: %llu\n",
+					(unsigned long long) e->ino);
 		}
 	}
 	return res;

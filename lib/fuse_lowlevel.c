@@ -2411,10 +2411,10 @@ static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
 
 	if (f->debug) {
 		fprintf(stderr,
-			"unique: %llu, opcode: %s (%i), nodeid: %lu, insize: %zu, pid: %u\n",
+			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
 			(unsigned long long) in->unique,
 			opname((enum fuse_opcode) in->opcode), in->opcode,
-			(unsigned long) in->nodeid, buf->size, in->pid);
+			(unsigned long long) in->nodeid, buf->size, in->pid);
 	}
 
 	req = fuse_ll_alloc_req(f);
