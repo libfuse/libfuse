@@ -1584,7 +1584,7 @@ int fuse_fs_opendir(struct fuse_fs *fs, const char *path,
 		err = fs->op.opendir(path, fi);
 
 		if (fs->debug && !err)
-			fprintf(stderr, "   opendir[%lli] flags: 0x%x %s\n",
+			fprintf(stderr, "   opendir[%llu] flags: 0x%x %s\n",
 				(unsigned long long) fi->fh, fi->flags, path);
 
 		return err;
@@ -1607,7 +1607,7 @@ int fuse_fs_open(struct fuse_fs *fs, const char *path,
 		err = fs->op.open(path, fi);
 
 		if (fs->debug && !err)
-			fprintf(stderr, "   open[%lli] flags: 0x%x %s\n",
+			fprintf(stderr, "   open[%llu] flags: 0x%x %s\n",
 				(unsigned long long) fi->fh, fi->flags, path);
 
 		return err;
