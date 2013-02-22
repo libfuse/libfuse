@@ -9,7 +9,6 @@ FUSE_3.0 {
 		fuse_chan_data;
 		fuse_chan_destroy;
 		fuse_chan_fd;
-		fuse_chan_receive;
 		fuse_chan_send;
 		fuse_chan_session;
 		fuse_reply_attr;
