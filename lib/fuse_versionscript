@@ -4,7 +4,6 @@ FUSE_3.0 {
 		fuse_exit;
 		fuse_loop;
 		fuse_loop_mt;
-		fuse_main;
 		fuse_chan_bufsize;
 		fuse_chan_data;
 		fuse_chan_destroy;

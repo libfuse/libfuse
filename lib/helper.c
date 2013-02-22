@@ -329,14 +329,6 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	return 0;
 }
 
-#undef fuse_main
-int fuse_main(void);
-int fuse_main(void)
-{
-	fprintf(stderr, "fuse_main(): This function does not exist\n");
-	return -1;
-}
-
 int fuse_version(void)
 {
 	return FUSE_VERSION;
