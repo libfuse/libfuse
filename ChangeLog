@@ -1,3 +1,9 @@
+2013-03-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix thread cancel race.  Exiting a worker my race with
+	cancelling that same worker.  This caused a segmenation
+	fault. Reported and tested by Anatol Pomozov
+
 2013-02-20  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: change the type of fuse_ino_t from 'unsigned long' to
