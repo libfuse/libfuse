@@ -1,3 +1,9 @@
+2013-03-19  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix thread cancel race.  Exiting a worker my race with
+	cancelling that same worker.  This caused a segmenation
+	fault. Reported and tested by Anatol Pomozov
+
 2011-02-02  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: In fuse_session_loop_mt() don't pause when exiting the
