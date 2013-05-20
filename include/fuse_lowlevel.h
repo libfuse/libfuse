@@ -600,6 +600,9 @@ struct fuse_lowlevel_ops {
 	 *
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
+         *
+	 * Returning a directory entry from readdir() does not affect
+	 * its lookup count.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_buf
@@ -1026,6 +1029,10 @@ struct fuse_lowlevel_ops {
 	 *
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
+         *
+	 * In contrast to readdir() (which does not affect the lookup
+	 * counts), the lookup count of every entry returned by
+	 * readdirplus() is increased by one.
 	 *
 	 * Introduced in version 3.0
 	 *
@@ -1175,6 +1182,11 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size);
  *
  * Possible requests:
  *   read, readdir, getxattr, listxattr
+ *
+ * Side effects:
+ *   when used to return data from a readdirplus() (but not readdir())
+ *   call, increments the lookup count of each returned entry by one
+ *   on success.
  *
  * @param req request handle
  * @param bufv buffer vector
