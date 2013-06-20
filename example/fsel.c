@@ -6,8 +6,21 @@
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 
-  gcc -Wall fsel.c `pkg-config fuse --cflags --libs` -o fsel
 */
+
+/** @file
+ * @tableofcontents
+ *
+ * fsel.c - FUSE fsel: FUSE select example
+ *
+ * \section section_compile compiling this example
+ *
+ * gcc -Wall fsel.c `pkg-config fuse --cflags --libs` -o fsel
+ *
+ * \section section_source the complete source
+ * \include fsel.c
+ */
+
 
 #define FUSE_USE_VERSION 30
 

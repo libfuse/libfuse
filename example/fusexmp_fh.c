@@ -5,9 +5,20 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
-  gcc -Wall fusexmp_fh.c `pkg-config fuse --cflags --libs` -lulockmgr -o fusexmp_fh
 */
+
+/** @file
+ * @tableofcontents
+ *
+ * fusexmp_fh.c - FUSE: Filesystem in Userspace
+ *
+ * \section section_compile compiling this example
+ *
+ * gcc -Wall fusexmp_fh.c `pkg-config fuse --cflags --libs` -lulockmgr -o fusexmp_fh
+ *
+ * \section section_source the complete source
+ * \include fusexmp_fh.c
+ */
 
 #define FUSE_USE_VERSION 30
 

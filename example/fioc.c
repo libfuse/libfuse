@@ -6,8 +6,21 @@
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 
-  gcc -Wall fioc.c `pkg-config fuse --cflags --libs` -o fioc
 */
+
+/** @file
+ * @tableofcontents
+ *
+ * fioc.c - FUSE fioc: FUSE ioctl example
+ *
+ * \section section_compile compiling this example
+ *
+ * gcc -Wall fioc.c `pkg-config fuse --cflags --libs` -o fioc
+ *
+ * \section section_source the complete source
+ * \include fioc.c 
+ */
+
 
 #define FUSE_USE_VERSION 30
 

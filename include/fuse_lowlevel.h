@@ -1565,6 +1565,9 @@ int fuse_req_interrupted(fuse_req_t req);
  * @param op_size sizeof(struct fuse_lowlevel_ops)
  * @param userdata user data
  * @return the created session object, or NULL on failure
+ *
+ * Example: See hello_ll.c: 
+ *   \snippet hello_ll.c doxygen_fuse_lowlevel_usage
  */
 struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 				       const struct fuse_lowlevel_ops *op,
@@ -1707,7 +1710,9 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 void fuse_session_destroy(struct fuse_session *se);
 
 /**
- * Exit a session
+ * Exit a session. This function is invoked by the POSIX signal handlers, when registered using:
+ * * fuse_set_signal_handlers()
+ * * fuse_remove_signal_handlers()
  *
  * @param se the session
  */
@@ -1737,7 +1742,11 @@ int fuse_session_exited(struct fuse_session *se);
 void *fuse_session_data(struct fuse_session *se);
 
 /**
- * Enter a single threaded event loop
+ * Enter a single threaded, blocking event loop.
+ *
+ * Using POSIX signals this event loop can be exited but the session 
+ * needs to be configued by issuing: 
+ *   fuse_set_signal_handlers() first. 
  *
  * @param se the session
  * @return 0 on success, -1 on error
