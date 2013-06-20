@@ -182,6 +182,13 @@ int fuse_chan_fd(struct fuse_chan *ch)
 	return ch->fd;
 }
 
+int fuse_chan_clearfd(struct fuse_chan *ch)
+{
+       int fd = ch->fd;
+       ch->fd = -1;
+       return fd;
+}
+
 size_t fuse_chan_bufsize(struct fuse_chan *ch)
 {
 	return ch->bufsize;

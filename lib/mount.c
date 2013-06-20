@@ -300,14 +300,18 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 		pfd.fd = fd;
 		pfd.events = 0;
 		res = poll(&pfd, 1, 0);
+
+		/* Need to close file descriptor, otherwise synchronous umount
+		   would recurse into filesystem, and deadlock.
+
+		   Caller expects fuse_kern_unmount to close the fd, so close it
+		   anyway. */
+		close(fd);
+
 		/* If file poll returns POLLERR on the device file descriptor,
 		   then the filesystem is already unmounted */
 		if (res == 1 && (pfd.revents & POLLERR))
 			return;
-
-		/* Need to close file descriptor, otherwise synchronous umount
-		   would recurse into filesystem, and deadlock */
-		close(fd);
 	}
 
 	if (geteuid() == 0) {

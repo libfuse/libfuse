@@ -249,10 +249,12 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
 
 static void fuse_unmount_common(const char *mountpoint, struct fuse_chan *ch)
 {
-	int fd = ch ? fuse_chan_fd(ch) : -1;
-	fuse_kern_unmount(mountpoint, fd);
-	if (ch)
-		fuse_chan_destroy(ch);
+	if (mountpoint) {
+		int fd = ch ? fuse_chan_clearfd(ch) : -1;
+		fuse_kern_unmount(mountpoint, fd);
+		if (ch)
+			fuse_chan_destroy(ch);
+	}
 }
 
 void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)

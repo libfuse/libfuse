@@ -106,6 +106,8 @@ struct fuse_session *fuse_lowlevel_new_common(struct fuse_args *args,
 					size_t op_size, void *userdata);
 
 void fuse_kern_unmount_compat22(const char *mountpoint);
+int fuse_chan_clearfd(struct fuse_chan *ch);
+
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct fuse_args *args);
 
