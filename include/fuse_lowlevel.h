@@ -1800,11 +1800,10 @@ struct fuse_chan_ops {
  * @param op channel operations
  * @param fd file descriptor of the channel
  * @param bufsize the minimal receive buffer size
- * @param data user data
  * @return the new channel object, or NULL on failure
  */
 struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
-				size_t bufsize, void *data);
+				size_t bufsize);
 
 /**
  * Query the file descriptor of the channel
@@ -1821,14 +1820,6 @@ int fuse_chan_fd(struct fuse_chan *ch);
  * @return the buffer size passed to fuse_chan_new()
  */
 size_t fuse_chan_bufsize(struct fuse_chan *ch);
-
-/**
- * Query the user data
- *
- * @param ch the channel
- * @return the user data passed to fuse_chan_new()
- */
-void *fuse_chan_data(struct fuse_chan *ch);
 
 /**
  * Query the session to which this channel is assigned
