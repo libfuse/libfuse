@@ -93,6 +93,8 @@ struct fuse_ll {
 
 struct fuse_chan *fuse_kern_chan_new(int fd);
 
+int fuse_chan_clearfd(struct fuse_chan *ch);
+
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct fuse_args *args);
 

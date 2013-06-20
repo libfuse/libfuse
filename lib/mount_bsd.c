@@ -228,18 +228,21 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	(void)mountpoint;
 
 	if (fstat(fd, &sbuf) == -1)
-		return;
+		goto out;
 
 	devname_r(sbuf.st_rdev, S_IFCHR, dev, 128);
 
 	if (strncmp(dev, "fuse", 4))
-		return;
+		goto out;
 
 	strtol(dev + 4, &ep, 10);
 	if (*ep != '\0')
-		return;
+		goto out;
 
 	do_unmount(dev, fd);
+
+out:
+	close(fd);
 }
 
 /* Check if kernel is doing init in background */
