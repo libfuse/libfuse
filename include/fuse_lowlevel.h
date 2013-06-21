@@ -1621,11 +1621,11 @@ void fuse_session_process_buf(struct fuse_session *se,
  *
  * @param se the session
  * @param buf the fuse_buf to store the request in
- * @param chp pointer to the channel
+ * @param ch the channel
  * @return the actual size of the raw request, or -errno on error
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			     struct fuse_chan **chp);
+			     struct fuse_chan *ch);
 
 /**
  * Destroy a session

@@ -4037,7 +4037,6 @@ static int fuse_session_loop_remember(struct fuse *f)
 	curr_time(&now);
 	next_clean = now.tv_sec;
 	while (!fuse_session_exited(se)) {
-		struct fuse_chan *tmpch = ch;
 		struct fuse_buf fbuf = {
 			.mem = buf,
 			.size = bufsize,
@@ -4057,14 +4056,14 @@ static int fuse_session_loop_remember(struct fuse *f)
 			else
 				break;
 		} else if (res > 0) {
-			res = fuse_session_receive_buf(se, &fbuf, &tmpch);
+			res = fuse_session_receive_buf(se, &fbuf, ch);
 
 			if (res == -EINTR)
 				continue;
 			if (res <= 0)
 				break;
 
-			fuse_session_process_buf(se, &fbuf, tmpch);
+			fuse_session_process_buf(se, &fbuf, ch);
 		} else {
 			timeout = fuse_clean_cache(f);
 			curr_time(&now);

@@ -70,7 +70,6 @@ static void *fuse_do_work(void *data)
 
 	while (!fuse_session_exited(mt->se)) {
 		int isforget = 0;
-		struct fuse_chan *ch = mt->prevch;
 		struct fuse_buf fbuf = {
 			.mem = w->buf,
 			.size = w->bufsize,
@@ -78,7 +77,7 @@ static void *fuse_do_work(void *data)
 		int res;
 
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		res = fuse_session_receive_buf(mt->se, &fbuf, &ch);
+		res = fuse_session_receive_buf(mt->se, &fbuf, mt->prevch);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
@@ -114,7 +113,7 @@ static void *fuse_do_work(void *data)
 			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
-		fuse_session_process_buf(mt->se, &fbuf, ch);
+		fuse_session_process_buf(mt->se, &fbuf, mt->prevch);
 
 		pthread_mutex_lock(&mt->lock);
 		if (!isforget)

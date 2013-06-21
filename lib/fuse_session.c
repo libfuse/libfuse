@@ -69,19 +69,9 @@ void fuse_session_process_buf(struct fuse_session *se,
 }
 
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			     struct fuse_chan **chp)
+			     struct fuse_chan *ch)
 {
-	int res;
-
-	if (se->receive_buf) {
-		res = se->receive_buf(se, buf, chp);
-	} else {
-		res = fuse_chan_recv(chp, buf->mem, buf->size);
-		if (res > 0)
-			buf->size = res;
-	}
-
-	return res;
+	return se->receive_buf(se, buf, ch);
 }
 
 int fuse_chan_clearfd(struct fuse_chan *ch)
@@ -149,18 +139,6 @@ size_t fuse_chan_bufsize(struct fuse_chan *ch)
 struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
 {
 	return ch->se;
-}
-
-int fuse_chan_recv(struct fuse_chan **chp, char *buf, size_t size)
-{
-	struct fuse_chan *ch = *chp;
-
-	return ch->op.receive(chp, buf, size);
-}
-
-int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[], size_t count)
-{
-	return ch->op.send(ch, iov, count);
 }
 
 void fuse_chan_destroy(struct fuse_chan *ch)

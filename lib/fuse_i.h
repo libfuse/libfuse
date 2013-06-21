@@ -19,30 +19,6 @@ struct fuse_ll;
  */
 struct fuse_chan_ops {
 	/**
-	 * Hook for receiving a raw request
-	 *
-	 * @param ch pointer to the channel
-	 * @param buf the buffer to store the request in
-	 * @param size the size of the buffer
-	 * @return the actual size of the raw request, or -1 on error
-	 */
-	int (*receive)(struct fuse_chan **chp, char *buf, size_t size);
-
-	/**
-	 * Hook for sending a raw reply
-	 *
-	 * A return value of -ENOENT means, that the request was
-	 * interrupted, and the reply was discarded
-	 *
-	 * @param ch the channel
-	 * @param iov vector of blocks
-	 * @param count the number of blocks in vector
-	 * @return zero on success, -errno on failure
-	 */
-	int (*send)(struct fuse_chan *ch, const struct iovec iov[],
-		    size_t count);
-
-	/**
 	 * Destroy the channel
 	 *
 	 * @param ch the channel
@@ -52,7 +28,7 @@ struct fuse_chan_ops {
 
 struct fuse_session {
 	int (*receive_buf)(struct fuse_session *se, struct fuse_buf *buf,
-			   struct fuse_chan **chp);
+			   struct fuse_chan *ch);
 
 	void (*process_buf)(void *data, const struct fuse_buf *buf,
 			    struct fuse_chan *ch);
@@ -167,32 +143,6 @@ struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
  * @return the session, or NULL if the channel is not assigned
  */
 struct fuse_session *fuse_chan_session(struct fuse_chan *ch);
-
-/**
- * Send a raw reply
- *
- * A return value of -ENOENT means, that the request was
- * interrupted, and the reply was discarded
- *
- * @param ch the channel
- * @param iov vector of blocks
- * @param count the number of blocks in vector
- * @return zero on success, -errno on failure
- */
-int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
-		   size_t count);
-
-/**
- * Receive a raw request
- *
- * A return value of -ENODEV means, that the filesystem was unmounted
- *
- * @param ch pointer to the channel
- * @param buf the buffer to store the request in
- * @param size the size of the buffer
- * @return the actual size of the raw request, or -errno on error
- */
-int fuse_chan_recv(struct fuse_chan **ch, char *buf, size_t size);
 
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct fuse_args *args);

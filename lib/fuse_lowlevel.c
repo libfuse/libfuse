@@ -153,6 +153,62 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_ll *f)
 	return req;
 }
 
+static int fuse_chan_recv(struct fuse_chan *ch, char *buf, size_t size)
+{
+	int err;
+	ssize_t res;
+	struct fuse_session *se = fuse_chan_session(ch);
+	assert(se != NULL);
+
+restart:
+	res = read(fuse_chan_fd(ch), buf, size);
+	err = errno;
+
+	if (fuse_session_exited(se))
+		return 0;
+	if (res == -1) {
+		/* ENOENT means the operation was interrupted, it's safe
+		   to restart */
+		if (err == ENOENT)
+			goto restart;
+
+		if (err == ENODEV) {
+			fuse_session_exit(se);
+			return 0;
+		}
+		/* Errors occurring during normal operation: EINTR (read
+		   interrupted), EAGAIN (nonblocking I/O), ENODEV (filesystem
+		   umounted) */
+		if (err != EINTR && err != EAGAIN)
+			perror("fuse: reading device");
+		return -err;
+	}
+	if ((size_t) res < sizeof(struct fuse_in_header)) {
+		fprintf(stderr, "short read on fuse device\n");
+		return -EIO;
+	}
+	return res;
+}
+
+static int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
+			  size_t count)
+{
+	ssize_t res = writev(fuse_chan_fd(ch), iov, count);
+	int err = errno;
+
+	if (res == -1) {
+		struct fuse_session *se = fuse_chan_session(ch);
+
+		assert(se != NULL);
+
+		/* ENOENT means the operation was interrupted */
+		if (!fuse_session_exited(se) && err != ENOENT)
+			perror("fuse: writing device");
+		return -err;
+	}
+
+	return 0;
+}
 
 static int fuse_send_msg(struct fuse_ll *f, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
@@ -301,8 +357,6 @@ int fuse_reply_err(fuse_req_t req, int err)
 
 void fuse_reply_none(fuse_req_t req)
 {
-	if (req->ch)
-		fuse_chan_send(req->ch, NULL, 0);
 	fuse_free_req(req);
 }
 
@@ -2631,9 +2685,8 @@ static void fuse_ll_pipe_destructor(void *data)
 
 #ifdef HAVE_SPLICE
 static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			       struct fuse_chan **chp)
+			       struct fuse_chan *ch)
 {
-	struct fuse_chan *ch = *chp;
 	struct fuse_ll *f = fuse_session_data(se);
 	size_t bufsize = buf->size;
 	struct fuse_ll_pipe *llp;
@@ -2719,7 +2772,7 @@ static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 	return res;
 
 fallback:
-	res = fuse_chan_recv(chp, buf->mem, bufsize);
+	res = fuse_chan_recv(ch, buf->mem, bufsize);
 	if (res <= 0)
 		return res;
 
@@ -2729,11 +2782,11 @@ fallback:
 }
 #else
 static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			       struct fuse_chan **chp)
+			       struct fuse_chan *ch)
 {
 	(void) se;
 
-	int res = fuse_chan_recv(chp, buf->mem, buf->size);
+	int res = fuse_chan_recv(ch, buf->mem, buf->size);
 	if (res <= 0)
 		return res;
 
@@ -2742,7 +2795,6 @@ static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 	return res;
 }
 #endif
-
 
 struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 				       const struct fuse_lowlevel_ops *op,
