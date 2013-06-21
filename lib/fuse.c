@@ -4022,25 +4022,17 @@ static int fuse_session_loop_remember(struct fuse *f)
 	struct timespec now;
 	time_t next_clean;
 	struct fuse_chan *ch = fuse_session_chan(se);
-	size_t bufsize = fuse_chan_bufsize(ch);
-	char *buf = (char *) malloc(bufsize);
 	struct pollfd fds = {
 		.fd = fuse_chan_fd(ch),
 		.events = POLLIN
 	};
-
-	if (!buf) {
-		fprintf(stderr, "fuse: failed to allocate read buffer\n");
-		return -1;
-	}
+	struct fuse_buf fbuf = {
+		.mem = NULL,
+	};
 
 	curr_time(&now);
 	next_clean = now.tv_sec;
 	while (!fuse_session_exited(se)) {
-		struct fuse_buf fbuf = {
-			.mem = buf,
-			.size = bufsize,
-		};
 		unsigned timeout;
 
 		curr_time(&now);
@@ -4071,7 +4063,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 		}
 	}
 
-	free(buf);
+	free(fbuf.mem);
 	fuse_session_reset(se);
 	return res < 0 ? -1 : 0;
 }

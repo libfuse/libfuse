@@ -103,6 +103,7 @@ struct fuse_ll {
 	int broken_splice_nonblock;
 	uint64_t notify_ctr;
 	struct fuse_notify_req notify_list;
+	size_t bufsize;
 };
 
 struct fuse_chan *fuse_kern_chan_new(int fd);
@@ -130,11 +131,9 @@ void *fuse_session_data(struct fuse_session *se);
  *
  * @param op channel operations
  * @param fd file descriptor of the channel
- * @param bufsize the minimal receive buffer size
  * @return the new channel object, or NULL on failure
  */
-struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
-                               size_t bufsize);
+struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd);
 
 /**
  * Query the session to which this channel is assigned

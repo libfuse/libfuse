@@ -153,15 +153,24 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_ll *f)
 	return req;
 }
 
-static int fuse_chan_recv(struct fuse_chan *ch, char *buf, size_t size)
+static int fuse_chan_recv(struct fuse_session *se, struct fuse_buf *buf,
+			  struct fuse_chan *ch)
 {
+	struct fuse_ll *f = fuse_session_data(se);
 	int err;
 	ssize_t res;
-	struct fuse_session *se = fuse_chan_session(ch);
-	assert(se != NULL);
+
+	if (!buf->mem) {
+		buf->mem = malloc(f->bufsize);
+		if (!buf->mem) {
+			fprintf(stderr,
+				"fuse: failed to allocate read buffer\n");
+			return -ENOMEM;
+		}
+	}
 
 restart:
-	res = read(fuse_chan_fd(ch), buf, size);
+	res = read(fuse_chan_fd(ch), buf->mem, f->bufsize);
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -187,6 +196,9 @@ restart:
 		fprintf(stderr, "short read on fuse device\n");
 		return -EIO;
 	}
+
+	buf->size = res;
+
 	return res;
 }
 
@@ -1841,7 +1853,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
 	struct fuse_init_out outarg;
 	struct fuse_ll *f = req->f;
-	size_t bufsize = fuse_chan_bufsize(req->ch);
+	size_t bufsize = f->bufsize;
 
 	(void) nodeid;
 	if (f->debug) {
@@ -2688,7 +2700,7 @@ static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 			       struct fuse_chan *ch)
 {
 	struct fuse_ll *f = fuse_session_data(se);
-	size_t bufsize = buf->size;
+	size_t bufsize = buf->size = f->bufsize;
 	struct fuse_ll_pipe *llp;
 	struct fuse_buf tmpbuf;
 	int err;
@@ -2772,29 +2784,17 @@ static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 	return res;
 
 fallback:
-	res = fuse_chan_recv(ch, buf->mem, bufsize);
-	if (res <= 0)
-		return res;
-
-	buf->size = res;
-
-	return res;
+	return fuse_chan_recv(se, buf, ch);
 }
 #else
 static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 			       struct fuse_chan *ch)
 {
-	(void) se;
-
-	int res = fuse_chan_recv(ch, buf->mem, buf->size);
-	if (res <= 0)
-		return res;
-
-	buf->size = res;
-
-	return res;
+	return fuse_chan_recv(se, buf, ch);
 }
 #endif
+
+#define MIN_BUFSIZE 0x21000
 
 struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 				       const struct fuse_lowlevel_ops *op,
@@ -2819,6 +2819,9 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 	f->conn.max_write = UINT_MAX;
 	f->conn.max_readahead = UINT_MAX;
 	f->atomic_o_trunc = 0;
+	f->bufsize = getpagesize() + 0x1000;
+	f->bufsize = f->bufsize < MIN_BUFSIZE ? MIN_BUFSIZE : f->bufsize;
+
 	list_init_req(&f->list);
 	list_init_req(&f->interrupts);
 	list_init_nreq(&f->notify_list);

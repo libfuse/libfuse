@@ -1685,14 +1685,6 @@ int fuse_session_loop_mt(struct fuse_session *se);
 int fuse_chan_fd(struct fuse_chan *ch);
 
 /**
- * Query the minimal receive buffer size
- *
- * @param ch the channel
- * @return the buffer size passed to fuse_chan_new()
- */
-size_t fuse_chan_bufsize(struct fuse_chan *ch);
-
-/**
  * Destroy a channel
  *
  * @param ch the channel

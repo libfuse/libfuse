@@ -20,14 +20,10 @@ static void fuse_kern_chan_destroy(struct fuse_chan *ch)
 	close(fuse_chan_fd(ch));
 }
 
-#define MIN_BUFSIZE 0x21000
-
 struct fuse_chan *fuse_kern_chan_new(int fd)
 {
 	struct fuse_chan_ops op = {
 		.destroy = fuse_kern_chan_destroy,
 	};
-	size_t bufsize = getpagesize() + 0x1000;
-	bufsize = bufsize < MIN_BUFSIZE ? MIN_BUFSIZE : bufsize;
-	return fuse_chan_new(&op, fd, bufsize);
+	return fuse_chan_new(&op, fd);
 }

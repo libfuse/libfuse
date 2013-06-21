@@ -199,7 +199,7 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct cuse_init_out outarg;
 	struct fuse_ll *f = req->f;
 	struct cuse_data *cd = f->cuse_data;
-	size_t bufsize = fuse_chan_bufsize(req->ch);
+	size_t bufsize = f->bufsize;
 	struct cuse_lowlevel_ops *clop = req_clop(req);
 
 	(void) nodeid;

@@ -21,8 +21,6 @@ struct fuse_chan {
 	struct fuse_session *se;
 
 	int fd;
-
-	size_t bufsize;
 };
 
 struct fuse_session *fuse_session_new(void *data)
@@ -109,8 +107,7 @@ void *fuse_session_data(struct fuse_session *se)
 	return se->data;
 }
 
-struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
-				size_t bufsize)
+struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd)
 {
 	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
 	if (ch == NULL) {
@@ -121,7 +118,6 @@ struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
 	memset(ch, 0, sizeof(*ch));
 	ch->op = *op;
 	ch->fd = fd;
-	ch->bufsize = bufsize;
 
 	return ch;
 }
@@ -129,11 +125,6 @@ struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
 int fuse_chan_fd(struct fuse_chan *ch)
 {
 	return ch->fd;
-}
-
-size_t fuse_chan_bufsize(struct fuse_chan *ch)
-{
-	return ch->bufsize;
 }
 
 struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
