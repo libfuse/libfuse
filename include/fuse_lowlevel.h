@@ -1575,56 +1575,6 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
  * ----------------------------------------------------------- */
 
 /**
- * Session operations
- *
- * This is used in session creation
- */
-struct fuse_session_ops {
-	/**
-	 * Hook to process a request (mandatory)
-	 *
-	 * @param data user data passed to fuse_session_new()
-	 * @param buf buffer containing the raw request
-	 * @param len request length
-	 * @param ch channel on which the request was received
-	 */
-	void (*process) (void *data, const char *buf, size_t len,
-			 struct fuse_chan *ch);
-
-	/**
-	 * Hook for session exit and reset (optional)
-	 *
-	 * @param data user data passed to fuse_session_new()
-	 * @param val exited status (1 - exited, 0 - not exited)
-	 */
-	void (*exit) (void *data, int val);
-
-	/**
-	 * Hook for querying the current exited status (optional)
-	 *
-	 * @param data user data passed to fuse_session_new()
-	 * @return 1 if exited, 0 if not exited
-	 */
-	int (*exited) (void *data);
-
-	/**
-	 * Hook for cleaning up the channel on destroy (optional)
-	 *
-	 * @param data user data passed to fuse_session_new()
-	 */
-	void (*destroy) (void *data);
-};
-
-/**
- * Create a new session
- *
- * @param op session operations
- * @param data user data
- * @return new session object, or NULL on failure
- */
-struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data);
-
-/**
  * Assign a channel to a session
  *
  * If a session is destroyed, the assigned channel is also destroyed
@@ -1652,21 +1602,9 @@ void fuse_session_remove_chan(struct fuse_chan *ch);
 struct fuse_chan *fuse_session_chan(struct fuse_session *se);
 
 /**
- * Process a raw request
- *
- * @param se the session
- * @param buf buffer containing the raw request
- * @param len request length
- * @param ch channel on which the request was received
- */
-void fuse_session_process(struct fuse_session *se, const char *buf, size_t len,
-			  struct fuse_chan *ch);
-
-/**
  * Process a raw request supplied in a generic buffer
  *
- * This is a more generic version of fuse_session_process().  The
- * fuse_buf may contain a memory buffer or a pipe file descriptor.
+ * The fuse_buf may contain a memory buffer or a pipe file descriptor.
  *
  * @param se the session
  * @param buf the fuse_buf containing the request
@@ -1718,14 +1656,6 @@ void fuse_session_reset(struct fuse_session *se);
  * @return 1 if exited, 0 if not exited
  */
 int fuse_session_exited(struct fuse_session *se);
-
-/**
- * Get the user data provided to the session
- *
- * @param se the session
- * @return the user data
- */
-void *fuse_session_data(struct fuse_session *se);
 
 /**
  * Enter a single threaded event loop

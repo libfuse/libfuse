@@ -13,13 +13,13 @@ struct fuse_chan;
 struct fuse_ll;
 
 struct fuse_session {
-	struct fuse_session_ops op;
-
 	int (*receive_buf)(struct fuse_session *se, struct fuse_buf *buf,
 			   struct fuse_chan **chp);
 
 	void (*process_buf)(void *data, const struct fuse_buf *buf,
 			    struct fuse_chan *ch);
+
+	void (*destroy) (void *data);
 
 	void *data;
 
@@ -94,6 +94,23 @@ struct fuse_ll {
 struct fuse_chan *fuse_kern_chan_new(int fd);
 
 int fuse_chan_clearfd(struct fuse_chan *ch);
+
+/**
+ * Create a new session
+ *
+ * @param data user data
+ * @return new session object, or NULL on failure
+ */
+struct fuse_session *fuse_session_new(void *data);
+
+/**
+ * Get the user data provided to the session
+ *
+ * @param se the session
+ * @return the user data
+ */
+void *fuse_session_data(struct fuse_session *se);
+
 
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct fuse_args *args);

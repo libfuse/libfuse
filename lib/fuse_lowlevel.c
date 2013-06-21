@@ -2513,17 +2513,6 @@ clear_pipe:
 	goto out_free;
 }
 
-static void fuse_ll_process(void *data, const char *buf, size_t len,
-			    struct fuse_chan *ch)
-{
-	struct fuse_buf fbuf = {
-		.mem = (void *) buf,
-		.size = len,
-	};
-
-	fuse_ll_process_buf(data, &fbuf, ch);
-}
-
 enum {
 	KEY_HELP,
 	KEY_VERSION,
@@ -2762,10 +2751,6 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 	int err;
 	struct fuse_ll *f;
 	struct fuse_session *se;
-	struct fuse_session_ops sop = {
-		.process = fuse_ll_process,
-		.destroy = fuse_ll_destroy,
-	};
 
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
 		fprintf(stderr, "fuse: warning: library too old, some operations may not work\n");
@@ -2805,12 +2790,13 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 	f->owner = getuid();
 	f->userdata = userdata;
 
-	se = fuse_session_new(&sop, f);
+	se = fuse_session_new(f);
 	if (!se)
 		goto out_key_destroy;
 
 	se->receive_buf = fuse_ll_receive_buf;
 	se->process_buf = fuse_ll_process_buf;
+	se->destroy = fuse_ll_destroy;
 
 	return se;
 

@@ -25,7 +25,7 @@ struct fuse_chan {
 	size_t bufsize;
 };
 
-struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data)
+struct fuse_session *fuse_session_new(void *data)
 {
 	struct fuse_session *se = (struct fuse_session *) malloc(sizeof(*se));
 	if (se == NULL) {
@@ -34,7 +34,6 @@ struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data)
 	}
 
 	memset(se, 0, sizeof(*se));
-	se->op = *op;
 	se->data = data;
 
 	return se;
@@ -63,21 +62,10 @@ struct fuse_chan *fuse_session_chan(struct fuse_session *se)
 	return se->ch;
 }
 
-void fuse_session_process(struct fuse_session *se, const char *buf, size_t len,
-			  struct fuse_chan *ch)
-{
-	se->op.process(se->data, buf, len, ch);
-}
-
 void fuse_session_process_buf(struct fuse_session *se,
 			      const struct fuse_buf *buf, struct fuse_chan *ch)
 {
-	if (se->process_buf) {
-		se->process_buf(se->data, buf, ch);
-	} else {
-		assert(!(buf->flags & FUSE_BUF_IS_FD));
-		fuse_session_process(se->data, buf->mem, buf->size, ch);
-	}
+	se->process_buf(se->data, buf, ch);
 }
 
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
@@ -105,8 +93,7 @@ int fuse_chan_clearfd(struct fuse_chan *ch)
 
 void fuse_session_destroy(struct fuse_session *se)
 {
-	if (se->op.destroy)
-		se->op.destroy(se->data);
+	se->destroy(se->data);
 	if (se->ch != NULL)
 		fuse_chan_destroy(se->ch);
 	free(se);
@@ -114,24 +101,17 @@ void fuse_session_destroy(struct fuse_session *se)
 
 void fuse_session_exit(struct fuse_session *se)
 {
-	if (se->op.exit)
-		se->op.exit(se->data, 1);
 	se->exited = 1;
 }
 
 void fuse_session_reset(struct fuse_session *se)
 {
-	if (se->op.exit)
-		se->op.exit(se->data, 0);
 	se->exited = 0;
 }
 
 int fuse_session_exited(struct fuse_session *se)
 {
-	if (se->op.exited)
-		return se->op.exited(se->data);
-	else
-		return se->exited;
+	return se->exited;
 }
 
 void *fuse_session_data(struct fuse_session *se)
