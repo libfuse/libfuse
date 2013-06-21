@@ -404,6 +404,9 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		waitpid(pid, NULL, 0); /* bury zombie */
 	}
 
+	if (rv >= 0)
+		fcntl(rv, F_SETFD, FD_CLOEXEC);
+
 	return rv;
 }
 
