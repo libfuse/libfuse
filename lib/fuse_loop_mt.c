@@ -224,7 +224,7 @@ int fuse_session_loop_mt(struct fuse_session *se)
 
 	memset(&mt, 0, sizeof(struct fuse_mt));
 	mt.se = se;
-	mt.prevch = fuse_session_next_chan(se, NULL);
+	mt.prevch = fuse_session_chan(se);
 	mt.error = 0;
 	mt.numworker = 0;
 	mt.numavail = 0;

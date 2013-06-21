@@ -15,7 +15,7 @@
 int fuse_session_loop(struct fuse_session *se)
 {
 	int res = 0;
-	struct fuse_chan *ch = fuse_session_next_chan(se, NULL);
+	struct fuse_chan *ch = fuse_session_chan(se);
 	size_t bufsize = fuse_chan_bufsize(ch);
 	char *buf = (char *) malloc(bufsize);
 	if (!buf) {

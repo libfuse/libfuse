@@ -299,7 +299,7 @@ err_free:
 static void fuse_teardown(struct fuse *fuse, char *mountpoint)
 {
 	struct fuse_session *se = fuse_get_session(fuse);
-	struct fuse_chan *ch = fuse_session_next_chan(se, NULL);
+	struct fuse_chan *ch = fuse_session_chan(se);
 	fuse_remove_signal_handlers(se);
 	fuse_unmount(mountpoint, ch);
 	fuse_destroy(fuse);

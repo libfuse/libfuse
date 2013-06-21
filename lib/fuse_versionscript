@@ -25,7 +25,7 @@ FUSE_3.0 {
 		fuse_session_loop;
 		fuse_session_loop_mt;
 		fuse_session_new;
-		fuse_session_next_chan;
+		fuse_session_chan;
 		fuse_session_process;
 		fuse_session_reset;
 		fuse_opt_parse;

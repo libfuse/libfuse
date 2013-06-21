@@ -58,14 +58,9 @@ void fuse_session_remove_chan(struct fuse_chan *ch)
 	}
 }
 
-struct fuse_chan *fuse_session_next_chan(struct fuse_session *se,
-					 struct fuse_chan *ch)
+struct fuse_chan *fuse_session_chan(struct fuse_session *se)
 {
-	assert(ch == NULL || ch == se->ch);
-	if (ch == NULL)
-		return se->ch;
-	else
-		return NULL;
+	return se->ch;
 }
 
 void fuse_session_process(struct fuse_session *se, const char *buf, size_t len,

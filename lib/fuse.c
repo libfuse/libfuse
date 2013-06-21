@@ -4021,7 +4021,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 	int res = 0;
 	struct timespec now;
 	time_t next_clean;
-	struct fuse_chan *ch = fuse_session_next_chan(se, NULL);
+	struct fuse_chan *ch = fuse_session_chan(se);
 	size_t bufsize = fuse_chan_bufsize(ch);
 	char *buf = (char *) malloc(bufsize);
 	struct pollfd fds = {

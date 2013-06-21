@@ -1627,9 +1627,6 @@ struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data);
 /**
  * Assign a channel to a session
  *
- * Note: currently only a single channel may be assigned.  This may
- * change in the future
- *
  * If a session is destroyed, the assigned channel is also destroyed
  *
  * @param se the session
@@ -1638,7 +1635,7 @@ struct fuse_session *fuse_session_new(struct fuse_session_ops *op, void *data);
 void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch);
 
 /**
- * Remove a channel from a session
+ * Remove the channel from a session
  *
  * If the channel is not assigned to a session, then this is a no-op
  *
@@ -1647,18 +1644,12 @@ void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch);
 void fuse_session_remove_chan(struct fuse_chan *ch);
 
 /**
- * Iterate over the channels assigned to a session
- *
- * The iterating function needs to start with a NULL channel, and
- * after that needs to pass the previously returned channel to the
- * function.
+ * Return channel assigned to the session
  *
  * @param se the session
- * @param ch the previous channel, or NULL
- * @return the next channel, or NULL if no more channels exist
+ * @return the channel
  */
-struct fuse_chan *fuse_session_next_chan(struct fuse_session *se,
-					 struct fuse_chan *ch);
+struct fuse_chan *fuse_session_chan(struct fuse_session *se);
 
 /**
  * Process a raw request
