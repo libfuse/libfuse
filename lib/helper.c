@@ -235,7 +235,7 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
 	if (fd == -1)
 		return NULL;
 
-	ch = fuse_kern_chan_new(fd);
+	ch = fuse_chan_new(fd);
 	if (!ch)
 		fuse_kern_unmount(mountpoint, fd);
 

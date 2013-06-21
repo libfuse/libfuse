@@ -20,7 +20,6 @@ endif
 libfuse_la_SOURCES = 		\
 	fuse.c			\
 	fuse_i.h		\
-	fuse_kern_chan.c	\
 	fuse_loop.c		\
 	fuse_loop_mt.c		\
 	fuse_lowlevel.c		\

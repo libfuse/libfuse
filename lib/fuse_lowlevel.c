@@ -156,7 +156,7 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_ll *f)
 static int fuse_chan_recv(struct fuse_session *se, struct fuse_buf *buf,
 			  struct fuse_chan *ch)
 {
-	struct fuse_ll *f = fuse_session_data(se);
+	struct fuse_ll *f = se->f;
 	int err;
 	ssize_t res;
 
@@ -221,6 +221,12 @@ static int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
 
 	return 0;
 }
+
+void fuse_chan_close(struct fuse_chan *ch)
+{
+       close(fuse_chan_fd(ch));
+}
+
 
 static int fuse_send_msg(struct fuse_ll *f, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
@@ -2128,7 +2134,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
 	if (!ch)
 		return -EINVAL;
 
-	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	f = fuse_chan_session(ch)->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2152,7 +2158,7 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
 	if (!ch)
 		return -EINVAL;
 
-	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	f = fuse_chan_session(ch)->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2179,7 +2185,7 @@ int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
 	if (!ch)
 		return -EINVAL;
 
-	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	f = fuse_chan_session(ch)->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2213,7 +2219,7 @@ int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
 	if (!ch)
 		return -EINVAL;
 
-	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	f = fuse_chan_session(ch)->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2295,7 +2301,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_chan *ch, fuse_ino_t ino,
 	if (!ch)
 		return -EINVAL;
 
-	f = (struct fuse_ll *)fuse_session_data(fuse_chan_session(ch));
+	f = fuse_chan_session(ch)->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2440,10 +2446,10 @@ static int fuse_ll_copy_from_pipe(struct fuse_bufvec *dst,
 	return 0;
 }
 
-static void fuse_ll_process_buf(void *data, const struct fuse_buf *buf,
-				struct fuse_chan *ch)
+void fuse_session_process_buf(struct fuse_session *se,
+			      const struct fuse_buf *buf, struct fuse_chan *ch)
 {
-	struct fuse_ll *f = (struct fuse_ll *) data;
+	struct fuse_ll *f = se->f;
 	const size_t write_header_size = sizeof(struct fuse_in_header) +
 		sizeof(struct fuse_write_in);
 	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
@@ -2671,9 +2677,8 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 	return -1;
 }
 
-static void fuse_ll_destroy(void *data)
+static void fuse_ll_destroy(struct fuse_ll *f)
 {
-	struct fuse_ll *f = (struct fuse_ll *) data;
 	struct fuse_ll_pipe *llp;
 
 	if (f->got_init && !f->got_destroy) {
@@ -2689,6 +2694,15 @@ static void fuse_ll_destroy(void *data)
 	free(f);
 }
 
+void fuse_session_destroy(struct fuse_session *se)
+{
+	fuse_ll_destroy(se->f);
+	if (se->ch != NULL)
+		fuse_chan_destroy(se->ch);
+	free(se);
+}
+
+
 static void fuse_ll_pipe_destructor(void *data)
 {
 	struct fuse_ll_pipe *llp = data;
@@ -2696,10 +2710,10 @@ static void fuse_ll_pipe_destructor(void *data)
 }
 
 #ifdef HAVE_SPLICE
-static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			       struct fuse_chan *ch)
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
+			     struct fuse_chan *ch)
 {
-	struct fuse_ll *f = fuse_session_data(se);
+	struct fuse_ll *f = se->f;
 	size_t bufsize = buf->size = f->bufsize;
 	struct fuse_ll_pipe *llp;
 	struct fuse_buf tmpbuf;
@@ -2787,8 +2801,8 @@ fallback:
 	return fuse_chan_recv(se, buf, ch);
 }
 #else
-static int fuse_ll_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			       struct fuse_chan *ch)
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
+			     struct fuse_chan *ch)
 {
 	return fuse_chan_recv(se, buf, ch);
 }
@@ -2845,13 +2859,11 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 	f->owner = getuid();
 	f->userdata = userdata;
 
-	se = fuse_session_new(f);
+	se = fuse_session_new();
 	if (!se)
 		goto out_key_destroy;
 
-	se->receive_buf = fuse_ll_receive_buf;
-	se->process_buf = fuse_ll_process_buf;
-	se->destroy = fuse_ll_destroy;
+	se->f = f;
 
 	return se;
 

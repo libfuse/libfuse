@@ -12,35 +12,20 @@
 struct fuse_chan;
 struct fuse_ll;
 
-/**
- * Channel operations
- *
- * This is used in channel creation
- */
-struct fuse_chan_ops {
-	/**
-	 * Destroy the channel
-	 *
-	 * @param ch the channel
-	 */
-	void (*destroy)(struct fuse_chan *ch);
-};
-
 struct fuse_session {
-	int (*receive_buf)(struct fuse_session *se, struct fuse_buf *buf,
-			   struct fuse_chan *ch);
-
-	void (*process_buf)(void *data, const struct fuse_buf *buf,
-			    struct fuse_chan *ch);
-
-	void (*destroy) (void *data);
-
-	void *data;
+	struct fuse_ll *f;
 
 	volatile int exited;
 
 	struct fuse_chan *ch;
 };
+
+struct fuse_chan {
+	struct fuse_session *se;
+
+	int fd;
+};
+
 
 struct fuse_req {
 	struct fuse_ll *f;
@@ -106,25 +91,15 @@ struct fuse_ll {
 	size_t bufsize;
 };
 
-struct fuse_chan *fuse_kern_chan_new(int fd);
-
 int fuse_chan_clearfd(struct fuse_chan *ch);
+void fuse_chan_close(struct fuse_chan *ch);
 
 /**
  * Create a new session
  *
- * @param data user data
  * @return new session object, or NULL on failure
  */
-struct fuse_session *fuse_session_new(void *data);
-
-/**
- * Get the user data provided to the session
- *
- * @param se the session
- * @return the user data
- */
-void *fuse_session_data(struct fuse_session *se);
+struct fuse_session *fuse_session_new(void);
 
 /**
  * Create a new channel
@@ -133,7 +108,7 @@ void *fuse_session_data(struct fuse_session *se);
  * @param fd file descriptor of the channel
  * @return the new channel object, or NULL on failure
  */
-struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd);
+struct fuse_chan *fuse_chan_new(int fd);
 
 /**
  * Query the session to which this channel is assigned

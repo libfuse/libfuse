@@ -174,7 +174,7 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 		free(cd);
 		return NULL;
 	}
-	ll = se->data;
+	ll = se->f;
 	ll->cuse_data = cd;
 
 	return se;
@@ -312,7 +312,7 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 		goto err_se;
 	}
 
-	ch = fuse_kern_chan_new(fd);
+	ch = fuse_chan_new(fd);
 	if (!ch) {
 		close(fd);
 		goto err_se;

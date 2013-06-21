@@ -15,24 +15,15 @@
 #include <assert.h>
 #include <errno.h>
 
-struct fuse_chan {
-	struct fuse_chan_ops op;
 
-	struct fuse_session *se;
-
-	int fd;
-};
-
-struct fuse_session *fuse_session_new(void *data)
+struct fuse_session *fuse_session_new(void)
 {
 	struct fuse_session *se = (struct fuse_session *) malloc(sizeof(*se));
 	if (se == NULL) {
 		fprintf(stderr, "fuse: failed to allocate session\n");
 		return NULL;
 	}
-
 	memset(se, 0, sizeof(*se));
-	se->data = data;
 
 	return se;
 }
@@ -60,31 +51,11 @@ struct fuse_chan *fuse_session_chan(struct fuse_session *se)
 	return se->ch;
 }
 
-void fuse_session_process_buf(struct fuse_session *se,
-			      const struct fuse_buf *buf, struct fuse_chan *ch)
-{
-	se->process_buf(se->data, buf, ch);
-}
-
-int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			     struct fuse_chan *ch)
-{
-	return se->receive_buf(se, buf, ch);
-}
-
 int fuse_chan_clearfd(struct fuse_chan *ch)
 {
 	int fd = ch->fd;
 	ch->fd = -1;
 	return fd;
-}
-
-void fuse_session_destroy(struct fuse_session *se)
-{
-	se->destroy(se->data);
-	if (se->ch != NULL)
-		fuse_chan_destroy(se->ch);
-	free(se);
 }
 
 void fuse_session_exit(struct fuse_session *se)
@@ -102,12 +73,7 @@ int fuse_session_exited(struct fuse_session *se)
 	return se->exited;
 }
 
-void *fuse_session_data(struct fuse_session *se)
-{
-	return se->data;
-}
-
-struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd)
+struct fuse_chan *fuse_chan_new(int fd)
 {
 	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
 	if (ch == NULL) {
@@ -116,7 +82,6 @@ struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd)
 	}
 
 	memset(ch, 0, sizeof(*ch));
-	ch->op = *op;
 	ch->fd = fd;
 
 	return ch;
@@ -135,7 +100,6 @@ struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
 void fuse_chan_destroy(struct fuse_chan *ch)
 {
 	fuse_session_remove_chan(ch);
-	if (ch->op.destroy)
-		ch->op.destroy(ch);
+	fuse_chan_close(ch);
 	free(ch);
 }
