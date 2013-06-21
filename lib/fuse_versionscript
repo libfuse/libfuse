@@ -7,8 +7,6 @@ FUSE_3.0 {
 		fuse_chan_bufsize;
 		fuse_chan_destroy;
 		fuse_chan_fd;
-		fuse_chan_send;
-		fuse_chan_session;
 		fuse_reply_attr;
 		fuse_reply_buf;
 		fuse_reply_entry;
@@ -39,8 +37,6 @@ FUSE_3.0 {
 		fuse_set_signal_handlers;
 		fuse_add_direntry;
 		fuse_add_direntry_plus;
-		fuse_chan_new;
-		fuse_chan_recv;
 		fuse_daemonize;
 		fuse_get_session;
 		fuse_interrupted;

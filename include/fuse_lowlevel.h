@@ -1616,8 +1616,7 @@ void fuse_session_process_buf(struct fuse_session *se,
 /**
  * Receive a raw request supplied in a generic buffer
  *
- * This is a more generic version of fuse_chan_recv().  The fuse_buf
- * supplied to this function contains a suitably allocated memory
+ * The fuse_buf supplied to this function contains a suitably allocated memory
  * buffer.  This may be overwritten with a file descriptor buffer.
  *
  * @param se the session
@@ -1678,55 +1677,6 @@ int fuse_session_loop_mt(struct fuse_session *se);
  * ----------------------------------------------------------- */
 
 /**
- * Channel operations
- *
- * This is used in channel creation
- */
-struct fuse_chan_ops {
-	/**
-	 * Hook for receiving a raw request
-	 *
-	 * @param ch pointer to the channel
-	 * @param buf the buffer to store the request in
-	 * @param size the size of the buffer
-	 * @return the actual size of the raw request, or -1 on error
-	 */
-	int (*receive)(struct fuse_chan **chp, char *buf, size_t size);
-
-	/**
-	 * Hook for sending a raw reply
-	 *
-	 * A return value of -ENOENT means, that the request was
-	 * interrupted, and the reply was discarded
-	 *
-	 * @param ch the channel
-	 * @param iov vector of blocks
-	 * @param count the number of blocks in vector
-	 * @return zero on success, -errno on failure
-	 */
-	int (*send)(struct fuse_chan *ch, const struct iovec iov[],
-		    size_t count);
-
-	/**
-	 * Destroy the channel
-	 *
-	 * @param ch the channel
-	 */
-	void (*destroy)(struct fuse_chan *ch);
-};
-
-/**
- * Create a new channel
- *
- * @param op channel operations
- * @param fd file descriptor of the channel
- * @param bufsize the minimal receive buffer size
- * @return the new channel object, or NULL on failure
- */
-struct fuse_chan *fuse_chan_new(struct fuse_chan_ops *op, int fd,
-				size_t bufsize);
-
-/**
  * Query the file descriptor of the channel
  *
  * @param ch the channel
@@ -1741,40 +1691,6 @@ int fuse_chan_fd(struct fuse_chan *ch);
  * @return the buffer size passed to fuse_chan_new()
  */
 size_t fuse_chan_bufsize(struct fuse_chan *ch);
-
-/**
- * Query the session to which this channel is assigned
- *
- * @param ch the channel
- * @return the session, or NULL if the channel is not assigned
- */
-struct fuse_session *fuse_chan_session(struct fuse_chan *ch);
-
-/**
- * Receive a raw request
- *
- * A return value of -ENODEV means, that the filesystem was unmounted
- *
- * @param ch pointer to the channel
- * @param buf the buffer to store the request in
- * @param size the size of the buffer
- * @return the actual size of the raw request, or -errno on error
- */
-int fuse_chan_recv(struct fuse_chan **ch, char *buf, size_t size);
-
-/**
- * Send a raw reply
- *
- * A return value of -ENOENT means, that the request was
- * interrupted, and the reply was discarded
- *
- * @param ch the channel
- * @param iov vector of blocks
- * @param count the number of blocks in vector
- * @return zero on success, -errno on failure
- */
-int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
-		   size_t count);
 
 /**
  * Destroy a channel
