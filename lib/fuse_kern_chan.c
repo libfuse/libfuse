@@ -77,7 +77,10 @@ static int fuse_kern_chan_send(struct fuse_chan *ch, const struct iovec iov[],
 
 static void fuse_kern_chan_destroy(struct fuse_chan *ch)
 {
-	close(fuse_chan_fd(ch));
+	int fd = fuse_chan_fd(ch);
+
+	if (fd != -1)
+		close(fd);
 }
 
 #define MIN_BUFSIZE 0x21000
