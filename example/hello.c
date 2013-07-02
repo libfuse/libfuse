@@ -10,7 +10,7 @@
  *
  * hello.c - minimal FUSE example featuring fuse_main usage
  *
-* \section section_compile compiling this example
+ * \section section_compile compiling this example
  *
  * gcc -Wall hello.c `pkg-config fuse --cflags --libs` -o hello
  *

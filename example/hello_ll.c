@@ -180,7 +180,7 @@ static struct fuse_lowlevel_ops hello_ll_oper = {
 	.read		= hello_ll_read,
 };
 
-//! [doxygen_fuse_lowlevel_usage]
+/*! [doxygen_fuse_lowlevel_usage] */
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 			if (fuse_set_signal_handlers(se) != -1) {
 				fuse_session_add_chan(se, ch);
 				
-				// fuse_session_loop(..) blocks until ctrl+c or fusermount -u
+				/* fuse_session_loop(..) blocks until ctrl+c or fusermount -u */
 				err = fuse_session_loop(se); 
 				
 				fuse_remove_signal_handlers(se);
@@ -211,4 +211,4 @@ int main(int argc, char *argv[])
 
 	return err ? 1 : 0;
 }
-//! [doxygen_fuse_lowlevel_usage]
+/*! [doxygen_fuse_lowlevel_usage] */
