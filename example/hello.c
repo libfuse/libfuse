@@ -4,9 +4,34 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
-  gcc -Wall hello.c `pkg-config fuse --cflags --libs` -o hello
 */
+
+/** @file
+ *
+ * hello.c - minimal FUSE example featuring fuse_main usage
+ *
+ * \section section_compile compiling this example
+ *
+ * gcc -Wall hello.c `pkg-config fuse --cflags --libs` -o hello
+ *
+ * \section section_usage usage
+ \verbatim
+ % mkdir mnt
+ % ./hello mnt        # program will vanish into the background
+ % ls -la mnt
+   total 4
+   drwxr-xr-x 2 root root      0 Jan  1  1970 ./
+   drwxrwx--- 1 root vboxsf 4096 Jun 16 23:12 ../
+   -r--r--r-- 1 root root     13 Jan  1  1970 hello
+ % cat mnt/hello
+   Hello World!
+ % fusermount -u mnt
+ \endverbatim
+ *
+ * \section section_source the complete source
+ * \include hello.c
+ */
+
 
 #define FUSE_USE_VERSION 30
 
@@ -83,6 +108,7 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset,
 	return size;
 }
 
+// fuse_operations hello_oper is redirecting function-calls to _our_ functions implemented above
 static struct fuse_operations hello_oper = {
 	.getattr	= hello_getattr,
 	.readdir	= hello_readdir,
@@ -90,6 +116,7 @@ static struct fuse_operations hello_oper = {
 	.read		= hello_read,
 };
 
+// in the main function we call the blocking fuse_main(..) function with &hello_oper 
 int main(int argc, char *argv[])
 {
 	return fuse_main(argc, argv, &hello_oper, NULL);

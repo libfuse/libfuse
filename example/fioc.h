@@ -7,6 +7,15 @@
   See the file COPYING.
 */
 
+/** @file
+ * @tableofcontents
+ *
+ * fioc.h - FUSE-ioctl: ioctl support for FUSE
+ * 
+ * \include fioc.h
+ */
+
+
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <sys/ioctl.h>

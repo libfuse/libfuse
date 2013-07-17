@@ -589,6 +589,8 @@ struct fuse_context {
  * @param op the file system operation
  * @param user_data user data supplied in the context during the init() method
  * @return 0 on success, nonzero on failure
+ * 
+ * Example usage, see hello.c
  */
 /*
   int fuse_main(int argc, char *argv[], const struct fuse_operations *op,
@@ -635,6 +637,8 @@ void fuse_destroy(struct fuse *f);
  *
  * @param f the FUSE handle
  * @return 0 if no error occurred, -1 otherwise
+ * 
+ * See also: fuse_loop()
  */
 int fuse_loop(struct fuse *f);
 
@@ -654,9 +658,28 @@ void fuse_exit(struct fuse *f);
  *
  * Calling this function requires the pthreads library to be linked to
  * the application.
+ * 
+ * Note: using fuse_loop() instead of fuse_loop_mt() means you are running in single-threaded mode, 
+ * and that you will not have to worry about reentrancy, 
+ * though you will have to worry about recursive lookups. In single-threaded mode, FUSE 
+ * holds a global lock on your filesystem, and will wait for one callback to return 
+ * before calling another. This can lead to deadlocks, if your script makes any attempt 
+ * to access files or directories in the filesystem it is providing. 
+ * (This includes calling stat() on the mount-point, statfs() calls from the 'df' command, 
+ * and so on and so forth.) It is worth paying a little attention and being careful about this.
+ * 
+ * Enabling multiple threads, by using fuse_loop_mt(), will cause FUSE to make multiple simultaneous 
+ * calls into the various callback functions given by your fuse_operations record. 
+ * 
+ * If you are using multiple threads, you can enjoy all the parallel execution and interactive 
+ * response benefits of threads, and you get to enjoy all the benefits of race conditions 
+ * and locking bugs, too. Ensure that any code used in the callback funtion of fuse_operations 
+ * is also thread-safe.
  *
  * @param f the FUSE handle
  * @return 0 if no error occurred, -1 otherwise
+ * 
+ * See also: fuse_loop()
  */
 int fuse_loop_mt(struct fuse *f);
 

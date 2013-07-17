@@ -4,9 +4,20 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
-  gcc -Wall null.c `pkg-config fuse --cflags --libs` -o null
 */
+
+/** @file
+ *
+ * null.c - FUSE: Filesystem in Userspace 
+ *
+ * \section section_compile compiling this example
+ *
+ * gcc -Wall null.c `pkg-config fuse --cflags --libs` -o null
+ *
+ * \section section_source the complete source
+ * \include null.c
+ */
+
 
 #define FUSE_USE_VERSION 30
 

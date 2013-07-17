@@ -1,0 +1,92 @@
+/*!
+\mainpage FUSE API documentation
+
+Filesystem in Userspace (FUSE) is a loadable kernel module for Unix-like computer operating systems that lets non-privileged users create their own file systems without editing kernel code. This is achieved by running file system code in user space while the FUSE module provides only a "bridge" to the actual kernel interfaces. 
+
+(c) Wikipedia
+
+@tableofcontents 
+
+
+
+
+
+\section section1 How FUSE works
+
+@image html 490px-FUSE_structure.svg.png "Structural diagramm of Filesystem in Userspace from http://en.wikipedia.org/wiki/File:FUSE_structure.svg"
+
+\include how-fuse-works
+
+
+
+
+\section section2 Kernel
+
+\include kernel.txt 
+
+
+
+
+
+\section section_examples examples
+
+have a look at the examples listed in the example directory, which can be found here: <a href="files.html">files.html</a>.
+
+- @ref hello.c - minimal FUSE example featuring fuse_main usage
+
+- @ref hello_ll.c - FUSE: Filesystem in Userspace
+
+- @ref null.c - FUSE: Filesystem in Userspace
+
+- @ref cusexmp.c - CUSE example: Character device in Userspace
+
+- @ref fioc.c - FUSE fioc: FUSE ioctl example
+
+- @ref fioclient.c - FUSE fioclient: FUSE ioctl example client
+
+- @ref fsel.c - FUSE fsel: FUSE select example
+
+- @ref fselclient.c - FUSE fselclient: FUSE select example client
+
+- @ref fusexmp.c - FUSE: Filesystem in Userspace
+
+- @ref fusexmp_fh.c - FUSE: Filesystem in Userspace
+
+
+\section section_links links
+
+<a href="http://sourceforge.net/apps/mediawiki/fuse/index.php?title=Main_Page">http://sourceforge.net/apps/mediawiki/fuse/index.php?title=Main_Page</a> - the fuse wiki
+
+<a href="http://en.wikipedia.org/wiki/Filesystem_in_Userspace">http://en.wikipedia.org/wiki/Filesystem_in_Userspace</a> - FUSE on wikipedia 
+
+
+\section section_todo todo
+
+general:
+ 
+ - fuse_lowlevel.h, describe:
+  - a channel (or communication channel) is created by fuse_mount(..)
+  - a fuse session is associated with a channel and a signal handler and runs until the assigned signal handler
+    shuts the session down, see fuse_session_loop(se) and hello_ll.c
+    
+ - http://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/
+    
+ - http://cinwell.wordpress.com/
+
+ - http://sourceforge.net/apps/mediawiki/fuse/index.php?title=FuseProtocolSketch
+
+ - http://muratbuffalo.blogspot.de/2011/05/refuse-to-crash-with-re-fuse.html
+
+examples:
+ - demonstrate the effect of single vs multithreaded -> fuse_loop fuse_loop_mt 
+
+ - add comments and source form all existing examples
+ 
+ - also add examples form here: http://sourceforge.net/apps/mediawiki/fuse/index.php?title=Main_Page#How_should_threads_be_startedx3f
+
+ - add this new example: http://fuse.996288.n3.nabble.com/Create-multiple-filesystems-in-same-process-td9292.html
+
+ \section section_thanks thanks
+ - Mark Glines, <mark@glines.org> for his coments on fuse_loop() and fuse_loop_mt().
+ - Wikipedia - copied the FUSE introduction from the Filesystem in userspace article.
+*/

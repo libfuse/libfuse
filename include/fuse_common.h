@@ -451,8 +451,14 @@ ssize_t fuse_buf_copy(struct fuse_bufvec *dst, struct fuse_bufvec *src,
  * Stores session in a global variable.	 May only be called once per
  * process until fuse_remove_signal_handlers() is called.
  *
+ * Once either of the POSIX signals arrives, the exit_handler() in fuse_signals.c is called:
+ * \snippet fuse_signals.c doxygen_exit_handler
+ * 
  * @param se the session to exit
  * @return 0 on success, -1 on failure
+ * 
+ * See also:
+ * fuse_remove_signal_handlers()
  */
 int fuse_set_signal_handlers(struct fuse_session *se);
 
@@ -463,6 +469,9 @@ int fuse_set_signal_handlers(struct fuse_session *se);
  * be called again.
  *
  * @param se the same session as given in fuse_set_signal_handlers()
+ * 
+ * See also:
+ * fuse_set_signal_handlers()
  */
 void fuse_remove_signal_handlers(struct fuse_session *se);
 
