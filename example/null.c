@@ -8,7 +8,7 @@
 
 /** @file
  *
- * null.c - FUSE: Filesystem in Userspace 
+ * null.c - FUSE: Filesystem in Userspace
  *
  * \section section_compile compiling this example
  *

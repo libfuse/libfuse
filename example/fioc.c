@@ -18,7 +18,7 @@
  * gcc -Wall fioc.c `pkg-config fuse --cflags --libs` -o fioc
  *
  * \section section_source the complete source
- * \include fioc.c 
+ * \include fioc.c
  */
 
 

@@ -9,9 +9,9 @@
 /** @file
  *
  * hello_ll.c - fuse low level functionality
- * 
+ *
  * unlike hello.c this example will stay in the foreground. it also replaced
- * the convenience function fuse_main(..) with a more low level approach.  
+ * the convenience function fuse_main(..) with a more low level approach.
  *
  * \section section_compile compiling this example
  *
@@ -20,7 +20,7 @@
  * \section section_usage usage
  \verbatim
  % mkdir mnt
- % ./hello_ll mnt        # program will wait in foreground until you press CTRL+C
+ % ./hello_ll mnt       # program will wait in foreground until you press CTRL+C
  in a different shell do:
  % ls -la mnt
    total 4
@@ -191,15 +191,16 @@ int main(int argc, char *argv[])
 	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
 	    (ch = fuse_mount(mountpoint, &args)) != NULL) {
 		struct fuse_session *se;
+
 		se = fuse_lowlevel_new(&args, &hello_ll_oper,
 				       sizeof(hello_ll_oper), NULL);
 		if (se != NULL) {
 			if (fuse_set_signal_handlers(se) != -1) {
 				fuse_session_add_chan(se, ch);
-				
-				/* fuse_session_loop(..) blocks until ctrl+c or fusermount -u */
-				err = fuse_session_loop(se); 
-				
+
+				/* Block until ctrl+c or fusermount -u */
+				err = fuse_session_loop(se);
+
 				fuse_remove_signal_handlers(se);
 				fuse_session_remove_chan(ch);
 			}

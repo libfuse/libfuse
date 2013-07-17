@@ -1,11 +1,11 @@
 /*!
 \mainpage FUSE API documentation
 
-Filesystem in Userspace (FUSE) is a loadable kernel module for Unix-like computer operating systems that lets non-privileged users create their own file systems without editing kernel code. This is achieved by running file system code in user space while the FUSE module provides only a "bridge" to the actual kernel interfaces. 
+Filesystem in Userspace (FUSE) is a loadable kernel module for Unix-like computer operating systems that lets non-privileged users create their own file systems without editing kernel code. This is achieved by running file system code in user space while the FUSE module provides only a "bridge" to the actual kernel interfaces.
 
 (c) Wikipedia
 
-@tableofcontents 
+@tableofcontents
 
 
 
@@ -22,7 +22,7 @@ Filesystem in Userspace (FUSE) is a loadable kernel module for Unix-like compute
 
 \section section2 Kernel
 
-\include kernel.txt 
+\include kernel.txt
 
 
 
@@ -57,20 +57,20 @@ have a look at the examples listed in the example directory, which can be found 
 
 <a href="http://sourceforge.net/apps/mediawiki/fuse/index.php?title=Main_Page">http://sourceforge.net/apps/mediawiki/fuse/index.php?title=Main_Page</a> - the fuse wiki
 
-<a href="http://en.wikipedia.org/wiki/Filesystem_in_Userspace">http://en.wikipedia.org/wiki/Filesystem_in_Userspace</a> - FUSE on wikipedia 
+<a href="http://en.wikipedia.org/wiki/Filesystem_in_Userspace">http://en.wikipedia.org/wiki/Filesystem_in_Userspace</a> - FUSE on wikipedia
 
 
 \section section_todo todo
 
 general:
- 
+
  - fuse_lowlevel.h, describe:
   - a channel (or communication channel) is created by fuse_mount(..)
   - a fuse session is associated with a channel and a signal handler and runs until the assigned signal handler
     shuts the session down, see fuse_session_loop(se) and hello_ll.c
-    
+
  - http://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/
-    
+
  - http://cinwell.wordpress.com/
 
  - http://sourceforge.net/apps/mediawiki/fuse/index.php?title=FuseProtocolSketch
@@ -78,10 +78,10 @@ general:
  - http://muratbuffalo.blogspot.de/2011/05/refuse-to-crash-with-re-fuse.html
 
 examples:
- - demonstrate the effect of single vs multithreaded -> fuse_loop fuse_loop_mt 
+ - demonstrate the effect of single vs multithreaded -> fuse_loop fuse_loop_mt
 
  - add comments and source form all existing examples
- 
+
  - also add examples form here: http://sourceforge.net/apps/mediawiki/fuse/index.php?title=Main_Page#How_should_threads_be_startedx3f
 
  - add this new example: http://fuse.996288.n3.nabble.com/Create-multiple-filesystems-in-same-process-td9292.html

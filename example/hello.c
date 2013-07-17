@@ -108,7 +108,6 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset,
 	return size;
 }
 
-// fuse_operations hello_oper is redirecting function-calls to _our_ functions implemented above
 static struct fuse_operations hello_oper = {
 	.getattr	= hello_getattr,
 	.readdir	= hello_readdir,
@@ -116,7 +115,6 @@ static struct fuse_operations hello_oper = {
 	.read		= hello_read,
 };
 
-// in the main function we call the blocking fuse_main(..) function with &hello_oper 
 int main(int argc, char *argv[])
 {
 	return fuse_main(argc, argv, &hello_oper, NULL);

@@ -11,7 +11,7 @@
  * @tableofcontents
  *
  * fioc.h - FUSE-ioctl: ioctl support for FUSE
- * 
+ *
  * \include fioc.h
  */
 
