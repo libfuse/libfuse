@@ -34,18 +34,15 @@ extern "C" {
 /**
  * Information about open files
  *
- * Changed in version 2.5
+ * Changed in version 3.0
  */
 struct fuse_file_info {
 	/** Open flags.	 Available in open() and release() */
 	int flags;
 
-	/** Old file handle, don't use */
-	unsigned long fh_old;
-
 	/** In case of a write operation indicates if this was caused by a
 	    writepage */
-	int writepage;
+	unsigned int writepage : 1;
 
 	/** Can be filled in by open, to use direct I/O on this file.
 	    Introduced in version 2.4 */
