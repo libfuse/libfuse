@@ -6,6 +6,7 @@
   See the file COPYING.LIB.
 */
 
+#include "config.h"
 #include "mount_util.h"
 #include <stdio.h>
 #include <unistd.h>

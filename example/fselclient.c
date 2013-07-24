@@ -21,6 +21,7 @@
  * \include fselclient.c
  */
 
+#include <config.h>
 
 #include <sys/select.h>
 #include <sys/time.h>

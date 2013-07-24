@@ -1,6 +1,5 @@
 ## Process this file with automake to produce Makefile.in
 
-AM_CPPFLAGS = -D_FILE_OFFSET_BITS=64 
 bin_PROGRAMS = fusermount ulockmgr_server
 noinst_PROGRAMS = mount.fuse
 
@@ -17,7 +16,7 @@ mount_util.c: $(top_srcdir)/lib/mount_util.c
 mount_fuse_SOURCES = mount.fuse.c
 
 ulockmgr_server_SOURCES = ulockmgr_server.c
-ulockmgr_server_CPPFLAGS = -D_FILE_OFFSET_BITS=64 -D_REENTRANT 
+ulockmgr_server_CPPFLAGS = -D_REENTRANT 
 ulockmgr_server_LDFLAGS = -pthread
 
 install-exec-hook:

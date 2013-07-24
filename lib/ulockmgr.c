@@ -8,6 +8,7 @@
 
 /* #define DEBUG 1 */
 
+#include "config.h"
 #include "ulockmgr.h"
 #include <stdio.h>
 #include <stdlib.h>

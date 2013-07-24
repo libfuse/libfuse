@@ -1,3 +1,8 @@
+2013-07-24  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: remove "-D_FILE_OFFSET_BITS=64" from fuse.pc, add
+	AC_SYS_LARGEFILE to your configure.ac instead.
+
 2013-06-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: set FD_CLOEXEC also when receiving device fd from

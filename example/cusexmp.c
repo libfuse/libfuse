@@ -24,6 +24,8 @@
 
 #define FUSE_USE_VERSION 30
 
+#include <config.h>
+
 #include <cuse_lowlevel.h>
 #include <fuse_opt.h>
 #include <stddef.h>

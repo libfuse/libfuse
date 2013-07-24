@@ -6,7 +6,6 @@
   See the file COPYING.LIB
 */
 
-#include "config.h"
 #include <pthread.h>
 
 #ifndef USE_UCLIBC

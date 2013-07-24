@@ -24,6 +24,8 @@
 
 #define FUSE_USE_VERSION 30
 
+#include <config.h>
+
 #include <fuse.h>
 #include <unistd.h>
 #include <ctype.h>
