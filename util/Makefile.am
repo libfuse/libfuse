@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
-bin_PROGRAMS = fusermount ulockmgr_server
+bin_PROGRAMS = fusermount
 noinst_PROGRAMS = mount.fuse
 
 # we re-use mount_util.c from the library, but do want to keep ourself
@@ -14,10 +14,6 @@ mount_util.c: $(top_srcdir)/lib/mount_util.c
 	@cp $(top_srcdir)/lib/mount_util.c .
 
 mount_fuse_SOURCES = mount.fuse.c
-
-ulockmgr_server_SOURCES = ulockmgr_server.c
-ulockmgr_server_CPPFLAGS = -D_REENTRANT 
-ulockmgr_server_LDFLAGS = -pthread
 
 install-exec-hook:
 	-chmod u+s $(DESTDIR)$(bindir)/fusermount

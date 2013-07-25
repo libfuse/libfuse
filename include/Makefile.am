@@ -9,6 +9,4 @@ fuseinclude_HEADERS = \
 	fuse_opt.h		\
 	cuse_lowlevel.h
 
-include_HEADERS = ulockmgr.h
-
 noinst_HEADERS = fuse_kernel.h

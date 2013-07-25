@@ -5,6 +5,11 @@
 	libfuse3.*.  Invoke pkg-config with "fuse3" as the first argument
 	to build with version 3 of the library.
 
+	* ulockmgr: strip ulockmgr support from this source package and
+	distribute it separately.  It is not needed for the building of
+	libfuse, only fusexmp_fh.  Check ulockmgr library in ./configure
+	and if not disable remote-lock suport in fusexmp_fh.
+
 2013-07-24  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: remove "-D_FILE_OFFSET_BITS=64" from fuse.pc, add

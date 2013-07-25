@@ -3,7 +3,7 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include -DFUSERMOUNT_DIR=\"$(bindir)\" \
  -D_REENTRANT -DFUSE_USE_VERSION=30
 
-lib_LTLIBRARIES = libfuse3.la libulockmgr.la
+lib_LTLIBRARIES = libfuse3.la
 
 if BSD
 mount_source = mount_bsd.c
@@ -41,8 +41,5 @@ libfuse3_la_LDFLAGS = -pthread @libfuse_libs@ -version-number 0:0:0 \
 if NETBSD
 libfuse3_la_LIBADD = -lperfuse -lpuffs
 endif
-
-libulockmgr_la_SOURCES = ulockmgr.c
-libulockmgr_la_LDFLAGS = -pthread -version-number 1:0:1
 
 EXTRA_DIST = fuse_versionscript

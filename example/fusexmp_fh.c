@@ -29,7 +29,11 @@
 #define _GNU_SOURCE
 
 #include <fuse.h>
+
+#ifdef HAVE_LIBULOCKMGR
 #include <ulockmgr.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -500,6 +504,7 @@ static int xmp_removexattr(const char *path, const char *name)
 }
 #endif /* HAVE_SETXATTR */
 
+#ifdef HAVE_LIBULOCKMGR
 static int xmp_lock(const char *path, struct fuse_file_info *fi, int cmd,
 		    struct flock *lock)
 {
@@ -508,6 +513,7 @@ static int xmp_lock(const char *path, struct fuse_file_info *fi, int cmd,
 	return ulockmgr_op(fi->fh, cmd, lock, &fi->lock_owner,
 			   sizeof(fi->lock_owner));
 }
+#endif
 
 static int xmp_flock(const char *path, struct fuse_file_info *fi, int op)
 {
@@ -562,7 +568,9 @@ static struct fuse_operations xmp_oper = {
 	.listxattr	= xmp_listxattr,
 	.removexattr	= xmp_removexattr,
 #endif
+#ifdef HAVE_LIBULOCKMGR
 	.lock		= xmp_lock,
+#endif
 	.flock		= xmp_flock,
 };
 

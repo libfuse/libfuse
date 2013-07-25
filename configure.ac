@@ -63,6 +63,11 @@ AC_SEARCH_LIBS(dlopen, [dl])
 AC_SEARCH_LIBS(clock_gettime, [rt])
 libfuse_libs=$LIBS
 LIBS=
+AC_CHECK_LIB(ulockmgr, ulockmgr_op)
+fusexmp_fh_libs=$LIBS
+AC_SUBST(fusexmp_fh_libs)
+LIBS=
+
 AC_ARG_WITH([libiconv-prefix],
 [  --with-libiconv-prefix=DIR  search for libiconv in DIR/include and DIR/lib], [
     for dir in `echo "$withval" | tr : ' '`; do
