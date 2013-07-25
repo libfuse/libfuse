@@ -8,4 +8,4 @@ Description: Filesystem in Userspace
 Version: @VERSION@
 Libs: -L${libdir} -lfuse -pthread
 Libs.private: @libfuse_libs@
-Cflags: -I${includedir}/fuse
+Cflags: -I${includedir}/fuse3

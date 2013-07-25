@@ -12,7 +12,7 @@
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall hello.c `pkg-config fuse --cflags --libs` -o hello
+ * gcc -Wall hello.c `pkg-config fuse3 --cflags --libs` -o hello
  *
  * \section section_usage usage
  \verbatim

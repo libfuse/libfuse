@@ -112,7 +112,7 @@ if test "$arch" = linux -a "$cross_compiling" != "yes"; then
 	fi
 fi
 
-AC_CONFIG_FILES([fuse.pc Makefile lib/Makefile util/Makefile example/Makefile include/Makefile doc/Makefile])
+AC_CONFIG_FILES([fuse3.pc Makefile lib/Makefile util/Makefile example/Makefile include/Makefile doc/Makefile])
 AC_OUTPUT
 
 if test "$util_linux_ok" = no; then

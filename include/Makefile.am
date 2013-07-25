@@ -1,6 +1,6 @@
 ## Process this file with automake to produce Makefile.in
 
-fuseincludedir=$(includedir)/fuse
+fuseincludedir=$(includedir)/fuse3
 
 fuseinclude_HEADERS = \
 	fuse.h			\

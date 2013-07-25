@@ -30,7 +30,7 @@ config.*
 /compile
 /libtool
 /INSTALL
-/fuse.pc
+/*.pc
 /.pc
 /patches*
 /m4

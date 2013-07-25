@@ -3,7 +3,7 @@
 AM_CPPFLAGS = -I$(top_srcdir)/include -DFUSERMOUNT_DIR=\"$(bindir)\" \
  -D_REENTRANT -DFUSE_USE_VERSION=30
 
-lib_LTLIBRARIES = libfuse.la libulockmgr.la
+lib_LTLIBRARIES = libfuse3.la libulockmgr.la
 
 if BSD
 mount_source = mount_bsd.c
@@ -17,7 +17,7 @@ else
 iconv_source =
 endif
 
-libfuse_la_SOURCES = 		\
+libfuse3_la_SOURCES = 		\
 	fuse.c			\
 	fuse_i.h		\
 	fuse_loop.c		\
@@ -35,11 +35,11 @@ libfuse_la_SOURCES = 		\
 	$(iconv_source)		\
 	$(mount_source)
 
-libfuse_la_LDFLAGS = -pthread @libfuse_libs@ -version-number 3:0:0 \
+libfuse3_la_LDFLAGS = -pthread @libfuse_libs@ -version-number 0:0:0 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
 
 if NETBSD
-libfuse_la_LIBADD = -lperfuse -lpuffs
+libfuse3_la_LIBADD = -lperfuse -lpuffs
 endif
 
 libulockmgr_la_SOURCES = ulockmgr.c

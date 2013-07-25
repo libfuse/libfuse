@@ -15,7 +15,7 @@
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fioc.c `pkg-config fuse --cflags --libs` -o fioc
+ * gcc -Wall fioc.c `pkg-config fuse3 --cflags --libs` -o fioc
  *
  * \section section_source the complete source
  * \include fioc.c

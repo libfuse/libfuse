@@ -12,7 +12,7 @@
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall null.c `pkg-config fuse --cflags --libs` -o null
+ * gcc -Wall null.c `pkg-config fuse3 --cflags --libs` -o null
  *
  * \section section_source the complete source
  * \include null.c

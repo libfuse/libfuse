@@ -14,7 +14,7 @@
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fusexmp_fh.c `pkg-config fuse --cflags --libs` -lulockmgr -o fusexmp_fh
+ * gcc -Wall fusexmp_fh.c `pkg-config fuse3 --cflags --libs` -lulockmgr -o fusexmp_fh
  *
  * \section section_source the complete source
  * \include fusexmp_fh.c

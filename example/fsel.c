@@ -15,7 +15,7 @@
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fsel.c `pkg-config fuse --cflags --libs` -o fsel
+ * gcc -Wall fsel.c `pkg-config fuse3 --cflags --libs` -o fsel
  *
  * \section section_source the complete source
  * \include fsel.c

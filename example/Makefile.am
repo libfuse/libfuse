@@ -5,8 +5,8 @@ noinst_HEADERS = fioc.h
 noinst_PROGRAMS = fusexmp fusexmp_fh null hello hello_ll fioc fioclient \
 		  fsel fselclient cusexmp
 
-LDADD = ../lib/libfuse.la
-fusexmp_fh_LDADD = ../lib/libfuse.la ../lib/libulockmgr.la
+LDADD = ../lib/libfuse3.la
+fusexmp_fh_LDADD = ../lib/libfuse3.la ../lib/libulockmgr.la
 
 fioclient_CPPFLAGS =
 fioclient_LDFLAGS =

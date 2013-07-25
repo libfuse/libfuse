@@ -14,7 +14,7 @@
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fusexmp.c `pkg-config fuse --cflags --libs` -o fusexmp
+ * gcc -Wall fusexmp.c `pkg-config fuse3 --cflags --libs` -o fusexmp
  *
  * \section section_source the complete source
  * \include fusexmp.c

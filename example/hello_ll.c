@@ -15,7 +15,7 @@
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall hello_ll.c `pkg-config fuse --cflags --libs` -o hello_ll
+ * gcc -Wall hello_ll.c `pkg-config fuse3 --cflags --libs` -o hello_ll
  *
  * \section section_usage usage
  \verbatim
