@@ -58,30 +58,26 @@ static const struct fuse_opt fuse_helper_opts[] = {
 
 static void usage(const char *progname)
 {
-	fprintf(stderr,
-		"usage: %s mountpoint [options]\n\n", progname);
-	fprintf(stderr,
-		"general options:\n"
-		"    -o opt,[opt...]        mount options\n"
-		"    -h   --help            print help\n"
-		"    -V   --version         print version\n"
-		"\n");
+	printf("usage: %s mountpoint [options]\n\n", progname);
+	printf("general options:\n"
+	       "    -o opt,[opt...]        mount options\n"
+	       "    -h   --help            print help\n"
+	       "    -V   --version         print version\n"
+	       "\n");
 }
 
 static void helper_help(void)
 {
-	fprintf(stderr,
-		"FUSE options:\n"
-		"    -d   -o debug          enable debug output (implies -f)\n"
-		"    -f                     foreground operation\n"
-		"    -s                     disable multi-threaded operation\n"
-		"\n"
-		);
+	printf("FUSE options:\n"
+	       "    -d   -o debug          enable debug output (implies -f)\n"
+	       "    -f                     foreground operation\n"
+	       "    -s                     disable multi-threaded operation\n"
+	       "\n");
 }
 
 static void helper_version(void)
 {
-	fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
+	printf("FUSE library version: %s\n", PACKAGE_VERSION);
 }
 
 static int fuse_helper_opt_proc(void *data, const char *arg, int key,

@@ -127,7 +127,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 
 static void mount_help(void)
 {
-	fprintf(stderr,
+	printf(
 "    -o allow_other         allow access to other users\n"
 "    -o allow_root          allow access to root\n"
 "    -o auto_unmount        auto unmount on process termination\n"

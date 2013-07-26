@@ -4154,7 +4154,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
 
 static void fuse_lib_help(void)
 {
-	fprintf(stderr,
+	printf(
 "    -o hard_remove         immediate removal (don't hide files)\n"
 "    -o use_ino             let filesystem set inode numbers\n"
 "    -o readdir_ino         try to fill in d_ino in readdir\n"
@@ -4180,7 +4180,7 @@ static void fuse_lib_help(void)
 static void fuse_lib_help_modules(void)
 {
 	struct fuse_module *m;
-	fprintf(stderr, "\nModule options:\n");
+	printf("\nModule options:\n");
 	pthread_mutex_lock(&fuse_context_lock);
 	for (m = fuse_modules; m; m = m->next) {
 		struct fuse_fs *fs = NULL;
@@ -4188,7 +4188,7 @@ static void fuse_lib_help_modules(void)
 		struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 		if (fuse_opt_add_arg(&args, "") != -1 &&
 		    fuse_opt_add_arg(&args, "-h") != -1) {
-			fprintf(stderr, "\n[%s]\n", m->name);
+			printf("\n[%s]\n", m->name);
 			newfs = m->factory(&args, &fs);
 			assert(newfs == NULL);
 		}

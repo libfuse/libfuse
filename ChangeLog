@@ -1,3 +1,7 @@
+2013-07-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Print help on stdout instead of stderr
+
 2013-07-25  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fuse -> fuse3.  Allow 2.X and 3.X to coexist.  Includes

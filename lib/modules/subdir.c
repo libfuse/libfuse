@@ -630,7 +630,7 @@ static const struct fuse_opt subdir_opts[] = {
 
 static void subdir_help(void)
 {
-	fprintf(stderr,
+	printf(
 "    -o subdir=DIR	    prepend this directory to all paths (mandatory)\n"
 "    -o [no]rellinks	    transform absolute symlinks to relative\n");
 }

@@ -2616,13 +2616,13 @@ static const struct fuse_opt fuse_ll_opts[] = {
 
 static void fuse_ll_version(void)
 {
-	fprintf(stderr, "using FUSE kernel interface version %i.%i\n",
-		FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+	printf("using FUSE kernel interface version %i.%i\n",
+	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
 }
 
 static void fuse_ll_help(void)
 {
-	fprintf(stderr,
+	printf(
 "    -o max_write=N         set maximum size of write requests\n"
 "    -o max_readahead=N     set maximum readahead\n"
 "    -o max_background=N    set number of maximum background requests\n"
