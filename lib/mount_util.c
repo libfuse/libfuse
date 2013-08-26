@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <paths.h>
 #ifndef __NetBSD__
 #include <mntent.h>
 #endif

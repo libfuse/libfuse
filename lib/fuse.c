@@ -35,6 +35,7 @@
 #include <sys/uio.h>
 #include <sys/time.h>
 #include <sys/mman.h>
+#include <sys/file.h>
 
 #define FUSE_NODE_SLAB 1
 
