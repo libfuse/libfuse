@@ -224,7 +224,9 @@ static int fuse_chan_send(struct fuse_chan *ch, const struct iovec iov[],
 
 void fuse_chan_close(struct fuse_chan *ch)
 {
-       close(fuse_chan_fd(ch));
+	int fd = fuse_chan_fd(ch);
+	if (fd != -1)
+		close(fd);
 }
 
 
