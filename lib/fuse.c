@@ -2529,8 +2529,7 @@ static void do_forget(struct fuse *f, fuse_ino_t ino, uint64_t nlookup)
 	forget_node(f, ino, nlookup);
 }
 
-static void fuse_lib_forget(fuse_req_t req, fuse_ino_t ino,
-			    unsigned long nlookup)
+static void fuse_lib_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
 	do_forget(req_fuse(req), ino, nlookup);
 	fuse_reply_none(req);

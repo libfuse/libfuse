@@ -88,7 +88,7 @@ struct fuse_entry_param {
 	 * it as an error.
 	 *
 	 */
-	unsigned long generation;
+	uint64_t generation;
 
 	/** Inode attributes.
 	 *
@@ -233,7 +233,7 @@ struct fuse_lowlevel_ops {
 	 * @param ino the inode number
 	 * @param nlookup the number of lookups to forget
 	 */
-	void (*forget) (fuse_req_t req, fuse_ino_t ino, unsigned long nlookup);
+	void (*forget) (fuse_req_t req, fuse_ino_t ino, uint64_t nlookup);
 
 	/**
 	 * Get file attributes
