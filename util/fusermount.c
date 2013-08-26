@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pwd.h>
+#include <paths.h>
 #include <mntent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>

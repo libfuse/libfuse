@@ -24,6 +24,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <assert.h>
+#include <sys/file.h>
 
 #ifndef F_LINUX_SPECIFIC_BASE
 #define F_LINUX_SPECIFIC_BASE       1024

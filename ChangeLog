@@ -1,3 +1,8 @@
+2013-08-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: Add missing includes.  This allows compiling fuse with
+	musl.  Patch by Daniel Thau
+
 2013-07-01  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Released 2.9.3
