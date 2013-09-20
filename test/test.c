@@ -17,6 +17,13 @@ static char testfile2[1024];
 static char testdir[1024];
 static char testdir2[1024];
 static char subfile[1024];
+
+static char testfile_r[1024];
+static char testfile2_r[1024];
+static char testdir_r[1024];
+static char testdir2_r[1024];
+static char subfile_r[1024];
+
 static char testname[256];
 static char testdata[] = "abcdefghijklmnopqrstuvwxyz";
 static char testdata2[] = "1234567890-=qwertyuiop[]\asdfghjkl;'zxcvbnm,./";
@@ -834,7 +841,7 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
 	start_test("open(%s, %s, 0%03o)", exist ? "+" : "-", flags_str, mode);
 	unlink(testfile);
 	if (exist) {
-		res = create_file(testfile, testdata2, testdata2len);
+		res = create_file(testfile_r, testdata2, testdata2len);
 		if (res == -1)
 			return -1;
 
@@ -963,6 +970,9 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
 		return -1;
 	}
 	res = check_nonexist(testfile);
+	if (res == -1)
+		return -1;
+	res = check_nonexist(testfile_r);
 	if (res == -1)
 		return -1;
 	if (err)
@@ -1382,29 +1392,37 @@ static int do_test_create_ro_dir(int flags, const char *flags_str)
 int main(int argc, char *argv[])
 {
 	const char *basepath;
+	const char *realpath;
 	int err = 0;
+	int a;
 
 	umask(0);
-	if (argc < 2 || argc > 3) {
-		fprintf(stderr, "usage: %s testdir [test#]\n", argv[0]);
+	if (argc < 2 || argc > 4) {
+		fprintf(stderr, "usage: %s testdir [:realdir] [[-]test#]\n", argv[0]);
 		return 1;
 	}
 	basepath = argv[1];
-	if (argc == 3) {
+	realpath = basepath;
+	for (a = 2; a < argc; a++) {
 		char *endptr;
-		char *arg = argv[2];
-		if (arg[0] == '-') {
-			arg++;
-			skip_test = strtoul(arg, &endptr, 10);
+		char *arg = argv[a];
+		if (arg[0] == ':') {
+			realpath = arg + 1;
 		} else {
-			select_test = strtoul(argv[2], &endptr, 10);
-		}
-		if (arg[0] == '\0' || *endptr != '\0') {
-			fprintf(stderr, "invalid number: '%s'\n", arg);
-			return 1;
+			if (arg[0] == '-') {
+				arg++;
+				skip_test = strtoul(arg, &endptr, 10);
+			} else {
+				select_test = strtoul(arg, &endptr, 10);
+			}
+			if (arg[0] == '\0' || *endptr != '\0') {
+				fprintf(stderr, "invalid number: '%s'\n", arg);
+				return 1;
+			}
 		}
 	}
 	assert(strlen(basepath) < 512);
+	assert(strlen(realpath) < 512);
 	if (basepath[0] != '/') {
 		fprintf(stderr, "testdir must be an absolute path\n");
 		return 1;
@@ -1415,6 +1433,13 @@ int main(int argc, char *argv[])
 	sprintf(testdir, "%s/testdir", basepath);
 	sprintf(testdir2, "%s/testdir2", basepath);
 	sprintf(subfile, "%s/subfile", testdir2);
+
+	sprintf(testfile_r, "%s/testfile", realpath);
+	sprintf(testfile2_r, "%s/testfile2", realpath);
+	sprintf(testdir_r, "%s/testdir", realpath);
+	sprintf(testdir2_r, "%s/testdir2", realpath);
+	sprintf(subfile_r, "%s/subfile", testdir2_r);
+
 	err += test_create();
 	err += test_create_unlink();
 	err += test_mknod();
