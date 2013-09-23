@@ -95,6 +95,21 @@ struct fuse_ll {
 	size_t bufsize;
 };
 
+/**
+ * Filesystem module
+ *
+ * Filesystem modules are registered with the FUSE_REGISTER_MODULE()
+ * macro.
+ *
+ */
+struct fuse_module {
+	char *name;
+	fuse_module_factory_t factory;
+	struct fuse_module *next;
+	struct fusemod_so *so;
+	int ctr;
+};
+
 int fuse_chan_clearfd(struct fuse_chan *ch);
 void fuse_chan_close(struct fuse_chan *ch);
 

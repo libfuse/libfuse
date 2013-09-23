@@ -867,64 +867,33 @@ struct fuse_fs *fuse_fs_new(const struct fuse_operations *op, size_t op_size,
 			    void *user_data);
 
 /**
- * Filesystem module
+ * Factory for creating filesystem objects
  *
- * Filesystem modules are registered with the FUSE_REGISTER_MODULE()
- * macro.
+ * The function may use and remove options from 'args' that belong
+ * to this module.
  *
- * If the "-omodules=modname:..." option is present, filesystem
- * objects are created and pushed onto the stack with the 'factory'
- * function.
+ * For now the 'fs' vector always contains exactly one filesystem.
+ * This is the filesystem which will be below the newly created
+ * filesystem in the stack.
+ *
+ * @param args the command line arguments
+ * @param fs NULL terminated filesystem object vector
+ * @return the new filesystem object
  */
-struct fuse_module {
-	/**
-	 * Name of filesystem
-	 */
-	const char *name;
-
-	/**
-	 * Factory for creating filesystem objects
-	 *
-	 * The function may use and remove options from 'args' that belong
-	 * to this module.
-	 *
-	 * For now the 'fs' vector always contains exactly one filesystem.
-	 * This is the filesystem which will be below the newly created
-	 * filesystem in the stack.
-	 *
-	 * @param args the command line arguments
-	 * @param fs NULL terminated filesystem object vector
-	 * @return the new filesystem object
-	 */
-	struct fuse_fs *(*factory)(struct fuse_args *args,
-				   struct fuse_fs *fs[]);
-
-	struct fuse_module *next;
-	struct fusemod_so *so;
-	int ctr;
-};
-
-/**
- * Register a filesystem module
- *
- * This function is used by FUSE_REGISTER_MODULE and there's usually
- * no need to call it directly
- */
-void fuse_register_module(struct fuse_module *mod);
-
+typedef struct fuse_fs *(*fuse_module_factory_t)(struct fuse_args *args,
+						 struct fuse_fs *fs[]);
 /**
  * Register filesystem module
  *
- * For the parameters, see description of the fields in 'struct
- * fuse_module'
+ * If the "-omodules=@name_:..." option is present, filesystem
+ * objects are created and pushed onto the stack with the @factory_
+ * function.
+ *
+ * @name_ the name of this filesystem module
+ * @factory_ the factory function for this filesystem module
  */
-#define FUSE_REGISTER_MODULE(name_, factory_)				  \
-	static __attribute__((constructor)) void name_ ## _register(void) \
-	{								  \
-		static struct fuse_module mod =				  \
-			{ #name_, factory_, NULL, NULL, 0 };		  \
-		fuse_register_module(&mod);				  \
-	}
+#define FUSE_REGISTER_MODULE(name_, factory_) \
+	fuse_module_factory_t fuse_module_ ## name_ ## _factory = factory_;
 
 /** Get session from fuse object */
 struct fuse_session *fuse_get_session(struct fuse *f);

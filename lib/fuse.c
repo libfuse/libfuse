@@ -208,55 +208,90 @@ struct fuse_context_i {
 	fuse_req_t req;
 };
 
+/* Defined by FUSE_REGISTER_MODULE() in lib/modules/subdir.c and iconv.c.  */
+extern fuse_module_factory_t fuse_module_subdir_factory;
+extern fuse_module_factory_t fuse_module_iconv_factory;
+
 static pthread_key_t fuse_context_key;
 static pthread_mutex_t fuse_context_lock = PTHREAD_MUTEX_INITIALIZER;
 static int fuse_context_ref;
-static struct fusemod_so *fuse_current_so;
-static struct fuse_module *fuse_modules;
+static struct fuse_module *fuse_modules = NULL;
 
-static int fuse_load_so_name(const char *soname)
+static int fuse_register_module(const char *name,
+				fuse_module_factory_t factory,
+				struct fusemod_so *so)
 {
-	struct fusemod_so *so;
+	struct fuse_module *mod;
 
-	so = calloc(1, sizeof(struct fusemod_so));
-	if (!so) {
-		fprintf(stderr, "fuse: memory allocation failed\n");
+	mod = calloc(1, sizeof(struct fuse_module));
+	if (!mod) {
+		fprintf(stderr, "fuse: failed to allocate module\n");
 		return -1;
 	}
+	mod->name = strdup(name);
+	if (!mod->name) {
+		fprintf(stderr, "fuse: failed to allocate module name\n");
+		free(mod);
+		return -1;
+	}
+	mod->factory = factory;
+	mod->ctr = 0;
+	mod->so = so;
+	if (mod->so)
+		mod->so->ctr++;
+	mod->next = fuse_modules;
+	fuse_modules = mod;
 
-	fuse_current_so = so;
-	so->handle = dlopen(soname, RTLD_NOW);
-	fuse_current_so = NULL;
-	if (!so->handle) {
-		fprintf(stderr, "fuse: %s\n", dlerror());
-		goto err;
-	}
-	if (!so->ctr) {
-		fprintf(stderr, "fuse: %s did not register any modules\n",
-			soname);
-		goto err;
-	}
 	return 0;
-
-err:
-	if (so->handle)
-		dlclose(so->handle);
-	free(so);
-	return -1;
 }
+
 
 static int fuse_load_so_module(const char *module)
 {
-	int res;
-	char *soname = malloc(strlen(module) + 64);
-	if (!soname) {
+	int ret = -1;
+	char *tmp;
+	struct fusemod_so *so;
+	fuse_module_factory_t factory;
+
+	tmp = malloc(strlen(module) + 64);
+	if (!tmp) {
 		fprintf(stderr, "fuse: memory allocation failed\n");
 		return -1;
 	}
-	sprintf(soname, "libfusemod_%s.so", module);
-	res = fuse_load_so_name(soname);
-	free(soname);
-	return res;
+	sprintf(tmp, "libfusemod_%s.so", module);
+	so = calloc(1, sizeof(struct fusemod_so));
+	if (!so) {
+		fprintf(stderr, "fuse: failed to allocate module so\n");
+		goto out;
+	}
+
+	so->handle = dlopen(tmp, RTLD_NOW);
+	if (so->handle == NULL) {
+		fprintf(stderr, "fuse: dlopen(%s) failed: %s\n",
+			tmp, dlerror());
+		goto out_free_so;
+	}
+
+	sprintf(tmp, "fuse_module_%s_factory", module);
+	factory = dlsym(so->handle, tmp);
+	if (factory == NULL) {
+		fprintf(stderr, "fuse: symbol <%s> not found in module: %s\n",
+			tmp, dlerror());
+		goto out_dlclose;
+	}
+	ret = fuse_register_module(module, factory, so);
+	if (ret)
+		goto out_dlclose;
+
+out:
+	free(tmp);
+	return ret;
+
+out_dlclose:
+	dlclose(so->handle);
+out_free_so:
+	free(so);
+	goto out;
 }
 
 static struct fuse_module *fuse_find_module(const char *module)
@@ -4342,6 +4377,18 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 	struct fuse_fs *fs;
 	struct fuse_lowlevel_ops llop = fuse_path_ops;
 
+	pthread_mutex_lock(&fuse_context_lock);
+	static int builtin_modules_registered = 0;
+	/* Have the builtin modules already been registered? */
+	if (builtin_modules_registered == 0) {
+		/* If not, register them. */
+		fuse_register_module("subdir", fuse_module_subdir_factory, NULL);
+		fuse_register_module("iconv", fuse_module_iconv_factory, NULL);
+		builtin_modules_registered= 1;
+	}
+	pthread_mutex_unlock(&fuse_context_lock);
+
+
 	if (fuse_create_context_key() == -1)
 		goto out;
 
@@ -4522,14 +4569,3 @@ void fuse_destroy(struct fuse *f)
 	fuse_delete_context_key();
 }
 
-/* called with fuse_context_lock held or during initialization (before
-   main() has been called) */
-void fuse_register_module(struct fuse_module *mod)
-{
-	mod->ctr = 0;
-	mod->so = fuse_current_so;
-	if (mod->so)
-		mod->so->ctr++;
-	mod->next = fuse_modules;
-	fuse_modules = mod;
-}

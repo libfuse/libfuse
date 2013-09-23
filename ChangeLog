@@ -1,3 +1,8 @@
+2014-02-04  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: Don't use constructor functions for loading modules.
+	Original patch by Fabrice Bauzac
+
 2014-01-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: Add "async_dio" and "writeback_cache" options.
