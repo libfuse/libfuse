@@ -321,14 +321,13 @@ static size_t fuse_dirent_size(size_t namelen)
 	return FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + namelen);
 }
 
-static char *fuse_add_dirent(char *buf, const char *name,
-			     const struct stat *stbuf, off_t off)
+static void fuse_add_dirent(struct fuse_dirent *dirent, const char *name,
+			    const struct stat *stbuf, off_t off)
 {
 	unsigned namelen = strlen(name);
 	unsigned entlen = FUSE_NAME_OFFSET + namelen;
 	unsigned entsize = fuse_dirent_size(namelen);
 	unsigned padlen = entsize - entlen;
-	struct fuse_dirent *dirent = (struct fuse_dirent *) buf;
 
 	dirent->ino = stbuf->st_ino;
 	dirent->off = off;
@@ -336,9 +335,7 @@ static char *fuse_add_dirent(char *buf, const char *name,
 	dirent->type = (stbuf->st_mode & 0170000) >> 12;
 	strncpy(dirent->name, name, namelen);
 	if (padlen)
-		memset(buf + entlen, 0, padlen);
-
-	return buf + entsize;
+		memset(dirent->name + namelen, 0, padlen);
 }
 
 size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
@@ -349,7 +346,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 	(void) req;
 	entsize = fuse_dirent_size(strlen(name));
 	if (entsize <= bufsize && buf)
-		fuse_add_dirent(buf, name, stbuf, off);
+		fuse_add_dirent((struct fuse_dirent *) buf, name, stbuf, off);
 	return entsize;
 }
 
@@ -418,17 +415,15 @@ size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 			      const char *name,
 			      const struct fuse_entry_param *e, off_t off)
 {
-	struct fuse_entry_out *argp;
 	size_t entsize;
 
 	(void) req;
-	entsize = FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET_DIRENTPLUS +
-				    fuse_dirent_size(strlen(name)));
-	if (entsize <= bufsize && buf){
-		argp = (struct fuse_entry_out *)buf;
-		memset(argp, 0, sizeof(*argp));
-		fill_entry(argp, e);
-		fuse_add_dirent(buf + sizeof(*argp), name, &(e->attr), off);
+	entsize = FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET_DIRENTPLUS + strlen(name));
+	if (entsize <= bufsize && buf) {
+		struct fuse_direntplus *dp = (struct fuse_direntplus *) buf;
+		memset(&dp->entry_out, 0, sizeof(dp->entry_out));
+		fill_entry(&dp->entry_out, e);
+		fuse_add_dirent(&dp->dirent, name, &e->attr, off);
 	}
 	return entsize;
 }
