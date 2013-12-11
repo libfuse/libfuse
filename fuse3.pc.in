@@ -6,6 +6,6 @@ includedir=@includedir@
 Name: fuse
 Description: Filesystem in Userspace
 Version: @VERSION@
-Libs: -L${libdir} -lfuse -pthread
+Libs: -L${libdir} -lfuse3 -pthread
 Libs.private: @libfuse_libs@
 Cflags: -I${includedir}/fuse3
