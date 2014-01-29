@@ -1901,6 +1901,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_READDIRPLUS;
 		if (arg->flags & FUSE_READDIRPLUS_AUTO)
 			f->conn.capable |= FUSE_CAP_READDIRPLUS_AUTO;
+		if (arg->flags & FUSE_ASYNC_DIO)
+			f->conn.capable |= FUSE_CAP_ASYNC_DIO;
+		if (arg->flags & FUSE_WRITEBACK_CACHE)
+			f->conn.capable |= FUSE_CAP_WRITEBACK_CACHE;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
@@ -1938,6 +1942,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		if (!f->no_readdirplus_auto)
 			f->conn.want |= FUSE_CAP_READDIRPLUS_AUTO;
 	}
+	if (f->async_dio)
+		f->conn.want |= FUSE_CAP_ASYNC_DIO;
+	if (f->writeback_cache)
+		f->conn.want |= FUSE_CAP_WRITEBACK_CACHE;
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
@@ -1965,6 +1973,11 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want &= ~FUSE_CAP_READDIRPLUS;
 	if (f->no_readdirplus_auto)
 		f->conn.want &= ~FUSE_CAP_READDIRPLUS_AUTO;
+	if (f->no_async_dio)
+		f->conn.want &= ~FUSE_CAP_ASYNC_DIO;
+	if (f->no_writeback_cache)
+		f->conn.want &= ~FUSE_CAP_WRITEBACK_CACHE;
+
 	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
 		outarg.flags |= FUSE_ASYNC_READ;
 	if (f->conn.want & FUSE_CAP_POSIX_LOCKS)
@@ -1985,6 +1998,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_DO_READDIRPLUS;
 	if (f->conn.want & FUSE_CAP_READDIRPLUS_AUTO)
 		outarg.flags |= FUSE_READDIRPLUS_AUTO;
+	if (f->conn.want & FUSE_CAP_ASYNC_DIO)
+		outarg.flags |= FUSE_ASYNC_DIO;
+	if (f->conn.want & FUSE_CAP_WRITEBACK_CACHE)
+		outarg.flags |= FUSE_WRITEBACK_CACHE;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
 	if (f->conn.proto_minor >= 13) {
@@ -2604,6 +2621,10 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "readdirplus=yes", offsetof(struct fuse_ll, no_readdirplus_auto), 1},
 	{ "readdirplus=auto", offsetof(struct fuse_ll, no_readdirplus), 0},
 	{ "readdirplus=auto", offsetof(struct fuse_ll, no_readdirplus_auto), 0},
+	{ "async_dio", offsetof(struct fuse_ll, async_dio), 1},
+	{ "no_async_dio", offsetof(struct fuse_ll, no_async_dio), 1},
+	{ "writeback_cache", offsetof(struct fuse_ll, writeback_cache), 1},
+	{ "no_writeback_cache", offsetof(struct fuse_ll, no_writeback_cache), 1},
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
@@ -2631,12 +2652,14 @@ static void fuse_ll_help(void)
 "    -o big_writes          enable larger than 4kB writes\n"
 "    -o no_remote_lock      disable remote file locking\n"
 "    -o no_remote_flock     disable remote file locking (BSD)\n"
-"    -o no_remote_posix_lock disable remove file locking (POSIX)\n"
-"    -o [no_]splice_write   use splice to write to the fuse device\n"
-"    -o [no_]splice_move    move data while splicing to the fuse device\n"
-"    -o [no_]splice_read    use splice to read from the fuse device\n"
+"    -o no_remote_posix_lock  disable remove file locking (POSIX)\n"
+"    -o [no_]splice_write     use splice to write to the fuse device\n"
+"    -o [no_]splice_move      move data while splicing to the fuse device\n"
+"    -o [no_]splice_read      use splice to read from the fuse device\n"
 "    -o [no_]auto_inval_data  use automatic kernel cache invalidation logic\n"
-"    -o readdirplus=S       control readdirplus use (yes|no|auto)\n"
+"    -o readdirplus=S         control readdirplus use (yes|no|auto)\n"
+"    -o [no_]async_dio        asynchronous direct I/O\n"
+"    -o [no_]writeback_cache  asynchronous, buffered writes\n"
 );
 }
 

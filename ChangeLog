@@ -1,3 +1,9 @@
+2014-01-29  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: Add "async_dio" and "writeback_cache" options.
+	Asynchronous direct I/O is supported by linux kernels 3.13 and
+	later, writeback caching is supported by 3.14 and later.
+
 2013-08-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: Add missing includes.  This allows compiling fuse with
