@@ -1,0 +1,447 @@
+/*
+  FUSE: Filesystem in Userspace
+  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+
+  This program can be distributed under the terms of the GNU GPL.
+  See the file COPYING.
+*/
+
+/*
+ * gcc -Wall fuse_lo-plus.c `pkg-config fuse3 --cflags --libs` -o fuse_lo-plus
+ */
+
+#define _GNU_SOURCE
+#define FUSE_USE_VERSION 30
+
+#include <fuse_lowlevel.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <string.h>
+#include <dirent.h>
+#include <assert.h>
+#include <errno.h>
+#include <err.h>
+
+struct lo_inode {
+	struct lo_inode *next;
+	struct lo_inode *prev;
+	int fd;
+	ino_t ino;
+	dev_t dev;
+	uint64_t nlookup;
+};
+
+struct lo_data {
+	int debug;
+	struct lo_inode root;
+};
+
+static struct lo_data *lo_data(fuse_req_t req)
+{
+	return (struct lo_data *) fuse_req_userdata(req);
+}
+
+static struct lo_inode *lo_inode(fuse_req_t req, fuse_ino_t ino)
+{
+	if (ino == FUSE_ROOT_ID)
+		return &lo_data(req)->root;
+	else
+		return (struct lo_inode *) (uintptr_t) ino; 
+}
+
+static int lo_fd(fuse_req_t req, fuse_ino_t ino)
+{
+	return lo_inode(req, ino)->fd;
+}
+
+static bool lo_debug(fuse_req_t req)
+{
+	return lo_data(req)->debug != 0;
+}
+
+static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
+			     struct fuse_file_info *fi)
+{
+	int res;
+	struct stat buf;
+	(void) fi;
+
+	res = fstatat(lo_fd(req, ino), "", &buf, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	if (res == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	fuse_reply_attr(req, &buf, 1.0);
+}
+
+static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st)
+{
+	struct lo_inode *p;
+
+	for (p = lo->root.next; p != &lo->root; p = p->next) {
+		if (p->ino == st->st_ino && p->dev == st->st_dev)
+			return p;
+	}
+	return NULL;
+}
+
+static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
+			 struct fuse_entry_param *e)
+{
+	int newfd;
+	int res;
+	int saverr;
+	struct lo_inode *inode;
+
+	memset(e, 0, sizeof(*e));
+	e->attr_timeout = 1.0;
+	e->entry_timeout = 1.0;
+
+	newfd = openat(lo_fd(req, parent), name, O_PATH | O_NOFOLLOW);
+	if (newfd == -1)
+		goto out_err;
+
+	res = fstatat(newfd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	if (res == -1)
+		goto out_err;
+
+	inode = lo_find(lo_data(req), &e->attr);
+	if (inode) {
+		close(newfd);
+		newfd = -1;
+	} else {
+		struct lo_inode *prev = &lo_data(req)->root;
+		struct lo_inode *next = prev->next;
+		saverr = ENOMEM;
+		inode = calloc(1, sizeof(struct lo_inode));
+		if (!inode)
+			goto out_err;
+
+		inode->fd = newfd;
+		inode->ino = e->attr.st_ino;
+		inode->dev = e->attr.st_dev;
+
+		next->prev = inode;
+		inode->next = next;
+		inode->prev = prev;
+		prev->next = inode;
+	}
+	inode->nlookup++;
+	e->ino = (uintptr_t) inode;
+
+	if (lo_debug(req))
+		fprintf(stderr, "  %lli/%s -> %lli\n",
+			(unsigned long long) parent, name, (unsigned long long) e->ino);
+
+	return 0;
+
+out_err:
+	saverr = errno;
+	if (newfd != -1)
+		close(newfd);
+	return saverr;
+}
+
+static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	struct fuse_entry_param e;
+	int err;
+
+	err = lo_do_lookup(req, parent, name, &e);
+	if (err)
+		fuse_reply_err(req, err);
+	else
+		fuse_reply_entry(req, &e);
+}
+
+static void lo_free(struct lo_inode *inode)
+{
+	struct lo_inode *prev = inode->prev;
+	struct lo_inode *next = inode->next;
+
+	next->prev = prev;
+	prev->next = next;
+	close(inode->fd);
+	free(inode);
+}
+
+static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
+{
+	struct lo_inode *inode = lo_inode(req, ino);
+
+	if (lo_debug(req)) {
+		fprintf(stderr, "  forget %lli %lli -%lli\n",
+			(unsigned long long) ino, (unsigned long long) inode->nlookup,
+			(unsigned long long) nlookup);
+	}
+
+	assert(inode->nlookup >= nlookup);
+	inode->nlookup -= nlookup;
+
+	if (!inode->nlookup)
+		lo_free(inode);
+
+	fuse_reply_none(req);
+}
+
+static void lo_readlink(fuse_req_t req, fuse_ino_t ino)
+{
+	char buf[PATH_MAX + 1];
+	int res;
+
+	res = readlinkat(lo_fd(req, ino), "", buf, sizeof(buf));
+	if (res == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	if (res == sizeof(buf))
+		return (void) fuse_reply_err(req, ENAMETOOLONG);
+
+	buf[res] = '\0';
+
+	fuse_reply_readlink(req, buf);
+}
+
+struct lo_dirp {
+	int fd;
+	DIR *dp;
+	struct dirent *entry;
+	off_t offset;
+};
+
+static struct lo_dirp *lo_dirp(struct fuse_file_info *fi)
+{
+	return (struct lo_dirp *) (uintptr_t) fi->fh;
+}
+
+static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	int error = ENOMEM;
+	struct lo_dirp *d = calloc(1, sizeof(struct lo_dirp));
+	if (d == NULL)
+		goto out_err;
+
+	d->fd = openat(lo_fd(req, ino), ".", O_RDONLY);
+	if (d->fd == -1)
+		goto out_errno;
+
+	d->dp = fdopendir(d->fd);
+	if (d->dp == NULL)
+		goto out_errno;
+
+	d->offset = 0;
+	d->entry = NULL;
+
+	fi->fh = (uintptr_t) d;
+	fuse_reply_open(req, fi);
+	return;
+
+out_errno:
+	error = errno;
+out_err:
+	if (d) {
+		if (d->fd != -1)
+			close(d->fd);
+		free(d);
+	}
+	fuse_reply_err(req, error);
+}
+
+static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
+			  off_t offset, struct fuse_file_info *fi, int plus)
+{
+	struct lo_dirp *d = lo_dirp(fi);
+	char *buf;
+	char *p;
+	size_t rem;
+	int err;
+
+	(void) ino;
+
+	buf = calloc(size, 1);
+	if (!buf)
+		return (void) fuse_reply_err(req, ENOMEM);
+
+	if (offset != d->offset) {
+		seekdir(d->dp, offset);
+		d->entry = NULL;
+		d->offset = offset;
+	}
+	p = buf;
+	rem = size;
+	while (1) {
+		size_t entsize;
+		off_t nextoff;
+
+		if (!d->entry) {
+			errno = 0;
+			d->entry = readdir(d->dp);
+			if (!d->entry) {
+				if (errno && rem == size) {
+					err = errno;
+					goto error;
+				}
+				break;
+			}
+		}
+		nextoff = telldir(d->dp);
+		if (plus) {
+			struct fuse_entry_param e;
+
+			err = lo_do_lookup(req, ino, d->entry->d_name, &e);
+			if (err)
+				goto error;
+
+			entsize = fuse_add_direntry_plus(req, p, rem,
+							 d->entry->d_name,
+							 &e, nextoff);
+		} else {
+			struct stat st = {
+				.st_ino = d->entry->d_ino,
+				.st_mode = d->entry->d_type << 12,
+			};
+			entsize = fuse_add_direntry(req, p, rem,
+						    d->entry->d_name,
+						    &st, nextoff);
+		}
+		if (entsize > rem)
+			break;
+
+		p += entsize;
+		rem -= entsize;
+
+		d->entry = NULL;
+		d->offset = nextoff;
+	}
+
+	fuse_reply_buf(req, buf, size - rem);
+	free(buf);
+	return;
+
+error:
+	free(buf);
+	fuse_reply_err(req, err);
+}
+
+static void lo_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
+		       off_t offset, struct fuse_file_info *fi)
+{
+	lo_do_readdir(req, ino, size, offset, fi, 0);
+}
+
+static void lo_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size,
+			   off_t offset, struct fuse_file_info *fi)
+{
+	lo_do_readdir(req, ino, size, offset, fi, 1);
+}
+
+static void lo_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	struct lo_dirp *d = lo_dirp(fi);
+	(void) ino;
+	closedir(d->dp);
+	free(d);
+	fuse_reply_err(req, 0);
+}
+
+static void lo_open(fuse_req_t req, fuse_ino_t ino,
+			  struct fuse_file_info *fi)
+{
+	int fd;
+	char buf[64];
+
+	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
+	fd = open(buf, fi->flags & ~O_NOFOLLOW);
+	if (fd == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	fi->fh = fd;
+	fuse_reply_open(req, fi);
+}
+
+static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	(void) ino;
+
+	close(fi->fh);
+	fuse_reply_err(req, 0);
+}
+
+static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
+			  off_t offset, struct fuse_file_info *fi)
+{
+	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
+
+	(void) ino;
+
+	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	buf.buf[0].fd = fi->fh;
+	buf.buf[0].pos = offset;
+
+	fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
+}
+
+static struct fuse_lowlevel_ops lo_oper = {
+	.lookup		= lo_lookup,
+	.forget		= lo_forget,
+	.getattr	= lo_getattr,
+	.readlink	= lo_readlink,
+	.opendir	= lo_opendir,
+	.readdir	= lo_readdir,
+	.readdirplus	= lo_readdirplus,
+	.releasedir	= lo_releasedir,
+	.open		= lo_open,
+	.release	= lo_release,
+	.read		= lo_read,
+};
+
+#define LO_OPT(t, p, v) { t, offsetof(struct lo_data, p), v }
+
+static const struct fuse_opt lo_opts[] = {
+	FUSE_OPT_KEY("debug",		      FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_KEY("-d",		      FUSE_OPT_KEY_KEEP),
+	LO_OPT("debug",		      debug, 1),
+	LO_OPT("-d",		      debug, 1),
+	FUSE_OPT_END
+};
+
+int main(int argc, char *argv[])
+{
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+	struct fuse_chan *ch;
+	char *mountpoint;
+	int ret = -1;
+	struct lo_data lo = { .debug = 0 };
+
+	if (fuse_opt_parse(&args, &lo, lo_opts, NULL) == -1)
+		exit(1);
+	lo.root.next = lo.root.prev = &lo.root;
+	lo.root.fd = open("/", O_PATH);
+	lo.root.nlookup = 2;
+	if (lo.root.fd == -1)
+		err(1, "open(\"/\", O_PATH)");
+
+	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
+	    (ch = fuse_mount(mountpoint, &args)) != NULL) {
+		struct fuse_session *se;
+		se = fuse_lowlevel_new(&args, &lo_oper, sizeof(lo_oper), &lo);
+		if (se != NULL) {
+			if (fuse_set_signal_handlers(se) != -1) {
+				fuse_session_add_chan(se, ch);
+				ret = fuse_session_loop(se);
+				fuse_remove_signal_handlers(se);
+				fuse_session_remove_chan(ch);
+			}
+			fuse_session_destroy(se);
+		}
+		fuse_unmount(mountpoint, ch);
+		free(mountpoint);
+	}
+	fuse_opt_free_args(&args);
+
+	while (lo.root.next != &lo.root)
+		lo_free(lo.root.next);
+
+	return ret ? 1 : 0;
+}

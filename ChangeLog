@@ -1,3 +1,7 @@
+2014-02-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: added fuse_lo-plus.c to the examples
+
 2014-02-04  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: Don't use constructor functions for loading modules.
