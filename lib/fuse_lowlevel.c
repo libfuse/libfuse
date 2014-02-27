@@ -2721,7 +2721,7 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 			     struct fuse_chan *ch)
 {
 	struct fuse_ll *f = se->f;
-	size_t bufsize = buf->size = f->bufsize;
+	size_t bufsize = f->bufsize;
 	struct fuse_ll_pipe *llp;
 	struct fuse_buf tmpbuf;
 	int err;
@@ -2782,7 +2782,19 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 	if (res < sizeof(struct fuse_in_header) +
 	    sizeof(struct fuse_write_in) + pagesize) {
 		struct fuse_bufvec src = { .buf[0] = tmpbuf, .count = 1 };
-		struct fuse_bufvec dst = { .buf[0] = *buf, .count = 1 };
+		struct fuse_bufvec dst = { .count = 1 };
+
+		if (!buf->mem) {
+			buf->mem = malloc(f->bufsize);
+			if (!buf->mem) {
+				fprintf(stderr,
+					"fuse: failed to allocate read buffer\n");
+				return -ENOMEM;
+			}
+		}
+		buf->size = f->bufsize;
+		buf->flags = 0;
+		dst.buf[0] = *buf;
 
 		res = fuse_buf_copy(&dst, &src, 0);
 		if (res < 0) {
@@ -2796,11 +2808,14 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 			fuse_ll_clear_pipe(f);
 			return -EIO;
 		}
-		buf->size = tmpbuf.size;
-		return buf->size;
-	}
+		assert(res == tmpbuf.size);
 
-	*buf = tmpbuf;
+	} else {
+		/* Don't overwrite buf->mem, as that would cause a leak */
+		buf->fd = tmpbuf.fd;
+		buf->flags = tmpbuf.flags;
+	}
+	buf->size = tmpbuf.size;
 
 	return res;
 
