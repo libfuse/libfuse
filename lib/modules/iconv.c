@@ -172,20 +172,22 @@ static int iconv_opendir(const char *path, struct fuse_file_info *fi)
 }
 
 static int iconv_dir_fill(void *buf, const char *name,
-			  const struct stat *stbuf, off_t off)
+			  const struct stat *stbuf, off_t off,
+			  enum fuse_fill_dir_flags flags)
 {
 	struct iconv_dh *dh = buf;
 	char *newname;
 	int res = 0;
 	if (iconv_convpath(dh->ic, name, &newname, 1) == 0) {
-		res = dh->prev_filler(dh->prev_buf, newname, stbuf, off);
+		res = dh->prev_filler(dh->prev_buf, newname, stbuf, off, flags);
 		free(newname);
 	}
 	return res;
 }
 
 static int iconv_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t offset, struct fuse_file_info *fi)
+			 off_t offset, struct fuse_file_info *fi,
+			 enum fuse_readdir_flags flags)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;
@@ -196,7 +198,7 @@ static int iconv_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		dh.prev_buf = buf;
 		dh.prev_filler = filler;
 		err = fuse_fs_readdir(ic->next, newpath, &dh, iconv_dir_fill,
-				      offset, fi);
+				      offset, fi, flags);
 		free(newpath);
 	}
 	return err;

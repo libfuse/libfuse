@@ -36,16 +36,46 @@ extern "C" {
 /** Handle for a FUSE filesystem */
 struct fuse;
 
+/**
+ * Readdir flags, passed to ->readdir()
+ */
+enum fuse_readdir_flags {
+	/**
+	 * "Plus" mode.
+	 *
+	 * The kernel wants to prefill the inode cache during readdir.  The
+	 * filesystem may honour this by filling in the attributes and setting
+	 * FUSE_FILL_DIR_FLAGS for the filler function.  The filesystem may also
+	 * just ignore this flag completely.
+	 */
+	FUSE_READDIR_PLUS = (1 << 0),
+};
+
+enum fuse_fill_dir_flags {
+	/**
+	 * "Plus" mode: all file attributes are valid
+	 *
+	 * The attributes are used by the kernel to prefill the inode cache
+	 * during a readdir.
+	 *
+	 * It is okay to set FUSE_FILL_DIR_PLUS if FUSE_READDIR_PLUS is not set
+	 * and vice versa.
+	 */
+	FUSE_FILL_DIR_PLUS = (1 << 1),
+};
+
 /** Function to add an entry in a readdir() operation
  *
  * @param buf the buffer passed to the readdir() operation
  * @param name the file name of the directory entry
  * @param stat file attributes, can be NULL
  * @param off offset of the next entry or zero
+ * @param flags fill flags
  * @return 1 if buffer is full, zero otherwise
  */
 typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
-				const struct stat *stbuf, off_t off);
+				const struct stat *stbuf, off_t off,
+				enum fuse_fill_dir_flags flags);
 
 /**
  * The file system operations:
@@ -289,9 +319,10 @@ struct fuse_operations {
 	 * '1'.
 	 *
 	 * Introduced in version 2.3
+	 * The "flags" argument added in version 3.0
 	 */
 	int (*readdir) (const char *, void *, fuse_fill_dir_t, off_t,
-			struct fuse_file_info *);
+			struct fuse_file_info *, enum fuse_readdir_flags);
 
 	/** Release directory
 	 *
@@ -806,7 +837,7 @@ int fuse_fs_opendir(struct fuse_fs *fs, const char *path,
 		    struct fuse_file_info *fi);
 int fuse_fs_readdir(struct fuse_fs *fs, const char *path, void *buf,
 		    fuse_fill_dir_t filler, off_t off,
-		    struct fuse_file_info *fi);
+		    struct fuse_file_info *fi, enum fuse_readdir_flags flags);
 int fuse_fs_fsyncdir(struct fuse_fs *fs, const char *path, int datasync,
 		     struct fuse_file_info *fi);
 int fuse_fs_releasedir(struct fuse_fs *fs, const char *path,

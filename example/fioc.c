@@ -169,17 +169,19 @@ static int fioc_truncate(const char *path, off_t size)
 }
 
 static int fioc_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			off_t offset, struct fuse_file_info *fi)
+			off_t offset, struct fuse_file_info *fi,
+			enum fuse_readdir_flags flags)
 {
 	(void) fi;
 	(void) offset;
+	(void) flags;
 
 	if (fioc_file_type(path) != FIOC_ROOT)
 		return -ENOENT;
 
-	filler(buf, ".", NULL, 0);
-	filler(buf, "..", NULL, 0);
-	filler(buf, FIOC_NAME, NULL, 0);
+	filler(buf, ".", NULL, 0, 0);
+	filler(buf, "..", NULL, 0, 0);
+	filler(buf, FIOC_NAME, NULL, 0, 0);
 
 	return 0;
 }

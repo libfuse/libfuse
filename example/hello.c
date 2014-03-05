@@ -65,17 +65,19 @@ static int hello_getattr(const char *path, struct stat *stbuf)
 }
 
 static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t offset, struct fuse_file_info *fi)
+			 off_t offset, struct fuse_file_info *fi,
+			 enum fuse_readdir_flags flags)
 {
 	(void) offset;
 	(void) fi;
+	(void) flags;
 
 	if (strcmp(path, "/") != 0)
 		return -ENOENT;
 
-	filler(buf, ".", NULL, 0);
-	filler(buf, "..", NULL, 0);
-	filler(buf, hello_path + 1, NULL, 0);
+	filler(buf, ".", NULL, 0, 0);
+	filler(buf, "..", NULL, 0, 0);
+	filler(buf, hello_path + 1, NULL, 0, 0);
 
 	return 0;
 }

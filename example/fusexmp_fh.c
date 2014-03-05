@@ -128,7 +128,8 @@ static inline struct xmp_dirp *get_dirp(struct fuse_file_info *fi)
 }
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi)
+		       off_t offset, struct fuse_file_info *fi,
+		       enum fuse_readdir_flags flags)
 {
 	struct xmp_dirp *d = get_dirp(fi);
 
@@ -141,18 +142,30 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	while (1) {
 		struct stat st;
 		off_t nextoff;
+		enum fuse_fill_dir_flags fill_flags = 0;
 
 		if (!d->entry) {
 			d->entry = readdir(d->dp);
 			if (!d->entry)
 				break;
 		}
+#ifdef HAVE_FSTATAT
+		if (flags & FUSE_READDIR_PLUS) {
+			int res;
 
-		memset(&st, 0, sizeof(st));
-		st.st_ino = d->entry->d_ino;
-		st.st_mode = d->entry->d_type << 12;
+			res = fstatat(dirfd(d->dp), d->entry->d_name, &st,
+				      AT_SYMLINK_NOFOLLOW);
+			if (res != -1)
+				fill_flags |= FUSE_FILL_DIR_PLUS;
+		}
+#endif
+		if (!(fill_flags & FUSE_FILL_DIR_PLUS)) {
+			memset(&st, 0, sizeof(st));
+			st.st_ino = d->entry->d_ino;
+			st.st_mode = d->entry->d_type << 12;
+		}
 		nextoff = telldir(d->dp);
-		if (filler(buf, d->entry->d_name, &st, nextoff))
+		if (filler(buf, d->entry->d_name, &st, nextoff, fill_flags))
 			break;
 
 		d->entry = NULL;

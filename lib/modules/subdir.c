@@ -181,14 +181,15 @@ static int subdir_opendir(const char *path, struct fuse_file_info *fi)
 
 static int subdir_readdir(const char *path, void *buf,
 			  fuse_fill_dir_t filler, off_t offset,
-			  struct fuse_file_info *fi)
+			  struct fuse_file_info *fi,
+			  enum fuse_readdir_flags flags)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
 	int err = subdir_addpath(d, path, &newpath);
 	if (!err) {
 		err = fuse_fs_readdir(d->next, newpath, buf, filler, offset,
-				      fi);
+				      fi, flags);
 		free(newpath);
 	}
 	return err;

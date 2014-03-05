@@ -81,13 +81,15 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi)
+		       off_t offset, struct fuse_file_info *fi,
+		       enum fuse_readdir_flags flags)
 {
 	DIR *dp;
 	struct dirent *de;
 
 	(void) offset;
 	(void) fi;
+	(void) flags;
 
 	dp = opendir(path);
 	if (dp == NULL)
@@ -98,7 +100,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		memset(&st, 0, sizeof(st));
 		st.st_ino = de->d_ino;
 		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, 0))
+		if (filler(buf, de->d_name, &st, 0, 0))
 			break;
 	}
 
