@@ -13,6 +13,10 @@
 #define _GNU_SOURCE
 #define FUSE_USE_VERSION 30
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
 #include <fuse_lowlevel.h>
 #include <unistd.h>
 #include <stdlib.h>
