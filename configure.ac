@@ -54,7 +54,7 @@ if test "$enable_mtab" = "no"; then
 fi
 
 AC_CHECK_FUNCS([fork setxattr fdatasync splice vmsplice utimensat pipe2])
-AC_CHECK_FUNCS([posix_fallocate fstatat])
+AC_CHECK_FUNCS([posix_fallocate fstatat openat readlinkat])
 AC_CHECK_MEMBERS([struct stat.st_atim])
 AC_CHECK_MEMBERS([struct stat.st_atimespec])
 
