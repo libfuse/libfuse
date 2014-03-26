@@ -10,6 +10,11 @@
 	result in EINVAL when mounting the filesystem.  This also needs a
 	fix in the kernel.
 
+2014-03-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Initilaize stat buffer passed to ->getattr() and ->fgetattr() to
+	zero in all cases.  Reported by Daniel Iwan
+
 2013-08-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: Add missing includes.  This allows compiling fuse with
