@@ -1,3 +1,8 @@
+2014-03-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Initilaize stat buffer passed to ->getattr() and ->fgetattr() to
+	zero in all cases.  Reported by Daniel Iwan
+
 2014-03-05  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: implement readdirplus for high-level API.  Reuse the

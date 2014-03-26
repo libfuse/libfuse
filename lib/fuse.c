@@ -2278,6 +2278,7 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 		if (res)
 			break;
 
+		memset(&buf, 0, sizeof(buf));
 		res = fuse_fs_getattr(f->fs, newpath, &buf);
 		if (res == -ENOENT)
 			break;
@@ -2659,6 +2660,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	char *path;
 	int err;
 
+	memset(&buf, 0, sizeof(buf));
 	if (valid == FUSE_SET_ATTR_SIZE && fi != NULL &&
 	    f->fs->op.ftruncate && f->fs->op.fgetattr)
 		err = get_path_nullok(f, ino, &path);
