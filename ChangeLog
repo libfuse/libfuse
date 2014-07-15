@@ -1,3 +1,10 @@
+2014-07-15  Miklos Szeredi <miklos@szeredi.hu>
+
+	* fusermount, libfuse: send value as unsigned in "user_id=" and
+	"group_id=" options.  Uids/gids larger than 2147483647 would
+	result in EINVAL when mounting the filesystem.  This also needs a
+	fix in the kernel.
+
 2013-08-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: Add missing includes.  This allows compiling fuse with
