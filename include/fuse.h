@@ -162,7 +162,7 @@ struct fuse_operations {
 	int (*symlink) (const char *, const char *);
 
 	/** Rename a file */
-	int (*rename) (const char *, const char *);
+	int (*rename) (const char *, const char *, unsigned int);
 
 	/** Create a hard link to a file */
 	int (*link) (const char *, const char *);
@@ -808,7 +808,7 @@ int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf);
 int fuse_fs_fgetattr(struct fuse_fs *fs, const char *path, struct stat *buf,
 		     struct fuse_file_info *fi);
 int fuse_fs_rename(struct fuse_fs *fs, const char *oldpath,
-		   const char *newpath);
+		   const char *newpath, unsigned int flags);
 int fuse_fs_unlink(struct fuse_fs *fs, const char *path);
 int fuse_fs_rmdir(struct fuse_fs *fs, const char *path);
 int fuse_fs_symlink(struct fuse_fs *fs, const char *linkname,

@@ -393,7 +393,8 @@ struct fuse_lowlevel_ops {
 	 * @param newname new name
 	 */
 	void (*rename) (fuse_req_t req, fuse_ino_t parent, const char *name,
-			fuse_ino_t newparent, const char *newname);
+			fuse_ino_t newparent, const char *newname,
+			unsigned int flags);
 
 	/**
 	 * Create a hard link

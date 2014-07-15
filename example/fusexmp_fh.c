@@ -242,9 +242,13 @@ static int xmp_symlink(const char *from, const char *to)
 	return 0;
 }
 
-static int xmp_rename(const char *from, const char *to)
+static int xmp_rename(const char *from, const char *to, unsigned int flags)
 {
 	int res;
+
+	/* When we have renameat2() in libc, then we can implement flags */
+	if (flags)
+		return -EINVAL;
 
 	res = rename(from, to);
 	if (res == -1)

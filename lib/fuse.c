@@ -43,6 +43,10 @@
 #undef FUSE_NODE_SLAB
 #endif
 
+#ifndef RENAME_EXCHANGE
+#define RENAME_EXCHANGE		(1 << 1)	/* Exchange source and dest */
+#endif
+
 #define FUSE_DEFAULT_INTR_SIGNAL SIGUSR1
 
 #define FUSE_UNKNOWN_INO 0xffffffff
@@ -1414,6 +1418,37 @@ out:
 	return err;
 }
 
+static int exchange_node(struct fuse *f, fuse_ino_t olddir, const char *oldname,
+			 fuse_ino_t newdir, const char *newname)
+{
+	struct node *oldnode;
+	struct node *newnode;
+	int err;
+
+	pthread_mutex_lock(&f->lock);
+	oldnode  = lookup_node(f, olddir, oldname);
+	newnode	 = lookup_node(f, newdir, newname);
+
+	if (oldnode)
+		unhash_name(f, oldnode);
+	if (newnode)
+		unhash_name(f, newnode);
+
+	err = -ENOMEM;
+	if (oldnode) {
+		if (hash_name(f, oldnode, newdir, newname) == -1)
+			goto out;
+	}
+	if (newnode) {
+		if (hash_name(f, newnode, olddir, oldname) == -1)
+			goto out;
+	}
+	err = 0;
+out:
+	pthread_mutex_unlock(&f->lock);
+	return err;
+}
+
 static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
 {
 	if (!f->conf.use_ino)
@@ -1533,14 +1568,15 @@ int fuse_fs_fgetattr(struct fuse_fs *fs, const char *path, struct stat *buf,
 }
 
 int fuse_fs_rename(struct fuse_fs *fs, const char *oldpath,
-		   const char *newpath)
+		   const char *newpath, unsigned int flags)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.rename) {
 		if (fs->debug)
-			fprintf(stderr, "rename %s %s\n", oldpath, newpath);
+			fprintf(stderr, "rename %s %s 0x%x\n", oldpath, newpath,
+				flags);
 
-		return fs->op.rename(oldpath, newpath);
+		return fs->op.rename(oldpath, newpath, flags);
 	} else {
 		return -ENOSYS;
 	}
@@ -2298,7 +2334,7 @@ static int hide_node(struct fuse *f, const char *oldpath,
 
 	newpath = hidden_name(f, dir, oldname, newname, sizeof(newname));
 	if (newpath) {
-		err = fuse_fs_rename(f->fs, oldpath, newpath);
+		err = fuse_fs_rename(f->fs, oldpath, newpath, 0);
 		if (!err)
 			err = rename_node(f, dir, oldname, dir, newname, 1);
 		free(newpath);
@@ -2912,7 +2948,7 @@ static void fuse_lib_symlink(fuse_req_t req, const char *linkname,
 
 static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 			    const char *oldname, fuse_ino_t newdir,
-			    const char *newname)
+			    const char *newname, unsigned int flags)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	char *oldpath;
@@ -2927,13 +2963,20 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 		struct fuse_intr_data d;
 		err = 0;
 		fuse_prepare_interrupt(f, req, &d);
-		if (!f->conf.hard_remove && is_open(f, newdir, newname))
+		if (!f->conf.hard_remove && !(flags & RENAME_EXCHANGE) &&
+		    is_open(f, newdir, newname))
 			err = hide_node(f, newpath, newdir, newname);
 		if (!err) {
-			err = fuse_fs_rename(f->fs, oldpath, newpath);
-			if (!err)
-				err = rename_node(f, olddir, oldname, newdir,
-						  newname, 0);
+			err = fuse_fs_rename(f->fs, oldpath, newpath, flags);
+			if (!err) {
+				if (flags & RENAME_EXCHANGE) {
+					err = exchange_node(f, olddir, oldname,
+							    newdir, newname);
+				} else {
+					err = rename_node(f, olddir, oldname,
+							  newdir, newname, 0);
+				}
+			}
 		}
 		fuse_finish_interrupt(f, req, &d);
 		free_path2(f, olddir, newdir, wnode1, wnode2, oldpath, newpath);

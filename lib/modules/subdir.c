@@ -267,7 +267,7 @@ static int subdir_symlink(const char *from, const char *path)
 	return err;
 }
 
-static int subdir_rename(const char *from, const char *to)
+static int subdir_rename(const char *from, const char *to, unsigned int flags)
 {
 	struct subdir *d = subdir_get();
 	char *newfrom;
@@ -276,7 +276,7 @@ static int subdir_rename(const char *from, const char *to)
 	if (!err) {
 		err = subdir_addpath(d, to, &newto);
 		if (!err) {
-			err = fuse_fs_rename(d->next, newfrom, newto);
+			err = fuse_fs_rename(d->next, newfrom, newto, flags);
 			free(newto);
 		}
 		free(newfrom);

@@ -281,7 +281,7 @@ static int iconv_symlink(const char *from, const char *to)
 	return err;
 }
 
-static int iconv_rename(const char *from, const char *to)
+static int iconv_rename(const char *from, const char *to, unsigned int flags)
 {
 	struct iconv *ic = iconv_get();
 	char *newfrom;
@@ -290,7 +290,7 @@ static int iconv_rename(const char *from, const char *to)
 	if (!err) {
 		err = iconv_convpath(ic, to, &newto, 0);
 		if (!err) {
-			err = fuse_fs_rename(ic->next, newfrom, newto);
+			err = fuse_fs_rename(ic->next, newfrom, newto, flags);
 			free(newto);
 		}
 		free(newfrom);
