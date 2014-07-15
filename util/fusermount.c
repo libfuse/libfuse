@@ -810,7 +810,7 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 	if (res == -1)
 		goto err;
 
-	sprintf(d, "fd=%i,rootmode=%o,user_id=%i,group_id=%i",
+	sprintf(d, "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
 		fd, rootmode, getuid(), getgid());
 
 	if (check_empty &&
@@ -851,7 +851,7 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 	}
 	if (res == -1 && errno == EINVAL) {
 		/* It could be an old version not supporting group_id */
-		sprintf(d, "fd=%i,rootmode=%o,user_id=%i",
+		sprintf(d, "fd=%i,rootmode=%o,user_id=%u",
 			fd, rootmode, getuid());
 		res = mount(source, mnt, type, flags, optbuf);
 	}
