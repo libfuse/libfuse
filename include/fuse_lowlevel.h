@@ -1335,6 +1335,10 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
  * Notify to invalidate parent attributes and the dentry matching
  * parent/name
  *
+ * To avoid a deadlock don't call this function from a filesystem operation and
+ * don't call it with a lock held that can also be held by a filesystem
+ * operation.
+ *
  * @param ch the channel through which to send the invalidation
  * @param parent inode number
  * @param name file name
@@ -1348,6 +1352,10 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
  * Notify to invalidate parent attributes and delete the dentry matching
  * parent/name if the dentry's inode number matches child (otherwise it
  * will invalidate the matching dentry).
+ *
+ * To avoid a deadlock don't call this function from a filesystem operation and
+ * don't call it with a lock held that can also be held by a filesystem
+ * operation.
  *
  * @param ch the channel through which to send the notification
  * @param parent inode number
