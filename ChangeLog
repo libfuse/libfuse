@@ -12,6 +12,8 @@
 	specify the time granularity it supports when the kernel is
 	responsible for updating times ("writeback_cache" option).
 
+	* libfuse: allow setting ctime in ->setattr()
+
 2014-03-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Initilaize stat buffer passed to ->getattr() and ->fgetattr() to

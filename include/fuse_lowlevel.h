@@ -135,6 +135,7 @@ struct fuse_forget_data {
 #define FUSE_SET_ATTR_MTIME	(1 << 5)
 #define FUSE_SET_ATTR_ATIME_NOW	(1 << 7)
 #define FUSE_SET_ATTR_MTIME_NOW	(1 << 8)
+#define FUSE_SET_ATTR_CTIME	(1 << 10)
 
 /* ----------------------------------------------------------- *
  * Request methods and replies				       *

@@ -79,8 +79,10 @@ static void convert_attr(const struct fuse_setattr_in *attr, struct stat *stbuf)
 	stbuf->st_size	       = attr->size;
 	stbuf->st_atime	       = attr->atime;
 	stbuf->st_mtime	       = attr->mtime;
+	stbuf->st_ctime        = attr->ctime;
 	ST_ATIM_NSEC_SET(stbuf, attr->atimensec);
 	ST_MTIM_NSEC_SET(stbuf, attr->mtimensec);
+	ST_CTIM_NSEC_SET(stbuf, attr->ctimensec);
 }
 
 static	size_t iov_length(const struct iovec *iov, size_t count)
@@ -1173,7 +1175,8 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			FUSE_SET_ATTR_ATIME	|
 			FUSE_SET_ATTR_MTIME	|
 			FUSE_SET_ATTR_ATIME_NOW	|
-			FUSE_SET_ATTR_MTIME_NOW;
+			FUSE_SET_ATTR_MTIME_NOW |
+			FUSE_SET_ATTR_CTIME;
 
 		req->f->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
 	} else
