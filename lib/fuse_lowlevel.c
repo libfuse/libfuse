@@ -1844,6 +1844,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_init_out outarg;
 	struct fuse_ll *f = req->f;
 	size_t bufsize = f->bufsize;
+	size_t outargsize = sizeof(outarg);
 
 	(void) nodeid;
 	if (f->debug) {
@@ -2017,6 +2018,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.max_background = f->conn.max_background;
 		outarg.congestion_threshold = f->conn.congestion_threshold;
 	}
+	if (f->conn.proto_minor >= 23)
+		outarg.time_gran = f->conn.time_gran;
 
 	if (f->debug) {
 		fprintf(stderr, "   INIT: %u.%u\n", outarg.major, outarg.minor);
@@ -2028,9 +2031,15 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			outarg.max_background);
 		fprintf(stderr, "   congestion_threshold=%i\n",
 		        outarg.congestion_threshold);
+		fprintf(stderr, "   time_gran=%u\n",
+			outarg.time_gran);
 	}
+	if (arg->minor < 5)
+		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;
+	else if (arg->minor < 23)
+		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
 
-	send_reply_ok(req, &outarg, arg->minor < 5 ? 8 : sizeof(outarg));
+	send_reply_ok(req, &outarg, outargsize);
 }
 
 static void do_destroy(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -2625,6 +2634,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "no_async_dio", offsetof(struct fuse_ll, no_async_dio), 1},
 	{ "writeback_cache", offsetof(struct fuse_ll, writeback_cache), 1},
 	{ "no_writeback_cache", offsetof(struct fuse_ll, no_writeback_cache), 1},
+	{ "time_gran=%u", offsetof(struct fuse_ll, conn.time_gran), 0 },
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
@@ -2660,6 +2670,7 @@ static void fuse_ll_help(void)
 "    -o readdirplus=S         control readdirplus use (yes|no|auto)\n"
 "    -o [no_]async_dio        asynchronous direct I/O\n"
 "    -o [no_]writeback_cache  asynchronous, buffered writes\n"
+"    -o time_gran=N           time granularity in nsec\n"
 );
 }
 

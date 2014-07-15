@@ -8,6 +8,10 @@
 	result in EINVAL when mounting the filesystem.  This also needs a
 	fix in the kernel.
 
+	* libfuse: add "time_gran" option.  This allows the filesystem to
+	specify the time granularity it supports when the kernel is
+	responsible for updating times ("writeback_cache" option).
+
 2014-03-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* Initilaize stat buffer passed to ->getattr() and ->fgetattr() to

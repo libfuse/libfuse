@@ -190,9 +190,17 @@ struct fuse_conn_info {
 	unsigned congestion_threshold;
 
 	/**
+	 * Time granularity if kernel is responsible for setting times (in nsec)
+	 *
+	 * Should be power of 10.  A zero (default) value is equivalent to
+	 * 1000000000 (1sec).
+	 */
+	unsigned time_gran;
+
+	/**
 	 * For future use.
 	 */
-	unsigned reserved[23];
+	unsigned reserved[22];
 };
 
 struct fuse_session;
