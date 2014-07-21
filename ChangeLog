@@ -1,3 +1,8 @@
+2014-07-21  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: highlevel API: fix directory file handle passed to
+	ioctl() method.  Reported by Eric Biggers
+
 2014-07-15  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: document deadlock avoidance for
