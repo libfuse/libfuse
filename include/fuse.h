@@ -500,6 +500,9 @@ struct fuse_operations {
 	 * _IOC_READ in area and if both are set in/out area.  In all
 	 * non-NULL cases, the area is of _IOC_SIZE(cmd) bytes.
 	 *
+	 * If flags has FUSE_IOCTL_DIR then the fuse_file_info refers to a
+	 * directory file handle.
+	 *
 	 * Introduced in version 2.8
 	 */
 	int (*ioctl) (const char *, int cmd, void *arg,
