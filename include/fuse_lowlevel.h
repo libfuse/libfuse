@@ -1032,9 +1032,9 @@ struct fuse_lowlevel_ops {
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
          *
-	 * In contrast to readdir() (which does not affect the lookup
-	 * counts), the lookup count of every entry returned by
-	 * readdirplus() is increased by one.
+	 * In contrast to readdir() (which does not affect the lookup counts),
+	 * the lookup count of every entry returned by readdirplus(), except "."
+	 * and "..", is incremented by one.
 	 *
 	 * Introduced in version 3.0
 	 *
