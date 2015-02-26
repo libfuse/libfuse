@@ -3418,6 +3418,12 @@ static int fill_dir(void *dh_, const char *name, const struct stat *statp,
 	return 0;
 }
 
+static int is_dot_or_dotdot(const char *name)
+{
+	return name[0] == '.' && (name[1] == '\0' ||
+				  (name[1] == '.' && name[2] == '\0'));
+}
+
 static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 			 off_t off, enum fuse_fill_dir_flags flags)
 {
@@ -3437,10 +3443,12 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 	if (off && statp && (flags & FUSE_FILL_DIR_PLUS)) {
 		e.attr = *statp;
 
-		res = do_lookup(f, dh->nodeid, name, &e);
-		if (res) {
-			dh->error = res;
-			return 1;
+		if (!is_dot_or_dotdot(name)) {
+			res = do_lookup(f, dh->nodeid, name, &e);
+			if (res) {
+				dh->error = res;
+				return 1;
+			}
 		}
 	} else {
 		e.attr.st_ino = FUSE_UNKNOWN_INO;
