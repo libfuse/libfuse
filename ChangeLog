@@ -1,3 +1,8 @@
+2015-02-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix fuse_remove_signal_handlers() to properly restore
+	the default signal handler.  Reported by: Chris Johnson
+
 2014-07-21  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: highlevel API: fix directory file handle passed to
