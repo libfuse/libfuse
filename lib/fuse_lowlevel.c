@@ -1923,6 +1923,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_ASYNC_DIO;
 		if (arg->flags & FUSE_WRITEBACK_CACHE)
 			f->conn.capable |= FUSE_CAP_WRITEBACK_CACHE;
+		if (arg->flags & FUSE_NO_OPEN_SUPPORT)
+			f->conn.capable |= FUSE_CAP_NO_OPEN_SUPPORT;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;

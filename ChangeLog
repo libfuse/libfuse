@@ -1,3 +1,7 @@
+2015-04-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: add FUSE_CAP_NO_OPEN_SUPPORT flag to ->init()
+
 2015-02-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fix fuse_remove_signal_handlers() to properly restore
