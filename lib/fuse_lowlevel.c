@@ -134,6 +134,8 @@ void fuse_free_req(fuse_req_t req)
 	req->u.ni.data = NULL;
 	list_del_req(req);
 	ctr = --req->ctr;
+	fuse_chan_put(req->ch);
+	req->ch = NULL;
 	pthread_mutex_unlock(&f->lock);
 	if (!ctr)
 		destroy_req(req);
@@ -2538,7 +2540,7 @@ void fuse_session_process_buf(struct fuse_session *se,
 	req->ctx.uid = in->uid;
 	req->ctx.gid = in->gid;
 	req->ctx.pid = in->pid;
-	req->ch = ch;
+	req->ch = fuse_chan_get(ch);
 
 	err = EIO;
 	if (!f->got_init) {
