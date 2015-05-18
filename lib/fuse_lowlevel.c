@@ -2735,8 +2735,7 @@ static void fuse_ll_destroy(struct fuse_ll *f)
 void fuse_session_destroy(struct fuse_session *se)
 {
 	fuse_ll_destroy(se->f);
-	if (se->ch != NULL)
-		fuse_chan_destroy(se->ch);
+	fuse_chan_put(se->ch);
 	free(se);
 }
 

@@ -1,3 +1,9 @@
+2015-05-23  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: refcount fuse_chan objects.  New functions:
+	fuse_chan_get(), fuse_chan_put().  Removed function:
+	fuse_chan_destroy().
+
 2015-04-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: add FUSE_CAP_NO_OPEN_SUPPORT flag to ->init()

@@ -23,6 +23,8 @@ struct fuse_session {
 struct fuse_chan {
 	struct fuse_session *se;
 
+	pthread_mutex_t lock;
+	int ctr;
 	int fd;
 };
 

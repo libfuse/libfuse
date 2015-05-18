@@ -84,6 +84,8 @@ struct fuse_chan *fuse_chan_new(int fd)
 
 	memset(ch, 0, sizeof(*ch));
 	ch->fd = fd;
+	ch->ctr = 1;
+	fuse_mutex_init(&ch->lock);
 
 	return ch;
 }
@@ -98,9 +100,30 @@ struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
 	return ch->se;
 }
 
-void fuse_chan_destroy(struct fuse_chan *ch)
+struct fuse_chan *fuse_chan_get(struct fuse_chan *ch)
 {
-	fuse_session_remove_chan(ch);
-	fuse_chan_close(ch);
-	free(ch);
+	assert(ch->ctr > 0);
+	pthread_mutex_lock(&ch->lock);
+	ch->ctr++;
+	pthread_mutex_unlock(&ch->lock);
+
+	return ch;
+}
+
+void fuse_chan_put(struct fuse_chan *ch)
+{
+	if (ch) {
+		pthread_mutex_lock(&ch->lock);
+		ch->ctr--;
+		if (!ch->ctr) {
+			pthread_mutex_unlock(&ch->lock);
+			fuse_session_remove_chan(ch);
+			fuse_chan_close(ch);
+			pthread_mutex_destroy(&ch->lock);
+			free(ch);
+		} else {
+			pthread_mutex_unlock(&ch->lock);
+		}
+
+	}
 }
