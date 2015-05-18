@@ -2657,6 +2657,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "writeback_cache", offsetof(struct fuse_ll, writeback_cache), 1},
 	{ "no_writeback_cache", offsetof(struct fuse_ll, no_writeback_cache), 1},
 	{ "time_gran=%u", offsetof(struct fuse_ll, conn.time_gran), 0 },
+	{ "clone_fd", offsetof(struct fuse_ll, clone_fd), 1 },
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
@@ -2693,6 +2694,7 @@ static void fuse_ll_help(void)
 "    -o [no_]async_dio        asynchronous direct I/O\n"
 "    -o [no_]writeback_cache  asynchronous, buffered writes\n"
 "    -o time_gran=N           time granularity in nsec\n"
+"    -o clone_fd              clone fuse device file descriptors\n"
 );
 }
 

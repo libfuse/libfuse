@@ -4,6 +4,10 @@
 	fuse_chan_get(), fuse_chan_put().  Removed function:
 	fuse_chan_destroy().
 
+	* libfuse: add "clone_fd" option.  This creates a separate device
+	file descriptor for each processing thread, which might improve
+	performance.
+
 2015-04-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: add FUSE_CAP_NO_OPEN_SUPPORT flag to ->init()

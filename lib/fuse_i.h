@@ -80,6 +80,7 @@ struct fuse_ll {
 	int no_async_dio;
 	int writeback_cache;
 	int no_writeback_cache;
+	int clone_fd;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	struct cuse_data *cuse_data;
