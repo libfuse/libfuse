@@ -1,5 +1,9 @@
 2015-05-22  Miklos Szeredi <miklos@szeredi.hu>
 
+	* Released 2.9.4
+
+2015-05-22  Miklos Szeredi <miklos@szeredi.hu>
+
 	* libfuse: fix exec environment for mount and umount.  Found by
 	Tavis Ormandy (CVE-2015-3202).
 
