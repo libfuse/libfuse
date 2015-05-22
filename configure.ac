@@ -86,7 +86,7 @@ if test -z "$MOUNT_FUSE_PATH"; then
 fi
 AC_SUBST(MOUNT_FUSE_PATH)
 if test -z "$UDEV_RULES_PATH"; then
-	UDEV_RULES_PATH=/etc/udev/rules.d
+	UDEV_RULES_PATH="${prefix}/lib/udev/rules.d"
 	AC_MSG_NOTICE([UDEV_RULES_PATH env var not set, using default $UDEV_RULES_PATH])
 fi
 AC_SUBST(UDEV_RULES_PATH)

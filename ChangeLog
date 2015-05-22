@@ -1,3 +1,10 @@
+2015-05-26  Miklos Szeredi <miklos@szeredi.hu>
+
+	* Use system directory for system-wide udev rules by default. This
+	ensures that fuse functions correctly on stateless operating
+	systems without requiring use of the site configuration directory
+	(/etc/).  Patch by Ikey Doherty
+
 2015-05-22  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fix exec environment for mount and umount.  Found by
