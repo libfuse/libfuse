@@ -97,10 +97,12 @@ static int add_mount(const char *progname, const char *fsname,
 		goto out_restore;
 	}
 	if (res == 0) {
+		char *env = NULL;
+
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
-		execl("/bin/mount", "/bin/mount", "--no-canonicalize", "-i",
-		      "-f", "-t", type, "-o", opts, fsname, mnt, NULL);
+		execle("/bin/mount", "/bin/mount", "--no-canonicalize", "-i",
+		       "-f", "-t", type, "-o", opts, fsname, mnt, NULL, &env);
 		fprintf(stderr, "%s: failed to execute /bin/mount: %s\n",
 			progname, strerror(errno));
 		exit(1);
@@ -148,10 +150,17 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 		goto out_restore;
 	}
 	if (res == 0) {
+		char *env = NULL;
+
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
-		execl("/bin/umount", "/bin/umount", "-i", rel_mnt,
-		      lazy ? "-l" : NULL, NULL);
+		if (lazy) {
+			execle("/bin/umount", "/bin/umount", "-i", rel_mnt,
+			       "-l", NULL, &env);
+		} else {
+			execle("/bin/umount", "/bin/umount", "-i", rel_mnt,
+			       NULL, &env);
+		}
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));
 		exit(1);
@@ -207,10 +216,12 @@ static int remove_mount(const char *progname, const char *mnt)
 		goto out_restore;
 	}
 	if (res == 0) {
+		char *env = NULL;
+
 		sigprocmask(SIG_SETMASK, &oldmask, NULL);
 		setuid(geteuid());
-		execl("/bin/umount", "/bin/umount", "--no-canonicalize", "-i",
-		      "--fake", mnt, NULL);
+		execle("/bin/umount", "/bin/umount", "--no-canonicalize", "-i",
+		       "--fake", mnt, NULL, &env);
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));
 		exit(1);

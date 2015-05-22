@@ -1,3 +1,8 @@
+2015-05-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix exec environment for mount and umount.  Found by
+	Tavis Ormandy (CVE-2015-3202).
+
 2015-04-23  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: add FUSE_CAP_NO_OPEN_SUPPORT flag to ->init()
