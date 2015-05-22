@@ -1,3 +1,8 @@
+2015-05-22  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix exec environment for mount and umount.  Found by
+	Tavis Ormandy (CVE-2015-3202).
+
 2015-02-26  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fix fuse_remove_signal_handlers() to properly restore
