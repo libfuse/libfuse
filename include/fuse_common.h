@@ -269,6 +269,13 @@ int fuse_daemonize(int foreground);
 int fuse_version(void);
 
 /**
+ * Get the full package version string of the library
+ *
+ * @return the package version
+ */
+const char *fuse_pkgversion(void);
+
+/**
  * Destroy poll handle
  *
  * @param ph the poll handle

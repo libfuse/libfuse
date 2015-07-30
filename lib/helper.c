@@ -332,3 +332,7 @@ int fuse_version(void)
 	return FUSE_VERSION;
 }
 
+const char *fuse_pkgversion(void)
+{
+  return PACKAGE_VERSION;
+}
