@@ -1,3 +1,8 @@
+2015-08-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: added fuse_pkgversion() function to retrieve the full
+	version string, per autoconf.  Patch by Christopher Harrison
+
 2015-06-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fix possible memory leak.  Reported by Jose R. Guzman
