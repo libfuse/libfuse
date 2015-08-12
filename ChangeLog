@@ -1,3 +1,8 @@
+2015-08-12  Miklos Szeredi <miklos@szeredi.hu>
+
+	* libfuse: fix warning mount.c:receive_fd().  Reported by Albert
+	Berger
+
 2015-06-29  Miklos Szeredi <miklos@szeredi.hu>
 
 	* libfuse: fix possible memory leak.  Reported by Jose R. Guzman
