@@ -134,6 +134,8 @@ void fuse_free_req(fuse_req_t req)
 	req->u.ni.data = NULL;
 	list_del_req(req);
 	ctr = --req->ctr;
+	fuse_chan_put(req->ch);
+	req->ch = NULL;
 	pthread_mutex_unlock(&f->lock);
 	if (!ctr)
 		destroy_req(req);
@@ -2538,7 +2540,7 @@ void fuse_session_process_buf(struct fuse_session *se,
 	req->ctx.uid = in->uid;
 	req->ctx.gid = in->gid;
 	req->ctx.pid = in->pid;
-	req->ch = ch;
+	req->ch = fuse_chan_get(ch);
 
 	err = EIO;
 	if (!f->got_init) {
@@ -2655,6 +2657,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "writeback_cache", offsetof(struct fuse_ll, writeback_cache), 1},
 	{ "no_writeback_cache", offsetof(struct fuse_ll, no_writeback_cache), 1},
 	{ "time_gran=%u", offsetof(struct fuse_ll, conn.time_gran), 0 },
+	{ "clone_fd", offsetof(struct fuse_ll, clone_fd), 1 },
 	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
@@ -2691,6 +2694,7 @@ static void fuse_ll_help(void)
 "    -o [no_]async_dio        asynchronous direct I/O\n"
 "    -o [no_]writeback_cache  asynchronous, buffered writes\n"
 "    -o time_gran=N           time granularity in nsec\n"
+"    -o clone_fd              clone fuse device file descriptors\n"
 );
 }
 
@@ -2735,8 +2739,7 @@ static void fuse_ll_destroy(struct fuse_ll *f)
 void fuse_session_destroy(struct fuse_session *se)
 {
 	fuse_ll_destroy(se->f);
-	if (se->ch != NULL)
-		fuse_chan_destroy(se->ch);
+	fuse_chan_put(se->ch);
 	free(se);
 }
 

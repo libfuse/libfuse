@@ -1705,11 +1705,19 @@ int fuse_session_loop_mt(struct fuse_session *se);
 int fuse_chan_fd(struct fuse_chan *ch);
 
 /**
- * Destroy a channel
+ * Obtain counted reference to the channel
+ *
+ * @param ch the channel
+ * @return the channel
+ */
+struct fuse_chan *fuse_chan_get(struct fuse_chan *ch);
+
+/**
+ * Drop counted reference to a channel
  *
  * @param ch the channel
  */
-void fuse_chan_destroy(struct fuse_chan *ch);
+void fuse_chan_put(struct fuse_chan *ch);
 
 #ifdef __cplusplus
 }

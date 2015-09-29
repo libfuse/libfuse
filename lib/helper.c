@@ -243,8 +243,7 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
 	if (mountpoint) {
 		int fd = ch ? fuse_chan_clearfd(ch) : -1;
 		fuse_kern_unmount(mountpoint, fd);
-		if (ch)
-			fuse_chan_destroy(ch);
+		fuse_chan_put(ch);
 	}
 }
 

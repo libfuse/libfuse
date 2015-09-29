@@ -20,6 +20,7 @@
 #include <semaphore.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <sys/ioctl.h>
 
 /* Environment var controlling the thread stack size */
 #define ENVNAME_THREAD_STACK "FUSE_THREAD_STACK"
@@ -30,6 +31,7 @@ struct fuse_worker {
 	pthread_t thread_id;
 	size_t bufsize;
 	struct fuse_buf fbuf;
+	struct fuse_chan *ch;
 	struct fuse_mt *mt;
 };
 
@@ -74,7 +76,7 @@ static void *fuse_do_work(void *data)
 		int res;
 
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		res = fuse_session_receive_buf(mt->se, &w->fbuf, mt->prevch);
+		res = fuse_session_receive_buf(mt->se, &w->fbuf, w->ch);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
@@ -110,7 +112,7 @@ static void *fuse_do_work(void *data)
 			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
-		fuse_session_process_buf(mt->se, &w->fbuf, mt->prevch);
+		fuse_session_process_buf(mt->se, &w->fbuf, w->ch);
 
 		pthread_mutex_lock(&mt->lock);
 		if (!isforget)
@@ -127,6 +129,7 @@ static void *fuse_do_work(void *data)
 
 			pthread_detach(w->thread_id);
 			free(w->fbuf.mem);
+			fuse_chan_put(w->ch);
 			free(w);
 			return NULL;
 		}
@@ -171,9 +174,46 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	return 0;
 }
 
+static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
+{
+	int res;
+	int clonefd;
+	uint32_t masterfd;
+	struct fuse_chan *newch;
+	const char *devname = "/dev/fuse";
+
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+	clonefd = open(devname, O_RDWR | O_CLOEXEC);
+	if (clonefd == -1) {
+		fprintf(stderr, "fuse: failed to open %s: %s\n", devname,
+			strerror(errno));
+		return NULL;
+	}
+	fcntl(clonefd, F_SETFD, FD_CLOEXEC);
+
+	masterfd = fuse_chan_fd(mt->prevch);
+	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
+	if (res == -1) {
+		fprintf(stderr, "fuse: failed to clone device fd: %s\n",
+			strerror(errno));
+		close(clonefd);
+		mt->se->f->clone_fd = 0;
+
+		return fuse_chan_get(mt->prevch);
+	}
+	newch = fuse_chan_new(clonefd);
+	if (newch == NULL)
+		close(clonefd);
+
+	return newch;
+}
+
 static int fuse_loop_start_thread(struct fuse_mt *mt)
 {
 	int res;
+
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
 	if (!w) {
 		fprintf(stderr, "fuse: failed to allocate worker structure\n");
@@ -183,8 +223,18 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 	w->fbuf.mem = NULL;
 	w->mt = mt;
 
+
+	if (mt->se->f->clone_fd) {
+		w->ch = fuse_clone_chan(mt);
+		if (!w->ch)
+			return -1;
+	} else {
+		w->ch = fuse_chan_get(mt->prevch);
+	}
+
 	res = fuse_start_thread(&w->thread_id, fuse_do_work, w);
 	if (res == -1) {
+		fuse_chan_put(w->ch);
 		free(w);
 		return -1;
 	}
@@ -202,6 +252,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	list_del_worker(w);
 	pthread_mutex_unlock(&mt->lock);
 	free(w->fbuf.mem);
+	fuse_chan_put(w->ch);
 	free(w);
 }
 
