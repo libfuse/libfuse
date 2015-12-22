@@ -27,6 +27,10 @@ explicitly using a separate set of API functions.
 Installation
 ------------
 
+You can download libfuse from
+https://github.com/libfuse/libfuse/releases. After extracting the
+tarball, build and install with
+
     ./configure
     make -j8
     make install
@@ -82,7 +86,7 @@ mailing list (subscribe at
 https://lists.sourceforge.net/lists/listinfo/fuse-devel).
 
 Please report any bugs on the GitHub issue tracker at
-https://github.com/libfuse/main/issues.
+https://github.com/libfuse/libfuse/issues.
 
 
 Credits
