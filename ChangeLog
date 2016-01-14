@@ -1,9 +1,13 @@
 Unreleased Changes
 ==================
 
-* fix warning in mount.c:receive_fd().  Reported by Albert Berger
-* fix possible memory leak.  Reported by Jose R. Guzman
+* New maintainer: Nikolaus Rath <Nikolaus@rath.org>. Many thanks to
+  Miklos Szeredi <miklos@szeredi.hu> for bringing FUSE to where it is
+  now!
 
+* fix warning in mount.c:receive_fd().  Reported by Albert Berger
+
+* fix possible memory leak.  Reported by Jose R. Guzman
 
 FUSE 2.9.4 (2015-05-22)
 =======================
