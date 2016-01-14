@@ -7,9 +7,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 
 EXTRA_DIST =			\
 	fuse.pc.in		\
-	README*			\
-	Filesystems		\
-	FAQ
+	README*
 
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = fuse.pc
