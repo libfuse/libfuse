@@ -932,6 +932,11 @@ struct fuse_lowlevel_ops {
 	 * kernel supports splicing from the fuse device, then the
 	 * data will be made available in pipe for supporting zero
 	 * copy data transfer.
+         *
+         * buf->count is guaranteed to be one (and thus buf->idx is
+         * always zero). The write_buf handler must ensure that
+         * bufv->off is correctly updated (reflecting the number of
+         * bytes read from bufv->buf[0]).
 	 *
 	 * Introduced in version 2.9
 	 *
