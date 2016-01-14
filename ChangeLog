@@ -1,54 +1,40 @@
-2015-08-12  Miklos Szeredi <miklos@szeredi.hu>
+Unreleased Changes
+==================
 
-	* libfuse: fix warning mount.c:receive_fd().  Reported by Albert
-	Berger
+* fix warning in mount.c:receive_fd().  Reported by Albert Berger
+* fix possible memory leak.  Reported by Jose R. Guzman
 
-2015-06-29  Miklos Szeredi <miklos@szeredi.hu>
 
-	* libfuse: fix possible memory leak.  Reported by Jose R. Guzman
+FUSE 2.9.4 (2015-05-22)
+=======================
 
-2015-05-22  Miklos Szeredi <miklos@szeredi.hu>
+* fix exec environment for mount and umount.  Found by Tavis Ormandy
+  (CVE-2015-3202).
 
-	* Released 2.9.4
+* fix fuse_remove_signal_handlers() to properly restore the default
+  signal handler.  Reported by: Chris Johnson
 
-2015-05-22  Miklos Szeredi <miklos@szeredi.hu>
+* highlevel API: fix directory file handle passed to ioctl() method.
+  Reported by Eric Biggers
 
-	* libfuse: fix exec environment for mount and umount.  Found by
-	Tavis Ormandy (CVE-2015-3202).
+* libfuse: document deadlock avoidance for fuse_notify_inval_entry()
+  and fuse_notify_delete()
 
-2015-02-26  Miklos Szeredi <miklos@szeredi.hu>
+* fusermount, libfuse: send value as unsigned in "user_id=" and
+  "group_id=" options.  Uids/gids larger than 2147483647 would result
+  in EINVAL when mounting the filesystem.  This also needs a fix in
+  the kernel.
 
-	* libfuse: fix fuse_remove_signal_handlers() to properly restore
-	the default signal handler.  Reported by: Chris Johnson
+* Initilaize stat buffer passed to ->getattr() and ->fgetattr() to
+  zero in all cases.  Reported by Daniel Iwan
 
-2014-07-21  Miklos Szeredi <miklos@szeredi.hu>
+* libfuse: Add missing includes.  This allows compiling fuse with
+  musl.  Patch by Daniel Thau
 
-	* libfuse: highlevel API: fix directory file handle passed to
-	ioctl() method.  Reported by Eric Biggers
 
-2014-07-15  Miklos Szeredi <miklos@szeredi.hu>
+Older Versions (before 2013-01-01)
+==================================
 
-	* libfuse: document deadlock avoidance for
-	fuse_notify_inval_entry() and fuse_notify_delete()
-
-	* fusermount, libfuse: send value as unsigned in "user_id=" and
-	"group_id=" options.  Uids/gids larger than 2147483647 would
-	result in EINVAL when mounting the filesystem.  This also needs a
-	fix in the kernel.
-
-2014-03-26  Miklos Szeredi <miklos@szeredi.hu>
-
-	* Initilaize stat buffer passed to ->getattr() and ->fgetattr() to
-	zero in all cases.  Reported by Daniel Iwan
-
-2013-08-26  Miklos Szeredi <miklos@szeredi.hu>
-
-	* libfuse: Add missing includes.  This allows compiling fuse with
-	musl.  Patch by Daniel Thau
-
-2013-07-01  Miklos Szeredi <miklos@szeredi.hu>
-
-	* Released 2.9.3
 
 2013-06-20  Miklos Szeredi <miklos@szeredi.hu>
 
