@@ -2263,6 +2263,7 @@ int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
 	outarg.nodeid = ino;
 	outarg.offset = offset;
 	outarg.size = size;
+	outarg.padding = 0;
 
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(out);
