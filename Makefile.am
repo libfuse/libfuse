@@ -6,9 +6,7 @@ SUBDIRS = @subdirs2@ doc
 
 EXTRA_DIST =			\
 	fuse3.pc.in		\
-	README*			\
-	Filesystems		\
-	FAQ
+	README*
 
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = fuse3.pc
