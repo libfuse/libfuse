@@ -3,6 +3,7 @@
 ACLOCAL_AMFLAGS = -I m4
 
 SUBDIRS = @subdirs2@ doc
+AUTOMAKE_OPTIONS = subdir-objects
 
 EXTRA_DIST =			\
 	fuse.pc.in		\
