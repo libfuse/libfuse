@@ -2,7 +2,7 @@ AC_INIT(fuse, 3.0.0_pre0)
 AC_PREREQ(2.59d)
 AC_CONFIG_MACRO_DIR([m4])
 AC_CANONICAL_TARGET
-AM_INIT_AUTOMAKE([subdir-objects])
+AM_INIT_AUTOMAKE([subdir-objects foreign])
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES(yes)])
 AC_CONFIG_HEADERS(include/config.h)
 
