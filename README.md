@@ -84,15 +84,3 @@ https://lists.sourceforge.net/lists/listinfo/fuse-devel).
 Please report any bugs on the GitHub issue tracker at
 https://github.com/libfuse/main/issues.
 
-
-Credits
--------
-
-libfuse is currently maintained by Nikolaus Rath.
-
-The CUSE feature was added by Tejun Heo.
-
-FUSE (both libfuse and the kernel module) was written by Miklos
-Szeredi.
-
-
