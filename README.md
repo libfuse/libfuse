@@ -61,8 +61,18 @@ doing nasty things.  Currently those limitations are:
   - The mountpoint is not a sticky directory which isn't owned by the
     user (like /tmp usually is)
 
-  - No other user (including root) can access the contents of the mounted
-    filesystem (though this can be relaxed)
+  - No other user (including root) can access the contents of the
+    mounted filesystem (though this can be relaxed by allowing the use
+    of the `allow_other` and `allow_root` mount options in `fuse.conf`)
+
+When using the `allow_other` option, be aware of
+[bug #15](https://github.com/libfuse/libfuse/issues/15): the
+permission to access a cached directory entry is only checked for the
+first user that accesses it. As long as the directory entry is cached,
+accesses by other users are made with the permissions of the first
+user. The only work around for this bug is to disable caching of
+directory entries, or to not use `allow_other`.
+
 
 
 Building your own filesystem
