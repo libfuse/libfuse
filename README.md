@@ -1,6 +1,25 @@
 libfuse
 =======
 
+Warning: unresolved security issue
+----------------------------------
+
+Be aware that FUSE has an unresolved security bug
+([bug #15](https://github.com/libfuse/libfuse/issues/15)): the
+permission check for accessing a cached directory is only done once
+when the directory entry is first loaded into the cache. Subsequent
+accesses will re-use the results of the first check, even if the
+directory permissions have since changed, and even if the subsequent
+access is made by a different user.
+
+This bug needs to be fixed in the Linux kernel and has been known
+since 2006 but unfortunately no fix has been applied yet. If you
+depend on correct permission handling for FUSE file systems, the only
+workaround is to completely disable caching of directory
+entries. Alternatively, the severity of the bug can be somewhat
+reduced by not using the `allow_other` mount option.
+
+
 About
 -----
 
@@ -64,15 +83,6 @@ doing nasty things.  Currently those limitations are:
   - No other user (including root) can access the contents of the
     mounted filesystem (though this can be relaxed by allowing the use
     of the `allow_other` and `allow_root` mount options in `fuse.conf`)
-
-When using the `allow_other` option, be aware of
-[bug #15](https://github.com/libfuse/libfuse/issues/15): the
-permission to access a cached directory entry is only checked for the
-first user that accesses it. As long as the directory entry is cached,
-accesses by other users are made with the permissions of the first
-user. The only work around for this bug is to disable caching of
-directory entries, or to not use `allow_other`.
-
 
 
 Building your own filesystem
