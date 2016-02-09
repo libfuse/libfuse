@@ -320,38 +320,67 @@ int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
 	return res;
 }
 
-static size_t fuse_dirent_size(size_t namelen)
-{
-	return FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + namelen);
-}
+#ifndef IFTODT
+# define IFTODT(mode) (((mode) & 0170000) >> 12)
+#endif
 
-static void fuse_add_dirent(struct fuse_dirent *dirent, const char *name,
-			    const struct stat *stbuf, off_t off)
+static void fuse_add_dirent(struct fuse_dirent *dirent,
+                            const char *name, const size_t namelen,
+                            const size_t entlen, const size_t entlen_padded,
+			    const struct stat *stbuf, const off_t off)
 {
-	unsigned namelen = strlen(name);
-	unsigned entlen = FUSE_NAME_OFFSET + namelen;
-	unsigned entsize = fuse_dirent_size(namelen);
-	unsigned padlen = entsize - entlen;
+	unsigned padlen = entlen_padded - entlen;
 
 	dirent->ino = stbuf->st_ino;
 	dirent->off = off;
 	dirent->namelen = namelen;
-	dirent->type = (stbuf->st_mode & 0170000) >> 12;
+	dirent->type = IFTODT(stbuf->st_mode);
 	strncpy(dirent->name, name, namelen);
 	if (padlen)
 		memset(dirent->name + namelen, 0, padlen);
 }
 
+static void calculate_dirent_size(const char *name,
+                                  size_t *namelen,
+                                  size_t *entlen,
+                                  size_t *entlen_padded)
+{
+  *namelen = strlen(name);
+  *entlen = FUSE_NAME_OFFSET + *namelen;
+  *entlen_padded = FUSE_DIRENT_ALIGN(*entlen);
+}
+
+static void calculate_dirent_plus_size(const char *name,
+                                       size_t *namelen,
+                                       size_t *entlen,
+                                       size_t *entlen_padded)
+{
+  *namelen = strlen(name);
+  *entlen = FUSE_NAME_OFFSET_DIRENTPLUS + *namelen;
+  *entlen_padded = FUSE_DIRENT_ALIGN(*entlen);
+}
+
+
+/* `buf` is allowed to be empty so that the proper size may be
+   allocated by the caller */
 size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 			 const char *name, const struct stat *stbuf, off_t off)
 {
-	size_t entsize;
+        (void)req;
+        size_t namelen;
+	size_t entlen;
+        size_t entlen_padded;
 
-	(void) req;
-	entsize = fuse_dirent_size(strlen(name));
-	if (entsize <= bufsize && buf)
-		fuse_add_dirent((struct fuse_dirent *) buf, name, stbuf, off);
-	return entsize;
+        calculate_dirent_size(name,&namelen,&entlen,&entlen_padded);
+        if ((buf == NULL) || (entlen_padded > bufsize))
+          return entlen_padded;
+
+        fuse_add_dirent((struct fuse_dirent *) buf,
+                        name, namelen,
+                        entlen, entlen_padded,
+                        stbuf, off);
+
+	return entlen_padded;
 }
 
 static void convert_statfs(const struct statvfs *stbuf,
@@ -415,21 +444,29 @@ static void fill_entry(struct fuse_entry_out *arg,
 	convert_stat(&e->attr, &arg->attr);
 }
 
+/* `buf` is allowed to be empty so that the proper size may be
+   allocated by the caller */
 size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 			      const char *name,
 			      const struct fuse_entry_param *e, off_t off)
 {
-	size_t entsize;
+        (void)req;
+        size_t namelen;
+	size_t entlen;
+        size_t entlen_padded;
 
-	(void) req;
-	entsize = FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET_DIRENTPLUS + strlen(name));
-	if (entsize <= bufsize && buf) {
-		struct fuse_direntplus *dp = (struct fuse_direntplus *) buf;
-		memset(&dp->entry_out, 0, sizeof(dp->entry_out));
-		fill_entry(&dp->entry_out, e);
-		fuse_add_dirent(&dp->dirent, name, &e->attr, off);
-	}
-	return entsize;
+        calculate_dirent_plus_size(name,&namelen,&entlen,&entlen_padded);
+        if ((buf == NULL) || (entlen_padded > bufsize))
+          return entlen_padded;
+
+        struct fuse_direntplus *dp = (struct fuse_direntplus *) buf;
+        memset(&dp->entry_out, 0, sizeof(dp->entry_out));
+        fill_entry(&dp->entry_out, e);
+        fuse_add_dirent(&dp->dirent, name, namelen,
+                        entlen, entlen_padded,
+                        &e->attr, off);
+
+	return entlen_padded;
 }
 
 static void fill_open(struct fuse_open_out *arg,
