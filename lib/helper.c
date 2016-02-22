@@ -439,7 +439,6 @@ int fuse_mount_compat1(const char *mountpoint, const char *args[])
 FUSE_SYMVER(".symver fuse_setup_compat2,__fuse_setup@");
 FUSE_SYMVER(".symver fuse_setup_compat22,fuse_setup@FUSE_2.2");
 FUSE_SYMVER(".symver fuse_teardown,__fuse_teardown@");
-FUSE_SYMVER(".symver fuse_main_compat2,fuse_main@");
 FUSE_SYMVER(".symver fuse_main_real_compat22,fuse_main_real@FUSE_2.2");
 
 #endif /* __FreeBSD__ || __NetBSD__ */

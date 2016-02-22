@@ -4886,7 +4886,6 @@ FUSE_SYMVER(".symver fuse_exited,__fuse_exited@");
 FUSE_SYMVER(".symver fuse_process_cmd,__fuse_process_cmd@");
 FUSE_SYMVER(".symver fuse_read_cmd,__fuse_read_cmd@");
 FUSE_SYMVER(".symver fuse_set_getcontext_func,__fuse_set_getcontext_func@");
-FUSE_SYMVER(".symver fuse_new_compat2,fuse_new@");
 FUSE_SYMVER(".symver fuse_new_compat22,fuse_new@FUSE_2.2");
 
 #endif /* __FreeBSD__ || __NetBSD__  */
