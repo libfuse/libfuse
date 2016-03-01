@@ -5,18 +5,20 @@ Warning: unresolved security issue
 ----------------------------------
 
 Be aware that FUSE has an unresolved security bug
-([bug #15](https://github.com/libfuse/libfuse/issues/15)): the
-permission check for accessing a cached directory is only done once
-when the directory entry is first loaded into the cache. Subsequent
-accesses will re-use the results of the first check, even if the
-directory permissions have since changed, and even if the subsequent
-access is made by a different user.
+([bug #15](https://github.com/libfuse/libfuse/issues/15)): if the
+`default_permissions` mount option is not used, the results of the
+first permission check performed by the file system for a directory
+entry will be re-used for subsequent accesses as long as the inode of
+the accessed entry is present in the kernel cache - even if the
+permissions have since changed, and even if the subsequent access is
+made by a different user.
 
 This bug needs to be fixed in the Linux kernel and has been known
 since 2006 but unfortunately no fix has been applied yet. If you
 depend on correct permission handling for FUSE file systems, the only
-workaround is to completely disable caching of directory
-entries. Alternatively, the severity of the bug can be somewhat
+workaround is to use `default_permissions` (which does not currently
+support ACLs), or to completely disable caching of directory entry
+attributes. Alternatively, the severity of the bug can be somewhat
 reduced by not using the `allow_other` mount option.
 
 
