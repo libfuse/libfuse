@@ -281,12 +281,16 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	int res;
 
 	res = fuse_parse_cmdline(&args, NULL, multithreaded, &foreground);
-	if (res == -1)
-		goto err_args;
+	if (res == -1) {
+		fuse_opt_free_args(&args);
+		return NULL;
+	}
 
 	res = fuse_opt_parse(&args, NULL, kill_subtype_opts, NULL);
-	if (res == -1)
-		goto err_args;
+	if (res == -1) {
+		fuse_opt_free_args(&args);
+		return NULL;
+	}
 
 	/*
 	 * Make sure file descriptors 0, 1 and 2 are open, otherwise chaos
@@ -301,7 +305,7 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	se = cuse_lowlevel_new(&args, ci, clop, userdata);
 	fuse_opt_free_args(&args);
 	if (se == NULL)
-		goto err_args;
+		return NULL;
 
 	fd = open(devname, O_RDWR);
 	if (fd == -1) {
@@ -335,8 +339,6 @@ err_sig:
 	fuse_remove_signal_handlers(se);
 err_se:
 	fuse_session_destroy(se);
-err_args:
-	fuse_opt_free_args(&args);
 	return NULL;
 }
 
