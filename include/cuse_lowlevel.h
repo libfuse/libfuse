@@ -9,8 +9,8 @@
   Read example/cusexmp.c for usages.
 */
 
-#ifndef _CUSE_LOWLEVEL_H_
-#define _CUSE_LOWLEVEL_H_
+#ifndef CUSE_LOWLEVEL_H_
+#define CUSE_LOWLEVEL_H_
 
 #ifndef FUSE_USE_VERSION
 #define FUSE_USE_VERSION 29
@@ -84,4 +84,4 @@ int cuse_lowlevel_main(int argc, char *argv[], const struct cuse_info *ci,
 }
 #endif
 
-#endif /* _CUSE_LOWLEVEL_H_ */
+#endif /* CUSE_LOWLEVEL_H_ */

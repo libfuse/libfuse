@@ -6,8 +6,8 @@
   See the file COPYING.LIB.
 */
 
-#ifndef _FUSE_LOWLEVEL_H_
-#define _FUSE_LOWLEVEL_H_
+#ifndef FUSE_LOWLEVEL_H_
+#define FUSE_LOWLEVEL_H_
 
 /** @file
  *
@@ -1728,4 +1728,4 @@ void fuse_chan_put(struct fuse_chan *ch);
 }
 #endif
 
-#endif /* _FUSE_LOWLEVEL_H_ */
+#endif /* FUSE_LOWLEVEL_H_ */
