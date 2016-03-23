@@ -222,7 +222,7 @@ struct fuse_operations {
 
 	/** Get file system statistics
 	 *
-	 * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
+	 * The 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
 	 *
 	 * Replaced 'struct statfs' parameter with 'struct statvfs' in
 	 * version 2.5
