@@ -104,8 +104,8 @@
  *  - add FUSE_NO_OPEN_SUPPORT flag
  */
 
-#ifndef LINUX_FUSE_H
-#define LINUX_FUSE_H
+#ifndef _LINUX_FUSE_H
+#define _LINUX_FUSE_H
 
 #ifdef __KERNEL__
 #include <linux/types.h>
@@ -758,4 +758,4 @@ struct fuse_notify_retrieve_in {
 /* Device ioctls: */
 #define FUSE_DEV_IOC_CLONE	_IOR(229, 0, uint32_t)
 
-#endif /* LINUX_FUSE_H */
+#endif /* _LINUX_FUSE_H */
