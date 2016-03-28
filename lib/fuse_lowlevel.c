@@ -160,9 +160,9 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_ll *f)
 
 void fuse_chan_close(struct fuse_chan *ch)
 {
-	int fd = fuse_chan_fd(ch);
+	int fd = ch->fd;
 	if (fd != -1)
-		close(fd);
+	    close(fd);
 }
 
 
@@ -188,7 +188,7 @@ static int fuse_send_msg(struct fuse_ll *f, struct fuse_chan *ch,
 		}
 	}
 
-	ssize_t res = writev(fuse_chan_fd(ch), iov, count);
+	ssize_t res = writev(ch->fd, iov, count);
 	int err = errno;
 
 	if (res == -1) {
@@ -777,7 +777,7 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 		splice_flags |= SPLICE_F_MOVE;
 
 	res = splice(llp->pipe[0], NULL,
-		     fuse_chan_fd(ch), NULL, out->len, splice_flags);
+		     ch->fd, NULL, out->len, splice_flags);
 	if (res == -1) {
 		res = -errno;
 		perror("fuse: splice from pipe");
@@ -2728,7 +2728,7 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 			goto fallback;
 	}
 
-	res = splice(fuse_chan_fd(ch), NULL, llp->pipe[1], NULL, bufsize, 0);
+	res = splice(ch->fd, NULL, llp->pipe[1], NULL, bufsize, 0);
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -2812,7 +2812,7 @@ fallback:
 	}
 
 restart:
-	res = read(fuse_chan_fd(ch), buf->mem, f->bufsize);
+	res = read(ch->fd, buf->mem, f->bufsize);
 	err = errno;
 
 	if (fuse_session_exited(se))

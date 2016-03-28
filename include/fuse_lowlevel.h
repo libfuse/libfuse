@@ -1702,14 +1702,6 @@ int fuse_session_loop_mt(struct fuse_session *se);
  * ----------------------------------------------------------- */
 
 /**
- * Query the file descriptor of the channel
- *
- * @param ch the channel
- * @return the file descriptor passed to fuse_chan_new()
- */
-int fuse_chan_fd(struct fuse_chan *ch);
-
-/**
  * Obtain counted reference to the channel
  *
  * @param ch the channel

@@ -90,11 +90,6 @@ struct fuse_chan *fuse_chan_new(int fd)
 	return ch;
 }
 
-int fuse_chan_fd(struct fuse_chan *ch)
-{
-	return ch->fd;
-}
-
 struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
 {
 	return ch->se;

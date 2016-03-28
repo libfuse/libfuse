@@ -193,7 +193,7 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 	}
 	fcntl(clonefd, F_SETFD, FD_CLOEXEC);
 
-	masterfd = fuse_chan_fd(mt->prevch);
+	masterfd = mt->prevch->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
 	if (res == -1) {
 		fprintf(stderr, "fuse: failed to clone device fd: %s\n",

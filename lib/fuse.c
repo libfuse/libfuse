@@ -4320,7 +4320,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 	time_t next_clean;
 	struct fuse_chan *ch = fuse_session_chan(se);
 	struct pollfd fds = {
-		.fd = fuse_chan_fd(ch),
+		.fd = ch->fd,
 		.events = POLLIN
 	};
 	struct fuse_buf fbuf = {
