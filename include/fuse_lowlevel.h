@@ -602,7 +602,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
-         *
+	 *
 	 * Returning a directory entry from readdir() does not affect
 	 * its lookup count.
 	 *
@@ -932,11 +932,11 @@ struct fuse_lowlevel_ops {
 	 * kernel supports splicing from the fuse device, then the
 	 * data will be made available in pipe for supporting zero
 	 * copy data transfer.
-         *
-         * buf->count is guaranteed to be one (and thus buf->idx is
-         * always zero). The write_buf handler must ensure that
-         * bufv->off is correctly updated (reflecting the number of
-         * bytes read from bufv->buf[0]).
+	 *
+	 * buf->count is guaranteed to be one (and thus buf->idx is
+	 * always zero). The write_buf handler must ensure that
+	 * bufv->off is correctly updated (reflecting the number of
+	 * bytes read from bufv->buf[0]).
 	 *
 	 * Introduced in version 2.9
 	 *
@@ -1036,7 +1036,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
-         *
+	 *
 	 * In contrast to readdir() (which does not affect the lookup counts),
 	 * the lookup count of every entry returned by readdirplus(), except "."
 	 * and "..", is incremented by one.
@@ -1402,7 +1402,7 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph);
  * @return zero for success, -errno for failure
  */
 int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
-                                     off_t off, off_t len);
+				     off_t off, off_t len);
 
 /**
  * Notify to invalidate parent attributes and the dentry matching
@@ -1419,7 +1419,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
  * @return zero for success, -errno for failure
  */
 int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
-                                     const char *name, size_t namelen);
+				     const char *name, size_t namelen);
 
 /**
  * Notify to invalidate parent attributes and delete the dentry matching

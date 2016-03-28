@@ -72,4 +72,3 @@ void fuse_remove_signal_handlers(struct fuse_session *se)
 	set_one_signal_handler(SIGTERM, exit_handler, 1);
 	set_one_signal_handler(SIGPIPE, SIG_IGN, 1);
 }
-

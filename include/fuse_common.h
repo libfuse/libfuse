@@ -114,7 +114,7 @@ struct fuse_file_info {
 #define FUSE_CAP_SPLICE_READ		(1 << 9)
 #define FUSE_CAP_FLOCK_LOCKS		(1 << 10)
 #define FUSE_CAP_IOCTL_DIR		(1 << 11)
-#define FUSE_CAP_AUTO_INVAL_DATA 	(1 << 12)
+#define FUSE_CAP_AUTO_INVAL_DATA	(1 << 12)
 #define FUSE_CAP_READDIRPLUS		(1 << 13)
 #define FUSE_CAP_READDIRPLUS_AUTO	(1 << 14)
 #define FUSE_CAP_ASYNC_DIO		(1 << 15)
@@ -429,7 +429,7 @@ struct fuse_bufvec {
 };
 
 /* Initialize bufvec with a single buffer of given size */
-#define FUSE_BUFVEC_INIT(size__) 				\
+#define FUSE_BUFVEC_INIT(size__)				\
 	((struct fuse_bufvec) {					\
 		/* .count= */ 1,				\
 		/* .idx =  */ 0,				\

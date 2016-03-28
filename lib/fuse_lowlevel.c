@@ -1997,7 +1997,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fprintf(stderr, "   max_background=%i\n",
 			outarg.max_background);
 		fprintf(stderr, "   congestion_threshold=%i\n",
-		        outarg.congestion_threshold);
+			outarg.congestion_threshold);
 		fprintf(stderr, "   time_gran=%u\n",
 			outarg.time_gran);
 	}
@@ -2102,7 +2102,7 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
 }
 
 int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
-                                     off_t off, off_t len)
+				     off_t off, off_t len)
 {
 	struct fuse_notify_inval_inode_out outarg;
 	struct fuse_ll *f;
@@ -2126,7 +2126,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
 }
 
 int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
-                                     const char *name, size_t namelen)
+				     const char *name, size_t namelen)
 {
 	struct fuse_notify_inval_entry_out outarg;
 	struct fuse_ll *f;

@@ -43,7 +43,7 @@ struct mount_opts {
 	char *kernel_opts;
 };
 
-#define FUSE_DUAL_OPT_KEY(templ, key) 				\
+#define FUSE_DUAL_OPT_KEY(templ, key)				\
 	FUSE_OPT_KEY(templ, key), FUSE_OPT_KEY("no" templ, key)
 
 static const struct fuse_opt fuse_mount_opts[] = {

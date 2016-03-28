@@ -28,12 +28,12 @@
 #ifdef __NetBSD__
 #include <perfuse.h>
 
-#define MS_RDONLY 	MNT_RDONLY
-#define MS_NOSUID 	MNT_NOSUID
-#define MS_NODEV 	MNT_NODEV
-#define MS_NOEXEC 	MNT_NOEXEC
-#define MS_SYNCHRONOUS 	MNT_SYNCHRONOUS
-#define MS_NOATIME 	MNT_NOATIME
+#define MS_RDONLY	MNT_RDONLY
+#define MS_NOSUID	MNT_NOSUID
+#define MS_NODEV	MNT_NODEV
+#define MS_NOEXEC	MNT_NOEXEC
+#define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
+#define MS_NOATIME	MNT_NOATIME
 
 #define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
 #endif
@@ -398,7 +398,7 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	rv = receive_fd(fds[1]);
 
 	if (!mo->auto_unmount) {
-		/* with auto_unmount option fusermount will not exit until 
+		/* with auto_unmount option fusermount will not exit until
 		   this socket is closed */
 		close(fds[1]);
 		waitpid(pid, NULL, 0); /* bury zombie */
