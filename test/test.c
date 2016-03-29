@@ -993,7 +993,7 @@ static int do_test_open_acc(int flags, const char *flags_str, int mode, int err)
 	int res;
 	int fd;
 
-	start_test("open_acc(%s) mode: 0%03o error: '%s'", flags_str, mode,
+	start_test("open_acc(%s) mode: 0%03o message: '%s'", flags_str, mode,
 		   strerror(err));
 	unlink(testfile);
 	res = create_file(testfile, data, datalen);

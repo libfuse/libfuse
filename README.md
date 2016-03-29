@@ -56,6 +56,12 @@ tarball, build and install with
     make -j8
     make install
 
+To run some self tests, you need a Python 3 environment with the
+[py.test](http://www.pytest.org/) module installed. To run the tests,
+execute
+
+    python3 -m pytest test/
+
 You may also need to add `/usr/local/lib` to `/etc/ld.so.conf` and/or
 run *ldconfig*. If you're building from the git repository (instead of
 using a release tarball), you also need to run `./makeconf.sh` to
@@ -111,4 +117,3 @@ https://lists.sourceforge.net/lists/listinfo/fuse-devel).
 
 Please report any bugs on the GitHub issue tracker at
 https://github.com/libfuse/libfuse/issues.
-
