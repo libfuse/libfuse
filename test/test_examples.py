@@ -83,6 +83,21 @@ def test_fusexmp_fh(tmpdir, name):
     else:
         umount(mount_process, mnt_dir)
 
+def test_fsel(tmpdir):
+    mnt_dir = str(tmpdir)
+    cmdline = [os.path.join(basename, 'example', 'fsel'),
+               '-f', mnt_dir ]
+    mount_process = subprocess.Popen(cmdline)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        cmdline = [ os.path.join(basename, 'example', 'fselclient') ]
+        subprocess.check_call(cmdline, cwd=mnt_dir)
+    except:
+        cleanup(mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
 def checked_unlink(filename, path, isdir=False):
     fullname = os.path.join(path, filename)
     if isdir:

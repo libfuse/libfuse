@@ -40,7 +40,7 @@ int main(void)
 {
 	static const char hex_map[FSEL_FILES] = "0123456789ABCDEF";
 	int fds[FSEL_FILES];
-	int i, nfds;
+	int i, nfds, tries;
 
 	for (i = 0; i < FSEL_FILES; i++) {
 		char name[] = { hex_map[i], '\0' };
@@ -52,7 +52,7 @@ int main(void)
 	}
 	nfds = fds[FSEL_FILES - 1] + 1;
 
-	while (1) {
+	for(tries=0; tries < 16; tries++) {
 		static char buf[4096];
 		fd_set rfds;
 		int rc;
