@@ -29,13 +29,15 @@ AC_ARG_ENABLE(util,
 	[  --enable-util           Compile with util ])
 AC_ARG_ENABLE(example,
 	[  --enable-example        Compile with examples ])
+AC_ARG_ENABLE(test,
+	[  --enable-test           Compile with tests ])
 AC_ARG_ENABLE(mtab,
 	[  --disable-mtab          Disable and ignore usage of /etc/mtab ])
 
 AC_ARG_WITH(pkgconfigdir,
-            [  --with-pkgconfigdir=DIR      pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@],
-            [pkgconfigdir=$withval],
-            [pkgconfigdir='${libdir}/pkgconfig'])
+	    [  --with-pkgconfigdir=DIR      pkgconfig file in DIR @<:@LIBDIR/pkgconfig@:>@],
+	    [pkgconfigdir=$withval],
+	    [pkgconfigdir='${libdir}/pkgconfig'])
 AC_SUBST(pkgconfigdir)
 
 subdirs2="include"
@@ -48,6 +50,9 @@ if test "$arch" = linux -a "$enable_util" != "no"; then
 fi
 if test "$enable_example" != "no"; then
 	subdirs2="$subdirs2 example";
+fi
+if test "$enable_test" != "no"; then
+	subdirs2="$subdirs2 test";
 fi
 if test "$enable_mtab" = "no"; then
 	AC_DEFINE(IGNORE_MTAB, 1, [Don't update /etc/mtab])
@@ -120,7 +125,7 @@ if test "$arch" = linux -a "$cross_compiling" != "yes"; then
 	fi
 fi
 
-AC_CONFIG_FILES([fuse3.pc Makefile lib/Makefile util/Makefile example/Makefile include/Makefile doc/Makefile])
+AC_CONFIG_FILES([fuse3.pc Makefile lib/Makefile util/Makefile example/Makefile include/Makefile doc/Makefile test/Makefile])
 AC_OUTPUT
 
 if test "$util_linux_ok" = no; then
