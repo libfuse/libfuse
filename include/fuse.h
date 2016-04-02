@@ -705,7 +705,7 @@ void fuse_exit(struct fuse *f);
  * If you are using multiple threads, you can enjoy all the parallel execution
  * and interactive response benefits of threads, and you get to enjoy all the
  * benefits of race conditions and locking bugs, too. Ensure that any code used
- * in the callback funtion of fuse_operations is also thread-safe.
+ * in the callback function of fuse_operations is also thread-safe.
  *
  * @param f the FUSE handle
  * @return 0 if no error occurred, -1 otherwise
