@@ -1056,6 +1056,27 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*readdirplus) (fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 			 struct fuse_file_info *fi);
+
+	/**
+	 * Read from a directory
+	 *
+	 * Introduced in version 3.0
+	 *
+	 * Call read(2) on a directory. You probably want the readdir* family of
+	 * functions instead of this.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_buf
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param size the size of the request
+	 * @param off the offset of the request
+	 * @param fi file information
+	 */
+	void (*dir_read) (fuse_req_t req, fuse_ino_t ino, size_t size,
+			  off_t off, struct fuse_file_info *fi);
 };
 
 /**

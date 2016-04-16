@@ -1803,6 +1803,20 @@ static void do_fallocate(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
+static void do_dir_read(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_dir_read_in *arg = (struct fuse_dir_read_in *) inarg;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+
+	if (req->f->op.dir_read)
+		req->f->op.dir_read(req, nodeid, arg->size, arg->off, &fi);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -2397,6 +2411,7 @@ static struct {
 	[FUSE_BATCH_FORGET] = { do_batch_forget, "BATCH_FORGET" },
 	[FUSE_READDIRPLUS] = { do_readdirplus,	"READDIRPLUS"},
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
+	[FUSE_DIR_READ]    = { do_dir_read,    "DIR_READ"    },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
