@@ -1,3 +1,9 @@
+FUSE 2.9.6 (2016-04-23)
+=======================
+
+* Tarball now includes documentation.
+* Shared-object version has now been bumped correctly.
+
 FUSE 2.9.5 (2016-01-14)
 =======================
 
