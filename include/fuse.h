@@ -6,8 +6,8 @@
   See the file COPYING.LIB.
 */
 
-#ifndef _FUSE_H_
-#define _FUSE_H_
+#ifndef FUSE_H_
+#define FUSE_H_
 
 /** @file
  *
@@ -936,4 +936,4 @@ struct fuse_session *fuse_get_session(struct fuse *f);
 }
 #endif
 
-#endif /* _FUSE_H_ */
+#endif /* FUSE_H_ */
