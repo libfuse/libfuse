@@ -6,8 +6,8 @@
   See the file COPYING.LIB.
 */
 
-#ifndef _FUSE_H_
-#define _FUSE_H_
+#ifndef FUSE_H_
+#define FUSE_H_
 
 /** @file
  *
@@ -222,7 +222,7 @@ struct fuse_operations {
 
 	/** Get file system statistics
 	 *
-	 * The 'f_frsize', 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
+	 * The 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
 	 *
 	 * Replaced 'struct statfs' parameter with 'struct statvfs' in
 	 * version 2.5
@@ -705,7 +705,7 @@ void fuse_exit(struct fuse *f);
  * If you are using multiple threads, you can enjoy all the parallel execution
  * and interactive response benefits of threads, and you get to enjoy all the
  * benefits of race conditions and locking bugs, too. Ensure that any code used
- * in the callback funtion of fuse_operations is also thread-safe.
+ * in the callback function of fuse_operations is also thread-safe.
  *
  * @param f the FUSE handle
  * @return 0 if no error occurred, -1 otherwise
@@ -936,4 +936,4 @@ struct fuse_session *fuse_get_session(struct fuse *f);
 }
 #endif
 
-#endif /* _FUSE_H_ */
+#endif /* FUSE_H_ */

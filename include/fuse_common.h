@@ -11,8 +11,8 @@
 #error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h> instead."
 #endif
 
-#ifndef _FUSE_COMMON_H_
-#define _FUSE_COMMON_H_
+#ifndef FUSE_COMMON_H_
+#define FUSE_COMMON_H_
 
 #include "fuse_opt.h"
 #include <stdint.h>
@@ -523,4 +523,4 @@ struct _fuse_off_t_must_be_64bit_dummy_struct \
 	{ unsigned _fuse_off_t_must_be_64bit:((sizeof(off_t) == 8) ? 1 : -1); };
 #endif
 
-#endif /* _FUSE_COMMON_H_ */
+#endif /* FUSE_COMMON_H_ */

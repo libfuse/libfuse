@@ -6,8 +6,8 @@
   See the file COPYING.LIB.
 */
 
-#ifndef _FUSE_OPT_H_
-#define _FUSE_OPT_H_
+#ifndef FUSE_OPT_H_
+#define FUSE_OPT_H_
 
 /** @file
  *
@@ -268,4 +268,4 @@ int fuse_opt_match(const struct fuse_opt opts[], const char *opt);
 }
 #endif
 
-#endif /* _FUSE_OPT_H_ */
+#endif /* FUSE_OPT_H_ */
