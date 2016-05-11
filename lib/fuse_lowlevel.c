@@ -2632,7 +2632,7 @@ static void fuse_ll_help(void)
 "    -o big_writes          enable larger than 4kB writes\n"
 "    -o no_remote_lock      disable remote file locking\n"
 "    -o no_remote_flock     disable remote file locking (BSD)\n"
-"    -o no_remote_posix_lock  disable remove file locking (POSIX)\n"
+"    -o no_remote_posix_lock  disable remote file locking (POSIX)\n"
 "    -o [no_]splice_write     use splice to write to the fuse device\n"
 "    -o [no_]splice_move      move data while splicing to the fuse device\n"
 "    -o [no_]splice_read      use splice to read from the fuse device\n"
