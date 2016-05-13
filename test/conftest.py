@@ -35,7 +35,7 @@ def check_test_output(capfd):
         if count == 0 or count - cnt > 0:
             stderr = cp.sub('', stderr, count=count - cnt)
 
-    for pattern in ('exception', 'error', 'warning', 'fatal',
+    for pattern in ('exception', 'error', 'warning', 'fatal', 'traceback',
                     'fault', 'crash(?:ed)?', 'abort(?:ed)'):
         cp = re.compile(r'\b{}\b'.format(pattern), re.IGNORECASE | re.MULTILINE)
         hit = cp.search(stderr)
