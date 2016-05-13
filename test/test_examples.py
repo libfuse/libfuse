@@ -83,6 +83,30 @@ def test_fusexmp_fh(tmpdir, name):
     else:
         umount(mount_process, mnt_dir)
 
+def test_fioc(tmpdir):
+    mnt_dir = str(tmpdir)
+    testfile = os.path.join(mnt_dir, 'fioc')
+    cmdline = [os.path.join(basename, 'example', 'fioc'),
+               '-f', mnt_dir ]
+    mount_process = subprocess.Popen(cmdline)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+
+        base_cmd = [ os.path.join(basename, 'example', 'fioclient'),
+                     testfile ]
+        assert subprocess.check_output(base_cmd) == b'0\n'
+        with open(testfile, 'wb') as fh:
+            fh.write(b'foobar')
+        assert subprocess.check_output(base_cmd) == b'6\n'
+        subprocess.check_call(base_cmd + [ '3' ])
+        with open(testfile, 'rb') as fh:
+            assert fh.read()== b'foo'
+    except:
+        cleanup(mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
 def test_fsel(tmpdir):
     mnt_dir = str(tmpdir)
     cmdline = [os.path.join(basename, 'example', 'fsel'),
