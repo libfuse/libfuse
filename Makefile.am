@@ -12,3 +12,7 @@ pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = fuse3.pc
 
 $(pkgconfig_DATA): config.status
+
+.PHONY: test
+test: all
+	python3 -m pytest test/

@@ -1,0 +1,16 @@
+sudo: required
+language:
+    - python
+    - c
+python: "3.5"
+compiler: gcc
+install:
+    - sudo apt-get update -qq
+    - sudo apt-get install -qq doxygen libtool automake autoconf
+    - sudo python -m pip install pytest
+script:
+    - ./makeconf.sh
+    - ./configure
+    - make -j4
+    - doxygen doc/Doxyfile
+    - python -m pytest test/
