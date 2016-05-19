@@ -1,3 +1,5 @@
+ - Continuous integration is here!
+ 
 What is new in 2.9
 
  - Add "zero copy" support for kernel 2.6.35 or newer
