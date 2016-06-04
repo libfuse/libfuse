@@ -270,26 +270,11 @@ int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
 # define IFTODT(mode) (((mode) & 0170000) >> 12)
 #endif
 
-static void fuse_add_dirent(struct fuse_dirent *dirent,
-                            const char *name, const size_t namelen,
-                            const size_t entlen, const size_t entlen_padded,
-			    const struct stat *stbuf, const off_t off)
-{
-	unsigned padlen = entlen_padded - entlen;
-
-	dirent->ino = stbuf->st_ino;
-	dirent->off = off;
-	dirent->namelen = namelen;
-	dirent->type = IFTODT(stbuf->st_mode);
-	strncpy(dirent->name, name, namelen);
-	if (padlen)
-		memset(dirent->name + namelen, 0, padlen);
-}
 
 static void calculate_dirent_size(const char *name,
-                                  size_t *namelen,
-                                  size_t *entlen,
-                                  size_t *entlen_padded)
+				  size_t *namelen,
+				  size_t *entlen,
+				  size_t *entlen_padded)
 {
   *namelen = strlen(name);
   *entlen = FUSE_NAME_OFFSET + *namelen;
@@ -297,9 +282,9 @@ static void calculate_dirent_size(const char *name,
 }
 
 static void calculate_dirent_plus_size(const char *name,
-                                       size_t *namelen,
-                                       size_t *entlen,
-                                       size_t *entlen_padded)
+				       size_t *namelen,
+				       size_t *entlen,
+				       size_t *entlen_padded)
 {
   *namelen = strlen(name);
   *entlen = FUSE_NAME_OFFSET_DIRENTPLUS + *namelen;
@@ -312,19 +297,23 @@ static void calculate_dirent_plus_size(const char *name,
 size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 			 const char *name, const struct stat *stbuf, off_t off)
 {
-        (void)req;
-        size_t namelen;
+	(void)req;
+	size_t namelen;
 	size_t entlen;
-        size_t entlen_padded;
+	size_t entlen_padded;
+	struct fuse_dirent *dirent;
 
-        calculate_dirent_size(name,&namelen,&entlen,&entlen_padded);
-        if ((buf == NULL) || (entlen_padded > bufsize))
-          return entlen_padded;
+	calculate_dirent_size(name,&namelen,&entlen,&entlen_padded);
+	if ((buf == NULL) || (entlen_padded > bufsize))
+	  return entlen_padded;
 
-        fuse_add_dirent((struct fuse_dirent *) buf,
-                        name, namelen,
-                        entlen, entlen_padded,
-                        stbuf, off);
+	dirent = (struct fuse_dirent*) buf;
+	dirent->ino = stbuf->st_ino;
+	dirent->off = off;
+	dirent->namelen = namelen;
+	dirent->type = IFTODT(stbuf->st_mode);
+	strncpy(dirent->name, name, namelen);
+	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
 	return entlen_padded;
 }
@@ -396,21 +385,26 @@ size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 			      const char *name,
 			      const struct fuse_entry_param *e, off_t off)
 {
-        (void)req;
-        size_t namelen;
+	(void)req;
+	size_t namelen;
 	size_t entlen;
-        size_t entlen_padded;
+	size_t entlen_padded;
 
-        calculate_dirent_plus_size(name,&namelen,&entlen,&entlen_padded);
-        if ((buf == NULL) || (entlen_padded > bufsize))
-          return entlen_padded;
+	calculate_dirent_plus_size(name,&namelen,&entlen,&entlen_padded);
+	if ((buf == NULL) || (entlen_padded > bufsize))
+	  return entlen_padded;
 
-        struct fuse_direntplus *dp = (struct fuse_direntplus *) buf;
-        memset(&dp->entry_out, 0, sizeof(dp->entry_out));
-        fill_entry(&dp->entry_out, e);
-        fuse_add_dirent(&dp->dirent, name, namelen,
-                        entlen, entlen_padded,
-                        &e->attr, off);
+	struct fuse_direntplus *dp = (struct fuse_direntplus *) buf;
+	memset(&dp->entry_out, 0, sizeof(dp->entry_out));
+	fill_entry(&dp->entry_out, e);
+
+	struct fuse_dirent *dirent = &dp->dirent;
+	dirent->ino = e->attr.st_ino;
+	dirent->off = off;
+	dirent->namelen = namelen;
+	dirent->type = IFTODT(e->attr.st_mode);
+	strncpy(dirent->name, name, namelen);
+	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
 	return entlen_padded;
 }
