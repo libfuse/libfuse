@@ -92,7 +92,7 @@ static int receive_message(int sock, void *buf, size_t buflen, int *fdp,
 
 	cmsg = CMSG_FIRSTHDR(&msg);
 	if (cmsg) {
-		if (!cmsg->cmsg_type == SCM_RIGHTS) {
+		if (cmsg->cmsg_type != SCM_RIGHTS) {
 			fprintf(stderr,
 				"ulockmgr_server: unknown control message %d\n",
 				cmsg->cmsg_type);
