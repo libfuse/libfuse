@@ -3,7 +3,7 @@ language:
     - python
     - c
 python: "3.5"
-compiler: gcc
+compiler: gcc clang
 install:
     - sudo apt-get update -qq
     - sudo apt-get install -qq doxygen libtool automake autoconf
@@ -14,3 +14,10 @@ script:
     - make -j4
     - doxygen doc/Doxyfile
     - python -m pytest test/
+    - make clean
+    - make -j4 CC=clang CFLAGS="-fsanitize=address -g -O1"
+    - python -m pytest test/
+    - make clean
+    - make -j4 CC=clang CFLAGS="-fsanitize=thread,undefined -g -O1"
+    - python -m pytest test/
+
