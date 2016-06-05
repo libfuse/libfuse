@@ -266,11 +266,6 @@ int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
 	return res;
 }
 
-#ifndef IFTODT
-# define IFTODT(mode) (((mode) & 0170000) >> 12)
-#endif
-
-
 static void calculate_dirent_size(const char *name,
 				  size_t *namelen,
 				  size_t *entlen,
@@ -311,7 +306,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 	dirent->ino = stbuf->st_ino;
 	dirent->off = off;
 	dirent->namelen = namelen;
-	dirent->type = IFTODT(stbuf->st_mode);
+	dirent->type = (stbuf->st_mode & 0170000) >> 12;
 	strncpy(dirent->name, name, namelen);
 	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
@@ -402,7 +397,7 @@ size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 	dirent->ino = e->attr.st_ino;
 	dirent->off = off;
 	dirent->namelen = namelen;
-	dirent->type = IFTODT(e->attr.st_mode);
+	dirent->type = (e->attr.st_mode & 0170000) >> 12;
 	strncpy(dirent->name, name, namelen);
 	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
