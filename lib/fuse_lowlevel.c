@@ -266,26 +266,6 @@ int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
 	return res;
 }
 
-static void calculate_dirent_size(const char *name,
-				  size_t *namelen,
-				  size_t *entlen,
-				  size_t *entlen_padded)
-{
-  *namelen = strlen(name);
-  *entlen = FUSE_NAME_OFFSET + *namelen;
-  *entlen_padded = FUSE_DIRENT_ALIGN(*entlen);
-}
-
-static void calculate_dirent_plus_size(const char *name,
-				       size_t *namelen,
-				       size_t *entlen,
-				       size_t *entlen_padded)
-{
-  *namelen = strlen(name);
-  *entlen = FUSE_NAME_OFFSET_DIRENTPLUS + *namelen;
-  *entlen_padded = FUSE_DIRENT_ALIGN(*entlen);
-}
-
 
 /* `buf` is allowed to be empty so that the proper size may be
    allocated by the caller */
@@ -298,7 +278,10 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 	size_t entlen_padded;
 	struct fuse_dirent *dirent;
 
-	calculate_dirent_size(name,&namelen,&entlen,&entlen_padded);
+	namelen = strlen(name);
+	entlen = FUSE_NAME_OFFSET + namelen;
+	entlen_padded = FUSE_DIRENT_ALIGN(entlen);
+
 	if ((buf == NULL) || (entlen_padded > bufsize))
 	  return entlen_padded;
 
@@ -385,7 +368,9 @@ size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 	size_t entlen;
 	size_t entlen_padded;
 
-	calculate_dirent_plus_size(name,&namelen,&entlen,&entlen_padded);
+	namelen = strlen(name);
+	entlen = FUSE_NAME_OFFSET_DIRENTPLUS + namelen;
+	entlen_padded = FUSE_DIRENT_ALIGN(entlen);
 	if ((buf == NULL) || (entlen_padded > bufsize))
 	  return entlen_padded;
 
