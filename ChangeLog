@@ -2,6 +2,8 @@ Unreleased Changes
 ==================
 
 * Added SELinux support.
+* Fixed race-condition when session is terminated right after starting
+  a FUSE file system.
 
 FUSE 2.9.6 (2016-04-23)
 =======================
