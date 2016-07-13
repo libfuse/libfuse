@@ -3039,6 +3039,8 @@ static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
 			free_path(f, ino, unlinkpath);
 		}
 	}
+
+	do_forget(f, ino, 1);
 }
 
 static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
