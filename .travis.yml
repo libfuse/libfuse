@@ -11,13 +11,11 @@ install:
 script:
     - ./makeconf.sh
     - ./configure
-    - make -j4
+    - make CFLAGS="-fsanitize=address,undefined -g -O1 -Wall -Werror" all
     - doxygen doc/Doxyfile
     - python -m pytest test/
-    - make clean
-    - make -j4 CC=clang CFLAGS="-fsanitize=address -g -O1"
+    - CC=clang CFLAGS="-fsanitize=address,undefined -g -O1 -Wall -Werror"
+      (./configure && make clean && make all)
     - python -m pytest test/
-    - make clean
-    - make -j4 CC=clang CFLAGS="-fsanitize=thread,undefined -g -O1"
-    - python -m pytest test/
+
 
