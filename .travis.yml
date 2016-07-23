@@ -3,21 +3,28 @@ language:
     - python
     - c
 python: "3.5"
-compiler: gcc clang
+compiler:
+    - gcc
+    - clang
+env:
+    - CC=gcc-6
+    - CC=clang
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    packages:
+    - doxygen
+    - libtool
+    - automake
+    - autoconf
+    - gcc-6
 install:
-    - sudo apt-get update -qq
-    - sudo apt-get install -qq doxygen libtool automake autoconf
     - sudo python -m pip install pytest
 script:
+    - $CC --version
     - ./makeconf.sh
     - ./configure
-    - make -j4
+    - CFLAGS="-fsanitize=address,undefined -g -O1 -Wall -Werror" make
     - doxygen doc/Doxyfile
     - python -m pytest test/
-    - make clean
-    - make -j4 CC=clang CFLAGS="-fsanitize=address -g -O1"
-    - python -m pytest test/
-    - make clean
-    - make -j4 CC=clang CFLAGS="-fsanitize=thread,undefined -g -O1"
-    - python -m pytest test/
-
