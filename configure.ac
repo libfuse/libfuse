@@ -86,17 +86,17 @@ AM_CONDITIONAL(ICONV, test "$am_cv_func_iconv" = yes)
 AC_SUBST(libfuse_libs)
 
 if test -z "$MOUNT_FUSE_PATH"; then
-	MOUNT_FUSE_PATH=/sbin
+	MOUNT_FUSE_PATH='${sbindir}'
 	AC_MSG_NOTICE([MOUNT_FUSE_PATH env var not set, using default $MOUNT_FUSE_PATH])
 fi
 AC_SUBST(MOUNT_FUSE_PATH)
 if test -z "$UDEV_RULES_PATH"; then
-	UDEV_RULES_PATH="${prefix}/lib/udev/rules.d"
+	UDEV_RULES_PATH='${libdir}/udev/rules.d'
 	AC_MSG_NOTICE([UDEV_RULES_PATH env var not set, using default $UDEV_RULES_PATH])
 fi
 AC_SUBST(UDEV_RULES_PATH)
 if test -z "$INIT_D_PATH"; then
-	INIT_D_PATH=/etc/init.d
+	INIT_D_PATH='${sysconfdir}/init.d'
 	AC_MSG_NOTICE([INIT_D_PATH env var not set, using default $INIT_D_PATH])
 fi
 AC_SUBST(INIT_D_PATH)
