@@ -36,10 +36,10 @@ libfuse3_la_SOURCES = 		\
 	$(mount_source)
 
 libfuse3_la_LDFLAGS = -pthread @libfuse_libs@ -version-number 0:0:0 \
-	-Wl,--version-script,$(srcdir)/fuse_versionscript
+	-Wl,--version-script,$(srcdir)/fuse.lds
 
 if NETBSD
 libfuse3_la_LIBADD = -lperfuse -lpuffs
 endif
 
-EXTRA_DIST = fuse_versionscript
+EXTRA_DIST = fuse.lds
