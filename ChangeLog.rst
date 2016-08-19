@@ -2,7 +2,7 @@ Unreleased Changes
 ==================
 
 * The channel interface (``fuse_chan_*`` functions) has been
-  made privat. The `struct fuse_chan_ops` data structure is now
+  made private. The `struct fuse_chan_ops` data structure is now
   opaque.
 
 * Added *clone_fd* option.  This creates a separate device file
