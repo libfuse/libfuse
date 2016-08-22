@@ -1056,6 +1056,47 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*readdirplus) (fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 			 struct fuse_file_info *fi);
+
+	/**
+	 * Set an ACL in the filesystem based on the supplied posix ACL xattr
+	 *
+	 * Valid replies:
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param name name of the posix ACL xattr
+	 * @param value buffer containing the posix ACL xattr
+	 * @param size size of the posix ACL xattr
+	 */
+	void (*setacl) (fuse_req_t req, fuse_ino_t ino, const char *name,
+			const struct posix_acl_xattr *value, size_t size);
+
+	/**
+	 * Read an ACL from the filesystem into a posix ACL xattr
+	 *
+	 * If size is zero, the size of the value should be sent with
+	 * fuse_reply_xattr.
+	 *
+	 * If the size is non-zero, and the value fits in the buffer, the
+	 * value should be sent with fuse_reply_buf.
+	 *
+	 * If the size is too small for the value, the ERANGE error should
+	 * be sent.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_buf
+	 *   fuse_reply_data
+	 *   fuse_reply_xattr
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param name of the posix ACL xattr
+	 * @param size maximum size of the value to send
+	 */
+	void (*getacl) (fuse_req_t req, fuse_ino_t ino, const char *name,
+			size_t size);
 };
 
 /**

@@ -577,6 +577,32 @@ static int iconv_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
+static int iconv_setacl(const char *path, enum posix_acl_type type,
+			struct fuse_acl *acl)
+{
+	struct iconv *ic = iconv_get();
+	char *newpath;
+	int err = iconv_convpath(ic, path, &newpath, 0);
+	if (!err) {
+		err = fuse_fs_setacl(ic->next, path, type, acl);
+		free(newpath);
+	}
+	return err;
+}
+
+static int iconv_getacl(const char *path, enum posix_acl_type type,
+			 struct fuse_acl **pacl)
+{
+	struct iconv *ic = iconv_get();
+	char *newpath;
+	int err = iconv_convpath(ic, path, &newpath, 0);
+	if (!err) {
+		err = fuse_fs_getacl(ic->next, path, type, pacl);
+		free(newpath);
+	}
+	return err;
+}
+
 static void *iconv_init(struct fuse_conn_info *conn)
 {
 	struct iconv *ic = iconv_get();
@@ -634,6 +660,8 @@ static const struct fuse_operations iconv_oper = {
 	.lock		= iconv_lock,
 	.flock		= iconv_flock,
 	.bmap		= iconv_bmap,
+	.setacl		= iconv_setacl,
+	.getacl		= iconv_getacl,
 
 	.flag_nopath = 1,
 };

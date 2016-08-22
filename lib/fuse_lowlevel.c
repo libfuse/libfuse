@@ -1524,12 +1524,16 @@ static void do_statfs(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_setxattr_in *arg = (struct fuse_setxattr_in *) inarg;
+	struct fuse_ll *f = req->f;
 	char *name = PARAM(arg);
 	char *value = name + strlen(name) + 1;
 
-	if (req->f->op.setxattr)
-		req->f->op.setxattr(req, nodeid, name, value, arg->size,
-				    arg->flags);
+	if ((req->f->conn.want & FUSE_CAP_POSIX_ACL) && is_posix_acl(name))
+		f->op.setacl(req, nodeid, name, (struct posix_acl_xattr *)value,
+			     arg->size);
+	else if (f->op.setxattr)
+		f->op.setxattr(req, nodeid, name, value, arg->size,
+			       arg->flags);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1537,9 +1541,13 @@ static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_getxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_getxattr_in *arg = (struct fuse_getxattr_in *) inarg;
+	struct fuse_ll *f = req->f;
+	char *name = PARAM(arg);
 
-	if (req->f->op.getxattr)
-		req->f->op.getxattr(req, nodeid, PARAM(arg), arg->size);
+	if ((req->f->conn.want & FUSE_CAP_POSIX_ACL) && is_posix_acl(name))
+		f->op.getacl(req, nodeid, name, arg->size);
+	else if (f->op.getxattr)
+		f->op.getxattr(req, nodeid, name, arg->size);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1558,7 +1566,9 @@ static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
 
-	if (req->f->op.removexattr)
+	if ((req->f->conn.want & FUSE_CAP_POSIX_ACL) && is_posix_acl(name))
+		req->f->op.setacl(req, nodeid, name, NULL, 0);
+	else if (req->f->op.removexattr)
 		req->f->op.removexattr(req, nodeid, name);
 	else
 		fuse_reply_err(req, ENOSYS);
@@ -1884,6 +1894,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_WRITEBACK_CACHE;
 		if (arg->flags & FUSE_NO_OPEN_SUPPORT)
 			f->conn.capable |= FUSE_CAP_NO_OPEN_SUPPORT;
+		if (arg->flags & FUSE_POSIX_ACL)
+			f->conn.capable |= FUSE_CAP_POSIX_ACL;
 	} else {
 		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
@@ -1925,6 +1937,9 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want |= FUSE_CAP_ASYNC_DIO;
 	if (f->writeback_cache)
 		f->conn.want |= FUSE_CAP_WRITEBACK_CACHE;
+	if ((f->conn.capable & FUSE_CAP_POSIX_ACL) && f->op.setacl &&
+	    f->op.getacl)
+		f->conn.want |= FUSE_CAP_POSIX_ACL;
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
@@ -1981,6 +1996,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_ASYNC_DIO;
 	if (f->conn.want & FUSE_CAP_WRITEBACK_CACHE)
 		outarg.flags |= FUSE_WRITEBACK_CACHE;
+	if (f->conn.want & FUSE_CAP_POSIX_ACL)
+		outarg.flags |= FUSE_POSIX_ACL;
 	outarg.max_readahead = f->conn.max_readahead;
 	outarg.max_write = f->conn.max_write;
 	if (f->conn.proto_minor >= 13) {

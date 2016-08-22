@@ -125,6 +125,13 @@ FUSE_3.0 {
 		fuse_lowlevel_notify_delete;
 		fuse_fs_flock;
 		fuse_fs_fallocate;
+		fuse_fs_setacl;
+		fuse_fs_getacl;
+		fuse_acl_from_xattr;
+		fuse_acl_to_xattr;
+		fuse_acl_equiv_mode;
+		fuse_acl_chmod;
+		fuse_acl_mknod;
 
 	local:
 		*;

@@ -36,6 +36,7 @@
 #include <sys/time.h>
 #include <sys/mman.h>
 #include <sys/file.h>
+#include <endian.h>
 
 #define FUSE_NODE_SLAB 1
 
@@ -1462,6 +1463,244 @@ static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
 		stbuf->st_gid = f->conf.gid;
 }
 
+static enum posix_acl_type fuse_get_acl_type(const char *name)
+{
+	if (!strcmp(name, POSIX_ACL_XATTR_ACCESS))
+		return POSIX_ACL_TYPE_ACCESS;
+	if (!strcmp(name, POSIX_ACL_XATTR_DEFAULT))
+		return POSIX_ACL_TYPE_DEFAULT;
+	return -1;
+}
+
+static size_t fuse_acl_size(int count)
+{
+	return sizeof(struct fuse_acl) + count * sizeof(struct fuse_acl_entry);
+}
+
+static struct fuse_acl *fuse_alloc_acl(int count)
+{
+	struct fuse_acl *acl;
+	acl = calloc(1, fuse_acl_size(count));
+	if (acl)
+		acl->count = count;
+	return acl;
+}
+
+static struct fuse_acl *fuse_clone_acl(struct fuse_acl *acl)
+{
+	struct fuse_acl *a = fuse_alloc_acl(acl->count);
+	if (a)
+		memcpy(a, acl, fuse_acl_size(acl->count));
+	return a;
+}
+
+static int fuse_acl_xattr_count(int size)
+{
+	if (size < sizeof(struct posix_acl_xattr))
+		return -1;
+	size -=  sizeof(struct posix_acl_xattr);
+	if (size % sizeof(struct posix_acl_xattr_entry))
+		return -1;
+	return size / sizeof(struct posix_acl_xattr_entry);
+}
+
+static size_t fuse_acl_xattr_size(struct fuse_acl *acl)
+{
+	return sizeof(struct posix_acl_xattr) +
+	       acl->count * sizeof(struct posix_acl_xattr_entry);
+}
+
+int fuse_acl_from_xattr(const struct posix_acl_xattr *xattr, size_t size,
+			struct fuse_acl **pacl)
+{
+	struct fuse_acl *acl;
+	int count, i;
+
+	count = fuse_acl_xattr_count(size);
+	if (count < 0)
+		return -EINVAL;
+	if (le32toh(xattr->version) != POSIX_ACL_XATTR_VERSION)
+		return -EINVAL;
+
+	acl = fuse_alloc_acl(count);
+	if (!acl)
+		return -ENOMEM;
+
+	acl->count = count;
+	for (i = 0; i < count; i++) {
+		const struct posix_acl_xattr_entry *xe = &xattr->entries[i];
+		struct fuse_acl_entry *e = &acl->entries[i];
+		e->tag = le16toh(xe->tag);
+		e->perm = le16toh(xe->perm);
+		e->id = le32toh(xe->id);
+	}
+	*pacl = acl;
+	return 0;
+}
+
+ssize_t fuse_acl_to_xattr(struct fuse_acl *acl, struct posix_acl_xattr **pxattr)
+{
+	size_t size = fuse_acl_xattr_size(acl);
+	struct posix_acl_xattr *xattr;
+	int i;
+
+	xattr = malloc(size);
+	if (!xattr)
+		return -ENOMEM;
+
+	xattr->version = htole32(POSIX_ACL_XATTR_VERSION);
+	for (i = 0; i < acl->count; i++) {
+		struct posix_acl_xattr_entry *xe = &xattr->entries[i];
+		struct fuse_acl_entry *e = &acl->entries[i];
+		xe->tag = htole16(e->tag);
+		xe->perm = htole16(e->perm);
+		xe->id = htole32(e->id);
+	}
+	*pxattr = xattr;
+	return size;
+}
+
+int fuse_acl_equiv_mode(struct fuse_acl *acl, uint32_t *pmode)
+{
+	uint32_t mode = 0;
+	int not_equiv = 0;
+	int i;
+
+	for (i = 0; i < acl->count; i++) {
+		struct fuse_acl_entry *e = &acl->entries[i];
+		switch (e->tag) {
+		case POSIX_ACL_TAG_USER_OBJ:
+			mode |= (e->perm & 00007) << 6;
+			break;
+		case POSIX_ACL_TAG_GROUP_OBJ:
+			mode |= (e->perm & 00007) << 3;
+			break;
+		case POSIX_ACL_TAG_OTHER:
+			mode |= e->perm & 00007;
+			break;
+		case POSIX_ACL_TAG_MASK:
+			mode = (mode & ~00070) | ((e->perm & 00007) << 3);
+			not_equiv = 1;
+			break;
+		case POSIX_ACL_TAG_USER:
+		case POSIX_ACL_TAG_GROUP:
+			not_equiv = 1;
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	if (pmode)
+		*pmode = mode;
+	return not_equiv;
+}
+
+int fuse_acl_chmod(struct fuse_acl *acl, mode_t mode)
+{
+	int i;
+	struct fuse_acl_entry *e, *group_e = NULL, *mask_e = NULL;
+
+	for (i = 0; i < acl->count; i++) {
+		e = &acl->entries[i];
+		switch (e->tag) {
+		case POSIX_ACL_TAG_USER_OBJ:
+			e->perm = (mode >> 6) & 00007;
+			break;
+		case POSIX_ACL_TAG_GROUP_OBJ:
+			group_e = e;
+			break;
+		case POSIX_ACL_TAG_OTHER:
+			e->perm = mode & 00007;
+			break;
+		case POSIX_ACL_TAG_MASK:
+			mask_e = e;
+			break;
+		}
+	}
+
+	if (mask_e) {
+		mask_e->perm = (mode >> 3) & 00007;
+	} else {
+		if (!group_e)
+			return -EIO;
+		group_e->perm = (mode >> 3) & 00007;
+	}
+	return 0;
+}
+
+int fuse_acl_mknod(struct fuse_acl *parent_acl, mode_t *pmode, bool is_dir,
+		   struct fuse_acl **default_acl, struct fuse_acl **acl)
+{
+	struct fuse_acl *a = NULL, *d = NULL;
+	struct fuse_acl_entry *group_obj = NULL, *mask_obj = NULL;
+	mode_t mode = *pmode;
+	int i;
+	int ret = 0;
+
+	if (S_ISLNK(*pmode))
+		goto out;
+
+	a = fuse_clone_acl(parent_acl);
+	if (!a)
+		return -ENOMEM;
+
+	for (i = 0; i < parent_acl->count; i++) {
+		struct fuse_acl_entry *ae = &a->entries[i];
+		switch (ae->tag) {
+		case POSIX_ACL_TAG_USER_OBJ:
+			ae->perm &= (mode >> 6) | ~00007;
+			mode &= (ae->perm << 6) | ~00700;
+			break;
+		case POSIX_ACL_TAG_USER:
+		case POSIX_ACL_TAG_GROUP:
+			break;
+		case POSIX_ACL_TAG_GROUP_OBJ:
+			group_obj = ae;
+			break;
+		case POSIX_ACL_TAG_MASK:
+			mask_obj = ae;
+			break;
+		case POSIX_ACL_TAG_OTHER:
+			ae->perm &= mode | ~00007;
+			mode &= ae->perm | ~00007;
+			break;
+		default:
+			ret = -EIO;
+			goto out_error;
+		}
+	}
+	if (mask_obj)
+		group_obj = mask_obj;
+	if (!group_obj) {
+		ret = -EIO;
+		goto out_error;
+	}
+	group_obj->perm &= (mode >> 3) | ~00007;
+	mode &= (group_obj->perm << 3) | ~00070;
+	*pmode = (*pmode & ~00777) | mode;
+
+	if (is_dir) {
+		d = fuse_clone_acl(parent_acl);
+		if (!d) {
+			ret = -ENOMEM;
+			goto out_error;
+		}
+	}
+
+out:
+	*acl = a;
+	*default_acl = d;
+	return ret;
+
+out_error:
+	free(a);
+	free(d);
+	a = NULL;
+	d = NULL;
+	goto out;
+}
+
 static struct fuse *req_fuse(fuse_req_t req)
 {
 	return (struct fuse *) fuse_req_userdata(req);
@@ -2273,6 +2512,43 @@ int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
 		return -ENOSYS;
 }
 
+int fuse_fs_setacl(struct fuse_fs *fs, const char *path, enum posix_acl_type type,
+		   struct fuse_acl *acl)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	int ret = -ENOTSUP;
+
+	if (fs->op.setacl) {
+		ret = fs->op.setacl(path, type, acl);
+		/*
+		 * Cannot return -ENOSYS as this will cause the kernel to
+		 * think that the fs doesn't support setxattr.
+		 */
+		if (ret == -ENOSYS)
+			ret = -ENOTSUP;
+	}
+	return ret;
+}
+
+/* On success caller is responsible for freeing *pacl */
+int fuse_fs_getacl(struct fuse_fs *fs, const char *path,
+		   enum posix_acl_type type, struct fuse_acl **pacl)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	int ret = -ENOTSUP;
+
+	if (fs->op.getacl) {
+		ret = fs->op.getacl(path, type, pacl);
+		/*
+		 * Cannot return -ENOSYS as this will cause the kernel to
+		 * think that the fs doesn't support getxattr.
+		 */
+		if (ret == -ENOSYS)
+			ret = -ENOTSUP;
+	}
+	return ret;
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -2523,6 +2799,8 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn)
 		conn->want &= ~FUSE_CAP_POSIX_LOCKS;
 	if (!fs->op.flock)
 		conn->want &= ~FUSE_CAP_FLOCK_LOCKS;
+	if (!fs->op.setacl || !fs->op.getacl)
+		conn->want &= ~FUSE_CAP_POSIX_ACL;
 	if (fs->op.init)
 		fs->user_data = fs->op.init(conn);
 }
@@ -4204,6 +4482,90 @@ static void fuse_lib_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 	reply_err(req, err);
 }
 
+static void fuse_lib_setacl(fuse_req_t req, fuse_ino_t ino, const char *name,
+			    const struct posix_acl_xattr *value, size_t size)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	enum posix_acl_type type;
+	struct fuse_acl *acl = NULL;
+	char *path;
+	struct fuse_intr_data d;
+	int err;
+
+	type = fuse_get_acl_type(name);
+	if (type < 0) {
+		err = -EINVAL;
+		goto out;
+	}
+	err = get_path(f, ino, &path);
+	if (err)
+		goto out;
+	if (value) {
+		err = fuse_acl_from_xattr(value, size, &acl);
+		if (err)
+			goto out_free_path;
+	}
+
+	fuse_prepare_interrupt(f, req, &d);
+	err = fuse_fs_setacl(f->fs, path, type, acl);
+	fuse_finish_interrupt(f, req, &d);
+
+	free(acl);
+out_free_path:
+	free_path(f, ino, path);
+out:
+	reply_err(req, err);
+}
+
+static void fuse_lib_getacl(fuse_req_t req, fuse_ino_t ino, const char *name,
+			    size_t size)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	enum posix_acl_type type;
+	struct fuse_acl *acl;
+	char *path;
+	struct fuse_intr_data d;
+	struct posix_acl_xattr *xattr;
+	ssize_t xattr_size;
+	int err;
+
+	err = -EINVAL;
+	type = fuse_get_acl_type(name);
+	if (type < 0)
+		goto out;
+	err = get_path(f, ino, &path);
+	if (err)
+		goto out;
+	fuse_prepare_interrupt(f, req, &d);
+	err = fuse_fs_getacl(f->fs, path, type, &acl);
+	fuse_finish_interrupt(f, req, &d);
+	if (err)
+		goto out_free_path;
+	if (size) {
+		xattr_size = fuse_acl_to_xattr(acl, &xattr);
+		if (xattr_size > 0) {
+			if (xattr_size > size) {
+				err = -ERANGE;
+			} else {
+				fuse_reply_buf(req, (char *)xattr, xattr_size);
+				err = 0;
+			}
+			free(xattr);
+		} else {
+			err = (int)xattr_size;
+		}
+	} else {
+		fuse_reply_xattr(req, fuse_acl_xattr_size(acl));
+	}
+
+	free(acl);
+out_free_path:
+	free_path(f, ino, path);
+out:
+	if (err)
+		reply_err(req, err);
+}
+
 static int clean_delay(struct fuse *f)
 {
 	/*
@@ -4300,6 +4662,8 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.ioctl = fuse_lib_ioctl,
 	.poll = fuse_lib_poll,
 	.fallocate = fuse_lib_fallocate,
+	.setacl = fuse_lib_setacl,
+	.getacl = fuse_lib_getacl,
 };
 
 int fuse_notify_poll(struct fuse_pollhandle *ph)

@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/uio.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -76,6 +77,67 @@ enum fuse_fill_dir_flags {
 typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
 				const struct stat *stbuf, off_t off,
 				enum fuse_fill_dir_flags flags);
+
+struct fuse_acl_entry {
+	uint16_t		tag;
+	uint16_t		perm;
+	uint32_t		id;
+};
+
+struct fuse_acl {
+	int			count;
+	struct fuse_acl_entry	entries[0];
+};
+
+/**
+ * Convert a raw posix ACL xattr to a FUSE ACL object
+ *
+ * @param xattr raw posix ACL xattr data
+ * @param size xattr data size
+ * @param acl storage for pointer to newly allocated acl
+ * @return 0 on success, -errno on error
+ */
+int fuse_acl_from_xattr(const struct posix_acl_xattr *xattr, size_t size,
+			struct fuse_acl **pacl);
+
+/**
+ * Convert a FUSE ACL object to a raw posix ACL xattr
+ *
+ * @param acl FUSE ACL object
+ * @param pxattr pointer for returning storage to raw posix ACL xattr
+ * @return the size of the xattr on success or -errno on error
+ */
+ssize_t fuse_acl_to_xattr(struct fuse_acl *acl, struct posix_acl_xattr **pxattr);
+
+/**
+ * Get the equivalent file mode for an ACL
+ *
+ * @param acl FUSE ACL object
+ * @param pmode storage for returning the file mode
+ * @return 0 if the ACL can be exactly represented by the file mode
+ *   permission bits, 1 if it cannot, and -errno on error.
+ */
+int fuse_acl_equiv_mode(struct fuse_acl *acl, uint32_t *pmode);
+
+/**
+ * Update the ACL based on the file mode
+ *
+ * @param acl FUSE ACL object
+ * @param mode new file mode
+ */
+int fuse_acl_chmod(struct fuse_acl *acl, mode_t mode);
+
+/**
+ * Get ACLs for new file
+ *
+ * @param parent_acl default ACL of new file's parent
+ * @param pmode pointer to mode of new file, may be updated based on ACL
+ * @param is_dir set to true if new file is a directory, false otherwise
+ * @param default_acl pointer for returning default ACL of new file (or NULL)
+ * @param acl pointer for returning access ACL of new file (or NULL)
+ */
+int fuse_acl_mknod(struct fuse_acl *parent_acl, mode_t *pmode, bool is_dir,
+		   struct fuse_acl **default_acl, struct fuse_acl **acl);
 
 /**
  * The file system operations:
@@ -574,6 +636,24 @@ struct fuse_operations {
 	 */
 	int (*fallocate) (const char *, int, off_t, off_t,
 			  struct fuse_file_info *);
+
+	/**
+	 * Sets posix acls
+	 *
+	 * Sets or replaces a posix acl and updates the file mode for the
+	 * specified file and type.  If the acl is NULL then any existing acl
+	 * is removed.  Returns 0 on success, -errno otherwise.
+	 */
+	int (*setacl) (const char *, enum posix_acl_type, struct fuse_acl *);
+
+	/**
+	 * Fetches posix acls
+	 *
+	 * If the specified file has an acl of the specified type, passes the
+	 * acl back to the caller in a newly allocated buffer and returns 0.
+	 * Returns -errno on failure.
+	 */
+	int (*getacl) (const char *, enum posix_acl_type, struct fuse_acl **);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -881,6 +961,10 @@ int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 		 unsigned *reventsp);
 int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
 		 off_t offset, off_t length, struct fuse_file_info *fi);
+int fuse_fs_setacl(struct fuse_fs *fs, const char *path, enum posix_acl_type type,
+		   struct fuse_acl *acl);
+int fuse_fs_getacl(struct fuse_fs *fs, const char *path,
+		   enum posix_acl_type type, struct fuse_acl **pacl);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn);
 void fuse_fs_destroy(struct fuse_fs *fs);
 
