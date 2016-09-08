@@ -563,6 +563,32 @@ static int subdir_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
+static int subdir_setacl(const char *path, enum posix_acl_type type,
+			 struct fuse_acl *acl)
+{
+	struct subdir *d = subdir_get();
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
+		err = fuse_fs_setacl(d->next, newpath, type, acl);
+		free(newpath);
+	}
+	return err;
+}
+
+static int subdir_getacl(const char *path, enum posix_acl_type type,
+			 struct fuse_acl **pacl)
+{
+	struct subdir *d = subdir_get();
+	char *newpath;
+	int err = subdir_addpath(d, path, &newpath);
+	if (!err) {
+		err = fuse_fs_getacl(d->next, newpath, type, pacl);
+		free(newpath);
+	}
+	return err;
+}
+
 static void *subdir_init(struct fuse_conn_info *conn)
 {
 	struct subdir *d = subdir_get();
@@ -616,6 +642,8 @@ static const struct fuse_operations subdir_oper = {
 	.lock		= subdir_lock,
 	.flock		= subdir_flock,
 	.bmap		= subdir_bmap,
+	.setacl		= subdir_setacl,
+	.getacl		= subdir_getacl,
 
 	.flag_nopath = 1,
 };

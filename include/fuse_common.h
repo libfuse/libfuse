@@ -15,6 +15,7 @@
 #define FUSE_COMMON_H_
 
 #include "fuse_opt.h"
+#include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -102,6 +103,7 @@ struct fuse_file_info {
  * FUSE_CAP_ASYNC_DIO: asynchronous direct I/O submission
  * FUSE_CAP_WRITEBACK_CACHE: use writeback cache for buffered writes
  * FUSE_CAP_NO_OPEN_SUPPORT: support zero-message opens
+ * FUSE_CAP_POSIX_ACL: filesystem supports posix acls
  */
 #define FUSE_CAP_ASYNC_READ		(1 << 0)
 #define FUSE_CAP_POSIX_LOCKS		(1 << 1)
@@ -120,6 +122,7 @@ struct fuse_file_info {
 #define FUSE_CAP_ASYNC_DIO		(1 << 15)
 #define FUSE_CAP_WRITEBACK_CACHE	(1 << 16)
 #define FUSE_CAP_NO_OPEN_SUPPORT	(1 << 17)
+#define FUSE_CAP_POSIX_ACL		(1 << 18)
 
 /**
  * Ioctl flags
@@ -496,6 +499,43 @@ int fuse_set_signal_handlers(struct fuse_session *se);
  * fuse_set_signal_handlers()
  */
 void fuse_remove_signal_handlers(struct fuse_session *se);
+
+/* ----------------------------------------------------------- *
+ * Posix ACLs						       *
+ * ----------------------------------------------------------- */
+
+#define POSIX_ACL_XATTR_VERSION 0x00002
+#define POSIX_ACL_XATTR_ACCESS "system.posix_acl_access"
+#define POSIX_ACL_XATTR_DEFAULT "system.posix_acl_default"
+
+enum posix_acl_type {
+	POSIX_ACL_TYPE_ACCESS,
+	POSIX_ACL_TYPE_DEFAULT,
+};
+
+#define POSIX_ACL_TAG_USER_OBJ	0x01
+#define POSIX_ACL_TAG_USER	0x02
+#define POSIX_ACL_TAG_GROUP_OBJ	0x04
+#define POSIX_ACL_TAG_GROUP	0x08
+#define POSIX_ACL_TAG_MASK	0x10
+#define POSIX_ACL_TAG_OTHER	0x20
+
+struct posix_acl_xattr_entry {
+	uint16_t	tag;
+	uint16_t	perm;
+	uint32_t	id;
+};
+
+struct posix_acl_xattr {
+	uint32_t			version;
+	struct posix_acl_xattr_entry	entries[0];
+};
+
+static inline int is_posix_acl(const char *name)
+{
+	return !strcmp(name, POSIX_ACL_XATTR_ACCESS) ||
+	       !strcmp(name, POSIX_ACL_XATTR_DEFAULT);
+}
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *
