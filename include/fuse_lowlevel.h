@@ -1394,14 +1394,14 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph);
 /**
  * Notify to invalidate cache for an inode
  *
- * @param ch the channel through which to send the invalidation
+ * @param se the session object
  * @param ino the inode number
  * @param off the offset in the inode where to start invalidating
  *            or negative to invalidate attributes only
  * @param len the amount of cache to invalidate or 0 for all
  * @return zero for success, -errno for failure
  */
-int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
+int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 				     off_t off, off_t len);
 
 /**
@@ -1412,13 +1412,13 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
  * don't call it with a lock held that can also be held by a filesystem
  * operation.
  *
- * @param ch the channel through which to send the invalidation
+ * @param se the session object
  * @param parent inode number
  * @param name file name
  * @param namelen strlen() of file name
  * @return zero for success, -errno for failure
  */
-int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
+int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen);
 
 /**
@@ -1430,14 +1430,14 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
  * don't call it with a lock held that can also be held by a filesystem
  * operation.
  *
- * @param ch the channel through which to send the notification
+ * @param se the session object
  * @param parent inode number
  * @param child inode number
  * @param name file name
  * @param namelen strlen() of file name
  * @return zero for success, -errno for failure
  */
-int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
+int fuse_lowlevel_notify_delete(struct fuse_session *se,
 				fuse_ino_t parent, fuse_ino_t child,
 				const char *name, size_t namelen);
 
@@ -1455,14 +1455,14 @@ int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
  * If this function returns an error, then the store wasn't fully
  * completed, but it may have been partially completed.
  *
- * @param ch the channel through which to send the invalidation
+ * @param se the session object
  * @param ino the inode number
  * @param offset the starting offset into the file to store to
  * @param bufv buffer vector
  * @param flags flags controlling the copy
  * @return zero for success, -errno for failure
  */
-int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
+int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 			       off_t offset, struct fuse_bufvec *bufv,
 			       enum fuse_buf_copy_flags flags);
 /**
@@ -1483,14 +1483,14 @@ int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
  * buffer.  For dirty pages the write() method will be called
  * regardless of having been retrieved previously.
  *
- * @param ch the channel through which to send the invalidation
+ * @param se the session object
  * @param ino the inode number
  * @param size the number of bytes to retrieve
  * @param offset the starting offset into the file to retrieve from
  * @param cookie user data to supply to the reply callback
  * @return zero for success, -errno for failure
  */
-int fuse_lowlevel_notify_retrieve(struct fuse_chan *ch, fuse_ino_t ino,
+int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 				  size_t size, off_t offset, void *cookie);
 
 

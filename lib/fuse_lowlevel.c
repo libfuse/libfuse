@@ -2112,17 +2112,17 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
 	}
 }
 
-int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
+int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 				     off_t off, off_t len)
 {
 	struct fuse_notify_inval_inode_out outarg;
 	struct fuse_ll *f;
 	struct iovec iov[2];
 
-	if (!ch)
+	if (!se)
 		return -EINVAL;
 
-	f = fuse_chan_session(ch)->f;
+	f = se->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2133,20 +2133,20 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_chan *ch, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	return send_notify_iov(f, ch, FUSE_NOTIFY_INVAL_INODE, iov, 2);
+	return send_notify_iov(f, se->ch, FUSE_NOTIFY_INVAL_INODE, iov, 2);
 }
 
-int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
+int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen)
 {
 	struct fuse_notify_inval_entry_out outarg;
 	struct fuse_ll *f;
 	struct iovec iov[3];
 
-	if (!ch)
+	if (!se)
 		return -EINVAL;
 
-	f = fuse_chan_session(ch)->f;
+	f = se->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2159,10 +2159,10 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_chan *ch, fuse_ino_t parent,
 	iov[2].iov_base = (void *)name;
 	iov[2].iov_len = namelen + 1;
 
-	return send_notify_iov(f, ch, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
+	return send_notify_iov(f, se->ch, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
 }
 
-int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
+int fuse_lowlevel_notify_delete(struct fuse_session *se,
 				fuse_ino_t parent, fuse_ino_t child,
 				const char *name, size_t namelen)
 {
@@ -2170,10 +2170,10 @@ int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
 	struct fuse_ll *f;
 	struct iovec iov[3];
 
-	if (!ch)
+	if (!se)
 		return -EINVAL;
 
-	f = fuse_chan_session(ch)->f;
+	f = se->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2190,10 +2190,10 @@ int fuse_lowlevel_notify_delete(struct fuse_chan *ch,
 	iov[2].iov_base = (void *)name;
 	iov[2].iov_len = namelen + 1;
 
-	return send_notify_iov(f, ch, FUSE_NOTIFY_DELETE, iov, 3);
+	return send_notify_iov(f, se->ch, FUSE_NOTIFY_DELETE, iov, 3);
 }
 
-int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
+int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 			       off_t offset, struct fuse_bufvec *bufv,
 			       enum fuse_buf_copy_flags flags)
 {
@@ -2204,10 +2204,10 @@ int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
 	size_t size = fuse_buf_size(bufv);
 	int res;
 
-	if (!ch)
+	if (!se)
 		return -EINVAL;
 
-	f = fuse_chan_session(ch)->f;
+	f = se->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2227,7 +2227,7 @@ int fuse_lowlevel_notify_store(struct fuse_chan *ch, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	res = fuse_send_data_iov(f, ch, iov, 2, bufv, flags);
+	res = fuse_send_data_iov(f, se->ch, iov, 2, bufv, flags);
 	if (res > 0)
 		res = -res;
 
@@ -2278,7 +2278,7 @@ out:
 		fuse_ll_clear_pipe(f);
 }
 
-int fuse_lowlevel_notify_retrieve(struct fuse_chan *ch, fuse_ino_t ino,
+int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 				  size_t size, off_t offset, void *cookie)
 {
 	struct fuse_notify_retrieve_out outarg;
@@ -2287,10 +2287,10 @@ int fuse_lowlevel_notify_retrieve(struct fuse_chan *ch, fuse_ino_t ino,
 	struct fuse_retrieve_req *rreq;
 	int err;
 
-	if (!ch)
+	if (!se)
 		return -EINVAL;
 
-	f = fuse_chan_session(ch)->f;
+	f = se->f;
 	if (!f)
 		return -ENODEV;
 
@@ -2316,7 +2316,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_chan *ch, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	err = send_notify_iov(f, ch, FUSE_NOTIFY_RETRIEVE, iov, 2);
+	err = send_notify_iov(f, se->ch, FUSE_NOTIFY_RETRIEVE, iov, 2);
 	if (err) {
 		pthread_mutex_lock(&f->lock);
 		list_del_nreq(&rreq->nreq);

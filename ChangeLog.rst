@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* The ``fuse_lowlevel_notify_*`` functions now all take a `struct
+  fuse_session` parameter instead of a `struct fuse_chan`.
+
 * The channel interface (``fuse_chan_*`` functions) has been
   made private. The `struct fuse_chan_ops` data structure is now
   opaque.
