@@ -1653,24 +1653,25 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
 void fuse_session_destroy(struct fuse_session *se);
 
 /**
- * Exit a session.
+ * Flag a session as terminated.
  *
- * This function is invoked by the POSIX signal handlers, when registered using:
- * * fuse_set_signal_handlers()
+ * This function is invoked by the POSIX signal handlers, when
+ * registered using fuse_set_signal_handlers(). It will cause any
+ * running event loops to terminate on the next opportunity.
  *
  * @param se the session
  */
 void fuse_session_exit(struct fuse_session *se);
 
 /**
- * Reset the exited status of a session
+ * Reset the terminated flag of a session
  *
  * @param se the session
  */
 void fuse_session_reset(struct fuse_session *se);
 
 /**
- * Query the exited status of a session
+ * Query the terminated flag of a session
  *
  * @param se the session
  * @return 1 if exited, 0 if not exited

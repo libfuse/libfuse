@@ -677,7 +677,10 @@ void fuse_destroy(struct fuse *f);
 int fuse_loop(struct fuse *f);
 
 /**
- * Exit from event loop
+ * Flag session as terminated
+ *
+ * This function will cause any running event loops to exit on
+ * the next opportunity.
  *
  * @param f the FUSE handle
  */
