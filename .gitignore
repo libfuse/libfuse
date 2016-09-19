@@ -34,3 +34,4 @@ config.*
 /.pc
 /patches*
 /m4
+TAGS
