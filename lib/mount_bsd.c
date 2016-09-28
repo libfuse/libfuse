@@ -144,53 +144,6 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
-void fuse_unmount_compat22(const char *mountpoint)
-{
-	char dev[128];
-	char *ssc, *umount_cmd;
-	FILE *sf;
-	int rv;
-	char seekscript[] =
-		/* error message is annoying in help output */
-		"exec 2>/dev/null; "
-		"/usr/bin/fstat " FUSE_DEV_TRUNK "* | "
-		"/usr/bin/awk 'BEGIN{ getline; if (! ($3 == \"PID\" && $10 == \"NAME\")) exit 1; }; "
-		"              { if ($3 == %d) print $10; }' | "
-		"/usr/bin/sort | "
-		"/usr/bin/uniq | "
-		"/usr/bin/awk '{ i += 1; if (i > 1){ exit 1; }; printf; }; END{ if (i == 0) exit 1; }'";
-
-	(void) mountpoint;
-
-	/*
-	 * If we don't know the fd, we have to resort to the scripted
-	 * solution -- iterating over the fd-s is unpractical, as we
-	 * don't know how many of open files we have. (This could be
-	 * looked up in procfs -- however, that's optional on FBSD; or
-	 * read out from the kmem -- however, that's bound to
-	 * privileges (in fact, that's what happens when we call the
-	 * setgid kmem fstat(1) utility).
-	 */
-	if (asprintf(&ssc, seekscript, getpid()) == -1)
-		return;
-
-	errno = 0;
-	sf = popen(ssc, "r");
-	free(ssc);
-	if (! sf)
-		return;
-
-	fgets(dev, sizeof(dev), sf);
-	rv = pclose(sf);
-	if (rv)
-		return;
-
-	if (asprintf(&umount_cmd, "/sbin/umount %s", dev) == -1)
-		return;
-	system(umount_cmd);
-	free(umount_cmd);
-}
-
 static void do_unmount(char *dev, int fd)
 {
 	char device_path[SPECNAMELEN + 12];
