@@ -213,7 +213,13 @@ struct fuse_pollhandle;
  * Create a FUSE mountpoint
  *
  * Returns a control file descriptor suitable for passing to
- * fuse_new()
+ * fuse_new(). Unknown parameters in `args` are passed through
+ * unchanged. Known parameters (with the exception of --help and
+ * --version) are removed from `args`.
+ *
+ * If the --help or --version parameters are specified, the function
+ * prints the requested information to stdout and returns a valid
+ * pointer. However, it does not actually perform the mount.
  *
  * @param mountpoint the mount point path
  * @param args argument vector
@@ -230,7 +236,7 @@ struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args);
 void fuse_unmount(const char *mountpoint, struct fuse_chan *ch);
 
 /**
- * Parse common options
+ * Utility functions for simple file systems to parse common options.
  *
  * The following options are parsed:
  *
@@ -242,7 +248,11 @@ void fuse_unmount(const char *mountpoint, struct fuse_chan *ch);
  *   '-ofsname=..'   file system name, if not present, then set to the program
  *		     name
  *
- * All parameters may be NULL
+ * Unknown parameters in `args` are passed through unchanged. Known
+ * parameters (with the exception of --help and --version) are removed.
+ *
+ * All parameters may be NULL (in which case they may still
+ * be specified on the command line, but will not be set).
  *
  * @param args argument vector
  * @param mountpoint the returned mountpoint, should be freed after use

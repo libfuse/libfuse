@@ -141,6 +141,8 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 		mo->ishelp = 1;
 		break;
 	}
+
+	/* Pass through unknown options */
 	return 1;
 }
 

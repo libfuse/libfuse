@@ -2674,6 +2674,7 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 		fprintf(stderr, "fuse: unknown option `%s'\n", arg);
 	}
 
+	/* Fail */
 	return -1;
 }
 

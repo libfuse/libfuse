@@ -640,6 +640,13 @@ struct fuse_context {
 /**
  * Create a new FUSE filesystem.
  *
+ * Known parameters in `args` are removed. If there are any unknown
+ * arguments, an error is printed to stderr and the function returns
+ * NULL.
+ *
+ * If the --help or --version parameters are specified, the function
+ * prints the requested information to stdout and returns NULL.
+ *
  * @param ch the communication channel
  * @param args argument vector
  * @param op the filesystem operations

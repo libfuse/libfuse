@@ -114,6 +114,7 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 		}
 
 	default:
+		/* Pass through unknown options */
 		return 1;
 	}
 }

@@ -1575,6 +1575,13 @@ int fuse_req_interrupted(fuse_req_t req);
 /**
  * Create a low level session
  *
+ * Known parameters in `args` are removed. If there are any unknown
+ * arguments, an error is printed to stderr and the function returns
+ * NULL.
+ *
+ * If the --help or --version parameters are specified, the function
+ * prints the requsted information to stdout and returns NULL.
+ *
  * @param args argument vector
  * @param op the low level filesystem operations
  * @param op_size sizeof(struct fuse_lowlevel_ops)

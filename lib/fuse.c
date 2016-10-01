@@ -4684,6 +4684,9 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 	init_list_head(&f->full_slabs);
 	init_list_head(&f->lru_table);
 
+	/* When --help or --version are specified, we print messages
+	   to stderr but continue for now (and keep the arguments in
+	   `args` for use below */
 	if (fuse_opt_parse(args, &f->conf, fuse_lib_opts,
 			   fuse_lib_opt_proc) == -1)
 		goto out_free_fs;
@@ -4714,6 +4717,8 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 	f->conf.readdir_ino = 1;
 #endif
 
+	/* This function will return NULL if there is an --help
+	   or --version argument in `args` */
 	f->se = fuse_lowlevel_new(args, &llop, sizeof(llop), f);
 	if (f->se == NULL) {
 		if (f->conf.help)
