@@ -17,18 +17,6 @@
 #include <errno.h>
 
 
-struct fuse_session *fuse_session_new(void)
-{
-	struct fuse_session *se = (struct fuse_session *) malloc(sizeof(*se));
-	if (se == NULL) {
-		fprintf(stderr, "fuse: failed to allocate session\n");
-		return NULL;
-	}
-	memset(se, 0, sizeof(*se));
-
-	return se;
-}
-
 void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch)
 {
 	assert(se->ch == NULL);

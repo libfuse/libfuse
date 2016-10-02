@@ -117,13 +117,6 @@ int fuse_chan_clearfd(struct fuse_chan *ch);
 void fuse_chan_close(struct fuse_chan *ch);
 
 /**
- * Create a new session
- *
- * @return new session object, or NULL on failure
- */
-struct fuse_session *fuse_session_new(void);
-
-/**
  * Create a new channel
  *
  * @param op channel operations

@@ -2907,12 +2907,13 @@ struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
 	f->owner = getuid();
 	f->userdata = userdata;
 
-	se = fuse_session_new();
-	if (!se)
+	se = (struct fuse_session *) malloc(sizeof(*se));
+	if (se == NULL) {
+		fprintf(stderr, "fuse: failed to allocate session\n");
 		goto out_key_destroy;
-
+	}
+	memset(se, 0, sizeof(*se));
 	se->f = f;
-
 	return se;
 
 out_key_destroy:
