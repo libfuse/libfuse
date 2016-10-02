@@ -2871,9 +2871,9 @@ restart:
 
 #define MIN_BUFSIZE 0x21000
 
-struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
-				       const struct fuse_lowlevel_ops *op,
-				       size_t op_size, void *userdata)
+struct fuse_session *fuse_session_new(struct fuse_args *args,
+				      const struct fuse_lowlevel_ops *op,
+				      size_t op_size, void *userdata)
 {
 	int err;
 	struct fuse_ll *f;

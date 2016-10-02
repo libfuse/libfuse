@@ -39,7 +39,7 @@ FUSE_3.0 {
 		fuse_daemonize;
 		fuse_get_session;
 		fuse_interrupted;
-		fuse_lowlevel_new;
+		fuse_session_new;
 		fuse_main_real;
 		fuse_mount;
 		fuse_session_mount;

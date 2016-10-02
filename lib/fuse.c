@@ -4719,7 +4719,7 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 
 	/* This function will return NULL if there is an --help
 	   or --version argument in `args` */
-	f->se = fuse_lowlevel_new(args, &llop, sizeof(llop), f);
+	f->se = fuse_session_new(args, &llop, sizeof(llop), f);
 	if (f->se == NULL) {
 		if (f->conf.help)
 			fuse_lib_help_modules();

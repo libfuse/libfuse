@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* The `fuse_lowlevel_new` function has been renamed to
+  `fuse_session_new`.
+
 * There are now new `fuse_session_unmount` and `fuse_session_mount`
   functions that should be used in the low-level API. The
   `fuse_mount` and `fuse_unmount` functions should be used with the

@@ -170,7 +170,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * There's no reply to this function
 	 *
-	 * @param userdata the user data passed to fuse_lowlevel_new()
+	 * @param userdata the user data passed to fuse_session_new()
 	 */
 	void (*init) (void *userdata, struct fuse_conn_info *conn);
 
@@ -181,7 +181,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * There's no reply to this function
 	 *
-	 * @param userdata the user data passed to fuse_lowlevel_new()
+	 * @param userdata the user data passed to fuse_session_new()
 	 */
 	void (*destroy) (void *userdata);
 
@@ -1502,7 +1502,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
  * Get the userdata from the request
  *
  * @param req request handle
- * @return the user data passed to fuse_lowlevel_new()
+ * @return the user data passed to fuse_session_new()
  */
 void *fuse_req_userdata(fuse_req_t req);
 
@@ -1602,17 +1602,18 @@ struct fuse_chan *fuse_session_mount(const char *mountpoint,
  * prints the requsted information to stdout and returns NULL.
  *
  * @param args argument vector
- * @param op the low level filesystem operations
+ * @param op the (low-level) filesystem operations
  * @param op_size sizeof(struct fuse_lowlevel_ops)
  * @param userdata user data
- * @return the created session object, or NULL on failure
+ *
+ * @return the fuse session on success, NULL on failure
  *
  * Example: See hello_ll.c:
  *   \snippet hello_ll.c doxygen_fuse_lowlevel_usage
- */
-struct fuse_session *fuse_lowlevel_new(struct fuse_args *args,
-				       const struct fuse_lowlevel_ops *op,
-				       size_t op_size, void *userdata);
+ **/
+struct fuse_session *fuse_session_new(struct fuse_args *args,
+				      const struct fuse_lowlevel_ops *op,
+				      size_t op_size, void *userdata);
 
 /**
  * Assign a channel to a session

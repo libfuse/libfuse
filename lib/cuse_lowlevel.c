@@ -170,7 +170,7 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 	lop.ioctl	= clop->ioctl		? cuse_fll_ioctl	: NULL;
 	lop.poll	= clop->poll		? cuse_fll_poll		: NULL;
 
-	se = fuse_lowlevel_new(args, &lop, sizeof(lop), userdata);
+	se = fuse_session_new(args, &lop, sizeof(lop), userdata);
 	if (!se) {
 		free(cd);
 		return NULL;

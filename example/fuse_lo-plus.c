@@ -471,7 +471,7 @@ int main(int argc, char *argv[])
 	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
 	    (ch = fuse_session_mount(mountpoint, &args)) != NULL) {
 		struct fuse_session *se;
-		se = fuse_lowlevel_new(&args, &lo_oper, sizeof(lo_oper), &lo);
+		se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 		if (se != NULL) {
 			if (fuse_set_signal_handlers(se) != -1) {
 				fuse_session_add_chan(se, ch);

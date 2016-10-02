@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
 	    (ch = fuse_session_mount(mountpoint, &args)) != NULL) {
 		struct fuse_session *se;
 
-		se = fuse_lowlevel_new(&args, &hello_ll_oper,
+		se = fuse_session_new(&args, &hello_ll_oper,
 				       sizeof(hello_ll_oper), NULL);
 		if (se != NULL) {
 			if (fuse_set_signal_handlers(se) != -1) {
