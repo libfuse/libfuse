@@ -56,14 +56,6 @@ typedef struct fuse_req *fuse_req_t;
  */
 struct fuse_session;
 
-/**
- * Channel
- *
- * A communication channel, providing hooks for sending and receiving
- * messages
- */
-struct fuse_chan;
-
 /** Directory entry parameters supplied to fuse_reply_entry() */
 struct fuse_entry_param {
 	/** Unique inode number
@@ -1573,30 +1565,15 @@ int fuse_req_interrupted(fuse_req_t req);
  * ----------------------------------------------------------- */
 
 /**
- * Create a FUSE mountpoint
+ * Create a low level session.
  *
- * Returns a control file descriptor suitable for passing to
- * fuse_new(). Unknown parameters in `args` are passed through
- * unchanged. Known parameters (with the exception of --help and
- * --version) are removed from `args`.
+ * Returns a session structure suitable for passing to
+ * fuse_session_mount() and fuse_session_loop().
  *
- * If the --help or --version parameters are specified, the function
- * prints the requested information to stdout and returns a valid
- * pointer. However, it does not actually perform the mount.
- *
- * @param mountpoint the mount point path
- * @param args argument vector
- * @return the communication channel on success, NULL on failure
- */
-struct fuse_chan *fuse_session_mount(const char *mountpoint,
-				     struct fuse_args *args);
-
-/**
- * Create a low level session
- *
- * Known parameters in `args` are removed. If there are any unknown
- * arguments, an error is printed to stderr and the function returns
- * NULL.
+ * Known arguments are defined in `struct fuse_opt fuse_ll_opts[]` and
+ * `struct fuse_opt fuse_mount_opts[]`. If there are any unknown
+ * arguments, an error message will be printed to stderr and the
+ * function will return NULL.
  *
  * If the --help or --version parameters are specified, the function
  * prints the requsted information to stdout and returns NULL.
@@ -1616,14 +1593,14 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      size_t op_size, void *userdata);
 
 /**
- * Assign a channel to a session
+ * Mount a FUSE file system.
  *
- * If a session is destroyed, the assigned channel is also destroyed
+ * @param mountpoint the mount point path
+ * @param se session object
  *
- * @param se the session
- * @param ch the channel
- */
-void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch);
+ * @return 0 on success, -1 on failure.
+ **/
+int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
 
 /**
  * Enter a single threaded, blocking event loop.
@@ -1672,13 +1649,11 @@ void fuse_session_reset(struct fuse_session *se);
 int fuse_session_exited(struct fuse_session *se);
 
 /**
- * Remove the channel from a session
+ * Unmount the file system
  *
- * If the channel is not assigned to a session, then this is a no-op
- *
- * @param ch the channel to remove
+ * @param se the session
  */
-void fuse_session_remove_chan(struct fuse_chan *ch);
+void fuse_session_unmount(struct fuse_session *se);
 
 /**
  * Destroy a session
@@ -1686,15 +1661,6 @@ void fuse_session_remove_chan(struct fuse_chan *ch);
  * @param se the session
  */
 void fuse_session_destroy(struct fuse_session *se);
-
-/**
- * Umount a FUSE mountpoint
- *
- * @param mountpoint the mount point path
- * @param ch the communication channel
- */
-void fuse_session_unmount(const char *mountpoint, struct fuse_chan *ch);
-
 
 /* ----------------------------------------------------------- *
  * Request processing (for custom event loops)                 *
@@ -1710,7 +1676,7 @@ void fuse_session_unmount(const char *mountpoint, struct fuse_chan *ch);
  * @param ch channel on which the request was received
  */
 void fuse_session_process_buf(struct fuse_session *se,
-			      const struct fuse_buf *buf, struct fuse_chan *ch);
+			      const struct fuse_buf *buf);
 
 /**
  * Receive a raw request supplied in a generic buffer
@@ -1723,36 +1689,7 @@ void fuse_session_process_buf(struct fuse_session *se,
  * @param ch the channel
  * @return the actual size of the raw request, or -errno on error
  */
-int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			     struct fuse_chan *ch);
-
-/* ----------------------------------------------------------- *
- * Channel interface					       *
- * ----------------------------------------------------------- */
-
-/**
- * Return channel assigned to the session
- *
- * @param se the session
- * @return the channel
- */
-struct fuse_chan *fuse_session_chan(struct fuse_session *se);
-
-
-/**
- * Obtain counted reference to the channel
- *
- * @param ch the channel
- * @return the channel
- */
-struct fuse_chan *fuse_chan_get(struct fuse_chan *ch);
-
-/**
- * Drop counted reference to a channel
- *
- * @param ch the channel
- */
-void fuse_chan_put(struct fuse_chan *ch);
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
 
 #ifdef __cplusplus
 }

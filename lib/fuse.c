@@ -4631,7 +4631,7 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 	}
 }
 
-struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
+struct fuse *fuse_new(struct fuse_args *args,
 		      const struct fuse_operations *op,
 		      size_t op_size, void *user_data)
 {
@@ -4721,12 +4721,12 @@ struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
 	   or --version argument in `args` */
 	f->se = fuse_session_new(args, &llop, sizeof(llop), f);
 	if (f->se == NULL) {
+		/* If we've printed help before, add module help at
+		 * the end */
 		if (f->conf.help)
 			fuse_lib_help_modules();
 		goto out_free_fs;
 	}
-
-	fuse_session_add_chan(f->se, ch);
 
 	if (f->conf.debug) {
 		fprintf(stderr, "nopath: %i\n", f->conf.nopath);
@@ -4837,12 +4837,11 @@ void fuse_destroy(struct fuse *f)
 	fuse_delete_context_key();
 }
 
-struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
-{
-	return fuse_session_mount(mountpoint, args);
+int fuse_mount(struct fuse *f, const char *mountpoint) {
+	return fuse_session_mount(fuse_get_session(f), mountpoint);
 }
 
-void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
-{
-	fuse_session_unmount(mountpoint, ch);
+
+void fuse_unmount(struct fuse *f) {
+	return fuse_session_unmount(fuse_get_session(f));
 }

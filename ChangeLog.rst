@@ -12,9 +12,70 @@ Unreleased Changes
 * The ``fuse_lowlevel_notify_*`` functions now all take a `struct
   fuse_session` parameter instead of a `struct fuse_chan`.
 
-* The channel interface (``fuse_chan_*`` functions) has been
-  made private. The `struct fuse_chan_ops` data structure is now
-  opaque.
+* The channel interface (``fuse_chan_*`` functions) has been made
+  private. As a result, the typical initialization sequence of a
+  low-level file system has changed from ::
+
+        ch = fuse_mount(mountpoint, &args);
+        se = fuse_lowlevel_new(&args, &lo_oper, sizeof(lo_oper), &lo);
+        fuse_set_signal_handlers(se);
+        fuse_session_add_chan(se, ch);
+        fuse_daemonize(fg);
+        if (mt)
+            fuse_session_loop_mt(se);
+        else
+            fuse_session_loop(se);
+        fuse_remove_signal_handlers(se);
+        fuse_session_remove_chan(ch);
+        fuse_session_destroy(se);
+        fuse_unmount(mountpoint, ch);
+
+  to ::
+
+        se = fuse_session_new(&args, &ll_ops, sizeof(ll_ops), NULL);
+        fuse_set_signal_handlers(se);
+        fuse_session_mount(se, mountpoint);
+        fuse_daemonize(fg);
+        if (mt)
+            fuse_session_loop_mt(se);
+        else
+            fuse_session_loop(se);
+        fuse_remove_signal_handlers(se);
+        fuse_session_unmount(se);
+        fuse_lowlevel_destroy(se);
+
+  The typical high-level setup has changed from ::
+
+        ch = fuse_mount(*mountpoint, &args);
+        fuse = fuse_new(ch, &args, op, op_size, user_data);
+        se = fuse_get_session(fuse);
+        fuse_set_signal_handlers(se);
+        fuse_daemonize(fg);
+        if (mt)
+            fuse_loop_mt(fuse);
+        else
+            fuse_loop(fuse);
+        fuse_remove_signal_handlers(se);
+        fuse_unmount(mountpoint, ch);
+        fuse_destroy(fuse);
+
+  to ::
+
+        fuse = fuse_new(&args, op, op_size, user_data);
+        se = fuse_get_session(fuse);
+        fuse_set_signal_handlers(se);
+        fuse_mount(se, mountpoint);
+        fuse_daemonize(fg);
+         if (mt)
+            fuse_loop_mt(fuse);
+        else
+            fuse_loop(fuse);
+        fuse_remove_signal_handlers(se);
+        fuse_unmount(se);
+        fuse_destroy(fuse);
+
+  File systems that use `fuse_main` are not affected by this change.
+
 
 * Added *clone_fd* option.  This creates a separate device file
   descriptor for each processing thread, which might improve

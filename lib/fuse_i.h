@@ -11,13 +11,16 @@
 
 struct fuse_chan;
 struct fuse_ll;
+struct mount_opts;
 
 struct fuse_session {
 	struct fuse_ll *f;
+	char *mountpoint;
 
 	volatile int exited;
 
 	struct fuse_chan *ch;
+	struct mount_opts *mo;
 };
 
 struct fuse_chan {
@@ -116,7 +119,11 @@ struct fuse_module {
 int fuse_chan_clearfd(struct fuse_chan *ch);
 void fuse_chan_close(struct fuse_chan *ch);
 
-/**
+/* ----------------------------------------------------------- *
+ * Channel interface					       *
+ * ----------------------------------------------------------- */
+
+ /**
  * Create a new channel
  *
  * @param op channel operations
@@ -133,8 +140,56 @@ struct fuse_chan *fuse_chan_new(int fd);
  */
 struct fuse_session *fuse_chan_session(struct fuse_chan *ch);
 
+/**
+ * Remove the channel from a session
+ *
+ * If the channel is not assigned to a session, then this is a no-op
+ *
+ * @param ch the channel to remove
+ */
+void fuse_session_remove_chan(struct fuse_chan *ch);
+
+/**
+ * Assign a channel to a session
+ *
+ * If a session is destroyed, the assigned channel is also destroyed
+ *
+ * @param se the session
+ * @param ch the channel
+ */
+void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch);
+
+/**
+ * Return channel assigned to the session
+ *
+ * @param se the session
+ * @return the channel
+ */
+struct fuse_chan *fuse_session_chan(struct fuse_session *se);
+
+/**
+ * Obtain counted reference to the channel
+ *
+ * @param ch the channel
+ * @return the channel
+ */
+struct fuse_chan *fuse_chan_get(struct fuse_chan *ch);
+
+/**
+ * Drop counted reference to a channel
+ *
+ * @param ch the channel
+ */
+void fuse_chan_put(struct fuse_chan *ch);
+
+
+struct mount_opts *parse_mount_opts(struct fuse_args *args);
+void destroy_mount_opts(struct mount_opts *mo);
+void fuse_mount_help(void);
+void fuse_mount_version(void);
+
 void fuse_kern_unmount(const char *mountpoint, int fd);
-int fuse_kern_mount(const char *mountpoint, struct fuse_args *args);
+int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count);

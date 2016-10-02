@@ -227,30 +227,32 @@ int fuse_daemonize(int foreground)
 	return 0;
 }
 
+
 static struct fuse *fuse_setup(int argc, char *argv[],
-			const struct fuse_operations *op, size_t op_size,
-			char **mountpoint, int *multithreaded, void *user_data)
+			       const struct fuse_operations *op, size_t op_size,
+			       int *multithreaded, void *user_data)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-	struct fuse_chan *ch;
 	struct fuse *fuse;
+	char *mountpoint;
 	int foreground;
 	int res;
 
-	res = fuse_parse_cmdline(&args, mountpoint, multithreaded, &foreground);
+	res = fuse_parse_cmdline(&args, &mountpoint, multithreaded, &foreground);
 	if (res == -1)
 		return NULL;
 
-	ch = fuse_mount(*mountpoint, &args);
-	if (!ch) {
+	fuse = fuse_new(&args, op, op_size, user_data);
+	if (fuse == NULL)  {
 		fuse_opt_free_args(&args);
-		goto err_free;
+		free(mountpoint);
+		return NULL;
 	}
 
-	fuse = fuse_new(ch, &args, op, op_size, user_data);
-	fuse_opt_free_args(&args);
-	if (fuse == NULL)
-		goto err_unmount;
+	res = fuse_mount(fuse, mountpoint);
+	free(mountpoint);
+	if (res != 0)
+		goto err_out1;
 
 	res = fuse_daemonize(foreground);
 	if (res == -1)
@@ -263,33 +265,29 @@ static struct fuse *fuse_setup(int argc, char *argv[],
 	return fuse;
 
 err_unmount:
-	fuse_unmount(*mountpoint, ch);
-	if (fuse)
-		fuse_destroy(fuse);
-err_free:
-	free(*mountpoint);
+	fuse_unmount(fuse);
+err_out1:
+	fuse_destroy(fuse);
+	fuse_opt_free_args(&args);
 	return NULL;
 }
 
-static void fuse_teardown(struct fuse *fuse, char *mountpoint)
+static void fuse_teardown(struct fuse *fuse)
 {
 	struct fuse_session *se = fuse_get_session(fuse);
-	struct fuse_chan *ch = fuse_session_chan(se);
 	fuse_remove_signal_handlers(se);
-	fuse_unmount(mountpoint, ch);
+	fuse_unmount(fuse);
 	fuse_destroy(fuse);
-	free(mountpoint);
 }
 
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		   size_t op_size, void *user_data)
 {
 	struct fuse *fuse;
-	char *mountpoint;
 	int multithreaded;
 	int res;
 
-	fuse = fuse_setup(argc, argv, op, op_size, &mountpoint,
+	fuse = fuse_setup(argc, argv, op, op_size,
 			  &multithreaded, user_data);
 	if (fuse == NULL)
 		return 1;
@@ -299,7 +297,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	else
 		res = fuse_loop(fuse);
 
-	fuse_teardown(fuse, mountpoint);
+	fuse_teardown(fuse);
 	if (res == -1)
 		return 1;
 

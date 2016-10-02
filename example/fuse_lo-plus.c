@@ -455,7 +455,7 @@ static const struct fuse_opt lo_opts[] = {
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-	struct fuse_chan *ch;
+	struct fuse_session *se;
 	char *mountpoint;
 	int ret = -1;
 	struct lo_data lo = { .debug = 0 };
@@ -468,23 +468,29 @@ int main(int argc, char *argv[])
 	if (lo.root.fd == -1)
 		err(1, "open(\"/\", O_PATH)");
 
-	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
-	    (ch = fuse_session_mount(mountpoint, &args)) != NULL) {
-		struct fuse_session *se;
-		se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
-		if (se != NULL) {
-			if (fuse_set_signal_handlers(se) != -1) {
-				fuse_session_add_chan(se, ch);
-				ret = fuse_session_loop(se);
-				fuse_remove_signal_handlers(se);
-				fuse_session_remove_chan(ch);
-			}
-			fuse_session_destroy(se);
-		}
-		fuse_session_unmount(mountpoint, ch);
-		free(mountpoint);
-	}
+	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != 0)
+	    goto err_out;
+
+	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 	fuse_opt_free_args(&args);
+	if (se == NULL)
+	    goto err_out;
+
+	if (fuse_set_signal_handlers(se) != 0)
+	    goto err_out1;
+
+	if (fuse_session_mount(se, mountpoint) != 0)
+	    goto err_out2;
+
+	ret = fuse_session_loop(se);
+
+	fuse_session_unmount(se);
+err_out2:
+	fuse_remove_signal_handlers(se);
+err_out1:
+	fuse_session_destroy(se);
+err_out:
+	free(mountpoint);
 
 	while (lo.root.next != &lo.root)
 		lo_free(lo.root.next);

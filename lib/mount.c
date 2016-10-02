@@ -57,14 +57,11 @@ enum {
 	KEY_MTAB_OPT,
 	KEY_ALLOW_ROOT,
 	KEY_RO,
-	KEY_HELP,
-	KEY_VERSION,
 };
 
 struct mount_opts {
 	int allow_other;
 	int allow_root;
-	int ishelp;
 	int flags;
 	int nonempty;
 	int auto_unmount;
@@ -118,14 +115,10 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("dirsync",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("atime",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
-	FUSE_OPT_KEY("-h",			KEY_HELP),
-	FUSE_OPT_KEY("--help",			KEY_HELP),
-	FUSE_OPT_KEY("-V",			KEY_VERSION),
-	FUSE_OPT_KEY("--version",		KEY_VERSION),
 	FUSE_OPT_END
 };
 
-static void mount_help(void)
+void fuse_mount_help(void)
 {
 	printf(
 "    -o allow_other         allow access to other users\n"
@@ -146,7 +139,7 @@ static void exec_fusermount(const char *argv[])
 	execvp(FUSERMOUNT_PROG, (char **) argv);
 }
 
-static void mount_version(void)
+void fuse_mount_version(void)
 {
 	int pid = fork();
 	if (!pid) {
@@ -230,16 +223,6 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 	case KEY_MTAB_OPT:
 		return fuse_opt_add_opt(&mo->mtab_opts, arg);
-
-	case KEY_HELP:
-		mount_help();
-		mo->ishelp = 1;
-		break;
-
-	case KEY_VERSION:
-		mount_version();
-		mo->ishelp = 1;
-		break;
 	}
 
 	/* Pass through unknown options */
@@ -568,67 +551,84 @@ static int get_mnt_flag_opts(char **mnt_optsp, int flags)
 	return 0;
 }
 
-int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
+struct mount_opts *parse_mount_opts(struct fuse_args *args)
 {
-	struct mount_opts mo;
+	struct mount_opts *mo;
+
+	mo = (struct mount_opts*) malloc(sizeof(struct mount_opts));
+	if (mo == NULL)
+		return NULL;
+
+	memset(mo, 0, sizeof(struct mount_opts));
+	mo->flags = MS_NOSUID | MS_NODEV;
+
+	if (args &&
+	    fuse_opt_parse(args, mo, fuse_mount_opts, fuse_mount_opt_proc) == -1)
+		goto err_out;
+
+	if (mo->allow_other && mo->allow_root) {
+		fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
+		goto err_out;
+	}
+
+	return mo;
+
+err_out:
+	destroy_mount_opts(mo);
+	return NULL;
+}
+
+void destroy_mount_opts(struct mount_opts *mo)
+{
+	free(mo->fsname);
+	free(mo->subtype);
+	free(mo->fusermount_opts);
+	free(mo->subtype_opt);
+	free(mo->kernel_opts);
+	free(mo->mtab_opts);
+	free(mo);
+}
+
+
+int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
+{
 	int res = -1;
 	char *mnt_opts = NULL;
 
-	memset(&mo, 0, sizeof(mo));
-	mo.flags = MS_NOSUID | MS_NODEV;
-
-	if (args &&
-	    fuse_opt_parse(args, &mo, fuse_mount_opts, fuse_mount_opt_proc) == -1)
-		return -1;
-
-	if (mo.allow_other && mo.allow_root) {
-		fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
-		goto out;
-	}
-	res = 0;
-	if (mo.ishelp)
-		goto out;
-
 	res = -1;
-	if (get_mnt_flag_opts(&mnt_opts, mo.flags) == -1)
+	if (get_mnt_flag_opts(&mnt_opts, mo->flags) == -1)
 		goto out;
-	if (mo.kernel_opts && fuse_opt_add_opt(&mnt_opts, mo.kernel_opts) == -1)
+	if (mo->kernel_opts && fuse_opt_add_opt(&mnt_opts, mo->kernel_opts) == -1)
 		goto out;
-	if (mo.mtab_opts &&  fuse_opt_add_opt(&mnt_opts, mo.mtab_opts) == -1)
+	if (mo->mtab_opts &&  fuse_opt_add_opt(&mnt_opts, mo->mtab_opts) == -1)
 		goto out;
 
-	res = fuse_mount_sys(mountpoint, &mo, mnt_opts);
+	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
 	if (res == -2) {
-		if (mo.fusermount_opts &&
-		    fuse_opt_add_opt(&mnt_opts, mo.fusermount_opts) == -1)
+		if (mo->fusermount_opts &&
+		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)
 			goto out;
 
-		if (mo.subtype) {
+		if (mo->subtype) {
 			char *tmp_opts = NULL;
 
 			res = -1;
 			if (fuse_opt_add_opt(&tmp_opts, mnt_opts) == -1 ||
-			    fuse_opt_add_opt(&tmp_opts, mo.subtype_opt) == -1) {
+			    fuse_opt_add_opt(&tmp_opts, mo->subtype_opt) == -1) {
 				free(tmp_opts);
 				goto out;
 			}
 
-			res = fuse_mount_fusermount(mountpoint, &mo, tmp_opts, 1);
+			res = fuse_mount_fusermount(mountpoint, mo, tmp_opts, 1);
 			free(tmp_opts);
 			if (res == -1)
-				res = fuse_mount_fusermount(mountpoint, &mo,
+				res = fuse_mount_fusermount(mountpoint, mo,
 							    mnt_opts, 0);
 		} else {
-			res = fuse_mount_fusermount(mountpoint, &mo, mnt_opts, 0);
+			res = fuse_mount_fusermount(mountpoint, mo, mnt_opts, 0);
 		}
 	}
 out:
 	free(mnt_opts);
-	free(mo.fsname);
-	free(mo.subtype);
-	free(mo.fusermount_opts);
-	free(mo.subtype_opt);
-	free(mo.kernel_opts);
-	free(mo.mtab_opts);
 	return res;
 }

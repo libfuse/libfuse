@@ -2437,10 +2437,9 @@ static int fuse_ll_copy_from_pipe(struct fuse_bufvec *dst,
 }
 
 void fuse_session_process_buf(struct fuse_session *se,
-			      const struct fuse_buf *buf,
-			      struct fuse_chan *ch)
+			      const struct fuse_buf *buf)
 {
-	fuse_session_process_buf_int(se, buf, ch);
+	fuse_session_process_buf_int(se,  buf, se->ch);
 }
 
 void fuse_session_process_buf_int(struct fuse_session *se,
@@ -2666,15 +2665,17 @@ static void fuse_ll_help(void)
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 			    struct fuse_args *outargs)
 {
-	(void) data; (void) outargs;
+	(void) data; (void) outargs; (void) arg;
 
 	switch (key) {
 	case KEY_HELP:
 		fuse_ll_help();
+		fuse_mount_help();
 		break;
 
 	case KEY_VERSION:
 		fuse_ll_version();
+		fuse_mount_version();
 		break;
 
 	default:
@@ -2706,6 +2707,7 @@ void fuse_session_destroy(struct fuse_session *se)
 {
 	fuse_ll_destroy(se->f);
 	fuse_chan_put(se->ch);
+	destroy_mount_opts(se->mo);
 	free(se);
 }
 
@@ -2716,10 +2718,9 @@ static void fuse_ll_pipe_destructor(void *data)
 	fuse_ll_pipe_free(llp);
 }
 
-int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf,
-			     struct fuse_chan *ch)
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
 {
-	return fuse_session_receive_buf_int(se, buf, ch);
+	return fuse_session_receive_buf_int(se, buf, se->ch);
 }
 
 int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
@@ -2878,6 +2879,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	int err;
 	struct fuse_ll *f;
 	struct fuse_session *se;
+	struct mount_opts *mo;
 
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
 		fprintf(stderr, "fuse: warning: library too old, some operations may not work\n");
@@ -2889,6 +2891,16 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
 		goto out;
 	}
+
+	/* Parse options */
+	mo = parse_mount_opts(args);
+	if (mo == NULL)
+		goto out_free0;
+	if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
+		goto out_free;
+
+	if (f->debug)
+		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
 
 	f->conn.async_read = 1;
 	f->conn.max_write = UINT_MAX;
@@ -2910,12 +2922,6 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		goto out_free;
 	}
 
-	if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
-		goto out_key_destroy;
-
-	if (f->debug)
-		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
-
 	memcpy(&f->op, op, op_size);
 	f->owner = getuid();
 	f->userdata = userdata;
@@ -2927,19 +2933,21 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	}
 	memset(se, 0, sizeof(*se));
 	se->f = f;
+	se->mo = mo;
 	return se;
 
 out_key_destroy:
 	pthread_key_delete(f->pipe_key);
 out_free:
+	free(mo);
+out_free0:
 	pthread_mutex_destroy(&f->lock);
 	free(f);
 out:
 	return NULL;
 }
 
-struct fuse_chan *fuse_session_mount(const char *mountpoint,
-				     struct fuse_args *args)
+int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
 	struct fuse_chan *ch;
 	int fd;
@@ -2954,23 +2962,39 @@ struct fuse_chan *fuse_session_mount(const char *mountpoint,
 			close(fd);
 	} while (fd >= 0 && fd <= 2);
 
-	fd = fuse_kern_mount(mountpoint, args);
+	/* Open channel */
+	fd = fuse_kern_mount(mountpoint, se->mo);
 	if (fd == -1)
-		return NULL;
+		return -1;
 
 	ch = fuse_chan_new(fd);
 	if (!ch)
-		fuse_kern_unmount(mountpoint, fd);
+		goto error_out;
 
-	return ch;
+	/* Add channel to session */
+	fuse_session_add_chan(se, ch);
+
+	/* Save mountpoint */
+	se->mountpoint = strdup(mountpoint);
+	if (se->mountpoint == NULL)
+		goto error_out;
+
+	return 0;
+
+error_out:
+	fuse_kern_unmount(mountpoint, fd);
+	return -1;
 }
 
-void fuse_session_unmount(const char *mountpoint, struct fuse_chan *ch)
+void fuse_session_unmount(struct fuse_session *se)
 {
-	if (mountpoint) {
-		int fd = ch ? fuse_chan_clearfd(ch) : -1;
-		fuse_kern_unmount(mountpoint, fd);
-		fuse_chan_put(ch);
+	fuse_session_remove_chan(se->ch);
+	if (se->mountpoint) {
+		int fd = se->ch ? fuse_chan_clearfd(se->ch) : -1;
+		fuse_kern_unmount(se->mountpoint, fd);
+		fuse_chan_put(se->ch);
+		free(se->mountpoint);
+		se->mountpoint = NULL;
 	}
 }
 

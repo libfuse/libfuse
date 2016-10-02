@@ -186,31 +186,35 @@ static struct fuse_lowlevel_ops hello_ll_oper = {
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-	struct fuse_chan *ch;
+	struct fuse_session *se;
 	char *mountpoint;
 	int err = -1;
 
-	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
-	    (ch = fuse_session_mount(mountpoint, &args)) != NULL) {
-		struct fuse_session *se;
+	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != 0)
+	    goto err_out;
 
-		se = fuse_session_new(&args, &hello_ll_oper,
-				       sizeof(hello_ll_oper), NULL);
-		if (se != NULL) {
-			if (fuse_set_signal_handlers(se) != -1) {
-				fuse_session_add_chan(se, ch);
-
-				/* Block until ctrl+c or fusermount -u */
-				err = fuse_session_loop(se);
-
-				fuse_remove_signal_handlers(se);
-				fuse_session_remove_chan(ch);
-			}
-			fuse_session_destroy(se);
-		}
-		fuse_session_unmount(mountpoint, ch);
-	}
+	se = fuse_session_new(&args, &hello_ll_oper,
+			      sizeof(hello_ll_oper), NULL);
 	fuse_opt_free_args(&args);
+	if (se == NULL)
+	    goto err_out;
+
+	if (fuse_set_signal_handlers(se) != 0)
+	    goto err_out1;
+
+	if (fuse_session_mount(se, mountpoint) != 0)
+	    goto err_out2;
+
+	/* Block until ctrl+c or fusermount -u */
+	err = fuse_session_loop(se);
+
+	fuse_session_unmount(se);
+err_out2:
+	fuse_remove_signal_handlers(se);
+err_out1:
+	fuse_session_destroy(se);
+err_out:
+	free(mountpoint);
 
 	return err ? 1 : 0;
 }

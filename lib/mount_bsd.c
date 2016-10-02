@@ -31,15 +31,12 @@
 enum {
 	KEY_ALLOW_ROOT,
 	KEY_RO,
-	KEY_HELP,
-	KEY_VERSION,
 	KEY_KERN
 };
 
 struct mount_opts {
 	int allow_other;
 	int allow_root;
-	int ishelp;
 	char *kernel_opts;
 };
 
@@ -51,10 +48,6 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	{ "allow_root", offsetof(struct mount_opts, allow_root), 1 },
 	FUSE_OPT_KEY("allow_root",		KEY_ALLOW_ROOT),
 	FUSE_OPT_KEY("-r",			KEY_RO),
-	FUSE_OPT_KEY("-h",			KEY_HELP),
-	FUSE_OPT_KEY("--help",			KEY_HELP),
-	FUSE_OPT_KEY("-V",			KEY_VERSION),
-	FUSE_OPT_KEY("--version",		KEY_VERSION),
 	/* standard FreeBSD mount options */
 	FUSE_DUAL_OPT_KEY("dev",		KEY_KERN),
 	FUSE_DUAL_OPT_KEY("async",		KEY_KERN),
@@ -100,14 +93,14 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_END
 };
 
-static void mount_help(void)
+void fuse_mount_help(void)
 {
 	printf("    -o allow_root          allow access to root\n");
 	system(FUSERMOUNT_PROG " --help");
 	fputc('\n', stderr);
 }
 
-static void mount_version(void)
+void fuse_mount_version(void)
 {
 	system(FUSERMOUNT_PROG " --version");
 }
@@ -130,16 +123,6 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 	case KEY_KERN:
 		return fuse_opt_add_opt(&mo->kernel_opts, arg);
-
-	case KEY_HELP:
-		mount_help();
-		mo->ishelp = 1;
-		break;
-
-	case KEY_VERSION:
-		mount_version();
-		mo->ishelp = 1;
-		break;
 	}
 
 	/* Pass through unknown options */
@@ -314,30 +297,44 @@ out:
 	return fd;
 }
 
-int fuse_kern_mount(const char *mountpoint, struct fuse_args *args)
+struct mount_opts *parse_mount_opts(struct fuse_args *args)
 {
-	struct mount_opts mo;
-	int res = -1;
+	struct mount_opts *mo;
 
-	memset(&mo, 0, sizeof(mo));
+	mo = (struct mount_opts*) malloc(sizeof(struct mount_opts));
+	if (mo == NULL)
+		return NULL;
+
+	memset(mo, 0, sizeof(struct mount_opts));
+
+	if (args &&
+	    fuse_opt_parse(args, mo, fuse_mount_opts, fuse_mount_opt_proc) == -1)
+		goto err_out;
+
+	if (mo->allow_other && mo->allow_root) {
+		fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
+		goto err_out;
+	}
+
+	return mo;
+
+err_out:
+	destroy_mount_opts(mo);
+	return NULL;
+}
+
+void destroy_mount_opts(struct mount_opts *mo)
+{
+	free(mo->kernel_opts);
+	free(mo);
+}
+
+int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
+{
 	/* mount util should not try to spawn the daemon */
 	setenv("MOUNT_FUSEFS_SAFE", "1", 1);
 	/* to notify the mount util it's called from lib */
 	setenv("MOUNT_FUSEFS_CALL_BY_LIB", "1", 1);
 
-	if (args &&
-	    fuse_opt_parse(args, &mo, fuse_mount_opts, fuse_mount_opt_proc) == -1)
-		return -1;
-
-	if (mo.allow_other && mo.allow_root) {
-		fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
-		goto out;
-	}
-	if (mo.ishelp)
-		return 0;
-
-	res = fuse_mount_core(mountpoint, mo.kernel_opts);
-out:
-	free(mo.kernel_opts);
-	return res;
+	return fuse_mount_core(mountpoint, mo->kernel_opts);
 }

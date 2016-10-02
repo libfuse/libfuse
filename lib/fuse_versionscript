@@ -4,8 +4,6 @@ FUSE_3.0 {
 		fuse_exit;
 		fuse_loop;
 		fuse_loop_mt;
-		fuse_chan_destroy;
-		fuse_chan_fd;
 		fuse_reply_attr;
 		fuse_reply_buf;
 		fuse_reply_entry;
@@ -15,13 +13,11 @@ FUSE_3.0 {
 		fuse_reply_write;
 		fuse_reply_xattr;
 		fuse_req_userdata;
-		fuse_session_add_chan;
 		fuse_session_destroy;
 		fuse_session_exit;
 		fuse_session_exited;
 		fuse_session_loop;
 		fuse_session_loop_mt;
-		fuse_session_chan;
 		fuse_session_reset;
 		fuse_opt_parse;
 		fuse_opt_add_opt;
@@ -48,7 +44,6 @@ FUSE_3.0 {
 		fuse_reply_lock;
 		fuse_req_interrupt_func;
 		fuse_req_interrupted;
-		fuse_session_remove_chan;
 		fuse_unmount;
 		fuse_session_unmount;
 		fuse_fs_access;

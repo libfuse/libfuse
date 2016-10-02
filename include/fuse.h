@@ -640,54 +640,43 @@ struct fuse_context {
 /**
  * Create a new FUSE filesystem.
  *
- * Known parameters in `args` are removed. If there are any unknown
- * arguments, an error is printed to stderr and the function returns
+ * Known arguments are defined in `struct fuse_opt fuse_lib_opts[]`,
+ * `struct fuse_opt fuse_mount_opts[]`, and `struct fuse_opt
+ * fuse_ll_opts[]`.  If there are any unknown arguments, an error
+ * message will be printed to stderr and the function will return
  * NULL.
  *
  * If the --help or --version parameters are specified, the function
  * prints the requested information to stdout and returns NULL.
  *
- * @param ch the communication channel
  * @param args argument vector
  * @param op the filesystem operations
  * @param op_size the size of the fuse_operations structure
  * @param user_data user data supplied in the context during the init() method
  * @return the created FUSE handle
  */
-struct fuse *fuse_new(struct fuse_chan *ch, struct fuse_args *args,
-		      const struct fuse_operations *op, size_t op_size,
-		      void *user_data);
+struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
+		      size_t op_size, void *user_data);
 
 /**
- * Create a FUSE mountpoint
- *
- * Returns a control file descriptor suitable for passing to
- * fuse_new(). Unknown parameters in `args` are passed through
- * unchanged. Known parameters (with the exception of --help and
- * --version) are removed from `args`.
- *
- * If the --help or --version parameters are specified, the function
- * prints the requested information to stdout and returns a valid
- * pointer. However, it does not actually perform the mount.
+ * Mount a FUSE file system.
  *
  * @param mountpoint the mount point path
- * @param args argument vector
- * @return the communication channel on success, NULL on failure
- */
-struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args);
+ * @param f the FUSE handle
+ *
+ * @return 0 on success, -1 on failure.
+ **/
+int fuse_mount(struct fuse *f, const char *mountpoint);
 
 /**
- * Umount a FUSE mountpoint
+ * Unmount a FUSE file system.
  *
- * @param mountpoint the mount point path
- * @param ch the communication channel
- */
-void fuse_unmount(const char *mountpoint, struct fuse_chan *ch);
+ * @param f the FUSE handle
+ **/
+void fuse_unmount(struct fuse *f);
 
 /**
  * Destroy the FUSE handle.
- *
- * The communication channel attached to the handle is also destroyed.
  *
  * NOTE: This function does not unmount the filesystem.	 If this is
  * needed, call fuse_unmount() before calling this function.
