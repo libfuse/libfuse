@@ -4836,3 +4836,13 @@ void fuse_destroy(struct fuse *f)
 	free(f);
 	fuse_delete_context_key();
 }
+
+struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
+{
+	return fuse_session_mount(mountpoint, args);
+}
+
+void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
+{
+	fuse_session_unmount(mountpoint, ch);
+}

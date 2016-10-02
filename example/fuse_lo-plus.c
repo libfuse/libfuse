@@ -95,7 +95,7 @@ static struct lo_inode *lo_inode(fuse_req_t req, fuse_ino_t ino)
 	if (ino == FUSE_ROOT_ID)
 		return &lo_data(req)->root;
 	else
-		return (struct lo_inode *) (uintptr_t) ino; 
+		return (struct lo_inode *) (uintptr_t) ino;
 }
 
 static int lo_fd(fuse_req_t req, fuse_ino_t ino)
@@ -469,7 +469,7 @@ int main(int argc, char *argv[])
 		err(1, "open(\"/\", O_PATH)");
 
 	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
-	    (ch = fuse_mount(mountpoint, &args)) != NULL) {
+	    (ch = fuse_session_mount(mountpoint, &args)) != NULL) {
 		struct fuse_session *se;
 		se = fuse_lowlevel_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 		if (se != NULL) {
@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
 			}
 			fuse_session_destroy(se);
 		}
-		fuse_unmount(mountpoint, ch);
+		fuse_session_unmount(mountpoint, ch);
 		free(mountpoint);
 	}
 	fuse_opt_free_args(&args);

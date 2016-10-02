@@ -227,41 +227,6 @@ int fuse_daemonize(int foreground)
 	return 0;
 }
 
-struct fuse_chan *fuse_mount(const char *mountpoint, struct fuse_args *args)
-{
-	struct fuse_chan *ch;
-	int fd;
-
-	/*
-	 * Make sure file descriptors 0, 1 and 2 are open, otherwise chaos
-	 * would ensue.
-	 */
-	do {
-		fd = open("/dev/null", O_RDWR);
-		if (fd > 2)
-			close(fd);
-	} while (fd >= 0 && fd <= 2);
-
-	fd = fuse_kern_mount(mountpoint, args);
-	if (fd == -1)
-		return NULL;
-
-	ch = fuse_chan_new(fd);
-	if (!ch)
-		fuse_kern_unmount(mountpoint, fd);
-
-	return ch;
-}
-
-void fuse_unmount(const char *mountpoint, struct fuse_chan *ch)
-{
-	if (mountpoint) {
-		int fd = ch ? fuse_chan_clearfd(ch) : -1;
-		fuse_kern_unmount(mountpoint, fd);
-		fuse_chan_put(ch);
-	}
-}
-
 static struct fuse *fuse_setup(int argc, char *argv[],
 			const struct fuse_operations *op, size_t op_size,
 			char **mountpoint, int *multithreaded, void *user_data)

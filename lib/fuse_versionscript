@@ -42,6 +42,7 @@ FUSE_3.0 {
 		fuse_lowlevel_new;
 		fuse_main_real;
 		fuse_mount;
+		fuse_session_mount;
 		fuse_new;
 		fuse_opt_insert_arg;
 		fuse_reply_lock;
@@ -49,6 +50,7 @@ FUSE_3.0 {
 		fuse_req_interrupted;
 		fuse_session_remove_chan;
 		fuse_unmount;
+		fuse_session_unmount;
 		fuse_fs_access;
 		fuse_fs_bmap;
 		fuse_fs_chmod;

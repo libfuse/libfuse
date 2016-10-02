@@ -1705,6 +1705,33 @@ int fuse_session_loop(struct fuse_session *se);
  */
 int fuse_session_loop_mt(struct fuse_session *se);
 
+/**
+ * Create a FUSE mountpoint
+ *
+ * Returns a control file descriptor suitable for passing to
+ * fuse_new(). Unknown parameters in `args` are passed through
+ * unchanged. Known parameters (with the exception of --help and
+ * --version) are removed from `args`.
+ *
+ * If the --help or --version parameters are specified, the function
+ * prints the requested information to stdout and returns a valid
+ * pointer. However, it does not actually perform the mount.
+ *
+ * @param mountpoint the mount point path
+ * @param args argument vector
+ * @return the communication channel on success, NULL on failure
+ */
+struct fuse_chan *fuse_session_mount(const char *mountpoint,
+				     struct fuse_args *args);
+
+/**
+ * Umount a FUSE mountpoint
+ *
+ * @param mountpoint the mount point path
+ * @param ch the communication channel
+ */
+void fuse_session_unmount(const char *mountpoint, struct fuse_chan *ch);
+
 /* ----------------------------------------------------------- *
  * Channel interface					       *
  * ----------------------------------------------------------- */

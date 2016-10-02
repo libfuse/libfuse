@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
 	int err = -1;
 
 	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1 &&
-	    (ch = fuse_mount(mountpoint, &args)) != NULL) {
+	    (ch = fuse_session_mount(mountpoint, &args)) != NULL) {
 		struct fuse_session *se;
 
 		se = fuse_lowlevel_new(&args, &hello_ll_oper,
@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 			}
 			fuse_session_destroy(se);
 		}
-		fuse_unmount(mountpoint, ch);
+		fuse_session_unmount(mountpoint, ch);
 	}
 	fuse_opt_free_args(&args);
 
