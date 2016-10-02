@@ -8,6 +8,7 @@
 
 #include "config.h"
 #include "fuse_lowlevel.h"
+#include "fuse_i.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,14 +23,14 @@ int fuse_session_loop(struct fuse_session *se)
 	};
 
 	while (!fuse_session_exited(se)) {
-		res = fuse_session_receive_buf(se, &fbuf, ch);
+		res = fuse_session_receive_buf_int(se, &fbuf, ch);
 
 		if (res == -EINTR)
 			continue;
 		if (res <= 0)
 			break;
 
-		fuse_session_process_buf(se, &fbuf, ch);
+		fuse_session_process_buf_int(se, &fbuf, ch);
 	}
 
 	free(fbuf.mem);
