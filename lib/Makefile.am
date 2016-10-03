@@ -24,7 +24,6 @@ libfuse3_la_SOURCES = 		\
 	fuse_loop_mt.c		\
 	fuse_lowlevel.c		\
 	fuse_misc.h		\
-	fuse_mt.c		\
 	fuse_opt.c		\
 	fuse_session.c		\
 	fuse_signals.c		\

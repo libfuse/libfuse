@@ -4379,6 +4379,20 @@ int fuse_loop(struct fuse *f)
 	return fuse_session_loop(f->se);
 }
 
+int fuse_loop_mt(struct fuse *f)
+{
+	if (f == NULL)
+		return -1;
+
+	int res = fuse_start_cleanup_thread(f);
+	if (res)
+		return -1;
+
+	res = fuse_session_loop_mt(fuse_get_session(f));
+	fuse_stop_cleanup_thread(f);
+	return res;
+}
+
 void fuse_exit(struct fuse *f)
 {
 	fuse_session_exit(f->se);
