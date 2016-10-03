@@ -40,9 +40,13 @@ def umount(mount_process, mnt_dir):
 
 # If valgrind and libtool are available, use them
 def has_program(name):
-    return subprocess.call([name, '--version'],
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL) == 0
+    try:
+        ret = subprocess.call([name, '--version'],
+                              stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        return False
+    return ret == 0
 
 if has_program('valgrind') and has_program('libtool'):
     base_cmdline = [ 'libtool', '--mode=execute',
