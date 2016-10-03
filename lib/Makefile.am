@@ -17,7 +17,7 @@ else
 iconv_source =
 endif
 
-libfuse3_la_SOURCES = 		\
+libfuse3_la_SOURCES =		\
 	fuse.c			\
 	fuse_i.h		\
 	fuse_loop.c		\
@@ -25,7 +25,6 @@ libfuse3_la_SOURCES = 		\
 	fuse_lowlevel.c		\
 	fuse_misc.h		\
 	fuse_opt.c		\
-	fuse_session.c		\
 	fuse_signals.c		\
 	buffer.c		\
 	cuse_lowlevel.c		\
