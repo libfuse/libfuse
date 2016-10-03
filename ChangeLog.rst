@@ -84,6 +84,9 @@ Unreleased Changes
 
   File systems that use `fuse_main` are not affected by this change.
 
+  For integration with custom event loops, the new `fuse_session_fd`
+  function provides the file descriptor that's used for communication
+  with the kernel.
 
 * Added *clone_fd* option.  This creates a separate device file
   descriptor for each processing thread, which might improve

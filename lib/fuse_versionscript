@@ -19,6 +19,7 @@ FUSE_3.0 {
 		fuse_session_loop;
 		fuse_session_loop_mt;
 		fuse_session_reset;
+		fuse_session_fd;
 		fuse_opt_parse;
 		fuse_opt_add_opt;
 		fuse_opt_add_arg;

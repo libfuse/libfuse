@@ -1728,8 +1728,24 @@ void fuse_session_unmount(struct fuse_session *se);
 void fuse_session_destroy(struct fuse_session *se);
 
 /* ----------------------------------------------------------- *
- * Request processing (for custom event loops)                 *
+ * Custom event loop support                                   *
  * ----------------------------------------------------------- */
+
+/**
+ * Return file descriptor for communication with kernel.
+ *
+ * The file selector can be used to integrate FUSE with a custom event
+ * loop. Whenever data is available for reading on the provided fd,
+ * the event loop should call `fuse_session_receive_buf` followed by
+ * `fuse_session_process_buf` to process the request.
+ *
+ * The returned file descriptor is valid until `fuse_session_unmount`
+ * is called.
+ *
+ * @param se the session
+ * @return a file descriptor
+ */
+int fuse_session_fd(struct fuse_session *se);
 
 /**
  * Process a raw request supplied in a generic buffer

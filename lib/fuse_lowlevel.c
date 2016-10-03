@@ -2975,6 +2975,11 @@ error_out:
 	return -1;
 }
 
+int fuse_session_fd(struct fuse_session *se)
+{
+	return fuse_session_chan(se)->fd;
+}
+
 void fuse_session_unmount(struct fuse_session *se)
 {
 	fuse_session_remove_chan(se->ch);
