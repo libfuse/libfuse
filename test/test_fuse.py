@@ -7,7 +7,7 @@ if __name__ == '__main__':
 
 import subprocess
 import os
-from util import wait_for_mount, umount, cleanup
+from util import wait_for_mount, umount, cleanup, base_cmdline
 
 basename = os.path.join(os.path.dirname(__file__), '..')
 
@@ -15,7 +15,8 @@ def test_fuse(tmpdir):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
-    cmdline = [ os.path.join(basename, 'example', 'fusexmp_fh'),
+    cmdline = base_cmdline + \
+              [ os.path.join(basename, 'example', 'fusexmp_fh'),
                 '-f', '-o' , 'use_ino,readdir_ino,kernel_cache',
                 mnt_dir ]
     mount_process = subprocess.Popen(cmdline)

@@ -36,3 +36,16 @@ def umount(mount_process, mnt_dir):
         time.sleep(0.1)
         elapsed += 0.1
     pytest.fail('mount process did not terminate')
+
+
+# If valgrind and libtool are available, use them
+def has_program(name):
+    return subprocess.call([name, '--version'],
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL) == 0
+
+if has_program('valgrind') and has_program('libtool'):
+    base_cmdline = [ 'libtool', '--mode=execute',
+                     'valgrind', '-q', '--' ]
+else:
+    base_cmdline = []

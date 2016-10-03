@@ -14,7 +14,7 @@ import shutil
 import filecmp
 import errno
 from tempfile import NamedTemporaryFile
-from util import wait_for_mount, umount, cleanup
+from util import wait_for_mount, umount, cleanup, base_cmdline
 from os.path import join as pjoin
 
 basename = pjoin(os.path.dirname(__file__), '..')
@@ -30,8 +30,9 @@ def name_generator(__ctr=[0]):
 @pytest.mark.parametrize("name", ('hello', 'hello_ll'))
 def test_hello(tmpdir, name):
     mnt_dir = str(tmpdir)
-    cmdline = [os.path.join(basename, 'example', name),
-               '-f', mnt_dir ]
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', name),
+                '-f', mnt_dir ]
     if name == 'hello_ll':
         # supports single-threading only
         cmdline.append('-s')
@@ -58,7 +59,8 @@ def test_fuse_lo_plus(tmpdir):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
-    cmdline = [pjoin(basename, 'example', 'fuse_lo-plus'),
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'fuse_lo-plus'),
                 '-f', '-s', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
@@ -90,8 +92,9 @@ def test_fusexmp_fh(tmpdir, name):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
-    cmdline = [pjoin(basename, 'example', name),
-                '-f', '-o' , 'use_ino,readdir_ino,kernel_cache',
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', name),
+                '-f', '-o', 'use_ino,readdir_ino,kernel_cache',
                 mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
@@ -121,19 +124,20 @@ def test_fusexmp_fh(tmpdir, name):
 def test_fioc(tmpdir):
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
-    cmdline = [pjoin(basename, 'example', 'fioc'),
-               '-f', mnt_dir ]
+    cmdline = base_cmdline + \
+              [pjoin(basename, 'example', 'fioc'), '-f', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
-        base_cmd = [ pjoin(basename, 'example', 'fioclient'),
-                     testfile ]
-        assert subprocess.check_output(base_cmd) == b'0\n'
+        cmdline = base_cmdline + \
+                  [ pjoin(basename, 'example', 'fioclient'),
+                    testfile ]
+        assert subprocess.check_output(cmdline) == b'0\n'
         with open(testfile, 'wb') as fh:
             fh.write(b'foobar')
-        assert subprocess.check_output(base_cmd) == b'6\n'
-        subprocess.check_call(base_cmd + [ '3' ])
+        assert subprocess.check_output(cmdline) == b'6\n'
+        subprocess.check_call(cmdline + [ '3' ])
         with open(testfile, 'rb') as fh:
             assert fh.read()== b'foo'
     except:
@@ -144,12 +148,13 @@ def test_fioc(tmpdir):
 
 def test_fsel(tmpdir):
     mnt_dir = str(tmpdir)
-    cmdline = [pjoin(basename, 'example', 'fsel'),
+    cmdline = base_cmdline + [pjoin(basename, 'example', 'fsel'),
                '-f', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
-        cmdline = [ pjoin(basename, 'example', 'fselclient') ]
+        cmdline = base_cmdline + \
+                  [ pjoin(basename, 'example', 'fselclient') ]
         subprocess.check_call(cmdline, cwd=mnt_dir)
     except:
         cleanup(mnt_dir)

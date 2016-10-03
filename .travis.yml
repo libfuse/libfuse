@@ -16,6 +16,7 @@ addons:
     packages:
     - doxygen
     - libtool
+    - valgrind
     - automake
     - autoconf
     - gcc-6
@@ -23,6 +24,8 @@ install:
     - sudo python -m pip install pytest
 script:
     - $CC --version
+    - libtool --version
+    - valgrind --version
     - ./makeconf.sh
     - ./configure
     - CFLAGS="-fsanitize=address,undefined -g -O1 -Wall -Werror" make
