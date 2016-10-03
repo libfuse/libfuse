@@ -1,5 +1,8 @@
-Unreleased Changes
-==================
+FUSE 3.0.0pre0 (2016-10-03)
+============================
+
+* This is a preview release. Functionality and API may still change
+  before the 3.0.0 release.
 
 * The `fuse_lowlevel_new` function has been renamed to
   `fuse_session_new` and no longer interprets the --version or --help
