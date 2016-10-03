@@ -99,7 +99,6 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("defcontext=",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("rootcontext=",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("max_read=",		KEY_KERN_OPT),
-	FUSE_OPT_KEY("max_read=",		FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_KEY("user=",			KEY_MTAB_OPT),
 	FUSE_OPT_KEY("-r",			KEY_RO),
 	FUSE_OPT_KEY("ro",			KEY_KERN_FLAG),

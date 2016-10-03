@@ -2622,7 +2622,6 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "no_writeback_cache", offsetof(struct fuse_ll, no_writeback_cache), 1},
 	{ "time_gran=%u", offsetof(struct fuse_ll, conn.time_gran), 0 },
 	{ "clone_fd", offsetof(struct fuse_ll, clone_fd), 1 },
-	FUSE_OPT_KEY("max_read=", FUSE_OPT_KEY_DISCARD),
 	FUSE_OPT_KEY("-h", KEY_HELP),
 	FUSE_OPT_KEY("--help", KEY_HELP),
 	FUSE_OPT_KEY("-V", KEY_VERSION),
