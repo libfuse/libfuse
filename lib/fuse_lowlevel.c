@@ -2581,11 +2581,6 @@ clear_pipe:
 	goto out_free;
 }
 
-enum {
-	KEY_HELP,
-	KEY_VERSION,
-};
-
 static const struct fuse_opt fuse_ll_opts[] = {
 	{ "debug", offsetof(struct fuse_ll, debug), 1 },
 	{ "-d", offsetof(struct fuse_ll, debug), 1 },
@@ -2622,20 +2617,16 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "no_writeback_cache", offsetof(struct fuse_ll, no_writeback_cache), 1},
 	{ "time_gran=%u", offsetof(struct fuse_ll, conn.time_gran), 0 },
 	{ "clone_fd", offsetof(struct fuse_ll, clone_fd), 1 },
-	FUSE_OPT_KEY("-h", KEY_HELP),
-	FUSE_OPT_KEY("--help", KEY_HELP),
-	FUSE_OPT_KEY("-V", KEY_VERSION),
-	FUSE_OPT_KEY("--version", KEY_VERSION),
 	FUSE_OPT_END
 };
 
-static void fuse_ll_version(void)
+void fuse_lowlevel_version(void)
 {
 	printf("using FUSE kernel interface version %i.%i\n",
 	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
 }
 
-static void fuse_ll_help(void)
+void fuse_lowlevel_help(void)
 {
 	printf(
 "Low-level options\n"
@@ -2664,25 +2655,10 @@ static void fuse_ll_help(void)
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 			    struct fuse_args *outargs)
 {
-	(void) data; (void) outargs; (void) arg;
+	(void) data; (void) outargs; (void) key; (void) arg;
 
-	switch (key) {
-	case KEY_HELP:
-		fuse_ll_help();
-		fuse_mount_help();
-		break;
-
-	case KEY_VERSION:
-		fuse_ll_version();
-		fuse_mount_version();
-		break;
-
-	default:
-		fprintf(stderr, "fuse: unknown option `%s'\n", arg);
-	}
-
-	/* Fail */
-	return -1;
+	/* Passthrough unknown options */
+	return 1;
 }
 
 static void fuse_ll_destroy(struct fuse_ll *f)
@@ -2888,15 +2864,23 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	f = (struct fuse_ll *) calloc(1, sizeof(struct fuse_ll));
 	if (f == NULL) {
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
-		goto out;
+		goto out1;
 	}
 
 	/* Parse options */
 	mo = parse_mount_opts(args);
 	if (mo == NULL)
-		goto out_free0;
-	if (fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
-		goto out_free;
+		goto out2;
+	if(fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
+		goto out3;
+	if (args->argc != 1) {
+		int i;
+		fprintf(stderr, "fuse: unknown option(s): `");
+		for(i = 1; i < args->argc-1; i++)
+			fprintf(stderr, "%s ", args->argv[i]);
+		fprintf(stderr, "%s'\n", args->argv[i]);
+		goto out4;
+	}
 
 	if (f->debug)
 		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
@@ -2918,7 +2902,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	if (err) {
 		fprintf(stderr, "fuse: failed to create thread specific key: %s\n",
 			strerror(err));
-		goto out_free;
+		goto out5;
 	}
 
 	memcpy(&f->op, op, op_size);
@@ -2928,21 +2912,24 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	se = (struct fuse_session *) malloc(sizeof(*se));
 	if (se == NULL) {
 		fprintf(stderr, "fuse: failed to allocate session\n");
-		goto out_key_destroy;
+		goto out6;
 	}
 	memset(se, 0, sizeof(*se));
 	se->f = f;
 	se->mo = mo;
 	return se;
 
-out_key_destroy:
+out6:
 	pthread_key_delete(f->pipe_key);
-out_free:
-	free(mo);
-out_free0:
+out5:
 	pthread_mutex_destroy(&f->lock);
+out4:
+	fuse_opt_free_args(args);
+out3:
+	free(mo);
+out2:
 	free(f);
-out:
+out1:
 	return NULL;
 }
 

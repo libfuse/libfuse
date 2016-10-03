@@ -21,36 +21,24 @@
 #include <errno.h>
 #include <sys/param.h>
 
-enum  {
-	KEY_HELP,
-	KEY_HELP_NOHEADER,
-	KEY_VERSION,
-};
-
-struct helper_opts {
-	int singlethread;
-	int foreground;
-	int nodefault_subtype;
-	char *mountpoint;
-};
-
-#define FUSE_HELPER_OPT(t, p) { t, offsetof(struct helper_opts, p), 1 }
+#define FUSE_HELPER_OPT(t, p) \
+	{ t, offsetof(struct fuse_cmdline_opts, p), 1 }
 
 static const struct fuse_opt fuse_helper_opts[] = {
+	FUSE_HELPER_OPT("-h",		show_help),
+	FUSE_HELPER_OPT("--help",	show_help),
+	FUSE_HELPER_OPT("-V",		show_version),
+	FUSE_HELPER_OPT("--version",	show_version),
+	FUSE_HELPER_OPT("-d",		debug),
+	FUSE_HELPER_OPT("debug",	debug),
 	FUSE_HELPER_OPT("-d",		foreground),
 	FUSE_HELPER_OPT("debug",	foreground),
+	FUSE_OPT_KEY("-d",		FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_KEY("debug",		FUSE_OPT_KEY_KEEP),
 	FUSE_HELPER_OPT("-f",		foreground),
 	FUSE_HELPER_OPT("-s",		singlethread),
 	FUSE_HELPER_OPT("fsname=",	nodefault_subtype),
 	FUSE_HELPER_OPT("subtype=",	nodefault_subtype),
-
-	FUSE_OPT_KEY("-h",		KEY_HELP),
-	FUSE_OPT_KEY("--help",		KEY_HELP),
-	FUSE_OPT_KEY("-ho",		KEY_HELP_NOHEADER),
-	FUSE_OPT_KEY("-V",		KEY_VERSION),
-	FUSE_OPT_KEY("--version",	KEY_VERSION),
-	FUSE_OPT_KEY("-d",		FUSE_OPT_KEY_KEEP),
-	FUSE_OPT_KEY("debug",		FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_KEY("fsname=",		FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_KEY("subtype=",	FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_END
@@ -80,23 +68,12 @@ static void helper_version(void)
 static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 				struct fuse_args *outargs)
 {
-	struct helper_opts *hopts = data;
+	(void) outargs;
+	struct fuse_cmdline_opts *opts = data;
 
 	switch (key) {
-	case KEY_HELP:
-		usage(outargs->argv[0]);
-		/* fall through */
-
-	case KEY_HELP_NOHEADER:
-		helper_help();
-		return fuse_opt_add_arg(outargs, "-h");
-
-	case KEY_VERSION:
-		helper_version();
-		return 1;
-
 	case FUSE_OPT_KEY_NONOPT:
-		if (!hopts->mountpoint) {
+		if (!opts->mountpoint) {
 			char mountpoint[PATH_MAX];
 			if (realpath(arg, mountpoint) == NULL) {
 				fprintf(stderr,
@@ -104,7 +81,7 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 					arg, strerror(errno));
 				return -1;
 			}
-			return fuse_opt_add_opt(&hopts->mountpoint, mountpoint);
+			return fuse_opt_add_opt(&opts->mountpoint, mountpoint);
 		} else {
 			fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
 			return -1;
@@ -137,38 +114,44 @@ static int add_default_subtype(const char *progname, struct fuse_args *args)
 	return res;
 }
 
-int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
-		       int *multithreaded, int *foreground)
+int fuse_parse_cmdline(struct fuse_args *args,
+		       struct fuse_cmdline_opts *opts)
 {
-	int res;
-	struct helper_opts hopts;
-
-	memset(&hopts, 0, sizeof(hopts));
-	res = fuse_opt_parse(args, &hopts, fuse_helper_opts,
-			     fuse_helper_opt_proc);
-	if (res == -1)
+	memset(opts, 0, sizeof(struct fuse_cmdline_opts));
+	if (fuse_opt_parse(args, opts, fuse_helper_opts,
+			   fuse_helper_opt_proc) == -1)
 		return -1;
 
-	if (!hopts.nodefault_subtype) {
-		res = add_default_subtype(args->argv[0], args);
-		if (res == -1)
-			goto err;
+	if (opts->show_version) {
+		helper_version();
+		fuse_lowlevel_version();
+		fuse_mount_version();
+		return -1;
 	}
-	if (mountpoint)
-		*mountpoint = hopts.mountpoint;
-	else
-		free(hopts.mountpoint);
 
-	if (multithreaded)
-		*multithreaded = !hopts.singlethread;
-	if (foreground)
-		*foreground = hopts.foreground;
+	if (opts->show_help) {
+		usage(args->argv[0]);
+		helper_help();
+		fuse_lowlevel_help();
+		fuse_mount_help();
+		return -1;
+	}
+
+	if (!opts->mountpoint) {
+		fprintf(stderr, "error: no mountpoint specified\n");
+		usage(args->argv[0]);
+		return -1;
+	}
+
+	/* If neither -o subtype nor -o fsname are specified,
+	   set subtype to program's basename */
+	if (!opts->nodefault_subtype)
+		if (add_default_subtype(args->argv[0], args) == -1)
+			return -1;
+
 	return 0;
-
-err:
-	free(hopts.mountpoint);
-	return -1;
 }
+
 
 int fuse_daemonize(int foreground)
 {
@@ -224,81 +207,93 @@ int fuse_daemonize(int foreground)
 	return 0;
 }
 
-
-static struct fuse *fuse_setup(int argc, char *argv[],
-			       const struct fuse_operations *op, size_t op_size,
-			       int *multithreaded, void *user_data)
-{
-	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-	struct fuse *fuse;
-	char *mountpoint;
-	int foreground;
-	int res;
-
-	res = fuse_parse_cmdline(&args, &mountpoint, multithreaded, &foreground);
-	if (res == -1)
-		return NULL;
-
-	fuse = fuse_new(&args, op, op_size, user_data);
-	if (fuse == NULL)  {
-		fuse_opt_free_args(&args);
-		free(mountpoint);
-		return NULL;
-	}
-
-	res = fuse_mount(fuse, mountpoint);
-	free(mountpoint);
-	if (res != 0)
-		goto err_out1;
-
-	res = fuse_daemonize(foreground);
-	if (res == -1)
-		goto err_unmount;
-
-	res = fuse_set_signal_handlers(fuse_get_session(fuse));
-	if (res == -1)
-		goto err_unmount;
-
-	return fuse;
-
-err_unmount:
-	fuse_unmount(fuse);
-err_out1:
-	fuse_destroy(fuse);
-	fuse_opt_free_args(&args);
-	return NULL;
-}
-
-static void fuse_teardown(struct fuse *fuse)
-{
-	struct fuse_session *se = fuse_get_session(fuse);
-	fuse_remove_signal_handlers(se);
-	fuse_unmount(fuse);
-	fuse_destroy(fuse);
-}
-
 int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		   size_t op_size, void *user_data)
 {
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse *fuse;
-	int multithreaded;
+	struct fuse_cmdline_opts opts;
 	int res;
 
-	fuse = fuse_setup(argc, argv, op, op_size,
-			  &multithreaded, user_data);
-	if (fuse == NULL)
+	memset(&opts, 0, sizeof(opts));
+	if (fuse_opt_parse(&args, &opts, fuse_helper_opts,
+			   fuse_helper_opt_proc) == -1)
 		return 1;
 
-	if (multithreaded)
-		res = fuse_loop_mt(fuse);
-	else
+	if (opts.show_version) {
+		helper_version();
+		fuse_lowlevel_version();
+		fuse_mount_version();
+		res = 0;
+		goto out1;
+	}
+
+	/* Re-add --help for later processing by fuse_new()
+	   (that way we also get help for modules options) */
+	if (opts.show_help) {
+		helper_help();
+		if (fuse_opt_add_arg(&args, "--help") == -1) {
+			res = 1;
+			goto out1;
+		}
+	}
+
+	if (!opts.show_help &&
+	    !opts.mountpoint) {
+		fprintf(stderr, "error: no mountpoint specified\n");
+		usage(args.argv[0]);
+		res = 1;
+		goto out1;
+	}
+
+	/* If neither -o subtype nor -o fsname are specified,
+	   set subtype to program's basename */
+	if (!opts.nodefault_subtype) {
+		if (add_default_subtype(args.argv[0], &args) == -1) {
+			res = 1;
+			goto out1;
+		}
+	}
+
+	/* --help is processed here and will result in NULL */
+	fuse = fuse_new(&args, op, op_size, user_data);
+	if (fuse == NULL) {
+		res = opts.show_help ? 0 : 1;
+		goto out1;
+	}
+
+	if (fuse_mount(fuse,opts.mountpoint) != 0) {
+		res = 1;
+		goto out2;
+	}
+
+	if (fuse_daemonize(opts.foreground) != 0) {
+		res = 1;
+		goto out3;
+	}
+
+	struct fuse_session *se = fuse_get_session(fuse);
+	if (fuse_set_signal_handlers(se) != 0) {
+		res = 1;
+		goto out3;
+	}
+
+	if (opts.singlethread)
 		res = fuse_loop(fuse);
+	else
+		res = fuse_loop_mt(fuse);
+	if (res)
+		res = 1;
 
-	fuse_teardown(fuse);
-	if (res == -1)
-		return 1;
-
-	return 0;
+	fuse_remove_signal_handlers(se);
+out3:
+	fuse_unmount(fuse);
+out2:
+	fuse_destroy(fuse);
+out1:
+	free(opts.mountpoint);
+	fuse_opt_free_args(&args);
+	return res;
 }
 
 int fuse_version(void)

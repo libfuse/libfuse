@@ -276,21 +276,18 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_chan *ch;
+	struct fuse_cmdline_opts opts;
 	int fd;
-	int foreground;
 	int res;
 
-	res = fuse_parse_cmdline(&args, NULL, multithreaded, &foreground);
-	if (res == -1) {
-		fuse_opt_free_args(&args);
+	if (fuse_parse_cmdline(&args, &opts) == -1)
 		return NULL;
-	}
+	*multithreaded = !opts.singlethread;
 
+	/* Remove subtype= option */
 	res = fuse_opt_parse(&args, NULL, kill_subtype_opts, NULL);
-	if (res == -1) {
-		fuse_opt_free_args(&args);
-		return NULL;
-	}
+	if (res == -1)
+		goto out1;
 
 	/*
 	 * Make sure file descriptors 0, 1 and 2 are open, otherwise chaos
@@ -303,9 +300,8 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	} while (fd >= 0 && fd <= 2);
 
 	se = cuse_lowlevel_new(&args, ci, clop, userdata);
-	fuse_opt_free_args(&args);
 	if (se == NULL)
-		return NULL;
+		goto out1;
 
 	fd = open(devname, O_RDWR);
 	if (fd == -1) {
@@ -329,7 +325,7 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	if (res == -1)
 		goto err_se;
 
-	res = fuse_daemonize(foreground);
+	res = fuse_daemonize(opts.foreground);
 	if (res == -1)
 		goto err_sig;
 
@@ -339,6 +335,9 @@ err_sig:
 	fuse_remove_signal_handlers(se);
 err_se:
 	fuse_session_destroy(se);
+out1:
+	free(opts.mountpoint);
+	fuse_opt_free_args(&args);
 	return NULL;
 }
 

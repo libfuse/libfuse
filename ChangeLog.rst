@@ -2,12 +2,20 @@ Unreleased Changes
 ==================
 
 * The `fuse_lowlevel_new` function has been renamed to
-  `fuse_session_new`.
+  `fuse_session_new` and no longer interprets the --version or --help
+  options. To print help or version information, use the new
+  `fuse_lowlevel_help` and `fuse_lowlevel_version` functions.
 
-* There are now new `fuse_session_unmount` and `fuse_session_mount`
-  functions that should be used in the low-level API. The
-  `fuse_mount` and `fuse_unmount` functions should be used with the
-  high-level API only.
+* There are new `fuse_session_unmount` and `fuse_session_mount`
+  functions that should be used in the low-level API. The `fuse_mount`
+  and `fuse_unmount` functions should be used with the high-level API
+  only.
+
+* Neither `fuse_mount` nor `fuse_session_mount` take struct fuse_opts
+  parameters anymore. Mount options are parsed by `fuse_new` (for the
+  high-level API) and `fuse_session_new` (for the low-level API)
+  instead. To print help or version information, use the new
+  `fuse_mount_help` and `fuse_mount_version` functions.
 
 * The ``fuse_lowlevel_notify_*`` functions now all take a `struct
   fuse_session` parameter instead of a `struct fuse_chan`.

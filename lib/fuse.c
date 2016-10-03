@@ -77,7 +77,7 @@ struct fuse_config {
 	int auto_cache;
 	int intr;
 	int intr_signal;
-	int help;
+	int show_help;
 	char *modules;
 };
 
@@ -4410,15 +4410,11 @@ int fuse_interrupted(void)
 		return 0;
 }
 
-enum {
-	KEY_HELP,
-};
-
 #define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
 
 static const struct fuse_opt fuse_lib_opts[] = {
-	FUSE_OPT_KEY("-h",		      KEY_HELP),
-	FUSE_OPT_KEY("--help",		      KEY_HELP),
+	FUSE_LIB_OPT("-h",		      show_help, 1),
+	FUSE_LIB_OPT("--help",		      show_help, 1),
 	FUSE_OPT_KEY("debug",		      FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_KEY("-d",		      FUSE_OPT_KEY_KEEP),
 	FUSE_LIB_OPT("debug",		      debug, 1),
@@ -4499,14 +4495,9 @@ static void fuse_lib_help_modules(void)
 static int fuse_lib_opt_proc(void *data, const char *arg, int key,
 			     struct fuse_args *outargs)
 {
-	(void) arg; (void) outargs;
+	(void) arg; (void) outargs; (void) data; (void) key;
 
-	if (key == KEY_HELP) {
-		struct fuse_config *conf = (struct fuse_config *) data;
-		fuse_lib_help();
-		conf->help = 1;
-	}
-
+	/* Pass through unknown options */
 	return 1;
 }
 
@@ -4641,6 +4632,25 @@ struct fuse *fuse_new(struct fuse_args *args,
 	struct fuse_fs *fs;
 	struct fuse_lowlevel_ops llop = fuse_path_ops;
 
+	f = (struct fuse *) calloc(1, sizeof(struct fuse));
+	if (f == NULL) {
+		fprintf(stderr, "fuse: failed to allocate fuse object\n");
+		goto out;
+	}
+
+	/* Parse options */
+	if (fuse_opt_parse(args, &f->conf, fuse_lib_opts,
+			   fuse_lib_opt_proc) == -1)
+		goto out_free;
+
+	if (f->conf.show_help) {
+		fuse_lib_help();
+		fuse_lowlevel_help();
+		fuse_mount_help();
+		/* Defer printing module help until modules
+		   have been loaded */
+	}
+
 	pthread_mutex_lock(&fuse_context_lock);
 	static int builtin_modules_registered = 0;
 	/* Have the builtin modules already been registered? */
@@ -4652,19 +4662,12 @@ struct fuse *fuse_new(struct fuse_args *args,
 	}
 	pthread_mutex_unlock(&fuse_context_lock);
 
-
 	if (fuse_create_context_key() == -1)
-		goto out;
-
-	f = (struct fuse *) calloc(1, sizeof(struct fuse));
-	if (f == NULL) {
-		fprintf(stderr, "fuse: failed to allocate fuse object\n");
-		goto out_delete_context_key;
-	}
+		goto out_free;
 
 	fs = fuse_fs_new(op, op_size, user_data);
 	if (!fs)
-		goto out_free;
+		goto out_delete_context_key;
 
 	f->fs = fs;
 	f->conf.nopath = fs->op.flag_nopath;
@@ -4685,13 +4688,6 @@ struct fuse *fuse_new(struct fuse_args *args,
 	init_list_head(&f->full_slabs);
 	init_list_head(&f->lru_table);
 
-	/* When --help or --version are specified, we print messages
-	   to stderr but continue for now (and keep the arguments in
-	   `args` for use below */
-	if (fuse_opt_parse(args, &f->conf, fuse_lib_opts,
-			   fuse_lib_opt_proc) == -1)
-		goto out_free_fs;
-
 	if (f->conf.modules) {
 		char *module;
 		char *next;
@@ -4707,6 +4703,11 @@ struct fuse *fuse_new(struct fuse_args *args,
 		}
 	}
 
+	if(f->conf.show_help) {
+		fuse_lib_help_modules();
+		goto out_free_fs;
+	}
+
 	if (!f->conf.ac_attr_timeout_set)
 		f->conf.ac_attr_timeout = f->conf.attr_timeout;
 
@@ -4718,16 +4719,9 @@ struct fuse *fuse_new(struct fuse_args *args,
 	f->conf.readdir_ino = 1;
 #endif
 
-	/* This function will return NULL if there is an --help
-	   or --version argument in `args` */
 	f->se = fuse_session_new(args, &llop, sizeof(llop), f);
-	if (f->se == NULL) {
-		/* If we've printed help before, add module help at
-		 * the end */
-		if (f->conf.help)
-			fuse_lib_help_modules();
+	if (f->se == NULL)
 		goto out_free_fs;
-	}
 
 	if (f->conf.debug) {
 		fprintf(stderr, "nopath: %i\n", f->conf.nopath);
@@ -4783,10 +4777,10 @@ out_free_fs:
 		fuse_put_module(f->fs->m);
 	free(f->fs);
 	free(f->conf.modules);
-out_free:
-	free(f);
 out_delete_context_key:
 	fuse_delete_context_key();
+out_free:
+	free(f);
 out:
 	return NULL;
 }

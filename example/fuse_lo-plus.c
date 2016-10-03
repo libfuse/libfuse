@@ -442,55 +442,54 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.read		= lo_read,
 };
 
-#define LO_OPT(t, p, v) { t, offsetof(struct lo_data, p), v }
-
-static const struct fuse_opt lo_opts[] = {
-	FUSE_OPT_KEY("debug",		      FUSE_OPT_KEY_KEEP),
-	FUSE_OPT_KEY("-d",		      FUSE_OPT_KEY_KEEP),
-	LO_OPT("debug",		      debug, 1),
-	LO_OPT("-d",		      debug, 1),
-	FUSE_OPT_END
-};
-
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
-	char *mountpoint;
-	int ret = -1;
+	struct fuse_cmdline_opts opts;
 	struct lo_data lo = { .debug = 0 };
+	int ret = -1;
 
-	if (fuse_opt_parse(&args, &lo, lo_opts, NULL) == -1)
-		exit(1);
+	if (fuse_parse_cmdline(&args, &opts) != 0)
+		return 1;
+	if (opts.show_help || opts.show_version) {
+		ret = 1;
+		goto err_out1;
+	}
+	if (!opts.foreground)
+		fprintf(stderr, "Warning: background operation "
+			"is not supported\n");
+	if (!opts.singlethread)
+		fprintf(stderr, "Warning: multithreading is not "
+			"supported\n");
+
+	lo.debug = opts.debug;
 	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = open("/", O_PATH);
 	lo.root.nlookup = 2;
 	if (lo.root.fd == -1)
 		err(1, "open(\"/\", O_PATH)");
 
-	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != 0)
-	    goto err_out;
-
 	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
-	fuse_opt_free_args(&args);
 	if (se == NULL)
-	    goto err_out;
-
-	if (fuse_set_signal_handlers(se) != 0)
 	    goto err_out1;
 
-	if (fuse_session_mount(se, mountpoint) != 0)
+	if (fuse_set_signal_handlers(se) != 0)
 	    goto err_out2;
+
+	if (fuse_session_mount(se, opts.mountpoint) != 0)
+	    goto err_out3;
 
 	ret = fuse_session_loop(se);
 
 	fuse_session_unmount(se);
-err_out2:
+err_out3:
 	fuse_remove_signal_handlers(se);
-err_out1:
+err_out2:
 	fuse_session_destroy(se);
-err_out:
-	free(mountpoint);
+err_out1:
+	free(opts.mountpoint);
+	fuse_opt_free_args(&args);
 
 	while (lo.root.next != &lo.root)
 		lo_free(lo.root.next);

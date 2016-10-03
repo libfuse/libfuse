@@ -209,34 +209,6 @@ struct fuse_session;
 struct fuse_pollhandle;
 
 /**
- * Utility functions for simple file systems to parse common options.
- *
- * The following options are parsed:
- *
- *   '-f'	     foreground
- *   '-d' '-odebug'  foreground, but keep the debug option
- *   '-s'	     single threaded
- *   '-h' '--help'   help
- *   '-ho'	     help without header
- *   '-ofsname=..'   file system name, if not present, then set to the program
- *		     name
- *
- * Unknown parameters in `args` are passed through unchanged. Known
- * parameters (with the exception of --help and --version) are removed.
- *
- * All parameters may be NULL (in which case they may still
- * be specified on the command line, but will not be set).
- *
- * @param args argument vector
- * @param mountpoint the returned mountpoint, should be freed after use
- * @param multithreaded set to 1 unless the '-s' option is present
- * @param foreground set to 1 if one of the relevant options is present
- * @return 0 on success, -1 on failure
- */
-int fuse_parse_cmdline(struct fuse_args *args, char **mountpoint,
-		       int *multithreaded, int *foreground);
-
-/**
  * Go into the background
  *
  * @param foreground if true, stay in the foreground

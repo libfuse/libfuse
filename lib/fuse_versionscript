@@ -122,6 +122,10 @@ FUSE_3.0 {
 		fuse_lowlevel_notify_delete;
 		fuse_fs_flock;
 		fuse_fs_fallocate;
+		fuse_lowlevel_help;
+		fuse_lowlevel_version;
+		fuse_mount_help;
+		fuse_mount_version;
 
 	local:
 		*;

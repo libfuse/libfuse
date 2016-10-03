@@ -187,35 +187,45 @@ int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
-	char *mountpoint;
-	int err = -1;
+	struct fuse_cmdline_opts opts;
+	int ret = -1;
 
-	if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != 0)
-	    goto err_out;
+	if (fuse_parse_cmdline(&args, &opts) != 0)
+		return 1;
+	if (opts.show_help || opts.show_version) {
+		ret = 1;
+		goto err_out1;
+	}
+	if (!opts.foreground)
+		fprintf(stderr, "Warning: background operation "
+			"is not supported\n");
+	if (!opts.singlethread)
+		fprintf(stderr, "Warning: multithreading is not "
+			"supported\n");
 
 	se = fuse_session_new(&args, &hello_ll_oper,
 			      sizeof(hello_ll_oper), NULL);
-	fuse_opt_free_args(&args);
 	if (se == NULL)
-	    goto err_out;
-
-	if (fuse_set_signal_handlers(se) != 0)
 	    goto err_out1;
 
-	if (fuse_session_mount(se, mountpoint) != 0)
+	if (fuse_set_signal_handlers(se) != 0)
 	    goto err_out2;
 
+	if (fuse_session_mount(se, opts.mountpoint) != 0)
+	    goto err_out3;
+
 	/* Block until ctrl+c or fusermount -u */
-	err = fuse_session_loop(se);
+	ret = fuse_session_loop(se);
 
 	fuse_session_unmount(se);
-err_out2:
+err_out3:
 	fuse_remove_signal_handlers(se);
-err_out1:
+err_out2:
 	fuse_session_destroy(se);
-err_out:
-	free(mountpoint);
+err_out1:
+	free(opts.mountpoint);
+	fuse_opt_free_args(&args);
 
-	return err ? 1 : 0;
+	return ret ? 1 : 0;
 }
 /*! [doxygen_fuse_lowlevel_usage] */

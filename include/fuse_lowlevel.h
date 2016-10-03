@@ -1560,9 +1560,71 @@ void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
  */
 int fuse_req_interrupted(fuse_req_t req);
 
+
+/* ----------------------------------------------------------- *
+ * Inquiry functions                                           *
+ * ----------------------------------------------------------- */
+
+/**
+ * Print FUSE library version to stdout.
+ */
+void fuse_lowlevel_version(void);
+
+/**
+ * Print FUSE mount (fusermount) version stdout.
+ */
+void fuse_mount_version(void);
+
+/**
+ * Print available low-level options to stdout.
+ * These options may be passed to `fuse_session_new()`
+ */
+void fuse_lowlevel_help(void);
+
+/**
+ * Print available mount options to stdout.
+ * These options may be passed to `fuse_session_new()`
+ */
+void fuse_mount_help(void);
+
 /* ----------------------------------------------------------- *
  * Filesystem setup & teardown                                 *
  * ----------------------------------------------------------- */
+
+struct fuse_cmdline_opts {
+	int singlethread;
+	int foreground;
+	int debug;
+	int nodefault_subtype;
+	char *mountpoint;
+	int show_version;
+	int show_help;
+};
+
+/**
+ * Utility function to parse common options for simple file systems
+ * using the low-level API. Available options are listed in `struct
+ * fuse_opt fuse_helper_opts[]`. A single non-option argument is
+ * treated as the mountpoint. Multiple (or no) non-option arguments
+ * will result in an error.
+ *
+ * Unknown options are passed through unchanged. Known options (other
+ * than --debug, which is preserved) and the mountpoint argument are
+ * removed from *args*.
+ *
+ * If --help or --version is specified, the appropriate information is
+ * printed to stdout and the function proceeds normally.
+ *
+ * If neither -o subtype= or -o fsname= options are given, the subtype
+ * is set to the basename of the program (the fsname defaults to
+ * "fuse").
+ *
+ * @param args argument vector (input+output)
+ * @param opts output argument for parsed options
+ * @return 0 on success, -1 on failure
+ */
+int fuse_parse_cmdline(struct fuse_args *args,
+		       struct fuse_cmdline_opts *opts);
 
 /**
  * Create a low level session.
@@ -1573,9 +1635,6 @@ int fuse_req_interrupted(fuse_req_t req);
  * Known options are defined in `struct fuse_opt fuse_ll_opts[]` and
  * `struct fuse_opt fuse_mount_opts[]`. If not all options are known,
  * an error message is written to stderr and the function returns NULL.
- *
- * If the --help or --version parameters are specified, the function
- * prints the requsted information to stdout and returns NULL.
  *
  * @param args argument vector
  * @param op the (low-level) filesystem operations
