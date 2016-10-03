@@ -4453,6 +4453,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
 static void fuse_lib_help(void)
 {
 	printf(
+"High-level options\n"
 "    -o hard_remove         immediate removal (don't hide files)\n"
 "    -o use_ino             let filesystem set inode numbers\n"
 "    -o readdir_ino         try to fill in d_ino in readdir\n"
@@ -4471,8 +4472,8 @@ static void fuse_lib_help(void)
 "    -o nopath              don't supply path if not necessary\n"
 "    -o intr                allow requests to be interrupted\n"
 "    -o intr_signal=NUM     signal to send on interrupt (%i)\n"
-"    -o modules=M1[:M2...]  names of modules to push onto filesystem stack\n"
-"\n", FUSE_DEFAULT_INTR_SIGNAL);
+"    -o modules=M1[:M2...]  names of modules to push onto filesystem stack\n\n",
+	       FUSE_DEFAULT_INTR_SIGNAL);
 }
 
 static void fuse_lib_help_modules(void)

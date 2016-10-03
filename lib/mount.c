@@ -121,6 +121,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 void fuse_mount_help(void)
 {
 	printf(
+"Mount options:\n"
 "    -o allow_other         allow access to other users\n"
 "    -o allow_root          allow access to root\n"
 "    -o auto_unmount        auto unmount on process termination\n"
@@ -129,8 +130,7 @@ void fuse_mount_help(void)
 "    -o fsname=NAME         set filesystem name\n"
 "    -o subtype=NAME        set filesystem type\n"
 "    -o large_read          issue large read requests (2.4 only)\n"
-"    -o max_read=N          set maximum size of read requests\n"
-"\n");
+"    -o max_read=N          set maximum size of read requests\n\n");
 }
 
 static void exec_fusermount(const char *argv[])

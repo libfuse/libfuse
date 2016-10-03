@@ -2639,6 +2639,7 @@ static void fuse_ll_version(void)
 static void fuse_ll_help(void)
 {
 	printf(
+"Low-level options\n"
 "    -o max_write=N         set maximum size of write requests\n"
 "    -o max_readahead=N     set maximum readahead\n"
 "    -o max_background=N    set number of maximum background requests\n"
@@ -2658,8 +2659,7 @@ static void fuse_ll_help(void)
 "    -o [no_]async_dio        asynchronous direct I/O\n"
 "    -o [no_]writeback_cache  asynchronous, buffered writes\n"
 "    -o time_gran=N           time granularity in nsec\n"
-"    -o clone_fd              clone fuse device file descriptors\n"
-);
+"    -o clone_fd              clone fuse device file descriptors\n\n");
 }
 
 static int fuse_ll_opt_proc(void *data, const char *arg, int key,

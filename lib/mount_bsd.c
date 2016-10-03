@@ -95,7 +95,9 @@ static const struct fuse_opt fuse_mount_opts[] = {
 
 void fuse_mount_help(void)
 {
-	printf("    -o allow_root          allow access to root\n");
+	printf(
+"Mount options:\n"
+"    -o allow_root          allow access to root\n");
 	system(FUSERMOUNT_PROG " --help");
 	fputc('\n', stderr);
 }

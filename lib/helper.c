@@ -59,16 +59,13 @@ static const struct fuse_opt fuse_helper_opts[] = {
 static void usage(const char *progname)
 {
 	printf("usage: %s mountpoint [options]\n\n", progname);
-	printf("general options:\n"
-	       "    -o opt,[opt...]        mount options\n"
-	       "    -h   --help            print help\n"
-	       "    -V   --version         print version\n"
-	       "\n");
 }
 
 static void helper_help(void)
 {
-	printf("FUSE options:\n"
+	printf("General options:\n"
+	       "    -h   --help            print help\n"
+	       "    -V   --version         print version\n"
 	       "    -d   -o debug          enable debug output (implies -f)\n"
 	       "    -f                     foreground operation\n"
 	       "    -s                     disable multi-threaded operation\n"
