@@ -106,7 +106,14 @@ struct fuse_entry_param {
 	double entry_timeout;
 };
 
-/** Additional context associated with requests */
+/**
+ * Additional context associated with requests.
+ *
+ * Note that the reported client uid, gid and pid may be zero in some
+ * situations. For example, if the FUSE file system is running in a
+ * PID or user namespace but then accessed from outside the namespace,
+ * there is no valid uid/pid/gid that could be reported.
+ */
 struct fuse_ctx {
 	/** User ID of the calling process */
 	uid_t uid;
