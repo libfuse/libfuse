@@ -2,6 +2,8 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
+  Implementation of the single-threaded FUSE session loop.
+
   This program can be distributed under the terms of the GNU LGPLv2.
   See the file COPYING.LIB
 */

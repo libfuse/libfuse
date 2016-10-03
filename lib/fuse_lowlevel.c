@@ -2,6 +2,9 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
+  Implementation of (most of) the low-level FUSE API. The session loop
+  functions are implemented in separate files.
+
   This program can be distributed under the terms of the GNU LGPLv2.
   See the file COPYING.LIB
 */

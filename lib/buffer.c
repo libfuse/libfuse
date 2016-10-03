@@ -2,6 +2,9 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2010  Miklos Szeredi <miklos@szeredi.hu>
 
+  Functions for dealing with `struct fuse_buf` and `struct
+  fuse_bufvec`.
+
   This program can be distributed under the terms of the GNU LGPLv2.
   See the file COPYING.LIB
 */

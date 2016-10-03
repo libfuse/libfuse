@@ -2,6 +2,8 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2005-2008 Csaba Henk <csaba.henk@creo.hu>
 
+  Architecture specific file system mounting (FreeBSD).
+
   This program can be distributed under the terms of the GNU LGPLv2.
   See the file COPYING.LIB.
 */
