@@ -53,6 +53,37 @@ def test_hello(tmpdir, name):
     else:
         umount(mount_process, mnt_dir)
 
+def test_fuse_lo_plus(tmpdir):
+    mnt_dir = str(tmpdir.mkdir('mnt'))
+    src_dir = str(tmpdir.mkdir('src'))
+
+    cmdline = [os.path.join(basename, 'example', 'fuse_lo-plus'),
+                '-f', '-s', mnt_dir ]
+    mount_process = subprocess.Popen(cmdline)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        work_dir = os.path.join(mnt_dir, src_dir)
+        tst_write(work_dir)
+        tst_mkdir(work_dir)
+        tst_symlink(work_dir)
+        tst_mknod(work_dir)
+        if os.getuid() == 0:
+            tst_chown(work_dir)
+        # Underlying fs may not have full nanosecond resolution
+        tst_utimens(work_dir, ns_tol=1000)
+        tst_link(work_dir)
+        tst_readdir(work_dir)
+        tst_statvfs(work_dir)
+        tst_truncate_path(work_dir)
+        tst_truncate_fd(work_dir)
+        tst_unlink(work_dir)
+        tst_passthrough(src_dir, work_dir)
+    except:
+        cleanup(mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
 @pytest.mark.parametrize("name", ('fusexmp', 'fusexmp_fh'))
 def test_fusexmp_fh(tmpdir, name):
     mnt_dir = str(tmpdir.mkdir('mnt'))
