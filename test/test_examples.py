@@ -15,8 +15,9 @@ import filecmp
 import errno
 from tempfile import NamedTemporaryFile
 from util import wait_for_mount, umount, cleanup
+from os.path import join as pjoin
 
-basename = os.path.join(os.path.dirname(__file__), '..')
+basename = pjoin(os.path.dirname(__file__), '..')
 TEST_FILE = __file__
 
 with open(TEST_FILE, 'rb') as fh:
@@ -38,7 +39,7 @@ def test_hello(tmpdir, name):
     try:
         wait_for_mount(mount_process, mnt_dir)
         assert os.listdir(mnt_dir) == [ 'hello' ]
-        filename = os.path.join(mnt_dir, 'hello')
+        filename = pjoin(mnt_dir, 'hello')
         with open(filename, 'r') as fh:
             assert fh.read() == 'Hello World!\n'
         with pytest.raises(IOError) as exc_info:
@@ -57,12 +58,12 @@ def test_fuse_lo_plus(tmpdir):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
-    cmdline = [os.path.join(basename, 'example', 'fuse_lo-plus'),
+    cmdline = [pjoin(basename, 'example', 'fuse_lo-plus'),
                 '-f', '-s', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
-        work_dir = os.path.join(mnt_dir, src_dir)
+        work_dir = pjoin(mnt_dir, src_dir)
         tst_write(work_dir)
         tst_mkdir(work_dir)
         tst_symlink(work_dir)
@@ -89,13 +90,13 @@ def test_fusexmp_fh(tmpdir, name):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
-    cmdline = [os.path.join(basename, 'example', name),
+    cmdline = [pjoin(basename, 'example', name),
                 '-f', '-o' , 'use_ino,readdir_ino,kernel_cache',
                 mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
-        work_dir = os.path.join(mnt_dir, src_dir)
+        work_dir = pjoin(mnt_dir, src_dir)
         tst_write(work_dir)
         tst_mkdir(work_dir)
         tst_symlink(work_dir)
@@ -119,14 +120,14 @@ def test_fusexmp_fh(tmpdir, name):
 
 def test_fioc(tmpdir):
     mnt_dir = str(tmpdir)
-    testfile = os.path.join(mnt_dir, 'fioc')
-    cmdline = [os.path.join(basename, 'example', 'fioc'),
+    testfile = pjoin(mnt_dir, 'fioc')
+    cmdline = [pjoin(basename, 'example', 'fioc'),
                '-f', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
-        base_cmd = [ os.path.join(basename, 'example', 'fioclient'),
+        base_cmd = [ pjoin(basename, 'example', 'fioclient'),
                      testfile ]
         assert subprocess.check_output(base_cmd) == b'0\n'
         with open(testfile, 'wb') as fh:
@@ -143,12 +144,12 @@ def test_fioc(tmpdir):
 
 def test_fsel(tmpdir):
     mnt_dir = str(tmpdir)
-    cmdline = [os.path.join(basename, 'example', 'fsel'),
+    cmdline = [pjoin(basename, 'example', 'fsel'),
                '-f', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
-        cmdline = [ os.path.join(basename, 'example', 'fselclient') ]
+        cmdline = [ pjoin(basename, 'example', 'fselclient') ]
         subprocess.check_call(cmdline, cwd=mnt_dir)
     except:
         cleanup(mnt_dir)
@@ -157,7 +158,7 @@ def test_fsel(tmpdir):
         umount(mount_process, mnt_dir)
 
 def checked_unlink(filename, path, isdir=False):
-    fullname = os.path.join(path, filename)
+    fullname = pjoin(path, filename)
     if isdir:
         os.rmdir(fullname)
     else:
@@ -190,7 +191,7 @@ def tst_symlink(mnt_dir):
     checked_unlink(linkname, mnt_dir)
 
 def tst_mknod(mnt_dir):
-    filename = os.path.join(mnt_dir, name_generator())
+    filename = pjoin(mnt_dir, name_generator())
     shutil.copyfile(TEST_FILE, filename)
     fstat = os.lstat(filename)
     assert stat.S_ISREG(fstat.st_mode)
@@ -200,7 +201,7 @@ def tst_mknod(mnt_dir):
     checked_unlink(filename, mnt_dir)
 
 def tst_chown(mnt_dir):
-    filename = os.path.join(mnt_dir, name_generator())
+    filename = pjoin(mnt_dir, name_generator())
     os.mkdir(filename)
     fstat = os.lstat(filename)
     uid = fstat.st_uid
@@ -221,17 +222,17 @@ def tst_chown(mnt_dir):
     checked_unlink(filename, mnt_dir, isdir=True)
 
 def tst_write(mnt_dir):
-    name = os.path.join(mnt_dir, name_generator())
+    name = pjoin(mnt_dir, name_generator())
     shutil.copyfile(TEST_FILE, name)
     assert filecmp.cmp(name, TEST_FILE, False)
     checked_unlink(name, mnt_dir)
 
 def tst_unlink(mnt_dir):
-    name = os.path.join(mnt_dir, name_generator())
+    name = pjoin(mnt_dir, name_generator())
     data1 = b'foo'
     data2 = b'bar'
 
-    with open(os.path.join(mnt_dir, name), 'wb+', buffering=0) as fh:
+    with open(pjoin(mnt_dir, name), 'wb+', buffering=0) as fh:
         fh.write(data1)
         checked_unlink(name, mnt_dir)
         fh.write(data2)
@@ -242,8 +243,8 @@ def tst_statvfs(mnt_dir):
     os.statvfs(mnt_dir)
 
 def tst_link(mnt_dir):
-    name1 = os.path.join(mnt_dir, name_generator())
-    name2 = os.path.join(mnt_dir, name_generator())
+    name1 = pjoin(mnt_dir, name_generator())
+    name2 = pjoin(mnt_dir, name_generator())
     shutil.copyfile(TEST_FILE, name1)
     assert filecmp.cmp(name1, TEST_FILE, False)
     os.link(name1, name2)
@@ -262,7 +263,7 @@ def tst_link(mnt_dir):
     os.unlink(name1)
 
 def tst_readdir(mnt_dir):
-    dir_ = os.path.join(mnt_dir, name_generator())
+    dir_ = pjoin(mnt_dir, name_generator())
     file_ = dir_ + "/" + name_generator()
     subdir = dir_ + "/" + name_generator()
     subfile = subdir + "/" + name_generator()
@@ -286,7 +287,7 @@ def tst_readdir(mnt_dir):
 def tst_truncate_path(mnt_dir):
     assert len(TEST_DATA) > 1024
 
-    filename = os.path.join(mnt_dir, name_generator())
+    filename = pjoin(mnt_dir, name_generator())
     with open(filename, 'wb') as fh:
         fh.write(TEST_DATA)
 
@@ -332,7 +333,7 @@ def tst_truncate_fd(mnt_dir):
         assert fh.read(size) == TEST_DATA[:size-1024]
 
 def tst_utimens(mnt_dir, ns_tol=0):
-    filename = os.path.join(mnt_dir, name_generator())
+    filename = pjoin(mnt_dir, name_generator())
     os.mkdir(filename)
     fstat = os.lstat(filename)
 
@@ -357,8 +358,8 @@ def tst_utimens(mnt_dir, ns_tol=0):
 
 def tst_passthrough(src_dir, mnt_dir):
     name = name_generator()
-    src_name = os.path.join(src_dir, name)
-    mnt_name = os.path.join(src_dir, name)
+    src_name = pjoin(src_dir, name)
+    mnt_name = pjoin(src_dir, name)
     assert name not in os.listdir(src_dir)
     assert name not in os.listdir(mnt_dir)
     with open(src_name, 'w') as fh:
@@ -368,8 +369,8 @@ def tst_passthrough(src_dir, mnt_dir):
     assert os.stat(src_name) == os.stat(mnt_name)
 
     name = name_generator()
-    src_name = os.path.join(src_dir, name)
-    mnt_name = os.path.join(src_dir, name)
+    src_name = pjoin(src_dir, name)
+    mnt_name = pjoin(src_dir, name)
     assert name not in os.listdir(src_dir)
     assert name not in os.listdir(mnt_dir)
     with open(mnt_name, 'w') as fh:
