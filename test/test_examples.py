@@ -31,6 +31,9 @@ def test_hello(tmpdir, name):
     mnt_dir = str(tmpdir)
     cmdline = [os.path.join(basename, 'example', name),
                '-f', mnt_dir ]
+    if name == 'hello_ll':
+        # supports single-threading only
+        cmdline.append('-s')
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
