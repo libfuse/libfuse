@@ -1570,10 +1570,9 @@ int fuse_req_interrupted(fuse_req_t req);
  * Returns a session structure suitable for passing to
  * fuse_session_mount() and fuse_session_loop().
  *
- * Known arguments are defined in `struct fuse_opt fuse_ll_opts[]` and
- * `struct fuse_opt fuse_mount_opts[]`. If there are any unknown
- * arguments, an error message will be printed to stderr and the
- * function will return NULL.
+ * Known options are defined in `struct fuse_opt fuse_ll_opts[]` and
+ * `struct fuse_opt fuse_mount_opts[]`. If not all options are known,
+ * an error message is written to stderr and the function returns NULL.
  *
  * If the --help or --version parameters are specified, the function
  * prints the requsted information to stdout and returns NULL.

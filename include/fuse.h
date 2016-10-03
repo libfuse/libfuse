@@ -608,8 +608,7 @@ struct fuse_context {
  * main() function.
  *
  * This function does the following:
- *   - parses command line options (-d -s and -h)
- *   - passes relevant mount options to the fuse_mount()
+ *   - parses command line options
  *   - installs signal handlers for INT, HUP, TERM and PIPE
  *   - registers an exit handler to unmount the filesystem on program exit
  *   - creates a fuse handle
@@ -640,14 +639,13 @@ struct fuse_context {
 /**
  * Create a new FUSE filesystem.
  *
- * Known arguments are defined in `struct fuse_opt fuse_lib_opts[]`,
+ * Known options are defined in `struct fuse_opt fuse_lib_opts[]`,
  * `struct fuse_opt fuse_mount_opts[]`, and `struct fuse_opt
- * fuse_ll_opts[]`.  If there are any unknown arguments, an error
- * message will be printed to stderr and the function will return
- * NULL.
+ * fuse_ll_opts[]`.  If not all options are known, an error message is
+ * written to stderr and the function returns NULL.
  *
- * If the --help or --version parameters are specified, the function
- * prints the requested information to stdout and returns NULL.
+ * If the --help option is specified, the function writes a help text
+ * to stdout and returns NULL.
  *
  * @param args argument vector
  * @param op the filesystem operations
