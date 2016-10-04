@@ -1760,10 +1760,11 @@ void fuse_session_process_buf(struct fuse_session *se,
 			      const struct fuse_buf *buf);
 
 /**
- * Receive a raw request supplied in a generic buffer
+ * Read a raw request from the kernel into the supplied buffer.
  *
- * The fuse_buf supplied to this function contains a suitably allocated memory
- * buffer.  This may be overwritten with a file descriptor buffer.
+ * Depending on file system options, system capabilities, and request
+ * size the request is either read into a memory buffer or spliced
+ * into a temporary pipe.
  *
  * @param se the session
  * @param buf the fuse_buf to store the request in
