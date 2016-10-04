@@ -2988,11 +2988,12 @@ error_out:
 
 void fuse_session_unmount(struct fuse_session *se)
 {
-	fuse_session_remove_chan(se->ch);
+	struct fuse_chan *ch = se->ch;
+	fuse_session_remove_chan(ch);
 	if (se->mountpoint) {
-		int fd = se->ch ? fuse_chan_clearfd(se->ch) : -1;
+		int fd = ch ? fuse_chan_clearfd(ch) : -1;
 		fuse_kern_unmount(se->mountpoint, fd);
-		fuse_chan_put(se->ch);
+		fuse_chan_put(ch);
 		free(se->mountpoint);
 		se->mountpoint = NULL;
 	}
