@@ -44,8 +44,7 @@
 
 struct fuse_pollhandle {
 	uint64_t kh;
-	struct fuse_chan *ch;
-	struct fuse_ll *f;
+	struct fuse_session *se;
 };
 
 static size_t pagesize;
@@ -1794,8 +1793,7 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 				return;
 			}
 			ph->kh = arg->kh;
-			ph->ch = req->ch;
-			ph->f = req->f;
+			ph->se = req->se;
 		}
 
 		req->f->op.poll(req, nodeid, &fi, ph);
@@ -2110,7 +2108,8 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
 		iov[1].iov_base = &outarg;
 		iov[1].iov_len = sizeof(outarg);
 
-		return send_notify_iov(ph->f, ph->ch, FUSE_NOTIFY_POLL, iov, 2);
+		return send_notify_iov(ph->se->f, ph->se->ch,
+				       FUSE_NOTIFY_POLL, iov, 2);
 	} else {
 		return 0;
 	}
