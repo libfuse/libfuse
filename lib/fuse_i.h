@@ -9,23 +9,18 @@
 #include "fuse.h"
 #include "fuse_lowlevel.h"
 
-struct fuse_chan;
 struct fuse_ll;
 struct mount_opts;
 
 struct fuse_session {
 	struct fuse_ll *f;
 	char *mountpoint;
-
 	volatile int exited;
-
-	struct fuse_chan *ch;
+	int fd;
 	struct mount_opts *mo;
 };
 
 struct fuse_chan {
-	struct fuse_session *se;
-
 	pthread_mutex_t lock;
 	int ctr;
 	int fd;
@@ -116,56 +111,9 @@ struct fuse_module {
 	int ctr;
 };
 
-int fuse_chan_clearfd(struct fuse_chan *ch);
-void fuse_chan_close(struct fuse_chan *ch);
-
 /* ----------------------------------------------------------- *
- * Channel interface					       *
+ * Channel interface (when using -o clone_fd)		       *
  * ----------------------------------------------------------- */
-
- /**
- * Create a new channel
- *
- * @param op channel operations
- * @param fd file descriptor of the channel
- * @return the new channel object, or NULL on failure
- */
-struct fuse_chan *fuse_chan_new(int fd);
-
-/**
- * Query the session to which this channel is assigned
- *
- * @param ch the channel
- * @return the session, or NULL if the channel is not assigned
- */
-struct fuse_session *fuse_chan_session(struct fuse_chan *ch);
-
-/**
- * Remove the channel from a session
- *
- * If the channel is not assigned to a session, then this is a no-op
- *
- * @param ch the channel to remove
- */
-void fuse_session_remove_chan(struct fuse_chan *ch);
-
-/**
- * Assign a channel to a session
- *
- * If a session is destroyed, the assigned channel is also destroyed
- *
- * @param se the session
- * @param ch the channel
- */
-void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch);
-
-/**
- * Return channel assigned to the session
- *
- * @param se the session
- * @return the channel
- */
-struct fuse_chan *fuse_session_chan(struct fuse_session *se);
 
 /**
  * Obtain counted reference to the channel
@@ -181,7 +129,6 @@ struct fuse_chan *fuse_chan_get(struct fuse_chan *ch);
  * @param ch the channel
  */
 void fuse_chan_put(struct fuse_chan *ch);
-
 
 struct mount_opts *parse_mount_opts(struct fuse_args *args);
 void destroy_mount_opts(struct mount_opts *mo);

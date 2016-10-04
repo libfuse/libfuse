@@ -161,18 +161,12 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 	return req;
 }
 
-void fuse_chan_close(struct fuse_chan *ch)
-{
-	int fd = ch->fd;
-	if (fd != -1)
-	    close(fd);
-}
-
-
-static int fuse_send_msg(struct fuse_ll *f, struct fuse_chan *ch,
+/* Send data. If *ch* is NULL, send via session master fd */
+static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
+	struct fuse_ll *f = se->f;
 
 	out->len = iov_length(iov, count);
 	if (f->debug) {
@@ -191,12 +185,11 @@ static int fuse_send_msg(struct fuse_ll *f, struct fuse_chan *ch,
 		}
 	}
 
-	ssize_t res = writev(ch->fd, iov, count);
+	ssize_t res = writev(ch ? ch->fd : se->fd,
+			     iov, count);
 	int err = errno;
 
 	if (res == -1) {
-		struct fuse_session *se = fuse_chan_session(ch);
-
 		assert(se != NULL);
 
 		/* ENOENT means the operation was interrupted */
@@ -225,7 +218,7 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
-	return fuse_send_msg(req->f, req->ch, iov, count);
+	return fuse_send_msg(req->se, req->ch, iov, count);
 }
 
 static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
@@ -480,7 +473,8 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
 	return send_reply_ok(req, buf, size);
 }
 
-static int fuse_send_data_iov_fallback(struct fuse_ll *f, struct fuse_chan *ch,
+static int fuse_send_data_iov_fallback(struct fuse_session *se,
+				       struct fuse_chan *ch,
 				       struct iovec *iov, int iov_count,
 				       struct fuse_bufvec *buf,
 				       size_t len)
@@ -498,7 +492,7 @@ static int fuse_send_data_iov_fallback(struct fuse_ll *f, struct fuse_chan *ch,
 		iov[iov_count].iov_base = buf->buf[0].mem;
 		iov[iov_count].iov_len = len;
 		iov_count++;
-		return fuse_send_msg(f, ch, iov, iov_count);
+		return fuse_send_msg(se, ch, iov, iov_count);
 	}
 
 	res = posix_memalign(&mbuf, pagesize, len);
@@ -516,7 +510,7 @@ static int fuse_send_data_iov_fallback(struct fuse_ll *f, struct fuse_chan *ch,
 	iov[iov_count].iov_base = mbuf;
 	iov[iov_count].iov_len = len;
 	iov_count++;
-	res = fuse_send_msg(f, ch, iov, iov_count);
+	res = fuse_send_msg(se, ch, iov, iov_count);
 	free(mbuf);
 
 	return res;
@@ -616,7 +610,7 @@ static int read_back(int fd, char *buf, size_t len)
 	return 0;
 }
 
-static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
+static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			       struct iovec *iov, int iov_count,
 			       struct fuse_bufvec *buf, unsigned int flags)
 {
@@ -624,6 +618,7 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 	size_t len = fuse_buf_size(buf);
 	struct fuse_out_header *out = iov[0].iov_base;
 	struct fuse_ll_pipe *llp;
+	struct fuse_ll *f = se->f;
 	int splice_flags;
 	size_t pipesize;
 	size_t total_fd_size;
@@ -769,7 +764,7 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 			iov[iov_count].iov_base = mbuf;
 			iov[iov_count].iov_len = len;
 			iov_count++;
-			res = fuse_send_msg(f, ch, iov, iov_count);
+			res = fuse_send_msg(se, ch, iov, iov_count);
 			free(mbuf);
 			return res;
 		}
@@ -790,8 +785,8 @@ static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
 	    (f->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
-	res = splice(llp->pipe[0], NULL,
-		     ch->fd, NULL, out->len, splice_flags);
+	res = splice(llp->pipe[0], NULL, ch ? ch->fd : se->fd,
+		     NULL, out->len, splice_flags);
 	if (res == -1) {
 		res = -errno;
 		perror("fuse: splice from pipe");
@@ -810,17 +805,17 @@ clear_pipe:
 	return res;
 
 fallback:
-	return fuse_send_data_iov_fallback(f, ch, iov, iov_count, buf, len);
+	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len);
 }
 #else
-static int fuse_send_data_iov(struct fuse_ll *f, struct fuse_chan *ch,
+static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			       struct iovec *iov, int iov_count,
 			       struct fuse_bufvec *buf, unsigned int flags)
 {
 	size_t len = fuse_buf_size(buf);
 	(void) flags;
 
-	return fuse_send_data_iov_fallback(f, ch, iov, iov_count, buf, len);
+	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len);
 }
 #endif
 
@@ -837,7 +832,7 @@ int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 	out.unique = req->unique;
 	out.error = 0;
 
-	res = fuse_send_data_iov(req->f, req->ch, iov, 1, bufv, flags);
+	res = fuse_send_data_iov(req->se, req->ch, iov, 1, bufv, flags);
 	if (res <= 0) {
 		fuse_free_req(req);
 		return res;
@@ -2081,12 +2076,12 @@ static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 		nreq->reply(nreq, req, nodeid, inarg, buf);
 }
 
-static int send_notify_iov(struct fuse_ll *f, struct fuse_chan *ch,
-			   int notify_code, struct iovec *iov, int count)
+static int send_notify_iov(struct fuse_session *se, int notify_code,
+			   struct iovec *iov, int count)
 {
 	struct fuse_out_header out;
 
-	if (!f->got_init)
+	if (!se->f->got_init)
 		return -ENOTCONN;
 
 	out.unique = 0;
@@ -2094,7 +2089,7 @@ static int send_notify_iov(struct fuse_ll *f, struct fuse_chan *ch,
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
-	return fuse_send_msg(f, ch, iov, count);
+	return fuse_send_msg(se, NULL, iov, count);
 }
 
 int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
@@ -2108,8 +2103,7 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
 		iov[1].iov_base = &outarg;
 		iov[1].iov_len = sizeof(outarg);
 
-		return send_notify_iov(ph->se->f, ph->se->ch,
-				       FUSE_NOTIFY_POLL, iov, 2);
+		return send_notify_iov(ph->se, FUSE_NOTIFY_POLL, iov, 2);
 	} else {
 		return 0;
 	}
@@ -2136,7 +2130,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	return send_notify_iov(f, se->ch, FUSE_NOTIFY_INVAL_INODE, iov, 2);
+	return send_notify_iov(se, FUSE_NOTIFY_INVAL_INODE, iov, 2);
 }
 
 int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
@@ -2162,7 +2156,7 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 	iov[2].iov_base = (void *)name;
 	iov[2].iov_len = namelen + 1;
 
-	return send_notify_iov(f, se->ch, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
+	return send_notify_iov(se, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
 }
 
 int fuse_lowlevel_notify_delete(struct fuse_session *se,
@@ -2193,7 +2187,7 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
 	iov[2].iov_base = (void *)name;
 	iov[2].iov_len = namelen + 1;
 
-	return send_notify_iov(f, se->ch, FUSE_NOTIFY_DELETE, iov, 3);
+	return send_notify_iov(se, FUSE_NOTIFY_DELETE, iov, 3);
 }
 
 int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
@@ -2230,7 +2224,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	res = fuse_send_data_iov(f, se->ch, iov, 2, bufv, flags);
+	res = fuse_send_data_iov(se, NULL, iov, 2, bufv, flags);
 	if (res > 0)
 		res = -res;
 
@@ -2319,7 +2313,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	err = send_notify_iov(f, se->ch, FUSE_NOTIFY_RETRIEVE, iov, 2);
+	err = send_notify_iov(se, FUSE_NOTIFY_RETRIEVE, iov, 2);
 	if (err) {
 		pthread_mutex_lock(&f->lock);
 		list_del_nreq(&rreq->nreq);
@@ -2442,7 +2436,7 @@ static int fuse_ll_copy_from_pipe(struct fuse_bufvec *dst,
 void fuse_session_process_buf(struct fuse_session *se,
 			      const struct fuse_buf *buf)
 {
-	fuse_session_process_buf_int(se,  buf, se->ch);
+	fuse_session_process_buf_int(se, buf, NULL);
 }
 
 void fuse_session_process_buf_int(struct fuse_session *se,
@@ -2499,7 +2493,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 			.iov_len = sizeof(struct fuse_out_header),
 		};
 
-		fuse_send_msg(f, ch, &iov, 1);
+		fuse_send_msg(se, ch, &iov, 1);
 		goto clear_pipe;
 	}
 
@@ -2507,7 +2501,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	req->ctx.uid = in->uid;
 	req->ctx.gid = in->gid;
 	req->ctx.pid = in->pid;
-	req->ch = fuse_chan_get(ch);
+	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
 	err = EIO;
 	if (!f->got_init) {
@@ -2684,7 +2678,7 @@ static void fuse_ll_destroy(struct fuse_ll *f)
 void fuse_session_destroy(struct fuse_session *se)
 {
 	fuse_ll_destroy(se->f);
-	fuse_chan_put(se->ch);
+	close(se->fd);
 	destroy_mount_opts(se->mo);
 	free(se);
 }
@@ -2698,7 +2692,7 @@ static void fuse_ll_pipe_destructor(void *data)
 
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
 {
-	return fuse_session_receive_buf_int(se, buf, se->ch);
+	return fuse_session_receive_buf_int(se, buf, NULL);
 }
 
 int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
@@ -2732,7 +2726,8 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 			goto fallback;
 	}
 
-	res = splice(ch->fd, NULL, llp->pipe[1], NULL, bufsize, 0);
+	res = splice(ch ? ch->fd : se->fd,
+		     NULL, llp->pipe[1], NULL, bufsize, 0);
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -2816,7 +2811,7 @@ fallback:
 	}
 
 restart:
-	res = read(ch->fd, buf->mem, f->bufsize);
+	res = read(ch ? ch->fd : se->fd, buf->mem, f->bufsize);
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -2938,7 +2933,6 @@ out1:
 
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
-	struct fuse_chan *ch;
 	int fd;
 
 	/*
@@ -2955,13 +2949,7 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 	fd = fuse_kern_mount(mountpoint, se->mo);
 	if (fd == -1)
 		return -1;
-
-	ch = fuse_chan_new(fd);
-	if (!ch)
-		goto error_out;
-
-	/* Add channel to session */
-	fuse_session_add_chan(se, ch);
+	se->fd = fd;
 
 	/* Save mountpoint */
 	se->mountpoint = strdup(mountpoint);
@@ -2977,19 +2965,14 @@ error_out:
 
 int fuse_session_fd(struct fuse_session *se)
 {
-	return fuse_session_chan(se)->fd;
+	return se->fd;
 }
 
 void fuse_session_unmount(struct fuse_session *se)
 {
-	fuse_session_remove_chan(se->ch);
-	if (se->mountpoint) {
-		int fd = se->ch ? fuse_chan_clearfd(se->ch) : -1;
-		fuse_kern_unmount(se->mountpoint, fd);
-		fuse_chan_put(se->ch);
-		free(se->mountpoint);
-		se->mountpoint = NULL;
-	}
+	fuse_kern_unmount(se->mountpoint, se->fd);
+	free(se->mountpoint);
+	se->mountpoint = NULL;
 }
 
 #ifdef linux
@@ -3061,36 +3044,6 @@ int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 }
 #endif
 
-void fuse_session_add_chan(struct fuse_session *se, struct fuse_chan *ch)
-{
-	assert(se->ch == NULL);
-	assert(ch->se == NULL);
-	se->ch = ch;
-	ch->se = se;
-}
-
-void fuse_session_remove_chan(struct fuse_chan *ch)
-{
-	struct fuse_session *se = ch->se;
-	if (se) {
-		assert(se->ch == ch);
-		se->ch = NULL;
-		ch->se = NULL;
-	}
-}
-
-struct fuse_chan *fuse_session_chan(struct fuse_session *se)
-{
-	return se->ch;
-}
-
-int fuse_chan_clearfd(struct fuse_chan *ch)
-{
-	int fd = ch->fd;
-	ch->fd = -1;
-	return fd;
-}
-
 void fuse_session_exit(struct fuse_session *se)
 {
 	se->exited = 1;
@@ -3104,53 +3057,4 @@ void fuse_session_reset(struct fuse_session *se)
 int fuse_session_exited(struct fuse_session *se)
 {
 	return se->exited;
-}
-
-struct fuse_chan *fuse_chan_new(int fd)
-{
-	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
-	if (ch == NULL) {
-		fprintf(stderr, "fuse: failed to allocate channel\n");
-		return NULL;
-	}
-
-	memset(ch, 0, sizeof(*ch));
-	ch->fd = fd;
-	ch->ctr = 1;
-	fuse_mutex_init(&ch->lock);
-
-	return ch;
-}
-
-struct fuse_session *fuse_chan_session(struct fuse_chan *ch)
-{
-	return ch->se;
-}
-
-struct fuse_chan *fuse_chan_get(struct fuse_chan *ch)
-{
-	assert(ch->ctr > 0);
-	pthread_mutex_lock(&ch->lock);
-	ch->ctr++;
-	pthread_mutex_unlock(&ch->lock);
-
-	return ch;
-}
-
-void fuse_chan_put(struct fuse_chan *ch)
-{
-	if (ch) {
-		pthread_mutex_lock(&ch->lock);
-		ch->ctr--;
-		if (!ch->ctr) {
-			pthread_mutex_unlock(&ch->lock);
-			fuse_session_remove_chan(ch);
-			fuse_chan_close(ch);
-			pthread_mutex_destroy(&ch->lock);
-			free(ch);
-		} else {
-			pthread_mutex_unlock(&ch->lock);
-		}
-
-	}
 }

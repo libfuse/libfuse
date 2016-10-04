@@ -23,6 +23,7 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/ioctl.h>
+#include <assert.h>
 
 /* Environment var controlling the thread stack size */
 #define ENVNAME_THREAD_STACK "FUSE_THREAD_STACK"
@@ -42,12 +43,52 @@ struct fuse_mt {
 	int numworker;
 	int numavail;
 	struct fuse_session *se;
-	struct fuse_chan *prevch;
 	struct fuse_worker main;
 	sem_t finish;
 	int exit;
 	int error;
 };
+
+static struct fuse_chan *fuse_chan_new(int fd)
+{
+	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
+	if (ch == NULL) {
+		fprintf(stderr, "fuse: failed to allocate channel\n");
+		return NULL;
+	}
+
+	memset(ch, 0, sizeof(*ch));
+	ch->fd = fd;
+	ch->ctr = 1;
+	fuse_mutex_init(&ch->lock);
+
+	return ch;
+}
+
+struct fuse_chan *fuse_chan_get(struct fuse_chan *ch)
+{
+	assert(ch->ctr > 0);
+	pthread_mutex_lock(&ch->lock);
+	ch->ctr++;
+	pthread_mutex_unlock(&ch->lock);
+
+	return ch;
+}
+
+void fuse_chan_put(struct fuse_chan *ch)
+{
+	if (ch == NULL)
+		return;
+	pthread_mutex_lock(&ch->lock);
+	ch->ctr--;
+	if (!ch->ctr) {
+		pthread_mutex_unlock(&ch->lock);
+		close(ch->fd);
+		pthread_mutex_destroy(&ch->lock);
+		free(ch);
+	} else
+		pthread_mutex_unlock(&ch->lock);
+}
 
 static void list_add_worker(struct fuse_worker *w, struct fuse_worker *next)
 {
@@ -195,15 +236,13 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 	}
 	fcntl(clonefd, F_SETFD, FD_CLOEXEC);
 
-	masterfd = mt->prevch->fd;
+	masterfd = mt->se->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
 	if (res == -1) {
 		fprintf(stderr, "fuse: failed to clone device fd: %s\n",
 			strerror(errno));
 		close(clonefd);
-		mt->se->f->clone_fd = 0;
-
-		return fuse_chan_get(mt->prevch);
+		return NULL;
 	}
 	newch = fuse_chan_new(clonefd);
 	if (newch == NULL)
@@ -225,13 +264,15 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 	w->fbuf.mem = NULL;
 	w->mt = mt;
 
-
+	w->ch = NULL;
 	if (mt->se->f->clone_fd) {
 		w->ch = fuse_clone_chan(mt);
-		if (!w->ch)
-			return -1;
-	} else {
-		w->ch = fuse_chan_get(mt->prevch);
+		if(!w->ch) {
+			/* Don't attempt this again */
+			fprintf(stderr, "fuse: trying to continue "
+				"without -o clone_fd.\n");
+			mt->se->f->clone_fd = 0;
+		}
 	}
 
 	res = fuse_start_thread(&w->thread_id, fuse_do_work, w);
@@ -266,7 +307,6 @@ int fuse_session_loop_mt(struct fuse_session *se)
 
 	memset(&mt, 0, sizeof(struct fuse_mt));
 	mt.se = se;
-	mt.prevch = fuse_session_chan(se);
 	mt.error = 0;
 	mt.numworker = 0;
 	mt.numavail = 0;

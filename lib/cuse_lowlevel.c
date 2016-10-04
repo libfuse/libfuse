@@ -275,7 +275,6 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	};
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
-	struct fuse_chan *ch;
 	struct fuse_cmdline_opts opts;
 	int fd;
 	int res;
@@ -312,14 +311,7 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 				devname, strerror(errno));
 		goto err_se;
 	}
-
-	ch = fuse_chan_new(fd);
-	if (!ch) {
-		close(fd);
-		goto err_se;
-	}
-
-	fuse_session_add_chan(se, ch);
+	se->fd = fd;
 
 	res = fuse_set_signal_handlers(se);
 	if (res == -1)
