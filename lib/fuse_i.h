@@ -31,9 +31,9 @@ struct fuse_chan {
 	int fd;
 };
 
-
 struct fuse_req {
 	struct fuse_ll *f;
+	struct fuse_session *se;
 	uint64_t unique;
 	int ctr;
 	pthread_mutex_t lock;

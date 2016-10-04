@@ -144,7 +144,7 @@ void fuse_free_req(fuse_req_t req)
 		destroy_req(req);
 }
 
-static struct fuse_req *fuse_ll_alloc_req(struct fuse_ll *f)
+static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 {
 	struct fuse_req *req;
 
@@ -152,7 +152,8 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_ll *f)
 	if (req == NULL) {
 		fprintf(stderr, "fuse: failed to allocate request\n");
 	} else {
-		req->f = f;
+		req->f = se->f;
+		req->se = se;
 		req->ctr = 1;
 		list_init_req(req);
 		fuse_mutex_init(&req->lock);
@@ -1075,7 +1076,7 @@ static void do_batch_forget(fuse_req_t req, fuse_ino_t nodeid,
 			struct fuse_forget_one *forget = &param[i];
 			struct fuse_req *dummy_req;
 
-			dummy_req = fuse_ll_alloc_req(req->f);
+			dummy_req = fuse_ll_alloc_req(req->se);
 			if (dummy_req == NULL)
 				break;
 
@@ -2488,7 +2489,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 			(unsigned long long) in->nodeid, buf->size, in->pid);
 	}
 
-	req = fuse_ll_alloc_req(f);
+	req = fuse_ll_alloc_req(se);
 	if (req == NULL) {
 		struct fuse_out_header out = {
 			.unique = in->unique,
