@@ -2657,7 +2657,7 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
-static void fuse_session_destroy(struct fuse_session *f)
+void fuse_session_destroy(struct fuse_session *f)
 {
 	struct fuse_ll_pipe *llp;
 
@@ -2844,7 +2844,6 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 {
 	int err;
 	struct fuse_session *f;
-	struct fuse_session *se;
 	struct mount_opts *mo;
 
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
@@ -2900,18 +2899,9 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	f->owner = getuid();
 	f->userdata = userdata;
 
-	se = (struct fuse_session *) malloc(sizeof(*se));
-	if (se == NULL) {
-		fprintf(stderr, "fuse: failed to allocate session\n");
-		goto out6;
-	}
-	memset(se, 0, sizeof(*se));
-	se = f;
-	se->mo = mo;
-	return se;
+	f->mo = mo;
+	return f;
 
-out6:
-	pthread_key_delete(f->pipe_key);
 out5:
 	pthread_mutex_destroy(&f->lock);
 out4:
