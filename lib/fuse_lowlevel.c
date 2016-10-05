@@ -2110,15 +2110,10 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 				     off_t off, off_t len)
 {
 	struct fuse_notify_inval_inode_out outarg;
-	struct fuse_session *f;
 	struct iovec iov[2];
 
 	if (!se)
 		return -EINVAL;
-
-	f = se;
-	if (!f)
-		return -ENODEV;
 
 	outarg.ino = ino;
 	outarg.off = off;
@@ -2134,15 +2129,10 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen)
 {
 	struct fuse_notify_inval_entry_out outarg;
-	struct fuse_session *f;
 	struct iovec iov[3];
 
 	if (!se)
 		return -EINVAL;
-
-	f = se;
-	if (!f)
-		return -ENODEV;
 
 	outarg.parent = parent;
 	outarg.namelen = namelen;
@@ -2161,17 +2151,12 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
 				const char *name, size_t namelen)
 {
 	struct fuse_notify_delete_out outarg;
-	struct fuse_session *f;
 	struct iovec iov[3];
 
 	if (!se)
 		return -EINVAL;
 
-	f = se;
-	if (!f)
-		return -ENODEV;
-
-	if (f->conn.proto_minor < 18)
+	if (se->conn.proto_minor < 18)
 		return -ENOSYS;
 
 	outarg.parent = parent;
@@ -2193,7 +2178,6 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 {
 	struct fuse_out_header out;
 	struct fuse_notify_store_out outarg;
-	struct fuse_session *f;
 	struct iovec iov[3];
 	size_t size = fuse_buf_size(bufv);
 	int res;
@@ -2201,11 +2185,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	f = se;
-	if (!f)
-		return -ENODEV;
-
-	if (f->conn.proto_minor < 15)
+	if (se->conn.proto_minor < 15)
 		return -ENOSYS;
 
 	out.unique = 0;
@@ -2276,7 +2256,6 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 				  size_t size, off_t offset, void *cookie)
 {
 	struct fuse_notify_retrieve_out outarg;
-	struct fuse_session *f;
 	struct iovec iov[2];
 	struct fuse_retrieve_req *rreq;
 	int err;
@@ -2284,23 +2263,19 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	f = se;
-	if (!f)
-		return -ENODEV;
-
-	if (f->conn.proto_minor < 15)
+	if (se->conn.proto_minor < 15)
 		return -ENOSYS;
 
 	rreq = malloc(sizeof(*rreq));
 	if (rreq == NULL)
 		return -ENOMEM;
 
-	pthread_mutex_lock(&f->lock);
+	pthread_mutex_lock(&se->lock);
 	rreq->cookie = cookie;
-	rreq->nreq.unique = f->notify_ctr++;
+	rreq->nreq.unique = se->notify_ctr++;
 	rreq->nreq.reply = fuse_ll_retrieve_reply;
-	list_add_nreq(&rreq->nreq, &f->notify_list);
-	pthread_mutex_unlock(&f->lock);
+	list_add_nreq(&rreq->nreq, &se->notify_list);
+	pthread_mutex_unlock(&se->lock);
 
 	outarg.notify_unique = rreq->nreq.unique;
 	outarg.nodeid = ino;
@@ -2312,9 +2287,9 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 
 	err = send_notify_iov(se, FUSE_NOTIFY_RETRIEVE, iov, 2);
 	if (err) {
-		pthread_mutex_lock(&f->lock);
+		pthread_mutex_lock(&se->lock);
 		list_del_nreq(&rreq->nreq);
-		pthread_mutex_unlock(&f->lock);
+		pthread_mutex_unlock(&se->lock);
 		free(rreq);
 	}
 
