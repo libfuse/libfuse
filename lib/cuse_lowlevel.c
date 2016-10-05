@@ -152,7 +152,6 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 	struct fuse_lowlevel_ops lop;
 	struct cuse_data *cd;
 	struct fuse_session *se;
-	struct fuse_session *ll;
 
 	cd = cuse_prep_data(ci, clop);
 	if (!cd)
@@ -175,8 +174,7 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 		free(cd);
 		return NULL;
 	}
-	ll = se;
-	ll->cuse_data = cd;
+	se->cuse_data = cd;
 
 	return se;
 }
