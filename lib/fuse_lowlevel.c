@@ -151,7 +151,6 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 	if (req == NULL) {
 		fprintf(stderr, "fuse: failed to allocate request\n");
 	} else {
-		req->se = se->f;
 		req->se = se;
 		req->ctr = 1;
 		list_init_req(req);
@@ -166,7 +165,7 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
-	struct fuse_session *f = se->f;
+	struct fuse_session *f = se;
 
 	out->len = iov_length(iov, count);
 	if (f->debug) {
@@ -618,7 +617,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	size_t len = fuse_buf_size(buf);
 	struct fuse_out_header *out = iov[0].iov_base;
 	struct fuse_ll_pipe *llp;
-	struct fuse_session *f = se->f;
+	struct fuse_session *f = se;
 	int splice_flags;
 	size_t pipesize;
 	size_t total_fd_size;
@@ -2081,7 +2080,7 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 {
 	struct fuse_out_header out;
 
-	if (!se->f->got_init)
+	if (!se->got_init)
 		return -ENOTCONN;
 
 	out.unique = 0;
@@ -2119,7 +2118,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2143,7 +2142,7 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2170,7 +2169,7 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2204,7 +2203,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2287,7 +2286,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2442,7 +2441,7 @@ void fuse_session_process_buf(struct fuse_session *se,
 void fuse_session_process_buf_int(struct fuse_session *se,
 				  const struct fuse_buf *buf, struct fuse_chan *ch)
 {
-	struct fuse_session *f = se->f;
+	struct fuse_session *f = se;
 	const size_t write_header_size = sizeof(struct fuse_in_header) +
 		sizeof(struct fuse_write_in);
 	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
@@ -2677,7 +2676,7 @@ static void fuse_ll_destroy(struct fuse_session *f)
 
 void fuse_session_destroy(struct fuse_session *se)
 {
-	fuse_ll_destroy(se->f);
+	fuse_ll_destroy(se);
 	close(se->fd);
 	destroy_mount_opts(se->mo);
 	free(se);
@@ -2698,7 +2697,7 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
 int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 				 struct fuse_chan *ch)
 {
-	struct fuse_session *f = se->f;
+	struct fuse_session *f = se;
 	int err;
 	ssize_t res;
 #ifdef HAVE_SPLICE
@@ -2913,7 +2912,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		goto out6;
 	}
 	memset(se, 0, sizeof(*se));
-	se->f = f;
+	se = f;
 	se->mo = mo;
 	return se;
 

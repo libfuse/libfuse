@@ -265,13 +265,13 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 	w->mt = mt;
 
 	w->ch = NULL;
-	if (mt->se->f->clone_fd) {
+	if (mt->se->clone_fd) {
 		w->ch = fuse_clone_chan(mt);
 		if(!w->ch) {
 			/* Don't attempt this again */
 			fprintf(stderr, "fuse: trying to continue "
 				"without -o clone_fd.\n");
-			mt->se->f->clone_fd = 0;
+			mt->se->clone_fd = 0;
 		}
 	}
 

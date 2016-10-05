@@ -175,7 +175,7 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 		free(cd);
 		return NULL;
 	}
-	ll = se->f;
+	ll = se;
 	ll->cuse_data = cd;
 
 	return se;
