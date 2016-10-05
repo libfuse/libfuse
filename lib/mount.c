@@ -122,7 +122,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 void fuse_mount_help(void)
 {
 	printf(
-"Mount options:\n"
+"FUSE-specific mount options:\n"
 "    -o allow_other         allow access to other users\n"
 "    -o allow_root          allow access to root\n"
 "    -o auto_unmount        auto unmount on process termination\n"
