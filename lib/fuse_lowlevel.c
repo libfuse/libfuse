@@ -1346,7 +1346,7 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 	fi.fh = arg->fh;
 	fi.writepage = arg->write_flags & 1;
 
-	if (req->se->conn.proto_minor < 9) {
+	if (f->conn.proto_minor < 9) {
 		bufv.buf[0].mem = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
 		bufv.buf[0].size -= sizeof(struct fuse_in_header) +
 			FUSE_COMPAT_WRITE_IN_SIZE;
@@ -1367,7 +1367,7 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 	}
 	bufv.buf[0].size = arg->size;
 
-	req->se->op.write_buf(req, nodeid, &bufv, arg->offset, &fi);
+	f->op.write_buf(req, nodeid, &bufv, arg->offset, &fi);
 
 out:
 	/* Need to reset the pipe if ->write_buf() didn't consume all data */
@@ -1883,7 +1883,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.max_readahead = 0;
 	}
 
-	if (req->se->conn.proto_minor >= 14) {
+	if (f->conn.proto_minor >= 14) {
 #ifdef HAVE_SPLICE
 #ifdef HAVE_VMSPLICE
 		f->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
@@ -1897,7 +1897,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.want |= FUSE_CAP_SPLICE_READ;
 #endif
 	}
-	if (req->se->conn.proto_minor >= 18)
+	if (f->conn.proto_minor >= 18)
 		f->conn.capable |= FUSE_CAP_IOCTL_DIR;
 
 	if (f->atomic_o_trunc)
@@ -2260,8 +2260,8 @@ static void fuse_ll_retrieve_reply(struct fuse_notify_req *nreq,
 	}
 	bufv.buf[0].size = arg->size;
 
-	if (req->se->op.retrieve_reply) {
-		req->se->op.retrieve_reply(req, rreq->cookie, ino,
+	if (f->op.retrieve_reply) {
+		f->op.retrieve_reply(req, rreq->cookie, ino,
 					  arg->offset, &bufv);
 	} else {
 		fuse_reply_none(req);
