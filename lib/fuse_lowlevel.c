@@ -165,10 +165,9 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
-	struct fuse_session *f = se;
 
 	out->len = iov_length(iov, count);
-	if (f->debug) {
+	if (se->debug) {
 		if (out->unique == 0) {
 			fprintf(stderr, "NOTIFY: code=%d length=%u\n",
 				out->error, out->len);
@@ -617,7 +616,6 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	size_t len = fuse_buf_size(buf);
 	struct fuse_out_header *out = iov[0].iov_base;
 	struct fuse_ll_pipe *llp;
-	struct fuse_session *f = se;
 	int splice_flags;
 	size_t pipesize;
 	size_t total_fd_size;
@@ -625,7 +623,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	size_t headerlen;
 	struct fuse_bufvec pipe_buf = FUSE_BUFVEC_INIT(len);
 
-	if (f->broken_splice_nonblock)
+	if (se->broken_splice_nonblock)
 		goto fallback;
 
 	if (flags & FUSE_BUF_NO_SPLICE)
@@ -642,11 +640,11 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	if (total_fd_size < 2 * pagesize)
 		goto fallback;
 
-	if (f->conn.proto_minor < 14 ||
-	    !(f->conn.want & FUSE_CAP_SPLICE_WRITE))
+	if (se->conn.proto_minor < 14 ||
+	    !(se->conn.want & FUSE_CAP_SPLICE_WRITE))
 		goto fallback;
 
-	llp = fuse_ll_get_pipe(f);
+	llp = fuse_ll_get_pipe(se);
 	if (llp == NULL)
 		goto fallback;
 
@@ -704,9 +702,9 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			 * this combination of input and output.
 			 */
 			if (res == -EAGAIN)
-				f->broken_splice_nonblock = 1;
+				se->broken_splice_nonblock = 1;
 
-			pthread_setspecific(f->pipe_key, NULL);
+			pthread_setspecific(se->pipe_key, NULL);
 			fuse_ll_pipe_free(llp);
 			goto fallback;
 		}
@@ -773,7 +771,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	len = res;
 	out->len = headerlen + len;
 
-	if (f->debug) {
+	if (se->debug) {
 		fprintf(stderr,
 			"   unique: %llu, success, outsize: %i (splice)\n",
 			(unsigned long long) out->unique, out->len);
@@ -781,7 +779,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 
 	splice_flags = 0;
 	if ((flags & FUSE_BUF_SPLICE_MOVE) &&
-	    (f->conn.want & FUSE_CAP_SPLICE_MOVE))
+	    (se->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
 	res = splice(llp->pipe[0], NULL, ch ? ch->fd : se->fd,
@@ -800,7 +798,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	return 0;
 
 clear_pipe:
-	fuse_ll_clear_pipe(f);
+	fuse_ll_clear_pipe(se);
 	return res;
 
 fallback:
@@ -2441,7 +2439,6 @@ void fuse_session_process_buf(struct fuse_session *se,
 void fuse_session_process_buf_int(struct fuse_session *se,
 				  const struct fuse_buf *buf, struct fuse_chan *ch)
 {
-	struct fuse_session *f = se;
 	const size_t write_header_size = sizeof(struct fuse_in_header) +
 		sizeof(struct fuse_write_in);
 	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
@@ -2473,7 +2470,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		in = buf->mem;
 	}
 
-	if (f->debug) {
+	if (se->debug) {
 		fprintf(stderr,
 			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
 			(unsigned long long) in->unique,
@@ -2503,17 +2500,17 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
 	err = EIO;
-	if (!f->got_init) {
+	if (!se->got_init) {
 		enum fuse_opcode expected;
 
-		expected = f->cuse_data ? CUSE_INIT : FUSE_INIT;
+		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
 		if (in->opcode != expected)
 			goto reply_err;
 	} else if (in->opcode == FUSE_INIT || in->opcode == CUSE_INIT)
 		goto reply_err;
 
 	err = EACCES;
-	if (f->allow_root && in->uid != f->owner && in->uid != 0 &&
+	if (se->allow_root && in->uid != se->owner && in->uid != 0 &&
 		 in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
 		 in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&
 		 in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
@@ -2527,16 +2524,16 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		goto reply_err;
 	if (in->opcode != FUSE_INTERRUPT) {
 		struct fuse_req *intr;
-		pthread_mutex_lock(&f->lock);
-		intr = check_interrupt(f, req);
-		list_add_req(req, &f->list);
-		pthread_mutex_unlock(&f->lock);
+		pthread_mutex_lock(&se->lock);
+		intr = check_interrupt(se, req);
+		list_add_req(req, &se->list);
+		pthread_mutex_unlock(&se->lock);
 		if (intr)
 			fuse_reply_err(intr, EAGAIN);
 	}
 
 	if ((buf->flags & FUSE_BUF_IS_FD) && write_header_size < buf->size &&
-	    (in->opcode != FUSE_WRITE || !f->op.write_buf) &&
+	    (in->opcode != FUSE_WRITE || !se->op.write_buf) &&
 	    in->opcode != FUSE_NOTIFY_REPLY) {
 		void *newmbuf;
 
@@ -2558,7 +2555,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	}
 
 	inarg = (void *) &in[1];
-	if (in->opcode == FUSE_WRITE && f->op.write_buf)
+	if (in->opcode == FUSE_WRITE && se->op.write_buf)
 		do_write_buf(req, in->nodeid, inarg, buf);
 	else if (in->opcode == FUSE_NOTIFY_REPLY)
 		do_notify_reply(req, in->nodeid, inarg, buf);
@@ -2573,7 +2570,7 @@ reply_err:
 	fuse_reply_err(req, err);
 clear_pipe:
 	if (buf->flags & FUSE_BUF_IS_FD)
-		fuse_ll_clear_pipe(f);
+		fuse_ll_clear_pipe(se);
 	goto out_free;
 }
 
@@ -2691,18 +2688,17 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
 int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 				 struct fuse_chan *ch)
 {
-	struct fuse_session *f = se;
 	int err;
 	ssize_t res;
 #ifdef HAVE_SPLICE
-	size_t bufsize = f->bufsize;
+	size_t bufsize = se->bufsize;
 	struct fuse_ll_pipe *llp;
 	struct fuse_buf tmpbuf;
 
-	if (f->conn.proto_minor < 14 || !(f->conn.want & FUSE_CAP_SPLICE_READ))
+	if (se->conn.proto_minor < 14 || !(se->conn.want & FUSE_CAP_SPLICE_READ))
 		goto fallback;
 
-	llp = fuse_ll_get_pipe(f);
+	llp = fuse_ll_get_pipe(se);
 	if (llp == NULL)
 		goto fallback;
 
@@ -2758,14 +2754,14 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 		struct fuse_bufvec dst = { .count = 1 };
 
 		if (!buf->mem) {
-			buf->mem = malloc(f->bufsize);
+			buf->mem = malloc(se->bufsize);
 			if (!buf->mem) {
 				fprintf(stderr,
 					"fuse: failed to allocate read buffer\n");
 				return -ENOMEM;
 			}
 		}
-		buf->size = f->bufsize;
+		buf->size = se->bufsize;
 		buf->flags = 0;
 		dst.buf[0] = *buf;
 
@@ -2773,12 +2769,12 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 		if (res < 0) {
 			fprintf(stderr, "fuse: copy from pipe: %s\n",
 				strerror(-res));
-			fuse_ll_clear_pipe(f);
+			fuse_ll_clear_pipe(se);
 			return res;
 		}
 		if (res < tmpbuf.size) {
 			fprintf(stderr, "fuse: copy from pipe: short read\n");
-			fuse_ll_clear_pipe(f);
+			fuse_ll_clear_pipe(se);
 			return -EIO;
 		}
 		assert(res == tmpbuf.size);
@@ -2795,7 +2791,7 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 fallback:
 #endif
 	if (!buf->mem) {
-		buf->mem = malloc(f->bufsize);
+		buf->mem = malloc(se->bufsize);
 		if (!buf->mem) {
 			fprintf(stderr,
 				"fuse: failed to allocate read buffer\n");
@@ -2804,7 +2800,7 @@ fallback:
 	}
 
 restart:
-	res = read(ch ? ch->fd : se->fd, buf->mem, f->bufsize);
+	res = read(ch ? ch->fd : se->fd, buf->mem, se->bufsize);
 	err = errno;
 
 	if (fuse_session_exited(se))
