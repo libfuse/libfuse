@@ -4856,3 +4856,13 @@ int fuse_mount(struct fuse *f, const char *mountpoint) {
 void fuse_unmount(struct fuse *f) {
 	return fuse_session_unmount(fuse_get_session(f));
 }
+
+int fuse_version(void)
+{
+	return FUSE_VERSION;
+}
+
+const char *fuse_pkgversion(void)
+{
+	return PACKAGE_VERSION;
+}

@@ -2,6 +2,10 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
+  Helper functions to create (simple) standalone programs. With the
+  aid of these functions it should be possible to create full FUSE
+  file system by implementing nothing but the request handlers.
+
   This program can be distributed under the terms of the GNU LGPLv2.
   See the file COPYING.LIB.
 */
@@ -294,14 +298,4 @@ out1:
 	free(opts.mountpoint);
 	fuse_opt_free_args(&args);
 	return res;
-}
-
-int fuse_version(void)
-{
-	return FUSE_VERSION;
-}
-
-const char *fuse_pkgversion(void)
-{
-	return PACKAGE_VERSION;
 }
