@@ -32,7 +32,7 @@ struct cuse_data {
 
 static struct cuse_lowlevel_ops *req_clop(fuse_req_t req)
 {
-	return &req->f->cuse_data->clop;
+	return &req->se->cuse_data->clop;
 }
 
 static void cuse_fll_open(fuse_req_t req, fuse_ino_t ino,
@@ -152,7 +152,6 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 	struct fuse_lowlevel_ops lop;
 	struct cuse_data *cd;
 	struct fuse_session *se;
-	struct fuse_ll *ll;
 
 	cd = cuse_prep_data(ci, clop);
 	if (!cd)
@@ -175,8 +174,7 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 		free(cd);
 		return NULL;
 	}
-	ll = se->f;
-	ll->cuse_data = cd;
+	se->cuse_data = cd;
 
 	return se;
 }
@@ -198,7 +196,7 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
 	struct cuse_init_out outarg;
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 	struct cuse_data *cd = f->cuse_data;
 	size_t bufsize = f->bufsize;
 	struct cuse_lowlevel_ops *clop = req_clop(req);

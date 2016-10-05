@@ -9,25 +9,9 @@
 #include "fuse.h"
 #include "fuse_lowlevel.h"
 
-struct fuse_ll;
 struct mount_opts;
 
-struct fuse_session {
-	struct fuse_ll *f;
-	char *mountpoint;
-	volatile int exited;
-	int fd;
-	struct mount_opts *mo;
-};
-
-struct fuse_chan {
-	pthread_mutex_t lock;
-	int ctr;
-	int fd;
-};
-
 struct fuse_req {
-	struct fuse_ll *f;
 	struct fuse_session *se;
 	uint64_t unique;
 	int ctr;
@@ -57,7 +41,13 @@ struct fuse_notify_req {
 	struct fuse_notify_req *prev;
 };
 
-struct fuse_ll {
+struct fuse_session {
+	struct fuse_ll *f;
+	char *mountpoint;
+	volatile int exited;
+	int fd;
+	struct mount_opts *mo;
+
 	int debug;
 	int allow_root;
 	int atomic_o_trunc;
@@ -94,6 +84,12 @@ struct fuse_ll {
 	uint64_t notify_ctr;
 	struct fuse_notify_req notify_list;
 	size_t bufsize;
+};
+
+struct fuse_chan {
+	pthread_mutex_t lock;
+	int ctr;
+	int fd;
 };
 
 /**

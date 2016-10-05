@@ -129,7 +129,7 @@ static void destroy_req(fuse_req_t req)
 void fuse_free_req(fuse_req_t req)
 {
 	int ctr;
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 
 	pthread_mutex_lock(&f->lock);
 	req->u.ni.func = NULL;
@@ -151,7 +151,6 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 	if (req == NULL) {
 		fprintf(stderr, "fuse: failed to allocate request\n");
 	} else {
-		req->f = se->f;
 		req->se = se;
 		req->ctr = 1;
 		list_init_req(req);
@@ -166,10 +165,9 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
-	struct fuse_ll *f = se->f;
 
 	out->len = iov_length(iov, count);
-	if (f->debug) {
+	if (se->debug) {
 		if (out->unique == 0) {
 			fprintf(stderr, "NOTIFY: code=%d length=%u\n",
 				out->error, out->len);
@@ -400,12 +398,12 @@ static void fill_open(struct fuse_open_out *arg,
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 {
 	struct fuse_entry_out arg;
-	size_t size = req->f->conn.proto_minor < 9 ?
+	size_t size = req->se->conn.proto_minor < 9 ?
 		FUSE_COMPAT_ENTRY_OUT_SIZE : sizeof(arg);
 
 	/* before ABI 7.4 e->ino == 0 was invalid, only ENOENT meant
 	   negative entry */
-	if (!e->ino && req->f->conn.proto_minor < 4)
+	if (!e->ino && req->se->conn.proto_minor < 4)
 		return fuse_reply_err(req, ENOENT);
 
 	memset(&arg, 0, sizeof(arg));
@@ -417,7 +415,7 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 		      const struct fuse_file_info *f)
 {
 	char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_open_out)];
-	size_t entrysize = req->f->conn.proto_minor < 9 ?
+	size_t entrysize = req->se->conn.proto_minor < 9 ?
 		FUSE_COMPAT_ENTRY_OUT_SIZE : sizeof(struct fuse_entry_out);
 	struct fuse_entry_out *earg = (struct fuse_entry_out *) buf;
 	struct fuse_open_out *oarg = (struct fuse_open_out *) (buf + entrysize);
@@ -433,7 +431,7 @@ int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 		    double attr_timeout)
 {
 	struct fuse_attr_out arg;
-	size_t size = req->f->conn.proto_minor < 9 ?
+	size_t size = req->se->conn.proto_minor < 9 ?
 		FUSE_COMPAT_ATTR_OUT_SIZE : sizeof(arg);
 
 	memset(&arg, 0, sizeof(arg));
@@ -555,7 +553,7 @@ static int fuse_pipe(int fds[2])
 }
 #endif
 
-static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
+static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_session *f)
 {
 	struct fuse_ll_pipe *llp = pthread_getspecific(f->pipe_key);
 	if (llp == NULL) {
@@ -584,7 +582,7 @@ static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_ll *f)
 }
 #endif
 
-static void fuse_ll_clear_pipe(struct fuse_ll *f)
+static void fuse_ll_clear_pipe(struct fuse_session *f)
 {
 	struct fuse_ll_pipe *llp = pthread_getspecific(f->pipe_key);
 	if (llp) {
@@ -618,7 +616,6 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	size_t len = fuse_buf_size(buf);
 	struct fuse_out_header *out = iov[0].iov_base;
 	struct fuse_ll_pipe *llp;
-	struct fuse_ll *f = se->f;
 	int splice_flags;
 	size_t pipesize;
 	size_t total_fd_size;
@@ -626,7 +623,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	size_t headerlen;
 	struct fuse_bufvec pipe_buf = FUSE_BUFVEC_INIT(len);
 
-	if (f->broken_splice_nonblock)
+	if (se->broken_splice_nonblock)
 		goto fallback;
 
 	if (flags & FUSE_BUF_NO_SPLICE)
@@ -643,11 +640,11 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	if (total_fd_size < 2 * pagesize)
 		goto fallback;
 
-	if (f->conn.proto_minor < 14 ||
-	    !(f->conn.want & FUSE_CAP_SPLICE_WRITE))
+	if (se->conn.proto_minor < 14 ||
+	    !(se->conn.want & FUSE_CAP_SPLICE_WRITE))
 		goto fallback;
 
-	llp = fuse_ll_get_pipe(f);
+	llp = fuse_ll_get_pipe(se);
 	if (llp == NULL)
 		goto fallback;
 
@@ -705,9 +702,9 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			 * this combination of input and output.
 			 */
 			if (res == -EAGAIN)
-				f->broken_splice_nonblock = 1;
+				se->broken_splice_nonblock = 1;
 
-			pthread_setspecific(f->pipe_key, NULL);
+			pthread_setspecific(se->pipe_key, NULL);
 			fuse_ll_pipe_free(llp);
 			goto fallback;
 		}
@@ -774,7 +771,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	len = res;
 	out->len = headerlen + len;
 
-	if (f->debug) {
+	if (se->debug) {
 		fprintf(stderr,
 			"   unique: %llu, success, outsize: %i (splice)\n",
 			(unsigned long long) out->unique, out->len);
@@ -782,7 +779,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 
 	splice_flags = 0;
 	if ((flags & FUSE_BUF_SPLICE_MOVE) &&
-	    (f->conn.want & FUSE_CAP_SPLICE_MOVE))
+	    (se->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
 	res = splice(llp->pipe[0], NULL, ch ? ch->fd : se->fd,
@@ -801,7 +798,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	return 0;
 
 clear_pipe:
-	fuse_ll_clear_pipe(f);
+	fuse_ll_clear_pipe(se);
 	return res;
 
 fallback:
@@ -844,7 +841,7 @@ int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
 {
 	struct fuse_statfs_out arg;
-	size_t size = req->f->conn.proto_minor < 4 ?
+	size_t size = req->se->conn.proto_minor < 4 ?
 		FUSE_COMPAT_STATFS_SIZE : sizeof(arg);
 
 	memset(&arg, 0, sizeof(arg));
@@ -927,7 +924,7 @@ int fuse_reply_ioctl_retry(fuse_req_t req,
 	iov[count].iov_len = sizeof(arg);
 	count++;
 
-	if (req->f->conn.proto_minor < 16) {
+	if (req->se->conn.proto_minor < 16) {
 		if (in_count) {
 			iov[count].iov_base = (void *)in_iov;
 			iov[count].iov_len = sizeof(in_iov[0]) * in_count;
@@ -1037,8 +1034,8 @@ static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
 
-	if (req->f->op.lookup)
-		req->f->op.lookup(req, nodeid, name);
+	if (req->se->op.lookup)
+		req->se->op.lookup(req, nodeid, name);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1047,8 +1044,8 @@ static void do_forget(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_forget_in *arg = (struct fuse_forget_in *) inarg;
 
-	if (req->f->op.forget)
-		req->f->op.forget(req, nodeid, arg->nlookup);
+	if (req->se->op.forget)
+		req->se->op.forget(req, nodeid, arg->nlookup);
 	else
 		fuse_reply_none(req);
 }
@@ -1062,10 +1059,10 @@ static void do_batch_forget(fuse_req_t req, fuse_ino_t nodeid,
 
 	(void) nodeid;
 
-	if (req->f->op.forget_multi) {
-		req->f->op.forget_multi(req, arg->count,
+	if (req->se->op.forget_multi) {
+		req->se->op.forget_multi(req, arg->count,
 				     (struct fuse_forget_data *) param);
-	} else if (req->f->op.forget) {
+	} else if (req->se->op.forget) {
 		for (i = 0; i < arg->count; i++) {
 			struct fuse_forget_one *forget = &param[i];
 			struct fuse_req *dummy_req;
@@ -1078,7 +1075,7 @@ static void do_batch_forget(fuse_req_t req, fuse_ino_t nodeid,
 			dummy_req->ctx = req->ctx;
 			dummy_req->ch = NULL;
 
-			req->f->op.forget(dummy_req, forget->nodeid,
+			req->se->op.forget(dummy_req, forget->nodeid,
 					  forget->nlookup);
 		}
 		fuse_reply_none(req);
@@ -1092,7 +1089,7 @@ static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_file_info *fip = NULL;
 	struct fuse_file_info fi;
 
-	if (req->f->conn.proto_minor >= 9) {
+	if (req->se->conn.proto_minor >= 9) {
 		struct fuse_getattr_in *arg = (struct fuse_getattr_in *) inarg;
 
 		if (arg->getattr_flags & FUSE_GETATTR_FH) {
@@ -1102,8 +1099,8 @@ static void do_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		}
 	}
 
-	if (req->f->op.getattr)
-		req->f->op.getattr(req, nodeid, fip);
+	if (req->se->op.getattr)
+		req->se->op.getattr(req, nodeid, fip);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1112,7 +1109,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_setattr_in *arg = (struct fuse_setattr_in *) inarg;
 
-	if (req->f->op.setattr) {
+	if (req->se->op.setattr) {
 		struct fuse_file_info *fi = NULL;
 		struct fuse_file_info fi_store;
 		struct stat stbuf;
@@ -1135,7 +1132,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			FUSE_SET_ATTR_MTIME_NOW |
 			FUSE_SET_ATTR_CTIME;
 
-		req->f->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
+		req->se->op.setattr(req, nodeid, &stbuf, arg->valid, fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1144,8 +1141,8 @@ static void do_access(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_access_in *arg = (struct fuse_access_in *) inarg;
 
-	if (req->f->op.access)
-		req->f->op.access(req, nodeid, arg->mask);
+	if (req->se->op.access)
+		req->se->op.access(req, nodeid, arg->mask);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1154,8 +1151,8 @@ static void do_readlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	(void) inarg;
 
-	if (req->f->op.readlink)
-		req->f->op.readlink(req, nodeid);
+	if (req->se->op.readlink)
+		req->se->op.readlink(req, nodeid);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1165,13 +1162,13 @@ static void do_mknod(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_mknod_in *arg = (struct fuse_mknod_in *) inarg;
 	char *name = PARAM(arg);
 
-	if (req->f->conn.proto_minor >= 12)
+	if (req->se->conn.proto_minor >= 12)
 		req->ctx.umask = arg->umask;
 	else
 		name = (char *) inarg + FUSE_COMPAT_MKNOD_IN_SIZE;
 
-	if (req->f->op.mknod)
-		req->f->op.mknod(req, nodeid, name, arg->mode, arg->rdev);
+	if (req->se->op.mknod)
+		req->se->op.mknod(req, nodeid, name, arg->mode, arg->rdev);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1180,11 +1177,11 @@ static void do_mkdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_mkdir_in *arg = (struct fuse_mkdir_in *) inarg;
 
-	if (req->f->conn.proto_minor >= 12)
+	if (req->se->conn.proto_minor >= 12)
 		req->ctx.umask = arg->umask;
 
-	if (req->f->op.mkdir)
-		req->f->op.mkdir(req, nodeid, PARAM(arg), arg->mode);
+	if (req->se->op.mkdir)
+		req->se->op.mkdir(req, nodeid, PARAM(arg), arg->mode);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1193,8 +1190,8 @@ static void do_unlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
 
-	if (req->f->op.unlink)
-		req->f->op.unlink(req, nodeid, name);
+	if (req->se->op.unlink)
+		req->se->op.unlink(req, nodeid, name);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1203,8 +1200,8 @@ static void do_rmdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
 
-	if (req->f->op.rmdir)
-		req->f->op.rmdir(req, nodeid, name);
+	if (req->se->op.rmdir)
+		req->se->op.rmdir(req, nodeid, name);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1214,8 +1211,8 @@ static void do_symlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	char *name = (char *) inarg;
 	char *linkname = ((char *) inarg) + strlen((char *) inarg) + 1;
 
-	if (req->f->op.symlink)
-		req->f->op.symlink(req, linkname, nodeid, name);
+	if (req->se->op.symlink)
+		req->se->op.symlink(req, linkname, nodeid, name);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1226,8 +1223,8 @@ static void do_rename(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	char *oldname = PARAM(arg);
 	char *newname = oldname + strlen(oldname) + 1;
 
-	if (req->f->op.rename)
-		req->f->op.rename(req, nodeid, oldname, arg->newdir, newname,
+	if (req->se->op.rename)
+		req->se->op.rename(req, nodeid, oldname, arg->newdir, newname,
 				  0);
 	else
 		fuse_reply_err(req, ENOSYS);
@@ -1239,8 +1236,8 @@ static void do_rename2(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	char *oldname = PARAM(arg);
 	char *newname = oldname + strlen(oldname) + 1;
 
-	if (req->f->op.rename)
-		req->f->op.rename(req, nodeid, oldname, arg->newdir, newname,
+	if (req->se->op.rename)
+		req->se->op.rename(req, nodeid, oldname, arg->newdir, newname,
 				  arg->flags);
 	else
 		fuse_reply_err(req, ENOSYS);
@@ -1250,8 +1247,8 @@ static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_link_in *arg = (struct fuse_link_in *) inarg;
 
-	if (req->f->op.link)
-		req->f->op.link(req, arg->oldnodeid, nodeid, PARAM(arg));
+	if (req->se->op.link)
+		req->se->op.link(req, arg->oldnodeid, nodeid, PARAM(arg));
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1260,19 +1257,19 @@ static void do_create(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
 
-	if (req->f->op.create) {
+	if (req->se->op.create) {
 		struct fuse_file_info fi;
 		char *name = PARAM(arg);
 
 		memset(&fi, 0, sizeof(fi));
 		fi.flags = arg->flags;
 
-		if (req->f->conn.proto_minor >= 12)
+		if (req->se->conn.proto_minor >= 12)
 			req->ctx.umask = arg->umask;
 		else
 			name = (char *) inarg + sizeof(struct fuse_open_in);
 
-		req->f->op.create(req, nodeid, name, arg->mode, &fi);
+		req->se->op.create(req, nodeid, name, arg->mode, &fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1285,8 +1282,8 @@ static void do_open(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.flags = arg->flags;
 
-	if (req->f->op.open)
-		req->f->op.open(req, nodeid, &fi);
+	if (req->se->op.open)
+		req->se->op.open(req, nodeid, &fi);
 	else
 		fuse_reply_open(req, &fi);
 }
@@ -1295,16 +1292,16 @@ static void do_read(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_read_in *arg = (struct fuse_read_in *) inarg;
 
-	if (req->f->op.read) {
+	if (req->se->op.read) {
 		struct fuse_file_info fi;
 
 		memset(&fi, 0, sizeof(fi));
 		fi.fh = arg->fh;
-		if (req->f->conn.proto_minor >= 9) {
+		if (req->se->conn.proto_minor >= 9) {
 			fi.lock_owner = arg->lock_owner;
 			fi.flags = arg->flags;
 		}
-		req->f->op.read(req, nodeid, arg->size, arg->offset, &fi);
+		req->se->op.read(req, nodeid, arg->size, arg->offset, &fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1319,7 +1316,7 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	fi.fh = arg->fh;
 	fi.writepage = (arg->write_flags & 1) != 0;
 
-	if (req->f->conn.proto_minor < 9) {
+	if (req->se->conn.proto_minor < 9) {
 		param = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
 	} else {
 		fi.lock_owner = arg->lock_owner;
@@ -1327,8 +1324,8 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		param = PARAM(arg);
 	}
 
-	if (req->f->op.write)
-		req->f->op.write(req, nodeid, param, arg->size,
+	if (req->se->op.write)
+		req->se->op.write(req, nodeid, param, arg->size,
 				 arg->offset, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
@@ -1337,7 +1334,7 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 			 const struct fuse_buf *ibuf)
 {
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 	struct fuse_bufvec bufv = {
 		.buf[0] = *ibuf,
 		.count = 1,
@@ -1349,7 +1346,7 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 	fi.fh = arg->fh;
 	fi.writepage = arg->write_flags & 1;
 
-	if (req->f->conn.proto_minor < 9) {
+	if (f->conn.proto_minor < 9) {
 		bufv.buf[0].mem = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
 		bufv.buf[0].size -= sizeof(struct fuse_in_header) +
 			FUSE_COMPAT_WRITE_IN_SIZE;
@@ -1370,7 +1367,7 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 	}
 	bufv.buf[0].size = arg->size;
 
-	req->f->op.write_buf(req, nodeid, &bufv, arg->offset, &fi);
+	f->op.write_buf(req, nodeid, &bufv, arg->offset, &fi);
 
 out:
 	/* Need to reset the pipe if ->write_buf() didn't consume all data */
@@ -1386,11 +1383,11 @@ static void do_flush(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.flush = 1;
-	if (req->f->conn.proto_minor >= 7)
+	if (req->se->conn.proto_minor >= 7)
 		fi.lock_owner = arg->lock_owner;
 
-	if (req->f->op.flush)
-		req->f->op.flush(req, nodeid, &fi);
+	if (req->se->op.flush)
+		req->se->op.flush(req, nodeid, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1403,7 +1400,7 @@ static void do_release(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.flags = arg->flags;
 	fi.fh = arg->fh;
-	if (req->f->conn.proto_minor >= 8) {
+	if (req->se->conn.proto_minor >= 8) {
 		fi.flush = (arg->release_flags & FUSE_RELEASE_FLUSH) ? 1 : 0;
 		fi.lock_owner = arg->lock_owner;
 	}
@@ -1412,8 +1409,8 @@ static void do_release(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fi.lock_owner = arg->lock_owner;
 	}
 
-	if (req->f->op.release)
-		req->f->op.release(req, nodeid, &fi);
+	if (req->se->op.release)
+		req->se->op.release(req, nodeid, &fi);
 	else
 		fuse_reply_err(req, 0);
 }
@@ -1426,8 +1423,8 @@ static void do_fsync(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
-	if (req->f->op.fsync)
-		req->f->op.fsync(req, nodeid, arg->fsync_flags & 1, &fi);
+	if (req->se->op.fsync)
+		req->se->op.fsync(req, nodeid, arg->fsync_flags & 1, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1440,8 +1437,8 @@ static void do_opendir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.flags = arg->flags;
 
-	if (req->f->op.opendir)
-		req->f->op.opendir(req, nodeid, &fi);
+	if (req->se->op.opendir)
+		req->se->op.opendir(req, nodeid, &fi);
 	else
 		fuse_reply_open(req, &fi);
 }
@@ -1454,8 +1451,8 @@ static void do_readdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
-	if (req->f->op.readdir)
-		req->f->op.readdir(req, nodeid, arg->size, arg->offset, &fi);
+	if (req->se->op.readdir)
+		req->se->op.readdir(req, nodeid, arg->size, arg->offset, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1468,8 +1465,8 @@ static void do_readdirplus(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
-	if (req->f->op.readdirplus)
-		req->f->op.readdirplus(req, nodeid, arg->size, arg->offset, &fi);
+	if (req->se->op.readdirplus)
+		req->se->op.readdirplus(req, nodeid, arg->size, arg->offset, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1483,8 +1480,8 @@ static void do_releasedir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	fi.flags = arg->flags;
 	fi.fh = arg->fh;
 
-	if (req->f->op.releasedir)
-		req->f->op.releasedir(req, nodeid, &fi);
+	if (req->se->op.releasedir)
+		req->se->op.releasedir(req, nodeid, &fi);
 	else
 		fuse_reply_err(req, 0);
 }
@@ -1497,8 +1494,8 @@ static void do_fsyncdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
-	if (req->f->op.fsyncdir)
-		req->f->op.fsyncdir(req, nodeid, arg->fsync_flags & 1, &fi);
+	if (req->se->op.fsyncdir)
+		req->se->op.fsyncdir(req, nodeid, arg->fsync_flags & 1, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1508,8 +1505,8 @@ static void do_statfs(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	(void) nodeid;
 	(void) inarg;
 
-	if (req->f->op.statfs)
-		req->f->op.statfs(req, nodeid);
+	if (req->se->op.statfs)
+		req->se->op.statfs(req, nodeid);
 	else {
 		struct statvfs buf = {
 			.f_namemax = 255,
@@ -1525,8 +1522,8 @@ static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	char *name = PARAM(arg);
 	char *value = name + strlen(name) + 1;
 
-	if (req->f->op.setxattr)
-		req->f->op.setxattr(req, nodeid, name, value, arg->size,
+	if (req->se->op.setxattr)
+		req->se->op.setxattr(req, nodeid, name, value, arg->size,
 				    arg->flags);
 	else
 		fuse_reply_err(req, ENOSYS);
@@ -1536,8 +1533,8 @@ static void do_getxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_getxattr_in *arg = (struct fuse_getxattr_in *) inarg;
 
-	if (req->f->op.getxattr)
-		req->f->op.getxattr(req, nodeid, PARAM(arg), arg->size);
+	if (req->se->op.getxattr)
+		req->se->op.getxattr(req, nodeid, PARAM(arg), arg->size);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1546,8 +1543,8 @@ static void do_listxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_getxattr_in *arg = (struct fuse_getxattr_in *) inarg;
 
-	if (req->f->op.listxattr)
-		req->f->op.listxattr(req, nodeid, arg->size);
+	if (req->se->op.listxattr)
+		req->se->op.listxattr(req, nodeid, arg->size);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1556,8 +1553,8 @@ static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
 
-	if (req->f->op.removexattr)
-		req->f->op.removexattr(req, nodeid, name);
+	if (req->se->op.removexattr)
+		req->se->op.removexattr(req, nodeid, name);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1587,8 +1584,8 @@ static void do_getlk(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	fi.lock_owner = arg->owner;
 
 	convert_fuse_file_lock(&arg->lk, &flock);
-	if (req->f->op.getlk)
-		req->f->op.getlk(req, nodeid, &fi, &flock);
+	if (req->se->op.getlk)
+		req->se->op.getlk(req, nodeid, &fi, &flock);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1621,14 +1618,14 @@ static void do_setlk_common(fuse_req_t req, fuse_ino_t nodeid,
 		if (!sleep)
 			op |= LOCK_NB;
 
-		if (req->f->op.flock)
-			req->f->op.flock(req, nodeid, &fi, op);
+		if (req->se->op.flock)
+			req->se->op.flock(req, nodeid, &fi, op);
 		else
 			fuse_reply_err(req, ENOSYS);
 	} else {
 		convert_fuse_file_lock(&arg->lk, &flock);
-		if (req->f->op.setlk)
-			req->f->op.setlk(req, nodeid, &fi, &flock, sleep);
+		if (req->se->op.setlk)
+			req->se->op.setlk(req, nodeid, &fi, &flock, sleep);
 		else
 			fuse_reply_err(req, ENOSYS);
 	}
@@ -1644,7 +1641,7 @@ static void do_setlkw(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	do_setlk_common(req, nodeid, inarg, 1);
 }
 
-static int find_interrupted(struct fuse_ll *f, struct fuse_req *req)
+static int find_interrupted(struct fuse_session *f, struct fuse_req *req)
 {
 	struct fuse_req *curr;
 
@@ -1686,7 +1683,7 @@ static int find_interrupted(struct fuse_ll *f, struct fuse_req *req)
 static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_interrupt_in *arg = (struct fuse_interrupt_in *) inarg;
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 
 	(void) nodeid;
 	if (f->debug)
@@ -1703,7 +1700,7 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	pthread_mutex_unlock(&f->lock);
 }
 
-static struct fuse_req *check_interrupt(struct fuse_ll *f, struct fuse_req *req)
+static struct fuse_req *check_interrupt(struct fuse_session *f, struct fuse_req *req)
 {
 	struct fuse_req *curr;
 
@@ -1729,8 +1726,8 @@ static void do_bmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_bmap_in *arg = (struct fuse_bmap_in *) inarg;
 
-	if (req->f->op.bmap)
-		req->f->op.bmap(req, nodeid, arg->blocksize, arg->block);
+	if (req->se->op.bmap)
+		req->se->op.bmap(req, nodeid, arg->blocksize, arg->block);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1743,7 +1740,7 @@ static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_file_info fi;
 
 	if (flags & FUSE_IOCTL_DIR &&
-	    !(req->f->conn.want & FUSE_CAP_IOCTL_DIR)) {
+	    !(req->se->conn.want & FUSE_CAP_IOCTL_DIR)) {
 		fuse_reply_err(req, ENOTTY);
 		return;
 	}
@@ -1751,13 +1748,13 @@ static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
-	if (sizeof(void *) == 4 && req->f->conn.proto_minor >= 16 &&
+	if (sizeof(void *) == 4 && req->se->conn.proto_minor >= 16 &&
 	    !(flags & FUSE_IOCTL_32BIT)) {
 		req->ioctl_64bit = 1;
 	}
 
-	if (req->f->op.ioctl)
-		req->f->op.ioctl(req, nodeid, arg->cmd,
+	if (req->se->op.ioctl)
+		req->se->op.ioctl(req, nodeid, arg->cmd,
 				 (void *)(uintptr_t)arg->arg, &fi, flags,
 				 in_buf, arg->in_size, arg->out_size);
 	else
@@ -1778,7 +1775,7 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	fi.fh = arg->fh;
 	fi.poll_events = arg->events;
 
-	if (req->f->op.poll) {
+	if (req->se->op.poll) {
 		struct fuse_pollhandle *ph = NULL;
 
 		if (arg->flags & FUSE_POLL_SCHEDULE_NOTIFY) {
@@ -1791,7 +1788,7 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			ph->se = req->se;
 		}
 
-		req->f->op.poll(req, nodeid, &fi, ph);
+		req->se->op.poll(req, nodeid, &fi, ph);
 	} else {
 		fuse_reply_err(req, ENOSYS);
 	}
@@ -1805,8 +1802,8 @@ static void do_fallocate(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
-	if (req->f->op.fallocate)
-		req->f->op.fallocate(req, nodeid, arg->mode, arg->offset, arg->length, &fi);
+	if (req->se->op.fallocate)
+		req->se->op.fallocate(req, nodeid, arg->mode, arg->offset, arg->length, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1815,7 +1812,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
 	struct fuse_init_out outarg;
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 	size_t bufsize = f->bufsize;
 	size_t outargsize = sizeof(outarg);
 
@@ -1886,7 +1883,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.max_readahead = 0;
 	}
 
-	if (req->f->conn.proto_minor >= 14) {
+	if (f->conn.proto_minor >= 14) {
 #ifdef HAVE_SPLICE
 #ifdef HAVE_VMSPLICE
 		f->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
@@ -1900,7 +1897,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.want |= FUSE_CAP_SPLICE_READ;
 #endif
 	}
-	if (req->f->conn.proto_minor >= 18)
+	if (f->conn.proto_minor >= 18)
 		f->conn.capable |= FUSE_CAP_IOCTL_DIR;
 
 	if (f->atomic_o_trunc)
@@ -2019,7 +2016,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 static void do_destroy(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 
 	(void) nodeid;
 	(void) inarg;
@@ -2058,7 +2055,7 @@ static void list_init_nreq(struct fuse_notify_req *nreq)
 static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 			    const void *inarg, const struct fuse_buf *buf)
 {
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 	struct fuse_notify_req *nreq;
 	struct fuse_notify_req *head;
 
@@ -2081,7 +2078,7 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 {
 	struct fuse_out_header out;
 
-	if (!se->f->got_init)
+	if (!se->got_init)
 		return -ENOTCONN;
 
 	out.unique = 0;
@@ -2113,13 +2110,13 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 				     off_t off, off_t len)
 {
 	struct fuse_notify_inval_inode_out outarg;
-	struct fuse_ll *f;
+	struct fuse_session *f;
 	struct iovec iov[2];
 
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2137,13 +2134,13 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen)
 {
 	struct fuse_notify_inval_entry_out outarg;
-	struct fuse_ll *f;
+	struct fuse_session *f;
 	struct iovec iov[3];
 
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2164,13 +2161,13 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
 				const char *name, size_t namelen)
 {
 	struct fuse_notify_delete_out outarg;
-	struct fuse_ll *f;
+	struct fuse_session *f;
 	struct iovec iov[3];
 
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2196,7 +2193,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 {
 	struct fuse_out_header out;
 	struct fuse_notify_store_out outarg;
-	struct fuse_ll *f;
+	struct fuse_session *f;
 	struct iovec iov[3];
 	size_t size = fuse_buf_size(bufv);
 	int res;
@@ -2204,7 +2201,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2241,7 +2238,7 @@ static void fuse_ll_retrieve_reply(struct fuse_notify_req *nreq,
 				   const void *inarg,
 				   const struct fuse_buf *ibuf)
 {
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->se;
 	struct fuse_retrieve_req *rreq =
 		container_of(nreq, struct fuse_retrieve_req, nreq);
 	const struct fuse_notify_retrieve_in *arg = inarg;
@@ -2263,8 +2260,8 @@ static void fuse_ll_retrieve_reply(struct fuse_notify_req *nreq,
 	}
 	bufv.buf[0].size = arg->size;
 
-	if (req->f->op.retrieve_reply) {
-		req->f->op.retrieve_reply(req, rreq->cookie, ino,
+	if (f->op.retrieve_reply) {
+		f->op.retrieve_reply(req, rreq->cookie, ino,
 					  arg->offset, &bufv);
 	} else {
 		fuse_reply_none(req);
@@ -2279,7 +2276,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 				  size_t size, off_t offset, void *cookie)
 {
 	struct fuse_notify_retrieve_out outarg;
-	struct fuse_ll *f;
+	struct fuse_session *f;
 	struct iovec iov[2];
 	struct fuse_retrieve_req *rreq;
 	int err;
@@ -2287,7 +2284,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	f = se->f;
+	f = se;
 	if (!f)
 		return -ENODEV;
 
@@ -2326,7 +2323,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 
 void *fuse_req_userdata(fuse_req_t req)
 {
-	return req->f->userdata;
+	return req->se->userdata;
 }
 
 const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
@@ -2338,10 +2335,10 @@ void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
 			     void *data)
 {
 	pthread_mutex_lock(&req->lock);
-	pthread_mutex_lock(&req->f->lock);
+	pthread_mutex_lock(&req->se->lock);
 	req->u.ni.func = func;
 	req->u.ni.data = data;
-	pthread_mutex_unlock(&req->f->lock);
+	pthread_mutex_unlock(&req->se->lock);
 	if (req->interrupted && func)
 		func(req, data);
 	pthread_mutex_unlock(&req->lock);
@@ -2351,9 +2348,9 @@ int fuse_req_interrupted(fuse_req_t req)
 {
 	int interrupted;
 
-	pthread_mutex_lock(&req->f->lock);
+	pthread_mutex_lock(&req->se->lock);
 	interrupted = req->interrupted;
-	pthread_mutex_unlock(&req->f->lock);
+	pthread_mutex_unlock(&req->se->lock);
 
 	return interrupted;
 }
@@ -2442,7 +2439,6 @@ void fuse_session_process_buf(struct fuse_session *se,
 void fuse_session_process_buf_int(struct fuse_session *se,
 				  const struct fuse_buf *buf, struct fuse_chan *ch)
 {
-	struct fuse_ll *f = se->f;
 	const size_t write_header_size = sizeof(struct fuse_in_header) +
 		sizeof(struct fuse_write_in);
 	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
@@ -2474,7 +2470,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		in = buf->mem;
 	}
 
-	if (f->debug) {
+	if (se->debug) {
 		fprintf(stderr,
 			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
 			(unsigned long long) in->unique,
@@ -2504,17 +2500,17 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
 	err = EIO;
-	if (!f->got_init) {
+	if (!se->got_init) {
 		enum fuse_opcode expected;
 
-		expected = f->cuse_data ? CUSE_INIT : FUSE_INIT;
+		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
 		if (in->opcode != expected)
 			goto reply_err;
 	} else if (in->opcode == FUSE_INIT || in->opcode == CUSE_INIT)
 		goto reply_err;
 
 	err = EACCES;
-	if (f->allow_root && in->uid != f->owner && in->uid != 0 &&
+	if (se->allow_root && in->uid != se->owner && in->uid != 0 &&
 		 in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
 		 in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&
 		 in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
@@ -2528,16 +2524,16 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		goto reply_err;
 	if (in->opcode != FUSE_INTERRUPT) {
 		struct fuse_req *intr;
-		pthread_mutex_lock(&f->lock);
-		intr = check_interrupt(f, req);
-		list_add_req(req, &f->list);
-		pthread_mutex_unlock(&f->lock);
+		pthread_mutex_lock(&se->lock);
+		intr = check_interrupt(se, req);
+		list_add_req(req, &se->list);
+		pthread_mutex_unlock(&se->lock);
 		if (intr)
 			fuse_reply_err(intr, EAGAIN);
 	}
 
 	if ((buf->flags & FUSE_BUF_IS_FD) && write_header_size < buf->size &&
-	    (in->opcode != FUSE_WRITE || !f->op.write_buf) &&
+	    (in->opcode != FUSE_WRITE || !se->op.write_buf) &&
 	    in->opcode != FUSE_NOTIFY_REPLY) {
 		void *newmbuf;
 
@@ -2559,7 +2555,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	}
 
 	inarg = (void *) &in[1];
-	if (in->opcode == FUSE_WRITE && f->op.write_buf)
+	if (in->opcode == FUSE_WRITE && se->op.write_buf)
 		do_write_buf(req, in->nodeid, inarg, buf);
 	else if (in->opcode == FUSE_NOTIFY_REPLY)
 		do_notify_reply(req, in->nodeid, inarg, buf);
@@ -2574,46 +2570,46 @@ reply_err:
 	fuse_reply_err(req, err);
 clear_pipe:
 	if (buf->flags & FUSE_BUF_IS_FD)
-		fuse_ll_clear_pipe(f);
+		fuse_ll_clear_pipe(se);
 	goto out_free;
 }
 
 static const struct fuse_opt fuse_ll_opts[] = {
-	{ "debug", offsetof(struct fuse_ll, debug), 1 },
-	{ "-d", offsetof(struct fuse_ll, debug), 1 },
-	{ "allow_root", offsetof(struct fuse_ll, allow_root), 1 },
-	{ "max_write=%u", offsetof(struct fuse_ll, conn.max_write), 0 },
-	{ "max_readahead=%u", offsetof(struct fuse_ll, conn.max_readahead), 0 },
-	{ "max_background=%u", offsetof(struct fuse_ll, conn.max_background), 0 },
+	{ "debug", offsetof(struct fuse_session, debug), 1 },
+	{ "-d", offsetof(struct fuse_session, debug), 1 },
+	{ "allow_root", offsetof(struct fuse_session, allow_root), 1 },
+	{ "max_write=%u", offsetof(struct fuse_session, conn.max_write), 0 },
+	{ "max_readahead=%u", offsetof(struct fuse_session, conn.max_readahead), 0 },
+	{ "max_background=%u", offsetof(struct fuse_session, conn.max_background), 0 },
 	{ "congestion_threshold=%u",
-	  offsetof(struct fuse_ll, conn.congestion_threshold), 0 },
-	{ "async_read", offsetof(struct fuse_ll, conn.async_read), 1 },
-	{ "sync_read", offsetof(struct fuse_ll, conn.async_read), 0 },
-	{ "atomic_o_trunc", offsetof(struct fuse_ll, atomic_o_trunc), 1},
-	{ "no_remote_lock", offsetof(struct fuse_ll, no_remote_posix_lock), 1},
-	{ "no_remote_lock", offsetof(struct fuse_ll, no_remote_flock), 1},
-	{ "no_remote_flock", offsetof(struct fuse_ll, no_remote_flock), 1},
-	{ "no_remote_posix_lock", offsetof(struct fuse_ll, no_remote_posix_lock), 1},
-	{ "big_writes", offsetof(struct fuse_ll, big_writes), 1},
-	{ "splice_write", offsetof(struct fuse_ll, splice_write), 1},
-	{ "no_splice_write", offsetof(struct fuse_ll, no_splice_write), 1},
-	{ "splice_move", offsetof(struct fuse_ll, splice_move), 1},
-	{ "no_splice_move", offsetof(struct fuse_ll, no_splice_move), 1},
-	{ "splice_read", offsetof(struct fuse_ll, splice_read), 1},
-	{ "no_splice_read", offsetof(struct fuse_ll, no_splice_read), 1},
-	{ "auto_inval_data", offsetof(struct fuse_ll, auto_inval_data), 1},
-	{ "no_auto_inval_data", offsetof(struct fuse_ll, no_auto_inval_data), 1},
-	{ "readdirplus=no", offsetof(struct fuse_ll, no_readdirplus), 1},
-	{ "readdirplus=yes", offsetof(struct fuse_ll, no_readdirplus), 0},
-	{ "readdirplus=yes", offsetof(struct fuse_ll, no_readdirplus_auto), 1},
-	{ "readdirplus=auto", offsetof(struct fuse_ll, no_readdirplus), 0},
-	{ "readdirplus=auto", offsetof(struct fuse_ll, no_readdirplus_auto), 0},
-	{ "async_dio", offsetof(struct fuse_ll, async_dio), 1},
-	{ "no_async_dio", offsetof(struct fuse_ll, no_async_dio), 1},
-	{ "writeback_cache", offsetof(struct fuse_ll, writeback_cache), 1},
-	{ "no_writeback_cache", offsetof(struct fuse_ll, no_writeback_cache), 1},
-	{ "time_gran=%u", offsetof(struct fuse_ll, conn.time_gran), 0 },
-	{ "clone_fd", offsetof(struct fuse_ll, clone_fd), 1 },
+	  offsetof(struct fuse_session, conn.congestion_threshold), 0 },
+	{ "async_read", offsetof(struct fuse_session, conn.async_read), 1 },
+	{ "sync_read", offsetof(struct fuse_session, conn.async_read), 0 },
+	{ "atomic_o_trunc", offsetof(struct fuse_session, atomic_o_trunc), 1},
+	{ "no_remote_lock", offsetof(struct fuse_session, no_remote_posix_lock), 1},
+	{ "no_remote_lock", offsetof(struct fuse_session, no_remote_flock), 1},
+	{ "no_remote_flock", offsetof(struct fuse_session, no_remote_flock), 1},
+	{ "no_remote_posix_lock", offsetof(struct fuse_session, no_remote_posix_lock), 1},
+	{ "big_writes", offsetof(struct fuse_session, big_writes), 1},
+	{ "splice_write", offsetof(struct fuse_session, splice_write), 1},
+	{ "no_splice_write", offsetof(struct fuse_session, no_splice_write), 1},
+	{ "splice_move", offsetof(struct fuse_session, splice_move), 1},
+	{ "no_splice_move", offsetof(struct fuse_session, no_splice_move), 1},
+	{ "splice_read", offsetof(struct fuse_session, splice_read), 1},
+	{ "no_splice_read", offsetof(struct fuse_session, no_splice_read), 1},
+	{ "auto_inval_data", offsetof(struct fuse_session, auto_inval_data), 1},
+	{ "no_auto_inval_data", offsetof(struct fuse_session, no_auto_inval_data), 1},
+	{ "readdirplus=no", offsetof(struct fuse_session, no_readdirplus), 1},
+	{ "readdirplus=yes", offsetof(struct fuse_session, no_readdirplus), 0},
+	{ "readdirplus=yes", offsetof(struct fuse_session, no_readdirplus_auto), 1},
+	{ "readdirplus=auto", offsetof(struct fuse_session, no_readdirplus), 0},
+	{ "readdirplus=auto", offsetof(struct fuse_session, no_readdirplus_auto), 0},
+	{ "async_dio", offsetof(struct fuse_session, async_dio), 1},
+	{ "no_async_dio", offsetof(struct fuse_session, no_async_dio), 1},
+	{ "writeback_cache", offsetof(struct fuse_session, writeback_cache), 1},
+	{ "no_writeback_cache", offsetof(struct fuse_session, no_writeback_cache), 1},
+	{ "time_gran=%u", offsetof(struct fuse_session, conn.time_gran), 0 },
+	{ "clone_fd", offsetof(struct fuse_session, clone_fd), 1 },
 	FUSE_OPT_END
 };
 
@@ -2658,7 +2654,7 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
-static void fuse_ll_destroy(struct fuse_ll *f)
+void fuse_session_destroy(struct fuse_session *f)
 {
 	struct fuse_ll_pipe *llp;
 
@@ -2672,15 +2668,9 @@ static void fuse_ll_destroy(struct fuse_ll *f)
 	pthread_key_delete(f->pipe_key);
 	pthread_mutex_destroy(&f->lock);
 	free(f->cuse_data);
+	close(f->fd);
+	destroy_mount_opts(f->mo);
 	free(f);
-}
-
-void fuse_session_destroy(struct fuse_session *se)
-{
-	fuse_ll_destroy(se->f);
-	close(se->fd);
-	destroy_mount_opts(se->mo);
-	free(se);
 }
 
 
@@ -2698,18 +2688,17 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
 int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 				 struct fuse_chan *ch)
 {
-	struct fuse_ll *f = se->f;
 	int err;
 	ssize_t res;
 #ifdef HAVE_SPLICE
-	size_t bufsize = f->bufsize;
+	size_t bufsize = se->bufsize;
 	struct fuse_ll_pipe *llp;
 	struct fuse_buf tmpbuf;
 
-	if (f->conn.proto_minor < 14 || !(f->conn.want & FUSE_CAP_SPLICE_READ))
+	if (se->conn.proto_minor < 14 || !(se->conn.want & FUSE_CAP_SPLICE_READ))
 		goto fallback;
 
-	llp = fuse_ll_get_pipe(f);
+	llp = fuse_ll_get_pipe(se);
 	if (llp == NULL)
 		goto fallback;
 
@@ -2765,14 +2754,14 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 		struct fuse_bufvec dst = { .count = 1 };
 
 		if (!buf->mem) {
-			buf->mem = malloc(f->bufsize);
+			buf->mem = malloc(se->bufsize);
 			if (!buf->mem) {
 				fprintf(stderr,
 					"fuse: failed to allocate read buffer\n");
 				return -ENOMEM;
 			}
 		}
-		buf->size = f->bufsize;
+		buf->size = se->bufsize;
 		buf->flags = 0;
 		dst.buf[0] = *buf;
 
@@ -2780,12 +2769,12 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 		if (res < 0) {
 			fprintf(stderr, "fuse: copy from pipe: %s\n",
 				strerror(-res));
-			fuse_ll_clear_pipe(f);
+			fuse_ll_clear_pipe(se);
 			return res;
 		}
 		if (res < tmpbuf.size) {
 			fprintf(stderr, "fuse: copy from pipe: short read\n");
-			fuse_ll_clear_pipe(f);
+			fuse_ll_clear_pipe(se);
 			return -EIO;
 		}
 		assert(res == tmpbuf.size);
@@ -2802,7 +2791,7 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 fallback:
 #endif
 	if (!buf->mem) {
-		buf->mem = malloc(f->bufsize);
+		buf->mem = malloc(se->bufsize);
 		if (!buf->mem) {
 			fprintf(stderr,
 				"fuse: failed to allocate read buffer\n");
@@ -2811,7 +2800,7 @@ fallback:
 	}
 
 restart:
-	res = read(ch ? ch->fd : se->fd, buf->mem, f->bufsize);
+	res = read(ch ? ch->fd : se->fd, buf->mem, se->bufsize);
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -2850,8 +2839,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      size_t op_size, void *userdata)
 {
 	int err;
-	struct fuse_ll *f;
-	struct fuse_session *se;
+	struct fuse_session *f;
 	struct mount_opts *mo;
 
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
@@ -2859,7 +2847,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		op_size = sizeof(struct fuse_lowlevel_ops);
 	}
 
-	f = (struct fuse_ll *) calloc(1, sizeof(struct fuse_ll));
+	f = (struct fuse_session *) calloc(1, sizeof(struct fuse_session));
 	if (f == NULL) {
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
 		goto out1;
@@ -2907,18 +2895,9 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	f->owner = getuid();
 	f->userdata = userdata;
 
-	se = (struct fuse_session *) malloc(sizeof(*se));
-	if (se == NULL) {
-		fprintf(stderr, "fuse: failed to allocate session\n");
-		goto out6;
-	}
-	memset(se, 0, sizeof(*se));
-	se->f = f;
-	se->mo = mo;
-	return se;
+	f->mo = mo;
+	return f;
 
-out6:
-	pthread_key_delete(f->pipe_key);
 out5:
 	pthread_mutex_destroy(&f->lock);
 out4:
