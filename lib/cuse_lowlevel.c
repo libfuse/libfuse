@@ -152,7 +152,7 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 	struct fuse_lowlevel_ops lop;
 	struct cuse_data *cd;
 	struct fuse_session *se;
-	struct fuse_ll *ll;
+	struct fuse_session *ll;
 
 	cd = cuse_prep_data(ci, clop);
 	if (!cd)
@@ -198,7 +198,7 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
 	struct cuse_init_out outarg;
-	struct fuse_ll *f = req->f;
+	struct fuse_session *f = req->f;
 	struct cuse_data *cd = f->cuse_data;
 	size_t bufsize = f->bufsize;
 	struct cuse_lowlevel_ops *clop = req_clop(req);
