@@ -42,7 +42,6 @@ struct fuse_notify_req {
 };
 
 struct fuse_session {
-	struct fuse_ll *f;
 	char *mountpoint;
 	volatile int exited;
 	int fd;
