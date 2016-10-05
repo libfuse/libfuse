@@ -2657,7 +2657,7 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
-static void fuse_ll_destroy(struct fuse_session *f)
+static void fuse_session_destroy(struct fuse_session *f)
 {
 	struct fuse_ll_pipe *llp;
 
@@ -2671,15 +2671,9 @@ static void fuse_ll_destroy(struct fuse_session *f)
 	pthread_key_delete(f->pipe_key);
 	pthread_mutex_destroy(&f->lock);
 	free(f->cuse_data);
+	close(f->fd);
+	destroy_mount_opts(f->mo);
 	free(f);
-}
-
-void fuse_session_destroy(struct fuse_session *se)
-{
-	fuse_ll_destroy(se);
-	close(se->fd);
-	destroy_mount_opts(se->mo);
-	free(se);
 }
 
 
