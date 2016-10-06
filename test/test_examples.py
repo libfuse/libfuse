@@ -27,12 +27,16 @@ def name_generator(__ctr=[0]):
     __ctr[0] += 1
     return 'testfile_%d' % __ctr[0]
 
+LL_OPTIONS = [ ['-o', 'splice_move,splice_write,splice_read' ],
+               ['-o', 'clone_fd,big_writes,writeback_cache' ] ]
+
 @pytest.mark.parametrize("name", ('hello', 'hello_ll'))
-def test_hello(tmpdir, name):
+@pytest.mark.parametrize("options", LL_OPTIONS)
+def test_hello(tmpdir, name, options):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
-                '-f', mnt_dir ]
+                '-f', mnt_dir ] + options
     if name == 'hello_ll':
         # supports single-threading only
         cmdline.append('-s')
@@ -55,13 +59,14 @@ def test_hello(tmpdir, name):
     else:
         umount(mount_process, mnt_dir)
 
-def test_fuse_lo_plus(tmpdir):
+@pytest.mark.parametrize("options", LL_OPTIONS)
+def test_fuse_lo_plus(tmpdir, options):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'fuse_lo-plus'),
-                '-f', '-s', mnt_dir ]
+                '-f', '-s', mnt_dir ] + options
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
@@ -88,14 +93,15 @@ def test_fuse_lo_plus(tmpdir):
         umount(mount_process, mnt_dir)
 
 @pytest.mark.parametrize("name", ('fusexmp', 'fusexmp_fh'))
-def test_fusexmp_fh(tmpdir, name):
+@pytest.mark.parametrize("options", LL_OPTIONS)
+def test_fusexmp_fh(tmpdir, name, options):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
                 '-f', '-o', 'use_ino,readdir_ino,kernel_cache',
-                mnt_dir ]
+                mnt_dir ] + options
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
