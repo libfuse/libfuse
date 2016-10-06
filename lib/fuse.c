@@ -2276,6 +2276,20 @@ int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
 		return -ENOSYS;
 }
 
+int fuse_fs_dir_read(struct fuse_fs *fs, const char *path, char* buf,
+		size_t size, off_t off, struct fuse_file_info *fi)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.dir_read) {
+		if (fs->debug)
+			fprintf(stderr, "dir_read %s %lu %ld\n",
+				path, (unsigned long) size, (long) off);
+		return fs->op.dir_read(path, buf, size, off, fi);
+	} else {
+		return -ENOSYS;
+	}
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -4207,6 +4221,34 @@ static void fuse_lib_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 	reply_err(req, err);
 }
 
+static void fuse_lib_dir_read(fuse_req_t req, fuse_ino_t ino, size_t size,
+		off_t off, struct fuse_file_info *llfi)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	int res;
+	struct fuse_file_info fi;
+	char *buf = (char *) malloc(size);
+	if (buf == NULL) {
+		reply_err(req, -ENOMEM);
+		return;
+	}
+	get_dirhandle(llfi, &fi);
+	char *path;
+	res = get_path_nullok(f, ino, &path);
+	if (!res) {
+		struct fuse_intr_data d;
+		fuse_prepare_interrupt(f, req, &d);
+		res = fuse_fs_dir_read(f->fs, path, buf, size, off, &fi);
+		fuse_finish_interrupt(f, req, &d);
+		free_path(f, ino, path);
+	}
+	if (res > 0)
+		fuse_reply_buf(req, buf, res);
+	else
+		reply_err(req, res);
+	free(buf);
+}
+
 static int clean_delay(struct fuse *f)
 {
 	/*
@@ -4303,6 +4345,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.ioctl = fuse_lib_ioctl,
 	.poll = fuse_lib_poll,
 	.fallocate = fuse_lib_fallocate,
+	.dir_read = fuse_lib_dir_read,
 };
 
 int fuse_notify_poll(struct fuse_pollhandle *ph)

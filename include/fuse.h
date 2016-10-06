@@ -574,6 +574,19 @@ struct fuse_operations {
 	 */
 	int (*fallocate) (const char *, int, off_t, off_t,
 			  struct fuse_file_info *);
+
+	/**
+	 * Reads from a directory
+	 *
+	 * This function is called when read(2) is called on a directory. Most
+	 * filesystems prohibit this and return EISDIR; FUSE will give this
+	 * behavior if you don't provide an implementation. Will be called after
+	 * opendir.
+	 *
+	 * Implemented in version 3.0
+	 */
+	int (*dir_read) (const char *, char *, size_t, off_t,
+			 struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -904,6 +917,8 @@ int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 		 unsigned *reventsp);
 int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
 		 off_t offset, off_t length, struct fuse_file_info *fi);
+int fuse_fs_dir_read(struct fuse_fs *fs, const char *path, char* buf,
+		size_t size, off_t off, struct fuse_file_info *fi);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn);
 void fuse_fs_destroy(struct fuse_fs *fs);
 

@@ -102,6 +102,12 @@
  *  - add ctime and ctimensec to fuse_setattr_in
  *  - add FUSE_RENAME2 request
  *  - add FUSE_NO_OPEN_SUPPORT flag
+ *
+ *  7.24
+ *  - add FUSE_LSEEK for SEEK_HOLE and SEEK_DATA support
+ *
+ *  7.25
+ *  - add FUSE_DIR_READ
  */
 
 #ifndef _LINUX_FUSE_H
@@ -137,7 +143,7 @@
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 23
+#define FUSE_KERNEL_MINOR_VERSION 25
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
@@ -358,6 +364,8 @@ enum fuse_opcode {
 	FUSE_FALLOCATE     = 43,
 	FUSE_READDIRPLUS   = 44,
 	FUSE_RENAME2       = 45,
+	FUSE_LSEEK         = 46,
+	FUSE_DIR_READ      = 47,
 
 	/* CUSE specific operations */
 	CUSE_INIT          = 4096,
@@ -757,5 +765,28 @@ struct fuse_notify_retrieve_in {
 
 /* Device ioctls: */
 #define FUSE_DEV_IOC_CLONE	_IOR(229, 0, uint32_t)
+
+struct fuse_lseek_in {
+	uint64_t	fh;
+	uint64_t	offset;
+	uint32_t	whence;
+	uint32_t	padding;
+};
+
+struct fuse_lseek_out {
+	uint64_t	offset;
+};
+
+struct fuse_dir_read_in {
+	uint32_t	size;
+	uint32_t	padding;
+	int64_t		off;
+	uint64_t	fh;
+};
+
+struct fuse_dir_read_out {
+	uint32_t	size;
+	uint32_t	padding;
+};
 
 #endif /* _LINUX_FUSE_H */
