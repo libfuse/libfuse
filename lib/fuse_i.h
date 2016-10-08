@@ -52,7 +52,6 @@ struct fuse_session {
 	int atomic_o_trunc;
 	int no_remote_posix_lock;
 	int no_remote_flock;
-	int big_writes;
 	int splice_write;
 	int splice_move;
 	int splice_read;

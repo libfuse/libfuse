@@ -28,7 +28,7 @@ def name_generator(__ctr=[0]):
     return 'testfile_%d' % __ctr[0]
 
 LL_OPTIONS = [ ['-o', 'splice_move,splice_write,splice_read' ],
-               ['-o', 'clone_fd,big_writes,writeback_cache' ] ]
+               ['-o', 'clone_fd,writeback_cache' ] ]
 
 @pytest.mark.parametrize("name", ('hello', 'hello_ll'))
 @pytest.mark.parametrize("options", LL_OPTIONS)

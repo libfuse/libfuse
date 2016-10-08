@@ -1,3 +1,10 @@
+Unreleased Changes
+==================
+
+* The ``-o big_writes`` mount option has been removed. It is now
+  always active. File systems that want to limit the size of write
+  requests should use the ``-o max_write=<N>`` option instead.
+
 FUSE 3.0.0pre0 (2016-10-03)
 ============================
 

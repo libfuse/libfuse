@@ -1860,8 +1860,6 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			f->conn.capable |= FUSE_CAP_ATOMIC_O_TRUNC;
 		if (arg->flags & FUSE_EXPORT_SUPPORT)
 			f->conn.capable |= FUSE_CAP_EXPORT_SUPPORT;
-		if (arg->flags & FUSE_BIG_WRITES)
-			f->conn.capable |= FUSE_CAP_BIG_WRITES;
 		if (arg->flags & FUSE_DONT_MASK)
 			f->conn.capable |= FUSE_CAP_DONT_MASK;
 		if (arg->flags & FUSE_FLOCK_LOCKS)
@@ -1906,8 +1904,6 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want |= FUSE_CAP_POSIX_LOCKS;
 	if (f->op.flock && !f->no_remote_flock)
 		f->conn.want |= FUSE_CAP_FLOCK_LOCKS;
-	if (f->big_writes)
-		f->conn.want |= FUSE_CAP_BIG_WRITES;
 	if (f->auto_inval_data)
 		f->conn.want |= FUSE_CAP_AUTO_INVAL_DATA;
 	if (f->op.readdirplus && !f->no_readdirplus) {
@@ -1951,6 +1947,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (f->no_writeback_cache)
 		f->conn.want &= ~FUSE_CAP_WRITEBACK_CACHE;
 
+	/* Always enable big writes, this is superseded
+	   by the max_write option */
+	outarg.flags |= FUSE_BIG_WRITES;
+
 	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
 		outarg.flags |= FUSE_ASYNC_READ;
 	if (f->conn.want & FUSE_CAP_POSIX_LOCKS)
@@ -1959,8 +1959,6 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_ATOMIC_O_TRUNC;
 	if (f->conn.want & FUSE_CAP_EXPORT_SUPPORT)
 		outarg.flags |= FUSE_EXPORT_SUPPORT;
-	if (f->conn.want & FUSE_CAP_BIG_WRITES)
-		outarg.flags |= FUSE_BIG_WRITES;
 	if (f->conn.want & FUSE_CAP_DONT_MASK)
 		outarg.flags |= FUSE_DONT_MASK;
 	if (f->conn.want & FUSE_CAP_FLOCK_LOCKS)
@@ -2565,7 +2563,6 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "no_remote_lock", offsetof(struct fuse_session, no_remote_flock), 1},
 	{ "no_remote_flock", offsetof(struct fuse_session, no_remote_flock), 1},
 	{ "no_remote_posix_lock", offsetof(struct fuse_session, no_remote_posix_lock), 1},
-	{ "big_writes", offsetof(struct fuse_session, big_writes), 1},
 	{ "splice_write", offsetof(struct fuse_session, splice_write), 1},
 	{ "no_splice_write", offsetof(struct fuse_session, no_splice_write), 1},
 	{ "splice_move", offsetof(struct fuse_session, splice_move), 1},
@@ -2605,7 +2602,6 @@ void fuse_lowlevel_help(void)
 "    -o async_read          perform reads asynchronously (default)\n"
 "    -o sync_read           perform reads synchronously\n"
 "    -o atomic_o_trunc      enable atomic open+truncate support\n"
-"    -o big_writes          enable larger than 4kB writes\n"
 "    -o no_remote_lock      disable remote file locking\n"
 "    -o no_remote_flock     disable remote file locking (BSD)\n"
 "    -o no_remote_posix_lock  disable remote file locking (POSIX)\n"
