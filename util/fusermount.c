@@ -714,7 +714,7 @@ static int get_string_opt(const char *s, unsigned len, const char *opt,
 
 static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 		    int fd, const char *opts, const char *dev, char **sourcep,
-		    char **mnt_optsp, off_t rootsize)
+		    char **mnt_optsp)
 {
 	int res;
 	int flags = MS_NOSUID | MS_NODEV;
@@ -726,7 +726,6 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 	char *subtype = NULL;
 	char *source = NULL;
 	char *type = NULL;
-	int check_empty = 1;
 	int blkdev = 0;
 
 	optbuf = (char *) malloc(strlen(opts) + 128);
@@ -759,8 +758,6 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 				goto err;
 			}
 			blkdev = 1;
-		} else if (opt_eq(s, len, "nonempty")) {
-			check_empty = 0;
 		} else if (opt_eq(s, len, "auto_unmount")) {
 			auto_unmount = 1;
 		} else if (!begins_with(s, "fd=") &&
@@ -812,10 +809,6 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 
 	sprintf(d, "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
 		fd, rootmode, getuid(), getgid());
-
-	if (check_empty &&
-	    fuse_mnt_check_empty(progname, mnt, rootmode, rootsize) == -1)
-		goto err;
 
 	source = malloc((fsname ? strlen(fsname) : 0) +
 			(subtype ? strlen(subtype) : 0) + strlen(dev) + 32);
@@ -1082,8 +1075,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 		restore_privs();
 		if (res != -1)
 			res = do_mount(real_mnt, &type, stbuf.st_mode & S_IFMT,
-				       fd, opts, dev, &source, &mnt_opts,
-				       stbuf.st_size);
+				       fd, opts, dev, &source, &mnt_opts);
 	} else
 		restore_privs();
 
@@ -1292,7 +1284,7 @@ int main(int argc, char *argv[])
 		return 0;
 
 	/* Become a daemon and wait for the parent to exit or die.
-	   ie For the control socket to get closed. 
+	   ie For the control socket to get closed.
 	   btw We don't want to use daemon() function here because
 	   it forks and messes with the file descriptors. */
 	setsid();

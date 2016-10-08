@@ -4,6 +4,15 @@ Unreleased Changes
 * The ``-o large_read`` mount option has been dropped. Hopefully no
   one uses a Linux 2.4 kernel anymore.
 
+* The `-o nonempty` mount point has been removed, mounting over
+  non-empty directories is now always allowed. This brings the
+  behavior of FUSE file systems in-line with the behavior of the
+  regular `mount` command.
+
+  File systems that do not want to allow mounting to non-empty
+  directories should perform this check themselves before handing
+  control to libfuse.
+
 * The chmod, chown, truncate, utimens and getattr handlers of the
   high-level API now all receive an additional struct fuse_file_info
   pointer. This pointer is NULL if the file is not currently open.
@@ -62,6 +71,7 @@ Unreleased Changes
 * The ``-o big_writes`` mount option has been removed. It is now
   always active. File systems that want to limit the size of write
   requests should use the ``-o max_write=<N>`` option instead.
+
 
 FUSE 3.0.0pre0 (2016-10-03)
 ============================
