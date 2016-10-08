@@ -605,6 +605,9 @@ struct fuse_lowlevel_ops {
 	 * Returning a directory entry from readdir() does not affect
 	 * its lookup count.
 	 *
+	 * The function does not have to report the '.' and '..'
+	 * entries, but is allowed to do so.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_buf
 	 *   fuse_reply_data
