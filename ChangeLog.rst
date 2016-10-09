@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* Removed ``example/null.c``. This has not been working for a while
+  for unknown reasons -- maybe because it tries to treat the
+  mountpoint as a file rather than a directory?
+
 * There is a new ``timefs3`` example that demonstrates the use of
   `fuse_lowlevel_notify_inval_entry`.
 
