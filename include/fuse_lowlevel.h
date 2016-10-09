@@ -1625,7 +1625,7 @@ struct fuse_cmdline_opts {
  * removed from *args*.
  *
  * If --help or --version is specified, the appropriate information is
- * printed to stdout and the function proceeds normally.
+ * printed to stdout and the function returns -1.
  *
  * If neither -o subtype= or -o fsname= options are given, the subtype
  * is set to the basename of the program (the fsname defaults to
