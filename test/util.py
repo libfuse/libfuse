@@ -38,6 +38,20 @@ def umount(mount_process, mnt_dir):
     pytest.fail('mount process did not terminate')
 
 
+def safe_sleep(secs):
+    '''Like time.sleep(), but sleep for at least *secs*
+
+    `time.sleep` may sleep less than the given period if a signal is
+    received. This function ensures that we sleep for at least the
+    desired time.
+    '''
+
+    now = time.time()
+    end = now + secs
+    while now < end:
+        time.sleep(end - now)
+        now = time.time()
+
 # If valgrind and libtool are available, use them
 def has_program(name):
     try:
