@@ -456,13 +456,6 @@ int main(int argc, char *argv[])
 		ret = 1;
 		goto err_out1;
 	}
-	if (!opts.foreground)
-		fprintf(stderr, "Warning: background operation "
-			"is not supported\n");
-	if (!opts.singlethread)
-		fprintf(stderr, "Warning: multithreading is not "
-			"supported\n");
-
 	lo.debug = opts.debug;
 	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = open("/", O_PATH);
@@ -480,7 +473,13 @@ int main(int argc, char *argv[])
 	if (fuse_session_mount(se, opts.mountpoint) != 0)
 	    goto err_out3;
 
-	ret = fuse_session_loop(se);
+	fuse_daemonize(opts.foreground);
+
+	/* Block until ctrl+c or fusermount -u */
+	if (opts.singlethread)
+		ret = fuse_session_loop(se);
+	else
+		ret = fuse_session_loop_mt(se);
 
 	fuse_session_unmount(se);
 err_out3:
