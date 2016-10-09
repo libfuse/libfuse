@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* There are new ``timefs1`` and ``timefs2`` examples that demonstrate
+  the use of the `fuse_lowlevel_notify_store` and
+  `fuse_lowlevel_notify_inval_inode` functions.
+
 * The ``-o big_writes`` mount option has been removed. It is now
   always active. File systems that want to limit the size of write
   requests should use the ``-o max_write=<N>`` option instead.

@@ -14,7 +14,8 @@ import shutil
 import filecmp
 import errno
 from tempfile import NamedTemporaryFile
-from util import wait_for_mount, umount, cleanup, base_cmdline
+from util import (wait_for_mount, umount, cleanup, base_cmdline,
+                  safe_sleep)
 from os.path import join as pjoin
 
 basename = pjoin(os.path.dirname(__file__), '..')
@@ -162,6 +163,35 @@ def test_fsel(tmpdir):
         cmdline = base_cmdline + \
                   [ pjoin(basename, 'example', 'fselclient') ]
         subprocess.check_call(cmdline, cwd=mnt_dir)
+    except:
+        cleanup(mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+@pytest.mark.parametrize("name", ('timefs1', 'timefs2'))
+@pytest.mark.parametrize("options", LL_OPTIONS)
+@pytest.mark.parametrize("notify", (True, False))
+def test_timefs(tmpdir, name, options, notify):
+    mnt_dir = str(tmpdir)
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', name),
+                '-f', '--update-interval=1', mnt_dir ] + options
+    if not notify:
+        cmdline.append('--no-notify')
+    mount_process = subprocess.Popen(cmdline)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        filename = pjoin(mnt_dir, 'current_time')
+        with open(filename, 'r') as fh:
+            read1 = fh.read()
+        safe_sleep(2)
+        with open(filename, 'r') as fh:
+            read2 = fh.read()
+        if notify:
+            assert read1 != read2
+        else:
+            assert read1 == read2
     except:
         cleanup(mnt_dir)
         raise
