@@ -1080,6 +1080,8 @@ int fuse_reply_err(fuse_req_t req, int err);
  *
  * Possible requests:
  *   forget
+ *   forget_multi
+ *   retrieve_reply
  *
  * @param req request handle
  */
