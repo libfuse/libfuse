@@ -87,6 +87,7 @@ FUSE_3.0 {
 		fuse_register_module;
 		fuse_reply_iov;
 		fuse_version;
+		fuse_pkgversion;
 		fuse_reply_bmap;
 		cuse_lowlevel_new;
 		cuse_lowlevel_main;
