@@ -2279,6 +2279,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	outarg.nodeid = ino;
 	outarg.offset = offset;
 	outarg.size = size;
+	outarg.padding = 0;
 
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);

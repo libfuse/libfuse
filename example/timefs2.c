@@ -291,8 +291,8 @@ static void* update_fs(void *data) {
         now = localtime(&t);
         assert(now != NULL);
 
-        file_size= strftime(file_contents, MAX_STR_LEN,
-                            "The current time is %H:%M:%S\n", now);
+        file_size = strftime(file_contents, MAX_STR_LEN,
+                             "The current time is %H:%M:%S\n", now);
         assert(file_size != 0);
         if (!options.no_notify && lookup_cnt) {
             /* Only send notification if the kernel

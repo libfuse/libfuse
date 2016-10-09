@@ -2,7 +2,7 @@
 
 AM_CPPFLAGS = -I$(top_srcdir)/include -D_REENTRANT
 noinst_HEADERS = fioc.h
-noinst_PROGRAMS = fusexmp fusexmp_fh null hello hello_ll fioc fioclient \
+noinst_PROGRAMS = fusexmp fusexmp_fh hello hello_ll fioc fioclient \
 		  fsel fselclient cusexmp fuse_lo-plus timefs1 timefs2 \
 		  timefs3
 
