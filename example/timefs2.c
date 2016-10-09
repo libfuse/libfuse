@@ -78,6 +78,10 @@ static char file_contents[MAX_STR_LEN];
 static int lookup_cnt = 0;
 static size_t file_size;
 
+/* Keep track if we ever stored data (==1), and
+   received it back correctly (==2) */
+static int retrieve_status = 0;
+
 /* Command line parsing */
 struct options {
     int no_notify;
@@ -239,6 +243,33 @@ static void tfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
     reply_buf_limited(req, file_contents, file_size, off, size);
 }
 
+static void tfs_retrieve_reply(fuse_req_t req, void *cookie, fuse_ino_t ino,
+                               off_t offset, struct fuse_bufvec *data) {
+    struct fuse_bufvec bufv;
+    char buf[MAX_STR_LEN];
+    char *expected;
+    ssize_t ret;
+
+    assert(ino == FILE_INO);
+    assert(offset == 0);
+    expected = (char*) cookie;
+
+    bufv.count = 1;
+    bufv.idx = 0;
+    bufv.off = 0;
+    bufv.buf[0].size = MAX_STR_LEN;
+    bufv.buf[0].mem = buf;
+    bufv.buf[0].flags = 0;
+
+    ret = fuse_buf_copy(&bufv, data, 0);
+    assert(ret > 0);
+    assert(strncmp(buf, expected, ret) == 0);
+    free(expected);
+    retrieve_status = 2;
+    fuse_reply_none(req);
+}
+
+
 static struct fuse_lowlevel_ops tfs_oper = {
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
@@ -246,13 +277,14 @@ static struct fuse_lowlevel_ops tfs_oper = {
     .open	= tfs_open,
     .read	= tfs_read,
     .forget     = tfs_forget,
+    .retrieve_reply = tfs_retrieve_reply,
 };
 
 static void* update_fs(void *data) {
     struct fuse_session *se = (struct fuse_session*) data;
     struct tm *now;
     time_t t;
-     struct fuse_bufvec bufv;
+    struct fuse_bufvec bufv;
 
     while(1) {
         t = time(NULL);
@@ -273,6 +305,14 @@ static void* update_fs(void *data) {
             bufv.buf[0].flags = 0;
             assert(fuse_lowlevel_notify_store(se, FILE_INO, 0,
                                               &bufv, 0) == 0);
+
+            /* To make sure that everything worked correctly, ask the
+               kernel to send us back the stored data */
+            assert(fuse_lowlevel_notify_retrieve
+                   (se, FILE_INO, MAX_STR_LEN, 0,
+                    (void*) strdup(file_contents)) == 0);
+            if(retrieve_status == 0)
+                retrieve_status = 1;
         }
         sleep(options.update_interval);
     }
@@ -324,6 +364,7 @@ int main(int argc, char *argv[]) {
     else
         ret = fuse_session_loop_mt(se);
 
+    assert(retrieve_status != 1);
     fuse_session_unmount(se);
 err_out3:
     fuse_remove_signal_handlers(se);

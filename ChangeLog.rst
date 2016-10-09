@@ -2,7 +2,8 @@ Unreleased Changes
 ==================
 
 * There are new ``timefs1`` and ``timefs2`` examples that demonstrate
-  the use of the `fuse_lowlevel_notify_store` and
+  the use of the `fuse_lowlevel_notify_store`,
+  `fuse_lowlevel_notify_retrieve`, and
   `fuse_lowlevel_notify_inval_inode` functions.
 
 * The ``-o big_writes`` mount option has been removed. It is now
