@@ -172,7 +172,7 @@ def test_fsel(tmpdir):
 @pytest.mark.parametrize("name", ('timefs1', 'timefs2'))
 @pytest.mark.parametrize("options", LL_OPTIONS)
 @pytest.mark.parametrize("notify", (True, False))
-def test_timefs(tmpdir, name, options, notify):
+def test_timefs12(tmpdir, name, options, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
@@ -192,6 +192,38 @@ def test_timefs(tmpdir, name, options, notify):
             assert read1 != read2
         else:
             assert read1 == read2
+    except:
+        cleanup(mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+@pytest.mark.parametrize("notify", (True, False))
+def test_timefs3(tmpdir, notify):
+    mnt_dir = str(tmpdir)
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'timefs3'),
+               '-f', '--update-interval=2',
+                '--timeout=4', mnt_dir ]
+    if not notify:
+        cmdline.append('--no-notify')
+    mount_process = subprocess.Popen(cmdline)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
+        try:
+            os.stat(fname)
+        except FileNotFoundError:
+            # We may have hit a race condition
+            fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
+            os.stat(fname)
+
+        safe_sleep(2)
+        if not notify:
+            os.stat(fname)
+            safe_sleep(4)
+        with pytest.raises(FileNotFoundError):
+            os.stat(fname)
     except:
         cleanup(mnt_dir)
         raise
