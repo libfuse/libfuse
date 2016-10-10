@@ -232,23 +232,27 @@ static struct fuse_lowlevel_ops tfs_oper = {
     .forget     = tfs_forget,
 };
 
-static void* update_fs(void *data) {
-    struct fuse_session *se = (struct fuse_session*) data;
-    struct tm *now;
-    char *old_name;
+static void update_fs(void) {
     time_t t;
+    struct tm *now;
     ssize_t ret;
 
+    t = time(NULL);
+    now = localtime(&t);
+    assert(now != NULL);
+
+    ret = strftime(file_name, MAX_STR_LEN,
+                   "Time_is_%Hh_%Mm_%Ss", now);
+    assert(ret != 0);
+}
+
+static void* update_fs_loop(void *data) {
+    struct fuse_session *se = (struct fuse_session*) data;
+    char *old_name;
+
     while(1) {
-        t = time(NULL);
-        now = localtime(&t);
-        assert(now != NULL);
-
         old_name = strdup(file_name);
-        ret = strftime(file_name, MAX_STR_LEN,
-                       "Time_is_%Hh_%Mm_%Ss", now);
-        assert(ret != 0);
-
+        update_fs();
         if (!options.no_notify && lookup_cnt)
             assert(fuse_lowlevel_notify_inval_entry
                    (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
@@ -295,6 +299,9 @@ int main(int argc, char *argv[]) {
         goto err_out1;
     }
 
+    /* Initial contents */
+    update_fs();
+
     se = fuse_session_new(&args, &tfs_oper,
                           sizeof(tfs_oper), NULL);
     if (se == NULL)
@@ -309,7 +316,7 @@ int main(int argc, char *argv[]) {
     fuse_daemonize(opts.foreground);
 
     /* Start thread to update file contents */
-    ret = pthread_create(&updater, NULL, update_fs, (void *)se);
+    ret = pthread_create(&updater, NULL, update_fs_loop, (void *)se);
     if (ret != 0) {
         fprintf(stderr, "pthread_create failed with %s\n",
                 strerror(ret));

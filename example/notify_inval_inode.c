@@ -255,19 +255,23 @@ static struct fuse_lowlevel_ops tfs_oper = {
     .forget     = tfs_forget,
 };
 
-static void* update_fs(void *data) {
-    struct fuse_session *se = (struct fuse_session*) data;
+static void update_fs(void) {
     struct tm *now;
     time_t t;
+    t = time(NULL);
+    now = localtime(&t);
+    assert(now != NULL);
+
+    file_size = strftime(file_contents, MAX_STR_LEN,
+                         "The current time is %H:%M:%S\n", now);
+    assert(file_size != 0);
+}
+
+static void* update_fs_loop(void *data) {
+    struct fuse_session *se = (struct fuse_session*) data;
 
     while(1) {
-        t = time(NULL);
-        now = localtime(&t);
-        assert(now != NULL);
-
-        file_size = strftime(file_contents, MAX_STR_LEN,
-                             "The current time is %H:%M:%S\n", now);
-        assert(file_size != 0);
+        update_fs();
         if (!options.no_notify && lookup_cnt) {
             /* Only send notification if the kernel
                is aware of the inode */
@@ -318,6 +322,9 @@ int main(int argc, char *argv[]) {
         goto err_out1;
     }
 
+    /* Initial contents */
+    update_fs();
+
     se = fuse_session_new(&args, &tfs_oper,
                           sizeof(tfs_oper), NULL);
     if (se == NULL)
@@ -332,7 +339,7 @@ int main(int argc, char *argv[]) {
     fuse_daemonize(opts.foreground);
 
     /* Start thread to update file contents */
-    ret = pthread_create(&updater, NULL, update_fs, (void *)se);
+    ret = pthread_create(&updater, NULL, update_fs_loop, (void *)se);
     if (ret != 0) {
         fprintf(stderr, "pthread_create failed with %s\n",
                 strerror(ret));
