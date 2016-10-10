@@ -1,6 +1,12 @@
 Unreleased Changes
 ==================
 
+* `fuse_session_new` now treats low-level options more consistently:
+  First, options are used to modify FUSE defaults. Second, the file
+  system may inspect and/or adjust the settings in its `init`
+  handler. Third, command line arguments take precedence over any
+  modifications made by the `init` handler.
+
 * Removed the `async_read` field from `struct fuse_conn_info`. To
   determine if the kernel supports asynchronous reads, file systems
   should check the `FUSE_CAP_ASYNC_READ` bit of the `capable`
