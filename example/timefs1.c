@@ -4,50 +4,61 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
-  This example implements a file system with a single file whose
-  contents change dynamically: it always contains the current time.
-
-  While timefs2.c uses fuse_lowlevel_notify_store() to actively push
-  the updated data into the kernel cache, this example uses
-  fuse_lowlevel_notify_inval_inode() to notify the kernel that the
-  cache has to be invalidated - but the kernel still has to explicitly
-  request the updated data on the next read.
-
-  To see the effect, first start the file system with the
-  ``--no-notify`` option:
-
-      $ timefs --update-interval=1 --no-notify mnt/
-
-  Observe that the output never changes, even though the file system
-  updates it once per second. This is because the contents are cached
-  in the kernel:
-
-      $ for i in 1 2 3 4 5; do
-      >     cat mnt/current_time
-      >     sleep 1
-      > done
-      The current time is 15:58:18
-      The current time is 15:58:18
-      The current time is 15:58:18
-      The current time is 15:58:18
-      The current time is 15:58:18
-
-  If you instead enable the notification functions, the changes become
-  visible:
-
-      $ timefs --update-interval=1 mnt/
-      $ for i in 1 2 3 4 5; do
-      >     cat mnt/current_time
-      >     sleep 1
-      > done
-      The current time is 15:58:40
-      The current time is 15:58:41
-      The current time is 15:58:42
-      The current time is 15:58:43
-      The current time is 15:58:44
-
 */
+
+/** @file
+ * @tableofcontents
+ *
+ * This example implements a file system with a single file whose
+ * contents change dynamically: it always contains the current time.
+ *
+ * While timefs2.c uses fuse_lowlevel_notify_store() to actively push
+ *  the updated data into the kernel cache, this example uses
+ *  fuse_lowlevel_notify_inval_inode() to notify the kernel that the
+ *  cache has to be invalidated - but the kernel still has to explicitly
+ *  request the updated data on the next read.
+ *
+ *  To see the effect, first start the file system with the
+ *  ``--no-notify`` option:
+ *
+ *      $ timefs --update-interval=1 --no-notify mnt/
+ *
+ *  Observe that the output never changes, even though the file system
+ *  updates it once per second. This is because the contents are cached
+ *  in the kernel:
+ *
+ *      $ for i in 1 2 3 4 5; do
+ *      >     cat mnt/current_time
+ *      >     sleep 1
+ *      > done
+ *      The current time is 15:58:18
+ *      The current time is 15:58:18
+ *      The current time is 15:58:18
+ *      The current time is 15:58:18
+ *      The current time is 15:58:18
+ *
+ *  If you instead enable the notification functions, the changes become
+ *  visible:
+ *
+ *      $ timefs --update-interval=1 mnt/
+ *      $ for i in 1 2 3 4 5; do
+ *      >     cat mnt/current_time
+ *      >     sleep 1
+ *      > done
+ *      The current time is 15:58:40
+ *      The current time is 15:58:41
+ *      The current time is 15:58:42
+ *      The current time is 15:58:43
+ *      The current time is 15:58:44
+ *
+ * \section section_compile compiling this example
+ *
+ *     gcc -Wall timefs1.c `pkg-config fuse3 --cflags --libs` -o timefs1
+ *
+ * \section section_source the complete source
+ * \include timefs1.c
+ */
+
 
 #define FUSE_USE_VERSION 30
 

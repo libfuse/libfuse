@@ -4,64 +4,75 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
-  This example implements a file system with a single file whose
-  file name changes dynamically to reflect the current time.
-
-  It illustrates the use of the fuse_lowlevel_notify_inval_entry()
-  function.
-
-  To see the effect, first start the file system with the
-  ``--no-notify``
-
-      $ timefs --update-interval=1 --timeout 30 --no-notify mnt/
-
-  Observe that `ls` always prints the correct directory contents
-  (since `readdir` output is not cached)::
-
-      $ ls mnt; sleep 1; ls mnt; sleep 1; ls mnt
-      Time_is_15h_48m_33s  current_time
-      Time_is_15h_48m_34s  current_time
-      Time_is_15h_48m_35s  current_time
-
-  However, if you try to access a file by name the kernel will
-  report that it still exists:
-
-      $ file=$(ls mnt/); echo $file
-      Time_is_15h_50m_09s
-      $ sleep 5; stat mnt/$file
-        File: ‘mnt/Time_is_15h_50m_09s’
-        Size: 32                Blocks: 0          IO Block: 4096   regular file
-      Device: 2ah/42d	Inode: 3           Links: 1
-      Access: (0444/-r--r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
-      Access: 1969-12-31 16:00:00.000000000 -0800
-      Modify: 1969-12-31 16:00:00.000000000 -0800
-      Change: 1969-12-31 16:00:00.000000000 -0800
-       Birth: -
-
-  Only once the kernel cache timeout has been reached will the stat
-  call fail:
-
-      $ sleep 30; stat mnt/$file
-      stat: cannot stat ‘mnt/Time_is_15h_50m_09s’: No such file or directory
-
-  In contrast, if you enable notifications you will be unable to stat
-  the file as soon as the file system updates its name:
-
-      $ timefs --update-interval=1 --timeout 30 --no-notify mnt/
-      $ file=$(ls mnt/); stat mnt/$file
-        File: ‘mnt/Time_is_20h_42m_11s’
-        Size: 0                 Blocks: 0          IO Block: 4096   regular empty file
-      Device: 2ah/42d	Inode: 2           Links: 1
-      Access: (0000/----------)  Uid: (    0/    root)   Gid: (    0/    root)
-      Access: 1969-12-31 16:00:00.000000000 -0800
-      Modify: 1969-12-31 16:00:00.000000000 -0800
-      Change: 1969-12-31 16:00:00.000000000 -0800
-       Birth: -
-      $ sleep 1; stat mnt/$file
-      stat: cannot stat ‘mnt/Time_is_20h_42m_11s’: No such file or directory
-
 */
+
+/** @file
+ * @tableofcontents
+ *
+ * This example implements a file system with a single file whose
+ * file name changes dynamically to reflect the current time.
+ *
+ * It illustrates the use of the fuse_lowlevel_notify_inval_entry()
+ * function.
+ *
+ * To see the effect, first start the file system with the
+ * ``--no-notify``
+ *
+ *     $ timefs --update-interval=1 --timeout 30 --no-notify mnt/
+ *
+ * Observe that `ls` always prints the correct directory contents
+ * (since `readdir` output is not cached)::
+ *
+ *     $ ls mnt; sleep 1; ls mnt; sleep 1; ls mnt
+ *     Time_is_15h_48m_33s  current_time
+ *     Time_is_15h_48m_34s  current_time
+ *     Time_is_15h_48m_35s  current_time
+ *
+ * However, if you try to access a file by name the kernel will
+ * report that it still exists:
+ *
+ *     $ file=$(ls mnt/); echo $file
+ *     Time_is_15h_50m_09s
+ *     $ sleep 5; stat mnt/$file
+ *       File: ‘mnt/Time_is_15h_50m_09s’
+ *       Size: 32                Blocks: 0          IO Block: 4096   regular file
+ *     Device: 2ah/42d	Inode: 3           Links: 1
+ *     Access: (0444/-r--r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+ *     Access: 1969-12-31 16:00:00.000000000 -0800
+ *     Modify: 1969-12-31 16:00:00.000000000 -0800
+ *     Change: 1969-12-31 16:00:00.000000000 -0800
+ *      Birth: -
+ *
+ * Only once the kernel cache timeout has been reached will the stat
+ * call fail:
+ *
+ *     $ sleep 30; stat mnt/$file
+ *     stat: cannot stat ‘mnt/Time_is_15h_50m_09s’: No such file or directory
+ *
+ * In contrast, if you enable notifications you will be unable to stat
+ * the file as soon as the file system updates its name:
+ *
+ *     $ timefs --update-interval=1 --timeout 30 --no-notify mnt/
+ *     $ file=$(ls mnt/); stat mnt/$file
+ *       File: ‘mnt/Time_is_20h_42m_11s’
+ *       Size: 0                 Blocks: 0          IO Block: 4096   regular empty file
+ *     Device: 2ah/42d	Inode: 2           Links: 1
+ *     Access: (0000/----------)  Uid: (    0/    root)   Gid: (    0/    root)
+ *     Access: 1969-12-31 16:00:00.000000000 -0800
+ *     Modify: 1969-12-31 16:00:00.000000000 -0800
+ *     Change: 1969-12-31 16:00:00.000000000 -0800
+ *      Birth: -
+ *     $ sleep 1; stat mnt/$file
+ *     stat: cannot stat ‘mnt/Time_is_20h_42m_11s’: No such file or directory
+ *
+ * \section section_compile compiling this example
+ *
+ *     gcc -Wall timefs3.c `pkg-config fuse3 --cflags --libs` -o timefs3
+ *
+ * \section section_source the complete source
+ * \include timefs3.c
+ */
+
 
 #define FUSE_USE_VERSION 30
 
