@@ -164,8 +164,10 @@ err_out:
 static void tfs_forget (fuse_req_t req, fuse_ino_t ino,
                         uint64_t nlookup) {
     (void) req;
-    assert(ino == FILE_INO || ino == FUSE_ROOT_ID);
-    lookup_cnt -= nlookup;
+    if(ino == FILE_INO)
+        lookup_cnt -= nlookup;
+    else
+        assert(ino == FUSE_ROOT_ID);
     fuse_reply_none(req);
 }
 
