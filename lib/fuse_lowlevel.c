@@ -1928,6 +1928,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if ((cond) && (f->conn.capable & (cap))) \
 		f->conn.want |= (cap)
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
+	LL_SET_DEFAULT(f->op.write_buf, FUSE_CAP_SPLICE_READ);
 	LL_SET_DEFAULT(f->op.getlk && f->op.setlk,
 		       FUSE_CAP_POSIX_LOCKS);
 	LL_SET_DEFAULT(f->op.flock, FUSE_CAP_FLOCK_LOCKS);
