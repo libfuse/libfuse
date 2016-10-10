@@ -1191,6 +1191,33 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size);
 /**
  * Reply with data copied/moved from buffer(s)
  *
+ * Zero copy data transfer ("splicing") will be used under
+ * the following circumstances:
+ *
+ * 1. FUSE_CAP_SPLICE_WRITE is set in fuse_conn_info.want, and
+ * 2. the kernel supports splicing from the fuse device
+ *    (FUSE_CAP_SPLICE_WRITE is set in fuse_conn_info.capable), and
+ * 3. *flags* does not contain FUSE_BUF_NO_SPLICE
+ * 4. The amount of data that is provided in file-descriptor backed
+ *    buffers (i.e., buffers for which bufv[n].flags == FUSE_BUF_FD)
+ *    is at least twice the page size.
+ *
+ * In order for SPLICE_F_MOVE to be used, the following additional
+ * conditions have to be fulfilled:
+ *
+ * 1. FUSE_CAP_SPLICE_MOVE is set in fuse_conn_info.want, and
+ * 2. the kernel supports it (i.e, FUSE_CAP_SPLICE_MOVE is set in
+      fuse_conn_info.capable), and
+ * 3. *flags* contains FUSE_BUF_SPLICE_MOVE
+ *
+ * Note that, if splice is used, the data is actually spliced twice:
+ * once into a temporary pipe (to prepend header data), and then again
+ * into the kernel. If some of the provided buffers are memory-backed,
+ * the data in them is copied in step one and spliced in step two.
+ *
+ * The FUSE_BUF_SPLICE_FORCE_SPLICE and FUSE_BUF_SPLICE_NONBLOCK flags
+ * are silently ignored.
+ *
  * Possible requests:
  *   read, readdir, getxattr, listxattr
  *
