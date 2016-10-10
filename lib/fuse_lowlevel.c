@@ -1701,7 +1701,7 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 }
 
 static struct fuse_req *check_interrupt(struct fuse_session *se,
-				        struct fuse_req *req)
+					struct fuse_req *req)
 {
 	struct fuse_req *curr;
 
@@ -2825,6 +2825,10 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
 		goto out1;
 	}
+	se->conn.async_read = 1;
+	se->conn.max_write = UINT_MAX;
+	se->conn.max_readahead = UINT_MAX;
+	se->atomic_o_trunc = 0;
 
 	/* Parse options */
 	mo = parse_mount_opts(args);
@@ -2844,10 +2848,6 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	if (se->debug)
 		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
 
-	se->conn.async_read = 1;
-	se->conn.max_write = UINT_MAX;
-	se->conn.max_readahead = UINT_MAX;
-	se->atomic_o_trunc = 0;
 	se->bufsize = getpagesize() + 0x1000;
 	se->bufsize = se->bufsize < MIN_BUFSIZE ? MIN_BUFSIZE : se->bufsize;
 
