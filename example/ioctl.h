@@ -10,9 +10,10 @@
 /** @file
  * @tableofcontents
  *
- * fioc.h - FUSE-ioctl: ioctl support for FUSE
+ * Header file to share definitions between the ioctl.c example file
+ * system and the ioctl_client.c test program.
  *
- * \include fioc.h
+ * \include ioctl.h
  */
 
 

@@ -5,22 +5,22 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
 */
 
 /** @file
  * @tableofcontents
  *
- * fioc.c - FUSE fioc: FUSE ioctl example
+ * This example illustrates how to write a FUSE file system that can
+ * process (a restricted set of) ioctls. It can be tested with the
+ * ioctl_client.c program.
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fioc.c `pkg-config fuse3 --cflags --libs` -o fioc
+ * gcc -Wall ioctl.c `pkg-config fuse3 --cflags --libs` -o ioctl
  *
  * \section section_source the complete source
- * \include fioc.c
+ * \include ioctl.c
  */
-
 
 #define FUSE_USE_VERSION 30
 
@@ -34,7 +34,7 @@
 #include <time.h>
 #include <errno.h>
 
-#include "fioc.h"
+#include "ioctl.h"
 
 #define FIOC_NAME	"fioc"
 

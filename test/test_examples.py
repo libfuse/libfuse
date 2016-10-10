@@ -101,17 +101,17 @@ def test_passthrough(tmpdir, name, options):
     else:
         umount(mount_process, mnt_dir)
 
-def test_fioc(tmpdir):
+def test_ioctl(tmpdir):
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
     cmdline = base_cmdline + \
-              [pjoin(basename, 'example', 'fioc'), '-f', mnt_dir ]
+              [pjoin(basename, 'example', 'ioctl'), '-f', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
         cmdline = base_cmdline + \
-                  [ pjoin(basename, 'example', 'fioclient'),
+                  [ pjoin(basename, 'example', 'ioctl_client'),
                     testfile ]
         assert subprocess.check_output(cmdline) == b'0\n'
         with open(testfile, 'wb') as fh:
@@ -126,15 +126,15 @@ def test_fioc(tmpdir):
     else:
         umount(mount_process, mnt_dir)
 
-def test_fsel(tmpdir):
+def test_poll(tmpdir):
     mnt_dir = str(tmpdir)
-    cmdline = base_cmdline + [pjoin(basename, 'example', 'fsel'),
+    cmdline = base_cmdline + [pjoin(basename, 'example', 'poll'),
                '-f', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         cmdline = base_cmdline + \
-                  [ pjoin(basename, 'example', 'fselclient') ]
+                  [ pjoin(basename, 'example', 'poll_client') ]
         subprocess.check_call(cmdline, cwd=mnt_dir)
     except:
         cleanup(mnt_dir)
