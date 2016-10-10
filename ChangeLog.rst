@@ -1,6 +1,8 @@
 Unreleased Changes
 ==================
 
+* Added ``example/cuse_client.c`` to test ``example/cuse.c``.
+
 * Removed ``example/null.c``. This has not been working for a while
   for unknown reasons -- maybe because it tries to treat the
   mountpoint as a file rather than a directory?
