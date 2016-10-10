@@ -167,12 +167,15 @@ struct fuse_conn_info {
 	unsigned max_readahead;
 
 	/**
-	 * Capability flags, that the kernel supports
+	 * Capability flags that the kernel supports (read-only)
 	 */
 	unsigned capable;
 
 	/**
-	 * Capability flags, that the filesystem wants to enable
+	 * Capability flags that the filesystem wants to enable.
+	 *
+	 * libfuse attempts to initialize this field with
+	 * reasonable default values before calling the init() handler.
 	 */
 	unsigned want;
 

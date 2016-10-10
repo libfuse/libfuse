@@ -1809,6 +1809,39 @@ static void do_fallocate(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
+static void apply_want_options(struct fuse_session *opts,
+			struct fuse_conn_info *conn)
+{
+#define LL_ENABLE(cond,cap) \
+	if (cond) conn->want |= (cap)
+#define LL_DISABLE(cond,cap) \
+	if (cond) conn->want &= ~(cap)
+
+	LL_ENABLE(opts->splice_read, FUSE_CAP_SPLICE_READ);
+	LL_DISABLE(opts->no_splice_read, FUSE_CAP_SPLICE_READ);
+
+	LL_ENABLE(opts->splice_write, FUSE_CAP_SPLICE_WRITE);
+	LL_DISABLE(opts->no_splice_write, FUSE_CAP_SPLICE_WRITE);
+
+	LL_ENABLE(opts->splice_move, FUSE_CAP_SPLICE_MOVE);
+	LL_DISABLE(opts->no_splice_move, FUSE_CAP_SPLICE_MOVE);
+
+	LL_ENABLE(opts->auto_inval_data, FUSE_CAP_AUTO_INVAL_DATA);
+	LL_DISABLE(opts->no_auto_inval_data, FUSE_CAP_AUTO_INVAL_DATA);
+
+	LL_DISABLE(opts->no_readdirplus, FUSE_CAP_READDIRPLUS);
+	LL_DISABLE(opts->no_readdirplus_auto, FUSE_CAP_READDIRPLUS_AUTO);
+
+	LL_ENABLE(opts->async_dio, FUSE_CAP_ASYNC_DIO);
+	LL_DISABLE(opts->no_async_dio, FUSE_CAP_ASYNC_DIO);
+
+	LL_ENABLE(opts->writeback_cache, FUSE_CAP_WRITEBACK_CACHE);
+	LL_DISABLE(opts->no_writeback_cache, FUSE_CAP_WRITEBACK_CACHE);
+
+	LL_ENABLE(opts->async_read, FUSE_CAP_ASYNC_READ);
+	LL_DISABLE(opts->sync_read, FUSE_CAP_ASYNC_READ);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -1851,11 +1884,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (arg->minor >= 6) {
 		if (arg->max_readahead < f->conn.max_readahead)
 			f->conn.max_readahead = arg->max_readahead;
-		if (arg->flags & FUSE_ASYNC_READ) {
+		if (arg->flags & FUSE_ASYNC_READ)
 			f->conn.capable |= FUSE_CAP_ASYNC_READ;
-			/* Enable by default */
-			f->conn.want |= FUSE_CAP_ASYNC_READ;
-		}
 		if (arg->flags & FUSE_POSIX_LOCKS)
 			f->conn.capable |= FUSE_CAP_POSIX_LOCKS;
 		if (arg->flags & FUSE_ATOMIC_O_TRUNC)
@@ -1886,36 +1916,23 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 #ifdef HAVE_SPLICE
 #ifdef HAVE_VMSPLICE
 		f->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
-		if (f->splice_write)
-			f->conn.want |= FUSE_CAP_SPLICE_WRITE;
-		if (f->splice_move)
-			f->conn.want |= FUSE_CAP_SPLICE_MOVE;
 #endif
 		f->conn.capable |= FUSE_CAP_SPLICE_READ;
-		if (f->splice_read)
-			f->conn.want |= FUSE_CAP_SPLICE_READ;
 #endif
 	}
 	if (f->conn.proto_minor >= 18)
 		f->conn.capable |= FUSE_CAP_IOCTL_DIR;
 
-	if (f->atomic_o_trunc)
-		f->conn.want |= FUSE_CAP_ATOMIC_O_TRUNC;
-	if (f->op.getlk && f->op.setlk && !f->no_remote_posix_lock)
-		f->conn.want |= FUSE_CAP_POSIX_LOCKS;
-	if (f->op.flock && !f->no_remote_flock)
-		f->conn.want |= FUSE_CAP_FLOCK_LOCKS;
-	if (f->auto_inval_data)
-		f->conn.want |= FUSE_CAP_AUTO_INVAL_DATA;
-	if (f->op.readdirplus && !f->no_readdirplus) {
-		f->conn.want |= FUSE_CAP_READDIRPLUS;
-		if (!f->no_readdirplus_auto)
-			f->conn.want |= FUSE_CAP_READDIRPLUS_AUTO;
-	}
-	if (f->async_dio)
-		f->conn.want |= FUSE_CAP_ASYNC_DIO;
-	if (f->writeback_cache)
-		f->conn.want |= FUSE_CAP_WRITEBACK_CACHE;
+	/* Default settings (where non-zero) */
+#define LL_SET_DEFAULT(cond, cap) \
+	if ((cond) && (f->conn.capable & (cap))) \
+		f->conn.want |= (cap)
+	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
+	LL_SET_DEFAULT(f->op.getlk && f->op.setlk,
+		       FUSE_CAP_POSIX_LOCKS);
+	LL_SET_DEFAULT(f->op.flock, FUSE_CAP_FLOCK_LOCKS);
+	LL_SET_DEFAULT(f->op.readdirplus, FUSE_CAP_READDIRPLUS);
+	LL_SET_DEFAULT(f->op.readdirplus, FUSE_CAP_READDIRPLUS_AUTO);
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fprintf(stderr, "fuse: warning: buffer size too small: %zu\n",
@@ -1928,29 +1945,18 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.max_write = bufsize;
 
 	f->got_init = 1;
+
+	/* Apply command-line options (so that init() handler has
+	   an idea about user preferences */
+	apply_want_options(f, &f->conn);
+
+	/* Allow file-system to overwrite defaults */
 	if (f->op.init)
 		f->op.init(f->userdata, &f->conn);
 
-	if (f->no_splice_read)
-		f->conn.want &= ~FUSE_CAP_SPLICE_READ;
-	if (f->no_splice_write)
-		f->conn.want &= ~FUSE_CAP_SPLICE_WRITE;
-	if (f->no_splice_move)
-		f->conn.want &= ~FUSE_CAP_SPLICE_MOVE;
-	if (f->no_auto_inval_data)
-		f->conn.want &= ~FUSE_CAP_AUTO_INVAL_DATA;
-	if (f->no_readdirplus)
-		f->conn.want &= ~FUSE_CAP_READDIRPLUS;
-	if (f->no_readdirplus_auto)
-		f->conn.want &= ~FUSE_CAP_READDIRPLUS_AUTO;
-	if (f->no_async_dio)
-		f->conn.want &= ~FUSE_CAP_ASYNC_DIO;
-	if (f->no_writeback_cache)
-		f->conn.want &= ~FUSE_CAP_WRITEBACK_CACHE;
-	if (f->async_read)
-		f->conn.want |= FUSE_CAP_ASYNC_READ;
-	if (f->sync_read)
-		f->conn.want &= ~FUSE_CAP_ASYNC_READ;
+	/* Now explicitly overwrite file-system's decision
+	   with command-line options */
+	apply_want_options(f, &f->conn);
 
 	/* Always enable big writes, this is superseded
 	   by the max_write option */

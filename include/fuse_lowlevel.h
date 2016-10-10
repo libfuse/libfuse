@@ -165,7 +165,14 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Initialize filesystem
 	 *
-	 * Called before any other filesystem method
+	 * This function is called when libfuse establishes
+	 * communication with the FUSE kernel module. The file system
+	 * should use this module to inspect and/or modify the
+	 * connection parameters provided in the `conn` structure.
+	 *
+	 * Note that some parameters may be overwritten by options
+	 * passed to fuse_session_new() which take precedence over the
+	 * values set in this handler.
 	 *
 	 * There's no reply to this function
 	 *
