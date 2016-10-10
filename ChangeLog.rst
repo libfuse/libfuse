@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* For low-level file systems that implement the `write_buf` handler,
+  the `splice_read` option is now enabled by default. As usual, this
+  can be changed in the file system's `init` handler.
+
 * `fuse_session_new` now treats low-level options more consistently:
   First, options are used to modify FUSE defaults. Second, the file
   system may inspect and/or adjust the settings in its `init`
