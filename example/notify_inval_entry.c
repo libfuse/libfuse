@@ -168,11 +168,12 @@ err_out:
 static void tfs_forget (fuse_req_t req, fuse_ino_t ino,
                         uint64_t nlookup) {
     (void) req;
-    assert(ino == file_ino || ino == FUSE_ROOT_ID);
-    lookup_cnt -= nlookup;
+    if(ino == file_ino)
+        lookup_cnt -= nlookup;
+    else
+        assert(ino == FUSE_ROOT_ID);
     fuse_reply_none(req);
 }
-
 
 static void tfs_getattr(fuse_req_t req, fuse_ino_t ino,
                         struct fuse_file_info *fi) {
