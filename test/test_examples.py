@@ -211,6 +211,45 @@ def test_notify_inval_entry(tmpdir, notify):
     else:
         umount(mount_process, mnt_dir)
 
+
+@pytest.mark.skipif(os.getuid() != 0,
+                    reason='needs to run as root')
+def test_cuse(capfd):
+
+    # Valgrind warns about unknown ioctls, that's ok
+    capfd.register_output(r'^==([0-9]+).+unhandled ioctl.+\n'
+                          r'==\1== \s{3}.+\n'
+                          r'==\1== \s{3}.+$', count=0)
+
+    devname = 'cuse-test-%d' % os.getpid()
+    devpath = '/dev/%s' % devname
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'cuse'),
+                '-f', '--name=%s' % devname ]
+    mount_process = subprocess.Popen(cmdline)
+
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'cuse_client'),
+                devpath ]
+    try:
+        wait_for_mount(mount_process, devpath,
+                       test_fn=os.path.exists)
+        assert subprocess.check_output(cmdline + ['s']) == b'0\n'
+        data = b'some test data'
+        off = 5
+        proc = subprocess.Popen(cmdline + [ 'w', str(len(data)), str(off) ],
+                                stdin=subprocess.PIPE)
+        proc.stdin.write(data)
+        proc.stdin.close()
+        assert proc.wait(timeout=10) == 0
+        size = str(off + len(data)).encode() + b'\n'
+        assert subprocess.check_output(cmdline + ['s']) == size
+        out = subprocess.check_output(
+            cmdline + [ 'r', str(off + len(data) + 2), '0' ])
+        assert out == (b'\0' * off) + data
+    finally:
+        mount_process.terminate()
+
 def checked_unlink(filename, path, isdir=False):
     fullname = pjoin(path, filename)
     if isdir:
