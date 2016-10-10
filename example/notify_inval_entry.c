@@ -115,13 +115,6 @@ static const struct fuse_opt option_spec[] = {
     FUSE_OPT_END
 };
 
-static int opt_proc(void *data, const char *arg, int key,
-                    struct fuse_args *outargs) {
-    (void) outargs; (void) data; (void) arg;
-    (void) key;
-    return 1;
-}
-
 static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
     stbuf->st_ino = ino;
     if (ino == FUSE_ROOT_ID) {
@@ -282,8 +275,7 @@ int main(int argc, char *argv[]) {
     pthread_t updater;
     int ret = -1;
 
-    if (fuse_opt_parse(&args, &options, option_spec,
-                       opt_proc) == -1)
+    if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
         return 1;
 
     if (fuse_parse_cmdline(&args, &opts) != 0)
