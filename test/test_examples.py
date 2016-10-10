@@ -211,6 +211,18 @@ def test_notify_inval_entry(tmpdir, notify):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.parametrize("writeback", (True, False))
+def test_write_cache(tmpdir, writeback):
+    # This test hangs under Valgrind when running close(fd)
+    # test_write_cache.c:test_fs(). Most likely this is because of an internal
+    # deadlock in valgrind, it probably assumes that until close() returns,
+    # control does not come to the program.
+    mnt_dir = str(tmpdir)
+    cmdline = [ pjoin(basename, 'test', 'test_write_cache'),
+                mnt_dir ]
+    if writeback:
+        cmdline.append('-owriteback_cache')
+    subprocess.check_call(cmdline)
 
 @pytest.mark.skipif(os.getuid() != 0,
                     reason='needs to run as root')
