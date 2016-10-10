@@ -253,6 +253,16 @@ static void* update_fs(void *data) {
     return NULL;
 }
 
+static void show_help(const char *progname)
+{
+    printf("usage: %s [options] <mountpoint>\n\n", progname);
+    printf("File-system specific options:\n"
+               "    --timeout=<secs>       Timeout for kernel caches\n"
+               "    --update-interval=<secs>  Update-rate of file system contents\n"
+               "    --no-notify            Disable kernel notifications\n"
+               "\n");
+}
+
 int main(int argc, char *argv[]) {
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_session *se;
@@ -266,8 +276,18 @@ int main(int argc, char *argv[]) {
 
     if (fuse_parse_cmdline(&args, &opts) != 0)
         return 1;
-    if (opts.show_help || opts.show_version) {
-        ret = 1;
+    if (opts.show_help) {
+        show_help(argv[0]);
+        fuse_cmdline_help();
+        fuse_lowlevel_help();
+        fuse_mount_help();
+        ret = 0;
+        goto err_out1;
+    } else if (opts.show_version) {
+        printf("FUSE library version %s\n", fuse_pkgversion());
+        fuse_lowlevel_version();
+        fuse_mount_version();
+        ret = 0;
         goto err_out1;
     }
 

@@ -1599,6 +1599,12 @@ void fuse_lowlevel_help(void);
  */
 void fuse_mount_help(void);
 
+
+/**
+ * Print available options for `fuse_parse_cmdline()`.
+ */
+void fuse_cmdline_help(void);
+
 /* ----------------------------------------------------------- *
  * Filesystem setup & teardown                                 *
  * ----------------------------------------------------------- */
@@ -1615,21 +1621,14 @@ struct fuse_cmdline_opts {
 
 /**
  * Utility function to parse common options for simple file systems
- * using the low-level API. Available options are listed in `struct
- * fuse_opt fuse_helper_opts[]`. A single non-option argument is
- * treated as the mountpoint. Multiple (or no) non-option arguments
- * will result in an error.
+ * using the low-level API. A help text that describes the available
+ * options can be printed with `fuse_cmdline_help`. A single
+ * non-option argument is treated as the mountpoint. Multiple
+ * non-option arguments will result in an error.
  *
- * Unknown options are passed through unchanged. Known options (other
- * than --debug, which is preserved) and the mountpoint argument are
- * removed from *args*.
- *
- * If --help or --version is specified, the appropriate information is
- * printed to stdout and the function returns -1.
- *
- * If neither -o subtype= or -o fsname= options are given, the subtype
- * is set to the basename of the program (the fsname defaults to
- * "fuse").
+ * If neither -o subtype= or -o fsname= options are given, a new
+ * subtype option will be added and set to the basename of the program
+ * (the fsname will remain unset, and then defaults to "fuse").
  *
  * @param args argument vector (input+output)
  * @param opts output argument for parsed options

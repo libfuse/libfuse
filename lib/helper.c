@@ -48,12 +48,7 @@ static const struct fuse_opt fuse_helper_opts[] = {
 	FUSE_OPT_END
 };
 
-static void usage(const char *progname)
-{
-	printf("usage: %s mountpoint [options]\n\n", progname);
-}
-
-static void helper_help(void)
+void fuse_cmdline_help(void)
 {
 	printf("General options:\n"
 	       "    -h   --help            print help\n"
@@ -62,11 +57,6 @@ static void helper_help(void)
 	       "    -f                     foreground operation\n"
 	       "    -s                     disable multi-threaded operation\n"
 	       "\n");
-}
-
-static void helper_version(void)
-{
-	printf("FUSE library version: %s\n", PACKAGE_VERSION);
 }
 
 static int fuse_helper_opt_proc(void *data, const char *arg, int key,
@@ -125,27 +115,6 @@ int fuse_parse_cmdline(struct fuse_args *args,
 	if (fuse_opt_parse(args, opts, fuse_helper_opts,
 			   fuse_helper_opt_proc) == -1)
 		return -1;
-
-	if (opts->show_version) {
-		helper_version();
-		fuse_lowlevel_version();
-		fuse_mount_version();
-		return -1;
-	}
-
-	if (opts->show_help) {
-		usage(args->argv[0]);
-		helper_help();
-		fuse_lowlevel_help();
-		fuse_mount_help();
-		return -1;
-	}
-
-	if (!opts->mountpoint) {
-		fprintf(stderr, "error: no mountpoint specified\n");
-		usage(args->argv[0]);
-		return -1;
-	}
 
 	/* If neither -o subtype nor -o fsname are specified,
 	   set subtype to program's basename */
@@ -225,7 +194,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		return 1;
 
 	if (opts.show_version) {
-		helper_version();
+		printf("FUSE library version %s\n", PACKAGE_VERSION);
 		fuse_lowlevel_version();
 		fuse_mount_version();
 		res = 0;
@@ -235,7 +204,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	/* Re-add --help for later processing by fuse_new()
 	   (that way we also get help for modules options) */
 	if (opts.show_help) {
-		helper_help();
+		fuse_cmdline_help();
 		if (fuse_opt_add_arg(&args, "--help") == -1) {
 			res = 1;
 			goto out1;
@@ -245,7 +214,6 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	if (!opts.show_help &&
 	    !opts.mountpoint) {
 		fprintf(stderr, "error: no mountpoint specified\n");
-		usage(args.argv[0]);
 		res = 1;
 		goto out1;
 	}
