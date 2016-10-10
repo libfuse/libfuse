@@ -188,9 +188,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	struct fuse_cmdline_opts opts;
 	int res;
 
-	memset(&opts, 0, sizeof(opts));
-	if (fuse_opt_parse(&args, &opts, fuse_helper_opts,
-			   fuse_helper_opt_proc) == -1)
+	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
 
 	if (opts.show_version) {
@@ -218,14 +216,6 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		goto out1;
 	}
 
-	/* If neither -o subtype nor -o fsname are specified,
-	   set subtype to program's basename */
-	if (!opts.nodefault_subtype) {
-		if (add_default_subtype(args.argv[0], &args) == -1) {
-			res = 1;
-			goto out1;
-		}
-	}
 
 	/* --help is processed here and will result in NULL */
 	fuse = fuse_new(&args, op, op_size, user_data);
