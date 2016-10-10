@@ -12,35 +12,35 @@
  * This example implements a file system with a single file whose
  * contents change dynamically: it always contains the current time.
  *
- * While timefs2.c uses fuse_lowlevel_notify_store() to actively push
- *  the updated data into the kernel cache, this example uses
- *  fuse_lowlevel_notify_inval_inode() to notify the kernel that the
- *  cache has to be invalidated - but the kernel still has to explicitly
- *  request the updated data on the next read.
+ * While notify_store_retrieve.c uses fuse_lowlevel_notify_store() to
+ * actively push the updated data into the kernel cache, this example
+ * uses fuse_lowlevel_notify_inval_inode() to notify the kernel that
+ * the cache has to be invalidated - but the kernel still has to
+ * explicitly request the updated data on the next read.
  *
- *  To see the effect, first start the file system with the
+ * To see the effect, first start the file system with the
  *  ``--no-notify`` option:
  *
- *      $ timefs --update-interval=1 --no-notify mnt/
+ *     $ notify_inval_inode --update-interval=1 --no-notify mnt/
  *
- *  Observe that the output never changes, even though the file system
- *  updates it once per second. This is because the contents are cached
- *  in the kernel:
+ * Observe that the output never changes, even though the file system
+ * updates it once per second. This is because the contents are cached
+ * in the kernel:
  *
- *      $ for i in 1 2 3 4 5; do
- *      >     cat mnt/current_time
- *      >     sleep 1
- *      > done
- *      The current time is 15:58:18
- *      The current time is 15:58:18
- *      The current time is 15:58:18
- *      The current time is 15:58:18
- *      The current time is 15:58:18
+ *     $ for i in 1 2 3 4 5; do
+ *     >     cat mnt/current_time
+ *     >     sleep 1
+ *     > done
+ *     The current time is 15:58:18
+ *     The current time is 15:58:18
+ *     The current time is 15:58:18
+ *     The current time is 15:58:18
+ *     The current time is 15:58:18
  *
- *  If you instead enable the notification functions, the changes become
- *  visible:
+ * If you instead enable the notification functions, the changes become
+ * visible:
  *
- *      $ timefs --update-interval=1 mnt/
+ *      $ notify_inval_inode --update-interval=1 mnt/
  *      $ for i in 1 2 3 4 5; do
  *      >     cat mnt/current_time
  *      >     sleep 1
@@ -53,10 +53,10 @@
  *
  * \section section_compile compiling this example
  *
- *     gcc -Wall timefs1.c `pkg-config fuse3 --cflags --libs` -o timefs1
+ *     gcc -Wall notify_inval_inode.c `pkg-config fuse3 --cflags --libs` -o notify_inval_inode
  *
  * \section section_source the complete source
- * \include timefs1.c
+ * \include notify_inval_inode.c
  */
 
 

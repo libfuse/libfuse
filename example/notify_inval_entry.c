@@ -9,53 +9,68 @@
 /** @file
  * @tableofcontents
  *
- *  This example implements a file system with a single file whose
- *  contents change dynamically: it always contains the current time.
+ * This example implements a file system with a single file whose
+ * file name changes dynamically to reflect the current time.
  *
- *  While timefs1.c uses fuse_lowlevel_notify_inval_inode() to let the
- *  kernel know that it has to invalidate the cache, this example
- *  actively pushes the updated data into the kernel cache using
- *  fuse_lowlevel_notify_store().
+ * It illustrates the use of the fuse_lowlevel_notify_inval_entry()
+ * function.
  *
- *  To see the effect, first start the file system with the
- *  ``--no-notify`` option:
+ * To see the effect, first start the file system with the
+ * ``--no-notify``
  *
- *      $ timefs --update-interval=1 --no-notify mnt/
+ *     $ notify_inval_entry --update-interval=1 --timeout 30 --no-notify mnt/
  *
- *  Observe that the output never changes, even though the file system
- *  updates it once per second. This is because the contents are cached
- *  in the kernel:
+ * Observe that `ls` always prints the correct directory contents
+ * (since `readdir` output is not cached)::
  *
- *      $ for i in 1 2 3 4 5; do
- *      >     cat mnt/current_time
- *      >     sleep 1
- *      > done
- *      The current time is 15:58:18
- *      The current time is 15:58:18
- *      The current time is 15:58:18
- *      The current time is 15:58:18
- *      The current time is 15:58:18
+ *     $ ls mnt; sleep 1; ls mnt; sleep 1; ls mnt
+ *     Time_is_15h_48m_33s  current_time
+ *     Time_is_15h_48m_34s  current_time
+ *     Time_is_15h_48m_35s  current_time
  *
- *  If you instead enable the notification functions, the changes become
- *  visible:
+ * However, if you try to access a file by name the kernel will
+ * report that it still exists:
  *
- *      $ timefs --update-interval=1 mnt/
- *      $ for i in 1 2 3 4 5; do
- *      >     cat mnt/current_time
- *      >     sleep 1
- *      > done
- *      The current time is 15:58:40
- *      The current time is 15:58:41
- *      The current time is 15:58:42
- *      The current time is 15:58:43
- *      The current time is 15:58:44
+ *     $ file=$(ls mnt/); echo $file
+ *     Time_is_15h_50m_09s
+ *     $ sleep 5; stat mnt/$file
+ *       File: ‘mnt/Time_is_15h_50m_09s’
+ *       Size: 32                Blocks: 0          IO Block: 4096   regular file
+ *     Device: 2ah/42d	Inode: 3           Links: 1
+ *     Access: (0444/-r--r--r--)  Uid: (    0/    root)   Gid: (    0/    root)
+ *     Access: 1969-12-31 16:00:00.000000000 -0800
+ *     Modify: 1969-12-31 16:00:00.000000000 -0800
+ *     Change: 1969-12-31 16:00:00.000000000 -0800
+ *      Birth: -
+ *
+ * Only once the kernel cache timeout has been reached will the stat
+ * call fail:
+ *
+ *     $ sleep 30; stat mnt/$file
+ *     stat: cannot stat ‘mnt/Time_is_15h_50m_09s’: No such file or directory
+ *
+ * In contrast, if you enable notifications you will be unable to stat
+ * the file as soon as the file system updates its name:
+ *
+ *     $ notify_inval_entry --update-interval=1 --timeout 30 --no-notify mnt/
+ *     $ file=$(ls mnt/); stat mnt/$file
+ *       File: ‘mnt/Time_is_20h_42m_11s’
+ *       Size: 0                 Blocks: 0          IO Block: 4096   regular empty file
+ *     Device: 2ah/42d	Inode: 2           Links: 1
+ *     Access: (0000/----------)  Uid: (    0/    root)   Gid: (    0/    root)
+ *     Access: 1969-12-31 16:00:00.000000000 -0800
+ *     Modify: 1969-12-31 16:00:00.000000000 -0800
+ *     Change: 1969-12-31 16:00:00.000000000 -0800
+ *      Birth: -
+ *     $ sleep 1; stat mnt/$file
+ *     stat: cannot stat ‘mnt/Time_is_20h_42m_11s’: No such file or directory
  *
  * \section section_compile compiling this example
  *
- *     gcc -Wall timefs2.c `pkg-config fuse3 --cflags --libs` -o timefs2
+ *     gcc -Wall notify_inval_entry.c `pkg-config fuse3 --cflags --libs` -o notify_inval_entry
  *
  * \section section_source the complete source
- * \include timefs2.c
+ * \include notify_inval_entry.c
  */
 
 
@@ -74,31 +89,19 @@
 #include <unistd.h>
 #include <pthread.h>
 
-/* We can't actually tell the kernel that there is no
-   timeout, so we just send a big value */
-#define NO_TIMEOUT 500000
-
-/* We cannot check directly if e.g. O_RDONLY is set, since this is not
- * an individual bit (cf. open(2)) */
-#define ACCESS_MASK (O_RDONLY | O_WRONLY | O_RDWR)
-
 #define MAX_STR_LEN 128
-#define FILE_INO 2
-#define FILE_NAME "current_time"
-static char file_contents[MAX_STR_LEN];
+static char file_name[MAX_STR_LEN];
+static fuse_ino_t file_ino = 2;
 static int lookup_cnt = 0;
-static size_t file_size;
-
-/* Keep track if we ever stored data (==1), and
-   received it back correctly (==2) */
-static int retrieve_status = 0;
 
 /* Command line parsing */
 struct options {
     int no_notify;
+    float timeout;
     int update_interval;
 };
 static struct options options = {
+    .timeout = 5,
     .no_notify = 0,
     .update_interval = 1,
 };
@@ -108,6 +111,7 @@ static struct options options = {
 static const struct fuse_opt option_spec[] = {
     OPTION("--no-notify", no_notify),
     OPTION("--update-interval=%d", update_interval),
+    OPTION("--timeout=%f", timeout),
     FUSE_OPT_END
 };
 
@@ -125,10 +129,10 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
         stbuf->st_nlink = 1;
     }
 
-    else if (ino == FILE_INO) {
-        stbuf->st_mode = S_IFREG | 0444;
+    else if (ino == file_ino) {
+        stbuf->st_mode = S_IFREG | 0000;
         stbuf->st_nlink = 1;
-        stbuf->st_size = file_size;
+        stbuf->st_size = 0;
     }
 
     else
@@ -144,14 +148,14 @@ static void tfs_lookup(fuse_req_t req, fuse_ino_t parent,
 
     if (parent != FUSE_ROOT_ID)
         goto err_out;
-    else if (strcmp(name, FILE_NAME) == 0) {
-        e.ino = FILE_INO;
+    else if (strcmp(name, file_name) == 0) {
+        e.ino = file_ino;
         lookup_cnt++;
     } else
         goto err_out;
 
-    e.attr_timeout = NO_TIMEOUT;
-    e.entry_timeout = NO_TIMEOUT;
+    e.attr_timeout = options.timeout;
+    e.entry_timeout = options.timeout;
     if (tfs_stat(e.ino, &e.attr) != 0)
         goto err_out;
     fuse_reply_entry(req, &e);
@@ -164,10 +168,11 @@ err_out:
 static void tfs_forget (fuse_req_t req, fuse_ino_t ino,
                         uint64_t nlookup) {
     (void) req;
-    assert(ino == FILE_INO || ino == FUSE_ROOT_ID);
+    assert(ino == file_ino || ino == FUSE_ROOT_ID);
     lookup_cnt -= nlookup;
     fuse_reply_none(req);
 }
+
 
 static void tfs_getattr(fuse_req_t req, fuse_ino_t ino,
                         struct fuse_file_info *fi) {
@@ -179,7 +184,7 @@ static void tfs_getattr(fuse_req_t req, fuse_ino_t ino,
     if (tfs_stat(ino, &stbuf) != 0)
         fuse_reply_err(req, ENOENT);
     else
-        fuse_reply_attr(req, &stbuf, NO_TIMEOUT);
+        fuse_reply_attr(req, &stbuf, options.timeout);
 }
 
 struct dirbuf {
@@ -220,111 +225,40 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         struct dirbuf b;
 
         memset(&b, 0, sizeof(b));
-        dirbuf_add(req, &b, FILE_NAME, FILE_INO);
+        dirbuf_add(req, &b, file_name, file_ino);
         reply_buf_limited(req, b.p, b.size, off, size);
         free(b.p);
     }
 }
 
-static void tfs_open(fuse_req_t req, fuse_ino_t ino,
-                     struct fuse_file_info *fi) {
-
-    /* Make cache persistent even if file is closed,
-       this makes it easier to see the effects */
-    fi->keep_cache = 1;
-
-    if (ino == FUSE_ROOT_ID)
-        fuse_reply_err(req, EISDIR);
-    else if ((fi->flags & ACCESS_MASK) != O_RDONLY)
-        fuse_reply_err(req, EACCES);
-    else if (ino == FILE_INO)
-        fuse_reply_open(req, fi);
-    else {
-        // This should not happen
-        fprintf(stderr, "Got open for non-existing inode!\n");
-        fuse_reply_err(req, ENOENT);
-    }
-}
-
-static void tfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
-                     off_t off, struct fuse_file_info *fi) {
-    (void) fi;
-
-    assert(ino == FILE_INO);
-    reply_buf_limited(req, file_contents, file_size, off, size);
-}
-
-static void tfs_retrieve_reply(fuse_req_t req, void *cookie, fuse_ino_t ino,
-                               off_t offset, struct fuse_bufvec *data) {
-    struct fuse_bufvec bufv;
-    char buf[MAX_STR_LEN];
-    char *expected;
-    ssize_t ret;
-
-    assert(ino == FILE_INO);
-    assert(offset == 0);
-    expected = (char*) cookie;
-
-    bufv.count = 1;
-    bufv.idx = 0;
-    bufv.off = 0;
-    bufv.buf[0].size = MAX_STR_LEN;
-    bufv.buf[0].mem = buf;
-    bufv.buf[0].flags = 0;
-
-    ret = fuse_buf_copy(&bufv, data, 0);
-    assert(ret > 0);
-    assert(strncmp(buf, expected, ret) == 0);
-    free(expected);
-    retrieve_status = 2;
-    fuse_reply_none(req);
-}
-
-
 static struct fuse_lowlevel_ops tfs_oper = {
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
-    .open	= tfs_open,
-    .read	= tfs_read,
     .forget     = tfs_forget,
-    .retrieve_reply = tfs_retrieve_reply,
 };
 
 static void* update_fs(void *data) {
     struct fuse_session *se = (struct fuse_session*) data;
     struct tm *now;
+    char *old_name;
     time_t t;
-    struct fuse_bufvec bufv;
+    ssize_t ret;
 
     while(1) {
         t = time(NULL);
         now = localtime(&t);
         assert(now != NULL);
 
-        file_size = strftime(file_contents, MAX_STR_LEN,
-                             "The current time is %H:%M:%S\n", now);
-        assert(file_size != 0);
-        if (!options.no_notify && lookup_cnt) {
-            /* Only send notification if the kernel
-               is aware of the inode */
-            bufv.count = 1;
-            bufv.idx = 0;
-            bufv.off = 0;
-            bufv.buf[0].size = file_size;
-            bufv.buf[0].mem = file_contents;
-            bufv.buf[0].flags = 0;
-            assert(fuse_lowlevel_notify_store(se, FILE_INO, 0,
-                                              &bufv, 0) == 0);
+        old_name = strdup(file_name);
+        ret = strftime(file_name, MAX_STR_LEN,
+                       "Time_is_%Hh_%Mm_%Ss", now);
+        assert(ret != 0);
 
-            /* To make sure that everything worked correctly, ask the
-               kernel to send us back the stored data */
-            assert(fuse_lowlevel_notify_retrieve
-                   (se, FILE_INO, MAX_STR_LEN, 0,
-                    (void*) strdup(file_contents)) == 0);
-            if(retrieve_status == 0)
-                retrieve_status = 1;
-        }
+        if (!options.no_notify && lookup_cnt)
+            assert(fuse_lowlevel_notify_inval_entry
+                   (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
+        free(old_name);
         sleep(options.update_interval);
     }
     return NULL;
@@ -334,6 +268,7 @@ static void show_help(const char *progname)
 {
     printf("usage: %s [options] <mountpoint>\n\n", progname);
     printf("File-system specific options:\n"
+               "    --timeout=<secs>       Timeout for kernel caches\n"
                "    --update-interval=<secs>  Update-rate of file system contents\n"
                "    --no-notify            Disable kernel notifications\n"
                "\n");
@@ -394,7 +329,6 @@ int main(int argc, char *argv[]) {
     else
         ret = fuse_session_loop_mt(se);
 
-    assert(retrieve_status != 1);
     fuse_session_unmount(se);
 err_out3:
     fuse_remove_signal_handlers(se);

@@ -142,10 +142,12 @@ def test_poll(tmpdir):
     else:
         umount(mount_process, mnt_dir)
 
-@pytest.mark.parametrize("name", ('timefs1', 'timefs2'))
+@pytest.mark.parametrize("name",
+                         ('notify_inval_inode',
+                          'notify_store_retrieve'))
 @pytest.mark.parametrize("options", LL_OPTIONS)
 @pytest.mark.parametrize("notify", (True, False))
-def test_timefs12(tmpdir, name, options, notify):
+def test_notify1(tmpdir, name, options, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
@@ -172,10 +174,10 @@ def test_timefs12(tmpdir, name, options, notify):
         umount(mount_process, mnt_dir)
 
 @pytest.mark.parametrize("notify", (True, False))
-def test_timefs3(tmpdir, notify):
+def test_notify_inval_entry(tmpdir, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
-              [ pjoin(basename, 'example', 'timefs3'),
+              [ pjoin(basename, 'example', 'notify_inval_entry'),
                '-f', '--update-interval=2',
                 '--timeout=4', mnt_dir ]
     if not notify:

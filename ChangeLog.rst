@@ -5,13 +5,12 @@ Unreleased Changes
   for unknown reasons -- maybe because it tries to treat the
   mountpoint as a file rather than a directory?
 
-* There is a new ``timefs3`` example that demonstrates the use of
-  `fuse_lowlevel_notify_inval_entry`.
+* There are several new examples that demonstrate the use of
+  the ``fuse_lowlevel_notify_*`` functions:
 
-* There are new ``timefs1`` and ``timefs2`` examples that demonstrate
-  the use of the `fuse_lowlevel_notify_store`,
-  `fuse_lowlevel_notify_retrieve`, and
-  `fuse_lowlevel_notify_inval_inode` functions.
+  - ``example/notify_store_retrieve.c``
+  - ``example/notify_inval_inode.c``
+  - ``example/notify_inval_entry.c``
 
 * The ``-o big_writes`` mount option has been removed. It is now
   always active. File systems that want to limit the size of write

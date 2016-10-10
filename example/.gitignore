@@ -8,5 +8,6 @@
 /poll_client
 /cusexmp
 /passthrough_ll
-/timefs1
-/timefs2
+/notify_inval_inode
+/notify_store_retrieve
+/notify_inval_entry
