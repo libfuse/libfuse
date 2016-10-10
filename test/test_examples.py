@@ -151,16 +151,21 @@ def test_notify1(tmpdir, name, options, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
-                '-f', '--update-interval=1', mnt_dir ] + options
+                '-f', '--update-interval=2', mnt_dir ] + options
     if not notify:
         cmdline.append('--no-notify')
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         filename = pjoin(mnt_dir, 'current_time')
-        with open(filename, 'r') as fh:
-            read1 = fh.read()
-        safe_sleep(2)
+        # Wait until first update
+        while True:
+            with open(filename, 'r') as fh:
+                read1 = fh.read()
+            if read1:
+                break
+            safe_sleep(2)
+        safe_sleep(6)
         with open(filename, 'r') as fh:
             read2 = fh.read()
         if notify:
@@ -179,7 +184,7 @@ def test_notify_inval_entry(tmpdir, notify):
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'notify_inval_entry'),
                '-f', '--update-interval=2',
-                '--timeout=4', mnt_dir ]
+                '--timeout=10', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
     mount_process = subprocess.Popen(cmdline)
@@ -189,14 +194,15 @@ def test_notify_inval_entry(tmpdir, notify):
         try:
             os.stat(fname)
         except FileNotFoundError:
-            # We may have hit a race condition
+            # We may have hit a race condition and issued
+            # readdir just before the name changed
             fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
             os.stat(fname)
 
-        safe_sleep(2)
+        safe_sleep(4)
         if not notify:
             os.stat(fname)
-            safe_sleep(4)
+            safe_sleep(10)
         with pytest.raises(FileNotFoundError):
             os.stat(fname)
     except:
