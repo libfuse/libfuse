@@ -202,6 +202,9 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	/* Re-add --help for later processing by fuse_new()
 	   (that way we also get help for modules options) */
 	if (opts.show_help) {
+		if(args.argv[0] != '\0')
+			printf("usage: %s [options] <mountpoint>\n\n",
+			       args.argv[0]);
 		fuse_cmdline_help();
 		if (fuse_opt_add_arg(&args, "--help") == -1) {
 			res = 1;

@@ -608,12 +608,29 @@ struct fuse_context {
  * main() function.
  *
  * This function does the following:
- *   - parses command line options
+ *   - parses command line options, and handles --help and
+ *     --version
  *   - installs signal handlers for INT, HUP, TERM and PIPE
  *   - registers an exit handler to unmount the filesystem on program exit
  *   - creates a fuse handle
  *   - registers the operations
  *   - calls either the single-threaded or the multi-threaded event loop
+ *
+ * Most file systems will have to parse some file-system specific
+ * arguments before calling this function. It is recommended to do
+ * this with fuse_opt_parse() and a processing function that passes
+ * through any unknown options (this can also be achieved by just
+ * passing NULL as the processing function). That way, the remaining
+ * options can be passed directly to fuse_main().
+ *
+ * To get a list of the options recognized by fuse_main(), look
+ * at the output when running with ``--help``.
+ *
+ * Normally, fuse_main() includes a basic ``usage: `` message in the
+ * --help output. However, if argv[0] is an empty string, the usage
+ * message is suppressed. This can be used by file systems to print
+ * their own usage line first. See hello.c for an example of how to do
+ * this.
  *
  * Note: this is currently implemented as a macro.
  *
