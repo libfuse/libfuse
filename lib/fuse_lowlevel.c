@@ -553,9 +553,9 @@ static int fuse_pipe(int fds[2])
 }
 #endif
 
-static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_session *f)
+static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_session *se)
 {
-	struct fuse_ll_pipe *llp = pthread_getspecific(f->pipe_key);
+	struct fuse_ll_pipe *llp = pthread_getspecific(se->pipe_key);
 	if (llp == NULL) {
 		int res;
 
@@ -575,18 +575,18 @@ static struct fuse_ll_pipe *fuse_ll_get_pipe(struct fuse_session *f)
 		llp->size = pagesize * 16;
 		llp->can_grow = 1;
 
-		pthread_setspecific(f->pipe_key, llp);
+		pthread_setspecific(se->pipe_key, llp);
 	}
 
 	return llp;
 }
 #endif
 
-static void fuse_ll_clear_pipe(struct fuse_session *f)
+static void fuse_ll_clear_pipe(struct fuse_session *se)
 {
-	struct fuse_ll_pipe *llp = pthread_getspecific(f->pipe_key);
+	struct fuse_ll_pipe *llp = pthread_getspecific(se->pipe_key);
 	if (llp) {
-		pthread_setspecific(f->pipe_key, NULL);
+		pthread_setspecific(se->pipe_key, NULL);
 		fuse_ll_pipe_free(llp);
 	}
 }
@@ -1641,30 +1641,30 @@ static void do_setlkw(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	do_setlk_common(req, nodeid, inarg, 1);
 }
 
-static int find_interrupted(struct fuse_session *f, struct fuse_req *req)
+static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
 {
 	struct fuse_req *curr;
 
-	for (curr = f->list.next; curr != &f->list; curr = curr->next) {
+	for (curr = se->list.next; curr != &se->list; curr = curr->next) {
 		if (curr->unique == req->u.i.unique) {
 			fuse_interrupt_func_t func;
 			void *data;
 
 			curr->ctr++;
-			pthread_mutex_unlock(&f->lock);
+			pthread_mutex_unlock(&se->lock);
 
 			/* Ugh, ugly locking */
 			pthread_mutex_lock(&curr->lock);
-			pthread_mutex_lock(&f->lock);
+			pthread_mutex_lock(&se->lock);
 			curr->interrupted = 1;
 			func = curr->u.ni.func;
 			data = curr->u.ni.data;
-			pthread_mutex_unlock(&f->lock);
+			pthread_mutex_unlock(&se->lock);
 			if (func)
 				func(curr, data);
 			pthread_mutex_unlock(&curr->lock);
 
-			pthread_mutex_lock(&f->lock);
+			pthread_mutex_lock(&se->lock);
 			curr->ctr--;
 			if (!curr->ctr)
 				destroy_req(curr);
@@ -1672,7 +1672,7 @@ static int find_interrupted(struct fuse_session *f, struct fuse_req *req)
 			return 1;
 		}
 	}
-	for (curr = f->interrupts.next; curr != &f->interrupts;
+	for (curr = se->interrupts.next; curr != &se->interrupts;
 	     curr = curr->next) {
 		if (curr->u.i.unique == req->u.i.unique)
 			return 1;
@@ -1700,11 +1700,12 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	pthread_mutex_unlock(&f->lock);
 }
 
-static struct fuse_req *check_interrupt(struct fuse_session *f, struct fuse_req *req)
+static struct fuse_req *check_interrupt(struct fuse_session *se,
+				        struct fuse_req *req)
 {
 	struct fuse_req *curr;
 
-	for (curr = f->interrupts.next; curr != &f->interrupts;
+	for (curr = se->interrupts.next; curr != &se->interrupts;
 	     curr = curr->next) {
 		if (curr->u.i.unique == req->unique) {
 			req->interrupted = 1;
@@ -1713,8 +1714,8 @@ static struct fuse_req *check_interrupt(struct fuse_session *f, struct fuse_req 
 			return NULL;
 		}
 	}
-	curr = f->interrupts.next;
-	if (curr != &f->interrupts) {
+	curr = se->interrupts.next;
+	if (curr != &se->interrupts) {
 		list_del_req(curr);
 		list_init_req(curr);
 		return curr;
@@ -2626,23 +2627,23 @@ static int fuse_ll_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
-void fuse_session_destroy(struct fuse_session *f)
+void fuse_session_destroy(struct fuse_session *se)
 {
 	struct fuse_ll_pipe *llp;
 
-	if (f->got_init && !f->got_destroy) {
-		if (f->op.destroy)
-			f->op.destroy(f->userdata);
+	if (se->got_init && !se->got_destroy) {
+		if (se->op.destroy)
+			se->op.destroy(se->userdata);
 	}
-	llp = pthread_getspecific(f->pipe_key);
+	llp = pthread_getspecific(se->pipe_key);
 	if (llp != NULL)
 		fuse_ll_pipe_free(llp);
-	pthread_key_delete(f->pipe_key);
-	pthread_mutex_destroy(&f->lock);
-	free(f->cuse_data);
-	close(f->fd);
-	destroy_mount_opts(f->mo);
-	free(f);
+	pthread_key_delete(se->pipe_key);
+	pthread_mutex_destroy(&se->lock);
+	free(se->cuse_data);
+	close(se->fd);
+	destroy_mount_opts(se->mo);
+	free(se);
 }
 
 
@@ -2811,7 +2812,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      size_t op_size, void *userdata)
 {
 	int err;
-	struct fuse_session *f;
+	struct fuse_session *se;
 	struct mount_opts *mo;
 
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
@@ -2819,8 +2820,8 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		op_size = sizeof(struct fuse_lowlevel_ops);
 	}
 
-	f = (struct fuse_session *) calloc(1, sizeof(struct fuse_session));
-	if (f == NULL) {
+	se = (struct fuse_session *) calloc(1, sizeof(struct fuse_session));
+	if (se == NULL) {
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
 		goto out1;
 	}
@@ -2829,7 +2830,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	mo = parse_mount_opts(args);
 	if (mo == NULL)
 		goto out2;
-	if(fuse_opt_parse(args, f, fuse_ll_opts, fuse_ll_opt_proc) == -1)
+	if(fuse_opt_parse(args, se, fuse_ll_opts, fuse_ll_opt_proc) == -1)
 		goto out3;
 	if (args->argc != 1) {
 		int i;
@@ -2840,44 +2841,44 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		goto out4;
 	}
 
-	if (f->debug)
+	if (se->debug)
 		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
 
-	f->conn.async_read = 1;
-	f->conn.max_write = UINT_MAX;
-	f->conn.max_readahead = UINT_MAX;
-	f->atomic_o_trunc = 0;
-	f->bufsize = getpagesize() + 0x1000;
-	f->bufsize = f->bufsize < MIN_BUFSIZE ? MIN_BUFSIZE : f->bufsize;
+	se->conn.async_read = 1;
+	se->conn.max_write = UINT_MAX;
+	se->conn.max_readahead = UINT_MAX;
+	se->atomic_o_trunc = 0;
+	se->bufsize = getpagesize() + 0x1000;
+	se->bufsize = se->bufsize < MIN_BUFSIZE ? MIN_BUFSIZE : se->bufsize;
 
-	list_init_req(&f->list);
-	list_init_req(&f->interrupts);
-	list_init_nreq(&f->notify_list);
-	f->notify_ctr = 1;
-	fuse_mutex_init(&f->lock);
+	list_init_req(&se->list);
+	list_init_req(&se->interrupts);
+	list_init_nreq(&se->notify_list);
+	se->notify_ctr = 1;
+	fuse_mutex_init(&se->lock);
 
-	err = pthread_key_create(&f->pipe_key, fuse_ll_pipe_destructor);
+	err = pthread_key_create(&se->pipe_key, fuse_ll_pipe_destructor);
 	if (err) {
 		fprintf(stderr, "fuse: failed to create thread specific key: %s\n",
 			strerror(err));
 		goto out5;
 	}
 
-	memcpy(&f->op, op, op_size);
-	f->owner = getuid();
-	f->userdata = userdata;
+	memcpy(&se->op, op, op_size);
+	se->owner = getuid();
+	se->userdata = userdata;
 
-	f->mo = mo;
-	return f;
+	se->mo = mo;
+	return se;
 
 out5:
-	pthread_mutex_destroy(&f->lock);
+	pthread_mutex_destroy(&se->lock);
 out4:
 	fuse_opt_free_args(args);
 out3:
 	free(mo);
 out2:
-	free(f);
+	free(se);
 out1:
 	return NULL;
 }
