@@ -157,11 +157,6 @@ struct fuse_conn_info {
 	unsigned proto_minor;
 
 	/**
-	 * Is asynchronous read supported (read-write)
-	 */
-	unsigned async_read;
-
-	/**
 	 * Maximum size of the write buffer
 	 */
 	unsigned max_write;

@@ -67,6 +67,8 @@ struct fuse_session {
 	int writeback_cache;
 	int no_writeback_cache;
 	int clone_fd;
+	int async_read;
+	int sync_read;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	struct cuse_data *cuse_data;

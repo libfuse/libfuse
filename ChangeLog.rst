@@ -1,6 +1,12 @@
 Unreleased Changes
 ==================
 
+* Removed the `async_read` field from `struct fuse_conn_info`. To
+  determine if the kernel supports asynchronous reads, file systems
+  should check the `FUSE_CAP_ASYNC_READ` bit of the `capable`
+  field. To enable/disable asynchronous reads, file systems should set
+  the flag in the `wanted` field.
+
 * The `fuse_parse_cmdline` function no longer prints out help when the
   ``--verbose`` or ``--help`` flags are given. This needs to be done
   by the file system (e.g. using the `fuse_cmdline_help()`,

@@ -1849,12 +1849,13 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 
 	if (arg->minor >= 6) {
-		if (f->conn.async_read)
-			f->conn.async_read = arg->flags & FUSE_ASYNC_READ;
 		if (arg->max_readahead < f->conn.max_readahead)
 			f->conn.max_readahead = arg->max_readahead;
-		if (arg->flags & FUSE_ASYNC_READ)
+		if (arg->flags & FUSE_ASYNC_READ) {
 			f->conn.capable |= FUSE_CAP_ASYNC_READ;
+			/* Enable by default */
+			f->conn.want |= FUSE_CAP_ASYNC_READ;
+		}
 		if (arg->flags & FUSE_POSIX_LOCKS)
 			f->conn.capable |= FUSE_CAP_POSIX_LOCKS;
 		if (arg->flags & FUSE_ATOMIC_O_TRUNC)
@@ -1878,7 +1879,6 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		if (arg->flags & FUSE_NO_OPEN_SUPPORT)
 			f->conn.capable |= FUSE_CAP_NO_OPEN_SUPPORT;
 	} else {
-		f->conn.async_read = 0;
 		f->conn.max_readahead = 0;
 	}
 
@@ -1947,12 +1947,16 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.want &= ~FUSE_CAP_ASYNC_DIO;
 	if (f->no_writeback_cache)
 		f->conn.want &= ~FUSE_CAP_WRITEBACK_CACHE;
+	if (f->async_read)
+		f->conn.want |= FUSE_CAP_ASYNC_READ;
+	if (f->sync_read)
+		f->conn.want &= ~FUSE_CAP_ASYNC_READ;
 
 	/* Always enable big writes, this is superseded
 	   by the max_write option */
 	outarg.flags |= FUSE_BIG_WRITES;
 
-	if (f->conn.async_read || (f->conn.want & FUSE_CAP_ASYNC_READ))
+	if (f->conn.want & FUSE_CAP_ASYNC_READ)
 		outarg.flags |= FUSE_ASYNC_READ;
 	if (f->conn.want & FUSE_CAP_POSIX_LOCKS)
 		outarg.flags |= FUSE_POSIX_LOCKS;
@@ -2558,8 +2562,8 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	{ "max_background=%u", offsetof(struct fuse_session, conn.max_background), 0 },
 	{ "congestion_threshold=%u",
 	  offsetof(struct fuse_session, conn.congestion_threshold), 0 },
-	{ "async_read", offsetof(struct fuse_session, conn.async_read), 1 },
-	{ "sync_read", offsetof(struct fuse_session, conn.async_read), 0 },
+	{ "sync_read", offsetof(struct fuse_session, sync_read), 1 },
+	{ "async_read", offsetof(struct fuse_session, async_read), 1 },
 	{ "atomic_o_trunc", offsetof(struct fuse_session, atomic_o_trunc), 1},
 	{ "no_remote_lock", offsetof(struct fuse_session, no_remote_posix_lock), 1},
 	{ "no_remote_lock", offsetof(struct fuse_session, no_remote_flock), 1},
@@ -2825,7 +2829,6 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
 		goto out1;
 	}
-	se->conn.async_read = 1;
 	se->conn.max_write = UINT_MAX;
 	se->conn.max_readahead = UINT_MAX;
 	se->atomic_o_trunc = 0;
