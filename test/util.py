@@ -4,10 +4,11 @@ import pytest
 import os
 import time
 
-def wait_for_mount(mount_process, mnt_dir):
+def wait_for_mount(mount_process, mnt_dir,
+                   test_fn=os.path.ismount):
     elapsed = 0
     while elapsed < 30:
-        if os.path.ismount(mnt_dir):
+        if test_fn(mnt_dir):
             return True
         if mount_process.poll() is not None:
             pytest.fail('file system process terminated prematurely')
