@@ -69,8 +69,8 @@ AC_SEARCH_LIBS(clock_gettime, [rt])
 libfuse_libs=$LIBS
 LIBS=
 AC_CHECK_LIB(ulockmgr, ulockmgr_op)
-fusexmp_fh_libs=$LIBS
-AC_SUBST(fusexmp_fh_libs)
+passthrough_fh_libs=$LIBS
+AC_SUBST(passthrough_fh_libs)
 LIBS=
 
 AC_ARG_WITH([libiconv-prefix],

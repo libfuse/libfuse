@@ -10,14 +10,18 @@
 /** @file
  * @tableofcontents
  *
- * fusexmp_fh.c - FUSE: Filesystem in Userspace
+ * This file system mirrors the existing file system hierarchy of the
+ * system, starting at the root file system. This is implemented by
+ * just "passing through" all requests to the corresponding user-space
+ * libc functions. This implementation is a little more sophisticated
+ * than the one in passthrough.c, so performance is not quite as bad.
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fusexmp_fh.c `pkg-config fuse3 --cflags --libs` -lulockmgr -o fusexmp_fh
+ * gcc -Wall passthrough_fh.c `pkg-config fuse3 --cflags --libs` -lulockmgr -o passthrough_fh
  *
  * \section section_source the complete source
- * \include fusexmp_fh.c
+ * \include passthrough_fh.c
  */
 
 #define FUSE_USE_VERSION 30

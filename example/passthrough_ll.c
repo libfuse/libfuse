@@ -6,8 +6,22 @@
   See the file COPYING.
 */
 
-/*
- * gcc -Wall fuse_lo-plus.c `pkg-config fuse3 --cflags --libs` -o fuse_lo-plus
+/** @file
+ * @tableofcontents
+ *
+ * This file system mirrors the existing file system hierarchy of the
+ * system, starting at the root file system. This is implemented by
+ * just "passing through" all requests to the corresponding user-space
+ * libc functions. In contrast to passthrough.c and passthrough_fh.c,
+ * this implementation ises the low-level API. Its performance should
+ * be the least bad among the three.
+ *
+ * \section section_compile compiling this example
+ *
+ * gcc -Wall passthrough_ll.c `pkg-config fuse3 --cflags --libs` -o passthrough_ll
+ *
+ * \section section_source the complete source
+ * \include passthrough_ll.c
  */
 
 #define _GNU_SOURCE
