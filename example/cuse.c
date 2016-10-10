@@ -11,14 +11,24 @@
 /** @file
  * @tableofcontents
  *
- * cusexmp.c - CUSE example: Character device in Userspace
+ * This example demonstrates how to implement a character device in
+ * userspace ("CUSE"). This is only allowed for root. The character
+ * device should appear in /dev under the specified name. It can be
+ * tested with the cuse_client.c program.
+ *
+ * Mount the file system with:
+ *
+ *     cuse -f --name=mydevice
+ *
+ * You should now have a new /dev/mydevice character device. To "unmount" it,
+ * kill the "cuse" process.
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall cusexmp.c `pkg-config fuse3 --cflags --libs` -o cusexmp
+ *     gcc -Wall cuse.c `pkg-config fuse3 --cflags --libs` -o cuse
  *
  * \section section_source the complete source
- * \include cusexmp.c
+ * \include cuse.c
  */
 
 
@@ -48,6 +58,9 @@ static const char *usage =
 "    --maj=MAJ|-M MAJ      device major number\n"
 "    --min=MIN|-m MIN      device minor number\n"
 "    --name=NAME|-n NAME   device name (mandatory)\n"
+"    -d   -o debug         enable debug output (implies -f)\n"
+"    -f                    foreground operation\n"
+"    -s                    disable multi-threaded operation\n"
 "\n";
 
 static int cusexmp_resize(size_t new_size)

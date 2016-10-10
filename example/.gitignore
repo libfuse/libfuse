@@ -6,7 +6,8 @@
 /ioctl_client
 /poll
 /poll_client
-/cusexmp
+/cuse
+/cuse_client
 /passthrough_ll
 /notify_inval_inode
 /notify_store_retrieve
