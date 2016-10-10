@@ -60,53 +60,26 @@ def test_hello(tmpdir, name, options):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh',
+                                  'passthrough_ll'))
 @pytest.mark.parametrize("options", LL_OPTIONS)
-def test_fuse_lo_plus(tmpdir, options):
-    mnt_dir = str(tmpdir.mkdir('mnt'))
-    src_dir = str(tmpdir.mkdir('src'))
-
-    cmdline = base_cmdline + \
-              [ pjoin(basename, 'example', 'fuse_lo-plus'),
-                '-f', '-s', mnt_dir ] + options
-    mount_process = subprocess.Popen(cmdline)
-    try:
-        wait_for_mount(mount_process, mnt_dir)
-        work_dir = pjoin(mnt_dir, src_dir)
-        tst_write(work_dir)
-        tst_mkdir(work_dir)
-        tst_symlink(work_dir)
-        tst_mknod(work_dir)
-        if os.getuid() == 0:
-            tst_chown(work_dir)
-        # Underlying fs may not have full nanosecond resolution
-        tst_utimens(work_dir, ns_tol=1000)
-        tst_link(work_dir)
-        tst_readdir(work_dir)
-        tst_statvfs(work_dir)
-        tst_truncate_path(work_dir)
-        tst_truncate_fd(work_dir)
-        tst_unlink(work_dir)
-        tst_passthrough(src_dir, work_dir)
-    except:
-        cleanup(mnt_dir)
-        raise
-    else:
-        umount(mount_process, mnt_dir)
-
-@pytest.mark.parametrize("name", ('fusexmp', 'fusexmp_fh'))
-@pytest.mark.parametrize("options", LL_OPTIONS)
-def test_fusexmp_fh(tmpdir, name, options):
+def test_passthrough(tmpdir, name, options):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
-                '-f', '-o', 'use_ino,readdir_ino,kernel_cache',
-                mnt_dir ] + options
+                '-f', mnt_dir ] + options
+    if not name.endswith('_ll'):
+        cmdline += [ '-o', 'use_ino,readdir_ino,kernel_cache' ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         work_dir = pjoin(mnt_dir, src_dir)
+
+        subprocess.check_call([ os.path.join(basename, 'test', 'test'),
+                    work_dir, ':' + src_dir ])
+
         tst_write(work_dir)
         tst_mkdir(work_dir)
         tst_symlink(work_dir)

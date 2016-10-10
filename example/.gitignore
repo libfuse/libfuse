@@ -1,5 +1,5 @@
-/fusexmp
-/fusexmp_fh
+/passthrough
+/passthrough_fh
 /hello
 /hello_ll
 /fioc
@@ -7,6 +7,6 @@
 /fsel
 /fselclient
 /cusexmp
-/fuse_lo-plus
+/passthrough_ll
 /timefs1
 /timefs2
