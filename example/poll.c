@@ -5,22 +5,22 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
 */
 
 /** @file
  * @tableofcontents
  *
- * fsel.c - FUSE fsel: FUSE select example
+ * This example illustrates how to write a FUSE file system that
+ * supports polling for changes that don't come through the kernel. It
+ * can be tested with the poll_client.c program.
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fsel.c `pkg-config fuse3 --cflags --libs` -o fsel
+ * gcc -Wall poll.c `pkg-config fuse3 --cflags --libs` -o poll
  *
  * \section section_source the complete source
- * \include fsel.c
+ * \include poll.c
  */
-
 
 #define FUSE_USE_VERSION 30
 

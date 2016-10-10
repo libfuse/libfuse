@@ -2,10 +2,10 @@
 /passthrough_fh
 /hello
 /hello_ll
-/fioc
-/fioclient
-/fsel
-/fselclient
+/ioctl
+/ioctl_client
+/poll
+/poll_client
 /cusexmp
 /passthrough_ll
 /timefs1

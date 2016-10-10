@@ -5,20 +5,21 @@
 
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
-
 */
 
 /** @file
  * @tableofcontents
  *
- * fselclient.c - FUSE fselclient: FUSE select example client
+ * poll_client.c
+ *
+ * This program tests the poll.c example file systsem.
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fselclient.c -o fselclient
+ * gcc -Wall poll_client.c -o poll_client
  *
  * \section section_source the complete source
- * \include fselclient.c
+ * \include poll_client.c
  */
 
 #include <config.h>

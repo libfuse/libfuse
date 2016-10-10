@@ -35,7 +35,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "fioc.h"
+#include "ioctl.h"
 
 static void *cusexmp_buf;
 static size_t cusexmp_size;

@@ -3,6 +3,8 @@
   Copyright (C) 2008       SUSE Linux Products GmbH
   Copyright (C) 2008       Tejun Heo <teheo@suse.de>
 
+  This program tests the ioctl.c example file systsem.
+
   This program can be distributed under the terms of the GNU GPL.
   See the file COPYING.
 */
@@ -10,15 +12,14 @@
 /** @file
  * @tableofcontents
  *
- * fioclient.c - FUSE fioclient: FUSE ioctl example client
+ * This program tests the ioctl.c example file systsem.
  *
  * \section section_compile compiling this example
  *
- * gcc -Wall fioclient.c -o fioclient
+ * gcc -Wall ioctl_client.c -o ioctl_client
  *
  * \section section_source the complete source
- * fioclient.c
- * \include fioclient.c
+ * \include ioctl_client.c
  */
 
 #include <config.h>
@@ -31,7 +32,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
-#include "fioc.h"
+#include "ioctl.h"
 
 const char *usage =
 "Usage: fioclient FIOC_FILE [size]\n"
