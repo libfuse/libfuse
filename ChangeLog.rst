@@ -1,6 +1,11 @@
 Unreleased Changes
 ==================
 
+* The `fuse_parse_cmdline` function no longer prints out help when the
+  ``--verbose`` or ``--help`` flags are given. This needs to be done
+  by the file system (e.g. using the `fuse_cmdline_help()`,
+  `fuse_lowlevel_help()` and `fuse_mount_help()` functions).
+
 * Added ``example/cuse_client.c`` to test ``example/cuse.c``.
 
 * Removed ``example/null.c``. This has not been working for a while
