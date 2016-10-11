@@ -140,6 +140,13 @@ FUSE 3.0.0pre0 (2016-10-03)
   descriptor for each processing thread, which might improve
   performance.
 
+* Added *writeback_cache* option. With kernel 3.14 and newer this
+  enables write-back caching which can significantly improve
+  performance.
+
+* Added *async_dio* option. With kernel 3.13 and newer, this allows
+  direct I/O to be done asynchronously.
+
 * The (high- and low-level) `rename` handlers now takes a *flags*
   parameter (with values corresponding to the *renameat2* system call
   introduced in Linux 3.15).
