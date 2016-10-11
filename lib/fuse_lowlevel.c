@@ -2631,15 +2631,6 @@ void fuse_lowlevel_help(void)
 "    -o clone_fd              clone fuse device file descriptors\n\n");
 }
 
-static int fuse_ll_opt_proc(void *data, const char *arg, int key,
-			    struct fuse_args *outargs)
-{
-	(void) data; (void) outargs; (void) key; (void) arg;
-
-	/* Passthrough unknown options */
-	return 1;
-}
-
 void fuse_session_destroy(struct fuse_session *se)
 {
 	struct fuse_ll_pipe *llp;
@@ -2846,7 +2837,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	mo = parse_mount_opts(args);
 	if (mo == NULL)
 		goto out2;
-	if(fuse_opt_parse(args, se, fuse_ll_opts, fuse_ll_opt_proc) == -1)
+	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
 		goto out3;
 	if (args->argc != 1) {
 		int i;
