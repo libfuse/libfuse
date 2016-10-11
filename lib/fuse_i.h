@@ -41,14 +41,7 @@ struct fuse_notify_req {
 	struct fuse_notify_req *prev;
 };
 
-struct fuse_session {
-	char *mountpoint;
-	volatile int exited;
-	int fd;
-	struct mount_opts *mo;
-
-	int debug;
-	int allow_root;
+struct session_opts {
 	int atomic_o_trunc;
 	int no_remote_posix_lock;
 	int no_remote_flock;
@@ -66,9 +59,18 @@ struct fuse_session {
 	int no_async_dio;
 	int writeback_cache;
 	int no_writeback_cache;
-	int clone_fd;
 	int async_read;
 	int sync_read;
+};
+
+struct fuse_session {
+	char *mountpoint;
+	volatile int exited;
+	int fd;
+	struct mount_opts *mo;
+	struct session_opts opts;
+	int debug;
+	int allow_root;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	struct cuse_data *cuse_data;
@@ -84,6 +86,7 @@ struct fuse_session {
 	uint64_t notify_ctr;
 	struct fuse_notify_req notify_list;
 	size_t bufsize;
+	int clone_fd;
 };
 
 struct fuse_chan {
