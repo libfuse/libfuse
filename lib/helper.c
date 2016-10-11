@@ -45,6 +45,7 @@ static const struct fuse_opt fuse_helper_opts[] = {
 	FUSE_HELPER_OPT("subtype=",	nodefault_subtype),
 	FUSE_OPT_KEY("fsname=",		FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_KEY("subtype=",	FUSE_OPT_KEY_KEEP),
+	FUSE_HELPER_OPT("clone_fd",	clone_fd),
 	FUSE_OPT_END
 };
 
@@ -56,6 +57,7 @@ void fuse_cmdline_help(void)
 	       "    -d   -o debug          enable debug output (implies -f)\n"
 	       "    -f                     foreground operation\n"
 	       "    -s                     disable multi-threaded operation\n"
+	       "    -o clone_fd            use separate fuse device fd for each thread\n"
 	       "\n");
 }
 
@@ -246,7 +248,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	if (opts.singlethread)
 		res = fuse_loop(fuse);
 	else
-		res = fuse_loop_mt(fuse);
+		res = fuse_loop_mt(fuse, opts.clone_fd);
 	if (res)
 		res = 1;
 

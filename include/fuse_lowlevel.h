@@ -1657,6 +1657,7 @@ struct fuse_cmdline_opts {
 	char *mountpoint;
 	int show_version;
 	int show_help;
+	int clone_fd;
 };
 
 /**
@@ -1727,9 +1728,11 @@ int fuse_session_loop(struct fuse_session *se);
  * Enter a multi-threaded event loop
  *
  * @param se the session
+ * @param clone_fd whether to use separate device fds for each thread
+ *                 (may increase performance)
  * @return 0 on success, -1 on error
  */
-int fuse_session_loop_mt(struct fuse_session *se);
+int fuse_session_loop_mt(struct fuse_session *se, int clone_fd);
 
 /**
  * Flag a session as terminated.

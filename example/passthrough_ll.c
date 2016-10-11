@@ -504,7 +504,7 @@ int main(int argc, char *argv[])
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
 	else
-		ret = fuse_session_loop_mt(se);
+		ret = fuse_session_loop_mt(se, opts.clone_fd);
 
 	fuse_session_unmount(se);
 err_out3:

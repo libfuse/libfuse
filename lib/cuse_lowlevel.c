@@ -350,7 +350,7 @@ int cuse_lowlevel_main(int argc, char *argv[], const struct cuse_info *ci,
 		return 1;
 
 	if (multithreaded)
-		res = fuse_session_loop_mt(se);
+		res = fuse_session_loop_mt(se, 0);
 	else
 		res = fuse_session_loop(se);
 

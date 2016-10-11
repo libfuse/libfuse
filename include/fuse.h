@@ -748,11 +748,13 @@ void fuse_exit(struct fuse *f);
  * in the callback function of fuse_operations is also thread-safe.
  *
  * @param f the FUSE handle
+ * @param clone_fd whether to use separate device fds for each thread
+ *                 (may increase performance)
  * @return 0 if no error occurred, -1 otherwise
  *
  * See also: fuse_loop()
  */
-int fuse_loop_mt(struct fuse *f);
+int fuse_loop_mt(struct fuse *f, int clone_fd);
 
 /**
  * Get the current context

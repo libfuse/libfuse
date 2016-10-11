@@ -2596,7 +2596,6 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("writeback_cache", opts.writeback_cache, 1),
 	LL_OPTION("no_writeback_cache", opts.no_writeback_cache, 1),
 	LL_OPTION("time_gran=%u", conn.time_gran, 0),
-	LL_OPTION("clone_fd", clone_fd, 1),
 	FUSE_OPT_END
 };
 
@@ -2627,8 +2626,7 @@ void fuse_lowlevel_help(void)
 "    -o readdirplus=S         control readdirplus use (yes|no|auto)\n"
 "    -o [no_]async_dio        asynchronous direct I/O\n"
 "    -o [no_]writeback_cache  asynchronous, buffered writes\n"
-"    -o time_gran=N           time granularity in nsec\n"
-"    -o clone_fd              clone fuse device file descriptors\n\n");
+"    -o time_gran=N           time granularity in nsec\n\n");
 }
 
 void fuse_session_destroy(struct fuse_session *se)

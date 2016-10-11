@@ -47,6 +47,7 @@ struct fuse_mt {
 	sem_t finish;
 	int exit;
 	int error;
+	int clone_fd;
 };
 
 static struct fuse_chan *fuse_chan_new(int fd)
@@ -265,13 +266,13 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 	w->mt = mt;
 
 	w->ch = NULL;
-	if (mt->se->clone_fd) {
+	if (mt->clone_fd) {
 		w->ch = fuse_clone_chan(mt);
 		if(!w->ch) {
 			/* Don't attempt this again */
 			fprintf(stderr, "fuse: trying to continue "
 				"without -o clone_fd.\n");
-			mt->se->clone_fd = 0;
+			mt->clone_fd = 0;
 		}
 	}
 
@@ -299,7 +300,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	free(w);
 }
 
-int fuse_session_loop_mt(struct fuse_session *se)
+int fuse_session_loop_mt(struct fuse_session *se, int clone_fd)
 {
 	int err;
 	struct fuse_mt mt;
@@ -307,6 +308,7 @@ int fuse_session_loop_mt(struct fuse_session *se)
 
 	memset(&mt, 0, sizeof(struct fuse_mt));
 	mt.se = se;
+	mt.clone_fd = clone_fd;
 	mt.error = 0;
 	mt.numworker = 0;
 	mt.numavail = 0;

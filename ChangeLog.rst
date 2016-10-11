@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* The `fuse_session_new` function no longer accepts the ``-o
+  clone_fd`` option. Instead, this has become a parameter of the
+  `fuse_session_loop_mt` and ``fuse_loop_mt` functions.
+
 * For low-level file systems that implement the `write_buf` handler,
   the `splice_read` option is now enabled by default. As usual, this
   can be changed in the file system's `init` handler.
