@@ -1813,9 +1813,9 @@ static void apply_want_options(struct session_opts *opts,
 			       struct fuse_conn_info *conn)
 {
 #define LL_ENABLE(cond,cap) \
-	if (cond) conn->want |= (cap);
+	if (cond) conn->want |= (cap)
 #define LL_DISABLE(cond,cap) \
-	if (cond) conn->want &= ~(cap);
+	if (cond) conn->want &= ~(cap)
 
 	LL_ENABLE(opts->splice_read, FUSE_CAP_SPLICE_READ);
 	LL_DISABLE(opts->no_splice_read, FUSE_CAP_SPLICE_READ);
