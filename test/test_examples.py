@@ -13,6 +13,8 @@ import stat
 import shutil
 import filecmp
 import errno
+import platform
+from distutils.version import LooseVersion
 from tempfile import NamedTemporaryFile
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep)
@@ -206,8 +208,10 @@ def test_notify_inval_entry(tmpdir, notify):
     else:
         umount(mount_process, mnt_dir)
 
-@pytest.mark.parametrize("writeback", (True, False))
+@pytest.mark.parametrize("writeback", (False, True))
 def test_write_cache(tmpdir, writeback):
+    if writeback and LooseVersion(platform.release()) < '3.14':
+        pytest.skip('Requires kernel 3.14 or newer')
     # This test hangs under Valgrind when running close(fd)
     # test_write_cache.c:test_fs(). Most likely this is because of an internal
     # deadlock in valgrind, it probably assumes that until close() returns,
