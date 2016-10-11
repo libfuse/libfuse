@@ -1809,8 +1809,8 @@ static void do_fallocate(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
-static void apply_want_options(struct fuse_session *opts,
-			struct fuse_conn_info *conn)
+static void apply_want_options(struct session_opts *opts,
+			       struct fuse_conn_info *conn)
 {
 #define LL_ENABLE(cond,cap) \
 	if (cond) conn->want |= (cap)
@@ -1949,7 +1949,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	/* Apply command-line options (so that init() handler has
 	   an idea about user preferences */
-	apply_want_options(f, &f->conn);
+	apply_want_options(&f->opts, &f->conn);
 
 	/* Allow file-system to overwrite defaults */
 	if (f->op.init)
@@ -1957,7 +1957,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	/* Now explicitly overwrite file-system's decision
 	   with command-line options */
-	apply_want_options(f, &f->conn);
+	apply_want_options(&f->opts, &f->conn);
 
 	/* Always enable big writes, this is superseded
 	   by the max_write option */
@@ -2571,30 +2571,30 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("max_readahead=%u", conn.max_readahead, 0),
 	LL_OPTION("max_background=%u", conn.max_background, 0),
 	LL_OPTION("congestion_threshold=%u", conn.congestion_threshold, 0),
-	LL_OPTION("sync_read", sync_read, 1),
-	LL_OPTION("async_read", async_read, 1),
-	LL_OPTION("atomic_o_trunc", atomic_o_trunc, 1),
-	LL_OPTION("no_remote_lock", no_remote_posix_lock, 1),
-	LL_OPTION("no_remote_lock", no_remote_flock, 1),
-	LL_OPTION("no_remote_flock", no_remote_flock, 1),
-	LL_OPTION("no_remote_posix_lock", no_remote_posix_lock, 1),
-	LL_OPTION("splice_write", splice_write, 1),
-	LL_OPTION("no_splice_write", no_splice_write, 1),
-	LL_OPTION("splice_move", splice_move, 1),
-	LL_OPTION("no_splice_move", no_splice_move, 1),
-	LL_OPTION("splice_read", splice_read, 1),
-	LL_OPTION("no_splice_read", no_splice_read, 1),
-	LL_OPTION("auto_inval_data", auto_inval_data, 1),
-	LL_OPTION("no_auto_inval_data", no_auto_inval_data, 1),
-	LL_OPTION("readdirplus=no", no_readdirplus, 1),
-	LL_OPTION("readdirplus=yes", no_readdirplus, 0),
-	LL_OPTION("readdirplus=yes", no_readdirplus_auto, 1),
-	LL_OPTION("readdirplus=auto", no_readdirplus, 0),
-	LL_OPTION("readdirplus=auto", no_readdirplus_auto, 0),
-	LL_OPTION("async_dio", async_dio, 1),
-	LL_OPTION("no_async_dio", no_async_dio, 1),
-	LL_OPTION("writeback_cache", writeback_cache, 1),
-	LL_OPTION("no_writeback_cache", no_writeback_cache, 1),
+	LL_OPTION("sync_read", opts.sync_read, 1),
+	LL_OPTION("async_read", opts.async_read, 1),
+	LL_OPTION("atomic_o_trunc", opts.atomic_o_trunc, 1),
+	LL_OPTION("no_remote_lock", opts.no_remote_posix_lock, 1),
+	LL_OPTION("no_remote_lock", opts.no_remote_flock, 1),
+	LL_OPTION("no_remote_flock", opts.no_remote_flock, 1),
+	LL_OPTION("no_remote_posix_lock", opts.no_remote_posix_lock, 1),
+	LL_OPTION("splice_write", opts.splice_write, 1),
+	LL_OPTION("no_splice_write", opts.no_splice_write, 1),
+	LL_OPTION("splice_move", opts.splice_move, 1),
+	LL_OPTION("no_splice_move", opts.no_splice_move, 1),
+	LL_OPTION("splice_read", opts.splice_read, 1),
+	LL_OPTION("no_splice_read", opts.no_splice_read, 1),
+	LL_OPTION("auto_inval_data", opts.auto_inval_data, 1),
+	LL_OPTION("no_auto_inval_data", opts.no_auto_inval_data, 1),
+	LL_OPTION("readdirplus=no", opts.no_readdirplus, 1),
+	LL_OPTION("readdirplus=yes", opts.no_readdirplus, 0),
+	LL_OPTION("readdirplus=yes", opts.no_readdirplus_auto, 1),
+	LL_OPTION("readdirplus=auto", opts.no_readdirplus, 0),
+	LL_OPTION("readdirplus=auto", opts.no_readdirplus_auto, 0),
+	LL_OPTION("async_dio", opts.async_dio, 1),
+	LL_OPTION("no_async_dio", opts.no_async_dio, 1),
+	LL_OPTION("writeback_cache", opts.writeback_cache, 1),
+	LL_OPTION("no_writeback_cache", opts.no_writeback_cache, 1),
 	LL_OPTION("time_gran=%u", conn.time_gran, 0),
 	LL_OPTION("clone_fd", clone_fd, 1),
 	FUSE_OPT_END
@@ -2831,7 +2831,6 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	}
 	se->conn.max_write = UINT_MAX;
 	se->conn.max_readahead = UINT_MAX;
-	se->atomic_o_trunc = 0;
 
 	/* Parse options */
 	mo = parse_mount_opts(args);
