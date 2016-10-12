@@ -45,6 +45,7 @@ static const struct fuse_opt fuse_helper_opts[] = {
 	FUSE_HELPER_OPT("subtype=",	nodefault_subtype),
 	FUSE_OPT_KEY("fsname=",		FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_KEY("subtype=",	FUSE_OPT_KEY_KEEP),
+	FUSE_HELPER_OPT("clone_fd",	clone_fd),
 	FUSE_OPT_END
 };
 
@@ -56,6 +57,7 @@ void fuse_cmdline_help(void)
 	       "    -d   -o debug          enable debug output (implies -f)\n"
 	       "    -f                     foreground operation\n"
 	       "    -s                     disable multi-threaded operation\n"
+	       "    -o clone_fd            use separate fuse device fd for each thread\n"
 	       "\n");
 }
 
@@ -188,9 +190,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	struct fuse_cmdline_opts opts;
 	int res;
 
-	memset(&opts, 0, sizeof(opts));
-	if (fuse_opt_parse(&args, &opts, fuse_helper_opts,
-			   fuse_helper_opt_proc) == -1)
+	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
 
 	if (opts.show_version) {
@@ -204,6 +204,9 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	/* Re-add --help for later processing by fuse_new()
 	   (that way we also get help for modules options) */
 	if (opts.show_help) {
+		if(args.argv[0] != '\0')
+			printf("usage: %s [options] <mountpoint>\n\n",
+			       args.argv[0]);
 		fuse_cmdline_help();
 		if (fuse_opt_add_arg(&args, "--help") == -1) {
 			res = 1;
@@ -218,14 +221,6 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		goto out1;
 	}
 
-	/* If neither -o subtype nor -o fsname are specified,
-	   set subtype to program's basename */
-	if (!opts.nodefault_subtype) {
-		if (add_default_subtype(args.argv[0], &args) == -1) {
-			res = 1;
-			goto out1;
-		}
-	}
 
 	/* --help is processed here and will result in NULL */
 	fuse = fuse_new(&args, op, op_size, user_data);
@@ -253,7 +248,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	if (opts.singlethread)
 		res = fuse_loop(fuse);
 	else
-		res = fuse_loop_mt(fuse);
+		res = fuse_loop_mt(fuse, opts.clone_fd);
 	if (res)
 		res = 1;
 

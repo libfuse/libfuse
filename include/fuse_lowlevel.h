@@ -165,7 +165,14 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Initialize filesystem
 	 *
-	 * Called before any other filesystem method
+	 * This function is called when libfuse establishes
+	 * communication with the FUSE kernel module. The file system
+	 * should use this module to inspect and/or modify the
+	 * connection parameters provided in the `conn` structure.
+	 *
+	 * Note that some parameters may be overwritten by options
+	 * passed to fuse_session_new() which take precedence over the
+	 * values set in this handler.
 	 *
 	 * There's no reply to this function
 	 *
@@ -413,12 +420,18 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Open a file
 	 *
-	 * Open flags (with the exception of O_CREAT, O_EXCL, O_NOCTTY and
-	 * O_TRUNC) are available in fi->flags.
+	 * Open flags are available in fi->flags.  Creation (O_CREAT,
+	 * O_EXCL, O_NOCTTY) and by default also truncation (O_TRUNC)
+	 * flags will be filtered out. If an application specifies
+	 * O_TRUNC, fuse first calls truncate() and then open().
 	 *
-	 * Filesystem may store an arbitrary file handle (pointer, index,
-	 * etc) in fi->fh, and use this in other all other file operations
-	 * (read, write, flush, release, fsync).
+	 * If filesystem is able to handle O_TRUNC directly, the
+	 * init() handler should set the `FUSE_CAP_ATOMIC_O_TRUNC` bit
+	 * in ``conn->want``.
+	 *
+	 * Filesystem may store an arbitrary file handle (pointer,
+	 * index, etc) in fi->fh, and use this in other all other file
+	 * operations (read, write, flush, release, fsync).
 	 *
 	 * Filesystem may also implement stateless file I/O and not store
 	 * anything in fi->fh.
@@ -1191,6 +1204,33 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size);
 /**
  * Reply with data copied/moved from buffer(s)
  *
+ * Zero copy data transfer ("splicing") will be used under
+ * the following circumstances:
+ *
+ * 1. FUSE_CAP_SPLICE_WRITE is set in fuse_conn_info.want, and
+ * 2. the kernel supports splicing from the fuse device
+ *    (FUSE_CAP_SPLICE_WRITE is set in fuse_conn_info.capable), and
+ * 3. *flags* does not contain FUSE_BUF_NO_SPLICE
+ * 4. The amount of data that is provided in file-descriptor backed
+ *    buffers (i.e., buffers for which bufv[n].flags == FUSE_BUF_FD)
+ *    is at least twice the page size.
+ *
+ * In order for SPLICE_F_MOVE to be used, the following additional
+ * conditions have to be fulfilled:
+ *
+ * 1. FUSE_CAP_SPLICE_MOVE is set in fuse_conn_info.want, and
+ * 2. the kernel supports it (i.e, FUSE_CAP_SPLICE_MOVE is set in
+      fuse_conn_info.capable), and
+ * 3. *flags* contains FUSE_BUF_SPLICE_MOVE
+ *
+ * Note that, if splice is used, the data is actually spliced twice:
+ * once into a temporary pipe (to prepend header data), and then again
+ * into the kernel. If some of the provided buffers are memory-backed,
+ * the data in them is copied in step one and spliced in step two.
+ *
+ * The FUSE_BUF_SPLICE_FORCE_SPLICE and FUSE_BUF_SPLICE_NONBLOCK flags
+ * are silently ignored.
+ *
  * Possible requests:
  *   read, readdir, getxattr, listxattr
  *
@@ -1617,6 +1657,7 @@ struct fuse_cmdline_opts {
 	char *mountpoint;
 	int show_version;
 	int show_help;
+	int clone_fd;
 };
 
 /**
@@ -1687,9 +1728,11 @@ int fuse_session_loop(struct fuse_session *se);
  * Enter a multi-threaded event loop
  *
  * @param se the session
+ * @param clone_fd whether to use separate device fds for each thread
+ *                 (may increase performance)
  * @return 0 on success, -1 on error
  */
-int fuse_session_loop_mt(struct fuse_session *se);
+int fuse_session_loop_mt(struct fuse_session *se, int clone_fd);
 
 /**
  * Flag a session as terminated.

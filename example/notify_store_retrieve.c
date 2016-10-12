@@ -111,13 +111,6 @@ static const struct fuse_opt option_spec[] = {
     FUSE_OPT_END
 };
 
-static int opt_proc(void *data, const char *arg, int key,
-                    struct fuse_args *outargs) {
-    (void) outargs; (void) data; (void) arg;
-    (void) key;
-    return 1;
-}
-
 static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
     stbuf->st_ino = ino;
     if (ino == FUSE_ROOT_ID) {
@@ -293,20 +286,24 @@ static struct fuse_lowlevel_ops tfs_oper = {
     .retrieve_reply = tfs_retrieve_reply,
 };
 
-static void* update_fs(void *data) {
-    struct fuse_session *se = (struct fuse_session*) data;
+static void update_fs(void) {
     struct tm *now;
     time_t t;
+    t = time(NULL);
+    now = localtime(&t);
+    assert(now != NULL);
+
+    file_size = strftime(file_contents, MAX_STR_LEN,
+                         "The current time is %H:%M:%S\n", now);
+    assert(file_size != 0);
+}
+
+static void* update_fs_loop(void *data) {
+    struct fuse_session *se = (struct fuse_session*) data;
     struct fuse_bufvec bufv;
 
     while(1) {
-        t = time(NULL);
-        now = localtime(&t);
-        assert(now != NULL);
-
-        file_size = strftime(file_contents, MAX_STR_LEN,
-                             "The current time is %H:%M:%S\n", now);
-        assert(file_size != 0);
+        update_fs();
         if (!options.no_notify && lookup_cnt) {
             /* Only send notification if the kernel
                is aware of the inode */
@@ -348,8 +345,7 @@ int main(int argc, char *argv[]) {
     pthread_t updater;
     int ret = -1;
 
-    if (fuse_opt_parse(&args, &options, option_spec,
-                       opt_proc) == -1)
+    if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
         return 1;
 
     if (fuse_parse_cmdline(&args, &opts) != 0)
@@ -369,6 +365,9 @@ int main(int argc, char *argv[]) {
         goto err_out1;
     }
 
+    /* Initial contents */
+    update_fs();
+
     se = fuse_session_new(&args, &tfs_oper,
                           sizeof(tfs_oper), NULL);
     if (se == NULL)
@@ -383,7 +382,7 @@ int main(int argc, char *argv[]) {
     fuse_daemonize(opts.foreground);
 
     /* Start thread to update file contents */
-    ret = pthread_create(&updater, NULL, update_fs, (void *)se);
+    ret = pthread_create(&updater, NULL, update_fs_loop, (void *)se);
     if (ret != 0) {
         fprintf(stderr, "pthread_create failed with %s\n",
                 strerror(ret));
@@ -394,7 +393,7 @@ int main(int argc, char *argv[]) {
     if (opts.singlethread)
         ret = fuse_session_loop(se);
     else
-        ret = fuse_session_loop_mt(se);
+        ret = fuse_session_loop_mt(se, opts.clone_fd);
 
     assert(retrieve_status != 1);
     fuse_session_unmount(se);

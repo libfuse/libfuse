@@ -1,6 +1,31 @@
 Unreleased Changes
 ==================
 
+* The `fuse_session_new` function no longer accepts the ``-o
+  clone_fd`` option. Instead, this has become a parameter of the
+  `fuse_session_loop_mt` and ``fuse_loop_mt` functions.
+
+* For low-level file systems that implement the `write_buf` handler,
+  the `splice_read` option is now enabled by default. As usual, this
+  can be changed in the file system's `init` handler.
+
+* `fuse_session_new` now treats low-level options more consistently:
+  First, options are used to modify FUSE defaults. Second, the file
+  system may inspect and/or adjust the settings in its `init`
+  handler. Third, command line arguments take precedence over any
+  modifications made by the `init` handler.
+
+* Removed the `async_read` field from `struct fuse_conn_info`. To
+  determine if the kernel supports asynchronous reads, file systems
+  should check the `FUSE_CAP_ASYNC_READ` bit of the `capable`
+  field. To enable/disable asynchronous reads, file systems should set
+  the flag in the `wanted` field.
+
+* The `fuse_parse_cmdline` function no longer prints out help when the
+  ``--verbose`` or ``--help`` flags are given. This needs to be done
+  by the file system (e.g. using the `fuse_cmdline_help()`,
+  `fuse_lowlevel_help()` and `fuse_mount_help()` functions).
+
 * Added ``example/cuse_client.c`` to test ``example/cuse.c``.
 
 * Removed ``example/null.c``. This has not been working for a while
@@ -114,6 +139,13 @@ FUSE 3.0.0pre0 (2016-10-03)
 * Added *clone_fd* option.  This creates a separate device file
   descriptor for each processing thread, which might improve
   performance.
+
+* Added *writeback_cache* option. With kernel 3.14 and newer this
+  enables write-back caching which can significantly improve
+  performance.
+
+* Added *async_dio* option. With kernel 3.13 and newer, this allows
+  direct I/O to be done asynchronously.
 
 * The (high- and low-level) `rename` handlers now takes a *flags*
   parameter (with values corresponding to the *renameat2* system call

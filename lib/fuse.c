@@ -4378,7 +4378,7 @@ int fuse_loop(struct fuse *f)
 	return fuse_session_loop(f->se);
 }
 
-int fuse_loop_mt(struct fuse *f)
+int fuse_loop_mt(struct fuse *f, int clone_fd)
 {
 	if (f == NULL)
 		return -1;
@@ -4387,7 +4387,7 @@ int fuse_loop_mt(struct fuse *f)
 	if (res)
 		return -1;
 
-	res = fuse_session_loop_mt(fuse_get_session(f));
+	res = fuse_session_loop_mt(fuse_get_session(f), clone_fd);
 	fuse_stop_cleanup_thread(f);
 	return res;
 }

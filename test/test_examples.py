@@ -13,6 +13,8 @@ import stat
 import shutil
 import filecmp
 import errno
+import platform
+from distutils.version import LooseVersion
 from tempfile import NamedTemporaryFile
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep)
@@ -151,21 +153,16 @@ def test_notify1(tmpdir, name, options, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
-                '-f', '--update-interval=2', mnt_dir ] + options
+                '-f', '--update-interval=1', mnt_dir ] + options
     if not notify:
         cmdline.append('--no-notify')
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         filename = pjoin(mnt_dir, 'current_time')
-        # Wait until first update
-        while True:
-            with open(filename, 'r') as fh:
-                read1 = fh.read()
-            if read1:
-                break
-            safe_sleep(2)
-        safe_sleep(6)
+        with open(filename, 'r') as fh:
+            read1 = fh.read()
+        safe_sleep(2)
         with open(filename, 'r') as fh:
             read2 = fh.read()
         if notify:
@@ -183,8 +180,8 @@ def test_notify_inval_entry(tmpdir, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'notify_inval_entry'),
-               '-f', '--update-interval=2',
-                '--timeout=10', mnt_dir ]
+                '-f', '--update-interval=1',
+                '--timeout=5', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
     mount_process = subprocess.Popen(cmdline)
@@ -199,10 +196,10 @@ def test_notify_inval_entry(tmpdir, notify):
             fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
             os.stat(fname)
 
-        safe_sleep(4)
+        safe_sleep(2)
         if not notify:
             os.stat(fname)
-            safe_sleep(10)
+            safe_sleep(5)
         with pytest.raises(FileNotFoundError):
             os.stat(fname)
     except:
@@ -211,6 +208,20 @@ def test_notify_inval_entry(tmpdir, notify):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.parametrize("writeback", (False, True))
+def test_write_cache(tmpdir, writeback):
+    if writeback and LooseVersion(platform.release()) < '3.14':
+        pytest.skip('Requires kernel 3.14 or newer')
+    # This test hangs under Valgrind when running close(fd)
+    # test_write_cache.c:test_fs(). Most likely this is because of an internal
+    # deadlock in valgrind, it probably assumes that until close() returns,
+    # control does not come to the program.
+    mnt_dir = str(tmpdir)
+    cmdline = [ pjoin(basename, 'test', 'test_write_cache'),
+                mnt_dir ]
+    if writeback:
+        cmdline.append('-owriteback_cache')
+    subprocess.check_call(cmdline)
 
 @pytest.mark.skipif(os.getuid() != 0,
                     reason='needs to run as root')
