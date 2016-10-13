@@ -17,10 +17,9 @@ import platform
 from distutils.version import LooseVersion
 from tempfile import NamedTemporaryFile
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
-                  safe_sleep)
+                  safe_sleep, basename)
 from os.path import join as pjoin
 
-basename = pjoin(os.path.dirname(__file__), '..')
 TEST_FILE = __file__
 
 with open(TEST_FILE, 'rb') as fh:

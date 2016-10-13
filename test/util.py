@@ -3,6 +3,9 @@ import subprocess
 import pytest
 import os
 import time
+from os.path import join as pjoin
+
+basename = pjoin(os.path.dirname(__file__), '..')
 
 def wait_for_mount(mount_process, mnt_dir,
                    test_fn=os.path.ismount):
@@ -17,12 +20,24 @@ def wait_for_mount(mount_process, mnt_dir,
     pytest.fail("mountpoint failed to come up")
 
 def cleanup(mnt_dir):
-    subprocess.call(['fusermount', '-z', '-u', mnt_dir],
+    # Don't bother trying Valgrind if things already went wrong
+
+    subprocess.call([pjoin(basename, 'util', 'fusermount'),
+                     '-z', '-u', mnt_dir],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.STDOUT)
 
 def umount(mount_process, mnt_dir):
-    subprocess.check_call(['fusermount', '-z', '-u', mnt_dir])
+    # fusermount will be setuid root, so we can only trace it with
+    # valgrind if we're root
+    if os.getuid() == 0:
+        cmdline = base_cmdline
+    else:
+        cmdline = []
+
+    cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount'),
+                          '-z', '-u', mnt_dir ]
+    subprocess.check_call(cmdline)
     assert not os.path.ismount(mnt_dir)
 
     # Give mount process a little while to terminate. Popen.wait(timeout)
@@ -68,3 +83,7 @@ if has_program('valgrind') and has_program('libtool'):
                      'valgrind', '-q', '--' ]
 else:
     base_cmdline = []
+
+
+# Try to use local fusermount
+os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'util'), os.environ['PATH'])
