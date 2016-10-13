@@ -30,4 +30,4 @@ script:
     - ./configure
     - CFLAGS="-fsanitize=address,undefined -g -O1 -Wall -Werror" make
     - doxygen doc/Doxyfile
-    - python -m pytest test/
+    - make test
