@@ -1840,6 +1840,9 @@ static void apply_want_options(struct session_opts *opts,
 
 	LL_ENABLE(opts->async_read, FUSE_CAP_ASYNC_READ);
 	LL_DISABLE(opts->sync_read, FUSE_CAP_ASYNC_READ);
+
+	LL_DISABLE(opts->no_remote_posix_lock, FUSE_CAP_POSIX_LOCKS);
+	LL_DISABLE(opts->no_remote_flock, FUSE_CAP_FLOCK_LOCKS);
 }
 
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
