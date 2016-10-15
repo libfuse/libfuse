@@ -29,11 +29,8 @@ def name_generator(__ctr=[0]):
     __ctr[0] += 1
     return 'testfile_%d' % __ctr[0]
 
-LL_OPTIONS = [ ['-o', 'splice_move,splice_write,splice_read' ],
-               ['-o', 'clone_fd,writeback_cache' ] ]
-
 @pytest.mark.parametrize("name", ('hello', 'hello_ll'))
-@pytest.mark.parametrize("options", LL_OPTIONS)
+@pytest.mark.parametrize("options", ([], ['-o', 'clone_fd']))
 def test_hello(tmpdir, name, options):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
@@ -63,14 +60,13 @@ def test_hello(tmpdir, name, options):
 
 @pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh',
                                   'passthrough_ll'))
-@pytest.mark.parametrize("options", LL_OPTIONS)
-def test_passthrough(tmpdir, name, options):
+def test_passthrough(tmpdir, name):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
-                '-f', mnt_dir ] + options
+                '-f', mnt_dir ]
     if not name.endswith('_ll'):
         cmdline += [ '-o', 'use_ino,readdir_ino,kernel_cache' ]
     mount_process = subprocess.Popen(cmdline)
@@ -146,13 +142,12 @@ def test_poll(tmpdir):
 @pytest.mark.parametrize("name",
                          ('notify_inval_inode',
                           'notify_store_retrieve'))
-@pytest.mark.parametrize("options", LL_OPTIONS)
 @pytest.mark.parametrize("notify", (True, False))
-def test_notify1(tmpdir, name, options, notify):
+def test_notify1(tmpdir, name, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
-                '-f', '--update-interval=1', mnt_dir ] + options
+                '-f', '--update-interval=1', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
     mount_process = subprocess.Popen(cmdline)

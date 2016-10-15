@@ -469,7 +469,6 @@ int main(int argc, char *argv[])
 	if (opts.show_help) {
 		printf("usage: %s [options] <mountpoint>\n\n", argv[0]);
 		fuse_cmdline_help();
-		fuse_lowlevel_help();
 		fuse_mount_help();
 		ret = 0;
 		goto err_out1;

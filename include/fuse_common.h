@@ -205,6 +205,61 @@ struct fuse_conn_info {
 
 struct fuse_session;
 struct fuse_pollhandle;
+struct fuse_conn_info_opts;
+
+/**
+ * This function parses several command-line options that can be used
+ * to override elements of struct fuse_conn_info. The pointer returned
+ * by this function should be passed to the
+ * fuse_apply_conn_info_opts() method by the file system's init()
+ * handler.
+ *
+ * Before using this function, think twice if you really want these
+ * parameters to be adjustable from the command line. In most cases,
+ * they should be determined by the file system internally.
+ *
+ * The following options are recognized:
+ *
+ *   -o max_write=N         sets conn->max_write
+ *   -o max_readahead=N     sets conn->max_readahead
+ *   -o max_background=N    sets conn->max_background
+ *   -o congestion_threshold=N  sets conn->congestion_threshold
+ *   -o async_read          sets FUSE_CAP_ASYNC_READ in conn->want
+ *   -o sync_read           unsets FUSE_CAP_ASYNC_READ in conn->want
+ *   -o atomic_o_trunc      sets FUSE_CAP_ATOMIC_O_TRUNC in conn->want
+ *   -o no_remote_lock      Equivalent to -o no_remote_flock,no_remote_posix_lock
+ *   -o no_remote_flock     Unsets FUSE_CAP_FLOCK_LOCKS in conn->want
+ *   -o no_remote_posix_lock  Unsets FUSE_CAP_POSIX_LOCKS in conn->want
+ *   -o [no_]splice_write     (un-)sets FUSE_CAP_SPLICE_WRITE in conn->want
+ *   -o [no_]splice_move      (un-)sets FUSE_CAP_SPLICE_MOVE in conn->want
+ *   -o [no_]splice_read      (un-)sets FUSE_CAP_SPLICE_READ in conn->want
+ *   -o [no_]auto_inval_data  (un-)sets FUSE_CAP_AUTO_INVAL_DATA in conn->want
+ *   -o readdirplus=no        unsets FUSE_CAP_READDIRPLUS in conn->want
+ *   -o readdirplus=yes       sets FUSE_CAP_READDIRPLUS and unsets
+ *                            FUSE_CAP_READDIRPLUS_AUTO in conn->want
+ *   -o readdirplus=auto      sets FUSE_CAP_READDIRPLUS and
+ *                            FUSE_CAP_READDIRPLUS_AUTO in conn->want
+ *   -o [no_]async_dio        (un-)sets FUSE_CAP_ASYNC_DIO in conn->want
+ *   -o [no_]writeback_cache  (un-)sets FUSE_CAP_WRITEBACK_CACHE in conn->want
+ *   -o time_gran=N           sets conn->time_gran
+ *
+ * Known options will be removed from *args*, unknown options will be
+ * passed through unchanged.
+ *
+ * @param args argument vector (input+output)
+ * @return parsed options
+ **/
+struct fuse_conn_info_opts* fuse_parse_conn_info_opts(struct fuse_args *args);
+
+/**
+ * This function applies the (parsed) parameters in *opts* to the
+ * *conn* pointer. It may modify the following fields: wants,
+ * max_write, max_readahead, congestion_threshold, max_background,
+ * time_gran. A field is only set (or unset) if the corresponding
+ * option has been explicitly set.
+ */
+void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
+			  struct fuse_conn_info *conn);
 
 /**
  * Go into the background

@@ -1628,17 +1628,10 @@ void fuse_lowlevel_version(void);
 void fuse_mount_version(void);
 
 /**
- * Print available low-level options to stdout.
- * These options may be passed to `fuse_session_new()`
- */
-void fuse_lowlevel_help(void);
-
-/**
  * Print available mount options to stdout.
  * These options may be passed to `fuse_session_new()`
  */
 void fuse_mount_help(void);
-
 
 /**
  * Print available options for `fuse_parse_cmdline()`.
@@ -1684,9 +1677,12 @@ int fuse_parse_cmdline(struct fuse_args *args,
  * Returns a session structure suitable for passing to
  * fuse_session_mount() and fuse_session_loop().
  *
- * Known options are defined in `struct fuse_opt fuse_ll_opts[]` and
- * `struct fuse_opt fuse_mount_opts[]`. If not all options are known,
- * an error message is written to stderr and the function returns NULL.
+ * Known options can be listed by fuse_mount_help(). Additionally,
+ * this function accepts the `--debug` option (which is not explicitly
+ * listed by fuse_mount_help()).
+ *
+ * If not all options are known, an error message is written to stderr
+ * and the function returns NULL.
  *
  * @param args argument vector
  * @param op the (low-level) filesystem operations

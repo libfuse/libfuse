@@ -41,34 +41,11 @@ struct fuse_notify_req {
 	struct fuse_notify_req *prev;
 };
 
-struct session_opts {
-	int atomic_o_trunc;
-	int no_remote_posix_lock;
-	int no_remote_flock;
-	int splice_write;
-	int splice_move;
-	int splice_read;
-	int no_splice_write;
-	int no_splice_move;
-	int no_splice_read;
-	int auto_inval_data;
-	int no_auto_inval_data;
-	int no_readdirplus;
-	int no_readdirplus_auto;
-	int async_dio;
-	int no_async_dio;
-	int writeback_cache;
-	int no_writeback_cache;
-	int async_read;
-	int sync_read;
-};
-
 struct fuse_session {
 	char *mountpoint;
 	volatile int exited;
 	int fd;
 	struct mount_opts *mo;
-	struct session_opts opts;
 	int debug;
 	int allow_root;
 	struct fuse_lowlevel_ops op;

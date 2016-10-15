@@ -39,10 +39,19 @@ struct options {
 static const struct fuse_opt option_spec[] = {
     OPTION("writeback_cache", writeback),
     OPTION("--data-size=%d", data_size),
-    FUSE_OPT_KEY("writeback_cache", FUSE_OPT_KEY_KEEP),
     FUSE_OPT_END
 };
 static int got_write;
+
+static void tfs_init (void *userdata, struct fuse_conn_info *conn)
+{
+    (void) userdata;
+
+    if(options.writeback) {
+        assert(conn->capable & FUSE_CAP_WRITEBACK_CACHE);
+        conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+    }
+}
 
 static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
     stbuf->st_ino = ino;
@@ -126,6 +135,7 @@ static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 }
 
 static struct fuse_lowlevel_ops tfs_oper = {
+    .init       = tfs_init,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .open	= tfs_open,

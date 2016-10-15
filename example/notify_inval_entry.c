@@ -287,7 +287,6 @@ int main(int argc, char *argv[]) {
     if (opts.show_help) {
         show_help(argv[0]);
         fuse_cmdline_help();
-        fuse_lowlevel_help();
         fuse_mount_help();
         ret = 0;
         goto err_out1;

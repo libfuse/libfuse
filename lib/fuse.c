@@ -4661,7 +4661,6 @@ struct fuse *fuse_new(struct fuse_args *args,
 
 	if (f->conf.show_help) {
 		fuse_lib_help();
-		fuse_lowlevel_help();
 		fuse_mount_help();
 		/* Defer printing module help until modules
 		   have been loaded */

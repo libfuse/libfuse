@@ -49,6 +49,69 @@ static const struct fuse_opt fuse_helper_opts[] = {
 	FUSE_OPT_END
 };
 
+struct fuse_conn_info_opts {
+	int atomic_o_trunc;
+	int no_remote_posix_lock;
+	int no_remote_flock;
+	int splice_write;
+	int splice_move;
+	int splice_read;
+	int no_splice_write;
+	int no_splice_move;
+	int no_splice_read;
+	int auto_inval_data;
+	int no_auto_inval_data;
+	int no_readdirplus;
+	int no_readdirplus_auto;
+	int async_dio;
+	int no_async_dio;
+	int writeback_cache;
+	int no_writeback_cache;
+	int async_read;
+	int sync_read;
+	unsigned max_write;
+	unsigned max_readahead;
+	unsigned max_background;
+	unsigned congestion_threshold;
+	unsigned time_gran;
+};
+
+#define CONN_OPTION(t, p, v)					\
+	{ t, offsetof(struct fuse_conn_info_opts, p), v }
+static const struct fuse_opt conn_info_opt_spec[] = {
+	CONN_OPTION("max_write=%u", max_write, 0),
+	CONN_OPTION("max_readahead=%u", max_readahead, 0),
+	CONN_OPTION("max_background=%u", max_background, 0),
+	CONN_OPTION("congestion_threshold=%u", congestion_threshold, 0),
+	CONN_OPTION("sync_read", sync_read, 1),
+	CONN_OPTION("async_read", async_read, 1),
+	CONN_OPTION("atomic_o_trunc", atomic_o_trunc, 1),
+	CONN_OPTION("no_remote_lock", no_remote_posix_lock, 1),
+	CONN_OPTION("no_remote_lock", no_remote_flock, 1),
+	CONN_OPTION("no_remote_flock", no_remote_flock, 1),
+	CONN_OPTION("no_remote_posix_lock", no_remote_posix_lock, 1),
+	CONN_OPTION("splice_write", splice_write, 1),
+	CONN_OPTION("no_splice_write", no_splice_write, 1),
+	CONN_OPTION("splice_move", splice_move, 1),
+	CONN_OPTION("no_splice_move", no_splice_move, 1),
+	CONN_OPTION("splice_read", splice_read, 1),
+	CONN_OPTION("no_splice_read", no_splice_read, 1),
+	CONN_OPTION("auto_inval_data", auto_inval_data, 1),
+	CONN_OPTION("no_auto_inval_data", no_auto_inval_data, 1),
+	CONN_OPTION("readdirplus=no", no_readdirplus, 1),
+	CONN_OPTION("readdirplus=yes", no_readdirplus, 0),
+	CONN_OPTION("readdirplus=yes", no_readdirplus_auto, 1),
+	CONN_OPTION("readdirplus=auto", no_readdirplus, 0),
+	CONN_OPTION("readdirplus=auto", no_readdirplus_auto, 0),
+	CONN_OPTION("async_dio", async_dio, 1),
+	CONN_OPTION("no_async_dio", no_async_dio, 1),
+	CONN_OPTION("writeback_cache", writeback_cache, 1),
+	CONN_OPTION("no_writeback_cache", no_writeback_cache, 1),
+	CONN_OPTION("time_gran=%u", time_gran, 0),
+	FUSE_OPT_END
+};
+
+
 void fuse_cmdline_help(void)
 {
 	printf("General options:\n"
@@ -261,4 +324,68 @@ out1:
 	free(opts.mountpoint);
 	fuse_opt_free_args(&args);
 	return res;
+}
+
+
+void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
+			       struct fuse_conn_info *conn)
+{
+	if(opts->max_write)
+		conn->max_write = opts->max_write;
+	if(opts->max_background)
+		conn->max_background = opts->max_background;
+	if(opts->congestion_threshold)
+		conn->congestion_threshold = opts->congestion_threshold;
+	if(opts->time_gran)
+		conn->time_gran = opts->time_gran;
+	if(opts->max_readahead)
+		conn->max_readahead = opts->max_readahead;
+
+#define LL_ENABLE(cond,cap) \
+	if (cond) conn->want |= (cap)
+#define LL_DISABLE(cond,cap) \
+	if (cond) conn->want &= ~(cap)
+
+	LL_ENABLE(opts->splice_read, FUSE_CAP_SPLICE_READ);
+	LL_DISABLE(opts->no_splice_read, FUSE_CAP_SPLICE_READ);
+
+	LL_ENABLE(opts->splice_write, FUSE_CAP_SPLICE_WRITE);
+	LL_DISABLE(opts->no_splice_write, FUSE_CAP_SPLICE_WRITE);
+
+	LL_ENABLE(opts->splice_move, FUSE_CAP_SPLICE_MOVE);
+	LL_DISABLE(opts->no_splice_move, FUSE_CAP_SPLICE_MOVE);
+
+	LL_ENABLE(opts->auto_inval_data, FUSE_CAP_AUTO_INVAL_DATA);
+	LL_DISABLE(opts->no_auto_inval_data, FUSE_CAP_AUTO_INVAL_DATA);
+
+	LL_DISABLE(opts->no_readdirplus, FUSE_CAP_READDIRPLUS);
+	LL_DISABLE(opts->no_readdirplus_auto, FUSE_CAP_READDIRPLUS_AUTO);
+
+	LL_ENABLE(opts->async_dio, FUSE_CAP_ASYNC_DIO);
+	LL_DISABLE(opts->no_async_dio, FUSE_CAP_ASYNC_DIO);
+
+	LL_ENABLE(opts->writeback_cache, FUSE_CAP_WRITEBACK_CACHE);
+	LL_DISABLE(opts->no_writeback_cache, FUSE_CAP_WRITEBACK_CACHE);
+
+	LL_ENABLE(opts->async_read, FUSE_CAP_ASYNC_READ);
+	LL_DISABLE(opts->sync_read, FUSE_CAP_ASYNC_READ);
+
+	LL_DISABLE(opts->no_remote_posix_lock, FUSE_CAP_POSIX_LOCKS);
+	LL_DISABLE(opts->no_remote_flock, FUSE_CAP_FLOCK_LOCKS);
+}
+
+struct fuse_conn_info_opts* fuse_parse_conn_info_opts(struct fuse_args *args)
+{
+	struct fuse_conn_info_opts *opts;
+
+	opts = calloc(1, sizeof(struct fuse_conn_info_opts));
+	if(opts == NULL) {
+		fprintf(stderr, "calloc failed\n");
+		return NULL;
+	}
+	if(fuse_opt_parse(args, opts, conn_info_opt_spec, NULL) == -1) {
+		free(opts);
+		return NULL;
+	}
+	return opts;
 }

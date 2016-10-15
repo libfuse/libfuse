@@ -1809,42 +1809,6 @@ static void do_fallocate(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
-static void apply_want_options(struct session_opts *opts,
-			       struct fuse_conn_info *conn)
-{
-#define LL_ENABLE(cond,cap) \
-	if (cond) conn->want |= (cap)
-#define LL_DISABLE(cond,cap) \
-	if (cond) conn->want &= ~(cap)
-
-	LL_ENABLE(opts->splice_read, FUSE_CAP_SPLICE_READ);
-	LL_DISABLE(opts->no_splice_read, FUSE_CAP_SPLICE_READ);
-
-	LL_ENABLE(opts->splice_write, FUSE_CAP_SPLICE_WRITE);
-	LL_DISABLE(opts->no_splice_write, FUSE_CAP_SPLICE_WRITE);
-
-	LL_ENABLE(opts->splice_move, FUSE_CAP_SPLICE_MOVE);
-	LL_DISABLE(opts->no_splice_move, FUSE_CAP_SPLICE_MOVE);
-
-	LL_ENABLE(opts->auto_inval_data, FUSE_CAP_AUTO_INVAL_DATA);
-	LL_DISABLE(opts->no_auto_inval_data, FUSE_CAP_AUTO_INVAL_DATA);
-
-	LL_DISABLE(opts->no_readdirplus, FUSE_CAP_READDIRPLUS);
-	LL_DISABLE(opts->no_readdirplus_auto, FUSE_CAP_READDIRPLUS_AUTO);
-
-	LL_ENABLE(opts->async_dio, FUSE_CAP_ASYNC_DIO);
-	LL_DISABLE(opts->no_async_dio, FUSE_CAP_ASYNC_DIO);
-
-	LL_ENABLE(opts->writeback_cache, FUSE_CAP_WRITEBACK_CACHE);
-	LL_DISABLE(opts->no_writeback_cache, FUSE_CAP_WRITEBACK_CACHE);
-
-	LL_ENABLE(opts->async_read, FUSE_CAP_ASYNC_READ);
-	LL_DISABLE(opts->sync_read, FUSE_CAP_ASYNC_READ);
-
-	LL_DISABLE(opts->no_remote_posix_lock, FUSE_CAP_POSIX_LOCKS);
-	LL_DISABLE(opts->no_remote_flock, FUSE_CAP_FLOCK_LOCKS);
-}
-
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -1949,18 +1913,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		f->conn.max_write = bufsize;
 
 	f->got_init = 1;
-
-	/* Apply command-line options (so that init() handler has
-	   an idea about user preferences */
-	apply_want_options(&f->opts, &f->conn);
-
-	/* Allow file-system to overwrite defaults */
 	if (f->op.init)
 		f->op.init(f->userdata, &f->conn);
-
-	/* Now explicitly overwrite file-system's decision
-	   with command-line options */
-	apply_want_options(&f->opts, &f->conn);
 
 	/* Always enable big writes, this is superseded
 	   by the max_write option */
@@ -2570,35 +2524,6 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("debug", debug, 1),
 	LL_OPTION("-d", debug, 1),
 	LL_OPTION("allow_root", allow_root, 1),
-	LL_OPTION("max_write=%u", conn.max_write, 0),
-	LL_OPTION("max_readahead=%u", conn.max_readahead, 0),
-	LL_OPTION("max_background=%u", conn.max_background, 0),
-	LL_OPTION("congestion_threshold=%u", conn.congestion_threshold, 0),
-	LL_OPTION("sync_read", opts.sync_read, 1),
-	LL_OPTION("async_read", opts.async_read, 1),
-	LL_OPTION("atomic_o_trunc", opts.atomic_o_trunc, 1),
-	LL_OPTION("no_remote_lock", opts.no_remote_posix_lock, 1),
-	LL_OPTION("no_remote_lock", opts.no_remote_flock, 1),
-	LL_OPTION("no_remote_flock", opts.no_remote_flock, 1),
-	LL_OPTION("no_remote_posix_lock", opts.no_remote_posix_lock, 1),
-	LL_OPTION("splice_write", opts.splice_write, 1),
-	LL_OPTION("no_splice_write", opts.no_splice_write, 1),
-	LL_OPTION("splice_move", opts.splice_move, 1),
-	LL_OPTION("no_splice_move", opts.no_splice_move, 1),
-	LL_OPTION("splice_read", opts.splice_read, 1),
-	LL_OPTION("no_splice_read", opts.no_splice_read, 1),
-	LL_OPTION("auto_inval_data", opts.auto_inval_data, 1),
-	LL_OPTION("no_auto_inval_data", opts.no_auto_inval_data, 1),
-	LL_OPTION("readdirplus=no", opts.no_readdirplus, 1),
-	LL_OPTION("readdirplus=yes", opts.no_readdirplus, 0),
-	LL_OPTION("readdirplus=yes", opts.no_readdirplus_auto, 1),
-	LL_OPTION("readdirplus=auto", opts.no_readdirplus, 0),
-	LL_OPTION("readdirplus=auto", opts.no_readdirplus_auto, 0),
-	LL_OPTION("async_dio", opts.async_dio, 1),
-	LL_OPTION("no_async_dio", opts.no_async_dio, 1),
-	LL_OPTION("writeback_cache", opts.writeback_cache, 1),
-	LL_OPTION("no_writeback_cache", opts.no_writeback_cache, 1),
-	LL_OPTION("time_gran=%u", conn.time_gran, 0),
 	FUSE_OPT_END
 };
 
@@ -2606,30 +2531,6 @@ void fuse_lowlevel_version(void)
 {
 	printf("using FUSE kernel interface version %i.%i\n",
 	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
-}
-
-void fuse_lowlevel_help(void)
-{
-	printf(
-"Low-level options\n"
-"    -o max_write=N         set maximum size of write requests\n"
-"    -o max_readahead=N     set maximum readahead\n"
-"    -o max_background=N    set number of maximum background requests\n"
-"    -o congestion_threshold=N  set kernel's congestion threshold\n"
-"    -o async_read          perform reads asynchronously (default)\n"
-"    -o sync_read           perform reads synchronously\n"
-"    -o atomic_o_trunc      enable atomic open+truncate support\n"
-"    -o no_remote_lock      disable remote file locking\n"
-"    -o no_remote_flock     disable remote file locking (BSD)\n"
-"    -o no_remote_posix_lock  disable remote file locking (POSIX)\n"
-"    -o [no_]splice_write     use splice to write to the fuse device\n"
-"    -o [no_]splice_move      move data while splicing to the fuse device\n"
-"    -o [no_]splice_read      use splice to read from the fuse device\n"
-"    -o [no_]auto_inval_data  use automatic kernel cache invalidation logic\n"
-"    -o readdirplus=S         control readdirplus use (yes|no|auto)\n"
-"    -o [no_]async_dio        asynchronous direct I/O\n"
-"    -o [no_]writeback_cache  asynchronous, buffered writes\n"
-"    -o time_gran=N           time granularity in nsec\n\n");
 }
 
 void fuse_session_destroy(struct fuse_session *se)

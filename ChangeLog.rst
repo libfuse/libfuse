@@ -9,22 +9,32 @@ Unreleased Changes
   the `splice_read` option is now enabled by default. As usual, this
   can be changed in the file system's `init` handler.
 
-* `fuse_session_new` now treats low-level options more consistently:
-  First, options are used to modify FUSE defaults. Second, the file
-  system may inspect and/or adjust the settings in its `init`
-  handler. Third, command line arguments take precedence over any
-  modifications made by the `init` handler.
+* The treatment of low-level options has been made more consistent:
 
-* Removed the `async_read` field from `struct fuse_conn_info`. To
-  determine if the kernel supports asynchronous reads, file systems
-  should check the `FUSE_CAP_ASYNC_READ` bit of the `capable`
-  field. To enable/disable asynchronous reads, file systems should set
-  the flag in the `wanted` field.
+  Options that can be set in the init() handler (via the
+  fuse_conn_info parameter) can now be set only here,
+  i.e. fuse_session_new() no longer accepts arguments that change the
+  fuse_conn_info object before or after the call do init(). As a side
+  effect, this removes the ambiguity where some options can be
+  overwritten by init(), while others overwrite the choices made by
+  init().
+
+  For file systems that wish to offer command line options for these
+  settings, the new fuse_parse_conn_info_opts() and
+  fuse_apply_conn_info_opts() functions are available.
+
+  Consequently, the fuse_lowlevel_help() method has been dropped.
+
+* The `async_read` field in `struct fuse_conn_info` has been
+  removed. To determine if the kernel supports asynchronous reads,
+  file systems should check the `FUSE_CAP_ASYNC_READ` bit of the
+  `capable` field. To enable/disable asynchronous reads, file systems
+  should set the flag in the `wanted` field.
 
 * The `fuse_parse_cmdline` function no longer prints out help when the
   ``--verbose`` or ``--help`` flags are given. This needs to be done
-  by the file system (e.g. using the `fuse_cmdline_help()`,
-  `fuse_lowlevel_help()` and `fuse_mount_help()` functions).
+  by the file system (e.g. using the `fuse_cmdline_help()` and
+  `fuse_mount_help()` functions).
 
 * Added ``example/cuse_client.c`` to test ``example/cuse.c``.
 
