@@ -70,8 +70,6 @@ create the `configure` script.
 You'll also need a fuse kernel module (Linux kernels 2.6.14 or later
 contain FUSE support).
 
-For more details see the file `INSTALL`
-
 Security implications
 ---------------------
 
@@ -97,8 +95,8 @@ Building your own filesystem
 ------------------------------
 
 FUSE comes with several example file systems in the `examples`
-directory. For example, the *fusexmp* example mirrors the contents of
-the root directory under the mountpoint. Start from there and adapt
+directory. For example, the *passthrough* examples mirror the contents
+of the root directory under the mountpoint. Start from there and adapt
 the code!
 
 The documentation of the API functions and necessary callbacks is
