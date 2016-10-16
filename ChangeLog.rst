@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* The ``-o large_read`` mount option has been dropped. Hopefully no
+  one uses a Linux 2.4 kernel anymore.
+
 * The chmod, chown, truncate, utimens and getattr handlers of the
   high-level API now all receive an additional struct fuse_file_info
   pointer. This pointer is NULL if the file is not currently open.

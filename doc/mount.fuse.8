@@ -33,8 +33,6 @@ This option disables flushing the cache of the file contents on every \fBopen\fP
 \fBauto_cache\fP
 This option enables automatic flushing of the data cache on \fBopen\fP(2). The cache will only be flushed if the modification time or the size of the file has changed.
 .TP
-\fBlarge_read\fP
-Issue large read requests.  This can improve performance for some filesystems, but can also degrade performance. This option is only useful on 2.4.X kernels, as on 2.6 kernels requests size is automatically determined for optimum performance.
 .TP
 \fBdirect_io\fP
 This option disables the use of page cache (file content cache) in the kernel for this filesystem. This has several affects:

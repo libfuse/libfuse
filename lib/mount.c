@@ -93,7 +93,6 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("blkdev",			KEY_FUSERMOUNT_OPT),
 	FUSE_OPT_KEY("fsname=",			KEY_FUSERMOUNT_OPT),
 	FUSE_OPT_KEY("subtype=",		KEY_SUBTYPE_OPT),
-	FUSE_OPT_KEY("large_read",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("blksize=",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("default_permissions",	KEY_KERN_OPT),
 	FUSE_OPT_KEY("context=",		KEY_KERN_OPT),
@@ -130,7 +129,6 @@ void fuse_mount_help(void)
 "    -o default_permissions enable permission checking by kernel\n"
 "    -o fsname=NAME         set filesystem name\n"
 "    -o subtype=NAME        set filesystem type\n"
-"    -o large_read          issue large read requests (2.4 only)\n"
 "    -o max_read=N          set maximum size of read requests\n\n");
 }
 
