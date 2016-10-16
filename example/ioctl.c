@@ -83,8 +83,10 @@ static int fioc_file_type(const char *path)
 	return FIOC_NONE;
 }
 
-static int fioc_getattr(const char *path, struct stat *stbuf)
+static int fioc_getattr(const char *path, struct stat *stbuf,
+			struct fuse_file_info *fi)
 {
+	(void) fi;
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
 	stbuf->st_atime = stbuf->st_mtime = time(NULL);
@@ -160,8 +162,10 @@ static int fioc_write(const char *path, const char *buf, size_t size,
 	return fioc_do_write(buf, size, offset);
 }
 
-static int fioc_truncate(const char *path, off_t size)
+static int fioc_truncate(const char *path, off_t size,
+			 struct fuse_file_info *fi)
 {
+	(void) fi;
 	if (fioc_file_type(path) != FIOC_FILE)
 		return -EINVAL;
 

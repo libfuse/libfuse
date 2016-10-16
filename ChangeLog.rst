@@ -1,6 +1,13 @@
 Unreleased Changes
 ==================
 
+* The chmod, chown, truncate, utimens and getattr handlers of the
+  high-level API now all receive an additional struct fuse_file_info
+  pointer. This pointer is NULL if the file is not currently open.
+
+  The fgetattr and ftruncate handlers have become obsolote and have
+  been removed.
+
 * The `fuse_session_new` function no longer accepts the ``-o
   clone_fd`` option. Instead, this has become a parameter of the
   `fuse_session_loop_mt` and ``fuse_loop_mt` functions.

@@ -48,8 +48,10 @@
 #include <sys/xattr.h>
 #endif
 
-static int xmp_getattr(const char *path, struct stat *stbuf)
+static int xmp_getattr(const char *path, struct stat *stbuf,
+		       struct fuse_file_info *fi)
 {
+	(void) fi;
 	int res;
 
 	res = lstat(path, stbuf);
@@ -200,8 +202,10 @@ static int xmp_link(const char *from, const char *to)
 	return 0;
 }
 
-static int xmp_chmod(const char *path, mode_t mode)
+static int xmp_chmod(const char *path, mode_t mode,
+		     struct fuse_file_info *fi)
 {
+	(void) fi;
 	int res;
 
 	res = chmod(path, mode);
@@ -211,8 +215,10 @@ static int xmp_chmod(const char *path, mode_t mode)
 	return 0;
 }
 
-static int xmp_chown(const char *path, uid_t uid, gid_t gid)
+static int xmp_chown(const char *path, uid_t uid, gid_t gid,
+		     struct fuse_file_info *fi)
 {
+	(void) fi;
 	int res;
 
 	res = lchown(path, uid, gid);
@@ -222,8 +228,10 @@ static int xmp_chown(const char *path, uid_t uid, gid_t gid)
 	return 0;
 }
 
-static int xmp_truncate(const char *path, off_t size)
+static int xmp_truncate(const char *path, off_t size,
+			struct fuse_file_info *fi)
 {
+	(void) fi;
 	int res;
 
 	res = truncate(path, size);
@@ -234,8 +242,10 @@ static int xmp_truncate(const char *path, off_t size)
 }
 
 #ifdef HAVE_UTIMENSAT
-static int xmp_utimens(const char *path, const struct timespec ts[2])
+static int xmp_utimens(const char *path, const struct timespec ts[2],
+		       struct fuse_file_info *fi)
 {
+	(void) fi;
 	int res;
 
 	/* don't use utime/utimes since they follow symlinks */

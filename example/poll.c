@@ -64,8 +64,10 @@ static int fsel_path_index(const char *path)
 	return ch <= '9' ? ch - '0' : ch - 'A' + 10;
 }
 
-static int fsel_getattr(const char *path, struct stat *stbuf)
+static int fsel_getattr(const char *path, struct stat *stbuf,
+			struct fuse_file_info *fi)
 {
+	(void) fi;
 	int idx;
 
 	memset(stbuf, 0, sizeof(struct stat));

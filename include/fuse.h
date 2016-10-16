@@ -105,7 +105,13 @@ struct fuse_operations {
 	 * the following operations:
 	 *
 	 * read, write, flush, release, fsync, readdir, releasedir,
-	 * fsyncdir, ftruncate, fgetattr, lock, ioctl and poll
+	 * fsyncdir, lock, ioctl and poll
+	 *
+	 * For the following operations, the path will not be
+	 * calculated only if the file is currently open (i.e., the
+	 * struct fuse_file_info argument is non-NULL):
+	 *
+	 * truncate, getattr, chmod, chown, utimens
 	 *
 	 * If this flag is set then the path will not be calculaged even if the
 	 * file wasn't unlinked.  However the path can still be non-NULL if it
@@ -121,10 +127,12 @@ struct fuse_operations {
 	/** Get file attributes.
 	 *
 	 * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
-	 * ignored.	 The 'st_ino' field is ignored except if the 'use_ino'
+	 * ignored. The 'st_ino' field is ignored except if the 'use_ino'
 	 * mount option is given.
+	 *
+	 * *fi* will be NULL if the file is not currenly opened.
 	 */
-	int (*getattr) (const char *, struct stat *);
+	int (*getattr) (const char *, struct stat *, struct fuse_file_info *fi);
 
 	/** Read the target of a symbolic link
 	 *
@@ -167,14 +175,23 @@ struct fuse_operations {
 	/** Create a hard link to a file */
 	int (*link) (const char *, const char *);
 
-	/** Change the permission bits of a file */
-	int (*chmod) (const char *, mode_t);
+	/** Change the permission bits of a file
+	 *
+	 * *fi* will be NULL if the file is not currenly opened.
+	 */
+	int (*chmod) (const char *, mode_t, struct fuse_file_info *fi);
 
-	/** Change the owner and group of a file */
-	int (*chown) (const char *, uid_t, gid_t);
+	/** Change the owner and group of a file
+	 *
+	 * *fi* will be NULL if the file is not currenly opened.
+	 */
+	int (*chown) (const char *, uid_t, gid_t, struct fuse_file_info *fi);
 
-	/** Change the size of a file */
-	int (*truncate) (const char *, off_t);
+	/** Change the size of a file
+	 *
+	 * *fi* will be NULL if the file is not currenly opened.
+	 */
+	int (*truncate) (const char *, off_t, struct fuse_file_info *fi);
 
 	/** File open operation
 	 *
@@ -388,34 +405,6 @@ struct fuse_operations {
 	int (*create) (const char *, mode_t, struct fuse_file_info *);
 
 	/**
-	 * Change the size of an open file
-	 *
-	 * This method is called instead of the truncate() method if the
-	 * truncation was invoked from an ftruncate() system call.
-	 *
-	 * If this method is not implemented or under Linux kernel
-	 * versions earlier than 2.6.15, the truncate() method will be
-	 * called instead.
-	 *
-	 * Introduced in version 2.5
-	 */
-	int (*ftruncate) (const char *, off_t, struct fuse_file_info *);
-
-	/**
-	 * Get attributes from an open file
-	 *
-	 * This method is called instead of the getattr() method if the
-	 * file information is available.
-	 *
-	 * Currently this is only called after the create() method if that
-	 * is implemented (see above).  Later it may be called for
-	 * invocations of fstat() too.
-	 *
-	 * Introduced in version 2.5
-	 */
-	int (*fgetattr) (const char *, struct stat *, struct fuse_file_info *);
-
-	/**
 	 * Perform POSIX file locking operation
 	 *
 	 * The cmd argument will be either F_GETLK, F_SETLK or F_SETLKW.
@@ -457,11 +446,14 @@ struct fuse_operations {
 	 * This supersedes the old utime() interface.  New applications
 	 * should use this.
 	 *
+	 * *fi* will be NULL if the file is not currenly opened.
+	 *
 	 * See the utimensat(2) man page for details.
 	 *
 	 * Introduced in version 2.6
 	 */
-	int (*utimens) (const char *, const struct timespec tv[2]);
+	 int (*utimens) (const char *, const struct timespec tv[2],
+			 struct fuse_file_info *fi);
 
 	/**
 	 * Map block index within file to block index within device
@@ -849,9 +841,8 @@ struct fuse_fs;
  * fuse_fs_releasedir and fuse_fs_statfs, which return 0.
  */
 
-int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf);
-int fuse_fs_fgetattr(struct fuse_fs *fs, const char *path, struct stat *buf,
-		     struct fuse_file_info *fi);
+int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf,
+		    struct fuse_file_info *fi);
 int fuse_fs_rename(struct fuse_fs *fs, const char *oldpath,
 		   const char *newpath, unsigned int flags);
 int fuse_fs_unlink(struct fuse_fs *fs, const char *path);
@@ -893,13 +884,14 @@ int fuse_fs_lock(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi, int cmd, struct flock *lock);
 int fuse_fs_flock(struct fuse_fs *fs, const char *path,
 		  struct fuse_file_info *fi, int op);
-int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode);
-int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid, gid_t gid);
-int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size);
-int fuse_fs_ftruncate(struct fuse_fs *fs, const char *path, off_t size,
-		      struct fuse_file_info *fi);
+int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode,
+		  struct fuse_file_info *fi);
+int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid, gid_t gid,
+		  struct fuse_file_info *fi);
+int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size,
+		     struct fuse_file_info *fi);
 int fuse_fs_utimens(struct fuse_fs *fs, const char *path,
-		    const struct timespec tv[2]);
+		    const struct timespec tv[2], struct fuse_file_info *fi);
 int fuse_fs_access(struct fuse_fs *fs, const char *path, int mask);
 int fuse_fs_readlink(struct fuse_fs *fs, const char *path, char *buf,
 		     size_t len);

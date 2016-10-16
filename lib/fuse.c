@@ -1537,34 +1537,15 @@ static inline void fuse_prepare_interrupt(struct fuse *f, fuse_req_t req,
 		fuse_do_prepare_interrupt(req, d);
 }
 
-int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf)
+int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf,
+		    struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.getattr) {
 		if (fs->debug)
-			fprintf(stderr, "getattr %s\n", path);
-
-		return fs->op.getattr(path, buf);
-	} else {
-		return -ENOSYS;
-	}
-}
-
-int fuse_fs_fgetattr(struct fuse_fs *fs, const char *path, struct stat *buf,
-		     struct fuse_file_info *fi)
-{
-	fuse_get_context()->private_data = fs->user_data;
-	if (fs->op.fgetattr) {
-		if (fs->debug)
-			fprintf(stderr, "fgetattr[%llu] %s\n",
+			fprintf(stderr, "getattr[%llu] %s\n",
 				(unsigned long long) fi->fh, path);
-
-		return fs->op.fgetattr(path, buf, fi);
-	} else if (path && fs->op.getattr) {
-		if (fs->debug)
-			fprintf(stderr, "getattr %s\n", path);
-
-		return fs->op.getattr(path, buf);
+		return fs->op.getattr(path, buf, fi);
 	} else {
 		return -ENOSYS;
 	}
@@ -2023,67 +2004,50 @@ int fuse_fs_flock(struct fuse_fs *fs, const char *path,
 	}
 }
 
-int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid, gid_t gid)
+int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid,
+		  gid_t gid, struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.chown) {
 		if (fs->debug)
-			fprintf(stderr, "chown %s %lu %lu\n", path,
+			fprintf(stderr, "chown[%llu] %s %lu %lu\n",
+				(unsigned long long) fi->fh, path,
 				(unsigned long) uid, (unsigned long) gid);
 
-		return fs->op.chown(path, uid, gid);
+		return fs->op.chown(path, uid, gid, fi);
 	} else {
 		return -ENOSYS;
 	}
 }
 
-int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size)
+int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size,
+		      struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.truncate) {
 		if (fs->debug)
-			fprintf(stderr, "truncate %s %llu\n", path,
-				(unsigned long long) size);
-
-		return fs->op.truncate(path, size);
-	} else {
-		return -ENOSYS;
-	}
-}
-
-int fuse_fs_ftruncate(struct fuse_fs *fs, const char *path, off_t size,
-		      struct fuse_file_info *fi)
-{
-	fuse_get_context()->private_data = fs->user_data;
-	if (fs->op.ftruncate) {
-		if (fs->debug)
-			fprintf(stderr, "ftruncate[%llu] %llu\n",
+			fprintf(stderr, "truncate[%llu] %llu\n",
 				(unsigned long long) fi->fh,
 				(unsigned long long) size);
 
-		return fs->op.ftruncate(path, size, fi);
-	} else if (path && fs->op.truncate) {
-		if (fs->debug)
-			fprintf(stderr, "truncate %s %llu\n", path,
-				(unsigned long long) size);
-
-		return fs->op.truncate(path, size);
+		return fs->op.truncate(path, size, fi);
 	} else {
 		return -ENOSYS;
 	}
 }
 
 int fuse_fs_utimens(struct fuse_fs *fs, const char *path,
-		    const struct timespec tv[2])
+		    const struct timespec tv[2], struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.utimens) {
 		if (fs->debug)
-			fprintf(stderr, "utimens %s %li.%09lu %li.%09lu\n",
-				path, tv[0].tv_sec, tv[0].tv_nsec,
+			fprintf(stderr, "utimens[%llu] %s %li.%09lu %li.%09lu\n",
+				(unsigned long long) fi->fh, path,
+				tv[0].tv_sec, tv[0].tv_nsec,
 				tv[1].tv_sec, tv[1].tv_nsec);
 
-		return fs->op.utimens(path, tv);
+		return fs->op.utimens(path, tv, fi);
 	} else {
 		return -ENOSYS;
 	}
@@ -2318,7 +2282,7 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 			break;
 
 		memset(&buf, 0, sizeof(buf));
-		res = fuse_fs_getattr(f->fs, newpath, &buf);
+		res = fuse_fs_getattr(f->fs, newpath, &buf, NULL);
 		if (res == -ENOENT)
 			break;
 		free(newpath);
@@ -2409,10 +2373,7 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid,
 	int res;
 
 	memset(e, 0, sizeof(struct fuse_entry_param));
-	if (fi)
-		res = fuse_fs_fgetattr(f->fs, path, &e->attr, fi);
-	else
-		res = fuse_fs_getattr(f->fs, path, &e->attr);
+	res = fuse_fs_getattr(f->fs, path, &e->attr, fi);
 	if (res == 0) {
 		res = do_lookup(f, nodeid, name, e);
 		if (res == 0 && f->conf.debug) {
@@ -2652,17 +2613,14 @@ static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 
 	memset(&buf, 0, sizeof(buf));
 
-	if (fi != NULL && f->fs->op.fgetattr)
+	if (fi != NULL)
 		err = get_path_nullok(f, ino, &path);
 	else
 		err = get_path(f, ino, &path);
 	if (!err) {
 		struct fuse_intr_data d;
 		fuse_prepare_interrupt(f, req, &d);
-		if (fi)
-			err = fuse_fs_fgetattr(f->fs, path, &buf, fi);
-		else
-			err = fuse_fs_getattr(f->fs, path, &buf);
+		err = fuse_fs_getattr(f->fs, path, &buf, fi);
 		fuse_finish_interrupt(f, req, &d);
 		free_path(f, ino, path);
 	}
@@ -2682,11 +2640,12 @@ static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 		reply_err(req, err);
 }
 
-int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode)
+int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode,
+		  struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.chmod)
-		return fs->op.chmod(path, mode);
+		return fs->op.chmod(path, mode, fi);
 	else
 		return -ENOSYS;
 }
@@ -2700,8 +2659,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	int err;
 
 	memset(&buf, 0, sizeof(buf));
-	if (valid == FUSE_SET_ATTR_SIZE && fi != NULL &&
-	    f->fs->op.ftruncate && f->fs->op.fgetattr)
+	if (fi != NULL)
 		err = get_path_nullok(f, ino, &path);
 	else
 		err = get_path(f, ino, &path);
@@ -2710,21 +2668,17 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		fuse_prepare_interrupt(f, req, &d);
 		err = 0;
 		if (!err && (valid & FUSE_SET_ATTR_MODE))
-			err = fuse_fs_chmod(f->fs, path, attr->st_mode);
+			err = fuse_fs_chmod(f->fs, path, attr->st_mode, fi);
 		if (!err && (valid & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID))) {
 			uid_t uid = (valid & FUSE_SET_ATTR_UID) ?
 				attr->st_uid : (uid_t) -1;
 			gid_t gid = (valid & FUSE_SET_ATTR_GID) ?
 				attr->st_gid : (gid_t) -1;
-			err = fuse_fs_chown(f->fs, path, uid, gid);
+			err = fuse_fs_chown(f->fs, path, uid, gid, fi);
 		}
 		if (!err && (valid & FUSE_SET_ATTR_SIZE)) {
-			if (fi)
-				err = fuse_fs_ftruncate(f->fs, path,
-							attr->st_size, fi);
-			else
-				err = fuse_fs_truncate(f->fs, path,
-						       attr->st_size);
+			err = fuse_fs_truncate(f->fs, path,
+					       attr->st_size, fi);
 		}
 #ifdef HAVE_UTIMENSAT
 		if (!err &&
@@ -2746,7 +2700,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			else if (valid & FUSE_SET_ATTR_MTIME)
 				tv[1] = attr->st_mtim;
 
-			err = fuse_fs_utimens(f->fs, path, tv);
+			err = fuse_fs_utimens(f->fs, path, tv, fi);
 		} else
 #endif
 		if (!err &&
@@ -2757,13 +2711,10 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			tv[0].tv_nsec = ST_ATIM_NSEC(attr);
 			tv[1].tv_sec = attr->st_mtime;
 			tv[1].tv_nsec = ST_MTIM_NSEC(attr);
-			err = fuse_fs_utimens(f->fs, path, tv);
+			err = fuse_fs_utimens(f->fs, path, tv, fi);
 		}
 		if (!err) {
-			if (fi)
-				err = fuse_fs_fgetattr(f->fs, path, &buf, fi);
-			else
-				err = fuse_fs_getattr(f->fs, path, &buf);
+			err = fuse_fs_getattr(f->fs, path, &buf, fi);
 		}
 		fuse_finish_interrupt(f, req, &d);
 		free_path(f, ino, path);
@@ -3116,7 +3067,7 @@ static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
 			struct stat stbuf;
 			int err;
 			pthread_mutex_unlock(&f->lock);
-			err = fuse_fs_fgetattr(f->fs, path, &stbuf, fi);
+			err = fuse_fs_getattr(f->fs, path, &stbuf, fi);
 			pthread_mutex_lock(&f->lock);
 			if (!err)
 				update_stat(node, &stbuf);

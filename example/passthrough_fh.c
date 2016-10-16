@@ -52,25 +52,17 @@
 #endif
 #include <sys/file.h> /* flock(2) */
 
-static int xmp_getattr(const char *path, struct stat *stbuf)
-{
-	int res;
-
-	res = lstat(path, stbuf);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int xmp_fgetattr(const char *path, struct stat *stbuf,
+static int xmp_getattr(const char *path, struct stat *stbuf,
 			struct fuse_file_info *fi)
 {
 	int res;
 
 	(void) path;
 
-	res = fstat(fi->fh, stbuf);
+	if(fi)
+		res = fstat(fi->fh, stbuf);
+	else
+		res = lstat(path, stbuf);
 	if (res == -1)
 		return -errno;
 
@@ -272,47 +264,46 @@ static int xmp_link(const char *from, const char *to)
 	return 0;
 }
 
-static int xmp_chmod(const char *path, mode_t mode)
+static int xmp_chmod(const char *path, mode_t mode,
+		     struct fuse_file_info *fi)
 {
 	int res;
 
-	res = chmod(path, mode);
+	if(fi)
+		res = fchmod(fi->fh, mode);
+	else
+		res = chmod(path, mode);
 	if (res == -1)
 		return -errno;
 
 	return 0;
 }
 
-static int xmp_chown(const char *path, uid_t uid, gid_t gid)
+static int xmp_chown(const char *path, uid_t uid, gid_t gid,
+		     struct fuse_file_info *fi)
 {
 	int res;
 
-	res = lchown(path, uid, gid);
+	if (fi)
+		res = fchown(fi->fh, uid, gid);
+	else
+		res = lchown(path, uid, gid);
 	if (res == -1)
 		return -errno;
 
 	return 0;
 }
 
-static int xmp_truncate(const char *path, off_t size)
-{
-	int res;
-
-	res = truncate(path, size);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int xmp_ftruncate(const char *path, off_t size,
+static int xmp_truncate(const char *path, off_t size,
 			 struct fuse_file_info *fi)
 {
 	int res;
 
-	(void) path;
+	if(fi)
+		res = ftruncate(fi->fh, size);
+	else
+		res = truncate(path, size);
 
-	res = ftruncate(fi->fh, size);
 	if (res == -1)
 		return -errno;
 
@@ -320,12 +311,16 @@ static int xmp_ftruncate(const char *path, off_t size,
 }
 
 #ifdef HAVE_UTIMENSAT
-static int xmp_utimens(const char *path, const struct timespec ts[2])
+static int xmp_utimens(const char *path, const struct timespec ts[2],
+		       struct fuse_file_info *fi)
 {
 	int res;
 
 	/* don't use utime/utimes since they follow symlinks */
-	res = utimensat(0, path, ts, AT_SYMLINK_NOFOLLOW);
+	if (fi)
+		res = futimens(fi->fh, ts);
+	else
+		res = utimensat(0, path, ts, AT_SYMLINK_NOFOLLOW);
 	if (res == -1)
 		return -errno;
 
@@ -550,7 +545,6 @@ static int xmp_flock(const char *path, struct fuse_file_info *fi, int op)
 
 static struct fuse_operations xmp_oper = {
 	.getattr	= xmp_getattr,
-	.fgetattr	= xmp_fgetattr,
 	.access		= xmp_access,
 	.readlink	= xmp_readlink,
 	.opendir	= xmp_opendir,
@@ -566,7 +560,6 @@ static struct fuse_operations xmp_oper = {
 	.chmod		= xmp_chmod,
 	.chown		= xmp_chown,
 	.truncate	= xmp_truncate,
-	.ftruncate	= xmp_ftruncate,
 #ifdef HAVE_UTIMENSAT
 	.utimens	= xmp_utimens,
 #endif

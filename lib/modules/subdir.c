@@ -52,26 +52,14 @@ static int subdir_addpath(struct subdir *d, const char *path, char **newpathp)
 	return 0;
 }
 
-static int subdir_getattr(const char *path, struct stat *stbuf)
+static int subdir_getattr(const char *path, struct stat *stbuf,
+			  struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
 	int err = subdir_addpath(d, path, &newpath);
 	if (!err) {
-		err = fuse_fs_getattr(d->next, newpath, stbuf);
-		free(newpath);
-	}
-	return err;
-}
-
-static int subdir_fgetattr(const char *path, struct stat *stbuf,
-			   struct fuse_file_info *fi)
-{
-	struct subdir *d = subdir_get();
-	char *newpath;
-	int err = subdir_addpath(d, path, &newpath);
-	if (!err) {
-		err = fuse_fs_fgetattr(d->next, newpath, stbuf, fi);
+		err = fuse_fs_getattr(d->next, newpath, stbuf, fi);
 		free(newpath);
 	}
 	return err;
@@ -301,62 +289,53 @@ static int subdir_link(const char *from, const char *to)
 	return err;
 }
 
-static int subdir_chmod(const char *path, mode_t mode)
+static int subdir_chmod(const char *path, mode_t mode,
+			struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
 	int err = subdir_addpath(d, path, &newpath);
 	if (!err) {
-		err = fuse_fs_chmod(d->next, newpath, mode);
+		err = fuse_fs_chmod(d->next, newpath, mode, fi);
 		free(newpath);
 	}
 	return err;
 }
 
-static int subdir_chown(const char *path, uid_t uid, gid_t gid)
+static int subdir_chown(const char *path, uid_t uid, gid_t gid,
+			struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
 	int err = subdir_addpath(d, path, &newpath);
 	if (!err) {
-		err = fuse_fs_chown(d->next, newpath, uid, gid);
+		err = fuse_fs_chown(d->next, newpath, uid, gid, fi);
 		free(newpath);
 	}
 	return err;
 }
 
-static int subdir_truncate(const char *path, off_t size)
+static int subdir_truncate(const char *path, off_t size,
+			   struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
 	int err = subdir_addpath(d, path, &newpath);
 	if (!err) {
-		err = fuse_fs_truncate(d->next, newpath, size);
+		err = fuse_fs_truncate(d->next, newpath, size, fi);
 		free(newpath);
 	}
 	return err;
 }
 
-static int subdir_ftruncate(const char *path, off_t size,
-			    struct fuse_file_info *fi)
+static int subdir_utimens(const char *path, const struct timespec ts[2],
+			  struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
 	int err = subdir_addpath(d, path, &newpath);
 	if (!err) {
-		err = fuse_fs_ftruncate(d->next, newpath, size, fi);
-		free(newpath);
-	}
-	return err;
-}
-
-static int subdir_utimens(const char *path, const struct timespec ts[2])
-{
-	struct subdir *d = subdir_get();
-	char *newpath;
-	int err = subdir_addpath(d, path, &newpath);
-	if (!err) {
-		err = fuse_fs_utimens(d->next, newpath, ts);
+		err = fuse_fs_utimens(d->next, newpath, ts, fi);
 		free(newpath);
 	}
 	return err;
@@ -582,7 +561,6 @@ static const struct fuse_operations subdir_oper = {
 	.destroy	= subdir_destroy,
 	.init		= subdir_init,
 	.getattr	= subdir_getattr,
-	.fgetattr	= subdir_fgetattr,
 	.access		= subdir_access,
 	.readlink	= subdir_readlink,
 	.opendir	= subdir_opendir,
@@ -598,7 +576,6 @@ static const struct fuse_operations subdir_oper = {
 	.chmod		= subdir_chmod,
 	.chown		= subdir_chown,
 	.truncate	= subdir_truncate,
-	.ftruncate	= subdir_ftruncate,
 	.utimens	= subdir_utimens,
 	.create		= subdir_create,
 	.open		= subdir_open,

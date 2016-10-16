@@ -68,8 +68,10 @@ static const struct fuse_opt option_spec[] = {
 	FUSE_OPT_END
 };
 
-static int hello_getattr(const char *path, struct stat *stbuf)
+static int hello_getattr(const char *path, struct stat *stbuf,
+			 struct fuse_file_info *fi)
 {
+	(void) fi;
 	int res = 0;
 
 	memset(stbuf, 0, sizeof(struct stat));
