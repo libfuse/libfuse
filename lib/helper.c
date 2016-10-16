@@ -114,14 +114,13 @@ static const struct fuse_opt conn_info_opt_spec[] = {
 
 void fuse_cmdline_help(void)
 {
-	printf("General options:\n"
-	       "    -h   --help            print help\n"
+	printf("    -h   --help            print help\n"
 	       "    -V   --version         print version\n"
 	       "    -d   -o debug          enable debug output (implies -f)\n"
 	       "    -f                     foreground operation\n"
 	       "    -s                     disable multi-threaded operation\n"
 	       "    -o clone_fd            use separate fuse device fd for each thread\n"
-	       "\n");
+	       "                           (may improve performance)\n");
 }
 
 static int fuse_helper_opt_proc(void *data, const char *arg, int key,
@@ -270,6 +269,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		if(args.argv[0] != '\0')
 			printf("usage: %s [options] <mountpoint>\n\n",
 			       args.argv[0]);
+		printf("FUSE options:\n");
 		fuse_cmdline_help();
 		if (fuse_opt_add_arg(&args, "--help") == -1) {
 			res = 1;

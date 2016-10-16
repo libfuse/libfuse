@@ -615,8 +615,8 @@ struct fuse_context {
  * passing NULL as the processing function). That way, the remaining
  * options can be passed directly to fuse_main().
  *
- * To get a list of the options recognized by fuse_main(), look
- * at the output when running with ``--help``.
+ * fuse_main() accepts all options that can be passed to
+ * fuse_parse_cmdline(), fuse_new(), or fuse_session_new().
  *
  * Normally, fuse_main() includes a basic ``usage: `` message in the
  * --help output. However, if argv[0] is an empty string, the usage
@@ -648,10 +648,31 @@ struct fuse_context {
 /**
  * Create a new FUSE filesystem.
  *
- * Known options are defined in `struct fuse_opt fuse_lib_opts[]`,
- * `struct fuse_opt fuse_mount_opts[]`, and `struct fuse_opt
- * fuse_ll_opts[]`.  If not all options are known, an error message is
- * written to stderr and the function returns NULL.
+ * This function accepts any option that can be passed to
+ * fuse_session_new(), as well as the following (high-level API
+ * specific) options:
+ *
+ *   -o hard_remove         immediate removal (don't hide files)
+ *   -o use_ino             let filesystem set inode numbers
+ *   -o readdir_ino         try to fill in d_ino in readdir
+ *   -o direct_io           use direct I/O
+ *   -o kernel_cache        cache files in kernel
+ *   -o [no]auto_cache      enable caching based on modification times (off)
+ *   -o umask=M             set file permissions (octal)
+ *   -o uid=N               set file owner
+ *   -o gid=N               set file group
+ *   -o entry_timeout=T     cache timeout for names (1.0s)
+ *   -o negative_timeout=T  cache timeout for deleted names (0.0s)
+ *   -o attr_timeout=T      cache timeout for attributes (1.0s)
+ *   -o ac_attr_timeout=T   auto cache timeout for attributes (attr_timeout)
+ *   -o noforget            never forget cached inodes
+ *   -o remember=T          remember cached inodes for T seconds (0s)
+ *   -o intr                allow requests to be interrupted
+ *   -o intr_signal=NUM     signal to send on interrupt (%i)
+ *   -o modules=M1[:M2...]  names of modules to push onto filesystem stack
+ *
+ * If an unknown option is passed in, an error message is written to
+ * stderr and the function returns NULL.
  *
  * If the --help option is specified, the function writes a help text
  * to stdout and returns NULL.

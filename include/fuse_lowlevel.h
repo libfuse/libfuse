@@ -1618,20 +1618,16 @@ int fuse_req_interrupted(fuse_req_t req);
  * ----------------------------------------------------------- */
 
 /**
- * Print FUSE library version to stdout.
+ * Print low-level version information to stdout.
  */
 void fuse_lowlevel_version(void);
 
 /**
- * Print FUSE mount (fusermount) version stdout.
+ * Print available low-level options to stdout. This is not an
+ * exhaustive list, but includes only those options that may be of
+ * interest to an end-user of a file system.
  */
-void fuse_mount_version(void);
-
-/**
- * Print available mount options to stdout.
- * These options may be passed to `fuse_session_new()`
- */
-void fuse_mount_help(void);
+void fuse_lowlevel_help(void);
 
 /**
  * Print available options for `fuse_parse_cmdline()`.
@@ -1677,9 +1673,16 @@ int fuse_parse_cmdline(struct fuse_args *args,
  * Returns a session structure suitable for passing to
  * fuse_session_mount() and fuse_session_loop().
  *
- * Known options can be listed by fuse_mount_help(). Additionally,
- * this function accepts the `--debug` option (which is not explicitly
- * listed by fuse_mount_help()).
+ * Under Linux, this function accepts the following options:
+ *
+ *  -d, --debug            enable debugging output
+ *  -o allow_other         allow access to other users
+ *  -o allow_root          allow access to root
+ *  -o auto_unmount        auto unmount on process termination
+ *  -o default_permissions enable permission checking by kernel
+ *  -o fsname=NAME         set filesystem name
+ *  -o subtype=NAME        set filesystem type
+ *  -o max_read=N          set maximum size of read requests
  *
  * If not all options are known, an error message is written to stderr
  * and the function returns NULL.

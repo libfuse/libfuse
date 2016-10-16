@@ -195,13 +195,12 @@ int main(int argc, char *argv[])
 	if (opts.show_help) {
 		printf("usage: %s [options] <mountpoint>\n\n", argv[0]);
 		fuse_cmdline_help();
-		fuse_mount_help();
+		fuse_lowlevel_help();
 		ret = 0;
 		goto err_out1;
 	} else if (opts.show_version) {
 		printf("FUSE library version %s\n", fuse_pkgversion());
 		fuse_lowlevel_version();
-		fuse_mount_version();
 		ret = 0;
 		goto err_out1;
 	}

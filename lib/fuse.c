@@ -4414,12 +4414,9 @@ static const struct fuse_opt fuse_lib_opts[] = {
 
 static void fuse_lib_help(void)
 {
+	/* These are not all options, but only the ones that
+	   may be of interest to an end-user */
 	printf(
-"High-level options\n"
-"    -o hard_remove         immediate removal (don't hide files)\n"
-"    -o use_ino             let filesystem set inode numbers\n"
-"    -o readdir_ino         try to fill in d_ino in readdir\n"
-"    -o direct_io           use direct I/O\n"
 "    -o kernel_cache        cache files in kernel\n"
 "    -o [no]auto_cache      enable caching based on modification times (off)\n"
 "    -o umask=M             set file permissions (octal)\n"
@@ -4431,10 +4428,7 @@ static void fuse_lib_help(void)
 "    -o ac_attr_timeout=T   auto cache timeout for attributes (attr_timeout)\n"
 "    -o noforget            never forget cached inodes\n"
 "    -o remember=T          remember cached inodes for T seconds (0s)\n"
-"    -o intr                allow requests to be interrupted\n"
-"    -o intr_signal=NUM     signal to send on interrupt (%i)\n"
-"    -o modules=M1[:M2...]  names of modules to push onto filesystem stack\n\n",
-	       FUSE_DEFAULT_INTR_SIGNAL);
+"    -o modules=M1[:M2...]  names of modules to push onto filesystem stack\n");
 }
 
 static void fuse_lib_help_modules(void)
@@ -4610,7 +4604,7 @@ struct fuse *fuse_new(struct fuse_args *args,
 
 	if (f->conf.show_help) {
 		fuse_lib_help();
-		fuse_mount_help();
+		fuse_lowlevel_help();
 		/* Defer printing module help until modules
 		   have been loaded */
 	}

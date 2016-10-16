@@ -2531,6 +2531,12 @@ void fuse_lowlevel_version(void)
 {
 	printf("using FUSE kernel interface version %i.%i\n",
 	       FUSE_KERNEL_VERSION, FUSE_KERNEL_MINOR_VERSION);
+	fuse_mount_version();
+}
+
+void fuse_lowlevel_help(void)
+{
+	fuse_mount_help();
 }
 
 void fuse_session_destroy(struct fuse_session *se)
