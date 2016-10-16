@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* The ``-o nopath`` option has been dropped - it never actually did
+  anything (since it is unconditionally overwritten with the value of
+  the `nopath` flag in `struct fuse_operations).
+
 * The ``-o large_read`` mount option has been dropped. Hopefully no
   one uses a Linux 2.4 kernel anymore.
 
