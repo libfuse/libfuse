@@ -15,11 +15,11 @@ using the inode number, otherwise an ESTALE error will be returned.
 
 1) low-level interface
 
-Filesystems need to implement special lookups for the names "." and
-"..".  The former may be requested on any inode, including
-non-directories, while the latter is only requested for directories.
-Otherwise these special lookups should behave identically to ordinary
-lookups.
+Filesystems need to set FUSE_CAP_EXPORT_SUPPORT in conn->wants and
+implement special lookups for the names "." and "..". The former may
+be requested on any inode, including non-directories, while the latter
+is only requested for directories.  Otherwise these special lookups
+should behave identically to ordinary lookups.
 
 2) high-level interface
 
