@@ -1673,16 +1673,11 @@ int fuse_parse_cmdline(struct fuse_args *args,
  * Returns a session structure suitable for passing to
  * fuse_session_mount() and fuse_session_loop().
  *
- * Under Linux, this function accepts the following options:
- *
- *  -d, --debug            enable debugging output
- *  -o allow_other         allow access to other users
- *  -o allow_root          allow access to root
- *  -o auto_unmount        auto unmount on process termination
- *  -o default_permissions enable permission checking by kernel
- *  -o fsname=NAME         set filesystem name
- *  -o subtype=NAME        set filesystem type
- *  -o max_read=N          set maximum size of read requests
+ * This function accepts most file-system independent mount options
+ * (like context, nodev, ro - see mount(8)), as well as the general
+ * fuse mount options listed in mount.fuse(8) (e.g. -o allow_root and
+ * -o default_permissions, but not ``-o use_ino``).  Instead of `-o
+ * debug`, debugging may also enabled with `-d` or `--debug`.
  *
  * If not all options are known, an error message is written to stderr
  * and the function returns NULL.
