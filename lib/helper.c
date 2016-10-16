@@ -258,7 +258,6 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	if (opts.show_version) {
 		printf("FUSE library version %s\n", PACKAGE_VERSION);
 		fuse_lowlevel_version();
-		fuse_mount_version();
 		res = 0;
 		goto out1;
 	}

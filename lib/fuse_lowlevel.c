@@ -2537,7 +2537,12 @@ void fuse_lowlevel_version(void)
 
 void fuse_lowlevel_help(void)
 {
-	fuse_mount_help();
+	/* These are not all options, but the ones that are
+	   potentially of interest to an end-user */
+	printf(
+"    -o allow_other         allow access to other users\n"
+"    -o allow_root          allow access to root\n"
+"    -o auto_unmount        auto unmount on process termination\n");
 }
 
 void fuse_session_destroy(struct fuse_session *se)
