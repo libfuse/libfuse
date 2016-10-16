@@ -14,13 +14,12 @@
  * Low level API
  *
  * IMPORTANT: you should define FUSE_USE_VERSION before including this
- * header.  To use the newest API define it to 26 (recommended for any
- * new application), to use the old API define it to 24 (default) or
- * 25
+ * header.  To use the newest API define it to 30 (recommended for any
+ * new application).
  */
 
 #ifndef FUSE_USE_VERSION
-#define FUSE_USE_VERSION 24
+#define FUSE_USE_VERSION 30
 #endif
 
 #include "fuse_common.h"
