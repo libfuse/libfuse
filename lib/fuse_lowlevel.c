@@ -2523,6 +2523,7 @@ clear_pipe:
 static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("debug", debug, 1),
 	LL_OPTION("-d", debug, 1),
+	LL_OPTION("debug", debug, 1),
 	LL_OPTION("allow_root", allow_root, 1),
 	FUSE_OPT_END
 };
