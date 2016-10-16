@@ -9,7 +9,9 @@
 .SH DESCRIPTION
 Filesystem in Userspace (FUSE) is a simple interface for userspace programs to export a virtual filesystem to the Linux kernel. It also aims to provide a secure method for non privileged users to create and mount their own filesystem implementations.
 .PP
-\fBfusermount\fR is a program to mount and unmount FUSE filesystems.
+\fBfusermount\fR is a program to mount and unmount FUSE
+filesystems. It should be called directly only for unmounting FUSE
+file systems.
 
 .SH OPTIONS
 .IP "\-h" 4
@@ -28,12 +30,14 @@ lazy unmount.
 .SH SEE ALSO
 \fImount\fR(8),
 \fImount.fuse\fR(8),
-\fIulockmgr_server\fR(1).
 
 .SH HOMEPAGE
 More information about fusermount and the FUSE project can be found at <\fIhttp://fuse.sourceforge.net/\fR>.
 
-.SH AUTHOR
-FUSE was written by Miklos Szeredi <\fImiklos@szeredi.hu\fR>.
-.PP
-This manual page was written by Daniel Baumann <\fIdaniel.baumann@progress\-technologies.net\fR>.
+.SH AUTHORS
+.LP
+FUSE is currently maintained by Nikolaus Rath <Nikolaus@rath.org>
+.LP
+The original author of FUSE is Miklos Szeredi <\fImiklos@szeredi.hu\fR>.
+.LP
+This manual page was originally written by Daniel Baumann <\fIdaniel.baumann@progress\-technologies.net\fR>.

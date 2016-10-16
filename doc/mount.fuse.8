@@ -12,7 +12,17 @@ Set the maximum number of FUSE mounts allowed to non-root users. The default is 
 \fBuser_allow_other\fP
 Allow non-root users to specify the \fBallow_other\fP or \fBallow_root\fP mount options (see below).
 .SH OPTIONS
-Most of the generic mount options described in \fBmount\fP are supported (\fBro\fP, \fBrw\fP, \fBsuid\fP, \fBnosuid\fP, \fBdev\fP, \fBnodev\fP, \fBexec\fP, \fBnoexec\fP, \fBatime\fP, \fBnoatime\fP, \fBsync\fP, \fBasync\fP, \fBdirsync\fP). Filesystems are mounted with \fBnodev,nosuid\fP by default, which can only be overridden by a privileged user.
+Most of the generic mount options described in \fBmount\fP are
+supported (\fBro\fP, \fBrw\fP, \fBsuid\fP, \fBnosuid\fP, \fBdev\fP,
+\fBnodev\fP, \fBexec\fP, \fBnoexec\fP, \fBatime\fP, \fBnoatime\fP,
+\fBsync\fP, \fBasync\fP, \fBdirsync\fP). Filesystems are mounted with
+\fBnodev,nosuid\fP by default, which can only be overridden by a
+privileged user.
+.SS "WARNING"
+Many of the mount options described below should not be specified
+directly by the user mounting the file system but chosen by the
+file-system itself when it calls mount(2). This is because the correct
+values depend on implementation details of the file system.
 .SS "General mount options:"
 These are FUSE specific mount options that can be specified for all filesystems:
 .TP
@@ -24,6 +34,45 @@ This option overrides the security measure restricting file access to the user m
 .TP
 \fBallow_root\fP
 This option is similar to \fBallow_other\fP but file access is limited to the user mounting the filesystem and root.  This option and \fBallow_other\fP are mutually exclusive.
+.TP
+\fBauto_unmount\fP
+This option enables automatic unmounting of the file system if the
+FUSE process terminates for any reason. Normally the FUSE process is
+responsible for un-mounting the file system, which means that the
+mountpoint becomes inaccessible if the file system process terminates
+without first unmounting the  file system.
+.TP
+\fBmax_read=N\fP
+With this option the maximum size of read operations can be set. The default is infinite. Note that the size of read requests is limited anyway to 32 pages (which is 128kbyte on i386).
+.TP
+\fBmax_readahead=N\fN
+Set the maximum number of bytes to read-ahead.  The default is determined by the kernel. On linux-2.6.22 or earlier it's 131072 (128kbytes)
+.TP
+\fBmax_write=N\fP
+Set the maximum number of bytes in a single write operation. The default is 128kbytes.
+.TP
+\fBasync_read\fP
+Perform reads asynchronously. This is the default
+.TP
+\fBsync_read\fP
+Perform all reads (even read-ahead) synchronously.
+.TP
+\fBdebug\fP
+Turns on debug information printing by the library.
+.TP
+\fBfsname=NAME\fP
+Sets the filesystem source (first field in \fI/etc/mtab\fP). The default is the mount program name.
+.TP
+\fBsubtype=TYPE\fP
+Sets the filesystem type (third field in \fI/etc/mtab\fP). The default is the mount program name. If the kernel suppports it, \fI/etc/mtab\fP and \fI/proc/mounts\fP will show the filesystem type as \fBfuse.TYPE\fP
+
+If the kernel doesn't support subtypes, the source filed will be \fBTYPE#NAME\fP, or if \fBfsname\fP option is not specified, just \fBTYPE\fP.
+.TP
+\fBblkdev\fP
+Mount a filesystem backed by a block device.  This is a privileged option. The device must be specified with the \fBfsname=NAME\fP option.
+.SS "High-level mount options:"
+These are FUSE specific mount options that can only be specified for
+file-systems that use the high-level FUSE API:
 .TP
 \fBkernel_cache\fP
 This option disables flushing the cache of the file contents on every \fBopen\fP(2).  This should only be enabled on filesystems, where the file data is never changed externally (not through the mounted FUSE filesystem).  Thus it is not suitable for network filesystems and other \fIintermediate\fP filesystems.
@@ -41,36 +90,10 @@ Each \fBread\fP(2) or \fBwrite\fP(2) system call will initiate one or more read 
 .IP 2.
 The return value of the read() and write() system calls will correspond to the return values of the read and write operations. This is useful for example if the file size is not known in advance (before reading it).
 .TP
-\fBmax_read=N\fP
-With this option the maximum size of read operations can be set. The default is infinite. Note that the size of read requests is limited anyway to 32 pages (which is 128kbyte on i386).
-.TP
-\fBmax_readahead=N\fN
-Set the maximum number of bytes to read-ahead.  The default is determined by the kernel. On linux-2.6.22 or earlier it's 131072 (128kbytes)
-.TP
-\fBmax_write=N\fP
-Set the maximum number of bytes in a single write operation. The default is 128kbytes.
-.TP
-\fBasync_read\fP
-Perform reads asynchronously. This is the default
-.TP
-\fBsync_read\fP
-Perform all reads (even read-ahead) synchronously.
-.TP
 \fBhard_remove\fP
 The default behavior is that if an open file is deleted, the file is renamed to a hidden file (\fB.fuse_hiddenXXX\fP), and only removed when the file is finally released.  This relieves the filesystem implementation of having to deal with this problem.  This option disables the hiding behavior, and files are removed immediately in an unlink operation (or in a rename operation which overwrites an existing file).
 
 It is recommended that you not use the hard_remove option. When hard_remove is set, the following libc functions fail on unlinked files (returning errno of \fBENOENT\fP): \fBread\fP(2), \fBwrite\fP(2), \fBfsync\fP(2), \fBclose\fP(2), \fBf*xattr\fP(2), \fBftruncate\fP(2), \fBfstat\fP(2), \fBfchmod\fP(2), \fBfchown\fP(2)
-.TP
-\fBdebug\fP
-Turns on debug information printing by the library.
-.TP
-\fBfsname=NAME\fP
-Sets the filesystem source (first field in \fI/etc/mtab\fP). The default is the mount program name.
-.TP
-\fBsubtype=TYPE\fP
-Sets the filesystem type (third field in \fI/etc/mtab\fP). The default is the mount program name. If the kernel suppports it, \fI/etc/mtab\fP and \fI/proc/mounts\fP will show the filesystem type as \fBfuse.TYPE\fP
-
-If the kernel doesn't support subtypes, the source filed will be \fBTYPE#NAME\fP, or if \fBfsname\fP option is not specified, just \fBTYPE\fP.
 .TP
 \fBuse_ino\fP
 Honor the \fIst_ino\fP field in kernel functions \fBgetattr()\fP and \fBfill_dir()\fP. This value is used to fill in the
@@ -78,9 +101,6 @@ Honor the \fIst_ino\fP field in kernel functions \fBgetattr()\fP and \fBfill_dir
 .TP
 \fBreaddir_ino\fP
 If \fBuse_ino\fP option is not given, still try to fill in the \fId_ino\fP field in \fBreaddir\fP(2). If the name was previously looked up, and is still in the cache, the inode number found there will be used. Otherwise it will be set to \fB-1\fP.  If \fBuse_ino\fP option is given, this option is ignored.
-.TP
-\fBnonempty\fP
-Allows mounts over a non-empty file or directory. By default these  mounts are rejected to prevent accidental covering up of data, which could for example prevent automatic backup.
 .TP
 \fBumask=M\fP
 Override the permission bits in \fIst_mode\fP set by the filesystem. The resulting permission bits are the ones missing from the given umask value.  The value is given in octal representation.
@@ -90,9 +110,6 @@ Override the \fIst_uid\fP field set by the filesystem (N is numeric).
 .TP
 \fBgid=N\fP
 Override the \fIst_gid\fP field set by the filesystem (N is numeric).
-.TP
-\fBblkdev\fP
-Mount a filesystem backed by a block device.  This is a privileged option. The device must be specified with the \fBfsname=NAME\fP option.
 .TP
 \fBentry_timeout=T\fP
 The timeout in seconds for which name lookups will be cached. The default is 1.0 second. For all the timeout options, it is possible to give fractions of a second as well (e.g. \fBentry_timeout=2.8\fP)
@@ -110,7 +127,15 @@ The timeout in seconds for which file attributes are cached for the purpose of c
 Allow requests to be interrupted.  Turning on this option may result in unexpected behavior, if the filesystem does not support request interruption.
 .TP
 \fBintr_signal=NUM\fP
-Specify which signal number to send to the filesystem when a request is interrupted.  The default is hardcoded to USR1.
+Specify which signal number to send to the filesystem when a request
+is interrupted.  The default is hardcoded to USR1.
+.TP
+\fBnoforget\fF
+Normally, FUSE assigns inodes to paths only for as long as the kernel
+is aware of them. With this option inodes are instead assigned permanently for
+the life-time of the file-system process. This will require more
+memory, but may be necessary when using applications that make use of
+inode numbers.
 .TP
 \fBmodules=M1[:M2...]\fP
 Add modules to the filesystem stack.  Modules are pushed in the order they are specified, with the original filesystem being on the bottom of the stack.
@@ -150,10 +175,12 @@ No other user (including root) can access the contents of the mounted filesystem
 FUSE filesystems are unmounted using the \fBfusermount\fP(1) command (\fBfusermount -u mountpoint\fP).
 .SH "AUTHORS"
 .LP
-The main author of FUSE is Miklos Szeredi <mszeredi@inf.bme.hu>.
+FUSE is currently maintained by Nikolaus Rath <Nikolaus@rath.org>
 .LP
-This man page was written by Bastien Roucaries <roucaries.bastien+debian@gmail.com> for the
-Debian GNU/Linux distribution (but it may be used by others) from README file.
+The original author of FUSE is Miklos Szeredi <mszeredi@inf.bme.hu>.
+.LP
+This man page was originally written by Bastien Roucaries <roucaries.bastien+debian@gmail.com> for the
+Debian GNU/Linux distribution.
 .SH SEE ALSO
 fusermount(1)
 mount(8)
