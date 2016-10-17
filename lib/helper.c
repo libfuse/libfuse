@@ -213,7 +213,9 @@ int fuse_daemonize(int foreground)
 		case 0:
 			break;
 		default:
-			read(waiter[0], &completed, sizeof(completed));
+			if (read(waiter[0], &completed, sizeof(completed))) {
+				/* Ignore errors */
+			}
 			_exit(0);
 		}
 
@@ -222,7 +224,9 @@ int fuse_daemonize(int foreground)
 			return -1;
 		}
 
-		(void) chdir("/");
+		if (chdir("/")) {
+			/* Ignore errors */
+		}
 
 		nullfd = open("/dev/null", O_RDWR, 0);
 		if (nullfd != -1) {
@@ -235,11 +239,15 @@ int fuse_daemonize(int foreground)
 
 		/* Propagate completion of daemon initializatation */
 		completed = 1;
-		write(waiter[1], &completed, sizeof(completed));
+		if (write(waiter[1], &completed, sizeof(completed))) {
+			/* Ignore errors */
+		}
 		close(waiter[0]);
 		close(waiter[1]);
 	} else {
-		(void) chdir("/");
+		if (chdir("/")) {
+			/* Ignore errors */
+		}
 	}
 	return 0;
 }

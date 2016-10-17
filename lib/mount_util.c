@@ -61,13 +61,19 @@ static int mtab_needs_update(const char *mnt)
 			return 0;
 
 		ruid = getuid();
-		if (ruid != 0)
-			setreuid(0, -1);
+		if (ruid != 0) {
+			if (setreuid(0, -1)) {
+				/* Ignore errors */
+			}
+		}
 
 		res = access(_PATH_MOUNTED, W_OK);
 		err = (res == -1) ? errno : 0;
-		if (ruid != 0)
-			setreuid(ruid, -1);
+		if (ruid != 0) {
+			if (setreuid(ruid, -1)) {
+				/* Ignore errors */
+			}
+		}
 
 		if (err == EROFS)
 			return 0;
