@@ -35,3 +35,7 @@ config.*
 /patches*
 /m4
 TAGS
+/GPATH
+/GRTAGS
+/GSYMS
+/GTAGS
