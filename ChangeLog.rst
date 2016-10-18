@@ -27,7 +27,7 @@ Unreleased Changes
   high-level API now all receive an additional struct fuse_file_info
   pointer. This pointer is NULL if the file is not currently open.
 
-  The fgetattr and ftruncate handlers have become obsolote and have
+  The fgetattr and ftruncate handlers have become obsolete and have
   been removed.
 
 * The `fuse_session_new` function no longer accepts the ``-o
