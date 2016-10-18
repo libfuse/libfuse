@@ -766,8 +766,6 @@ struct fuse_lowlevel_ops {
 	 *
 	 * This method is not called under Linux kernel versions 2.4.x
 	 *
-	 * Introduced in version 2.5
-	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 *
@@ -798,8 +796,6 @@ struct fuse_lowlevel_ops {
 	 * versions earlier than 2.6.15, the mknod() and open() methods
 	 * will be called instead.
 	 *
-	 * Introduced in version 2.5
-	 *
 	 * Valid replies:
 	 *   fuse_reply_create
 	 *   fuse_reply_err
@@ -815,8 +811,6 @@ struct fuse_lowlevel_ops {
 
 	/**
 	 * Test for a POSIX file lock
-	 *
-	 * Introduced in version 2.6
 	 *
 	 * Valid replies:
 	 *   fuse_reply_lock
@@ -843,8 +837,6 @@ struct fuse_lowlevel_ops {
 	 * will still allow file locking to work locally.  Hence these are
 	 * only interesting for network filesystems and similar.
 	 *
-	 * Introduced in version 2.6
-	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 *
@@ -863,8 +855,6 @@ struct fuse_lowlevel_ops {
 	 *
 	 * Note: This makes sense only for block device backed filesystems
 	 * mounted with the 'blkdev' option
-	 *
-	 * Introduced in version 2.6
 	 *
 	 * Valid replies:
 	 *   fuse_reply_bmap
@@ -886,8 +876,6 @@ struct fuse_lowlevel_ops {
 	 * iovs and setting FUSE_IOCTL_RETRY in @flags.  For
 	 * restricted ioctls, kernel prepares in/out data area
 	 * according to the information encoded in cmd.
-	 *
-	 * Introduced in version 2.8
 	 *
 	 * Valid replies:
 	 *   fuse_reply_ioctl_retry
@@ -911,8 +899,6 @@ struct fuse_lowlevel_ops {
 
 	/**
 	 * Poll for IO readiness
-	 *
-	 * Introduced in version 2.8
 	 *
 	 * Note: If ph is non-NULL, the client should notify
 	 * when IO readiness events occur by calling
@@ -952,8 +938,6 @@ struct fuse_lowlevel_ops {
 	 * bufv->off is correctly updated (reflecting the number of
 	 * bytes read from bufv->buf[0]).
 	 *
-	 * Introduced in version 2.9
-	 *
 	 * Valid replies:
 	 *   fuse_reply_write
 	 *   fuse_reply_err
@@ -970,8 +954,6 @@ struct fuse_lowlevel_ops {
 
 	/**
 	 * Callback function for the retrieve request
-	 *
-	 * Introduced in version 2.9
 	 *
 	 * Valid replies:
 	 *	fuse_reply_none
@@ -991,8 +973,6 @@ struct fuse_lowlevel_ops {
 	 * See description of the forget function for more
 	 * information.
 	 *
-	 * Introduced in version 2.9
-	 *
 	 * Valid replies:
 	 *   fuse_reply_none
 	 *
@@ -1007,8 +987,6 @@ struct fuse_lowlevel_ops {
 	 * Note: if the locking methods are not implemented, the kernel
 	 * will still allow file locking to work locally.  Hence these are
 	 * only interesting for network filesystems and similar.
-	 *
-	 * Introduced in version 2.9
 	 *
 	 * Valid replies:
 	 *   fuse_reply_err
@@ -1025,8 +1003,6 @@ struct fuse_lowlevel_ops {
 	 * Allocate requested space. If this function returns success then
 	 * subsequent writes to the specified range shall not fail due to the lack
 	 * of free space on the file system storage media.
-	 *
-	 * Introduced in version 2.9
 	 *
 	 * Valid replies:
 	 *   fuse_reply_err
@@ -1054,8 +1030,6 @@ struct fuse_lowlevel_ops {
 	 * In contrast to readdir() (which does not affect the lookup counts),
 	 * the lookup count of every entry returned by readdirplus(), except "."
 	 * and "..", is incremented by one.
-	 *
-	 * Introduced in version 3.0
 	 *
 	 * Valid replies:
 	 *   fuse_reply_buf

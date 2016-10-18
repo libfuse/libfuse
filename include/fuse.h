@@ -315,8 +315,6 @@ struct fuse_operations {
 	 * directory. Optionally opendir may also return an arbitrary
 	 * filehandle in the fuse_file_info structure, which will be
 	 * passed to readdir, closedir and fsyncdir.
-	 *
-	 * Introduced in version 2.3
 	 */
 	int (*opendir) (const char *, struct fuse_file_info *);
 
@@ -334,16 +332,11 @@ struct fuse_operations {
 	 * passes non-zero offset to the filler function.  When the buffer
 	 * is full (or an error happens) the filler function will return
 	 * '1'.
-	 *
-	 * Introduced in version 2.3
-	 * The "flags" argument added in version 3.0
 	 */
 	int (*readdir) (const char *, void *, fuse_fill_dir_t, off_t,
 			struct fuse_file_info *, enum fuse_readdir_flags);
 
 	/** Release directory
-	 *
-	 * Introduced in version 2.3
 	 */
 	int (*releasedir) (const char *, struct fuse_file_info *);
 
@@ -351,8 +344,6 @@ struct fuse_operations {
 	 *
 	 * If the datasync parameter is non-zero, then only the user data
 	 * should be flushed, not the meta data
-	 *
-	 * Introduced in version 2.3
 	 */
 	int (*fsyncdir) (const char *, int, struct fuse_file_info *);
 
@@ -362,9 +353,6 @@ struct fuse_operations {
 	 * The return value will passed in the private_data field of
 	 * fuse_context to all file operations and as a parameter to the
 	 * destroy() method.
-	 *
-	 * Introduced in version 2.3
-	 * Changed in version 2.6
 	 */
 	void *(*init) (struct fuse_conn_info *conn);
 
@@ -372,8 +360,6 @@ struct fuse_operations {
 	 * Clean up filesystem
 	 *
 	 * Called on filesystem exit.
-	 *
-	 * Introduced in version 2.3
 	 */
 	void (*destroy) (void *);
 
@@ -385,8 +371,6 @@ struct fuse_operations {
 	 * called.
 	 *
 	 * This method is not called under Linux kernel versions 2.4.x
-	 *
-	 * Introduced in version 2.5
 	 */
 	int (*access) (const char *, int);
 
@@ -399,8 +383,6 @@ struct fuse_operations {
 	 * If this method is not implemented or under Linux kernel
 	 * versions earlier than 2.6.15, the mknod() and open() methods
 	 * will be called instead.
-	 *
-	 * Introduced in version 2.5
 	 */
 	int (*create) (const char *, mode_t, struct fuse_file_info *);
 
@@ -433,8 +415,6 @@ struct fuse_operations {
 	 * Note: if this method is not implemented, the kernel will still
 	 * allow file locking to work locally.  Hence it is only
 	 * interesting for network filesystems and similar.
-	 *
-	 * Introduced in version 2.6
 	 */
 	int (*lock) (const char *, struct fuse_file_info *, int cmd,
 		     struct flock *);
@@ -449,8 +429,6 @@ struct fuse_operations {
 	 * *fi* will be NULL if the file is not currenly opened.
 	 *
 	 * See the utimensat(2) man page for details.
-	 *
-	 * Introduced in version 2.6
 	 */
 	 int (*utimens) (const char *, const struct timespec tv[2],
 			 struct fuse_file_info *fi);
@@ -460,8 +438,6 @@ struct fuse_operations {
 	 *
 	 * Note: This makes sense only for block device backed filesystems
 	 * mounted with the 'blkdev' option
-	 *
-	 * Introduced in version 2.6
 	 */
 	int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
 
@@ -477,8 +453,6 @@ struct fuse_operations {
 	 *
 	 * If flags has FUSE_IOCTL_DIR then the fuse_file_info refers to a
 	 * directory file handle.
-	 *
-	 * Introduced in version 2.8
 	 */
 	int (*ioctl) (const char *, int cmd, void *arg,
 		      struct fuse_file_info *, unsigned int flags, void *data);
@@ -497,8 +471,6 @@ struct fuse_operations {
 	 *
 	 * The callee is responsible for destroying ph with
 	 * fuse_pollhandle_destroy() when no longer in use.
-	 *
-	 * Introduced in version 2.8
 	 */
 	int (*poll) (const char *, struct fuse_file_info *,
 		     struct fuse_pollhandle *ph, unsigned *reventsp);
@@ -508,8 +480,6 @@ struct fuse_operations {
 	 * Similar to the write() method, but data is supplied in a
 	 * generic buffer.  Use fuse_buf_copy() to transfer data to
 	 * the destination.
-	 *
-	 * Introduced in version 2.9
 	 */
 	int (*write_buf) (const char *, struct fuse_bufvec *buf, off_t off,
 			  struct fuse_file_info *);
@@ -527,8 +497,6 @@ struct fuse_operations {
 	 * location pointed to by bufp.  If the buffer contains memory
 	 * regions, they too must be allocated using malloc().  The
 	 * allocated memory will be freed by the caller.
-	 *
-	 * Introduced in version 2.9
 	 */
 	int (*read_buf) (const char *, struct fuse_bufvec **bufp,
 			 size_t size, off_t off, struct fuse_file_info *);
@@ -549,8 +517,6 @@ struct fuse_operations {
 	 * Note: if this method is not implemented, the kernel will still
 	 * allow file locking to work locally.  Hence it is only
 	 * interesting for network filesystems and similar.
-	 *
-	 * Introduced in version 2.9
 	 */
 	int (*flock) (const char *, struct fuse_file_info *, int op);
 
@@ -561,8 +527,6 @@ struct fuse_operations {
 	 * file.  If this function returns success then any subsequent write
 	 * request to specified range is guaranteed not to fail because of lack
 	 * of space on the file system media.
-	 *
-	 * Introduced in version 2.9.1
 	 */
 	int (*fallocate) (const char *, int, off_t, off_t,
 			  struct fuse_file_info *);
@@ -589,7 +553,7 @@ struct fuse_context {
 	/** Private filesystem data */
 	void *private_data;
 
-	/** Umask of the calling process (introduced in version 2.8) */
+	/** Umask of the calling process */
 	mode_t umask;
 };
 

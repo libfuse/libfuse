@@ -44,27 +44,25 @@ struct fuse_file_info {
 	    writepage */
 	unsigned int writepage : 1;
 
-	/** Can be filled in by open, to use direct I/O on this file.
-	    Introduced in version 2.4 */
+	/** Can be filled in by open, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
 	/** Can be filled in by open, to indicate, that cached file data
-	    need not be invalidated.  Introduced in version 2.4 */
+	    need not be invalidated. */
 	unsigned int keep_cache : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
 	    maybe set in highlevel lock operation and lowlevel release
-	    operation.	Introduced in version 2.6 */
+	    operation. */
 	unsigned int flush : 1;
 
 	/** Can be filled in by open, to indicate that the file is not
-	    seekable.  Introduced in version 2.8 */
+	    seekable. */
 	unsigned int nonseekable : 1;
 
 	/* Indicates that flock locks for this file should be
 	   released.  If set, lock_owner shall contain a valid value.
-	   May only be set in ->release().  Introduced in version
-	   2.9 */
+	   May only be set in ->release(). */
 	unsigned int flock_release : 1;
 
 	/** Padding.  Do not use*/
@@ -78,8 +76,7 @@ struct fuse_file_info {
 	uint64_t lock_owner;
 
 	/** Requested poll events.  Available in ->poll.  Only set on kernels
-	    which support it.  If unsupported, this field is set to zero.
-	    Introduced in version 3.0 */
+	    which support it.  If unsupported, this field is set to zero. */
 	uint32_t poll_events;
 };
 
