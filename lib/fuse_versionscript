@@ -126,9 +126,9 @@ FUSE_3.0 {
 		fuse_fs_fallocate;
 		fuse_lowlevel_help;
 		fuse_lowlevel_version;
-		fuse_mount_help;
 		fuse_cmdline_help;
-		fuse_mount_version;
+		fuse_apply_conn_info_opts;
+		fuse_parse_conn_info_opts;
 
 	local:
 		*;
