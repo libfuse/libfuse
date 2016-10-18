@@ -11,8 +11,8 @@ Filesystem in Userspace (FUSE) is a simple interface for userspace programs to e
 .PP
 \fBfusermount\fR is a program to mount and unmount FUSE
 filesystems. It should be called directly only for unmounting FUSE
-file systems.
-
+file systems. To allow mounting and unmounting by unprivileged users,
+\fBfusermount\fR needs to be installed set-uid root.
 .SH OPTIONS
 .IP "\-h" 4
 print help.
