@@ -74,15 +74,24 @@ struct fuse_conn_info_opts {
 	unsigned max_background;
 	unsigned congestion_threshold;
 	unsigned time_gran;
+	int set_max_write;
+	int set_max_readahead;
+	int set_max_background;
+	int set_congestion_threshold;
+	int set_time_gran;
 };
 
 #define CONN_OPTION(t, p, v)					\
 	{ t, offsetof(struct fuse_conn_info_opts, p), v }
 static const struct fuse_opt conn_info_opt_spec[] = {
 	CONN_OPTION("max_write=%u", max_write, 0),
+	CONN_OPTION("max_write=", set_max_write, 1),
 	CONN_OPTION("max_readahead=%u", max_readahead, 0),
+	CONN_OPTION("max_readahead=", set_max_readahead, 1),
 	CONN_OPTION("max_background=%u", max_background, 0),
+	CONN_OPTION("max_background=", set_max_background, 1),
 	CONN_OPTION("congestion_threshold=%u", congestion_threshold, 0),
+	CONN_OPTION("congestion_threshold=", set_congestion_threshold, 1),
 	CONN_OPTION("sync_read", sync_read, 1),
 	CONN_OPTION("async_read", async_read, 1),
 	CONN_OPTION("atomic_o_trunc", atomic_o_trunc, 1),
@@ -108,6 +117,7 @@ static const struct fuse_opt conn_info_opt_spec[] = {
 	CONN_OPTION("writeback_cache", writeback_cache, 1),
 	CONN_OPTION("no_writeback_cache", no_writeback_cache, 1),
 	CONN_OPTION("time_gran=%u", time_gran, 0),
+	CONN_OPTION("time_gran=", set_time_gran, 1),
 	FUSE_OPT_END
 };
 
@@ -329,15 +339,15 @@ out1:
 void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
 			       struct fuse_conn_info *conn)
 {
-	if(opts->max_write)
+	if(opts->set_max_write)
 		conn->max_write = opts->max_write;
-	if(opts->max_background)
+	if(opts->set_max_background)
 		conn->max_background = opts->max_background;
-	if(opts->congestion_threshold)
+	if(opts->set_congestion_threshold)
 		conn->congestion_threshold = opts->congestion_threshold;
-	if(opts->time_gran)
+	if(opts->set_time_gran)
 		conn->time_gran = opts->time_gran;
-	if(opts->max_readahead)
+	if(opts->set_max_readahead)
 		conn->max_readahead = opts->max_readahead;
 
 #define LL_ENABLE(cond,cap) \
