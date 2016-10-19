@@ -556,10 +556,11 @@ static int iconv_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
-static void *iconv_init(struct fuse_conn_info *conn)
+static void *iconv_init(struct fuse_conn_info *conn,
+			struct fuse_config *cfg)
 {
 	struct iconv *ic = iconv_get();
-	fuse_fs_init(ic->next, conn);
+	fuse_fs_init(ic->next, conn, cfg);
 	return ic;
 }
 

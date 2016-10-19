@@ -542,10 +542,11 @@ static int subdir_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
-static void *subdir_init(struct fuse_conn_info *conn)
+static void *subdir_init(struct fuse_conn_info *conn,
+			 struct fuse_config *cfg)
 {
 	struct subdir *d = subdir_get();
-	fuse_fs_init(d->next, conn);
+	fuse_fs_init(d->next, conn, cfg);
 	return d;
 }
 

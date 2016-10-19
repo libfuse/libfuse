@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* The high-level init() handler now receives an additional struct
+  fuse_config pointer that can be used to adjust high-level API
+  specific configuration options.
+
 * File systems that use the low-level API and support lookup requests
   for '.' and '..' should continue make sure to set the
   FUSE_CAP_EXPORT_SUPPORT bit in fuse_conn_info->want.

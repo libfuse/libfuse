@@ -57,33 +57,6 @@
 
 #define NODE_TABLE_MIN_SIZE 8192
 
-struct fuse_config {
-	unsigned int uid;
-	unsigned int gid;
-	unsigned int  umask;
-	double entry_timeout;
-	double negative_timeout;
-	double attr_timeout;
-	double ac_attr_timeout;
-	int ac_attr_timeout_set;
-	int remember;
-	int nopath;
-	int debug;
-	int hard_remove;
-	int use_ino;
-	int readdir_ino;
-	int set_mode;
-	int set_uid;
-	int set_gid;
-	int direct_io;
-	int kernel_cache;
-	int auto_cache;
-	int intr;
-	int intr_signal;
-	int show_help;
-	char *modules;
-};
-
 struct fuse_fs {
 	struct fuse_operations op;
 	struct fuse_module *m;
@@ -2478,7 +2451,8 @@ static void reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
 		reply_err(req, err);
 }
 
-void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn)
+void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
+		  struct fuse_config *cfg)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (!fs->op.write_buf)
@@ -2488,7 +2462,7 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn)
 	if (!fs->op.flock)
 		conn->want &= ~FUSE_CAP_FLOCK_LOCKS;
 	if (fs->op.init)
-		fs->user_data = fs->op.init(conn);
+		fs->user_data = fs->op.init(conn, cfg);
 }
 
 static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
@@ -2497,7 +2471,7 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 
 	fuse_create_context(f);
 	conn->want |= FUSE_CAP_EXPORT_SUPPORT;
-	fuse_fs_init(f->fs, conn);
+	fuse_fs_init(f->fs, conn, &f->conf);
 }
 
 void fuse_fs_destroy(struct fuse_fs *fs)
