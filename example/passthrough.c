@@ -48,6 +48,14 @@
 #include <sys/xattr.h>
 #endif
 
+static void *xmp_init(struct fuse_conn_info *conn,
+		      struct fuse_config *cfg)
+{
+	(void) conn;
+	cfg->use_ino = 1;
+	return NULL;
+}
+
 static int xmp_getattr(const char *path, struct stat *stbuf,
 		       struct fuse_file_info *fi)
 {
@@ -401,6 +409,7 @@ static int xmp_removexattr(const char *path, const char *name)
 #endif /* HAVE_SETXATTR */
 
 static struct fuse_operations xmp_oper = {
+	.init           = xmp_init,
 	.getattr	= xmp_getattr,
 	.access		= xmp_access,
 	.readlink	= xmp_readlink,

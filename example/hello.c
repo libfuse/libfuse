@@ -68,6 +68,14 @@ static const struct fuse_opt option_spec[] = {
 	FUSE_OPT_END
 };
 
+static void *hello_init(struct fuse_conn_info *conn,
+			struct fuse_config *cfg)
+{
+	(void) conn;
+	cfg->kernel_cache = 1;
+	return NULL;
+}
+
 static int hello_getattr(const char *path, struct stat *stbuf,
 			 struct fuse_file_info *fi)
 {
@@ -137,6 +145,7 @@ static int hello_read(const char *path, char *buf, size_t size, off_t offset,
 }
 
 static struct fuse_operations hello_oper = {
+	.init           = hello_init,
 	.getattr	= hello_getattr,
 	.readdir	= hello_readdir,
 	.open		= hello_open,

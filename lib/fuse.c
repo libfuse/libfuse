@@ -4360,10 +4360,6 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_OPT_KEY("-d",		      FUSE_OPT_KEY_KEEP),
 	FUSE_LIB_OPT("debug",		      debug, 1),
 	FUSE_LIB_OPT("-d",		      debug, 1),
-	FUSE_LIB_OPT("hard_remove",	      hard_remove, 1),
-	FUSE_LIB_OPT("use_ino",		      use_ino, 1),
-	FUSE_LIB_OPT("readdir_ino",	      readdir_ino, 1),
-	FUSE_LIB_OPT("direct_io",	      direct_io, 1),
 	FUSE_LIB_OPT("kernel_cache",	      kernel_cache, 1),
 	FUSE_LIB_OPT("auto_cache",	      auto_cache, 1),
 	FUSE_LIB_OPT("noauto_cache",	      auto_cache, 0),
@@ -4380,8 +4376,6 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_LIB_OPT("negative_timeout=%lf",  negative_timeout, 0),
 	FUSE_LIB_OPT("noforget",              remember, -1),
 	FUSE_LIB_OPT("remember=%u",           remember, 0),
-	FUSE_LIB_OPT("intr",		      intr, 1),
-	FUSE_LIB_OPT("intr_signal=%d",	      intr_signal, 0),
 	FUSE_LIB_OPT("modules=%s",	      modules, 0),
 	FUSE_OPT_END
 };

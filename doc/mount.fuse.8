@@ -68,27 +68,10 @@ This option disables flushing the cache of the file contents on every \fBopen\fP
 \fBNOTE\fP: if this option is not specified (and neither \fBdirect_io\fP) data is still cached after the \fBopen\fP(2), so a \fBread\fP(2) system call will not always initiate a read operation.
 .TP
 \fBauto_cache\fP
-This option enables automatic flushing of the data cache on \fBopen\fP(2). The cache will only be flushed if the modification time or the size of the file has changed.
-.TP
-.TP
-\fBdirect_io\fP
-This option disables the use of page cache (file content cache) in the kernel for this filesystem. This has several affects:
-.IP 1.
-Each \fBread\fP(2) or \fBwrite\fP(2) system call will initiate one or more read or write operations, data will not be cached in the kernel.
-.IP 2.
-The return value of the read() and write() system calls will correspond to the return values of the read and write operations. This is useful for example if the file size is not known in advance (before reading it).
-.TP
-\fBhard_remove\fP
-The default behavior is that if an open file is deleted, the file is renamed to a hidden file (\fB.fuse_hiddenXXX\fP), and only removed when the file is finally released.  This relieves the filesystem implementation of having to deal with this problem.  This option disables the hiding behavior, and files are removed immediately in an unlink operation (or in a rename operation which overwrites an existing file).
-
-It is recommended that you not use the hard_remove option. When hard_remove is set, the following libc functions fail on unlinked files (returning errno of \fBENOENT\fP): \fBread\fP(2), \fBwrite\fP(2), \fBfsync\fP(2), \fBclose\fP(2), \fBf*xattr\fP(2), \fBftruncate\fP(2), \fBfstat\fP(2), \fBfchmod\fP(2), \fBfchown\fP(2)
-.TP
-\fBuse_ino\fP
-Honor the \fIst_ino\fP field in kernel functions \fBgetattr()\fP and \fBfill_dir()\fP. This value is used to fill in the
-\fIst_ino\fP field in the \fBstat\fP(2), \fBlstat\fP(2), \fBfstat\fP(2) functions and the \fId_ino\fP field in the \fBreaddir\fP(2) function. The filesystem does not have to guarantee uniqueness, however some applications rely on this value being unique for the whole filesystem.
-.TP
-\fBreaddir_ino\fP
-If \fBuse_ino\fP option is not given, still try to fill in the \fId_ino\fP field in \fBreaddir\fP(2). If the name was previously looked up, and is still in the cache, the inode number found there will be used. Otherwise it will be set to \fB-1\fP.  If \fBuse_ino\fP option is given, this option is ignored.
+This option is an alternative to
+`kernel_cache`. Instead of unconditionally keeping cached data, the
+cached data is invalidated on \fBopen\fP(2) if if the modification
+time or the size of the file has changed since it was last opened.
 .TP
 \fBumask=M\fP
 Override the permission bits in \fIst_mode\fP set by the filesystem. The resulting permission bits are the ones missing from the given umask value.  The value is given in octal representation.
@@ -110,13 +93,6 @@ The timeout in seconds for which file/directory attributes are cached.  The defa
 .TP
 \fBac_attr_timeout=T\fP
 The timeout in seconds for which file attributes are cached for the purpose of checking if \fBauto_cache\fP should flush the file data on  open. The default is the value of \fBattr_timeout\fP
-.TP
-\fBintr\fP
-Allow requests to be interrupted.  Turning on this option may result in unexpected behavior, if the filesystem does not support request interruption.
-.TP
-\fBintr_signal=NUM\fP
-Specify which signal number to send to the filesystem when a request
-is interrupted.  The default is hardcoded to USR1.
 .TP
 \fBnoforget\fP
 .TP

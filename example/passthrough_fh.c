@@ -52,6 +52,14 @@
 #endif
 #include <sys/file.h> /* flock(2) */
 
+static void *xmp_init(struct fuse_conn_info *conn,
+		      struct fuse_config *cfg)
+{
+	(void) conn;
+	cfg->use_ino = 1;
+	return NULL;
+}
+
 static int xmp_getattr(const char *path, struct stat *stbuf,
 			struct fuse_file_info *fi)
 {
@@ -544,6 +552,7 @@ static int xmp_flock(const char *path, struct fuse_file_info *fi, int op)
 }
 
 static struct fuse_operations xmp_oper = {
+	.init           = xmp_init,
 	.getattr	= xmp_getattr,
 	.access		= xmp_access,
 	.readlink	= xmp_readlink,

@@ -67,8 +67,6 @@ def test_passthrough(tmpdir, name):
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
                 '-f', mnt_dir ]
-    if not name.endswith('_ll'):
-        cmdline += [ '-o', 'use_ino,readdir_ino,kernel_cache' ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
