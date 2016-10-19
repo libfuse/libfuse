@@ -118,10 +118,13 @@ Allow requests to be interrupted.  Turning on this option may result in unexpect
 Specify which signal number to send to the filesystem when a request
 is interrupted.  The default is hardcoded to USR1.
 .TP
-\fBnoforget\fF
+\fBnoforget\fP
+.TP
+\fBremember=T\fP
 Normally, FUSE assigns inodes to paths only for as long as the kernel
-is aware of them. With this option inodes are instead assigned permanently for
-the life-time of the file-system process. This will require more
+is aware of them. With this option inodes are instead assigned
+for at least \fBT\fP seconds (or, in the case of \fBnoforget\fP,
+the life-time of the file-system process). This will require more
 memory, but may be necessary when using applications that make use of
 inode numbers.
 .TP
