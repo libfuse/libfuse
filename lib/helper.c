@@ -213,7 +213,7 @@ int fuse_daemonize(int foreground)
 		case 0:
 			break;
 		default:
-			read(waiter[0], &completed, sizeof(completed));
+			(void) read(waiter[0], &completed, sizeof(completed));
 			_exit(0);
 		}
 
@@ -235,7 +235,7 @@ int fuse_daemonize(int foreground)
 
 		/* Propagate completion of daemon initializatation */
 		completed = 1;
-		write(waiter[1], &completed, sizeof(completed));
+		(void) write(waiter[1], &completed, sizeof(completed));
 		close(waiter[0]);
 		close(waiter[1]);
 	} else {
