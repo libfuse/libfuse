@@ -561,6 +561,8 @@ static void *iconv_init(struct fuse_conn_info *conn,
 {
 	struct iconv *ic = iconv_get();
 	fuse_fs_init(ic->next, conn, cfg);
+	/* Don't touch cfg->nullpath_ok, we can work with
+	   either */
 	return ic;
 }
 
@@ -612,8 +614,6 @@ static const struct fuse_operations iconv_oper = {
 	.lock		= iconv_lock,
 	.flock		= iconv_flock,
 	.bmap		= iconv_bmap,
-
-	.flag_nopath = 1,
 };
 
 static const struct fuse_opt iconv_opts[] = {

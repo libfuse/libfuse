@@ -547,6 +547,8 @@ static void *subdir_init(struct fuse_conn_info *conn,
 {
 	struct subdir *d = subdir_get();
 	fuse_fs_init(d->next, conn, cfg);
+	/* Don't touch cfg->nullpath_ok, we can work with
+	   either */
 	return d;
 }
 
@@ -594,8 +596,6 @@ static const struct fuse_operations subdir_oper = {
 	.lock		= subdir_lock,
 	.flock		= subdir_flock,
 	.bmap		= subdir_bmap,
-
-	.flag_nopath = 1,
 };
 
 static const struct fuse_opt subdir_opts[] = {

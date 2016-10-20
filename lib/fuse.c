@@ -1193,7 +1193,7 @@ static int get_path_nullok(struct fuse *f, fuse_ino_t nodeid, char **path)
 {
 	int err = 0;
 
-	if (f->conf.nopath) {
+	if (f->conf.nullpath_ok) {
 		*path = NULL;
 	} else {
 		err = get_path_common(f, nodeid, NULL, path, NULL);
@@ -2958,7 +2958,7 @@ static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
 	if(unlink_hidden) {
 		if (path) {
 			fuse_fs_unlink(f->fs, path);
-		} else if (f->conf.nopath) {
+		} else if (f->conf.nullpath_ok) {
 			char *unlinkpath;
 
 			if (get_path(f, ino, &unlinkpath) == 0)
@@ -4480,7 +4480,6 @@ static int fuse_push_module(struct fuse *f, const char *module,
 	}
 	newfs->m = m;
 	f->fs = newfs;
-	f->conf.nopath = newfs->op.flag_nopath && f->conf.nopath;
 	return 0;
 }
 
@@ -4596,7 +4595,6 @@ struct fuse *fuse_new(struct fuse_args *args,
 		goto out_delete_context_key;
 
 	f->fs = fs;
-	f->conf.nopath = fs->op.flag_nopath;
 
 	/* Oh f**k, this is ugly! */
 	if (!fs->op.lock) {
@@ -4650,7 +4648,7 @@ struct fuse *fuse_new(struct fuse_args *args,
 		goto out_free_fs;
 
 	if (f->conf.debug) {
-		fprintf(stderr, "nopath: %i\n", f->conf.nopath);
+		fprintf(stderr, "nullpath_ok: %i\n", f->conf.nullpath_ok);
 	}
 
 	/* Trace topmost layer by default */

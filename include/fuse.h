@@ -244,13 +244,25 @@ struct fuse_config {
 	double ac_attr_timeout;
 
 	/**
+	 * If this option is given the file-system handlers for the
+	 * following operations will not receive path information:
+	 * read, write, flush, release, fsync, readdir, releasedir,
+	 * fsyncdir, lock, ioctl and poll.
+	 *
+	 * For the truncate, getattr, chmod, chown and utimens
+	 * operations the path will be provided only if the file is
+	 * not currently open (i.e., when the struct fuse_file_info
+	 * argument is NULL).
+	 */
+	int nullpath_ok;
+
+	/**
 	 * The remaining options are used by libfuse internally and
 	 * should not be touched.
 	 */
 	int show_help;
 	char *modules;
 	int debug;
-	int nopath;
 };
 
 
@@ -277,30 +289,6 @@ struct fuse_config {
  * is also a snapshot of the relevant wiki pages in the doc/ folder.
  */
 struct fuse_operations {
-	/**
-	 * Flag indicating that the path need not be calculated for
-	 * the following operations:
-	 *
-	 * read, write, flush, release, fsync, readdir, releasedir,
-	 * fsyncdir, lock, ioctl and poll
-	 *
-	 * For the following operations, the path will not be
-	 * calculated only if the file is currently open (i.e., the
-	 * struct fuse_file_info argument is non-NULL):
-	 *
-	 * truncate, getattr, chmod, chown, utimens
-	 *
-	 * If this flag is set then the path will not be calculaged even if the
-	 * file wasn't unlinked.  However the path can still be non-NULL if it
-	 * needs to be calculated for some other reason.
-	 */
-	unsigned int flag_nopath:1;
-
-	/**
-	 * Reserved flags, don't set
-	 */
-	unsigned int flag_reserved:31;
-
 	/** Get file attributes.
 	 *
 	 * Similar to stat().  The 'st_dev' and 'st_blksize' fields are

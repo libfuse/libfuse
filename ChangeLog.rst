@@ -5,6 +5,10 @@ Unreleased Changes
   fuse_config pointer that can be used to adjust high-level API
   specific configuration options.
 
+* The `nopath_flag` field of struct fuse_operations has been
+  removed. Instead, a new `nullpath_ok` flag can now be set
+  in struct fuse_config.
+
 * File systems that use the low-level API and support lookup requests
   for '.' and '..' should continue make sure to set the
   FUSE_CAP_EXPORT_SUPPORT bit in fuse_conn_info->want.

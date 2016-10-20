@@ -57,6 +57,7 @@ static void *xmp_init(struct fuse_conn_info *conn,
 {
 	(void) conn;
 	cfg->use_ino = 1;
+	cfg->nullpath_ok = 1;
 	return NULL;
 }
 
