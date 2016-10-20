@@ -2559,7 +2559,8 @@ void fuse_session_destroy(struct fuse_session *se)
 	pthread_key_delete(se->pipe_key);
 	pthread_mutex_destroy(&se->lock);
 	free(se->cuse_data);
-	close(se->fd);
+	if (se->fd != -1)
+		close(se->fd);
 	destroy_mount_opts(se->mo);
 	free(se);
 }
@@ -2743,6 +2744,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
 		goto out1;
 	}
+	se->fd = -1;
 	se->conn.max_write = UINT_MAX;
 	se->conn.max_readahead = UINT_MAX;
 
