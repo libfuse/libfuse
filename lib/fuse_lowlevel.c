@@ -2739,6 +2739,11 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		op_size = sizeof(struct fuse_lowlevel_ops);
 	}
 
+	if (args->argc == 0) {
+		fprintf(stderr, "fuse: empty argv passed to fuse_session_new().\n");
+		return NULL;
+	}
+
 	se = (struct fuse_session *) calloc(1, sizeof(struct fuse_session));
 	if (se == NULL) {
 		fprintf(stderr, "fuse: failed to allocate fuse object\n");
@@ -2754,7 +2759,12 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 		goto out2;
 	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
 		goto out3;
-	if (args->argc != 1) {
+
+	if(args->argc == 1 &&
+	   args->argv[0][0] == '-') {
+		fprintf(stderr, "fuse: warning: argv[0] looks like an option, but "
+			"will be ignored\n");
+	} else if (args->argc != 1) {
 		int i;
 		fprintf(stderr, "fuse: unknown option(s): `");
 		for(i = 1; i < args->argc-1; i++)

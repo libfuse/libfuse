@@ -1655,6 +1655,12 @@ int fuse_parse_cmdline(struct fuse_args *args,
  * If not all options are known, an error message is written to stderr
  * and the function returns NULL.
  *
+ * Option parsing skips argv[0], which is assumed to contain the
+ * program name. To prevent accidentially passing an option in
+ * argv[0], this element must always be present (even if no options
+ * are specified). It may be set to the empty string ('\0') if no
+ * reasonable value can be provided.
+ *
  * @param args argument vector
  * @param op the (low-level) filesystem operations
  * @param op_size sizeof(struct fuse_lowlevel_ops)

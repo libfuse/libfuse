@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* Documentation: clarified that the fuse_argv structure that is passed
+  to `fuse_new()` and `fuse_lowlevel_new()` must always contain at
+  least one element.
+
 * The high-level init() handler now receives an additional struct
   fuse_config pointer that can be used to adjust high-level API
   specific configuration options.

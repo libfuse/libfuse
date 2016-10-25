@@ -748,11 +748,13 @@ struct fuse_context {
  * fuse_main() accepts all options that can be passed to
  * fuse_parse_cmdline(), fuse_new(), or fuse_session_new().
  *
- * Normally, fuse_main() includes a basic ``usage: `` message in the
- * --help output. However, if argv[0] is an empty string, the usage
- * message is suppressed. This can be used by file systems to print
- * their own usage line first. See hello.c for an example of how to do
- * this.
+ * Option parsing skips argv[0], which is assumed to contain the
+ * program name. This element must always be present and is used to
+ * construct a basic ``usage: `` message for the --help
+ * output. argv[0] may also be set to the empty string. In this case
+ * the usage message is suppressed. This can be used by file systems
+ * to print their own usage line first. See hello.c for an example of
+ * how to do this.
  *
  * Note: this is currently implemented as a macro.
  *
@@ -784,6 +786,12 @@ struct fuse_context {
  *
  * If the --help option is specified, the function writes a help text
  * to stdout and returns NULL.
+ *
+ * Option parsing skips argv[0], which is assumed to contain the
+ * program name. This element must always be present and is used to
+ * construct a basic ``usage: `` message for the --help output. If
+ * argv[0] is set to the empty string, no usage message is included in
+ * the --help output.
  *
  * If an unknown option is passed in, an error message is written to
  * stderr and the function returns NULL.
