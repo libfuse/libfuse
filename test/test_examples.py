@@ -60,13 +60,16 @@ def test_hello(tmpdir, name, options):
 
 @pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh',
                                   'passthrough_ll'))
-def test_passthrough(tmpdir, name):
+@pytest.mark.parametrize("debug", (True, False))
+def test_passthrough(tmpdir, name, debug):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
                 '-f', mnt_dir ]
+    if debug:
+        cmdline.append('-d')
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)

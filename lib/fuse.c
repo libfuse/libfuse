@@ -1510,14 +1510,26 @@ static inline void fuse_prepare_interrupt(struct fuse *f, fuse_req_t req,
 		fuse_do_prepare_interrupt(req, d);
 }
 
+static const char* file_info_string(struct fuse_file_info *fi,
+			      char* buf, size_t len)
+{
+	if(fi == NULL)
+		return "NULL";
+	snprintf(buf, len, "%llu", (unsigned long long) fi->fh);
+	return buf;
+}
+
 int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf,
 		    struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.getattr) {
-		if (fs->debug)
-			fprintf(stderr, "getattr[%llu] %s\n",
-				(unsigned long long) fi->fh, path);
+		if (fs->debug) {
+			char buf[10];
+			fprintf(stderr, "getattr[%s] %s\n",
+				file_info_string(fi, buf, sizeof(buf)),
+				path);
+		}
 		return fs->op.getattr(path, buf, fi);
 	} else {
 		return -ENOSYS;
@@ -1982,11 +1994,12 @@ int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid,
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.chown) {
-		if (fs->debug)
-			fprintf(stderr, "chown[%llu] %s %lu %lu\n",
-				(unsigned long long) fi->fh, path,
-				(unsigned long) uid, (unsigned long) gid);
-
+		if (fs->debug) {
+			char buf[10];
+			fprintf(stderr, "chown[%s] %s %lu %lu\n",
+				file_info_string(fi, buf, sizeof(buf)),
+				path, (unsigned long) uid, (unsigned long) gid);
+		}
 		return fs->op.chown(path, uid, gid, fi);
 	} else {
 		return -ENOSYS;
@@ -1998,11 +2011,12 @@ int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size,
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.truncate) {
-		if (fs->debug)
-			fprintf(stderr, "truncate[%llu] %llu\n",
-				(unsigned long long) fi->fh,
+		if (fs->debug) {
+			char buf[10];
+			fprintf(stderr, "truncate[%s] %llu\n",
+				file_info_string(fi, buf, sizeof(buf)),
 				(unsigned long long) size);
-
+		}
 		return fs->op.truncate(path, size, fi);
 	} else {
 		return -ENOSYS;
@@ -2014,12 +2028,13 @@ int fuse_fs_utimens(struct fuse_fs *fs, const char *path,
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.utimens) {
-		if (fs->debug)
-			fprintf(stderr, "utimens[%llu] %s %li.%09lu %li.%09lu\n",
-				(unsigned long long) fi->fh, path,
-				tv[0].tv_sec, tv[0].tv_nsec,
+		if (fs->debug) {
+			char buf[10];
+			fprintf(stderr, "utimens[%s] %s %li.%09lu %li.%09lu\n",
+				file_info_string(fi, buf, sizeof(buf)),
+				path, tv[0].tv_sec, tv[0].tv_nsec,
 				tv[1].tv_sec, tv[1].tv_nsec);
-
+		}
 		return fs->op.utimens(path, tv, fi);
 	} else {
 		return -ENOSYS;
