@@ -19,10 +19,10 @@ $(pkgconfig_DATA): config.status
 setuid_fusermount:
 	@echo "Attempting to use sudo to make util/fusermount setuid root"
 	@echo "If this fails, set permissions manually and re-run make test"
-	test $$(ls -n util/fusermount | awk 'NR==1 {print $$3}') -eq 0 || \
-	    sudo chown root util/fusermount
-	test -u util/fusermount || \
-	    sudo chmod u+s util/fusermount
+	test $$(ls -n util/fusermount3 | awk 'NR==1 {print $$3}') -eq 0 || \
+	    sudo chown root util/fusermount3
+	test -u util/fusermount3 || \
+	    sudo chmod u+s util/fusermount3
 
 # If we are not root, util/fusermount needs to be setuid root
 # for tests to work.

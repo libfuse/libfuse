@@ -1,22 +1,22 @@
 ## Process this file with automake to produce Makefile.in
 
-bin_PROGRAMS = fusermount
-noinst_PROGRAMS = mount.fuse
+bin_PROGRAMS = fusermount3
+noinst_PROGRAMS = mount.fuse3
 
 # we re-use mount_util.c from the library, but do want to keep ourself
 # as stand-alone as possible. in order to make an out-of-source build
 # possible, we "generate" the file from its original location by
 # copying it over.
-fusermount_SOURCES = fusermount.c mount_util.c
-fusermount_CPPFLAGS = -I$(top_srcdir)/lib
+fusermount3_SOURCES = fusermount.c mount_util.c
+fusermount3_CPPFLAGS = -I$(top_srcdir)/lib
 BUILT_SOURCES = mount_util.c
 mount_util.c: $(top_srcdir)/lib/mount_util.c
 	@cp $(top_srcdir)/lib/mount_util.c .
 
-mount_fuse_SOURCES = mount.fuse.c
+mount_fuse3_SOURCES = mount.fuse.c
 
 install-exec-hook:
-	-chmod u+s $(DESTDIR)$(bindir)/fusermount
+	-chmod u+s $(DESTDIR)$(bindir)/fusermount3
 	@if test ! -e $(DESTDIR)/dev/fuse; then \
 		$(MKDIR_P) $(DESTDIR)/dev; \
 		echo "mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229 || true"; \
@@ -31,7 +31,7 @@ INIT_D_PATH = @INIT_D_PATH@
 
 install-exec-local:
 	$(MKDIR_P) $(DESTDIR)$(MOUNT_FUSE_PATH)
-	$(INSTALL_PROGRAM) $(builddir)/mount.fuse $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
+	$(INSTALL_PROGRAM) $(builddir)/mount.fuse3 $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse3
 	$(MKDIR_P) $(DESTDIR)$(INIT_D_PATH)
 	$(INSTALL_SCRIPT) $(srcdir)/init_script $(DESTDIR)$(INIT_D_PATH)/fuse
 	@if test -x /usr/sbin/update-rc.d; then \
@@ -44,7 +44,7 @@ install-data-local:
 	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/99-fuse.rules
 
 uninstall-local:
-	rm -f $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse
+	rm -f $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse3
 	rm -f $(DESTDIR)$(UDEV_RULES_PATH)/99-fuse.rules
 	rm -f $(DESTDIR)$(INIT_D_PATH)/fuse
 	@if test -x /usr/sbin/update-rc.d; then \

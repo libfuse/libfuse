@@ -1,3 +1,10 @@
+Unreleased Changes
+==================
+
+* The fusermount and mount.fuse binaries have been renamed to
+  fusermount3 and mount.fuse3 to allow co-installation of libfuse 2.x
+  and 3.x
+
 FUSE 3.0.0-rc1 (2016-10-28)
 ===========================
 

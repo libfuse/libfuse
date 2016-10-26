@@ -1,4 +1,3 @@
-fusermount
-fuse_ioslave
-mount.fuse
+fusermount3
+mount.fuse3
 mount_util.c

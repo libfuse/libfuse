@@ -40,7 +40,7 @@
 #define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
 #endif
 
-#define FUSERMOUNT_PROG		"fusermount"
+#define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
 #ifndef HAVE_FORK

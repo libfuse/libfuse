@@ -22,7 +22,7 @@ def wait_for_mount(mount_process, mnt_dir,
 def cleanup(mnt_dir):
     # Don't bother trying Valgrind if things already went wrong
 
-    subprocess.call([pjoin(basename, 'util', 'fusermount'),
+    subprocess.call([pjoin(basename, 'util', 'fusermount3'),
                      '-z', '-u', mnt_dir],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.STDOUT)
@@ -35,7 +35,7 @@ def umount(mount_process, mnt_dir):
     else:
         cmdline = []
 
-    cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount'),
+    cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount3'),
                           '-z', '-u', mnt_dir ]
     subprocess.check_call(cmdline)
     assert not os.path.ismount(mnt_dir)
