@@ -18,11 +18,6 @@ supported (\fBro\fP, \fBrw\fP, \fBsuid\fP, \fBnosuid\fP, \fBdev\fP,
 \fBsync\fP, \fBasync\fP, \fBdirsync\fP). Filesystems are mounted with
 \fBnodev,nosuid\fP by default, which can only be overridden by a
 privileged user.
-.SS "WARNING"
-Many of the mount options described below should not be specified
-directly by the user mounting the file system but chosen by the
-file-system itself when it calls mount(2). This is because the correct
-values depend on implementation details of the file system.
 .SS "General mount options:"
 These are FUSE specific mount options that can be specified for all filesystems:
 .TP
@@ -42,8 +37,15 @@ responsible for un-mounting the file system, which means that the
 mountpoint becomes inaccessible if the file system process terminates
 without first unmounting the  file system.
 .TP
-\fBmax_read=N\fP
-With this option the maximum size of read operations can be set. The default is infinite. Note that the size of read requests is limited anyway to 32 pages (which is 128kbyte on i386).
+\fBmax_read=N\fP With this option the maximum size of read operations
+can be set. The default is infinite, but typically the kernel enforces
+its own limit in addition to this one.
+
+\fBWarning:\fP The correct
+setting for this option depends on implementation details of the file
+system and is not intended to be specified by the user mounting the
+file system. Rather, the correct value should be added by the
+file-system internally when it calls \fBmount(2)\fP.
 .TP
 \fBdebug\fP
 Turns on debug information printing by the library.
