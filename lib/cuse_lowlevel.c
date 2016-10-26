@@ -196,20 +196,20 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
 	struct cuse_init_out outarg;
-	struct fuse_session *f = req->se;
-	struct cuse_data *cd = f->cuse_data;
-	size_t bufsize = f->bufsize;
+	struct fuse_session *se = req->se;
+	struct cuse_data *cd = se->cuse_data;
+	size_t bufsize = se->bufsize;
 	struct cuse_lowlevel_ops *clop = req_clop(req);
 
 	(void) nodeid;
-	if (f->debug) {
+	if (se->debug) {
 		fprintf(stderr, "CUSE_INIT: %u.%u\n", arg->major, arg->minor);
 		fprintf(stderr, "flags=0x%08x\n", arg->flags);
 	}
-	f->conn.proto_major = arg->major;
-	f->conn.proto_minor = arg->minor;
-	f->conn.capable = 0;
-	f->conn.want = 0;
+	se->conn.proto_major = arg->major;
+	se->conn.proto_minor = arg->minor;
+	se->conn.capable = 0;
+	se->conn.want = 0;
 
 	if (arg->major < 7) {
 		fprintf(stderr, "cuse: unsupported protocol version: %u.%u\n",
@@ -225,23 +225,23 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 
 	bufsize -= 4096;
-	if (bufsize < f->conn.max_write)
-		f->conn.max_write = bufsize;
+	if (bufsize < se->conn.max_write)
+		se->conn.max_write = bufsize;
 
-	f->got_init = 1;
-	if (f->op.init)
-		f->op.init(f->userdata, &f->conn);
+	se->got_init = 1;
+	if (se->op.init)
+		se->op.init(se->userdata, &se->conn);
 
 	memset(&outarg, 0, sizeof(outarg));
 	outarg.major = FUSE_KERNEL_VERSION;
 	outarg.minor = FUSE_KERNEL_MINOR_VERSION;
 	outarg.flags = cd->flags;
 	outarg.max_read = cd->max_read;
-	outarg.max_write = f->conn.max_write;
+	outarg.max_write = se->conn.max_write;
 	outarg.dev_major = cd->dev_major;
 	outarg.dev_minor = cd->dev_minor;
 
-	if (f->debug) {
+	if (se->debug) {
 		fprintf(stderr, "   CUSE_INIT: %u.%u\n",
 			outarg.major, outarg.minor);
 		fprintf(stderr, "   flags=0x%08x\n", outarg.flags);
@@ -256,7 +256,7 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	cuse_reply_init(req, &outarg, cd->dev_info, cd->dev_info_len);
 
 	if (clop->init_done)
-		clop->init_done(f->userdata);
+		clop->init_done(se->userdata);
 
 	fuse_free_req(req);
 }
