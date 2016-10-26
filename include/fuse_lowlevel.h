@@ -1439,9 +1439,14 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen);
 
 /**
- * Notify to invalidate parent attributes and delete the dentry matching
- * parent/name if the dentry's inode number matches child (otherwise it
- * will invalidate the matching dentry).
+ * As of kernel 4.8, this function behaves like
+ * fuse_lowlevel_notify_inval_entry() with the following additional
+ * effect:
+ *
+ * If the provided *child* inode matches the inode that is currently
+ * associated with the cached dentry, and if there are any inotify
+ * watches registered for the dentry, then the watchers are informed
+ * that the dentry has been deleted.
  *
  * To avoid a deadlock don't call this function from a filesystem operation and
  * don't call it with a lock held that can also be held by a filesystem
