@@ -22,7 +22,15 @@ privileged user.
 These are FUSE specific mount options that can be specified for all filesystems:
 .TP
 \fBdefault_permissions\fP
-By default FUSE doesn't check file access permissions, the filesystem is free to implement it's access policy or leave it to the underlying file access mechanism (e.g. in case of network filesystems). This option enables permission checking, restricting access based on file mode.  This is option is usually useful together with the \fBallow_other\fP mount option.
+This option instructs the kernel to perform its own permission check
+instead of deferring all permission checking to the FUSE
+filesystem. The check by the kernel is done in addition to any
+permission checks by the filesystem, and both have to succeed for an
+operation to be allowed. The kernel performs a standard UNIX permission
+check (based on mode bits and ownership of the directory entry, and
+uid/gid of the acessing process). If the filesystem supports extended
+attributes and the kernel is sufficiently recent, it may also take
+into account access control lists (ACLs).
 .TP
 \fBallow_other\fP
 This option overrides the security measure restricting file access to the user mounting the filesystem.  So all users (including root) can access the files.  This option is by default only allowed to root, but this restriction can be removed with a configuration option described in the previous section.
