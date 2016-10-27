@@ -3,6 +3,30 @@
 fuse \- configuration and mount options for FUSE file systems
 .SH DESCRIPTION
 FUSE (Filesystem in Userspace) is a simple interface for userspace programs to export a virtual filesystem to the Linux kernel. FUSE also aims to provide a secure method for non privileged users to create and mount their own filesystem implementations.
+.SH DEFINITIONS
+.TP
+\fBFUSE\fP
+The in-kernel filesystem that forwards requests to a user-space
+process.
+.TP
+\fBfilesystem\fP
+The user-space process that responds to requests received from the
+kernel.
+.TP
+\fBlibfuse\fP
+The shared library that most (user-space) filesystems use to
+communicate with FUSE (the kernel filesystem). libfuse also provides
+the \fBfusermount\fP helper to allow non-privileged users to mount
+filesystems.
+.TP
+\fBfilesystem owner\fP
+The user that starts the filesystem and instructs the kernel to
+associate it with a particular mountpoint. The latter is typically done
+by the filesystem itself on start-up. When using libfuse, this is done
+by calling the \fBfusermount\fP utility.
+.TP
+\fBclient\fP
+Any process that interacts with the mountpoint.
 .SH CONFIGURATION
 Some options regarding mount policy can be set in the file \fI/etc/fuse.conf\fP. Currently these options are:
 .TP
@@ -10,7 +34,11 @@ Some options regarding mount policy can be set in the file \fI/etc/fuse.conf\fP.
 Set the maximum number of FUSE mounts allowed to non-root users. The default is 1000.
 .TP
 \fBuser_allow_other\fP
-Allow non-root users to specify the \fBallow_other\fP or \fBallow_root\fP mount options (see below).
+Allow non-root users to specify the \fBallow_other\fP or
+\fBallow_root\fP mount options (see below).
+.TP
+These limits are enforced by the \fBfusermount\fP helper, so they can
+be avoided by filesystems that run as root.
 .SH OPTIONS
 Most of the generic mount options described in \fBmount\fP are
 supported (\fBro\fP, \fBrw\fP, \fBsuid\fP, \fBnosuid\fP, \fBdev\fP,
@@ -23,64 +51,100 @@ These are FUSE specific mount options that can be specified for all filesystems:
 .TP
 \fBdefault_permissions\fP
 This option instructs the kernel to perform its own permission check
-instead of deferring all permission checking to the FUSE
+instead of deferring all permission checking to the
 filesystem. The check by the kernel is done in addition to any
 permission checks by the filesystem, and both have to succeed for an
 operation to be allowed. The kernel performs a standard UNIX permission
 check (based on mode bits and ownership of the directory entry, and
-uid/gid of the acessing process). If the filesystem supports extended
+uid/gid of the client). If the filesystem supports extended
 attributes and the kernel is sufficiently recent, it may also take
 into account access control lists (ACLs).
 .TP
 \fBallow_other\fP
-This option overrides the security measure restricting file access to the user mounting the filesystem.  So all users (including root) can access the files.  This option is by default only allowed to root, but this restriction can be removed with a configuration option described in the previous section.
+This option overrides the security measure
+restricting file access to the filesystem owner, so that all users
+(including root) can access the files.  This option is by default only
+allowed to root, but this restriction can be removed with a
+configuration option described in the previous section.
 .TP
 \fBallow_root\fP
-This option is similar to \fBallow_other\fP but file access is limited to the user mounting the filesystem and root.  This option and \fBallow_other\fP are mutually exclusive.
+This option is similar to \fBallow_other\fP but file access is limited
+to the filesystem owner and root.  This option and \fBallow_other\fP are mutually exclusive.
 .TP
 \fBauto_unmount\fP
-This option enables automatic unmounting of the file system if the
-FUSE process terminates for any reason. Normally the FUSE process is
-responsible for un-mounting the file system, which means that the
-mountpoint becomes inaccessible if the file system process terminates
-without first unmounting the  file system.
+This option enables automatic release of the mountpoint if filesystem
+terminates for any reason. Normally the filesystem is
+responsible for releasing the mountpoint, which means that the
+mountpoint becomes inaccessible if the filesystem terminates
+without first unmounting.
 .TP
-\fBmax_read=N\fP With this option the maximum size of read operations
-can be set. The default is infinite, but typically the kernel enforces
-its own limit in addition to this one.
-
-\fBWarning:\fP The correct
-setting for this option depends on implementation details of the file
-system and is not intended to be specified by the user mounting the
-file system. Rather, the correct value should be added by the
-file-system internally when it calls \fBmount(2)\fP.
-.TP
-\fBdebug\fP
-Turns on debug information printing by the library.
-.TP
-\fBfsname=NAME\fP
-Sets the filesystem source (first field in \fI/etc/mtab\fP). The default is the mount program name.
-.TP
-\fBsubtype=TYPE\fP
-Sets the filesystem type (third field in \fI/etc/mtab\fP). The default is the mount program name. If the kernel suppports it, \fI/etc/mtab\fP and \fI/proc/mounts\fP will show the filesystem type as \fBfuse.TYPE\fP
-
-If the kernel doesn't support subtypes, the source filed will be \fBTYPE#NAME\fP, or if \fBfsname\fP option is not specified, just \fBTYPE\fP.
+\fBrootmode=M\fP
+Specifies the the file mode of the filesystem's root (in octal
+representation).
 .TP
 \fBblkdev\fP
-Mount a filesystem backed by a block device.  This is a privileged option. The device must be specified with the \fBfsname=NAME\fP option.
+Mount a filesystem backed by a block device.  This is a privileged
+option. The device must be specified with the \fBfsname=NAME\fP
+option.
+.TP
+\fBblksize=N\fP
+Set the block size for the filesystem. This option is only valid
+for 'fuseblk' type mounts. The default is 512.
+
+In most cases, this option should not be specified by
+the filesystem owner but set internally by the filesystem.
+.TP
+\fBmax_read=N\fP
+With this option the maximum size of read operations can be set. The
+default is infinite, but typically the kernel enforces its own limit
+in addition to this one.
+
+This option should not be specified by the filesystem owner. The
+correct (or optimum) value depends on the filesystem implementation
+and should thus be set by the filesystem internally.
+.TP
+\fBfd=N\fP
+The file descriptor to use for communication between the userspace
+filesystem and the kernel.  The file descriptor must have been
+obtained by opening the FUSE device (/dev/fuse).
+
+This option should not be specified by the filesystem owner. It is set
+by libfuse (or, if libfuse is not used, must be set by the filesystem
+itself).
+.TP
+\fBuser_id=N\fP
+\fBgroup_id=N\fP
+Specifies the numeric uid/gid of the mount owner.
+
+This option should not be specified by the filesystem owner. It is set
+by libfuse (or, if libfuse is not used, must be set by the filesystem
+itself).
+.TP
+\fBfsname=NAME\fP
+Sets the filesystem source (first field in \fI/etc/mtab\fP). The
+default is the name of the filesystem process.
+.TP
+\fBsubtype=TYPE\fP
+Sets the filesystem type (third field in \fI/etc/mtab\fP). The default
+is the name of the filesystem process. If the kernel suppports it, \fI/etc/mtab\fP and \fI/proc/mounts\fP will show the filesystem type as \fBfuse.TYPE\fP
+
+If the kernel doesn't support subtypes, the source filed will be
+\fBTYPE#NAME\fP, or if \fBfsname\fP option is not specified, just
+\fBTYPE\fP.
 .SS "High-level mount options:"
-These are FUSE specific mount options that can only be specified for
-file-systems that use the high-level FUSE API:
+These following options are not actually passed to the kernel but
+interpreted by libfuse. They can only be specified for filesystems
+that use the high-level libfuse API:
 .TP
 \fBkernel_cache\fP
-This option disables flushing the cache of the file contents on every \fBopen\fP(2).  This should only be enabled on filesystems, where the file data is never changed externally (not through the mounted FUSE filesystem).  Thus it is not suitable for network filesystems and other \fIintermediate\fP filesystems.
+This option disables flushing the cache of the file contents on every \fBopen\fP(2).  This should only be enabled on filesystems, where the file data is never changed externally (not through the mounted FUSE filesystem).  Thus it is not suitable for network filesystems and other "intermediate" filesystems.
 
 \fBNOTE\fP: if this option is not specified (and neither \fBdirect_io\fP) data is still cached after the \fBopen\fP(2), so a \fBread\fP(2) system call will not always initiate a read operation.
 .TP
 \fBauto_cache\fP
 This option is an alternative to
-`kernel_cache`. Instead of unconditionally keeping cached data, the
-cached data is invalidated on \fBopen\fP(2) if if the modification
+\fBkernel_cache\fP. Instead of unconditionally keeping cached data, the
+cached data is invalidated on \fBopen\fP(2) if the modification
 time or the size of the file has changed since it was last opened.
 .TP
 \fBumask=M\fP
@@ -107,10 +171,10 @@ The timeout in seconds for which file attributes are cached for the purpose of c
 \fBnoforget\fP
 .TP
 \fBremember=T\fP
-Normally, FUSE assigns inodes to paths only for as long as the kernel
+Normally, libfuse assigns inodes to paths only for as long as the kernel
 is aware of them. With this option inodes are instead assigned
 for at least \fBT\fP seconds (or, in the case of \fBnoforget\fP,
-the life-time of the file-system process). This will require more
+the life-time of the filesystem). This will require more
 memory, but may be necessary when using applications that make use of
 inode numbers.
 .TP
