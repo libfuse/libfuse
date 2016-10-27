@@ -80,42 +80,107 @@ struct fuse_file_info {
 	uint32_t poll_events;
 };
 
+
+
+/**************************************************************************
+ * Capability bits for 'fuse_conn_info.capable' and 'fuse_conn_info.want' *
+ **************************************************************************/
+
 /**
- * Capability bits for 'fuse_conn_info.capable' and 'fuse_conn_info.want'
+ * Indicates that the filesystem supports asynchronous read requests.
  *
- * FUSE_CAP_ASYNC_READ: filesystem supports asynchronous read requests
- * FUSE_CAP_POSIX_LOCKS: filesystem supports "remote" locking
- * FUSE_CAP_ATOMIC_O_TRUNC: filesystem handles the O_TRUNC open flag
- * FUSE_CAP_EXPORT_SUPPORT: filesystem handles lookups of "." and ".."
- * FUSE_CAP_DONT_MASK: don't apply umask to file mode on create operations
- * FUSE_CAP_SPLICE_WRITE: ability to use splice() to write to the fuse device
- * FUSE_CAP_SPLICE_MOVE: ability to move data to the fuse device with splice()
- * FUSE_CAP_SPLICE_READ: ability to use splice() to read from the fuse device
- * FUSE_CAP_IOCTL_DIR: ioctl support on directories
- * FUSE_CAP_AUTO_INVAL_DATA: automatically invalidate cached pages
- * FUSE_CAP_DO_READDIRPLUS: do READDIRPLUS (READDIR+LOOKUP in one)
- * FUSE_CAP_READDIRPLUS_AUTO: adaptive readdirplus
- * FUSE_CAP_ASYNC_DIO: asynchronous direct I/O submission
- * FUSE_CAP_WRITEBACK_CACHE: use writeback cache for buffered writes
- * FUSE_CAP_NO_OPEN_SUPPORT: support zero-message opens
+ * If this capability is not requested/available, the kernel will
+ * ensure that there is at most one pending read request per
+ * file-handle at any time, and will attempt to order read requests by
+ * increasing offset.
  */
 #define FUSE_CAP_ASYNC_READ		(1 << 0)
+
+/**
+ * Indicates that the filesystem supports "remote" locking.
+ */
 #define FUSE_CAP_POSIX_LOCKS		(1 << 1)
+
+/**
+ * Indicates that the filesystem supports  the O_TRUNC open flag
+ */
 #define FUSE_CAP_ATOMIC_O_TRUNC		(1 << 3)
+
+/**
+ * Indicates that the filesystem supports lookups of "." and "..".
+ */
 #define FUSE_CAP_EXPORT_SUPPORT		(1 << 4)
-/* (1 << 5) used to be FUSE_CAP_BIG_WRITES, which is now
-   always enabled */
+
+/**
+ * Indicates that the kernel should not apply the umask to the
+ * file mode on create operations.
+ */
 #define FUSE_CAP_DONT_MASK		(1 << 6)
+
+/**
+ * Indicates that libfuse should try to use splice() when writing to
+ * the fuse device
+ */
 #define FUSE_CAP_SPLICE_WRITE		(1 << 7)
+
+/**
+ * Indicates that libfuse should try to move pages instead of copying
+ * when writing to / reading from the fuse device.
+ */
 #define FUSE_CAP_SPLICE_MOVE		(1 << 8)
+
+/**
+ * Indicates that libfuse should try to use splice() when reading from
+ * the fuse device.
+ */
 #define FUSE_CAP_SPLICE_READ		(1 << 9)
+
+/**
+ * FIXME: This capability is not documented. Please get in touch if
+ * you know what it does!
+ */
 #define FUSE_CAP_FLOCK_LOCKS		(1 << 10)
+
+/**
+ * Indicates that the filesystem supports ioctl's on directories.
+ */
 #define FUSE_CAP_IOCTL_DIR		(1 << 11)
+
+/**
+ * Indicates that the filesystem supports automatic invalidation of
+ * cached pages.
+ */
 #define FUSE_CAP_AUTO_INVAL_DATA	(1 << 12)
+
+/**
+ * Indicates that the filesystem supports readdirplus
+ */
 #define FUSE_CAP_READDIRPLUS		(1 << 13)
+
+/**
+ * Indicates that the filesystem supports adaptive readdirplus
+ */
 #define FUSE_CAP_READDIRPLUS_AUTO	(1 << 14)
+
+/**
+ * Indicates that the filesystem supports asynchronous direct I/O submission.
+ *
+ * If this capability is not requested/available, the kernel will
+ * ensure that there is at most one pending read and one pending write request per
+ * direct I/O file-handle at any time.
+ */
 #define FUSE_CAP_ASYNC_DIO		(1 << 15)
+
+/**
+ * Indicates that writeback caching should be enabled. This means that
+ * individual write request may be buffered and merged in the kernel
+ * before they are send to the filesystem.
+ */
 #define FUSE_CAP_WRITEBACK_CACHE	(1 << 16)
+
+/**
+ * Indicates that the filesystem supports support zero-message opens.
+ */
 #define FUSE_CAP_NO_OPEN_SUPPORT	(1 << 17)
 
 /**
