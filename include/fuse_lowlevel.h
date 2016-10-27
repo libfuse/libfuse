@@ -154,6 +154,12 @@ struct fuse_forget_data {
  * after the call has returned, so if they are needed later, their
  * contents have to be copied.
  *
+ * In general, all methods are expected to perform any necessary
+ * permission checking. However, a filesystem may delegate this task
+ * to the kernel by passing the `default_permissions` mount option to
+ * `fuse_session_new()`. In this case, methods will only be called if
+ * the kernel's permission check has succeeded.
+ *
  * The filesystem sometimes needs to handle a return value of -ENOENT
  * from the reply function, which means, that the request was
  * interrupted, and the reply discarded.  For example if

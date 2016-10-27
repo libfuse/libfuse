@@ -280,13 +280,13 @@ struct fuse_config {
  * init and destroy are special purpose methods, without which a full
  * featured filesystem can still be implemented.
  *
+ * In general, all methods are expected to perform any necessary
+ * permission checking. However, a filesystem may delegate this task
+ * to the kernel by passing the `default_permissions` mount option to
+ * `fuse_new()`. In this case, methods will only be called if
+ * the kernel's permission check has succeeded.
+ *
  * Almost all operations take a path which can be of any length.
- *
- * Changed in fuse 2.8.0 (regardless of API version)
- * Previously, paths were limited to a length of PATH_MAX.
- *
- * See http://fuse.sourceforge.net/wiki/ for more information.  There
- * is also a snapshot of the relevant wiki pages in the doc/ folder.
  */
 struct fuse_operations {
 	/** Get file attributes.

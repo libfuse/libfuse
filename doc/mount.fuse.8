@@ -59,6 +59,9 @@ check (based on mode bits and ownership of the directory entry, and
 uid/gid of the client). If the filesystem supports extended
 attributes and the kernel is sufficiently recent, it may also take
 into account access control lists (ACLs).
+
+Filesystems that do not implement any permission checking should
+generally add this option internally.
 .TP
 \fBallow_other\fP
 This option overrides the security measure
