@@ -1,5 +1,8 @@
-Unreleased Changes
-==================
+FUSE 3.0.0-rc1 (2016-10-28)
+===========================
+
+This is a release candidate. Functionality and API will correspond
+to the final release unless any serious bugs are discovered.
 
 * Added a `max_read` field to `struct fuse_conn_info`. For the time
   being, the maximum size of read requests has to be specified both
