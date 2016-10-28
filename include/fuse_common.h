@@ -33,8 +33,6 @@ extern "C" {
 
 /**
  * Information about open files
- *
- * Changed in version 3.0
  */
 struct fuse_file_info {
 	/** Open flags.	 Available in open() and release() */

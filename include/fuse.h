@@ -372,8 +372,6 @@ struct fuse_operations {
 	 * given flags. Optionally open may also return an arbitrary
 	 * filehandle in the fuse_file_info structure, which will be
 	 * passed to all file operations.
-	 *
-	 * Changed in version 2.2
 	 */
 	int (*open) (const char *, struct fuse_file_info *);
 
@@ -385,8 +383,6 @@ struct fuse_operations {
 	 * 'direct_io' mount option is specified, in which case the return
 	 * value of the read system call will reflect the return value of
 	 * this operation.
-	 *
-	 * Changed in version 2.2
 	 */
 	int (*read) (const char *, char *, size_t, off_t,
 		     struct fuse_file_info *);
@@ -396,8 +392,6 @@ struct fuse_operations {
 	 * Write should return exactly the number of bytes requested
 	 * except on error.	 An exception to this is when the 'direct_io'
 	 * mount option is specified (see read operation).
-	 *
-	 * Changed in version 2.2
 	 */
 	int (*write) (const char *, const char *, size_t, off_t,
 		      struct fuse_file_info *);
@@ -405,9 +399,6 @@ struct fuse_operations {
 	/** Get file system statistics
 	 *
 	 * The 'f_favail', 'f_fsid' and 'f_flag' fields are ignored
-	 *
-	 * Replaced 'struct statfs' parameter with 'struct statvfs' in
-	 * version 2.5
 	 */
 	int (*statfs) (const char *, struct statvfs *);
 
@@ -431,8 +422,6 @@ struct fuse_operations {
 	 *
 	 * Filesystems shouldn't assume that flush will always be called
 	 * after some writes, or that if will be called at all.
-	 *
-	 * Changed in version 2.2
 	 */
 	int (*flush) (const char *, struct fuse_file_info *);
 
@@ -447,8 +436,6 @@ struct fuse_operations {
 	 * have a file opened more than once, in which case only the last
 	 * release will mean, that no more reads/writes will happen on the
 	 * file.  The return value of release is ignored.
-	 *
-	 * Changed in version 2.2
 	 */
 	int (*release) (const char *, struct fuse_file_info *);
 
@@ -456,8 +443,6 @@ struct fuse_operations {
 	 *
 	 * If the datasync parameter is non-zero, then only the user data
 	 * should be flushed, not the meta data.
-	 *
-	 * Changed in version 2.2
 	 */
 	int (*fsync) (const char *, int, struct fuse_file_info *);
 

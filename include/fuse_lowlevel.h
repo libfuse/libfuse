@@ -284,9 +284,6 @@ struct fuse_lowlevel_ops {
 	 * @param attr the attributes
 	 * @param to_set bit mask of attributes which should be set
 	 * @param fi file information, or NULL
-	 *
-	 * Changed in version 2.5:
-	 *     file information filled in for ftruncate
 	 */
 	void (*setattr) (fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			 int to_set, struct fuse_file_info *fi);
