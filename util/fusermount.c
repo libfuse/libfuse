@@ -1206,7 +1206,7 @@ int main(int argc, char *argv[])
 		res = chdir("/");
 		if (res == -1) {
 			fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
-			exit(1);
+			goto err_out;
 		}
 	}
 	restore_privs();
@@ -1221,21 +1221,23 @@ int main(int argc, char *argv[])
 	if (commfd == NULL) {
 		fprintf(stderr, "%s: old style mounting not supported\n",
 			progname);
-		exit(1);
+		goto err_out;
 	}
 
 	fd = mount_fuse(mnt, opts);
 	if (fd == -1)
-		exit(1);
+		goto err_out;
 
 	cfd = atoi(commfd);
 	res = send_fd(cfd, fd);
 	if (res == -1)
-		exit(1);
+		goto err_out;
 	close(fd);
 
-	if (!auto_unmount)
+	if (!auto_unmount) {
+		free(mnt);
 		return 0;
+	}
 
 	/* Become a daemon and wait for the parent to exit or die.
 	   ie For the control socket to get closed.
@@ -1245,7 +1247,7 @@ int main(int argc, char *argv[])
 	res = chdir("/");
 	if (res == -1) {
 		fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
-		exit(1);
+		goto err_out;
 	}
 
 	sigfillset(&sigset);
@@ -1278,6 +1280,10 @@ do_unmount:
 				progname, mnt, strerror(errno));
 	}
 	if (res == -1)
-		exit(1);
+		goto err_out;
 	return 0;
+
+err_out:
+	free(mnt);
+	exit(1);
 }
