@@ -1,6 +1,12 @@
 Unreleased Changes
 ==================
 
+* Added a `max_read` field to `struct fuse_conn_info`. For the time
+  being, the maximum size of read requests has to be specified both
+  there *and* passed to fuse_session_new() using the ``-o
+  max_read=<n>`` mount option. At some point in the future, specifying
+  the mount option will no longer be necessary.
+
 * Documentation: clarified that the fuse_argv structure that is passed
   to `fuse_new()` and `fuse_lowlevel_new()` must always contain at
   least one element.

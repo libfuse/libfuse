@@ -100,11 +100,17 @@ the filesystem owner but set internally by the filesystem.
 \fBmax_read=N\fP
 With this option the maximum size of read operations can be set. The
 default is infinite, but typically the kernel enforces its own limit
-in addition to this one.
+in addition to this one. A value of zero corresponds to no limit.
 
 This option should not be specified by the filesystem owner. The
 correct (or optimum) value depends on the filesystem implementation
 and should thus be set by the filesystem internally.
+
+This mount option is deprecated in favor of direct negotiation over
+the device fd (as done for e.g. the maximum size of write
+operations). For the time being, libfuse-using filesystems that want
+to limit the read size must therefore use this mount option \fIand\fP
+set the same value again in the init() handler.
 .TP
 \fBfd=N\fP
 The file descriptor to use for communication between the userspace

@@ -222,6 +222,20 @@ struct fuse_conn_info {
 	unsigned max_write;
 
 	/**
+	 * Maximum size of read requests. A value of zero indicates no
+	 * limit. However, even if the filesystem does not specify a
+	 * limit, the maximum size of read requests will still be
+	 * limited by the kernel.
+	 *
+	 * NOTE: For the time being, the maximum size of read requests
+	 * must be set both here *and* passed to fuse_session_new()
+	 * using the ``-o max_read=<n>`` mount option. At some point
+	 * in the future, specifying the mount option will no longer
+	 * be necessary.
+	 */
+	unsigned max_read;
+
+	/**
 	 * Maximum readahead
 	 */
 	unsigned max_readahead;

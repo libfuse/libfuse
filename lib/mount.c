@@ -73,6 +73,7 @@ struct mount_opts {
 	char *mtab_opts;
 	char *fusermount_opts;
 	char *kernel_opts;
+	unsigned max_read;
 };
 
 #define FUSE_MOUNT_OPT(t, p) { t, offsetof(struct mount_opts, p), 1 }
@@ -83,6 +84,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_MOUNT_OPT("blkdev",		blkdev),
 	FUSE_MOUNT_OPT("auto_unmount",		auto_unmount),
 	FUSE_MOUNT_OPT("fsname=%s",		fsname),
+	FUSE_MOUNT_OPT("max_read=%u",		max_read),
 	FUSE_MOUNT_OPT("subtype=%s",		subtype),
 	FUSE_OPT_KEY("allow_other",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("allow_root",		KEY_ALLOW_ROOT),
@@ -156,6 +158,11 @@ static const struct mount_flags mount_flags[] = {
 #endif
 	{NULL,	    0,		    0}
 };
+
+unsigned get_max_read(struct mount_opts *o)
+{
+	return o->max_read;
+}
 
 static void set_mount_flag(const char *s, int *flags)
 {

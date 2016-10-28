@@ -1916,6 +1916,14 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
 
+	unsigned max_read_mo = get_max_read(se->mo);
+	if (se->conn.max_read != max_read_mo) {
+		fprintf(stderr, "fuse: error: init() and fuse_session_new() "
+			"requested different maximum read size (%u vs %u)\n",
+			se->conn.max_read, max_read_mo);
+		abort();
+	}
+
 	/* Always enable big writes, this is superseded
 	   by the max_write option */
 	outarg.flags |= FUSE_BIG_WRITES;

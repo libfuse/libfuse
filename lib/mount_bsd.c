@@ -40,6 +40,7 @@ struct mount_opts {
 	int allow_other;
 	int allow_root;
 	char *kernel_opts;
+	unsigned max_read;
 };
 
 #define FUSE_DUAL_OPT_KEY(templ, key)				\
@@ -48,6 +49,7 @@ struct mount_opts {
 static const struct fuse_opt fuse_mount_opts[] = {
 	{ "allow_other", offsetof(struct mount_opts, allow_other), 1 },
 	{ "allow_root", offsetof(struct mount_opts, allow_root), 1 },
+	{ "max_read=%u", offsetof(struct mount_opts, max_read), 1 },
 	FUSE_OPT_KEY("allow_root",		KEY_ALLOW_ROOT),
 	FUSE_OPT_KEY("-r",			KEY_RO),
 	/* standard FreeBSD mount options */
@@ -96,6 +98,11 @@ static const struct fuse_opt fuse_mount_opts[] = {
 void fuse_mount_version(void)
 {
 	system(FUSERMOUNT_PROG " --version");
+}
+
+unsigned get_max_read(struct mount_opts *o)
+{
+	return o->max_read;
 }
 
 static int fuse_mount_opt_proc(void *data, const char *arg, int key,
