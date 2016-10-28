@@ -32,9 +32,7 @@
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
-#define FUSE_DEV_OLD "/proc/fs/fuse/dev"
-#define FUSE_DEV_NEW "/dev/fuse"
-#define FUSE_VERSION_FILE_OLD "/proc/fs/fuse/version"
+#define FUSE_DEV "/dev/fuse"
 #define FUSE_CONF "/etc/fuse.conf"
 
 #ifndef MS_DIRSYNC
@@ -876,37 +874,6 @@ err:
 	return -1;
 }
 
-static int check_version(const char *dev)
-{
-	int res;
-	int majorver;
-	int minorver;
-	const char *version_file;
-	FILE *vf;
-
-	if (strcmp(dev, FUSE_DEV_OLD) != 0)
-		return 0;
-
-	version_file = FUSE_VERSION_FILE_OLD;
-	vf = fopen(version_file, "r");
-	if (vf == NULL) {
-		fprintf(stderr, "%s: kernel interface too old\n", progname);
-		return -1;
-	}
-	res = fscanf(vf, "%i.%i", &majorver, &minorver);
-	fclose(vf);
-	if (res != 2) {
-		fprintf(stderr, "%s: error reading %s\n", progname,
-			version_file);
-		return -1;
-	}
-	if (majorver < 3) {
-		fprintf(stderr, "%s: kernel interface too old\n", progname);
-		return -1;
-	}
-	return 0;
-}
-
 static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 {
 	int res;
@@ -1012,20 +979,11 @@ static int try_open(const char *dev, char **devp, int silent)
 static int try_open_fuse_device(char **devp)
 {
 	int fd;
-	int err;
 
 	drop_privs();
-	fd = try_open(FUSE_DEV_NEW, devp, 0);
+	fd = try_open(FUSE_DEV, devp, 0);
 	restore_privs();
-	if (fd >= 0)
-		return fd;
-
-	err = fd;
-	fd = try_open(FUSE_DEV_OLD, devp, 1);
-	if (fd >= 0)
-		return fd;
-
-	return err;
+	return fd;
 }
 
 static int open_fuse_device(char **devp)
@@ -1069,15 +1027,11 @@ static int mount_fuse(const char *mnt, const char *opts)
 		}
 	}
 
-	res = check_version(dev);
-	if (res != -1) {
-		res = check_perm(&real_mnt, &stbuf, &mountpoint_fd);
-		restore_privs();
-		if (res != -1)
-			res = do_mount(real_mnt, &type, stbuf.st_mode & S_IFMT,
-				       fd, opts, dev, &source, &mnt_opts);
-	} else
-		restore_privs();
+	res = check_perm(&real_mnt, &stbuf, &mountpoint_fd);
+	restore_privs();
+	if (res != -1)
+		res = do_mount(real_mnt, &type, stbuf.st_mode & S_IFMT,
+			       fd, opts, dev, &source, &mnt_opts);
 
 	if (mountpoint_fd != -1)
 		close(mountpoint_fd);
