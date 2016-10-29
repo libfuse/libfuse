@@ -8,27 +8,13 @@
 
 /** @file
  *
- * hello.c - minimal FUSE example featuring fuse_main usage
+ * minimal example filesystem using high-level API
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall hello.c `pkg-config fuse3 --cflags --libs` -o hello
+ *     gcc -Wall hello.c `pkg-config fuse3 --cflags --libs` -o hello
  *
- * \section section_usage usage
- \verbatim
- % mkdir mnt
- % ./hello mnt        # program will vanish into the background
- % ls -la mnt
-   total 4
-   drwxr-xr-x 2 root root      0 Jan  1  1970 ./
-   drwxrwx--- 1 root vboxsf 4096 Jun 16 23:12 ../
-   -r--r--r-- 1 root root     13 Jan  1  1970 hello
- % cat mnt/hello
-   Hello World!
- % fusermount -u mnt
- \endverbatim
- *
- * \section section_source the complete source
+ * ## Source code ##
  * \include hello.c
  */
 
@@ -45,7 +31,7 @@
 #include <stddef.h>
 #include <assert.h>
 
-/**
+/*
  * Command line options
  *
  * We can't set default values for the char* fields here because

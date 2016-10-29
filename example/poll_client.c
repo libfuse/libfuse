@@ -8,17 +8,14 @@
 */
 
 /** @file
- * @tableofcontents
- *
- * poll_client.c
  *
  * This program tests the poll.c example file systsem.
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall poll_client.c -o poll_client
+ *      gcc -Wall poll_client.c -o poll_client
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include poll_client.c
  */
 

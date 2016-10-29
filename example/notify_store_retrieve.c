@@ -7,7 +7,6 @@
 */
 
 /** @file
- * @tableofcontents
  *
  *  This example implements a file system with a single file whose
  *  contents change dynamically: it always contains the current time.
@@ -50,11 +49,11 @@
  *      The current time is 15:58:43
  *      The current time is 15:58:44
  *
- * \section section_compile compiling this example
+ * ## Compilation ##
  *
  *     gcc -Wall notify_store_retrieve.c `pkg-config fuse3 --cflags --libs` -o notify_store_retrieve
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include notify_store_retrieve.c
  */
 

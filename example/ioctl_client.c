@@ -10,15 +10,14 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This program tests the ioctl.c example file systsem.
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall ioctl_client.c -o ioctl_client
+ *     gcc -Wall ioctl_client.c -o ioctl_client
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include ioctl_client.c
  */
 

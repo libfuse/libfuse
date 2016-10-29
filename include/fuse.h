@@ -1079,12 +1079,12 @@ typedef struct fuse_fs *(*fuse_module_factory_t)(struct fuse_args *args,
 /**
  * Register filesystem module
  *
- * If the "-omodules=@name_:..." option is present, filesystem
- * objects are created and pushed onto the stack with the @factory_
+ * If the "-omodules=*name*_:..." option is present, filesystem
+ * objects are created and pushed onto the stack with the *factory_*
  * function.
  *
- * @name_ the name of this filesystem module
- * @factory_ the factory function for this filesystem module
+ * @param name_ the name of this filesystem module
+ * @param factory_ the factory function for this filesystem module
  */
 #define FUSE_REGISTER_MODULE(name_, factory_) \
 	fuse_module_factory_t fuse_module_ ## name_ ## _factory = factory_;

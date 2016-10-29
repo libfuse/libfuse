@@ -876,7 +876,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * Note: For unrestricted ioctls (not allowed for FUSE
 	 * servers), data in and out areas can be discovered by giving
-	 * iovs and setting FUSE_IOCTL_RETRY in @flags.  For
+	 * iovs and setting FUSE_IOCTL_RETRY in *flags*.  For
 	 * restricted ioctls, kernel prepares in/out data area
 	 * according to the information encoded in cmd.
 	 *
@@ -1675,9 +1675,6 @@ int fuse_parse_cmdline(struct fuse_args *args,
  * @param userdata user data
  *
  * @return the fuse session on success, NULL on failure
- *
- * Example: See hello_ll.c:
- *   \snippet hello_ll.c doxygen_fuse_lowlevel_usage
  **/
 struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      const struct fuse_lowlevel_ops *op,
@@ -1782,7 +1779,6 @@ int fuse_session_fd(struct fuse_session *se);
  *
  * @param se the session
  * @param buf the fuse_buf containing the request
- * @param ch channel on which the request was received
  */
 void fuse_session_process_buf(struct fuse_session *se,
 			      const struct fuse_buf *buf);
@@ -1796,7 +1792,6 @@ void fuse_session_process_buf(struct fuse_session *se,
  *
  * @param se the session
  * @param buf the fuse_buf to store the request in
- * @param ch the channel
  * @return the actual size of the raw request, or -errno on error
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);

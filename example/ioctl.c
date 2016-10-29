@@ -14,11 +14,11 @@
  * process (a restricted set of) ioctls. It can be tested with the
  * ioctl_client.c program.
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall ioctl.c `pkg-config fuse3 --cflags --libs` -o ioctl
+ *     gcc -Wall ioctl.c `pkg-config fuse3 --cflags --libs` -o ioctl
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include ioctl.c
  */
 

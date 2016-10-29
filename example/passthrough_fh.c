@@ -8,7 +8,6 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This file system mirrors the existing file system hierarchy of the
  * system, starting at the root file system. This is implemented by
@@ -16,11 +15,11 @@
  * libc functions. This implementation is a little more sophisticated
  * than the one in passthrough.c, so performance is not quite as bad.
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall passthrough_fh.c `pkg-config fuse3 --cflags --libs` -lulockmgr -o passthrough_fh
+ *     gcc -Wall passthrough_fh.c `pkg-config fuse3 --cflags --libs` -lulockmgr -o passthrough_fh
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include passthrough_fh.c
  */
 

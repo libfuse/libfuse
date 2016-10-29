@@ -7,7 +7,6 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This example implements a file system with a single file whose
  * file name changes dynamically to reflect the current time.
@@ -65,11 +64,11 @@
  *     $ sleep 1; stat mnt/$file
  *     stat: cannot stat ‘mnt/Time_is_20h_42m_11s’: No such file or directory
  *
- * \section section_compile compiling this example
+ * ## Compilation ##
  *
  *     gcc -Wall notify_inval_entry.c `pkg-config fuse3 --cflags --libs` -o notify_inval_entry
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include notify_inval_entry.c
  */
 

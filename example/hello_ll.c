@@ -8,32 +8,13 @@
 
 /** @file
  *
- * hello_ll.c - fuse low level functionality
+ * minimal example filesystem using low-level API
  *
- * unlike hello.c this example will stay in the foreground. it also replaced
- * the convenience function fuse_main(..) with a more low level approach.
+ * Compile with:
  *
- * \section section_compile compiling this example
+ *     gcc -Wall hello_ll.c `pkg-config fuse3 --cflags --libs` -o hello_ll
  *
- * gcc -Wall hello_ll.c `pkg-config fuse3 --cflags --libs` -o hello_ll
- *
- * \section section_usage usage
- \verbatim
- % mkdir mnt
- % ./hello_ll mnt       # program will wait in foreground until you press CTRL+C
- in a different shell do:
- % ls -la mnt
-   total 4
-   drwxr-xr-x 2 root root      0 Jan  1  1970 ./
-   drwxrwx--- 1 root vboxsf 4096 Jun 16 23:12 ../
-   -r--r--r-- 1 root root     13 Jan  1  1970 hello
- % cat mnt/hello
-   Hello World!
- finally either press ctrl+c or do:
- % fusermount -u mnt
- \endverbatim
- *
- * \section section_source the complete source
+ * ## Source code ##
  * \include hello_ll.c
  */
 
@@ -182,7 +163,6 @@ static struct fuse_lowlevel_ops hello_ll_oper = {
 	.read		= hello_ll_read,
 };
 
-/*! [doxygen_fuse_lowlevel_usage] */
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
@@ -235,4 +215,3 @@ err_out1:
 
 	return ret ? 1 : 0;
 }
-/*! [doxygen_fuse_lowlevel_usage] */

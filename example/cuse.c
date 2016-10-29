@@ -9,7 +9,6 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This example demonstrates how to implement a character device in
  * userspace ("CUSE"). This is only allowed for root. The character
@@ -23,11 +22,11 @@
  * You should now have a new /dev/mydevice character device. To "unmount" it,
  * kill the "cuse" process.
  *
- * \section section_compile compiling this example
+ * To compile this example, run
  *
  *     gcc -Wall cuse.c `pkg-config fuse3 --cflags --libs` -o cuse
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include cuse.c
  */
 

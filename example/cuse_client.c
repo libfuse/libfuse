@@ -8,7 +8,6 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This program tests the cuse.c example file system.
  *
@@ -29,11 +28,11 @@
  *     hello
  *     transferred 6 bytes (6 -> 6)
  *
- * \section section_compile compiling this example
+ * Compiling this example
  *
- * gcc -Wall cuse_client.c -o cuse_client
+ *     gcc -Wall cuse_client.c -o cuse_client
  *
- * \section section_source the complete source
+ * ## Source Code ##
  * \include cuse_client.c
  */
 

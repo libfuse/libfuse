@@ -7,7 +7,6 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This file system mirrors the existing file system hierarchy of the
  * system, starting at the root file system. This is implemented by
@@ -16,11 +15,11 @@
  * this implementation ises the low-level API. Its performance should
  * be the least bad among the three.
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall passthrough_ll.c `pkg-config fuse3 --cflags --libs` -o passthrough_ll
+ *     gcc -Wall passthrough_ll.c `pkg-config fuse3 --cflags --libs` -o passthrough_ll
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include passthrough_ll.c
  */
 

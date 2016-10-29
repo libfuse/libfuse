@@ -8,18 +8,17 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This file system mirrors the existing file system hierarchy of the
  * system, starting at the root file system. This is implemented by
  * just "passing through" all requests to the corresponding user-space
  * libc functions. It's performance is terrible.
  *
- * \section section_compile compiling this example
+ * Compile with
  *
- * gcc -Wall passthrough.c `pkg-config fuse3 --cflags --libs` -o passthrough
+ *     gcc -Wall passthrough.c `pkg-config fuse3 --cflags --libs` -o passthrough
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include passthrough.c
  */
 

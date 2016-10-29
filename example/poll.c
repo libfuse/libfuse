@@ -8,17 +8,16 @@
 */
 
 /** @file
- * @tableofcontents
  *
  * This example illustrates how to write a FUSE file system that
  * supports polling for changes that don't come through the kernel. It
  * can be tested with the poll_client.c program.
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall poll.c `pkg-config fuse3 --cflags --libs` -o poll
+ *     gcc -Wall poll.c `pkg-config fuse3 --cflags --libs` -o poll
  *
- * \section section_source the complete source
+ * ## Source code ##
  * \include poll.c
  */
 
