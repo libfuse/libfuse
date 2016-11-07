@@ -276,9 +276,9 @@ struct fuse_config {
  *
  * All methods are optional, but some are essential for a useful
  * filesystem (e.g. getattr).  Open, flush, release, fsync, opendir,
- * releasedir, fsyncdir, access, create, ftruncate, fgetattr, lock,
- * init and destroy are special purpose methods, without which a full
- * featured filesystem can still be implemented.
+ * releasedir, fsyncdir, access, create, truncate, lock, init and
+ * destroy are special purpose methods, without which a full featured
+ * filesystem can still be implemented.
  *
  * In general, all methods are expected to perform any necessary
  * permission checking. However, a filesystem may delegate this task
