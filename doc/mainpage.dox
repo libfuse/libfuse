@@ -14,7 +14,7 @@ mount the file system, unmount it, read requests from the kernel, and
 send responses back.
 
 
-\section Getting started
+## Getting started ##
 
 libfuse offers two APIs: a "high-level", synchronous API, and a
 "low-level" asynchronous API. In both cases, incoming requests from
@@ -28,7 +28,7 @@ separate set of API functions.
 The high-level API that is primarily specified in fuse.h. The
 low-level API that is primarily documented in fuse_lowlevel.h.
 
-\section Examples
+## Examples ##
 
 FUSE comes with several examples in the <a
 href="files.html">examples</a> directory. A good starting point are
