@@ -2,4 +2,4 @@
 
 dist_man_MANS = fusermount.1 mount.fuse.8
 
-EXTRA_DIST = kernel.txt Doxyfile html README.NFS developer-notes.rst
+EXTRA_DIST = kernel.txt Doxyfile html README.NFS
