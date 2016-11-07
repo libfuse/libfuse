@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+FUSE 3.0.0-rc2 (2016-11-06)
+===========================
 
 * Fixed documentation of chmod, chown, truncate, utimens and getattr
   handlers. The struct fuse_file_info pointer may be NULL even if the
