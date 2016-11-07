@@ -39,3 +39,4 @@ TAGS
 /GRTAGS
 /GSYMS
 /GTAGS
+/test/test_setattr
