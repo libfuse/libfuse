@@ -166,7 +166,7 @@ struct fuse_config {
 	 * option. When hard_remove is set, the following libc
 	 * functions fail on unlinked files (returning errno of
 	 * ENOENT): read(2), write(2), fsync(2), close(2), f*xattr(2),
-	 * ftruncate(2), fstat(2), fch‐ mod(2), fchown(2)
+	 * ftruncate(2), fstat(2), fchmod(2), fchown(2)
 	 */
 	int hard_remove;
 
