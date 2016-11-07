@@ -160,7 +160,7 @@ static void test_fs(char *mountpoint) {
     assert(read(fd, buf, dsize) == dsize);
     close(fd);
 
-    assert(snprintf(fname, PATH_MAX, "%s/write_me",
+    assert(snprintf(fname, PATH_MAX, "%s/" FILE_NAME,
                      mountpoint) > 0);
     fd = open(fname, O_WRONLY);
     if (fd == -1) {
