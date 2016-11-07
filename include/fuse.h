@@ -250,9 +250,8 @@ struct fuse_config {
 	 * fsyncdir, lock, ioctl and poll.
 	 *
 	 * For the truncate, getattr, chmod, chown and utimens
-	 * operations the path will be provided only if the file is
-	 * not currently open (i.e., when the struct fuse_file_info
-	 * argument is NULL).
+	 * operations the path will be provided only if the struct
+	 * fuse_file_info argument is NULL.
 	 */
 	int nullpath_ok;
 
@@ -295,7 +294,8 @@ struct fuse_operations {
 	 * ignored. The 'st_ino' field is ignored except if the 'use_ino'
 	 * mount option is given.
 	 *
-	 * *fi* will be NULL if the file is not currenly opened.
+	 * `fi` will always be NULL if the file is not currenly open, but
+	 * may also be NULL if the file is open.
 	 */
 	int (*getattr) (const char *, struct stat *, struct fuse_file_info *fi);
 
@@ -342,19 +342,22 @@ struct fuse_operations {
 
 	/** Change the permission bits of a file
 	 *
-	 * *fi* will be NULL if the file is not currenly opened.
+	 * `fi` will always be NULL if the file is not currenly open, but
+	 * may also be NULL if the file is open.
 	 */
 	int (*chmod) (const char *, mode_t, struct fuse_file_info *fi);
 
 	/** Change the owner and group of a file
 	 *
-	 * *fi* will be NULL if the file is not currenly opened.
+	 * `fi` will always be NULL if the file is not currenly open, but
+	 * may also be NULL if the file is open.
 	 */
 	int (*chown) (const char *, uid_t, gid_t, struct fuse_file_info *fi);
 
 	/** Change the size of a file
 	 *
-	 * *fi* will be NULL if the file is not currenly opened.
+	 * `fi` will always be NULL if the file is not currenly open, but
+	 * may also be NULL if the file is open.
 	 */
 	int (*truncate) (const char *, off_t, struct fuse_file_info *fi);
 
@@ -577,7 +580,8 @@ struct fuse_operations {
 	 * This supersedes the old utime() interface.  New applications
 	 * should use this.
 	 *
-	 * *fi* will be NULL if the file is not currenly opened.
+	 * `fi` will always be NULL if the file is not currenly open, but
+	 * may also be NULL if the file is open.
 	 *
 	 * See the utimensat(2) man page for details.
 	 */

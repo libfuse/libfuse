@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* Fixed documentation of chmod, chown, truncate, utimens and getattr
+  handlers. The struct fuse_file_info pointer may be NULL even if the
+  file is open.
+
 * The fusermount and mount.fuse binaries have been renamed to
   fusermount3 and mount.fuse3 to allow co-installation of libfuse 2.x
   and 3.x
