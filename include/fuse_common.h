@@ -259,15 +259,24 @@ struct fuse_conn_info {
 	unsigned max_background;
 
 	/**
+
 	 * Kernel congestion threshold parameter
 	 */
 	unsigned congestion_threshold;
 
 	/**
-	 * Time granularity if kernel is responsible for setting times (in nsec)
+	 * When FUSE_CAP_WRITEBACK_CACHE is enabled, the kernel is responsible
+	 * for updating mtime and ctime when write requests are received. The
+	 * updated values are passed to the filesystem with setattr() requests.
+	 * However, if the filesystem does not support the full resolution of
+	 * the kernel timestamps (nanoseconds), the mtime and ctime values used
+	 * by kernel and filesystem will differ (and result in an apparent
+	 * change of times after a cache flush).
 	 *
-	 * Should be power of 10.  A zero (default) value is equivalent to
-	 * 1000000000 (1sec).
+	 * To prevent this problem, this variable can be used to inform the
+	 * kernel about the timestamp granularity supported by the file-system.
+	 * The value should be power of 10.  A zero (default) value is
+	 * equivalent to 1000000000 (1sec).
 	 */
 	unsigned time_gran;
 
