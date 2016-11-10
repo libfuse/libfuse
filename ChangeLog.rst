@@ -1,3 +1,8 @@
+UNRELEASED CHANGES
+==================
+
+* Fixed test errors when running tests as root.
+
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
 

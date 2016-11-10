@@ -1395,6 +1395,7 @@ int main(int argc, char *argv[])
 	const char *realpath;
 	int err = 0;
 	int a;
+	int is_root;
 
 	umask(0);
 	if (argc < 2 || argc > 4) {
@@ -1439,6 +1440,8 @@ int main(int argc, char *argv[])
 	sprintf(testdir_r, "%s/testdir", realpath);
 	sprintf(testdir2_r, "%s/testdir2", realpath);
 	sprintf(subfile_r, "%s/subfile", testdir2_r);
+
+	is_root = (geteuid() == 0);
 
 	err += test_create();
 	err += test_create_unlink();
@@ -1489,15 +1492,17 @@ int main(int argc, char *argv[])
 	err += test_open_acc(O_WRONLY, 0600, 0);
 	err += test_open_acc(O_RDWR,   0600, 0);
 	err += test_open_acc(O_RDONLY, 0400, 0);
-	err += test_open_acc(O_RDONLY | O_TRUNC, 0400, EACCES);
-	err += test_open_acc(O_WRONLY, 0400, EACCES);
-	err += test_open_acc(O_RDWR,   0400, EACCES);
-	err += test_open_acc(O_RDONLY, 0200, EACCES);
 	err += test_open_acc(O_WRONLY, 0200, 0);
-	err += test_open_acc(O_RDWR,   0200, EACCES);
-	err += test_open_acc(O_RDONLY, 0000, EACCES);
-	err += test_open_acc(O_WRONLY, 0000, EACCES);
-	err += test_open_acc(O_RDWR,   0000, EACCES);
+	if(!is_root) {
+		err += test_open_acc(O_RDONLY | O_TRUNC, 0400, EACCES);
+		err += test_open_acc(O_WRONLY, 0400, EACCES);
+		err += test_open_acc(O_RDWR,   0400, EACCES);
+		err += test_open_acc(O_RDONLY, 0200, EACCES);
+		err += test_open_acc(O_RDWR,   0200, EACCES);
+		err += test_open_acc(O_RDONLY, 0000, EACCES);
+		err += test_open_acc(O_WRONLY, 0000, EACCES);
+		err += test_open_acc(O_RDWR,   0000, EACCES);
+	}
 	err += test_create_ro_dir(O_CREAT);
 	err += test_create_ro_dir(O_CREAT | O_EXCL);
 	err += test_create_ro_dir(O_CREAT | O_WRONLY);
