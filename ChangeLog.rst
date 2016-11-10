@@ -5,6 +5,8 @@ UNRELEASED CHANGES
 
 * Made check for util-linux version more robust.
 
+* Added documentation for FUSE_CAP_FLOCK_LOCKS.
+
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
 

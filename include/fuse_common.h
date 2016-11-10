@@ -134,8 +134,12 @@ struct fuse_file_info {
 #define FUSE_CAP_SPLICE_READ		(1 << 9)
 
 /**
- * FIXME: This capability is not documented. Please get in touch if
- * you know what it does!
+ * If set, the calls to flock(2) will be emulated using POSIX locks and must
+ * then be handled by the filesystem's setlock() handler.
+ *
+ * If not set, flock(2) calls will be handled by the FUSE kernel module
+ * internally (so any access that does not go through the kernel cannot be taken
+ * into account).
  */
 #define FUSE_CAP_FLOCK_LOCKS		(1 << 10)
 
