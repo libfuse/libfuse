@@ -3,6 +3,8 @@ UNRELEASED CHANGES
 
 * Fixed test errors when running tests as root.
 
+* Made check for util-linux version more robust.
+
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
 
