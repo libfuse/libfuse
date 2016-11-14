@@ -181,7 +181,15 @@ struct fuse_file_info {
 #define FUSE_CAP_WRITEBACK_CACHE	(1 << 16)
 
 /**
- * Indicates that the filesystem supports support zero-message opens.
+ * Indicates support for zero-message opens. If this flag is set in
+ * the `capable` field of the `fuse_conn_info` structure, then the
+ * filesystem may return `ENOSYS` from the open() handler to indicate
+ * success. Further attempts to open files will be handled in the
+ * kernel. (If this flag is not set, returning ENOSYS will be treated
+ * as an error and signaled to the caller).
+ *
+ * Setting (or unsetting) this flag in the `want` field has *no
+ * effect*.
  */
 #define FUSE_CAP_NO_OPEN_SUPPORT	(1 << 17)
 
