@@ -248,7 +248,15 @@ struct fuse_lowlevel_ops {
 	void (*forget) (fuse_req_t req, fuse_ino_t ino, uint64_t nlookup);
 
 	/**
-	 * Get file attributes
+	 * Get file attributes.
+	 *
+	 * If writeback caching is enabled, the kernel may have a
+	 * better idea of a file's length than the FUSE file system
+	 * (eg if there has been a write that extended the file size,
+	 * but that has not yet been passed to the filesystem.n
+	 *
+	 * In this case, the st_size value provided by the file system
+	 * will be ignored.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_attr
