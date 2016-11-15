@@ -280,13 +280,18 @@ struct fuse_conn_info {
 	unsigned want;
 
 	/**
-	 * Maximum number of backgrounded requests
+	 * Maximum number of backgrounded requests. If you want to
+	 * know what this means, please refer to the kernel source
+	 * (and, ideally, submit a brief explanation that can be
+	 * included here).
 	 */
 	unsigned max_background;
 
 	/**
-
-	 * Kernel congestion threshold parameter
+	 * Kernel congestion threshold parameter.  If you want to
+	 * know what this means, please refer to the kernel source
+	 * (and, ideally, submit a brief explanation that can be
+	 * included here).
 	 */
 	unsigned congestion_threshold;
 
