@@ -149,8 +149,22 @@ struct fuse_file_info {
 #define FUSE_CAP_IOCTL_DIR		(1 << 11)
 
 /**
- * Indicates that the filesystem supports automatic invalidation of
- * cached pages.
+ * Traditionally, while a file is open the FUSE kernel module only
+ * asks the filesystem for an update of the file's attributes when a
+ * client attempts to read beyond EOF. This is unsuitable for
+ * e.g. network filesystems, where the file contents may change
+ * without the kernel knowing about it.
+ *
+ * If this flag is set, FUSE will check the validity of the attributes
+ * on every read. If the attributes are no longer valid (i.e., if the
+ * *attr_timeout* passed to fuse_reply_attr() or set in `struct
+ * fuse_entry_param` has passed), it will first issue a `getattr`
+ * request. If the new mtime differs from the previous value, any
+ * cached file *contents* will be invalidated as well.
+ *
+ * This flag should always be set when available. If all file changes
+ * go through the kernel, *attr_timeout* should be set to zero to
+ * avoid unneccessary getattr() calls.
  */
 #define FUSE_CAP_AUTO_INVAL_DATA	(1 << 12)
 
