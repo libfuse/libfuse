@@ -2940,6 +2940,7 @@ void fuse_session_exit(struct fuse_session *se)
 void fuse_session_reset(struct fuse_session *se)
 {
 	se->exited = 0;
+	se->error = 0;
 }
 
 int fuse_session_exited(struct fuse_session *se)

@@ -35,6 +35,8 @@ int fuse_session_loop(struct fuse_session *se)
 	}
 
 	free(fbuf.mem);
+	if(se->error != 0)
+		res = se->error;
 	fuse_session_reset(se);
-	return res < 0 ? -1 : 0;
+	return res;
 }

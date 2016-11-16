@@ -7,6 +7,10 @@ UNRELEASED CHANGES
 
 * Added documentation for FUSE_CAP_FLOCK_LOCKS.
 
+* fuse_loop(), fuse_loop_mt(), fuse_session_loop() and
+  fuse_session_loop_mt() now return -errno instead of -1 in case of
+  failure.
+
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
 

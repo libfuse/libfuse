@@ -1783,7 +1783,7 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
  *   fuse_set_signal_handlers() first.
  *
  * @param se the session
- * @return 0 on success, -1 on error
+ * @return 0 on success, -errno on failure
  */
 int fuse_session_loop(struct fuse_session *se);
 
@@ -1793,7 +1793,7 @@ int fuse_session_loop(struct fuse_session *se);
  * @param se the session
  * @param clone_fd whether to use separate device fds for each thread
  *                 (may increase performance)
- * @return 0 on success, -1 on error
+ * @return 0 on success, -errno on failure
  */
 int fuse_session_loop_mt(struct fuse_session *se, int clone_fd);
 

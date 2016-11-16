@@ -339,6 +339,8 @@ int fuse_session_loop_mt(struct fuse_session *se, int clone_fd)
 
 	pthread_mutex_destroy(&mt.lock);
 	sem_destroy(&mt.finish);
+	if(se->error != 0)
+		err = se->error;
 	fuse_session_reset(se);
 	return err;
 }

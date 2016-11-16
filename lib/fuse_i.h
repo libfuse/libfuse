@@ -63,6 +63,7 @@ struct fuse_session {
 	uint64_t notify_ctr;
 	struct fuse_notify_req notify_list;
 	size_t bufsize;
+	int error;
 };
 
 struct fuse_chan {

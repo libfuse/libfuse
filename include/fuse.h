@@ -828,7 +828,7 @@ void fuse_destroy(struct fuse *f);
  * operations are called.
  *
  * @param f the FUSE handle
- * @return 0 if no error occurred, -1 otherwise
+ * @return 0 if no error occurred, -errno otherwise
  *
  * See also: fuse_loop()
  */
@@ -871,7 +871,7 @@ void fuse_exit(struct fuse *f);
  * @param f the FUSE handle
  * @param clone_fd whether to use separate device fds for each thread
  *                 (may increase performance)
- * @return 0 if no error occurred, -1 otherwise
+ * @return 0 if no error occurred, -errno otherwise
  *
  * See also: fuse_loop()
  */
