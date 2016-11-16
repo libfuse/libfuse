@@ -830,7 +830,7 @@ void fuse_destroy(struct fuse *f);
  * @param f the FUSE handle
  * @return 0 if no error occurred, -errno otherwise
  *
- * See also: fuse_loop()
+ * See also: fuse_loop_mt()
  */
 int fuse_loop(struct fuse *f);
 
