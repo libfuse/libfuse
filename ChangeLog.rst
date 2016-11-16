@@ -5,7 +5,8 @@ UNRELEASED CHANGES
 
 * Made check for util-linux version more robust.
 
-* Added documentation for FUSE_CAP_FLOCK_LOCKS.
+* Added documentation for all fuse capability flags (`FUSE_CAP_*`) and
+  `struct fuse_conn_info` fields.
 
 * fuse_loop(), fuse_loop_mt(), fuse_session_loop() and
   fuse_session_loop_mt() now return -errno instead of -1 in case of
