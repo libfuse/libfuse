@@ -288,10 +288,12 @@ struct fuse_conn_info {
 	unsigned max_background;
 
 	/**
-	 * Kernel congestion threshold parameter.  If you want to
-	 * know what this means, please refer to the kernel source
-	 * (and, ideally, submit a brief explanation that can be
-	 * included here).
+	 * Kernel congestion threshold parameter. If the number of pending
+	 * background requests exceeds this number, the FUSE kernel module will
+	 * mark the filesystem as "congested". This instructs the kernel to
+	 * expect that queued requests will take some time to complete, and to
+	 * adjust its algorithms accordingly (e.g. by putting a waiting thread
+	 * to sleep instead of using a busy-loop).
 	 */
 	unsigned congestion_threshold;
 
