@@ -399,6 +399,11 @@ struct fuse_lowlevel_ops {
 	 * until the lookup count reaches zero (see description of the
 	 * forget function).
 	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure with error code EINVAL, i.e. all
+	 * future bmap requests will fail with EINVAL without being
+	 * send to the filesystem process.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 *
@@ -449,6 +454,12 @@ struct fuse_lowlevel_ops {
 	 * There are also some flags (direct_io, keep_cache) which the
 	 * filesystem may set in fi, to change the way the file is opened.
 	 * See fuse_file_info structure in <fuse_common.h> for more details.
+	 *
+	 * If this request is answered with an error code of ENOSYS
+	 * and FUSE_CAP_NO_OPEN_SUPPORT is set in
+	 * `fuse_conn_info.capable`, this is treated as success and
+	 * future calls to open will also succeed without being send
+	 * to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_open
@@ -537,6 +548,11 @@ struct fuse_lowlevel_ops {
 	 * If the filesystem supports file locking operations (setlk,
 	 * getlk) it should remove all locks belonging to 'fi->owner'.
 	 *
+	 * If this request is answered with an error code of ENOSYS,
+	 * this is treated as success and future calls to flush() will
+	 * succeed automatically without being send to the filesystem
+	 * process.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 *
@@ -579,6 +595,11 @@ struct fuse_lowlevel_ops {
 	 *
 	 * If the datasync parameter is non-zero, then only the user data
 	 * should be flushed, not the meta data.
+	 *
+	 * If this request is answered with an error code of ENOSYS,
+	 * this is treated as success and future calls to fsync() will
+	 * succeed automatically without being send to the filesystem
+	 * process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_err
@@ -673,6 +694,11 @@ struct fuse_lowlevel_ops {
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
 	 *
+	 * If this request is answered with an error code of ENOSYS,
+	 * this is treated as success and future calls to fsyncdir() will
+	 * succeed automatically without being send to the filesystem
+	 * process.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 *
@@ -699,6 +725,11 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Set an extended attribute
 	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure with error code EOPNOTSUPP, i.e. all
+	 * future setxattr() requests will fail with EOPNOTSUPP without being
+	 * send to the filesystem process.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 */
@@ -716,6 +747,11 @@ struct fuse_lowlevel_ops {
 	 *
 	 * If the size is too small for the value, the ERANGE error should
 	 * be sent.
+	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure with error code EOPNOTSUPP, i.e. all
+	 * future getxattr() requests will fail with EOPNOTSUPP without being
+	 * send to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_buf
@@ -744,6 +780,11 @@ struct fuse_lowlevel_ops {
 	 * If the size is too small for the list, the ERANGE error should
 	 * be sent.
 	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure with error code EOPNOTSUPP, i.e. all
+	 * future listxattr() requests will fail with EOPNOTSUPP without being
+	 * send to the filesystem process.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_buf
 	 *   fuse_reply_data
@@ -758,6 +799,11 @@ struct fuse_lowlevel_ops {
 
 	/**
 	 * Remove an extended attribute
+	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure with error code EOPNOTSUPP, i.e. all
+	 * future removexattr() requests will fail with EOPNOTSUPP without being
+	 * send to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_err
@@ -776,6 +822,10 @@ struct fuse_lowlevel_ops {
 	 * called.
 	 *
 	 * This method is not called under Linux kernel versions 2.4.x
+	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent success, i.e. this and all future access()
+	 * requests will succeed without being send to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_err
@@ -806,6 +856,10 @@ struct fuse_lowlevel_ops {
 	 * If this method is not implemented or under Linux kernel
 	 * versions earlier than 2.6.15, the mknod() and open() methods
 	 * will be called instead.
+	 *
+	 * If this request is answered with an error code of ENOSYS, the handler
+	 * is treated as not implemented (i.e., for this and future requests the
+	 * mknod() and open() handlers will be called instead).
 	 *
 	 * Valid replies:
 	 *   fuse_reply_create
@@ -867,6 +921,11 @@ struct fuse_lowlevel_ops {
 	 * Note: This makes sense only for block device backed filesystems
 	 * mounted with the 'blkdev' option
 	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure, i.e. all future bmap() requests will
+	 * fail with the same error code without being send to the filesystem
+	 * process.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_bmap
 	 *   fuse_reply_err
@@ -922,6 +981,11 @@ struct fuse_lowlevel_ops {
 	 *
 	 * The callee is responsible for destroying ph with
 	 * fuse_pollhandle_destroy() when no longer in use.
+	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as success (with a kernel-defined default poll-mask) and
+	 * future calls to pull() will succeed the same way without being send
+	 * to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_poll
@@ -1015,6 +1079,11 @@ struct fuse_lowlevel_ops {
 	 * subsequent writes to the specified range shall not fail due to the lack
 	 * of free space on the file system storage media.
 	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure with error code EOPNOTSUPP, i.e. all
+	 * future fallocate() requests will fail with EOPNOTSUPP without being
+	 * send to the filesystem process.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 *
@@ -1058,13 +1127,21 @@ struct fuse_lowlevel_ops {
 };
 
 /**
- * Reply with an error code or success
+ * Reply with an error code or success.
  *
  * Possible requests:
  *   all except forget
  *
+ * Whereever possible, error codes should be chosen from the list of
+ * documented error conditions in the corresponding system calls
+ * manpage.
+ *
+ * An error code of ENOSYS is sometimes treated specially. This is
+ * indicated in the documentation of the affected handler functions.
+ *
+ * The following requests may be answered with a zero error code:
  * unlink, rmdir, rename, flush, release, fsync, fsyncdir, setxattr,
- * removexattr and setlk may send a zero code
+ * removexattr, setlk.
  *
  * @param req request handle
  * @param err the positive error value, or zero for success
