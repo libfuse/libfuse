@@ -15,6 +15,14 @@ UNRELEASED CHANGES
 * The FUSE main loop is now aborted if the file-system requests
   capabilities that are not supported by the kernel.
 
+* Most file-system capabilities that were opt-in in libfuse2 are now
+  enabled by default. Filesystem developers are encouraged to review
+  the documentation of the FUSE_CAP_* features to ensure that their
+  filesystem is compatible with the new semantics. As before, a
+  particular capability can still be disabled by unsetting the
+  corresponding bit of `fuse_conn_info.wants` in the init() handler.
+
+
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
 

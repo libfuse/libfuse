@@ -91,45 +91,63 @@ struct fuse_file_info {
  * ensure that there is at most one pending read request per
  * file-handle at any time, and will attempt to order read requests by
  * increasing offset.
+ *
+ * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_ASYNC_READ		(1 << 0)
 
 /**
  * Indicates that the filesystem supports "remote" locking.
+ *
+ * This feature is enabled by default when supported by the kernel,
+ * and if getlk() and setlk() handlers are implemented.
  */
 #define FUSE_CAP_POSIX_LOCKS		(1 << 1)
 
 /**
  * Indicates that the filesystem supports  the O_TRUNC open flag
+ *
+ * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_ATOMIC_O_TRUNC		(1 << 3)
 
 /**
  * Indicates that the filesystem supports lookups of "." and "..".
+ *
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_EXPORT_SUPPORT		(1 << 4)
 
 /**
  * Indicates that the kernel should not apply the umask to the
  * file mode on create operations.
+ *
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_DONT_MASK		(1 << 6)
 
 /**
  * Indicates that libfuse should try to use splice() when writing to
- * the fuse device
+ * the fuse device. This may improve performance.
+ *
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_SPLICE_WRITE		(1 << 7)
 
 /**
- * Indicates that libfuse should try to move pages instead of copying
- * when writing to / reading from the fuse device.
+ * Indicates that libfuse should try to move pages instead of copying when
+ * writing to / reading from the fuse device. This may improve performance.
+ *
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_SPLICE_MOVE		(1 << 8)
 
 /**
  * Indicates that libfuse should try to use splice() when reading from
- * the fuse device.
+ * the fuse device. This may improve performance.
+ *
+ * This feature is enabled by default when supported by the kernel and
+ * if the filesystem implements a write_buf() handler.
  */
 #define FUSE_CAP_SPLICE_READ		(1 << 9)
 
@@ -140,11 +158,16 @@ struct fuse_file_info {
  * If not set, flock(2) calls will be handled by the FUSE kernel module
  * internally (so any access that does not go through the kernel cannot be taken
  * into account).
+ *
+ * This feature is enabled by default when supported by the kernel and
+ * if the filesystem implements a flock() handler.
  */
 #define FUSE_CAP_FLOCK_LOCKS		(1 << 10)
 
 /**
  * Indicates that the filesystem supports ioctl's on directories.
+ *
+ * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_IOCTL_DIR		(1 << 11)
 
@@ -165,25 +188,35 @@ struct fuse_file_info {
  * This flag should always be set when available. If all file changes
  * go through the kernel, *attr_timeout* should be set to zero to
  * avoid unneccessary getattr() calls.
+ *
+ * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_AUTO_INVAL_DATA	(1 << 12)
 
 /**
  * Indicates that the filesystem supports readdirplus
+ *
+ * This feature is enabled by default when supported by the kernel and if the
+ * filesystem implements a readdirplus() handler.
  */
 #define FUSE_CAP_READDIRPLUS		(1 << 13)
 
 /**
  * Indicates that the filesystem supports adaptive readdirplus
+ *
+ * This feature is enabled by default when supported by the kernel and if the
+ * filesystem implements a readdirplus() handler.
  */
 #define FUSE_CAP_READDIRPLUS_AUTO	(1 << 14)
 
 /**
  * Indicates that the filesystem supports asynchronous direct I/O submission.
  *
- * If this capability is not requested/available, the kernel will
- * ensure that there is at most one pending read and one pending write request per
- * direct I/O file-handle at any time.
+ * If this capability is not requested/available, the kernel will ensure that
+ * there is at most one pending read and one pending write request per direct
+ * I/O file-handle at any time.
+ *
+ * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_ASYNC_DIO		(1 << 15)
 
@@ -191,6 +224,8 @@ struct fuse_file_info {
  * Indicates that writeback caching should be enabled. This means that
  * individual write request may be buffered and merged in the kernel
  * before they are send to the filesystem.
+ *
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_WRITEBACK_CACHE	(1 << 16)
 

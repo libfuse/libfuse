@@ -1890,11 +1890,21 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->conn.proto_minor >= 18)
 		se->conn.capable |= FUSE_CAP_IOCTL_DIR;
 
-	/* Default settings (where non-zero) */
+	/* Default settings for modern filesystems.
+	 *
+	 * Most of these capabilities were disabled by default in
+	 * libfuse2 for backwards compatibility reasons. In libfuse3,
+	 * we can finally enable them by default (as long as they're
+	 * supported by the kernel).
+	 */
 #define LL_SET_DEFAULT(cond, cap) \
 	if ((cond) && (se->conn.capable & (cap))) \
 		se->conn.want |= (cap)
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
+	LL_SET_DEFAULT(1, FUSE_CAP_AUTO_INVAL_DATA);
+	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_DIO);
+	LL_SET_DEFAULT(1, FUSE_CAP_IOCTL_DIR);
+	LL_SET_DEFAULT(1, FUSE_CAP_ATOMIC_O_TRUNC);
 	LL_SET_DEFAULT(se->op.write_buf, FUSE_CAP_SPLICE_READ);
 	LL_SET_DEFAULT(se->op.getlk && se->op.setlk,
 		       FUSE_CAP_POSIX_LOCKS);
