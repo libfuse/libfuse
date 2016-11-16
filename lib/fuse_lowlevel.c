@@ -1921,7 +1921,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fprintf(stderr, "fuse: error: init() and fuse_session_new() "
 			"requested different maximum read size (%u vs %u)\n",
 			se->conn.max_read, max_read_mo);
-		abort();
+		fuse_reply_err(req, EPROTO);
+		se->error = -EPROTO;
+		fuse_session_exit(se);
+		return;
 	}
 
 	/* Always enable big writes, this is superseded
