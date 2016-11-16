@@ -11,6 +11,9 @@ UNRELEASED CHANGES
   fuse_session_loop_mt() now return -errno instead of -1 in case of
   failure.
 
+* The FUSE main loop is now aborted if the file-system requests
+  capabilities that are not supported by the kernel.
+
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
 

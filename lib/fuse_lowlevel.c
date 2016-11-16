@@ -1916,6 +1916,15 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
 
+	if (se->conn.want & (~se->conn.capable)) {
+		fprintf(stderr, "fuse: error: filesystem requested capabilites "
+			"that are not supported by kernel, aborting.\n");
+		fuse_reply_err(req, EPROTO);
+		se->error = -EPROTO;
+		fuse_session_exit(se);
+		return;
+	}
+
 	unsigned max_read_mo = get_max_read(se->mo);
 	if (se->conn.max_read != max_read_mo) {
 		fprintf(stderr, "fuse: error: init() and fuse_session_new() "
