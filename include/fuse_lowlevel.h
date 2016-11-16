@@ -972,7 +972,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * Note: If ph is non-NULL, the client should notify
 	 * when IO readiness events occur by calling
-	 * fuse_lowelevel_notify_poll() with the specified ph.
+	 * fuse_lowlevel_notify_poll() with the specified ph.
 	 *
 	 * Regardless of the number of times poll with a non-NULL ph
 	 * is received, single notification is enough to clear all.
