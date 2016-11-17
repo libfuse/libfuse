@@ -65,20 +65,7 @@ generally add this option internally.
 \fBallow_other\fP
 This option overrides the security measure
 restricting file access to the filesystem owner, so that all users
-(including root) can access the files.  This option is by default only
-allowed to root, but this restriction can be removed with a
-configuration option described in the previous section.
-.TP
-\fBallow_root\fP
-This option is similar to \fBallow_other\fP but file access is limited
-to the filesystem owner and root.  This option and \fBallow_other\fP are mutually exclusive.
-.TP
-\fBauto_unmount\fP
-This option enables automatic release of the mountpoint if filesystem
-terminates for any reason. Normally the filesystem is
-responsible for releasing the mountpoint, which means that the
-mountpoint becomes inaccessible if the filesystem terminates
-without first unmounting.
+(including root) can access the files.
 .TP
 \fBrootmode=M\fP
 Specifies the the file mode of the filesystem's root (in octal
@@ -139,6 +126,23 @@ is the name of the filesystem process. If the kernel suppports it, \fI/etc/mtab\
 If the kernel doesn't support subtypes, the source filed will be
 \fBTYPE#NAME\fP, or if \fBfsname\fP option is not specified, just
 \fBTYPE\fP.
+
+.SS "libfuse-specific mount options:"
+These following options are not actually passed to the kernel but
+interpreted by libfuse. They can be specified for all filesystems
+that use libfuse:
+.TP
+\fBallow_root\fP
+This option is similar to \fBallow_other\fP but file access is limited
+to the filesystem owner and root.  This option and \fBallow_other\fP are mutually exclusive.
+.TP
+\fBauto_unmount\fP
+This option enables automatic release of the mountpoint if filesystem
+terminates for any reason. Normally the filesystem is
+responsible for releasing the mountpoint, which means that the
+mountpoint becomes inaccessible if the filesystem terminates
+without first unmounting.
+
 .SS "High-level mount options:"
 These following options are not actually passed to the kernel but
 interpreted by libfuse. They can only be specified for filesystems
