@@ -268,6 +268,15 @@ struct fuse_file_info {
 #define FUSE_CAP_POSIX_ACL              (1 << 19)
 
 /**
+ * Indicates that the filesystem is responsible for unsetting
+ * setuid and setgid bits when a file is written, truncated, or
+ * its owner is changed.
+ *
+ * This feature is enabled by default when supported by the kernel.
+ */
+#define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine

@@ -22,8 +22,13 @@ UNRELEASED CHANGES
   particular capability can still be disabled by unsetting the
   corresponding bit of `fuse_conn_info.wants` in the init() handler.
 
-* Added FUSE_CAP_PARALLEL_DIROPS and FUSE_CAP_POSIX_ACL feature flags.
+* Added FUSE_CAP_PARALLEL_DIROPS and FUSE_CAP_POSIX_ACL,
+  FUSE_HANDLE_KILLPRIV feature flags.
 
+* FUSE filesystems are now responsible for unsetting the setuid/setgid
+  flags when a file is written, truncated, or its owner
+  changed. Previously, this was handled by the kernel but subject to
+  race conditions.
 
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================

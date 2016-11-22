@@ -351,6 +351,9 @@ struct fuse_operations {
 	 *
 	 * `fi` will always be NULL if the file is not currenly open, but
 	 * may also be NULL if the file is open.
+	 *
+	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
+	 * expected to reset the setuid and setgid bits.
 	 */
 	int (*chown) (const char *, uid_t, gid_t, struct fuse_file_info *fi);
 
@@ -358,6 +361,9 @@ struct fuse_operations {
 	 *
 	 * `fi` will always be NULL if the file is not currenly open, but
 	 * may also be NULL if the file is open.
+	 *
+	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
+	 * expected to reset the setuid and setgid bits.
 	 */
 	int (*truncate) (const char *, off_t, struct fuse_file_info *fi);
 
@@ -395,6 +401,9 @@ struct fuse_operations {
 	 * Write should return exactly the number of bytes requested
 	 * except on error.	 An exception to this is when the 'direct_io'
 	 * mount option is specified (see read operation).
+	 *
+	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
+	 * expected to reset the setuid and setgid bits.
 	 */
 	int (*write) (const char *, const char *, size_t, off_t,
 		      struct fuse_file_info *);
@@ -635,6 +644,9 @@ struct fuse_operations {
 	 * Similar to the write() method, but data is supplied in a
 	 * generic buffer.  Use fuse_buf_copy() to transfer data to
 	 * the destination.
+	 *
+	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
+	 * expected to reset the setuid and setgid bits.
 	 */
 	int (*write_buf) (const char *, struct fuse_bufvec *buf, off_t off,
 			  struct fuse_file_info *);

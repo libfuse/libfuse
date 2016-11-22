@@ -276,6 +276,10 @@ struct fuse_lowlevel_ops {
 	 * bitmask contain valid values.  Other members contain undefined
 	 * values.
 	 *
+	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
+	 * expected to reset the setuid and setgid bits if the file
+	 * size or owner is being changed.
+	 *
 	 * If the setattr was invoked from the ftruncate() system call
 	 * under Linux kernel versions 2.6.15 or later, the fi->fh will
 	 * contain the value set by the open method or will be undefined
@@ -508,6 +512,9 @@ struct fuse_lowlevel_ops {
 	 * been opened in 'direct_io' mode, in which case the return value
 	 * of the write system call will reflect the return value of this
 	 * operation.
+	 *
+	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
+	 * expected to reset the setuid and setgid bits.
 	 *
 	 * fi->fh will contain the value set by the open method, or will
 	 * be undefined if the open method didn't set any value.
@@ -1012,6 +1019,9 @@ struct fuse_lowlevel_ops {
 	 * always zero). The write_buf handler must ensure that
 	 * bufv->off is correctly updated (reflecting the number of
 	 * bytes read from bufv->buf[0]).
+	 *
+	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
+	 * expected to reset the setuid and setgid bits.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_write

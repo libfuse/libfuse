@@ -1879,6 +1879,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_PARALLEL_DIROPS;
 		if (arg->flags & FUSE_POSIX_ACL)
 			se->conn.capable |= FUSE_CAP_POSIX_ACL;
+		if (arg->flags & FUSE_HANDLE_KILLPRIV)
+			se->conn.capable |= FUSE_CAP_HANDLE_KILLPRIV;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -1907,6 +1909,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
 	LL_SET_DEFAULT(1, FUSE_CAP_PARALLEL_DIROPS);
 	LL_SET_DEFAULT(1, FUSE_CAP_AUTO_INVAL_DATA);
+	LL_SET_DEFAULT(1, FUSE_CAP_HANDLE_KILLPRIV);
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_DIO);
 	LL_SET_DEFAULT(1, FUSE_CAP_IOCTL_DIR);
 	LL_SET_DEFAULT(1, FUSE_CAP_ATOMIC_O_TRUNC);
