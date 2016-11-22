@@ -1875,6 +1875,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_WRITEBACK_CACHE;
 		if (arg->flags & FUSE_NO_OPEN_SUPPORT)
 			se->conn.capable |= FUSE_CAP_NO_OPEN_SUPPORT;
+		if (arg->flags & FUSE_PARALLEL_DIROPS)
+			se->conn.capable |= FUSE_CAP_PARALLEL_DIROPS;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -1901,6 +1903,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if ((cond) && (se->conn.capable & (cap))) \
 		se->conn.want |= (cap)
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
+	LL_SET_DEFAULT(1, FUSE_CAP_PARALLEL_DIROPS);
 	LL_SET_DEFAULT(1, FUSE_CAP_AUTO_INVAL_DATA);
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_DIO);
 	LL_SET_DEFAULT(1, FUSE_CAP_IOCTL_DIR);

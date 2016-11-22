@@ -243,6 +243,16 @@ struct fuse_file_info {
 #define FUSE_CAP_NO_OPEN_SUPPORT	(1 << 17)
 
 /**
+ * Indicates support for parallel directory operations. If this flag
+ * is unset, the FUSE kernel module will ensure that lookup() and
+ * readdir() requests are never issued concurrently for the same
+ * directory.
+ *
+ * This feature is enabled by default when supported by the kernel.
+ */
+#define FUSE_CAP_PARALLEL_DIROPS        (1 << 18)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
