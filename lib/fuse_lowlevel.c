@@ -1877,6 +1877,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_NO_OPEN_SUPPORT;
 		if (arg->flags & FUSE_PARALLEL_DIROPS)
 			se->conn.capable |= FUSE_CAP_PARALLEL_DIROPS;
+		if (arg->flags & FUSE_POSIX_ACL)
+			se->conn.capable |= FUSE_CAP_POSIX_ACL;
 	} else {
 		se->conn.max_readahead = 0;
 	}

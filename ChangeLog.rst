@@ -22,7 +22,8 @@ UNRELEASED CHANGES
   particular capability can still be disabled by unsetting the
   corresponding bit of `fuse_conn_info.wants` in the init() handler.
 
-* Added FUSE_CAP_PARALLEL_DIROPS feature flag.
+* Added FUSE_CAP_PARALLEL_DIROPS and FUSE_CAP_POSIX_ACL feature flags.
+
 
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
