@@ -1200,18 +1200,15 @@ int main(int argc, char *argv[])
 
 	origmnt = argv[optind];
 
-	drop_privs();
 	mnt = fuse_mnt_resolve_path(progname, origmnt);
-	if (mnt != NULL) {
-		res = chdir("/");
-		if (res == -1) {
-			fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
-			goto err_out;
-		}
-	}
-	restore_privs();
 	if (mnt == NULL)
 		exit(1);
+
+	res = chdir("/");
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
+		goto err_out;
+	}
 
 	umask(033);
 	if (unmount)
