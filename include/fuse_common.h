@@ -253,7 +253,7 @@ struct fuse_file_info {
 #define FUSE_CAP_PARALLEL_DIROPS        (1 << 18)
 
 /**
- * Indicates support for POSIX ACL.
+ * Indicates support for POSIX ACLs.
  *
  * If this feature is enabled, the kernel will cache and have
  * responsibility for enforcing ACLs. ACL will be stored as xattrs and
@@ -262,6 +262,10 @@ struct fuse_file_info {
  * ensuring inheritance of default ACLs when new filesystem nodes are
  * created. Note that this requires that the file system is able to
  * parse and interpret the xattr representation of ACLs.
+ *
+ * Enabling this feature implicitly turns on the
+ * ``default_permissions`` mount option (even if it was not passed to
+ * mount(2)).
  *
  * This feature is disabled by default.
  */

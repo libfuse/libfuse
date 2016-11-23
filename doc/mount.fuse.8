@@ -55,9 +55,12 @@ filesystem. The check by the kernel is done in addition to any
 permission checks by the filesystem, and both have to succeed for an
 operation to be allowed. The kernel performs a standard UNIX permission
 check (based on mode bits and ownership of the directory entry, and
-uid/gid of the client). If the filesystem supports extended
-attributes and the kernel is sufficiently recent, it may also take
-into account access control lists (ACLs).
+uid/gid of the client).
+
+This mount option is activated implicitly if the filesystem enables
+ACL support during the initial feature negotiation when opening the
+device fd. In this case, the kernel performs both ACL and standard
+unix permission checking.
 
 Filesystems that do not implement any permission checking should
 generally add this option internally.
