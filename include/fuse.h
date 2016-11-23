@@ -819,6 +819,8 @@ int fuse_mount(struct fuse *f, const char *mountpoint);
 /**
  * Unmount a FUSE file system.
  *
+ * See fuse_session_unmount() for additional information.
+ *
  * @param f the FUSE handle
  **/
 void fuse_unmount(struct fuse *f);

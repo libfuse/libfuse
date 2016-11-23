@@ -1850,7 +1850,26 @@ void fuse_session_reset(struct fuse_session *se);
 int fuse_session_exited(struct fuse_session *se);
 
 /**
- * Unmount the file system
+ * Ensure that file system is unmounted.
+ *
+ * In regular operation, the file system is typically unmounted by the
+ * user calling umount(8) or fusermount(1), which then terminates the
+ * FUSE session loop. However, the session loop may also terminate as
+ * a result of an explicit call to fuse_session_exit() (e.g. by a
+ * signal handler installed by fuse_set_signal_handler()). In this
+ * case the filesystem remains mounted, but any attempt to access it
+ * will block (while the filesystem process is still running) or give
+ * an ESHUTDOWN error (after the filesystem process has terminated).
+ *
+ * If the communication channel with the FUSE kernel module is still
+ * open (i.e., if the session loop was terminated by an explicit call
+ * to fuse_session_exit()), this function will close it and unmount
+ * the filesystem. If the communication channel has been closed by the
+ * kernel, this method will do (almost) nothing.
+ *
+ * NOTE: The above semantics mean that if the connection to the kernel
+ * is terminated via the ``/sys/fs/fuse/connections/NNN/abort`` file,
+ * this method will *not* unmount the filesystem.
  *
  * @param se the session
  */

@@ -275,7 +275,8 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 		close(fd);
 
 		/* If file poll returns POLLERR on the device file descriptor,
-		   then the filesystem is already unmounted */
+		   then the filesystem is already unmounted or the connection
+		   was severed via /sys/fs/fuse/connections/NNN/abort */
 		if (res == 1 && (pfd.revents & POLLERR))
 			return;
 	}

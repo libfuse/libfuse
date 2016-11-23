@@ -2655,6 +2655,8 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 
 	if (res == -1) {
 		if (err == ENODEV) {
+			/* Filesystem was unmounted, or connection was aborted
+			   via /sys/fs/fuse/connections */
 			fuse_session_exit(se);
 			return 0;
 		}
@@ -2743,6 +2745,8 @@ restart:
 			goto restart;
 
 		if (err == ENODEV) {
+			/* Filesystem was unmounted, or connection was aborted
+			   via /sys/fs/fuse/connections */
 			fuse_session_exit(se);
 			return 0;
 		}
