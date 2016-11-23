@@ -33,7 +33,7 @@ install-exec-local:
 	$(MKDIR_P) $(DESTDIR)$(MOUNT_FUSE_PATH)
 	$(INSTALL_PROGRAM) $(builddir)/mount.fuse3 $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse3
 	$(MKDIR_P) $(DESTDIR)$(INIT_D_PATH)
-	$(INSTALL_SCRIPT) $(srcdir)/init_script $(DESTDIR)$(INIT_D_PATH)/fuse
+	$(INSTALL_SCRIPT) $(srcdir)/init_script $(DESTDIR)$(INIT_D_PATH)/fuse3
 	@if test -x /usr/sbin/update-rc.d; then \
 		echo "/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 . || true"; \
 		/usr/sbin/update-rc.d fuse start 34 S . start 41 0 6 . || true; \
@@ -41,7 +41,7 @@ install-exec-local:
 
 install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(UDEV_RULES_PATH)
-	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/99-fuse.rules
+	$(INSTALL_DATA) $(srcdir)/udev.rules $(DESTDIR)$(UDEV_RULES_PATH)/99-fuse3.rules
 
 uninstall-local:
 	rm -f $(DESTDIR)$(MOUNT_FUSE_PATH)/mount.fuse3
