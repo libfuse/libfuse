@@ -30,6 +30,11 @@ UNRELEASED CHANGES
   changed. Previously, this was handled by the kernel but subject to
   race conditions.
 
+* The ``allow_other`` and ``allow_root`` mount options (accepted by
+  `fuse_session_new()`) may now be specified together. In this case,
+  ``allow_root`` takes precedence.
+
+
 FUSE 3.0.0-rc2 (2016-11-06)
 ===========================
 

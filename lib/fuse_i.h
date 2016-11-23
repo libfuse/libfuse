@@ -47,7 +47,7 @@ struct fuse_session {
 	int fd;
 	struct mount_opts *mo;
 	int debug;
-	int allow_root;
+	int deny_others;
 	struct fuse_lowlevel_ops op;
 	int got_init;
 	struct cuse_data *cuse_data;

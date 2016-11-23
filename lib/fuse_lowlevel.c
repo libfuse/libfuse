@@ -2491,7 +2491,8 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		goto reply_err;
 
 	err = EACCES;
-	if (se->allow_root && in->uid != se->owner && in->uid != 0 &&
+	/* Implement -o allow_root */
+	if (se->deny_others && in->uid != se->owner && in->uid != 0 &&
 		 in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
 		 in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&
 		 in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
@@ -2562,7 +2563,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("debug", debug, 1),
 	LL_OPTION("-d", debug, 1),
 	LL_OPTION("--debug", debug, 1),
-	LL_OPTION("allow_root", allow_root, 1),
+	LL_OPTION("allow_root", deny_others, 1),
 	FUSE_OPT_END
 };
 
@@ -2578,8 +2579,8 @@ void fuse_lowlevel_help(void)
 	/* These are not all options, but the ones that are
 	   potentially of interest to an end-user */
 	printf(
-"    -o allow_other         allow access to other users\n"
-"    -o allow_root          allow access to root\n"
+"    -o allow_other         allow access by all users\n"
+"    -o allow_root          allow access by root\n"
 "    -o auto_unmount        auto unmount on process termination\n");
 }
 
@@ -2792,10 +2793,20 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	se->conn.max_readahead = UINT_MAX;
 
 	/* Parse options */
+	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
+		goto out2;
+	if(se->deny_others) {
+		/* Allowing access only by root is done by instructing
+		 * kernel to allow access by everyone, and then restricting
+		 * access to root and mountpoint owner in libfuse.
+		 */
+		// We may be adding the option a second time, but
+		// that doesn't hurt.
+		if(fuse_opt_add_arg(args, "-oallow_other") == -1)
+			goto out2;
+	}
 	mo = parse_mount_opts(args);
 	if (mo == NULL)
-		goto out2;
-	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
 		goto out3;
 
 	if(args->argc == 1 &&

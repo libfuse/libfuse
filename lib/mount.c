@@ -57,13 +57,12 @@ enum {
 	KEY_FUSERMOUNT_OPT,
 	KEY_SUBTYPE_OPT,
 	KEY_MTAB_OPT,
-	KEY_ALLOW_ROOT,
+	KEY_ALLOW_OTHER,
 	KEY_RO,
 };
 
 struct mount_opts {
 	int allow_other;
-	int allow_root;
 	int flags;
 	int auto_unmount;
 	int blkdev;
@@ -80,14 +79,12 @@ struct mount_opts {
 
 static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_MOUNT_OPT("allow_other",		allow_other),
-	FUSE_MOUNT_OPT("allow_root",		allow_root),
 	FUSE_MOUNT_OPT("blkdev",		blkdev),
 	FUSE_MOUNT_OPT("auto_unmount",		auto_unmount),
 	FUSE_MOUNT_OPT("fsname=%s",		fsname),
 	FUSE_MOUNT_OPT("max_read=%u",		max_read),
 	FUSE_MOUNT_OPT("subtype=%s",		subtype),
 	FUSE_OPT_KEY("allow_other",		KEY_KERN_OPT),
-	FUSE_OPT_KEY("allow_root",		KEY_ALLOW_ROOT),
 	FUSE_OPT_KEY("auto_unmount",		KEY_FUSERMOUNT_OPT),
 	FUSE_OPT_KEY("blkdev",			KEY_FUSERMOUNT_OPT),
 	FUSE_OPT_KEY("fsname=",			KEY_FUSERMOUNT_OPT),
@@ -185,15 +182,10 @@ static void set_mount_flag(const char *s, int *flags)
 static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 			       struct fuse_args *outargs)
 {
+	(void) outargs;
 	struct mount_opts *mo = data;
 
 	switch (key) {
-	case KEY_ALLOW_ROOT:
-		if (fuse_opt_add_opt(&mo->kernel_opts, "allow_other") == -1 ||
-		    fuse_opt_add_arg(outargs, "-oallow_root") == -1)
-			return -1;
-		return 0;
-
 	case KEY_RO:
 		arg = "ro";
 		/* fall through */
@@ -547,11 +539,6 @@ struct mount_opts *parse_mount_opts(struct fuse_args *args)
 	if (args &&
 	    fuse_opt_parse(args, mo, fuse_mount_opts, fuse_mount_opt_proc) == -1)
 		goto err_out;
-
-	if (mo->allow_other && mo->allow_root) {
-		fprintf(stderr, "fuse: 'allow_other' and 'allow_root' options are mutually exclusive\n");
-		goto err_out;
-	}
 
 	return mo;
 
