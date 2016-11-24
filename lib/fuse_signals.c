@@ -10,18 +10,26 @@
 
 #include "config.h"
 #include "fuse_lowlevel.h"
+#include "fuse_i.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
+#include <stdlib.h>
 
 static struct fuse_session *fuse_instance;
 
 static void exit_handler(int sig)
 {
 	(void) sig;
-	if (fuse_instance)
+	if (fuse_instance) {
 		fuse_session_exit(fuse_instance);
+		if(sig <= 0) {
+			fprintf(stderr, "assertion error: signal value <= 0\n");
+			abort();
+		}
+		fuse_instance->error = sig;
+	}
 }
 
 static int set_one_signal_handler(int sig, void (*handler)(int), int remove)

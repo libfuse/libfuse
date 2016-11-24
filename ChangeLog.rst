@@ -9,11 +9,12 @@ UNRELEASED CHANGES
   `struct fuse_conn_info` fields.
 
 * fuse_loop(), fuse_loop_mt(), fuse_session_loop() and
-  fuse_session_loop_mt() now return -errno instead of -1 in case of
-  failure.
+  fuse_session_loop_mt() now return more detailed error codes instead
+  of just -1. See the documentation of fuse_session_loop() for details.
 
 * The FUSE main loop is now aborted if the file-system requests
-  capabilities that are not supported by the kernel.
+  capabilities that are not supported by the kernel. In this case, the
+  session loop is exited with a return code of ``-EPROTO``.
 
 * Most file-system capabilities that were opt-in in libfuse2 are now
   enabled by default. Filesystem developers are encouraged to review

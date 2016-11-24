@@ -1788,22 +1788,38 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
 /**
  * Enter a single threaded, blocking event loop.
  *
- * Using POSIX signals this event loop can be exited but the session
- * needs to be configued by issuing:
- *   fuse_set_signal_handlers() first.
+ * When the event loop terminates because the connection to the FUSE
+ * kernel module has been closed, this function returns zero. This
+ * happens when the filesystem is unmounted regularly (by the
+ * filesystem owner or root running the umount(8) or fusermount(1)
+ * command), or if connection is explicitly severed by writing ``1``
+ * to the``abort`` file in ``/sys/fs/fuse/connections/NNN``. The only
+ * way to distinguish between these two conditions is to check if the
+ * filesystem is still mounted after the session loop returns.
+ *
+ * When some error occurs during request processing, the function
+ * returns a negated errno(3) value.
+ *
+ * If the loop has been terminated because of a signal handler
+ * installed by fuse_set_signal_handlers(), this function returns the
+ * (positive) signal value that triggered the exit.
  *
  * @param se the session
- * @return 0 on success, -errno on failure
+ * @return 0, -errno, or a signal value
  */
 int fuse_session_loop(struct fuse_session *se);
 
 /**
- * Enter a multi-threaded event loop
+ * Enter a multi-threaded event loop.
+ *
+ * For a description of the return value and the conditions when the
+ * event loop exits, refer to the documentation of
+ * fuse_session_loop().
  *
  * @param se the session
  * @param clone_fd whether to use separate device fds for each thread
  *                 (may increase performance)
- * @return 0 on success, -errno on failure
+ * @return see fuse_session_loop()
  */
 int fuse_session_loop_mt(struct fuse_session *se, int clone_fd);
 

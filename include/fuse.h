@@ -839,8 +839,12 @@ void fuse_destroy(struct fuse *f);
  * Requests from the kernel are processed, and the appropriate
  * operations are called.
  *
+ * For a description of the return value and the conditions when the
+ * event loop exits, refer to the documentation of
+ * fuse_session_loop().
+ *
  * @param f the FUSE handle
- * @return 0 if no error occurred, -errno otherwise
+ * @return see fuse_session_loop()
  *
  * See also: fuse_loop_mt()
  */
@@ -863,8 +867,9 @@ void fuse_exit(struct fuse *f);
  * operations are called.  Request are processed in parallel by
  * distributing them between multiple threads.
  *
- * Calling this function requires the pthreads library to be linked to
- * the application.
+ * For a description of the return value and the conditions when the
+ * event loop exits, refer to the documentation of
+ * fuse_session_loop().
  *
  * Note: using fuse_loop() instead of fuse_loop_mt() means you are running in
  * single-threaded mode, and that you will not have to worry about reentrancy,
@@ -883,7 +888,7 @@ void fuse_exit(struct fuse *f);
  * @param f the FUSE handle
  * @param clone_fd whether to use separate device fds for each thread
  *                 (may increase performance)
- * @return 0 if no error occurred, -errno otherwise
+ * @return see fuse_session_loop()
  *
  * See also: fuse_loop()
  */
