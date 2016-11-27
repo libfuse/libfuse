@@ -17,7 +17,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 MOUNTPOINT=/sys/fs/fuse/connections
 
 # Gracefully exit if the package has been removed.
-which fusermount &>/dev/null || exit 5
+which fusermount3 &>/dev/null || exit 5
 
 case "$1" in
     start|restart|force-reload)

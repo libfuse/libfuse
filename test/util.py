@@ -28,7 +28,7 @@ def cleanup(mnt_dir):
                     stderr=subprocess.STDOUT)
 
 def umount(mount_process, mnt_dir):
-    # fusermount will be setuid root, so we can only trace it with
+    # fusermount3 will be setuid root, so we can only trace it with
     # valgrind if we're root
     if os.getuid() == 0:
         cmdline = base_cmdline
@@ -85,5 +85,5 @@ else:
     base_cmdline = []
 
 
-# Try to use local fusermount
+# Try to use local fusermount3
 os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'util'), os.environ['PATH'])

@@ -209,10 +209,10 @@ static int may_unmount(const char *mnt, int quiet)
 }
 
 /*
- * Check whether the file specified in "fusermount -u" is really a
+ * Check whether the file specified in "fusermount3 -u" is really a
  * mountpoint and not a symlink.  This is necessary otherwise the user
  * could move the mountpoint away and replace it with a symlink
- * pointing to an arbitrary mount, thereby tricking fusermount into
+ * pointing to an arbitrary mount, thereby tricking fusermount3 into
  * unmounting that (umount(2) will follow symlinks).
  *
  * This is the child process running in a separate mount namespace, so
@@ -1119,7 +1119,7 @@ static void usage(void)
 
 static void show_version(void)
 {
-	printf("fusermount version: %s\n", PACKAGE_VERSION);
+	printf("fusermount3 version: %s\n", PACKAGE_VERSION);
 	exit(0);
 }
 

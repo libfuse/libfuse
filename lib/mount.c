@@ -356,7 +356,7 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		snprintf(env, sizeof(env), "%i", fds[0]);
 		setenv(FUSE_COMMFD_ENV, env, 1);
 		exec_fusermount(argv);
-		perror("fuse: failed to exec fusermount");
+		perror("fuse: failed to exec fusermount3");
 		_exit(1);
 	}
 
@@ -364,7 +364,7 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	rv = receive_fd(fds[1]);
 
 	if (!mo->auto_unmount) {
-		/* with auto_unmount option fusermount will not exit until
+		/* with auto_unmount option fusermount3 will not exit until
 		   this socket is closed */
 		close(fds[1]);
 		waitpid(pid, NULL, 0); /* bury zombie */
@@ -404,7 +404,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	}
 
 	if (mo->auto_unmount) {
-		/* Tell the caller to fallback to fusermount because
+		/* Tell the caller to fallback to fusermount3 because
 		   auto-unmount does not work otherwise. */
 		return -2;
 	}
@@ -462,7 +462,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	if (res == -1) {
 		/*
 		 * Maybe kernel doesn't support unprivileged mounts, in this
-		 * case try falling back to fusermount
+		 * case try falling back to fusermount3
 		 */
 		if (errno == EPERM) {
 			res = -2;

@@ -73,7 +73,7 @@ contain FUSE support).
 Security implications
 ---------------------
 
-If you run `make install`, the *fusermount* program is installed
+If you run `make install`, the *fusermount3* program is installed
 set-user-id to root.  This is done to allow normal users to mount
 their own filesystem implementations.
 
