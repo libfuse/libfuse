@@ -780,7 +780,7 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 			if (getuid() != 0 && !user_allow_other &&
 			    (opt_eq(s, len, "allow_other") ||
 			     opt_eq(s, len, "allow_root"))) {
-				fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in /etc/fuse.conf\n", progname, len, s);
+				fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in %s\n", progname, len, s, FUSE_CONF);
 				goto err;
 			}
 			if (!skip_option) {
@@ -1022,7 +1022,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 	if (getuid() != 0 && mount_max != -1) {
 		int mount_count = count_fuse_fs();
 		if (mount_count >= mount_max) {
-			fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in /etc/fuse.conf\n", progname);
+			fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in %s\n", progname, FUSE_CONF);
 			goto fail_close_fd;
 		}
 	}
