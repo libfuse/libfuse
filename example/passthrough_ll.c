@@ -37,6 +37,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
+#include <limits.h>
 #include <dirent.h>
 #include <assert.h>
 #include <errno.h>
