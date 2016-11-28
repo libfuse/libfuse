@@ -463,6 +463,8 @@ int main(int argc, char *argv[])
 	struct lo_data lo = { .debug = 0 };
 	int ret = -1;
 
+	lo.root.next = lo.root.prev = &lo.root;
+
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
 	if (opts.show_help) {
@@ -479,7 +481,6 @@ int main(int argc, char *argv[])
 	}
 
 	lo.debug = opts.debug;
-	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = open("/", O_PATH);
 	lo.root.nlookup = 2;
 	if (lo.root.fd == -1)
