@@ -464,6 +464,7 @@ int main(int argc, char *argv[])
 	int ret = -1;
 
 	lo.root.next = lo.root.prev = &lo.root;
+	lo.root.fd = -1;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
@@ -515,6 +516,8 @@ err_out1:
 
 	while (lo.root.next != &lo.root)
 		lo_free(lo.root.next);
+	if (lo.root.fd >= 0)
+		close(lo.root.fd);
 
 	return ret ? 1 : 0;
 }
