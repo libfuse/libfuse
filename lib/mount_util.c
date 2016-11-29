@@ -33,10 +33,6 @@
 #define IGNORE_MTAB 1
 #endif /* IGNORE_MTAB */
 #define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
-#else /* !__NetBSD__ */
-#ifdef IGNORE_MTAB
-#undef IGNORE_MTAB
-#endif /* IGNORE_MTAB */
 #endif /* __NetBSD__ */
 
 #ifdef IGNORE_MTAB
