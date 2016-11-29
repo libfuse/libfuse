@@ -45,8 +45,9 @@ struct fuse_file_info {
 	/** Can be filled in by open, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
-	/** Can be filled in by open, to indicate, that cached file data
-	    need not be invalidated. */
+	/** Can be filled in by open, to indicate that currently
+	    cached file data (that the filesystem provided the last
+	    time the file was open) need not be invalidated. */
 	unsigned int keep_cache : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
