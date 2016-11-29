@@ -39,7 +39,7 @@ What is FUSE?
 
 FUSE is a userspace filesystem framework.  It consists of a kernel
 module (fuse.ko), a userspace library (libfuse.*) and a mount utility
-(fusermount).
+(fusermount3).
 
 One of the most important features of FUSE is allowing secure,
 non-privileged mounts.  This opens up new possibilities for the use of
@@ -176,7 +176,7 @@ How do non-privileged mounts work?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Since the mount() system call is a privileged operation, a helper
-program (fusermount) is needed, which is installed setuid root.
+program (fusermount3) is needed, which is installed setuid root.
 
 The implication of providing non-privileged mounts is that the mount
 owner must not be able to use this capability to compromise the
@@ -204,7 +204,7 @@ How are requirements fulfilled?
 
     The solution is not to allow opening device files and ignore
     setuid and setgid bits when executing programs.  To ensure this
-    fusermount always adds "nosuid" and "nodev" to the mount options
+    fusermount3 always adds "nosuid" and "nodev" to the mount options
     for non-privileged mounts.
 
  B) If another user is accessing files or directories in the
@@ -222,7 +222,7 @@ How are requirements fulfilled?
         owner could otherwise not be able to modify (or could only
         make limited modifications).
 
-        This is solved in fusermount, by checking the access
+        This is solved in fusermount3, by checking the access
         permissions on the mountpoint and only allowing the mount if
         the mount owner can do unlimited modification (has write
         access to the mountpoint, and mountpoint is not a "sticky"

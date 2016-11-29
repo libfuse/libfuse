@@ -209,10 +209,10 @@ static int may_unmount(const char *mnt, int quiet)
 }
 
 /*
- * Check whether the file specified in "fusermount -u" is really a
+ * Check whether the file specified in "fusermount3 -u" is really a
  * mountpoint and not a symlink.  This is necessary otherwise the user
  * could move the mountpoint away and replace it with a symlink
- * pointing to an arbitrary mount, thereby tricking fusermount into
+ * pointing to an arbitrary mount, thereby tricking fusermount3 into
  * unmounting that (umount(2) will follow symlinks).
  *
  * This is the child process running in a separate mount namespace, so
@@ -780,7 +780,7 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 			if (getuid() != 0 && !user_allow_other &&
 			    (opt_eq(s, len, "allow_other") ||
 			     opt_eq(s, len, "allow_root"))) {
-				fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in /etc/fuse.conf\n", progname, len, s);
+				fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in %s\n", progname, len, s, FUSE_CONF);
 				goto err;
 			}
 			if (!skip_option) {
@@ -1022,7 +1022,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 	if (getuid() != 0 && mount_max != -1) {
 		int mount_count = count_fuse_fs();
 		if (mount_count >= mount_max) {
-			fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in /etc/fuse.conf\n", progname);
+			fprintf(stderr, "%s: too many FUSE filesystems mounted; mount_max=N can be set in %s\n", progname, FUSE_CONF);
 			goto fail_close_fd;
 		}
 	}
@@ -1119,7 +1119,7 @@ static void usage(void)
 
 static void show_version(void)
 {
-	printf("fusermount version: %s\n", PACKAGE_VERSION);
+	printf("fusermount3 version: %s\n", PACKAGE_VERSION);
 	exit(0);
 }
 

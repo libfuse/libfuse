@@ -16,14 +16,14 @@ kernel.
 \fBlibfuse\fP
 The shared library that most (user-space) filesystems use to
 communicate with FUSE (the kernel filesystem). libfuse also provides
-the \fBfusermount\fP helper to allow non-privileged users to mount
-filesystems.
+the \fBfusermount3\fP (or \fBfusermount\fP if you have older version of
+libfuse) helper to allow non-privileged users to mount filesystems.
 .TP
 \fBfilesystem owner\fP
 The user that starts the filesystem and instructs the kernel to
 associate it with a particular mountpoint. The latter is typically done
 by the filesystem itself on start-up. When using libfuse, this is done
-by calling the \fBfusermount\fP utility.
+by calling the \fBfusermount3\fP utility.
 .TP
 \fBclient\fP
 Any process that interacts with the mountpoint.
@@ -37,7 +37,7 @@ Set the maximum number of FUSE mounts allowed to non-root users. The default is 
 Allow non-root users to specify the \fBallow_other\fP or
 \fBallow_root\fP mount options (see below).
 .TP
-These limits are enforced by the \fBfusermount\fP helper, so they can be avoided by filesystems that run as root.
+These limits are enforced by the \fBfusermount3\fP helper, so they can be avoided by filesystems that run as root.
 .SH OPTIONS
 Most of the generic mount options described in \fBmount\fP are
 supported (\fBro\fP, \fBrw\fP, \fBsuid\fP, \fBnosuid\fP, \fBdev\fP,
@@ -217,7 +217,7 @@ Transform absolute symlinks into relative
 \fBnorellinks\fP
 Do not transform absolute symlinks into relative.  This is the default.
 .SH SECURITY
-The fusermount program is installed set-user-gid to fuse. This is done to allow users from fuse group to mount
+The fusermount3 program is installed set-user-gid to fuse. This is done to allow users from fuse group to mount
 their own filesystem implementations.
 There must however be some limitations, in order to prevent Bad User from
 doing nasty things.  Currently those limitations are:
@@ -228,7 +228,7 @@ The mountpoint is not a sticky directory which isn't owned by the user (like \fI
 .IP 3.
 No other user (including root) can access the contents of the mounted filesystem.
 .SH NOTE
-FUSE filesystems are unmounted using the \fBfusermount\fP(1) command (\fBfusermount -u mountpoint\fP).
+FUSE filesystems are unmounted using the \fBfusermount3\fP(1) command (\fBfusermount3 -u mountpoint\fP).
 .SH "AUTHORS"
 .LP
 FUSE is currently maintained by Nikolaus Rath <Nikolaus@rath.org>
@@ -238,5 +238,6 @@ The original author of FUSE is Miklos Szeredi <mszeredi@inf.bme.hu>.
 This man page was originally written by Bastien Roucaries <roucaries.bastien+debian@gmail.com> for the
 Debian GNU/Linux distribution.
 .SH SEE ALSO
-fusermount(1)
-mount(8)
+.BR fusermount3 (1)
+.BR fusermount (1)
+.BR mount (8)
