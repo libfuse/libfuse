@@ -12,7 +12,7 @@
  * This file system mirrors the existing file system hierarchy of the
  * system, starting at the root file system. This is implemented by
  * just "passing through" all requests to the corresponding user-space
- * libc functions. It's performance is terrible.
+ * libc functions. Its performance is terrible.
  *
  * Compile with
  *
