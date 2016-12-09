@@ -1,5 +1,20 @@
-FUSE 3.0.0-rc3 (2016-11-29)
-===========================
+libfuse 3.0.0 (2016-12-08)
+==========================
+
+* NOTE TO PACKAGERS:
+
+  libfuse 3 is designed to be co-installable with libfuse 2. However,
+  some files will be installed by both libfuse 2 and libfuse 3
+  (e.g. /etc/fuse.conf, the udev and init scripts, and the
+  mount.fuse(8) manpage). These files should be taken from
+  libfuse 3. The format/content is guaranteed to remain backwards
+  compatible with libfuse 2.
+
+  We recommend to ship libfuse2 and libfuse3 in three separate
+  packages: a libfuse-common package that contains files shared by
+  libfuse 2+3 (taken from the libfuse3 tarball), and libfuse2 and
+  libfuse3 packages that contain the shared library and helper
+  programs for the respective version.
 
 * Fixed test errors when running tests as root.
 
@@ -31,27 +46,9 @@ FUSE 3.0.0-rc3 (2016-11-29)
   changed. Previously, this was handled by the kernel but subject to
   race conditions.
 
-* The ``allow_other`` and ``allow_root`` mount options (accepted by
-  `fuse_session_new()`) may now be specified together. In this case,
-  ``allow_root`` takes precedence.
-
-
-FUSE 3.0.0-rc2 (2016-11-06)
-===========================
-
-* Fixed documentation of chmod, chown, truncate, utimens and getattr
-  handlers. The struct fuse_file_info pointer may be NULL even if the
-  file is open.
-
 * The fusermount and mount.fuse binaries have been renamed to
   fusermount3 and mount.fuse3 to allow co-installation of libfuse 2.x
   and 3.x
-
-FUSE 3.0.0-rc1 (2016-10-28)
-===========================
-
-This is a release candidate. Functionality and API will correspond
-to the final release unless any serious bugs are discovered.
 
 * Added a `max_read` field to `struct fuse_conn_info`. For the time
   being, the maximum size of read requests has to be specified both
@@ -102,7 +99,8 @@ to the final release unless any serious bugs are discovered.
 
 * The chmod, chown, truncate, utimens and getattr handlers of the
   high-level API now all receive an additional struct fuse_file_info
-  pointer. This pointer is NULL if the file is not currently open.
+  pointer (which, however, may be NULL even if the file is currently
+  open).
 
   The fgetattr and ftruncate handlers have become obsolete and have
   been removed.
@@ -159,17 +157,14 @@ to the final release unless any serious bugs are discovered.
   always active. File systems that want to limit the size of write
   requests should use the ``-o max_write=<N>`` option instead.
 
-
-FUSE 3.0.0pre0 (2016-10-03)
-============================
-
-* This is a preview release. Functionality and API may still change
-  before the 3.0.0 release.
-
 * The `fuse_lowlevel_new` function has been renamed to
   `fuse_session_new` and no longer interprets the --version or --help
   options. To print help or version information, use the new
   `fuse_lowlevel_help` and `fuse_lowlevel_version` functions.
+
+* The ``allow_other`` and ``allow_root`` mount options (accepted by
+  `fuse_session_new()`) may now be specified together. In this case,
+  ``allow_root`` takes precedence.
 
 * There are new `fuse_session_unmount` and `fuse_session_mount`
   functions that should be used in the low-level API. The `fuse_mount`
