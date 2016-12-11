@@ -1,6 +1,8 @@
 libfuse
 =======
 
+[![Build Status](https://travis-ci.org/libfuse/libfuse.svg?branch=master)](https://travis-ci.org/libfuse/libfuse)
+
 Warning: unresolved security issue
 ----------------------------------
 
