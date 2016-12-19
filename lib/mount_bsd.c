@@ -255,10 +255,16 @@ mount:
 		if (pid == 0) {
 			const char *argv[32];
 			int a = 0;
-
-			if (! fdnam && asprintf(&fdnam, "%d", fd) == -1) {
-				perror("fuse: failed to assemble mount arguments");
-				exit(1);
+			int ret = -1; 
+			
+			if (! fdnam)
+			{
+				ret = asprintf(&fdnam, "%d", fd); 
+				if(ret == -1)
+				{
+					perror("fuse: failed to assemble mount arguments");
+					exit(1);
+				}
 			}
 
 			argv[a++] = mountprog;
@@ -267,6 +273,10 @@ mount:
 				argv[a++] = opts;
 			}
 			argv[a++] = fdnam;
+			
+			if(ret != -1)
+				free(fdnam);
+			
 			argv[a++] = mountpoint;
 			argv[a++] = NULL;
 			execvp(mountprog, (char **) argv);
