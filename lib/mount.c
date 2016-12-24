@@ -37,8 +37,11 @@
 #define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
 #define MS_NOATIME	MNT_NOATIME
 
+#ifndef IGNORE_MTAB
+#define IGNORE_MTAB 1
+#endif /* IGNORE_MTAB */
 #define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
-#endif
+#endif /* __NetBSD__ */
 
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
@@ -481,7 +484,6 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		goto out_close;
 	}
 
-#ifndef __NetBSD__
 #ifndef IGNORE_MTAB
 	if (geteuid() == 0) {
 		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
@@ -496,7 +498,6 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			goto out_umount;
 	}
 #endif /* IGNORE_MTAB */
-#endif /* __NetBSD__ */
 	free(type);
 	free(source);
 
