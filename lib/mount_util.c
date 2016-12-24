@@ -30,6 +30,9 @@
 
 #ifdef __NetBSD__
 #define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
+#endif
+
+#ifdef IGNORE_MTAB
 #define mtab_needs_update(mnt) 0
 #else
 static int mtab_needs_update(const char *mnt)
@@ -75,7 +78,7 @@ static int mtab_needs_update(const char *mnt)
 
 	return 1;
 }
-#endif /* __NetBSD__ */
+#endif /* IGNORE_MTAB */
 
 static int add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts)

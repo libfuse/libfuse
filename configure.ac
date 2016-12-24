@@ -54,7 +54,8 @@ fi
 if test "$enable_test" != "no"; then
 	subdirs2="$subdirs2 test";
 fi
-if test "$enable_mtab" = "no"; then
+if test "$enable_mtab" = "no" -o \
+	"$arch" = "netbsd"; then
 	AC_DEFINE(IGNORE_MTAB, 1, [Don't update /etc/mtab])
 fi
 
