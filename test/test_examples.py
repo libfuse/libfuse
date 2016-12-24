@@ -140,6 +140,28 @@ def test_poll(tmpdir):
     else:
         umount(mount_process, mnt_dir)
 
+def test_null(tmpdir):
+    mnt_file = str(tmpdir) + '/file'
+    with open(mnt_file, 'w') as fh:
+        fh.write('dummy')
+    cmdline = base_cmdline + [pjoin(basename, 'example', 'null'),
+               '-f', mnt_file ]
+    mount_process = subprocess.Popen(cmdline)
+    def test_fn(name):
+        return os.stat(name).st_size > 4000
+    try:
+        wait_for_mount(mount_process, mnt_file, test_fn)
+        with open(mnt_file, 'rb') as fh:
+            assert fh.read(382) == b'\0' * 382
+        with open(mnt_file, 'wb') as fh:
+            fh.write(b'whatever')
+    except:
+        cleanup(mnt_file)
+        raise
+    else:
+        umount(mount_process, mnt_file)
+
+
 @pytest.mark.parametrize("name",
                          ('notify_inval_inode',
                           'notify_store_retrieve'))

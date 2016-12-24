@@ -8,14 +8,17 @@
 
 /** @file
  *
- * null.c - FUSE: Filesystem in Userspace
+ * This "filesystem" provides only a single file. The mountpoint
+ * needs to be a file rather than a directory. All writes to the
+ * file will be discarded, and reading the file always returns
+ * \0.
  *
- * \section section_compile compiling this example
+ * Compile with:
  *
- * gcc -Wall null.c `pkg-config fuse3 --cflags --libs` -o null
+ *     gcc -Wall null.c `pkg-config fuse3 --cflags --libs` -o null
  *
- * \section section_source the complete source
- * \include null.c
+ * ## Source code ##
+ * \include passthrough_fh.c
  */
 
 
