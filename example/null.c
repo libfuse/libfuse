@@ -85,6 +85,7 @@ static int null_read(const char *path, char *buf, size_t size,
 	if (offset >= (1ULL << 32))
 		return 0;
 
+	memset(buf, 0, size);
 	return size;
 }
 
