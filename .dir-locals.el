@@ -1,6 +1,4 @@
-((nil . ((eval . (add-hook 'before-save-hook
-			   'whitespace-cleanup nil t))))
- (python-mode . ((indent-tabs-mode . nil)))
+((python-mode . ((indent-tabs-mode . nil)))
  (autoconf-mode . ((indent-tabs-mode . t)))
  (c-mode . ((c-file-style . "stroustrup")
 	    (indent-tabs-mode . t)
