@@ -17,3 +17,5 @@ ioctl_client_LDADD =
 poll_client_CPPFLAGS =
 poll_client_LDFLAGS =
 poll_client_LDADD =
+
+EXTRA_DIST = meson.build

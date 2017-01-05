@@ -10,3 +10,5 @@ fuseinclude_HEADERS = \
 	cuse_lowlevel.h
 
 noinst_HEADERS = fuse_kernel.h
+
+EXTRA_DIST = meson.build

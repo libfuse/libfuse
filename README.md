@@ -28,33 +28,58 @@ Installation
 ------------
 
 You can download libfuse from
-https://github.com/libfuse/libfuse/releases. After extracting the
-tarball, build and install with
+https://github.com/libfuse/libfuse/releases. To build and install, we
+recommend to use [Meson](http://mesonbuild.com/) and
+[Ninja](https://ninja-build.org).  After extracting the libfuse
+tarball, create a (temporary) build directory and run Meson:
 
-    ./configure
-    make -j8
-    make install
+    $ md build; cd build
+    $ meson ..
 
-To run some self tests, you need a Python 3 environment with the
-[py.test](http://www.pytest.org/) module installed. To run the tests,
-execute
+Normally, the default build options will work fine. If you
+nevertheless want to adjust them, you can do so with the *mesonconf*
+command:
 
-    python3 -m pytest test/
+    $ mesonconf # list options
+    $ mesonconf  -D disable-mtab=true # set an option
 
-You may also need to add `/usr/local/lib` to `/etc/ld.so.conf` and/or
-run *ldconfig*. If you're building from the git repository (instead of
-using a release tarball), you also need to run `./makeconf.sh` to
-create the `configure` script.
+To build, test and install libfuse, you then use Ninja:
 
-You'll also need a fuse kernel module (Linux kernels 2.6.14 or later
-contain FUSE support).
+    $ ninja
+    $ sudo ninja tests # requires pytest, see below
+    $ sudo ninja install
+
+Running the tests requires the [py.test](http://www.pytest.org/)
+Python module. Instead of running the tests as root, the majority of
+tests can also be run as a regular user if *util/fusermount3* is
+made setuid root first:
+
+    $ sudo chown root:root util/fusermount3
+    $ sudo chmod 4755 util/fusermount3
+    $ ninja tests
+
+
+Alternate Installation
+----------------------
+
+If you are not able to use Meson and Ninja, please report this to the
+libfuse mailing list. Until the problem is resolved, you may fall back
+to an in-source build using autotools:
+
+    $ ./configure
+    $ make
+    $ sudo make install
+
+Note that support for building with autotools may disappear at some
+point, so if you depend on using autotools for some reason please let
+the libfuse developers know!
+
 
 Security implications
 ---------------------
 
-If you run `make install`, the *fusermount3* program is installed
-set-user-id to root.  This is done to allow normal users to mount
-their own filesystem implementations.
+The *fusermount3* program is installed setuid root. This is done to
+allow normal users to mount their own filesystem implementations.
 
 To limit the harm that malicious users can do this way, *fusermount3*
 enforces the following limitations:

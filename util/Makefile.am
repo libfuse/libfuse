@@ -23,7 +23,7 @@ install-exec-hook:
 		mknod $(DESTDIR)/dev/fuse -m 0666 c 10 229 || true; \
 	fi
 
-EXTRA_DIST = udev.rules init_script
+EXTRA_DIST = udev.rules init_script meson.build install_helper.sh
 
 MOUNT_FUSE_PATH = @MOUNT_FUSE_PATH@
 UDEV_RULES_PATH = @UDEV_RULES_PATH@

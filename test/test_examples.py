@@ -77,7 +77,7 @@ def test_passthrough(tmpdir, name, debug):
         wait_for_mount(mount_process, mnt_dir)
         work_dir = pjoin(mnt_dir, src_dir)
 
-        subprocess.check_call([ os.path.join(basename, 'test', 'test'),
+        subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
                     work_dir, ':' + src_dir ])
 
         tst_write(work_dir)

@@ -105,7 +105,7 @@ def fuse_test_marker():
 
     return pytest.mark.uses_fuse()
 
-# If valgrind and libtool are available, use them
+# If valgrind is available, use it
 def has_program(name):
     try:
         ret = subprocess.call([name, '--version'],
@@ -115,9 +115,8 @@ def has_program(name):
         return False
     return ret == 0
 
-if has_program('valgrind') and has_program('libtool'):
-    base_cmdline = [ 'libtool', '--mode=execute',
-                     'valgrind', '-q', '--' ]
+if has_program('valgrind'):
+    base_cmdline = [ 'valgrind', '-q', '--' ]
 else:
     base_cmdline = []
 

@@ -1,0 +1,90 @@
+# Attention, emacs, please use -*- mode: python -*-
+# (even though this isn't actually Python code)
+
+project('libfuse3', 'c', version: '3.1.0',
+        default_options: [ 'buildtype=plain' ])
+
+#
+# Feature detection
+#
+cfg = configuration_data()
+cc = meson.get_compiler('c')
+
+# Default includes when checking for presence of functions and
+# struct members
+include_default = '
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+'
+
+cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
+
+# Test for presence of some functions
+test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
+               'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
+               'utimensat' ]
+foreach func : test_funcs
+    cfg.set('HAVE_' + func.to_upper(),
+        cc.has_function(func, prefix: include_default))
+endforeach
+cfg.set('HAVE_SETXATTR', 
+        cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
+cfg.set('HAVE_ICONV', 
+        cc.has_function('iconv', prefix: '#include <iconv.h>'))
+
+# Test if structs have specific member
+cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
+         cc.has_member('struct stat', 'st_atim',
+                       prefix: include_default))
+cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
+         cc.has_member('struct stat', 'st_atimespec',
+                       prefix: include_default))
+
+# Write the test results into config.h (stored in build directory)
+configure_file(output: 'config.h',
+               configuration : cfg)
+
+
+#
+# Compiler configuration
+#
+add_global_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-Wno-sign-compare',
+                     '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
+                     '-O2', '-g', '-fno-strict-aliasing', language: 'c')
+
+# Some (stupid) GCC versions warn about unused return values even when they are
+# casted to void. This makes -Wunused-result pretty useless, since there is no
+# way to suppress the warning when we really *want* to ignore the value.
+code = '''
+__attribute__((warn_unused_result)) int get_4() {
+    return 4;
+}
+int main(void) {
+    (void) get_4();
+    return 0;
+}'''
+if not cc.compiles(code, args: [ '-O0', '-Werror=unused-result' ])
+     message('Compiler warns about unused result even when casting to void')
+     add_global_arguments('-Wno-unused-result', language: 'c')
+endif
+
+# current_build_dir() contains config.h
+include_dirs = include_directories('include', 'lib',
+                                   meson.current_build_dir())
+
+# Common dependencies
+thread_dep = dependency('threads') 
+
+#
+# Read build files from sub-directories
+#
+subdirs = [ 'lib', 'include', 'util', 'example', 'doc', 'test' ]
+foreach n : subdirs
+    subdir(n)
+endforeach

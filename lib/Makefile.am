@@ -40,4 +40,4 @@ if NETBSD
 libfuse3_la_LIBADD = -lperfuse -lpuffs
 endif
 
-EXTRA_DIST = fuse_versionscript
+EXTRA_DIST = fuse_versionscript meson.build
