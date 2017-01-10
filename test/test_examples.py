@@ -17,10 +17,12 @@ import platform
 from distutils.version import LooseVersion
 from tempfile import NamedTemporaryFile
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
-                  safe_sleep, basename)
+                  safe_sleep, basename, fuse_test_marker)
 from os.path import join as pjoin
 
 TEST_FILE = __file__
+
+pytestmark = fuse_test_marker()
 
 with open(TEST_FILE, 'rb') as fh:
     TEST_DATA = fh.read()

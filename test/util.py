@@ -2,6 +2,7 @@
 import subprocess
 import pytest
 import os
+import stat
 import time
 from os.path import join as pjoin
 
@@ -67,6 +68,42 @@ def safe_sleep(secs):
     while now < end:
         time.sleep(end - now)
         now = time.time()
+
+def fuse_test_marker():
+    '''Return a pytest.marker that indicates FUSE availability
+
+    If system/user/environment does not support FUSE, return
+    a `pytest.mark.skip` object with more details. If FUSE is
+    supported, return `pytest.mark.uses_fuse()`.
+    '''
+
+    skip = lambda x: pytest.mark.skip(reason=x)
+
+    with subprocess.Popen(['which', 'fusermount3'], stdout=subprocess.PIPE,
+                          universal_newlines=True) as which:
+        fusermount_path = which.communicate()[0].strip()
+
+    if not fusermount_path or which.returncode != 0:
+        return skip("Can't find fusermount executable")
+
+    if not os.path.exists('/dev/fuse'):
+        return skip("FUSE kernel module does not seem to be loaded")
+
+    if os.getuid() == 0:
+        return pytest.mark.uses_fuse()
+
+    mode = os.stat(fusermount_path).st_mode
+    if mode & stat.S_ISUID == 0:
+        return skip('fusermount executable not setuid, and we are not root.')
+
+    try:
+        fd = os.open('/dev/fuse', os.O_RDWR)
+    except OSError as exc:
+        return skip('Unable to open /dev/fuse: %s' % exc.strerror)
+    else:
+        os.close(fd)
+
+    return pytest.mark.uses_fuse()
 
 # If valgrind and libtool are available, use them
 def has_program(name):
