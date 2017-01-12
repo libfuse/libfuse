@@ -141,11 +141,11 @@ static void fioc_do_rw(fuse_req_t req, void *addr, const void *in_buf,
 
 	/* prepare size outputs */
 	out_iov[0].iov_base =
-		addr + (unsigned long)&(((struct fioc_rw_arg *)0)->prev_size);
+		addr + offsetof(struct fioc_rw_arg, prev_size);
 	out_iov[0].iov_len = sizeof(arg->prev_size);
 
 	out_iov[1].iov_base =
-		addr + (unsigned long)&(((struct fioc_rw_arg *)0)->new_size);
+		addr + offsetof(struct fioc_rw_arg, new_size);
 	out_iov[1].iov_len = sizeof(arg->new_size);
 
 	/* prepare client buf */
