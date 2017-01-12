@@ -2,7 +2,12 @@
 
 set -e
 
+# Disable leak checking for now, there are some issues (or false positives)
+# that we still need to fix
+export ASAN_OPTIONS="detect_leaks=0"
+
 export CFLAGS="-Werror"
+export LSAN_OPTIONS="suppressions=$(pwd)/test/lsan_suppress.txt"
 export CC
 
 # Standard build
@@ -18,14 +23,14 @@ for CC in gcc gcc-6 clang; do
 
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
-    ninja tests
+    TEST_WITH_VALGRIND=true ninja tests
     cd ..
 done
 (cd build-$CC; sudo ninja install)
 
 # Sanitized build
 CC=clang
-for san in undefined; do
+for san in undefined address; do
     mkdir build-${san}; cd build-${san}
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4

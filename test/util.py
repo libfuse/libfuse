@@ -105,21 +105,12 @@ def fuse_test_marker():
 
     return pytest.mark.uses_fuse()
 
-# If valgrind is available, use it
-def has_program(name):
-    try:
-        ret = subprocess.call([name, '--version'],
-                              stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL)
-    except FileNotFoundError:
-        return False
-    return ret == 0
-
-if has_program('valgrind'):
+# Use valgrind if requested
+if os.environ.get('TEST_WITH_VALGRIND', 'no').lower().strip() \
+   not in ('no', 'false', '0'):
     base_cmdline = [ 'valgrind', '-q', '--' ]
 else:
     base_cmdline = []
-
 
 # Try to use local fusermount3
 os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'util'), os.environ['PATH'])
