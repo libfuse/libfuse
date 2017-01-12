@@ -1,33 +1,18 @@
 sudo: required
+dist: trusty
+
 language:
-    - python
     - c
-python: "3.5"
-compiler:
-    - gcc
-    - clang
-env:
-    - CC=gcc-6
-    - CC=clang
 addons:
   apt:
     sources:
     - ubuntu-toolchain-r-test
     packages:
     - doxygen
-    - libtool
     - valgrind
-    - automake
-    - autoconf
+    - clang
+    - gcc
     - gcc-6
-install:
-    - sudo python -m pip install pytest
-script:
-    - $CC --version
-    - libtool --version
-    - valgrind --version
-    - ./makeconf.sh
-    - ./configure
-    - CFLAGS="-fsanitize=address,undefined -g -O1 -Wall -Werror" make
-    - doxygen doc/Doxyfile
-    - make test
+install: test/travis-install.sh
+script: test/travis-build.sh
+
