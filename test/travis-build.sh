@@ -6,7 +6,6 @@ set -e
 # that we still need to fix
 export ASAN_OPTIONS="detect_leaks=0"
 
-export CFLAGS="-Werror"
 export LSAN_OPTIONS="suppressions=$(pwd)/test/lsan_suppress.txt"
 export CC
 
@@ -18,7 +17,7 @@ for CC in gcc gcc-6 clang; do
     else
         build_opts=''
     fi
-    meson ${build_opts} ../
+    meson -D werror=true ${build_opts} ../
     ninja
 
     sudo chown root:root util/fusermount3
@@ -34,7 +33,7 @@ for san in undefined address; do
     mkdir build-${san}; cd build-${san}
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
-    meson -D b_sanitize=${san} -D b_lundef=false ..
+    meson -D b_sanitize=${san} -D b_lundef=false -D werror=true ..
     ninja
 
     # Test as root and regular user
