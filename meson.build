@@ -13,7 +13,6 @@ cc = meson.get_compiler('c')
 # Default includes when checking for presence of functions and
 # struct members
 include_default = '
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -22,6 +21,7 @@ include_default = '
 #include <sys/stat.h>
 #include <fcntl.h>
 '
+args_default = [ '-D_GNU_SOURCE' ]
 
 cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
 
@@ -31,7 +31,7 @@ test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'utimensat' ]
 foreach func : test_funcs
     cfg.set('HAVE_' + func.to_upper(),
-        cc.has_function(func, prefix: include_default))
+        cc.has_function(func, prefix: include_default, args: args_default))
 endforeach
 cfg.set('HAVE_SETXATTR', 
         cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
@@ -41,15 +41,16 @@ cfg.set('HAVE_ICONV',
 # Test if structs have specific member
 cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
          cc.has_member('struct stat', 'st_atim',
-                       prefix: include_default))
+                       prefix: include_default,
+                       args: args_default))
 cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
          cc.has_member('struct stat', 'st_atimespec',
-                       prefix: include_default))
+                       prefix: include_default,
+                       args: args_default))
 
 # Write the test results into config.h (stored in build directory)
 configure_file(output: 'config.h',
                configuration : cfg)
-
 
 #
 # Compiler configuration
