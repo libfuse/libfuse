@@ -1734,19 +1734,43 @@ int fuse_fs_read_buf(struct fuse_fs *fs, const char *path,
 int fuse_fs_read(struct fuse_fs *fs, const char *path, char *mem, size_t size,
 		 off_t off, struct fuse_file_info *fi)
 {
-	int res;
-	struct fuse_bufvec *buf = NULL;
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.read || fs->op.read_buf) {
+		int res;
 
-	res = fuse_fs_read_buf(fs, path, &buf, size, off, fi);
-	if (res == 0) {
-		struct fuse_bufvec dst = FUSE_BUFVEC_INIT(size);
+		if (fs->debug)
+			fprintf(stderr,
+				"read[%llu] %zu bytes from %llu flags: 0x%x\n",
+				(unsigned long long) fi->fh,
+				size, (unsigned long long) off, fi->flags);
 
-		dst.buf[0].mem = mem;
-		res = fuse_buf_copy(&dst, buf, 0);
+		if (fs->op.read_buf) {
+			struct fuse_bufvec *buf = NULL;
+
+			res = fs->op.read_buf(path, &buf, size, off, fi);
+			if (res == 0) {
+				struct fuse_bufvec dst = FUSE_BUFVEC_INIT(size);
+
+				dst.buf[0].mem = mem;
+				res = fuse_buf_copy(&dst, buf, 0);
+			}
+			fuse_free_buf(buf);
+		} else {
+			res = fs->op.read(path, mem, size, off, fi);
+		}
+
+		if (fs->debug && res >= 0)
+			fprintf(stderr, "   read[%llu] %u bytes from %llu\n",
+				(unsigned long long) fi->fh,
+				res,
+				(unsigned long long) off);
+		if (res >= 0 && res > (int) size)
+			fprintf(stderr, "fuse: read too many bytes\n");
+
+		return res;
+	} else {
+		return -ENOSYS;
 	}
-	fuse_free_buf(buf);
-
-	return res;
 }
 
 int fuse_fs_write_buf(struct fuse_fs *fs, const char *path,
