@@ -2,6 +2,7 @@
 # (even though this isn't actually Python code)
 
 project('libfuse3', 'c', version: '3.1.0',
+        meson_version: '>= 0.37',
         default_options: [ 'buildtype=plain' ])
 
 #
