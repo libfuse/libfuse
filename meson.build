@@ -76,9 +76,8 @@ if not cc.compiles(code, args: [ '-O0', '-Werror=unused-result' ])
      add_global_arguments('-Wno-unused-result', language: 'c')
 endif
 
-# current_build_dir() contains config.h
-include_dirs = include_directories('include', 'lib',
-                                   meson.current_build_dir())
+# '.' will refer to current build directory, which contains config.h
+include_dirs = include_directories('include', 'lib', '.')
 
 # Common dependencies
 thread_dep = dependency('threads') 
