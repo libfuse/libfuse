@@ -122,6 +122,13 @@ static bool lo_debug(fuse_req_t req)
 	return lo_data(req)->debug != 0;
 }
 
+static void lo_init(void *userdata,
+		    struct fuse_conn_info *conn)
+{
+	(void) userdata;
+	conn->want |= FUSE_CAP_EXPORT_SUPPORT;
+}
+
 static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
@@ -443,6 +450,7 @@ static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static struct fuse_lowlevel_ops lo_oper = {
+	.init		= lo_init,
 	.lookup		= lo_lookup,
 	.forget		= lo_forget,
 	.getattr	= lo_getattr,
