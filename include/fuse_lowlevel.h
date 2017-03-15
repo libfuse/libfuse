@@ -439,14 +439,8 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Open a file
 	 *
-	 * Open flags are available in fi->flags.  Creation (O_CREAT,
-	 * O_EXCL, O_NOCTTY) and by default also truncation (O_TRUNC)
-	 * flags will be filtered out. If an application specifies
-	 * O_TRUNC, fuse first calls truncate() and then open().
-	 *
-	 * If filesystem is able to handle O_TRUNC directly, the
-	 * init() handler should set the `FUSE_CAP_ATOMIC_O_TRUNC` bit
-	 * in ``conn->want``.
+	 * Open flags are available in fi->flags. Creation (O_CREAT,
+	 * O_EXCL, O_NOCTTY) flags will be filtered out. 
 	 *
 	 * Filesystem may store an arbitrary file handle (pointer,
 	 * index, etc) in fi->fh, and use this in other all other file

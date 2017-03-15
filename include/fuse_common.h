@@ -106,7 +106,9 @@ struct fuse_file_info {
 #define FUSE_CAP_POSIX_LOCKS		(1 << 1)
 
 /**
- * Indicates that the filesystem supports  the O_TRUNC open flag
+ * Indicates that the filesystem supports the O_TRUNC open flag.  If
+ * disabled, and an application specifies O_TRUNC, fuse first calls
+ * truncate() and then open() with O_TRUNC filtered out.
  *
  * This feature is enabled by default when supported by the kernel.
  */
