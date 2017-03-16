@@ -3,6 +3,7 @@ libfuse 3.1.0 (UNRELEASED)
 
 * Re-introduced examples/null.c.
 * Added experimental support for building with Meson.
+* Document that -o auto_unmount implies -o nodev,nosuid.
 
 libfuse 3.0.0 (2016-12-08)
 ==========================

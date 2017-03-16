@@ -146,6 +146,10 @@ responsible for releasing the mountpoint, which means that the
 mountpoint becomes inaccessible if the filesystem terminates
 without first unmounting.
 
+At the moment, this option implies that the filesystem will also be
+mounted with \fBnodev\fP and \fBnosuid\fP (even when mounted by
+root). This restriction may be lifted in the future.
+
 .SS "High-level mount options:"
 These following options are not actually passed to the kernel but
 interpreted by libfuse. They can only be specified for filesystems
