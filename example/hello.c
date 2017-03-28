@@ -105,7 +105,7 @@ static int hello_open(const char *path, struct fuse_file_info *fi)
 	if (strcmp(path+1, options.filename) != 0)
 		return -ENOENT;
 
-	if ((fi->flags & 3) != O_RDONLY)
+	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		return -EACCES;
 
 	return 0;
