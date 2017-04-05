@@ -82,7 +82,7 @@ def test_passthrough(tmpdir, name, debug, capfd):
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
-        work_dir = pjoin(mnt_dir, src_dir)
+        work_dir = mnt_dir + src_dir
 
         tst_statvfs(work_dir)
         tst_readdir(src_dir, work_dir)
