@@ -86,6 +86,7 @@ def test_passthrough(tmpdir, name, debug):
         tst_rmdir(src_dir, work_dir)
         tst_symlink(work_dir)
         tst_mknod(work_dir)
+        tst_unlink(src_dir, work_dir)
         if os.getuid() == 0:
             tst_chown(work_dir)
         # Underlying fs may not have full nanosecond resolution
@@ -291,6 +292,18 @@ def checked_unlink(filename, path, isdir=False):
         os.stat(fullname)
     assert exc_info.value.errno == errno.ENOENT
     assert filename not in os.listdir(path)
+
+def tst_unlink(src_dir, mnt_dir):
+    name = name_generator()
+    fullname = mnt_dir + "/" + name
+    with open(pjoin(src_dir, name), 'wb') as fh:
+        fh.write(b'hello')
+    assert name in os.listdir(mnt_dir)
+    os.unlink(fullname)
+    with pytest.raises(OSError) as exc_info:
+        os.stat(fullname)
+    assert exc_info.value.errno == errno.ENOENT
+    assert name not in os.listdir(mnt_dir)
 
 def tst_mkdir(mnt_dir):
     dirname = name_generator()
