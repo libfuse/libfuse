@@ -84,8 +84,8 @@ def test_passthrough(tmpdir, name, debug):
         tst_mkdir(work_dir)
         tst_rmdir(src_dir, work_dir)
         tst_open_write(src_dir, work_dir)
+        tst_create(work_dir)
         tst_symlink(work_dir)
-        tst_mknod(work_dir)
         tst_unlink(src_dir, work_dir)
         if os.getuid() == 0:
             tst_chown(work_dir)
@@ -337,15 +337,22 @@ def tst_symlink(mnt_dir):
     assert linkname in os.listdir(mnt_dir)
     checked_unlink(linkname, mnt_dir)
 
-def tst_mknod(mnt_dir):
-    filename = pjoin(mnt_dir, name_generator())
-    shutil.copyfile(TEST_FILE, filename)
-    fstat = os.lstat(filename)
+def tst_create(mnt_dir):
+    name = name_generator()
+    fullname = pjoin(mnt_dir, name)
+    with pytest.raises(OSError) as exc_info:
+        os.stat(fullname)
+    assert exc_info.value.errno == errno.ENOENT
+    assert name not in os.listdir(mnt_dir)
+
+    fd = os.open(fullname, os.O_CREAT | os.O_RDWR)
+    os.close(fd)
+
+    assert name in os.listdir(mnt_dir)
+    fstat = os.lstat(fullname)
     assert stat.S_ISREG(fstat.st_mode)
     assert fstat.st_nlink == 1
-    assert os.path.basename(filename) in os.listdir(mnt_dir)
-    assert filecmp.cmp(TEST_FILE, filename, False)
-    checked_unlink(filename, mnt_dir)
+    assert fstat.st_size == 0
 
 def tst_chown(mnt_dir):
     filename = pjoin(mnt_dir, name_generator())
