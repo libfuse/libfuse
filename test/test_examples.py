@@ -83,6 +83,7 @@ def test_passthrough(tmpdir, name, debug):
         tst_write(work_dir)
         tst_readdir(src_dir, work_dir)
         tst_mkdir(work_dir)
+        tst_rmdir(src_dir, work_dir)
         tst_symlink(work_dir)
         tst_mknod(work_dir)
         if os.getuid() == 0:
@@ -300,7 +301,17 @@ def tst_mkdir(mnt_dir):
     assert os.listdir(fullname) ==  []
     assert fstat.st_nlink in (1,2)
     assert dirname in os.listdir(mnt_dir)
-    checked_unlink(dirname, mnt_dir, isdir=True)
+
+def tst_rmdir(src_dir, mnt_dir):
+    name = name_generator()
+    fullname = mnt_dir + "/" + name
+    os.mkdir(pjoin(src_dir, name))
+    assert name in os.listdir(mnt_dir)
+    os.rmdir(fullname)
+    with pytest.raises(OSError) as exc_info:
+        os.stat(fullname)
+    assert exc_info.value.errno == errno.ENOENT
+    assert name not in os.listdir(mnt_dir)
 
 def tst_symlink(mnt_dir):
     linkname = name_generator()
@@ -354,8 +365,8 @@ def tst_open_unlink(mnt_dir):
     name = pjoin(mnt_dir, name_generator())
     data1 = b'foo'
     data2 = b'bar'
-    fullname = pjoin(mnt_dir, name)
-    with open(fullname, 'wb+', buffering=0) as fh:
+
+    with open(pjoin(mnt_dir, name), 'wb+', buffering=0) as fh:
         fh.write(data1)
         checked_unlink(name, mnt_dir)
         fh.write(data2)
