@@ -282,17 +282,6 @@ def test_cuse(capfd):
     finally:
         mount_process.terminate()
 
-def checked_unlink(filename, path, isdir=False):
-    fullname = pjoin(path, filename)
-    if isdir:
-        os.rmdir(fullname)
-    else:
-        os.unlink(fullname)
-    with pytest.raises(OSError) as exc_info:
-        os.stat(fullname)
-    assert exc_info.value.errno == errno.ENOENT
-    assert filename not in os.listdir(path)
-
 def tst_unlink(src_dir, mnt_dir):
     name = name_generator()
     fullname = mnt_dir + "/" + name
@@ -335,7 +324,6 @@ def tst_symlink(mnt_dir):
     assert os.readlink(fullname) == "/imaginary/dest"
     assert fstat.st_nlink == 1
     assert linkname in os.listdir(mnt_dir)
-    checked_unlink(linkname, mnt_dir)
 
 def tst_create(mnt_dir):
     name = name_generator()
@@ -373,7 +361,6 @@ def tst_chown(mnt_dir):
     assert fstat.st_uid == uid_new
     assert fstat.st_gid == gid_new
 
-    checked_unlink(filename, mnt_dir, isdir=True)
 def tst_open_write(src_dir, mnt_dir):
     name = name_generator()
     fd = os.open(pjoin(src_dir, name),
@@ -390,10 +377,14 @@ def tst_open_unlink(mnt_dir):
     name = pjoin(mnt_dir, name_generator())
     data1 = b'foo'
     data2 = b'bar'
-
-    with open(pjoin(mnt_dir, name), 'wb+', buffering=0) as fh:
+    fullname = pjoin(mnt_dir, name)
+    with open(fullname, 'wb+', buffering=0) as fh:
         fh.write(data1)
-        checked_unlink(name, mnt_dir)
+        os.unlink(fullname)
+        with pytest.raises(OSError) as exc_info:
+            os.stat(fullname)
+            assert exc_info.value.errno == errno.ENOENT
+        assert name not in os.listdir(mnt_dir)
         fh.write(data2)
         fh.seek(0)
         assert fh.read() == data1+data2
@@ -512,8 +503,6 @@ def tst_utimens(mnt_dir, ns_tol=0):
     if sys.version_info >= (3,3):
         assert abs(fstat.st_atime_ns - atime_ns) <= ns_tol
         assert abs(fstat.st_mtime_ns - mtime_ns) <= ns_tol
-
-    checked_unlink(filename, mnt_dir, isdir=True)
 
 def tst_passthrough(src_dir, mnt_dir):
     name = name_generator()
