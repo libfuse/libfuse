@@ -81,6 +81,7 @@ def test_passthrough(tmpdir, name, debug):
                     work_dir, ':' + src_dir ])
 
         tst_write(work_dir)
+        tst_readdir(src_dir, work_dir)
         tst_mkdir(work_dir)
         tst_symlink(work_dir)
         tst_mknod(work_dir)
@@ -89,7 +90,6 @@ def test_passthrough(tmpdir, name, debug):
         # Underlying fs may not have full nanosecond resolution
         tst_utimens(work_dir, ns_tol=1000)
         tst_link(work_dir)
-        tst_readdir(work_dir)
         tst_statvfs(work_dir)
         tst_truncate_path(work_dir)
         tst_truncate_fd(work_dir)
@@ -385,8 +385,8 @@ def tst_link(mnt_dir):
     assert fstat1.st_nlink == 1
     os.unlink(name1)
 
-def tst_readdir(mnt_dir):
-    dir_ = pjoin(mnt_dir, name_generator())
+def tst_readdir(src_dir, mnt_dir):
+    dir_ = pjoin(src_dir, name_generator())
     file_ = dir_ + "/" + name_generator()
     subdir = dir_ + "/" + name_generator()
     subfile = subdir + "/" + name_generator()
