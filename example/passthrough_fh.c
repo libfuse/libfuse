@@ -57,6 +57,18 @@ static void *xmp_init(struct fuse_conn_info *conn,
 	(void) conn;
 	cfg->use_ino = 1;
 	cfg->nullpath_ok = 1;
+
+	/* Pick up changes from lower filesystem right away. This is
+	   also necessary for better hardlink support. When the kernel
+	   calls the unlink() handler, it does not know the inode of
+	   the to-be-removed entry and can therefore not invalidate
+	   the cache of the associated inode - resulting in an
+	   incorrect st_nlink value being reported for any remaining
+	   hardlinks to this inode. */
+	cfg->entry_timeout = 0;
+	cfg->attr_timeout = 0;
+	cfg->negative_timeout = 0;
+
 	return NULL;
 }
 
