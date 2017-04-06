@@ -64,6 +64,7 @@ def test_hello(tmpdir, name, options):
                                   'passthrough_ll'))
 @pytest.mark.parametrize("debug", (True, False))
 def test_passthrough(tmpdir, name, debug):
+    is_ll = (name == 'passthrough_ll')
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
@@ -77,26 +78,29 @@ def test_passthrough(tmpdir, name, debug):
         wait_for_mount(mount_process, mnt_dir)
         work_dir = pjoin(mnt_dir, src_dir)
 
-        subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
-                    work_dir, ':' + src_dir ])
-
-        tst_readdir(src_dir, work_dir)
-        tst_mkdir(work_dir)
-        tst_rmdir(src_dir, work_dir)
-        tst_open_write(src_dir, work_dir)
-        tst_create(work_dir)
-        tst_symlink(work_dir)
-        tst_unlink(src_dir, work_dir)
-        if os.getuid() == 0:
-            tst_chown(work_dir)
-        # Underlying fs may not have full nanosecond resolution
-        tst_utimens(work_dir, ns_tol=1000)
-        tst_link(work_dir)
         tst_statvfs(work_dir)
-        tst_truncate_path(work_dir)
-        tst_truncate_fd(work_dir)
-        tst_open_unlink(work_dir)
-        tst_passthrough(src_dir, work_dir)
+        tst_readdir(src_dir, work_dir)
+        if not is_ll:
+            tst_mkdir(work_dir)
+            tst_rmdir(src_dir, work_dir)
+            tst_create(work_dir)
+            tst_open_write(src_dir, work_dir)
+            tst_unlink(src_dir, work_dir)
+            tst_symlink(work_dir)
+            if os.getuid() == 0:
+                tst_chown(work_dir)
+
+            # Underlying fs may not have full nanosecond resolution
+            tst_utimens(work_dir, ns_tol=1000)
+
+            tst_link(work_dir)
+            tst_truncate_path(work_dir)
+            tst_truncate_fd(work_dir)
+            tst_open_unlink(work_dir)
+            tst_passthrough(src_dir, work_dir)
+
+            subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
+                                    work_dir, ':' + src_dir ])
     except:
         cleanup(mnt_dir)
         raise
