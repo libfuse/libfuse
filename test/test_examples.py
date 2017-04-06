@@ -62,7 +62,7 @@ def test_hello(tmpdir, name, options):
 
 @pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh',
                                   'passthrough_ll'))
-@pytest.mark.parametrize("debug", (True, False))
+@pytest.mark.parametrize("debug", (False, True))
 def test_passthrough(tmpdir, name, debug, capfd):
     
     # Avoid false positives from libfuse debug messages
