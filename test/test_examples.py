@@ -93,7 +93,7 @@ def test_passthrough(tmpdir, name, debug):
         tst_statvfs(work_dir)
         tst_truncate_path(work_dir)
         tst_truncate_fd(work_dir)
-        tst_unlink(work_dir)
+        tst_open_unlink(work_dir)
         tst_passthrough(src_dir, work_dir)
     except:
         cleanup(mnt_dir)
@@ -350,12 +350,12 @@ def tst_write(mnt_dir):
     assert filecmp.cmp(name, TEST_FILE, False)
     checked_unlink(name, mnt_dir)
 
-def tst_unlink(mnt_dir):
+def tst_open_unlink(mnt_dir):
     name = pjoin(mnt_dir, name_generator())
     data1 = b'foo'
     data2 = b'bar'
-
-    with open(pjoin(mnt_dir, name), 'wb+', buffering=0) as fh:
+    fullname = pjoin(mnt_dir, name)
+    with open(fullname, 'wb+', buffering=0) as fh:
         fh.write(data1)
         checked_unlink(name, mnt_dir)
         fh.write(data2)
