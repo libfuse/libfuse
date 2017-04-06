@@ -80,10 +80,10 @@ def test_passthrough(tmpdir, name, debug):
         subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
                     work_dir, ':' + src_dir ])
 
-        tst_write(work_dir)
         tst_readdir(src_dir, work_dir)
         tst_mkdir(work_dir)
         tst_rmdir(src_dir, work_dir)
+        tst_open_write(src_dir, work_dir)
         tst_symlink(work_dir)
         tst_mknod(work_dir)
         tst_unlink(src_dir, work_dir)
@@ -367,12 +367,17 @@ def tst_chown(mnt_dir):
     assert fstat.st_gid == gid_new
 
     checked_unlink(filename, mnt_dir, isdir=True)
+def tst_open_write(src_dir, mnt_dir):
+    name = name_generator()
+    fd = os.open(pjoin(src_dir, name),
+                 os.O_CREAT | os.O_RDWR)
+    os.close(fd)
+    fullname = pjoin(mnt_dir, name)
+    with open(fullname, 'wb') as fh_out, \
+         open(TEST_FILE, 'rb') as fh_in:
+        shutil.copyfileobj(fh_in, fh_out)
 
-def tst_write(mnt_dir):
-    name = pjoin(mnt_dir, name_generator())
-    shutil.copyfile(TEST_FILE, name)
-    assert filecmp.cmp(name, TEST_FILE, False)
-    checked_unlink(name, mnt_dir)
+    assert filecmp.cmp(fullname, TEST_FILE, False)
 
 def tst_open_unlink(mnt_dir):
     name = pjoin(mnt_dir, name_generator())
