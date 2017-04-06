@@ -177,6 +177,9 @@ struct fuse_config {
 	 * field in the readdir(2) function. The filesystem does not
 	 * have to guarantee uniqueness, however some applications
 	 * rely on this value being unique for the whole filesystem.
+	 *
+	 * Note that this does *not* affect the inode that libfuse 
+	 * and the kernel use internally (also called the "nodeid").
 	 */
 	int use_ino;
 
@@ -292,7 +295,9 @@ struct fuse_operations {
 	 *
 	 * Similar to stat().  The 'st_dev' and 'st_blksize' fields are
 	 * ignored. The 'st_ino' field is ignored except if the 'use_ino'
-	 * mount option is given.
+	 * mount option is given. In that case it is passed to userspace,
+	 * but libfuse and the kernel will still assign a different
+	 * inode for internal use (called the "nodeid").
 	 *
 	 * `fi` will always be NULL if the file is not currenly open, but
 	 * may also be NULL if the file is open.

@@ -4,7 +4,10 @@ libfuse 3.1.0 (UNRELEASED)
 * Re-introduced examples/null.c.
 * Added experimental support for building with Meson.
 * Document that -o auto_unmount implies -o nodev,nosuid.
-
+* Document that `-o auto_unmount` implies `-o nodev,nosuid`.
+* Document that the *use_ino* option of the high-level interface does
+  not affect the inode that libfuse and the kernel use internally.
+  
 libfuse 3.0.0 (2016-12-08)
 ==========================
 
