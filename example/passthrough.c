@@ -250,10 +250,12 @@ static int xmp_chown(const char *path, uid_t uid, gid_t gid,
 static int xmp_truncate(const char *path, off_t size,
 			struct fuse_file_info *fi)
 {
-	(void) fi;
 	int res;
 
-	res = truncate(path, size);
+	if (fi != NULL)
+		res = ftruncate(fi->fh, size);
+	else
+		res = truncate(path, size);
 	if (res == -1)
 		return -errno;
 
