@@ -284,7 +284,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 	if (res == -1)
 		return -errno;
 
-	close(res);
+	fi->fh = res;
 	return 0;
 }
 
@@ -339,11 +339,8 @@ static int xmp_statfs(const char *path, struct statvfs *stbuf)
 
 static int xmp_release(const char *path, struct fuse_file_info *fi)
 {
-	/* Just a stub.	 This method is optional and can safely be left
-	   unimplemented */
-
 	(void) path;
-	(void) fi;
+	close(fi->fh);
 	return 0;
 }
 
