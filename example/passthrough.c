@@ -296,8 +296,11 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	int fd;
 	int res;
 
-	(void) fi;
-	fd = open(path, O_RDONLY);
+	if(fi == NULL)
+		fd = open(path, O_RDONLY);
+	else
+		fd = fi->fh;
+	
 	if (fd == -1)
 		return -errno;
 
@@ -305,7 +308,8 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	if (res == -1)
 		res = -errno;
 
-	close(fd);
+	if(fi == NULL)
+		close(fd);
 	return res;
 }
 
@@ -316,7 +320,11 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	int res;
 
 	(void) fi;
-	fd = open(path, O_WRONLY);
+	if(fi == NULL)
+		fd = open(path, O_WRONLY);
+	else
+		fd = fi->fh;
+	
 	if (fd == -1)
 		return -errno;
 
@@ -324,7 +332,8 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 	if (res == -1)
 		res = -errno;
 
-	close(fd);
+	if(fi == NULL)
+		close(fd);
 	return res;
 }
 
@@ -370,13 +379,18 @@ static int xmp_fallocate(const char *path, int mode,
 	if (mode)
 		return -EOPNOTSUPP;
 
-	fd = open(path, O_WRONLY);
+	if(fi == NULL)
+		fd = open(path, O_WRONLY);
+	else
+		fd = fi->fh;
+	
 	if (fd == -1)
 		return -errno;
 
 	res = -posix_fallocate(fd, offset, length);
 
-	close(fd);
+	if(fi == NULL)
+		close(fd);
 	return res;
 }
 #endif
