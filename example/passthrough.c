@@ -278,6 +278,19 @@ static int xmp_utimens(const char *path, const struct timespec ts[2],
 }
 #endif
 
+static int xmp_create(const char *path, mode_t mode,
+		      struct fuse_file_info *fi)
+{
+	int res;
+
+	res = open(path, fi->flags, mode);
+	if (res == -1)
+		return -errno;
+
+	fi->fh = res;
+	return 0;
+}
+
 static int xmp_open(const char *path, struct fuse_file_info *fi)
 {
 	int res;
@@ -452,6 +465,7 @@ static struct fuse_operations xmp_oper = {
 	.utimens	= xmp_utimens,
 #endif
 	.open		= xmp_open,
+	.create 	= xmp_create,
 	.read		= xmp_read,
 	.write		= xmp_write,
 	.statfs		= xmp_statfs,
