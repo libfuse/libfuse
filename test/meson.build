@@ -18,7 +18,7 @@ td += executable('test_syscalls', 'test_syscalls.c',
 foreach fname : [ 'conftest.py', 'pytest.ini', 'test_examples.py',
                   'util.py' ]
     td += custom_target(fname, input: fname, output: fname,
-                        command: ['cp', '-fP', '--preserve=mode',
+                        command: ['cp', '-fPu', '--preserve=mode',
                                   '@INPUT@', '@OUTPUT@'])
 endforeach
 
