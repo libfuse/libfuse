@@ -14,13 +14,12 @@ td += executable('test_syscalls', 'test_syscalls.c',
                  include_directories: include_dirs,
                  install: false)
 
-# Actual tests are written in Python and can simply be copied.
-foreach fname : [ 'conftest.py', 'pytest.ini', 'test_examples.py',
-                  'util.py' ]
-    td += custom_target(fname, input: fname, output: fname,
-                        command: ['cp', '-fPu', '--preserve=mode',
-                                  '@INPUT@', '@OUTPUT@'])
-endforeach
+test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
+                 'util.py' ]
+td += custom_target('test_scripts', input: test_scripts,
+                      output: test_scripts, build_by_default: true,
+                      command: ['cp', '-fPu', '--preserve=mode',
+                                '@INPUT@', meson.current_build_dir() ])
 
 # Create a new 'tests' target that we can run with Ninja
 run_target('tests', depends: td,

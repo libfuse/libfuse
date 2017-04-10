@@ -29,7 +29,7 @@ Installation
 
 You can download libfuse from
 https://github.com/libfuse/libfuse/releases. To build and install, we
-recommend to use [Meson](http://mesonbuild.com/) (version 0.37 or
+recommend to use [Meson](http://mesonbuild.com/) (version 0.38 or
 newer) and [Ninja](https://ninja-build.org).  After extracting the
 libfuse tarball, create a (temporary) build directory and run Meson:
 
