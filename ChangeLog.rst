@@ -1,4 +1,4 @@
-libfuse 3.1.0 (UNRELEASED)
+libfuse 3.0.1 (2017-04-10)
 ==========================
 
 * Re-introduced *examples/null.c*.
