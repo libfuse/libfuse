@@ -22,7 +22,7 @@ for CC in gcc gcc-6 clang; do
 
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
-    TEST_WITH_VALGRIND=true ninja tests
+    TEST_WITH_VALGRIND=true python3 -m pytest test/
     cd ..
 done
 (cd build-$CC; sudo ninja install)
@@ -37,10 +37,10 @@ for san in undefined address; do
     ninja
 
     # Test as root and regular user
-    sudo ninja tests
+    sudo python3 -m pytest test/
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
-    ninja tests
+    python3 -m pytest test/
     cd ..
 done
 
