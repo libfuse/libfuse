@@ -6,7 +6,10 @@ libfuse 3.1.0 (UNRELEASED)
 * Document that `-o auto_unmount` implies `-o nodev,nosuid`.
 * Document that the *use_ino* option of the high-level interface does
   not affect the inode that libfuse and the kernel use internally.
-  
+* Fixed test cases for passthrough* examples (they weren't actually
+  testing the examples).
+* Fixed several bugs in the passthrough* examples.
+
 libfuse 3.0.0 (2016-12-08)
 ==========================
 
