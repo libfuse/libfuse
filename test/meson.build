@@ -21,14 +21,7 @@ td += custom_target('test_scripts', input: test_scripts,
                       command: ['cp', '-fPu', '--preserve=mode',
                                 '@INPUT@', meson.current_build_dir() ])
 
-# Create a new 'tests' target that we can run with Ninja
-run_target('tests', depends: td,
-           command: [ 'python3', '-m', 'pytest',
-                      meson.current_build_dir() ])
-
-
 # Provide something helpful when running 'ninja test'
 wrong_cmd = executable('wrong_command', 'wrong_command.c',
                        install: false)
 test('wrong_cmd', wrong_cmd)
-

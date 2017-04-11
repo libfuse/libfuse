@@ -46,17 +46,17 @@ command:
 To build, test and install libfuse, you then use Ninja:
 
     $ ninja
-    $ sudo ninja tests # requires pytest, see below
+    $ sudo python3 -m pytest test/
     $ sudo ninja install
 
 Running the tests requires the [py.test](http://www.pytest.org/)
 Python module. Instead of running the tests as root, the majority of
-tests can also be run as a regular user if *util/fusermount3* is
-made setuid root first:
+tests can also be run as a regular user if *util/fusermount3* is made
+setuid root first:
 
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
-    $ ninja tests
+    $ python3 -m pytest test/
 
 
 Alternate Installation
