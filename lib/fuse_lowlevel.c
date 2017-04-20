@@ -2767,7 +2767,10 @@ restart:
 	return res;
 }
 
-#define MIN_BUFSIZE 0x21000
+#define KERNEL_BUF_PAGES 32
+
+/* room needed in buffer to accommodate header */
+#define HEADER_SIZE 0x1000
 
 struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      const struct fuse_lowlevel_ops *op,
@@ -2829,8 +2832,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	if (se->debug)
 		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
 
-	se->bufsize = getpagesize() + 0x1000;
-	se->bufsize = se->bufsize < MIN_BUFSIZE ? MIN_BUFSIZE : se->bufsize;
+	se->bufsize = KERNEL_BUF_PAGES * getpagesize() + HEADER_SIZE;
 
 	list_init_req(&se->list);
 	list_init_req(&se->interrupts);
