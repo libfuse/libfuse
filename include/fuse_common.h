@@ -77,6 +77,10 @@ struct fuse_file_info {
 	/** Requested poll events.  Available in ->poll.  Only set on kernels
 	    which support it.  If unsupported, this field is set to zero. */
 	uint32_t poll_events;
+
+	/** Can be filled in by open to indicate not to use read/write_buf */
+	unsigned int no_read_buf : 1;
+	unsigned int no_write_buf : 1;
 };
 
 
