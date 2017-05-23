@@ -53,11 +53,9 @@ FUSE_3.0 {
 		fuse_fs_chown;
 		fuse_fs_create;
 		fuse_fs_destroy;
-		fuse_fs_fgetattr;
 		fuse_fs_flush;
 		fuse_fs_fsync;
 		fuse_fs_fsyncdir;
-		fuse_fs_ftruncate;
 		fuse_fs_getattr;
 		fuse_fs_getxattr;
 		fuse_fs_init;
