@@ -1,3 +1,9 @@
+Unreleased Changes
+==================
+
+* `fuse_main()` / `fuse_remove_signal_handlers()`: do not reset
+  `SIGPIPE` handler to `SIG_DFL` it was not set by us.
+
 libfuse 3.0.2 (2017-05-24)
 ==========================
 

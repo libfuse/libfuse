@@ -32,6 +32,11 @@ static void exit_handler(int sig)
 	}
 }
 
+static void do_nothing(int sig)
+{
+	(void) sig;
+}
+
 static int set_one_signal_handler(int sig, void (*handler)(int), int remove)
 {
 	struct sigaction sa;
@@ -57,10 +62,15 @@ static int set_one_signal_handler(int sig, void (*handler)(int), int remove)
 
 int fuse_set_signal_handlers(struct fuse_session *se)
 {
+	/* If we used SIG_IGN instead of the do_nothing function,
+	   then we would be unable to tell if we set SIG_IGN (and
+	   thus should reset to SIG_DFL in fuse_remove_signal_handlers)
+	   or if it was already set to SIG_IGN (and should be left
+	   untouched. */
 	if (set_one_signal_handler(SIGHUP, exit_handler, 0) == -1 ||
 	    set_one_signal_handler(SIGINT, exit_handler, 0) == -1 ||
 	    set_one_signal_handler(SIGTERM, exit_handler, 0) == -1 ||
-	    set_one_signal_handler(SIGPIPE, SIG_IGN, 0) == -1)
+	    set_one_signal_handler(SIGPIPE, do_nothing, 0) == -1)
 		return -1;
 
 	fuse_instance = se;
@@ -78,5 +88,5 @@ void fuse_remove_signal_handlers(struct fuse_session *se)
 	set_one_signal_handler(SIGHUP, exit_handler, 1);
 	set_one_signal_handler(SIGINT, exit_handler, 1);
 	set_one_signal_handler(SIGTERM, exit_handler, 1);
-	set_one_signal_handler(SIGPIPE, SIG_IGN, 1);
+	set_one_signal_handler(SIGPIPE, do_nothing, 1);
 }
