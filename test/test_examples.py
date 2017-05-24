@@ -86,6 +86,7 @@ def test_passthrough(tmpdir, name, debug, capfd):
 
         tst_statvfs(work_dir)
         tst_readdir(src_dir, work_dir)
+        tst_open_read(src_dir, work_dir)
         if not is_ll:
             tst_mkdir(work_dir)
             tst_rmdir(src_dir, work_dir)
@@ -370,6 +371,14 @@ def tst_chown(mnt_dir):
     fstat = os.lstat(filename)
     assert fstat.st_uid == uid_new
     assert fstat.st_gid == gid_new
+
+def tst_open_read(src_dir, mnt_dir):
+    name = name_generator()
+    with open(pjoin(src_dir, name), 'wb') as fh_out, \
+         open(TEST_FILE, 'rb') as fh_in:
+        shutil.copyfileobj(fh_in, fh_out)
+
+    assert filecmp.cmp(pjoin(mnt_dir, name), TEST_FILE, False)
 
 def tst_open_write(src_dir, mnt_dir):
     name = name_generator()
