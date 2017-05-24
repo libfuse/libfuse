@@ -20,7 +20,12 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <pthread.h>
+
+#ifndef __linux__
+#include <limits.h>
+#else
 #include <linux/limits.h>
+#endif
 
 #define FILE_INO 2
 #define FILE_NAME "truncate_me"
