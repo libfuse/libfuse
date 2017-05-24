@@ -9,6 +9,8 @@ export ASAN_OPTIONS="detect_leaks=0"
 export LSAN_OPTIONS="suppressions=$(pwd)/test/lsan_suppress.txt"
 export CC
 
+TEST_CMD="python3 -m pytest --maxfail=99 test/"
+
 # Standard build
 for CC in gcc gcc-6 clang; do
     mkdir build-${CC}; cd build-${CC}
@@ -22,7 +24,7 @@ for CC in gcc gcc-6 clang; do
 
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
-    TEST_WITH_VALGRIND=true python3 -m pytest test/
+    TEST_WITH_VALGRIND=true ${TEST_CMD}
     cd ..
 done
 (cd build-$CC; sudo ninja install)
@@ -37,10 +39,10 @@ for san in undefined address; do
     ninja
 
     # Test as root and regular user
-    sudo python3 -m pytest test/
+    sudo ${TEST_CMD}
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
-    python3 -m pytest test/
+    ${TEST_CMD}
     cd ..
 done
 
@@ -49,7 +51,7 @@ CC=gcc
 ./makeconf.sh
 ./configure
 make
-sudo python3 -m pytest test/
+sudo ${TEST_CMD}
 sudo make install
 
 # Documentation
