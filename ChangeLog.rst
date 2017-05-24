@@ -1,3 +1,14 @@
+libfuse 3.0.2 (2017-05-24)
+==========================
+
+* Option parsing for the high-level API now works correctly
+  (previously, default values would override specified values).
+* Tests should now build (and run) under FreeBSD.
+* Improved documentation of `struct fuse_context`
+* Internal: calculate request buffer size from page size and kernel
+  page limit instead of using hardcoded 128 kB limit.
+
+
 libfuse 3.0.1 (2017-04-10)
 ==========================
 

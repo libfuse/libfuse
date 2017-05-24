@@ -33,7 +33,7 @@ libfuse3_la_SOURCES =		\
 	$(iconv_source)		\
 	$(mount_source)
 
-libfuse3_la_LDFLAGS = -pthread @libfuse_libs@ -version-number 3:0:1 \
+libfuse3_la_LDFLAGS = -pthread @libfuse_libs@ -version-number 3:0:2 \
 	-Wl,--version-script,$(srcdir)/fuse_versionscript
 
 if NETBSD
