@@ -17,7 +17,7 @@ if cfg.has('HAVE_ICONV')
 endif
 
 deps = [ thread_dep ]
-libdl = meson.get_compiler('c').find_library('dl')
+libdl = meson.get_compiler('c').find_library('dl', required: false)
 if libdl.found()
    deps += [ libdl ]
 endif
