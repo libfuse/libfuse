@@ -15,7 +15,7 @@ td += executable('test_syscalls', 'test_syscalls.c',
                  install: false)
 
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
-                 'util.py' ]
+                 'util.py', 'test_ctests.py' ]
 td += custom_target('test_scripts', input: test_scripts,
                       output: test_scripts, build_by_default: true,
                       command: ['cp', '-fPu', '--preserve=mode',
