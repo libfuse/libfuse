@@ -339,8 +339,16 @@ struct fuse_operations {
 	/** Create a symbolic link */
 	int (*symlink) (const char *, const char *);
 
-	/** Rename a file */
-	int (*rename) (const char *, const char *, unsigned int);
+	/** Rename a file
+	 *
+	 * *flags* may be `RENAME_EXCHANGE` or `RENAME_NOREPLACE`. If
+	 * RENAME_NOREPLACE is specified, the filesystem must not
+	 * overwrite *newname* if it exists and return an error
+	 * instead. If `RENAME_EXCHANGE` is specified, the filesystem
+	 * must atomically exchange the two files, i.e. both must
+	 * exist and neither may be deleted.
+	 */
+	int (*rename) (const char *, const char *, unsigned int flags);
 
 	/** Create a hard link to a file */
 	int (*link) (const char *, const char *);

@@ -408,6 +408,13 @@ struct fuse_lowlevel_ops {
 	 * future bmap requests will fail with EINVAL without being
 	 * send to the filesystem process.
 	 *
+	 * *flags* may be `RENAME_EXCHANGE` or `RENAME_NOREPLACE`. If
+	 * RENAME_NOREPLACE is specified, the filesystem must not
+	 * overwrite *newname* if it exists and return an error
+	 * instead. If `RENAME_EXCHANGE` is specified, the filesystem
+	 * must atomically exchange the two files, i.e. both must
+	 * exist and neither may be deleted.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_err
 	 *
