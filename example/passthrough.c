@@ -74,9 +74,16 @@ static int xmp_getattr(const char *path, struct stat *stbuf,
 	int res;
 
 	res = lstat(path, stbuf);
-	if (res == -1)
-		return -errno;
+	if (res == -1) {
+		/* Temporary debugging aid for issue #157 */
+		res = errno;
+		printf("xmp_getattr(%s) --> %s\n", path,
+		       strerror(res));
+		return -res;
+	}
 
+	printf("xmp_getattr(%s) --> ino %d, nlink %d\n", path,
+	       (int) stbuf->st_ino, (int) stbuf->st_nlink);
 	return 0;
 }
 
