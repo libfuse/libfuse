@@ -224,7 +224,7 @@ struct fuse_lowlevel_ops {
 	 * overwriting an existing file) rename. Filesystems must handle
 	 * such requests properly and it is recommended to defer removal
 	 * of the inode until the lookup count reaches zero. Calls to
-	 * unlink, remdir or rename will be followed closely by forget
+	 * unlink, rmdir or rename will be followed closely by forget
 	 * unless the file or directory is open, in which case the
 	 * kernel issues forget only after the release or releasedir
 	 * calls.
