@@ -416,19 +416,33 @@ def tst_link(mnt_dir):
     name2 = pjoin(mnt_dir, name_generator())
     shutil.copyfile(TEST_FILE, name1)
     assert filecmp.cmp(name1, TEST_FILE, False)
+
+    fstat1 = os.lstat(name1)
+    assert fstat1.st_nlink == 1
+
     os.link(name1, name2)
 
     fstat1 = os.lstat(name1)
     fstat2 = os.lstat(name2)
-
     assert fstat1 == fstat2
     assert fstat1.st_nlink == 2
-
     assert os.path.basename(name2) in os.listdir(mnt_dir)
     assert filecmp.cmp(name1, name2, False)
+    
     os.unlink(name2)
+    
+    assert os.path.basename(name2) not in os.listdir(mnt_dir)
+    with pytest.raises(FileNotFoundError):
+        os.lstat(name2)
     fstat1 = os.lstat(name1)
-    assert fstat1.st_nlink == 1
+
+    # For debugging issue #157
+    #assert fstat1.st_nlink == 1
+    if fstat1.st_nlink != 1:
+        print('Old stat result:', fstat2, file=sys.stdin)
+        print('New stat result:', fstat1, file=sys.stdin)
+        assert fstat1.st_nlink == 1
+
     os.unlink(name1)
 
 def tst_readdir(src_dir, mnt_dir):
