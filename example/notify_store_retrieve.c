@@ -317,7 +317,11 @@ static void* update_fs_loop(void *data) {
             /* This shouldn't fail, but apparenly it sometimes
                does - see https://github.com/libfuse/libfuse/issues/105 */
             ret = fuse_lowlevel_notify_store(se, FILE_INO, 0, &bufv, 0);
-            if (ret != 0) {
+            if (-ret == ENODEV) {
+                // File system was unmounted
+                break;
+            }
+            else if (ret != 0) {
                 fprintf(stderr, "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
                         strerror(-ret), -ret);
                 abort();
@@ -325,9 +329,12 @@ static void* update_fs_loop(void *data) {
 
             /* To make sure that everything worked correctly, ask the
                kernel to send us back the stored data */
-            assert(fuse_lowlevel_notify_retrieve
-                   (se, FILE_INO, MAX_STR_LEN, 0,
-                    (void*) strdup(file_contents)) == 0);
+            ret = fuse_lowlevel_notify_retrieve(se, FILE_INO, MAX_STR_LEN,
+                                                0, (void*) strdup(file_contents));
+            if (-ret == ENODEV) { // File system was unmounted
+                break;
+            }
+            assert(ret == 0);
             if(retrieve_status == 0)
                 retrieve_status = 1;
         }
