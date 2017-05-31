@@ -186,9 +186,11 @@ struct fuse_lowlevel_ops {
 	void (*init) (void *userdata, struct fuse_conn_info *conn);
 
 	/**
-	 * Clean up filesystem
+	 * Clean up filesystem.
 	 *
-	 * Called on filesystem exit
+	 * Called on filesystem exit. When this method is called, the
+	 * connection to the kernel may be gone already, so that eg. calls
+	 * to fuse_lowlevel_notify_* will fail.
 	 *
 	 * There's no reply to this function
 	 *
