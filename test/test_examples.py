@@ -12,6 +12,7 @@ import pytest
 import stat
 import shutil
 import filecmp
+import time
 import errno
 from tempfile import NamedTemporaryFile
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
@@ -381,20 +382,26 @@ def tst_link(mnt_dir):
     assert fstat1.st_nlink == 2
     assert os.path.basename(name2) in os.listdir(mnt_dir)
     assert filecmp.cmp(name1, name2, False)
-    
+
+    # Since RELEASE requests are asynchronous, it is possible that
+    # libfuse still considers the file to be open at this point
+    # and (since -o hard_remove is not used) renames it instead of
+    # deleting it. In that case, the following lstat() call will
+    # still report an st_nlink value of 2 (cf. issue #157).
     os.unlink(name2)
-    
+
     assert os.path.basename(name2) not in os.listdir(mnt_dir)
     with pytest.raises(FileNotFoundError):
         os.lstat(name2)
-    fstat1 = os.lstat(name1)
 
-    # For debugging issue #157
-    #assert fstat1.st_nlink == 1
-    if fstat1.st_nlink != 1:
-        print('Old stat result:', fstat2, file=sys.stdin)
-        print('New stat result:', fstat1, file=sys.stdin)
-        assert fstat1.st_nlink == 1
+    # See above, we may have to wait until RELEASE has been
+    # received before the st_nlink value is correct.
+    maxwait = time.time() + 2
+    fstat1 = os.lstat(name1)
+    while fstat1.st_nlink == 2 and time.time() < maxwait:
+        fstat1 = os.lstat(name1)
+        time.sleep(0.1)
+    assert fstat1.st_nlink == 1
 
     os.unlink(name1)
 
