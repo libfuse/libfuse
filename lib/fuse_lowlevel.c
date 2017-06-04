@@ -2399,12 +2399,12 @@ static const char *opname(enum fuse_opcode opcode)
 static int fuse_ll_copy_from_pipe(struct fuse_bufvec *dst,
 				  struct fuse_bufvec *src)
 {
-	int res = fuse_buf_copy(dst, src, 0);
+	ssize_t res = fuse_buf_copy(dst, src, 0);
 	if (res < 0) {
 		fprintf(stderr, "fuse: copy from pipe: %s\n", strerror(-res));
 		return res;
 	}
-	if (res < fuse_buf_size(dst)) {
+	if ((size_t)res < fuse_buf_size(dst)) {
 		fprintf(stderr, "fuse: copy from pipe: short read\n");
 		return -1;
 	}
@@ -2940,7 +2940,7 @@ retry:
 		goto out_free;
 	}
 
-	if (ret == bufsize) {
+	if ((size_t)ret == bufsize) {
 		free(buf);
 		bufsize *= 4;
 		goto retry;

@@ -1719,7 +1719,7 @@ int fuse_fs_read_buf(struct fuse_fs *fs, const char *path,
 				(unsigned long long) fi->fh,
 				fuse_buf_size(*bufp),
 				(unsigned long long) off);
-		if (res >= 0 && fuse_buf_size(*bufp) > (int) size)
+		if (res >= 0 && fuse_buf_size(*bufp) > size)
 			fprintf(stderr, "fuse: read too many bytes\n");
 
 		if (res < 0)
