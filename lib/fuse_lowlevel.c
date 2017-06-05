@@ -2935,7 +2935,7 @@ retry:
 
 	ret = read(fd, buf, bufsize);
 	close(fd);
-	if (ret == -1) {
+	if (ret < 0) {
 		ret = -EIO;
 		goto out_free;
 	}
