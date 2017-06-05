@@ -1,8 +1,8 @@
 Unreleased Changes
 ==================
 
-* The `example/passthrough_ll` filesystem now supports writing
-  to files.
+* The `example/passthrough_ll` filesystem now supports creating
+  and writing to files.
 * `fuse_main()` / `fuse_remove_signal_handlers()`: do not reset
   `SIGPIPE` handler to `SIG_DFL` it was not set by us.
 * Documented the `RENAME_EXCHANGE` and `RENAME_NOREPLACE` flags that

@@ -429,8 +429,29 @@ static void lo_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 	fuse_reply_err(req, 0);
 }
 
+static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+		      mode_t mode, struct fuse_file_info *fi)
+{
+	int fd;
+	struct fuse_entry_param e;
+	int err;
+
+	fd = openat(lo_fd(req, parent), name,
+		    (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
+	if (fd == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	fi->fh = fd;
+
+	err = lo_do_lookup(req, parent, name, &e);
+	if (err)
+		fuse_reply_err(req, err);
+	else
+		fuse_reply_create(req, &e, fi);
+}
+
 static void lo_open(fuse_req_t req, fuse_ino_t ino,
-			  struct fuse_file_info *fi)
+		    struct fuse_file_info *fi)
 {
 	int fd;
 	char buf[64];
@@ -495,6 +516,7 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.readdir	= lo_readdir,
 	.readdirplus	= lo_readdirplus,
 	.releasedir	= lo_releasedir,
+	.create		= lo_create,
 	.open		= lo_open,
 	.release	= lo_release,
 	.read		= lo_read,
