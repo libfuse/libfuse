@@ -86,11 +86,11 @@ def test_passthrough(tmpdir, name, debug, capfd):
         tst_statvfs(work_dir)
         tst_readdir(src_dir, work_dir)
         tst_open_read(src_dir, work_dir)
+        tst_open_write(src_dir, work_dir)
         if not is_ll:
             tst_mkdir(work_dir)
             tst_rmdir(src_dir, work_dir)
             tst_create(work_dir)
-            tst_open_write(src_dir, work_dir)
             tst_unlink(src_dir, work_dir)
             tst_symlink(work_dir)
             if os.getuid() == 0:

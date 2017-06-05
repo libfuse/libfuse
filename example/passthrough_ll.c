@@ -453,7 +453,7 @@ static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 }
 
 static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
-			  off_t offset, struct fuse_file_info *fi)
+		    off_t offset, struct fuse_file_info *fi)
 {
 	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
 
@@ -464,6 +464,25 @@ static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	buf.buf[0].pos = offset;
 
 	fuse_reply_data(req, &buf, FUSE_BUF_SPLICE_MOVE);
+}
+
+static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
+			 struct fuse_bufvec *in_buf, off_t off,
+			 struct fuse_file_info *fi)
+{
+	(void) ino;
+	ssize_t res;
+	struct fuse_bufvec out_buf = FUSE_BUFVEC_INIT(fuse_buf_size(in_buf));
+
+	out_buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
+	out_buf.buf[0].fd = fi->fh;
+	out_buf.buf[0].pos = off;
+
+	res = fuse_buf_copy(&out_buf, in_buf, 0);
+	if(res < 0)
+		fuse_reply_err(req, -res);
+	else
+		fuse_reply_write(req, (size_t) res);
 }
 
 static struct fuse_lowlevel_ops lo_oper = {
@@ -479,6 +498,7 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.open		= lo_open,
 	.release	= lo_release,
 	.read		= lo_read,
+	.write_buf      = lo_write_buf
 };
 
 int main(int argc, char *argv[])
