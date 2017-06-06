@@ -24,6 +24,14 @@ API, the callbacks must work with inodes and responses must be sent
 explicitly using a separate set of API functions.
 
 
+Supported Platforms
+-------------------
+
+* Linux (fully)
+* BSD (mostly/best-effort)
+* For OS-X, please use [OSXFUSE](https://osxfuse.github.io/)
+  
+
 Installation
 ------------
 
