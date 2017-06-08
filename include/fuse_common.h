@@ -189,8 +189,8 @@ struct fuse_file_info {
  * cached file *contents* will be invalidated as well.
  *
  * This flag should always be set when available. If all file changes
- * go through the kernel, *attr_timeout* should be set to zero to
- * avoid unneccessary getattr() calls.
+ * go through the kernel, *attr_timeout* should be set to a very large
+ * number to avoid unneccessary getattr() calls.
  *
  * This feature is enabled by default when supported by the kernel.
  */

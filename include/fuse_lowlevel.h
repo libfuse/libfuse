@@ -90,10 +90,16 @@ struct fuse_entry_param {
 	 */
 	struct stat attr;
 
-	/** Validity timeout (in seconds) for the attributes */
+	/** Validity timeout (in seconds) for inode attributes. If
+	    attributes only change as a result of requests that come
+	    through the kernel, this should be set to a very large
+	    value. */
 	double attr_timeout;
 
-	/** Validity timeout (in seconds) for the name */
+	/** Validity timeout (in seconds) for the name. If directory
+	    entries are changed/deleted only as a result of requests
+	    that come through the kernel, this should be set to a very
+	    large value. */
 	double entry_timeout;
 };
 
