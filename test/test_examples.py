@@ -406,17 +406,20 @@ def tst_link(mnt_dir):
     os.unlink(name1)
 
 def tst_readdir(src_dir, mnt_dir):
-    dir_ = pjoin(src_dir, name_generator())
-    file_ = dir_ + "/" + name_generator()
-    subdir = dir_ + "/" + name_generator()
+    newdir = name_generator()
+
+    src_newdir = pjoin(src_dir, newdir)
+    mnt_newdir = pjoin(mnt_dir, newdir)
+    file_ = src_newdir + "/" + name_generator()
+    subdir = src_newdir + "/" + name_generator()
     subfile = subdir + "/" + name_generator()
 
-    os.mkdir(dir_)
+    os.mkdir(src_newdir)
     shutil.copyfile(TEST_FILE, file_)
     os.mkdir(subdir)
     shutil.copyfile(TEST_FILE, subfile)
 
-    listdir_is = os.listdir(dir_)
+    listdir_is = os.listdir(mnt_newdir)
     listdir_is.sort()
     listdir_should = [ os.path.basename(file_), os.path.basename(subdir) ]
     listdir_should.sort()
@@ -425,7 +428,7 @@ def tst_readdir(src_dir, mnt_dir):
     os.unlink(file_)
     os.unlink(subfile)
     os.rmdir(subdir)
-    os.rmdir(dir_)
+    os.rmdir(src_newdir)
 
 def tst_truncate_path(mnt_dir):
     assert len(TEST_DATA) > 1024
