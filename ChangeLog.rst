@@ -1,6 +1,8 @@
 Unreleased Changes
 ==================
 
+* The init script is now installed into the right location
+  ($DESTDIR/etc/init.d rather than $prefix/$sysconfdir/init.d) 
 * The `example/passthrough_ll` filesystem now supports creating
   and writing to files.
 * `fuse_main()` / `fuse_remove_signal_handlers()`: do not reset
