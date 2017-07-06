@@ -6,8 +6,6 @@
   See the file COPYING.LIB
 */
 
-#define FUSE_USE_VERSION 30
-
 #include <config.h>
 
 #include <fuse.h>
