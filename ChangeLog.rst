@@ -269,14 +269,14 @@ libfuse 3.0.0 (2016-12-08)
         fuse = fuse_new(&args, op, op_size, user_data);
         se = fuse_get_session(fuse);
         fuse_set_signal_handlers(se);
-        fuse_mount(se, mountpoint);
+        fuse_mount(fuse, mountpoint);
         fuse_daemonize(fg);
          if (mt)
             fuse_loop_mt(fuse);
         else
             fuse_loop(fuse);
         fuse_remove_signal_handlers(se);
-        fuse_unmount(se);
+        fuse_unmount(fuse);
         fuse_destroy(fuse);
 
   File systems that use `fuse_main` are not affected by this change.
