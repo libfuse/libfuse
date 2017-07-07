@@ -19,7 +19,7 @@
  */
 
 #ifndef FUSE_USE_VERSION
-#define FUSE_USE_VERSION 30
+#error FUSE_USE_VERSION not defined
 #endif
 
 #include "fuse_common.h"
