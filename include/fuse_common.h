@@ -406,8 +406,9 @@ struct fuse_conn_info {
 	 *
 	 * To prevent this problem, this variable can be used to inform the
 	 * kernel about the timestamp granularity supported by the file-system.
-	 * The value should be power of 10.  A zero (default) value is
-	 * equivalent to 1000000000 (1sec).
+	 * The value should be power of 10.  The default is 1, i.e. full
+	 * nano-second resolution. Filesystems supporting only second resolution
+	 * should set this to 1000000000.
 	 */
 	unsigned time_gran;
 

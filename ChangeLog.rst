@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* Fixed description of the `fuse_conn_info->time_gran`. The default
+  value of zero actually corresponds to full nanosecond resolution,
+  not one second resolution.
 * The init script is now installed into the right location
   ($DESTDIR/etc/init.d rather than $prefix/$sysconfdir/init.d) 
 * The `example/passthrough_ll` filesystem now supports creating
