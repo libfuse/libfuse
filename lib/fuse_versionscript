@@ -132,6 +132,12 @@ FUSE_3.0 {
 		*;
 };
 
+FUSE_3.1 {
+	global:
+	        fuse_lib_help;
+		fuse_new_30;
+} FUSE_3.0;
+
 # Local Variables:
 # indent-tabs-mode: t
 # End:

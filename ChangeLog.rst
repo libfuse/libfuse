@@ -1,11 +1,15 @@
 Unreleased Changes
 ==================
 
+* Added new `fuse_lib_help()` function. File-systems that previously
+  passed a ``--help`` option to `fuse_new()` must now process the
+  ``--help`` option internally and call `fuse_lib_help()` to print the
+  help for generic FUSE options.
 * Fixed description of the `fuse_conn_info->time_gran`. The default
   value of zero actually corresponds to full nanosecond resolution,
   not one second resolution.
 * The init script is now installed into the right location
-  ($DESTDIR/etc/init.d rather than $prefix/$sysconfdir/init.d) 
+  (``$DESTDIR/etc/init.d`` rather than ``$prefix/$sysconfdir/init.d``)
 * The `example/passthrough_ll` filesystem now supports creating
   and writing to files.
 * `fuse_main()` / `fuse_remove_signal_handlers()`: do not reset

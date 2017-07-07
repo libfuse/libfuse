@@ -25,11 +25,11 @@ if host_machine.system().startswith('netbsd')
 endif
 
 fusermount_path = join_paths(get_option('prefix'), get_option('bindir'))
-libfuse = library('fuse3', libfuse_sources, version: '3.0.0', install: true,
+libfuse = library('fuse3', libfuse_sources, version: meson.project_version(),
                   soversion: '3', include_directories: include_dirs,
-                  dependencies: deps,
+                  dependencies: deps, install: true,
                   link_depends: 'fuse_versionscript',
-                  c_args: [ '-DFUSE_USE_VERSION=30',
+                  c_args: [ '-DFUSE_USE_VERSION=31',
                             '-DFUSERMOUNT_DIR="{}"'.format(fusermount_path) ],
                   link_args: ['-Wl,--version-script,' + meson.current_source_dir()
                               + '/fuse_versionscript' ])

@@ -272,18 +272,15 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		goto out1;
 	}
 
-	/* Re-add --help for later processing by fuse_new()
-	   (that way we also get help for modules options) */
 	if (opts.show_help) {
 		if(args.argv[0] != '\0')
 			printf("usage: %s [options] <mountpoint>\n\n",
 			       args.argv[0]);
 		printf("FUSE options:\n");
 		fuse_cmdline_help();
-		if (fuse_opt_add_arg(&args, "--help") == -1) {
-			res = 1;
-			goto out1;
-		}
+		fuse_lib_help(&args);
+		res = 0;
+		goto out1;
 	}
 
 	if (!opts.show_help &&
@@ -294,10 +291,9 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	}
 
 
-	/* --help is processed here and will result in NULL */
 	fuse = fuse_new(&args, op, op_size, user_data);
 	if (fuse == NULL) {
-		res = opts.show_help ? 0 : 1;
+		res = 1;
 		goto out1;
 	}
 

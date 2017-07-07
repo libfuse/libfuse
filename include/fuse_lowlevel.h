@@ -14,7 +14,7 @@
  * Low level API
  *
  * IMPORTANT: you should define FUSE_USE_VERSION before including this
- * header.  To use the newest API define it to 30 (recommended for any
+ * header.  To use the newest API define it to 31 (recommended for any
  * new application).
  */
 

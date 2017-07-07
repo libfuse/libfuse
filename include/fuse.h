@@ -795,6 +795,19 @@ struct fuse_context {
  * ----------------------------------------------------------- */
 
 /**
+ * Print available options (high- and low-level) to stdout.  This is
+ * not an exhaustive list, but includes only those options that may be
+ * of interest to an end-user of a file system.
+ *
+ * The function looks at the argument vector only to determine if
+ * there are additional modules to be loaded (module=foo option),
+ * and attempts to call their help functions as well.
+ *
+ * @param args the argument vector.
+ */
+void fuse_lib_help(struct fuse_args *args);
+
+/**
  * Create a new FUSE filesystem.
  *
  * This function accepts most file-system independent mount options
@@ -821,8 +834,14 @@ struct fuse_context {
  *            `struct fuse_operations.init` handler.
  * @return the created FUSE handle
  */
+#if FUSE_USE_VERSION == 30
+#define fuse_new(args, op, size, data) fuse_new_30(args, op, size, data)
+#else
 struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
 		      size_t op_size, void *private_data);
+#endif
+struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
+			 size_t op_size, void *private_data);
 
 /**
  * Mount a FUSE file system.

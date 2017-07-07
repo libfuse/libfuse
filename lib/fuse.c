@@ -4400,8 +4400,6 @@ int fuse_interrupted(void)
 #define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
 
 static const struct fuse_opt fuse_lib_opts[] = {
-	FUSE_LIB_OPT("-h",		      show_help, 1),
-	FUSE_LIB_OPT("--help",		      show_help, 1),
 	FUSE_OPT_KEY("debug",		      FUSE_OPT_KEY_KEEP),
 	FUSE_OPT_KEY("-d",		      FUSE_OPT_KEY_KEEP),
 	FUSE_LIB_OPT("debug",		      debug, 1),
@@ -4426,7 +4424,34 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_OPT_END
 };
 
-static void fuse_lib_help(void)
+static int fuse_lib_opt_proc(void *data, const char *arg, int key,
+			     struct fuse_args *outargs)
+{
+	(void) arg; (void) outargs; (void) data; (void) key;
+
+	/* Pass through unknown options */
+	return 1;
+}
+
+
+static const struct fuse_opt fuse_help_opts[] = {
+	FUSE_LIB_OPT("modules=%s", modules, 1),
+	FUSE_OPT_KEY("modules=%s", FUSE_OPT_KEY_KEEP),
+	FUSE_OPT_END
+};
+
+static void print_module_help(const char *name,
+			      fuse_module_factory_t *fac)
+{
+	struct fuse_args a = FUSE_ARGS_INIT(0, NULL);
+	if (fuse_opt_add_arg(&a, "") == -1 ||
+	    fuse_opt_add_arg(&a, "-h") == -1)
+		return;
+	printf("\nOptions for %s module:\n", name);
+	(*fac)(&a, NULL);
+}
+
+void fuse_lib_help(struct fuse_args *args)
 {
 	/* These are not all options, but only the ones that
 	   may be of interest to an end-user */
@@ -4443,36 +4468,41 @@ static void fuse_lib_help(void)
 "    -o noforget            never forget cached inodes\n"
 "    -o remember=T          remember cached inodes for T seconds (0s)\n"
 "    -o modules=M1[:M2...]  names of modules to push onto filesystem stack\n");
-}
 
-static void fuse_lib_help_modules(void)
-{
+
+	/* Print low-level help */
+	fuse_lowlevel_help();
+
+	/* Print help for builtin modules */
+	print_module_help("subdir", &fuse_module_subdir_factory);
+	print_module_help("iconv", &fuse_module_iconv_factory);
+
+	/* Parse command line options in case we need to
+	   activate more modules */
+	struct fuse_config conf = { .modules = NULL };
+	if (fuse_opt_parse(args, &conf, fuse_help_opts,
+			   fuse_lib_opt_proc) == -1
+	    || !conf.modules)
+		return;
+	
+	char *module;
+	char *next;
 	struct fuse_module *m;
-	printf("\nModule options:\n");
-	pthread_mutex_lock(&fuse_context_lock);
-	for (m = fuse_modules; m; m = m->next) {
-		struct fuse_fs *fs = NULL;
-		struct fuse_fs *newfs;
-		struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
-		if (fuse_opt_add_arg(&args, "") != -1 &&
-		    fuse_opt_add_arg(&args, "-h") != -1) {
-			printf("\n[%s]\n", m->name);
-			newfs = m->factory(&args, &fs);
-			assert(newfs == NULL);
-		}
-		fuse_opt_free_args(&args);
+
+	// Iterate over all modules
+	for (module = conf.modules; module; module = next) {
+		char *p;
+		for (p = module; *p && *p != ':'; p++);
+		next = *p ? p + 1 : NULL;
+		*p = '\0';
+
+		m = fuse_get_module(module);
+		if (m)
+			print_module_help(module, &m->factory);
 	}
-	pthread_mutex_unlock(&fuse_context_lock);
 }
 
-static int fuse_lib_opt_proc(void *data, const char *arg, int key,
-			     struct fuse_args *outargs)
-{
-	(void) arg; (void) outargs; (void) data; (void) key;
-
-	/* Pass through unknown options */
-	return 1;
-}
+				      
 
 static int fuse_init_intr_signal(int signum, int *installed)
 {
@@ -4595,6 +4625,33 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 	}
 }
 
+
+/* Emulates 3.0-style fuse_new(), which processes
+   --help */
+FUSE_SYMVER(".symver fuse_new_30,fuse_new@FUSE_3.0");
+FUSE_SYMVER(".symver fuse_new,fuse_new@@FUSE_3.1");
+struct fuse *fuse_new_30(struct fuse_args *args,
+			 const struct fuse_operations *op,
+			 size_t op_size, void *user_data)
+{
+	struct fuse_config conf;
+	const struct fuse_opt opts[] = {
+		FUSE_LIB_OPT("-h", show_help, 1),
+		FUSE_LIB_OPT("--help", show_help, 1),
+		FUSE_OPT_END
+	};
+
+	if (fuse_opt_parse(args, &conf, opts,
+			   fuse_lib_opt_proc) == -1)
+		return NULL;
+
+	if (conf.show_help) {
+		fuse_lib_help(args);
+		return NULL;
+	} else
+		return fuse_new(args, op, op_size, user_data);
+}
+
 struct fuse *fuse_new(struct fuse_args *args,
 		      const struct fuse_operations *op,
 		      size_t op_size, void *user_data)
@@ -4619,13 +4676,6 @@ struct fuse *fuse_new(struct fuse_args *args,
 	if (fuse_opt_parse(args, &f->conf, fuse_lib_opts,
 			   fuse_lib_opt_proc) == -1)
 		goto out_free;
-
-	if (f->conf.show_help) {
-		fuse_lib_help();
-		fuse_lowlevel_help();
-		/* Defer printing module help until modules
-		   have been loaded */
-	}
 
 	pthread_mutex_lock(&fuse_context_lock);
 	static int builtin_modules_registered = 0;
@@ -4671,11 +4721,6 @@ struct fuse *fuse_new(struct fuse_args *args,
 			    fuse_push_module(f, module, args) == -1)
 				goto out_free_fs;
 		}
-	}
-
-	if(f->conf.show_help) {
-		fuse_lib_help_modules();
-		goto out_free_fs;
 	}
 
 	if (!f->conf.ac_attr_timeout_set)

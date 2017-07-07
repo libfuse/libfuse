@@ -21,7 +21,7 @@
  * \include poll.c
  */
 
-#define FUSE_USE_VERSION 30
+#define FUSE_USE_VERSION 31
 
 #include <config.h>
 
