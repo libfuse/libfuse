@@ -1,6 +1,3 @@
-# Attention, emacs, please use -*- mode: python -*-
-# (even though this isn't actually Python code)
-
 # Compile helper programs
 td = []
 foreach prog: [ 'test_write_cache', 'test_setattr' ]

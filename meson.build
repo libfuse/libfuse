@@ -1,6 +1,3 @@
-# Attention, emacs, please use -*- mode: python -*-
-# (even though this isn't actually Python code)
-
 project('libfuse3', 'c', version: '3.0.2',
         meson_version: '>= 0.38',
         default_options: [ 'buildtype=plain' ])
