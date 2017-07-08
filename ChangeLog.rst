@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+libfuse 3.1.0 (2017-07-08)
+==========================
 
 * Added new `fuse_lib_help()` function. File-systems that previously
   passed a ``--help`` option to `fuse_new()` must now process the
