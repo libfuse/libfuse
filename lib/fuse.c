@@ -4647,7 +4647,7 @@ struct fuse *fuse_new_30(struct fuse_args *args,
 		fuse_lib_help(args);
 		return NULL;
 	} else
-		return fuse_new(args, op, op_size, user_data);
+		return fuse_new_31(args, op, op_size, user_data);
 }
 
 /* Explicit prototype to prevent compiler warnings
