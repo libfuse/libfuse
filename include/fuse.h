@@ -835,13 +835,13 @@ void fuse_lib_help(struct fuse_args *args);
  * @return the created FUSE handle
  */
 #if FUSE_USE_VERSION == 30
+struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
+			 size_t op_size, void *private_data);
 #define fuse_new(args, op, size, data) fuse_new_30(args, op, size, data)
 #else
 struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
 		      size_t op_size, void *private_data);
 #endif
-struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
-			 size_t op_size, void *private_data);
 
 /**
  * Mount a FUSE file system.

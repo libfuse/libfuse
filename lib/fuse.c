@@ -4626,30 +4626,6 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 }
 
 
-/* Emulates 3.0-style fuse_new(), which processes --help */
-FUSE_SYMVER(".symver fuse_new_30,fuse_new@FUSE_3.0");
-struct fuse *fuse_new_30(struct fuse_args *args,
-			 const struct fuse_operations *op,
-			 size_t op_size, void *user_data)
-{
-	struct fuse_config conf;
-	const struct fuse_opt opts[] = {
-		FUSE_LIB_OPT("-h", show_help, 1),
-		FUSE_LIB_OPT("--help", show_help, 1),
-		FUSE_OPT_END
-	};
-
-	if (fuse_opt_parse(args, &conf, opts,
-			   fuse_lib_opt_proc) == -1)
-		return NULL;
-
-	if (conf.show_help) {
-		fuse_lib_help(args);
-		return NULL;
-	} else
-		return fuse_new_31(args, op, op_size, user_data);
-}
-
 /* Explicit prototype to prevent compiler warnings
    (fuse.h only defines fuse_new()) */
 struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
@@ -4801,6 +4777,32 @@ out_free:
 	free(f);
 out:
 	return NULL;
+}
+
+/* Emulates 3.0-style fuse_new(), which processes --help */
+struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
+			 size_t op_size, void *private_data);
+FUSE_SYMVER(".symver fuse_new_30,fuse_new@FUSE_3.0");
+struct fuse *fuse_new_30(struct fuse_args *args,
+			 const struct fuse_operations *op,
+			 size_t op_size, void *user_data)
+{
+	struct fuse_config conf;
+	const struct fuse_opt opts[] = {
+		FUSE_LIB_OPT("-h", show_help, 1),
+		FUSE_LIB_OPT("--help", show_help, 1),
+		FUSE_OPT_END
+	};
+
+	if (fuse_opt_parse(args, &conf, opts,
+			   fuse_lib_opt_proc) == -1)
+		return NULL;
+
+	if (conf.show_help) {
+		fuse_lib_help(args);
+		return NULL;
+	} else
+		return fuse_new_31(args, op, op_size, user_data);
 }
 
 void fuse_destroy(struct fuse *f)
