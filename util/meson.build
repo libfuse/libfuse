@@ -18,7 +18,10 @@ executable('mount.fuse3', ['mount.fuse.c'],
            install: true,
            install_dir: get_option('sbindir'))
 
+udev = dependency('udev')
+udevrulesdir = join_paths(udev.get_pkgconfig_variable('udevdir'), 'rules.d')
+
 meson.add_install_script('install_helper.sh', get_option('sysconfdir'),
-                         get_option('bindir'), get_option('libdir'))
+                         get_option('bindir'), udevrulesdir)
 
 
