@@ -40,7 +40,7 @@
 #include <config.h>
 
 #include <sys/types.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <stdio.h>
