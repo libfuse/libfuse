@@ -2,6 +2,16 @@ project('libfuse3', 'c', version: '3.1.0',
         meson_version: '>= 0.38',
         default_options: [ 'buildtype=plain' ])
 
+
+platform = host_machine.system()
+if platform == 'darwin'
+  error('libfuse does not support OS-X.\n' +
+        'Take a look at http://osxfuse.github.io/ instead')
+elif platform == 'cygwin' or platform == 'windows'
+  error('libfuse does not support Windows.\n' +
+        'Take a look at http://www.secfs.net/winfsp/ instead')       
+endif
+
 #
 # Feature detection
 #
