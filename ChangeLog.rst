@@ -12,6 +12,9 @@ Unreleased Changes
 
 * Fixed a test failure when /tmp is on btrfs.  
 
+* Incorporated several patches from the FreeBSD port. libfuse should
+  now compile under FreeBSD without the need for patches.
+
 libfuse 3.1.0 (2017-07-08)
 ==========================
 
