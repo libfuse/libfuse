@@ -10,6 +10,8 @@ Unreleased Changes
 * Fixed a symbol versioning problem that resulted in very strange
   failures (segfaults, unexpected behavior) in different situations.
 
+* Fixed a test failure when /tmp is on btrfs.  
+
 libfuse 3.1.0 (2017-07-08)
 ==========================
 

@@ -266,6 +266,7 @@ def tst_mkdir(mnt_dir):
     fstat = os.stat(fullname)
     assert stat.S_ISDIR(fstat.st_mode)
     assert os.listdir(fullname) ==  []
+    # Some filesystem (e.g. BTRFS) don't track st_nlink for directories
     assert fstat.st_nlink in (1,2)
     assert dirname in os.listdir(mnt_dir)
 

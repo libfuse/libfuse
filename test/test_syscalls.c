@@ -1329,7 +1329,9 @@ static int test_mkdir(void)
 	if (res == -1)
 		return -1;
 	err += check_mode(testdir, 0755);
-	err += check_nlink(testdir, 2);
+	/* Some file systems (like btrfs) don't track link
+	   count for directories */
+	//err += check_nlink(testdir, 2);
 	err += check_dir_contents(testdir, dir_contents);
 	res = rmdir(testdir);
 	if (res == -1) {
