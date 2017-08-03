@@ -1,3 +1,9 @@
+Unreleased Changes
+==================
+
+* Fixed a compilation problem of the passthrough_ll example on
+  32 bit systems (wrong check and wrong error message).
+
 libfuse 3.1.0 (2017-07-08)
 ==========================
 
