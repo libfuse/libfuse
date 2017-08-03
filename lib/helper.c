@@ -41,10 +41,16 @@ static const struct fuse_opt fuse_helper_opts[] = {
 	FUSE_OPT_KEY("debug",		FUSE_OPT_KEY_KEEP),
 	FUSE_HELPER_OPT("-f",		foreground),
 	FUSE_HELPER_OPT("-s",		singlethread),
+#ifdef __FreeBSD__
+	FUSE_HELPER_OPT("fsname=",	fsname),
+#else
 	FUSE_HELPER_OPT("fsname=",	nodefault_subtype),
 	FUSE_HELPER_OPT("subtype=",	nodefault_subtype),
+#endif
 	FUSE_OPT_KEY("fsname=",		FUSE_OPT_KEY_KEEP),
+#ifndef __FreeBSD__
 	FUSE_OPT_KEY("subtype=",	FUSE_OPT_KEY_KEEP),
+#endif
 	FUSE_HELPER_OPT("clone_fd",	clone_fd),
 	FUSE_OPT_END
 };
@@ -161,24 +167,43 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 	}
 }
 
+#ifdef __FreeBSD__
+static int add_default_fsname(const char *progname, struct fuse_args *args)
+#else
 static int add_default_subtype(const char *progname, struct fuse_args *args)
+#endif
 {
 	int res;
+#ifdef __FreeBSD__
+	char *fsname_opt;
+#else
 	char *subtype_opt;
+#endif
 	const char *basename = strrchr(progname, '/');
 	if (basename == NULL)
 		basename = progname;
 	else if (basename[1] != '\0')
 		basename++;
 
+#ifdef __FreeBSD__
+	fsname_opt = (char *) malloc(strlen(basename) + 64);
+	if (fsname_opt == NULL) {
+#else
 	subtype_opt = (char *) malloc(strlen(basename) + 64);
 	if (subtype_opt == NULL) {
+#endif
 		fprintf(stderr, "fuse: memory allocation failed\n");
 		return -1;
 	}
+#ifdef __FreeBSD__
+	sprintf(fsname_opt, "-osubtype=%s", basename);
+	res = fuse_opt_add_arg(args, fsname_opt);
+	free(fsname_opt);
+#else
 	sprintf(subtype_opt, "-osubtype=%s", basename);
 	res = fuse_opt_add_arg(args, subtype_opt);
 	free(subtype_opt);
+#endif
 	return res;
 }
 
@@ -192,8 +217,13 @@ int fuse_parse_cmdline(struct fuse_args *args,
 
 	/* If neither -o subtype nor -o fsname are specified,
 	   set subtype to program's basename */
+#ifdef __FreeBSD__
+	if (!opts->fsname)
+		if (add_default_fsname(args->argv[0], args) == -1)
+#else
 	if (!opts->nodefault_subtype)
 		if (add_default_subtype(args->argv[0], args) == -1)
+#endif
 			return -1;
 
 	return 0;
