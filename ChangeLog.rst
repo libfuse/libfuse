@@ -7,6 +7,9 @@ Unreleased Changes
 * pkg-config is now used to determine the proper directory for
   udev rules.
 
+* Fixed a symbol versioning problem that resulted in very strange
+  failures (segfaults, unexpected behavior) in different situations.
+
 libfuse 3.1.0 (2017-07-08)
 ==========================
 
