@@ -1981,6 +1981,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_ASYNC_DIO;
 	if (se->conn.want & FUSE_CAP_WRITEBACK_CACHE)
 		outarg.flags |= FUSE_WRITEBACK_CACHE;
+	if (se->conn.want & FUSE_CAP_POSIX_ACL)
+		outarg.flags |= FUSE_POSIX_ACL;
 	outarg.max_readahead = se->conn.max_readahead;
 	outarg.max_write = se->conn.max_write;
 	if (se->conn.proto_minor >= 13) {

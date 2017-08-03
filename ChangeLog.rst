@@ -1,3 +1,10 @@
+Unreleased Changes
+==================
+
+* Fixed support for `FUSE_CAP_POSIX_ACL`: setting this capability
+  flag had no effect in the previous versions of libfuse 3.x;
+  now ACLs should actually work.
+
 libfuse 3.1.1 (2017-08-06)
 ==========================
 
