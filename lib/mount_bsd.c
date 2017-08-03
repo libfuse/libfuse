@@ -13,6 +13,11 @@
 #include "fuse_misc.h"
 #include "fuse_opt.h"
 
+#ifdef __FreeBSD__
+#include <sys/param.h>
+#include <sys/mount.h>
+#endif
+
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/sysctl.h>
@@ -72,6 +77,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_DUAL_OPT_KEY("ro",			KEY_KERN),
 	FUSE_DUAL_OPT_KEY("rw",			KEY_KERN),
 	FUSE_DUAL_OPT_KEY("auto",		KEY_KERN),
+	FUSE_DUAL_OPT_KEY("automounted",	KEY_KERN),
 	/* options supported under both Linux and FBSD */
 	FUSE_DUAL_OPT_KEY("allow_other",	KEY_KERN),
 	FUSE_DUAL_OPT_KEY("default_permissions",KEY_KERN),
@@ -119,6 +125,7 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
+#ifndef __FreeBSD__
 static void do_unmount(char *dev, int fd)
 {
 	char device_path[SPECNAMELEN + 12];
@@ -146,12 +153,16 @@ static void do_unmount(char *dev, int fd)
 
 	waitpid(pid, NULL, 0);
 }
+#endif
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
 	char *ep, dev[128];
 	struct stat sbuf;
 
+#ifdef __FreeBSD__
+	unmount(mountpoint, MNT_FORCE);
+#else
 	(void)mountpoint;
 
 	if (fstat(fd, &sbuf) == -1)
@@ -169,6 +180,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	do_unmount(dev, fd);
 
 out:
+#endif
 	close(fd);
 }
 
