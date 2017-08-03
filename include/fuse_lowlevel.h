@@ -1727,11 +1727,7 @@ struct fuse_cmdline_opts {
 	int singlethread;
 	int foreground;
 	int debug;
-#ifdef __FreeBSD__
-	int fsname;
-#else
 	int nodefault_subtype;
-#endif
 	char *mountpoint;
 	int show_version;
 	int show_help;
