@@ -92,7 +92,10 @@ thread_dep = dependency('threads')
 #
 # Read build files from sub-directories
 #
-subdirs = [ 'lib', 'include', 'util', 'example', 'doc', 'test' ]
+subdirs = [ 'lib', 'include', 'example', 'doc', 'test' ]
+if not host_machine.system().startswith('freebsd')
+subdirs += 'util'
+endif
 foreach n : subdirs
     subdir(n)
 endforeach
