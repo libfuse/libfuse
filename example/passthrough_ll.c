@@ -46,6 +46,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <err.h>
+#include <inttypes.h>
 
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
@@ -233,6 +234,10 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	struct fuse_entry_param e;
 	int err;
 
+	if (lo_debug(req))
+		fprintf(stderr, "lo_lookup(parent=%" PRIu64 ", name=%s)\n",
+			parent, name);
+	
 	err = lo_do_lookup(req, parent, name, &e);
 	if (err)
 		fuse_reply_err(req, err);
@@ -436,6 +441,10 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	struct fuse_entry_param e;
 	int err;
 
+	if (lo_debug(req))
+		fprintf(stderr, "lo_create(parent=%" PRIu64 ", name=%s)\n",
+			parent, name);
+			
 	fd = openat(lo_fd(req, parent), name,
 		    (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
 	if (fd == -1)
@@ -455,6 +464,10 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino,
 {
 	int fd;
 	char buf[64];
+
+	if (lo_debug(req))
+		fprintf(stderr, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
+			ino, fi->flags);
 
 	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
 	fd = open(buf, fi->flags & ~O_NOFOLLOW);
@@ -478,7 +491,9 @@ static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 {
 	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
 
-	(void) ino;
+	if (lo_debug(req))
+		fprintf(stderr, "lo_read(ino=%" PRIu64 ", size=%zd, "
+			"off=%lu)\n", ino, size, (unsigned long) offset);
 
 	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
 	buf.buf[0].fd = fi->fh;
@@ -499,6 +514,10 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	out_buf.buf[0].fd = fi->fh;
 	out_buf.buf[0].pos = off;
 
+	if (lo_debug(req))
+		fprintf(stderr, "lo_write(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
+			ino, out_buf.buf[0].size, (unsigned long) off);
+	
 	res = fuse_buf_copy(&out_buf, in_buf, 0);
 	if(res < 0)
 		fuse_reply_err(req, -res);
