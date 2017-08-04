@@ -51,6 +51,7 @@
 #define OFFSET_MAX 0x7fffffffffffffffLL
 
 #define NODE_TABLE_MIN_SIZE 8192
+#define FS_INODE_HASH_SIZE (64 * 1024)
 
 struct fuse_config {
 	unsigned int uid;
@@ -152,6 +153,7 @@ struct fuse {
 	int pagesize;
 	struct list_head partial_slabs;
 	struct list_head full_slabs;
+	struct list_head fs_inode_hash[FS_INODE_HASH_SIZE];
 	pthread_t prune_thread;
 };
 
@@ -181,6 +183,8 @@ struct node {
 	unsigned int is_hidden : 1;
 	unsigned int cache_valid : 1;
 	int treelock;
+	ino_t fs_inode;
+	struct list_head fs_inode_hash_bucket_entry;
 	char inline_name[32];
 };
 
@@ -494,6 +498,10 @@ static size_t id_hash(struct fuse *f, fuse_ino_t ino)
 		return hash;
 }
 
+static size_t fs_inode_hash(ino_t inode) {
+	return ((size_t) (inode * 2654435761U)) % FS_INODE_HASH_SIZE;
+}
+
 static struct node *get_node_nocheck(struct fuse *f, fuse_ino_t nodeid)
 {
 	size_t hash = id_hash(f, nodeid);
@@ -797,6 +805,7 @@ static void delete_node(struct fuse *f, struct node *node)
 	if (lru_enabled(f))
 		remove_node_lru(node);
 	unhash_id(f, node);
+	list_del(&node->fs_inode_hash_bucket_entry);
 	free_node(f, node);
 }
 
@@ -840,8 +849,14 @@ static void inc_nlookup(struct node *node)
 	node->nlookup++;
 }
 
+static void update_fs_inode(struct fuse* f, struct node *node, ino_t fs_inode) {
+	node->fs_inode = fs_inode;
+	list_del(&node->fs_inode_hash_bucket_entry);
+	list_add_head(&node->fs_inode_hash_bucket_entry, &f->fs_inode_hash[fs_inode_hash(fs_inode)]);
+}
+
 static struct node *find_node(struct fuse *f, fuse_ino_t parent,
-			      const char *name)
+			      const char *name, ino_t fs_inode)
 {
 	struct node *node;
 
@@ -870,8 +885,17 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 			struct node_lru *lnode = node_lru(node);
 			init_list_head(&lnode->lru);
 		}
-	} else if (lru_enabled(f) && node->nlookup == 1) {
-		remove_node_lru(node);
+		node->fs_inode = fs_inode;
+		init_list_head(&node->fs_inode_hash_bucket_entry);
+		list_add_head(&node->fs_inode_hash_bucket_entry,
+				&f->fs_inode_hash[fs_inode_hash(node->fs_inode)]);
+	} else {
+		if (fs_inode != node->fs_inode) {
+			update_fs_inode(f, node, fs_inode);
+		}
+		if (lru_enabled(f) && node->nlookup == 1) {
+			remove_node_lru(node);
+		}
 	}
 	inc_nlookup(node);
 out_err:
@@ -2473,7 +2497,7 @@ static int lookup_path(struct fuse *f, fuse_ino_t nodeid,
 	if (res == 0) {
 		struct node *node;
 
-		node = find_node(f, nodeid, name);
+		node = find_node(f, nodeid, name, e->attr.st_ino);
 		if (node == NULL)
 			res = -ENOMEM;
 		else {
@@ -2746,6 +2770,9 @@ static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 			buf.st_nlink--;
 		if (f->conf.auto_cache)
 			update_stat(node, &buf);
+		if (node->fs_inode != buf.st_ino) {
+			update_fs_inode(f, node, buf.st_ino);
+		}
 		pthread_mutex_unlock(&f->lock);
 		set_stat(f, ino, &buf);
 		fuse_reply_attr(req, &buf, f->conf.attr_timeout);
@@ -4145,6 +4172,39 @@ int fuse_clean_cache(struct fuse *f)
 	return clean_delay(f);
 }
 
+int fuse_notify_inval_fs_inode(struct fuse *f, ino_t fs_inode) {
+	int max_notification_count = 32;
+	int notification_count = 0;
+	fuse_ino_t notifications[max_notification_count];
+
+	if (f->conf.debug) {
+		fprintf(stderr, "INVALFS %llu\n", (unsigned long long) fs_inode);
+	}
+
+	pthread_mutex_lock(&f->lock);
+	struct list_head* list = &f->fs_inode_hash[fs_inode_hash(fs_inode)];
+	struct list_head* entry = list->next;
+	while (entry != list && notification_count < max_notification_count) {
+		struct node* node = list_entry(entry, struct node, fs_inode_hash_bucket_entry);
+		if (node->fs_inode == fs_inode) {
+			notifications[notification_count++] = node->nodeid;
+		}
+		entry = entry->next;
+	}
+	struct fuse_chan *ch = fuse_session_next_chan(f->se, NULL);
+	pthread_mutex_unlock(&f->lock);
+
+	int status = 0;
+	for (int i = 0; i < notification_count; ++i) {
+		fuse_ino_t inode = notifications[i];
+		int err = fuse_lowlevel_notify_inval_inode(ch, inode, 0, 0);
+		if (err != 0 && status == 0) {
+			status = err;
+		}
+	}
+	return status;
+}
+
 static struct fuse_lowlevel_ops fuse_path_ops = {
 	.init = fuse_lib_init,
 	.destroy = fuse_lib_destroy,
@@ -4640,6 +4700,9 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	init_list_head(&f->partial_slabs);
 	init_list_head(&f->full_slabs);
 	init_list_head(&f->lru_table);
+	for (int i = 0; i < FS_INODE_HASH_SIZE; i++) {
+		init_list_head(&f->fs_inode_hash[i]);
+	}
 
 	if (fuse_opt_parse(args, &f->conf, fuse_lib_opts,
 			   fuse_lib_opt_proc) == -1)
@@ -4725,6 +4788,11 @@ struct fuse *fuse_new_common(struct fuse_chan *ch, struct fuse_args *args,
 	root->nodeid = FUSE_ROOT_ID;
 	inc_nlookup(root);
 	hash_id(f, root);
+
+	root->fs_inode = FUSE_ROOT_ID;
+	init_list_head(&root->fs_inode_hash_bucket_entry);
+	list_add_head(&root->fs_inode_hash_bucket_entry,
+			&f->fs_inode_hash[fs_inode_hash(root->fs_inode)]);
 
 	return f;
 

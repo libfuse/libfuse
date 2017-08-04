@@ -794,6 +794,19 @@ void fuse_stop_cleanup_thread(struct fuse *fuse);
  */
 int fuse_clean_cache(struct fuse *fuse);
 
+/**
+ * Notify the kernel to invalidate cache for the specified FS inode.
+ *
+ * This can be used to notify the kernel about external changes
+ * to files and directories, for example in network file systems.
+ *
+ * This uses a one-to-many mapping from the inode numbers reported
+ * by the file system (in the `st_ino` field in `getattr` output)
+ * and FUSE nodes. This calls `fuse_lowlevel_notify_inval_inode`
+ * internally.
+ */
+int fuse_notify_inval_fs_inode(struct fuse *fuse, ino_t fs_inode);
+
 /*
  * Stacking API
  */
