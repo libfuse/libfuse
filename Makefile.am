@@ -10,7 +10,8 @@ EXTRA_DIST = \
 	test/*.py \
 	test/pytest.ini \
         meson.build \
-        meson_options.txt
+        meson_options.txt \
+        ChangeLog.rst
 
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = fuse3.pc
