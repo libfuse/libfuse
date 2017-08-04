@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* Documentation: clarified how filesystems are supposed to process
+  open() and create() flags (see include/fuse_lowlevel.h).
+
 * Fixed a compilation problem of the passthrough_ll example on
   32 bit systems (wrong check and wrong error message).
 

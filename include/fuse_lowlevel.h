@@ -454,8 +454,33 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Open a file
 	 *
-	 * Open flags are available in fi->flags. Creation (O_CREAT,
-	 * O_EXCL, O_NOCTTY) flags will be filtered out. 
+	 * Open flags are available in fi->flags. The following rules
+	 * apply.
+	 *
+	 *  - Creation (O_CREAT, O_EXCL, O_NOCTTY) flags will be
+	 *    filtered out / handled by the kernel.
+	 *
+	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR) should be used
+	 *    by the filesystem to check if the operation is
+	 *    permitted.  If the ``-o default_permissions`` mount
+	 *    option is given, this check is already done by the
+	 *    kernel before calling open() and may thus be omitted by
+	 *    the filesystem.
+	 *
+	 *  - When writeback caching is enabled, the kernel may send
+	 *    read requests even for files opened with O_WRONLY. The
+	 *    filesystem should be prepared to handle this.
+	 *
+	 *  - When writeback caching is disabled, the filesystem is
+	 *    expected to properly handle the O_APPEND flag and ensure
+	 *    that each write is appending to the end of the file.
+	 * 
+         *  - When writeback caching is enabled, the kernel will
+	 *    handle O_APPEND. However, unless all changes to the file
+	 *    come through the kernel this will not work reliably. The
+	 *    filesystem should thus either ignore the O_APPEND flag
+	 *    (and let the kernel handle it), or return an error
+	 *    (indicating that reliably O_APPEND is not available).
 	 *
 	 * Filesystem may store an arbitrary file handle (pointer,
 	 * index, etc) in fi->fh, and use this in other all other file
@@ -858,16 +883,8 @@ struct fuse_lowlevel_ops {
 	 * If the file does not exist, first create it with the specified
 	 * mode, and then open it.
 	 *
-	 * Open flags (with the exception of O_NOCTTY) are available in
-	 * fi->flags.
-	 *
-	 * Filesystem may store an arbitrary file handle (pointer, index,
-	 * etc) in fi->fh, and use this in other all other file operations
-	 * (read, write, flush, release, fsync).
-	 *
-	 * There are also some flags (direct_io, keep_cache) which the
-	 * filesystem may set in fi, to change the way the file is opened.
-	 * See fuse_file_info structure in <fuse_common.h> for more details.
+	 * See the description of the open handler for more
+	 * information.
 	 *
 	 * If this method is not implemented or under Linux kernel
 	 * versions earlier than 2.6.15, the mknod() and open() methods

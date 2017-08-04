@@ -380,20 +380,53 @@ struct fuse_operations {
 	 */
 	int (*truncate) (const char *, off_t, struct fuse_file_info *fi);
 
-	/** File open operation
+	/** Open a file
 	 *
-	 * No creation (O_CREAT, O_EXCL) and by default also no
-	 * truncation (O_TRUNC) flags will be passed to open(). If an
-	 * application specifies O_TRUNC, fuse first calls truncate()
-	 * and then open(). Only if 'atomic_o_trunc' has been
-	 * specified and kernel version is 2.6.24 or later, O_TRUNC is
-	 * passed on to open.
+	 * Open flags are available in fi->flags. The following rules
+	 * apply.
 	 *
-	 * Unless the 'default_permissions' mount option is given,
-	 * open should check if the operation is permitted for the
-	 * given flags. Optionally open may also return an arbitrary
-	 * filehandle in the fuse_file_info structure, which will be
-	 * passed to all file operations.
+	 *  - Creation (O_CREAT, O_EXCL, O_NOCTTY) flags will be
+	 *    filtered out / handled by the kernel.
+	 *
+	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR) should be used
+	 *    by the filesystem to check if the operation is
+	 *    permitted.  If the ``-o default_permissions`` mount
+	 *    option is given, this check is already done by the
+	 *    kernel before calling open() and may thus be omitted by
+	 *    the filesystem.
+	 *
+	 *  - When writeback caching is enabled, the kernel may send
+	 *    read requests even for files opened with O_WRONLY. The
+	 *    filesystem should be prepared to handle this.
+	 *
+	 *  - When writeback caching is disabled, the filesystem is
+	 *    expected to properly handle the O_APPEND flag and ensure
+	 *    that each write is appending to the end of the file.
+	 * 
+         *  - When writeback caching is enabled, the kernel will
+	 *    handle O_APPEND. However, unless all changes to the file
+	 *    come through the kernel this will not work reliably. The
+	 *    filesystem should thus either ignore the O_APPEND flag
+	 *    (and let the kernel handle it), or return an error
+	 *    (indicating that reliably O_APPEND is not available).
+	 *
+	 * Filesystem may store an arbitrary file handle (pointer,
+	 * index, etc) in fi->fh, and use this in other all other file
+	 * operations (read, write, flush, release, fsync).
+	 *
+	 * Filesystem may also implement stateless file I/O and not store
+	 * anything in fi->fh.
+	 *
+	 * There are also some flags (direct_io, keep_cache) which the
+	 * filesystem may set in fi, to change the way the file is opened.
+	 * See fuse_file_info structure in <fuse_common.h> for more details.
+	 *
+	 * If this request is answered with an error code of ENOSYS
+	 * and FUSE_CAP_NO_OPEN_SUPPORT is set in
+	 * `fuse_conn_info.capable`, this is treated as success and
+	 * future calls to open will also succeed without being send
+	 * to the filesystem process.
+	 *
 	 */
 	int (*open) (const char *, struct fuse_file_info *);
 
