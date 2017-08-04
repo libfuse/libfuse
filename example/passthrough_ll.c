@@ -61,48 +61,6 @@ struct _uintptr_to_must_hold_fuse_ino_t_dummy_struct \
 			((sizeof(fuse_ino_t) >= sizeof(uintptr_t)) ? 1 : -1); };
 #endif
 
-/* Compat stuff.  Doesn't make it work, just makes it compile. */
-#ifndef HAVE_FSTATAT
-#warning fstatat(2) needed by this program
-int fstatat(int dirfd, const char *pathname, struct stat *buf, int flags)
-{
-	errno = ENOSYS;
-	return -1;
-}
-#endif
-#ifndef HAVE_OPENAT
-#warning openat(2) needed by this program
-int openat(int dirfd, const char *pathname, int flags, ...)
-{
-	errno = ENOSYS;
-	return -1;
-}
-#endif
-#ifndef HAVE_READLINKAT
-#warning readlinkat(2) needed by this program
-ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsiz)
-{
-	errno = ENOSYS;
-	return -1;
-}
-#endif
-#ifndef AT_EMPTY_PATH
-#warning AT_EMPTY_PATH needed by this program
-#define AT_EMPTY_PATH 0
-#endif
-#ifndef AT_SYMLINK_NOFOLLOW
-#warning AT_SYMLINK_NOFOLLOW needed by this program
-#define AT_SYMLINK_NOFOLLOW 0
-#endif
-#ifndef O_PATH
-#warning O_PATH needed by this program
-#define O_PATH 0
-#endif
-#ifndef O_NOFOLLOW
-#warning O_NOFOLLOW needed by this program
-#define O_NOFOLLOW 0
-#endif
-
 struct lo_inode {
 	struct lo_inode *next;
 	struct lo_inode *prev;
