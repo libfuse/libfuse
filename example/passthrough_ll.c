@@ -19,6 +19,13 @@
  * until the file is not opened anymore would make the example much
  * more complicated.
  *
+ * When writeback caching is enabled (-o writeback mount option), it
+ * is only possible to write to files for which the mounting user has
+ * read permissions. This is because the writeback cache requires the
+ * kernel to be able to issue read requests for all files (which the
+ * passthrough filesystem cannot satisfy if it can't read the file in
+ * the underlying filesystem).
+ *
  * Compile with:
  *
  *     gcc -Wall passthrough_ll.c `pkg-config fuse3 --cflags --libs` -o passthrough_ll
@@ -72,7 +79,16 @@ struct lo_inode {
 
 struct lo_data {
 	int debug;
+	int writeback;
 	struct lo_inode root;
+};
+
+static const struct fuse_opt lo_opts[] = {
+	{ "writeback",
+	  offsetof(struct lo_data, writeback), 1 },
+	{ "no_writeback",
+	  offsetof(struct lo_data, writeback), 0 },
+	FUSE_OPT_END
 };
 
 static struct lo_data *lo_data(fuse_req_t req)
@@ -101,8 +117,15 @@ static bool lo_debug(fuse_req_t req)
 static void lo_init(void *userdata,
 		    struct fuse_conn_info *conn)
 {
-	(void) userdata;
+	struct lo_data *lo = (struct lo_data*) userdata;
 	conn->want |= FUSE_CAP_EXPORT_SUPPORT;
+
+	if (lo->writeback &&
+	    conn->capable & FUSE_CAP_WRITEBACK_CACHE) {
+		if (lo->debug)
+			fprintf(stderr, "lo_init: activating writeback\n");
+		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+	}
 }
 
 static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -427,6 +450,23 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino,
 		fprintf(stderr, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
 			ino, fi->flags);
 
+	/* With writeback cache, kernel may send read requests even
+	   when userspace opened write-only */
+	if (lo_data(req)->writeback &&
+	    (fi->flags & O_ACCMODE) == O_WRONLY) {
+		fi->flags &= ~O_ACCMODE;
+		fi->flags |= O_RDWR;
+	}
+
+	/* With writeback cache, O_APPEND is handled by the kernel.
+	   This breaks atomicity (since the file may change in the
+	   underlying filesystem, so that the kernel's idea of the
+	   end of the file isn't accurate anymore). In this example,
+	   we just accept that. A more rigorous filesystem may want
+	   to return an error here */
+	if (lo_data(req)->writeback && (fi->flags & O_APPEND))
+		fi->flags &= ~O_APPEND;
+
 	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
 	fd = open(buf, fi->flags & ~O_NOFOLLOW);
 	if (fd == -1)
@@ -505,7 +545,8 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
-	struct lo_data lo = { .debug = 0 };
+	struct lo_data lo = { .debug = 0,
+	                      .writeback = 0 };
 	int ret = -1;
 
 	lo.root.next = lo.root.prev = &lo.root;
@@ -526,6 +567,9 @@ int main(int argc, char *argv[])
 		goto err_out1;
 	}
 
+	if (fuse_opt_parse(&args, &lo, lo_opts, NULL)== -1)
+		return 1;
+	
 	lo.debug = opts.debug;
 	lo.root.fd = open("/", O_PATH);
 	lo.root.nlookup = 2;

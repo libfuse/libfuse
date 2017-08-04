@@ -60,8 +60,48 @@ def test_hello(tmpdir, name, options):
     else:
         umount(mount_process, mnt_dir)
 
-@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh',
-                                  'passthrough_ll'))
+@pytest.mark.parametrize("writeback", (False, True))
+@pytest.mark.parametrize("debug", (False, True))
+def test_passthrough_ll(tmpdir, writeback, debug, capfd):
+    
+    # Avoid false positives from libfuse debug messages
+    if debug:
+        capfd.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
+                              count=0)
+
+    mnt_dir = str(tmpdir.mkdir('mnt'))
+    src_dir = str(tmpdir.mkdir('src'))
+
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'passthrough_ll'),
+                '-f', mnt_dir ]
+    if debug:
+        cmdline.append('-d')
+
+    if writeback:
+        cmdline.append('-o')
+        cmdline.append('writeback')
+        
+    mount_process = subprocess.Popen(cmdline)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        work_dir = mnt_dir + src_dir
+
+        tst_statvfs(work_dir)
+        tst_readdir(src_dir, work_dir)
+        tst_open_read(src_dir, work_dir)
+        tst_open_write(src_dir, work_dir)
+        tst_create(work_dir)
+        tst_passthrough(src_dir, work_dir)
+        tst_append(src_dir, work_dir)
+        tst_seek(src_dir, work_dir)
+    except:
+        cleanup(mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh'))
 @pytest.mark.parametrize("debug", (False, True))
 def test_passthrough(tmpdir, name, debug, capfd):
     
@@ -70,7 +110,6 @@ def test_passthrough(tmpdir, name, debug, capfd):
         capfd.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
                               count=0)
 
-    is_ll = (name == 'passthrough_ll')
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
@@ -92,24 +131,23 @@ def test_passthrough(tmpdir, name, debug, capfd):
         tst_passthrough(src_dir, work_dir)
         tst_append(src_dir, work_dir)
         tst_seek(src_dir, work_dir)
-        if not is_ll:
-            tst_mkdir(work_dir)
-            tst_rmdir(src_dir, work_dir)
-            tst_unlink(src_dir, work_dir)
-            tst_symlink(work_dir)
-            if os.getuid() == 0:
-                tst_chown(work_dir)
+        tst_mkdir(work_dir)
+        tst_rmdir(src_dir, work_dir)
+        tst_unlink(src_dir, work_dir)
+        tst_symlink(work_dir)
+        if os.getuid() == 0:
+            tst_chown(work_dir)
 
-            # Underlying fs may not have full nanosecond resolution
-            tst_utimens(work_dir, ns_tol=1000)
+        # Underlying fs may not have full nanosecond resolution
+        tst_utimens(work_dir, ns_tol=1000)
 
-            tst_link(work_dir)
-            tst_truncate_path(work_dir)
-            tst_truncate_fd(work_dir)
-            tst_open_unlink(work_dir)
-
-            subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
-                                    work_dir, ':' + src_dir ])
+        tst_link(work_dir)
+        tst_truncate_path(work_dir)
+        tst_truncate_fd(work_dir)
+        tst_open_unlink(work_dir)
+        
+        subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
+                                work_dir, ':' + src_dir ])
     except:
         cleanup(mnt_dir)
         raise
