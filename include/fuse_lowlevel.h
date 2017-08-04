@@ -1762,6 +1762,9 @@ struct fuse_cmdline_opts {
  * subtype option will be added and set to the basename of the program
  * (the fsname will remain unset, and then defaults to "fuse").
  *
+ * Known options will be removed from *args*, unknown options will
+ * remain.
+ *
  * @param args argument vector (input+output)
  * @param opts output argument for parsed options
  * @return 0 on success, -1 on failure
