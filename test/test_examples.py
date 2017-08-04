@@ -15,6 +15,7 @@ import filecmp
 import time
 import errno
 from tempfile import NamedTemporaryFile
+from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker)
 from os.path import join as pjoin
@@ -89,6 +90,8 @@ def test_passthrough(tmpdir, name, debug, capfd):
         tst_open_write(src_dir, work_dir)
         tst_create(work_dir)
         tst_passthrough(src_dir, work_dir)
+        tst_append(src_dir, work_dir)
+        tst_seek(src_dir, work_dir)
         if not is_ll:
             tst_mkdir(work_dir)
             tst_rmdir(src_dir, work_dir)
@@ -247,6 +250,17 @@ def test_cuse(capfd):
     finally:
         mount_process.terminate()
 
+@contextmanager
+def os_open(name, flags):
+    try:
+        fd = os.open(name, flags)
+        yield fd
+    finally:
+        os.close(fd)
+
+def os_create(name):
+    os.close(os.open(name, os.O_CREAT | os.O_RDWR))
+
 def tst_unlink(src_dir, mnt_dir):
     name = name_generator()
     fullname = mnt_dir + "/" + name
@@ -337,9 +351,7 @@ def tst_open_read(src_dir, mnt_dir):
 
 def tst_open_write(src_dir, mnt_dir):
     name = name_generator()
-    fd = os.open(pjoin(src_dir, name),
-                 os.O_CREAT | os.O_RDWR)
-    os.close(fd)
+    os_create(pjoin(src_dir, name))
     fullname = pjoin(mnt_dir, name)
     with open(fullname, 'wb') as fh_out, \
          open(TEST_FILE, 'rb') as fh_in:
@@ -347,6 +359,32 @@ def tst_open_write(src_dir, mnt_dir):
 
     assert filecmp.cmp(fullname, TEST_FILE, False)
 
+def tst_append(src_dir, mnt_dir):
+    name = name_generator()
+    os_create(pjoin(src_dir, name))
+    fullname = pjoin(mnt_dir, name)
+    with os_open(fullname, os.O_WRONLY) as fd:
+        os.write(fd, b'foo\n')
+    with os_open(fullname, os.O_WRONLY|os.O_APPEND) as fd:
+        os.write(fd, b'bar\n')
+
+    with open(fullname, 'rb') as fh:
+        assert fh.read() == b'foo\nbar\n'
+
+def tst_seek(src_dir, mnt_dir):
+    name = name_generator()
+    os_create(pjoin(src_dir, name))
+    fullname = pjoin(mnt_dir, name)
+    with os_open(fullname, os.O_WRONLY) as fd:
+        os.lseek(fd, 1, os.SEEK_SET)
+        os.write(fd, b'foobar\n')
+    with os_open(fullname, os.O_WRONLY) as fd:
+        os.lseek(fd, 4, os.SEEK_SET)
+        os.write(fd, b'com')
+        
+    with open(fullname, 'rb') as fh:
+        assert fh.read() == b'\0foocom\n'
+        
 def tst_open_unlink(mnt_dir):
     name = pjoin(mnt_dir, name_generator())
     data1 = b'foo'
