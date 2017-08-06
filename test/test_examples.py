@@ -290,8 +290,8 @@ def test_cuse(capfd):
 
 @contextmanager
 def os_open(name, flags):
+    fd = os.open(name, flags)
     try:
-        fd = os.open(name, flags)
         yield fd
     finally:
         os.close(fd)
