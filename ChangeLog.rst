@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+libfuse 3.1.1 (2017-08-06)
+==========================
 
 * Documentation: clarified how filesystems are supposed to process
   open() and create() flags (see include/fuse_lowlevel.h).
@@ -13,7 +13,7 @@ Unreleased Changes
 * Fixed a symbol versioning problem that resulted in very strange
   failures (segfaults, unexpected behavior) in different situations.
 
-* Fixed a test failure when /tmp is on btrfs.  
+* Fixed a test failure when /tmp is on btrfs.
 
 * Incorporated several patches from the FreeBSD port. libfuse should
   now compile under FreeBSD without the need for patches.
