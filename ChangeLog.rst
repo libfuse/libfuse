@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* Added new `fuse_invalidate_path()` routine for cache invalidation
+  from the high-level FUSE API, along with an example and tests.
+  
 * There's a new `printcap` example that can be used to determine the
   capabilities of the running kernel.
   

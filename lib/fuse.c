@@ -893,6 +893,36 @@ out_err:
 	return node;
 }
 
+static int lookup_path_in_cache(struct fuse *f,
+		const char *path, fuse_ino_t *inop)
+{
+	char *tmp = strdup(path);
+	if (!tmp)
+		return -ENOMEM;
+
+	pthread_mutex_lock(&f->lock);
+	fuse_ino_t ino = FUSE_ROOT_ID;
+
+	int err = 0;
+	char *save_ptr;
+	char *path_element = strtok_r(tmp, "/", &save_ptr);
+	while (path_element != NULL) {
+		struct node *node = lookup_node(f, ino, path_element);
+		if (node == NULL) {
+			err = -ENOENT;
+			break;
+		}
+		ino = node->nodeid;
+		path_element = strtok_r(NULL, "/", &save_ptr);
+	}
+	pthread_mutex_unlock(&f->lock);
+	free(tmp);
+
+	if (!err)
+		*inop = ino;
+	return err;
+}
+
 static char *add_name(char **buf, unsigned *bufsize, char *s, const char *name)
 {
 	size_t len = strlen(name);
@@ -4398,6 +4428,16 @@ int fuse_interrupted(void)
 		return fuse_req_interrupted(c->req);
 	else
 		return 0;
+}
+
+int fuse_invalidate_path(struct fuse *f, const char *path) {
+	fuse_ino_t ino;
+	int err = lookup_path_in_cache(f, path, &ino);
+	if (err) {
+		return err;
+	}
+
+	return fuse_lowlevel_notify_inval_inode(f->se, ino, 0, 0);
 }
 
 #define FUSE_LIB_OPT(t, p, v) { t, offsetof(struct fuse_config, p), v }
