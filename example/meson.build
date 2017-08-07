@@ -11,6 +11,7 @@ if not platform.endswith('bsd')
 endif
 
 threaded_examples = [ 'notify_inval_inode',
+                      'notify_inval_inode_fh',
                       'notify_store_retrieve',
                       'notify_inval_entry',
                       'poll' ]
