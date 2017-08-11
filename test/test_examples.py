@@ -14,6 +14,7 @@ import shutil
 import filecmp
 import time
 import errno
+import sys
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
@@ -31,8 +32,11 @@ def name_generator(__ctr=[0]):
     __ctr[0] += 1
     return 'testfile_%d' % __ctr[0]
 
+options = [ [] ]
+if sys.platform == 'linux':
+    options.append(['-o', 'clone_fd'])
+@pytest.mark.parametrize("options", options)
 @pytest.mark.parametrize("name", ('hello', 'hello_ll'))
-@pytest.mark.parametrize("options", ([], ['-o', 'clone_fd']))
 def test_hello(tmpdir, name, options):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
@@ -60,9 +64,8 @@ def test_hello(tmpdir, name, options):
     else:
         umount(mount_process, mnt_dir)
 
-@pytest.mark.skipif(
-    not os.path.exists(pjoin(basename, 'example', 'passthrough_ll')),
-    reason='example not compiled')
+@pytest.mark.skipif('bsd' in sys.platform,
+                    reason='not supported under BSD')
 @pytest.mark.parametrize("writeback", (False, True))
 @pytest.mark.parametrize("debug", (False, True))
 def test_passthrough_ll(tmpdir, writeback, debug, capfd):
@@ -112,6 +115,10 @@ def test_passthrough(tmpdir, name, debug, capfd):
     if debug:
         capfd.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
                               count=0)
+
+    # test_syscalls prints "No error" under FreeBSD
+    capfd.register_output(r"^ \d\d \[[^\]]+ message: 'No error: 0'\]",
+                          count=0)
 
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))

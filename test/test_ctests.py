@@ -8,6 +8,7 @@ if __name__ == '__main__':
 import subprocess
 import pytest
 import platform
+import sys
 from distutils.version import LooseVersion
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker)
@@ -15,6 +16,8 @@ from os.path import join as pjoin
 
 pytestmark = fuse_test_marker()
 
+@pytest.mark.skipif('bsd' in sys.platform,
+                    reason='writeback requires Linux')
 @pytest.mark.parametrize("writeback", (False, True))
 def test_write_cache(tmpdir, writeback):
     if writeback and LooseVersion(platform.release()) < '3.14':
@@ -31,9 +34,10 @@ def test_write_cache(tmpdir, writeback):
     subprocess.check_call(cmdline)
 
 
-@pytest.mark.parametrize("name",
-                         ('notify_inval_inode',
-                          'notify_store_retrieve'))
+names = [ 'notify_inval_inode' ]
+if sys.platform == 'linux':
+    names.append('notify_store_retrieve')
+@pytest.mark.parametrize("name", names)
 @pytest.mark.parametrize("notify", (True, False))
 def test_notify1(tmpdir, name, notify):
     mnt_dir = str(tmpdir)
