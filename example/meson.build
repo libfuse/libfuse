@@ -1,9 +1,14 @@
 # Attention, emacs, please use -*- mode: python -*-
 # (even though this isn't actually Python code)
 
-examples = [ 'passthrough', 'passthrough_fh', 'null', 'hello', 'hello_ll',
+examples = [ 'passthrough', 'passthrough_fh',
+             'null', 'hello', 'hello_ll',
              'ioctl', 'ioctl_client', 'poll_client',
-             'passthrough_ll', 'cuse', 'cuse_client' ]
+             'cuse', 'cuse_client' ]
+
+if not platform.endswith('bsd')
+  examples += 'passthrough_ll'
+endif
 
 threaded_examples = [ 'notify_inval_inode',
                       'notify_store_retrieve',

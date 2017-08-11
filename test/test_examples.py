@@ -60,6 +60,9 @@ def test_hello(tmpdir, name, options):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.skipif(
+    not os.path.exists(pjoin(basename, 'example', 'passthrough_ll')),
+    reason='example not compiled')
 @pytest.mark.parametrize("writeback", (False, True))
 @pytest.mark.parametrize("debug", (False, True))
 def test_passthrough_ll(tmpdir, writeback, debug, capfd):
