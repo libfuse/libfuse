@@ -5,6 +5,8 @@ Unreleased Changes
   flag had no effect in the previous versions of libfuse 3.x;
   now ACLs should actually work.
 
+* Fixed a number of compilation problems under FreeBSD.  
+
 libfuse 3.1.1 (2017-08-06)
 ==========================
 
