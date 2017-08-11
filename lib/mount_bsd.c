@@ -108,6 +108,7 @@ unsigned get_max_read(struct mount_opts *o)
 static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 			       struct fuse_args *outargs)
 {
+	(void) outargs;
 	struct mount_opts *mo = data;
 
 	switch (key) {
@@ -125,8 +126,6 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
-	char *ep, dev[128];
-	struct stat sbuf;
 	unmount(mountpoint, MNT_FORCE);
 	close(fd);
 }

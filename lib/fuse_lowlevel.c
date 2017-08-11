@@ -2978,6 +2978,7 @@ out_free:
  */
 int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 {
+	(void) req; (void) size; (void) list;
 	return -ENOSYS;
 }
 #endif
