@@ -2509,7 +2509,8 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 	struct fuse *f = (struct fuse *) data;
 
 	fuse_create_context(f);
-	conn->want |= FUSE_CAP_EXPORT_SUPPORT;
+	if(conn->capable & FUSE_CAP_EXPORT_SUPPORT)
+		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 	fuse_fs_init(f->fs, conn, &f->conf);
 }
 
