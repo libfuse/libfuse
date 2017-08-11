@@ -133,7 +133,8 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 /* Check if kernel is doing init in background */
 static int init_backgrounded(void)
 {
-	unsigned ibg, len;
+	unsigned ibg;
+	size_t len;
 
 	len = sizeof(ibg);
 
