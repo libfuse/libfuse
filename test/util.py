@@ -5,6 +5,7 @@ import os
 import stat
 import time
 from os.path import join as pjoin
+import sys
 
 basename = pjoin(os.path.dirname(__file__), '..')
 
@@ -23,21 +24,28 @@ def wait_for_mount(mount_process, mnt_dir,
 def cleanup(mnt_dir):
     # Don't bother trying Valgrind if things already went wrong
 
-    subprocess.call([pjoin(basename, 'util', 'fusermount3'),
-                     '-z', '-u', mnt_dir],
-                    stdout=subprocess.DEVNULL,
+    if 'bsd' in sys.platform:
+        cmd = [ 'umount', '-f', mnt_dir ]
+    else:
+        cmd = [pjoin(basename, 'util', 'fusermount3'),
+                         '-z', '-u', mnt_dir]
+    subprocess.call(cmd, stdout=subprocess.DEVNULL,
                     stderr=subprocess.STDOUT)
 
 def umount(mount_process, mnt_dir):
-    # fusermount3 will be setuid root, so we can only trace it with
-    # valgrind if we're root
-    if os.getuid() == 0:
-        cmdline = base_cmdline
-    else:
-        cmdline = []
 
-    cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount3'),
-                          '-z', '-u', mnt_dir ]
+    if 'bsd' in sys.platform:
+        cmdline = [ 'umount', mnt_dir ]
+    else:
+        # fusermount3 will be setuid root, so we can only trace it with
+        # valgrind if we're root
+        if os.getuid() == 0:
+            cmdline = base_cmdline
+        else:
+            cmdline = []
+        cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount3'),
+                              '-z', '-u', mnt_dir ]
+
     subprocess.check_call(cmdline)
     assert not os.path.ismount(mnt_dir)
 
@@ -78,6 +86,9 @@ def fuse_test_marker():
     '''
 
     skip = lambda x: pytest.mark.skip(reason=x)
+
+    if 'bsd' in sys.platform:
+        return pytest.mark.uses_fuse()
 
     with subprocess.Popen(['which', 'fusermount3'], stdout=subprocess.PIPE,
                           universal_newlines=True) as which:
