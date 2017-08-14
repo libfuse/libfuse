@@ -125,3 +125,6 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 				 struct fuse_chan *ch);
 void fuse_session_process_buf_int(struct fuse_session *se,
 				  const struct fuse_buf *buf, struct fuse_chan *ch);
+
+struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
+		      size_t op_size, void *private_data);

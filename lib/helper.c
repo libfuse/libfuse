@@ -302,7 +302,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	}
 
 
-	fuse = fuse_new(&args, op, op_size, user_data);
+	fuse = fuse_new_31(&args, op, op_size, user_data);
 	if (fuse == NULL) {
 		res = 1;
 		goto out1;

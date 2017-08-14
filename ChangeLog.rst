@@ -9,6 +9,8 @@ Unreleased Changes
 
 * Fixed installation directory for udev rules.  
 
+* Fixed compilation with LTO.
+
 libfuse 3.1.1 (2017-08-06)
 ==========================
 

@@ -4629,8 +4629,6 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 
 /* Explicit prototype to prevent compiler warnings
    (fuse.h only defines fuse_new()) */
-struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
-		      size_t op_size, void *private_data);
 FUSE_SYMVER(".symver fuse_new_31,fuse_new@@FUSE_3.1");
 struct fuse *fuse_new_31(struct fuse_args *args,
 		      const struct fuse_operations *op,
