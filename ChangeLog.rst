@@ -5,7 +5,9 @@ Unreleased Changes
   flag had no effect in the previous versions of libfuse 3.x;
   now ACLs should actually work.
 
-* Fixed a number of compilation problems under FreeBSD.  
+* Fixed a number of compilation problems under FreeBSD.
+
+* Fixed installation directory for udev rules.  
 
 libfuse 3.1.1 (2017-08-06)
 ==========================
