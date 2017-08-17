@@ -1,6 +1,8 @@
 Unreleased Changes
 ==================
 
+* Added new `fuse_invalidate_path()` routine for cache invalidation
+  from the high-level FUSE API, along with an example and tests.
 * Fixed support for `FUSE_CAP_POSIX_ACL`: setting this capability
   flag had no effect in the previous versions of libfuse 3.x;
   now ACLs should actually work.

@@ -136,6 +136,7 @@ FUSE_3.1 {
 	global:
 	        fuse_lib_help;
 		fuse_new_30;
+		fuse_invalidate_path;
 } FUSE_3.0;
 
 # Local Variables:

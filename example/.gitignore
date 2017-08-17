@@ -11,5 +11,6 @@
 /cuse_client
 /passthrough_ll
 /notify_inval_inode
+/notify_inval_inode_fh
 /notify_store_retrieve
 /notify_inval_entry
