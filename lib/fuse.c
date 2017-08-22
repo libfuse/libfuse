@@ -198,7 +198,9 @@ struct fuse_context_i {
 
 /* Defined by FUSE_REGISTER_MODULE() in lib/modules/subdir.c and iconv.c.  */
 extern fuse_module_factory_t fuse_module_subdir_factory;
+#ifdef HAVE_ICONV
 extern fuse_module_factory_t fuse_module_iconv_factory;
+#endif
 
 static pthread_key_t fuse_context_key;
 static pthread_mutex_t fuse_context_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -4476,7 +4478,9 @@ void fuse_lib_help(struct fuse_args *args)
 
 	/* Print help for builtin modules */
 	print_module_help("subdir", &fuse_module_subdir_factory);
+#ifdef HAVE_ICONV
 	print_module_help("iconv", &fuse_module_iconv_factory);
+#endif
 
 	/* Parse command line options in case we need to
 	   activate more modules */
@@ -4661,7 +4665,9 @@ struct fuse *fuse_new_31(struct fuse_args *args,
 	if (builtin_modules_registered == 0) {
 		/* If not, register them. */
 		fuse_register_module("subdir", fuse_module_subdir_factory, NULL);
+#ifdef HAVE_ICONV
 		fuse_register_module("iconv", fuse_module_iconv_factory, NULL);
+#endif
 		builtin_modules_registered= 1;
 	}
 	pthread_mutex_unlock(&fuse_context_lock);

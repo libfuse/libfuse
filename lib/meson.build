@@ -9,7 +9,7 @@ else
    libfuse_sources += [ 'mount_bsd.c' ]
 endif
 
-if cfg.has('HAVE_ICONV')
+if cfg.get('HAVE_ICONV')
    libfuse_sources += [ 'modules/iconv.c' ]
 endif
 
