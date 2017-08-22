@@ -66,6 +66,12 @@ enum fuse_fill_dir_flags {
 
 /** Function to add an entry in a readdir() operation
  *
+ * The *off* parameter can be any non-zero value that enableds the
+ * filesystem to identify the current point in the directory
+ * stream. It does not need to be the actual physical position. A
+ * value of zero is reserved to indicate that seeking in directories
+ * is not supported.
+ * 
  * @param buf the buffer passed to the readdir() operation
  * @param name the file name of the directory entry
  * @param stat file attributes, can be NULL

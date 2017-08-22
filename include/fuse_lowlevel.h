@@ -1421,9 +1421,12 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
  * From the 'stbuf' argument the st_ino field and bits 12-15 of the
  * st_mode field are used.  The other fields are ignored.
  *
- * Note: offsets do not necessarily represent physical offsets, and
- * could be any marker, that enables the implementation to find a
- * specific point in the directory stream.
+ * *off* should be any non-zero value that the filesystem can use to
+ * identify the current point in the directory stream. It does not
+ * need to be the actual physical position. A value of zero is
+ * reserved to mean "from the beginning", and should therefore never
+ * be used (the first call to fuse_add_direntry should be passed the
+ * offset of the second directory entry).
  *
  * @param req request handle
  * @param buf the point where the new entry will be added to the buffer
@@ -1440,18 +1443,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 /**
  * Add a directory entry to the buffer with the attributes
  *
- * Buffer needs to be large enough to hold the entry.  If it's not,
- * then the entry is not filled in but the size of the entry is still
- * returned.  The caller can check this by comparing the bufsize
- * parameter with the returned entry size.  If the entry size is
- * larger than the buffer size, the operation failed.
- *
- * From the 'stbuf' argument the st_ino field and bits 12-15 of the
- * st_mode field are used.  The other fields are ignored.
- *
- * Note: offsets do not necessarily represent physical offsets, and
- * could be any marker, that enables the implementation to find a
- * specific point in the directory stream.
+ * See documentation of `fuse_add_direntryt()` for more details.
  *
  * @param req request handle
  * @param buf the point where the new entry will be added to the buffer
