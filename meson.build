@@ -1,6 +1,6 @@
 project('libfuse3', 'c', version: '3.1.1',
         meson_version: '>= 0.38',
-        default_options: [ 'buildtype=plain' ])
+        default_options: [ 'buildtype=debugoptimized' ])
 
 
 platform = host_machine.system()
@@ -65,7 +65,7 @@ configure_file(output: 'config.h',
 #
 add_global_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-Wno-sign-compare',
                      '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
-                     '-O2', '-g', '-fno-strict-aliasing', language: 'c')
+                     '-fno-strict-aliasing', language: 'c')
 
 # Some (stupid) GCC versions warn about unused return values even when they are
 # casted to void. This makes -Wunused-result pretty useless, since there is no
