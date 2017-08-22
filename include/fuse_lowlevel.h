@@ -1525,7 +1525,11 @@ int fuse_reply_poll(fuse_req_t req, unsigned revents);
 int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph);
 
 /**
- * Notify to invalidate cache for an inode
+ * Notify to invalidate cache for an inode.
+ *
+ * Added in FUSE protocol version 7.12. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do
+ * nothing.
  *
  * @param se the session object
  * @param ino the inode number
@@ -1541,9 +1545,13 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
  * Notify to invalidate parent attributes and the dentry matching
  * parent/name
  *
- * To avoid a deadlock don't call this function from a filesystem operation and
- * don't call it with a lock held that can also be held by a filesystem
- * operation.
+ * To avoid a deadlock don't call this function from a filesystem
+ * operation and don't call it with a lock held that can also be held
+ * by a filesystem operation.
+ *
+ * Added in FUSE protocol version 7.12. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do
+ * nothing.
  *
  * @param se the session object
  * @param parent inode number
@@ -1555,18 +1563,21 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen);
 
 /**
- * As of kernel 4.8, this function behaves like
- * fuse_lowlevel_notify_inval_entry() with the following additional
- * effect:
+ * This function behaves like fuse_lowlevel_notify_inval_entry() with
+ * the following additional effect (at least as of Linux kernel 4.8):
  *
  * If the provided *child* inode matches the inode that is currently
  * associated with the cached dentry, and if there are any inotify
  * watches registered for the dentry, then the watchers are informed
  * that the dentry has been deleted.
  *
- * To avoid a deadlock don't call this function from a filesystem operation and
- * don't call it with a lock held that can also be held by a filesystem
- * operation.
+ * To avoid a deadlock don't call this function from a filesystem
+ * operation and don't call it with a lock held that can also be held
+ * by a filesystem operation.
+ *
+ * Added in FUSE protocol version 7.18. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do
+ * nothing.
  *
  * @param se the session object
  * @param parent inode number
@@ -1593,6 +1604,10 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
  * If this function returns an error, then the store wasn't fully
  * completed, but it may have been partially completed.
  *
+ * Added in FUSE protocol version 7.15. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do
+ * nothing.
+ *
  * @param se the session object
  * @param ino the inode number
  * @param offset the starting offset into the file to store to
@@ -1611,8 +1626,8 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
  * the returned data.
  *
  * Only present pages are returned in the retrieve reply.  Retrieving
- * stops when it finds a non-present page and only data prior to that is
- * returned.
+ * stops when it finds a non-present page and only data prior to that
+ * is returned.
  *
  * If this function returns an error, then the retrieve will not be
  * completed and no reply will be sent.
@@ -1620,6 +1635,10 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
  * This function doesn't change the dirty state of pages in the kernel
  * buffer.  For dirty pages the write() method will be called
  * regardless of having been retrieved previously.
+ *
+ * Added in FUSE protocol version 7.15. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do
+ * nothing.
  *
  * @param se the session object
  * @param ino the inode number

@@ -1,6 +1,12 @@
 Unreleased Changes
 ==================
 
+* Improved documentation of `fuse_lowlevel_notify_*` functions.
+
+* `fuse_lowlevel_notify_inval_inode()` and
+  `fuse_lowlevel_notify_inval_entry()` now return -ENOSYS instead of
+  an undefined error if the function is not supported by the kernel.
+  
 * Documented the special meaning of the *zero* offset for the
   fuse_fill_dir_t function.
   

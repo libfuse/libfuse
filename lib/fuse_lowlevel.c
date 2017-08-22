@@ -2123,6 +2123,9 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
+	if (se->conn.proto_major < 6 || se->conn.proto_minor < 12)
+		return -ENOSYS;
+	
 	outarg.ino = ino;
 	outarg.off = off;
 	outarg.len = len;
@@ -2141,6 +2144,9 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 	if (!se)
 		return -EINVAL;
+	
+	if (se->conn.proto_major < 6 || se->conn.proto_minor < 12)
+		return -ENOSYS;
 
 	outarg.parent = parent;
 	outarg.namelen = namelen;
@@ -2164,7 +2170,7 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
 	if (!se)
 		return -EINVAL;
 
-	if (se->conn.proto_minor < 18)
+	if (se->conn.proto_major < 6 || se->conn.proto_minor < 18)
 		return -ENOSYS;
 
 	outarg.parent = parent;
@@ -2193,7 +2199,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	if (se->conn.proto_minor < 15)
+	if (se->conn.proto_major < 6 || se->conn.proto_minor < 15)
 		return -ENOSYS;
 
 	out.unique = 0;
@@ -2271,7 +2277,7 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	if (!se)
 		return -EINVAL;
 
-	if (se->conn.proto_minor < 15)
+	if (se->conn.proto_major < 6 || se->conn.proto_minor < 15)
 		return -ENOSYS;
 
 	rreq = malloc(sizeof(*rreq));
