@@ -284,7 +284,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	}
 
 	if (opts.show_help) {
-		if(args.argv[0] != '\0')
+		if(args.argv[0][0] != '\0')
 			printf("usage: %s [options] <mountpoint>\n\n",
 			       args.argv[0]);
 		printf("FUSE options:\n");
