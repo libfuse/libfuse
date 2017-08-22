@@ -151,7 +151,13 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	(void) path;
 	if (offset != d->offset) {
+#ifndef __FreeBSD__
 		seekdir(d->dp, offset);
+#else
+		/* Subtract the one that we add when calling
+		   telldir() below */
+		seekdir(d->dp, offset-1);
+#endif
 		d->entry = NULL;
 		d->offset = offset;
 	}
@@ -181,6 +187,13 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			st.st_mode = d->entry->d_type << 12;
 		}
 		nextoff = telldir(d->dp);
+#ifdef __FreeBSD__		
+		/* Under FreeBSD, telldir() may return 0 the first time
+		   it is called. But for libfuse, an offset of zero
+		   means that offsets are not supported, so we shift
+		   everything by one. */
+		nextoff++;
+#endif
 		if (filler(buf, d->entry->d_name, &st, nextoff, fill_flags))
 			break;
 

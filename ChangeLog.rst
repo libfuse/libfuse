@@ -4,6 +4,8 @@ Unreleased Changes
 * Documented the special meaning of the *zero* offset for the
   fuse_fill_dir_t function.
   
+* The `passthrough_fh` example now works under FreeBSD.
+  
 * libfuse can now be build without libiconv.
 
 * Fixed support for `FUSE_CAP_POSIX_ACL`: setting this capability
