@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* `fuse_loop` no longer returns a positive value if the filesystem
+  loop was terminated without errors or signals.
+  
 * Improved documentation of `fuse_lowlevel_notify_*` functions.
 
 * `fuse_lowlevel_notify_inval_inode()` and
