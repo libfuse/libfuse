@@ -127,7 +127,7 @@ static void *fuse_do_work(void *data)
 		if (res <= 0) {
 			if (res < 0) {
 				fuse_session_exit(mt->se);
-				mt->error = -1;
+				mt->error = res;
 			}
 			break;
 		}

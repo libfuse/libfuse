@@ -1,7 +1,10 @@
 Unreleased Changes
 ==================
 
-* `fuse_loop` no longer returns a positive value if the filesystem
+* `fuse_loop_mt()` now returns the minus the actual errno if there was
+  an error (instead of just -1).
+  
+* `fuse_loop()` no longer returns a positive value if the filesystem
   loop was terminated without errors or signals.
   
 * Improved documentation of `fuse_lowlevel_notify_*` functions.
