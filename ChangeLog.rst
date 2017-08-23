@@ -1,6 +1,9 @@
 Unreleased Changes
 ==================
 
+* There's a new `printcap` example that can be used to determine the
+  capabilities of the running kernel.
+  
 * `fuse_loop_mt()` now returns the minus the actual errno if there was
   an error (instead of just -1).
   

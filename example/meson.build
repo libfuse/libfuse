@@ -2,7 +2,7 @@
 # (even though this isn't actually Python code)
 
 examples = [ 'passthrough', 'passthrough_fh',
-             'null', 'hello', 'hello_ll',
+             'null', 'hello', 'hello_ll', 'printcap',
              'ioctl', 'ioctl_client', 'poll_client',
              'cuse', 'cuse_client' ]
 
