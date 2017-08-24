@@ -53,6 +53,13 @@ libfuse 3.1.1 (2017-08-06)
 
 * Fixed a test failure when /tmp is on btrfs.
 
+* The maximum number of idle worker threads used by `fuse_loop_mt()`
+  is now configurable.
+
+* `fuse_loop_mt()` and `fuse_session_loop_mt()` now take a
+  `struct fuse_loop_config` parameter that supersedes the *clone_fd*
+  parameter.
+
 * Incorporated several patches from the FreeBSD port. libfuse should
   now compile under FreeBSD without the need for patches.
 

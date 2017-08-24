@@ -22,7 +22,7 @@
 #define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 1
+#define FUSE_MINOR_VERSION 2
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 10 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -79,7 +79,29 @@ struct fuse_file_info {
 	uint32_t poll_events;
 };
 
+/**
+ * Configuration parameters passed to fuse_session_loop_mt() and
+ * fuse_loop_mt().
+ */
+struct fuse_loop_config {
+	/**
+	 * whether to use separate device fds for each thread
+	 * (may increase performance)
+	 */
+	int clone_fd;
 
+	/**
+	 * The maximum number of available worker threads before they
+	 * start to get deleted when they become idle. If not
+	 * specified, the default is 10.
+	 *
+	 * Adjusting this has performance implications; a very small number
+	 * of threads in the pool will cause a lot of thread creation and
+	 * deletion overhead and performance may suffer. When set to 0, a new
+	 * thread will be created to service every operation.
+	 */
+	unsigned int max_idle_threads;
+};
 
 /**************************************************************************
  * Capability bits for 'fuse_conn_info.capable' and 'fuse_conn_info.want' *
