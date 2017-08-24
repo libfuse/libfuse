@@ -1,6 +1,8 @@
 Unreleased Changes
 ==================
 
+* Support for building with autotools has been dropped.
+  
 * Added new `fuse_invalidate_path()` routine for cache invalidation
   from the high-level FUSE API, along with an example and tests.
   

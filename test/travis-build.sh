@@ -46,14 +46,6 @@ for san in undefined address; do
     cd ..
 done
 
-# Autotools build
-CC=gcc
-./makeconf.sh
-./configure
-make
-sudo ${TEST_CMD}
-sudo make install
-
 # Documentation
 doxygen doc/Doxyfile
 

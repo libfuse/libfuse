@@ -66,23 +66,6 @@ setuid root first:
     $ sudo chmod 4755 util/fusermount3
     $ python3 -m pytest test/
 
-
-Alternate Installation
-----------------------
-
-If you are not able to use Meson and Ninja, please report this to the
-libfuse mailing list. Until the problem is resolved, you may fall back
-to an in-source build using autotools:
-
-    $ ./configure
-    $ make
-    $ sudo make install
-
-Note that support for building with autotools may disappear at some
-point, so if you depend on using autotools for some reason please let
-the libfuse developers know!
-
-
 Security implications
 ---------------------
 
