@@ -19,7 +19,7 @@ from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker, test_printcap,
-                  fuse_caps, fuse_proto)
+                  fuse_proto)
 from os.path import join as pjoin
 
 pytestmark = fuse_test_marker()
