@@ -167,6 +167,11 @@ def test_passthrough(tmpdir, name, debug, capfd):
     else:
         umount(mount_process, mnt_dir)
 
+# Is this really not supported? We should check with
+# the FreeBSD guys, maybe we're just doing something
+# wrong.
+@pytest.mark.skipif('freebsd' in sys.platform,
+                    reason='not supported in FreeBSD')
 def test_ioctl(tmpdir):
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
@@ -208,6 +213,11 @@ def test_poll(tmpdir):
     else:
         umount(mount_process, mnt_dir)
 
+# Is this really not supported? We should check with
+# the FreeBSD guys, maybe we're just doing something
+# wrong.
+@pytest.mark.skipif('freebsd' in sys.platform,
+                    reason='not supported in FreeBSD')
 def test_null(tmpdir):
     mnt_file = str(tmpdir) + '/file'
     with open(mnt_file, 'w') as fh:
