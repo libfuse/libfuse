@@ -6,8 +6,30 @@ import stat
 import time
 from os.path import join as pjoin
 import sys
+import re
 
 basename = pjoin(os.path.dirname(__file__), '..')
+
+def test_printcap():
+    cmdline = base_cmdline + [ pjoin(basename, 'example', 'printcap') ]
+    proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE,
+                            universal_newlines=True)
+    (stdout, _) = proc.communicate(30)
+    assert proc.returncode == 0
+
+    proto = None
+    caps = set()
+    for line in stdout.split('\n'):
+        if line.startswith('\t'):
+            caps.add(line.strip())
+            continue
+
+        hit = re.match(r'Protocol version: (\d+)\.(\d+)$', line) 
+        if hit:
+            proto = (int(hit.group(1)), int(hit.group(2)))
+
+    return (proto, caps)
+
 
 def wait_for_mount(mount_process, mnt_dir,
                    test_fn=os.path.ismount):
@@ -125,3 +147,11 @@ else:
 
 # Try to use local fusermount3
 os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'util'), os.environ['PATH'])
+
+try:
+    (fuse_proto, fuse_caps) = test_printcap()
+except:
+    # Rely on test to raise error
+    fuse_proto = (0,0)
+    fuse_caps = set()
+

@@ -18,19 +18,14 @@ import sys
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
-                  safe_sleep, basename, fuse_test_marker)
+                  safe_sleep, basename, fuse_test_marker, test_printcap,
+                  fuse_caps, fuse_proto)
 from os.path import join as pjoin
-
-TEST_FILE = __file__
 
 pytestmark = fuse_test_marker()
 
-def test_printcap():
-    cmdline = base_cmdline + [ pjoin(basename, 'example', 'printcap') ]
-    proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE,
-                            universal_newlines=True)
-    (stdout, _) = proc.communicate(30)
-    assert proc.returncode == 0
+TEST_FILE = __file__
+
 with open(TEST_FILE, 'rb') as fh:
     TEST_DATA = fh.read()
 
@@ -70,8 +65,10 @@ def test_hello(tmpdir, name, options):
     else:
         umount(mount_process, mnt_dir)
 
-@pytest.mark.skipif('bsd' in sys.platform,
-                    reason='not supported under BSD')
+
+@pytest.mark.skipif(not os.path.exists(
+    pjoin(basename, 'example', 'passthrough_ll')),
+    reason='not built')
 @pytest.mark.parametrize("writeback", (False, True))
 @pytest.mark.parametrize("debug", (False, True))
 def test_passthrough_ll(tmpdir, writeback, debug, capfd):
@@ -233,6 +230,8 @@ def test_null(tmpdir):
         umount(mount_process, mnt_file)
 
 
+@pytest.mark.skipif(fuse_proto < (7,12),
+                    reason='not supported by running kernel')
 @pytest.mark.parametrize("notify", (True, False))
 def test_notify_inval_entry(tmpdir, notify):
     mnt_dir = str(tmpdir)
@@ -615,3 +614,8 @@ def tst_passthrough(src_dir, mnt_dir):
     assert name in os.listdir(src_dir)
     assert name in os.listdir(mnt_dir)
     assert os.stat(src_name) == os.stat(mnt_name)
+
+# avoid warning about unused import
+test_printcap
+
+    
