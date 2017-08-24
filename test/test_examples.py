@@ -25,6 +25,12 @@ TEST_FILE = __file__
 
 pytestmark = fuse_test_marker()
 
+def test_printcap():
+    cmdline = base_cmdline + [ pjoin(basename, 'example', 'printcap') ]
+    proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE,
+                            universal_newlines=True)
+    (stdout, _) = proc.communicate(30)
+    assert proc.returncode == 0
 with open(TEST_FILE, 'rb') as fh:
     TEST_DATA = fh.read()
 
