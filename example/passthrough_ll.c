@@ -118,7 +118,9 @@ static void lo_init(void *userdata,
 		    struct fuse_conn_info *conn)
 {
 	struct lo_data *lo = (struct lo_data*) userdata;
-	conn->want |= FUSE_CAP_EXPORT_SUPPORT;
+
+	if(conn->capable & FUSE_CAP_EXPORT_SUPPORT)
+		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 
 	if (lo->writeback &&
 	    conn->capable & FUSE_CAP_WRITEBACK_CACHE) {
