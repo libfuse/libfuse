@@ -90,12 +90,10 @@ int main(int argc, char **argv)
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	char *mountpoint;
 	int ret = -1;
-	int fd;
 
 	mountpoint = strdup("/tmp/fuse_printcap_XXXXXX");
-	fd = mkstemp(mountpoint);
-	if(fd == -1) {
-		perror("mkstemp");
+	if(mkdtemp(mountpoint) == NULL) {
+		perror("mkdtemp");
 		return 1;
 	}
 	
@@ -121,8 +119,7 @@ err_out3:
 err_out2:
 	fuse_session_destroy(se);
 err_out1:
-	close(fd);
-	unlink(mountpoint);
+	rmdir(mountpoint);
 	free(mountpoint);
 	fuse_opt_free_args(&args);
 
