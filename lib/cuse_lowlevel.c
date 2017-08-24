@@ -349,8 +349,12 @@ int cuse_lowlevel_main(int argc, char *argv[], const struct cuse_info *ci,
 	if (se == NULL)
 		return 1;
 
-	if (multithreaded)
-		res = fuse_session_loop_mt(se, 0);
+	if (multithreaded) {
+		struct fuse_loop_config config;
+		config.clone_fd = 0;
+		config.max_idle_threads = 10;
+		res = fuse_session_loop_mt(se, &config);
+	}
 	else
 		res = fuse_session_loop(se);
 

@@ -139,6 +139,12 @@ FUSE_3.1 {
 		fuse_invalidate_path;
 } FUSE_3.0;
 
+FUSE_3.2 {
+	global:
+		fuse_session_loop_mt_31;
+		fuse_loop_mt_31;
+} FUSE_3.1;
+
 # Local Variables:
 # indent-tabs-mode: t
 # End:
