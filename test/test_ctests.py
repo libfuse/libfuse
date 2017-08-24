@@ -35,7 +35,7 @@ def test_write_cache(tmpdir, writeback):
     subprocess.check_call(cmdline)
 
 
-names = [ 'notify_inval_inode', 'notify_inval_inode_fh' ]
+names = [ 'notify_inval_inode', 'invalidate_path' ]
 if sys.platform == 'linux':
     names.append('notify_store_retrieve')
 @pytest.mark.parametrize("name", names)
@@ -70,7 +70,7 @@ def test_notify1(tmpdir, name, notify):
 def test_notify_file_size(tmpdir, notify):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
-              [ pjoin(basename, 'example', 'notify_inval_inode_fh'),
+              [ pjoin(basename, 'example', 'invalidate_path'),
                 '-f', '--update-interval=1', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')

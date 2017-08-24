@@ -4,7 +4,7 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -D_REENTRANT
 noinst_HEADERS = ioctl.h
 noinst_PROGRAMS = passthrough passthrough_fh null hello hello_ll \
 		  ioctl ioctl_client poll poll_client passthrough_ll \
-		  notify_inval_inode notify_inval_inode_fh \
+		  notify_inval_inode invalidate_path \
 		  notify_store_retrieve notify_inval_entry \
 		  cuse cuse_client printcap
 

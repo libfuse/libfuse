@@ -19,10 +19,10 @@
  *
  * ## Compilation ##
  *
- *     gcc -Wall notify_inval_inode_fh.c `pkg-config fuse3 --cflags --libs` -o notify_inval_inode_fh
+ *     gcc -Wall @file `pkg-config fuse3 --cflags --libs` -o invalidate_path
  *
  * ## Source code ##
- * \include notify_inval_inode_fh.c
+ * \include @file
  */
 
 #define FUSE_USE_VERSION 31
