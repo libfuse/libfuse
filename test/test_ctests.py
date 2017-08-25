@@ -18,7 +18,7 @@ import os.path
 
 pytestmark = fuse_test_marker()
 
-@pytest.mark.skipif('FUSE_CAP_WRITEBACK' not in fuse_caps,
+@pytest.mark.skipif('FUSE_CAP_WRITEBACK_CACHE' not in fuse_caps,
                     reason='not supported by running kernel')
 @pytest.mark.parametrize("writeback", (False, True))
 def test_write_cache(tmpdir, writeback):
