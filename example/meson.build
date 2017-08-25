@@ -1,13 +1,15 @@
-# Attention, emacs, please use -*- mode: python -*-
-# (even though this isn't actually Python code)
-
 examples = [ 'passthrough', 'passthrough_fh',
-             'null', 'hello', 'hello_ll', 'printcap',
-             'ioctl', 'ioctl_client', 'poll_client',
+             'hello', 'hello_ll', 'printcap',
+             'ioctl_client', 'poll_client',
              'cuse', 'cuse_client' ]
 
 if not platform.endswith('bsd')
-  examples += 'passthrough_ll'
+    examples += 'passthrough_ll'
+
+    # Is this really not supported? We should check with
+    # the FreeBSD guys, maybe we're just doing something
+    # wrong.
+    examples += [ 'null', 'ioctl' ]
 endif
 
 threaded_examples = [ 'notify_inval_inode',

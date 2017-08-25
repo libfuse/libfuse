@@ -66,12 +66,13 @@ def test_hello(tmpdir, name, options):
         umount(mount_process, mnt_dir)
 
 
-@pytest.mark.skipif(not os.path.exists(
-    pjoin(basename, 'example', 'passthrough_ll')),
-    reason='not built')
 @pytest.mark.parametrize("writeback", (False, True))
 @pytest.mark.parametrize("debug", (False, True))
 def test_passthrough_ll(tmpdir, writeback, debug, capfd):
+    
+    progname = pjoin(basename, 'example', 'passthrough_ll')
+    if not os.path.exists(progname):
+        pytest.skip('%s not built' % os.path.basename(progname))
     
     # Avoid false positives from libfuse debug messages
     if debug:
@@ -81,9 +82,7 @@ def test_passthrough_ll(tmpdir, writeback, debug, capfd):
     mnt_dir = str(tmpdir.mkdir('mnt'))
     src_dir = str(tmpdir.mkdir('src'))
 
-    cmdline = base_cmdline + \
-              [ pjoin(basename, 'example', 'passthrough_ll'),
-                '-f', mnt_dir ]
+    cmdline = base_cmdline + [ progname, '-f', mnt_dir ]
     if debug:
         cmdline.append('-d')
 
@@ -167,16 +166,14 @@ def test_passthrough(tmpdir, name, debug, capfd):
     else:
         umount(mount_process, mnt_dir)
 
-# Is this really not supported? We should check with
-# the FreeBSD guys, maybe we're just doing something
-# wrong.
-@pytest.mark.skipif('freebsd' in sys.platform,
-                    reason='not supported in FreeBSD')
 def test_ioctl(tmpdir):
+    progname = pjoin(basename, 'example', 'ioctl')
+    if not os.path.exists(progname):
+        pytest.skip('%s not built' % os.path.basename(progname))
+    
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
-    cmdline = base_cmdline + \
-              [pjoin(basename, 'example', 'ioctl'), '-f', mnt_dir ]
+    cmdline = base_cmdline + [progname, '-f', mnt_dir ]
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
@@ -213,17 +210,15 @@ def test_poll(tmpdir):
     else:
         umount(mount_process, mnt_dir)
 
-# Is this really not supported? We should check with
-# the FreeBSD guys, maybe we're just doing something
-# wrong.
-@pytest.mark.skipif('freebsd' in sys.platform,
-                    reason='not supported in FreeBSD')
 def test_null(tmpdir):
+    progname = pjoin(basename, 'example', 'null')
+    if not os.path.exists(progname):
+        pytest.skip('%s not built' % os.path.basename(progname))
+    
     mnt_file = str(tmpdir) + '/file'
     with open(mnt_file, 'w') as fh:
         fh.write('dummy')
-    cmdline = base_cmdline + [pjoin(basename, 'example', 'null'),
-               '-f', mnt_file ]
+    cmdline = base_cmdline + [ progname, '-f', mnt_file ]
     mount_process = subprocess.Popen(cmdline)
     def test_fn(name):
         return os.stat(name).st_size > 4000
