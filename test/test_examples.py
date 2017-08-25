@@ -166,6 +166,8 @@ def test_passthrough(tmpdir, name, debug, capfd):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.skipif(fuse_proto < (7,11),
+                    reason='not supported by running kernel')
 def test_ioctl(tmpdir):
     progname = pjoin(basename, 'example', 'ioctl')
     if not os.path.exists(progname):
