@@ -126,8 +126,8 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
-	unmount(mountpoint, MNT_FORCE);
 	close(fd);
+	unmount(mountpoint, MNT_FORCE);
 }
 
 /* Check if kernel is doing init in background */
