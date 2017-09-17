@@ -795,6 +795,8 @@ DOCSET_BUNDLE_ID       = org.doxygen.Project
 
 HTML_DYNAMIC_SECTIONS  = YES
 
+HTML_EXTRA_FILES = doc/fast17-vangoor.pdf
+
 # If the GENERATE_HTMLHELP tag is set to YES, the CHM_FILE tag can
 # be used to specify the file name of the resulting .chm file. You
 # can add a path in front of the file if the result should not be

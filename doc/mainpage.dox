@@ -35,5 +35,20 @@ href="files.html">examples</a> directory. A good starting point are
 hello.c (for the high-level API) and hello_ll.c (for the low-level
 API).
 
+## FUSE internals ##
+
+The authoritative source of information about libfuse internals
+(including the protocol used for communication with the FUSE kernel
+module) is the source code.
+
+However, some people have kindly documented different aspects of FUSE
+in a more beginner friendly way. While this information is
+increasingly out of date, it still provides a good overview:
+
+- Bharat Vangoor et al have included an overview of the FUSE internals
+  in a <a href="fast17-vangoor.pdf">paper evaluating FUSE performance</a>.
+
+- Some documentation of the kernel-userspace protocol is available on
+  the <a href="https://github.com/libfuse/libfuse/wiki/">libfuse wiki</a>.
 
 */
