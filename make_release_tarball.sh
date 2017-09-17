@@ -14,7 +14,7 @@ fi
 
 echo "Creating release tarball for ${TAG}..."
 
-git checkout "${TAG}"
+git checkout -q "${TAG}"
 doxygen doc/Doxyfile
 
 mkdir "${TAG}"
