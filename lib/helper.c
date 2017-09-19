@@ -336,7 +336,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		struct fuse_loop_config loop_config;
 		loop_config.clone_fd = opts.clone_fd;
 		loop_config.max_idle_threads = opts.max_idle_threads;
-		res = fuse_loop_mt(fuse, &loop_config);
+		res = fuse_loop_mt_32(fuse, &loop_config);
 	}
 	if (res)
 		res = 1;

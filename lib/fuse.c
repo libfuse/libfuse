@@ -4382,7 +4382,6 @@ int fuse_loop(struct fuse *f)
 	return fuse_session_loop(f->se);
 }
 
-int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
 FUSE_SYMVER(".symver fuse_loop_mt_32,fuse_loop_mt@@FUSE_3.2");
 int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config)
 {
@@ -4393,7 +4392,7 @@ int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config)
 	if (res)
 		return -1;
 
-	res = fuse_session_loop_mt(fuse_get_session(f), config);
+	res = fuse_session_loop_mt_32(fuse_get_session(f), config);
 	fuse_stop_cleanup_thread(f);
 	return res;
 }
@@ -4683,8 +4682,6 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 }
 
 
-/* Explicit prototype to prevent compiler warnings
-   (fuse.h only defines fuse_new()) */
 FUSE_SYMVER(".symver fuse_new_31,fuse_new@@FUSE_3.1");
 struct fuse *fuse_new_31(struct fuse_args *args,
 		      const struct fuse_operations *op,

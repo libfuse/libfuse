@@ -353,7 +353,7 @@ int cuse_lowlevel_main(int argc, char *argv[], const struct cuse_info *ci,
 		struct fuse_loop_config config;
 		config.clone_fd = 0;
 		config.max_idle_threads = 10;
-		res = fuse_session_loop_mt(se, &config);
+		res = fuse_session_loop_mt_32(se, &config);
 	}
 	else
 		res = fuse_session_loop(se);
