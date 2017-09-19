@@ -4398,7 +4398,7 @@ int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config)
 }
 
 int fuse_loop_mt_31(struct fuse *f, int clone_fd);
-FUSE_SYMVER(".symver fuse_loop_mt_31,fuse_loop_mt@FUSE_3.1");
+FUSE_SYMVER(".symver fuse_loop_mt_31,fuse_loop_mt@FUSE_3.0");
 int fuse_loop_mt_31(struct fuse *f, int clone_fd)
 {
 	struct fuse_loop_config config;
