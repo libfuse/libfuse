@@ -1,6 +1,5 @@
 sudo: required
 dist: trusty
-group: deprecated-2017Q2
 
 language:
     - c
@@ -14,6 +13,9 @@ addons:
     - clang
     - gcc
     - gcc-6
+    - python3-pip
+before_install:
+   - sudo -H python3 -m pip install pip==8.1.1
 install: test/travis-install.sh
 script: test/travis-build.sh
 
