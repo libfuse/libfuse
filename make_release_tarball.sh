@@ -26,3 +26,8 @@ rm "${TAG}/make_release_tarball.sh" \
 cp -a doc/html "${TAG}/doc/"
 tar -cJf "${TAG}.tar.xz" "${TAG}/"
 gpg --armor --detach-sign "${TAG}.tar.xz"
+
+PREV_TAG="$(git tag --list 'fuse-3*' --sort=-taggerdate --merged "${TAG}^"| head -1)"
+echo "Contributors from ${PREV_TAG} to ${TAG}:"
+git log --pretty="format:%an <%aE>" "${PREV_TAG}..${TAG}" | sort -u
+
