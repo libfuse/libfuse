@@ -4148,7 +4148,7 @@ static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 	}
 
 	assert(!in_bufsz || !out_bufsz || in_bufsz == out_bufsz);
-	if (out_buf)
+	if (out_buf && in_bufsz)
 		memcpy(out_buf, in_buf, in_bufsz);
 
 	err = get_path_nullok(f, ino, &path);
