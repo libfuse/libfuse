@@ -60,8 +60,6 @@
 
 #define FUSE_USE_VERSION 31
 
-#include <config.h>
-
 #include <fuse_lowlevel.h>
 #include <stdio.h>
 #include <stdlib.h>
