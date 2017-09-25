@@ -14,7 +14,7 @@ if cfg.get('HAVE_ICONV')
 endif
 
 deps = [ thread_dep ]
-libdl = meson.get_compiler('c').find_library('dl', required: false)
+libdl = cc.find_library('dl', required: false)
 if libdl.found()
    deps += [ libdl ]
 endif
@@ -22,6 +22,9 @@ endif
 if host_machine.system().startswith('netbsd')
    deps += [ cc.find_library('perfuse'),
              cc.find_library('puffs') ]
+else
+   # Required for clock_gettime before glibc 2.17
+   deps += cc.find_library('rt')
 endif
 
 fusermount_path = join_paths(get_option('prefix'), get_option('bindir'))
