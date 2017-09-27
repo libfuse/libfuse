@@ -263,7 +263,7 @@ static int fuse_load_so_module(const char *module)
 	}
 
 	sprintf(tmp, "fuse_module_%s_factory", module);
-	factory = dlsym(so->handle, tmp);
+	factory = *((fuse_module_factory_t *) dlsym(so->handle, tmp));
 	if (factory == NULL) {
 		fprintf(stderr, "fuse: symbol <%s> not found in module: %s\n",
 			tmp, dlerror());
