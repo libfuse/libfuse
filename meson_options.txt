@@ -1,2 +1,5 @@
 option('disable-mtab', type : 'boolean', value : false,
        description: 'Disable and ignore usage of /etc/mtab')
+
+option('udevrulesdir', type : 'string', value : '',
+       description: 'Path where udev rules are installed to (Defaults to udevdir specified in udev.pc)')
