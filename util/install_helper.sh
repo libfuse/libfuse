@@ -25,6 +25,9 @@ install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
 install -D -m 755 "${MESON_SOURCE_ROOT}/util/init_script" \
         "${DESTDIR}/etc/init.d/fuse3"
 
+install -D -m 644 "${MESON_SOURCE_ROOT}/util/fuse.conf" \
+	"${DESTDIR}/etc/fuse.conf"
+
 if test -x /usr/sbin/update-rc.d && test -z "${DESTDIR}"; then
     /usr/sbin/update-rc.d fuse3 start 34 S . start 41 0 6 . || /bin/true
 else
