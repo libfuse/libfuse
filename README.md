@@ -138,5 +138,5 @@ https://github.com/libfuse/libfuse/issues.
 Professional Support
 --------------------
 
-Professional support is available. Please contact Nikolaus Rath
-<Nikolaus@rath.org> for details.
+Professional support is offered via (Rath
+Consulting)[http://www.rath-consulting.biz].
