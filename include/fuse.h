@@ -305,7 +305,7 @@ struct fuse_operations {
 	 * but libfuse and the kernel will still assign a different
 	 * inode for internal use (called the "nodeid").
 	 *
-	 * `fi` will always be NULL if the file is not currenly open, but
+	 * `fi` will always be NULL if the file is not currenlty open, but
 	 * may also be NULL if the file is open.
 	 */
 	int (*getattr) (const char *, struct stat *, struct fuse_file_info *fi);
@@ -361,14 +361,14 @@ struct fuse_operations {
 
 	/** Change the permission bits of a file
 	 *
-	 * `fi` will always be NULL if the file is not currenly open, but
+	 * `fi` will always be NULL if the file is not currenlty open, but
 	 * may also be NULL if the file is open.
 	 */
 	int (*chmod) (const char *, mode_t, struct fuse_file_info *fi);
 
 	/** Change the owner and group of a file
 	 *
-	 * `fi` will always be NULL if the file is not currenly open, but
+	 * `fi` will always be NULL if the file is not currenlty open, but
 	 * may also be NULL if the file is open.
 	 *
 	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
@@ -378,7 +378,7 @@ struct fuse_operations {
 
 	/** Change the size of a file
 	 *
-	 * `fi` will always be NULL if the file is not currenly open, but
+	 * `fi` will always be NULL if the file is not currenlty open, but
 	 * may also be NULL if the file is open.
 	 *
 	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
@@ -642,7 +642,7 @@ struct fuse_operations {
 	 * This supersedes the old utime() interface.  New applications
 	 * should use this.
 	 *
-	 * `fi` will always be NULL if the file is not currenly open, but
+	 * `fi` will always be NULL if the file is not currenlty open, but
 	 * may also be NULL if the file is open.
 	 *
 	 * See the utimensat(2) man page for details.
