@@ -1443,7 +1443,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 /**
  * Add a directory entry to the buffer with the attributes
  *
- * See documentation of `fuse_add_direntryt()` for more details.
+ * See documentation of `fuse_add_direntry()` for more details.
  *
  * @param req request handle
  * @param buf the point where the new entry will be added to the buffer
