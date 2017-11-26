@@ -1800,7 +1800,7 @@ int fuse_parse_cmdline(struct fuse_args *args,
  * and the function returns NULL.
  *
  * Option parsing skips argv[0], which is assumed to contain the
- * program name. To prevent accidentially passing an option in
+ * program name. To prevent accidentally passing an option in
  * argv[0], this element must always be present (even if no options
  * are specified). It may be set to the empty string ('\0') if no
  * reasonable value can be provided.
