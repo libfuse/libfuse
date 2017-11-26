@@ -212,7 +212,7 @@ struct fuse_loop_config {
  *
  * This flag should always be set when available. If all file changes
  * go through the kernel, *attr_timeout* should be set to a very large
- * number to avoid unneccessary getattr() calls.
+ * number to avoid unnecessary getattr() calls.
  *
  * This feature is enabled by default when supported by the kernel.
  */
