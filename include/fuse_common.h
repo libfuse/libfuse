@@ -384,7 +384,7 @@ struct fuse_conn_info {
 	 * 4.8, only two types of requests fall into this category:
 	 *
 	 *   1. Read-ahead requests
-	 *   2. Asychronous direct I/O requests
+	 *   2. Asynchronous direct I/O requests
 	 *
 	 * Read-ahead requests are generated (if max_readahead is
 	 * non-zero) by the kernel to preemptively fill its caches
