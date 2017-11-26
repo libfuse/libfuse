@@ -854,7 +854,7 @@ ENUM_VALUES_PER_LINE   = 4
 # Netscape 6.0+, Internet explorer 5.0+, or Konqueror). Windows users are
 # probably better off using the HTML help feature. Other possible values
 # for this tag are: HIERARCHIES, which will generate the Groups, Directories,
-# and Class Hiererachy pages using a tree view instead of an ordered list;
+# and Class Hierarchy pages using a tree view instead of an ordered list;
 # ALL, which combines the behavior of FRAME and HIERARCHIES; and NONE, which
 # disables this behavior completely. For backwards compatibility with previous
 # releases of Doxygen, the values YES and NO are equivalent to FRAME and NONE
