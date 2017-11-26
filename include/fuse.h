@@ -816,7 +816,7 @@ struct fuse_context {
  * @param argv the argument vector passed to the main() function
  * @param op the file system operation
  * @param private_data Initial value for the `private_data`
- *            field of `struct fuse_context`. May be overriden by the
+ *            field of `struct fuse_context`. May be overridden by the
  *            `struct fuse_operations.init` handler.
  * @return 0 on success, nonzero on failure
  *
@@ -869,7 +869,7 @@ void fuse_lib_help(struct fuse_args *args);
  * @param op the filesystem operations
  * @param op_size the size of the fuse_operations structure
  * @param private_data Initial value for the `private_data`
- *            field of `struct fuse_context`. May be overriden by the
+ *            field of `struct fuse_context`. May be overridden by the
  *            `struct fuse_operations.init` handler.
  * @return the created FUSE handle
  */
@@ -1171,7 +1171,7 @@ int fuse_notify_poll(struct fuse_pollhandle *ph);
  * @param op the filesystem operations
  * @param op_size the size of the fuse_operations structure
  * @param private_data Initial value for the `private_data`
- *            field of `struct fuse_context`. May be overriden by the
+ *            field of `struct fuse_context`. May be overridden by the
  *            `struct fuse_operations.init` handler.
  * @return a new filesystem object
  */
