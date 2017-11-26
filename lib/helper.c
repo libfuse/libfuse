@@ -260,7 +260,7 @@ int fuse_daemonize(int foreground)
 				close(nullfd);
 		}
 
-		/* Propagate completion of daemon initializatation */
+		/* Propagate completion of daemon initialization */
 		completed = 1;
 		(void) write(waiter[1], &completed, sizeof(completed));
 		close(waiter[0]);
