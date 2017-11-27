@@ -470,7 +470,7 @@ FUSE 2.9.4 (2015-05-22)
   in EINVAL when mounting the filesystem.  This also needs a fix in
   the kernel.
 
-* Initilaize stat buffer passed to ->getattr() and ->fgetattr() to
+* Initialize stat buffer passed to ->getattr() and ->fgetattr() to
   zero in all cases.  Reported by Daniel Iwan
 
 * libfuse: Add missing includes.  This allows compiling fuse with

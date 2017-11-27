@@ -312,7 +312,7 @@ static void* update_fs_loop(void *data) {
             bufv.buf[0].mem = file_contents;
             bufv.buf[0].flags = 0;
 
-            /* This shouldn't fail, but apparenly it sometimes
+            /* This shouldn't fail, but apparently it sometimes
                does - see https://github.com/libfuse/libfuse/issues/105 */
             ret = fuse_lowlevel_notify_store(se, FILE_INO, 0, &bufv, 0);
             if (-ret == ENODEV) {

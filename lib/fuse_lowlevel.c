@@ -1936,7 +1936,7 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		se->op.init(se->userdata, &se->conn);
 
 	if (se->conn.want & (~se->conn.capable)) {
-		fprintf(stderr, "fuse: error: filesystem requested capabilites "
+		fprintf(stderr, "fuse: error: filesystem requested capabilities "
 			"0x%x that are not supported by kernel, aborting.\n",
 			se->conn.want & (~se->conn.capable));
 		fuse_reply_err(req, EPROTO);

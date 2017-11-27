@@ -672,7 +672,7 @@ REFERENCES_RELATION    = NO
 # If the REFERENCES_LINK_SOURCE tag is set to YES (the default)
 # and SOURCE_BROWSER tag is set to YES, then the hyperlinks from
 # functions in REFERENCES_RELATION and REFERENCED_BY_RELATION lists will
-# link to the source code.  Otherwise they will link to the documentstion.
+# link to the source code.  Otherwise they will link to the documentation.
 
 REFERENCES_LINK_SOURCE = YES
 
@@ -854,7 +854,7 @@ ENUM_VALUES_PER_LINE   = 4
 # Netscape 6.0+, Internet explorer 5.0+, or Konqueror). Windows users are
 # probably better off using the HTML help feature. Other possible values
 # for this tag are: HIERARCHIES, which will generate the Groups, Directories,
-# and Class Hiererachy pages using a tree view instead of an ordered list;
+# and Class Hierarchy pages using a tree view instead of an ordered list;
 # ALL, which combines the behavior of FRAME and HIERARCHIES; and NONE, which
 # disables this behavior completely. For backwards compatibility with previous
 # releases of Doxygen, the values YES and NO are equivalent to FRAME and NONE

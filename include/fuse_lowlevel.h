@@ -1443,7 +1443,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 /**
  * Add a directory entry to the buffer with the attributes
  *
- * See documentation of `fuse_add_direntryt()` for more details.
+ * See documentation of `fuse_add_direntry()` for more details.
  *
  * @param req request handle
  * @param buf the point where the new entry will be added to the buffer
@@ -1800,7 +1800,7 @@ int fuse_parse_cmdline(struct fuse_args *args,
  * and the function returns NULL.
  *
  * Option parsing skips argv[0], which is assumed to contain the
- * program name. To prevent accidentially passing an option in
+ * program name. To prevent accidentally passing an option in
  * argv[0], this element must always be present (even if no options
  * are specified). It may be set to the empty string ('\0') if no
  * reasonable value can be provided.
