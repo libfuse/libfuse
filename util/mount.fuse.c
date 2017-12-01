@@ -154,6 +154,7 @@ int main(int argc, char *argv[])
 				int ignore = 0;
 				const char *ignore_opts[] = { "",
 							      "user",
+							      "nofail",
 							      "nouser",
 							      "users",
 							      "auto",
