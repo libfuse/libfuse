@@ -12,7 +12,7 @@
  * system, starting at the root file system. This is implemented by
  * just "passing through" all requests to the corresponding user-space
  * libc functions. In contrast to passthrough.c and passthrough_fh.c,
- * this implementation ises the low-level API. Its performance should
+ * this implementation uses the low-level API. Its performance should
  * be the least bad among the three, but many operations are not
  * implemented. In particular, it is not possible to remove files (or
  * directories) because the code necessary to defer actual removal
