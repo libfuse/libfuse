@@ -18,14 +18,14 @@ executable('mount.fuse3', ['mount.fuse.c'],
            install: true,
            install_dir: get_option('sbindir'))
 
+if not get_option('skip-systemfiles'):
+  udevrulesdir = get_option('udevrulesdir')
+  if udevrulesdir == ''
+    udev = dependency('udev')
+    udevrulesdir = join_paths(udev.get_pkgconfig_variable('udevdir'), 'rules.d')
+  endif
 
-udevrulesdir = get_option('udevrulesdir')
-if udevrulesdir == ''
-  udev = dependency('udev')
-  udevrulesdir = join_paths(udev.get_pkgconfig_variable('udevdir'), 'rules.d')
-endif
-
-meson.add_install_script('install_helper.sh', get_option('sysconfdir'),
-                         get_option('bindir'), udevrulesdir)
+  meson.add_install_script('install_helper.sh', get_option('sysconfdir'),
+                           get_option('bindir'), udevrulesdir)
 
 

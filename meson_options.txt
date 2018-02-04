@@ -3,3 +3,7 @@ option('disable-mtab', type : 'boolean', value : false,
 
 option('udevrulesdir', type : 'string', value : '',
        description: 'Path where udev rules are installed to (Defaults to udevdir specified in udev.pc)')
+
+option('skip-systemfiles', type : 'boolean', value : false,
+       description: 'Whether to install system files or not, incl. udevrules, etc. (Defaults to false)')
+       
