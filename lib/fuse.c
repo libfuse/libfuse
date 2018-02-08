@@ -4842,6 +4842,9 @@ struct fuse *fuse_new_30(struct fuse_args *args,
 			 size_t op_size, void *user_data)
 {
 	struct fuse_config conf;
+
+	memset(&conf, 0, sizeof(conf));
+
 	const struct fuse_opt opts[] = {
 		FUSE_LIB_OPT("-h", show_help, 1),
 		FUSE_LIB_OPT("--help", show_help, 1),
