@@ -46,7 +46,7 @@ def wait_for_mount(mount_process, mnt_dir,
 def cleanup(mnt_dir):
     # Don't bother trying Valgrind if things already went wrong
 
-    if 'bsd' in sys.platform:
+    if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
         cmd = [ 'umount', '-f', mnt_dir ]
     else:
         cmd = [pjoin(basename, 'util', 'fusermount3'),
@@ -56,7 +56,7 @@ def cleanup(mnt_dir):
 
 def umount(mount_process, mnt_dir):
 
-    if 'bsd' in sys.platform:
+    if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
         cmdline = [ 'umount', mnt_dir ]
     else:
         # fusermount3 will be setuid root, so we can only trace it with
@@ -109,7 +109,7 @@ def fuse_test_marker():
 
     skip = lambda x: pytest.mark.skip(reason=x)
 
-    if 'bsd' in sys.platform:
+    if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
         return pytest.mark.uses_fuse()
 
     with subprocess.Popen(['which', 'fusermount3'], stdout=subprocess.PIPE,

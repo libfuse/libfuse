@@ -93,7 +93,7 @@ thread_dep = dependency('threads')
 # Read build files from sub-directories
 #
 subdirs = [ 'lib', 'include', 'example', 'doc', 'test' ]
-if not platform.endswith('bsd')
+if not platform.endswith('bsd') and platform != 'dragonfly'
   subdirs += 'util'
 endif
 foreach n : subdirs

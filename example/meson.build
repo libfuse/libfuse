@@ -3,7 +3,7 @@ examples = [ 'passthrough', 'passthrough_fh',
              'ioctl_client', 'poll_client', 'ioctl',
              'cuse', 'cuse_client' ]
 
-if not platform.endswith('bsd')
+if not platform.endswith('bsd') and platform != 'dragonfly'
     examples += 'passthrough_ll'
 
     # According to Conrad Meyer <cem@freebsd.org>, FreeBSD doesn't
