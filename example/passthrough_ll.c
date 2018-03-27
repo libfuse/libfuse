@@ -51,6 +51,16 @@
 #include <err.h>
 #include <inttypes.h>
 
+#ifndef AT_EMPTY_PATH
+# define AT_EMPTY_PATH 0x1000
+#endif
+#ifndef O_PATH
+# define O_PATH 010000000
+#endif
+#ifndef O_CLOEXEC
+# define O_CLOEXEC 02000000
+#endif
+
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
    store uintptr_t values in a fuse_ino_t variable. The following
