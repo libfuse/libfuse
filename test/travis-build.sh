@@ -42,6 +42,9 @@ for san in undefined address; do
     sudo ${TEST_CMD}
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
+    # Cleanup temporary files (since they're now owned by root)
+    sudo rm -rf .pytest_cache/
+
     ${TEST_CMD}
     cd ..
 done
