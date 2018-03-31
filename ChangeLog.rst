@@ -1,5 +1,13 @@
 * Support `mount -o nofail`
 
+libfuse 3.2.2 (2018-03-31)
+==========================
+
+* Added example fuse.conf file.
+* Added "support" for -o nofail mount option (the option is accepted
+  and ignored).
+* Various small bugfixes.  
+
 libfuse 3.2.1 (2017-11-14)
 ==========================
 
