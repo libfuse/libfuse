@@ -327,7 +327,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 	(void) ino;
 
-	buf = calloc(size, 1);
+	buf = calloc(1, size);
 	if (!buf)
 		return (void) fuse_reply_err(req, ENOMEM);
 
