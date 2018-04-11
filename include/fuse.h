@@ -1205,7 +1205,7 @@ typedef struct fuse_fs *(*fuse_module_factory_t)(struct fuse_args *args,
  * @param factory_ the factory function for this filesystem module
  */
 #define FUSE_REGISTER_MODULE(name_, factory_) \
-	fuse_module_factory_t fuse_module_ ## name_ ## _factory = factory_;
+	fuse_module_factory_t fuse_module_ ## name_ ## _factory = factory_
 
 /** Get session from fuse object */
 struct fuse_session *fuse_get_session(struct fuse *f);
