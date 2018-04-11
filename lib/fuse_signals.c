@@ -21,7 +21,6 @@ static struct fuse_session *fuse_instance;
 
 static void exit_handler(int sig)
 {
-	(void) sig;
 	if (fuse_instance) {
 		fuse_session_exit(fuse_instance);
 		if(sig <= 0) {
