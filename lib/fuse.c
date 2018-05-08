@@ -1255,7 +1255,7 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 {
 	int err;
 
-	/* FIXME: locking two paths needs deadlock checking */
+	/* locking two paths needs deadlock checking -- see get_path2_ordered */
 	err = try_get_path(f, nodeid1, name1, path1, wnode1, true);
 	if (!err) {
 		err = try_get_path(f, nodeid2, name2, path2, wnode2, true);
@@ -1269,7 +1269,7 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 	return err;
 }
 
-static int get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
+static int get_path2_ordered(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 		     fuse_ino_t nodeid2, const char *name2,
 		     char **path1, char **path2,
 		     struct node **wnode1, struct node **wnode2)
@@ -1300,6 +1300,20 @@ static int get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 	pthread_mutex_unlock(&f->lock);
 
 	return err;
+}
+
+static int get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
+		     fuse_ino_t nodeid2, const char *name2,
+		     char **path1, char **path2,
+		     struct node **wnode1, struct node **wnode2)
+{
+	/* order the locks to avoid deadlock */
+	if (nodeid1 < nodeid2 || (nodeid1 == nodeid2 && strcmp(name1, name2) <= 0))
+		return get_path2_ordered(f,
+			nodeid1, name1, nodeid2, name2, path1, path2, wnode1, wnode2);
+	else
+		return get_path2_ordered(f,
+			nodeid2, name2, nodeid1, name1, path2, path1, wnode2, wnode1);
 }
 
 static void free_path_wrlock(struct fuse *f, fuse_ino_t nodeid,
