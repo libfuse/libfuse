@@ -489,7 +489,7 @@ static int count_fuse_fs(void)
 
 
 #else /* IGNORE_MTAB */
-static int count_fuse_fs()
+static int count_fuse_fs(void)
 {
 	return 0;
 }
@@ -506,6 +506,7 @@ static int add_mount(const char *source, const char *mnt, const char *type,
 
 static int unmount_fuse(const char *mnt, int quiet, int lazy)
 {
+	(void) quiet;
 	return fuse_mnt_umount(progname, mnt, mnt, lazy);
 }
 #endif /* IGNORE_MTAB */
