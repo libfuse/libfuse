@@ -13,6 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdint.h>
 
 static char *progname;
 
@@ -40,6 +41,10 @@ static void add_arg(char **cmdp, const char *opt)
 {
 	size_t optlen = strlen(opt);
 	size_t cmdlen = *cmdp ? strlen(*cmdp) : 0;
+	if (optlen >= (SIZE_MAX - cmdlen - 4)/4) {
+		fprintf(stderr, "%s: argument too long\n", progname);
+		exit(1);
+	}
 	char *cmd = xrealloc(*cmdp, cmdlen + optlen * 4 + 4);
 	char *s;
 	s = cmd + cmdlen;
