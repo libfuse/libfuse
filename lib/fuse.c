@@ -1248,6 +1248,49 @@ static int get_path_wrlock(struct fuse *f, fuse_ino_t nodeid, const char *name,
 	return get_path_common(f, nodeid, name, path, wnode);
 }
 
+#if defined(__FreeBSD__)
+#define CHECK_DIR_LOOP true
+#else
+#define CHECK_DIR_LOOP false
+#endif
+
+static int check_dir_loop(struct fuse *f,
+			  fuse_ino_t nodeid1, const char *name1,
+			  fuse_ino_t nodeid2, const char *name2)
+{
+	struct node *node, *node1, *node2;
+	fuse_ino_t id1, id2;
+
+	node1 = lookup_node(f, nodeid1, name1);
+	id1 = node1 ? node1->nodeid : nodeid1;
+
+	node2 = lookup_node(f, nodeid2, name2);
+	id2 = node2 ? node2->nodeid : nodeid2;
+
+	for (node = get_node(f, id2); node->nodeid != FUSE_ROOT_ID;
+	     node = node->parent) {
+		if (node->name == NULL || node->parent == NULL)
+			break;
+
+		if (node->nodeid != id2 && node->nodeid == id1)
+			return -EINVAL;
+	}
+
+	if (node2)
+	{
+		for (node = get_node(f, id1); node->nodeid != FUSE_ROOT_ID;
+		     node = node->parent) {
+			if (node->name == NULL || node->parent == NULL)
+				break;
+
+			if (node->nodeid != id1 && node->nodeid == id2)
+				return -ENOTEMPTY;
+		}
+	}
+
+	return 0;
+}
+
 static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 			 fuse_ino_t nodeid2, const char *name2,
 			 char **path1, char **path2,
@@ -1272,11 +1315,20 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 static int get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 		     fuse_ino_t nodeid2, const char *name2,
 		     char **path1, char **path2,
-		     struct node **wnode1, struct node **wnode2)
+		     struct node **wnode1, struct node **wnode2,
+		     bool dir_loop)
 {
 	int err;
 
 	pthread_mutex_lock(&f->lock);
+
+	if (dir_loop)
+	{
+		err = check_dir_loop(f, nodeid1, name1, nodeid2, name2);
+		if (err)
+			goto out_unlock;
+	}
+
 	err = try_get_path2(f, nodeid1, name1, nodeid2, name2,
 			    path1, path2, wnode1, wnode2);
 	if (err == -EAGAIN) {
@@ -1297,6 +1349,8 @@ static int get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 		debug_path(f, "DEQUEUE PATH1", nodeid1, name1, !!wnode1);
 		debug_path(f, "        PATH2", nodeid2, name2, !!wnode2);
 	}
+
+out_unlock:
 	pthread_mutex_unlock(&f->lock);
 
 	return err;
@@ -2965,7 +3019,8 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 	int err;
 
 	err = get_path2(f, olddir, oldname, newdir, newname,
-			&oldpath, &newpath, &wnode1, &wnode2);
+			&oldpath, &newpath, &wnode1, &wnode2,
+			CHECK_DIR_LOOP);
 	if (!err) {
 		struct fuse_intr_data d;
 		err = 0;
@@ -3001,7 +3056,8 @@ static void fuse_lib_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 	int err;
 
 	err = get_path2(f, ino, NULL, newparent, newname,
-			&oldpath, &newpath, NULL, NULL);
+			&oldpath, &newpath, NULL, NULL,
+			false);
 	if (!err) {
 		struct fuse_intr_data d;
 

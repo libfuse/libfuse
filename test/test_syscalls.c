@@ -1282,6 +1282,221 @@ static int test_rename_dir(void)
 	return 0;
 }
 
+static int test_rename_dir_loop(void)
+{
+#define PATH(p)		(snprintf(path, sizeof path, "%s/%s", testdir, p), path)
+#define PATH2(p)	(snprintf(path2, sizeof path2, "%s/%s", testdir, p), path2)
+
+	char path[1024], path2[1024];
+	int err = 0;
+	int res;
+
+	start_test("rename dir loop");
+
+	res = create_dir(testdir, testdir_files);
+	if (res == -1)
+		return -1;
+
+	res = mkdir(PATH("a"), 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		goto fail;
+	}
+
+	res = rename(PATH("a"), PATH2("a"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	errno = 0;
+	res = rename(PATH("a"), PATH2("a/b"));
+	if (res == 0 || errno != EINVAL) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = mkdir(PATH("a/b"), 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		goto fail;
+	}
+
+	res = mkdir(PATH("a/b/c"), 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		goto fail;
+	}
+
+	errno = 0;
+	res = rename(PATH("a"), PATH2("a/b/c"));
+	if (res == 0 || errno != EINVAL) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	errno = 0;
+	res = rename(PATH("a"), PATH2("a/b/c/a"));
+	if (res == 0 || errno != EINVAL) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	errno = 0;
+	res = rename(PATH("a/b/c"), PATH2("a"));
+	if (res == 0 || errno != ENOTEMPTY) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = open(PATH("a/foo"), O_CREAT, 0644);
+	if (res == -1) {
+		PERROR("open");
+		goto fail;
+	}
+	close(res);
+
+	res = rename(PATH("a/foo"), PATH2("a/bar"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = rename(PATH("a/bar"), PATH2("a/foo"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = rename(PATH("a/foo"), PATH2("a/b/bar"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = rename(PATH("a/b/bar"), PATH2("a/foo"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = rename(PATH("a/foo"), PATH2("a/b/c/bar"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = rename(PATH("a/b/c/bar"), PATH2("a/foo"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = open(PATH("a/bar"), O_CREAT, 0644);
+	if (res == -1) {
+		PERROR("open");
+		goto fail;
+	}
+	close(res);
+
+	res = rename(PATH("a/foo"), PATH2("a/bar"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	unlink(PATH("a/bar"));
+
+	res = rename(PATH("a/b"), PATH2("a/d"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = rename(PATH("a/d"), PATH2("a/b"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = mkdir(PATH("a/d"), 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		goto fail;
+	}
+
+	res = rename(PATH("a/b"), PATH2("a/d"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = rename(PATH("a/d"), PATH2("a/b"));
+	if (res == -1) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	res = mkdir(PATH("a/d"), 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		goto fail;
+	}
+
+	res = mkdir(PATH("a/d/e"), 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		goto fail;
+	}
+
+	errno = 0;
+	res = rename(PATH("a/b"), PATH2("a/d"));
+	if (res == 0 || errno != ENOTEMPTY) {
+		PERROR("rename");
+		goto fail;
+	}
+
+	rmdir(PATH("a/d/e"));
+	rmdir(PATH("a/d"));
+
+ 	rmdir(PATH("a/b/c"));
+	rmdir(PATH("a/b"));
+	rmdir(PATH("a"));
+
+	err += cleanup_dir(testdir, testdir_files, 0);
+	res = rmdir(testdir);
+	if (res == -1) {
+		PERROR("rmdir");
+		goto fail;
+	}
+	res = check_nonexist(testdir);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	success();
+	return 0;
+
+fail:
+	unlink(PATH("a/bar"));
+
+	rmdir(PATH("a/d/e"));
+	rmdir(PATH("a/d"));
+ 
+ 	rmdir(PATH("a/b/c"));
+	rmdir(PATH("a/b"));
+	rmdir(PATH("a"));
+
+	cleanup_dir(testdir, testdir_files, 1);
+	rmdir(testdir);
+
+	return -1;
+
+#undef PATH2
+#undef PATH
+}
+
 #ifndef __FreeBSD__
 static int test_mkfifo(void)
 {
@@ -1461,6 +1676,7 @@ int main(int argc, char *argv[])
 	err += test_mkdir();
 	err += test_rename_file();
 	err += test_rename_dir();
+	err += test_rename_dir_loop();
 	err += test_utime();
 	err += test_truncate(0);
 	err += test_truncate(testdatalen / 2);
