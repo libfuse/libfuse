@@ -1249,11 +1249,10 @@ static int get_path_wrlock(struct fuse *f, fuse_ino_t nodeid, const char *name,
 }
 
 #if defined(__FreeBSD__)
-#define CHECK_DIR_LOOP true
-#else
-#define CHECK_DIR_LOOP false
+#define CHECK_DIR_LOOP
 #endif
 
+#if defined(CHECK_DIR_LOOP)
 static int check_dir_loop(struct fuse *f,
 			  fuse_ino_t nodeid1, const char *name1,
 			  fuse_ino_t nodeid2, const char *name2)
@@ -1290,6 +1289,7 @@ static int check_dir_loop(struct fuse *f,
 
 	return 0;
 }
+#endif
 
 static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 			 fuse_ino_t nodeid2, const char *name2,
@@ -1315,19 +1315,21 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 static int get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 		     fuse_ino_t nodeid2, const char *name2,
 		     char **path1, char **path2,
-		     struct node **wnode1, struct node **wnode2,
-		     bool dir_loop)
+		     struct node **wnode1, struct node **wnode2)
 {
 	int err;
 
 	pthread_mutex_lock(&f->lock);
 
-	if (dir_loop)
+#if defined(CHECK_DIR_LOOP)
+	if (name1)
 	{
+		// called during rename; perform dir loop check
 		err = check_dir_loop(f, nodeid1, name1, nodeid2, name2);
 		if (err)
 			goto out_unlock;
 	}
+#endif
 
 	err = try_get_path2(f, nodeid1, name1, nodeid2, name2,
 			    path1, path2, wnode1, wnode2);
@@ -1350,7 +1352,9 @@ static int get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 		debug_path(f, "        PATH2", nodeid2, name2, !!wnode2);
 	}
 
+#if defined(CHECK_DIR_LOOP)
 out_unlock:
+#endif
 	pthread_mutex_unlock(&f->lock);
 
 	return err;
@@ -3019,8 +3023,7 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 	int err;
 
 	err = get_path2(f, olddir, oldname, newdir, newname,
-			&oldpath, &newpath, &wnode1, &wnode2,
-			CHECK_DIR_LOOP);
+			&oldpath, &newpath, &wnode1, &wnode2);
 	if (!err) {
 		struct fuse_intr_data d;
 		err = 0;
@@ -3056,8 +3059,7 @@ static void fuse_lib_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 	int err;
 
 	err = get_path2(f, ino, NULL, newparent, newname,
-			&oldpath, &newpath, NULL, NULL,
-			false);
+			&oldpath, &newpath, NULL, NULL);
 	if (!err) {
 		struct fuse_intr_data d;
 
