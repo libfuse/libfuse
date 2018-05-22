@@ -528,7 +528,7 @@ struct fuse_operations {
 	 * this method should check if opendir is permitted for this
 	 * directory. Optionally opendir may also return an arbitrary
 	 * filehandle in the fuse_file_info structure, which will be
-	 * passed to readdir, closedir and fsyncdir.
+	 * passed to readdir, releasedir and fsyncdir.
 	 */
 	int (*opendir) (const char *, struct fuse_file_info *);
 
