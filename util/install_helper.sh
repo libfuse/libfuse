@@ -14,16 +14,16 @@ prefix="${MESON_INSTALL_DESTDIR_PREFIX}"
 chown root:root "${prefix}/${bindir}/fusermount3"
 chmod u+s "${prefix}/${bindir}/fusermount3"
 
-if test ! -e "${DESTDIR}/dev/fuse"; then
-    mkdir -p "${DESTDIR}/dev"
-    mknod "${DESTDIR}/dev/fuse" -m 0666 c 10 229
+if test ! -e "${DESTDIR}/${FORCE_PREFIX}/dev/fuse"; then
+    mkdir -p "${DESTDIR}/${FORCE_PREFIX}/dev"
+    mknod "${DESTDIR}/${FORCE_PREFIX}/dev/fuse" -m 0666 c 10 229
 fi
 
 install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
-        "${DESTDIR}/${udevrulesdir}/99-fuse3.rules"
+        "${DESTDIR}/${FORCE_PREFIX}/${udevrulesdir}/99-fuse3.rules"
 
 install -D -m 755 "${MESON_SOURCE_ROOT}/util/init_script" \
-        "${DESTDIR}/etc/init.d/fuse3"
+        "${DESTDIR}/${FORCE_PREFIX}/etc/init.d/fuse3"
 
 install -D -m 644 "${MESON_SOURCE_ROOT}/util/fuse.conf" \
 	"${DESTDIR}/etc/fuse.conf"
