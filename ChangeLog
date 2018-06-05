@@ -1,3 +1,8 @@
+FUSE 2.9.8
+==========
+
+* Fixed rename deadlock on FreeBSD.
+
 FUSE 2.9.7 (2016-06-20)
 =======================
 
