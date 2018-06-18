@@ -1160,6 +1160,42 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*readdirplus) (fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 			 struct fuse_file_info *fi);
+
+	/**
+	 * Copy a range of data from one file to another
+	 *
+	 * Performs an optimized copy between two file descriptors without the
+	 * additional cost of transferring data through the FUSE kernel module
+	 * to user space (glibc) and then back into the FUSE filesystem again.
+	 *
+	 * In case this method is not implemented, glibc falls back to reading
+	 * data from the source and writing to the destination. Effectively
+	 * doing an inefficient copy of the data.
+	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure with error code EOPNOTSUPP, i.e. all
+	 * future copy_file_range() requests will fail with EOPNOTSUPP without
+	 * being send to the filesystem process.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_write
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino_in the inode number or the source file
+	 * @param off_in starting point from were the data should be read
+	 * @param fi_in file information of the source file
+	 * @param ino_out the inode number or the destination file
+	 * @param off_out starting point where the data should be written
+	 * @param fi_out file information of the destination file
+	 * @param len maximum size of the data to copy
+	 * @param flags passed along with the copy_file_range() syscall
+	 */
+	void (*copy_file_range) (fuse_req_t req, fuse_ino_t ino_in,
+				 off_t off_in, struct fuse_file_info *fi_in,
+				 fuse_ino_t ino_out, off_t off_out,
+				 struct fuse_file_info *fi_out, size_t len,
+				 int flags);
 };
 
 /**

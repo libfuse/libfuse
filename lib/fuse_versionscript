@@ -153,6 +153,12 @@ FUSE_3.3 {
 		fuse_open_channel;
 } FUSE_3.2;
 
+FUSE_3.4 {
+	global:
+		fuse_fs_copy_file_range;
+		fuse_reply_copy_file_range;
+} FUSE_3.3;
+
 # Local Variables:
 # indent-tabs-mode: t
 # End:
