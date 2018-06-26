@@ -576,6 +576,26 @@ static int xmp_flock(const char *path, struct fuse_file_info *fi, int op)
 	return 0;
 }
 
+#ifdef HAVE_COPY_FILE_RANGE
+static ssize_t xmp_copy_file_range(const char *path_in,
+				   struct fuse_file_info *fi_in,
+				   off_t off_in, const char *path_out,
+				   struct fuse_file_info *fi_out,
+				   off_t off_out, size_t len, int flags)
+{
+	ssize_t res;
+	(void) path_in;
+	(void) path_out;
+
+	res = copy_file_range(fi_in->fh, &off_in, fi_out->fh, &off_out, len,
+			      flags);
+	if (res == -1)
+		return -errno;
+
+	return res;
+}
+#endif
+
 static struct fuse_operations xmp_oper = {
 	.init           = xmp_init,
 	.getattr	= xmp_getattr,
@@ -620,6 +640,9 @@ static struct fuse_operations xmp_oper = {
 	.lock		= xmp_lock,
 #endif
 	.flock		= xmp_flock,
+#ifdef HAVE_COPY_FILE_RANGE
+	.copy_file_range = xmp_copy_file_range,
+#endif
 };
 
 int main(int argc, char *argv[])
