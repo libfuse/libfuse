@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -710,6 +713,101 @@ fail:
 	cleanup_dir(testdir, testdir_files, 1);
 	return -1;
 }
+
+#ifdef HAVE_COPY_FILE_RANGE
+static int test_copy_file_range(void)
+{
+	const char *data = testdata;
+	int datalen = testdatalen;
+	int err = 0;
+	int res;
+	int fd_in, fd_out;
+	off_t pos_in = 0, pos_out = 0;
+
+	start_test("copy_file_range");
+	unlink(testfile);
+	fd_in = open(testfile, O_CREAT | O_RDWR, 0644);
+	if (fd_in == -1) {
+		PERROR("creat");
+		return -1;
+	}
+	res = write(fd_in, data, datalen);
+	if (res == -1) {
+		PERROR("write");
+		close(fd_in);
+		return -1;
+	}
+	if (res != datalen) {
+		ERROR("write is short: %u instead of %u", res, datalen);
+		close(fd_in);
+		return -1;
+	}
+
+	unlink(testfile2);
+	fd_out = creat(testfile2, 0644);
+	if (fd_out == -1) {
+		PERROR("creat");
+		close(fd_in);
+		return -1;
+	}
+	res = copy_file_range(fd_in, &pos_in, fd_out, &pos_out, datalen, 0);
+	if (res == -1) {
+		PERROR("copy_file_range");
+		close(fd_in);
+		close(fd_out);
+		return -1;
+	}
+	if (res != datalen) {
+		ERROR("copy is short: %u instead of %u", res, datalen);
+		close(fd_in);
+		close(fd_out);
+		return -1;
+	}
+
+	res = close(fd_in);
+	if (res == -1) {
+		PERROR("close");
+		return -1;
+	}
+	res = close(fd_out);
+	if (res == -1) {
+		PERROR("close");
+		return -1;
+	}
+
+	err = check_data(testfile2, data, 0, datalen);
+
+	res = unlink(testfile);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testfile);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	res = unlink(testfile2);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testfile2);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	success();
+	return 0;
+}
+#else
+static int test_copy_file_range(void)
+{
+	return 0;
+}
+#endif
 
 static int test_utime(void)
 {
@@ -1792,6 +1890,7 @@ int main(int argc, char *argv[])
 	err += test_create_ro_dir(O_CREAT | O_EXCL);
 	err += test_create_ro_dir(O_CREAT | O_WRONLY);
 	err += test_create_ro_dir(O_CREAT | O_TRUNC);
+	err += test_copy_file_range();
 
 	unlink(testfile);
 	unlink(testfile2);
