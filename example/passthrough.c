@@ -29,6 +29,8 @@
 #include <config.h>
 #endif
 
+#define _GNU_SOURCE
+
 #ifdef linux
 /* For pread()/pwrite()/utimensat() */
 #define _XOPEN_SOURCE 700
@@ -445,6 +447,46 @@ static int xmp_removexattr(const char *path, const char *name)
 }
 #endif /* HAVE_SETXATTR */
 
+#ifdef HAVE_COPY_FILE_RANGE
+static ssize_t xmp_copy_file_range(const char *path_in,
+				   struct fuse_file_info *fi_in,
+				   off_t offset_in, const char *path_out,
+				   struct fuse_file_info *fi_out,
+				   off_t offset_out, size_t len, int flags)
+{
+	int fd_in, fd_out;
+	ssize_t res;
+
+	if(fi_in == NULL)
+		fd_in = open(path_in, O_RDONLY);
+	else
+		fd_in = fi_in->fh;
+
+	if (fd_in == -1)
+		return -errno;
+
+	if(fi_out == NULL)
+		fd_out = open(path_out, O_WRONLY);
+	else
+		fd_out = fi_out->fh;
+
+	if (fd_out == -1) {
+		close(fd_in);
+		return -errno;
+	}
+
+	res = copy_file_range(fd_in, &offset_in, fd_out, &offset_out, len,
+			      flags);
+	if (res == -1)
+		res = -errno;
+
+	close(fd_in);
+	close(fd_out);
+
+	return res;
+}
+#endif
+
 static struct fuse_operations xmp_oper = {
 	.init           = xmp_init,
 	.getattr	= xmp_getattr,
@@ -479,6 +521,9 @@ static struct fuse_operations xmp_oper = {
 	.getxattr	= xmp_getxattr,
 	.listxattr	= xmp_listxattr,
 	.removexattr	= xmp_removexattr,
+#endif
+#ifdef HAVE_COPY_FILE_RANGE
+	.copy_file_range = xmp_copy_file_range,
 #endif
 };
 

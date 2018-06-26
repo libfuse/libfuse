@@ -1,3 +1,9 @@
+libfuse 3.4.0
+=============
+
+* Add `copy_file_range()` to support efficient copying of data from one file to
+  an other.
+
 libfuse 3.3.0 (2018-11-06)
 ==========================
 

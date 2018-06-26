@@ -1,4 +1,4 @@
-project('libfuse3', 'c', version: '3.3.0',
+project('libfuse3', 'c', version: '3.4.0',
         meson_version: '>= 0.42',
         default_options: [ 'buildtype=debugoptimized' ])
 
@@ -36,7 +36,7 @@ cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
-               'utimensat' ]
+               'utimensat', 'copy_file_range' ]
 foreach func : test_funcs
     cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))

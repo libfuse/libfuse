@@ -37,6 +37,8 @@
 #define _GNU_SOURCE
 #define FUSE_USE_VERSION 31
 
+#include "config.h"
+
 #include <fuse_lowlevel.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -1121,6 +1123,31 @@ out:
 	fuse_reply_err(req, saverr);
 }
 
+#ifdef HAVE_COPY_FILE_RANGE
+static void lo_copy_file_range(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
+			       struct fuse_file_info *fi_in,
+			       fuse_ino_t ino_out, off_t off_out,
+			       struct fuse_file_info *fi_out, size_t len,
+			       int flags)
+{
+	ssize_t res;
+
+	if (lo_debug(req))
+		fprintf(stderr, "lo_copy_file_range(ino=%" PRIu64 "/fd=%lu, "
+				"off=%lu, ino=%" PRIu64 "/fd=%lu, "
+				"off=%lu, size=%zd, flags=0x%x)\n",
+			ino_in, fi_in->fh, off_in, ino_out, fi_out->fh, off_out,
+			len, flags);
+
+	res = copy_file_range(fi_in->fh, &off_in, fi_out->fh, &off_out, len,
+			      flags);
+	if (res < 0)
+		fuse_reply_err(req, -errno);
+	else
+		fuse_reply_write(req, res);
+}
+#endif
+
 static struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.lookup		= lo_lookup,
@@ -1155,6 +1182,9 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.listxattr	= lo_listxattr,
 	.setxattr	= lo_setxattr,
 	.removexattr	= lo_removexattr,
+#ifdef HAVE_COPY_FILE_RANGE
+	.copy_file_range = lo_copy_file_range,
+#endif
 };
 
 int main(int argc, char *argv[])
