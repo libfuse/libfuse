@@ -19,6 +19,9 @@ MOUNTPOINT=/sys/fs/fuse/connections
 # Gracefully exit if the package has been removed.
 which fusermount3 &>/dev/null || exit 5
 
+# Define LSB log_* functions.
+. /lib/lsb/init-functions
+
 case "$1" in
     start|restart|force-reload)
 	if ! grep -qw fuse /proc/filesystems; then
