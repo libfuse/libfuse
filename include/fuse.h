@@ -305,7 +305,7 @@ struct fuse_operations {
 	 * but libfuse and the kernel will still assign a different
 	 * inode for internal use (called the "nodeid").
 	 *
-	 * `fi` will always be NULL if the file is not currenlty open, but
+	 * `fi` will always be NULL if the file is not currently open, but
 	 * may also be NULL if the file is open.
 	 */
 	int (*getattr) (const char *, struct stat *, struct fuse_file_info *fi);
