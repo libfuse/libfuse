@@ -858,9 +858,9 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Check file access permissions
 	 *
-	 * This will be called for the access() system call.  If the
-	 * 'default_permissions' mount option is given, this method is not
-	 * called.
+	 * This will be called for the access() and chdir() system
+	 * calls.  If the 'default_permissions' mount option is given,
+	 * this method is not called.
 	 *
 	 * This method is not called under Linux kernel versions 2.4.x
 	 *
