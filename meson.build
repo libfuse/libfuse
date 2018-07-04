@@ -20,7 +20,7 @@ cc = meson.get_compiler('c')
 
 # Default includes when checking for presence of functions and
 # struct members
-include_default = '
+include_default = '''
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -28,7 +28,7 @@ include_default = '
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-'
+'''
 args_default = [ '-D_GNU_SOURCE' ]
 
 cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
