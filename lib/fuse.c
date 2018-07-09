@@ -4417,7 +4417,9 @@ int fuse_getgroups(int size, gid_t list[])
 
 int fuse_interrupted(void)
 {
-	return fuse_req_interrupted(fuse_get_context_internal()->req);
+	struct fuse_context_i *c = fuse_get_context_internal();
+
+	return c->req ? fuse_req_interrupted(c->req) : 0;
 }
 
 void fuse_set_getcontext_func(struct fuse_context *(*func)(void))
