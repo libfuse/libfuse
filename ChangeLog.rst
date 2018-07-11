@@ -1,5 +1,5 @@
-libfuse 3.2.4
-=============
+libfuse 3.2.4 (2018-07-11)
+==========================
 
 * Fixed `rename` deadlock on FreeBSD.
 
