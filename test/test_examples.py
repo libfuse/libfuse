@@ -593,8 +593,8 @@ def tst_utimens(mnt_dir, ns_tol=0):
 
     fstat = os.lstat(filename)
 
-    assert abs(fstat.st_atime - atime) < 1e-3
-    assert abs(fstat.st_mtime - mtime) < 1e-3
+    assert abs(fstat.st_atime - atime) < 1
+    assert abs(fstat.st_mtime - mtime) < 1
     if sys.version_info >= (3,3):
         assert abs(fstat.st_atime_ns - atime_ns) <= ns_tol
         assert abs(fstat.st_mtime_ns - mtime_ns) <= ns_tol
