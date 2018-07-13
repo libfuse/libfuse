@@ -711,6 +711,23 @@ static int get_string_opt(const char *s, unsigned len, const char *opt,
 	return 1;
 }
 
+/* The kernel silently truncates the "data" argument to PAGE_SIZE-1 characters.
+ * This can be dangerous if it e.g. truncates the option "group_id=1000" to
+ * "group_id=1".
+ * This wrapper detects this case and bails out with an error.
+ */
+static int mount_notrunc(const char *source, const char *target,
+			 const char *filesystemtype, unsigned long mountflags,
+			 const char *data) {
+	if (strlen(data) > sysconf(_SC_PAGESIZE) - 1) {
+		fprintf(stderr, "%s: mount options too long\n", progname);
+		errno = EINVAL;
+		return -1;
+	}
+	return mount(source, target, filesystemtype, mountflags, data);
+}
+
+
 static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 		    int fd, const char *opts, const char *dev, char **sourcep,
 		    char **mnt_optsp)
@@ -828,7 +845,7 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 	else
 		strcpy(source, subtype ? subtype : dev);
 
-	res = mount(source, mnt, type, flags, optbuf);
+	res = mount_notrunc(source, mnt, type, flags, optbuf);
 	if (res == -1 && errno == ENODEV && subtype) {
 		/* Probably missing subtype support */
 		strcpy(type, blkdev ? "fuseblk" : "fuse");
@@ -839,13 +856,13 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 			strcpy(source, type);
 		}
 
-		res = mount(source, mnt, type, flags, optbuf);
+		res = mount_notrunc(source, mnt, type, flags, optbuf);
 	}
 	if (res == -1 && errno == EINVAL) {
 		/* It could be an old version not supporting group_id */
 		sprintf(d, "fd=%i,rootmode=%o,user_id=%u",
 			fd, rootmode, getuid());
-		res = mount(source, mnt, type, flags, optbuf);
+		res = mount_notrunc(source, mnt, type, flags, optbuf);
 	}
 	if (res == -1) {
 		int errno_save = errno;
