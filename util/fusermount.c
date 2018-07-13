@@ -29,6 +29,7 @@
 #include <sys/socket.h>
 #include <sys/utsname.h>
 #include <sched.h>
+#include <stdbool.h>
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
@@ -754,8 +755,10 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 		unsigned len;
 		const char *fsname_str = "fsname=";
 		const char *subtype_str = "subtype=";
+		bool escape_ok = begins_with(s, fsname_str) ||
+				 begins_with(s, subtype_str);
 		for (len = 0; s[len]; len++) {
-			if (s[len] == '\\' && s[len + 1])
+			if (escape_ok && s[len] == '\\' && s[len + 1])
 				len++;
 			else if (s[len] == ',')
 				break;
