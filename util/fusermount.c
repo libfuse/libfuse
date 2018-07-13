@@ -565,10 +565,19 @@ static void read_conf(void)
 			fprintf(stderr, "%s: reading %s: missing newline at end of file\n", progname, FUSE_CONF);
 
 		}
+		if (ferror(fp)) {
+			fprintf(stderr, "%s: reading %s: read failed\n", progname, FUSE_CONF);
+			exit(1);
+		}
 		fclose(fp);
 	} else if (errno != ENOENT) {
+		bool fatal = (errno != EACCES && errno != ELOOP &&
+			      errno != ENAMETOOLONG && errno != ENOTDIR &&
+			      errno != EOVERFLOW);
 		fprintf(stderr, "%s: failed to open %s: %s\n",
 			progname, FUSE_CONF, strerror(errno));
+		if (fatal)
+			exit(1);
 	}
 }
 
