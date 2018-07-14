@@ -819,10 +819,16 @@ static int do_mount(const char *mnt, char **typep, mode_t rootmode,
 						flags |= flag;
 					else
 						flags  &= ~flag;
-				} else {
+				} else if (opt_eq(s, len, "default_permissions") ||
+					   opt_eq(s, len, "allow_other") ||
+					   begins_with(s, "max_read=") ||
+					   begins_with(s, "blksize=")) {
 					memcpy(d, s, len);
 					d += len;
 					*d++ = ',';
+				} else {
+					fprintf(stderr, "%s: unknown option '%.*s'\n", progname, len, s);
+					exit(1);
 				}
 			}
 		}
