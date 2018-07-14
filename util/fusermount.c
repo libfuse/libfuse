@@ -30,6 +30,7 @@
 #include <sys/utsname.h>
 #include <sched.h>
 #include <stdbool.h>
+#include <sys/vfs.h>
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
@@ -915,6 +916,8 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	int res;
 	const char *mnt = *mntp;
 	const char *origmnt = mnt;
+	struct statfs fs_buf;
+	size_t i;
 
 	res = lstat(mnt, stbuf);
 	if (res == -1) {
@@ -987,8 +990,53 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		return -1;
 	}
 
+	/* Do not permit mounting over anything in procfs - it has a couple
+	 * places to which we have "write access" without being supposed to be
+	 * able to just put anything we want there.
+	 * Luckily, without allow_other, we can't get other users to actually
+	 * use any fake information we try to put there anyway.
+	 * Use a whitelist to be safe. */
+	if (statfs(*mntp, &fs_buf)) {
+		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
+			progname, mnt, strerror(errno));
+		return -1;
+	}
 
-	return 0;
+	/* Use the same list of permitted filesystems for the mount target as
+	 * the ecryptfs mount helper
+	 * (https://bazaar.launchpad.net/~ecryptfs/ecryptfs/trunk/view/head:/src/utils/mount.ecryptfs_private.c#L225). */
+	typeof(fs_buf.f_type) f_type_whitelist[] = {
+		0x61756673 /* AUFS_SUPER_MAGIC */,
+		0x9123683E /* BTRFS_SUPER_MAGIC */,
+		0x00C36400 /* CEPH_SUPER_MAGIC */,
+		0xFF534D42 /* CIFS_MAGIC_NUMBER */,
+		0x0000F15F /* ECRYPTFS_SUPER_MAGIC */,
+		0x0000EF53 /* EXT[234]_SUPER_MAGIC */,
+		0xF2F52010 /* F2FS_SUPER_MAGIC */,
+		0x65735546 /* FUSE_SUPER_MAGIC */,
+		0x01161970 /* GFS2_MAGIC */,
+		0x3153464A /* JFS_SUPER_MAGIC */,
+		0x000072B6 /* JFFS2_SUPER_MAGIC */,
+		0x0000564C /* NCP_SUPER_MAGIC */,
+		0x00006969 /* NFS_SUPER_MAGIC */,
+		0x00003434 /* NILFS_SUPER_MAGIC */,
+		0x5346544E /* NTFS_SB_MAGIC */,
+		0x794C7630 /* OVERLAYFS_SUPER_MAGIC */,
+		0x52654973 /* REISERFS_SUPER_MAGIC */,
+		0x73717368 /* SQUASHFS_MAGIC */,
+		0x01021994 /* TMPFS_MAGIC */,
+		0x24051905 /* UBIFS_SUPER_MAGIC */,
+		0x58465342 /* XFS_SB_MAGIC */,
+		0x2FC12FC1 /* ZFS_SUPER_MAGIC */,
+	};
+	for (i = 0; i < sizeof(f_type_whitelist)/sizeof(f_type_whitelist[0]); i++) {
+		if (f_type_whitelist[i] == fs_buf.f_type)
+			return 0;
+	}
+
+	fprintf(stderr, "%s: mounting over filesystem type %#010lx is forbidden\n",
+		progname, (unsigned long)fs_buf.f_type);
+	return -1;
 }
 
 static int try_open(const char *dev, char **devp, int silent)
