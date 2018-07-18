@@ -1,6 +1,10 @@
-libfuse 3.2.5
-==========================
+Unreleased Changes
+==================
 
+* The fusermount binary has been hardened in several ways to reduce
+  potential attack surface. Most importantly, mountpoints and mount
+  options must now match a hard-coded whitelist. It is expected that
+  this whitelist covers all regular use-cases.
 * Added a test of `seekdir` to test_syscalls.
 * Fixed `readdir` bug when non-zero offsets are given to filler and the
   filesystem client, after reading a whole directory, re-reads it from a
