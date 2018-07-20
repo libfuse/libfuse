@@ -1,3 +1,8 @@
+libfuse 3.2.5
+==========================
+
+* Added a test of `seekdir` to test_syscalls.
+
 libfuse 3.2.4 (2018-07-11)
 ==========================
 
