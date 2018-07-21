@@ -149,6 +149,7 @@ static void show_help(const char *progname)
 
 int main(int argc, char *argv[])
 {
+	int ret;
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
 	/* Set defaults -- we have to use strdup so that
@@ -172,5 +173,7 @@ int main(int argc, char *argv[])
 		args.argv[0] = (char*) "";
 	}
 
-	return fuse_main(args.argc, args.argv, &hello_oper, NULL);
+	ret = fuse_main(args.argc, args.argv, &hello_oper, NULL);
+	fuse_opt_free_args(&args);
+	return ret;
 }

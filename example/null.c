@@ -27,6 +27,7 @@
 #include <fuse.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
@@ -119,6 +120,7 @@ int main(int argc, char *argv[])
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
+	fuse_opt_free_args(&args);
 
 	if (!opts.mountpoint) {
 		fprintf(stderr, "missing mountpoint parameter\n");
@@ -128,8 +130,10 @@ int main(int argc, char *argv[])
 	if (stat(opts.mountpoint, &stbuf) == -1) {
 		fprintf(stderr ,"failed to access mountpoint %s: %s\n",
 			opts.mountpoint, strerror(errno));
+		free(opts.mountpoint);
 		return 1;
 	}
+	free(opts.mountpoint);
 	if (!S_ISREG(stbuf.st_mode)) {
 		fprintf(stderr, "mountpoint is not a regular file\n");
 		return 1;
