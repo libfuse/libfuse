@@ -1,3 +1,11 @@
+libfuse 3.2.5
+==========================
+
+* Added a test of `seekdir` to test_syscalls.
+* Fixed `readdir` bug when non-zero offsets are given to filler and the
+  filesystem client, after reading a whole directory, re-reads it from a
+  non-zero offset e. g. by calling `seekdir` followed by `readdir`.
+
 libfuse 3.2.4 (2018-07-11)
 ==========================
 

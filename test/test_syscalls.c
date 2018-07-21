@@ -28,6 +28,7 @@ static char testname[256];
 static char testdata[] = "abcdefghijklmnopqrstuvwxyz";
 static char testdata2[] = "1234567890-=qwertyuiop[]\asdfghjkl;'zxcvbnm,./";
 static const char *testdir_files[] = { "f1", "f2", NULL};
+static long seekdir_offsets[4];
 static char zerodata[4096];
 static int testdatalen = sizeof(testdata) - 1;
 static int testdata2len = sizeof(testdata2) - 1;
@@ -86,6 +87,8 @@ static void __start_test(const char *fmt, ...)
 
 #define PERROR(msg) test_perror(__FUNCTION__, msg)
 #define ERROR(msg, args...) test_error(__FUNCTION__, msg, ##args)
+
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 static int check_size(const char *path, int len)
 {
@@ -649,6 +652,63 @@ static int test_ftruncate(int len, int mode)
 
 	success();
 	return 0;
+}
+
+static int test_seekdir(void)
+{
+	int i;
+	int res;
+	DIR *dp;
+	struct dirent *de;
+
+	start_test("seekdir");
+	res = create_dir(testdir, testdir_files);
+	if (res == -1)
+		return res;
+
+	dp = opendir(testdir);
+	if (dp == NULL) {
+		PERROR("opendir");
+		return -1;
+	}
+
+	/* Remember dir offsets */
+	for (i = 0; i < ARRAY_SIZE(seekdir_offsets); i++) {
+		seekdir_offsets[i] = telldir(dp);
+		errno = 0;
+		de = readdir(dp);
+		if (de == NULL) {
+			if (errno) {
+				PERROR("readdir");
+				goto fail;
+			}
+			break;
+		}
+	}
+
+	/* Walk until the end of directory */
+	while (de)
+		de = readdir(dp);
+
+	/* Start from the last valid dir offset and seek backwards */
+	for (i--; i >= 0; i--) {
+		seekdir(dp, seekdir_offsets[i]);
+		de = readdir(dp);
+		if (de == NULL) {
+			ERROR("Unexpected end of directory after seekdir()");
+			goto fail;
+		}
+	}
+
+	closedir(dp);
+	res = cleanup_dir(testdir, testdir_files, 0);
+	if (!res)
+		success();
+	return res;
+fail:
+	closedir(dp);
+	cleanup_dir(testdir, testdir_files, 1);
+	return -1;
 }
 
 static int test_utime(void)
@@ -1677,6 +1737,7 @@ int main(int argc, char *argv[])
 	err += test_rename_file();
 	err += test_rename_dir();
 	err += test_rename_dir_loop();
+	err += test_seekdir();
 	err += test_utime();
 	err += test_truncate(0);
 	err += test_truncate(testdatalen / 2);
