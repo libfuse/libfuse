@@ -446,6 +446,7 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 	}
 
 out:
+	free(copy);
 	if (res == -1)
 		return -1;
 
@@ -1365,6 +1366,7 @@ do_unmount:
 	}
 	if (res == -1)
 		goto err_out;
+	free(mnt);
 	return 0;
 
 err_out:
