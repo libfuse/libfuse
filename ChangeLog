@@ -1,6 +1,8 @@
 Unreleased Changes
 ==================
 
+* libfuse no longer segfaults when fuse_interrupted() is called outside
+  the event loop.
 * The fusermount binary has been hardened in several ways to reduce
   potential attack surface. Most importantly, mountpoints and mount
   options must now match a hard-coded whitelist. It is expected that
