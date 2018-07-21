@@ -175,6 +175,7 @@ static void test_fs(char *mountpoint) {
 
     assert(write(fd, buf, dsize) == dsize);
     assert(write(fd, buf, dsize) == dsize);
+    free(buf);
     close(fd);
 }
 
@@ -191,6 +192,7 @@ int main(int argc, char *argv[]) {
 #endif
     se = fuse_session_new(&args, &tfs_oper,
                           sizeof(tfs_oper), NULL);
+    fuse_opt_free_args(&args);
     assert (se != NULL);
     assert(fuse_set_signal_handlers(se) == 0);
     assert(fuse_session_mount(se, fuse_opts.mountpoint) == 0);
@@ -200,6 +202,7 @@ int main(int argc, char *argv[]) {
 
     /* Write test data */
     test_fs(fuse_opts.mountpoint);
+    free(fuse_opts.mountpoint);
 
     /* Stop file system */
     assert(pthread_cancel(fs_thread) == 0);
