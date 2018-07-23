@@ -205,9 +205,10 @@ int main(int argc, char *argv[]) {
     free(fuse_opts.mountpoint);
 
     /* Stop file system */
-    assert(pthread_cancel(fs_thread) == 0);
-
+    fuse_session_exit(se);
     fuse_session_unmount(se);
+    assert(pthread_join(fs_thread, NULL) == 0);
+
     assert(got_write == 1);
     fuse_remove_signal_handlers(se);
     fuse_session_destroy(se);
