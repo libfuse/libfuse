@@ -181,7 +181,6 @@ struct fuse_dh {
 	char *contents;
 	struct fuse_direntry *first;
 	struct fuse_direntry **last;
-	int allocated;
 	unsigned len;
 	unsigned size;
 	unsigned needlen;
