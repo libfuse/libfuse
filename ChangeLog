@@ -1,16 +1,17 @@
-Unreleased Changes
-==================
+FUSE 2.9.8 (2018-07-24)
+=======================
 
+* SECURITY UPDATE: In previous versions of libfuse it was possible to
+  for unprivileged users to specify the `allow_other` option even when
+  this was forbidden in `/etc/fuse.conf`.  The vulnerability is
+  present only on systems where SELinux is active (including in
+  permissive mode).
 * libfuse no longer segfaults when fuse_interrupted() is called outside
   the event loop.
 * The fusermount binary has been hardened in several ways to reduce
   potential attack surface. Most importantly, mountpoints and mount
   options must now match a hard-coded whitelist. It is expected that
   this whitelist covers all regular use-cases.
-
-FUSE 2.9.8
-==========
-
 * Fixed rename deadlock on FreeBSD.
 
 FUSE 2.9.7 (2016-06-20)

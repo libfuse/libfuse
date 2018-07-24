@@ -1,4 +1,4 @@
-AC_INIT(fuse, 2.9.7)
+AC_INIT(fuse, 2.9.8)
 
 AC_PREREQ(2.59d)
 AC_CONFIG_MACRO_DIR([m4])
