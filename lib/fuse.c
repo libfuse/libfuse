@@ -3479,10 +3479,14 @@ static int fill_dir(void *dh_, const char *name, const struct stat *statp,
 	}
 
 	if (off) {
+		if (dh->filled) {
+			dh->error = -EIO;
+			return 1;
+		}
+
 		if (extend_contents(dh, dh->needlen) == -1)
 			return 1;
 
-		dh->filled = 0;
 		newlen = dh->len +
 			fuse_add_direntry(dh->req, dh->contents + dh->len,
 					  dh->needlen - dh->len, name,
@@ -3490,6 +3494,8 @@ static int fill_dir(void *dh_, const char *name, const struct stat *statp,
 		if (newlen > dh->needlen)
 			return 1;
 	} else {
+		dh->filled = 1;
+
 		newlen = dh->len +
 			fuse_add_direntry(dh->req, NULL, 0, name, NULL, 0);
 		if (extend_contents(dh, newlen) == -1)
@@ -3519,7 +3525,7 @@ static int readdir_fill(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
 		dh->len = 0;
 		dh->error = 0;
 		dh->needlen = size;
-		dh->filled = 1;
+		dh->filled = 0;
 		dh->req = req;
 		fuse_prepare_interrupt(f, req, &d);
 		err = fuse_fs_readdir(f->fs, path, dh, fill_dir, off, fi);
