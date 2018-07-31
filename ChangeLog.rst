@@ -1,3 +1,5 @@
+* Allow fuse to be mounted into autofs folder hierarchy
+
 libfuse 3.2.5 (2018-07-24)
 ==========================
 
