@@ -1003,11 +1003,14 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		return -1;
 	}
 
-	/* Use the same list of permitted filesystems for the mount target as
-	 * the ecryptfs mount helper
-	 * (https://bazaar.launchpad.net/~ecryptfs/ecryptfs/trunk/view/head:/src/utils/mount.ecryptfs_private.c#L225). */
+	/* Define permitted filesystems for the mount target. This was
+	 * originally the same list as used by the ecryptfs mount helper
+	 * (https://bazaar.launchpad.net/~ecryptfs/ecryptfs/trunk/view/head:/src/utils/mount.ecryptfs_private.c#L225)
+	 * but got expanded as we found more filesystems that needed to be
+	 * overlayed. */
 	typeof(fs_buf.f_type) f_type_whitelist[] = {
 		0x61756673 /* AUFS_SUPER_MAGIC */,
+		0x00000187 /* AUTOFS_SUPER_MAGIC */,
 		0x9123683E /* BTRFS_SUPER_MAGIC */,
 		0x00C36400 /* CEPH_SUPER_MAGIC */,
 		0xFF534D42 /* CIFS_MAGIC_NUMBER */,
@@ -1029,7 +1032,6 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x24051905 /* UBIFS_SUPER_MAGIC */,
 		0x58465342 /* XFS_SB_MAGIC */,
 		0x2FC12FC1 /* ZFS_SUPER_MAGIC */,
-		0x00000187 /* AUTOFS */,
 	};
 	for (i = 0; i < sizeof(f_type_whitelist)/sizeof(f_type_whitelist[0]); i++) {
 		if (f_type_whitelist[i] == fs_buf.f_type)
