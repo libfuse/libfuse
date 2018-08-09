@@ -1011,6 +1011,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	typeof(fs_buf.f_type) f_type_whitelist[] = {
 		0x61756673 /* AUFS_SUPER_MAGIC */,
 		0x00000187 /* AUTOFS_SUPER_MAGIC */,
+		0xCA451A4E /* BCACHEFS_STATFS_MAGIC */,
 		0x9123683E /* BTRFS_SUPER_MAGIC */,
 		0x00C36400 /* CEPH_SUPER_MAGIC */,
 		0xFF534D42 /* CIFS_MAGIC_NUMBER */,
