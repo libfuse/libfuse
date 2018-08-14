@@ -329,7 +329,7 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	if (lo_debug(req))
 		fprintf(stderr, "lo_lookup(parent=%" PRIu64 ", name=%s)\n",
 			parent, name);
-	
+
 	err = lo_do_lookup(req, parent, name, &e);
 	if (err)
 		fuse_reply_err(req, err);
@@ -730,7 +730,7 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	if (lo_debug(req))
 		fprintf(stderr, "lo_create(parent=%" PRIu64 ", name=%s)\n",
 			parent, name);
-			
+
 	fd = openat(lo_fd(req, parent), name,
 		    (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
 	if (fd == -1)
@@ -758,8 +758,7 @@ static void lo_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void lo_open(fuse_req_t req, fuse_ino_t ino,
-		    struct fuse_file_info *fi)
+static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	int fd;
 	char buf[64];
@@ -853,7 +852,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	if (lo_debug(req))
 		fprintf(stderr, "lo_write(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
 			ino, out_buf.buf[0].size, (unsigned long) off);
-	
+
 	res = fuse_buf_copy(&out_buf, in_buf, 0);
 	if(res < 0)
 		fuse_reply_err(req, -res);
@@ -953,7 +952,7 @@ int main(int argc, char *argv[])
 
 	if (fuse_opt_parse(&args, &lo, lo_opts, NULL)== -1)
 		return 1;
-	
+
 	lo.debug = opts.debug;
 	lo.root.refcount = 2;
 	if (lo.source) {
