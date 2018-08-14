@@ -518,7 +518,7 @@ static void unref_inode(struct lo_data *lo, struct lo_inode *inode, uint64_t n)
 	}
 }
 
-static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
+static void lo_forget_one(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
 	struct lo_data *lo = lo_data(req);
 	struct lo_inode *inode = lo_inode(req, ino);
@@ -531,7 +531,21 @@ static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 	}
 
 	unref_inode(lo, inode, nlookup);
+}
 
+static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
+{
+	lo_forget_one(req, ino, nlookup);
+	fuse_reply_none(req);
+}
+
+static void lo_forget_multi(fuse_req_t req, size_t count,
+				struct fuse_forget_data *forgets)
+{
+	int i;
+
+	for (i = 0; i < count; i++)
+		lo_forget_one(req, forgets[i].ino, forgets[i].nlookup);
 	fuse_reply_none(req);
 }
 
@@ -886,6 +900,7 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.rmdir		= lo_rmdir,
 	.rename		= lo_rename,
 	.forget		= lo_forget,
+	.forget_multi	= lo_forget_multi,
 	.getattr	= lo_getattr,
 	.setattr	= lo_setattr,
 	.readlink	= lo_readlink,
