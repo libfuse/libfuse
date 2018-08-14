@@ -52,6 +52,7 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <sys/file.h>
+#include <sys/xattr.h>
 
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
@@ -81,6 +82,7 @@ struct lo_data {
 	int debug;
 	int writeback;
 	int flock;
+	int xattr;
 	const char *source;
 	struct lo_inode root; /* protected by lo->mutex */
 };
@@ -96,6 +98,10 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, flock), 1 },
 	{ "no_flock",
 	  offsetof(struct lo_data, flock), 0 },
+	{ "xattr",
+	  offsetof(struct lo_data, xattr), 1 },
+	{ "no_xattr",
+	  offsetof(struct lo_data, xattr), 0 },
 
 	FUSE_OPT_END
 };
@@ -910,6 +916,182 @@ static void lo_flock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
+static void lo_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
+			size_t size)
+{
+	char *value = NULL;
+	char procname[64];
+	struct lo_inode *inode = lo_inode(req, ino);
+	ssize_t ret;
+	int saverr;
+
+	saverr = ENOSYS;
+	if (!lo_data(req)->xattr)
+		goto out;
+
+	if (lo_debug(req)) {
+		fprintf(stderr, "lo_getxattr(ino=%" PRIu64 ", name=%s size=%zd)\n",
+			ino, name, size);
+	}
+
+	if (inode->is_symlink) {
+		/* Sorry, no race free way to getxattr on symlink. */
+		saverr = EPERM;
+		goto out;
+	}
+
+	sprintf(procname, "/proc/self/fd/%i", inode->fd);
+
+	if (size) {
+		value = malloc(size);
+		if (!value)
+			goto out_err;
+
+		ret = getxattr(procname, name, value, size);
+		if (ret == -1)
+			goto out_err;
+		saverr = 0;
+		if (ret == 0)
+			goto out;
+
+		fuse_reply_buf(req, value, ret);
+	} else {
+		ret = getxattr(procname, name, NULL, 0);
+		if (ret == -1)
+			goto out_err;
+
+		fuse_reply_xattr(req, ret);
+	}
+out_free:
+	free(value);
+	return;
+
+out_err:
+	saverr = errno;
+out:
+	fuse_reply_err(req, saverr);
+	goto out_free;
+}
+
+static void lo_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
+{
+	char *value = NULL;
+	char procname[64];
+	struct lo_inode *inode = lo_inode(req, ino);
+	ssize_t ret;
+	int saverr;
+
+	saverr = ENOSYS;
+	if (!lo_data(req)->xattr)
+		goto out;
+
+	if (lo_debug(req)) {
+		fprintf(stderr, "lo_listxattr(ino=%" PRIu64 ", size=%zd)\n",
+			ino, size);
+	}
+
+	if (inode->is_symlink) {
+		/* Sorry, no race free way to listxattr on symlink. */
+		saverr = EPERM;
+		goto out;
+	}
+
+	sprintf(procname, "/proc/self/fd/%i", inode->fd);
+
+	if (size) {
+		value = malloc(size);
+		if (!value)
+			goto out_err;
+
+		ret = listxattr(procname, value, size);
+		if (ret == -1)
+			goto out_err;
+		saverr = 0;
+		if (ret == 0)
+			goto out;
+
+		fuse_reply_buf(req, value, ret);
+	} else {
+		ret = listxattr(procname, NULL, 0);
+		if (ret == -1)
+			goto out_err;
+
+		fuse_reply_xattr(req, ret);
+	}
+out_free:
+	free(value);
+	return;
+
+out_err:
+	saverr = errno;
+out:
+	fuse_reply_err(req, saverr);
+	goto out_free;
+}
+
+static void lo_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
+			const char *value, size_t size, int flags)
+{
+	char procname[64];
+	struct lo_inode *inode = lo_inode(req, ino);
+	ssize_t ret;
+	int saverr;
+
+	saverr = ENOSYS;
+	if (!lo_data(req)->xattr)
+		goto out;
+
+	if (lo_debug(req)) {
+		fprintf(stderr, "lo_setxattr(ino=%" PRIu64 ", name=%s value=%s size=%zd)\n",
+			ino, name, value, size);
+	}
+
+	if (inode->is_symlink) {
+		/* Sorry, no race free way to setxattr on symlink. */
+		saverr = EPERM;
+		goto out;
+	}
+
+	sprintf(procname, "/proc/self/fd/%i", inode->fd);
+
+	ret = setxattr(procname, name, value, size, flags);
+	saverr = ret == -1 ? errno : 0;
+
+out:
+	fuse_reply_err(req, saverr);
+}
+
+static void lo_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
+{
+	char procname[64];
+	struct lo_inode *inode = lo_inode(req, ino);
+	ssize_t ret;
+	int saverr;
+
+	saverr = ENOSYS;
+	if (!lo_data(req)->xattr)
+		goto out;
+
+	if (lo_debug(req)) {
+		fprintf(stderr, "lo_removexattr(ino=%" PRIu64 ", name=%s)\n",
+			ino, name);
+	}
+
+	if (inode->is_symlink) {
+		/* Sorry, no race free way to setxattr on symlink. */
+		saverr = EPERM;
+		goto out;
+	}
+
+	sprintf(procname, "/proc/self/fd/%i", inode->fd);
+
+	ret = removexattr(procname, name);
+	saverr = ret == -1 ? errno : 0;
+
+out:
+	fuse_reply_err(req, saverr);
+}
+
 static struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.lookup		= lo_lookup,
@@ -940,6 +1122,10 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.statfs		= lo_statfs,
 	.fallocate	= lo_fallocate,
 	.flock		= lo_flock,
+	.getxattr	= lo_getxattr,
+	.listxattr	= lo_listxattr,
+	.setxattr	= lo_setxattr,
+	.removexattr	= lo_removexattr,
 };
 
 int main(int argc, char *argv[])
