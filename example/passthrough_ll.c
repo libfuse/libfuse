@@ -77,6 +77,12 @@ struct lo_inode {
 	uint64_t refcount; /* protected by lo->mutex */
 };
 
+enum {
+	CACHE_NEVER,
+	CACHE_NORMAL,
+	CACHE_ALWAYS,
+};
+
 struct lo_data {
 	pthread_mutex_t mutex;
 	int debug;
@@ -84,6 +90,9 @@ struct lo_data {
 	int flock;
 	int xattr;
 	const char *source;
+	double timeout;
+	int cache;
+	int timeout_set;
 	struct lo_inode root; /* protected by lo->mutex */
 };
 
@@ -102,6 +111,16 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, xattr), 1 },
 	{ "no_xattr",
 	  offsetof(struct lo_data, xattr), 0 },
+	{ "timeout=%lf",
+	  offsetof(struct lo_data, timeout), 0 },
+	{ "timeout=",
+	  offsetof(struct lo_data, timeout_set), 1 },
+	{ "cache=never",
+	  offsetof(struct lo_data, cache), CACHE_NEVER },
+	{ "cache=auto",
+	  offsetof(struct lo_data, cache), CACHE_NORMAL },
+	{ "cache=always",
+	  offsetof(struct lo_data, cache), CACHE_ALWAYS },
 
 	FUSE_OPT_END
 };
@@ -155,13 +174,15 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 {
 	int res;
 	struct stat buf;
+	struct lo_data *lo = lo_data(req);
+
 	(void) fi;
 
 	res = fstatat(lo_fd(req, ino), "", &buf, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 	if (res == -1)
 		return (void) fuse_reply_err(req, errno);
 
-	fuse_reply_attr(req, &buf, 1.0);
+	fuse_reply_attr(req, &buf, lo->timeout);
 }
 
 static int utimensat_empty_nofollow(struct lo_inode *inode,
@@ -285,8 +306,8 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	struct lo_inode *inode;
 
 	memset(e, 0, sizeof(*e));
-	e->attr_timeout = 1.0;
-	e->entry_timeout = 1.0;
+	e->attr_timeout = lo->timeout;
+	e->entry_timeout = lo->timeout;
 
 	newfd = openat(lo_fd(req, parent), name, O_PATH | O_NOFOLLOW);
 	if (newfd == -1)
@@ -446,8 +467,8 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	int saverr;
 
 	memset(&e, 0, sizeof(struct fuse_entry_param));
-	e.attr_timeout = 1.0;
-	e.entry_timeout = 1.0;
+	e.attr_timeout = lo->timeout;
+	e.entry_timeout = lo->timeout;
 
 	res = linkat_empty_nofollow(inode, lo_fd(req, parent), name);
 	if (res == -1)
@@ -598,6 +619,7 @@ static struct lo_dirp *lo_dirp(struct fuse_file_info *fi)
 static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	int error = ENOMEM;
+	struct lo_data *lo = lo_data(req);
 	struct lo_dirp *d = calloc(1, sizeof(struct lo_dirp));
 	if (d == NULL)
 		goto out_err;
@@ -614,6 +636,8 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	d->entry = NULL;
 
 	fi->fh = (uintptr_t) d;
+	if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
 	fuse_reply_open(req, fi);
 	return;
 
@@ -779,6 +803,7 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	int fd;
 	char buf[64];
+	struct lo_data *lo = lo_data(req);
 
 	if (lo_debug(req))
 		fprintf(stderr, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
@@ -786,8 +811,7 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 
 	/* With writeback cache, kernel may send read requests even
 	   when userspace opened write-only */
-	if (lo_data(req)->writeback &&
-	    (fi->flags & O_ACCMODE) == O_WRONLY) {
+	if (lo->writeback && (fi->flags & O_ACCMODE) == O_WRONLY) {
 		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
 	}
@@ -798,7 +822,7 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	   end of the file isn't accurate anymore). In this example,
 	   we just accept that. A more rigorous filesystem may want
 	   to return an error here */
-	if (lo_data(req)->writeback && (fi->flags & O_APPEND))
+	if (lo->writeback && (fi->flags & O_APPEND))
 		fi->flags &= ~O_APPEND;
 
 	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
@@ -807,6 +831,10 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		return (void) fuse_reply_err(req, errno);
 
 	fi->fh = fd;
+	if (lo->cache == CACHE_NEVER)
+		fi->direct_io = 1;
+	else if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
 	fuse_reply_open(req, fi);
 }
 
@@ -1143,6 +1171,7 @@ int main(int argc, char *argv[])
 	pthread_mutex_init(&lo.mutex, NULL);
 	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = -1;
+	lo.cache = CACHE_NORMAL;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
@@ -1178,6 +1207,24 @@ int main(int argc, char *argv[])
 		lo.source = "/";
 	}
 	lo.root.is_symlink = false;
+	if (!lo.timeout_set) {
+		switch (lo.cache) {
+		case CACHE_NEVER:
+			lo.timeout = 0.0;
+			break;
+
+		case CACHE_NORMAL:
+			lo.timeout = 1.0;
+			break;
+
+		case CACHE_ALWAYS:
+			lo.timeout = 86400.0;
+			break;
+		}
+	} else if (lo.timeout < 0) {
+		errx(1, "timeout is negative (%lf)", lo.timeout);
+	}
+
 	lo.root.fd = open(lo.source, O_PATH);
 	if (lo.root.fd == -1)
 		err(1, "open(\"%s\", O_PATH)", lo.source);
