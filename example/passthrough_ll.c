@@ -69,6 +69,7 @@ struct lo_inode {
 	struct lo_inode *next; /* protected by lo->mutex */
 	struct lo_inode *prev; /* protected by lo->mutex */
 	int fd;
+	bool is_symlink;
 	ino_t ino;
 	dev_t dev;
 	uint64_t refcount; /* protected by lo->mutex */
@@ -193,6 +194,7 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		if (!inode)
 			goto out_err;
 
+		inode->is_symlink = S_ISLNK(e->attr.st_mode);
 		inode->refcount = 1;
 		inode->fd = newfd;
 		inode->ino = e->attr.st_ino;
@@ -612,6 +614,7 @@ int main(int argc, char *argv[])
 	
 	lo.debug = opts.debug;
 	lo.root.refcount = 2;
+	lo.root.is_symlink = false;
 	lo.root.fd = open("/", O_PATH);
 	if (lo.root.fd == -1)
 		err(1, "open(\"/\", O_PATH)");
