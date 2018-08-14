@@ -585,6 +585,9 @@ int main(int argc, char *argv[])
 	                      .writeback = 0 };
 	int ret = -1;
 
+	/* Don't mask creation mode, kernel already did that */
+	umask(0);
+
 	pthread_mutex_init(&lo.mutex, NULL);
 	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = -1;
