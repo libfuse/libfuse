@@ -342,6 +342,12 @@ out_err:
 	fuse_reply_err(req, error);
 }
 
+static int is_dot_or_dotdot(const char *name)
+{
+	return name[0] == '.' && (name[1] == '\0' ||
+				  (name[1] == '.' && name[2] == '\0'));
+}
+
 static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t offset, struct fuse_file_info *fi, int plus)
 {
@@ -367,6 +373,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	while (1) {
 		size_t entsize;
 		off_t nextoff;
+		const char *name;
 
 		if (!d->entry) {
 			errno = 0;
@@ -380,23 +387,28 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			}
 		}
 		nextoff = telldir(d->dp);
+		name = d->entry->d_name;
 		if (plus) {
 			struct fuse_entry_param e;
 
-			err = lo_do_lookup(req, ino, d->entry->d_name, &e);
-			if (err)
-				goto error;
+			if (is_dot_or_dotdot(name)) {
+				e.ino = 0;
+				e.attr.st_ino = d->entry->d_ino;
+				e.attr.st_mode = d->entry->d_type << 12;
+			} else {
+				err = lo_do_lookup(req, ino, name, &e);
+				if (err)
+					goto error;
+			}
 
-			entsize = fuse_add_direntry_plus(req, p, rem,
-							 d->entry->d_name,
+			entsize = fuse_add_direntry_plus(req, p, rem, name,
 							 &e, nextoff);
 		} else {
 			struct stat st = {
 				.st_ino = d->entry->d_ino,
 				.st_mode = d->entry->d_type << 12,
 			};
-			entsize = fuse_add_direntry(req, p, rem,
-						    d->entry->d_name,
+			entsize = fuse_add_direntry(req, p, rem, name,
 						    &st, nextoff);
 		}
 		if (entsize > rem)
