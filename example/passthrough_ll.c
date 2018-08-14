@@ -50,6 +50,7 @@
 #include <errno.h>
 #include <err.h>
 #include <inttypes.h>
+#include <pthread.h>
 
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
@@ -65,18 +66,19 @@ struct _uintptr_to_must_hold_fuse_ino_t_dummy_struct \
 #endif
 
 struct lo_inode {
-	struct lo_inode *next;
-	struct lo_inode *prev;
+	struct lo_inode *next; /* protected by lo->mutex */
+	struct lo_inode *prev; /* protected by lo->mutex */
 	int fd;
 	ino_t ino;
 	dev_t dev;
-	uint64_t nlookup;
+	uint64_t refcount; /* protected by lo->mutex */
 };
 
 struct lo_data {
+	pthread_mutex_t mutex;
 	int debug;
 	int writeback;
-	struct lo_inode root;
+	struct lo_inode root; /* protected by lo->mutex */
 };
 
 static const struct fuse_opt lo_opts[] = {
@@ -143,12 +145,19 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st)
 {
 	struct lo_inode *p;
+	struct lo_inode *ret = NULL;
 
+	pthread_mutex_lock(&lo->mutex);
 	for (p = lo->root.next; p != &lo->root; p = p->next) {
-		if (p->ino == st->st_ino && p->dev == st->st_dev)
-			return p;
+		if (p->ino == st->st_ino && p->dev == st->st_dev) {
+			assert(p->refcount > 0);
+			ret = p;
+			ret->refcount++;
+			break;
+		}
 	}
-	return NULL;
+	pthread_mutex_unlock(&lo->mutex);
+	return ret;
 }
 
 static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
@@ -157,6 +166,7 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int newfd;
 	int res;
 	int saverr;
+	struct lo_data *lo = lo_data(req);
 	struct lo_inode *inode;
 
 	memset(e, 0, sizeof(*e));
@@ -176,23 +186,27 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		close(newfd);
 		newfd = -1;
 	} else {
-		struct lo_inode *prev = &lo_data(req)->root;
-		struct lo_inode *next = prev->next;
+		struct lo_inode *prev, *next;
+
 		saverr = ENOMEM;
 		inode = calloc(1, sizeof(struct lo_inode));
 		if (!inode)
 			goto out_err;
 
+		inode->refcount = 1;
 		inode->fd = newfd;
 		inode->ino = e->attr.st_ino;
 		inode->dev = e->attr.st_dev;
 
+		pthread_mutex_lock(&lo->mutex);
+		prev = &lo->root;
+		next = prev->next;
 		next->prev = inode;
 		inode->next = next;
 		inode->prev = prev;
 		prev->next = inode;
+		pthread_mutex_unlock(&lo->mutex);
 	}
-	inode->nlookup++;
 	e->ino = (uintptr_t) inode;
 
 	if (lo_debug(req))
@@ -224,32 +238,44 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		fuse_reply_entry(req, &e);
 }
 
-static void lo_free(struct lo_inode *inode)
+static void unref_inode(struct lo_data *lo, struct lo_inode *inode, uint64_t n)
 {
-	struct lo_inode *prev = inode->prev;
-	struct lo_inode *next = inode->next;
+	if (!inode)
+		return;
 
-	next->prev = prev;
-	prev->next = next;
-	close(inode->fd);
-	free(inode);
+	pthread_mutex_lock(&lo->mutex);
+	assert(inode->refcount >= n);
+	inode->refcount -= n;
+	if (!inode->refcount) {
+		struct lo_inode *prev, *next;
+
+		prev = inode->prev;
+		next = inode->next;
+		next->prev = prev;
+		prev->next = next;
+
+		pthread_mutex_unlock(&lo->mutex);
+		close(inode->fd);
+		free(inode);
+
+	} else {
+		pthread_mutex_unlock(&lo->mutex);
+	}
 }
 
 static void lo_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
+	struct lo_data *lo = lo_data(req);
 	struct lo_inode *inode = lo_inode(req, ino);
 
 	if (lo_debug(req)) {
 		fprintf(stderr, "  forget %lli %lli -%lli\n",
-			(unsigned long long) ino, (unsigned long long) inode->nlookup,
+			(unsigned long long) ino,
+			(unsigned long long) inode->refcount,
 			(unsigned long long) nlookup);
 	}
 
-	assert(inode->nlookup >= nlookup);
-	inode->nlookup -= nlookup;
-
-	if (!inode->nlookup)
-		lo_free(inode);
+	unref_inode(lo, inode, nlookup);
 
 	fuse_reply_none(req);
 }
@@ -547,6 +573,7 @@ int main(int argc, char *argv[])
 	                      .writeback = 0 };
 	int ret = -1;
 
+	pthread_mutex_init(&lo.mutex, NULL);
 	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = -1;
 
@@ -569,8 +596,8 @@ int main(int argc, char *argv[])
 		return 1;
 	
 	lo.debug = opts.debug;
+	lo.root.refcount = 2;
 	lo.root.fd = open("/", O_PATH);
-	lo.root.nlookup = 2;
 	if (lo.root.fd == -1)
 		err(1, "open(\"/\", O_PATH)");
 
@@ -601,8 +628,6 @@ err_out1:
 	free(opts.mountpoint);
 	fuse_opt_free_args(&args);
 
-	while (lo.root.next != &lo.root)
-		lo_free(lo.root.next);
 	if (lo.root.fd >= 0)
 		close(lo.root.fd);
 
