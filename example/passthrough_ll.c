@@ -51,6 +51,7 @@
 #include <err.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <sys/file.h>
 
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
@@ -79,6 +80,7 @@ struct lo_data {
 	pthread_mutex_t mutex;
 	int debug;
 	int writeback;
+	int flock;
 	const char *source;
 	struct lo_inode root; /* protected by lo->mutex */
 };
@@ -90,6 +92,10 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, writeback), 0 },
 	{ "source=%s",
 	  offsetof(struct lo_data, source), 0 },
+	{ "flock",
+	  offsetof(struct lo_data, flock), 1 },
+	{ "no_flock",
+	  offsetof(struct lo_data, flock), 0 },
 
 	FUSE_OPT_END
 };
@@ -130,6 +136,11 @@ static void lo_init(void *userdata,
 		if (lo->debug)
 			fprintf(stderr, "lo_init: activating writeback\n");
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+	}
+	if (lo->flock && conn->capable & FUSE_CAP_FLOCK_LOCKS) {
+		if (lo->debug)
+			fprintf(stderr, "lo_init: activating flock locks\n");
+		conn->want |= FUSE_CAP_FLOCK_LOCKS;
 	}
 }
 
@@ -888,6 +899,17 @@ static void lo_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 	fuse_reply_err(req, err);
 }
 
+static void lo_flock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
+		     int op)
+{
+	int res;
+	(void) ino;
+
+	res = flock(fi->fh, op);
+
+	fuse_reply_err(req, res == -1 ? errno : 0);
+}
+
 static struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.lookup		= lo_lookup,
@@ -917,6 +939,7 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.write_buf      = lo_write_buf,
 	.statfs		= lo_statfs,
 	.fallocate	= lo_fallocate,
+	.flock		= lo_flock,
 };
 
 int main(int argc, char *argv[])
