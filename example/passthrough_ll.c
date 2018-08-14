@@ -79,6 +79,7 @@ struct lo_data {
 	pthread_mutex_t mutex;
 	int debug;
 	int writeback;
+	const char *source;
 	struct lo_inode root; /* protected by lo->mutex */
 };
 
@@ -87,6 +88,9 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, writeback), 1 },
 	{ "no_writeback",
 	  offsetof(struct lo_data, writeback), 0 },
+	{ "source=%s",
+	  offsetof(struct lo_data, source), 0 },
+
 	FUSE_OPT_END
 };
 
@@ -937,10 +941,23 @@ int main(int argc, char *argv[])
 	
 	lo.debug = opts.debug;
 	lo.root.refcount = 2;
+	if (lo.source) {
+		struct stat stat;
+		int res;
+
+		res = lstat(lo.source, &stat);
+		if (res == -1)
+			err(1, "failed to stat source (\"%s\")", lo.source);
+		if (!S_ISDIR(stat.st_mode))
+			errx(1, "source is not a directory");
+
+	} else {
+		lo.source = "/";
+	}
 	lo.root.is_symlink = false;
-	lo.root.fd = open("/", O_PATH);
+	lo.root.fd = open(lo.source, O_PATH);
 	if (lo.root.fd == -1)
-		err(1, "open(\"/\", O_PATH)");
+		err(1, "open(\"%s\", O_PATH)", lo.source);
 
 	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 	if (se == NULL)
