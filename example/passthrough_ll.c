@@ -702,9 +702,10 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			struct fuse_entry_param e;
 
 			if (is_dot_or_dotdot(name)) {
-				e.ino = 0;
-				e.attr.st_ino = d->entry->d_ino;
-				e.attr.st_mode = d->entry->d_type << 12;
+				e = (struct fuse_entry_param) {
+					.attr.st_ino = d->entry->d_ino,
+					.attr.st_mode = d->entry->d_type << 12,
+				};
 			} else {
 				err = lo_do_lookup(req, ino, name, &e);
 				if (err)
