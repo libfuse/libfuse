@@ -1,5 +1,5 @@
 project('libfuse3', 'c', version: '3.2.5',
-        meson_version: '>= 0.38',
+        meson_version: '>= 0.40.1',
         default_options: [ 'buildtype=debugoptimized' ])
 
 
@@ -63,9 +63,9 @@ configure_file(output: 'config.h',
 #
 # Compiler configuration
 #
-add_global_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-Wno-sign-compare',
-                     '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
-                     '-fno-strict-aliasing', language: 'c')
+add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-Wno-sign-compare',
+                      '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
+                      '-fno-strict-aliasing', language: 'c')
 
 # Some (stupid) GCC versions warn about unused return values even when they are
 # casted to void. This makes -Wunused-result pretty useless, since there is no
@@ -80,7 +80,7 @@ int main(void) {
 }'''
 if not cc.compiles(code, args: [ '-O0', '-Werror=unused-result' ])
      message('Compiler warns about unused result even when casting to void')
-     add_global_arguments('-Wno-unused-result', language: 'c')
+     add_project_arguments('-Wno-unused-result', language: 'c')
 endif
 
 # '.' will refer to current build directory, which contains config.h

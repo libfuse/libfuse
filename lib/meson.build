@@ -44,4 +44,6 @@ pkg.generate(libraries: [ libfuse, '-lpthread' ],
              name: 'fuse3',
              description: 'Filesystem in Userspace',
              subdirs: 'fuse3')
-             
+
+libfuse_dep = declare_dependency(include_directories: include_dirs,
+                                 link_with: libfuse, dependencies: deps)
