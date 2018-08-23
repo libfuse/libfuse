@@ -140,6 +140,115 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &buf, 1.0);
 }
 
+static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set, struct fuse_file_info *fi)
+{
+	int res;
+	int error;
+	struct timespec times[2] = {
+		{ .tv_sec = 0, .tv_nsec = UTIME_OMIT },
+		{ .tv_sec = 0, .tv_nsec = UTIME_OMIT }
+	};
+	char buf[64];
+
+	sprintf(buf, "/proc/self/fd/%d", lo_fd(req, ino));
+
+	if (lo_debug(req))
+		fprintf(stderr, "lo_setattr:%s%s%s%s%s%s%s%s%s\n",
+			to_set & FUSE_SET_ATTR_MODE ? " MODE" : "",
+			to_set & FUSE_SET_ATTR_UID ? " UID" : "",
+			to_set & FUSE_SET_ATTR_GID ? " GID" : "",
+			to_set & FUSE_SET_ATTR_SIZE ? " SIZE" : "",
+			to_set & FUSE_SET_ATTR_ATIME ? " ATIME" : "",
+			to_set & FUSE_SET_ATTR_MTIME ? " MTIME" : "",
+			to_set & FUSE_SET_ATTR_ATIME_NOW ? " ATIME_NOW" : "",
+			to_set & FUSE_SET_ATTR_MTIME_NOW ? " MTIME_NOW" : "",
+			to_set & FUSE_SET_ATTR_CTIME ? " CTIME" : "");
+
+	if (to_set & FUSE_SET_ATTR_MODE)
+	{
+		res = chmod(buf, attr->st_mode);
+		if (res == -1)
+			goto out_errno;
+	}
+
+	if ((to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) == (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID))
+	{
+		res = chown(buf, attr->st_uid, attr->st_gid);
+		if (res == -1)
+			goto out_errno;
+	}
+	else if (to_set & FUSE_SET_ATTR_UID)
+	{
+		res = chown(buf, attr->st_uid, -1);
+		if (res == -1)
+			goto out_errno;
+	}
+	else if (to_set & FUSE_SET_ATTR_GID)
+	{
+		res = chown(buf, -1, attr->st_gid);
+		if (res == -1)
+			goto out_errno;
+	}
+
+	if (to_set & FUSE_SET_ATTR_SIZE)
+	{
+		if (fi->fh)
+			res = ftruncate(fi->fh, attr->st_size);
+		else
+			res = truncate(buf, attr->st_size);
+		if (res == -1)
+			goto out_errno;
+	}
+
+	if (to_set & FUSE_SET_ATTR_ATIME)
+	{
+		times[0].tv_sec = attr->st_atime;
+		times[0].tv_nsec = 0;
+	}
+
+	if (to_set & FUSE_SET_ATTR_MTIME)
+	{
+		times[1].tv_sec = attr->st_mtime;
+		times[1].tv_nsec = 0;
+	}
+
+	if (to_set & FUSE_SET_ATTR_ATIME_NOW)
+		times[0].tv_nsec = UTIME_NOW;
+
+	if (to_set & FUSE_SET_ATTR_MTIME_NOW)
+		times[1].tv_nsec = UTIME_NOW;
+
+	if (to_set & FUSE_SET_ATTR_CTIME)
+		return (void) fuse_reply_err(req, ENOTSUP);
+
+	if (to_set & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_ATIME_NOW | FUSE_SET_ATTR_MTIME_NOW))
+	{
+		int fd = open("/proc/self/fd", O_PATH);
+		if (fd < 0)
+			goto out_errno;
+
+		sprintf(buf, "%d", lo_fd(req, ino));
+		res = utimensat(fd, buf, times, 0);
+		if (res == -1)
+		{
+			error = errno;
+			close (fd);
+			goto out_err;
+		}
+
+		res = close (fd);
+		if (res == -1)
+			goto out_errno;
+	}
+
+	return lo_getattr (req, ino, fi);
+
+out_errno:
+	error = errno;
+out_err:
+	return (void) fuse_reply_err(req, error);
+}
+
 static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st)
 {
 	struct lo_inode *p;
@@ -216,7 +325,7 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	if (lo_debug(req))
 		fprintf(stderr, "lo_lookup(parent=%" PRIu64 ", name=%s)\n",
 			parent, name);
-	
+
 	err = lo_do_lookup(req, parent, name, &e);
 	if (err)
 		fuse_reply_err(req, err);
@@ -421,9 +530,9 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int err;
 
 	if (lo_debug(req))
-		fprintf(stderr, "lo_create(parent=%" PRIu64 ", name=%s)\n",
-			parent, name);
-			
+		fprintf(stderr, "lo_create(parent=%" PRIu64 ", name=%s, mode=0%o)\n",
+			parent, name, mode);
+
 	fd = openat(lo_fd(req, parent), name,
 		    (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
 	if (fd == -1)
@@ -465,13 +574,34 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino,
 	if (lo_data(req)->writeback && (fi->flags & O_APPEND))
 		fi->flags &= ~O_APPEND;
 
-	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
+	sprintf(buf, "/proc/self/fd/%d", lo_fd(req, ino));
 	fd = open(buf, fi->flags & ~O_NOFOLLOW);
 	if (fd == -1)
 		return (void) fuse_reply_err(req, errno);
 
 	fi->fh = fd;
 	fuse_reply_open(req, fi);
+}
+
+static void lo_mknod(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, dev_t rdev)
+{
+	int res;
+	struct fuse_entry_param e;
+	int err;
+
+	if (lo_debug(req))
+		fprintf(stderr, "lo_mknod(parent=%" PRIu64 ", name=%s, mode=0%o)\n",
+			parent, name, mode);
+
+	res = mknodat(lo_fd(req, parent), name, mode, rdev);
+	if (res == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	err = lo_do_lookup(req, parent, name, &e);
+	if (err)
+		fuse_reply_err(req, err);
+	else
+		fuse_reply_entry(req, &e);
 }
 
 static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
@@ -513,7 +643,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	if (lo_debug(req))
 		fprintf(stderr, "lo_write(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
 			ino, out_buf.buf[0].size, (unsigned long) off);
-	
+
 	res = fuse_buf_copy(&out_buf, in_buf, 0);
 	if(res < 0)
 		fuse_reply_err(req, -res);
@@ -526,7 +656,9 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.lookup		= lo_lookup,
 	.forget		= lo_forget,
 	.getattr	= lo_getattr,
+	.setattr	= lo_setattr,
 	.readlink	= lo_readlink,
+	.mknod		= lo_mknod,
 	.opendir	= lo_opendir,
 	.readdir	= lo_readdir,
 	.readdirplus	= lo_readdirplus,
@@ -567,7 +699,7 @@ int main(int argc, char *argv[])
 
 	if (fuse_opt_parse(&args, &lo, lo_opts, NULL)== -1)
 		return 1;
-	
+
 	lo.debug = opts.debug;
 	lo.root.fd = open("/", O_PATH);
 	lo.root.nlookup = 2;
