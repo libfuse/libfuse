@@ -11,12 +11,17 @@ bindir="$2"
 udevrulesdir="$3"
 prefix="${MESON_INSTALL_DESTDIR_PREFIX}"
 
-chown root:root "${prefix}/${bindir}/fusermount3"
-chmod u+s "${prefix}/${bindir}/fusermount3"
+if test -z "${DESTDIR}"; then
+    chown root:root "${prefix}/${bindir}/fusermount3"
+    chmod u+s "${prefix}/${bindir}/fusermount3"
+fi
 
-if test ! -e "${DESTDIR}/dev/fuse"; then
-    mkdir -p "${DESTDIR}/dev"
-    mknod "${DESTDIR}/dev/fuse" -m 0666 c 10 229
+
+if test -z "${DESTDIR}"; then
+    if test ! -e "${DESTDIR}/dev/fuse"; then
+        mkdir -p "${DESTDIR}/dev"
+        mknod "${DESTDIR}/dev/fuse" -m 0666 c 10 229
+    fi
 fi
 
 install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
