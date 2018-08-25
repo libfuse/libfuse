@@ -234,6 +234,18 @@ static int fuse_register_module(const char *name,
 	return 0;
 }
 
+static void fuse_unregister_module(struct fuse_module *m)
+{
+	struct fuse_module **mp;
+	for (mp = &fuse_modules; *mp; mp = &(*mp)->next) {
+		if (*mp == m) {
+			*mp = (*mp)->next;
+			break;
+		}
+	}
+	free(m->name);
+	free(m);
+}
 
 static int fuse_load_so_module(const char *module)
 {
@@ -313,8 +325,11 @@ static struct fuse_module *fuse_get_module(const char *module)
 static void fuse_put_module(struct fuse_module *m)
 {
 	pthread_mutex_lock(&fuse_context_lock);
-	assert(m->ctr > 0);
-	m->ctr--;
+	if (m->so)
+		assert(m->ctr > 0);
+	/* Builtin modules may already have m->ctr == 0 */
+	if (m->ctr > 0)
+		m->ctr--;
 	if (!m->ctr && m->so) {
 		struct fusemod_so *so = m->so;
 		assert(so->ctr > 0);
@@ -323,13 +338,15 @@ static void fuse_put_module(struct fuse_module *m)
 			struct fuse_module **mp;
 			for (mp = &fuse_modules; *mp;) {
 				if ((*mp)->so == so)
-					*mp = (*mp)->next;
+					fuse_unregister_module(*mp);
 				else
 					mp = &(*mp)->next;
 			}
 			dlclose(so->handle);
 			free(so);
 		}
+	} else if (!m->ctr) {
+		fuse_unregister_module(m);
 	}
 	pthread_mutex_unlock(&fuse_context_lock);
 }
@@ -4962,6 +4979,9 @@ void fuse_destroy(struct fuse *f)
 	assert(list_empty(&f->partial_slabs));
 	assert(list_empty(&f->full_slabs));
 
+	while (fuse_modules) {
+		fuse_put_module(fuse_modules);
+	}
 	free(f->id_table.array);
 	free(f->name_table.array);
 	pthread_mutex_destroy(&f->lock);
