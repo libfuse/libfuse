@@ -15,3 +15,4 @@ int fuse_mnt_umount(const char *progname, const char *abs_mnt,
 		    const char *rel_mnt, int lazy);
 char *fuse_mnt_resolve_path(const char *progname, const char *orig);
 int fuse_mnt_check_fuseblk(void);
+int fuse_mnt_parse_fuse_fd(const char *mountpoint);
