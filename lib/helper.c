@@ -15,6 +15,7 @@
 #include "fuse_misc.h"
 #include "fuse_opt.h"
 #include "fuse_lowlevel.h"
+#include "mount_util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -147,7 +148,11 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 	switch (key) {
 	case FUSE_OPT_KEY_NONOPT:
 		if (!opts->mountpoint) {
-			char mountpoint[PATH_MAX];
+			if (fuse_mnt_parse_fuse_fd(arg) != -1) {
+				return fuse_opt_add_opt(&opts->mountpoint, arg);
+			}
+
+			char mountpoint[PATH_MAX] = "";
 			if (realpath(arg, mountpoint) == NULL) {
 				fprintf(stderr,
 					"fuse: bad mount point `%s': %s\n",
