@@ -303,30 +303,30 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	if (!opts.show_help &&
 	    !opts.mountpoint) {
 		fprintf(stderr, "error: no mountpoint specified\n");
-		res = 1;
+		res = 2;
 		goto out1;
 	}
 
 
 	fuse = fuse_new_31(&args, op, op_size, user_data);
 	if (fuse == NULL) {
-		res = 1;
+		res = 3;
 		goto out1;
 	}
 
 	if (fuse_mount(fuse,opts.mountpoint) != 0) {
-		res = 1;
+		res = 4;
 		goto out2;
 	}
 
 	if (fuse_daemonize(opts.foreground) != 0) {
-		res = 1;
+		res = 5;
 		goto out3;
 	}
 
 	struct fuse_session *se = fuse_get_session(fuse);
 	if (fuse_set_signal_handlers(se) != 0) {
-		res = 1;
+		res = 6;
 		goto out3;
 	}
 
@@ -339,7 +339,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		res = fuse_loop_mt_32(fuse, &loop_config);
 	}
 	if (res)
-		res = 1;
+		res = 7;
 
 	fuse_remove_signal_handlers(se);
 out3:

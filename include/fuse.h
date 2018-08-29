@@ -812,6 +812,15 @@ struct fuse_context {
  *
  * Note: this is currently implemented as a macro.
  *
+ * The following error codes may be returned from fuse_main():
+ *   1: Invalid option arguments
+ *   2: No mount point specified
+ *   3: FUSE setup failed
+ *   4: Mounting failed
+ *   5: Failed to daemonize (detach from session)
+ *   6: Failed to set up signal handlers
+ *   7: An error occured during the life of the file system
+ *
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
  * @param op the file system operation
