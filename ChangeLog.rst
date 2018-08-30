@@ -1,4 +1,11 @@
-* Allow fuse to be mounted into autofs folder hierarchy
+Unreleased Changes
+==================
+
+* The fuse_main() function now returns more fine-grained error codes.
+* FUSE filesystems may now be mounted on mountpoint within
+  bcachefs, aufs and FAT filesystems.
+* libfuse may now be used as a Meson subproject.
+* Fix a few low-impact memory leaks.
 
 libfuse 3.2.5 (2018-07-24)
 ==========================
