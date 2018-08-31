@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+libfuse 3.2.6 (2018-08-31)
+==========================
 
 * The fuse_main() function now returns more fine-grained error codes.
 * FUSE filesystems may now be mounted on mountpoint within
