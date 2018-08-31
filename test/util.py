@@ -7,6 +7,7 @@ import time
 from os.path import join as pjoin
 import sys
 import re
+import itertools
 
 basename = pjoin(os.path.dirname(__file__), '..')
 
@@ -138,6 +139,12 @@ def fuse_test_marker():
 
     return pytest.mark.uses_fuse()
 
+def powerset(iterable):
+  s = list(iterable)
+  return itertools.chain.from_iterable(
+      itertools.combinations(s, r) for r in range(len(s)+1))
+
+
 # Use valgrind if requested
 if os.environ.get('TEST_WITH_VALGRIND', 'no').lower().strip() \
    not in ('no', 'false', '0'):
@@ -147,6 +154,8 @@ else:
 
 # Try to use local fusermount3
 os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'util'), os.environ['PATH'])
+# Put example binaries on PATH
+os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'example'), os.environ['PATH'])
 
 try:
     (fuse_proto, fuse_caps) = test_printcap()

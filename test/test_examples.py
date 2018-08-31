@@ -19,7 +19,7 @@ from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker, test_printcap,
-                  fuse_proto)
+                  fuse_proto, powerset)
 from os.path import join as pjoin
 
 pytestmark = fuse_test_marker()
@@ -33,20 +33,36 @@ def name_generator(__ctr=[0]):
     __ctr[0] += 1
     return 'testfile_%d' % __ctr[0]
 
-options = [ [] ]
+options = []
 if sys.platform == 'linux':
-    options.append(['-o', 'clone_fd'])
-@pytest.mark.parametrize("options", options)
-@pytest.mark.parametrize("name", ('hello', 'hello_ll'))
-def test_hello(tmpdir, name, options):
-    mnt_dir = str(tmpdir)
-    cmdline = base_cmdline + \
-              [ pjoin(basename, 'example', name),
-                '-f', mnt_dir ] + options
+    options.append('clone_fd')
+
+def invoke_directly(mnt_dir, name, options):
+    cmdline = base_cmdline + [ pjoin(basename, 'example', name),
+                               '-f', mnt_dir, '-o', ','.join(options) ]
     if name == 'hello_ll':
         # supports single-threading only
         cmdline.append('-s')
-    mount_process = subprocess.Popen(cmdline)
+
+    return cmdline
+
+def invoke_mount_fuse(mnt_dir, name, options):
+    return base_cmdline + [ pjoin(basename, 'util', 'mount.fuse3'),
+                            name, mnt_dir, '-o', ','.join(options) ]
+
+def invoke_mount_fuse_drop_privileges(mnt_dir, name, options):
+    if os.getuid() != 0:
+        pytest.skip('drop_privileges requires root, skipping.')
+
+    return invoke_mount_fuse(mnt_dir, name, options + ('drop_privileges',))
+
+@pytest.mark.parametrize("cmdline_builder", (invoke_directly, invoke_mount_fuse,
+                                             invoke_mount_fuse_drop_privileges))
+@pytest.mark.parametrize("options", powerset(options))
+@pytest.mark.parametrize("name", ('hello', 'hello_ll'))
+def test_hello(tmpdir, name, options, cmdline_builder):
+    mnt_dir = str(tmpdir)
+    mount_process = subprocess.Popen(cmdline_builder(mnt_dir, name, options))
     try:
         wait_for_mount(mount_process, mnt_dir)
         assert os.listdir(mnt_dir) == [ 'hello' ]
