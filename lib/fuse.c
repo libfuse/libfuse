@@ -1797,7 +1797,7 @@ int fuse_fs_read_buf(struct fuse_fs *fs, const char *path,
 				(unsigned long long) fi->fh,
 				size, (unsigned long long) off, fi->flags);
 
-		if (fs->op.read_buf) {
+		if (fs->op.read_buf && !fi->no_read_buf) {
 			res = fs->op.read_buf(path, bufp, size, off, fi);
 		} else {
 			struct fuse_bufvec *buf;
@@ -1851,7 +1851,7 @@ int fuse_fs_read(struct fuse_fs *fs, const char *path, char *mem, size_t size,
 				(unsigned long long) fi->fh,
 				size, (unsigned long long) off, fi->flags);
 
-		if (fs->op.read_buf) {
+		if (fs->op.read_buf && !fi->no_read_buf) {
 			struct fuse_bufvec *buf = NULL;
 
 			res = fs->op.read_buf(path, &buf, size, off, fi);
@@ -1899,7 +1899,7 @@ int fuse_fs_write_buf(struct fuse_fs *fs, const char *path,
 				(unsigned long long) off,
 				fi->flags);
 
-		if (fs->op.write_buf) {
+		if (fs->op.write_buf && !fi->no_write_buf) {
 			res = fs->op.write_buf(path, buf, off, fi);
 		} else {
 			void *mem = NULL;
