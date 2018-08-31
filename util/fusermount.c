@@ -35,7 +35,6 @@
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
 #define FUSE_DEV "/dev/fuse"
-#define FUSE_CONF "/etc/fuse.conf"
 
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC 128

@@ -6,6 +6,9 @@ Unreleased Changes
   bcachefs, aufs and FAT filesystems.
 * libfuse may now be used as a Meson subproject.
 * Fix a few low-impact memory leaks.
+* The `fuse.conf` file is no longer looked for in `/etc`, but in the
+  *sysconfdir* directory (which can be set with `meson configure`). By
+  default, the location is thus `/usr/local/etc/fuse.conf`.
 
 libfuse 3.2.5 (2018-07-24)
 ==========================
