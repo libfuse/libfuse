@@ -6,10 +6,12 @@ executable('fusermount3', ['fusermount.c', '../lib/mount_util.c'],
            install_dir: get_option('bindir'),
            c_args: '-DFUSE_CONF="@0@"'.format(fuseconf_path))
 
-executable('mount.fuse3', ['mount.fuse.c'], 
+executable('mount.fuse3', ['mount.fuse.c'],
            include_directories: include_dirs,
+           link_with: [ libfuse ],
            install: true,
-           install_dir: get_option('sbindir'))
+           install_dir: get_option('sbindir'),
+           c_args: '-DFUSE_USE_VERSION=33')
 
 
 udevrulesdir = get_option('udevrulesdir')

@@ -199,6 +199,16 @@ inode numbers.
 .TP
 \fBmodules=M1[:M2...]\fP
 Add modules to the filesystem stack.  Modules are pushed in the order they are specified, with the original filesystem being on the bottom of the stack.
+
+.SS "\fBmount.fuse3\fP options:"
+These options are interpreted by \fBmount.fuse3\fP and are thus only available when mounting a file system via \fBmount.fuse3\fP (such as when mounting via the generic \fBmount\fP(1) command or \fI/etc/fstab\fP). Supported options are:
+.TP
+\fBsetuid=USER\fP
+Switch to \fBUSER\fP and its primary group before launching the FUSE file system process. mount.fuse3 must be run as root or with \fBCAP_SETUID\fP and \fBCAP_SETGID\fP for this to work.
+.TP
+\fBdrop_privileges\fP
+Perform setup of the FUSE file descriptor and mounting the file system before launching the FUSE file system process. \fBmount.fuse3\fP requires privilege to do so, i.e. must be run as root or at least with \fBCAP_SYS_ADMIN\fP and \fBCAP_SETPCAP\fP. It will launch the file system process fully unprivileged, i.e. without \fBcapabilities\fP(7) and \fBprctl\fP(2) flags set up such that privileges can't be reacquired (e.g. via setuid or fscaps binaries). This reduces risk in the event of the FUSE file system process getting compromised by malicious file system data.
+
 .SH FUSE MODULES (STACKING)
 Modules are filesystem stacking support to high level API. Filesystem modules can be built into libfuse or loaded from shared object
 .SS "iconv"

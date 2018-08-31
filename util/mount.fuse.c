@@ -14,6 +14,18 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
+#include <fcntl.h>
+#include <pwd.h>
+#include <sys/wait.h>
+
+#ifdef linux
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#include <linux/capability.h>
+#include <linux/securebits.h>
+#endif
+
+#include "fuse.h"
 
 static char *progname;
 
@@ -80,6 +92,124 @@ static char *add_option(const char *opt, char *options)
 	return options;
 }
 
+static int prepare_fuse_fd(const char *mountpoint, const char* subtype,
+			   const char *options)
+{
+	int fuse_fd = -1;
+	int flags = -1;
+	int subtype_len = strlen(subtype) + 9;
+	char* options_copy = xrealloc(NULL, subtype_len);
+
+	snprintf(options_copy, subtype_len, "subtype=%s", subtype);
+	options_copy = add_option(options, options_copy);
+	fuse_fd = fuse_open_channel(mountpoint, options_copy);
+	if (fuse_fd == -1) {
+		exit(1);
+	}
+
+	flags = fcntl(fuse_fd, F_GETFD);
+	if (flags == -1 || fcntl(fuse_fd, F_SETFD, flags & ~FD_CLOEXEC) == 1) {
+		fprintf(stderr, "%s: Failed to clear CLOEXEC: %s\n",
+			progname, strerror(errno));
+		exit(1);
+	}
+
+	return fuse_fd;
+}
+
+#ifdef linux
+static uint64_t get_capabilities(void)
+{
+	/*
+	 * This invokes the capset syscall directly to avoid the libcap
+	 * dependency, which isn't really justified just for this.
+	 */
+	struct __user_cap_header_struct header = {
+		.version = _LINUX_CAPABILITY_VERSION_3,
+		.pid = 0,
+	};
+	struct __user_cap_data_struct data[2];
+	memset(data, 0, sizeof(data));
+	if (syscall(SYS_capget, &header, data) == -1) {
+		fprintf(stderr, "%s: Failed to get capabilities: %s\n",
+			progname, strerror(errno));
+		exit(1);
+	}
+
+	return data[0].effective | ((uint64_t) data[1].effective << 32);
+}
+
+static void set_capabilities(uint64_t caps)
+{
+	/*
+	 * This invokes the capset syscall directly to avoid the libcap
+	 * dependency, which isn't really justified just for this.
+	 */
+	struct __user_cap_header_struct header = {
+		.version = _LINUX_CAPABILITY_VERSION_3,
+		.pid = 0,
+	};
+	struct __user_cap_data_struct data[2];
+	memset(data, 0, sizeof(data));
+	data[0].effective = data[0].permitted = caps;
+	data[1].effective = data[1].permitted = caps >> 32;
+	if (syscall(SYS_capset, &header, data) == -1) {
+		fprintf(stderr, "%s: Failed to set capabilities: %s\n",
+			progname, strerror(errno));
+		exit(1);
+	}
+}
+
+static void drop_and_lock_capabilities(void)
+{
+	/* Set and lock securebits. */
+	if (prctl(PR_SET_SECUREBITS,
+		  SECBIT_KEEP_CAPS_LOCKED |
+		  SECBIT_NO_SETUID_FIXUP |
+		  SECBIT_NO_SETUID_FIXUP_LOCKED |
+		  SECBIT_NOROOT |
+		  SECBIT_NOROOT_LOCKED) == -1) {
+		fprintf(stderr, "%s: Failed to set securebits %s\n",
+			progname, strerror(errno));
+		exit(1);
+	}
+
+	/* Clear the capability bounding set. */
+	int cap;
+	for (cap = 0; ; cap++) {
+		int cap_status = prctl(PR_CAPBSET_READ, cap);
+		if (cap_status == 0) {
+			continue;
+		}
+		if (cap_status == -1 && errno == EINVAL) {
+			break;
+		}
+
+		if (cap_status != 1) {
+			fprintf(stderr,
+				"%s: Failed to get capability %u: %s\n",
+				progname, cap, strerror(errno));
+			exit(1);
+		}
+		if (prctl(PR_CAPBSET_DROP, cap) == -1) {
+			fprintf(stderr,
+				"%s: Failed to drop capability %u: %s\n",
+				progname, cap, strerror(errno));
+		}
+	}
+
+	/* Drop capabilities. */
+	set_capabilities(0);
+
+	/* Prevent re-acquisition of privileges. */
+	if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
+		fprintf(stderr, "%s: Failed to set no_new_privs: %s\n",
+			progname, strerror(errno));
+		exit(1);
+	}
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	char *type = NULL;
@@ -88,10 +218,12 @@ int main(int argc, char *argv[])
 	char *basename;
 	char *options = NULL;
 	char *command = NULL;
-	char *setuid = NULL;
+	char *setuid_name = NULL;
 	int i;
 	int dev = 1;
 	int suid = 1;
+	int pass_fuse_fd = 0;
+	int drop_privileges = 0;
 
 	progname = argv[0];
 	basename = strrchr(argv[0], '/');
@@ -167,7 +299,12 @@ int main(int argc, char *argv[])
 							      "_netdev",
 							      NULL};
 				if (strncmp(opt, "setuid=", 7) == 0) {
-					setuid = xstrdup(opt + 7);
+					setuid_name = xstrdup(opt + 7);
+					ignore = 1;
+				} else if (strcmp(opt,
+						  "drop_privileges") == 0) {
+					pass_fuse_fd = 1;
+					drop_privileges = 1;
 					ignore = 1;
 				}
 				for (j = 0; ignore_opts[j]; j++)
@@ -184,6 +321,16 @@ int main(int argc, char *argv[])
 				}
 				opt = strtok(NULL, ",");
 			}
+		}
+	}
+
+	if (drop_privileges) {
+		uint64_t required_caps = CAP_TO_MASK(CAP_SETPCAP) |
+				CAP_TO_MASK(CAP_SYS_ADMIN);
+		if ((get_capabilities() & required_caps) != required_caps) {
+			fprintf(stderr, "%s: drop_privileges was requested, which launches the FUSE file system fully unprivileged. In order to do so %s must be run with privileges, please invoke with CAP_SYS_ADMIN and CAP_SETPCAP (e.g. as root).\n",
+			progname, progname);
+			exit(1);
 		}
 	}
 
@@ -209,6 +356,51 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (setuid_name && setuid_name[0]) {
+#ifdef linux
+		if (drop_privileges) {
+			/*
+			 * Make securebits more permissive before calling
+			 * setuid(). Specifically, if SECBIT_KEEP_CAPS and
+			 * SECBIT_NO_SETUID_FIXUP weren't set, setuid() would
+			 * have the side effect of dropping all capabilities,
+			 * and we need to retain CAP_SETPCAP in order to drop
+			 * all privileges before exec().
+			 */
+			if (prctl(PR_SET_SECUREBITS,
+				  SECBIT_KEEP_CAPS |
+				  SECBIT_NO_SETUID_FIXUP) == -1) {
+				fprintf(stderr,
+					"%s: Failed to set securebits %s\n",
+					progname, strerror(errno));
+				exit(1);
+			}
+		}
+#endif
+
+		struct passwd *pwd = getpwnam(setuid_name);
+		if (setgid(pwd->pw_gid) == -1 || setuid(pwd->pw_uid) == -1) {
+			fprintf(stderr, "%s: Failed to setuid to %s: %s\n",
+				progname, setuid_name, strerror(errno));
+			exit(1);
+		}
+	} else if (!getenv("HOME")) {
+		/* Hack to make filesystems work in the boot environment */
+		setenv("HOME", "/root", 0);
+	}
+
+	if (pass_fuse_fd)  {
+		int fuse_fd = prepare_fuse_fd(mountpoint, type, options);
+		char *dev_fd_mountpoint = xrealloc(NULL, 20);
+		snprintf(dev_fd_mountpoint, 20, "/dev/fd/%u", fuse_fd);
+		mountpoint = dev_fd_mountpoint;
+	}
+
+#ifdef linux
+	if (drop_privileges) {
+		drop_and_lock_capabilities();
+	}
+#endif
 	add_arg(&command, type);
 	if (source)
 		add_arg(&command, source);
@@ -216,19 +408,6 @@ int main(int argc, char *argv[])
 	if (options) {
 		add_arg(&command, "-o");
 		add_arg(&command, options);
-	}
-
-	if (setuid && setuid[0]) {
-		char *sucommand = command;
-		command = NULL;
-		add_arg(&command, "su");
-		add_arg(&command, "-");
-		add_arg(&command, setuid);
-		add_arg(&command, "-c");
-		add_arg(&command, sucommand);
-	} else if (!getenv("HOME")) {
-		/* Hack to make filesystems work in the boot environment */
-		setenv("HOME", "/root", 0);
 	}
 
 	execl("/bin/sh", "/bin/sh", "-c", command, NULL);

@@ -420,3 +420,21 @@ struct fuse_conn_info_opts* fuse_parse_conn_info_opts(struct fuse_args *args)
 	}
 	return opts;
 }
+
+int fuse_open_channel(const char *mountpoint, const char* options)
+{
+	struct mount_opts *opts = NULL;
+	int fd = -1;
+	const char *argv[] = { "", "-o", options };
+	int argc = sizeof(argv) / sizeof(argv[0]);
+	struct fuse_args args = FUSE_ARGS_INIT(argc, (char**) argv);
+
+	opts = parse_mount_opts(&args);
+	if (opts == NULL)
+		return -1;
+
+	fd = fuse_kern_mount(mountpoint, opts);
+	destroy_mount_opts(opts);
+
+	return fd;
+}
