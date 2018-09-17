@@ -1,3 +1,13 @@
+Unreleased Changes
+=================
+
+* The FUSE_CAP_READDIRPLUS_AUTO capability is no longer enabled by
+  default unless the file system defines both a readdir() and a
+  readdirplus() handler.
+
+* The description of the FUSE_CAP_READDIRPLUS_AUTO flag has been
+  improved.
+
 libfuse 3.2.6 (2018-08-31)
 ==========================
 

@@ -1918,7 +1918,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		       FUSE_CAP_POSIX_LOCKS);
 	LL_SET_DEFAULT(se->op.flock, FUSE_CAP_FLOCK_LOCKS);
 	LL_SET_DEFAULT(se->op.readdirplus, FUSE_CAP_READDIRPLUS);
-	LL_SET_DEFAULT(se->op.readdirplus, FUSE_CAP_READDIRPLUS_AUTO);
+	LL_SET_DEFAULT(se->op.readdirplus && se->op.readdir,
+		       FUSE_CAP_READDIRPLUS_AUTO);
 	se->conn.time_gran = 1;
 	
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
