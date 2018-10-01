@@ -81,53 +81,10 @@ def test_hello(tmpdir, name, options, cmdline_builder):
     else:
         umount(mount_process, mnt_dir)
 
-
 @pytest.mark.parametrize("writeback", (False, True))
+@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh', 'passthrough_ll'))
 @pytest.mark.parametrize("debug", (False, True))
-def test_passthrough_ll(tmpdir, writeback, debug, capfd):
-    
-    progname = pjoin(basename, 'example', 'passthrough_ll')
-    if not os.path.exists(progname):
-        pytest.skip('%s not built' % os.path.basename(progname))
-    
-    # Avoid false positives from libfuse debug messages
-    if debug:
-        capfd.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
-                              count=0)
-
-    mnt_dir = str(tmpdir.mkdir('mnt'))
-    src_dir = str(tmpdir.mkdir('src'))
-
-    cmdline = base_cmdline + [ progname, '-f', mnt_dir ]
-    if debug:
-        cmdline.append('-d')
-
-    if writeback:
-        cmdline.append('-o')
-        cmdline.append('writeback')
-        
-    mount_process = subprocess.Popen(cmdline)
-    try:
-        wait_for_mount(mount_process, mnt_dir)
-        work_dir = mnt_dir + src_dir
-
-        tst_statvfs(work_dir)
-        tst_readdir(src_dir, work_dir)
-        tst_open_read(src_dir, work_dir)
-        tst_open_write(src_dir, work_dir)
-        tst_create(work_dir)
-        tst_passthrough(src_dir, work_dir)
-        tst_append(src_dir, work_dir)
-        tst_seek(src_dir, work_dir)
-    except:
-        cleanup(mnt_dir)
-        raise
-    else:
-        umount(mount_process, mnt_dir)
-
-@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh'))
-@pytest.mark.parametrize("debug", (False, True))
-def test_passthrough(tmpdir, name, debug, capfd):
+def test_passthrough(tmpdir, name, debug, capfd, writeback):
     
     # Avoid false positives from libfuse debug messages
     if debug:
@@ -146,6 +103,13 @@ def test_passthrough(tmpdir, name, debug, capfd):
                 '-f', mnt_dir ]
     if debug:
         cmdline.append('-d')
+
+    if writeback:
+        if name != 'passthrough_ll':
+            pytest.skip('example does not support writeback caching')
+        cmdline.append('-o')
+        cmdline.append('writeback')
+        
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
@@ -173,9 +137,15 @@ def test_passthrough(tmpdir, name, debug, capfd):
         tst_truncate_path(work_dir)
         tst_truncate_fd(work_dir)
         tst_open_unlink(work_dir)
-        
-        subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
-                                work_dir, ':' + src_dir ])
+
+        syscall_test_cmd = [ os.path.join(basename, 'test', 'test_syscalls'),
+                             work_dir, ':' + src_dir ]
+        if writeback:
+            # When writeback caching is enabled, kernel has to open files for
+            # reading even when userspace opens with O_WDONLY. This fails if the
+            # filesystem process doesn't have special permission.
+            syscall_test_cmd.append('-52')
+        subprocess.check_call(syscall_test_cmd)
     except:
         cleanup(mnt_dir)
         raise
