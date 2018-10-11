@@ -1,0 +1,13 @@
+The following files may be used under the terms of the GNU Lesser
+General Public License, version 2.1 ("LGPL"):
+
+- All files in the include/ directory.
+- All files in the lib/ directory.
+- meson.build
+
+The full terms of the LGPL can be found in the LGPL2.txt file.
+
+
+All other files may be used only under the terms of the GNU General
+Public License, version 2 ("GPL"). The full text of this license can
+be found in the GPL2.txt file.
