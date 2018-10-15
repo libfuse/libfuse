@@ -27,7 +27,7 @@ explicitly using a separate set of API functions.
 Supported Platforms
 -------------------
 
-* Linux (fully)
+* Linux (fully) 
 * BSD (mostly/best-effort)
 * For OS-X, please use [OSXFUSE](https://osxfuse.github.io/)
   
@@ -65,6 +65,9 @@ setuid root first:
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
     $ python3 -m pytest test/
+    
+ If you face a problem with installing, Make sure your operating system is upgraded and updated. 
+     
 
 Security implications
 ---------------------
