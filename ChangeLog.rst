@@ -1,6 +1,9 @@
 Unreleased Changes
 =================
 
+* The `auto_unmount` mode now works correctly in combination with
+  autofs.
+
 * The FUSE_CAP_READDIRPLUS_AUTO capability is no longer enabled by
   default unless the file system defines both a readdir() and a
   readdirplus() handler.

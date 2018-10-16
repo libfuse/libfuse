@@ -237,6 +237,7 @@ static int check_is_mount_child(void *p)
 	const char **a = p;
 	const char *last = a[0];
 	const char *mnt = a[1];
+	const char *type = a[2];
 	int res;
 	const char *procmounts = "/proc/mounts";
 	int found;
@@ -284,7 +285,8 @@ static int check_is_mount_child(void *p)
 			continue;
 		}
 		if (entp->mnt_dir[0] == '/' &&
-		    strcmp(entp->mnt_dir + 1, last) == 0) {
+		    strcmp(entp->mnt_dir + 1, last) == 0 &&
+		    (!type || strcmp(entp->mnt_type, type) == 0)) {
 			found = 1;
 			break;
 		}
@@ -317,11 +319,11 @@ static pid_t clone_newns(void *a)
 #endif
 }
 
-static int check_is_mount(const char *last, const char *mnt)
+static int check_is_mount(const char *last, const char *mnt, const char *type)
 {
 	pid_t pid, p;
 	int status;
-	const char *a[2] = { last, mnt };
+	const char *a[3] = { last, mnt, type };
 
 	pid = clone_newns((void *) a);
 	if (pid == (pid_t) -1) {
@@ -433,7 +435,7 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 	if (umount_nofollow_support()) {
 		umount_flags |= UMOUNT_NOFOLLOW;
 	} else {
-		res = check_is_mount(last, mnt);
+		res = check_is_mount(last, mnt, NULL);
 		if (res == -1)
 			goto out;
 	}
@@ -739,7 +741,7 @@ static int mount_notrunc(const char *source, const char *target,
 }
 
 
-static int do_mount(const char *mnt, char **typep, mode_t rootmode,
+static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 		    int fd, const char *opts, const char *dev, char **sourcep,
 		    char **mnt_optsp)
 {
@@ -1091,13 +1093,12 @@ static int open_fuse_device(char **devp)
 }
 
 
-static int mount_fuse(const char *mnt, const char *opts)
+static int mount_fuse(const char *mnt, const char *opts, const char **type)
 {
 	int res;
 	int fd;
 	char *dev;
 	struct stat stbuf;
-	char *type = NULL;
 	char *source = NULL;
 	char *mnt_opts = NULL;
 	const char *real_mnt = mnt;
@@ -1121,7 +1122,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 	res = check_perm(&real_mnt, &stbuf, &mountpoint_fd);
 	restore_privs();
 	if (res != -1)
-		res = do_mount(real_mnt, &type, stbuf.st_mode & S_IFMT,
+		res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT,
 			       fd, opts, dev, &source, &mnt_opts);
 
 	if (mountpoint_fd != -1)
@@ -1137,7 +1138,7 @@ static int mount_fuse(const char *mnt, const char *opts)
 	}
 
 	if (geteuid() == 0) {
-		res = add_mount(source, mnt, type, mnt_opts);
+		res = add_mount(source, mnt, *type, mnt_opts);
 		if (res == -1) {
 			/* Can't clean up mount in a non-racy way */
 			goto fail_close_fd;
@@ -1146,7 +1147,6 @@ static int mount_fuse(const char *mnt, const char *opts)
 
 out_free:
 	free(source);
-	free(type);
 	free(mnt_opts);
 	free(dev);
 
@@ -1194,6 +1194,51 @@ static int send_fd(int sock_fd, int fd)
 	return 0;
 }
 
+/* The parent fuse process has died: decide whether to auto_unmount.
+ *
+ * In the normal case (umount or fusermount -u), the filesystem
+ * has already been unmounted. If we simply unmount again we can
+ * cause problems with stacked mounts (e.g. autofs).
+ *
+ * So we unmount here only in abnormal case where fuse process has
+ * died without unmount happening. To detect this, we first look in
+ * the mount table to make sure the mountpoint is still mounted and
+ * has proper type. If so, we then see if opening the mount dir is
+ * returning 'Transport endpoint is not connected'.
+ *
+ * The order of these is important, because if autofs is in use,
+ * opening the dir to check for ENOTCONN will cause a new mount
+ * in the normal case where filesystem has been unmounted cleanly.
+ */
+static int should_auto_unmount(const char *mnt, const char *type)
+{
+	char *copy;
+	const char *last;
+	int result = 0;
+	int fd;
+
+	copy = strdup(mnt);
+	if (copy == NULL) {
+	fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		return 0;
+	}
+
+	if (chdir_to_parent(copy, &last) == -1)
+		goto out;
+	if (check_is_mount(last, mnt, type) == -1)
+		goto out;
+
+	fd = open(mnt, O_RDONLY);
+	if (fd != -1) {
+		close(fd);
+	} else {
+		result = errno == ENOTCONN;
+	}
+out:
+	free(copy);
+	return result;
+}
+
 static void usage(void)
 {
 	printf("%s: [options] mountpoint\n"
@@ -1228,6 +1273,7 @@ int main(int argc, char *argv[])
 	char *commfd;
 	int cfd;
 	const char *opts = "";
+	const char *type = NULL;
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
@@ -1315,7 +1361,7 @@ int main(int argc, char *argv[])
 		goto err_out;
 	}
 
-	fd = mount_fuse(mnt, opts);
+	fd = mount_fuse(mnt, opts, &type);
 	if (fd == -1)
 		goto err_out;
 
@@ -1360,6 +1406,10 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	if (!should_auto_unmount(mnt, type)) {
+		goto success_out;
+	}
+
 do_unmount:
 	if (geteuid() == 0)
 		res = unmount_fuse(mnt, quiet, lazy);
@@ -1372,6 +1422,8 @@ do_unmount:
 	}
 	if (res == -1)
 		goto err_out;
+
+success_out:
 	free(mnt);
 	return 0;
 
