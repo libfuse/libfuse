@@ -18,6 +18,8 @@ td += custom_target('test_scripts', input: test_scripts,
                       command: ['cp', '-fPp',
                                 '@INPUT@', meson.current_build_dir() ])
 
+
+
 # Provide something helpful when running 'ninja test'
 wrong_cmd = executable('wrong_command', 'wrong_command.c',
                        install: false)

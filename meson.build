@@ -67,6 +67,10 @@ add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-W
                       '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
                       '-fno-strict-aliasing', language: 'c')
 
+if meson.is_subproject() 
+	add_project_arguments('-DMESON_IS_SUBPROJECT', language: 'c')
+endif
+
 # Some (stupid) GCC versions warn about unused return values even when they are
 # casted to void. This makes -Wunused-result pretty useless, since there is no
 # way to suppress the warning when we really *want* to ignore the value.
