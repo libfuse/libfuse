@@ -65,7 +65,7 @@ configure_file(output: 'config.h',
 #
 add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-Wno-sign-compare',
                       '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
-                      '-fno-strict-aliasing', language: 'c')
+                      '-fno-strict-aliasing', meson.is_subproject()? '-DMESON_IS_SUBPROJECT' : '-UMESON_IS_SUBPROJECT', language: 'c')
 
 # Some (stupid) GCC versions warn about unused return values even when they are
 # casted to void. This makes -Wunused-result pretty useless, since there is no
