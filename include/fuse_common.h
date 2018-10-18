@@ -219,7 +219,7 @@ struct fuse_loop_config {
 #define FUSE_CAP_AUTO_INVAL_DATA	(1 << 12)
 
 /**
- * Indicates that the filesystem supports readdirplus
+ * Indicates that the filesystem supports readdirplus.
  *
  * This feature is enabled by default when supported by the kernel and if the
  * filesystem implements a readdirplus() handler.
@@ -227,10 +227,21 @@ struct fuse_loop_config {
 #define FUSE_CAP_READDIRPLUS		(1 << 13)
 
 /**
- * Indicates that the filesystem supports adaptive readdirplus
+ * Indicates that the filesystem supports adaptive readdirplus. 
  *
- * This feature is enabled by default when supported by the kernel and if the
- * filesystem implements a readdirplus() handler.
+ * If FUSE_CAP_READDIRPLUS is not set, this flag has no effect.
+ *
+ * If FUSE_CAP_READDIRPLUS is set and this flag is not set, the kernel
+ * will always issue readdirplus() requests to retrieve directory
+ * contents.
+ *
+ * If FUSE_CAP_READDIRPLUS is set and this flag is set, the kernel
+ * will issue both readdir() and readdirplus() requests, depending on
+ * how much information is expected to be required.
+ *
+ * This feature is enabled by default when supported by the kernel and
+ * if the filesystem implements both a readdirplus() and a readdir()
+ * handler.
  */
 #define FUSE_CAP_READDIRPLUS_AUTO	(1 << 14)
 

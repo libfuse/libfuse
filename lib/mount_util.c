@@ -352,3 +352,16 @@ int fuse_mnt_check_fuseblk(void)
 	fclose(f);
 	return 0;
 }
+
+int fuse_mnt_parse_fuse_fd(const char *mountpoint)
+{
+	int fd = -1;
+	int len = 0;
+
+	if (sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len) == 1 &&
+	    len == strlen(mountpoint)) {
+		return fd;
+	}
+
+	return -1;
+}

@@ -1,3 +1,22 @@
+Unreleased Changes
+=================
+
+* The FUSE_CAP_READDIRPLUS_AUTO capability is no longer enabled by
+  default unless the file system defines both a readdir() and a
+  readdirplus() handler.
+
+* The description of the FUSE_CAP_READDIRPLUS_AUTO flag has been
+  improved.
+
+* Allow open `/dev/fuse` file descriptors to be passed via mountpoints of the
+  special format `/dev/fd/%u`. This allows mounting to be handled by the parent
+  so the FUSE filesystem process can run fully unprivileged.
+
+* Add a `drop_privileges` option to mount.fuse3 which causes it to open
+  `/dev/fuse` and mount the file system itself, then run the FUSE file
+  filesystem fully unprivileged and unable to re-acquire privilege via setuid,
+  fscaps, etc.
+
 libfuse 3.2.6 (2018-08-31)
 ==========================
 

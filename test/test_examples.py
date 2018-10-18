@@ -19,7 +19,7 @@ from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker, test_printcap,
-                  fuse_proto)
+                  fuse_proto, powerset)
 from os.path import join as pjoin
 
 pytestmark = fuse_test_marker()
@@ -33,20 +33,36 @@ def name_generator(__ctr=[0]):
     __ctr[0] += 1
     return 'testfile_%d' % __ctr[0]
 
-options = [ [] ]
+options = []
 if sys.platform == 'linux':
-    options.append(['-o', 'clone_fd'])
-@pytest.mark.parametrize("options", options)
-@pytest.mark.parametrize("name", ('hello', 'hello_ll'))
-def test_hello(tmpdir, name, options):
-    mnt_dir = str(tmpdir)
-    cmdline = base_cmdline + \
-              [ pjoin(basename, 'example', name),
-                '-f', mnt_dir ] + options
+    options.append('clone_fd')
+
+def invoke_directly(mnt_dir, name, options):
+    cmdline = base_cmdline + [ pjoin(basename, 'example', name),
+                               '-f', mnt_dir, '-o', ','.join(options) ]
     if name == 'hello_ll':
         # supports single-threading only
         cmdline.append('-s')
-    mount_process = subprocess.Popen(cmdline)
+
+    return cmdline
+
+def invoke_mount_fuse(mnt_dir, name, options):
+    return base_cmdline + [ pjoin(basename, 'util', 'mount.fuse3'),
+                            name, mnt_dir, '-o', ','.join(options) ]
+
+def invoke_mount_fuse_drop_privileges(mnt_dir, name, options):
+    if os.getuid() != 0:
+        pytest.skip('drop_privileges requires root, skipping.')
+
+    return invoke_mount_fuse(mnt_dir, name, options + ('drop_privileges',))
+
+@pytest.mark.parametrize("cmdline_builder", (invoke_directly, invoke_mount_fuse,
+                                             invoke_mount_fuse_drop_privileges))
+@pytest.mark.parametrize("options", powerset(options))
+@pytest.mark.parametrize("name", ('hello', 'hello_ll'))
+def test_hello(tmpdir, name, options, cmdline_builder):
+    mnt_dir = str(tmpdir)
+    mount_process = subprocess.Popen(cmdline_builder(mnt_dir, name, options))
     try:
         wait_for_mount(mount_process, mnt_dir)
         assert os.listdir(mnt_dir) == [ 'hello' ]
@@ -65,53 +81,10 @@ def test_hello(tmpdir, name, options):
     else:
         umount(mount_process, mnt_dir)
 
-
 @pytest.mark.parametrize("writeback", (False, True))
+@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh', 'passthrough_ll'))
 @pytest.mark.parametrize("debug", (False, True))
-def test_passthrough_ll(tmpdir, writeback, debug, capfd):
-    
-    progname = pjoin(basename, 'example', 'passthrough_ll')
-    if not os.path.exists(progname):
-        pytest.skip('%s not built' % os.path.basename(progname))
-    
-    # Avoid false positives from libfuse debug messages
-    if debug:
-        capfd.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
-                              count=0)
-
-    mnt_dir = str(tmpdir.mkdir('mnt'))
-    src_dir = str(tmpdir.mkdir('src'))
-
-    cmdline = base_cmdline + [ progname, '-f', mnt_dir ]
-    if debug:
-        cmdline.append('-d')
-
-    if writeback:
-        cmdline.append('-o')
-        cmdline.append('writeback')
-        
-    mount_process = subprocess.Popen(cmdline)
-    try:
-        wait_for_mount(mount_process, mnt_dir)
-        work_dir = mnt_dir + src_dir
-
-        tst_statvfs(work_dir)
-        tst_readdir(src_dir, work_dir)
-        tst_open_read(src_dir, work_dir)
-        tst_open_write(src_dir, work_dir)
-        tst_create(work_dir)
-        tst_passthrough(src_dir, work_dir)
-        tst_append(src_dir, work_dir)
-        tst_seek(src_dir, work_dir)
-    except:
-        cleanup(mnt_dir)
-        raise
-    else:
-        umount(mount_process, mnt_dir)
-
-@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh'))
-@pytest.mark.parametrize("debug", (False, True))
-def test_passthrough(tmpdir, name, debug, capfd):
+def test_passthrough(tmpdir, name, debug, capfd, writeback):
     
     # Avoid false positives from libfuse debug messages
     if debug:
@@ -130,6 +103,13 @@ def test_passthrough(tmpdir, name, debug, capfd):
                 '-f', mnt_dir ]
     if debug:
         cmdline.append('-d')
+
+    if writeback:
+        if name != 'passthrough_ll':
+            pytest.skip('example does not support writeback caching')
+        cmdline.append('-o')
+        cmdline.append('writeback')
+        
     mount_process = subprocess.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
@@ -157,9 +137,15 @@ def test_passthrough(tmpdir, name, debug, capfd):
         tst_truncate_path(work_dir)
         tst_truncate_fd(work_dir)
         tst_open_unlink(work_dir)
-        
-        subprocess.check_call([ os.path.join(basename, 'test', 'test_syscalls'),
-                                work_dir, ':' + src_dir ])
+
+        syscall_test_cmd = [ os.path.join(basename, 'test', 'test_syscalls'),
+                             work_dir, ':' + src_dir ]
+        if writeback:
+            # When writeback caching is enabled, kernel has to open files for
+            # reading even when userspace opens with O_WDONLY. This fails if the
+            # filesystem process doesn't have special permission.
+            syscall_test_cmd.append('-52')
+        subprocess.check_call(syscall_test_cmd)
     except:
         cleanup(mnt_dir)
         raise
@@ -455,7 +441,7 @@ def tst_open_unlink(mnt_dir):
         os.unlink(fullname)
         with pytest.raises(OSError) as exc_info:
             os.stat(fullname)
-            assert exc_info.value.errno == errno.ENOENT
+        assert exc_info.value.errno == errno.ENOENT
         assert name not in os.listdir(mnt_dir)
         fh.write(data2)
         fh.seek(0)

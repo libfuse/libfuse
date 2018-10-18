@@ -1545,9 +1545,14 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
  * Notify to invalidate parent attributes and the dentry matching
  * parent/name
  *
- * To avoid a deadlock don't call this function from a filesystem
- * operation and don't call it with a lock held that can also be held
- * by a filesystem operation.
+ * To avoid a deadlock this function must not be called while
+ * executing a related filesytem operation or while holding a lock
+ * that could be needed to execute such an operation. As of kernel
+ * 4.18, a "related operation" is a lookup(), symlink(), mknod(),
+ * mkdir(), unlink(), rename(), link() or create() request for the
+ * parent, and a setattr(), unlink(), rmdir(), rename(), setxattr(),
+ * removexattr(), readdir() or readdirplus() request for the inode
+ * itself.
  *
  * Added in FUSE protocol version 7.12. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do
@@ -1571,9 +1576,11 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
  * watches registered for the dentry, then the watchers are informed
  * that the dentry has been deleted.
  *
- * To avoid a deadlock don't call this function from a filesystem
- * operation and don't call it with a lock held that can also be held
- * by a filesystem operation.
+ * To avoid a deadlock this function must not be called while
+ * executing a related filesytem operation or while holding a lock
+ * that could be needed to execute such an operation (see the
+ * description of fuse_lowlevel_notify_inval_entry() for more
+ * details).
  *
  * Added in FUSE protocol version 7.18. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do

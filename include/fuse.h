@@ -1219,6 +1219,16 @@ typedef struct fuse_fs *(*fuse_module_factory_t)(struct fuse_args *args,
 /** Get session from fuse object */
 struct fuse_session *fuse_get_session(struct fuse *f);
 
+/**
+ * Open a FUSE file descriptor and set up the mount for the given
+ * mountpoint and flags.
+ *
+ * @param mountpoint reference to the mount in the file system
+ * @param options mount options
+ * @return the FUSE file descriptor or -1 upon error
+ */
+int fuse_open_channel(const char *mountpoint, const char *options);
+
 #ifdef __cplusplus
 }
 #endif

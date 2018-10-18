@@ -148,6 +148,11 @@ FUSE_3.2 {
 		fuse_loop_mt_31;
 } FUSE_3.1;
 
+FUSE_3.3 {
+	global:
+		fuse_open_channel;
+} FUSE_3.2;
+
 # Local Variables:
 # indent-tabs-mode: t
 # End:
