@@ -19,6 +19,12 @@ td += custom_target('test_scripts', input: test_scripts,
                                 '@INPUT@', meson.current_build_dir() ])
 
 # Provide something helpful when running 'ninja test'
-wrong_cmd = executable('wrong_command', 'wrong_command.c',
-                       install: false)
-test('wrong_cmd', wrong_cmd)
+
+if meson.is_subproject()
+	test('libfuse is a subproject, skipping tests', executable('wrong_command',
+                      'wrong_command.c', install: false,
+                       c_args: [ '-DMESON_IS_SUBPROJECT' ]))
+else
+	test('wrong_command', executable('wrong_command', 'wrong_command.c',
+                      install: false))
+endif
