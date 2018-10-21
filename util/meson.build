@@ -21,6 +21,7 @@ if udevrulesdir == ''
 endif
 
 meson.add_install_script('install_helper.sh',
+                         meson.current_source_dir(),
                          join_paths(get_option('prefix'), get_option('sysconfdir')),
                          join_paths(get_option('prefix'), get_option('bindir')),
                          udevrulesdir)
