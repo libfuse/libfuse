@@ -1,5 +1,5 @@
-Unreleased Changes
-=================
+libfuse 3.3.0 (2018-11-06)
+==========================
 
 * The `auto_unmount` mode now works correctly in combination with
   autofs.
