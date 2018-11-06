@@ -17,6 +17,9 @@ Unreleased Changes
   filesystem fully unprivileged and unable to re-acquire privilege via setuid,
   fscaps, etc.
 
+* Documented under which conditions the `fuse_lowlevel_notify_*`
+  functions may block.
+
 libfuse 3.2.6 (2018-08-31)
 ==========================
 

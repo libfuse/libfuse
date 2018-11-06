@@ -1531,6 +1531,15 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph);
  * this (or a newer) version, the function will return -ENOSYS and do
  * nothing.
  *
+ * If the filesystem has writeback caching enabled, invalidating an
+ * inode will first trigger a writeback of all dirty pages. The call
+ * will block until all writeback requests have completed and the
+ * inode has been invalidated. It will, however, not wait for
+ * completion of pending writeback requests that have been issued
+ * before.
+ *
+ * If there are no dirty pages, this function will never block.
+ *
  * @param se the session object
  * @param ino the inode number
  * @param off the offset in the inode where to start invalidating
@@ -1553,6 +1562,8 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
  * parent, and a setattr(), unlink(), rmdir(), rename(), setxattr(),
  * removexattr(), readdir() or readdirplus() request for the inode
  * itself.
+ *
+ * When called correctly, this function will never block.
  *
  * Added in FUSE protocol version 7.12. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do
@@ -1581,6 +1592,8 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
  * that could be needed to execute such an operation (see the
  * description of fuse_lowlevel_notify_inval_entry() for more
  * details).
+ *
+ * When called correctly, this function will never block.
  *
  * Added in FUSE protocol version 7.18. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do
