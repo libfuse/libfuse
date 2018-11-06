@@ -12,7 +12,7 @@ addons:
     - valgrind
     - clang
     - gcc
-    - gcc-6
+    - gcc-7
     - python3-pip
 install: test/travis-install.sh
 script: test/travis-build.sh

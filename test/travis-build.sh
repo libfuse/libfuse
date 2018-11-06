@@ -25,9 +25,9 @@ chmod 0755 "${TEST_DIR}"
 cd "${TEST_DIR}"
 
 # Standard build
-for CC in gcc gcc-6 clang; do
+for CC in gcc gcc-7 clang; do
     mkdir build-${CC}; cd build-${CC}
-    if [ ${CC} == 'gcc-6' ]; then
+    if [ ${CC} == 'gcc-7' ]; then
         build_opts='-D b_lundef=false'
     else
         build_opts=''
