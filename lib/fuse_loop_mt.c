@@ -32,6 +32,11 @@ struct fuse_worker {
 	struct fuse_worker *prev;
 	struct fuse_worker *next;
 	pthread_t thread_id;
+	size_t bufsize;
+
+	// We need to include fuse_buf so that we can properly free
+	// it when a thread is terminated by pthread_cancel().
+	struct fuse_buf fbuf;
 	struct fuse_chan *ch;
 	struct fuse_mt *mt;
 };
@@ -113,16 +118,13 @@ static void *fuse_do_work(void *data)
 {
 	struct fuse_worker *w = (struct fuse_worker *) data;
 	struct fuse_mt *mt = w->mt;
-	struct fuse_buf fbuf;
-
-	memset(&fbuf, 0, sizeof(struct fuse_buf));
 
 	while (!fuse_session_exited(mt->se)) {
 		int isforget = 0;
 		int res;
 
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		res = fuse_session_receive_buf_int(mt->se, &fbuf, w->ch);
+		res = fuse_session_receive_buf_int(mt->se, &w->fbuf, w->ch);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
@@ -144,8 +146,8 @@ static void *fuse_do_work(void *data)
 		 * This disgusting hack is needed so that zillions of threads
 		 * are not created on a burst of FORGET messages
 		 */
-		if (!(fbuf.flags & FUSE_BUF_IS_FD)) {
-			struct fuse_in_header *in = fbuf.mem;
+		if (!(w->fbuf.flags & FUSE_BUF_IS_FD)) {
+			struct fuse_in_header *in = w->fbuf.mem;
 
 			if (in->opcode == FUSE_FORGET ||
 			    in->opcode == FUSE_BATCH_FORGET)
@@ -158,7 +160,7 @@ static void *fuse_do_work(void *data)
 			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
-		fuse_session_process_buf_int(mt->se, &fbuf, w->ch);
+		fuse_session_process_buf_int(mt->se, &w->fbuf, w->ch);
 
 		pthread_mutex_lock(&mt->lock);
 		if (!isforget)
@@ -174,7 +176,7 @@ static void *fuse_do_work(void *data)
 			pthread_mutex_unlock(&mt->lock);
 
 			pthread_detach(w->thread_id);
-			free(fbuf.mem);
+			free(w->fbuf.mem);
 			fuse_chan_put(w->ch);
 			free(w);
 			return NULL;
@@ -183,7 +185,6 @@ static void *fuse_do_work(void *data)
 	}
 
 	sem_post(&mt->finish);
-	free(fbuf.mem);
 
 	return NULL;
 }
@@ -258,12 +259,14 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 static int fuse_loop_start_thread(struct fuse_mt *mt)
 {
 	int res;
+
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
 	if (!w) {
 		fprintf(stderr, "fuse: failed to allocate worker structure\n");
 		return -1;
 	}
 	memset(w, 0, sizeof(struct fuse_worker));
+	w->fbuf.mem = NULL;
 	w->mt = mt;
 
 	w->ch = NULL;
@@ -296,6 +299,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	pthread_mutex_lock(&mt->lock);
 	list_del_worker(w);
 	pthread_mutex_unlock(&mt->lock);
+	free(w->fbuf.mem);
 	fuse_chan_put(w->ch);
 	free(w);
 }
