@@ -1189,6 +1189,13 @@ int main(int argc, char *argv[])
 		goto err_out1;
 	}
 
+	if(opts.mountpoint == NULL) {
+		printf("usage: %s [options] <mountpoint>\n", argv[0]);
+		printf("       %s --help\n", argv[0]);
+		ret = 1;
+		goto err_out1;
+	}
+
 	if (fuse_opt_parse(&args, &lo, lo_opts, NULL)== -1)
 		return 1;
 
