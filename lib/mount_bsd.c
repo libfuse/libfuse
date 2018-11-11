@@ -222,6 +222,7 @@ mount:
 				if(ret == -1)
 				{
 					perror("fuse: failed to assemble mount arguments");
+					close(fd);
 					exit(1);
 				}
 			}
@@ -232,14 +233,11 @@ mount:
 				argv[a++] = opts;
 			}
 			argv[a++] = fdnam;
-			
-			if(ret != -1)
-				free(fdnam);
-			
 			argv[a++] = mountpoint;
 			argv[a++] = NULL;
 			execvp(mountprog, (char **) argv);
 			perror("fuse: failed to exec mount program");
+			free(fdnam);
 			exit(1);
 		}
 
