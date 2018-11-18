@@ -44,7 +44,7 @@ def wait_for_mount(mount_process, mnt_dir,
         elapsed += 0.1
     pytest.fail("mountpoint failed to come up")
 
-def cleanup(mnt_dir):
+def cleanup(mount_process, mnt_dir):
     # Don't bother trying Valgrind if things already went wrong
 
     if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
@@ -54,6 +54,11 @@ def cleanup(mnt_dir):
                          '-z', '-u', mnt_dir]
     subprocess.call(cmd, stdout=subprocess.DEVNULL,
                     stderr=subprocess.STDOUT)
+    mount_process.terminate()
+    try:
+        mount_process.wait(1)
+    except subprocess.TimeoutExpired:
+        mount_process.kill()
 
 def umount(mount_process, mnt_dir):
 

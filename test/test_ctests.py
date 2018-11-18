@@ -64,7 +64,7 @@ def test_notify1(tmpdir, name, notify):
         else:
             assert read1 == read2
     except:
-        cleanup(mnt_dir)
+        cleanup(mount_process, mnt_dir)
         raise
     else:
         umount(mount_process, mnt_dir)

@@ -76,7 +76,7 @@ def test_hello(tmpdir, name, options, cmdline_builder):
             open(filename + 'does-not-exist', 'r+')
         assert exc_info.value.errno == errno.ENOENT
     except:
-        cleanup(mnt_dir)
+        cleanup(mount_process, mnt_dir)
         raise
     else:
         umount(mount_process, mnt_dir)
@@ -147,7 +147,7 @@ def test_passthrough(tmpdir, name, debug, capfd, writeback):
             syscall_test_cmd.append('-52')
         subprocess.check_call(syscall_test_cmd)
     except:
-        cleanup(mnt_dir)
+        cleanup(mount_process, mnt_dir)
         raise
     else:
         umount(mount_process, mnt_dir)
@@ -177,7 +177,7 @@ def test_ioctl(tmpdir):
         with open(testfile, 'rb') as fh:
             assert fh.read()== b'foo'
     except:
-        cleanup(mnt_dir)
+        cleanup(mount_process, mnt_dir)
         raise
     else:
         umount(mount_process, mnt_dir)
@@ -193,7 +193,7 @@ def test_poll(tmpdir):
                   [ pjoin(basename, 'example', 'poll_client') ]
         subprocess.check_call(cmdline, cwd=mnt_dir)
     except:
-        cleanup(mnt_dir)
+        cleanup(mount_process, mnt_dir)
         raise
     else:
         umount(mount_process, mnt_dir)
@@ -217,7 +217,7 @@ def test_null(tmpdir):
         with open(mnt_file, 'wb') as fh:
             fh.write(b'whatever')
     except:
-        cleanup(mnt_file)
+        cleanup(mount_process, mnt_file)
         raise
     else:
         umount(mount_process, mnt_file)
@@ -253,7 +253,7 @@ def test_notify_inval_entry(tmpdir, notify):
         with pytest.raises(FileNotFoundError):
             os.stat(fname)
     except:
-        cleanup(mnt_dir)
+        cleanup(mount_process, mnt_dir)
         raise
     else:
         umount(mount_process, mnt_dir)
