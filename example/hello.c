@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
 	if (options.show_help) {
 		show_help(argv[0]);
 		assert(fuse_opt_add_arg(&args, "--help") == 0);
-		args.argv[0] = (char*) "";
+		args.argv[0][0] = '\0';
 	}
 
 	ret = fuse_main(args.argc, args.argv, &hello_oper, NULL);
