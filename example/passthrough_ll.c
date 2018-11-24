@@ -700,9 +700,9 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		}
 		nextoff = telldir(d->dp);
 		name = d->entry->d_name;
+		fuse_ino_t entry_ino = 0;
 		if (plus) {
 			struct fuse_entry_param e;
-
 			if (is_dot_or_dotdot(name)) {
 				e = (struct fuse_entry_param) {
 					.attr.st_ino = d->entry->d_ino,
@@ -712,6 +712,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 				err = lo_do_lookup(req, ino, name, &e);
 				if (err)
 					goto error;
+				entry_ino = e.ino;
 			}
 
 			entsize = fuse_add_direntry_plus(req, p, rem, name,
@@ -724,9 +725,12 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			entsize = fuse_add_direntry(req, p, rem, name,
 						    &st, nextoff);
 		}
-		if (entsize > rem)
+		if (entsize > rem) {
+			if (entry_ino != 0) 
+				lo_forget_one(req, entry_ino, 1);
 			break;
-
+		}
+		
 		p += entsize;
 		rem -= entsize;
 
