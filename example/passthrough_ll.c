@@ -698,7 +698,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 				break;
 			}
 		}
-		nextoff = telldir(d->dp);
+		nextoff = d->entry->d_off;
 		name = d->entry->d_name;
 		fuse_ino_t entry_ino = 0;
 		if (plus) {
