@@ -117,6 +117,7 @@ def test_passthrough(tmpdir, name, debug, capfd, writeback):
 
         tst_statvfs(work_dir)
         tst_readdir(src_dir, work_dir)
+        tst_readdir_big(src_dir, work_dir)
         tst_open_read(src_dir, work_dir)
         tst_open_write(src_dir, work_dir)
         tst_create(work_dir)
@@ -515,6 +516,31 @@ def tst_readdir(src_dir, mnt_dir):
     os.rmdir(subdir)
     os.rmdir(src_newdir)
 
+def tst_readdir_big(src_dir, mnt_dir):
+
+    # Add enough entries so that readdir needs to be called
+    # multiple times.
+    fnames = []
+    for i in range(500):
+        fname  = ('A rather long filename to make sure that we '
+                  'fill up the buffer - ' * 3) + str(i)
+        with open(pjoin(src_dir, fname), 'w') as fh:
+            fh.write('File %d' % i)
+        fnames.append(fname)
+
+    listdir_is = sorted(os.listdir(mnt_dir))
+    listdir_should = sorted(os.listdir(src_dir))
+    assert listdir_is == listdir_should
+
+    for fname in fnames:
+        stat_src = os.stat(pjoin(src_dir, fname))
+        stat_mnt = os.stat(pjoin(mnt_dir, fname))
+        assert stat_src.st_ino == stat_mnt.st_ino
+        assert stat_src.st_mtime == stat_mnt.st_mtime
+        assert stat_src.st_ctime == stat_mnt.st_ctime
+        assert stat_src.st_size == stat_mnt.st_size
+        os.unlink(pjoin(src_dir, fname))
+    
 def tst_truncate_path(mnt_dir):
     assert len(TEST_DATA) > 1024
 
