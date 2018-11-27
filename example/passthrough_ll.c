@@ -666,22 +666,23 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	struct lo_dirp *d = lo_dirp(fi);
 	char *buf;
 	char *p;
-	size_t rem;
+	size_t rem = size;
 	int err;
 
 	(void) ino;
 
 	buf = calloc(1, size);
-	if (!buf)
-		return (void) fuse_reply_err(req, ENOMEM);
+	if (!buf) {
+		err = ENOMEM;
+		goto error;
+	}
+	p = buf;
 
 	if (offset != d->offset) {
 		seekdir(d->dp, offset);
 		d->entry = NULL;
 		d->offset = offset;
 	}
-	p = buf;
-	rem = size;
 	while (1) {
 		size_t entsize;
 		off_t nextoff;
@@ -691,11 +692,12 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			errno = 0;
 			d->entry = readdir(d->dp);
 			if (!d->entry) {
-				if (errno && rem == size) {
+				if (errno) {  // Error
 					err = errno;
 					goto error;
+				} else {  // End of stream
+					break; 
 				}
-				break;
 			}
 		}
 		nextoff = d->entry->d_off;
@@ -738,13 +740,17 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		d->offset = nextoff;
 	}
 
-	fuse_reply_buf(req, buf, size - rem);
-	free(buf);
-	return;
-
+    err = 0;
 error:
-	free(buf);
-	fuse_reply_err(req, err);
+    // If there's an error, we can only signal it if we haven't stored
+    // any entries yet - otherwise we'd end up with wrong lookup
+    // counts for the entries that are already in the buffer. So we
+    // return what we've collected until that point.
+    if (err && rem == size)
+	    fuse_reply_err(req, err);
+    else
+	    fuse_reply_buf(req, buf, size - rem);
+    free(buf);
 }
 
 static void lo_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
