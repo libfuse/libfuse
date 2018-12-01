@@ -1791,6 +1791,8 @@ static void do_poll(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		}
 
 		req->se->op.poll(req, nodeid, &fi, ph);
+		free(ph);
+		ph = NULL;
 	} else {
 		fuse_reply_err(req, ENOSYS);
 	}
