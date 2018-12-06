@@ -65,7 +65,7 @@ struct fuse_file_info {
 	unsigned int flock_release : 1;
 
 	/** Padding.  Do not use*/
-	unsigned int padding : 27;
+	unsigned int padding : 26;
 
 	/** File handle.  May be filled in by filesystem in open().
 	    Available in all other file operations */
