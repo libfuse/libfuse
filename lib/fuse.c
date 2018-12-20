@@ -4645,6 +4645,7 @@ static void print_module_help(const char *name,
 		return;
 	printf("\nOptions for %s module:\n", name);
 	(*fac)(&a, NULL);
+	fuse_opt_free_args(&a);
 }
 
 void fuse_lib_help(struct fuse_args *args)
