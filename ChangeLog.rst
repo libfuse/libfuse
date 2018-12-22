@@ -1,5 +1,5 @@
-libfuse 3.4.1
-=============
+libfuse 3.4.1 (2018-12-22)
+==========================
 
 * The `examples/passthrough_ll.c` example filesystem has been
   significantly extended.
