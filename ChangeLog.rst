@@ -1,3 +1,11 @@
+libfuse 3.4.1
+=============
+
+* The `examples/passthrough_ll.c` example filesystem has been
+  significantly extended.
+* Support for `copy_file_range` has been added.
+* Build system updates for non-Linux systems.
+
 libfuse 3.4.0
 =============
 
