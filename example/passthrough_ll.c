@@ -384,14 +384,10 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 	int newfd = -1;
 	int res;
 	int saverr;
-	struct lo_inode *inode;
 	struct lo_inode *dir = lo_inode(req, parent);
 	struct fuse_entry_param e;
 
 	saverr = ENOMEM;
-	inode = calloc(1, sizeof(struct lo_inode));
-	if (!inode)
-		goto out;
 
 	if (S_ISDIR(mode))
 		res = mkdirat(dir->fd, name, mode);
@@ -417,7 +413,6 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 out:
 	if (newfd != -1)
 		close(newfd);
-	free(inode);
 	fuse_reply_err(req, saverr);
 }
 

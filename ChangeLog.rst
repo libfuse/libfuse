@@ -1,3 +1,9 @@
+Unreleased Changes
+==================
+
+* Fixed a memory leak in `examples/passthrough_ll.c`.
+
+
 libfuse 3.4.1 (2018-12-22)
 ==========================
 
