@@ -1010,6 +1010,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	 * but got expanded as we found more filesystems that needed to be
 	 * overlayed. */
 	typeof(fs_buf.f_type) f_type_whitelist[] = {
+		0x5346414f /* OPENAFS_SUPER_MAGIC */,
 		0x61756673 /* AUFS_SUPER_MAGIC */,
 		0x00000187 /* AUTOFS_SUPER_MAGIC */,
 		0xCA451A4E /* BCACHEFS_STATFS_MAGIC */,
