@@ -1028,6 +1028,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	 * the ecryptfs mount helper
 	 * (https://bazaar.launchpad.net/~ecryptfs/ecryptfs/trunk/view/head:/src/utils/mount.ecryptfs_private.c#L225). */
 	typeof(fs_buf.f_type) f_type_whitelist[] = {
+		0x5346414f /* OPENAFS_SUPER_MAGIC */,
 		0x61756673 /* AUFS_SUPER_MAGIC */,
 		0x9123683E /* BTRFS_SUPER_MAGIC */,
 		0x00C36400 /* CEPH_SUPER_MAGIC */,

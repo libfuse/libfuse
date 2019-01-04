@@ -1,5 +1,8 @@
 Unreleased Changes
 ==================
+
+* Added OpenAFS to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within OpenAFS filesystems).
 * Added a test of `seekdir` to test_syscalls.
 * Fixed `readdir` bug when non-zero offsets are given to filler and the
   filesystem client, after reading a whole directory, re-reads it from a
