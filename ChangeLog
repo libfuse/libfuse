@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+FUSE 2.9.9 (2019-01-04)
+=======================
 
 * Added OpenAFS to whitelist (so users can now mount FUSE filesystems
   on mountpoints within OpenAFS filesystems).
