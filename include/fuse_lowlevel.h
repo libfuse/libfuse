@@ -496,8 +496,8 @@ struct fuse_lowlevel_ops {
 	 * If this request is answered with an error code of ENOSYS
 	 * and FUSE_CAP_NO_OPEN_SUPPORT is set in
 	 * `fuse_conn_info.capable`, this is treated as success and
-	 * future calls to open will also succeed without being send
-	 * to the filesystem process.
+	 * future calls to open and release will also succeed without being
+	 * sent to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_open
@@ -613,6 +613,10 @@ struct fuse_lowlevel_ops {
 	 *
 	 * For every open call there will be exactly one release call.
 	 *
+	 * However, in the case of a forced unmount, the filesystem should
+	 * safely handle the possibility of not receiving remaining release
+	 * calls.
+	 *
 	 * The filesystem may reply with an error, but error values are
 	 * not returned to close() or munmap() which triggered the
 	 * release.
@@ -660,11 +664,12 @@ struct fuse_lowlevel_ops {
 	 * etc) in fi->fh, and use this in other all other directory
 	 * stream operations (readdir, releasedir, fsyncdir).
 	 *
-	 * Filesystem may also implement stateless directory I/O and not
-	 * store anything in fi->fh, though that makes it impossible to
-	 * implement standard conforming directory stream operations in
-	 * case the contents of the directory can change between opendir
-	 * and releasedir.
+	 * Implementing standard conforming directory stream operations when
+	 * the directory is modified between opendir and releasedir calls
+	 * requires either storing state in a handle indexed by fi->fh (and
+	 * using readdir's off_t parameter to index into it) or using
+	 * readdir's off_t parameter as a cookie that will seek to the correct
+	 * entry in the directory even under concurrent modification.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_open
@@ -691,7 +696,9 @@ struct fuse_lowlevel_ops {
 	 * its lookup count.
 	 *
 	 * The function does not have to report the '.' and '..'
-	 * entries, but is allowed to do so.
+	 * entries, but is allowed to do so. Note that, if readdir does
+	 * not return '.' or '..', they will not be implicitly returned,
+	 * and this behavior is observable by the caller.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_buf
@@ -712,6 +719,10 @@ struct fuse_lowlevel_ops {
 	 *
 	 * For every opendir call there will be exactly one releasedir
 	 * call.
+	 *
+	 * However, in the case of a forced unmount, the filesystem should
+	 * safely handle the possibility of not receiving remaining releasedir
+	 * calls.
 	 *
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
