@@ -31,7 +31,7 @@
 #include <sys/param.h>
 
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
-#define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
+#define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
 #endif
 
 #ifdef IGNORE_MTAB
