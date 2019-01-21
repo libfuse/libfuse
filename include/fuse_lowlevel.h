@@ -1590,14 +1590,14 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
  * Notify to invalidate parent attributes and the dentry matching
  * parent/name
  *
- * To avoid a deadlock this function must not be called while
- * executing a related filesytem operation or while holding a lock
- * that could be needed to execute such an operation. As of kernel
- * 4.18, a "related operation" is a lookup(), symlink(), mknod(),
- * mkdir(), unlink(), rename(), link() or create() request for the
- * parent, and a setattr(), unlink(), rmdir(), rename(), setxattr(),
- * removexattr(), readdir() or readdirplus() request for the inode
- * itself.
+ * To avoid a deadlock this function must not be called in the
+ * execution path of a related filesytem operation or within any code
+ * that could hold a lock that could be needed to execute such an
+ * operation. As of kernel 4.18, a "related operation" is a lookup(),
+ * symlink(), mknod(), mkdir(), unlink(), rename(), link() or create()
+ * request for the parent, and a setattr(), unlink(), rmdir(),
+ * rename(), setxattr(), removexattr(), readdir() or readdirplus()
+ * request for the inode itself.
  *
  * When called correctly, this function will never block.
  *
