@@ -1031,9 +1031,23 @@ int fuse_reply_poll(fuse_req_t req, unsigned revents)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+/* Is `path` a single path component that is not "." or ".."? */
+static int is_safe_path_component(const char *path)
+{
+	if (strchr(path, '/'))
+		return 0;
+
+	return !is_dot_or_dotdot(path);
+}
+
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
+
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
 
 	if (req->se->op.lookup)
 		req->se->op.lookup(req, nodeid, name);
@@ -1168,6 +1182,11 @@ static void do_mknod(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	else
 		name = (char *) inarg + FUSE_COMPAT_MKNOD_IN_SIZE;
 
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
 	if (req->se->op.mknod)
 		req->se->op.mknod(req, nodeid, name, arg->mode, arg->rdev);
 	else
@@ -1177,12 +1196,18 @@ static void do_mknod(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_mkdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_mkdir_in *arg = (struct fuse_mkdir_in *) inarg;
+	char *name = PARAM(arg);
 
 	if (req->se->conn.proto_minor >= 12)
 		req->ctx.umask = arg->umask;
 
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
 	if (req->se->op.mkdir)
-		req->se->op.mkdir(req, nodeid, PARAM(arg), arg->mode);
+		req->se->op.mkdir(req, nodeid, name, arg->mode);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1190,6 +1215,11 @@ static void do_mkdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 static void do_unlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
+
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
 
 	if (req->se->op.unlink)
 		req->se->op.unlink(req, nodeid, name);
@@ -1201,6 +1231,11 @@ static void do_rmdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
 
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
 	if (req->se->op.rmdir)
 		req->se->op.rmdir(req, nodeid, name);
 	else
@@ -1211,6 +1246,11 @@ static void do_symlink(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
 	char *linkname = ((char *) inarg) + strlen((char *) inarg) + 1;
+
+	if (!is_safe_path_component(name)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
 
 	if (req->se->op.symlink)
 		req->se->op.symlink(req, linkname, nodeid, name);
@@ -1224,6 +1264,12 @@ static void do_rename(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	char *oldname = PARAM(arg);
 	char *newname = oldname + strlen(oldname) + 1;
 
+	if (!is_safe_path_component(oldname) ||
+	    !is_safe_path_component(newname)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
 	if (req->se->op.rename)
 		req->se->op.rename(req, nodeid, oldname, arg->newdir, newname,
 				  0);
@@ -1236,6 +1282,12 @@ static void do_rename2(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_rename2_in *arg = (struct fuse_rename2_in *) inarg;
 	char *oldname = PARAM(arg);
 	char *newname = oldname + strlen(oldname) + 1;
+
+	if (!is_safe_path_component(oldname) ||
+	    !is_safe_path_component(newname)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
 
 	if (req->se->op.rename)
 		req->se->op.rename(req, nodeid, oldname, arg->newdir, newname,
@@ -1269,6 +1321,11 @@ static void do_create(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			req->ctx.umask = arg->umask;
 		else
 			name = (char *) inarg + sizeof(struct fuse_open_in);
+
+		if (!is_safe_path_component(name)) {
+			fuse_reply_err(req, EINVAL);
+			return;
+		}
 
 		req->se->op.create(req, nodeid, name, arg->mode, &fi);
 	} else

@@ -3525,12 +3525,6 @@ static int fill_dir(void *dh_, const char *name, const struct stat *statp,
 	return 0;
 }
 
-static int is_dot_or_dotdot(const char *name)
-{
-	return name[0] == '.' && (name[1] == '\0' ||
-				  (name[1] == '.' && name[2] == '\0'));
-}
-
 static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 			 off_t off, enum fuse_fill_dir_flags flags)
 {

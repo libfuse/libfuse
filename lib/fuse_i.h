@@ -131,3 +131,8 @@ struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *o
 int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
 int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
 
+static inline int is_dot_or_dotdot(const char *name)
+{
+	return name[0] == '.' && (name[1] == '\0' ||
+				  (name[1] == '.' && name[2] == '\0'));
+}
