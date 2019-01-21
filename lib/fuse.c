@@ -157,6 +157,8 @@ struct node {
 	unsigned int cache_valid : 1;
 	int treelock;
 	char inline_name[32];
+	void *userdata;
+	void (*userdata_finalize)(void *);
 };
 
 #define TREELOCK_WRITE -1
@@ -193,6 +195,8 @@ struct fuse_dh {
 struct fuse_context_i {
 	struct fuse_context ctx;
 	fuse_req_t req;
+	fuse_ino_t ino;
+	const char *name;
 };
 
 /* Defined by FUSE_REGISTER_MODULE() in lib/modules/subdir.c and iconv.c.  */
@@ -571,6 +575,8 @@ static void free_node(struct fuse *f, struct node *node)
 {
 	if (node->name != node->inline_name)
 		free(node->name);
+	if (node->userdata_finalize)
+		node->userdata_finalize(node->userdata);
 	free_node_mem(f, node);
 }
 
@@ -2588,11 +2594,13 @@ static void fuse_delete_context_key(void)
 	pthread_mutex_unlock(&fuse_context_lock);
 }
 
-static struct fuse *req_fuse_prepare(fuse_req_t req)
+static struct fuse *req_fuse_prepare(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
 	struct fuse_context_i *c = fuse_create_context(req_fuse(req));
 	const struct fuse_ctx *ctx = fuse_req_ctx(req);
 	c->req = req;
+	c->ino = ino;
+	c->name = name;
 	c->ctx.uid = ctx->uid;
 	c->ctx.gid = ctx->gid;
 	c->ctx.pid = ctx->pid;
@@ -2666,7 +2674,7 @@ static void fuse_lib_destroy(void *data)
 static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 			    const char *name)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, parent, name);
 	struct fuse_entry_param e;
 	char *path;
 	int err;
@@ -2750,7 +2758,7 @@ static void fuse_lib_forget_multi(fuse_req_t req, size_t count,
 static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct stat buf;
 	char *path;
 	int err;
@@ -2804,7 +2812,7 @@ int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode,
 static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			     int valid, struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct stat buf;
 	char *path;
 	int err;
@@ -2884,7 +2892,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
 static void fuse_lib_access(fuse_req_t req, fuse_ino_t ino, int mask)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int err;
 
@@ -2902,7 +2910,7 @@ static void fuse_lib_access(fuse_req_t req, fuse_ino_t ino, int mask)
 
 static void fuse_lib_readlink(fuse_req_t req, fuse_ino_t ino)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char linkname[PATH_MAX + 1];
 	char *path;
 	int err;
@@ -2925,7 +2933,7 @@ static void fuse_lib_readlink(fuse_req_t req, fuse_ino_t ino)
 static void fuse_lib_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 			   mode_t mode, dev_t rdev)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, parent, name);
 	struct fuse_entry_param e;
 	char *path;
 	int err;
@@ -2963,7 +2971,7 @@ static void fuse_lib_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 static void fuse_lib_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 			   mode_t mode)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, parent, name);
 	struct fuse_entry_param e;
 	char *path;
 	int err;
@@ -2985,7 +2993,7 @@ static void fuse_lib_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 static void fuse_lib_unlink(fuse_req_t req, fuse_ino_t parent,
 			    const char *name)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, parent, name);
 	struct node *wnode;
 	char *path;
 	int err;
@@ -3010,7 +3018,7 @@ static void fuse_lib_unlink(fuse_req_t req, fuse_ino_t parent,
 
 static void fuse_lib_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, parent, name);
 	struct node *wnode;
 	char *path;
 	int err;
@@ -3032,7 +3040,7 @@ static void fuse_lib_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void fuse_lib_symlink(fuse_req_t req, const char *linkname,
 			     fuse_ino_t parent, const char *name)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, parent, name);
 	struct fuse_entry_param e;
 	char *path;
 	int err;
@@ -3055,7 +3063,7 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 			    const char *oldname, fuse_ino_t newdir,
 			    const char *newname, unsigned int flags)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, olddir, oldname); // XXX
 	char *oldpath;
 	char *newpath;
 	struct node *wnode1;
@@ -3092,7 +3100,7 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 static void fuse_lib_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 			  const char *newname)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_entry_param e;
 	char *oldpath;
 	char *newpath;
@@ -3150,7 +3158,7 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 			    const char *name, mode_t mode,
 			    struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, parent, name);
 	struct fuse_intr_data d;
 	struct fuse_entry_param e;
 	char *path;
@@ -3236,7 +3244,7 @@ static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
 static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 			  struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	char *path;
 	int err;
@@ -3274,7 +3282,7 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t off, struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_bufvec *buf = NULL;
 	char *path;
 	int res;
@@ -3301,7 +3309,7 @@ static void fuse_lib_write_buf(fuse_req_t req, fuse_ino_t ino,
 			       struct fuse_bufvec *buf, off_t off,
 			       struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int res;
 
@@ -3324,7 +3332,7 @@ static void fuse_lib_write_buf(fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 			   struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int err;
 
@@ -3352,7 +3360,7 @@ static struct fuse_dh *get_dirhandle(const struct fuse_file_info *llfi,
 static void fuse_lib_opendir(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *llfi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	struct fuse_dh *dh;
 	struct fuse_file_info fi;
@@ -3695,7 +3703,7 @@ static void fuse_readdir_common(fuse_req_t req, fuse_ino_t ino, size_t size,
 				off_t off, struct fuse_file_info *llfi,
 				enum fuse_readdir_flags flags)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_file_info fi;
 	struct fuse_dh *dh = get_dirhandle(llfi, &fi);
 	int err;
@@ -3741,7 +3749,7 @@ static void fuse_lib_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size,
 static void fuse_lib_releasedir(fuse_req_t req, fuse_ino_t ino,
 				struct fuse_file_info *llfi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	struct fuse_file_info fi;
 	struct fuse_dh *dh = get_dirhandle(llfi, &fi);
@@ -3766,7 +3774,7 @@ static void fuse_lib_releasedir(fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 			      struct fuse_file_info *llfi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_file_info fi;
 	char *path;
 	int err;
@@ -3786,7 +3794,7 @@ static void fuse_lib_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 
 static void fuse_lib_statfs(fuse_req_t req, fuse_ino_t ino)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct statvfs buf;
 	char *path = NULL;
 	int err = 0;
@@ -3812,7 +3820,7 @@ static void fuse_lib_statfs(fuse_req_t req, fuse_ino_t ino)
 static void fuse_lib_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			      const char *value, size_t size, int flags)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int err;
 
@@ -3847,7 +3855,7 @@ static int common_getxattr(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			      size_t size)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	int res;
 
 	if (size) {
@@ -3890,7 +3898,7 @@ static int common_listxattr(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
 
 static void fuse_lib_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	int res;
 
 	if (size) {
@@ -3917,7 +3925,7 @@ static void fuse_lib_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 static void fuse_lib_removexattr(fuse_req_t req, fuse_ino_t ino,
 				 const char *name)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int err;
 
@@ -4086,7 +4094,7 @@ static int fuse_flush_common(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_release(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	char *path;
 	int err = 0;
@@ -4109,7 +4117,7 @@ static void fuse_lib_release(fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_flush(fuse_req_t req, fuse_ino_t ino,
 			   struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int err;
 
@@ -4124,7 +4132,7 @@ static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
 			    struct fuse_file_info *fi, struct flock *lock,
 			    int cmd)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int err;
 
@@ -4186,7 +4194,7 @@ static void fuse_lib_setlk(fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_flock(fuse_req_t req, fuse_ino_t ino,
 			   struct fuse_file_info *fi, int op)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	char *path;
 	int err;
 
@@ -4204,7 +4212,7 @@ static void fuse_lib_flock(fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 			  uint64_t idx)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	char *path;
 	int err;
@@ -4227,7 +4235,7 @@ static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 			   const void *in_buf, size_t in_bufsz,
 			   size_t out_bufsz)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	struct fuse_file_info fi;
 	char *path, *out_buf = NULL;
@@ -4276,7 +4284,7 @@ out:
 static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,
 			  struct fuse_file_info *fi, struct fuse_pollhandle *ph)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	char *path;
 	int err;
@@ -4298,7 +4306,7 @@ static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,
 static void fuse_lib_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 		off_t offset, off_t length, struct fuse_file_info *fi)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, ino, NULL);
 	struct fuse_intr_data d;
 	char *path;
 	int err;
@@ -4319,7 +4327,7 @@ static void fuse_lib_copy_file_range(fuse_req_t req, fuse_ino_t nodeid_in,
 				     struct fuse_file_info *fi_out, size_t len,
 				     int flags)
 {
-	struct fuse *f = req_fuse_prepare(req);
+	struct fuse *f = req_fuse_prepare(req, nodeid_in, NULL); // XXX
 	struct fuse_intr_data d;
 	char *path_in, *path_out;
 	int err;
@@ -4562,6 +4570,57 @@ struct fuse_context *fuse_get_context(void)
 		return &c->ctx;
 	else
 		return NULL;
+}
+
+static struct node *get_node_by_name(struct fuse *f, fuse_ino_t parent, const char *name)
+{
+	if (!name)
+		return get_node(f, parent);
+
+	char *path;
+	errno = -get_path_name(f, parent, name, &path);
+	if (errno)
+		return NULL;
+
+	struct fuse_entry_param e;
+	errno = -lookup_path(f, parent, name, path, &e, NULL);
+	free_path(f, parent, path);
+	if (errno)
+		return NULL;
+
+	return get_node_nocheck(f, e.ino);
+}
+
+void *fuse_get_context_node_userdata(void)
+{
+	struct fuse_context_i *c = fuse_get_context_internal();
+	if (!c)
+		return NULL;
+
+	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, c->name);
+	if (!node)
+		return NULL;
+
+	return node->userdata;
+}
+
+int fuse_set_context_node_userdata(void *data, void (*finalize)(void *))
+{
+	struct fuse_context_i *c = fuse_get_context_internal();
+	if (!c)
+		return -EINVAL;
+
+	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, c->name);
+	if (!node)
+		return -errno;
+
+	if (node->userdata_finalize && node->userdata != data)
+		node->userdata_finalize(node->userdata);
+
+	node->userdata = data;
+	node->userdata_finalize = finalize;
+
+	return 0;
 }
 
 int fuse_getgroups(int size, gid_t list[])

@@ -1013,6 +1013,30 @@ int fuse_loop_mt(struct fuse *f, struct fuse_loop_config *config);
 struct fuse_context *fuse_get_context(void);
 
 /**
+ * Get the userdata stored against the node the current filesystem operation is
+ * targetting.
+ *
+ * @return the userdata
+ */
+void *fuse_get_context_node_userdata(void);
+
+/**
+ * Set the userdata for the node the current filesystem operation is
+ * targetting. If a finalizer is specified, it will be called with the userdata
+ * pointer as its argument when the cached node is being deallocated, or when
+ * the userdata is being changed to a different value.
+ *
+ * If an error occurs, a nonzero value is returned. In this case, you should
+ * finalize (or otherwise clean up) the userdata immediately.
+ *
+ * @param data the userdata to store against the node
+ * @param finalize a function to be called when the node is deallocated, or
+ *                 when the userdata is changed; can be NULL
+ * @return 0 on success, nonzero on failure
+ */
+int fuse_set_context_node_userdata(void *data, void (*finalize)(void *));
+
+/**
  * Get the current supplementary group IDs for the current request
  *
  * Similar to the getgroups(2) system call, except the return value is

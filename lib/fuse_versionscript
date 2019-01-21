@@ -157,6 +157,8 @@ FUSE_3.4 {
 	global:
 		fuse_fs_copy_file_range;
 		fuse_reply_copy_file_range;
+		fuse_get_context_node_userdata;
+		fuse_set_context_node_userdata;
 } FUSE_3.3;
 
 # Local Variables:
