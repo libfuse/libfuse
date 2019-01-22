@@ -4591,26 +4591,26 @@ static struct node *get_node_by_name(struct fuse *f, fuse_ino_t parent, const ch
 	return get_node_nocheck(f, e.ino);
 }
 
-void *fuse_get_context_node_userdata(void)
+void *fuse_get_context_node_userdata(int parent)
 {
 	struct fuse_context_i *c = fuse_get_context_internal();
 	if (!c)
 		return NULL;
 
-	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, c->name);
+	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, parent ? NULL : c->name);
 	if (!node)
 		return NULL;
 
 	return node->userdata;
 }
 
-int fuse_set_context_node_userdata(void *data, void (*finalize)(void *))
+int fuse_set_context_node_userdata(int parent, void *data, void (*finalize)(void *))
 {
 	struct fuse_context_i *c = fuse_get_context_internal();
 	if (!c)
 		return -EINVAL;
 
-	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, c->name);
+	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, parent ? NULL : c->name);
 	if (!node)
 		return -errno;
 
