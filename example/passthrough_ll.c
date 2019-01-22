@@ -773,6 +773,7 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		      mode_t mode, struct fuse_file_info *fi)
 {
 	int fd;
+	struct lo_data *lo = lo_data(req);
 	struct fuse_entry_param e;
 	int err;
 
@@ -786,6 +787,10 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		return (void) fuse_reply_err(req, errno);
 
 	fi->fh = fd;
+	if (lo->cache == CACHE_NEVER)
+		fi->direct_io = 1;
+	else if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
 
 	err = lo_do_lookup(req, parent, name, &e);
 	if (err)
