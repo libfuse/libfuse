@@ -1023,6 +1023,18 @@ struct fuse_context *fuse_get_context(void);
 void *fuse_get_context_node_userdata(int parent);
 
 /**
+ * Get the mutex for the userdata for the node the current filesystem operation
+ * is targetting.
+ *
+ * Note that the mutex is not used internally -- it is up to the calling code
+ * to use the mutex to synchronize operations on the node's userdata.
+ *
+ * @param parent get mutex for the parent of the node instead of the node itself
+ * @return a pointer to the node's userdata mutex
+ */
+pthread_mutex_t *fuse_get_context_node_userdata_lock(int parent);
+
+/**
  * Set the userdata for the node the current filesystem operation is
  * targetting. If a finalizer is specified, it will be called with the userdata
  * pointer as its argument when the cached node is being deallocated, or when

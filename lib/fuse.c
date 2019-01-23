@@ -159,6 +159,7 @@ struct node {
 	char inline_name[32];
 	void *userdata;
 	void (*userdata_finalize)(void *);
+	pthread_mutex_t userdata_lock;
 };
 
 #define TREELOCK_WRITE -1
@@ -577,6 +578,7 @@ static void free_node(struct fuse *f, struct node *node)
 		free(node->name);
 	if (node->userdata_finalize)
 		node->userdata_finalize(node->userdata);
+	pthread_mutex_destroy(&node->userdata_lock);
 	free_node_mem(f, node);
 }
 
@@ -895,6 +897,7 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 		node->generation = f->generation;
 		if (f->conf.remember)
 			inc_nlookup(node);
+		pthread_mutex_init(&node->userdata_lock, NULL);
 
 		if (hash_name(f, node, parent, name) == -1) {
 			free_node(f, node);
@@ -4591,26 +4594,36 @@ static struct node *get_node_by_name(struct fuse *f, fuse_ino_t parent, const ch
 	return get_node_nocheck(f, e.ino);
 }
 
-void *fuse_get_context_node_userdata(int parent)
+static struct node *get_context_node(int parent)
 {
 	struct fuse_context_i *c = fuse_get_context_internal();
 	if (!c)
 		return NULL;
 
-	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, parent ? NULL : c->name);
+	return get_node_by_name(c->ctx.fuse, c->ino, parent ? NULL : c->name);
+}
+
+void *fuse_get_context_node_userdata(int parent)
+{
+	struct node *node = get_context_node(parent);
 	if (!node)
 		return NULL;
 
 	return node->userdata;
 }
 
+pthread_mutex_t *fuse_get_context_node_userdata_lock(int parent)
+{
+	struct node *node = get_context_node(parent);
+	if (!node)
+		return NULL;
+
+	return &node->userdata_lock;
+}
+
 int fuse_set_context_node_userdata(int parent, void *data, void (*finalize)(void *))
 {
-	struct fuse_context_i *c = fuse_get_context_internal();
-	if (!c)
-		return -EINVAL;
-
-	struct node *node = get_node_by_name(c->ctx.fuse, c->ino, parent ? NULL : c->name);
+	struct node *node = get_context_node(parent);
 	if (!node)
 		return -errno;
 
@@ -5009,6 +5022,7 @@ struct fuse *fuse_new_31(struct fuse_args *args,
 
 	root->parent = NULL;
 	root->nodeid = FUSE_ROOT_ID;
+	pthread_mutex_init(&root->userdata_lock, NULL);
 	inc_nlookup(root);
 	hash_id(f, root);
 
