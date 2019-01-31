@@ -4600,7 +4600,22 @@ static struct node *get_context_node(int parent)
 	if (!c)
 		return NULL;
 
-	return get_node_by_name(c->ctx.fuse, c->ino, parent ? NULL : c->name);
+	if (c->name && !parent)
+		/* ino is the parent, lookup child */
+		return get_node_by_name(c->ctx.fuse, c->ino, parent ? NULL : c->name);
+	else if (c->name && parent)
+		/* ino is the parent, get parent */
+		return get_node(c->ctx.fuse, c->ino);
+	else if (!c->name && !parent)
+		/* ino is the node, get it */
+		return get_node(c->ctx.fuse, c->ino);
+	else if (!c->name && parent)
+		/* ino is the node, get its parent */
+		return get_node(c->ctx.fuse, c->ino)->parent;
+
+	// unreachable
+	assert(0);
+	return NULL;
 }
 
 void *fuse_get_context_node_userdata(int parent)
