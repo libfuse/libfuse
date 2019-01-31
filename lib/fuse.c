@@ -157,9 +157,8 @@ struct node {
 	unsigned int cache_valid : 1;
 	int treelock;
 	char inline_name[32];
-	void *userdata;
-	void (*userdata_finalize)(void *);
 	pthread_mutex_t userdata_lock;
+	struct fuse_node_userdata userdata;
 };
 
 #define TREELOCK_WRITE -1
@@ -576,8 +575,8 @@ static void free_node(struct fuse *f, struct node *node)
 {
 	if (node->name != node->inline_name)
 		free(node->name);
-	if (node->userdata_finalize)
-		node->userdata_finalize(node->userdata);
+	if (node->userdata.finalize)
+		node->userdata.finalize(node->userdata.data);
 	pthread_mutex_destroy(&node->userdata_lock);
 	free_node_mem(f, node);
 }
@@ -4618,35 +4617,36 @@ static struct node *get_context_node(int parent)
 	return NULL;
 }
 
-void *fuse_get_context_node_userdata(int parent)
+struct fuse_node_userdata *fuse_context_node_userdata_acquire(int parent)
 {
 	struct node *node = get_context_node(parent);
 	if (!node)
 		return NULL;
 
-	return node->userdata;
+	pthread_mutex_lock(&node->userdata_lock);
+
+	return &node->userdata;
 }
 
-pthread_mutex_t *fuse_get_context_node_userdata_lock(int parent)
+struct fuse_node_userdata *fuse_context_node_userdata_timedacquire(
+		int parent, const struct timespec *abs_timeout)
 {
 	struct node *node = get_context_node(parent);
 	if (!node)
 		return NULL;
 
-	return &node->userdata_lock;
+	int res = pthread_mutex_timedlock(&node->userdata_lock, abs_timeout);
+
+	return res == 0 ? &node->userdata : NULL;
 }
 
-int fuse_set_context_node_userdata(int parent, void *data, void (*finalize)(void *))
+int fuse_context_node_userdata_release(int parent)
 {
 	struct node *node = get_context_node(parent);
 	if (!node)
 		return -errno;
 
-	if (node->userdata_finalize && node->userdata != data)
-		node->userdata_finalize(node->userdata);
-
-	node->userdata = data;
-	node->userdata_finalize = finalize;
+	pthread_mutex_unlock(&node->userdata_lock);
 
 	return 0;
 }

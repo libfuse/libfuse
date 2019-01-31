@@ -157,9 +157,9 @@ FUSE_3.4 {
 	global:
 		fuse_fs_copy_file_range;
 		fuse_reply_copy_file_range;
-		fuse_get_context_node_userdata;
-		fuse_get_context_node_userdata_lock;
-		fuse_set_context_node_userdata;
+		fuse_context_node_userdata_acquire;
+		fuse_context_node_userdata_timedacquire;
+		fuse_context_node_userdata_release;
 } FUSE_3.3;
 
 # Local Variables:

@@ -1012,45 +1012,51 @@ int fuse_loop_mt(struct fuse *f, struct fuse_loop_config *config);
  */
 struct fuse_context *fuse_get_context(void);
 
+/** Userdata to be stored against each node.
+ */
+struct fuse_node_userdata {
+	/** Opaque pointer to be used by the caller of
+	 * fuse_context_node_userdata_* methods. */
+	void *data;
+
+	/** Finalizer called by FUSE when the node is being freed.  Users
+	 * should set this if special cleanup for the data field is necessary.
+	 * */
+	void (*finalize)(void *);
+};
+
 /**
- * Get the userdata stored against the node the current filesystem operation is
- * targetting.
+ * Acquire the userdata stored against the node the current filesystem
+ * operation is targetting.  Use fuse_context_node_userdata_release to release
+ * the lock held on the userdata.
  *
  * @param parent get userdata for the parent of the node instead of the node
  *               itself
- * @return the userdata
+ * @return the fuse_node_userdata struct, or NULL if an error occurred (errno
+ *         is non-zero), or NULL if the parent of the root node was requested
+ *         (errno is zero)
  */
-void *fuse_get_context_node_userdata(int parent);
+struct fuse_node_userdata *fuse_context_node_userdata_acquire(int parent);
 
 /**
- * Get the mutex for the userdata for the node the current filesystem operation
- * is targetting.
- *
- * Note that the mutex is not used internally -- it is up to the calling code
- * to use the mutex to synchronize operations on the node's userdata.
- *
- * @param parent get mutex for the parent of the node instead of the node itself
- * @return a pointer to the node's userdata mutex
+ * Like fuse_context_node_userdata_acquire, except a timeout on acquiring the
+ * lock is given, as per pthread_mutex_timedlock.  NULL may be returned with
+ * errno set to ETIMEDOUT if the userdata lock could not be acquired within the
+ * timeout.
  */
-pthread_mutex_t *fuse_get_context_node_userdata_lock(int parent);
+struct fuse_node_userdata *fuse_context_node_userdata_timedacquire(
+		int parent, const struct timespec *abs_timeout);
 
 /**
- * Set the userdata for the node the current filesystem operation is
- * targetting. If a finalizer is specified, it will be called with the userdata
- * pointer as its argument when the cached node is being deallocated, or when
- * the userdata is being changed to a different value.
+ * Release the userdata stored against the node the current filesystem
+ * operation is targetting.  You should not use the handle given by
+ * fuse_context_node_userdata_acquire after calling this.
  *
- * If an error occurs, a nonzero value is returned. In this case, you should
- * finalize (or otherwise clean up) the userdata immediately.
- *
- * @param parent set userdata for the parent of the node instead of the node
- *               itself
- * @param data the userdata to store against the node
- * @param finalize a function to be called when the node is deallocated, or
- *                 when the userdata is changed; can be NULL
+ * @param parent release userdata for the parent of the node instead of the
+ *               node itself
  * @return 0 on success, nonzero on failure
  */
-int fuse_set_context_node_userdata(int parent, void *data, void (*finalize)(void *));
+int fuse_context_node_userdata_release(int parent);
 
 /**
  * Get the current supplementary group IDs for the current request
