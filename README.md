@@ -1,8 +1,12 @@
-libfuse
+libfuse (built with CMake)
 =======
 
 About
 -----
+
+This is a fork of the libfuse reference implementation which may be found here:
+
+This fork is designed to build with CMake, otherwise it should be identical to the reference platform.
 
 FUSE (Filesystem in Userspace) is an interface for userspace programs
 to export a filesystem to the Linux kernel. The FUSE project consists
@@ -35,27 +39,34 @@ Supported Platforms
 Installation
 ------------
 
-You can download libfuse from
-https://github.com/libfuse/libfuse/releases. To build and install, we
-recommend to use [Meson](http://mesonbuild.com/) and
-[Ninja](https://ninja-build.org).  After extracting the libfuse
-tarball, create a (temporary) build directory and run Meson:
+You can download libfuse:
+
+git clone https://github.com/Smit-tay/libfuse-cmake 
+
+To build and install, you are free to use meson or CMake
+
+We recommend to use [CMake](https://cmake.org/) the hugely superior meta-make system.
+
+You are free to use the Unix make, Ninja, or any other CMake supported make system - see, CMake is better than meson !
+
+Out of source builds are *highly* recommended.  Simply create a (temporary) build directory and run CMake:
 
     $ mkdir build; cd build
-    $ meson ..
+    $ cmake ..
 
-Normally, the default build options will work fine. If you
-nevertheless want to adjust them, you can do so with the *mesonconf*
-command:
+Normally, the default build options will work fine. However, to build examples, tests, and other recommended utilites, you will probably want to do this:
+(this also specifically uses Unix Makefiles which is the cmake default)
 
-    $ mesonconf # list options
-    $ mesonconf  -D disable-mtab=true # set an option
+	$ cmake -G "Unix Makefiles" -DOPTION_BUILD_UTILS=ON -DOPTION_BUILD_EXAMPLES=ON -DCMAKE_INSTALL_PREFIX=/home/<USER>/FUSE/install -DCMAKE_BUILD_TYPE=Debug ..
 
-To build, test and install libfuse, you then use Ninja:
 
-    $ ninja
+To build, test and install libfuse, you then use make (or other supported make systems, e.g Ninja):
+
+    $ make
     $ sudo python3 -m pytest test/
-    $ sudo ninja install
+    $ sudo make install
+
+IMPORTANT - Tests current perform best when run under python3.6.  Issues have been reported attempting to use python3.7 with pytest.
 
 Running the tests requires the [py.test](http://www.pytest.org/)
 Python module. Instead of running the tests as root, the majority of
@@ -64,7 +75,7 @@ setuid root first:
 
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
-    $ python3 -m pytest test/
+    $ python3.6 -m pytest test/
 
 Security implications
 ---------------------
@@ -127,16 +138,18 @@ directory and at http://libfuse.github.io/doxygen.
 Getting Help
 ------------
 
-If you need help, please ask on the <fuse-devel@lists.sourceforge.net>
+If you need help related to libfuse itself, please ask on the <fuse-devel@lists.sourceforge.net>
 mailing list (subscribe at
 https://lists.sourceforge.net/lists/listinfo/fuse-devel).
 
-Please report any bugs on the GitHub issue tracker at
+Please report any libfuse bugs on the GitHub issue tracker at
 https://github.com/libfuse/libfuse/issues.
+
+Please report CMake related libfuse bugs here:
+https://github.com/Smit-tay/libfuse-cmake/issues
 
 
 Professional Support
 --------------------
 
-Professional support is offered via [Rath
-Consulting](http://www.rath-consulting.biz).
+Professional support is offered via [Rath Consulting](http://www.rath-consulting.biz).
