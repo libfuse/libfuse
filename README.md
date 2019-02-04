@@ -57,7 +57,11 @@ Out of source builds are *highly* recommended.  Simply create a (temporary) buil
 Normally, the default build options will work fine. However, to build examples, tests, and other recommended utilites, you will probably want to do this:
 (this also specifically uses Unix Makefiles which is the cmake default)
 
-	$ cmake -G "Unix Makefiles" -DOPTION_BUILD_UTILS=ON -DOPTION_BUILD_EXAMPLES=ON -DCMAKE_INSTALL_PREFIX=/home/<USER>/FUSE/install -DCMAKE_BUILD_TYPE=Debug ..
+	$ cmake -G "Unix Makefiles" \
+                -DOPTION_BUILD_UTILS=ON \
+                -DOPTION_BUILD_EXAMPLES=ON \
+                -DCMAKE_INSTALL_PREFIX=/home/<USER>/FUSE/install \
+                -DCMAKE_BUILD_TYPE=Debug ..
 
 
 To build, test and install libfuse, you then use make (or other supported make systems, e.g Ninja):
