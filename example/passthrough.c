@@ -26,7 +26,7 @@
 #define FUSE_USE_VERSION 31
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#include "config.h"
 #endif
 
 #define _GNU_SOURCE
