@@ -5,8 +5,13 @@ About
 -----
 
 This is a fork of the libfuse reference implementation which may be found here:
+[https://github.com/libfuse/libfuse](https://github.com/libfuse/libfuse)
 
 This fork is designed to build with CMake, otherwise it should be identical to the reference platform.
+
+The best reference for using libfuse is the reference implementation.
+
+BUT - This is the place to come for information about building libfuse with CMake instead of meson.
 
 FUSE (Filesystem in Userspace) is an interface for userspace programs
 to export a filesystem to the Linux kernel. The FUSE project consists
@@ -45,7 +50,7 @@ git clone https://github.com/Smit-tay/libfuse-cmake
 
 To build and install, you are free to use meson or CMake
 
-We recommend to use [CMake](https://cmake.org/) the hugely superior meta-make system.
+We recommend to use [CMake](https://cmake.org/) the hugely superior meta-make system.  CMake allows a developer to use a wide variey of build systems and include native support for various command-line or GUI environments such as Visual Studio, Eclipse, COdeBlocks, Ninja, or plain old Unix make.
 
 You are free to use the Unix make, Ninja, or any other CMake supported make system - see, CMake is better than meson !
 
@@ -67,9 +72,10 @@ Normally, the default build options will work fine. However, to build examples, 
 To build, test and install libfuse, you then use make (or other supported make systems, e.g Ninja):
 
     $ make
-    $ sudo python3 -m pytest test/
+    $ python3 -m pytest test/
     $ sudo make install
 
+NOTE:  One of the primary outstanding issues (with this libfuse-Cmake fork) is to remove any dependency upon python.  Expect to see native ctest replace python pytest soon.
 IMPORTANT - Tests current perform best when run under python3.6.  Issues have been reported attempting to use python3.7 with pytest.
 
 Running the tests requires the [py.test](http://www.pytest.org/)
@@ -80,6 +86,8 @@ setuid root first:
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
     $ python3.6 -m pytest test/
+
+NOTE: Some tests are designed to "drop privileges" and so will be skipped if the user is not root.
 
 Security implications
 ---------------------
