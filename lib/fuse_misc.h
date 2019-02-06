@@ -13,7 +13,7 @@
     - confuse the dynamic linker in uClibc
     - not supported on MacOSX (in MachO binary format)
 */
-#if (!defined(__UCLIBC__) && !defined(__APPLE__))
+#if (!defined(__UCLIBC__) && !defined(__APPLE__)) && !defined(DISABLE_SYMVER)
 #define FUSE_SYMVER(x) __asm__(x)
 #else
 #define FUSE_SYMVER(x)

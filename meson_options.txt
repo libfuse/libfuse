@@ -1,6 +1,9 @@
 option('disable-mtab', type : 'boolean', value : false,
        description: 'Disable and ignore usage of /etc/mtab')
 
+option('disable-symver', type : 'boolean', value : false,
+       description: 'Disable symvers')
+
 option('udevrulesdir', type : 'string', value : '',
        description: 'Where to install udev rules (if empty, query pkg-config(1))')
 

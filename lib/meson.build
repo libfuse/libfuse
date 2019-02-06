@@ -28,12 +28,18 @@ else
 endif
 
 fusermount_path = join_paths(get_option('prefix'), get_option('bindir'))
+c_args = [ '-DFUSE_USE_VERSION=34',
+           '-DFUSERMOUNT_DIR="@0@"'.format(fusermount_path) ]
+
+if get_option('disable-symver')
+  c_args += [ '-DDISABLE_SYMVER' ]
+endif
+
 libfuse = library('fuse3', libfuse_sources, version: meson.project_version(),
                   soversion: '3', include_directories: include_dirs,
                   dependencies: deps, install: true,
                   link_depends: 'fuse_versionscript',
-                  c_args: [ '-DFUSE_USE_VERSION=34',
-                            '-DFUSERMOUNT_DIR="@0@"'.format(fusermount_path) ],
+                  c_args: c_args,
                   link_args: ['-Wl,--version-script,' + meson.current_source_dir()
                               + '/fuse_versionscript' ])
 
