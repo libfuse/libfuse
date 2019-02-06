@@ -15,6 +15,6 @@ addons:
     - gcc-7
     - python3-pip
     - cmake
-install: test/travis-install.sh
 script: test/travis-build.sh
+install: test/travis-install.sh
 
