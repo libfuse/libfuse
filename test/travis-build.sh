@@ -32,8 +32,14 @@ for CC in gcc gcc-7 clang; do
     else
         build_opts=''
     fi
-    meson -D werror=true ${build_opts} "${SOURCE_DIR}"
-    ninja
+#    meson -D werror=true ${build_opts} "${SOURCE_DIR}"
+#    ninja
+    cmake -G "Unix Makefiles" \
+            -DOPTION_BUILD_UTILS=ON \
+            -DOPTION_BUILD_EXAMPLES=ON \
+            -DCMAKE_INSTALL_PREFIX=/home/<USER>/FUSE/install \
+            -DCMAKE_BUILD_TYPE=Debug "${SOURCE_DIR}"
+    make -j
 
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
@@ -48,8 +54,14 @@ for san in undefined address; do
     mkdir build-${san}; cd build-${san}
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
-    meson -D b_sanitize=${san} -D b_lundef=false -D werror=true "${SOURCE_DIR}"
-    ninja
+    # meson -D b_sanitize=${san} -D b_lundef=false -D werror=true "${SOURCE_DIR}"
+    # ninja
+    cmake -G "Unix Makefiles" \
+            -DOPTION_BUILD_UTILS=ON \
+            -DOPTION_BUILD_EXAMPLES=ON \
+            -DCMAKE_INSTALL_PREFIX=/home/<USER>/FUSE/install \
+            -DCMAKE_BUILD_TYPE=Debug "${SOURCE_DIR}"
+    make -j
 
     # Test as root and regular user
     sudo ${TEST_CMD}
