@@ -35,7 +35,7 @@ pipeline {
                    echo '******************'
                    
                    cd build
-                   sudo /usr/bin/chmod-jenkins root:root util/fusermount3
+                   sudo /usr/bin/chown-jenkins root:root util/fusermount3
                    sudo /usr/bin/chmod-jenkins 4755 util/fusermount3
                    python3.6 -m pytest test/
                    '''
