@@ -20,6 +20,7 @@ pipeline {
             steps {
                 echo 'Building..'
                 sh '''
+                   cd build
                    make -j \
                    '''
 
@@ -29,6 +30,7 @@ pipeline {
             steps {
                 echo 'Testing..'
                 sh '''
+                   cd build
                    sudo chown root:root util/fusermount3
                    sudo chmod 4755 util/fusermount3
                    python3.6 -m pytest test/
