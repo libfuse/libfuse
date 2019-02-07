@@ -30,24 +30,27 @@ pipeline {
             steps {
                 echo 'Testing..'
 
-                ## For almost anything to work, fusermount3 has to be setuid root.
-                ## To accomplish this - in a reasonably secure manner - under 
-                ## a Jenkins job (which normally runs as an unprivileged user) 
-                ## we need two 'helpers' and make use of a customized suders rule file for Jenkins.
-                ## etc/sudoers.d/jenkins looks like this:
-                ##     jenkins <HOSTNAME> = (root) NOPASSWD: /usr/bin/chmod-jenkins, /usr/bin/chown-jenkins
-                ## The two files just call the real chown and chmod like this:
-                ##  /usr/bin/chown "$@"
-                ##   and
-                ##  /usr/bin/chmod "$@"
-                ## Don't forget to set executable on them !
+                //    Actually, this is stupid - I could just as easily let jenkins 
+                //    run chown and chmod directly.
+                //     Must be a better way.
+
+                // For almost anything to work, fusermount3 has to be setuid root.
+                // To accomplish this - in a reasonably secure manner - under 
+                // a Jenkins job (which normally runs as an unprivileged user) 
+                // we need two 'helpers' and make use of a customized suders rule file for Jenkins.
+                // etc/sudoers.d/jenkins looks like this:
+                //     jenkins <HOSTNAME> = (root) NOPASSWD: /usr/bin/chmod-jenkins, /usr/bin/chown-jenkins
+                // The two files just call the real chown and chmod like this:
+                //  /usr/bin/chown "$@"
+                //   and
+                //  /usr/bin/chmod "$@"
+                // Don't forget to set executable on them !
                 sh '''
                    cd build
                    sudo /usr/bin/chown-jenkins root:root util/fusermount3
                    sudo /usr/bin/chmod-jenkins 4755 util/fusermount3
                    python3.6 -m pytest test/
                    '''
-                    
             }
         }
     }
