@@ -5,7 +5,7 @@ pipeline {
         stage('Configure'){
             steps {
                 sh '''
-                mkdir build;
+                mkdir -p build;
                 cd build;
                 cmake -G "Unix Makefiles" \
                       -DOPTION_BUILD_UTILS=ON \
