@@ -14,7 +14,6 @@ pipeline {
                       -DCMAKE_BUILD_TYPE=Debug \
                '''
             }
-                
         }
         stage('Build') {
             steps {
