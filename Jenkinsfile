@@ -30,6 +30,10 @@ pipeline {
             steps {
                 echo 'Testing..'
                 sh '''
+                   echo '******************'
+                   echo $PATH
+                   echo '******************'
+                   
                    cd build
                    sudo chown root:root util/fusermount3
                    sudo chmod 4755 util/fusermount3
