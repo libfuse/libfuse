@@ -1777,7 +1777,7 @@ static void fuse_free_buf(struct fuse_bufvec *buf)
 		size_t i;
 
 		for (i = 0; i < buf->count; i++)
-			if (!(buf->buf[0].flags & FUSE_BUF_IS_FD))
+			if (!(buf->buf[i].flags & FUSE_BUF_IS_FD))
 				free(buf->buf[i].mem);
 		free(buf);
 	}
