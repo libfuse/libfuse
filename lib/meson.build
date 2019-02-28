@@ -10,10 +10,10 @@ else
 endif
 
 deps = [ thread_dep ]
+libiconv = cc.find_library('iconv', required: fale)
 
-if cfg.get('HAVE_ICONV')
+if cfg.get('HAVE_ICONV') and libiconv.found()
    libfuse_sources += [ 'modules/iconv.c' ]
-   libiconv = cc.find_library('iconv', required: true)
    deps += [ libiconv ]
 endif
 
