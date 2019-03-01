@@ -44,9 +44,8 @@ endforeach
 cfg.set('HAVE_SETXATTR', 
         cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
         
-libiconv = cc.find_library('iconv', required: false)
 cfg.set('HAVE_ICONV', 
-        cc.has_function('iconv', prefix: '#include <iconv.h>') and libiconv.found())
+        cc.has_function('iconv', prefix: '#include <iconv.h>'))
 
 # Test if structs have specific member
 cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
