@@ -9,13 +9,13 @@ else
    libfuse_sources += [ 'mount_bsd.c' ]
 endif
 
+deps = [ thread_dep ]
 if cfg.get('HAVE_ICONV')
    libiconv = cc.find_library('iconv', required: true)
    libfuse_sources += [ 'modules/iconv.c' ]
    deps += [ libiconv ]
 endif
 
-deps = [ thread_dep ]
 libdl = cc.find_library('dl', required: false)
 if libdl.found()
    deps += [ libdl ]
