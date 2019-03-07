@@ -76,10 +76,6 @@
    timeout, so we just send a big value */
 #define NO_TIMEOUT 500000
 
-/* We cannot check directly if e.g. O_RDONLY is set, since this is not
- * an individual bit (cf. open(2)) */
-#define ACCESS_MASK (O_RDONLY | O_WRONLY | O_RDWR)
-
 #define MAX_STR_LEN 128
 #define FILE_INO 2
 #define FILE_NAME "current_time"
@@ -224,7 +220,7 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
 
     if (ino == FUSE_ROOT_ID)
         fuse_reply_err(req, EISDIR);
-    else if ((fi->flags & ACCESS_MASK) != O_RDONLY)
+    else if ((fi->flags & O_ACCMODE) != O_RDONLY)
         fuse_reply_err(req, EACCES);
     else if (ino == FILE_INO)
         fuse_reply_open(req, fi);

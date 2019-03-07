@@ -163,8 +163,9 @@ static int check_mode(const char *path, mode_t mode)
 		PERROR("lstat");
 		return -1;
 	}
-	if ((stbuf.st_mode & 07777) != mode) {
-		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & 07777, mode);
+	if ((stbuf.st_mode & ALLPERMS) != mode) {
+		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & ALLPERMS,
+		      mode);
 		return -1;
 	}
 	return 0;
@@ -178,8 +179,9 @@ static int fcheck_mode(int fd, mode_t mode)
 		PERROR("fstat");
 		return -1;
 	}
-	if ((stbuf.st_mode & 07777) != mode) {
-		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & 07777, mode);
+	if ((stbuf.st_mode & ALLPERMS) != mode) {
+		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & ALLPERMS,
+		      mode);
 		return -1;
 	}
 	return 0;
@@ -1040,7 +1042,7 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
 		err += check_mode(testfile, mode);
 	err += check_nlink(testfile, 1);
 	err += check_size(testfile, currlen);
-	if (exist && !(flags & O_TRUNC) && (mode & 0400))
+	if (exist && !(flags & O_TRUNC) && (mode & S_IRUSR))
 		err += check_data(testfile, testdata2, 0, testdata2len);
 
 	res = write(fd, data, datalen);
@@ -1057,7 +1059,7 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
 
 			err += check_size(testfile, currlen);
 
-			if (mode & 0400) {
+			if (mode & S_IRUSR) {
 				err += check_data(testfile, data, 0, datalen);
 				if (exist && !(flags & O_TRUNC) &&
 				    testdata2len > datalen)
