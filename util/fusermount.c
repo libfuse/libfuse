@@ -428,7 +428,9 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 		return -1;
 	}
 
+	drop_privs();
 	res = chdir_to_parent(copy, &last);
+	restore_privs();
 	if (res == -1)
 		goto out;
 
