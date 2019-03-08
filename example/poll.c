@@ -115,7 +115,7 @@ static int fsel_open(const char *path, struct fuse_file_info *fi)
 
 	if (idx < 0)
 		return -ENOENT;
-	if ((fi->flags & 3) != O_RDONLY)
+	if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		return -EACCES;
 	if (fsel_open_mask & (1 << idx))
 		return -EBUSY;
