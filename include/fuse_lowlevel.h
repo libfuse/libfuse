@@ -583,8 +583,10 @@ struct fuse_lowlevel_ops {
 	 *
 	 * NOTE: the name of the method is misleading, since (unlike
 	 * fsync) the filesystem is not forced to flush pending writes.
-	 * One reason to flush data, is if the filesystem wants to return
-	 * write errors.
+	 * One reason to flush data is if the filesystem wants to return
+	 * write errors during close.  However, such use is non-portable
+	 * because POSIX does not require [close] to wait for delayed I/O to
+	 * complete.
 	 *
 	 * If the filesystem supports file locking operations (setlk,
 	 * getlk) it should remove all locks belonging to 'fi->owner'.
@@ -600,6 +602,8 @@ struct fuse_lowlevel_ops {
 	 * @param req request handle
 	 * @param ino the inode number
 	 * @param fi file information
+	 *
+	 * [close]: http://pubs.opengroup.org/onlinepubs/9699919799/functions/close.html
 	 */
 	void (*flush) (fuse_req_t req, fuse_ino_t ino,
 		       struct fuse_file_info *fi);
