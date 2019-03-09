@@ -4,6 +4,8 @@ Unreleased Changes
 * Fixed a memory leak in `examples/passthrough_ll.c`.
 * Added OpenAFS to whitelist (so users can now mount FUSE filesystems
   on mountpoints within OpenAFS filesystems).
+* Added HFS+ to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within HFS+ filesystems).
 
 
 libfuse 3.4.1 (2018-12-22)
