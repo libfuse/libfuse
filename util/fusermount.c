@@ -8,9 +8,9 @@
 /* This program does the mounting and unmounting of FUSE filesystems */
 
 #define _GNU_SOURCE /* for clone */
-#include <config.h>
-
+#include "config.h"
 #include "mount_util.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
