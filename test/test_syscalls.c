@@ -19,13 +19,13 @@ static char testfile[1024];
 static char testfile2[1024];
 static char testdir[1024];
 static char testdir2[1024];
-static char subfile[1024];
+static char subfile[1280];
 
 static char testfile_r[1024];
 static char testfile2_r[1024];
 static char testdir_r[1024];
 static char testdir2_r[1024];
-static char subfile_r[1024];
+static char subfile_r[1280];
 
 static char testname[256];
 static char testdata[] = "abcdefghijklmnopqrstuvwxyz";
@@ -493,7 +493,7 @@ static int cleanup_dir(const char *path, const char **dir_files, int quiet)
 
 	for (i = 0; dir_files[i]; i++) {
 		int res;
-		char fpath[1024];
+		char fpath[1280];
 		sprintf(fpath, "%s/%s", path, dir_files[i]);
 		res = unlink(fpath);
 		if (res == -1 && !quiet) {
@@ -526,7 +526,7 @@ static int create_dir(const char *path, const char **dir_files)
 		return -1;
 
 	for (i = 0; dir_files[i]; i++) {
-		char fpath[1024];
+		char fpath[1280];
 		sprintf(fpath, "%s/%s", path, dir_files[i]);
 		res = create_file(fpath, "", 0);
 		if (res == -1) {
@@ -1447,7 +1447,7 @@ static int test_rename_dir_loop(void)
 #define PATH(p)		(snprintf(path, sizeof path, "%s/%s", testdir, p), path)
 #define PATH2(p)	(snprintf(path2, sizeof path2, "%s/%s", testdir, p), path2)
 
-	char path[1024], path2[1024];
+	char path[1280], path2[1280];
 	int err = 0;
 	int res;
 
