@@ -471,21 +471,28 @@ struct fuse_operations {
 	 * BIG NOTE: This is not equivalent to fsync().  It's not a
 	 * request to sync dirty data.
 	 *
-	 * Flush is called on each close() of a file descriptor.  So if a
-	 * filesystem wants to return write errors in close() and the file
-	 * has cached dirty data, this is a good place to write back data
-	 * and return any errors.  Since many applications ignore close()
-	 * errors this is not always useful.
+	 * Flush is called on each close() of a file descriptor, as opposed to
+	 * release which is called on the close of the last file descriptor for
+	 * a file.  Under Linux, errors returned by flush() will be passed to 
+	 * userspace as errors from close(), so flush() is a good place to write
+	 * back any cached dirty data. However, many applications ignore errors 
+	 * on close(), and on non-Linux systems, close() may succeed even if flush()
+	 * returns an error. For these reasons, filesystems should not assume
+	 * that errors returned by flush will ever be noticed or even
+	 * delivered.
 	 *
 	 * NOTE: The flush() method may be called more than once for each
-	 * open().	This happens if more than one file descriptor refers
-	 * to an opened file due to dup(), dup2() or fork() calls.	It is
-	 * not possible to determine if a flush is final, so each flush
-	 * should be treated equally.  Multiple write-flush sequences are
-	 * relatively rare, so this shouldn't be a problem.
+	 * open().  This happens if more than one file descriptor refers to an
+	 * opened file, e.g. due to dup(), dup2() or fork() calls.  It is not
+	 * possible to determine if a flush is final, so each flush should be
+	 * treated equally.  Multiple write-flush sequences are relatively
+	 * rare, so this shouldn't be a problem.
 	 *
-	 * Filesystems shouldn't assume that flush will always be called
-	 * after some writes, or that if will be called at all.
+	 * Filesystems shouldn't assume that flush will be called at any
+	 * particular point.  It may be called more times than expected, or not
+	 * at all.
+	 *
+	 * [close]: http://pubs.opengroup.org/onlinepubs/9699919799/functions/close.html
 	 */
 	int (*flush) (const char *, struct fuse_file_info *);
 
