@@ -473,11 +473,11 @@ struct fuse_operations {
 	 *
 	 * Flush is called on each close() of a file descriptor, as opposed to
 	 * release which is called on the close of the last file descriptor for
-	 * a file.  One use of flush is to return errors from delayed writes.
-	 * However, such use is non-portable, because POSIX does not require
-	 * [close] to wait for delayed I/O to complete.  Linux's close() does,
-	 * but other operating systems' do not.  Also, many applications ignore
-	 * close() errors.  For these reason, filesystems should not assume
+	 * a file.  Under Linux, errors returned by flush() will be passed to 
+	 * userspace as errors from close(), so flush() is a good place to write
+	 * back any cached dirty data. However, many applications ignore errors 
+	 * on close(), and on non-Linux systems, close() may succeed even if flush()
+	 * returns an error. For these reasons, filesystems should not assume
 	 * that errors returned by flush will ever be noticed or even
 	 * delivered.
 	 *
