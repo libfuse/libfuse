@@ -670,8 +670,11 @@ struct fuse_operations {
 	 *
 	 * If flags has FUSE_IOCTL_DIR then the fuse_file_info refers to a
 	 * directory file handle.
+	 *
+	 * Note : the unsigned long request submitted by the application
+	 * is truncated to 32 bits.
 	 */
-	int (*ioctl) (const char *, int cmd, void *arg,
+	int (*ioctl) (const char *, unsigned int cmd, void *arg,
 		      struct fuse_file_info *, unsigned int flags, void *data);
 
 	/**
