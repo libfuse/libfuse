@@ -4,6 +4,12 @@ Unreleased Changes
 * Added a new example (passthrough_hp). The functionality is similar
   to passthrough_ll, but the implementation focuses on performance and
   correctness rather than simplicity.
+* Added support for fuse kernel feature `max_pages` which allows to increase
+  the maximum number of pages that can be used per request. This feature was
+  introduced in kernel 4.20. `max_pages` is set based on the value in
+  `max_write`. By default `max_write` will be 1MiB now for kernels that support
+  `max_pages`. If you want smaller buffers or writes you have to set
+  `max_write` manually.
 
 libfuse 3.5.0 (2019-04-16)
 ==========================

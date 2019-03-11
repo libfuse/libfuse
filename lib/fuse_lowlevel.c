@@ -1909,6 +1909,14 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_HANDLE_KILLPRIV;
 		if (arg->flags & FUSE_NO_OPENDIR_SUPPORT)
 			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
+		if (!(arg->flags & FUSE_MAX_PAGES)) {
+			size_t max_bufsize =
+				FUSE_DEFAULT_MAX_PAGES_PER_REQ * getpagesize()
+				+ FUSE_BUFFER_HEADER_SIZE;
+			if (bufsize > max_bufsize) {
+				bufsize = max_bufsize;
+			}
+		}
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -1955,10 +1963,10 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			bufsize);
 		bufsize = FUSE_MIN_READ_BUFFER;
 	}
+	se->bufsize = bufsize;
 
-	bufsize -= 4096;
-	if (bufsize < se->conn.max_write)
-		se->conn.max_write = bufsize;
+	if (se->conn.max_write > bufsize - FUSE_BUFFER_HEADER_SIZE)
+		se->conn.max_write = bufsize - FUSE_BUFFER_HEADER_SIZE;
 
 	se->got_init = 1;
 	if (se->op.init)
@@ -1983,6 +1991,14 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		se->error = -EPROTO;
 		fuse_session_exit(se);
 		return;
+	}
+
+	if (se->conn.max_write < bufsize - FUSE_BUFFER_HEADER_SIZE) {
+		se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
+	}
+	if (arg->flags & FUSE_MAX_PAGES) {
+		outarg.flags |= FUSE_MAX_PAGES;
+		outarg.max_pages = (se->conn.max_write - 1) / getpagesize() + 1;
 	}
 
 	/* Always enable big writes, this is superseded
@@ -2807,11 +2823,6 @@ restart:
 	return res;
 }
 
-#define KERNEL_BUF_PAGES 32
-
-/* room needed in buffer to accommodate header */
-#define HEADER_SIZE 0x1000
-
 struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      const struct fuse_lowlevel_ops *op,
 				      size_t op_size, void *userdata)
@@ -2872,7 +2883,8 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	if (se->debug)
 		fprintf(stderr, "FUSE library version: %s\n", PACKAGE_VERSION);
 
-	se->bufsize = KERNEL_BUF_PAGES * getpagesize() + HEADER_SIZE;
+	se->bufsize = FUSE_MAX_MAX_PAGES * getpagesize() +
+		FUSE_BUFFER_HEADER_SIZE;
 
 	list_init_req(&se->list);
 	list_init_req(&se->interrupts);
