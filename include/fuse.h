@@ -677,8 +677,11 @@ struct fuse_operations {
 	 *
 	 * If flags has FUSE_IOCTL_DIR then the fuse_file_info refers to a
 	 * directory file handle.
+	 *
+	 * Note : the unsigned long request submitted by the application
+	 * is truncated to 32 bits.
 	 */
-	int (*ioctl) (const char *, int cmd, void *arg,
+	int (*ioctl) (const char *, unsigned int cmd, void *arg,
 		      struct fuse_file_info *, unsigned int flags, void *data);
 
 	/**
@@ -1182,8 +1185,9 @@ int fuse_fs_removexattr(struct fuse_fs *fs, const char *path,
 			const char *name);
 int fuse_fs_bmap(struct fuse_fs *fs, const char *path, size_t blocksize,
 		 uint64_t *idx);
-int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd, void *arg,
-		  struct fuse_file_info *fi, unsigned int flags, void *data);
+int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, unsigned int cmd,
+		  void *arg, struct fuse_file_info *fi, unsigned int flags,
+		  void *data);
 int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi, struct fuse_pollhandle *ph,
 		 unsigned *reventsp);

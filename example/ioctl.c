@@ -188,7 +188,7 @@ static int fioc_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	return 0;
 }
 
-static int fioc_ioctl(const char *path, int cmd, void *arg,
+static int fioc_ioctl(const char *path, unsigned int cmd, void *arg,
 		      struct fuse_file_info *fi, unsigned int flags, void *data)
 {
 	(void) arg;

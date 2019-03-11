@@ -1,3 +1,7 @@
+* Changed ioctl commands to "unsigned int" in order to support commands
+  which do not fit into a signed int. Commands issued by applications
+  are still truncated to 32 bits.
+
 libfuse 3.4.2 (2019-03-09)
 ==========================
 

@@ -1010,9 +1010,12 @@ struct fuse_lowlevel_ops {
 	 * @param in_buf data fetched from the caller
 	 * @param in_bufsz number of fetched bytes
 	 * @param out_bufsz maximum size of output data
+	 *
+	 * Note : the unsigned long request submitted by the application
+	 * is truncated to 32 bits.
 	 */
-	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
-		       struct fuse_file_info *fi, unsigned flags,
+	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
+		       void *arg, struct fuse_file_info *fi, unsigned flags,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
 
 	/**
