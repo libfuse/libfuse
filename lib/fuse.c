@@ -2304,8 +2304,9 @@ int fuse_fs_removexattr(struct fuse_fs *fs, const char *path, const char *name)
 	}
 }
 
-int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd, void *arg,
-		  struct fuse_file_info *fi, unsigned int flags, void *data)
+int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, unsigned int cmd,
+		  void *arg, struct fuse_file_info *fi, unsigned int flags,
+		  void *data)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.ioctl) {
@@ -4222,10 +4223,10 @@ static void fuse_lib_bmap(fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 		reply_err(req, err);
 }
 
-static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
-			   struct fuse_file_info *llfi, unsigned int flags,
-			   const void *in_buf, size_t in_bufsz,
-			   size_t out_bufsz)
+static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
+			   void *arg, struct fuse_file_info *llfi,
+			   unsigned int flags, const void *in_buf,
+			   size_t in_bufsz, size_t out_bufsz)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_intr_data d;
