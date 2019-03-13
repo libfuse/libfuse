@@ -9,8 +9,8 @@
 
 #define _GNU_SOURCE /* for clone */
 #include "config.h"
-
 #include "mount_util.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -428,7 +428,9 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 		return -1;
 	}
 
+	drop_privs();
 	res = chdir_to_parent(copy, &last);
+	restore_privs();
 	if (res == -1)
 		goto out;
 
@@ -1038,6 +1040,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x24051905 /* UBIFS_SUPER_MAGIC */,
 		0x58465342 /* XFS_SB_MAGIC */,
 		0x2FC12FC1 /* ZFS_SUPER_MAGIC */,
+		0x0000482b /* HFSPLUS_SUPER_MAGIC */,
 	};
 	for (i = 0; i < sizeof(f_type_whitelist)/sizeof(f_type_whitelist[0]); i++) {
 		if (f_type_whitelist[i] == fs_buf.f_type)

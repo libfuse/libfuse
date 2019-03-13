@@ -14,7 +14,8 @@ addons:
     - gcc
     - gcc-7
     - python3-pip
-    - cmake
+    - python3-setuptools
+    - ninja-build
 script: test/travis-build.sh
 install: test/travis-install.sh
 

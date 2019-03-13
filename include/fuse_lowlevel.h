@@ -496,8 +496,8 @@ struct fuse_lowlevel_ops {
 	 * If this request is answered with an error code of ENOSYS
 	 * and FUSE_CAP_NO_OPEN_SUPPORT is set in
 	 * `fuse_conn_info.capable`, this is treated as success and
-	 * future calls to open will also succeed without being send
-	 * to the filesystem process.
+	 * future calls to open and release will also succeed without being
+	 * sent to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_open
@@ -583,8 +583,10 @@ struct fuse_lowlevel_ops {
 	 *
 	 * NOTE: the name of the method is misleading, since (unlike
 	 * fsync) the filesystem is not forced to flush pending writes.
-	 * One reason to flush data, is if the filesystem wants to return
-	 * write errors.
+	 * One reason to flush data is if the filesystem wants to return
+	 * write errors during close.  However, such use is non-portable
+	 * because POSIX does not require [close] to wait for delayed I/O to
+	 * complete.
 	 *
 	 * If the filesystem supports file locking operations (setlk,
 	 * getlk) it should remove all locks belonging to 'fi->owner'.
@@ -600,6 +602,8 @@ struct fuse_lowlevel_ops {
 	 * @param req request handle
 	 * @param ino the inode number
 	 * @param fi file information
+	 *
+	 * [close]: http://pubs.opengroup.org/onlinepubs/9699919799/functions/close.html
 	 */
 	void (*flush) (fuse_req_t req, fuse_ino_t ino,
 		       struct fuse_file_info *fi);
@@ -611,7 +615,8 @@ struct fuse_lowlevel_ops {
 	 * file: all file descriptors are closed and all memory mappings
 	 * are unmapped.
 	 *
-	 * For every open call there will be exactly one release call.
+	 * For every open call there will be exactly one release call (unless
+	 * the filesystem is force-unmounted).
 	 *
 	 * The filesystem may reply with an error, but error values are
 	 * not returned to close() or munmap() which triggered the
@@ -660,12 +665,6 @@ struct fuse_lowlevel_ops {
 	 * etc) in fi->fh, and use this in other all other directory
 	 * stream operations (readdir, releasedir, fsyncdir).
 	 *
-	 * Filesystem may also implement stateless directory I/O and not
-	 * store anything in fi->fh, though that makes it impossible to
-	 * implement standard conforming directory stream operations in
-	 * case the contents of the directory can change between opendir
-	 * and releasedir.
-	 *
 	 * Valid replies:
 	 *   fuse_reply_open
 	 *   fuse_reply_err
@@ -690,8 +689,24 @@ struct fuse_lowlevel_ops {
 	 * Returning a directory entry from readdir() does not affect
 	 * its lookup count.
 	 *
+         * If off_t is non-zero, then it will correspond to one of the off_t
+	 * values that was previously returned by readdir() for the same
+	 * directory handle. In this case, readdir() should skip over entries
+	 * coming before the position defined by the off_t value. If entries
+	 * are added or removed while the directory handle is open, they filesystem
+	 * may still include the entries that have been removed, and may not
+	 * report the entries that have been created. However, addition or
+	 * removal of entries must never cause readdir() to skip over unrelated
+	 * entries or to report them more than once. This means
+	 * that off_t can not be a simple index that enumerates the entries
+	 * that have been returned but must contain sufficient information to
+	 * uniquely determine the next directory entry to return even when the
+	 * set of entries is changing.
+	 *
 	 * The function does not have to report the '.' and '..'
-	 * entries, but is allowed to do so.
+	 * entries, but is allowed to do so. Note that, if readdir does
+	 * not return '.' or '..', they will not be implicitly returned,
+	 * and this behavior is observable by the caller.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_buf
@@ -711,7 +726,7 @@ struct fuse_lowlevel_ops {
 	 * Release an open directory
 	 *
 	 * For every opendir call there will be exactly one releasedir
-	 * call.
+	 * call (unless the filesystem is force-unmounted).
 	 *
 	 * fi->fh will contain the value set by the opendir method, or
 	 * will be undefined if the opendir method didn't set any value.
@@ -995,9 +1010,12 @@ struct fuse_lowlevel_ops {
 	 * @param in_buf data fetched from the caller
 	 * @param in_bufsz number of fetched bytes
 	 * @param out_bufsz maximum size of output data
+	 *
+	 * Note : the unsigned long request submitted by the application
+	 * is truncated to 32 bits.
 	 */
-	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
-		       struct fuse_file_info *fi, unsigned flags,
+	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
+		       void *arg, struct fuse_file_info *fi, unsigned flags,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
 
 	/**

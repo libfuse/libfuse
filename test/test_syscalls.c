@@ -14,18 +14,22 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#ifndef ALLPERMS
+# define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)/* 07777 */
+#endif
+
 
 static char testfile[1024];
 static char testfile2[1024];
 static char testdir[1024];
 static char testdir2[1024];
-static char subfile[1024];
+static char subfile[1280];
 
 static char testfile_r[1024];
 static char testfile2_r[1024];
 static char testdir_r[1024];
 static char testdir2_r[1024];
-static char subfile_r[1024];
+static char subfile_r[1280];
 
 static char testname[256];
 static char testdata[] = "abcdefghijklmnopqrstuvwxyz";
@@ -163,8 +167,9 @@ static int check_mode(const char *path, mode_t mode)
 		PERROR("lstat");
 		return -1;
 	}
-	if ((stbuf.st_mode & 07777) != mode) {
-		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & 07777, mode);
+	if ((stbuf.st_mode & ALLPERMS) != mode) {
+		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & ALLPERMS,
+		      mode);
 		return -1;
 	}
 	return 0;
@@ -178,8 +183,9 @@ static int fcheck_mode(int fd, mode_t mode)
 		PERROR("fstat");
 		return -1;
 	}
-	if ((stbuf.st_mode & 07777) != mode) {
-		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & 07777, mode);
+	if ((stbuf.st_mode & ALLPERMS) != mode) {
+		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & ALLPERMS,
+		      mode);
 		return -1;
 	}
 	return 0;
@@ -491,7 +497,7 @@ static int cleanup_dir(const char *path, const char **dir_files, int quiet)
 
 	for (i = 0; dir_files[i]; i++) {
 		int res;
-		char fpath[1024];
+		char fpath[1280];
 		sprintf(fpath, "%s/%s", path, dir_files[i]);
 		res = unlink(fpath);
 		if (res == -1 && !quiet) {
@@ -524,7 +530,7 @@ static int create_dir(const char *path, const char **dir_files)
 		return -1;
 
 	for (i = 0; dir_files[i]; i++) {
-		char fpath[1024];
+		char fpath[1280];
 		sprintf(fpath, "%s/%s", path, dir_files[i]);
 		res = create_file(fpath, "", 0);
 		if (res == -1) {
@@ -1040,7 +1046,7 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
 		err += check_mode(testfile, mode);
 	err += check_nlink(testfile, 1);
 	err += check_size(testfile, currlen);
-	if (exist && !(flags & O_TRUNC) && (mode & 0400))
+	if (exist && !(flags & O_TRUNC) && (mode & S_IRUSR))
 		err += check_data(testfile, testdata2, 0, testdata2len);
 
 	res = write(fd, data, datalen);
@@ -1057,7 +1063,7 @@ static int do_test_open(int exist, int flags, const char *flags_str, int mode)
 
 			err += check_size(testfile, currlen);
 
-			if (mode & 0400) {
+			if (mode & S_IRUSR) {
 				err += check_data(testfile, data, 0, datalen);
 				if (exist && !(flags & O_TRUNC) &&
 				    testdata2len > datalen)
@@ -1445,7 +1451,7 @@ static int test_rename_dir_loop(void)
 #define PATH(p)		(snprintf(path, sizeof path, "%s/%s", testdir, p), path)
 #define PATH2(p)	(snprintf(path2, sizeof path2, "%s/%s", testdir, p), path2)
 
-	char path[1024], path2[1024];
+	char path[1280], path2[1280];
 	int err = 0;
 	int res;
 

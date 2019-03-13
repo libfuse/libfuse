@@ -1,10 +1,16 @@
-Unreleased Changes
-==================
+* Changed ioctl commands to "unsigned int" in order to support commands
+  which do not fit into a signed int. Commands issued by applications
+  are still truncated to 32 bits.
+
+libfuse 3.4.2 (2019-03-09)
+==========================
 
 * Fixed a memory leak in `examples/passthrough_ll.c`.
 * Added OpenAFS to whitelist (so users can now mount FUSE filesystems
   on mountpoints within OpenAFS filesystems).
-
+* Added HFS+ to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within HFS+ filesystems).
+* Documentation improvements.
 
 libfuse 3.4.1 (2018-12-22)
 ==========================

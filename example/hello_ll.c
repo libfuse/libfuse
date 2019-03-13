@@ -138,7 +138,7 @@ static void hello_ll_open(fuse_req_t req, fuse_ino_t ino,
 {
 	if (ino != 2)
 		fuse_reply_err(req, EISDIR);
-	else if ((fi->flags & 3) != O_RDONLY)
+	else if ((fi->flags & O_ACCMODE) != O_RDONLY)
 		fuse_reply_err(req, EACCES);
 	else
 		fuse_reply_open(req, fi);
@@ -180,6 +180,13 @@ int main(int argc, char *argv[])
 		printf("FUSE library version %s\n", fuse_pkgversion());
 		fuse_lowlevel_version();
 		ret = 0;
+		goto err_out1;
+	}
+
+	if(opts.mountpoint == NULL) {
+		printf("usage: %s [options] <mountpoint>\n", argv[0]);
+		printf("       %s --help\n", argv[0]);
+		ret = 1;
 		goto err_out1;
 	}
 

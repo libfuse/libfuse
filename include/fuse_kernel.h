@@ -54,7 +54,7 @@
  *  - add POLL message and NOTIFY_POLL notification
  *
  * 7.12
- *  - add umask flag to input argument of open, mknod and mkdir
+ *  - add umask flag to input argument of create, mknod and mkdir
  *  - add notification messages for invalidation of inodes and
  *    directory entries
  *
@@ -338,6 +338,13 @@ struct fuse_file_lock {
  * FUSE_POLL_SCHEDULE_NOTIFY: request poll notify
  */
 #define FUSE_POLL_SCHEDULE_NOTIFY (1 << 0)
+
+/**
+ * Fsync flags
+ *
+ * FUSE_FSYNC_FDATASYNC: Sync data only, not metadata
+ */
+#define FUSE_FSYNC_FDATASYNC	(1 << 0)
 
 enum fuse_opcode {
 	FUSE_LOOKUP		= 1,

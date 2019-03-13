@@ -284,7 +284,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 	dirent->ino = stbuf->st_ino;
 	dirent->off = off;
 	dirent->namelen = namelen;
-	dirent->type = (stbuf->st_mode & 0170000) >> 12;
+	dirent->type = (stbuf->st_mode & S_IFMT) >> 12;
 	strncpy(dirent->name, name, namelen);
 	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
@@ -377,7 +377,7 @@ size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 	dirent->ino = e->attr.st_ino;
 	dirent->off = off;
 	dirent->namelen = namelen;
-	dirent->type = (e->attr.st_mode & 0170000) >> 12;
+	dirent->type = (e->attr.st_mode & S_IFMT) >> 12;
 	strncpy(dirent->name, name, namelen);
 	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
@@ -1315,7 +1315,7 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
-	fi.writepage = (arg->write_flags & 1) != 0;
+	fi.writepage = (arg->write_flags & FUSE_WRITE_CACHE) != 0;
 
 	if (req->se->conn.proto_minor < 9) {
 		param = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
@@ -1345,7 +1345,7 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
-	fi.writepage = arg->write_flags & 1;
+	fi.writepage = arg->write_flags & FUSE_WRITE_CACHE;
 
 	if (se->conn.proto_minor < 9) {
 		bufv.buf[0].mem = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
@@ -1420,12 +1420,13 @@ static void do_fsync(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_fsync_in *arg = (struct fuse_fsync_in *) inarg;
 	struct fuse_file_info fi;
+	int datasync = arg->fsync_flags & FUSE_FSYNC_FDATASYNC;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
 	if (req->se->op.fsync)
-		req->se->op.fsync(req, nodeid, arg->fsync_flags & 1, &fi);
+		req->se->op.fsync(req, nodeid, datasync, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -1491,12 +1492,13 @@ static void do_fsyncdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_fsync_in *arg = (struct fuse_fsync_in *) inarg;
 	struct fuse_file_info fi;
+	int datasync = arg->fsync_flags & FUSE_FSYNC_FDATASYNC;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 
 	if (req->se->op.fsyncdir)
-		req->se->op.fsyncdir(req, nodeid, arg->fsync_flags & 1, &fi);
+		req->se->op.fsyncdir(req, nodeid, datasync, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
 }
