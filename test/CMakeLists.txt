@@ -5,6 +5,9 @@
 cmake_minimum_required (VERSION 3.12.0)
 set (CMAKE_VERBOSE_MAKEFILE FALSE)
 
+if( NOT DEFINED NDEBUG )
+	message(WARNING "NDEBUG is *not* defined, you will almost definitely experience problems")
+endif()
 
 add_executable( test_write_cache)
 target_sources( test_write_cache PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/test_write_cache.c )
