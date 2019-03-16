@@ -5,11 +5,11 @@
 cmake_minimum_required (VERSION 3.12.0)
 set (CMAKE_VERBOSE_MAKEFILE FALSE)
 
-if( NOT DEFINED NDEBUG )
-        message(WARNING "NDEBUG is *not* defined, you will almost definitely experience problems")
+if( DEFINED NDEBUG )
+        message(WARNING "NDEBUG is defined, you will almost definitely experience problems")
 endif()
 
-set(EXAMPLES passthrough passthrough_fh hello hello_ll printcap ioctl_client 
+set(EXAMPLES passthrough passthrough_fh hello hello_ll printcap ioctl_client
              poll_client ioctl cuse cuse_client)
 
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "bsd$" AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "dragonfly")

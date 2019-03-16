@@ -5,8 +5,8 @@
 cmake_minimum_required (VERSION 3.12.0)
 set (CMAKE_VERBOSE_MAKEFILE FALSE)
 
-if( NOT DEFINED NDEBUG )
-	message(WARNING "NDEBUG is *not* defined, you will almost definitely experience problems")
+if( DEFINED NDEBUG )
+	message(WARNING "NDEBUG is defined, you will almost definitely experience problems")
 endif()
 
 add_executable( test_write_cache)
@@ -25,7 +25,7 @@ target_include_directories(test_syscalls PUBLIC ${INCLUDE_DIRS})
 #target_link_libraries(test_syscalls fuse3 ${CMAKE_THREAD_LIBS_INIT})
 
 set(TEST_SCRIPTS conftest.py pytest.ini test_examples.py util.py test_ctests.py)
-                                
+
 add_custom_target(test_scripts)
 foreach(TEST_SCRIPT ${TEST_SCRIPTS})
   add_custom_command(TARGET test_scripts PRE_BUILD
