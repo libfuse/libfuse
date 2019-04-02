@@ -336,6 +336,18 @@ struct fuse_loop_config {
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
 
 /**
+ * Indicates support for zero-message opendirs. If this flag is set in
+ * the `capable` field of the `fuse_conn_info` structure, then the filesystem
+ * may return `ENOSYS` from the opendir() handler to indicate success. Further
+ * opendir and releasedir messages will be handled in the kernel. (If this
+ * flag is not set, returning ENOSYS will be treated as an error and signalled
+ * to the caller.)
+ *
+ * Setting (or unsetting) this flag in the `want` field has *no effect*.
+ */
+#define FUSE_CAP_NO_OPENDIR_SUPPORT    (1 << 24)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine

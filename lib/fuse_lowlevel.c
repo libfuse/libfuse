@@ -1907,6 +1907,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_POSIX_ACL;
 		if (arg->flags & FUSE_HANDLE_KILLPRIV)
 			se->conn.capable |= FUSE_CAP_HANDLE_KILLPRIV;
+		if (arg->flags & FUSE_NO_OPENDIR_SUPPORT)
+			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
 	} else {
 		se->conn.max_readahead = 0;
 	}

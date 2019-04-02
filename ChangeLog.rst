@@ -8,6 +8,7 @@ libfuse 3.5.0 (UNRELEASED)
   on mountpoints within SMB 2.0 filesystems).
 * Added a new `cache_readdir` flag to `fuse_file_info` to enable
   caching of readdir results. Supported by kernels 4.20 and newer.  
+* Add support and documentation for FUSE_CAP_NO_OPENDIR_SUPPORT.
 
 libfuse 3.4.2 (2019-03-09)
 ==========================
