@@ -1,6 +1,8 @@
 * Changed ioctl commands to "unsigned int" in order to support commands
   which do not fit into a signed int. Commands issued by applications
   are still truncated to 32 bits.
+* Added SMB2 to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within SMB 2.0 filesystems).
 
 libfuse 3.4.2 (2019-03-09)
 ==========================
