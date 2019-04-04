@@ -411,17 +411,17 @@ struct fuse_lowlevel_ops {
 	 * until the lookup count reaches zero (see description of the
 	 * forget function).
 	 *
-	 * If this request is answered with an error code of ENOSYS, this is
-	 * treated as a permanent failure with error code EINVAL, i.e. all
-	 * future bmap requests will fail with EINVAL without being
-	 * send to the filesystem process.
-	 *
 	 * *flags* may be `RENAME_EXCHANGE` or `RENAME_NOREPLACE`. If
 	 * RENAME_NOREPLACE is specified, the filesystem must not
 	 * overwrite *newname* if it exists and return an error
 	 * instead. If `RENAME_EXCHANGE` is specified, the filesystem
 	 * must atomically exchange the two files, i.e. both must
 	 * exist and neither may be deleted.
+	 *
+	 * If this request is answered with an error code of ENOSYS when
+	 * flags != 0, then this is treated as a permanent failure with error
+	 * code EINVAL, i.e. all future rename requests with nonzero flags will
+	 * fail with EINVAL without being send to the filesystem process.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_err
@@ -572,8 +572,8 @@ struct fuse_lowlevel_ops {
 	 *
 	 * This is called on each close() of the opened file.
 	 *
-	 * Since file descriptors can be duplicated (dup, dup2, fork), for
-	 * one open call there may be many flush calls.
+	 * Since multiple file descriptors can share one file handle (due to
+	 * dup, fork, etc), for one open call there may be many flush calls.
 	 *
 	 * Filesystems shouldn't assume that flush will always be called
 	 * after some writes, or that if will be called at all.
@@ -759,7 +759,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * If this request is answered with an error code of ENOSYS,
 	 * this is treated as success and future calls to fsyncdir() will
-	 * succeed automatically without being send to the filesystem
+	 * succeed automatically without being sent to the filesystem
 	 * process.
 	 *
 	 * Valid replies:
