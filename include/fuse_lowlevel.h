@@ -118,7 +118,7 @@ struct fuse_ctx {
 	/** Group ID of the calling process */
 	gid_t gid;
 
-	/** Thread ID of the calling process */
+	/** Process ID of the calling process */
 	pid_t pid;
 
 	/** Umask of the calling process */
