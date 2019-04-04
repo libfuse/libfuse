@@ -460,12 +460,11 @@ struct fuse_lowlevel_ops {
 	 *  - Creation (O_CREAT, O_EXCL, O_NOCTTY) flags will be
 	 *    filtered out / handled by the kernel.
 	 *
-	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR) should be used
-	 *    by the filesystem to check if the operation is
-	 *    permitted.  If the ``-o default_permissions`` mount
-	 *    option is given, this check is already done by the
-	 *    kernel before calling open() and may thus be omitted by
-	 *    the filesystem.
+	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR, O_EXEC, O_SEARCH)
+	 *    should be used by the filesystem to check if the operation is
+	 *    permitted.  If the ``-o default_permissions`` mount option is
+	 *    given, this check is already done by the kernel before calling
+	 *    open() and may thus be omitted by the filesystem.
 	 *
 	 *  - When writeback caching is enabled, the kernel may send
 	 *    read requests even for files opened with O_WRONLY. The
