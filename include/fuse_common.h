@@ -32,14 +32,24 @@ extern "C" {
 #endif
 
 /**
- * Information about open files
+ * Information about an open file.
+ *
+ * File Handles are created by the open, opendir, and create methods and closed
+ * by the release and releasedir methods.  Multiple file handles may be
+ * concurrently open for the same file.  Generally, a client will create one
+ * file handle per file descriptor, though in some cases multiple file
+ * descriptors can share a single file handle.
  */
 struct fuse_file_info {
 	/** Open flags.	 Available in open() and release() */
 	int flags;
 
-	/** In case of a write operation indicates if this was caused by a
-	    writepage */
+	/** In case of a write operation indicates if this was caused
+	    by a delayed write from the page cache. If so, then the
+	    context's pid, uid, and gid fields will not be valid, and
+	    the *fh* value may not match the *fh* value that would
+	    have been sent with the corresponding individual write
+	    requests if write caching had been disabled. */
 	unsigned int writepage : 1;
 
 	/** Can be filled in by open, to use direct I/O on this file. */
@@ -67,8 +77,9 @@ struct fuse_file_info {
 	/** Padding.  Do not use*/
 	unsigned int padding : 27;
 
-	/** File handle.  May be filled in by filesystem in open().
-	    Available in all other file operations */
+	/** File handle id.  May be filled in by filesystem in create,
+	 * open, and opendir().  Available in most other file operations on the
+	 * same file handle. */
 	uint64_t fh;
 
 	/** Lock owner id.  Available in locking operations and flush */

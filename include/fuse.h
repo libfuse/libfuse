@@ -66,7 +66,7 @@ enum fuse_fill_dir_flags {
 
 /** Function to add an entry in a readdir() operation
  *
- * The *off* parameter can be any non-zero value that enableds the
+ * The *off* parameter can be any non-zero value that enables the
  * filesystem to identify the current point in the directory
  * stream. It does not need to be the actual physical position. A
  * value of zero is reserved to indicate that seeking in directories
@@ -220,7 +220,7 @@ struct fuse_config {
 	/**
 	 * This option disables flushing the cache of the file
 	 * contents on every open(2).  This should only be enabled on
-	 * filesystems, where the file data is never changed
+	 * filesystems where the file data is never changed
 	 * externally (not through the mounted FUSE filesystem).  Thus
 	 * it is not suitable for network filesystems and other
 	 * intermediate filesystems.
@@ -394,12 +394,11 @@ struct fuse_operations {
 	 *  - Creation (O_CREAT, O_EXCL, O_NOCTTY) flags will be
 	 *    filtered out / handled by the kernel.
 	 *
-	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR) should be used
-	 *    by the filesystem to check if the operation is
-	 *    permitted.  If the ``-o default_permissions`` mount
-	 *    option is given, this check is already done by the
-	 *    kernel before calling open() and may thus be omitted by
-	 *    the filesystem.
+	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR, O_EXEC, O_SEARCH)
+	 *    should be used by the filesystem to check if the operation is
+	 *    permitted.  If the ``-o default_permissions`` mount option is
+	 *    given, this check is already done by the kernel before calling
+	 *    open() and may thus be omitted by the filesystem.
 	 *
 	 *  - When writeback caching is enabled, the kernel may send
 	 *    read requests even for files opened with O_WRONLY. The
@@ -483,9 +482,9 @@ struct fuse_operations {
 	 *
 	 * NOTE: The flush() method may be called more than once for each
 	 * open().  This happens if more than one file descriptor refers to an
-	 * opened file, e.g. due to dup(), dup2() or fork() calls.  It is not
-	 * possible to determine if a flush is final, so each flush should be
-	 * treated equally.  Multiple write-flush sequences are relatively
+	 * open file handle, e.g. due to dup(), dup2() or fork() calls.  It is
+	 * not possible to determine if a flush is final, so each flush should
+	 * be treated equally.  Multiple write-flush sequences are relatively
 	 * rare, so this shouldn't be a problem.
 	 *
 	 * Filesystems shouldn't assume that flush will be called at any
@@ -503,7 +502,7 @@ struct fuse_operations {
 	 * are unmapped.
 	 *
 	 * For every open() call there will be exactly one release() call
-	 * with the same flags and file descriptor.	 It is possible to
+	 * with the same flags and file handle.  It is possible to
 	 * have a file opened more than once, in which case only the last
 	 * release will mean, that no more reads/writes will happen on the
 	 * file.  The return value of release is ignored.
@@ -794,7 +793,7 @@ struct fuse_context {
 	/** Group ID of the calling process */
 	gid_t gid;
 
-	/** Thread ID of the calling process */
+	/** Process ID of the calling thread */
 	pid_t pid;
 
 	/** Private filesystem data */
