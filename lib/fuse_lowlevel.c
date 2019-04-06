@@ -1420,7 +1420,7 @@ static void do_fsync(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_fsync_in *arg = (struct fuse_fsync_in *) inarg;
 	struct fuse_file_info fi;
-	int datasync = arg->fsync_flags & FUSE_FSYNC_FDATASYNC;
+	int datasync = arg->fsync_flags & 1;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
@@ -1492,7 +1492,7 @@ static void do_fsyncdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_fsync_in *arg = (struct fuse_fsync_in *) inarg;
 	struct fuse_file_info fi;
-	int datasync = arg->fsync_flags & FUSE_FSYNC_FDATASYNC;
+	int datasync = arg->fsync_flags & 1;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
