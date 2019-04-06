@@ -55,9 +55,11 @@ struct fuse_file_info {
 	/** Can be filled in by open, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
-	/** Can be filled in by open, to indicate that currently
-	    cached file data (that the filesystem provided the last
-	    time the file was open) need not be invalidated. */
+	/** Can be filled in by open. It signals the kernel that any
+	    currently cached file data (ie., data that the filesystem
+	    provided the last time the file was open) need not be
+	    invalidated. Has no effect when set in other contexts (in
+	    particular it does nothing when set by opendir()). */
 	unsigned int keep_cache : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
@@ -74,8 +76,14 @@ struct fuse_file_info {
 	   May only be set in ->release(). */
 	unsigned int flock_release : 1;
 
-	/** Padding.  Do not use*/
-	unsigned int padding : 27;
+	/** Can be filled in by opendir. It signals the kernel to
+	    enable caching of entries returned by readdir().  Has no
+	    effect when set in other contexts (in particular it does
+	    nothing when set by open()). */
+	unsigned int cache_readdir : 1;
+
+	/** Padding.  Reserved for future use*/
+	unsigned int padding : 26;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the
