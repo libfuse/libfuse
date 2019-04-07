@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+libfuse 3.5.0 (UNRELEASED)
+==========================
 
 * Changed ioctl commands to "unsigned int" in order to support commands
   which do not fit into a signed int. Commands issued by applications
