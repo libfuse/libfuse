@@ -665,6 +665,13 @@ struct fuse_lowlevel_ops {
 	 * etc) in fi->fh, and use this in other all other directory
 	 * stream operations (readdir, releasedir, fsyncdir).
 	 *
+	 * If this request is answered with an error code of ENOSYS and
+	 * FUSE_CAP_NO_OPENDIR_SUPPORT is set in `fuse_conn_info.capable`,
+	 * this is treated as success and future calls to opendir and
+	 * releasedir will also succeed without being sent to the filesystem
+	 * process. In addition, the kernel will cache readdir results
+	 * as if opendir returned FOPEN_KEEP_CACHE | FOPEN_CACHE_DIR.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_open
 	 *   fuse_reply_err

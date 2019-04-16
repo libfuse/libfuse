@@ -77,6 +77,8 @@ static void pc_init(void *userdata,
 			printf("\tFUSE_CAP_PARALLEL_DIROPS\n");
 	if(conn->capable & FUSE_CAP_POSIX_ACL)
 			printf("\tFUSE_CAP_POSIX_ACL\n");
+	if(conn->capable & FUSE_CAP_NO_OPENDIR_SUPPORT)
+			printf("\tFUSE_CAP_NO_OPENDIR_SUPPORT\n");
 	fuse_session_exit(se);
 }
 
