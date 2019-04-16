@@ -1,4 +1,4 @@
-libfuse 3.5.0 (UNRELEASED)
+libfuse 3.5.0 (2019-04-16)
 ==========================
 
 * Changed ioctl commands to "unsigned int" in order to support commands
@@ -7,7 +7,7 @@ libfuse 3.5.0 (UNRELEASED)
 * Added SMB2 to whitelist (so users can now mount FUSE filesystems
   on mountpoints within SMB 2.0 filesystems).
 * Added a new `cache_readdir` flag to `fuse_file_info` to enable
-  caching of readdir results. Supported by kernels 4.20 and newer.  
+  caching of readdir results. Supported by kernels 4.20 and newer.
 * Add support and documentation for FUSE_CAP_NO_OPENDIR_SUPPORT.
 
 libfuse 3.4.2 (2019-03-09)
