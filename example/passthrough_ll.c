@@ -936,12 +936,19 @@ static void lo_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 	int err;
 	(void) ino;
 
+#ifdef HAVE_FALLOCATE
+	err = fallocate(fi->fh, mode, offset, length);
+	if (err < 0)
+		err = errno;
+
+#elif HAVE_POSIX_FALLOCATE
 	if (mode) {
 		fuse_reply_err(req, EOPNOTSUPP);
 		return;
 	}
 
 	err = posix_fallocate(fi->fh, offset, length);
+#endif
 
 	fuse_reply_err(req, err);
 }
