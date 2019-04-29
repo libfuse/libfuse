@@ -54,7 +54,9 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <sys/file.h>
+#ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
+#endif
 
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
@@ -77,6 +79,9 @@ struct lo_inode {
 	ino_t ino;
 	dev_t dev;
 	uint64_t refcount; /* protected by lo->mutex */
+#ifndef HAVE_AT_EMPTY_PATH
+	char pathname[PATH_MAX];
+#endif
 };
 
 enum {
@@ -180,7 +185,19 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 
 	(void) fi;
 
-	res = fstatat(lo_fd(req, ino), "", &buf, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+#ifdef HAVE_AT_EMPTY_PATH
+	int flags = AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW;
+	res = fstatat(lo_fd(req, ino), "", &buf, flags);
+#else
+	struct lo_inode *inode;
+
+	inode = lo_inode(req, ino);
+	if (inode->is_symlink) {
+		res = lstat(inode->pathname, &buf);
+	} else {
+		res = fstat(inode->fd, &buf);
+	}
+#endif
 	if (res == -1)
 		return (void) fuse_reply_err(req, errno);
 
@@ -194,8 +211,12 @@ static int utimensat_empty_nofollow(struct lo_inode *inode,
 	char procname[64];
 
 	if (inode->is_symlink) {
+#ifdef HAVE_AT_EMPTY_PATH
 		res = utimensat(inode->fd, "", tv,
 				AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+#else
+		res = utimensat(AT_FDCWD, inode->pathname, tv, 0);
+#endif
 		if (res == -1 && errno == EINVAL) {
 			/* Sorry, no race free way to set times on symlink. */
 			errno = EPERM;
@@ -232,8 +253,16 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		gid_t gid = (valid & FUSE_SET_ATTR_GID) ?
 			attr->st_gid : (gid_t) -1;
 
+#ifdef HAVE_AT_EMPTY_PATH
 		res = fchownat(ifd, "", uid, gid,
 			       AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+#else
+		if (inode->is_symlink) {
+			res = lchown(inode->pathname, uid, gid);
+		} else {
+			res = fchown(ifd, uid, gid);
+		}
+#endif
 		if (res == -1)
 			goto out_err;
 	}
@@ -304,6 +333,7 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int newfd;
 	int res;
 	int saverr;
+	int oflags;
 	struct lo_data *lo = lo_data(req);
 	struct lo_inode *inode;
 
@@ -311,11 +341,22 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	e->attr_timeout = lo->timeout;
 	e->entry_timeout = lo->timeout;
 
-	newfd = openat(lo_fd(req, parent), name, O_PATH | O_NOFOLLOW);
+#ifdef HAVE_AT_EMPTY_PATH
+	/* Open the symlink itself */
+	oflags = O_PATH | O_NOFOLLOW;
+#else
+	/* Open the link's target. */
+	oflags = 0;
+#endif
+	newfd = openat(lo_fd(req, parent), name, oflags);
 	if (newfd == -1)
 		goto out_err;
 
+#ifdef HAVE_AT_EMPTY_PATH
 	res = fstatat(newfd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+#else
+	res = fstatat(lo_fd(req, parent), name, &e->attr, AT_SYMLINK_NOFOLLOW);
+#endif
 	if (res == -1)
 		goto out_err;
 
@@ -336,6 +377,13 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		inode->fd = newfd;
 		inode->ino = e->attr.st_ino;
 		inode->dev = e->attr.st_dev;
+#ifndef HAVE_AT_EMPTY_PATH
+		struct lo_inode *parent_inode;
+
+		parent_inode = lo_inode(req, parent);
+		snprintf(inode->pathname, sizeof(inode->pathname), "%s/%s",
+			parent_inode->pathname, name);
+#endif
 
 		pthread_mutex_lock(&lo->mutex);
 		prev = &lo->root;
@@ -434,14 +482,20 @@ static void lo_symlink(fuse_req_t req, const char *link,
 	lo_mknod_symlink(req, parent, name, S_IFLNK, 0, link);
 }
 
-static int linkat_empty_nofollow(struct lo_inode *inode, int dfd,
-				 const char *name)
+static int linkat_empty_nofollow(struct lo_inode *inode, fuse_req_t req,
+		fuse_ino_t parent, const char *name)
 {
 	int res;
 	char procname[64];
+	int dfd = lo_fd(req, parent);
 
 	if (inode->is_symlink) {
+#ifdef HAVE_AT_EMPTY_PATH
 		res = linkat(inode->fd, "", dfd, name, AT_EMPTY_PATH);
+#else
+		struct lo_inode *parent_inode = lo_inode(req, parent);
+		res = link(parent_inode->pathname, name);
+#endif
 		if (res == -1 && (errno == ENOENT || errno == EINVAL)) {
 			/* Sorry, no race free way to hard-link a symlink. */
 			errno = EPERM;
@@ -467,11 +521,15 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	e.attr_timeout = lo->timeout;
 	e.entry_timeout = lo->timeout;
 
-	res = linkat_empty_nofollow(inode, lo_fd(req, parent), name);
+	res = linkat_empty_nofollow(inode, req, parent, name);
 	if (res == -1)
 		goto out_err;
 
+#ifdef HAVE_AT_EMPTY_PATH
 	res = fstatat(inode->fd, "", &e.attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+#else
+	res = fstatat(parent, name, &e.attr, AT_SYMLINK_NOFOLLOW);
+#endif
 	if (res == -1)
 		goto out_err;
 
@@ -589,7 +647,12 @@ static void lo_readlink(fuse_req_t req, fuse_ino_t ino)
 	char buf[PATH_MAX + 1];
 	int res;
 
+#ifdef HAVE_AT_EMPTY_PATH
 	res = readlinkat(lo_fd(req, ino), "", buf, sizeof(buf));
+#else
+	struct lo_inode *loi = lo_inode(req, ino);
+	res = readlink(loi->pathname, buf, sizeof(buf));
+#endif
 	if (res == -1)
 		return (void) fuse_reply_err(req, errno);
 
@@ -941,7 +1004,7 @@ static void lo_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 	if (err < 0)
 		err = errno;
 
-#elif HAVE_POSIX_FALLOCATE
+#elif defined(HAVE_POSIX_FALLOCATE)
 	if (mode) {
 		fuse_reply_err(req, EOPNOTSUPP);
 		return;
@@ -964,6 +1027,7 @@ static void lo_flock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
+#ifdef HAVE_SETXATTR
 static void lo_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			size_t size)
 {
@@ -1139,6 +1203,7 @@ static void lo_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 out:
 	fuse_reply_err(req, saverr);
 }
+#endif
 
 #ifdef HAVE_COPY_FILE_RANGE
 static void lo_copy_file_range(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
@@ -1195,10 +1260,12 @@ static struct fuse_lowlevel_ops lo_oper = {
 	.statfs		= lo_statfs,
 	.fallocate	= lo_fallocate,
 	.flock		= lo_flock,
+#ifdef HAVE_SETXATTR
 	.getxattr	= lo_getxattr,
 	.listxattr	= lo_listxattr,
 	.setxattr	= lo_setxattr,
 	.removexattr	= lo_removexattr,
+#endif
 #ifdef HAVE_COPY_FILE_RANGE
 	.copy_file_range = lo_copy_file_range,
 #endif
@@ -1280,9 +1347,12 @@ int main(int argc, char *argv[])
 		errx(1, "timeout is negative (%lf)", lo.timeout);
 	}
 
-	lo.root.fd = open(lo.source, O_PATH);
+	lo.root.fd = open(lo.source, 0);
 	if (lo.root.fd == -1)
-		err(1, "open(\"%s\", O_PATH)", lo.source);
+		err(1, "open(\"%s\", 0)", lo.source);
+#ifndef HAVE_AT_EMPTY_PATH
+	snprintf(lo.root.pathname, sizeof(lo.root.pathname), ".");
+#endif
 
 	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 	if (se == NULL)

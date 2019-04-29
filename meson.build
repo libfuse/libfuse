@@ -46,6 +46,16 @@ cfg.set('HAVE_SETXATTR',
 cfg.set('HAVE_ICONV', 
         cc.has_function('iconv', prefix: '#include <iconv.h>'))
 
+# Test for some flags of common functions
+cfg.set('HAVE_AT_EMPTY_PATH',
+	cc.compiles('''
+		#define _GNU_SOURCE
+		#include <fcntl.h>
+		#ifndef AT_EMPTY_PATH
+		#error
+		#endif
+	'''))
+
 # Test if structs have specific member
 cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
          cc.has_member('struct stat', 'st_atim',

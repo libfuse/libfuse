@@ -3,9 +3,11 @@ examples = [ 'passthrough', 'passthrough_fh',
              'ioctl_client', 'poll_client', 'ioctl',
              'cuse', 'cuse_client' ]
 
-if not platform.endswith('bsd') and platform != 'dragonfly'
+if platform != 'netbsd' and platform != 'openbsd' and platform != 'dragonfly'
     examples += 'passthrough_ll'
+endif
 
+if not platform.endswith('bsd') and platform != 'dragonfly'
     # According to Conrad Meyer <cem@freebsd.org>, FreeBSD doesn't
     # support mounting files, This is enforced in vfs_domount_first()
     # with the v_type != VDIR check.
