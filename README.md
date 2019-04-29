@@ -24,6 +24,20 @@ API, the callbacks must work with inodes and responses must be sent
 explicitly using a separate set of API functions.
 
 
+Development Status
+------------------
+
+libfuse is shipped by all major Linux distributions and has been in
+production use across a wide range of systems for many years. However,
+at present libfuse does not have any active, regular contributors. The
+current maintainer continues to apply pull requests and makes regular
+releases, but unfortunately has no capacity to do any development
+beyond addressing high-impact issues. When reporting bugs, please
+understand that unless you are including a pull request or are
+reporting a critical issue, you will probably not get a response. If
+you are using libfuse, please consider to contribute to the project.
+
+
 Supported Platforms
 -------------------
 
