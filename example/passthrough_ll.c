@@ -666,9 +666,6 @@ static void lo_readlink(fuse_req_t req, fuse_ino_t ino)
 
 struct lo_dirp {
 	int fd;
-	DIR *dp;
-	struct dirent *entry;
-	off_t offset;
 };
 
 static struct lo_dirp *lo_dirp(struct fuse_file_info *fi)
@@ -687,13 +684,6 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	d->fd = openat(lo_fd(req, ino), ".", O_RDONLY);
 	if (d->fd == -1)
 		goto out_errno;
-
-	d->dp = fdopendir(d->fd);
-	if (d->dp == NULL)
-		goto out_errno;
-
-	d->offset = 0;
-	d->entry = NULL;
 
 	fi->fh = (uintptr_t) d;
 	if (lo->cache == CACHE_ALWAYS)
@@ -722,51 +712,56 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t offset, struct fuse_file_info *fi, int plus)
 {
 	struct lo_dirp *d = lo_dirp(fi);
-	char *buf;
+	char *fuse_buf = NULL;
+	char *dbuf = NULL;
 	char *p;
+	int o;
 	size_t rem = size;
+	ssize_t r;
+	off_t base;
 	int err;
 
 	(void) ino;
 
-	buf = calloc(1, size);
-	if (!buf) {
+	fuse_buf = calloc(1, size);
+	if (!fuse_buf) {
 		err = ENOMEM;
 		goto error;
 	}
-	p = buf;
-
-	if (offset != d->offset) {
-		seekdir(d->dp, offset);
-		d->entry = NULL;
-		d->offset = offset;
+	p = fuse_buf;
+	dbuf = calloc(1, size);
+	if (!dbuf) {
+		err = ENOMEM;
+		goto error;
 	}
-	while (1) {
+
+	/*
+	 * The Linux getdirentries(3) man page is incorrect.  Reading actually
+	 * starts at the file pointer, not at basep as indicated by the man
+	 * page.
+	 */
+	lseek(d->fd, offset, SEEK_SET);
+	r = getdirentries(d->fd, dbuf, size, &base);
+	if (r < 0) {
+		err = errno;
+		perror("getdirentries");
+		goto error;
+	}
+	for (o = 0; o < r; ) {
 		size_t entsize;
 		off_t nextoff;
 		const char *name;
+		struct dirent *de = (struct dirent*)&dbuf[o];
 
-		if (!d->entry) {
-			errno = 0;
-			d->entry = readdir(d->dp);
-			if (!d->entry) {
-				if (errno) {  // Error
-					err = errno;
-					goto error;
-				} else {  // End of stream
-					break; 
-				}
-			}
-		}
-		nextoff = d->entry->d_off;
-		name = d->entry->d_name;
+		nextoff = de->d_off;
+		name = de->d_name;
 		fuse_ino_t entry_ino = 0;
 		if (plus) {
 			struct fuse_entry_param e;
 			if (is_dot_or_dotdot(name)) {
 				e = (struct fuse_entry_param) {
-					.attr.st_ino = d->entry->d_ino,
-					.attr.st_mode = d->entry->d_type << 12,
+					.attr.st_ino = de->d_ino,
+					.attr.st_mode = de->d_type << 12,
 				};
 			} else {
 				err = lo_do_lookup(req, ino, name, &e);
@@ -779,8 +774,8 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 							 &e, nextoff);
 		} else {
 			struct stat st = {
-				.st_ino = d->entry->d_ino,
-				.st_mode = d->entry->d_type << 12,
+				.st_ino = de->d_ino,
+				.st_mode = de->d_type << 12,
 			};
 			entsize = fuse_add_direntry(req, p, rem, name,
 						    &st, nextoff);
@@ -791,24 +786,23 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			break;
 		}
 		
+		o += de->d_reclen;
 		p += entsize;
 		rem -= entsize;
-
-		d->entry = NULL;
-		d->offset = nextoff;
 	}
 
-    err = 0;
+	err = 0;
 error:
-    // If there's an error, we can only signal it if we haven't stored
-    // any entries yet - otherwise we'd end up with wrong lookup
-    // counts for the entries that are already in the buffer. So we
-    // return what we've collected until that point.
-    if (err && rem == size)
-	    fuse_reply_err(req, err);
-    else
-	    fuse_reply_buf(req, buf, size - rem);
-    free(buf);
+	// If there's an error, we can only signal it if we haven't stored
+	// any entries yet - otherwise we'd end up with wrong lookup
+	// counts for the entries that are already in the buffer. So we
+	// return what we've collected until that point.
+	if (err && rem == size)
+		fuse_reply_err(req, err);
+	else
+		fuse_reply_buf(req, fuse_buf, size - rem);
+	free(dbuf);
+	free(fuse_buf);
 }
 
 static void lo_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
@@ -827,7 +821,6 @@ static void lo_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 {
 	struct lo_dirp *d = lo_dirp(fi);
 	(void) ino;
-	closedir(d->dp);
 	free(d);
 	fuse_reply_err(req, 0);
 }
@@ -866,7 +859,7 @@ static void lo_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 			struct fuse_file_info *fi)
 {
 	int res;
-	int fd = dirfd(lo_dirp(fi)->dp);
+	int fd = lo_dirp(fi)->fd;
 	(void) ino;
 	if (datasync)
 		res = fdatasync(fd);
