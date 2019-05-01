@@ -1,7 +1,9 @@
 # Build libfuse on FreeBSD, but don't run the tests.
 # More work is required to make the tests work.
-freebsd_instance:
-  image: freebsd-12-0-release-amd64
+task:
+  name: FreeBSD
+  freebsd_instance:
+    image: freebsd-12-0-release-amd64
   install_script: pkg install -y meson ninja
   script:
     - mkdir build
