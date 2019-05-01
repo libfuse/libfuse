@@ -207,16 +207,13 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 static int utimensat_empty_nofollow(struct lo_inode *inode,
 				    const struct timespec *tv)
 {
+#ifdef HAVE_AT_EMPTY_PATH
 	int res;
 	char procname[64];
 
 	if (inode->is_symlink) {
-#ifdef HAVE_AT_EMPTY_PATH
 		res = utimensat(inode->fd, "", tv,
 				AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-#else
-		res = utimensat(AT_FDCWD, inode->pathname, tv, 0);
-#endif
 		if (res == -1 && errno == EINVAL) {
 			/* Sorry, no race free way to set times on symlink. */
 			errno = EPERM;
@@ -226,24 +223,21 @@ static int utimensat_empty_nofollow(struct lo_inode *inode,
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
 
 	return utimensat(AT_FDCWD, procname, tv, 0);
+#else
+	return utimensat(AT_FDCWD, inode->pathname, tv, AT_SYMLINK_NOFOLLOW);
+#endif
 }
 
 static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		       int valid, struct fuse_file_info *fi)
 {
 	int saverr;
-	char procname[64];
 	struct lo_inode *inode = lo_inode(req, ino);
 	int ifd = inode->fd;
 	int res;
 
 	if (valid & FUSE_SET_ATTR_MODE) {
-		if (fi) {
-			res = fchmod(fi->fh, attr->st_mode);
-		} else {
-			sprintf(procname, "/proc/self/fd/%i", ifd);
-			res = chmod(procname, attr->st_mode);
-		}
+		res = fchmod(ifd, attr->st_mode);
 		if (res == -1)
 			goto out_err;
 	}
@@ -267,12 +261,7 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			goto out_err;
 	}
 	if (valid & FUSE_SET_ATTR_SIZE) {
-		if (fi) {
-			res = ftruncate(fi->fh, attr->st_size);
-		} else {
-			sprintf(procname, "/proc/self/fd/%i", ifd);
-			res = truncate(procname, attr->st_size);
-		}
+		res = ftruncate(ifd, attr->st_size);
 		if (res == -1)
 			goto out_err;
 	}
@@ -294,10 +283,7 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		else if (valid & FUSE_SET_ATTR_MTIME)
 			tv[1] = attr->st_mtim;
 
-		if (fi)
-			res = futimens(fi->fh, tv);
-		else
-			res = utimensat_empty_nofollow(inode, tv);
+		res = utimensat_empty_nofollow(inode, tv);
 		if (res == -1)
 			goto out_err;
 	}
@@ -482,6 +468,7 @@ static void lo_symlink(fuse_req_t req, const char *link,
 	lo_mknod_symlink(req, parent, name, S_IFLNK, 0, link);
 }
 
+#ifdef HAVE_AT_EMPTY_PATH
 static int linkat_empty_nofollow(struct lo_inode *inode, fuse_req_t req,
 		fuse_ino_t parent, const char *name)
 {
@@ -490,12 +477,7 @@ static int linkat_empty_nofollow(struct lo_inode *inode, fuse_req_t req,
 	int dfd = lo_fd(req, parent);
 
 	if (inode->is_symlink) {
-#ifdef HAVE_AT_EMPTY_PATH
 		res = linkat(inode->fd, "", dfd, name, AT_EMPTY_PATH);
-#else
-		struct lo_inode *parent_inode = lo_inode(req, parent);
-		res = link(parent_inode->pathname, name);
-#endif
 		if (res == -1 && (errno == ENOENT || errno == EINVAL)) {
 			/* Sorry, no race free way to hard-link a symlink. */
 			errno = EPERM;
@@ -507,6 +489,13 @@ static int linkat_empty_nofollow(struct lo_inode *inode, fuse_req_t req,
 
 	return linkat(AT_FDCWD, procname, dfd, name, AT_SYMLINK_FOLLOW);
 }
+#else
+static int linkat_empty_nofollow(struct lo_inode *inode,
+		fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	return linkat(AT_FDCWD, inode->pathname, lo_fd(req, parent), name, 0);
+}
+#endif
 
 static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 		    const char *name)
@@ -528,7 +517,7 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 #ifdef HAVE_AT_EMPTY_PATH
 	res = fstatat(inode->fd, "", &e.attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 #else
-	res = fstatat(parent, name, &e.attr, AT_SYMLINK_NOFOLLOW);
+	res = fstatat(lo_fd(req, parent), name, &e.attr, AT_SYMLINK_NOFOLLOW);
 #endif
 	if (res == -1)
 		goto out_err;
@@ -871,7 +860,6 @@ static void lo_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	int fd;
-	char buf[64];
 	struct lo_data *lo = lo_data(req);
 
 	if (lo_debug(req))
@@ -894,8 +882,14 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (lo->writeback && (fi->flags & O_APPEND))
 		fi->flags &= ~O_APPEND;
 
+#ifdef HAVE_AT_EMPTY_PATH
+	char buf[64];
+
 	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
 	fd = open(buf, fi->flags & ~O_NOFOLLOW);
+#else
+	fd = open(lo_inode(req, ino)->pathname, fi->flags & ~O_NOFOLLOW);
+#endif
 	if (fd == -1)
 		return (void) fuse_reply_err(req, errno);
 
