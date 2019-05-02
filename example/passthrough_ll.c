@@ -233,11 +233,21 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 {
 	int saverr;
 	struct lo_inode *inode = lo_inode(req, ino);
-	int ifd = inode->fd;
 	int res;
+	char pathname[64];
+#ifdef HAVE_AT_EMPTY_PATH
+	int ifd = inode->fd;
+	snprintf(pathname, sizeof(pathname), "/proc/self/fd/%i", ifd);
+#else
+	snprintf(pathname, sizeof(pathname), "%s", inode->pathname);
+#endif
 
 	if (valid & FUSE_SET_ATTR_MODE) {
-		res = fchmod(ifd, attr->st_mode);
+		if (fi) {
+			res = fchmod(fi->fh, attr->st_mode);
+		} else {
+			res = chmod(pathname, attr->st_mode);
+		}
 		if (res == -1)
 			goto out_err;
 	}
@@ -251,17 +261,21 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		res = fchownat(ifd, "", uid, gid,
 			       AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 #else
-		if (inode->is_symlink) {
-			res = lchown(inode->pathname, uid, gid);
+		if (!inode->is_symlink && fi) {
+			res = fchown(fi->fh, uid, gid);
 		} else {
-			res = fchown(ifd, uid, gid);
+			res = lchown(pathname, uid, gid);
 		}
 #endif
 		if (res == -1)
 			goto out_err;
 	}
 	if (valid & FUSE_SET_ATTR_SIZE) {
-		res = ftruncate(ifd, attr->st_size);
+		if (fi) {
+			res = ftruncate(fi->fh, attr->st_size);
+		} else {
+			res = truncate(pathname, attr->st_size);
+		}
 		if (res == -1)
 			goto out_err;
 	}
