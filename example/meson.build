@@ -31,4 +31,10 @@ foreach ex : threaded_examples
                install: false)
 endforeach
 
+if not platform.endswith('bsd') and platform != 'dragonfly'
+    executable('passthrough_hp', 'passthrough_hp.cc',
+               dependencies: [ thread_dep, libfuse_dep ],
+               install: false)
+endif
+
 # TODO: Link passthrough_fh with ulockmgr if available
