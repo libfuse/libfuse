@@ -153,6 +153,60 @@ def test_passthrough(tmpdir, name, debug, capfd, writeback):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.parametrize("cache", (False, True))
+def test_passthrough_hp(tmpdir, cache):
+    mnt_dir = str(tmpdir.mkdir('mnt'))
+    src_dir = str(tmpdir.mkdir('src'))
+
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'passthrough_hp'),
+                src_dir, mnt_dir ]
+
+    if not cache:
+        cmdline.append('--nocache')
+        
+    mount_process = subprocess.Popen(cmdline)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+
+        tst_statvfs(mnt_dir)
+        tst_readdir(src_dir, mnt_dir)
+        tst_readdir_big(src_dir, mnt_dir)
+        tst_open_read(src_dir, mnt_dir)
+        tst_open_write(src_dir, mnt_dir)
+        tst_create(mnt_dir)
+        tst_passthrough(src_dir, mnt_dir)
+        tst_append(src_dir, mnt_dir)
+        tst_seek(src_dir, mnt_dir)
+        tst_mkdir(mnt_dir)
+        tst_rmdir(src_dir, mnt_dir)
+        tst_unlink(src_dir, mnt_dir)
+        tst_symlink(mnt_dir)
+        if os.getuid() == 0:
+            tst_chown(mnt_dir)
+
+        # Underlying fs may not have full nanosecond resolution
+        tst_utimens(mnt_dir, ns_tol=1000)
+
+        tst_link(mnt_dir)
+        tst_truncate_path(mnt_dir)
+        tst_truncate_fd(mnt_dir)
+        tst_open_unlink(mnt_dir)
+
+        # test_syscalls assumes that changes in source directory
+        # will be reflected immediately in mountpoint, so we
+        # can't use it.
+        if not cache:
+            syscall_test_cmd = [ os.path.join(basename, 'test', 'test_syscalls'),
+                             mnt_dir, ':' + src_dir ]
+            subprocess.check_call(syscall_test_cmd)
+    except:
+        cleanup(mount_process, mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+        
 @pytest.mark.skipif(fuse_proto < (7,11),
                     reason='not supported by running kernel')
 def test_ioctl(tmpdir):

@@ -1,4 +1,4 @@
-project('libfuse3', 'c', version: '3.5.0',
+project('libfuse3', ['cpp', 'c'], version: '3.5.0',
         meson_version: '>= 0.42',
         default_options: [ 'buildtype=debugoptimized' ])
 
@@ -66,6 +66,10 @@ configure_file(output: 'config.h',
 add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-Wno-sign-compare',
                       '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
                       '-fno-strict-aliasing', language: 'c')
+add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-D_GNU_SOURCE',
+                     '-Wall', '-Wextra', '-Wno-sign-compare', '-std=c++11',
+                     '-Wmissing-declarations', '-Wwrite-strings',
+                     '-fno-strict-aliasing', language: 'cpp')
 
 # Some (stupid) GCC versions warn about unused return values even when they are
 # casted to void. This makes -Wunused-result pretty useless, since there is no
