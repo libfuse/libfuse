@@ -67,6 +67,11 @@ static void test_error(const char *func, const char *msg, ...)
 	fprintf(stderr, "\n");
 }
 
+static int is_dot_or_dotdot(const char *name) {
+    return name[0] == '.' &&
+           (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'));
+}
+
 static void success(void)
 {
 	fprintf(stderr, "%s OK\n", testname);
@@ -381,10 +386,6 @@ static int check_dir_contents(const char *path, const char **contents)
 		found[i] = 0;
 		cont[i] = contents[i];
 	}
-	found[i] = 0;
-	cont[i++] = ".";
-	found[i] = 0;
-	cont[i++] = "..";
 	cont[i] = NULL;
 
 	dp = opendir(path);
@@ -405,6 +406,8 @@ static int check_dir_contents(const char *path, const char **contents)
 			}
 			break;
 		}
+		if (is_dot_or_dotdot(de->d_name))
+			continue;
 		for (i = 0; cont[i] != NULL; i++) {
 			assert(i < MAX_ENTRIES);
 			if (strcmp(cont[i], de->d_name) == 0) {

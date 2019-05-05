@@ -3,6 +3,7 @@ dist: xenial
 
 language:
     - c
+    - c++
 addons:
   apt:
     sources:
@@ -11,6 +12,7 @@ addons:
     - doxygen
     - valgrind
     - clang
+    - libc++-helpers
     - gcc
     - gcc-7
     - python3-pip
