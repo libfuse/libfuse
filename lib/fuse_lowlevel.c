@@ -392,6 +392,8 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_DIRECT_IO;
 	if (f->keep_cache)
 		arg->open_flags |= FOPEN_KEEP_CACHE;
+	if (f->cache_readdir)
+		arg->open_flags |= FOPEN_CACHE_DIR;
 	if (f->nonseekable)
 		arg->open_flags |= FOPEN_NONSEEKABLE;
 }
@@ -1420,7 +1422,7 @@ static void do_fsync(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_fsync_in *arg = (struct fuse_fsync_in *) inarg;
 	struct fuse_file_info fi;
-	int datasync = arg->fsync_flags & FUSE_FSYNC_FDATASYNC;
+	int datasync = arg->fsync_flags & 1;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
@@ -1492,7 +1494,7 @@ static void do_fsyncdir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_fsync_in *arg = (struct fuse_fsync_in *) inarg;
 	struct fuse_file_info fi;
-	int datasync = arg->fsync_flags & FUSE_FSYNC_FDATASYNC;
+	int datasync = arg->fsync_flags & 1;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
@@ -1905,6 +1907,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_POSIX_ACL;
 		if (arg->flags & FUSE_HANDLE_KILLPRIV)
 			se->conn.capable |= FUSE_CAP_HANDLE_KILLPRIV;
+		if (arg->flags & FUSE_NO_OPENDIR_SUPPORT)
+			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
 	} else {
 		se->conn.max_readahead = 0;
 	}

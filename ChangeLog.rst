@@ -1,6 +1,21 @@
+Unreleased Changes
+==================
+
+* Added a new example (passthrough_hp). The functionality is similar
+  to passthrough_ll, but the implementation focuses on performance and
+  correctness rather than simplicity.
+
+libfuse 3.5.0 (2019-04-16)
+==========================
+
 * Changed ioctl commands to "unsigned int" in order to support commands
   which do not fit into a signed int. Commands issued by applications
   are still truncated to 32 bits.
+* Added SMB2 to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within SMB 2.0 filesystems).
+* Added a new `cache_readdir` flag to `fuse_file_info` to enable
+  caching of readdir results. Supported by kernels 4.20 and newer.
+* Add support and documentation for FUSE_CAP_NO_OPENDIR_SUPPORT.
 
 libfuse 3.4.2 (2019-03-09)
 ==========================

@@ -23,6 +23,25 @@
 #include <sys/syscall.h>
 #include <linux/capability.h>
 #include <linux/securebits.h>
+/* for 2.6 kernels */
+#if !defined(SECBIT_KEEP_CAPS) && defined(SECURE_KEEP_CAPS)
+#define SECBIT_KEEP_CAPS (issecure_mask(SECURE_KEEP_CAPS))
+#endif
+#if !defined(SECBIT_KEEP_CAPS_LOCKED) && defined(SECURE_KEEP_CAPS_LOCKED)
+#define SECBIT_KEEP_CAPS_LOCKED (issecure_mask(SECURE_KEEP_CAPS_LOCKED))
+#endif
+#if !defined(SECBIT_NO_SETUID_FIXUP) && defined(SECURE_NO_SETUID_FIXUP)
+#define SECBIT_NO_SETUID_FIXUP (issecure_mask(SECURE_NO_SETUID_FIXUP))
+#endif
+#if !defined(SECBIT_NO_SETUID_FIXUP_LOCKED) && defined(SECURE_NO_SETUID_FIXUP_LOCKED)
+#define SECBIT_NO_SETUID_FIXUP_LOCKED (issecure_mask(SECURE_NO_SETUID_FIXUP_LOCKED))
+#endif
+#if !defined(SECBIT_NOROOT) && defined(SECURE_NOROOT)
+#define SECBIT_NOROOT (issecure_mask(SECURE_NOROOT))
+#endif
+#if !defined(SECBIT_NOROOT_LOCKED) && defined(SECURE_NOROOT_LOCKED)
+#define SECBIT_NOROOT_LOCKED (issecure_mask(SECURE_NOROOT_LOCKED))
+#endif
 #endif
 
 #include "fuse.h"

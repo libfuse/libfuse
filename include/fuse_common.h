@@ -32,22 +32,34 @@ extern "C" {
 #endif
 
 /**
- * Information about open files
+ * Information about an open file.
+ *
+ * File Handles are created by the open, opendir, and create methods and closed
+ * by the release and releasedir methods.  Multiple file handles may be
+ * concurrently open for the same file.  Generally, a client will create one
+ * file handle per file descriptor, though in some cases multiple file
+ * descriptors can share a single file handle.
  */
 struct fuse_file_info {
 	/** Open flags.	 Available in open() and release() */
 	int flags;
 
-	/** In case of a write operation indicates if this was caused by a
-	    writepage */
+	/** In case of a write operation indicates if this was caused
+	    by a delayed write from the page cache. If so, then the
+	    context's pid, uid, and gid fields will not be valid, and
+	    the *fh* value may not match the *fh* value that would
+	    have been sent with the corresponding individual write
+	    requests if write caching had been disabled. */
 	unsigned int writepage : 1;
 
 	/** Can be filled in by open, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
-	/** Can be filled in by open, to indicate that currently
-	    cached file data (that the filesystem provided the last
-	    time the file was open) need not be invalidated. */
+	/** Can be filled in by open. It signals the kernel that any
+	    currently cached file data (ie., data that the filesystem
+	    provided the last time the file was open) need not be
+	    invalidated. Has no effect when set in other contexts (in
+	    particular it does nothing when set by opendir()). */
 	unsigned int keep_cache : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
@@ -64,11 +76,18 @@ struct fuse_file_info {
 	   May only be set in ->release(). */
 	unsigned int flock_release : 1;
 
-	/** Padding.  Do not use*/
-	unsigned int padding : 27;
+	/** Can be filled in by opendir. It signals the kernel to
+	    enable caching of entries returned by readdir().  Has no
+	    effect when set in other contexts (in particular it does
+	    nothing when set by open()). */
+	unsigned int cache_readdir : 1;
 
-	/** File handle.  May be filled in by filesystem in open().
-	    Available in all other file operations */
+	/** Padding.  Reserved for future use*/
+	unsigned int padding : 26;
+
+	/** File handle id.  May be filled in by filesystem in create,
+	 * open, and opendir().  Available in most other file operations on the
+	 * same file handle. */
 	uint64_t fh;
 
 	/** Lock owner id.  Available in locking operations and flush */
@@ -315,6 +334,18 @@ struct fuse_loop_config {
  * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
+
+/**
+ * Indicates support for zero-message opendirs. If this flag is set in
+ * the `capable` field of the `fuse_conn_info` structure, then the filesystem
+ * may return `ENOSYS` from the opendir() handler to indicate success. Further
+ * opendir and releasedir messages will be handled in the kernel. (If this
+ * flag is not set, returning ENOSYS will be treated as an error and signalled
+ * to the caller.)
+ *
+ * Setting (or unsetting) this flag in the `want` field has *no effect*.
+ */
+#define FUSE_CAP_NO_OPENDIR_SUPPORT    (1 << 24)
 
 /**
  * Ioctl flags

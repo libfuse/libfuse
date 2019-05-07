@@ -78,8 +78,8 @@ static void cuse_fll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 }
 
 static void cuse_fll_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
-		       struct fuse_file_info *fi, unsigned int flags,
-		       const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+			   struct fuse_file_info *fi, unsigned int flags,
+			   const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
 	(void)ino;
 	req_clop(req)->ioctl(req, cmd, arg, fi, flags, in_buf, in_bufsz,
