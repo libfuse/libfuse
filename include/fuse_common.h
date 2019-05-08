@@ -336,6 +336,17 @@ struct fuse_loop_config {
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
 
 /**
+ * Indicates that filesystem can specify the maximum transfer
+ * size.
+ *
+ * If this flags is set in conn.capable, the filesystem may
+ * set the max transfer size by (a) setting this flag in
+ * conn.want, and (b) setting the desired transfer size in
+ * conn.max_pages.
+ */
+#define FUSE_CAP_MAX_PAGES	       (1 << 22)
+
+/**
  * Indicates support for zero-message opendirs. If this flag is set in
  * the `capable` field of the `fuse_conn_info` structure, then the filesystem
  * may return `ENOSYS` from the opendir() handler to indicate success. Further
@@ -346,6 +357,7 @@ struct fuse_loop_config {
  * Setting (or unsetting) this flag in the `want` field has *no effect*.
  */
 #define FUSE_CAP_NO_OPENDIR_SUPPORT    (1 << 24)
+
 
 /**
  * Ioctl flags
@@ -477,9 +489,15 @@ struct fuse_conn_info {
 	unsigned time_gran;
 
 	/**
+	 * Maximum transfer size, in pages. Meaningful only if
+	 * FUSE_CAP_MAX_PAGES is set in .capable and .wanted.
+	 */
+	unsigned max_pages;
+
+	/**
 	 * For future use.
 	 */
-	unsigned reserved[22];
+	unsigned reserved[21];
 };
 
 struct fuse_session;
@@ -502,6 +520,7 @@ struct fuse_conn_info_opts;
  *   -o max_write=N         sets conn->max_write
  *   -o max_readahead=N     sets conn->max_readahead
  *   -o max_background=N    sets conn->max_background
+ *   -o max_pages=N	    sets conn->max_pages
  *   -o congestion_threshold=N  sets conn->congestion_threshold
  *   -o async_read          sets FUSE_CAP_ASYNC_READ in conn->want
  *   -o sync_read           unsets FUSE_CAP_ASYNC_READ in conn->want

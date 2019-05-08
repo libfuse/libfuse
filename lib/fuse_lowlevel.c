@@ -1909,6 +1909,9 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_HANDLE_KILLPRIV;
 		if (arg->flags & FUSE_NO_OPENDIR_SUPPORT)
 			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
+		if (arg->flags & FUSE_MAX_PAGES)
+			se->conn.capable |= FUSE_CAP_MAX_PAGES;
+		se->conn.max_pages = 0;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -1972,6 +1975,26 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		se->error = -EPROTO;
 		fuse_session_exit(se);
 		return;
+	}
+
+	if (se->conn.want & FUSE_CAP_MAX_PAGES) {
+		const char *err = NULL;
+		if (se->conn.max_pages == 0)
+			err = "fuse: error: filesystem requested "
+			      "FUSE_CAP_MAX_PAGES but did not set "
+			      "conn.max_pages to a non-zero value.";
+		else if (se->conn.max_pages >= (1 << 16))
+			err = "fuse: error: filesystem set conn.max_pages "
+			      "to an unreasonable large value >65535)";
+		if (err != NULL) {
+			fprintf(stderr, "%s", err);
+			fuse_reply_err(req, EPROTO);
+			se->error = -EPROTO;
+			fuse_session_exit(se);
+			return;
+		}
+		outarg.max_pages = se->conn.max_pages;
+		outarg.flags |= FUSE_MAX_PAGES;
 	}
 
 	unsigned max_read_mo = get_max_read(se->mo);

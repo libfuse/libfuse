@@ -96,6 +96,7 @@ struct lo_data {
 	int cache;
 	int timeout_set;
 	struct lo_inode root; /* protected by lo->mutex */
+	int max_pages;
 };
 
 static const struct fuse_opt lo_opts[] = {
@@ -123,6 +124,8 @@ static const struct fuse_opt lo_opts[] = {
 	  offsetof(struct lo_data, cache), CACHE_NORMAL },
 	{ "cache=always",
 	  offsetof(struct lo_data, cache), CACHE_ALWAYS },
+	{ "max_pages=%d",
+	  offsetof(struct lo_data, max_pages), 0 },
 
 	FUSE_OPT_END
 };
@@ -168,6 +171,15 @@ static void lo_init(void *userdata,
 		if (lo->debug)
 			fprintf(stderr, "lo_init: activating flock locks\n");
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
+	}
+	if (lo->max_pages) {
+		if (conn->capable & FUSE_CAP_MAX_PAGES) {
+			conn->want |= FUSE_CAP_MAX_PAGES;
+			conn->max_pages = lo->max_pages;
+		} else {
+			fprintf(stderr, "lo_init: max_pages specified but not "
+				"supported, ignoring.\n");
+		}
 	}
 }
 

@@ -83,6 +83,8 @@ struct fuse_conn_info_opts {
 	int set_max_background;
 	int set_congestion_threshold;
 	int set_time_gran;
+	int max_pages;
+	int set_max_pages;
 };
 
 #define CONN_OPTION(t, p, v)					\
@@ -90,6 +92,8 @@ struct fuse_conn_info_opts {
 static const struct fuse_opt conn_info_opt_spec[] = {
 	CONN_OPTION("max_write=%u", max_write, 0),
 	CONN_OPTION("max_write=", set_max_write, 1),
+	CONN_OPTION("max_pages=%u", max_pages, 0),
+	CONN_OPTION("max_pages=", set_max_pages, 1),
 	CONN_OPTION("max_readahead=%u", max_readahead, 0),
 	CONN_OPTION("max_readahead=", set_max_readahead, 1),
 	CONN_OPTION("max_background=%u", max_background, 0),
@@ -371,6 +375,10 @@ void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
 		conn->time_gran = opts->time_gran;
 	if(opts->set_max_readahead)
 		conn->max_readahead = opts->max_readahead;
+	if(opts->set_max_pages) {
+		conn->max_pages = opts->max_pages;
+		conn->want |= FUSE_CAP_MAX_PAGES;
+	}
 
 #define LL_ENABLE(cond,cap) \
 	if (cond) conn->want |= (cap)
