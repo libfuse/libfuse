@@ -391,9 +391,35 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 
 	if (S_ISDIR(mode))
 		res = mkdirat(dir->fd, name, mode);
-	else if (S_ISLNK(mode))
+	else if (S_ISLNK(mode)) {
 		res = symlinkat(link, dir->fd, name);
-	else
+#ifdef __FreeBSD__
+	} else if (S_ISSOCK(mode)) {
+		struct sockaddr_un su;
+		int fd = -1;
+		errno = 0;
+
+		if (strlen(name) >= sizeof(su.sun_path))
+			errno = ENAMETOOLONG;
+		if (errno == 0)
+			fd = socket(AF_UNIX, SOCK_STREAM, 0);
+		if (fd >= 0) {
+			/*
+			 * We must bind the socket to the underlying file
+			 * system to create the socket file, even though
+			 * we'll never listen on this socket.
+			 */
+			su.sun_family = AF_UNIX;
+			strncpy(su.sun_path, name, sizeof(su.sun_path));
+			res = bindat(dir->fd, fd, (struct sockaddr*)&su,
+				sizeof(su));
+			if (res == 0)
+				close(fd);
+		} else {
+			res = -1;
+		}
+#endif
+	} else
 		res = mknodat(dir->fd, name, mode, rdev);
 	saverr = errno;
 	if (res == -1)

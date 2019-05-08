@@ -44,6 +44,10 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
+#ifdef __FreeBSD__
+#include <sys/socket.h>
+#include <sys/un.h>
+#endif
 #include <sys/time.h>
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
@@ -144,9 +148,34 @@ static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 		res = open(path, O_CREAT | O_EXCL | O_WRONLY, mode);
 		if (res >= 0)
 			res = close(res);
-	} else if (S_ISFIFO(mode))
+	} else if (S_ISFIFO(mode)) {
 		res = mkfifo(path, mode);
-	else
+#ifdef __FreeBSD__
+	} else if (S_ISSOCK(mode)) {
+		struct sockaddr_un su;
+		int fd = -1;
+		errno = 0;
+
+		if (strlen(path) >= sizeof(su.sun_path))
+			errno = ENAMETOOLONG;
+		if (errno == 0)
+			fd = socket(AF_UNIX, SOCK_STREAM, 0);
+		if (fd >= 0) {
+			/*
+			 * We must bind the socket to the underlying file
+			 * system to create the socket file, even though
+			 * we'll never listen on this socket.
+			 */
+			su.sun_family = AF_UNIX;
+			strncpy(su.sun_path, path, sizeof(su.sun_path));
+			res = bind(fd, (struct sockaddr*)&su, sizeof(su));
+			if (res == 0)
+				close(fd);
+		} else {
+			res = -1;
+		}
+#endif
+	} else
 		res = mknod(path, mode, rdev);
 	if (res == -1)
 		return -errno;
