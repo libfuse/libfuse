@@ -56,6 +56,8 @@
 #include <sys/file.h>
 #include <sys/xattr.h>
 
+#include "passthrough_helpers.h"
+
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
    store uintptr_t values in a fuse_ino_t variable. The following
@@ -381,7 +383,6 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 			     const char *name, mode_t mode, dev_t rdev,
 			     const char *link)
 {
-	int newfd = -1;
 	int res;
 	int saverr;
 	struct lo_inode *dir = lo_inode(req, parent);
@@ -389,38 +390,8 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 
 	saverr = ENOMEM;
 
-	if (S_ISDIR(mode))
-		res = mkdirat(dir->fd, name, mode);
-	else if (S_ISLNK(mode)) {
-		res = symlinkat(link, dir->fd, name);
-#ifdef __FreeBSD__
-	} else if (S_ISSOCK(mode)) {
-		struct sockaddr_un su;
-		int fd = -1;
-		errno = 0;
+	res = mknod_wrapper(dir->fd, name, link, mode, rdev);
 
-		if (strlen(name) >= sizeof(su.sun_path))
-			errno = ENAMETOOLONG;
-		if (errno == 0)
-			fd = socket(AF_UNIX, SOCK_STREAM, 0);
-		if (fd >= 0) {
-			/*
-			 * We must bind the socket to the underlying file
-			 * system to create the socket file, even though
-			 * we'll never listen on this socket.
-			 */
-			su.sun_family = AF_UNIX;
-			strncpy(su.sun_path, name, sizeof(su.sun_path));
-			res = bindat(dir->fd, fd, (struct sockaddr*)&su,
-				sizeof(su));
-			if (res == 0)
-				close(fd);
-		} else {
-			res = -1;
-		}
-#endif
-	} else
-		res = mknodat(dir->fd, name, mode, rdev);
 	saverr = errno;
 	if (res == -1)
 		goto out;
@@ -437,8 +408,6 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 	return;
 
 out:
-	if (newfd != -1)
-		close(newfd);
 	fuse_reply_err(req, saverr);
 }
 

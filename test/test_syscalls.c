@@ -1872,7 +1872,7 @@ int main(int argc, char *argv[])
 	sprintf(testdir, "%s/testdir", basepath);
 	sprintf(testdir2, "%s/testdir2", basepath);
 	sprintf(subfile, "%s/subfile", testdir2);
-	sprintf(testsock, "%s/s", basepath);
+	sprintf(testsock, "%s/testsock", basepath);
 
 	sprintf(testfile_r, "%s/testfile", realpath);
 	sprintf(testfile2_r, "%s/testfile2", realpath);
@@ -1955,6 +1955,7 @@ int main(int argc, char *argv[])
 
 	unlink(testfile);
 	unlink(testfile2);
+	unlink(testsock);
 	rmdir(testdir);
 	rmdir(testdir2);
 
