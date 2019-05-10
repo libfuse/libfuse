@@ -46,7 +46,7 @@
 #define FUSE_USE_VERSION 35
 
 #ifdef HAVE_CONFIG_H
-#include <config.h>
+#include "config.h"
 #endif
 
 #ifndef _GNU_SOURCE
@@ -73,7 +73,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <list>
-#include <cxxopts.hpp>
+#include "cxxopts.hpp"
 #include <mutex>
 #include <fstream>
 #include <thread>

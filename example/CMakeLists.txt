@@ -35,4 +35,8 @@ foreach( EXAMPLE ${THREADED_EXAMPLES} )
     target_link_libraries(${EXAMPLE} ${CMAKE_THREAD_LIBS_INIT} fuse3)
 endforeach()
 
+if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "bsd$" AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "dragonfly")
+    add_executable(passthrough_hp passthrough_hp.cc)
+    target_link_libraries(passthrough_hp ${CMAKE_THREAD_LIBS_INIT} fuse3)
+endif()
 # TODO: Link passthrough_fh with ulockmgr if available

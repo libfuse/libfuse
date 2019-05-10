@@ -9,7 +9,7 @@ project (libfuse3
          VERSION 3.4.1 
          DESCRIPTION "The reference implementation of the Linux FUSE (Filesystem in Userspace) interface"
          HOMEPAGE_URL https://github.com/libfuse/libfuse 
-         LANGUAGES C )
+	 LANGUAGES C CXX )
 
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/CMakeCache.txt)
   if (NOT CMAKE_BUILD_TYPE)
@@ -111,7 +111,7 @@ if(OPTION_BUILD_UTILS)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/doc)
   endif()
 else()
-  message("NOT building utils and docs")
+	message("NOT building utils and docs (hint: OPTION_BUILD_UTILS)")
 endif()
                
 option(OPTION_BUILD_EXAMPLES "Also build examples" OFF)
@@ -119,7 +119,7 @@ if(OPTION_BUILD_EXAMPLES)
   message("Also building examples")
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/example)
 else()
-  message("NOT building examples")
+	message("NOT building examples (hint: OPTION_BUILD_EXAMPLES)")
 endif()             
 
 configure_file (
