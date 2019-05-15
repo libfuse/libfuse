@@ -8,10 +8,12 @@ if __name__ == '__main__':
 import subprocess
 import os
 import sys
+import py
 import pytest
 import stat
 import shutil
 import filecmp
+import tempfile
 import time
 import errno
 import sys
@@ -56,6 +58,20 @@ def invoke_mount_fuse_drop_privileges(mnt_dir, name, options):
 
     return invoke_mount_fuse(mnt_dir, name, options + ('drop_privileges',))
 
+class raii_tmpdir:
+    def __init__(self):
+        self.d = tempfile.mkdtemp()
+
+    def __str__(self):
+        return str(self.d)
+
+    def mkdir(self, path):
+        return py.path.local(str(self.d)).mkdir(path)
+
+@pytest.fixture
+def short_tmpdir():
+    return raii_tmpdir()
+
 @pytest.mark.parametrize("cmdline_builder", (invoke_directly, invoke_mount_fuse,
                                              invoke_mount_fuse_drop_privileges))
 @pytest.mark.parametrize("options", powerset(options))
@@ -84,8 +100,7 @@ def test_hello(tmpdir, name, options, cmdline_builder):
 @pytest.mark.parametrize("writeback", (False, True))
 @pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh', 'passthrough_ll'))
 @pytest.mark.parametrize("debug", (False, True))
-def test_passthrough(tmpdir, name, debug, capfd, writeback):
-    
+def test_passthrough(short_tmpdir, name, debug, capfd, writeback):
     # Avoid false positives from libfuse debug messages
     if debug:
         capfd.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
@@ -95,8 +110,8 @@ def test_passthrough(tmpdir, name, debug, capfd, writeback):
     capfd.register_output(r"^ \d\d \[[^\]]+ message: 'No error: 0'\]",
                           count=0)
 
-    mnt_dir = str(tmpdir.mkdir('mnt'))
-    src_dir = str(tmpdir.mkdir('src'))
+    mnt_dir = str(short_tmpdir.mkdir('mnt'))
+    src_dir = str(short_tmpdir.mkdir('src'))
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
@@ -145,7 +160,7 @@ def test_passthrough(tmpdir, name, debug, capfd, writeback):
             # When writeback caching is enabled, kernel has to open files for
             # reading even when userspace opens with O_WDONLY. This fails if the
             # filesystem process doesn't have special permission.
-            syscall_test_cmd.append('-52')
+            syscall_test_cmd.append('-53')
         subprocess.check_call(syscall_test_cmd)
     except:
         cleanup(mount_process, mnt_dir)
@@ -154,9 +169,9 @@ def test_passthrough(tmpdir, name, debug, capfd, writeback):
         umount(mount_process, mnt_dir)
 
 @pytest.mark.parametrize("cache", (False, True))
-def test_passthrough_hp(tmpdir, cache):
-    mnt_dir = str(tmpdir.mkdir('mnt'))
-    src_dir = str(tmpdir.mkdir('src'))
+def test_passthrough_hp(short_tmpdir, cache):
+    mnt_dir = str(short_tmpdir.mkdir('mnt'))
+    src_dir = str(short_tmpdir.mkdir('src'))
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'passthrough_hp'),

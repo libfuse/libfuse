@@ -11,8 +11,10 @@
 #include <utime.h>
 #include <errno.h>
 #include <assert.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 
 #ifndef ALLPERMS
 # define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)/* 07777 */
@@ -23,6 +25,7 @@ static char testfile[1024];
 static char testfile2[1024];
 static char testdir[1024];
 static char testdir2[1024];
+static char testsock[1024];
 static char subfile[1280];
 
 static char testfile_r[1024];
@@ -1734,6 +1737,53 @@ static int test_mkdir(void)
 	return 0;
 }
 
+static int test_socket(void)
+{
+	struct sockaddr_un su;
+	int fd;
+	int res;
+	int err = 0;
+
+	start_test("socket");
+	if (strlen(testsock) + 1 > sizeof(su.sun_path)) {
+		fprintf(stderr, "Need to shorten mount point by %lu chars\n",
+			strlen(testsock) + 1 - sizeof(su.sun_path));
+		return -1;
+	}
+	unlink(testsock);
+	fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (fd < 0) {
+		PERROR("socket");
+		return -1;
+	}
+	su.sun_family = AF_UNIX;
+	strncpy(su.sun_path, testsock, sizeof(su.sun_path));
+	res = bind(fd, (struct sockaddr*)&su, sizeof(su));
+	if (res == -1) {
+		PERROR("bind");
+		return -1;
+	}
+
+	res = check_type(testsock, S_IFSOCK);
+	if (res == -1)
+		return -1;
+	err += check_nlink(testsock, 1);
+	close(fd);
+	res = unlink(testsock);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testsock);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	success();
+	return 0;
+}
+
 #define test_create_ro_dir(flags)	 \
 	do_test_create_ro_dir(flags, #flags)
 
@@ -1822,6 +1872,7 @@ int main(int argc, char *argv[])
 	sprintf(testdir, "%s/testdir", basepath);
 	sprintf(testdir2, "%s/testdir2", basepath);
 	sprintf(subfile, "%s/subfile", testdir2);
+	sprintf(testsock, "%s/testsock", basepath);
 
 	sprintf(testfile_r, "%s/testfile", realpath);
 	sprintf(testfile2_r, "%s/testfile2", realpath);
@@ -1845,6 +1896,7 @@ int main(int argc, char *argv[])
 	err += test_rename_dir();
 	err += test_rename_dir_loop();
 	err += test_seekdir();
+	err += test_socket();
 	err += test_utime();
 	err += test_truncate(0);
 	err += test_truncate(testdatalen / 2);
@@ -1903,6 +1955,7 @@ int main(int argc, char *argv[])
 
 	unlink(testfile);
 	unlink(testfile2);
+	unlink(testsock);
 	rmdir(testdir);
 	rmdir(testdir2);
 
