@@ -160,7 +160,7 @@ def test_passthrough(short_tmpdir, name, debug, capfd, writeback):
             # When writeback caching is enabled, kernel has to open files for
             # reading even when userspace opens with O_WDONLY. This fails if the
             # filesystem process doesn't have special permission.
-            syscall_test_cmd.append('-52')
+            syscall_test_cmd.append('-53')
         subprocess.check_call(syscall_test_cmd)
     except:
         cleanup(mount_process, mnt_dir)
