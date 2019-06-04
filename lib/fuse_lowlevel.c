@@ -2566,7 +2566,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		mbuf = newmbuf;
 
 		tmpbuf = FUSE_BUFVEC_INIT(buf->size - write_header_size);
-		tmpbuf.buf[0].mem = mbuf + write_header_size;
+		tmpbuf.buf[0].mem = (char *)mbuf + write_header_size;
 
 		res = fuse_ll_copy_from_pipe(&tmpbuf, &bufv);
 		err = -res;
