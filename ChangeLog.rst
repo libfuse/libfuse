@@ -1,3 +1,9 @@
+libfuse 3.6.1 (2019-06-13)
+==========================
+
+* Fixed version number (release 3.6.0 was shipped with a declared
+  version of 3.0.0).
+
 libfuse 3.6.0 (2019-06-13)
 ==========================
 
