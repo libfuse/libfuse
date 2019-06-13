@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+libfuse 3.6.0 (2019-06-13)
+==========================
 
 * Added a new example (passthrough_hp). The functionality is similar
   to passthrough_ll, but the implementation focuses on performance and
