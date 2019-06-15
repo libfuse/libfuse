@@ -208,6 +208,7 @@ static int may_unmount(const char *mnt, int quiet)
 
 	return 0;
 }
+#endif
 
 /*
  * Check whether the file specified in "fusermount3 -u" is really a
@@ -395,6 +396,7 @@ static int chdir_to_parent(char *copy, const char **lastp)
 	return 0;
 }
 
+#ifndef IGNORE_MTAB
 /* Check whether the kernel supports UMOUNT_NOFOLLOW flag */
 static int umount_nofollow_support(void)
 {
