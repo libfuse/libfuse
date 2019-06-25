@@ -232,7 +232,7 @@ static int process_opt(struct fuse_opt_context *ctx,
 		if (call_proc(ctx, arg, opt->value, iso) == -1)
 			return -1;
 	} else {
-		void *var = ctx->data + opt->offset;
+		void *var = (char *)ctx->data + opt->offset;
 		if (sep && opt->templ[sep + 1]) {
 			const char *param = arg + sep;
 			if (opt->templ[sep] == '=')

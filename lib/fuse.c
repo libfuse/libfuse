@@ -4261,7 +4261,7 @@ static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 	fuse_prepare_interrupt(f, req, &d);
 
 	err = fuse_fs_ioctl(f->fs, path, cmd, arg, &fi, flags,
-			    out_buf ?: (void *)in_buf);
+			    out_buf ? out_buf : (void *)in_buf);
 
 	fuse_finish_interrupt(f, req, &d);
 	free_path(f, ino, path);
@@ -5062,7 +5062,7 @@ int fuse_mount(struct fuse *f, const char *mountpoint) {
 
 
 void fuse_unmount(struct fuse *f) {
-	return fuse_session_unmount(fuse_get_session(f));
+	fuse_session_unmount(fuse_get_session(f));
 }
 
 int fuse_version(void)

@@ -56,6 +56,8 @@
 #include <sys/file.h>
 #include <sys/xattr.h>
 
+#include "passthrough_helpers.h"
+
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
    store uintptr_t values in a fuse_ino_t variable. The following
@@ -381,7 +383,6 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 			     const char *name, mode_t mode, dev_t rdev,
 			     const char *link)
 {
-	int newfd = -1;
 	int res;
 	int saverr;
 	struct lo_inode *dir = lo_inode(req, parent);
@@ -389,12 +390,8 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 
 	saverr = ENOMEM;
 
-	if (S_ISDIR(mode))
-		res = mkdirat(dir->fd, name, mode);
-	else if (S_ISLNK(mode))
-		res = symlinkat(link, dir->fd, name);
-	else
-		res = mknodat(dir->fd, name, mode, rdev);
+	res = mknod_wrapper(dir->fd, name, link, mode, rdev);
+
 	saverr = errno;
 	if (res == -1)
 		goto out;
@@ -411,8 +408,6 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 	return;
 
 out:
-	if (newfd != -1)
-		close(newfd);
 	fuse_reply_err(req, saverr);
 }
 

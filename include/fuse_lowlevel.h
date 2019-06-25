@@ -75,9 +75,6 @@ struct fuse_entry_param {
 	 * it must assign a new, previously unused generation number
 	 * to the inode at the same time.
 	 *
-	 * The generation must be non-zero, otherwise FUSE will treat
-	 * it as an error.
-	 *
 	 */
 	uint64_t generation;
 
