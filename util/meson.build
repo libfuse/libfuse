@@ -20,9 +20,17 @@ if udevrulesdir == ''
   udevrulesdir = join_paths(udev.get_pkgconfig_variable('udevdir'), 'rules.d')
 endif
 
+noroot = get_option('no-root')
+if noroot
+  useroot = 'false'
+else
+  useroot = 'true'
+endif
+
 meson.add_install_script('install_helper.sh',
                          join_paths(get_option('prefix'), get_option('sysconfdir')),
                          join_paths(get_option('prefix'), get_option('bindir')),
-                         udevrulesdir)
+                         udevrulesdir,
+                         useroot)
 
 
