@@ -10,6 +10,6 @@ option('utils', type : 'boolean', value : true,
 option('examples', type : 'boolean', value : true,
        description: 'Whether or not to build example programs')
 
-option('no-root', type : 'boolean', value : false,
-       description: 'Install files without root permissions')
+option('useroot', type : 'boolean', value : true,
+       description: 'Set owner and setuid bits on installed file')
 
