@@ -1,7 +1,12 @@
+#!/usr/bin/env python3
+
 import sys
 import pytest
 import time
 import re
+import os
+import threading
+
 
 # If a test fails, wait a moment before retrieving the captured
 # stdout/stderr. When using a server process, this makes sure that we capture
@@ -16,74 +21,77 @@ def pytest_pyfunc_call(pyfuncitem):
     if failed:
         time.sleep(1)
 
-@pytest.fixture()
-def pass_capfd(request, capfd):
-    '''Provide capfd object to UnitTest instances'''
-    request.instance.capfd = capfd
 
-def check_test_output(capfd):
-    (stdout, stderr) = capfd.readouterr()
+class OutputChecker:
+    '''Check output data for suspicious patters.
 
-    # Write back what we've read (so that it will still be printed.
-    sys.stdout.write(stdout)
-    sys.stderr.write(stderr)
-
-    # Strip out false positives
-    for (pattern, flags, count) in capfd.false_positives:
-        cp = re.compile(pattern, flags)
-        (stdout, cnt) = cp.subn('', stdout, count=count)
-        if count == 0 or count - cnt > 0:
-            stderr = cp.sub('', stderr, count=count - cnt)
-
-    patterns = [ r'\b{}\b'.format(x) for x in
-                 ('exception', 'error', 'warning', 'fatal', 'traceback',
-                    'fault', 'crash(?:ed)?', 'abort(?:ed)',
-                    'uninitiali[zs]ed') ]
-    patterns += ['^==[0-9]+== ']
-    for pattern in patterns:
-        cp = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
-        hit = cp.search(stderr)
-        if hit:
-            raise AssertionError('Suspicious output to stderr (matched "%s")' % hit.group(0))
-        hit = cp.search(stdout)
-        if hit:
-            raise AssertionError('Suspicious output to stdout (matched "%s")' % hit.group(0))
-
-def register_output(self, pattern, count=1, flags=re.MULTILINE):
-    '''Register *pattern* as false positive for output checking
-
-    This prevents the test from failing because the output otherwise
-    appears suspicious.
+    Everything written to check_output.fd will be scanned for suspicious
+    messages and then written to sys.stdout.
     '''
 
-    self.false_positives.append((pattern, flags, count))
+    def __init__(self):
+        (fd_r, fd_w) = os.pipe()
+        self.fd = fd_w
+        self._false_positives = []
+        self._buf = bytearray()
+        self._thread = threading.Thread(target=self._loop, daemon=True, args=(fd_r,))
+        self._thread.start()
 
-# This is a terrible hack that allows us to access the fixtures from the
-# pytest_runtest_call hook. Among a lot of other hidden assumptions, it probably
-# relies on tests running sequential (i.e., don't dare to use e.g. the xdist
-# plugin)
-current_capfd = None
-@pytest.yield_fixture(autouse=True)
-def save_cap_fixtures(request, capfd):
-    global current_capfd
-    capfd.false_positives = []
+    def register_output(self, pattern, count=1, flags=re.MULTILINE):
+        '''Register *pattern* as false positive for output checking
 
-    # Monkeypatch in a function to register false positives
-    type(capfd).register_output = register_output
+        This prevents the test from failing because the output otherwise
+        appears suspicious.
+        '''
 
-    if request.config.getoption('capture') == 'no':
-        capfd = None
-    current_capfd = capfd
-    bak = current_capfd
-    yield
+        self._false_positives.append((pattern, flags, count))
 
-    # Try to catch problems with this hack (e.g. when running tests
-    # simultaneously)
-    assert bak is current_capfd
-    current_capfd = None
+    def _loop(self, ifd):
+        BUFSIZE = 128*1024
+        ofd = sys.stdout.fileno()
+        while True:
+            buf = os.read(ifd, BUFSIZE)
+            if not buf:
+                break
+            os.write(ofd, buf)
+            self._buf += buf
 
-@pytest.hookimpl(trylast=True)
-def pytest_runtest_call(item):
-    capfd = current_capfd
-    if capfd is not None:
-        check_test_output(capfd)
+    def _check(self):
+        os.close(self.fd)
+        self._thread.join()
+
+        buf = self._buf.decode('utf8', errors='replace')
+
+        # Strip out false positives
+        for (pattern, flags, count) in self._false_positives:
+            cp = re.compile(pattern, flags)
+            (buf, cnt) = cp.subn('', buf, count=count)
+
+        patterns = [ r'\b{}\b'.format(x) for x in
+                     ('exception', 'error', 'warning', 'fatal', 'traceback',
+                        'fault', 'crash(?:ed)?', 'abort(?:ed)',
+                        'uninitiali[zs]ed') ]
+        patterns += ['^==[0-9]+== ']
+
+        for pattern in patterns:
+            cp = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
+            hit = cp.search(buf)
+            if hit:
+                raise AssertionError('Suspicious output to stderr (matched "%s")'
+                                     % hit.group(0))
+
+@pytest.fixture()
+def output_checker(request):
+    checker = OutputChecker()
+    yield checker
+    checker._check()
+
+
+# Make test outcome available to fixtures
+# (from https://github.com/pytest-dev/pytest/issues/230)
+@pytest.hookimpl(hookwrapper=True, tryfirst=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, "rep_" + rep.when, rep)
+    return rep

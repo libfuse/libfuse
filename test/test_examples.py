@@ -76,9 +76,11 @@ def short_tmpdir():
                                              invoke_mount_fuse_drop_privileges))
 @pytest.mark.parametrize("options", powerset(options))
 @pytest.mark.parametrize("name", ('hello', 'hello_ll'))
-def test_hello(tmpdir, name, options, cmdline_builder):
+def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
     mnt_dir = str(tmpdir)
-    mount_process = subprocess.Popen(cmdline_builder(mnt_dir, name, options))
+    mount_process = subprocess.Popen(
+        cmdline_builder(mnt_dir, name, options),
+        stdout=output_checker.fd, stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
         assert os.listdir(mnt_dir) == [ 'hello' ]
@@ -100,15 +102,15 @@ def test_hello(tmpdir, name, options, cmdline_builder):
 @pytest.mark.parametrize("writeback", (False, True))
 @pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh', 'passthrough_ll'))
 @pytest.mark.parametrize("debug", (False, True))
-def test_passthrough(short_tmpdir, name, debug, capfd, writeback):
+def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
     # Avoid false positives from libfuse debug messages
     if debug:
-        capfd.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
-                              count=0)
+        output_checker.register_output(r'^   unique: [0-9]+, error: -[0-9]+ .+$',
+                                       count=0)
 
     # test_syscalls prints "No error" under FreeBSD
-    capfd.register_output(r"^ \d\d \[[^\]]+ message: 'No error: 0'\]",
-                          count=0)
+    output_checker.register_output(r"^ \d\d \[[^\]]+ message: 'No error: 0'\]",
+                                   count=0)
 
     mnt_dir = str(short_tmpdir.mkdir('mnt'))
     src_dir = str(short_tmpdir.mkdir('src'))
@@ -125,7 +127,8 @@ def test_passthrough(short_tmpdir, name, debug, capfd, writeback):
         cmdline.append('-o')
         cmdline.append('writeback')
         
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
         work_dir = mnt_dir + src_dir
@@ -169,7 +172,7 @@ def test_passthrough(short_tmpdir, name, debug, capfd, writeback):
         umount(mount_process, mnt_dir)
 
 @pytest.mark.parametrize("cache", (False, True))
-def test_passthrough_hp(short_tmpdir, cache):
+def test_passthrough_hp(short_tmpdir, cache, output_checker):
     mnt_dir = str(short_tmpdir.mkdir('mnt'))
     src_dir = str(short_tmpdir.mkdir('src'))
 
@@ -180,7 +183,8 @@ def test_passthrough_hp(short_tmpdir, cache):
     if not cache:
         cmdline.append('--nocache')
         
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
@@ -224,7 +228,7 @@ def test_passthrough_hp(short_tmpdir, cache):
         
 @pytest.mark.skipif(fuse_proto < (7,11),
                     reason='not supported by running kernel')
-def test_ioctl(tmpdir):
+def test_ioctl(tmpdir, output_checker):
     progname = pjoin(basename, 'example', 'ioctl')
     if not os.path.exists(progname):
         pytest.skip('%s not built' % os.path.basename(progname))
@@ -232,7 +236,8 @@ def test_ioctl(tmpdir):
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
     cmdline = base_cmdline + [progname, '-f', mnt_dir ]
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
@@ -252,11 +257,12 @@ def test_ioctl(tmpdir):
     else:
         umount(mount_process, mnt_dir)
 
-def test_poll(tmpdir):
+def test_poll(tmpdir, output_checker):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + [pjoin(basename, 'example', 'poll'),
                '-f', mnt_dir ]
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
         cmdline = base_cmdline + \
@@ -268,7 +274,7 @@ def test_poll(tmpdir):
     else:
         umount(mount_process, mnt_dir)
 
-def test_null(tmpdir):
+def test_null(tmpdir, output_checker):
     progname = pjoin(basename, 'example', 'null')
     if not os.path.exists(progname):
         pytest.skip('%s not built' % os.path.basename(progname))
@@ -277,7 +283,8 @@ def test_null(tmpdir):
     with open(mnt_file, 'w') as fh:
         fh.write('dummy')
     cmdline = base_cmdline + [ progname, '-f', mnt_file ]
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     def test_fn(name):
         return os.stat(name).st_size > 4000
     try:
@@ -296,7 +303,7 @@ def test_null(tmpdir):
 @pytest.mark.skipif(fuse_proto < (7,12),
                     reason='not supported by running kernel')
 @pytest.mark.parametrize("notify", (True, False))
-def test_notify_inval_entry(tmpdir, notify):
+def test_notify_inval_entry(tmpdir, notify, output_checker):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'notify_inval_entry'),
@@ -304,7 +311,8 @@ def test_notify_inval_entry(tmpdir, notify):
                 '--timeout=5', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
         fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
@@ -330,7 +338,7 @@ def test_notify_inval_entry(tmpdir, notify):
 
 @pytest.mark.skipif(os.getuid() != 0,
                     reason='needs to run as root')
-def test_cuse(capfd):
+def test_cuse(capfd, output_checker):
 
     # Valgrind warns about unknown ioctls, that's ok
     capfd.register_output(r'^==([0-9]+).+unhandled ioctl.+\n'
@@ -342,7 +350,8 @@ def test_cuse(capfd):
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'cuse'),
                 '-f', '--name=%s' % devname ]
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'cuse_client'),
