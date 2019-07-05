@@ -338,12 +338,12 @@ def test_notify_inval_entry(tmpdir, notify, output_checker):
 
 @pytest.mark.skipif(os.getuid() != 0,
                     reason='needs to run as root')
-def test_cuse(capfd, output_checker):
+def test_cuse(output_checker):
 
     # Valgrind warns about unknown ioctls, that's ok
-    capfd.register_output(r'^==([0-9]+).+unhandled ioctl.+\n'
-                          r'==\1== \s{3}.+\n'
-                          r'==\1== \s{3}.+$', count=0)
+    output_checker.register_output(r'^==([0-9]+).+unhandled ioctl.+\n'
+                                   r'==\1== \s{3}.+\n'
+                                   r'==\1== \s{3}.+$', count=0)
 
     devname = 'cuse-test-%d' % os.getpid()
     devpath = '/dev/%s' % devname
