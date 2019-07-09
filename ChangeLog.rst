@@ -1,3 +1,9 @@
+Unreleased Changes
+==================
+
+* The init script is now installed to /etc/ rather than /usr/local/etc
+  by default.
+
 libfuse 3.6.1 (2019-06-13)
 ==========================
 

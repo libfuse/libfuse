@@ -40,14 +40,14 @@ install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
         "${DESTDIR}${udevrulesdir}/99-fuse3.rules"
 
 install -D -m 755 "${MESON_SOURCE_ROOT}/util/init_script" \
-        "${DESTDIR}${sysconfdir}/init.d/fuse3"
+        "${DESTDIR}/etc/init.d/fuse3"
 
 
 if test -x /usr/sbin/update-rc.d && test -z "${DESTDIR}"; then
     /usr/sbin/update-rc.d fuse3 start 34 S . start 41 0 6 . || /bin/true
 else
     echo "== FURTHER ACTION REQUIRED =="
-    echo "Make sure that your init system will start the ${sysconfdir}/init.d/fuse3 init script"
+    echo "Make sure that your init system will start the ${DESTDIR}/etc/init.d/fuse3 init script"
 fi
 
 
