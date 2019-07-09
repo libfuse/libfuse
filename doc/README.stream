@@ -1,0 +1,68 @@
+fuse_file_info::stream and ::nonseekable
+========================================
+
+Both are set in open() or create(). With either, lseek(), pread() and
+pwrite() on the file fail with ESPIPE.
+
+
+When to use stream
+------------------
+
+For files that behave like a pipe or socket:
+
+  - The data is produced, not stored (event feed, command/reply channel,
+    device). Reading the same offset twice would not return the same
+    bytes.
+  - A read may wait for data that a write on the same fd produces.
+  - The file is opened with direct_io. This is required.
+  - The filesystem does not need an offset, it always gets 0.
+
+
+When to use nonseekable
+-----------------------
+
+For files with fixed contents that can only be read in order (generated
+report, decompressed stream, backend that cannot seek):
+
+  - The file uses the page cache or passthrough.
+  - The filesystem wants the offset, it advances with each read.
+  - Reads and writes on one fd never wait for each other.
+
+
+What goes wrong with the wrong choice
+-------------------------------------
+
+| Choice                        | Result                                  |
+|-------------------------------|-----------------------------------------|
+| nonseekable, socket-like file | read waiting for write on same fd hangs |
+| stream without direct_io      | end of file, or first bytes repeated    |
+| stream, size 0, io_uring/AIO  | every read returns end of file          |
+
+
+Why
+---
+
+nonseekable keeps a file position. read() and write() hold the file
+position lock (f_pos_lock) of the open file while the request runs, if
+the process has threads or the fd is shared through fork(), dup() or fd
+passing. A write then waits for a read on the same open file to finish,
+and only one read or write on it runs at a time.
+
+stream has no file position and takes no lock. read() and write() pass
+offset 0. With direct_io the filesystem picks the data, so offset 0 does
+no harm. The page cache and passthrough use the offset themselves and
+always access offset 0. io_uring and AIO reads with direct_io return end
+of file without asking the filesystem when the offset is at or past the
+file size.
+
+splice() and sendfile() use and advance the file position even for
+stream, and io_uring passes an explicit offset through for both.
+
+
+Kernel support
+--------------
+
+FOPEN_STREAM exists since Linux 5.2 and was backported to stable kernels
+down to 3.16.70. Older kernels ignore it and apply FOPEN_NONSEEKABLE,
+which libfuse sends along with it. Directories behave as nonseekable
+with both flags.

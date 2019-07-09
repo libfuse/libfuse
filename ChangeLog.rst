@@ -48,6 +48,12 @@ Unreleased Changes
   is disabled by default.
   https://lore.kernel.org/r/20251009110623.3115511-1-giveme.gulu@gmail.com
 
+* New ``fuse_file_info::stream`` field. ``open`` and ``create`` set it for
+  pipe-like ``direct_io`` files, which have no file position. A read and a
+  write on the same fd can then run at the same time, which
+  ``nonseekable`` does not allow. See ``doc/README.stream`` for how the
+  two differ.
+
 
 libfuse 3.18.0 (2025-12-18)
 ===========================
