@@ -69,8 +69,15 @@ struct fuse_file_info {
 	    seekable.  Introduced in version 2.8 */
 	unsigned int nonseekable : 1;
 
+	unsigned int : 1; /* flock_release on libfuse 2.9 */
+	unsigned int : 1; /* cache_readdir on libfuse 3 */
+
+	/** Can be filled in by open, to indicate that the file is
+	    stream-like (no file position at all). */
+	unsigned int stream : 1;
+
 	/** Padding.  Do not use*/
-	unsigned int padding : 28;
+	unsigned int padding : 25;
 
 	/** File handle.  May be filled in by filesystem in open().
 	    Available in all other file operations */
