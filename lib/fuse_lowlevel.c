@@ -607,6 +607,12 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_NOFLUSH;
 	if (f->parallel_direct_writes)
 		arg->open_flags |= FOPEN_PARALLEL_DIRECT_WRITES;
+	/*
+	 * Kernels before 5.2 ignore FOPEN_STREAM and use FOPEN_NONSEEKABLE.
+	 * Kernels since 5.2 ignore FOPEN_NONSEEKABLE when FOPEN_STREAM is set.
+	 */
+	if (f->stream)
+		arg->open_flags |= FOPEN_STREAM | FOPEN_NONSEEKABLE;
 }
 
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)

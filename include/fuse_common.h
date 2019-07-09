@@ -73,8 +73,11 @@ struct fuse_file_info {
 	    operation. */
 	uint32_t flush : 1;
 
-	/** Can be filled in by open, to indicate that the file is not
-	    seekable. */
+	/**
+	 * Can be filled in by open, to indicate that the file is not
+	 * seekable. 'stream' is preferred for pipe-like files, see
+	 * <libfuse>/doc/README.stream.
+	 */
 	uint32_t nonseekable : 1;
 
 	/* Indicates that flock locks for this file should be
@@ -104,8 +107,15 @@ struct fuse_file_info {
 	 */
 	uint32_t kill_suidgid : 1;
 
+	/**
+	 * Can be filled in by open, to indicate that the file has no
+	 * position. Implies 'nonseekable'. Needs direct_io, see
+	 * <libfuse>/doc/README.stream.
+	 */
+	uint32_t stream : 1;
+
 	/** Padding.  Reserved for future use*/
-	uint32_t padding : 22;
+	uint32_t padding : 21;
 	uint32_t padding2 : 32;
 	uint32_t padding3 : 32;
 
