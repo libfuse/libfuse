@@ -76,8 +76,14 @@ struct fuse_file_info {
 	   2.9 */
 	unsigned int flock_release : 1;
 
+	unsigned int : 1; /* cache_readdir on libfuse3 */
+
+	/** Can be filled in by open, to indicate that the file is
+	    stream-like (no file position at all). */
+	unsigned int stream : 1;
+
 	/** Padding.  Do not use*/
-	unsigned int padding : 27;
+	unsigned int padding : 25;
 
 	/** File handle.  May be filled in by filesystem in open().
 	    Available in all other file operations */
