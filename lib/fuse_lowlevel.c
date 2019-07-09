@@ -396,6 +396,8 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_CACHE_DIR;
 	if (f->nonseekable)
 		arg->open_flags |= FOPEN_NONSEEKABLE;
+	if (f->stream)
+		arg->open_flags |= FOPEN_STREAM;
 }
 
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
