@@ -194,7 +194,8 @@ def test_passthrough_hp(short_tmpdir, cache, output_checker):
         tst_open_read(src_dir, mnt_dir)
         tst_open_write(src_dir, mnt_dir)
         tst_create(mnt_dir)
-        tst_passthrough(src_dir, mnt_dir)
+        if not cache:
+            tst_passthrough(src_dir, mnt_dir)
         tst_append(src_dir, mnt_dir)
         tst_seek(src_dir, mnt_dir)
         tst_mkdir(mnt_dir)
