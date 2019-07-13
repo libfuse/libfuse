@@ -264,6 +264,15 @@ struct fuse_loop_config {
  * will issue both readdir() and readdirplus() requests, depending on
  * how much information is expected to be required.
  *
+ * As of Linux 4.20, the algorithm is as follows: when userspace
+ * starts to read directory entries, issue a READDIRPLUS request to
+ * the filesystem. If any entry attributes have been looked up by the
+ * time userspace requests the next batch of entries continue with
+ * READDIRPLUS, otherwise switch to plain READDIR.  This will reasult
+ * in eg plain "ls" triggering READDIRPLUS first then READDIR after
+ * that because it doesn't do lookups.  "ls -l" should result in all
+ * READDIRPLUS, except if dentries are already cached.
+ *
  * This feature is enabled by default when supported by the kernel and
  * if the filesystem implements both a readdirplus() and a readdir()
  * handler.
