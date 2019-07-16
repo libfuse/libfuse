@@ -611,6 +611,35 @@ static int read_back(int fd, char *buf, size_t len)
 	return 0;
 }
 
+static int grow_pipe_to_max(int pipefd)
+{
+	int max;
+	int res;
+	int maxfd;
+	char buf[32];
+
+	maxfd = open("/proc/sys/fs/pipe-max-size", O_RDONLY);
+	if (maxfd < 0)
+		return -errno;
+
+	res = read(maxfd, buf, sizeof(buf) - 1);
+	if (res < 0) {
+		int saved_errno;
+
+		saved_errno = errno;
+		close(maxfd);
+		return -saved_errno;
+	}
+	close(maxfd);
+	buf[res] = '\0';
+
+	max = atoi(buf);
+	res = fcntl(pipefd, F_SETPIPE_SZ, max);
+	if (res < 0)
+		return -errno;
+	return max;
+}
+
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			       struct iovec *iov, int iov_count,
 			       struct fuse_bufvec *buf, unsigned int flags)
@@ -666,6 +695,9 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 		if (llp->can_grow) {
 			res = fcntl(llp->pipe[0], F_SETPIPE_SZ, pipesize);
 			if (res == -1) {
+				res = grow_pipe_to_max(llp->pipe[0]);
+				if (res > 0)
+					llp->size = res;
 				llp->can_grow = 0;
 				goto fallback;
 			}
@@ -2694,6 +2726,9 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 			res = fcntl(llp->pipe[0], F_SETPIPE_SZ, bufsize);
 			if (res == -1) {
 				llp->can_grow = 0;
+				res = grow_pipe_to_max(llp->pipe[0]);
+				if (res > 0)
+					llp->size = res;
 				goto fallback;
 			}
 			llp->size = res;
