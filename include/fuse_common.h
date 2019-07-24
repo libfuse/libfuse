@@ -82,8 +82,12 @@ struct fuse_file_info {
 	    nothing when set by open()). */
 	unsigned int cache_readdir : 1;
 
+	/** Can be filled in by open, to indicate that the file is
+	    stream-like (no file position at all). */
+	unsigned int stream : 1;
+
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 26;
+	unsigned int padding : 25;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the

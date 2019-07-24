@@ -122,13 +122,14 @@ static int fsel_open(const char *path, struct fuse_file_info *fi)
 	fsel_open_mask |= (1 << idx);
 
 	/*
-	 * fsel files are nonseekable somewhat pipe-like files which
+	 * fsel files are nonseekable stream-like files similar to pipes which
 	 * gets filled up periodically by producer thread and consumed
 	 * on read.  Tell FUSE as such.
 	 */
 	fi->fh = idx;
 	fi->direct_io = 1;
 	fi->nonseekable = 1;
+	fi->stream = 1;
 
 	return 0;
 }
