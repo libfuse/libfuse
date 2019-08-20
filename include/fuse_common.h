@@ -83,7 +83,9 @@ struct fuse_file_info {
 	unsigned int cache_readdir : 1;
 
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 26;
+	unsigned int padding : 25;
+	/* the following int was once allocated by accident. kept for backwards compatibility */
+	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the
