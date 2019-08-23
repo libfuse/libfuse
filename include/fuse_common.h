@@ -83,7 +83,13 @@ struct fuse_file_info {
 	unsigned int cache_readdir : 1;
 
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 26;
+	unsigned int padding : 25;
+	/* The following int was once allocated by accident, it is kept for
+	   backwards compatibility. `padding2` may be used to implement additional
+	   flags in the future just like `padding`. For the sake of compatibility
+	   make sure that the bitfields fit into blocks of 32 bits exactly so that
+	   no hidden padding exists in between. */
+	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the
@@ -246,7 +252,7 @@ struct fuse_loop_config {
 #define FUSE_CAP_READDIRPLUS		(1 << 13)
 
 /**
- * Indicates that the filesystem supports adaptive readdirplus. 
+ * Indicates that the filesystem supports adaptive readdirplus.
  *
  * If FUSE_CAP_READDIRPLUS is not set, this flag has no effect.
  *
