@@ -23,6 +23,7 @@ endif
 meson.add_install_script('install_helper.sh',
                          join_paths(get_option('prefix'), get_option('sysconfdir')),
                          join_paths(get_option('prefix'), get_option('bindir')),
-                         udevrulesdir)
+                         udevrulesdir,
+                         '@0@'.format(get_option('useroot')))
 
 
