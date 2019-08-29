@@ -965,7 +965,7 @@ static char *add_name(char **buf, unsigned *bufsize, char *s, const char *name)
 		*bufsize = newbufsize;
 	}
 	s -= len;
-	strncpy(s, name, len);
+	memcpy(s, name, len);
 	s--;
 	*s = '/';
 

@@ -285,7 +285,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 	dirent->off = off;
 	dirent->namelen = namelen;
 	dirent->type = (stbuf->st_mode & S_IFMT) >> 12;
-	strncpy(dirent->name, name, namelen);
+	memcpy(dirent->name, name, namelen);
 	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
 	return entlen_padded;
@@ -378,7 +378,7 @@ size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 	dirent->off = off;
 	dirent->namelen = namelen;
 	dirent->type = (e->attr.st_mode & S_IFMT) >> 12;
-	strncpy(dirent->name, name, namelen);
+	memcpy(dirent->name, name, namelen);
 	memset(dirent->name + namelen, 0, entlen_padded - entlen);
 
 	return entlen_padded;
