@@ -24,7 +24,7 @@ static void exit_handler(int sig)
 	if (fuse_instance) {
 		fuse_session_exit(fuse_instance);
 		if(sig <= 0) {
-			fprintf(stderr, "assertion error: signal value <= 0\n");
+			fuse_log(FUSE_LOG_ERR, "assertion error: signal value <= 0\n");
 			abort();
 		}
 		fuse_instance->error = sig;
@@ -79,7 +79,7 @@ int fuse_set_signal_handlers(struct fuse_session *se)
 void fuse_remove_signal_handlers(struct fuse_session *se)
 {
 	if (fuse_instance != se)
-		fprintf(stderr,
+		fuse_log(FUSE_LOG_ERR,
 			"fuse: fuse_remove_signal_handlers: unknown session\n");
 	else
 		fuse_instance = NULL;

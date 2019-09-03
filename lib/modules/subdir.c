@@ -633,7 +633,7 @@ static struct fuse_fs *subdir_new(struct fuse_args *args,
 
 	d = calloc(1, sizeof(struct subdir));
 	if (d == NULL) {
-		fprintf(stderr, "fuse-subdir: memory allocation failed\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-subdir: memory allocation failed\n");
 		return NULL;
 	}
 
@@ -641,19 +641,19 @@ static struct fuse_fs *subdir_new(struct fuse_args *args,
 		goto out_free;
 
 	if (!next[0] || next[1]) {
-		fprintf(stderr, "fuse-subdir: exactly one next filesystem required\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-subdir: exactly one next filesystem required\n");
 		goto out_free;
 	}
 
 	if (!d->base) {
-		fprintf(stderr, "fuse-subdir: missing 'subdir' option\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-subdir: missing 'subdir' option\n");
 		goto out_free;
 	}
 
 	if (d->base[0] && d->base[strlen(d->base)-1] != '/') {
 		char *tmp = realloc(d->base, strlen(d->base) + 2);
 		if (!tmp) {
-			fprintf(stderr, "fuse-subdir: memory allocation failed\n");
+			fuse_log(FUSE_LOG_ERR, "fuse-subdir: memory allocation failed\n");
 			goto out_free;
 		}
 		d->base = tmp;
