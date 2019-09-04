@@ -1,3 +1,10 @@
+Unreleased Changes
+==================
+
+* Added custom log message handler function support so that libfuse
+  applications can direct messages to syslog(3) or other logging systems.
+  stderr remains the default.  See `fuse_log.h` for the new API.
+
 libfuse 3.6.2 (2019-07-09)
 ==========================
 

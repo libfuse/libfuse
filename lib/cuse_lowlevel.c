@@ -122,14 +122,14 @@ static struct cuse_data *cuse_prep_data(const struct cuse_info *ci,
 				      NULL);
 
 	if (dev_info_len > CUSE_INIT_INFO_MAX) {
-		fprintf(stderr, "cuse: dev_info (%zu) too large, limit=%u\n",
+		fuse_log(FUSE_LOG_ERR, "cuse: dev_info (%zu) too large, limit=%u\n",
 			dev_info_len, CUSE_INIT_INFO_MAX);
 		return NULL;
 	}
 
 	cd = calloc(1, sizeof(*cd) + dev_info_len);
 	if (!cd) {
-		fprintf(stderr, "cuse: failed to allocate cuse_data\n");
+		fuse_log(FUSE_LOG_ERR, "cuse: failed to allocate cuse_data\n");
 		return NULL;
 	}
 
@@ -203,8 +203,8 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	(void) nodeid;
 	if (se->debug) {
-		fprintf(stderr, "CUSE_INIT: %u.%u\n", arg->major, arg->minor);
-		fprintf(stderr, "flags=0x%08x\n", arg->flags);
+		fuse_log(FUSE_LOG_DEBUG, "CUSE_INIT: %u.%u\n", arg->major, arg->minor);
+		fuse_log(FUSE_LOG_DEBUG, "flags=0x%08x\n", arg->flags);
 	}
 	se->conn.proto_major = arg->major;
 	se->conn.proto_minor = arg->minor;
@@ -212,14 +212,14 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	se->conn.want = 0;
 
 	if (arg->major < 7) {
-		fprintf(stderr, "cuse: unsupported protocol version: %u.%u\n",
+		fuse_log(FUSE_LOG_ERR, "cuse: unsupported protocol version: %u.%u\n",
 			arg->major, arg->minor);
 		fuse_reply_err(req, EPROTO);
 		return;
 	}
 
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
-		fprintf(stderr, "cuse: warning: buffer size too small: %zu\n",
+		fuse_log(FUSE_LOG_ERR, "cuse: warning: buffer size too small: %zu\n",
 			bufsize);
 		bufsize = FUSE_MIN_READ_BUFFER;
 	}
@@ -242,14 +242,14 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	outarg.dev_minor = cd->dev_minor;
 
 	if (se->debug) {
-		fprintf(stderr, "   CUSE_INIT: %u.%u\n",
+		fuse_log(FUSE_LOG_DEBUG, "   CUSE_INIT: %u.%u\n",
 			outarg.major, outarg.minor);
-		fprintf(stderr, "   flags=0x%08x\n", outarg.flags);
-		fprintf(stderr, "   max_read=0x%08x\n", outarg.max_read);
-		fprintf(stderr, "   max_write=0x%08x\n", outarg.max_write);
-		fprintf(stderr, "   dev_major=%u\n", outarg.dev_major);
-		fprintf(stderr, "   dev_minor=%u\n", outarg.dev_minor);
-		fprintf(stderr, "   dev_info: %.*s\n", cd->dev_info_len,
+		fuse_log(FUSE_LOG_DEBUG, "   flags=0x%08x\n", outarg.flags);
+		fuse_log(FUSE_LOG_DEBUG, "   max_read=0x%08x\n", outarg.max_read);
+		fuse_log(FUSE_LOG_DEBUG, "   max_write=0x%08x\n", outarg.max_write);
+		fuse_log(FUSE_LOG_DEBUG, "   dev_major=%u\n", outarg.dev_major);
+		fuse_log(FUSE_LOG_DEBUG, "   dev_minor=%u\n", outarg.dev_minor);
+		fuse_log(FUSE_LOG_DEBUG, "   dev_info: %.*s\n", cd->dev_info_len,
 			cd->dev_info);
 	}
 
@@ -303,9 +303,9 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	fd = open(devname, O_RDWR);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
-			fprintf(stderr, "cuse: device not found, try 'modprobe cuse' first\n");
+			fuse_log(FUSE_LOG_ERR, "cuse: device not found, try 'modprobe cuse' first\n");
 		else
-			fprintf(stderr, "cuse: failed to open %s: %s\n",
+			fuse_log(FUSE_LOG_ERR, "cuse: failed to open %s: %s\n",
 				devname, strerror(errno));
 		goto err_se;
 	}

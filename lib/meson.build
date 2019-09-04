@@ -1,7 +1,8 @@
 libfuse_sources = ['fuse.c', 'fuse_i.h', 'fuse_loop.c', 'fuse_loop_mt.c',
                    'fuse_lowlevel.c', 'fuse_misc.h', 'fuse_opt.c',
                    'fuse_signals.c', 'buffer.c', 'cuse_lowlevel.c',
-                   'helper.c', 'modules/subdir.c', 'mount_util.c' ]
+                   'helper.c', 'modules/subdir.c', 'mount_util.c',
+                   'fuse_log.c' ]
 
 if host_machine.system().startswith('linux')
    libfuse_sources += [ 'mount.c' ]

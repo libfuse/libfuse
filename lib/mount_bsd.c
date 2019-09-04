@@ -161,7 +161,7 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 		fd = strtol(fdnam, &ep, 10);
 
 		if (*ep != '\0') {
-			fprintf(stderr, "invalid value given in FUSE_DEV_FD\n");
+			fuse_log(FUSE_LOG_ERR, "invalid value given in FUSE_DEV_FD\n");
 			return -1;
 		}
 

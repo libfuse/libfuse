@@ -659,7 +659,7 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 
 	ic = calloc(1, sizeof(struct iconv));
 	if (ic == NULL) {
-		fprintf(stderr, "fuse-iconv: memory allocation failed\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: memory allocation failed\n");
 		return NULL;
 	}
 
@@ -667,7 +667,7 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 		goto out_free;
 
 	if (!next[0] || next[1]) {
-		fprintf(stderr, "fuse-iconv: exactly one next filesystem required\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: exactly one next filesystem required\n");
 		goto out_free;
 	}
 
@@ -678,13 +678,13 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 		old = strdup(setlocale(LC_CTYPE, ""));
 	ic->tofs = iconv_open(from, to);
 	if (ic->tofs == (iconv_t) -1) {
-		fprintf(stderr, "fuse-iconv: cannot convert from %s to %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: cannot convert from %s to %s\n",
 			to, from);
 		goto out_free;
 	}
 	ic->fromfs = iconv_open(to, from);
 	if (ic->tofs == (iconv_t) -1) {
-		fprintf(stderr, "fuse-iconv: cannot convert from %s to %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: cannot convert from %s to %s\n",
 			from, to);
 		goto out_iconv_close_to;
 	}
