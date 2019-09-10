@@ -50,7 +50,6 @@
 #include <dirent.h>
 #include <assert.h>
 #include <errno.h>
-#include <err.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <sys/file.h>
@@ -1248,10 +1247,15 @@ int main(int argc, char *argv[])
 		int res;
 
 		res = lstat(lo.source, &stat);
-		if (res == -1)
-			err(1, "failed to stat source (\"%s\")", lo.source);
-		if (!S_ISDIR(stat.st_mode))
-			errx(1, "source is not a directory");
+		if (res == -1) {
+			fuse_log(FUSE_LOG_ERR, "failed to stat source (\"%s\"): %m\n",
+				 lo.source);
+			exit(1);
+		}
+		if (!S_ISDIR(stat.st_mode)) {
+			fuse_log(FUSE_LOG_ERR, "source is not a directory\n");
+			exit(1);
+		}
 
 	} else {
 		lo.source = "/";
@@ -1272,12 +1276,17 @@ int main(int argc, char *argv[])
 			break;
 		}
 	} else if (lo.timeout < 0) {
-		errx(1, "timeout is negative (%lf)", lo.timeout);
+		fuse_log(FUSE_LOG_ERR, "timeout is negative (%lf)\n",
+			 lo.timeout);
+		exit(1);
 	}
 
 	lo.root.fd = open(lo.source, O_PATH);
-	if (lo.root.fd == -1)
-		err(1, "open(\"%s\", O_PATH)", lo.source);
+	if (lo.root.fd == -1) {
+		fuse_log(FUSE_LOG_ERR, "open(\"%s\", O_PATH): %m\n",
+			 lo.source);
+		exit(1);
+	}
 
 	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 	if (se == NULL)
