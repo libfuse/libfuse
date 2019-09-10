@@ -131,8 +131,6 @@ struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *o
 int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
 int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
 
-void fuse_log(enum fuse_log_level level, const char *fmt, ...);
-
 #define FUSE_MAX_MAX_PAGES 256
 #define FUSE_DEFAULT_MAX_PAGES_PER_REQ 32
 

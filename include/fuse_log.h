@@ -67,6 +67,14 @@ typedef void (*fuse_log_func_t)(enum fuse_log_level level,
  */
 void fuse_set_log_func(fuse_log_func_t func);
 
+/**
+ * Emit a log message
+ *
+ * @param level severity level (FUSE_LOG_ERR, FUSE_LOG_DEBUG, etc)
+ * @param fmt sprintf-style format string including newline
+ */
+void fuse_log(enum fuse_log_level level, const char *fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif
