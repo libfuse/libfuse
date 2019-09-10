@@ -9,7 +9,6 @@
 */
 
 #include "fuse_log.h"
-#include "fuse_i.h"
 
 #include <stdarg.h>
 #include <stdio.h>
