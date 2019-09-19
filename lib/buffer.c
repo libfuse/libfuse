@@ -163,10 +163,10 @@ static ssize_t fuse_buf_splice(const struct fuse_buf *dst, size_t dst_off,
 			       size_t len, enum fuse_buf_copy_flags flags)
 {
 	int splice_flags = 0;
-	off_t *srcpos = NULL;
-	off_t *dstpos = NULL;
-	off_t srcpos_val;
-	off_t dstpos_val;
+	fuse_off_t *srcpos = NULL;
+	fuse_off_t *dstpos = NULL;
+	fuse_off_t srcpos_val;
+	fuse_off_t dstpos_val;
 	ssize_t res;
 	size_t copied = 0;
 

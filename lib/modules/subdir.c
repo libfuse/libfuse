@@ -50,7 +50,7 @@ static int subdir_addpath(struct subdir *d, const char *path, char **newpathp)
 	return 0;
 }
 
-static int subdir_getattr(const char *path, struct stat *stbuf,
+static int subdir_getattr(const char *path, struct fuse_stat *stbuf,
 			  struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
@@ -166,7 +166,7 @@ static int subdir_opendir(const char *path, struct fuse_file_info *fi)
 }
 
 static int subdir_readdir(const char *path, void *buf,
-			  fuse_fill_dir_t filler, off_t offset,
+			  fuse_fill_dir_t filler, fuse_off_t offset,
 			  struct fuse_file_info *fi,
 			  enum fuse_readdir_flags flags)
 {
@@ -193,7 +193,7 @@ static int subdir_releasedir(const char *path, struct fuse_file_info *fi)
 	return err;
 }
 
-static int subdir_mknod(const char *path, mode_t mode, dev_t rdev)
+static int subdir_mknod(const char *path, fuse_mode_t mode, fuse_dev_t rdev)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
@@ -205,7 +205,7 @@ static int subdir_mknod(const char *path, mode_t mode, dev_t rdev)
 	return err;
 }
 
-static int subdir_mkdir(const char *path, mode_t mode)
+static int subdir_mkdir(const char *path, fuse_mode_t mode)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
@@ -287,7 +287,7 @@ static int subdir_link(const char *from, const char *to)
 	return err;
 }
 
-static int subdir_chmod(const char *path, mode_t mode,
+static int subdir_chmod(const char *path, fuse_mode_t mode,
 			struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
@@ -300,7 +300,7 @@ static int subdir_chmod(const char *path, mode_t mode,
 	return err;
 }
 
-static int subdir_chown(const char *path, uid_t uid, gid_t gid,
+static int subdir_chown(const char *path, fuse_uid_t uid, fuse_gid_t gid,
 			struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
@@ -313,7 +313,7 @@ static int subdir_chown(const char *path, uid_t uid, gid_t gid,
 	return err;
 }
 
-static int subdir_truncate(const char *path, off_t size,
+static int subdir_truncate(const char *path, fuse_off_t size,
 			   struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
@@ -326,7 +326,7 @@ static int subdir_truncate(const char *path, off_t size,
 	return err;
 }
 
-static int subdir_utimens(const char *path, const struct timespec ts[2],
+static int subdir_utimens(const char *path, const struct fuse_timespec ts[2],
 			  struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
@@ -339,7 +339,7 @@ static int subdir_utimens(const char *path, const struct timespec ts[2],
 	return err;
 }
 
-static int subdir_create(const char *path, mode_t mode,
+static int subdir_create(const char *path, fuse_mode_t mode,
 			 struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
@@ -365,7 +365,7 @@ static int subdir_open(const char *path, struct fuse_file_info *fi)
 }
 
 static int subdir_read_buf(const char *path, struct fuse_bufvec **bufp,
-			   size_t size, off_t offset, struct fuse_file_info *fi)
+			   size_t size, fuse_off_t offset, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
@@ -378,7 +378,7 @@ static int subdir_read_buf(const char *path, struct fuse_bufvec **bufp,
 }
 
 static int subdir_write_buf(const char *path, struct fuse_bufvec *buf,
-			off_t offset, struct fuse_file_info *fi)
+			fuse_off_t offset, struct fuse_file_info *fi)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
@@ -390,7 +390,7 @@ static int subdir_write_buf(const char *path, struct fuse_bufvec *buf,
 	return err;
 }
 
-static int subdir_statfs(const char *path, struct statvfs *stbuf)
+static int subdir_statfs(const char *path, struct fuse_statvfs *stbuf)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;
@@ -504,7 +504,7 @@ static int subdir_removexattr(const char *path, const char *name)
 }
 
 static int subdir_lock(const char *path, struct fuse_file_info *fi, int cmd,
-		       struct flock *lock)
+		       struct fuse_flock *lock)
 {
 	struct subdir *d = subdir_get();
 	char *newpath;

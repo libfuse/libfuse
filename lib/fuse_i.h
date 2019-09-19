@@ -52,7 +52,7 @@ struct fuse_session {
 	int got_init;
 	struct cuse_data *cuse_data;
 	void *userdata;
-	uid_t owner;
+	fuse_uid_t owner;
 	struct fuse_conn_info conn;
 	struct fuse_req list;
 	struct fuse_req interrupts;
@@ -113,7 +113,7 @@ unsigned get_max_read(struct mount_opts *o);
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
 
-int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
+int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct fuse_iovec *iov,
 			       int count);
 void fuse_free_req(fuse_req_t req);
 

@@ -18,10 +18,6 @@
 
 #include "fuse_lowlevel.h"
 
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/uio.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -51,9 +47,9 @@ struct cuse_lowlevel_ops {
 	void (*init_done) (void *userdata);
 	void (*destroy) (void *userdata);
 	void (*open) (fuse_req_t req, struct fuse_file_info *fi);
-	void (*read) (fuse_req_t req, size_t size, off_t off,
+	void (*read) (fuse_req_t req, size_t size, fuse_off_t off,
 		      struct fuse_file_info *fi);
-	void (*write) (fuse_req_t req, const char *buf, size_t size, off_t off,
+	void (*write) (fuse_req_t req, const char *buf, size_t size, fuse_off_t off,
 		       struct fuse_file_info *fi);
 	void (*flush) (fuse_req_t req, struct fuse_file_info *fi);
 	void (*release) (fuse_req_t req, struct fuse_file_info *fi);

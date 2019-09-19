@@ -60,13 +60,13 @@ static void *hello_init(struct fuse_conn_info *conn,
 	return NULL;
 }
 
-static int hello_getattr(const char *path, struct stat *stbuf,
+static int hello_getattr(const char *path, struct fuse_stat *stbuf,
 			 struct fuse_file_info *fi)
 {
 	(void) fi;
 	int res = 0;
 
-	memset(stbuf, 0, sizeof(struct stat));
+	memset(stbuf, 0, sizeof(struct fuse_stat));
 	if (strcmp(path, "/") == 0) {
 		stbuf->st_mode = S_IFDIR | 0755;
 		stbuf->st_nlink = 2;
@@ -81,7 +81,7 @@ static int hello_getattr(const char *path, struct stat *stbuf,
 }
 
 static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t offset, struct fuse_file_info *fi,
+			 fuse_off_t offset, struct fuse_file_info *fi,
 			 enum fuse_readdir_flags flags)
 {
 	(void) offset;
@@ -109,7 +109,7 @@ static int hello_open(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int hello_read(const char *path, char *buf, size_t size, off_t offset,
+static int hello_read(const char *path, char *buf, size_t size, fuse_off_t offset,
 		      struct fuse_file_info *fi)
 {
 	size_t len;

@@ -81,7 +81,7 @@ static void *xmp_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 }
 
 static int xmp_getattr(const char *path,
-		struct stat *stbuf, struct fuse_file_info* fi) {
+		struct fuse_stat *stbuf, struct fuse_file_info* fi) {
 	(void) fi;
 	if (strcmp(path, "/") == 0) {
 		stbuf->st_ino = 1;
@@ -105,7 +105,7 @@ static int xmp_getattr(const char *path,
 }
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		off_t offset, struct fuse_file_info *fi,
+		fuse_off_t offset, struct fuse_file_info *fi,
 		enum fuse_readdir_flags flags) {
 	(void) fi;
 	(void) offset;
@@ -115,7 +115,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	} else {
 		(void) filler;
 		(void) buf;
-		struct stat file_stat;
+		struct fuse_stat file_stat;
 		xmp_getattr("/" TIME_FILE_NAME, &file_stat, NULL);
 		filler(buf, TIME_FILE_NAME, &file_stat, 0, 0);
 		xmp_getattr("/" GROW_FILE_NAME, &file_stat, NULL);
@@ -132,7 +132,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi) {
 	return 0;
 }
 
-static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
+static int xmp_read(const char *path, char *buf, size_t size, fuse_off_t offset,
 		struct fuse_file_info *fi) {
 	(void) fi;
 	(void) offset;

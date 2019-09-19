@@ -72,7 +72,7 @@ static void *xmp_init(struct fuse_conn_info *conn,
 	return NULL;
 }
 
-static int xmp_getattr(const char *path, struct stat *stbuf,
+static int xmp_getattr(const char *path, struct fuse_stat *stbuf,
 			struct fuse_file_info *fi)
 {
 	int res;
@@ -115,7 +115,7 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 struct xmp_dirp {
 	DIR *dp;
 	struct dirent *entry;
-	off_t offset;
+	fuse_off_t offset;
 };
 
 static int xmp_opendir(const char *path, struct fuse_file_info *fi)
@@ -144,7 +144,7 @@ static inline struct xmp_dirp *get_dirp(struct fuse_file_info *fi)
 }
 
 static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi,
+		       fuse_off_t offset, struct fuse_file_info *fi,
 		       enum fuse_readdir_flags flags)
 {
 	struct xmp_dirp *d = get_dirp(fi);
@@ -162,8 +162,8 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		d->offset = offset;
 	}
 	while (1) {
-		struct stat st;
-		off_t nextoff;
+		struct fuse_stat st;
+		fuse_off_t nextoff;
 		enum fuse_fill_dir_flags fill_flags = 0;
 
 		if (!d->entry) {
@@ -213,7 +213,7 @@ static int xmp_releasedir(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
+static int xmp_mknod(const char *path, fuse_mode_t mode, fuse_dev_t rdev)
 {
 	int res;
 
@@ -227,7 +227,7 @@ static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 	return 0;
 }
 
-static int xmp_mkdir(const char *path, mode_t mode)
+static int xmp_mkdir(const char *path, fuse_mode_t mode)
 {
 	int res;
 
@@ -297,7 +297,7 @@ static int xmp_link(const char *from, const char *to)
 	return 0;
 }
 
-static int xmp_chmod(const char *path, mode_t mode,
+static int xmp_chmod(const char *path, fuse_mode_t mode,
 		     struct fuse_file_info *fi)
 {
 	int res;
@@ -312,7 +312,7 @@ static int xmp_chmod(const char *path, mode_t mode,
 	return 0;
 }
 
-static int xmp_chown(const char *path, uid_t uid, gid_t gid,
+static int xmp_chown(const char *path, fuse_uid_t uid, fuse_gid_t gid,
 		     struct fuse_file_info *fi)
 {
 	int res;
@@ -327,7 +327,7 @@ static int xmp_chown(const char *path, uid_t uid, gid_t gid,
 	return 0;
 }
 
-static int xmp_truncate(const char *path, off_t size,
+static int xmp_truncate(const char *path, fuse_off_t size,
 			 struct fuse_file_info *fi)
 {
 	int res;
@@ -344,7 +344,7 @@ static int xmp_truncate(const char *path, off_t size,
 }
 
 #ifdef HAVE_UTIMENSAT
-static int xmp_utimens(const char *path, const struct timespec ts[2],
+static int xmp_utimens(const char *path, const struct fuse_timespec ts[2],
 		       struct fuse_file_info *fi)
 {
 	int res;
@@ -361,7 +361,7 @@ static int xmp_utimens(const char *path, const struct timespec ts[2],
 }
 #endif
 
-static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
+static int xmp_create(const char *path, fuse_mode_t mode, struct fuse_file_info *fi)
 {
 	int fd;
 
@@ -385,7 +385,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
+static int xmp_read(const char *path, char *buf, size_t size, fuse_off_t offset,
 		    struct fuse_file_info *fi)
 {
 	int res;
@@ -399,7 +399,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 }
 
 static int xmp_read_buf(const char *path, struct fuse_bufvec **bufp,
-			size_t size, off_t offset, struct fuse_file_info *fi)
+			size_t size, fuse_off_t offset, struct fuse_file_info *fi)
 {
 	struct fuse_bufvec *src;
 
@@ -421,7 +421,7 @@ static int xmp_read_buf(const char *path, struct fuse_bufvec **bufp,
 }
 
 static int xmp_write(const char *path, const char *buf, size_t size,
-		     off_t offset, struct fuse_file_info *fi)
+		     fuse_off_t offset, struct fuse_file_info *fi)
 {
 	int res;
 
@@ -434,7 +434,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 }
 
 static int xmp_write_buf(const char *path, struct fuse_bufvec *buf,
-		     off_t offset, struct fuse_file_info *fi)
+		     fuse_off_t offset, struct fuse_file_info *fi)
 {
 	struct fuse_bufvec dst = FUSE_BUFVEC_INIT(fuse_buf_size(buf));
 
@@ -447,7 +447,7 @@ static int xmp_write_buf(const char *path, struct fuse_bufvec *buf,
 	return fuse_buf_copy(&dst, buf, FUSE_BUF_SPLICE_NONBLOCK);
 }
 
-static int xmp_statfs(const char *path, struct statvfs *stbuf)
+static int xmp_statfs(const char *path, struct fuse_statvfs *stbuf)
 {
 	int res;
 
@@ -505,7 +505,7 @@ static int xmp_fsync(const char *path, int isdatasync,
 
 #ifdef HAVE_POSIX_FALLOCATE
 static int xmp_fallocate(const char *path, int mode,
-			off_t offset, off_t length, struct fuse_file_info *fi)
+			fuse_off_t offset, fuse_off_t length, struct fuse_file_info *fi)
 {
 	(void) path;
 
@@ -555,7 +555,7 @@ static int xmp_removexattr(const char *path, const char *name)
 
 #ifdef HAVE_LIBULOCKMGR
 static int xmp_lock(const char *path, struct fuse_file_info *fi, int cmd,
-		    struct flock *lock)
+		    struct fuse_flock *lock)
 {
 	(void) path;
 
@@ -579,9 +579,9 @@ static int xmp_flock(const char *path, struct fuse_file_info *fi, int op)
 #ifdef HAVE_COPY_FILE_RANGE
 static ssize_t xmp_copy_file_range(const char *path_in,
 				   struct fuse_file_info *fi_in,
-				   off_t off_in, const char *path_out,
+				   fuse_off_t off_in, const char *path_out,
 				   struct fuse_file_info *fi_out,
-				   off_t off_out, size_t len, int flags)
+				   fuse_off_t off_out, size_t len, int flags)
 {
 	ssize_t res;
 	(void) path_in;

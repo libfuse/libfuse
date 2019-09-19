@@ -31,9 +31,9 @@
 #define FILE_NAME "truncate_me"
 
 static int got_fh;
-static mode_t file_mode = S_IFREG | 0644;
+static fuse_mode_t file_mode = S_IFREG | 0644;
 
-static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
+static int tfs_stat(fuse_ino_t ino, struct fuse_stat *stbuf) {
     stbuf->st_ino = ino;
     if (ino == FUSE_ROOT_ID) {
         stbuf->st_mode = S_IFDIR | 0755;
@@ -75,7 +75,7 @@ err_out:
 
 static void tfs_getattr(fuse_req_t req, fuse_ino_t ino,
                         struct fuse_file_info *fi) {
-    struct stat stbuf;
+    struct fuse_stat stbuf;
 
     (void) fi;
 
@@ -97,7 +97,7 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
     }
 }
 
-static void tfs_setattr (fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+static void tfs_setattr (fuse_req_t req, fuse_ino_t ino, struct fuse_stat *attr,
                          int to_set, struct fuse_file_info *fi) {
     if(ino != FILE_INO ||
        !(to_set & FUSE_SET_ATTR_MODE)) {

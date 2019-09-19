@@ -58,7 +58,7 @@ static void tfs_init (void *userdata, struct fuse_conn_info *conn)
     }
 }
 
-static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
+static int tfs_stat(fuse_ino_t ino, struct fuse_stat *stbuf) {
     stbuf->st_ino = ino;
     if (ino == FUSE_ROOT_ID) {
         stbuf->st_mode = S_IFDIR | 0755;
@@ -100,7 +100,7 @@ err_out:
 
 static void tfs_getattr(fuse_req_t req, fuse_ino_t ino,
                         struct fuse_file_info *fi) {
-    struct stat stbuf;
+    struct fuse_stat stbuf;
 
     (void) fi;
 
@@ -122,7 +122,7 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
-                      size_t size, off_t off, struct fuse_file_info *fi) {
+                      size_t size, fuse_off_t off, struct fuse_file_info *fi) {
     (void) fi; (void) buf; (void) off;
     size_t expected;
 

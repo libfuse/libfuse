@@ -99,7 +99,7 @@ err:
 	return err;
 }
 
-static int iconv_getattr(const char *path, struct stat *stbuf,
+static int iconv_getattr(const char *path, struct fuse_stat *stbuf,
 			 struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
@@ -158,7 +158,7 @@ static int iconv_opendir(const char *path, struct fuse_file_info *fi)
 }
 
 static int iconv_dir_fill(void *buf, const char *name,
-			  const struct stat *stbuf, off_t off,
+			  const struct fuse_stat *stbuf, fuse_off_t off,
 			  enum fuse_fill_dir_flags flags)
 {
 	struct iconv_dh *dh = buf;
@@ -172,7 +172,7 @@ static int iconv_dir_fill(void *buf, const char *name,
 }
 
 static int iconv_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			 off_t offset, struct fuse_file_info *fi,
+			 fuse_off_t offset, struct fuse_file_info *fi,
 			 enum fuse_readdir_flags flags)
 {
 	struct iconv *ic = iconv_get();
@@ -202,7 +202,7 @@ static int iconv_releasedir(const char *path, struct fuse_file_info *fi)
 	return err;
 }
 
-static int iconv_mknod(const char *path, mode_t mode, dev_t rdev)
+static int iconv_mknod(const char *path, fuse_mode_t mode, fuse_dev_t rdev)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;
@@ -214,7 +214,7 @@ static int iconv_mknod(const char *path, mode_t mode, dev_t rdev)
 	return err;
 }
 
-static int iconv_mkdir(const char *path, mode_t mode)
+static int iconv_mkdir(const char *path, fuse_mode_t mode)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;
@@ -301,7 +301,7 @@ static int iconv_link(const char *from, const char *to)
 	return err;
 }
 
-static int iconv_chmod(const char *path, mode_t mode,
+static int iconv_chmod(const char *path, fuse_mode_t mode,
 		       struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
@@ -314,7 +314,7 @@ static int iconv_chmod(const char *path, mode_t mode,
 	return err;
 }
 
-static int iconv_chown(const char *path, uid_t uid, gid_t gid,
+static int iconv_chown(const char *path, fuse_uid_t uid, fuse_gid_t gid,
 		       struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
@@ -327,7 +327,7 @@ static int iconv_chown(const char *path, uid_t uid, gid_t gid,
 	return err;
 }
 
-static int iconv_truncate(const char *path, off_t size,
+static int iconv_truncate(const char *path, fuse_off_t size,
 			   struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
@@ -340,7 +340,7 @@ static int iconv_truncate(const char *path, off_t size,
 	return err;
 }
 
-static int iconv_utimens(const char *path, const struct timespec ts[2],
+static int iconv_utimens(const char *path, const struct fuse_timespec ts[2],
 			 struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
@@ -353,7 +353,7 @@ static int iconv_utimens(const char *path, const struct timespec ts[2],
 	return err;
 }
 
-static int iconv_create(const char *path, mode_t mode,
+static int iconv_create(const char *path, fuse_mode_t mode,
 			struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
@@ -379,7 +379,7 @@ static int iconv_open_file(const char *path, struct fuse_file_info *fi)
 }
 
 static int iconv_read_buf(const char *path, struct fuse_bufvec **bufp,
-			  size_t size, off_t offset, struct fuse_file_info *fi)
+			  size_t size, fuse_off_t offset, struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;
@@ -392,7 +392,7 @@ static int iconv_read_buf(const char *path, struct fuse_bufvec **bufp,
 }
 
 static int iconv_write_buf(const char *path, struct fuse_bufvec *buf,
-			   off_t offset, struct fuse_file_info *fi)
+			   fuse_off_t offset, struct fuse_file_info *fi)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;
@@ -404,7 +404,7 @@ static int iconv_write_buf(const char *path, struct fuse_bufvec *buf,
 	return err;
 }
 
-static int iconv_statfs(const char *path, struct statvfs *stbuf)
+static int iconv_statfs(const char *path, struct fuse_statvfs *stbuf)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;
@@ -518,7 +518,7 @@ static int iconv_removexattr(const char *path, const char *name)
 }
 
 static int iconv_lock(const char *path, struct fuse_file_info *fi, int cmd,
-		      struct flock *lock)
+		      struct fuse_flock *lock)
 {
 	struct iconv *ic = iconv_get();
 	char *newpath;

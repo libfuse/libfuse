@@ -104,7 +104,7 @@ static const struct fuse_opt option_spec[] = {
     FUSE_OPT_END
 };
 
-static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
+static int tfs_stat(fuse_ino_t ino, struct fuse_stat *stbuf) {
     stbuf->st_ino = ino;
     if (ino == FUSE_ROOT_ID) {
         stbuf->st_mode = S_IFDIR | 0755;
@@ -159,7 +159,7 @@ static void tfs_forget (fuse_req_t req, fuse_ino_t ino,
 
 static void tfs_getattr(fuse_req_t req, fuse_ino_t ino,
                         struct fuse_file_info *fi) {
-    struct stat stbuf;
+    struct fuse_stat stbuf;
 
     (void) fi;
 
@@ -177,7 +177,7 @@ struct dirbuf {
 
 static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
                        fuse_ino_t ino) {
-    struct stat stbuf;
+    struct fuse_stat stbuf;
     size_t oldsize = b->size;
     b->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
     b->p = (char *) realloc(b->p, b->size);
@@ -190,7 +190,7 @@ static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
 static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
-                             off_t off, size_t maxsize) {
+                             fuse_off_t off, size_t maxsize) {
     if (off < bufsize)
         return fuse_reply_buf(req, buf + off,
                               min(bufsize - off, maxsize));
@@ -199,7 +199,7 @@ static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
 }
 
 static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-                        off_t off, struct fuse_file_info *fi) {
+                        fuse_off_t off, struct fuse_file_info *fi) {
     (void) fi;
 
     if (ino != FUSE_ROOT_ID)
@@ -235,7 +235,7 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void tfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
-                     off_t off, struct fuse_file_info *fi) {
+                     fuse_off_t off, struct fuse_file_info *fi) {
     (void) fi;
 
     assert(ino == FILE_INO);
@@ -243,7 +243,7 @@ static void tfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static void tfs_retrieve_reply(fuse_req_t req, void *cookie, fuse_ino_t ino,
-                               off_t offset, struct fuse_bufvec *data) {
+                               fuse_off_t offset, struct fuse_bufvec *data) {
     struct fuse_bufvec bufv;
     char buf[MAX_STR_LEN];
     char *expected;

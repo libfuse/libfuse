@@ -43,14 +43,14 @@ static void cuse_fll_open(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void cuse_fll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
-			  off_t off, struct fuse_file_info *fi)
+			  fuse_off_t off, struct fuse_file_info *fi)
 {
 	(void)ino;
 	req_clop(req)->read(req, size, off, fi);
 }
 
 static void cuse_fll_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
-			   size_t size, off_t off, struct fuse_file_info *fi)
+			   size_t size, fuse_off_t off, struct fuse_file_info *fi)
 {
 	(void)ino;
 	req_clop(req)->write(req, buf, size, off, fi);
@@ -182,7 +182,7 @@ struct fuse_session *cuse_lowlevel_new(struct fuse_args *args,
 static int cuse_reply_init(fuse_req_t req, struct cuse_init_out *arg,
 			   char *dev_info, unsigned dev_info_len)
 {
-	struct iovec iov[3];
+	struct fuse_iovec iov[3];
 
 	iov[1].iov_base = arg;
 	iov[1].iov_len = sizeof(struct cuse_init_out);

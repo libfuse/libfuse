@@ -97,20 +97,20 @@ static Inode& get_inode(fuse_ino_t ino);
 static void forget_one(fuse_ino_t ino, uint64_t n);
 
 // Uniquely identifies a file in the source directory tree. This could
-// be simplified to just ino_t since we require the source directory
+// be simplified to just fuse_ino_t since we require the source directory
 // not to contain any mountpoints. This hasn't been done yet in case
 // we need to reconsider this constraint (but relaxing this would have
 // the drawback that we can no longer re-use inode numbers, and thus
 // readdir() would need to do a full lookup() in order to report the
 // right inode number).
-typedef std::pair<ino_t, dev_t> SrcId;
+typedef std::pair<fuse_ino_t, fuse_dev_t> SrcId;
 
 // Define a hash function for SrcId
 namespace std {
     template<>
     struct hash<SrcId> {
         size_t operator()(const SrcId& id) const {
-            return hash<ino_t>{}(id.first) ^ hash<dev_t>{}(id.second);
+            return hash<fuse_ino_t>{}(id.first) ^ hash<fuse_dev_t>{}(id.second);
         }
     };
 }
@@ -121,8 +121,8 @@ typedef std::unordered_map<SrcId, Inode> InodeMap;
 struct Inode {
     int fd {-1};
     bool is_symlink {false};
-    dev_t src_dev {0};
-    ino_t src_ino {0};
+    fuse_dev_t src_dev {0};
+    fuse_ino_t src_ino {0};
     uint64_t nlookup {0};
     std::mutex m;
 
@@ -149,7 +149,7 @@ struct Fs {
     bool debug;
     std::string source;
     size_t blocksize;
-    dev_t src_dev;
+    fuse_dev_t src_dev;
     bool nosplice;
     bool nocache;
 };
@@ -205,7 +205,7 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
 static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     (void)fi;
     Inode& inode = get_inode(ino);
-    struct stat attr;
+    struct fuse_stat attr;
     auto res = fstatat(inode.fd, "", &attr,
                        AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
     if (res == -1) {
@@ -218,7 +218,7 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
 #ifdef HAVE_UTIMENSAT
 static int utimensat_empty_nofollow(Inode& inode,
-                                    const struct timespec *tv) {
+                                    const struct fuse_timespec *tv) {
     if (inode.is_symlink) {
         /* Does not work on current kernels, but may in the future:
            https://marc.info/?l=linux-kernel&m=154158217810354&w=2 */
@@ -238,7 +238,7 @@ static int utimensat_empty_nofollow(Inode& inode,
 #endif
 
 
-static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct fuse_stat *attr,
                        int valid, struct fuse_file_info* fi) {
     Inode& inode = get_inode(ino);
     int ifd = inode.fd;
@@ -256,8 +256,8 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
             goto out_err;
     }
     if (valid & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) {
-        uid_t uid = (valid & FUSE_SET_ATTR_UID) ? attr->st_uid : static_cast<uid_t>(-1);
-        gid_t gid = (valid & FUSE_SET_ATTR_GID) ? attr->st_gid : static_cast<gid_t>(-1);
+        fuse_uid_t uid = (valid & FUSE_SET_ATTR_UID) ? attr->st_uid : static_cast<fuse_uid_t>(-1);
+        fuse_gid_t gid = (valid & FUSE_SET_ATTR_GID) ? attr->st_gid : static_cast<fuse_gid_t>(-1);
 
         res = fchownat(ifd, "", uid, gid, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
         if (res == -1)
@@ -275,7 +275,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
             goto out_err;
     }
     if (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) {
-        struct timespec tv[2];
+        struct fuse_timespec tv[2];
 
         tv[0].tv_sec = 0;
         tv[1].tv_sec = 0;
@@ -312,7 +312,7 @@ out_err:
 }
 
 
-static void sfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+static void sfs_setattr(fuse_req_t req, fuse_ino_t ino, struct fuse_stat *attr,
                         int valid, fuse_file_info *fi) {
     (void) ino;
     do_setattr(req, ino, attr, valid, fi);
@@ -410,7 +410,7 @@ static void sfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
 
 
 static void mknod_symlink(fuse_req_t req, fuse_ino_t parent,
-                              const char *name, mode_t mode, dev_t rdev,
+                              const char *name, fuse_mode_t mode, fuse_dev_t rdev,
                               const char *link) {
     int res;
     Inode& inode_p = get_inode(parent);
@@ -442,13 +442,13 @@ out:
 
 
 static void sfs_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
-                      mode_t mode, dev_t rdev) {
+                      fuse_mode_t mode, fuse_dev_t rdev) {
     mknod_symlink(req, parent, name, mode, rdev, nullptr);
 }
 
 
 static void sfs_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
-                      mode_t mode) {
+                      fuse_mode_t mode) {
     mknod_symlink(req, parent, name, S_IFDIR | mode, 0, nullptr);
 }
 
@@ -590,7 +590,7 @@ static void sfs_readlink(fuse_req_t req, fuse_ino_t ino) {
 
 struct DirHandle {
     DIR *dp {nullptr};
-    off_t offset;
+    fuse_off_t offset;
 
     DirHandle() = default;
     DirHandle(const DirHandle&) = delete;
@@ -657,7 +657,7 @@ static bool is_dot_or_dotdot(const char *name) {
 
 
 static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-                    off_t offset, fuse_file_info *fi, int plus) {
+                    fuse_off_t offset, fuse_file_info *fi, int plus) {
     auto d = get_dir_handle(fi);
     Inode& inode = get_inode(ino);
     lock_guard<mutex> g {inode.m};
@@ -757,14 +757,14 @@ error:
 
 
 static void sfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-                        off_t offset, fuse_file_info *fi) {
+                        fuse_off_t offset, fuse_file_info *fi) {
     // operation logging is done in readdir to reduce code duplication
     do_readdir(req, ino, size, offset, fi, 0);
 }
 
 
 static void sfs_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size,
-                            off_t offset, fuse_file_info *fi) {
+                            fuse_off_t offset, fuse_file_info *fi) {
     // operation logging is done in readdir to reduce code duplication
     do_readdir(req, ino, size, offset, fi, 1);
 }
@@ -779,7 +779,7 @@ static void sfs_releasedir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
 
 static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
-                       mode_t mode, fuse_file_info *fi) {
+                       fuse_mode_t mode, fuse_file_info *fi) {
     Inode& inode_p = get_inode(parent);
 
     auto fd = openat(inode_p.fd, name,
@@ -881,7 +881,7 @@ static void sfs_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 }
 
 
-static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) {
+static void do_read(fuse_req_t req, size_t size, fuse_off_t off, fuse_file_info *fi) {
 
     fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
     buf.buf[0].flags = static_cast<fuse_buf_flags>(
@@ -892,14 +892,14 @@ static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) 
     fuse_reply_data(req, &buf, FUSE_BUF_COPY_FLAGS);
 }
 
-static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
+static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, fuse_off_t off,
                      fuse_file_info *fi) {
     (void) ino;
     do_read(req, size, off, fi);
 }
 
 
-static void do_write_buf(fuse_req_t req, size_t size, off_t off,
+static void do_write_buf(fuse_req_t req, size_t size, fuse_off_t off,
                          fuse_bufvec *in_buf, fuse_file_info *fi) {
     fuse_bufvec out_buf = FUSE_BUFVEC_INIT(size);
     out_buf.buf[0].flags = static_cast<fuse_buf_flags>(
@@ -916,7 +916,7 @@ static void do_write_buf(fuse_req_t req, size_t size, off_t off,
 
 
 static void sfs_write_buf(fuse_req_t req, fuse_ino_t ino, fuse_bufvec *in_buf,
-                          off_t off, fuse_file_info *fi) {
+                          fuse_off_t off, fuse_file_info *fi) {
     (void) ino;
     auto size {fuse_buf_size(in_buf)};
     do_write_buf(req, size, off, in_buf, fi);
@@ -924,7 +924,7 @@ static void sfs_write_buf(fuse_req_t req, fuse_ino_t ino, fuse_bufvec *in_buf,
 
 
 static void sfs_statfs(fuse_req_t req, fuse_ino_t ino) {
-    struct statvfs stbuf;
+    struct fuse_statvfs stbuf;
 
     auto res = fstatvfs(get_fs_fd(ino), &stbuf);
     if (res == -1)
@@ -936,7 +936,7 @@ static void sfs_statfs(fuse_req_t req, fuse_ino_t ino) {
 
 #ifdef HAVE_POSIX_FALLOCATE
 static void sfs_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
-                          off_t offset, off_t length, fuse_file_info *fi) {
+                          fuse_off_t offset, fuse_off_t length, fuse_file_info *fi) {
     (void) ino;
     if (mode) {
         fuse_reply_err(req, EOPNOTSUPP);
@@ -1223,7 +1223,7 @@ int main(int argc, char *argv[]) {
     fs.root.is_symlink = false;
     fs.timeout = options.count("nocache") ? 0 : 86400.0;
 
-    struct stat stat;
+    struct fuse_stat stat;
     auto ret = lstat(fs.source.c_str(), &stat);
     if (ret == -1)
         err(1, "ERROR: failed to stat source (\"%s\")", fs.source.c_str());

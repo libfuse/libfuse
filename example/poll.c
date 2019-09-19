@@ -63,13 +63,13 @@ static int fsel_path_index(const char *path)
 	return ch <= '9' ? ch - '0' : ch - 'A' + 10;
 }
 
-static int fsel_getattr(const char *path, struct stat *stbuf,
+static int fsel_getattr(const char *path, struct fuse_stat *stbuf,
 			struct fuse_file_info *fi)
 {
 	(void) fi;
 	int idx;
 
-	memset(stbuf, 0, sizeof(struct stat));
+	memset(stbuf, 0, sizeof(struct fuse_stat));
 
 	if (strcmp(path, "/") == 0) {
 		stbuf->st_mode = S_IFDIR | 0555;
@@ -88,7 +88,7 @@ static int fsel_getattr(const char *path, struct stat *stbuf,
 }
 
 static int fsel_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-			off_t offset, struct fuse_file_info *fi,
+			fuse_off_t offset, struct fuse_file_info *fi,
 			enum fuse_readdir_flags flags)
 {
 	char name[2] = { };
@@ -143,7 +143,7 @@ static int fsel_release(const char *path, struct fuse_file_info *fi)
 	return 0;
 }
 
-static int fsel_read(const char *path, char *buf, size_t size, off_t offset,
+static int fsel_read(const char *path, char *buf, size_t size, fuse_off_t offset,
 		     struct fuse_file_info *fi)
 {
 	int idx = fi->fh;
@@ -217,7 +217,7 @@ static struct fuse_operations fsel_oper = {
 
 static void *fsel_producer(void *data)
 {
-	const struct timespec interval = { 0, 250000000 };
+	const struct fuse_timespec interval = { 0, 250000000 };
 	unsigned idx = 0, nr = 1;
 
 	(void) data;

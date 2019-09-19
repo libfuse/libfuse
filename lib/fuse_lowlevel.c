@@ -55,7 +55,7 @@ static __attribute__((constructor)) void fuse_ll_init_pagesize(void)
 	pagesize = getpagesize();
 }
 
-static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
+static void convert_stat(const struct fuse_stat *stbuf, struct fuse_attr *attr)
 {
 	attr->ino	= stbuf->st_ino;
 	attr->mode	= stbuf->st_mode;
@@ -74,7 +74,7 @@ static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 	attr->ctimensec = ST_CTIM_NSEC(stbuf);
 }
 
-static void convert_attr(const struct fuse_setattr_in *attr, struct stat *stbuf)
+static void convert_attr(const struct fuse_setattr_in *attr, struct fuse_stat *stbuf)
 {
 	stbuf->st_mode	       = attr->mode;
 	stbuf->st_uid	       = attr->uid;
@@ -88,7 +88,7 @@ static void convert_attr(const struct fuse_setattr_in *attr, struct stat *stbuf)
 	ST_CTIM_NSEC_SET(stbuf, attr->ctimensec);
 }
 
-static	size_t iov_length(const struct iovec *iov, size_t count)
+static	size_t iov_length(const struct fuse_iovec *iov, size_t count)
 {
 	size_t seg;
 	size_t ret = 0;
@@ -163,7 +163,7 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 
 /* Send data. If *ch* is NULL, send via session master fd */
 static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
-			 struct iovec *iov, int count)
+			 struct fuse_iovec *iov, int count)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
 
@@ -201,7 +201,7 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 }
 
 
-int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
+int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct fuse_iovec *iov,
 			       int count)
 {
 	struct fuse_out_header out;
@@ -220,7 +220,7 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 	return fuse_send_msg(req->se, req->ch, iov, count);
 }
 
-static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
+static int send_reply_iov(fuse_req_t req, int error, struct fuse_iovec *iov,
 			  int count)
 {
 	int res;
@@ -233,7 +233,7 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 static int send_reply(fuse_req_t req, int error, const void *arg,
 		      size_t argsize)
 {
-	struct iovec iov[2];
+	struct fuse_iovec iov[2];
 	int count = 1;
 	if (argsize) {
 		iov[1].iov_base = (void *) arg;
@@ -243,16 +243,16 @@ static int send_reply(fuse_req_t req, int error, const void *arg,
 	return send_reply_iov(req, error, iov, count);
 }
 
-int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
+int fuse_reply_iov(fuse_req_t req, const struct fuse_iovec *iov, int count)
 {
 	int res;
-	struct iovec *padded_iov;
+	struct fuse_iovec *padded_iov;
 
-	padded_iov = malloc((count + 1) * sizeof(struct iovec));
+	padded_iov = malloc((count + 1) * sizeof(struct fuse_iovec));
 	if (padded_iov == NULL)
 		return fuse_reply_err(req, ENOMEM);
 
-	memcpy(padded_iov + 1, iov, count * sizeof(struct iovec));
+	memcpy(padded_iov + 1, iov, count * sizeof(struct fuse_iovec));
 	count++;
 
 	res = send_reply_iov(req, 0, padded_iov, count);
@@ -265,7 +265,7 @@ int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
 /* `buf` is allowed to be empty so that the proper size may be
    allocated by the caller */
 size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
-			 const char *name, const struct stat *stbuf, off_t off)
+			 const char *name, const struct fuse_stat *stbuf, fuse_off_t off)
 {
 	(void)req;
 	size_t namelen;
@@ -291,7 +291,7 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 	return entlen_padded;
 }
 
-static void convert_statfs(const struct statvfs *stbuf,
+static void convert_statfs(const struct fuse_statvfs *stbuf,
 			   struct fuse_kstatfs *kstatfs)
 {
 	kstatfs->bsize	 = stbuf->f_bsize;
@@ -356,7 +356,7 @@ static void fill_entry(struct fuse_entry_out *arg,
    allocated by the caller */
 size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 			      const char *name,
-			      const struct fuse_entry_param *e, off_t off)
+			      const struct fuse_entry_param *e, fuse_off_t off)
 {
 	(void)req;
 	size_t namelen;
@@ -430,7 +430,7 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 			     entrysize + sizeof(struct fuse_open_out));
 }
 
-int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
+int fuse_reply_attr(fuse_req_t req, const struct fuse_stat *attr,
 		    double attr_timeout)
 {
 	struct fuse_attr_out arg;
@@ -476,7 +476,7 @@ int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
 
 static int fuse_send_data_iov_fallback(struct fuse_session *se,
 				       struct fuse_chan *ch,
-				       struct iovec *iov, int iov_count,
+				       struct fuse_iovec *iov, int iov_count,
 				       struct fuse_bufvec *buf,
 				       size_t len)
 {
@@ -641,7 +641,7 @@ static int grow_pipe_to_max(int pipefd)
 }
 
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
-			       struct iovec *iov, int iov_count,
+			       struct fuse_iovec *iov, int iov_count,
 			       struct fuse_bufvec *buf, unsigned int flags)
 {
 	int res;
@@ -841,7 +841,7 @@ fallback:
 }
 #else
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
-			       struct iovec *iov, int iov_count,
+			       struct fuse_iovec *iov, int iov_count,
 			       struct fuse_bufvec *buf, unsigned int flags)
 {
 	size_t len = fuse_buf_size(buf);
@@ -854,7 +854,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 		    enum fuse_buf_copy_flags flags)
 {
-	struct iovec iov[2];
+	struct fuse_iovec iov[2];
 	struct fuse_out_header out;
 	int res;
 
@@ -873,7 +873,7 @@ int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 	}
 }
 
-int fuse_reply_statfs(fuse_req_t req, const struct statvfs *stbuf)
+int fuse_reply_statfs(fuse_req_t req, const struct fuse_statvfs *stbuf)
 {
 	struct fuse_statfs_out arg;
 	size_t size = req->se->conn.proto_minor < 4 ?
@@ -895,7 +895,7 @@ int fuse_reply_xattr(fuse_req_t req, size_t count)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_lock(fuse_req_t req, const struct flock *lock)
+int fuse_reply_lock(fuse_req_t req, const struct fuse_flock *lock)
 {
 	struct fuse_lk_out arg;
 
@@ -922,7 +922,7 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-static struct fuse_ioctl_iovec *fuse_ioctl_iovec_copy(const struct iovec *iov,
+static struct fuse_ioctl_iovec *fuse_ioctl_iovec_copy(const struct fuse_iovec *iov,
 						      size_t count)
 {
 	struct fuse_ioctl_iovec *fiov;
@@ -941,13 +941,13 @@ static struct fuse_ioctl_iovec *fuse_ioctl_iovec_copy(const struct iovec *iov,
 }
 
 int fuse_reply_ioctl_retry(fuse_req_t req,
-			   const struct iovec *in_iov, size_t in_count,
-			   const struct iovec *out_iov, size_t out_count)
+			   const struct fuse_iovec *in_iov, size_t in_count,
+			   const struct fuse_iovec *out_iov, size_t out_count)
 {
 	struct fuse_ioctl_out arg;
 	struct fuse_ioctl_iovec *in_fiov = NULL;
 	struct fuse_ioctl_iovec *out_fiov = NULL;
-	struct iovec iov[4];
+	struct fuse_iovec iov[4];
 	size_t count = 1;
 	int res;
 
@@ -1013,7 +1013,7 @@ enomem:
 int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size)
 {
 	struct fuse_ioctl_out arg;
-	struct iovec iov[3];
+	struct fuse_iovec iov[3];
 	size_t count = 1;
 
 	memset(&arg, 0, sizeof(arg));
@@ -1031,14 +1031,14 @@ int fuse_reply_ioctl(fuse_req_t req, int result, const void *buf, size_t size)
 	return send_reply_iov(req, 0, iov, count);
 }
 
-int fuse_reply_ioctl_iov(fuse_req_t req, int result, const struct iovec *iov,
+int fuse_reply_ioctl_iov(fuse_req_t req, int result, const struct fuse_iovec *iov,
 			 int count)
 {
-	struct iovec *padded_iov;
+	struct fuse_iovec *padded_iov;
 	struct fuse_ioctl_out arg;
 	int res;
 
-	padded_iov = malloc((count + 2) * sizeof(struct iovec));
+	padded_iov = malloc((count + 2) * sizeof(struct fuse_iovec));
 	if (padded_iov == NULL)
 		return fuse_reply_err(req, ENOMEM);
 
@@ -1047,7 +1047,7 @@ int fuse_reply_ioctl_iov(fuse_req_t req, int result, const struct iovec *iov,
 	padded_iov[1].iov_base = &arg;
 	padded_iov[1].iov_len = sizeof(arg);
 
-	memcpy(&padded_iov[2], iov, count * sizeof(struct iovec));
+	memcpy(&padded_iov[2], iov, count * sizeof(struct fuse_iovec));
 
 	res = send_reply_iov(req, 0, padded_iov, count + 2);
 	free(padded_iov);
@@ -1147,7 +1147,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (req->se->op.setattr) {
 		struct fuse_file_info *fi = NULL;
 		struct fuse_file_info fi_store;
-		struct stat stbuf;
+		struct fuse_stat stbuf;
 		memset(&stbuf, 0, sizeof(stbuf));
 		convert_attr(arg, &stbuf);
 		if (arg->valid & FATTR_FH) {
@@ -1545,7 +1545,7 @@ static void do_statfs(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (req->se->op.statfs)
 		req->se->op.statfs(req, nodeid);
 	else {
-		struct statvfs buf = {
+		struct fuse_statvfs buf = {
 			.f_namemax = 255,
 			.f_bsize = 512,
 		};
@@ -1597,9 +1597,9 @@ static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 }
 
 static void convert_fuse_file_lock(struct fuse_file_lock *fl,
-				   struct flock *flock)
+				   struct fuse_flock *flock)
 {
-	memset(flock, 0, sizeof(struct flock));
+	memset(flock, 0, sizeof(struct fuse_flock));
 	flock->l_type = fl->type;
 	flock->l_whence = SEEK_SET;
 	flock->l_start = fl->start;
@@ -1614,7 +1614,7 @@ static void do_getlk(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_lk_in *arg = (struct fuse_lk_in *) inarg;
 	struct fuse_file_info fi;
-	struct flock flock;
+	struct fuse_flock flock;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
@@ -1632,7 +1632,7 @@ static void do_setlk_common(fuse_req_t req, fuse_ino_t nodeid,
 {
 	struct fuse_lk_in *arg = (struct fuse_lk_in *) inarg;
 	struct fuse_file_info fi;
-	struct flock flock;
+	struct fuse_flock flock;
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
@@ -2160,7 +2160,7 @@ static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 }
 
 static int send_notify_iov(struct fuse_session *se, int notify_code,
-			   struct iovec *iov, int count)
+			   struct fuse_iovec *iov, int count)
 {
 	struct fuse_out_header out;
 
@@ -2179,7 +2179,7 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
 {
 	if (ph != NULL) {
 		struct fuse_notify_poll_wakeup_out outarg;
-		struct iovec iov[2];
+		struct fuse_iovec iov[2];
 
 		outarg.kh = ph->kh;
 
@@ -2193,10 +2193,10 @@ int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
 }
 
 int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
-				     off_t off, off_t len)
+				     fuse_off_t off, fuse_off_t len)
 {
 	struct fuse_notify_inval_inode_out outarg;
-	struct iovec iov[2];
+	struct fuse_iovec iov[2];
 
 	if (!se)
 		return -EINVAL;
@@ -2218,7 +2218,7 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen)
 {
 	struct fuse_notify_inval_entry_out outarg;
-	struct iovec iov[3];
+	struct fuse_iovec iov[3];
 
 	if (!se)
 		return -EINVAL;
@@ -2243,7 +2243,7 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
 				const char *name, size_t namelen)
 {
 	struct fuse_notify_delete_out outarg;
-	struct iovec iov[3];
+	struct fuse_iovec iov[3];
 
 	if (!se)
 		return -EINVAL;
@@ -2265,12 +2265,12 @@ int fuse_lowlevel_notify_delete(struct fuse_session *se,
 }
 
 int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
-			       off_t offset, struct fuse_bufvec *bufv,
+			       fuse_off_t offset, struct fuse_bufvec *bufv,
 			       enum fuse_buf_copy_flags flags)
 {
 	struct fuse_out_header out;
 	struct fuse_notify_store_out outarg;
-	struct iovec iov[3];
+	struct fuse_iovec iov[3];
 	size_t size = fuse_buf_size(bufv);
 	int res;
 
@@ -2345,10 +2345,10 @@ out:
 }
 
 int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
-				  size_t size, off_t offset, void *cookie)
+				  size_t size, fuse_off_t offset, void *cookie)
 {
 	struct fuse_notify_retrieve_out outarg;
-	struct iovec iov[2];
+	struct fuse_iovec iov[2];
 	struct fuse_retrieve_req *rreq;
 	int err;
 
@@ -2553,7 +2553,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 			.unique = in->unique,
 			.error = -ENOMEM,
 		};
-		struct iovec iov = {
+		struct fuse_iovec iov = {
 			.iov_base = &out,
 			.iov_len = sizeof(struct fuse_out_header),
 		};
@@ -3018,7 +3018,7 @@ void fuse_session_unmount(struct fuse_session *se)
 }
 
 #ifdef linux
-int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
+int fuse_req_getgroups(fuse_req_t req, int size, fuse_gid_t list[])
 {
 	char *buf;
 	size_t bufsize = 1024;
@@ -3080,7 +3080,7 @@ out_free:
 /*
  * This is currently not implemented on other than Linux...
  */
-int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
+int fuse_req_getgroups(fuse_req_t req, int size, fuse_gid_t list[])
 {
 	(void) req; (void) size; (void) list;
 	return -ENOSYS;

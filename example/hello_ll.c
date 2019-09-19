@@ -32,7 +32,7 @@
 static const char *hello_str = "Hello World!\n";
 static const char *hello_name = "hello";
 
-static int hello_stat(fuse_ino_t ino, struct stat *stbuf)
+static int hello_stat(fuse_ino_t ino, struct fuse_stat *stbuf)
 {
 	stbuf->st_ino = ino;
 	switch (ino) {
@@ -56,7 +56,7 @@ static int hello_stat(fuse_ino_t ino, struct stat *stbuf)
 static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
-	struct stat stbuf;
+	struct fuse_stat stbuf;
 
 	(void) fi;
 
@@ -92,7 +92,7 @@ struct dirbuf {
 static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
 		       fuse_ino_t ino)
 {
-	struct stat stbuf;
+	struct fuse_stat stbuf;
 	size_t oldsize = b->size;
 	b->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
 	b->p = (char *) realloc(b->p, b->size);
@@ -105,7 +105,7 @@ static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
 static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
-			     off_t off, size_t maxsize)
+			     fuse_off_t off, size_t maxsize)
 {
 	if (off < bufsize)
 		return fuse_reply_buf(req, buf + off,
@@ -115,7 +115,7 @@ static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
 }
 
 static void hello_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-			     off_t off, struct fuse_file_info *fi)
+			     fuse_off_t off, struct fuse_file_info *fi)
 {
 	(void) fi;
 
@@ -145,7 +145,7 @@ static void hello_ll_open(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void hello_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
-			  off_t off, struct fuse_file_info *fi)
+			  fuse_off_t off, struct fuse_file_info *fi)
 {
 	(void) fi;
 

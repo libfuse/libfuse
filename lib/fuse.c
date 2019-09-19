@@ -132,9 +132,9 @@ struct fuse {
 
 struct lock {
 	int type;
-	off_t start;
-	off_t end;
-	pid_t pid;
+	fuse_off_t start;
+	fuse_off_t end;
+	fuse_pid_t pid;
 	uint64_t owner;
 	struct lock *next;
 };
@@ -149,9 +149,9 @@ struct node {
 	char *name;
 	uint64_t nlookup;
 	int open_count;
-	struct timespec stat_updated;
-	struct timespec mtime;
-	off_t size;
+	struct fuse_timespec stat_updated;
+	struct fuse_timespec mtime;
+	fuse_off_t size;
 	struct lock *locks;
 	unsigned int is_hidden : 1;
 	unsigned int cache_valid : 1;
@@ -165,11 +165,11 @@ struct node {
 struct node_lru {
 	struct node node;
 	struct list_head lru;
-	struct timespec forget_time;
+	struct fuse_timespec forget_time;
 };
 
 struct fuse_direntry {
-	struct stat stat;
+	struct fuse_stat stat;
 	char *name;
 	struct fuse_direntry *next;
 };
@@ -548,9 +548,9 @@ static struct node *get_node(struct fuse *f, fuse_ino_t nodeid)
 	return node;
 }
 
-static void curr_time(struct timespec *now);
-static double diff_timespec(const struct timespec *t1,
-			   const struct timespec *t2);
+static void curr_time(struct fuse_timespec *now);
+static double diff_timespec(const struct fuse_timespec *t1,
+			   const struct fuse_timespec *t2);
 
 static void remove_node_lru(struct node *node)
 {
@@ -1532,7 +1532,7 @@ out:
 	return err;
 }
 
-static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
+static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct fuse_stat *stbuf)
 {
 	if (!f->conf.use_ino)
 		stbuf->st_ino = nodeid;
@@ -1573,7 +1573,7 @@ static void fuse_interrupt(fuse_req_t req, void *d_)
 	pthread_mutex_lock(&f->lock);
 	while (!d->finished) {
 		struct timeval now;
-		struct timespec timeout;
+		struct fuse_timespec timeout;
 
 		pthread_kill(d->id, f->conf.intr_signal);
 		gettimeofday(&now, NULL);
@@ -1626,7 +1626,7 @@ static const char* file_info_string(struct fuse_file_info *fi,
 	return buf;
 }
 
-int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf,
+int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct fuse_stat *buf,
 		    struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -1785,7 +1785,7 @@ static void fuse_free_buf(struct fuse_bufvec *buf)
 }
 
 int fuse_fs_read_buf(struct fuse_fs *fs, const char *path,
-		     struct fuse_bufvec **bufp, size_t size, off_t off,
+		     struct fuse_bufvec **bufp, size_t size, fuse_off_t off,
 		     struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -1840,7 +1840,7 @@ int fuse_fs_read_buf(struct fuse_fs *fs, const char *path,
 }
 
 int fuse_fs_read(struct fuse_fs *fs, const char *path, char *mem, size_t size,
-		 off_t off, struct fuse_file_info *fi)
+		 fuse_off_t off, struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.read || fs->op.read_buf) {
@@ -1882,7 +1882,7 @@ int fuse_fs_read(struct fuse_fs *fs, const char *path, char *mem, size_t size,
 }
 
 int fuse_fs_write_buf(struct fuse_fs *fs, const char *path,
-		      struct fuse_bufvec *buf, off_t off,
+		      struct fuse_bufvec *buf, fuse_off_t off,
 		      struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -1946,7 +1946,7 @@ out:
 }
 
 int fuse_fs_write(struct fuse_fs *fs, const char *path, const char *mem,
-		  size_t size, off_t off, struct fuse_file_info *fi)
+		  size_t size, fuse_off_t off, struct fuse_file_info *fi)
 {
 	struct fuse_bufvec bufv = FUSE_BUFVEC_INIT(size);
 
@@ -2000,7 +2000,7 @@ int fuse_fs_flush(struct fuse_fs *fs, const char *path,
 	}
 }
 
-int fuse_fs_statfs(struct fuse_fs *fs, const char *path, struct statvfs *buf)
+int fuse_fs_statfs(struct fuse_fs *fs, const char *path, struct fuse_statvfs *buf)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.statfs) {
@@ -2031,7 +2031,7 @@ int fuse_fs_releasedir(struct fuse_fs *fs, const char *path,
 }
 
 int fuse_fs_readdir(struct fuse_fs *fs, const char *path, void *buf,
-		    fuse_fill_dir_t filler, off_t off,
+		    fuse_fill_dir_t filler, fuse_off_t off,
 		    struct fuse_file_info *fi,
 		    enum fuse_readdir_flags flags)
 {
@@ -2050,7 +2050,7 @@ int fuse_fs_readdir(struct fuse_fs *fs, const char *path, void *buf,
 	}
 }
 
-int fuse_fs_create(struct fuse_fs *fs, const char *path, mode_t mode,
+int fuse_fs_create(struct fuse_fs *fs, const char *path, fuse_mode_t mode,
 		   struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -2076,7 +2076,7 @@ int fuse_fs_create(struct fuse_fs *fs, const char *path, mode_t mode,
 }
 
 int fuse_fs_lock(struct fuse_fs *fs, const char *path,
-		 struct fuse_file_info *fi, int cmd, struct flock *lock)
+		 struct fuse_file_info *fi, int cmd, struct fuse_flock *lock)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.lock) {
@@ -2121,8 +2121,8 @@ int fuse_fs_flock(struct fuse_fs *fs, const char *path,
 	}
 }
 
-int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid,
-		  gid_t gid, struct fuse_file_info *fi)
+int fuse_fs_chown(struct fuse_fs *fs, const char *path, fuse_uid_t uid,
+		  fuse_gid_t gid, struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.chown) {
@@ -2138,7 +2138,7 @@ int fuse_fs_chown(struct fuse_fs *fs, const char *path, uid_t uid,
 	}
 }
 
-int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size,
+int fuse_fs_truncate(struct fuse_fs *fs, const char *path, fuse_off_t size,
 		      struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -2156,7 +2156,7 @@ int fuse_fs_truncate(struct fuse_fs *fs, const char *path, off_t size,
 }
 
 int fuse_fs_utimens(struct fuse_fs *fs, const char *path,
-		    const struct timespec tv[2], struct fuse_file_info *fi)
+		    const struct fuse_timespec tv[2], struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.utimens) {
@@ -2201,8 +2201,8 @@ int fuse_fs_readlink(struct fuse_fs *fs, const char *path, char *buf,
 	}
 }
 
-int fuse_fs_mknod(struct fuse_fs *fs, const char *path, mode_t mode,
-		  dev_t rdev)
+int fuse_fs_mknod(struct fuse_fs *fs, const char *path, fuse_mode_t mode,
+		  fuse_dev_t rdev)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.mknod) {
@@ -2217,7 +2217,7 @@ int fuse_fs_mknod(struct fuse_fs *fs, const char *path, mode_t mode,
 	}
 }
 
-int fuse_fs_mkdir(struct fuse_fs *fs, const char *path, mode_t mode)
+int fuse_fs_mkdir(struct fuse_fs *fs, const char *path, fuse_mode_t mode)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.mkdir) {
@@ -2345,7 +2345,7 @@ int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 }
 
 int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
-		off_t offset, off_t length, struct fuse_file_info *fi)
+		fuse_off_t offset, fuse_off_t length, struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.fallocate) {
@@ -2362,9 +2362,9 @@ int fuse_fs_fallocate(struct fuse_fs *fs, const char *path, int mode,
 }
 
 ssize_t fuse_fs_copy_file_range(struct fuse_fs *fs, const char *path_in,
-				struct fuse_file_info *fi_in, off_t off_in,
+				struct fuse_file_info *fi_in, fuse_off_t off_in,
 				const char *path_out,
-				struct fuse_file_info *fi_out, off_t off_out,
+				struct fuse_file_info *fi_out, fuse_off_t off_out,
 				size_t len, int flags)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -2399,7 +2399,7 @@ static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 			 char *newname, size_t bufsize)
 {
-	struct stat buf;
+	struct fuse_stat buf;
 	struct node *node;
 	struct node *newnode;
 	char *newpath;
@@ -2453,7 +2453,7 @@ static int hide_node(struct fuse *f, const char *oldpath,
 	return err;
 }
 
-static int mtime_eq(const struct stat *stbuf, const struct timespec *ts)
+static int mtime_eq(const struct fuse_stat *stbuf, const struct fuse_timespec *ts)
 {
 	return stbuf->st_mtime == ts->tv_sec &&
 		ST_MTIM_NSEC(stbuf) == ts->tv_nsec;
@@ -2463,7 +2463,7 @@ static int mtime_eq(const struct stat *stbuf, const struct timespec *ts)
 #define CLOCK_MONOTONIC CLOCK_REALTIME
 #endif
 
-static void curr_time(struct timespec *now)
+static void curr_time(struct fuse_timespec *now)
 {
 	static clockid_t clockid = CLOCK_MONOTONIC;
 	int res = clock_gettime(clockid, now);
@@ -2477,7 +2477,7 @@ static void curr_time(struct timespec *now)
 	}
 }
 
-static void update_stat(struct node *node, const struct stat *stbuf)
+static void update_stat(struct node *node, const struct fuse_stat *stbuf)
 {
 	if (node->cache_valid && (!mtime_eq(stbuf, &node->mtime) ||
 				  stbuf->st_size != node->size))
@@ -2753,7 +2753,7 @@ static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
 	struct fuse *f = req_fuse_prepare(req);
-	struct stat buf;
+	struct fuse_stat buf;
 	char *path;
 	int err;
 
@@ -2786,7 +2786,7 @@ static void fuse_lib_getattr(fuse_req_t req, fuse_ino_t ino,
 		reply_err(req, err);
 }
 
-int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode,
+int fuse_fs_chmod(struct fuse_fs *fs, const char *path, fuse_mode_t mode,
 		  struct fuse_file_info *fi)
 {
 	fuse_get_context()->private_data = fs->user_data;
@@ -2803,11 +2803,11 @@ int fuse_fs_chmod(struct fuse_fs *fs, const char *path, mode_t mode,
 		return -ENOSYS;
 }
 
-static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
+static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct fuse_stat *attr,
 			     int valid, struct fuse_file_info *fi)
 {
 	struct fuse *f = req_fuse_prepare(req);
-	struct stat buf;
+	struct fuse_stat buf;
 	char *path;
 	int err;
 
@@ -2823,10 +2823,10 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		if (!err && (valid & FUSE_SET_ATTR_MODE))
 			err = fuse_fs_chmod(f->fs, path, attr->st_mode, fi);
 		if (!err && (valid & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID))) {
-			uid_t uid = (valid & FUSE_SET_ATTR_UID) ?
-				attr->st_uid : (uid_t) -1;
-			gid_t gid = (valid & FUSE_SET_ATTR_GID) ?
-				attr->st_gid : (gid_t) -1;
+			fuse_uid_t uid = (valid & FUSE_SET_ATTR_UID) ?
+				attr->st_uid : (fuse_uid_t) -1;
+			fuse_gid_t gid = (valid & FUSE_SET_ATTR_GID) ?
+				attr->st_gid : (fuse_gid_t) -1;
 			err = fuse_fs_chown(f->fs, path, uid, gid, fi);
 		}
 		if (!err && (valid & FUSE_SET_ATTR_SIZE)) {
@@ -2836,7 +2836,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 #ifdef HAVE_UTIMENSAT
 		if (!err &&
 		    (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME))) {
-			struct timespec tv[2];
+			struct fuse_timespec tv[2];
 
 			tv[0].tv_sec = 0;
 			tv[1].tv_sec = 0;
@@ -2859,7 +2859,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		if (!err &&
 		    (valid & (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) ==
 		    (FUSE_SET_ATTR_ATIME | FUSE_SET_ATTR_MTIME)) {
-			struct timespec tv[2];
+			struct fuse_timespec tv[2];
 			tv[0].tv_sec = attr->st_atime;
 			tv[0].tv_nsec = ST_ATIM_NSEC(attr);
 			tv[1].tv_sec = attr->st_mtime;
@@ -2925,7 +2925,7 @@ static void fuse_lib_readlink(fuse_req_t req, fuse_ino_t ino)
 }
 
 static void fuse_lib_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
-			   mode_t mode, dev_t rdev)
+			   fuse_mode_t mode, fuse_dev_t rdev)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_entry_param e;
@@ -2963,7 +2963,7 @@ static void fuse_lib_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
 }
 
 static void fuse_lib_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
-			   mode_t mode)
+			   fuse_mode_t mode)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_entry_param e;
@@ -3149,7 +3149,7 @@ static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
 }
 
 static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
-			    const char *name, mode_t mode,
+			    const char *name, fuse_mode_t mode,
 			    struct fuse_file_info *fi)
 {
 	struct fuse *f = req_fuse_prepare(req);
@@ -3197,8 +3197,8 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 	free_path(f, parent, path);
 }
 
-static double diff_timespec(const struct timespec *t1,
-			    const struct timespec *t2)
+static double diff_timespec(const struct fuse_timespec *t1,
+			    const struct fuse_timespec *t2)
 {
 	return (t1->tv_sec - t2->tv_sec) +
 		((double) t1->tv_nsec - (double) t2->tv_nsec) / 1000000000.0;
@@ -3212,12 +3212,12 @@ static void open_auto_cache(struct fuse *f, fuse_ino_t ino, const char *path,
 	pthread_mutex_lock(&f->lock);
 	node = get_node(f, ino);
 	if (node->cache_valid) {
-		struct timespec now;
+		struct fuse_timespec now;
 
 		curr_time(&now);
 		if (diff_timespec(&now, &node->stat_updated) >
 		    f->conf.ac_attr_timeout) {
-			struct stat stbuf;
+			struct fuse_stat stbuf;
 			int err;
 			pthread_mutex_unlock(&f->lock);
 			err = fuse_fs_getattr(f->fs, path, &stbuf, fi);
@@ -3274,7 +3274,7 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void fuse_lib_read(fuse_req_t req, fuse_ino_t ino, size_t size,
-			  off_t off, struct fuse_file_info *fi)
+			  fuse_off_t off, struct fuse_file_info *fi)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_bufvec *buf = NULL;
@@ -3300,7 +3300,7 @@ static void fuse_lib_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static void fuse_lib_write_buf(fuse_req_t req, fuse_ino_t ino,
-			       struct fuse_bufvec *buf, off_t off,
+			       struct fuse_bufvec *buf, fuse_off_t off,
 			       struct fuse_file_info *fi)
 {
 	struct fuse *f = req_fuse_prepare(req);
@@ -3429,7 +3429,7 @@ static int extend_contents(struct fuse_dh *dh, unsigned minsize)
 }
 
 static int fuse_add_direntry_to_dh(struct fuse_dh *dh, const char *name,
-				   struct stat *st)
+				   struct fuse_stat *st)
 {
 	struct fuse_direntry *de;
 
@@ -3468,11 +3468,11 @@ static fuse_ino_t lookup_nodeid(struct fuse *f, fuse_ino_t parent,
 	return res;
 }
 
-static int fill_dir(void *dh_, const char *name, const struct stat *statp,
-		    off_t off, enum fuse_fill_dir_flags flags)
+static int fill_dir(void *dh_, const char *name, const struct fuse_stat *statp,
+		    fuse_off_t off, enum fuse_fill_dir_flags flags)
 {
 	struct fuse_dh *dh = (struct fuse_dh *) dh_;
-	struct stat stbuf;
+	struct fuse_stat stbuf;
 
 	if ((flags & ~FUSE_FILL_DIR_PLUS) != 0) {
 		dh->error = -EIO;
@@ -3489,7 +3489,7 @@ static int fill_dir(void *dh_, const char *name, const struct stat *statp,
 	if (!dh->fuse->conf.use_ino) {
 		stbuf.st_ino = FUSE_UNKNOWN_INO;
 		if (dh->fuse->conf.readdir_ino) {
-			stbuf.st_ino = (ino_t)
+			stbuf.st_ino = (fuse_ino_t)
 				lookup_nodeid(dh->fuse, dh->nodeid, name);
 		}
 	}
@@ -3533,8 +3533,8 @@ static int is_dot_or_dotdot(const char *name)
 				  (name[1] == '.' && name[2] == '\0'));
 }
 
-static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
-			 off_t off, enum fuse_fill_dir_flags flags)
+static int fill_dir_plus(void *dh_, const char *name, const struct fuse_stat *statp,
+			 fuse_off_t off, enum fuse_fill_dir_flags flags)
 {
 	struct fuse_dh *dh = (struct fuse_dh *) dh_;
 	struct fuse_entry_param e = {
@@ -3562,7 +3562,7 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 	} else {
 		e.attr.st_ino = FUSE_UNKNOWN_INO;
 		if (!f->conf.use_ino && f->conf.readdir_ino) {
-			e.attr.st_ino = (ino_t)
+			e.attr.st_ino = (fuse_ino_t)
 				lookup_nodeid(f, dh->nodeid, name);
 		}
 	}
@@ -3610,7 +3610,7 @@ static void free_direntries(struct fuse_direntry *de)
 }
 
 static int readdir_fill(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
-			size_t size, off_t off, struct fuse_dh *dh,
+			size_t size, fuse_off_t off, struct fuse_dh *dh,
 			struct fuse_file_info *fi,
 			enum fuse_readdir_flags flags)
 {
@@ -3650,9 +3650,9 @@ static int readdir_fill(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
 }
 
 static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
-				  off_t off, enum fuse_readdir_flags flags)
+				  fuse_off_t off, enum fuse_readdir_flags flags)
 {
-	off_t pos;
+	fuse_off_t pos;
 	struct fuse_direntry *de = dh->first;
 
 	dh->len = 0;
@@ -3694,7 +3694,7 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 }
 
 static void fuse_readdir_common(fuse_req_t req, fuse_ino_t ino, size_t size,
-				off_t off, struct fuse_file_info *llfi,
+				fuse_off_t off, struct fuse_file_info *llfi,
 				enum fuse_readdir_flags flags)
 {
 	struct fuse *f = req_fuse_prepare(req);
@@ -3729,13 +3729,13 @@ out:
 }
 
 static void fuse_lib_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-			     off_t off, struct fuse_file_info *llfi)
+			     fuse_off_t off, struct fuse_file_info *llfi)
 {
 	fuse_readdir_common(req, ino, size, off, llfi, 0);
 }
 
 static void fuse_lib_readdirplus(fuse_req_t req, fuse_ino_t ino, size_t size,
-				  off_t off, struct fuse_file_info *llfi)
+				  fuse_off_t off, struct fuse_file_info *llfi)
 {
 	fuse_readdir_common(req, ino, size, off, llfi, FUSE_READDIR_PLUS);
 }
@@ -3789,7 +3789,7 @@ static void fuse_lib_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 static void fuse_lib_statfs(fuse_req_t req, fuse_ino_t ino)
 {
 	struct fuse *f = req_fuse_prepare(req);
-	struct statvfs buf;
+	struct fuse_statvfs buf;
 	char *path = NULL;
 	int err = 0;
 
@@ -4034,7 +4034,7 @@ out:
 	return 0;
 }
 
-static void flock_to_lock(struct flock *flock, struct lock *lock)
+static void flock_to_lock(struct fuse_flock *flock, struct lock *lock)
 {
 	memset(lock, 0, sizeof(struct lock));
 	lock->type = flock->l_type;
@@ -4044,7 +4044,7 @@ static void flock_to_lock(struct flock *flock, struct lock *lock)
 	lock->pid = flock->l_pid;
 }
 
-static void lock_to_flock(struct lock *lock, struct flock *flock)
+static void lock_to_flock(struct lock *lock, struct fuse_flock *flock)
 {
 	flock->l_type = lock->type;
 	flock->l_start = lock->start;
@@ -4057,7 +4057,7 @@ static int fuse_flush_common(struct fuse *f, fuse_req_t req, fuse_ino_t ino,
 			     const char *path, struct fuse_file_info *fi)
 {
 	struct fuse_intr_data d;
-	struct flock lock;
+	struct fuse_flock lock;
 	struct lock l;
 	int err;
 	int errlock;
@@ -4123,7 +4123,7 @@ static void fuse_lib_flush(fuse_req_t req, fuse_ino_t ino,
 }
 
 static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
-			    struct fuse_file_info *fi, struct flock *lock,
+			    struct fuse_file_info *fi, struct fuse_flock *lock,
 			    int cmd)
 {
 	struct fuse *f = req_fuse_prepare(req);
@@ -4142,7 +4142,7 @@ static int fuse_lock_common(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void fuse_lib_getlk(fuse_req_t req, fuse_ino_t ino,
-			   struct fuse_file_info *fi, struct flock *lock)
+			   struct fuse_file_info *fi, struct fuse_flock *lock)
 {
 	int err;
 	struct lock l;
@@ -4168,7 +4168,7 @@ static void fuse_lib_getlk(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void fuse_lib_setlk(fuse_req_t req, fuse_ino_t ino,
-			   struct fuse_file_info *fi, struct flock *lock,
+			   struct fuse_file_info *fi, struct fuse_flock *lock,
 			   int sleep)
 {
 	int err = fuse_lock_common(req, ino, fi, lock,
@@ -4298,7 +4298,7 @@ static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,
 }
 
 static void fuse_lib_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
-		off_t offset, off_t length, struct fuse_file_info *fi)
+		fuse_off_t offset, fuse_off_t length, struct fuse_file_info *fi)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_intr_data d;
@@ -4316,8 +4316,8 @@ static void fuse_lib_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 }
 
 static void fuse_lib_copy_file_range(fuse_req_t req, fuse_ino_t nodeid_in,
-				     off_t off_in, struct fuse_file_info *fi_in,
-				     fuse_ino_t nodeid_out, off_t off_out,
+				     fuse_off_t off_in, struct fuse_file_info *fi_in,
+				     fuse_ino_t nodeid_out, fuse_off_t off_out,
 				     struct fuse_file_info *fi_out, size_t len,
 				     int flags)
 {
@@ -4377,7 +4377,7 @@ int fuse_clean_cache(struct fuse *f)
 	struct node_lru *lnode;
 	struct list_head *curr, *next;
 	struct node *node;
-	struct timespec now;
+	struct fuse_timespec now;
 
 	pthread_mutex_lock(&f->lock);
 
@@ -4467,7 +4467,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 {
 	struct fuse_session *se = f->se;
 	int res = 0;
-	struct timespec now;
+	struct fuse_timespec now;
 	time_t next_clean;
 	struct pollfd fds = {
 		.fd = se->fd,
@@ -4566,7 +4566,7 @@ struct fuse_context *fuse_get_context(void)
 		return NULL;
 }
 
-int fuse_getgroups(int size, gid_t list[])
+int fuse_getgroups(int size, fuse_gid_t list[])
 {
 	struct fuse_context_i *c = fuse_get_context_internal();
 	if (!c)

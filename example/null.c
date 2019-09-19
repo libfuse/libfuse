@@ -33,7 +33,7 @@
 #include <time.h>
 #include <errno.h>
 
-static int null_getattr(const char *path, struct stat *stbuf,
+static int null_getattr(const char *path, struct fuse_stat *stbuf,
 			struct fuse_file_info *fi)
 {
 	(void) fi;
@@ -52,7 +52,7 @@ static int null_getattr(const char *path, struct stat *stbuf,
 	return 0;
 }
 
-static int null_truncate(const char *path, off_t size,
+static int null_truncate(const char *path, fuse_off_t size,
 			 struct fuse_file_info *fi)
 {
 	(void) size;
@@ -75,7 +75,7 @@ static int null_open(const char *path, struct fuse_file_info *fi)
 }
 
 static int null_read(const char *path, char *buf, size_t size,
-		     off_t offset, struct fuse_file_info *fi)
+		     fuse_off_t offset, struct fuse_file_info *fi)
 {
 	(void) buf;
 	(void) offset;
@@ -92,7 +92,7 @@ static int null_read(const char *path, char *buf, size_t size,
 }
 
 static int null_write(const char *path, const char *buf, size_t size,
-		      off_t offset, struct fuse_file_info *fi)
+		      fuse_off_t offset, struct fuse_file_info *fi)
 {
 	(void) buf;
 	(void) offset;
@@ -116,7 +116,7 @@ int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_cmdline_opts opts;
-	struct stat stbuf;
+	struct fuse_stat stbuf;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;

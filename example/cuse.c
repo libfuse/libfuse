@@ -92,7 +92,7 @@ static void cusexmp_open(fuse_req_t req, struct fuse_file_info *fi)
 	fuse_reply_open(req, fi);
 }
 
-static void cusexmp_read(fuse_req_t req, size_t size, off_t off,
+static void cusexmp_read(fuse_req_t req, size_t size, fuse_off_t off,
 			 struct fuse_file_info *fi)
 {
 	(void)fi;
@@ -106,7 +106,7 @@ static void cusexmp_read(fuse_req_t req, size_t size, off_t off,
 }
 
 static void cusexmp_write(fuse_req_t req, const char *buf, size_t size,
-			  off_t off, struct fuse_file_info *fi)
+			  fuse_off_t off, struct fuse_file_info *fi)
 {
 	(void)fi;
 
@@ -123,7 +123,7 @@ static void fioc_do_rw(fuse_req_t req, void *addr, const void *in_buf,
 		       size_t in_bufsz, size_t out_bufsz, int is_read)
 {
 	const struct fioc_rw_arg *arg;
-	struct iovec in_iov[2], out_iov[3], iov[3];
+	struct fuse_iovec in_iov[2], out_iov[3], iov[3];
 	size_t cur_size;
 
 	/* read in arg */
@@ -210,7 +210,7 @@ static void cusexmp_ioctl(fuse_req_t req, int cmd, void *arg,
 	switch (cmd) {
 	case FIOC_GET_SIZE:
 		if (!out_bufsz) {
-			struct iovec iov = { arg, sizeof(size_t) };
+			struct fuse_iovec iov = { arg, sizeof(size_t) };
 
 			fuse_reply_ioctl_retry(req, NULL, 0, &iov, 1);
 		} else
@@ -220,7 +220,7 @@ static void cusexmp_ioctl(fuse_req_t req, int cmd, void *arg,
 
 	case FIOC_SET_SIZE:
 		if (!in_bufsz) {
-			struct iovec iov = { arg, sizeof(size_t) };
+			struct fuse_iovec iov = { arg, sizeof(size_t) };
 
 			fuse_reply_ioctl_retry(req, &iov, 1, NULL, 0);
 		} else {

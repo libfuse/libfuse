@@ -16,8 +16,7 @@
 
 #include "fuse_opt.h"
 #include "fuse_log.h"
-#include <stdint.h>
-#include <sys/types.h>
+#include "fuse_types.h"
 
 /** Major version of FUSE library interface */
 #define FUSE_MAJOR_VERSION 3
@@ -693,7 +692,7 @@ struct fuse_buf {
 	 *
 	 * Used if FUSE_BUF_FD_SEEK flag is set.
 	 */
-	off_t pos;
+	fuse_off_t pos;
 };
 
 /**

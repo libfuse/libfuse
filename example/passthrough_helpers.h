@@ -28,7 +28,7 @@
  * operation
  */
 static int mknod_wrapper(int dirfd, const char *path, const char *link,
-	int mode, dev_t rdev)
+	int mode, fuse_dev_t rdev)
 {
 	int res;
 
