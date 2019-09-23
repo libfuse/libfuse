@@ -554,6 +554,19 @@ static int iconv_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
+static off_t iconv_lseek(const char *path, off_t off, int whence,
+			 struct fuse_file_info *fi)
+{
+	struct iconv *ic = iconv_get();
+	char *newpath;
+	int res = iconv_convpath(ic, path, &newpath, 0);
+	if (!res) {
+		res = fuse_fs_lseek(ic->next, newpath, off, whence, fi);
+		free(newpath);
+	}
+	return res;
+}
+
 static void *iconv_init(struct fuse_conn_info *conn,
 			struct fuse_config *cfg)
 {
@@ -612,6 +625,7 @@ static const struct fuse_operations iconv_oper = {
 	.lock		= iconv_lock,
 	.flock		= iconv_flock,
 	.bmap		= iconv_bmap,
+	.lseek		= iconv_lseek,
 };
 
 static const struct fuse_opt iconv_opts[] = {

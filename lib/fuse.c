@@ -2384,6 +2384,23 @@ ssize_t fuse_fs_copy_file_range(struct fuse_fs *fs, const char *path_in,
 		return -ENOSYS;
 }
 
+off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
+		    struct fuse_file_info *fi)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.lseek) {
+		if (fs->debug) {
+			char buf[10];
+			fuse_log(FUSE_LOG_DEBUG, "lseek[%s] %llu %d\n",
+				file_info_string(fi, buf, sizeof(buf)),
+				(unsigned long long) off, whence);
+		}
+		return fs->op.lseek(path, off, whence, fi);
+	} else {
+		return -ENOSYS;
+	}
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -4354,6 +4371,31 @@ static void fuse_lib_copy_file_range(fuse_req_t req, fuse_ino_t nodeid_in,
 	free_path(f, nodeid_out, path_out);
 }
 
+static void fuse_lib_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
+			   struct fuse_file_info *fi)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	struct fuse_intr_data d;
+	char *path;
+	int err;
+	off_t res;
+
+	err = get_path(f, ino, &path);
+	if (err) {
+		reply_err(req, err);
+		return;
+	}
+
+	fuse_prepare_interrupt(f, req, &d);
+	res = fuse_fs_lseek(f->fs, path, off, whence, fi);
+	fuse_finish_interrupt(f, req, &d);
+	free_path(f, ino, path);
+	if (res >= 0)
+		fuse_reply_lseek(req, res);
+	else
+		reply_err(req, res);
+}
+
 static int clean_delay(struct fuse *f)
 {
 	/*
@@ -4451,6 +4493,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.poll = fuse_lib_poll,
 	.fallocate = fuse_lib_fallocate,
 	.copy_file_range = fuse_lib_copy_file_range,
+	.lseek = fuse_lib_lseek,
 };
 
 int fuse_notify_poll(struct fuse_pollhandle *ph)

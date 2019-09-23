@@ -127,6 +127,8 @@ FUSE_3.0 {
 		fuse_cmdline_help;
 		fuse_apply_conn_info_opts;
 		fuse_parse_conn_info_opts;
+		fuse_fs_lseek;
+		fuse_reply_lseek;
 
 	local:
 		*;

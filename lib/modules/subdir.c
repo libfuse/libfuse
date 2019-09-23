@@ -540,6 +540,19 @@ static int subdir_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
+static off_t subdir_lseek(const char *path, off_t off, int whence,
+			  struct fuse_file_info *fi)
+{
+	struct subdir *ic = subdir_get();
+	char *newpath;
+	int res = subdir_addpath(ic, path, &newpath);
+	if (!res) {
+		res = fuse_fs_lseek(ic->next, newpath, off, whence, fi);
+		free(newpath);
+	}
+	return res;
+}
+
 static void *subdir_init(struct fuse_conn_info *conn,
 			 struct fuse_config *cfg)
 {
@@ -594,6 +607,7 @@ static const struct fuse_operations subdir_oper = {
 	.lock		= subdir_lock,
 	.flock		= subdir_flock,
 	.bmap		= subdir_bmap,
+	.lseek		= subdir_lseek,
 };
 
 static const struct fuse_opt subdir_opts[] = {
