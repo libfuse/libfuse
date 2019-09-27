@@ -1,5 +1,5 @@
-Unreleased Changes
-==================
+libfuse 3.7.0 (2019-09-27)
+==========================
 
 * Added UFSD to whitelist (so users can now mount FUSE filesystems
   on mountpoints within UFSD filesystems).
