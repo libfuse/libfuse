@@ -89,7 +89,7 @@ allow normal users to mount their own filesystem implementations.
 To limit the harm that malicious users can do this way, *fusermount3*
 enforces the following limitations:
 
-  - The user can only mount on a mountpoint for which he has write
+  - The user can only mount on a mountpoint for which they have write
     permission
 
   - The mountpoint must not be a sticky directory which isn't owned by
