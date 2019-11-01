@@ -83,7 +83,8 @@ struct fuse_file_info {
 	unsigned int cache_readdir : 1;
 
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 26;
+	unsigned int padding : 25;
+	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the
@@ -246,7 +247,7 @@ struct fuse_loop_config {
 #define FUSE_CAP_READDIRPLUS		(1 << 13)
 
 /**
- * Indicates that the filesystem supports adaptive readdirplus. 
+ * Indicates that the filesystem supports adaptive readdirplus.
  *
  * If FUSE_CAP_READDIRPLUS is not set, this flag has no effect.
  *
@@ -257,6 +258,15 @@ struct fuse_loop_config {
  * If FUSE_CAP_READDIRPLUS is set and this flag is set, the kernel
  * will issue both readdir() and readdirplus() requests, depending on
  * how much information is expected to be required.
+ *
+ * As of Linux 4.20, the algorithm is as follows: when userspace
+ * starts to read directory entries, issue a READDIRPLUS request to
+ * the filesystem. If any entry attributes have been looked up by the
+ * time userspace requests the next batch of entries continue with
+ * READDIRPLUS, otherwise switch to plain READDIR.  This will reasult
+ * in eg plain "ls" triggering READDIRPLUS first then READDIR after
+ * that because it doesn't do lookups.  "ls -l" should result in all
+ * READDIRPLUS, except if dentries are already cached.
  *
  * This feature is enabled by default when supported by the kernel and
  * if the filesystem implements both a readdirplus() and a readdir()

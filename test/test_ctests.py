@@ -21,7 +21,7 @@ pytestmark = fuse_test_marker()
 @pytest.mark.skipif('FUSE_CAP_WRITEBACK_CACHE' not in fuse_caps,
                     reason='not supported by running kernel')
 @pytest.mark.parametrize("writeback", (False, True))
-def test_write_cache(tmpdir, writeback):
+def test_write_cache(tmpdir, writeback, output_checker):
     if writeback and LooseVersion(platform.release()) < '3.14':
         pytest.skip('Requires kernel 3.14 or newer')
     # This test hangs under Valgrind when running close(fd)
@@ -33,7 +33,7 @@ def test_write_cache(tmpdir, writeback):
                 mnt_dir ]
     if writeback:
         cmdline.append('-owriteback_cache')
-    subprocess.check_call(cmdline)
+    subprocess.check_call(cmdline, stdout=output_checker.fd, stderr=output_checker.fd)
 
 
 names = [ 'notify_inval_inode', 'invalidate_path' ]
@@ -43,14 +43,15 @@ if fuse_proto >= (7,15):
                     reason='not supported by running kernel')
 @pytest.mark.parametrize("name", names)
 @pytest.mark.parametrize("notify", (True, False))
-def test_notify1(tmpdir, name, notify):
+def test_notify1(tmpdir, name, notify, output_checker):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
                 '-f', '--update-interval=1', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
         filename = pjoin(mnt_dir, 'current_time')
@@ -72,14 +73,15 @@ def test_notify1(tmpdir, name, notify):
 @pytest.mark.skipif(fuse_proto < (7,12),
                     reason='not supported by running kernel')
 @pytest.mark.parametrize("notify", (True, False))
-def test_notify_file_size(tmpdir, notify):
+def test_notify_file_size(tmpdir, notify, output_checker):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'invalidate_path'),
                 '-f', '--update-interval=1', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
-    mount_process = subprocess.Popen(cmdline)
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
     try:
         wait_for_mount(mount_process, mnt_dir)
         filename = pjoin(mnt_dir, 'growing')

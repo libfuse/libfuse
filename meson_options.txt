@@ -5,7 +5,11 @@ option('udevrulesdir', type : 'string', value : '',
        description: 'Where to install udev rules (if empty, query pkg-config(1))')
 
 option('utils', type : 'boolean', value : true,
-       description: 'Wheter or not to build and install helper programs')
+       description: 'Whether or not to build and install helper programs')
 
 option('examples', type : 'boolean', value : true,
-       description: 'Wheter or not to build example programs')
+       description: 'Whether or not to build example programs')
+
+option('useroot', type : 'boolean', value : true,
+       description: 'Set owner and setuid bits on installed files')
+
