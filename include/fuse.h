@@ -776,6 +776,11 @@ struct fuse_operations {
 				    off_t offset_in, const char *path_out,
 				    struct fuse_file_info *fi_out,
 				    off_t offset_out, size_t size, int flags);
+
+	/**
+	 * Find next data or hole after the specified offset
+	 */
+	off_t (*lseek) (const char *, off_t off, int whence, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -1197,6 +1202,8 @@ ssize_t fuse_fs_copy_file_range(struct fuse_fs *fs, const char *path_in,
 				const char *path_out,
 				struct fuse_file_info *fi_out, off_t off_out,
 				size_t len, int flags);
+off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
+		    struct fuse_file_info *fi);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		struct fuse_config *cfg);
 void fuse_fs_destroy(struct fuse_fs *fs);

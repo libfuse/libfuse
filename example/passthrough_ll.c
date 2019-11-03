@@ -1161,6 +1161,19 @@ static void lo_copy_file_range(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
 }
 #endif
 
+static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
+		     struct fuse_file_info *fi)
+{
+	off_t res;
+
+	(void)ino;
+	res = lseek(fi->fh, off, whence);
+	if (res != -1)
+		fuse_reply_lseek(req, res);
+	else
+		fuse_reply_err(req, errno);
+}
+
 static struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.lookup		= lo_lookup,
@@ -1198,6 +1211,7 @@ static struct fuse_lowlevel_ops lo_oper = {
 #ifdef HAVE_COPY_FILE_RANGE
 	.copy_file_range = lo_copy_file_range,
 #endif
+	.lseek		= lo_lseek,
 };
 
 int main(int argc, char *argv[])

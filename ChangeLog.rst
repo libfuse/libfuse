@@ -1,3 +1,9 @@
+Unreleased Changes
+==================
+
+* Added support for FUSE_LSEEK operation which can be used to report holes
+  in sparse files.
+
 libfuse 3.7.0 (2019-09-27)
 ==========================
 

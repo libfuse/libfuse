@@ -1065,6 +1065,16 @@ int fuse_reply_poll(fuse_req_t req, unsigned revents)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+int fuse_reply_lseek(fuse_req_t req, off_t off)
+{
+	struct fuse_lseek_out arg;
+
+	memset(&arg, 0, sizeof(arg));
+	arg.offset = off;
+
+	return send_reply_ok(req, &arg, sizeof(arg));
+}
+
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
@@ -1867,6 +1877,20 @@ static void do_copy_file_range(fuse_req_t req, fuse_ino_t nodeid_in, const void 
 		fuse_reply_err(req, ENOSYS);
 }
 
+static void do_lseek(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_lseek_in *arg = (struct fuse_lseek_in *) inarg;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+
+	if (req->se->op.lseek)
+		req->se->op.lseek(req, nodeid, arg->offset, arg->whence, &fi);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
@@ -2471,6 +2495,7 @@ static struct {
 	[FUSE_READDIRPLUS] = { do_readdirplus,	"READDIRPLUS"},
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
+	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
