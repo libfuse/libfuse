@@ -596,7 +596,6 @@ static void lo_readlink(fuse_req_t req, fuse_ino_t ino)
 }
 
 struct lo_dirp {
-	int fd;
 	DIR *dp;
 	struct dirent *entry;
 	off_t offset;
@@ -611,15 +610,18 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 {
 	int error = ENOMEM;
 	struct lo_data *lo = lo_data(req);
-	struct lo_dirp *d = calloc(1, sizeof(struct lo_dirp));
+	struct lo_dirp *d;
+	int fd;
+
+	d = calloc(1, sizeof(struct lo_dirp));
 	if (d == NULL)
 		goto out_err;
 
-	d->fd = openat(lo_fd(req, ino), ".", O_RDONLY);
-	if (d->fd == -1)
+	fd = openat(lo_fd(req, ino), ".", O_RDONLY);
+	if (fd == -1)
 		goto out_errno;
 
-	d->dp = fdopendir(d->fd);
+	d->dp = fdopendir(fd);
 	if (d->dp == NULL)
 		goto out_errno;
 
@@ -636,8 +638,8 @@ out_errno:
 	error = errno;
 out_err:
 	if (d) {
-		if (d->fd != -1)
-			close(d->fd);
+		if (fd != -1)
+			close(fd);
 		free(d);
 	}
 	fuse_reply_err(req, error);
