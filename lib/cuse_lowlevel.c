@@ -319,6 +319,7 @@ struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
 	if (res == -1)
 		goto err_sig;
 
+	fuse_opt_free_args(&args);
 	return se;
 
 err_sig:
