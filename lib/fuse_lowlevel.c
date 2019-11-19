@@ -1965,6 +1965,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_HANDLE_KILLPRIV;
 		if (arg->flags & FUSE_NO_OPENDIR_SUPPORT)
 			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
+		if (arg->flags & FUSE_EXPLICIT_INVAL_DATA)
+			se->conn.capable |= FUSE_CAP_EXPLICIT_INVAL_DATA;
 		if (!(arg->flags & FUSE_MAX_PAGES)) {
 			size_t max_bufsize =
 				FUSE_DEFAULT_MAX_PAGES_PER_REQ * getpagesize()
@@ -2085,6 +2087,8 @@ static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_WRITEBACK_CACHE;
 	if (se->conn.want & FUSE_CAP_POSIX_ACL)
 		outarg.flags |= FUSE_POSIX_ACL;
+	if (se->conn.want & FUSE_CAP_EXPLICIT_INVAL_DATA)
+		outarg.flags |= FUSE_EXPLICIT_INVAL_DATA;
 	outarg.max_readahead = se->conn.max_readahead;
 	outarg.max_write = se->conn.max_write;
 	if (se->conn.proto_minor >= 13) {
