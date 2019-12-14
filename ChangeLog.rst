@@ -1,4 +1,4 @@
-Unreleased Changes
+libfuse 3.9.0 (2019-12-14)
 ==========================
 
 * Added support for FUSE_EXPLICIT_INVAL_DATA to enable
