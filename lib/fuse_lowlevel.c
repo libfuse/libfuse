@@ -2975,7 +2975,8 @@ out5:
 out4:
 	fuse_opt_free_args(args);
 out3:
-	free(mo);
+	if (mo != NULL)
+		destroy_mount_opts(mo);
 out2:
 	free(se);
 out1:
