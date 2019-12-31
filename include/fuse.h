@@ -407,8 +407,8 @@ struct fuse_operations {
 	 *  - When writeback caching is disabled, the filesystem is
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
-	 * 
-         *  - When writeback caching is enabled, the kernel will
+	 *
+	 *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
 	 *    filesystem should thus either ignore the O_APPEND flag
