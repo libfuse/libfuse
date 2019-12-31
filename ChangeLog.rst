@@ -5,6 +5,7 @@ libfuse 3.10.0 (2019-12-14)
   Define FUSE_USE_VERSION < 35 to get old ioctl prototype
   with int commands; define FUSE_USE_VERSION >= 35 to get
   new ioctl prototype with unsigned int commands.
+* Fixed an issue with the linker version script.
 
 libfuse 3.9.0 (2019-12-14)
 ==========================
