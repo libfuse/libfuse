@@ -1,3 +1,11 @@
+libfuse 3.10.0 (2019-12-14)
+==========================
+
+* Make ioctl prototype conditional on FUSE_USE_VERSION.
+  Define FUSE_USE_VERSION < 35 to get old ioctl prototype
+  with int commands; define FUSE_USE_VERSION >= 35 to get
+  new ioctl prototype with unsigned int commands.
+
 libfuse 3.9.0 (2019-12-14)
 ==========================
 

@@ -14,7 +14,7 @@
  * Low level API
  *
  * IMPORTANT: you should define FUSE_USE_VERSION before including this
- * header.  To use the newest API define it to 31 (recommended for any
+ * header.  To use the newest API define it to 35 (recommended for any
  * new application).
  */
 
@@ -1018,9 +1018,15 @@ struct fuse_lowlevel_ops {
 	 * Note : the unsigned long request submitted by the application
 	 * is truncated to 32 bits.
 	 */
+#if FUSE_USE_VERSION < 35
+	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd,
+		       void *arg, struct fuse_file_info *fi, unsigned flags,
+		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#else
 	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 		       void *arg, struct fuse_file_info *fi, unsigned flags,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#endif
 
 	/**
 	 * Poll for IO readiness
