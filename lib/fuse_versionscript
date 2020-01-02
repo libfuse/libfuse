@@ -165,7 +165,7 @@ FUSE_3.7 {
 	global:
 		fuse_set_log_func;
 		fuse_log;
-} FUSE_3.3;
+} FUSE_3.4;
 
 # Local Variables:
 # indent-tabs-mode: t
