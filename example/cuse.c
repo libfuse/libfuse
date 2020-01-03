@@ -3,7 +3,7 @@
   Copyright (C) 2008-2009  SUSE Linux Products GmbH
   Copyright (C) 2008-2009  Tejun Heo <tj@kernel.org>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 
 */

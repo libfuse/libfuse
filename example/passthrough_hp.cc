@@ -4,7 +4,7 @@
   Copyright (C) 2017       Nikolaus Rath <Nikolaus@rath.org>
   Copyright (C) 2018       Valve, Inc
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 

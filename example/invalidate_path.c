@@ -3,7 +3,7 @@
   Copyright (C) 2016 Nikolaus Rath <Nikolaus@rath.org>
             (C) 2017 EditShare LLC <slawek.rudnicki@editshare.com>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
  */
 
