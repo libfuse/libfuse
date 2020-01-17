@@ -10,6 +10,7 @@ sysconfdir="$1"
 bindir="$2"
 udevrulesdir="$3"
 useroot="$4"
+initscriptsdir="$5"
 
 # Both sysconfdir and bindir are absolute paths (since they are joined
 # with --prefix in meson.build), but need to be interpreted relative
@@ -40,14 +41,14 @@ install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
         "${DESTDIR}${udevrulesdir}/99-fuse3.rules"
 
 install -D -m 755 "${MESON_SOURCE_ROOT}/util/init_script" \
-        "${DESTDIR}/etc/init.d/fuse3"
+        "${DESTDIR}${initscriptsdir}/fuse3"
 
 
 if test -x /usr/sbin/update-rc.d && test -z "${DESTDIR}"; then
     /usr/sbin/update-rc.d fuse3 start 34 S . start 41 0 6 . || /bin/true
 else
     echo "== FURTHER ACTION REQUIRED =="
-    echo "Make sure that your init system will start the ${DESTDIR}/etc/init.d/fuse3 init script"
+    echo "Make sure that your init system will start the ${DESTDIR}${initscriptsdir}/fuse3 init script"
 fi
 
 

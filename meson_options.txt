@@ -13,3 +13,5 @@ option('examples', type : 'boolean', value : true,
 option('useroot', type : 'boolean', value : true,
        description: 'Set owner and setuid bits on installed files')
 
+option('initscriptsdir', type : 'string', value : '/etc/init.d',
+       description: 'Where to install init scripts')
