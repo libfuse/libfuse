@@ -9,8 +9,8 @@ set (CMAKE_VERBOSE_MAKEFILE FALSE)
 # In meson it seems you collect all your variables first, then construct the target from them
 add_library(fuse3 SHARED fuse.c fuse_i.h fuse_loop.c fuse_loop_mt.c fuse_lowlevel.c
               fuse_misc.h fuse_opt.c fuse_signals.c buffer.c cuse_lowlevel.c helper.c
-              mount_util.c modules/subdir.c)
-                    
+              mount_util.c modules/subdir.c fuse_log.c)
+
 if(${CMAKE_SYSTEM_NAME} MATCHES "BSD")
   target_sources(fuse3 PUBLIC mount_bsd.c)
 else()
@@ -48,7 +48,7 @@ endif()
 set(BINDIR "bindir" CACHE STRING "mount path subdirectory default: [bindir]")
 set(FUSERMOUNT_DIR "${CMAKE_INSTALL_PREFIX}/${BINDIR}" CACHE STRING "The mount path (not exactly sure what this is)" )
 
-target_compile_definitions(fuse3 PUBLIC FUSE_USE_VERSION=34 
+target_compile_definitions(fuse3 PUBLIC FUSE_USE_VERSION=35
                                         FUSERMOUNT_DIR=\"${FUSERMOUNT_DIR}\"
                                         PACKAGE_VERSION=\"${CMAKE_PROJECT_VERSION}\")
 # Should be changed to target_link_options (requires 3.13.X)

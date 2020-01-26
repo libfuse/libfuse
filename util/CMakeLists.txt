@@ -4,7 +4,7 @@
 
 cmake_minimum_required (VERSION 3.12.0)
 set (CMAKE_VERBOSE_MAKEFILE FALSE)
- 
+
 include(GNUInstallDirs)
 
 set(MESON_SOURCE_ROOT ${CMAKE_PROJECT_SOURCE_DIR})
@@ -17,9 +17,9 @@ set(FUSECONF_PATH ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_SYSCONFDIR}/fuse.conf)
 #           c_args: '-DFUSE_CONF="@0@"'.format(fuseconf_path))
 add_executable(fusermount3 fusermount.c ../lib/mount_util.c)
 
-target_include_directories(fusermount3 
+target_include_directories(fusermount3
                            PUBLIC ${INCLUDE_DIRS})
-target_compile_definitions(fusermount3 
+target_compile_definitions(fusermount3
                            PUBLIC FUSE_CONF=\"${FUSECONF_PATH}\")
 install(TARGETS fusermount3 RUNTIME
         DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -34,12 +34,12 @@ install(TARGETS fusermount3 RUNTIME
 
 add_executable(mount.fuse3 mount.fuse.c )
 
-target_include_directories(mount.fuse3 
+target_include_directories(mount.fuse3
                            PUBLIC ${INCLUDE_DIRS})
 target_link_libraries(mount.fuse3 fuse3)
 
-target_compile_definitions(mount.fuse3 
-						   PUBLIC FUSE_USE_VERSION=34)
+target_compile_definitions(mount.fuse3
+						   PUBLIC FUSE_USE_VERSION=35)
 install(TARGETS mount.fuse3 RUNTIME
         DESTINATION ${CMAKE_INSTALL_SBINDIR})
 
@@ -49,9 +49,9 @@ install(TARGETS mount.fuse3 RUNTIME
 #  udev = dependency('udev')
 #  udevrulesdir = join_paths(udev.get_pkgconfig_variable('udevdir'), 'rules.d')
 #endif
-option(UDEV_RULES_DIR 
-       "Target directory for udev rule installation. Ensure you have permissions to write to this directory." 
-       "/etc/udev/rules.d" 
+option(UDEV_RULES_DIR
+       "Target directory for udev rule installation. Ensure you have permissions to write to this directory."
+       "/etc/udev/rules.d"
 )
 
 #

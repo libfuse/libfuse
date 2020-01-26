@@ -123,7 +123,7 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
 
 static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
                       size_t size, off_t off, struct fuse_file_info *fi) {
-    (void) fi; (void) buf; (void) off;
+    (void) fi; (void) buf; (void) off; (void) ino;
     size_t expected;
 
     assert(ino == FILE_INO);
@@ -187,7 +187,7 @@ int main(int argc, char *argv[]) {
 
     assert(fuse_opt_parse(&args, &options, option_spec, NULL) == 0);
     assert(fuse_parse_cmdline(&args, &fuse_opts) == 0);
-#ifndef __FreeBSD__    
+#ifndef __FreeBSD__
     assert(fuse_opt_add_arg(&args, "-oauto_unmount") == 0);
 #endif
     se = fuse_session_new(&args, &tfs_oper,
