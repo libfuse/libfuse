@@ -82,7 +82,7 @@ static void success(void)
 
 static void __start_test(const char *fmt, ...)
 {
-	unsigned int n;
+	int n;
 	va_list ap;
 	n = sprintf(testname, "%3i [", testnum++);
 	va_start(ap, fmt);
