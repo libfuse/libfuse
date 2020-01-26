@@ -58,7 +58,7 @@ static struct fuse_chan *fuse_chan_new(int fd)
 {
 	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
 	if (ch == NULL) {
-		fprintf(stderr, "fuse: failed to allocate channel\n");
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate channel\n");
 		return NULL;
 	}
 
@@ -201,7 +201,7 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	pthread_attr_init(&attr);
 	stack_size = getenv(ENVNAME_THREAD_STACK);
 	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
-		fprintf(stderr, "fuse: invalid stack size: %s\n", stack_size);
+		fuse_log(FUSE_LOG_ERR, "fuse: invalid stack size: %s\n", stack_size);
 
 	/* Disallow signal reception in worker threads */
 	sigemptyset(&newset);
@@ -214,7 +214,7 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
 	pthread_attr_destroy(&attr);
 	if (res != 0) {
-		fprintf(stderr, "fuse: error creating thread: %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse: error creating thread: %s\n",
 			strerror(res));
 		return -1;
 	}
@@ -235,7 +235,7 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 #endif
 	clonefd = open(devname, O_RDWR | O_CLOEXEC);
 	if (clonefd == -1) {
-		fprintf(stderr, "fuse: failed to open %s: %s\n", devname,
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n", devname,
 			strerror(errno));
 		return NULL;
 	}
@@ -244,7 +244,7 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 	masterfd = mt->se->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
 	if (res == -1) {
-		fprintf(stderr, "fuse: failed to clone device fd: %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to clone device fd: %s\n",
 			strerror(errno));
 		close(clonefd);
 		return NULL;
@@ -262,7 +262,7 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
 	if (!w) {
-		fprintf(stderr, "fuse: failed to allocate worker structure\n");
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate worker structure\n");
 		return -1;
 	}
 	memset(w, 0, sizeof(struct fuse_worker));
@@ -274,7 +274,7 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 		w->ch = fuse_clone_chan(mt);
 		if(!w->ch) {
 			/* Don't attempt this again */
-			fprintf(stderr, "fuse: trying to continue "
+			fuse_log(FUSE_LOG_ERR, "fuse: trying to continue "
 				"without -o clone_fd.\n");
 			mt->clone_fd = 0;
 		}

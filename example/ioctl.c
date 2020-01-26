@@ -22,7 +22,7 @@
  * \include ioctl.c
  */
 
-#define FUSE_USE_VERSION 31
+#define FUSE_USE_VERSION 35
 
 #include <fuse.h>
 #include <stdlib.h>

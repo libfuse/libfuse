@@ -93,7 +93,7 @@ def test_notify_file_size(tmpdir, notify, output_checker):
         else:
             assert new_size == size
     except:
-        cleanup(mnt_dir)
+        cleanup(mount_process, mnt_dir)
         raise
     else:
         umount(mount_process, mnt_dir)

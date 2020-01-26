@@ -554,6 +554,19 @@ static int iconv_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
+static off_t iconv_lseek(const char *path, off_t off, int whence,
+			 struct fuse_file_info *fi)
+{
+	struct iconv *ic = iconv_get();
+	char *newpath;
+	int res = iconv_convpath(ic, path, &newpath, 0);
+	if (!res) {
+		res = fuse_fs_lseek(ic->next, newpath, off, whence, fi);
+		free(newpath);
+	}
+	return res;
+}
+
 static void *iconv_init(struct fuse_conn_info *conn,
 			struct fuse_config *cfg)
 {
@@ -612,6 +625,7 @@ static const struct fuse_operations iconv_oper = {
 	.lock		= iconv_lock,
 	.flock		= iconv_flock,
 	.bmap		= iconv_bmap,
+	.lseek		= iconv_lseek,
 };
 
 static const struct fuse_opt iconv_opts[] = {
@@ -659,7 +673,7 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 
 	ic = calloc(1, sizeof(struct iconv));
 	if (ic == NULL) {
-		fprintf(stderr, "fuse-iconv: memory allocation failed\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: memory allocation failed\n");
 		return NULL;
 	}
 
@@ -667,7 +681,7 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 		goto out_free;
 
 	if (!next[0] || next[1]) {
-		fprintf(stderr, "fuse-iconv: exactly one next filesystem required\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: exactly one next filesystem required\n");
 		goto out_free;
 	}
 
@@ -678,13 +692,13 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 		old = strdup(setlocale(LC_CTYPE, ""));
 	ic->tofs = iconv_open(from, to);
 	if (ic->tofs == (iconv_t) -1) {
-		fprintf(stderr, "fuse-iconv: cannot convert from %s to %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: cannot convert from %s to %s\n",
 			to, from);
 		goto out_free;
 	}
 	ic->fromfs = iconv_open(to, from);
 	if (ic->tofs == (iconv_t) -1) {
-		fprintf(stderr, "fuse-iconv: cannot convert from %s to %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse-iconv: cannot convert from %s to %s\n",
 			from, to);
 		goto out_iconv_close_to;
 	}

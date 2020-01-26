@@ -154,14 +154,14 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 
 			char mountpoint[PATH_MAX] = "";
 			if (realpath(arg, mountpoint) == NULL) {
-				fprintf(stderr,
+				fuse_log(FUSE_LOG_ERR,
 					"fuse: bad mount point `%s': %s\n",
 					arg, strerror(errno));
 				return -1;
 			}
 			return fuse_opt_add_opt(&opts->mountpoint, mountpoint);
 		} else {
-			fprintf(stderr, "fuse: invalid argument `%s'\n", arg);
+			fuse_log(FUSE_LOG_ERR, "fuse: invalid argument `%s'\n", arg);
 			return -1;
 		}
 
@@ -186,7 +186,7 @@ static int add_default_subtype(const char *progname, struct fuse_args *args)
 
 	subtype_opt = (char *) malloc(strlen(basename) + 64);
 	if (subtype_opt == NULL) {
-		fprintf(stderr, "fuse: memory allocation failed\n");
+		fuse_log(FUSE_LOG_ERR, "fuse: memory allocation failed\n");
 		return -1;
 	}
 #ifdef __FreeBSD__
@@ -307,7 +307,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 
 	if (!opts.show_help &&
 	    !opts.mountpoint) {
-		fprintf(stderr, "error: no mountpoint specified\n");
+		fuse_log(FUSE_LOG_ERR, "error: no mountpoint specified\n");
 		res = 2;
 		goto out1;
 	}
@@ -411,7 +411,7 @@ struct fuse_conn_info_opts* fuse_parse_conn_info_opts(struct fuse_args *args)
 
 	opts = calloc(1, sizeof(struct fuse_conn_info_opts));
 	if(opts == NULL) {
-		fprintf(stderr, "calloc failed\n");
+		fuse_log(FUSE_LOG_ERR, "calloc failed\n");
 		return NULL;
 	}
 	if(fuse_opt_parse(args, opts, conn_info_opt_spec, NULL) == -1) {

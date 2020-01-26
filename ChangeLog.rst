@@ -1,3 +1,38 @@
+Unreleased Changes
+==================
+
+* Fixed memory leak in fuse_session_new().
+* Fixed an issue with the linker version script.
+
+libfuse 3.10.0 (2019-12-14)
+==========================
+
+* Make ioctl prototype conditional on FUSE_USE_VERSION.
+  Define FUSE_USE_VERSION < 35 to get old ioctl prototype
+  with int commands; define FUSE_USE_VERSION >= 35 to get
+  new ioctl prototype with unsigned int commands.
+
+libfuse 3.9.0 (2019-12-14)
+==========================
+
+* Added support for FUSE_EXPLICIT_INVAL_DATA to enable
+  only invalidate cached pages on explicit request.
+
+libfuse 3.8.0 (2019-11-03)
+==========================
+
+* Added support for FUSE_LSEEK operation which can be used to report holes
+  in sparse files.
+
+libfuse 3.7.0 (2019-09-27)
+==========================
+
+* Added UFSD to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within UFSD filesystems).
+* Added custom log message handler function support so that libfuse
+  applications can direct messages to syslog(3) or other logging systems.
+  stderr remains the default.  See `fuse_log.h` for the new API.
+
 libfuse 3.6.2 (2019-07-09)
 ==========================
 

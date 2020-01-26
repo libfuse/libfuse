@@ -14,7 +14,7 @@
  * Low level API
  *
  * IMPORTANT: you should define FUSE_USE_VERSION before including this
- * header.  To use the newest API define it to 31 (recommended for any
+ * header.  To use the newest API define it to 35 (recommended for any
  * new application).
  */
 
@@ -1018,9 +1018,15 @@ struct fuse_lowlevel_ops {
 	 * Note : the unsigned long request submitted by the application
 	 * is truncated to 32 bits.
 	 */
+#if FUSE_USE_VERSION < 35
+	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd,
+		       void *arg, struct fuse_file_info *fi, unsigned flags,
+		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#else
 	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 		       void *arg, struct fuse_file_info *fi, unsigned flags,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#endif
 
 	/**
 	 * Poll for IO readiness
@@ -1218,6 +1224,27 @@ struct fuse_lowlevel_ops {
 				 fuse_ino_t ino_out, off_t off_out,
 				 struct fuse_file_info *fi_out, size_t len,
 				 int flags);
+
+	/**
+	 * Find next data or hole after the specified offset
+	 *
+	 * If this request is answered with an error code of ENOSYS, this is
+	 * treated as a permanent failure, i.e. all future lseek() requests will
+	 * fail with the same error code without being send to the filesystem
+	 * process.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_lseek
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 * @param off offset to start search from
+	 * @param whence either SEEK_DATA or SEEK_HOLE
+	 * @param fi file information
+	 */
+	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
+		       struct fuse_file_info *fi);
 };
 
 /**
@@ -1568,6 +1595,18 @@ int fuse_reply_ioctl_iov(fuse_req_t req, int result, const struct iovec *iov,
  * @param revents poll result event mask
  */
 int fuse_reply_poll(fuse_req_t req, unsigned revents);
+
+/**
+ * Reply with offset
+ *
+ * Possible requests:
+ *   lseek
+ *
+ * @param req request handle
+ * @param off offset of next data or hole
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_lseek(fuse_req_t req, off_t off);
 
 /* ----------------------------------------------------------- *
  * Notification						       *

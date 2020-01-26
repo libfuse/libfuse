@@ -1761,7 +1761,8 @@ static int test_socket(void)
 		return -1;
 	}
 	su.sun_family = AF_UNIX;
-	strncpy(su.sun_path, testsock, sizeof(su.sun_path));
+	strncpy(su.sun_path, testsock, sizeof(su.sun_path) - 1);
+	su.sun_path[sizeof(su.sun_path) - 1] = '\0';
 	res = bind(fd, (struct sockaddr*)&su, sizeof(su));
 	if (res == -1) {
 		PERROR("bind");

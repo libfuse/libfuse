@@ -540,6 +540,19 @@ static int subdir_bmap(const char *path, size_t blocksize, uint64_t *idx)
 	return err;
 }
 
+static off_t subdir_lseek(const char *path, off_t off, int whence,
+			  struct fuse_file_info *fi)
+{
+	struct subdir *ic = subdir_get();
+	char *newpath;
+	int res = subdir_addpath(ic, path, &newpath);
+	if (!res) {
+		res = fuse_fs_lseek(ic->next, newpath, off, whence, fi);
+		free(newpath);
+	}
+	return res;
+}
+
 static void *subdir_init(struct fuse_conn_info *conn,
 			 struct fuse_config *cfg)
 {
@@ -594,6 +607,7 @@ static const struct fuse_operations subdir_oper = {
 	.lock		= subdir_lock,
 	.flock		= subdir_flock,
 	.bmap		= subdir_bmap,
+	.lseek		= subdir_lseek,
 };
 
 static const struct fuse_opt subdir_opts[] = {
@@ -633,7 +647,7 @@ static struct fuse_fs *subdir_new(struct fuse_args *args,
 
 	d = calloc(1, sizeof(struct subdir));
 	if (d == NULL) {
-		fprintf(stderr, "fuse-subdir: memory allocation failed\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-subdir: memory allocation failed\n");
 		return NULL;
 	}
 
@@ -641,19 +655,19 @@ static struct fuse_fs *subdir_new(struct fuse_args *args,
 		goto out_free;
 
 	if (!next[0] || next[1]) {
-		fprintf(stderr, "fuse-subdir: exactly one next filesystem required\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-subdir: exactly one next filesystem required\n");
 		goto out_free;
 	}
 
 	if (!d->base) {
-		fprintf(stderr, "fuse-subdir: missing 'subdir' option\n");
+		fuse_log(FUSE_LOG_ERR, "fuse-subdir: missing 'subdir' option\n");
 		goto out_free;
 	}
 
 	if (d->base[0] && d->base[strlen(d->base)-1] != '/') {
 		char *tmp = realloc(d->base, strlen(d->base) + 2);
 		if (!tmp) {
-			fprintf(stderr, "fuse-subdir: memory allocation failed\n");
+			fuse_log(FUSE_LOG_ERR, "fuse-subdir: memory allocation failed\n");
 			goto out_free;
 		}
 		d->base = tmp;
