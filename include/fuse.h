@@ -48,7 +48,7 @@ enum fuse_readdir_flags {
 	 * FUSE_FILL_DIR_FLAGS for the filler function.  The filesystem may also
 	 * just ignore this flag completely.
 	 */
-	FUSE_READDIR_PLUS = (1 << 0),
+	FUSE_READDIR_PLUS = (1 << 0)
 };
 
 enum fuse_fill_dir_flags {
@@ -61,7 +61,7 @@ enum fuse_fill_dir_flags {
 	 * It is okay to set FUSE_FILL_DIR_PLUS if FUSE_READDIR_PLUS is not set
 	 * and vice versa.
 	 */
-	FUSE_FILL_DIR_PLUS = (1 << 1),
+	FUSE_FILL_DIR_PLUS = (1 << 1)
 };
 
 /** Function to add an entry in a readdir() operation
