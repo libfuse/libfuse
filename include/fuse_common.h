@@ -635,7 +635,7 @@ enum fuse_buf_flags {
 	 * until .size bytes have been copied or an error or EOF is
 	 * detected.
 	 */
-	FUSE_BUF_FD_RETRY	= (1 << 3),
+	FUSE_BUF_FD_RETRY	= (1 << 3)
 };
 
 /**
@@ -677,7 +677,7 @@ enum fuse_buf_copy_flags {
 	 * is full or empty).  See SPLICE_F_NONBLOCK in the splice(2)
 	 * man page.
 	 */
-	FUSE_BUF_SPLICE_NONBLOCK= (1 << 4),
+	FUSE_BUF_SPLICE_NONBLOCK= (1 << 4)
 };
 
 /**
