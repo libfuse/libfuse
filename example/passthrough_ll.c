@@ -1174,7 +1174,7 @@ static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		fuse_reply_err(req, errno);
 }
 
-static struct fuse_lowlevel_ops lo_oper = {
+static const struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.lookup		= lo_lookup,
 	.mkdir		= lo_mkdir,

@@ -214,7 +214,7 @@ static int fioc_ioctl(const char *path, unsigned int cmd, void *arg,
 	return -EINVAL;
 }
 
-static struct fuse_operations fioc_oper = {
+static const struct fuse_operations fioc_oper = {
 	.getattr	= fioc_getattr,
 	.readdir	= fioc_readdir,
 	.truncate	= fioc_truncate,

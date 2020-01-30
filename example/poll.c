@@ -206,7 +206,7 @@ static int fsel_poll(const char *path, struct fuse_file_info *fi,
 	return 0;
 }
 
-static struct fuse_operations fsel_oper = {
+static const struct fuse_operations fsel_oper = {
 	.getattr	= fsel_getattr,
 	.readdir	= fsel_readdir,
 	.open		= fsel_open,

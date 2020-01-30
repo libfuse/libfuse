@@ -269,7 +269,7 @@ static void tfs_retrieve_reply(fuse_req_t req, void *cookie, fuse_ino_t ino,
 }
 
 
-static struct fuse_lowlevel_ops tfs_oper = {
+static const struct fuse_lowlevel_ops tfs_oper = {
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
