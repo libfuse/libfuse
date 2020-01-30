@@ -516,8 +516,8 @@ static void free_node_mem(struct fuse *f, struct node *node)
 
 static size_t id_hash(struct fuse *f, fuse_ino_t ino)
 {
-	uint64_t hash = ((uint32_t) ino * 2654435761U) % f->id_table.size;
-	uint64_t oldhash = hash % (f->id_table.size / 2);
+	uint64_t hash = ((uint32_t) ino * 2654435761U) & (f->id_table.size - 1);
+	uint64_t oldhash = hash & (f->id_table.size / 2 - 1);
 
 	if (oldhash >= f->id_table.split)
 		return oldhash;
@@ -698,8 +698,8 @@ static size_t name_hash(struct fuse *f, fuse_ino_t parent,
 	for (; *name; name++)
 		hash = hash * 31 + (unsigned char) *name;
 
-	hash %= f->name_table.size;
-	oldhash = hash % (f->name_table.size / 2);
+	hash &= (f->name_table.size - 1);
+	oldhash = hash & (f->name_table.size / 2 - 1);
 	if (oldhash >= f->name_table.split)
 		return oldhash;
 	else
