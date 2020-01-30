@@ -85,7 +85,7 @@ static void pc_init(void *userdata,
 }
 
 
-static struct fuse_lowlevel_ops pc_oper = {
+static const struct fuse_lowlevel_ops pc_oper = {
 	.init		= pc_init,
 };
 

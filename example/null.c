@@ -104,7 +104,7 @@ static int null_write(const char *path, const char *buf, size_t size,
 	return size;
 }
 
-static struct fuse_operations null_oper = {
+static const struct fuse_operations null_oper = {
 	.getattr	= null_getattr,
 	.truncate	= null_truncate,
 	.open		= null_open,

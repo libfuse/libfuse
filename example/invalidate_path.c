@@ -153,7 +153,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	}
 }
 
-static struct fuse_operations xmp_oper = {
+static const struct fuse_operations xmp_oper = {
 		.init     = xmp_init,
 		.getattr  = xmp_getattr,
 		.readdir  = xmp_readdir,

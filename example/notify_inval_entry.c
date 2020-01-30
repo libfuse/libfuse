@@ -222,7 +222,7 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     }
 }
 
-static struct fuse_lowlevel_ops tfs_oper = {
+static const struct fuse_lowlevel_ops tfs_oper = {
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,

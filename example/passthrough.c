@@ -506,7 +506,7 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
 	return res;
 }
 
-static struct fuse_operations xmp_oper = {
+static const struct fuse_operations xmp_oper = {
 	.init           = xmp_init,
 	.getattr	= xmp_getattr,
 	.access		= xmp_access,
