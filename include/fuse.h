@@ -772,9 +772,10 @@ struct fuse_operations {
 	 * additional cost of transferring data through the FUSE kernel module
 	 * to user space (glibc) and then back into the FUSE filesystem again.
 	 *
-	 * In case this method is not implemented, glibc falls back to reading
-	 * data from the source and writing to the destination. Effectively
-	 * doing an inefficient copy of the data.
+	 * In case this method is not implemented, applications are expected to
+	 * fall back to a regular file copy.   (Some glibc versions did this
+	 * emulation automatically, but the emulation has been removed from all
+	 * glibc release branches.)
 	 */
 	ssize_t (*copy_file_range) (const char *path_in,
 				    struct fuse_file_info *fi_in,
