@@ -67,6 +67,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <limits.h>
 
 // C++ includes
 #include <cstddef>
