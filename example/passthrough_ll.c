@@ -387,8 +387,6 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 	struct lo_inode *dir = lo_inode(req, parent);
 	struct fuse_entry_param e;
 
-	saverr = ENOMEM;
-
 	res = mknod_wrapper(dir->fd, name, link, mode, rdev);
 
 	saverr = errno;
