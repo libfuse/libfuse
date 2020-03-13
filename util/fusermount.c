@@ -1253,7 +1253,7 @@ static void usage(void)
 	       "Options:\n"
 	       " -h		    print help\n"
 	       " -V		    print version\n"
-	       " -o opt[,opt...]   mount options\n"
+	       " -o opt[,opt...]    mount options\n"
 	       " -u		    unmount\n"
 	       " -q		    quiet\n"
 	       " -z		    lazy unmount\n",
