@@ -650,7 +650,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	struct fuse_ll_pipe *llp;
 	int splice_flags;
 	size_t pipesize;
-	size_t total_fd_size;
+	size_t total_buf_size;
 	size_t idx;
 	size_t headerlen;
 	struct fuse_bufvec pipe_buf = FUSE_BUFVEC_INIT(len);
@@ -661,15 +661,13 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	if (flags & FUSE_BUF_NO_SPLICE)
 		goto fallback;
 
-	total_fd_size = 0;
+	total_buf_size = 0;
 	for (idx = buf->idx; idx < buf->count; idx++) {
-		if (buf->buf[idx].flags & FUSE_BUF_IS_FD) {
-			total_fd_size = buf->buf[idx].size;
-			if (idx == buf->idx)
-				total_fd_size -= buf->off;
-		}
+		total_buf_size = buf->buf[idx].size;
+		if (idx == buf->idx)
+			total_buf_size -= buf->off;
 	}
-	if (total_fd_size < 2 * pagesize)
+	if (total_buf_size < 2 * pagesize)
 		goto fallback;
 
 	if (se->conn.proto_minor < 14 ||
