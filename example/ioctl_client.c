@@ -5,7 +5,7 @@
 
   This program tests the ioctl.c example file systsem.
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
