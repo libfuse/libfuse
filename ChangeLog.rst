@@ -1,16 +1,12 @@
-Unreleased Changes
-==================
+libfuse 3.9.1 (2020-03-19)
+===========================
 
 * Fixed memory leak in fuse_session_new().
 * Fixed an issue with the linker version script.
-
-libfuse 3.10.0 (2019-12-14)
-==========================
-
-* Make ioctl prototype conditional on FUSE_USE_VERSION.
-  Define FUSE_USE_VERSION < 35 to get old ioctl prototype
-  with int commands; define FUSE_USE_VERSION >= 35 to get
-  new ioctl prototype with unsigned int commands.
+* Make ioctl prototype conditional on FUSE_USE_VERSION.  Define FUSE_USE_VERSION < 35 to
+  get old ioctl prototype with int commands; define FUSE_USE_VERSION >= 35 to get new
+  ioctl prototype with unsigned int commands.
+* Various small bugfixes.
 
 libfuse 3.9.0 (2019-12-14)
 ==========================

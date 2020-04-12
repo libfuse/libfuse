@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 /* This program does the mounting and unmounting of FUSE filesystems */
@@ -1253,7 +1253,7 @@ static void usage(void)
 	       "Options:\n"
 	       " -h		    print help\n"
 	       " -V		    print version\n"
-	       " -o opt[,opt...]   mount options\n"
+	       " -o opt[,opt...]    mount options\n"
 	       " -u		    unmount\n"
 	       " -q		    quiet\n"
 	       " -z		    lazy unmount\n",

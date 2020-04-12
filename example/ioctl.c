@@ -3,7 +3,7 @@
   Copyright (C) 2008       SUSE Linux Products GmbH
   Copyright (C) 2008       Tejun Heo <teheo@suse.de>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -214,7 +214,7 @@ static int fioc_ioctl(const char *path, unsigned int cmd, void *arg,
 	return -EINVAL;
 }
 
-static struct fuse_operations fioc_oper = {
+static const struct fuse_operations fioc_oper = {
 	.getattr	= fioc_getattr,
 	.readdir	= fioc_readdir,
 	.truncate	= fioc_truncate,

@@ -3,7 +3,7 @@
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
   Copyright (C) 2011       Sebastian Pipping <sebastian@pipping.org>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -608,7 +608,7 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
 	return res;
 }
 
-static struct fuse_operations xmp_oper = {
+static const struct fuse_operations xmp_oper = {
 	.init           = xmp_init,
 	.getattr	= xmp_getattr,
 	.access		= xmp_access,

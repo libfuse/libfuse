@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2017 Nikolaus Rath <Nikolaus@rath.org>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -85,7 +85,7 @@ static void pc_init(void *userdata,
 }
 
 
-static struct fuse_lowlevel_ops pc_oper = {
+static const struct fuse_lowlevel_ops pc_oper = {
 	.init		= pc_init,
 };
 

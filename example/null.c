@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -104,7 +104,7 @@ static int null_write(const char *path, const char *buf, size_t size,
 	return size;
 }
 
-static struct fuse_operations null_oper = {
+static const struct fuse_operations null_oper = {
 	.getattr	= null_getattr,
 	.truncate	= null_truncate,
 	.open		= null_open,

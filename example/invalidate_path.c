@@ -3,7 +3,7 @@
   Copyright (C) 2016 Nikolaus Rath <Nikolaus@rath.org>
             (C) 2017 EditShare LLC <slawek.rudnicki@editshare.com>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
  */
 
@@ -153,7 +153,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 	}
 }
 
-static struct fuse_operations xmp_oper = {
+static const struct fuse_operations xmp_oper = {
 		.init     = xmp_init,
 		.getattr  = xmp_getattr,
 		.readdir  = xmp_readdir,

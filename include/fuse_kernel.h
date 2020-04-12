@@ -424,7 +424,7 @@ enum fuse_opcode {
 	FUSE_COPY_FILE_RANGE	= 47,
 
 	/* CUSE specific operations */
-	CUSE_INIT		= 4096,
+	CUSE_INIT		= 4096
 };
 
 enum fuse_notify_code {
@@ -434,7 +434,7 @@ enum fuse_notify_code {
 	FUSE_NOTIFY_STORE = 4,
 	FUSE_NOTIFY_RETRIEVE = 5,
 	FUSE_NOTIFY_DELETE = 6,
-	FUSE_NOTIFY_CODE_MAX,
+	FUSE_NOTIFY_CODE_MAX
 };
 
 /* The read buffer is required to be at least 8k, but may be much larger */
