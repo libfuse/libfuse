@@ -86,6 +86,9 @@ Normally, the default build options will work fine. However, to build examples, 
 To build, test and install libfuse, you then use make (or other supported make systems, e.g Ninja):
 
     $ make
+    $ # Expect *many* failures unless you built Debug
+    $ # Poor coding standards have encouraged such silliness as:
+    $ # assert( test_func() );
     $ python3 -m pytest test/
     $ sudo make install
 
@@ -99,7 +102,7 @@ setuid root first:
 
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
-    $ python3.6 -m pytest test/
+    $ python3 -m pytest test/
 
 NOTE: Some tests are designed to "drop privileges" and so will be skipped if the user is not root.
 
