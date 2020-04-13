@@ -2,8 +2,12 @@
 # Every attempt has been made to match all the functionality provided by meson
 # Use at your own risk
 
-cmake_minimum_required (VERSION 3.12.0)
+cmake_minimum_required (VERSION 3.13.0)
 set (CMAKE_VERBOSE_MAKEFILE FALSE)
+
+# I'm pretty sure this is safe to do at a top level.
+# If it's not, it seems like versioning needs to be performed better.
+add_compile_definitions(FUSE_USE_VERSION=39)
 
 project (libfuse3
          VERSION 3.9.1
@@ -67,7 +71,7 @@ add_compile_options("-Dlinux=1" "-D_REENTRANT" "-DHAVE_CONFIG_H" "-Wall" "-Wextr
                       "-Wstrict-prototypes" "-Wmissing-declarations" "-Wwrite-strings"
                       "-fno-strict-aliasing")
 
-# This comment appears in meson.build -
+# This comment (double hash lines) appears in meson.build -
 # not sure why the author thinks it's stupid to warn about an unused return values
 # Seems like the right thing to do is fix the code, instead of cast to void.
 ## Some (stupid) GCC versions warn about unused return values even when they are
@@ -84,7 +88,7 @@ int main(void) {
 
 CHECK_C_SOURCE_COMPILES("${CHECK_UNUSED_RESULT_WARNING}" CHECK_UNUSED_RESULT)
 if(CHECK_UNUSED_RESULT)
-  message(WARNING "Compiler warns about unused result even when casting to void")
+  message(WARNING "Adding -Wno-unused-result to suppress sloppy coding warnings")
   add_compile_options("-Wno-unused-result")
 endif()
 
