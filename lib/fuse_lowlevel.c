@@ -3040,6 +3040,7 @@ void fuse_session_unmount(struct fuse_session *se)
 {
 	if (se->mountpoint != NULL) {
 		fuse_kern_unmount(se->mountpoint, se->fd);
+		se->fd = -1;
 		free(se->mountpoint);
 		se->mountpoint = NULL;
 	}
