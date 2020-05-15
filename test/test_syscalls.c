@@ -1746,7 +1746,7 @@ static int test_socket(void)
 
 	start_test("socket");
 	if (strlen(testsock) + 1 > sizeof(su.sun_path)) {
-		fprintf(stderr, "Need to shorten mount point by %lu chars\n",
+		fprintf(stderr, "Need to shorten mount point by %zu chars\n",
 			strlen(testsock) + 1 - sizeof(su.sun_path));
 		return -1;
 	}
