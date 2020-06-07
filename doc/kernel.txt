@@ -70,7 +70,7 @@ The filesystem type given to mount(2) can be one of the following:
 Mount options
 ~~~~~~~~~~~~~
 
-See mount.fuse(8).
+See mount.fuse3(8).
 
 Control filesystem
 ~~~~~~~~~~~~~~~~~~
