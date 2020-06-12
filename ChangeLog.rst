@@ -1,3 +1,10 @@
+libfuse 3.9.2 (2020-06-12)
+==========================
+
+* Remove obsolete workarounds in examples.
+* Do not require C++ compiler for building.
+* Minor bugfixes.
+
 libfuse 3.9.1 (2020-03-19)
 ===========================
 
