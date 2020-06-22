@@ -23,7 +23,7 @@ def pytest_pyfunc_call(pyfuncitem):
 
 
 class OutputChecker:
-    '''Check output data for suspicious patters.
+    '''Check output data for suspicious patterns.
 
     Everything written to check_output.fd will be scanned for suspicious
     messages and then written to sys.stdout.
