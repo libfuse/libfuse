@@ -705,6 +705,7 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 	if (old) {
 		setlocale(LC_CTYPE, old);
 		free(old);
+		old = NULL;
 	}
 
 	ic->next = next[0];
