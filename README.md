@@ -126,7 +126,7 @@ attributes.
 Building your own filesystem
 ------------------------------
 
-FUSE comes with several example file systems in the `examples`
+FUSE comes with several example file systems in the `example`
 directory. For example, the *passthrough* examples mirror the contents
 of the root directory under the mountpoint. Start from there and adapt
 the code!
