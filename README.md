@@ -59,11 +59,11 @@ tarball, create a (temporary) build directory and run Meson:
     $ meson ..
 
 Normally, the default build options will work fine. If you
-nevertheless want to adjust them, you can do so with the *mesonconf*
-command:
+nevertheless want to adjust them, you can do so with the
+*meson configure* command:
 
-    $ mesonconf # list options
-    $ mesonconf  -D disable-mtab=true # set an option
+    $ meson configure # list options
+    $ meson configure -D disable-mtab=true # set an option
 
 To build, test and install libfuse, you then use Ninja:
 
