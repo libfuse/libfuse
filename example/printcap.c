@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2017 Nikolaus Rath <Nikolaus@rath.org>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -77,11 +77,15 @@ static void pc_init(void *userdata,
 			printf("\tFUSE_CAP_PARALLEL_DIROPS\n");
 	if(conn->capable & FUSE_CAP_POSIX_ACL)
 			printf("\tFUSE_CAP_POSIX_ACL\n");
+	if(conn->capable & FUSE_CAP_NO_OPENDIR_SUPPORT)
+			printf("\tFUSE_CAP_NO_OPENDIR_SUPPORT\n");
+	if(conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA)
+			printf("\tFUSE_CAP_EXPLICIT_INVAL_DATA\n");
 	fuse_session_exit(se);
 }
 
 
-static struct fuse_lowlevel_ops pc_oper = {
+static const struct fuse_lowlevel_ops pc_oper = {
 	.init		= pc_init,
 };
 

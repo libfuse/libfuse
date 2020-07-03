@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -153,7 +153,7 @@ static void hello_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	reply_buf_limited(req, hello_str, strlen(hello_str), off, size);
 }
 
-static struct fuse_lowlevel_ops hello_ll_oper = {
+static const struct fuse_lowlevel_ops hello_ll_oper = {
 	.lookup		= hello_ll_lookup,
 	.getattr	= hello_ll_getattr,
 	.readdir	= hello_ll_readdir,

@@ -127,6 +127,8 @@ FUSE_3.0 {
 		fuse_cmdline_help;
 		fuse_apply_conn_info_opts;
 		fuse_parse_conn_info_opts;
+		fuse_fs_lseek;
+		fuse_reply_lseek;
 
 	local:
 		*;
@@ -162,6 +164,12 @@ FUSE_3.4 {
 		fuse_fs_copy_file_range;
 		fuse_reply_copy_file_range;
 } FUSE_3.3;
+
+FUSE_3.7 {
+	global:
+		fuse_set_log_func;
+		fuse_log;
+} FUSE_3.4;
 
 # Local Variables:
 # indent-tabs-mode: t

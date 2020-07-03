@@ -11,7 +11,7 @@ executable('mount.fuse3', ['mount.fuse.c'],
            link_with: [ libfuse ],
            install: true,
            install_dir: get_option('sbindir'),
-           c_args: '-DFUSE_USE_VERSION=34')
+           c_args: '-DFUSE_USE_VERSION=35')
 
 
 udevrulesdir = get_option('udevrulesdir')
@@ -23,6 +23,7 @@ endif
 meson.add_install_script('install_helper.sh',
                          join_paths(get_option('prefix'), get_option('sysconfdir')),
                          join_paths(get_option('prefix'), get_option('bindir')),
-                         udevrulesdir)
+                         udevrulesdir,
+                         '@0@'.format(get_option('useroot')))
 
 

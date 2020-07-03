@@ -1,6 +1,77 @@
+libfuse 3.9.2 (2020-06-12)
+==========================
+
+* Remove obsolete workarounds in examples.
+* Do not require C++ compiler for building.
+* Minor bugfixes.
+
+libfuse 3.9.1 (2020-03-19)
+===========================
+
+* Fixed memory leak in fuse_session_new().
+* Fixed an issue with the linker version script.
+* Make ioctl prototype conditional on FUSE_USE_VERSION.  Define FUSE_USE_VERSION < 35 to
+  get old ioctl prototype with int commands; define FUSE_USE_VERSION >= 35 to get new
+  ioctl prototype with unsigned int commands.
+* Various small bugfixes.
+
+libfuse 3.9.0 (2019-12-14)
+==========================
+
+* Added support for FUSE_EXPLICIT_INVAL_DATA to enable
+  only invalidate cached pages on explicit request.
+
+libfuse 3.8.0 (2019-11-03)
+==========================
+
+* Added support for FUSE_LSEEK operation which can be used to report holes
+  in sparse files.
+
+libfuse 3.7.0 (2019-09-27)
+==========================
+
+* Added UFSD to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within UFSD filesystems).
+* Added custom log message handler function support so that libfuse
+  applications can direct messages to syslog(3) or other logging systems.
+  stderr remains the default.  See `fuse_log.h` for the new API.
+
+libfuse 3.6.2 (2019-07-09)
+==========================
+
+* The init script is now installed to /etc/ rather than /usr/local/etc
+  by default.
+
+libfuse 3.6.1 (2019-06-13)
+==========================
+
+* Fixed version number (release 3.6.0 was shipped with a declared
+  version of 3.0.0).
+
+libfuse 3.6.0 (2019-06-13)
+==========================
+
+* Added a new example (passthrough_hp). The functionality is similar
+  to passthrough_ll, but the implementation focuses on performance and
+  correctness rather than simplicity.
+* Added support for fuse kernel feature `max_pages` which allows to increase
+  the maximum number of pages that can be used per request. This feature was
+  introduced in kernel 4.20. `max_pages` is set based on the value in
+  `max_write`. By default `max_write` will be 1MiB now for kernels that support
+  `max_pages`. If you want smaller buffers or writes you have to set
+  `max_write` manually.
+
+libfuse 3.5.0 (2019-04-16)
+==========================
+
 * Changed ioctl commands to "unsigned int" in order to support commands
   which do not fit into a signed int. Commands issued by applications
   are still truncated to 32 bits.
+* Added SMB2 to whitelist (so users can now mount FUSE filesystems
+  on mountpoints within SMB 2.0 filesystems).
+* Added a new `cache_readdir` flag to `fuse_file_info` to enable
+  caching of readdir results. Supported by kernels 4.20 and newer.
+* Add support and documentation for FUSE_CAP_NO_OPENDIR_SUPPORT.
 
 libfuse 3.4.2 (2019-03-09)
 ==========================

@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 /* This program does the mounting and unmounting of FUSE filesystems */
@@ -208,6 +208,7 @@ static int may_unmount(const char *mnt, int quiet)
 
 	return 0;
 }
+#endif
 
 /*
  * Check whether the file specified in "fusermount3 -u" is really a
@@ -395,6 +396,7 @@ static int chdir_to_parent(char *copy, const char **lastp)
 	return 0;
 }
 
+#ifndef IGNORE_MTAB
 /* Check whether the kernel supports UMOUNT_NOFOLLOW flag */
 static int umount_nofollow_support(void)
 {
@@ -1012,35 +1014,37 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	 * but got expanded as we found more filesystems that needed to be
 	 * overlayed. */
 	typeof(fs_buf.f_type) f_type_whitelist[] = {
-		0x5346414f /* OPENAFS_SUPER_MAGIC */,
 		0x61756673 /* AUFS_SUPER_MAGIC */,
 		0x00000187 /* AUTOFS_SUPER_MAGIC */,
 		0xCA451A4E /* BCACHEFS_STATFS_MAGIC */,
 		0x9123683E /* BTRFS_SUPER_MAGIC */,
 		0x00C36400 /* CEPH_SUPER_MAGIC */,
 		0xFF534D42 /* CIFS_MAGIC_NUMBER */,
-		0X00004D44 /* MSDOS_SUPER_MAGIC */,
 		0x0000F15F /* ECRYPTFS_SUPER_MAGIC */,
 		0x0000EF53 /* EXT[234]_SUPER_MAGIC */,
 		0xF2F52010 /* F2FS_SUPER_MAGIC */,
 		0x65735546 /* FUSE_SUPER_MAGIC */,
 		0x01161970 /* GFS2_MAGIC */,
 		0x47504653 /* GPFS_SUPER_MAGIC */,
-		0x3153464A /* JFS_SUPER_MAGIC */,
+		0x0000482b /* HFSPLUS_SUPER_MAGIC */,
 		0x000072B6 /* JFFS2_SUPER_MAGIC */,
+		0x3153464A /* JFS_SUPER_MAGIC */,
 		0x0BD00BD0 /* LL_SUPER_MAGIC */,
+		0X00004D44 /* MSDOS_SUPER_MAGIC */,
 		0x0000564C /* NCP_SUPER_MAGIC */,
 		0x00006969 /* NFS_SUPER_MAGIC */,
 		0x00003434 /* NILFS_SUPER_MAGIC */,
 		0x5346544E /* NTFS_SB_MAGIC */,
+		0x5346414f /* OPENAFS_SUPER_MAGIC */,
 		0x794C7630 /* OVERLAYFS_SUPER_MAGIC */,
 		0x52654973 /* REISERFS_SUPER_MAGIC */,
+		0xFE534D42 /* SMB2_SUPER_MAGIC */,
 		0x73717368 /* SQUASHFS_MAGIC */,
 		0x01021994 /* TMPFS_MAGIC */,
 		0x24051905 /* UBIFS_SUPER_MAGIC */,
+		0x736675005346544e /* UFSD */,
 		0x58465342 /* XFS_SB_MAGIC */,
 		0x2FC12FC1 /* ZFS_SUPER_MAGIC */,
-		0x0000482b /* HFSPLUS_SUPER_MAGIC */,
 	};
 	for (i = 0; i < sizeof(f_type_whitelist)/sizeof(f_type_whitelist[0]); i++) {
 		if (f_type_whitelist[i] == fs_buf.f_type)
@@ -1249,7 +1253,7 @@ static void usage(void)
 	       "Options:\n"
 	       " -h		    print help\n"
 	       " -V		    print version\n"
-	       " -o opt[,opt...]   mount options\n"
+	       " -o opt[,opt...]    mount options\n"
 	       " -u		    unmount\n"
 	       " -q		    quiet\n"
 	       " -z		    lazy unmount\n",

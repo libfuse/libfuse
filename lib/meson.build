@@ -1,7 +1,8 @@
 libfuse_sources = ['fuse.c', 'fuse_i.h', 'fuse_loop.c', 'fuse_loop_mt.c',
                    'fuse_lowlevel.c', 'fuse_misc.h', 'fuse_opt.c',
                    'fuse_signals.c', 'buffer.c', 'cuse_lowlevel.c',
-                   'helper.c', 'modules/subdir.c', 'mount_util.c' ]
+                   'helper.c', 'modules/subdir.c', 'mount_util.c',
+                   'fuse_log.c' ]
 
 if host_machine.system().startswith('linux')
    libfuse_sources += [ 'mount.c' ]
@@ -36,7 +37,7 @@ libfuse = library('fuse3', libfuse_sources, version: meson.project_version(),
                   soversion: '3', include_directories: include_dirs,
                   dependencies: deps, install: true,
                   link_depends: 'fuse_versionscript',
-                  c_args: [ '-DFUSE_USE_VERSION=34',
+                  c_args: [ '-DFUSE_USE_VERSION=35',
                             '-DFUSERMOUNT_DIR="@0@"'.format(fusermount_path) ],
                   link_args: ['-Wl,--version-script,' + meson.current_source_dir()
                               + '/fuse_versionscript' ])

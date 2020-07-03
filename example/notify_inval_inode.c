@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2016 Nikolaus Rath <Nikolaus@rath.org>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -239,7 +239,7 @@ static void tfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
     reply_buf_limited(req, file_contents, file_size, off, size);
 }
 
-static struct fuse_lowlevel_ops tfs_oper = {
+static const struct fuse_lowlevel_ops tfs_oper = {
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,

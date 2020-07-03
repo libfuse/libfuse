@@ -48,7 +48,7 @@ enum fuse_readdir_flags {
 	 * FUSE_FILL_DIR_FLAGS for the filler function.  The filesystem may also
 	 * just ignore this flag completely.
 	 */
-	FUSE_READDIR_PLUS = (1 << 0),
+	FUSE_READDIR_PLUS = (1 << 0)
 };
 
 enum fuse_fill_dir_flags {
@@ -61,12 +61,12 @@ enum fuse_fill_dir_flags {
 	 * It is okay to set FUSE_FILL_DIR_PLUS if FUSE_READDIR_PLUS is not set
 	 * and vice versa.
 	 */
-	FUSE_FILL_DIR_PLUS = (1 << 1),
+	FUSE_FILL_DIR_PLUS = (1 << 1)
 };
 
 /** Function to add an entry in a readdir() operation
  *
- * The *off* parameter can be any non-zero value that enableds the
+ * The *off* parameter can be any non-zero value that enables the
  * filesystem to identify the current point in the directory
  * stream. It does not need to be the actual physical position. A
  * value of zero is reserved to indicate that seeking in directories
@@ -220,7 +220,7 @@ struct fuse_config {
 	/**
 	 * This option disables flushing the cache of the file
 	 * contents on every open(2).  This should only be enabled on
-	 * filesystems, where the file data is never changed
+	 * filesystems where the file data is never changed
 	 * externally (not through the mounted FUSE filesystem).  Thus
 	 * it is not suitable for network filesystems and other
 	 * intermediate filesystems.
@@ -394,12 +394,11 @@ struct fuse_operations {
 	 *  - Creation (O_CREAT, O_EXCL, O_NOCTTY) flags will be
 	 *    filtered out / handled by the kernel.
 	 *
-	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR) should be used
-	 *    by the filesystem to check if the operation is
-	 *    permitted.  If the ``-o default_permissions`` mount
-	 *    option is given, this check is already done by the
-	 *    kernel before calling open() and may thus be omitted by
-	 *    the filesystem.
+	 *  - Access modes (O_RDONLY, O_WRONLY, O_RDWR, O_EXEC, O_SEARCH)
+	 *    should be used by the filesystem to check if the operation is
+	 *    permitted.  If the ``-o default_permissions`` mount option is
+	 *    given, this check is already done by the kernel before calling
+	 *    open() and may thus be omitted by the filesystem.
 	 *
 	 *  - When writeback caching is enabled, the kernel may send
 	 *    read requests even for files opened with O_WRONLY. The
@@ -408,8 +407,8 @@ struct fuse_operations {
 	 *  - When writeback caching is disabled, the filesystem is
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
-	 * 
-         *  - When writeback caching is enabled, the kernel will
+	 *
+	 *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
 	 *    filesystem should thus either ignore the O_APPEND flag
@@ -483,9 +482,9 @@ struct fuse_operations {
 	 *
 	 * NOTE: The flush() method may be called more than once for each
 	 * open().  This happens if more than one file descriptor refers to an
-	 * opened file, e.g. due to dup(), dup2() or fork() calls.  It is not
-	 * possible to determine if a flush is final, so each flush should be
-	 * treated equally.  Multiple write-flush sequences are relatively
+	 * open file handle, e.g. due to dup(), dup2() or fork() calls.  It is
+	 * not possible to determine if a flush is final, so each flush should
+	 * be treated equally.  Multiple write-flush sequences are relatively
 	 * rare, so this shouldn't be a problem.
 	 *
 	 * Filesystems shouldn't assume that flush will be called at any
@@ -503,7 +502,7 @@ struct fuse_operations {
 	 * are unmapped.
 	 *
 	 * For every open() call there will be exactly one release() call
-	 * with the same flags and file descriptor.	 It is possible to
+	 * with the same flags and file handle.  It is possible to
 	 * have a file opened more than once, in which case only the last
 	 * release will mean, that no more reads/writes will happen on the
 	 * file.  The return value of release is ignored.
@@ -681,8 +680,13 @@ struct fuse_operations {
 	 * Note : the unsigned long request submitted by the application
 	 * is truncated to 32 bits.
 	 */
+#if FUSE_USE_VERSION < 35
+	int (*ioctl) (const char *, int cmd, void *arg,
+		      struct fuse_file_info *, unsigned int flags, void *data);
+#else
 	int (*ioctl) (const char *, unsigned int cmd, void *arg,
 		      struct fuse_file_info *, unsigned int flags, void *data);
+#endif
 
 	/**
 	 * Poll for IO readiness events
@@ -768,15 +772,21 @@ struct fuse_operations {
 	 * additional cost of transferring data through the FUSE kernel module
 	 * to user space (glibc) and then back into the FUSE filesystem again.
 	 *
-	 * In case this method is not implemented, glibc falls back to reading
-	 * data from the source and writing to the destination. Effectively
-	 * doing an inefficient copy of the data.
+	 * In case this method is not implemented, applications are expected to
+	 * fall back to a regular file copy.   (Some glibc versions did this
+	 * emulation automatically, but the emulation has been removed from all
+	 * glibc release branches.)
 	 */
 	ssize_t (*copy_file_range) (const char *path_in,
 				    struct fuse_file_info *fi_in,
 				    off_t offset_in, const char *path_out,
 				    struct fuse_file_info *fi_out,
 				    off_t offset_out, size_t size, int flags);
+
+	/**
+	 * Find next data or hole after the specified offset
+	 */
+	off_t (*lseek) (const char *, off_t off, int whence, struct fuse_file_info *);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -794,7 +804,7 @@ struct fuse_context {
 	/** Group ID of the calling process */
 	gid_t gid;
 
-	/** Thread ID of the calling process */
+	/** Process ID of the calling thread */
 	pid_t pid;
 
 	/** Private filesystem data */
@@ -1185,9 +1195,15 @@ int fuse_fs_removexattr(struct fuse_fs *fs, const char *path,
 			const char *name);
 int fuse_fs_bmap(struct fuse_fs *fs, const char *path, size_t blocksize,
 		 uint64_t *idx);
+#if FUSE_USE_VERSION < 35
+int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, int cmd,
+		  void *arg, struct fuse_file_info *fi, unsigned int flags,
+		  void *data);
+#else
 int fuse_fs_ioctl(struct fuse_fs *fs, const char *path, unsigned int cmd,
 		  void *arg, struct fuse_file_info *fi, unsigned int flags,
 		  void *data);
+#endif
 int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi, struct fuse_pollhandle *ph,
 		 unsigned *reventsp);
@@ -1198,6 +1214,8 @@ ssize_t fuse_fs_copy_file_range(struct fuse_fs *fs, const char *path_in,
 				const char *path_out,
 				struct fuse_file_info *fi_out, off_t off_out,
 				size_t len, int flags);
+off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
+		    struct fuse_file_info *fi);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		struct fuse_config *cfg);
 void fuse_fs_destroy(struct fuse_fs *fs);

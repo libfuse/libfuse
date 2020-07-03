@@ -15,6 +15,7 @@
 #define FUSE_COMMON_H_
 
 #include "fuse_opt.h"
+#include "fuse_log.h"
 #include <stdint.h>
 #include <sys/types.h>
 
@@ -22,7 +23,7 @@
 #define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 2
+#define FUSE_MINOR_VERSION 9
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 10 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -32,22 +33,34 @@ extern "C" {
 #endif
 
 /**
- * Information about open files
+ * Information about an open file.
+ *
+ * File Handles are created by the open, opendir, and create methods and closed
+ * by the release and releasedir methods.  Multiple file handles may be
+ * concurrently open for the same file.  Generally, a client will create one
+ * file handle per file descriptor, though in some cases multiple file
+ * descriptors can share a single file handle.
  */
 struct fuse_file_info {
 	/** Open flags.	 Available in open() and release() */
 	int flags;
 
-	/** In case of a write operation indicates if this was caused by a
-	    writepage */
+	/** In case of a write operation indicates if this was caused
+	    by a delayed write from the page cache. If so, then the
+	    context's pid, uid, and gid fields will not be valid, and
+	    the *fh* value may not match the *fh* value that would
+	    have been sent with the corresponding individual write
+	    requests if write caching had been disabled. */
 	unsigned int writepage : 1;
 
 	/** Can be filled in by open, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
-	/** Can be filled in by open, to indicate that currently
-	    cached file data (that the filesystem provided the last
-	    time the file was open) need not be invalidated. */
+	/** Can be filled in by open. It signals the kernel that any
+	    currently cached file data (ie., data that the filesystem
+	    provided the last time the file was open) need not be
+	    invalidated. Has no effect when set in other contexts (in
+	    particular it does nothing when set by opendir()). */
 	unsigned int keep_cache : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
@@ -64,11 +77,19 @@ struct fuse_file_info {
 	   May only be set in ->release(). */
 	unsigned int flock_release : 1;
 
-	/** Padding.  Do not use*/
-	unsigned int padding : 27;
+	/** Can be filled in by opendir. It signals the kernel to
+	    enable caching of entries returned by readdir().  Has no
+	    effect when set in other contexts (in particular it does
+	    nothing when set by open()). */
+	unsigned int cache_readdir : 1;
 
-	/** File handle.  May be filled in by filesystem in open().
-	    Available in all other file operations */
+	/** Padding.  Reserved for future use*/
+	unsigned int padding : 25;
+	unsigned int padding2 : 32;
+
+	/** File handle id.  May be filled in by filesystem in create,
+	 * open, and opendir().  Available in most other file operations on the
+	 * same file handle. */
 	uint64_t fh;
 
 	/** Lock owner id.  Available in locking operations and flush */
@@ -227,7 +248,7 @@ struct fuse_loop_config {
 #define FUSE_CAP_READDIRPLUS		(1 << 13)
 
 /**
- * Indicates that the filesystem supports adaptive readdirplus. 
+ * Indicates that the filesystem supports adaptive readdirplus.
  *
  * If FUSE_CAP_READDIRPLUS is not set, this flag has no effect.
  *
@@ -238,6 +259,15 @@ struct fuse_loop_config {
  * If FUSE_CAP_READDIRPLUS is set and this flag is set, the kernel
  * will issue both readdir() and readdirplus() requests, depending on
  * how much information is expected to be required.
+ *
+ * As of Linux 4.20, the algorithm is as follows: when userspace
+ * starts to read directory entries, issue a READDIRPLUS request to
+ * the filesystem. If any entry attributes have been looked up by the
+ * time userspace requests the next batch of entries continue with
+ * READDIRPLUS, otherwise switch to plain READDIR.  This will reasult
+ * in eg plain "ls" triggering READDIRPLUS first then READDIR after
+ * that because it doesn't do lookups.  "ls -l" should result in all
+ * READDIRPLUS, except if dentries are already cached.
  *
  * This feature is enabled by default when supported by the kernel and
  * if the filesystem implements both a readdirplus() and a readdir()
@@ -315,6 +345,41 @@ struct fuse_loop_config {
  * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
+
+/**
+ * Indicates support for zero-message opendirs. If this flag is set in
+ * the `capable` field of the `fuse_conn_info` structure, then the filesystem
+ * may return `ENOSYS` from the opendir() handler to indicate success. Further
+ * opendir and releasedir messages will be handled in the kernel. (If this
+ * flag is not set, returning ENOSYS will be treated as an error and signalled
+ * to the caller.)
+ *
+ * Setting (or unsetting) this flag in the `want` field has *no effect*.
+ */
+#define FUSE_CAP_NO_OPENDIR_SUPPORT    (1 << 24)
+
+/**
+ * Indicates support for invalidating cached pages only on explicit request.
+ *
+ * If this flag is set in the `capable` field of the `fuse_conn_info` structure,
+ * then the FUSE kernel module supports invalidating cached pages only on
+ * explicit request by the filesystem through fuse_lowlevel_notify_inval_inode()
+ * or fuse_invalidate_path().
+ *
+ * By setting this flag in the `want` field of the `fuse_conn_info` structure,
+ * the filesystem is responsible for invalidating cached pages through explicit
+ * requests to the kernel.
+ *
+ * Note that setting this flag does not prevent the cached pages from being
+ * flushed by OS itself and/or through user actions.
+ *
+ * Note that if both FUSE_CAP_EXPLICIT_INVAL_DATA and FUSE_CAP_AUTO_INVAL_DATA
+ * are set in the `capable` field of the `fuse_conn_info` structure then
+ * FUSE_CAP_AUTO_INVAL_DATA takes precedence.
+ *
+ * This feature is disabled by default.
+ */
+#define FUSE_CAP_EXPLICIT_INVAL_DATA    (1 << 25)
 
 /**
  * Ioctl flags
@@ -570,7 +635,7 @@ enum fuse_buf_flags {
 	 * until .size bytes have been copied or an error or EOF is
 	 * detected.
 	 */
-	FUSE_BUF_FD_RETRY	= (1 << 3),
+	FUSE_BUF_FD_RETRY	= (1 << 3)
 };
 
 /**
@@ -612,7 +677,7 @@ enum fuse_buf_copy_flags {
 	 * is full or empty).  See SPLICE_F_NONBLOCK in the splice(2)
 	 * man page.
 	 */
-	FUSE_BUF_SPLICE_NONBLOCK= (1 << 4),
+	FUSE_BUF_SPLICE_NONBLOCK= (1 << 4)
 };
 
 /**

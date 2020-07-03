@@ -3,7 +3,7 @@
   Copyright (C) 2008       SUSE Linux Products GmbH
   Copyright (C) 2008       Tejun Heo <teheo@suse.de>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -206,7 +206,7 @@ static int fsel_poll(const char *path, struct fuse_file_info *fi,
 	return 0;
 }
 
-static struct fuse_operations fsel_oper = {
+static const struct fuse_operations fsel_oper = {
 	.getattr	= fsel_getattr,
 	.readdir	= fsel_readdir,
 	.open		= fsel_open,

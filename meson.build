@@ -1,4 +1,4 @@
-project('libfuse3', 'c', version: '3.4.2',
+project('libfuse3', ['c'], version: '3.9.2',
         meson_version: '>= 0.42',
         default_options: [ 'buildtype=debugoptimized' ])
 
@@ -36,7 +36,7 @@ cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
-               'utimensat', 'copy_file_range' ]
+               'utimensat', 'copy_file_range', 'fallocate' ]
 foreach func : test_funcs
     cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))
@@ -66,6 +66,10 @@ configure_file(output: 'config.h',
 add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-Wall', '-Wextra', '-Wno-sign-compare',
                       '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
                       '-fno-strict-aliasing', language: 'c')
+add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-D_GNU_SOURCE',
+                     '-Wall', '-Wextra', '-Wno-sign-compare', '-std=c++11',
+                     '-Wmissing-declarations', '-Wwrite-strings',
+                     '-fno-strict-aliasing', language: 'cpp')
 
 # Some (stupid) GCC versions warn about unused return values even when they are
 # casted to void. This makes -Wunused-result pretty useless, since there is no

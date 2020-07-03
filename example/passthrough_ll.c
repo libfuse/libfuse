@@ -2,7 +2,7 @@
   FUSE: Filesystem in Userspace
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
 
-  This program can be distributed under the terms of the GNU GPL.
+  This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
 
@@ -50,11 +50,12 @@
 #include <dirent.h>
 #include <assert.h>
 #include <errno.h>
-#include <err.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <sys/file.h>
 #include <sys/xattr.h>
+
+#include "passthrough_helpers.h"
 
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
@@ -73,7 +74,6 @@ struct lo_inode {
 	struct lo_inode *next; /* protected by lo->mutex */
 	struct lo_inode *prev; /* protected by lo->mutex */
 	int fd;
-	bool is_symlink;
 	ino_t ino;
 	dev_t dev;
 	uint64_t refcount; /* protected by lo->mutex */
@@ -161,12 +161,12 @@ static void lo_init(void *userdata,
 	if (lo->writeback &&
 	    conn->capable & FUSE_CAP_WRITEBACK_CACHE) {
 		if (lo->debug)
-			fprintf(stderr, "lo_init: activating writeback\n");
+			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating writeback\n");
 		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 	}
 	if (lo->flock && conn->capable & FUSE_CAP_FLOCK_LOCKS) {
 		if (lo->debug)
-			fprintf(stderr, "lo_init: activating flock locks\n");
+			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
 	}
 }
@@ -185,26 +185,6 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 		return (void) fuse_reply_err(req, errno);
 
 	fuse_reply_attr(req, &buf, lo->timeout);
-}
-
-static int utimensat_empty_nofollow(struct lo_inode *inode,
-				    const struct timespec *tv)
-{
-	int res;
-	char procname[64];
-
-	if (inode->is_symlink) {
-		res = utimensat(inode->fd, "", tv,
-				AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-		if (res == -1 && errno == EINVAL) {
-			/* Sorry, no race free way to set times on symlink. */
-			errno = EPERM;
-		}
-		return res;
-	}
-	sprintf(procname, "/proc/self/fd/%i", inode->fd);
-
-	return utimensat(AT_FDCWD, procname, tv, 0);
 }
 
 static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
@@ -267,8 +247,10 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
 		if (fi)
 			res = futimens(fi->fh, tv);
-		else
-			res = utimensat_empty_nofollow(inode, tv);
+		else {
+			sprintf(procname, "/proc/self/fd/%i", ifd);
+			res = utimensat(AT_FDCWD, procname, tv, 0);
+		}
 		if (res == -1)
 			goto out_err;
 	}
@@ -331,7 +313,6 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		if (!inode)
 			goto out_err;
 
-		inode->is_symlink = S_ISLNK(e->attr.st_mode);
 		inode->refcount = 1;
 		inode->fd = newfd;
 		inode->ino = e->attr.st_ino;
@@ -349,7 +330,7 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	e->ino = (uintptr_t) inode;
 
 	if (lo_debug(req))
-		fprintf(stderr, "  %lli/%s -> %lli\n",
+		fuse_log(FUSE_LOG_DEBUG, "  %lli/%s -> %lli\n",
 			(unsigned long long) parent, name, (unsigned long long) e->ino);
 
 	return 0;
@@ -367,7 +348,7 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	int err;
 
 	if (lo_debug(req))
-		fprintf(stderr, "lo_lookup(parent=%" PRIu64 ", name=%s)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_lookup(parent=%" PRIu64 ", name=%s)\n",
 			parent, name);
 
 	err = lo_do_lookup(req, parent, name, &e);
@@ -381,20 +362,13 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 			     const char *name, mode_t mode, dev_t rdev,
 			     const char *link)
 {
-	int newfd = -1;
 	int res;
 	int saverr;
 	struct lo_inode *dir = lo_inode(req, parent);
 	struct fuse_entry_param e;
 
-	saverr = ENOMEM;
+	res = mknod_wrapper(dir->fd, name, link, mode, rdev);
 
-	if (S_ISDIR(mode))
-		res = mkdirat(dir->fd, name, mode);
-	else if (S_ISLNK(mode))
-		res = symlinkat(link, dir->fd, name);
-	else
-		res = mknodat(dir->fd, name, mode, rdev);
 	saverr = errno;
 	if (res == -1)
 		goto out;
@@ -404,15 +378,13 @@ static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 		goto out;
 
 	if (lo_debug(req))
-		fprintf(stderr, "  %lli/%s -> %lli\n",
+		fuse_log(FUSE_LOG_DEBUG, "  %lli/%s -> %lli\n",
 			(unsigned long long) parent, name, (unsigned long long) e.ino);
 
 	fuse_reply_entry(req, &e);
 	return;
 
 out:
-	if (newfd != -1)
-		close(newfd);
 	fuse_reply_err(req, saverr);
 }
 
@@ -434,26 +406,6 @@ static void lo_symlink(fuse_req_t req, const char *link,
 	lo_mknod_symlink(req, parent, name, S_IFLNK, 0, link);
 }
 
-static int linkat_empty_nofollow(struct lo_inode *inode, int dfd,
-				 const char *name)
-{
-	int res;
-	char procname[64];
-
-	if (inode->is_symlink) {
-		res = linkat(inode->fd, "", dfd, name, AT_EMPTY_PATH);
-		if (res == -1 && (errno == ENOENT || errno == EINVAL)) {
-			/* Sorry, no race free way to hard-link a symlink. */
-			errno = EPERM;
-		}
-		return res;
-	}
-
-	sprintf(procname, "/proc/self/fd/%i", inode->fd);
-
-	return linkat(AT_FDCWD, procname, dfd, name, AT_SYMLINK_FOLLOW);
-}
-
 static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 		    const char *name)
 {
@@ -461,13 +413,16 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	struct lo_data *lo = lo_data(req);
 	struct lo_inode *inode = lo_inode(req, ino);
 	struct fuse_entry_param e;
+	char procname[64];
 	int saverr;
 
 	memset(&e, 0, sizeof(struct fuse_entry_param));
 	e.attr_timeout = lo->timeout;
 	e.entry_timeout = lo->timeout;
 
-	res = linkat_empty_nofollow(inode, lo_fd(req, parent), name);
+	sprintf(procname, "/proc/self/fd/%i", inode->fd);
+	res = linkat(AT_FDCWD, procname, lo_fd(req, parent), name,
+		     AT_SYMLINK_FOLLOW);
 	if (res == -1)
 		goto out_err;
 
@@ -481,7 +436,7 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	e.ino = (uintptr_t) inode;
 
 	if (lo_debug(req))
-		fprintf(stderr, "  %lli/%s -> %lli\n",
+		fuse_log(FUSE_LOG_DEBUG, "  %lli/%s -> %lli\n",
 			(unsigned long long) parent, name,
 			(unsigned long long) e.ino);
 
@@ -559,7 +514,7 @@ static void lo_forget_one(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 	struct lo_inode *inode = lo_inode(req, ino);
 
 	if (lo_debug(req)) {
-		fprintf(stderr, "  forget %lli %lli -%lli\n",
+		fuse_log(FUSE_LOG_DEBUG, "  forget %lli %lli -%lli\n",
 			(unsigned long long) ino,
 			(unsigned long long) inode->refcount,
 			(unsigned long long) nlookup);
@@ -602,7 +557,6 @@ static void lo_readlink(fuse_req_t req, fuse_ino_t ino)
 }
 
 struct lo_dirp {
-	int fd;
 	DIR *dp;
 	struct dirent *entry;
 	off_t offset;
@@ -617,15 +571,18 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 {
 	int error = ENOMEM;
 	struct lo_data *lo = lo_data(req);
-	struct lo_dirp *d = calloc(1, sizeof(struct lo_dirp));
+	struct lo_dirp *d;
+	int fd;
+
+	d = calloc(1, sizeof(struct lo_dirp));
 	if (d == NULL)
 		goto out_err;
 
-	d->fd = openat(lo_fd(req, ino), ".", O_RDONLY);
-	if (d->fd == -1)
+	fd = openat(lo_fd(req, ino), ".", O_RDONLY);
+	if (fd == -1)
 		goto out_errno;
 
-	d->dp = fdopendir(d->fd);
+	d->dp = fdopendir(fd);
 	if (d->dp == NULL)
 		goto out_errno;
 
@@ -634,7 +591,7 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 
 	fi->fh = (uintptr_t) d;
 	if (lo->cache == CACHE_ALWAYS)
-		fi->keep_cache = 1;
+		fi->cache_readdir = 1;
 	fuse_reply_open(req, fi);
 	return;
 
@@ -642,8 +599,8 @@ out_errno:
 	error = errno;
 out_err:
 	if (d) {
-		if (d->fd != -1)
-			close(d->fd);
+		if (fd != -1)
+			close(fd);
 		free(d);
 	}
 	fuse_reply_err(req, error);
@@ -778,7 +735,7 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int err;
 
 	if (lo_debug(req))
-		fprintf(stderr, "lo_create(parent=%" PRIu64 ", name=%s)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_create(parent=%" PRIu64 ", name=%s)\n",
 			parent, name);
 
 	fd = openat(lo_fd(req, parent), name,
@@ -819,7 +776,7 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	struct lo_data *lo = lo_data(req);
 
 	if (lo_debug(req))
-		fprintf(stderr, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
 			ino, fi->flags);
 
 	/* With writeback cache, kernel may send read requests even
@@ -885,7 +842,7 @@ static void lo_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	struct fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
 
 	if (lo_debug(req))
-		fprintf(stderr, "lo_read(ino=%" PRIu64 ", size=%zd, "
+		fuse_log(FUSE_LOG_DEBUG, "lo_read(ino=%" PRIu64 ", size=%zd, "
 			"off=%lu)\n", ino, size, (unsigned long) offset);
 
 	buf.buf[0].flags = FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK;
@@ -908,7 +865,7 @@ static void lo_write_buf(fuse_req_t req, fuse_ino_t ino,
 	out_buf.buf[0].pos = off;
 
 	if (lo_debug(req))
-		fprintf(stderr, "lo_write(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_write(ino=%" PRIu64 ", size=%zd, off=%lu)\n",
 			ino, out_buf.buf[0].size, (unsigned long) off);
 
 	res = fuse_buf_copy(&out_buf, in_buf, 0);
@@ -933,15 +890,22 @@ static void lo_statfs(fuse_req_t req, fuse_ino_t ino)
 static void lo_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 			 off_t offset, off_t length, struct fuse_file_info *fi)
 {
-	int err;
+	int err = EOPNOTSUPP;
 	(void) ino;
 
+#ifdef HAVE_FALLOCATE
+	err = fallocate(fi->fh, mode, offset, length);
+	if (err < 0)
+		err = errno;
+
+#elif defined(HAVE_POSIX_FALLOCATE)
 	if (mode) {
 		fuse_reply_err(req, EOPNOTSUPP);
 		return;
 	}
 
 	err = posix_fallocate(fi->fh, offset, length);
+#endif
 
 	fuse_reply_err(req, err);
 }
@@ -971,14 +935,8 @@ static void lo_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		goto out;
 
 	if (lo_debug(req)) {
-		fprintf(stderr, "lo_getxattr(ino=%" PRIu64 ", name=%s size=%zd)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_getxattr(ino=%" PRIu64 ", name=%s size=%zd)\n",
 			ino, name, size);
-	}
-
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to getxattr on symlink. */
-		saverr = EPERM;
-		goto out;
 	}
 
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
@@ -1027,14 +985,8 @@ static void lo_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 		goto out;
 
 	if (lo_debug(req)) {
-		fprintf(stderr, "lo_listxattr(ino=%" PRIu64 ", size=%zd)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_listxattr(ino=%" PRIu64 ", size=%zd)\n",
 			ino, size);
-	}
-
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to listxattr on symlink. */
-		saverr = EPERM;
-		goto out;
 	}
 
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
@@ -1083,14 +1035,8 @@ static void lo_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 		goto out;
 
 	if (lo_debug(req)) {
-		fprintf(stderr, "lo_setxattr(ino=%" PRIu64 ", name=%s value=%s size=%zd)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_setxattr(ino=%" PRIu64 ", name=%s value=%s size=%zd)\n",
 			ino, name, value, size);
-	}
-
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to setxattr on symlink. */
-		saverr = EPERM;
-		goto out;
 	}
 
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
@@ -1114,14 +1060,8 @@ static void lo_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 		goto out;
 
 	if (lo_debug(req)) {
-		fprintf(stderr, "lo_removexattr(ino=%" PRIu64 ", name=%s)\n",
+		fuse_log(FUSE_LOG_DEBUG, "lo_removexattr(ino=%" PRIu64 ", name=%s)\n",
 			ino, name);
-	}
-
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to setxattr on symlink. */
-		saverr = EPERM;
-		goto out;
 	}
 
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
@@ -1143,7 +1083,7 @@ static void lo_copy_file_range(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
 	ssize_t res;
 
 	if (lo_debug(req))
-		fprintf(stderr, "lo_copy_file_range(ino=%" PRIu64 "/fd=%lu, "
+		fuse_log(FUSE_LOG_DEBUG, "lo_copy_file_range(ino=%" PRIu64 "/fd=%lu, "
 				"off=%lu, ino=%" PRIu64 "/fd=%lu, "
 				"off=%lu, size=%zd, flags=0x%x)\n",
 			ino_in, fi_in->fh, off_in, ino_out, fi_out->fh, off_out,
@@ -1152,13 +1092,26 @@ static void lo_copy_file_range(fuse_req_t req, fuse_ino_t ino_in, off_t off_in,
 	res = copy_file_range(fi_in->fh, &off_in, fi_out->fh, &off_out, len,
 			      flags);
 	if (res < 0)
-		fuse_reply_err(req, -errno);
+		fuse_reply_err(req, errno);
 	else
 		fuse_reply_write(req, res);
 }
 #endif
 
-static struct fuse_lowlevel_ops lo_oper = {
+static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
+		     struct fuse_file_info *fi)
+{
+	off_t res;
+
+	(void)ino;
+	res = lseek(fi->fh, off, whence);
+	if (res != -1)
+		fuse_reply_lseek(req, res);
+	else
+		fuse_reply_err(req, errno);
+}
+
+static const struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.lookup		= lo_lookup,
 	.mkdir		= lo_mkdir,
@@ -1195,6 +1148,7 @@ static struct fuse_lowlevel_ops lo_oper = {
 #ifdef HAVE_COPY_FILE_RANGE
 	.copy_file_range = lo_copy_file_range,
 #endif
+	.lseek		= lo_lseek,
 };
 
 int main(int argc, char *argv[])
@@ -1246,15 +1200,19 @@ int main(int argc, char *argv[])
 		int res;
 
 		res = lstat(lo.source, &stat);
-		if (res == -1)
-			err(1, "failed to stat source (\"%s\")", lo.source);
-		if (!S_ISDIR(stat.st_mode))
-			errx(1, "source is not a directory");
+		if (res == -1) {
+			fuse_log(FUSE_LOG_ERR, "failed to stat source (\"%s\"): %m\n",
+				 lo.source);
+			exit(1);
+		}
+		if (!S_ISDIR(stat.st_mode)) {
+			fuse_log(FUSE_LOG_ERR, "source is not a directory\n");
+			exit(1);
+		}
 
 	} else {
 		lo.source = "/";
 	}
-	lo.root.is_symlink = false;
 	if (!lo.timeout_set) {
 		switch (lo.cache) {
 		case CACHE_NEVER:
@@ -1270,12 +1228,17 @@ int main(int argc, char *argv[])
 			break;
 		}
 	} else if (lo.timeout < 0) {
-		errx(1, "timeout is negative (%lf)", lo.timeout);
+		fuse_log(FUSE_LOG_ERR, "timeout is negative (%lf)\n",
+			 lo.timeout);
+		exit(1);
 	}
 
 	lo.root.fd = open(lo.source, O_PATH);
-	if (lo.root.fd == -1)
-		err(1, "open(\"%s\", O_PATH)", lo.source);
+	if (lo.root.fd == -1) {
+		fuse_log(FUSE_LOG_ERR, "open(\"%s\", O_PATH): %m\n",
+			 lo.source);
+		exit(1);
+	}
 
 	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
 	if (se == NULL)

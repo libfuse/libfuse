@@ -27,12 +27,16 @@ cd "${TEST_DIR}"
 # Standard build
 for CC in gcc gcc-7 clang; do
     mkdir build-${CC}; cd build-${CC}
+    if [ "${CC}" == "clang" ]; then
+        export CXX="clang++"
+    fi
     if [ ${CC} == 'gcc-7' ]; then
         build_opts='-D b_lundef=false'
     else
         build_opts=''
     fi
-#    meson -D werror=true ${build_opts} "${SOURCE_DIR}"
+
+#    meson -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
 #    ninja
     cmake -G "Unix Makefiles" \
             -DOPTION_BUILD_UTILS=ON \
@@ -50,11 +54,13 @@ done
 
 # Sanitized build
 CC=clang
+CXX=clang++
 for san in undefined address; do
     mkdir build-${san}; cd build-${san}
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
-    # meson -D b_sanitize=${san} -D b_lundef=false -D werror=true "${SOURCE_DIR}"
+    #     meson -D b_sanitize=${san} -D b_lundef=false -D werror=true "${SOURCE_DIR}" \
+    #       || (cat meson-logs/meson-log.txt; false)
     # ninja
     cmake -G "Unix Makefiles" \
             -DOPTION_BUILD_UTILS=ON \
