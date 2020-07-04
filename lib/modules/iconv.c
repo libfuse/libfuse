@@ -638,10 +638,15 @@ static const struct fuse_opt iconv_opts[] = {
 
 static void iconv_help(void)
 {
-	char *old = strdup(setlocale(LC_CTYPE, ""));
-	char *charmap = strdup(nl_langinfo(CODESET));
-	setlocale(LC_CTYPE, old);
-	free(old);
+	char *charmap;
+	const char *old = setlocale(LC_CTYPE, "");
+
+	charmap = strdup(nl_langinfo(CODESET));
+	if (old)
+		setlocale(LC_CTYPE, old);
+	else
+		perror("setlocale");
+
 	printf(
 "    -o from_code=CHARSET   original encoding of file names (default: UTF-8)\n"
 "    -o to_code=CHARSET     new encoding of the file names (default: %s)\n",
