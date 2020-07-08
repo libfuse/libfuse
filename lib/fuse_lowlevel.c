@@ -167,6 +167,7 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 {
 	struct fuse_out_header *out = iov[0].iov_base;
 
+	assert(se != NULL);
 	out->len = iov_length(iov, count);
 	if (se->debug) {
 		if (out->unique == 0) {
@@ -189,8 +190,6 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 	int err = errno;
 
 	if (res == -1) {
-		assert(se != NULL);
-
 		/* ENOENT means the operation was interrupted */
 		if (!fuse_session_exited(se) && err != ENOENT)
 			perror("fuse: writing device");
