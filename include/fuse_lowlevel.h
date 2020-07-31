@@ -471,7 +471,7 @@ struct fuse_lowlevel_ops {
 	 *  - When writeback caching is disabled, the filesystem is
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
-	 *
+	 * 
          *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
@@ -1975,7 +1975,7 @@ int fuse_session_loop(struct fuse_session *se);
  * fuse_session_loop().
  *
  * @param se the session
- * @param config session loop configuration
+ * @param config session loop configuration 
  * @return see fuse_session_loop()
  */
 #if FUSE_USE_VERSION < 32
