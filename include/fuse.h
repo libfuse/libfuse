@@ -255,8 +255,8 @@ struct fuse_config {
 	/**
 	 * If this option is given the file-system handlers for the
 	 * following operations will not receive path information:
-	 * read, write, flush, release, fsync, readdir, releasedir,
-	 * fsyncdir, lock, ioctl and poll.
+	 * read, write, flush, release, fallocate, fsync, readdir,
+	 * releasedir, fsyncdir, lock, ioctl and poll.
 	 *
 	 * For the truncate, getattr, chmod, chown and utimens
 	 * operations the path will be provided only if the struct
