@@ -1,3 +1,13 @@
+Unreleased Changes
+==================
+
+* (none so far)
+
+libfuse 3.9.4 (2020-08-09)
+==========================
+
+This was an "accidental" release, it is equivalent to 3.9.3.
+
 libfuse 3.9.3 (2020-08-09)
 ==========================
 
