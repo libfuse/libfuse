@@ -662,7 +662,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 
 	total_buf_size = 0;
 	for (idx = buf->idx; idx < buf->count; idx++) {
-		total_buf_size = buf->buf[idx].size;
+		total_buf_size += buf->buf[idx].size;
 		if (idx == buf->idx)
 			total_buf_size -= buf->off;
 	}
