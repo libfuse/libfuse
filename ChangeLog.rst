@@ -1,3 +1,9 @@
+libfuse 3.9.3 (2020-08-09)
+==========================
+
+* Fixed compilation under OS X and µClibc.
+* Minor bugfixes and doc updates.
+
 libfuse 3.9.2 (2020-06-12)
 ==========================
 
