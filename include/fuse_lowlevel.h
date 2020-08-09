@@ -1982,7 +1982,12 @@ int fuse_session_loop(struct fuse_session *se);
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
 #define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
 #else
+#if (!defined(__UCLIBC__) && !defined(__APPLE__))
 int fuse_session_loop_mt(struct fuse_session *se, struct fuse_loop_config *config);
+#else
+int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
+#define fuse_session_loop_mt(se, config) fuse_session_loop_mt_32(se, config)
+#endif
 #endif
 
 /**

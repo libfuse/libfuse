@@ -146,6 +146,7 @@ FUSE_3.2 {
 	global:
 		fuse_session_loop_mt;
 		fuse_session_loop_mt_31;
+		fuse_session_loop_mt_32;
 		fuse_loop_mt;
 		fuse_loop_mt_31;
 } FUSE_3.1;
