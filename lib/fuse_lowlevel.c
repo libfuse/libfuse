@@ -1888,7 +1888,10 @@ static void do_lseek(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
-static void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+/* Prevent bogus data races (bogus since "init" is called before
+ * multi-threading becomes relevant */
+static __attribute__((no_sanitize("thread")))
+void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
 	struct fuse_init_out outarg;
@@ -3115,17 +3118,22 @@ int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 }
 #endif
 
+/* Prevent spurious data race warning - we don't care
+ * about races for this flag */
+__attribute__((no_sanitize_thread))
 void fuse_session_exit(struct fuse_session *se)
 {
 	se->exited = 1;
 }
 
+__attribute__((no_sanitize_thread))
 void fuse_session_reset(struct fuse_session *se)
 {
 	se->exited = 0;
 	se->error = 0;
 }
 
+__attribute__((no_sanitize_thread))
 int fuse_session_exited(struct fuse_session *se)
 {
 	return se->exited;
