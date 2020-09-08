@@ -20,7 +20,7 @@
 #  define FUSE_SYMVER(sym1, sym2) __asm__("\t.symver " sym1 "," sym2);
 # endif
 #else
-#define FUSE_SYMVER(sym2)
+#define FUSE_SYMVER(sym1, sym2)
 #endif
 
 #ifndef USE_UCLIBC
