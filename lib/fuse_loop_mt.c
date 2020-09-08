@@ -304,7 +304,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	free(w);
 }
 
-FUSE_SYMVER(".symver fuse_session_loop_mt_32,fuse_session_loop_mt@@FUSE_3.2");
+FUSE_SYMVER("fuse_session_loop_mt_32", "fuse_session_loop_mt@@FUSE_3.2")
 int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config)
 {
 	int err;
@@ -352,7 +352,7 @@ int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *co
 }
 
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
-FUSE_SYMVER(".symver fuse_session_loop_mt_31,fuse_session_loop_mt@FUSE_3.0");
+FUSE_SYMVER("fuse_session_loop_mt_31", "fuse_session_loop_mt@FUSE_3.0")
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd)
 {
 	struct fuse_loop_config config;
