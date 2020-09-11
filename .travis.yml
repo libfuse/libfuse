@@ -1,6 +1,8 @@
 sudo: required
 dist: bionic
 
+before_script:
+    - curl https://spot.fedorapeople.org/spotfoss-ppa.key | sudo apt-key add -
 language:
     - c
     - c++
