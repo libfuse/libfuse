@@ -8,6 +8,7 @@ addons:
   apt:
     sources:
     - sourceline: 'ppa:ubuntu-toolchain-r/test'
+    - sourceline: 'ppa:spotfoss/ppa'
     packages:
     - doxygen
     - valgrind
