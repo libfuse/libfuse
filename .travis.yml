@@ -4,7 +4,7 @@ dist: bionic
 before_install:
     - curl https://spot.fedorapeople.org/spotfoss-ppa.key | sudo apt-key add -
     - wget https://launchpad.net/~spotfoss/+archive/ubuntu/ppa/+files/valgrind_3.16.1-2_amd64.deb
-    - sudo dpkg -i valgrind_3.16.1-2_amd64.deb
+    - sudo apt install valgrind_3.16.1-2_amd64.deb
 language:
     - c
     - c++
