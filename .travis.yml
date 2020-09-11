@@ -1,5 +1,5 @@
 sudo: required
-dist: xenial
+dist: bionic
 
 language:
     - c
@@ -13,8 +13,10 @@ addons:
     - valgrind
     - clang
     - libstdc++-7-dev 
+    - libstdc++-10-dev
     - gcc
     - gcc-7
+    - gcc-10
     - python3-pip
     - python3-setuptools
     - ninja-build

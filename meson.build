@@ -87,6 +87,23 @@ if not cc.compiles(code, args: [ '-O0', '-Werror=unused-result' ])
      add_project_arguments('-Wno-unused-result', language: 'c')
 endif
 
+# gcc-10 and newer support the symver attribute which we need to use if we
+# want to support LTO
+code = '''
+__attribute__((symver ("get@@TEST_0"))) int get_4() {
+    return 4;
+}
+int main(void) {
+    (void) get_4();
+    return 0;
+}'''
+if cc.compiles(code, args: [ '-O0', '-c'])
+     message('Compiler supports symver attribute')
+     add_project_arguments('-DHAVE_SYMVER_ATTRIBUTE', language: 'c')
+else
+     message('Compiler does not support symver attribute')
+endif
+
 # '.' will refer to current build directory, which contains config.h
 include_dirs = include_directories('include', 'lib', '.')
 

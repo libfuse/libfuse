@@ -25,13 +25,18 @@ chmod 0755 "${TEST_DIR}"
 cd "${TEST_DIR}"
 
 # Standard build
-for CC in gcc gcc-7 clang; do
+for CC in gcc gcc-7 gcc-10 clang; do
     mkdir build-${CC}; cd build-${CC}
     if [ "${CC}" == "clang" ]; then
         export CXX="clang++"
     fi
     if [ ${CC} == 'gcc-7' ]; then
         build_opts='-D b_lundef=false'
+    else
+        build_opts=''
+    fi
+    if [ ${CC} == 'gcc-10' ]; then
+        build_opts='-Dc_args="-flto=auto -ffat-lto-objects"'
     else
         build_opts=''
     fi

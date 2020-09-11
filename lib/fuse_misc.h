@@ -14,9 +14,13 @@
     - not supported on MacOSX (in MachO binary format)
 */
 #if (!defined(__UCLIBC__) && !defined(__APPLE__))
-#define FUSE_SYMVER(x) __asm__(x)
+# if HAVE_SYMVER_ATTRIBUTE
+#  define FUSE_SYMVER(sym1, sym2) __attribute__ ((symver (sym2)))
+# else
+#  define FUSE_SYMVER(sym1, sym2) __asm__("\t.symver " sym1 "," sym2);
+# endif
 #else
-#define FUSE_SYMVER(x)
+#define FUSE_SYMVER(sym1, sym2)
 #endif
 
 #ifndef USE_UCLIBC
