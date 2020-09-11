@@ -89,12 +89,17 @@ endif
 
 # gcc-10 and newer support the symver attribute which we need to use if we
 # want to support LTO
+# recent clang and gcc both support __has_attribute (and if they are too old
+# to have __has_attribute, then they are too old to support symver)
+# other compilers might not have __has_attribute, but in those cases
+# it is safe for this check to fail and for us to fallback to the old _asm_
+# method for symver
 code = '''
-__attribute__((symver ("get@@TEST_0"))) int get_4() {
-    return 4;
-}
+#if defined __has_attribute && !__has_attribute (symver)
+#error symver attribute not supported
+#endif
+
 int main(void) {
-    (void) get_4();
     return 0;
 }'''
 if cc.compiles(code, args: [ '-O0', '-c'])
