@@ -9,7 +9,7 @@ addons:
     sources:
     - sourceline: 'ppa:ubuntu-toolchain-r/test'
     - sourceline: 'ppa:spotfoss/ppa'
-      key_url: 'https://spot.fedorapeople.org/ubuntu-gpg.key'
+      key_url: 'https://spot.fedorapeople.org/spotfoss-ppa.key'
     packages:
     - doxygen
     - valgrind
