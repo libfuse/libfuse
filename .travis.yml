@@ -7,7 +7,7 @@ language:
 addons:
   apt:
     sources:
-    - ppa:ubuntu-toolchain-r/test
+    - sourceline: 'ppa:ubuntu-toolchain-r/test'
     packages:
     - doxygen
     - valgrind
