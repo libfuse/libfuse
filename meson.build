@@ -95,8 +95,12 @@ endif
 # it is safe for this check to fail and for us to fallback to the old _asm_
 # method for symver
 code = '''
-#if defined __has_attribute && !__has_attribute (symver)
-#error symver attribute not supported
+#if defined __has_attribute
+# if !__has_attribute (symver)
+# error symver attribute not supported
+# endif
+#else
+#error __has_attribute not defined, assume we do not have symver
 #endif
 
 int main(void) {
