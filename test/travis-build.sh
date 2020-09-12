@@ -36,7 +36,7 @@ for CC in gcc gcc-7 gcc-10 clang; do
         build_opts=''
     fi
     if [ ${CC} == 'gcc-10' ]; then
-        build_opts='-Dc_args="-flto=auto -ffat-lto-objects"'
+        build_opts='-Dc_args=-flto=auto'
     else
         build_opts=''
     fi
