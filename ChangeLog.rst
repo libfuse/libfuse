@@ -1,7 +1,7 @@
 Unreleased Changes
 ==================
 
-* (none so far)
+* Add FUSE_CAP_CACHE_SYMLINKS: allow caching symlinks in kernel page cache.
 
 libfuse 3.9.4 (2020-08-09)
 ==========================
