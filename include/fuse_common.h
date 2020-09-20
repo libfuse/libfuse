@@ -347,6 +347,19 @@ struct fuse_loop_config {
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
 
 /**
+ * Indicates that the kernel supports caching symlinks in its page cache.
+ *
+ * When this feature is enabled, symlink targets are saved in the page cache.
+ * You can invalidate a cached link by calling:
+ * `fuse_lowlevel_notify_inval_inode(se, ino, 0, 0);`
+ *
+ * This feature is disabled by default.
+ * If the kernel supports it (>= 4.20), you can enable this feature by
+ * setting this flag in the `want` field of the `fuse_conn_info` structure.
+ */
+#define FUSE_CAP_CACHE_SYMLINKS        (1 << 23)
+
+/**
  * Indicates support for zero-message opendirs. If this flag is set in
  * the `capable` field of the `fuse_conn_info` structure, then the filesystem
  * may return `ENOSYS` from the opendir() handler to indicate success. Further
