@@ -121,7 +121,7 @@ struct fuse_config {
 	/**
 	 * The timeout in seconds for which a negative lookup will be
 	 * cached. This means, that if file did not exist (lookup
-	 * retuned ENOENT), the lookup will only be redone after the
+	 * returned ENOENT), the lookup will only be redone after the
 	 * timeout, and the file/directory will be assumed to not
 	 * exist until then. A value of zero means that negative
 	 * lookups are not cached.

@@ -179,7 +179,7 @@ Override the \fIst_gid\fP field set by the filesystem (N is numeric).
 The timeout in seconds for which name lookups will be cached. The default is 1.0 second. For all the timeout options, it is possible to give fractions of a second as well (e.g. \fBentry_timeout=2.8\fP)
 .TP
 \fBnegative_timeout=T\fP
-The timeout in seconds for which a negative lookup will be cached. This means, that if file did not exist (lookup retuned \fBENOENT\fP), the lookup will only be redone after the timeout, and the file/directory will be assumed to not exist until then.  The default is 0.0 second, meaning that caching negative lookups are disabled.
+The timeout in seconds for which a negative lookup will be cached. This means, that if file did not exist (lookup returned \fBENOENT\fP), the lookup will only be redone after the timeout, and the file/directory will be assumed to not exist until then.  The default is 0.0 second, meaning that caching negative lookups are disabled.
 .TP
 \fBattr_timeout=T\fP
 The timeout in seconds for which file/directory attributes are cached.  The default is 1.0 second.
