@@ -10,10 +10,9 @@
 
 /*
   Versioned symbols cannot be used in some cases because it
-    - confuse the dynamic linker in uClibc
     - not supported on MacOSX (in MachO binary format)
 */
-#if (!defined(__UCLIBC__) && !defined(__APPLE__))
+#ifndef __APPLE__
 # if HAVE_SYMVER_ATTRIBUTE
 #  define FUSE_SYMVER(sym1, sym2) __attribute__ ((symver (sym2)))
 # else
