@@ -155,7 +155,7 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 		req->se = se;
 		req->ctr = 1;
 		list_init_req(req);
-		fuse_mutex_init(&req->lock);
+		pthread_mutex_init(&req->lock, NULL);
 	}
 
 	return req;
@@ -2958,7 +2958,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	list_init_req(&se->interrupts);
 	list_init_nreq(&se->notify_list);
 	se->notify_ctr = 1;
-	fuse_mutex_init(&se->lock);
+	pthread_mutex_init(&se->lock, NULL);
 
 	err = pthread_key_create(&se->pipe_key, fuse_ll_pipe_destructor);
 	if (err) {
