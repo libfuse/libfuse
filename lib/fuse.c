@@ -3390,7 +3390,7 @@ static void fuse_lib_opendir(fuse_req_t req, fuse_ino_t ino,
 	dh->len = 0;
 	dh->filled = 0;
 	dh->nodeid = ino;
-	fuse_mutex_init(&dh->lock);
+	pthread_mutex_init(&dh->lock, NULL);
 
 	llfi->fh = (uintptr_t) dh;
 
@@ -4973,7 +4973,7 @@ struct fuse *fuse_new_31(struct fuse_args *args,
 	if (node_table_init(&f->id_table) == -1)
 		goto out_free_name_table;
 
-	fuse_mutex_init(&f->lock);
+	pthread_mutex_init(&f->lock, NULL);
 
 	root = alloc_node(f);
 	if (root == NULL) {

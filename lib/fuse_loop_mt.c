@@ -65,7 +65,7 @@ static struct fuse_chan *fuse_chan_new(int fd)
 	memset(ch, 0, sizeof(*ch));
 	ch->fd = fd;
 	ch->ctr = 1;
-	fuse_mutex_init(&ch->lock);
+	pthread_mutex_init(&ch->lock, NULL);
 
 	return ch;
 }
@@ -321,7 +321,7 @@ int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *co
 	mt.main.thread_id = pthread_self();
 	mt.main.prev = mt.main.next = &mt.main;
 	sem_init(&mt.finish, 0, 0);
-	fuse_mutex_init(&mt.lock);
+	pthread_mutex_init(&mt.lock, NULL);
 
 	pthread_mutex_lock(&mt.lock);
 	err = fuse_loop_start_thread(&mt);
