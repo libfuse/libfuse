@@ -121,16 +121,17 @@ int main(int argc, char **argv)
 		if (!argc) {
 			if (ioctl(fd, FIOC_GET_SIZE, &size)) {
 				perror("ioctl");
-				return 1;
+				goto error;
 			}
 			printf("%zu\n", size);
 		} else {
 			size = param[0];
 			if (ioctl(fd, FIOC_SET_SIZE, &size)) {
 				perror("ioctl");
-				return 1;
+				goto error;
 			}
 		}
+		close(fd);
 		return 0;
 
 	case 'r':
@@ -138,13 +139,18 @@ int main(int argc, char **argv)
 		rc = do_rw(fd, cmd == 'r', param[0], param[1],
 			   &prev_size, &new_size);
 		if (rc < 0)
-			return 1;
+			goto error;
 		fprintf(stderr, "transferred %d bytes (%zu -> %zu)\n",
 			rc, prev_size, new_size);
+		close(fd);
 		return 0;
 	}
 
- usage:
+usage:
 	fprintf(stderr, "%s", usage);
+	return 1;
+
+error:
+	close(fd);
 	return 1;
 }
