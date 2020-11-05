@@ -779,6 +779,7 @@ static int test_copy_file_range(void)
 	res = close(fd_in);
 	if (res == -1) {
 		PERROR("close");
+		close(fd_out);
 		return -1;
 	}
 	res = close(fd_out);
@@ -932,8 +933,10 @@ static int test_create_unlink(void)
 		return -1;
 	}
 	res = check_nonexist(testfile);
-	if (res == -1)
+	if (res == -1) {
+		close(fd);
 		return -1;
+	}
 	res = write(fd, data, datalen);
 	if (res == -1) {
 		PERROR("write");
@@ -1766,8 +1769,10 @@ static int test_socket(void)
 	}
 
 	res = check_type(testsock, S_IFSOCK);
-	if (res == -1)
+	if (res == -1) {
+		close(fd);
 		return -1;
+	}
 	err += check_nlink(testsock, 1);
 	close(fd);
 	res = unlink(testsock);
