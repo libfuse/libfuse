@@ -398,7 +398,7 @@ int main(int argc, char *argv[])
 #endif
 
 		struct passwd *pwd = getpwnam(setuid_name);
-		if (setgid(pwd->pw_gid) == -1 || setuid(pwd->pw_uid) == -1) {
+		if (!pwd || setgid(pwd->pw_gid) == -1 || setuid(pwd->pw_uid) == -1) {
 			fprintf(stderr, "%s: Failed to setuid to %s: %s\n",
 				progname, setuid_name, strerror(errno));
 			exit(1);
