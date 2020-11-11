@@ -267,7 +267,7 @@ static int fuse_bufvec_advance(struct fuse_bufvec *bufv, size_t len)
 	const struct fuse_buf *buf = fuse_bufvec_current(bufv);
 
 	if (!buf)
-		return 1;
+		return 0;
 
 	bufv->off += len;
 	assert(bufv->off <= buf->size);
