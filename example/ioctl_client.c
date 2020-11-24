@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
+#include <unistd.h>
 #include "ioctl.h"
 
 const char *usage =
