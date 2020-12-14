@@ -4350,7 +4350,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 
 		res = poll(&fds, 1, timeout * 1000);
 		if (res == -1) {
-			if (errno == -EINTR)
+			if (errno == EINTR)
 				continue;
 			else
 				break;
