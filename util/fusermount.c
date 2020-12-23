@@ -397,26 +397,12 @@ static int chdir_to_parent(char *copy, const char **lastp)
 }
 
 #ifndef IGNORE_MTAB
-/* Check whether the kernel supports UMOUNT_NOFOLLOW flag */
-static int umount_nofollow_support(void)
-{
-	int res = umount2("", UMOUNT_UNUSED);
-	if (res != -1 || errno != EINVAL)
-		return 0;
-
-	res = umount2("", UMOUNT_NOFOLLOW);
-	if (res != -1 || errno != ENOENT)
-		return 0;
-
-	return 1;
-}
-
 static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 {
 	int res;
 	char *copy;
 	const char *last;
-	int umount_flags = lazy ? UMOUNT_DETACH : 0;
+	int umount_flags = (lazy ? UMOUNT_DETACH : 0) | UMOUNT_NOFOLLOW;
 
 	if (getuid() != 0) {
 		res = may_unmount(mnt, quiet);
@@ -435,14 +421,6 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 	restore_privs();
 	if (res == -1)
 		goto out;
-
-	if (umount_nofollow_support()) {
-		umount_flags |= UMOUNT_NOFOLLOW;
-	} else {
-		res = check_is_mount(last, mnt, NULL);
-		if (res == -1)
-			goto out;
-	}
 
 	res = umount2(last, umount_flags);
 	if (res == -1 && !quiet) {
