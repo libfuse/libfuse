@@ -477,8 +477,10 @@ static ssize_t xmp_copy_file_range(const char *path_in,
 	if (res == -1)
 		res = -errno;
 
-	close(fd_in);
-	close(fd_out);
+	if (fi_out == NULL)
+		close(fd_out);
+	if (fi_in == NULL)
+		close(fd_in);
 
 	return res;
 }
