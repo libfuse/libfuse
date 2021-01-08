@@ -1270,7 +1270,7 @@ int main(int argc, char *argv[])
 		{"version", no_argument, NULL, 'V'},
 		{0, 0, 0, 0}};
 
-	progname = strdup(argv[0]);
+	progname = strdup(argc > 0 ? argv[0] : "fusermount");
 	if (progname == NULL) {
 		fprintf(stderr, "%s: failed to allocate memory\n", argv[0]);
 		exit(1);
