@@ -697,7 +697,7 @@ struct fuse_lowlevel_ops {
 	 * values that was previously returned by readdir() for the same
 	 * directory handle. In this case, readdir() should skip over entries
 	 * coming before the position defined by the off_t value. If entries
-	 * are added or removed while the directory handle is open, they filesystem
+	 * are added or removed while the directory handle is open, the filesystem
 	 * may still include the entries that have been removed, and may not
 	 * report the entries that have been created. However, addition or
 	 * removal of entries must never cause readdir() to skip over unrelated
