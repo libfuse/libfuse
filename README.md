@@ -35,7 +35,7 @@ releases, but unfortunately has no capacity to do any development
 beyond addressing high-impact issues. When reporting bugs, please
 understand that unless you are including a pull request or are
 reporting a critical issue, you will probably not get a response. If
-you are using libfuse, please consider to contribute to the project.
+you are using libfuse, please consider contributing to the project.
 
 
 Supported Platforms
@@ -50,8 +50,8 @@ Installation
 ------------
 
 You can download libfuse from
-https://github.com/libfuse/libfuse/releases. To build and install, we
-recommend to use [Meson](http://mesonbuild.com/) and
+https://github.com/libfuse/libfuse/releases. To build and install, you
+must use [Meson](http://mesonbuild.com/) and
 [Ninja](https://ninja-build.org).  After extracting the libfuse
 tarball, create a (temporary) build directory and run Meson:
 
@@ -65,7 +65,7 @@ nevertheless want to adjust them, you can do so with the
     $ meson configure # list options
     $ meson configure -D disable-mtab=true # set an option
 
-To build, test and install libfuse, you then use Ninja:
+To build, test, and install libfuse, you then use Ninja:
 
     $ ninja
     $ sudo python3 -m pytest test/
