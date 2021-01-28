@@ -773,7 +773,8 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 			blkdev = 1;
 		} else if (opt_eq(s, len, "auto_unmount")) {
 			auto_unmount = 1;
-		} else if (!begins_with(s, "fd=") &&
+		} else if (!opt_eq(s, len, "nonempty") &&
+			   !begins_with(s, "fd=") &&
 			   !begins_with(s, "rootmode=") &&
 			   !begins_with(s, "user_id=") &&
 			   !begins_with(s, "group_id=")) {
