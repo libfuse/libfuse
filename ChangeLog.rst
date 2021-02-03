@@ -4,6 +4,7 @@ Unreleased Changes
 * Allow "nonempty" as a mount option, for backwards compatibility with
   fusermount 2. The option has no effect since mounting over non-empty
   directories is allowed by default.
+* Fix returning inode numbers from readdir() in offset==0 mode.
 
 libfuse 3.10.1 (2020-12-07)
 ===========================
