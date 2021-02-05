@@ -1,10 +1,11 @@
-Unreleased Changes
-==================
+libfuse 3.10.2 (2021-02-05)
+===========================
 
-* Allow "nonempty" as a mount option, for backwards compatibility with
-  fusermount 2. The option has no effect since mounting over non-empty
-  directories is allowed by default.
+* Allow "nonempty" as a mount option, for backwards compatibility with fusermount 2. The
+  option has no effect since mounting over non-empty directories is allowed by default.
 * Fix returning inode numbers from readdir() in offset==0 mode.
+* FUSE filesystems can now be mounted underneath EXFAT mountpoints.
+* Various minor bugfixes.  
 
 libfuse 3.10.1 (2020-12-07)
 ===========================
