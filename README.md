@@ -44,7 +44,7 @@ releases, but unfortunately has no capacity to do any development
 beyond addressing high-impact issues. When reporting bugs, please
 understand that unless you are including a pull request or are
 reporting a critical issue, you will probably not get a response. If
-you are using libfuse, please consider to contribute to the project.
+you are using libfuse, please consider contributing to the project.
 
 
 Supported Platforms
@@ -70,9 +70,6 @@ You are free to use the Unix make, Ninja, or any other CMake supported make syst
 
 Out of source builds are *highly* recommended.  Simply create a (temporary) build directory and run CMake:
 
-    $ mkdir build; cd build
-    $ cmake ..
-
 Normally, the default build options will work fine. However, to build examples, tests, and other recommended utilites, you will probably want to do this:
 (this also specifically uses Unix Makefiles which is the cmake default)
 
@@ -81,7 +78,6 @@ Normally, the default build options will work fine. However, to build examples, 
                 -DOPTION_BUILD_EXAMPLES=ON \
                 -DCMAKE_INSTALL_PREFIX=/home/<USER>/FUSE/install \
                 -DCMAKE_BUILD_TYPE=Debug ..
-
 
 To build, test and install libfuse, you then use make (or other supported make systems, e.g Ninja):
 
@@ -152,7 +148,7 @@ attributes.
 Building your own filesystem
 ------------------------------
 
-FUSE comes with several example file systems in the `examples`
+FUSE comes with several example file systems in the `example`
 directory. For example, the *passthrough* examples mirror the contents
 of the root directory under the mountpoint. Start from there and adapt
 the code!

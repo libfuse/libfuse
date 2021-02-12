@@ -121,7 +121,7 @@ struct fuse_config {
 	/**
 	 * The timeout in seconds for which a negative lookup will be
 	 * cached. This means, that if file did not exist (lookup
-	 * retuned ENOENT), the lookup will only be redone after the
+	 * returned ENOENT), the lookup will only be redone after the
 	 * timeout, and the file/directory will be assumed to not
 	 * exist until then. A value of zero means that negative
 	 * lookups are not cached.
@@ -255,8 +255,8 @@ struct fuse_config {
 	/**
 	 * If this option is given the file-system handlers for the
 	 * following operations will not receive path information:
-	 * read, write, flush, release, fsync, readdir, releasedir,
-	 * fsyncdir, lock, ioctl and poll.
+	 * read, write, flush, release, fallocate, fsync, readdir,
+	 * releasedir, fsyncdir, lock, ioctl and poll.
 	 *
 	 * For the truncate, getattr, chmod, chown and utimens
 	 * operations the path will be provided only if the struct

@@ -783,6 +783,7 @@ static int test_copy_file_range(void)
 	res = close(fd_in);
 	if (res == -1) {
 		PERROR("close");
+		close(fd_out);
 		return -1;
 	}
 	res = close(fd_out);
@@ -936,8 +937,10 @@ static int test_create_unlink(void)
 		return -1;
 	}
 	res = check_nonexist(testfile);
-	if (res == -1)
+	if (res == -1) {
+		close(fd);
 		return -1;
+	}
 	res = write(fd, data, datalen);
 	if (res == -1) {
 		PERROR("write");
@@ -1750,7 +1753,7 @@ static int test_socket(void)
 
 	start_test("socket");
 	if (strlen(testsock) + 1 > sizeof(su.sun_path)) {
-		fprintf(stderr, "Need to shorten mount point by %lu chars\n",
+		fprintf(stderr, "Need to shorten mount point by %zu chars\n",
 			strlen(testsock) + 1 - sizeof(su.sun_path));
 		return -1;
 	}
@@ -1770,8 +1773,10 @@ static int test_socket(void)
 	}
 
 	res = check_type(testsock, S_IFSOCK);
-	if (res == -1)
+	if (res == -1) {
+		close(fd);
 		return -1;
+	}
 	err += check_nlink(testsock, 1);
 	close(fd);
 	res = unlink(testsock);

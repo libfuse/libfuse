@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
+#include <unistd.h>
 #include "ioctl.h"
 
 const char *usage =
@@ -41,6 +42,7 @@ int main(int argc, char **argv)
 {
 	size_t size;
 	int fd;
+	int ret = 0;
 
 	if (argc < 2) {
 		fprintf(stderr, "%s", usage);
@@ -56,15 +58,19 @@ int main(int argc, char **argv)
 	if (argc == 2) {
 		if (ioctl(fd, FIOC_GET_SIZE, &size)) {
 			perror("ioctl");
-			return 1;
+			ret = 1;
+			goto out;
 		}
 		printf("%zu\n", size);
 	} else {
 		size = strtoul(argv[2], NULL, 0);
 		if (ioctl(fd, FIOC_SET_SIZE, &size)) {
 			perror("ioctl");
-			return 1;
+			ret = 1;
+			goto out;
 		}
 	}
-	return 0;
+out:
+	close(fd);
+	return ret;
 }

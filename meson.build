@@ -1,4 +1,4 @@
-project('libfuse3', ['cpp', 'c'], version: '3.9.1',
+project('libfuse3', ['c'], version: '3.10.2',
         meson_version: '>= 0.42',
         default_options: [ 'buildtype=debugoptimized' ])
 
@@ -85,6 +85,32 @@ int main(void) {
 if not cc.compiles(code, args: [ '-O0', '-Werror=unused-result' ])
      message('Compiler warns about unused result even when casting to void')
      add_project_arguments('-Wno-unused-result', language: 'c')
+endif
+
+# gcc-10 and newer support the symver attribute which we need to use if we
+# want to support LTO
+# recent clang and gcc both support __has_attribute (and if they are too old
+# to have __has_attribute, then they are too old to support symver)
+# other compilers might not have __has_attribute, but in those cases
+# it is safe for this check to fail and for us to fallback to the old _asm_
+# method for symver
+code = '''
+#if defined __has_attribute
+# if !__has_attribute (symver)
+# error symver attribute not supported
+# endif
+#else
+#error __has_attribute not defined, assume we do not have symver
+#endif
+
+int main(void) {
+    return 0;
+}'''
+if cc.compiles(code, args: [ '-O0', '-c'])
+     message('Compiler supports symver attribute')
+     add_project_arguments('-DHAVE_SYMVER_ATTRIBUTE', language: 'c')
+else
+     message('Compiler does not support symver attribute')
 endif
 
 # '.' will refer to current build directory, which contains config.h

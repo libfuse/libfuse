@@ -132,7 +132,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		memset(&st, 0, sizeof(st));
 		st.st_ino = de->d_ino;
 		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, 0, 0))
+		if (filler(buf, de->d_name, &st, 0, FUSE_FILL_DIR_PLUS))
 			break;
 	}
 
@@ -477,8 +477,10 @@ static ssize_t xmp_copy_file_range(const char *path_in,
 	if (res == -1)
 		res = -errno;
 
-	close(fd_in);
-	close(fd_out);
+	if (fi_out == NULL)
+		close(fd_out);
+	if (fi_in == NULL)
+		close(fd_in);
 
 	return res;
 }

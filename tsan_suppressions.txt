@@ -1,0 +1,5 @@
+# Use with
+# TSAN_OPTIONS="suppressions=tsan_suppressions.txt" ./myprogram
+
+# False positive
+race:pthread_setcancelstate

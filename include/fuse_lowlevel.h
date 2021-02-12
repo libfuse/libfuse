@@ -697,7 +697,7 @@ struct fuse_lowlevel_ops {
 	 * values that was previously returned by readdir() for the same
 	 * directory handle. In this case, readdir() should skip over entries
 	 * coming before the position defined by the off_t value. If entries
-	 * are added or removed while the directory handle is open, they filesystem
+	 * are added or removed while the directory handle is open, the filesystem
 	 * may still include the entries that have been removed, and may not
 	 * report the entries that have been created. However, addition or
 	 * removal of entries must never cause readdir() to skip over unrelated
@@ -1982,7 +1982,12 @@ int fuse_session_loop(struct fuse_session *se);
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
 #define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
 #else
+#if (!defined(__UCLIBC__) && !defined(__APPLE__))
 int fuse_session_loop_mt(struct fuse_session *se, struct fuse_loop_config *config);
+#else
+int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
+#define fuse_session_loop_mt(se, config) fuse_session_loop_mt_32(se, config)
+#endif
 #endif
 
 /**

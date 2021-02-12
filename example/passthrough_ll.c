@@ -35,7 +35,7 @@
  */
 
 #define _GNU_SOURCE
-#define FUSE_USE_VERSION 31
+#define FUSE_USE_VERSION 34
 
 #include "config.h"
 
@@ -74,7 +74,6 @@ struct lo_inode {
 	struct lo_inode *next; /* protected by lo->mutex */
 	struct lo_inode *prev; /* protected by lo->mutex */
 	int fd;
-	bool is_symlink;
 	ino_t ino;
 	dev_t dev;
 	uint64_t refcount; /* protected by lo->mutex */
@@ -188,26 +187,6 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 	fuse_reply_attr(req, &buf, lo->timeout);
 }
 
-static int utimensat_empty_nofollow(struct lo_inode *inode,
-				    const struct timespec *tv)
-{
-	int res;
-	char procname[64];
-
-	if (inode->is_symlink) {
-		res = utimensat(inode->fd, "", tv,
-				AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-		if (res == -1 && errno == EINVAL) {
-			/* Sorry, no race free way to set times on symlink. */
-			errno = EPERM;
-		}
-		return res;
-	}
-	sprintf(procname, "/proc/self/fd/%i", inode->fd);
-
-	return utimensat(AT_FDCWD, procname, tv, 0);
-}
-
 static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		       int valid, struct fuse_file_info *fi)
 {
@@ -268,8 +247,10 @@ static void lo_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
 		if (fi)
 			res = futimens(fi->fh, tv);
-		else
-			res = utimensat_empty_nofollow(inode, tv);
+		else {
+			sprintf(procname, "/proc/self/fd/%i", ifd);
+			res = utimensat(AT_FDCWD, procname, tv, 0);
+		}
 		if (res == -1)
 			goto out_err;
 	}
@@ -332,7 +313,6 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		if (!inode)
 			goto out_err;
 
-		inode->is_symlink = S_ISLNK(e->attr.st_mode);
 		inode->refcount = 1;
 		inode->fd = newfd;
 		inode->ino = e->attr.st_ino;
@@ -426,26 +406,6 @@ static void lo_symlink(fuse_req_t req, const char *link,
 	lo_mknod_symlink(req, parent, name, S_IFLNK, 0, link);
 }
 
-static int linkat_empty_nofollow(struct lo_inode *inode, int dfd,
-				 const char *name)
-{
-	int res;
-	char procname[64];
-
-	if (inode->is_symlink) {
-		res = linkat(inode->fd, "", dfd, name, AT_EMPTY_PATH);
-		if (res == -1 && (errno == ENOENT || errno == EINVAL)) {
-			/* Sorry, no race free way to hard-link a symlink. */
-			errno = EPERM;
-		}
-		return res;
-	}
-
-	sprintf(procname, "/proc/self/fd/%i", inode->fd);
-
-	return linkat(AT_FDCWD, procname, dfd, name, AT_SYMLINK_FOLLOW);
-}
-
 static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 		    const char *name)
 {
@@ -453,13 +413,16 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	struct lo_data *lo = lo_data(req);
 	struct lo_inode *inode = lo_inode(req, ino);
 	struct fuse_entry_param e;
+	char procname[64];
 	int saverr;
 
 	memset(&e, 0, sizeof(struct fuse_entry_param));
 	e.attr_timeout = lo->timeout;
 	e.entry_timeout = lo->timeout;
 
-	res = linkat_empty_nofollow(inode, lo_fd(req, parent), name);
+	sprintf(procname, "/proc/self/fd/%i", inode->fd);
+	res = linkat(AT_FDCWD, procname, lo_fd(req, parent), name,
+		     AT_SYMLINK_FOLLOW);
 	if (res == -1)
 		goto out_err;
 
@@ -976,12 +939,6 @@ static void lo_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			ino, name, size);
 	}
 
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to getxattr on symlink. */
-		saverr = EPERM;
-		goto out;
-	}
-
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
 
 	if (size) {
@@ -1030,12 +987,6 @@ static void lo_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size)
 	if (lo_debug(req)) {
 		fuse_log(FUSE_LOG_DEBUG, "lo_listxattr(ino=%" PRIu64 ", size=%zd)\n",
 			ino, size);
-	}
-
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to listxattr on symlink. */
-		saverr = EPERM;
-		goto out;
 	}
 
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
@@ -1088,12 +1039,6 @@ static void lo_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			ino, name, value, size);
 	}
 
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to setxattr on symlink. */
-		saverr = EPERM;
-		goto out;
-	}
-
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
 
 	ret = setxattr(procname, name, value, size, flags);
@@ -1117,12 +1062,6 @@ static void lo_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 	if (lo_debug(req)) {
 		fuse_log(FUSE_LOG_DEBUG, "lo_removexattr(ino=%" PRIu64 ", name=%s)\n",
 			ino, name);
-	}
-
-	if (inode->is_symlink) {
-		/* Sorry, no race free way to setxattr on symlink. */
-		saverr = EPERM;
-		goto out;
 	}
 
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
@@ -1217,6 +1156,7 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
+	struct fuse_loop_config config;
 	struct lo_data lo = { .debug = 0,
 	                      .writeback = 0 };
 	int ret = -1;
@@ -1274,7 +1214,6 @@ int main(int argc, char *argv[])
 	} else {
 		lo.source = "/";
 	}
-	lo.root.is_symlink = false;
 	if (!lo.timeout_set) {
 		switch (lo.cache) {
 		case CACHE_NEVER:
@@ -1317,8 +1256,11 @@ int main(int argc, char *argv[])
 	/* Block until ctrl+c or fusermount -u */
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
-	else
-		ret = fuse_session_loop_mt(se, opts.clone_fd);
+	else {
+		config.clone_fd = opts.clone_fd;
+		config.max_idle_threads = opts.max_idle_threads;
+		ret = fuse_session_loop_mt(se, &config);
+	}
 
 	fuse_session_unmount(se);
 err_out3:

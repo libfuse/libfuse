@@ -13,7 +13,7 @@
  *
  * Compile with:
  *
- *     gcc -Wall protocol_info.c `pkg-config fuse3 --cflags --libs` -o protocol_info
+ *     gcc -Wall printcap.c `pkg-config fuse3 --cflags --libs` -o printcap
  *
  * ## Source code ##
  * \include @file
@@ -77,6 +77,8 @@ static void pc_init(void *userdata,
 			printf("\tFUSE_CAP_PARALLEL_DIROPS\n");
 	if(conn->capable & FUSE_CAP_POSIX_ACL)
 			printf("\tFUSE_CAP_POSIX_ACL\n");
+	if(conn->capable & FUSE_CAP_CACHE_SYMLINKS)
+			printf("\tFUSE_CAP_CACHE_SYMLINKS\n");
 	if(conn->capable & FUSE_CAP_NO_OPENDIR_SUPPORT)
 			printf("\tFUSE_CAP_NO_OPENDIR_SUPPORT\n");
 	if(conn->capable & FUSE_CAP_EXPLICIT_INVAL_DATA)

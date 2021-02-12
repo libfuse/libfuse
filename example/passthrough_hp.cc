@@ -121,7 +121,6 @@ typedef std::unordered_map<SrcId, Inode> InodeMap;
 
 struct Inode {
     int fd {-1};
-    bool is_symlink {false};
     dev_t src_dev {0};
     ino_t src_ino {0};
     uint64_t nlookup {0};
@@ -217,28 +216,6 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 }
 
 
-#ifdef HAVE_UTIMENSAT
-static int utimensat_empty_nofollow(Inode& inode,
-                                    const struct timespec *tv) {
-    if (inode.is_symlink) {
-        /* Does not work on current kernels, but may in the future:
-           https://marc.info/?l=linux-kernel&m=154158217810354&w=2 */
-        auto res = utimensat(inode.fd, "", tv, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-        if (res == -1 && errno == EINVAL) {
-            /* Sorry, no race free way to set times on symlink. */
-            errno = EPERM;
-        }
-        return res;
-    }
-
-    char procname[64];
-    sprintf(procname, "/proc/self/fd/%i", inode.fd);
-
-    return utimensat(AT_FDCWD, procname, tv, 0);
-}
-#endif
-
-
 static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
                        int valid, struct fuse_file_info* fi) {
     Inode& inode = get_inode(ino);
@@ -297,7 +274,9 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
             res = futimens(fi->fh, tv);
         else {
 #ifdef HAVE_UTIMENSAT
-            res = utimensat_empty_nofollow(inode, tv);
+            char procname[64];
+            sprintf(procname, "/proc/self/fd/%i", ifd);
+            res = utimensat(AT_FDCWD, procname, tv, 0);
 #else
             res = -1;
             errno = EOPNOTSUPP;
@@ -378,7 +357,6 @@ static int do_lookup(fuse_ino_t parent, const char *name,
         lock_guard<mutex> g {inode.m};
         inode.src_ino = e->attr.st_ino;
         inode.src_dev = e->attr.st_dev;
-        inode.is_symlink = S_ISLNK(e->attr.st_mode);
         inode.nlookup = 1;
         inode.fd = newfd;
         fs_lock.unlock();
@@ -460,22 +438,6 @@ static void sfs_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 }
 
 
-static int linkat_empty_nofollow(Inode& inode, int dfd, const char *name) {
-    if (inode.is_symlink) {
-        auto res = linkat(inode.fd, "", dfd, name, AT_EMPTY_PATH);
-        if (res == -1 && (errno == ENOENT || errno == EINVAL)) {
-            /* Sorry, no race free way to hard-link a symlink. */
-            errno = EOPNOTSUPP;
-        }
-        return res;
-    }
-
-    char procname[64];
-    sprintf(procname, "/proc/self/fd/%i", inode.fd);
-    return linkat(AT_FDCWD, procname, dfd, name, AT_SYMLINK_FOLLOW);
-}
-
-
 static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
                      const char *name) {
     Inode& inode = get_inode(ino);
@@ -485,7 +447,9 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
     e.attr_timeout = fs.timeout;
     e.entry_timeout = fs.timeout;
 
-    auto res = linkat_empty_nofollow(inode, inode_p.fd, name);
+    char procname[64];
+    sprintf(procname, "/proc/self/fd/%i", inode.fd);
+    auto res = linkat(AT_FDCWD, procname, inode_p.fd, name, AT_SYMLINK_FOLLOW);
     if (res == -1) {
         fuse_reply_err(req, errno);
         return;
@@ -965,12 +929,6 @@ static void sfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
     ssize_t ret;
     int saverr;
 
-    if (inode.is_symlink) {
-        /* Sorry, no race free way to getxattr on symlink. */
-        saverr = ENOTSUP;
-        goto out;
-    }
-
     char procname[64];
     sprintf(procname, "/proc/self/fd/%i", inode.fd);
 
@@ -1014,12 +972,6 @@ static void sfs_listxattr(fuse_req_t req, fuse_ino_t ino, size_t size) {
     ssize_t ret;
     int saverr;
 
-    if (inode.is_symlink) {
-        /* Sorry, no race free way to listxattr on symlink. */
-        saverr = ENOTSUP;
-        goto out;
-    }
-
     char procname[64];
     sprintf(procname, "/proc/self/fd/%i", inode.fd);
 
@@ -1062,19 +1014,12 @@ static void sfs_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
     ssize_t ret;
     int saverr;
 
-    if (inode.is_symlink) {
-        /* Sorry, no race free way to setxattr on symlink. */
-        saverr = ENOTSUP;
-        goto out;
-    }
-
     char procname[64];
     sprintf(procname, "/proc/self/fd/%i", inode.fd);
 
     ret = setxattr(procname, name, value, size, flags);
     saverr = ret == -1 ? errno : 0;
 
-out:
     fuse_reply_err(req, saverr);
 }
 
@@ -1085,17 +1030,10 @@ static void sfs_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name) {
     ssize_t ret;
     int saverr;
 
-    if (inode.is_symlink) {
-        /* Sorry, no race free way to setxattr on symlink. */
-        saverr = ENOTSUP;
-        goto out;
-    }
-
     sprintf(procname, "/proc/self/fd/%i", inode.fd);
     ret = removexattr(procname, name);
     saverr = ret == -1 ? errno : 0;
 
-out:
     fuse_reply_err(req, saverr);
 }
 #endif
@@ -1221,7 +1159,6 @@ int main(int argc, char *argv[]) {
     // Initialize filesystem root
     fs.root.fd = -1;
     fs.root.nlookup = 9999;
-    fs.root.is_symlink = false;
     fs.timeout = options.count("nocache") ? 0 : 86400.0;
 
     struct stat stat;
