@@ -1,3 +1,5 @@
+* Fix returning d_ino and d_type from readdir() in offset==0 mode.
+
 libfuse 3.10.2 (2021-02-05)
 ===========================
 
