@@ -32,7 +32,6 @@ struct fuse_worker {
 	struct fuse_worker *prev;
 	struct fuse_worker *next;
 	pthread_t thread_id;
-	size_t bufsize;
 
 	// We need to include fuse_buf so that we can properly free
 	// it when a thread is terminated by pthread_cancel().
