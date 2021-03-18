@@ -3566,7 +3566,7 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 		return 1;
 	}
 
-	if (off && statp && (flags & FUSE_FILL_DIR_PLUS)) {
+	if (statp && (flags & FUSE_FILL_DIR_PLUS)) {
 		e.attr = *statp;
 
 		if (!is_dot_or_dotdot(name)) {

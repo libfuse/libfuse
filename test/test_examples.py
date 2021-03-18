@@ -109,7 +109,8 @@ def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
         umount(mount_process, mnt_dir)
 
 @pytest.mark.parametrize("writeback", (False, True))
-@pytest.mark.parametrize("name", ('passthrough', 'passthrough_fh', 'passthrough_ll'))
+@pytest.mark.parametrize("name", ('passthrough', 'passthrough_plus',
+                           'passthrough_fh', 'passthrough_ll'))
 @pytest.mark.parametrize("debug", (False, True))
 def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
     # Avoid false positives from libfuse debug messages
@@ -124,9 +125,14 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
     mnt_dir = str(short_tmpdir.mkdir('mnt'))
     src_dir = str(short_tmpdir.mkdir('src'))
 
-    cmdline = base_cmdline + \
-              [ pjoin(basename, 'example', name),
-                '-f', mnt_dir ]
+    if name == 'passthrough_plus':
+        cmdline = base_cmdline + \
+                  [ pjoin(basename, 'example', 'passthrough'),
+                    '--plus', '-f', mnt_dir ]
+    else:
+        cmdline = base_cmdline + \
+                  [ pjoin(basename, 'example', name),
+                    '-f', mnt_dir ]
     if debug:
         cmdline.append('-d')
 

@@ -33,16 +33,16 @@ int main(int argc, char* argv[])
         if (strcmp(dent->d_name, ".") != 0 && strcmp(dent->d_name, "..") != 0) {
             printf("%llu %d %s\n", (unsigned long long)dent->d_ino,
 			(int)dent->d_type, dent->d_name);
-            if ((long long)dent->d_ino <= 1)
-               fprintf(stderr,"%s : bad d_ino %lld\n",
-                        (unsigned long long)dent->d_ino);
+            if ((long long)dent->d_ino < 0)
+               fprintf(stderr,"%s : bad d_ino %llu\n",
+                        dent->d_name, (unsigned long long)dent->d_ino);
             if ((dent->d_type < 1) || (dent->d_type > 15))
                fprintf(stderr,"%s : bad d_type %d\n",
-                        (int)dent->d_type);
+                        dent->d_name, (int)dent->d_type);
         } else {
             if (dent->d_type != DT_DIR)
                fprintf(stderr,"%s : bad d_type %d\n",
-                        (int)dent->d_type);
+                        dent->d_name, (int)dent->d_type);
         }
         dent = readdir(dirp);
     }
