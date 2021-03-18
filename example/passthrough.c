@@ -55,6 +55,8 @@
 
 #include "passthrough_helpers.h"
 
+static int fill_dir_plus = 0;
+
 static void *xmp_init(struct fuse_conn_info *conn,
 		      struct fuse_config *cfg)
 {
@@ -132,7 +134,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		memset(&st, 0, sizeof(st));
 		st.st_ino = de->d_ino;
 		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, 0, FUSE_FILL_DIR_PLUS))
+		if (filler(buf, de->d_name, &st, 0, fill_dir_plus))
 			break;
 	}
 
@@ -551,6 +553,18 @@ static const struct fuse_operations xmp_oper = {
 
 int main(int argc, char *argv[])
 {
+	enum { MAX_ARGS = 10 };
+	int i,new_argc;
+	char *new_argv[MAX_ARGS];
+
 	umask(0);
-	return fuse_main(argc, argv, &xmp_oper, NULL);
+			/* Process the "--plus" option apart */
+	for (i=0, new_argc=0; (i<argc) && (new_argc<MAX_ARGS); i++) {
+		if (!strcmp(argv[i], "--plus")) {
+			fill_dir_plus = FUSE_FILL_DIR_PLUS;
+		} else {
+			new_argv[new_argc++] = argv[i];
+		}
+	}
+	return fuse_main(new_argc, new_argv, &xmp_oper, NULL);
 }

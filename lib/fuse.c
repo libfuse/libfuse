@@ -3578,6 +3578,11 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 		}
 	} else {
 		e.attr.st_ino = FUSE_UNKNOWN_INO;
+		if (statp) {
+			e.attr.st_mode = statp->st_mode;
+			if (f->conf.use_ino)
+				e.attr.st_ino = statp->st_ino;
+		}
 		if (!f->conf.use_ino && f->conf.readdir_ino) {
 			e.attr.st_ino = (ino_t)
 				lookup_nodeid(f, dh->nodeid, name);
