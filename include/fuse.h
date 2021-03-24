@@ -361,14 +361,14 @@ struct fuse_operations {
 
 	/** Change the permission bits of a file
 	 *
-	 * `fi` will always be NULL if the file is not currenlty open, but
+	 * `fi` will always be NULL if the file is not currently open, but
 	 * may also be NULL if the file is open.
 	 */
 	int (*chmod) (const char *, mode_t, struct fuse_file_info *fi);
 
 	/** Change the owner and group of a file
 	 *
-	 * `fi` will always be NULL if the file is not currenlty open, but
+	 * `fi` will always be NULL if the file is not currently open, but
 	 * may also be NULL if the file is open.
 	 *
 	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
@@ -378,7 +378,7 @@ struct fuse_operations {
 
 	/** Change the size of a file
 	 *
-	 * `fi` will always be NULL if the file is not currenlty open, but
+	 * `fi` will always be NULL if the file is not currently open, but
 	 * may also be NULL if the file is open.
 	 *
 	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
@@ -648,7 +648,7 @@ struct fuse_operations {
 	 * This supersedes the old utime() interface.  New applications
 	 * should use this.
 	 *
-	 * `fi` will always be NULL if the file is not currenlty open, but
+	 * `fi` will always be NULL if the file is not currently open, but
 	 * may also be NULL if the file is open.
 	 *
 	 * See the utimensat(2) man page for details.
@@ -856,7 +856,7 @@ struct fuse_context {
  *   4: Mounting failed
  *   5: Failed to daemonize (detach from session)
  *   6: Failed to set up signal handlers
- *   7: An error occured during the life of the file system
+ *   7: An error occurred during the life of the file system
  *
  * @param argc the argument counter passed to the main() function
  * @param argv the argument vector passed to the main() function
