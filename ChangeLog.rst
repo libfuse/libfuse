@@ -1,3 +1,8 @@
+UNRELEASED CHANGES
+==================
+
+* <please document user-visible changes here when committing them>
+
 libfuse 3.10.3 (2021-04-12)
 ===========================
 
