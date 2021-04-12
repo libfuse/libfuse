@@ -1,5 +1,8 @@
-* Fix returning d_ino and d_type from readdir(3) in non-plus mode
+libfuse 3.10.3 (2021-04-12)
+===========================
 
+* Fix returning d_ino and d_type from readdir(3) in non-plus mode
+  
 libfuse 3.10.2 (2021-02-05)
 ===========================
 
