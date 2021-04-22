@@ -1251,7 +1251,7 @@ struct fuse_lowlevel_ops {
  * Reply with an error code or success.
  *
  * Possible requests:
- *   all except forget
+ *   all except forget, forget_multi, retrieve_reply
  *
  * Wherever possible, error codes should be chosen from the list of
  * documented error conditions in the corresponding system calls
