@@ -51,6 +51,9 @@ enum fuse_readdir_flags {
 	FUSE_READDIR_PLUS = (1 << 0)
 };
 
+/**
+ * Readdir flags, passed to fuse_fill_dir_t callback.
+ */
 enum fuse_fill_dir_flags {
 	/**
 	 * "Plus" mode: all file attributes are valid
@@ -74,7 +77,7 @@ enum fuse_fill_dir_flags {
  * 
  * @param buf the buffer passed to the readdir() operation
  * @param name the file name of the directory entry
- * @param stat file attributes, can be NULL
+ * @param stbuf file attributes, can be NULL
  * @param off offset of the next entry or zero
  * @param flags fill flags
  * @return 1 if buffer is full, zero otherwise
@@ -984,6 +987,10 @@ int fuse_loop(struct fuse *f);
  */
 void fuse_exit(struct fuse *f);
 
+#if FUSE_USE_VERSION < 32
+int fuse_loop_mt_31(struct fuse *f, int clone_fd);
+#define fuse_loop_mt(f, clone_fd) fuse_loop_mt_31(f, clone_fd)
+#else
 /**
  * FUSE event loop with multiple threads
  *
@@ -1015,10 +1022,6 @@ void fuse_exit(struct fuse *f);
  *
  * See also: fuse_loop()
  */
-#if FUSE_USE_VERSION < 32
-int fuse_loop_mt_31(struct fuse *f, int clone_fd);
-#define fuse_loop_mt(f, clone_fd) fuse_loop_mt_31(f, clone_fd)
-#else
 int fuse_loop_mt(struct fuse *f, struct fuse_loop_config *config);
 #endif
 

@@ -21,8 +21,6 @@
  *
  *     gcc -Wall @file `pkg-config fuse3 --cflags --libs` -o invalidate_path
  *
- * ## Source code ##
- * \include @file
  */
 
 #define FUSE_USE_VERSION 34
