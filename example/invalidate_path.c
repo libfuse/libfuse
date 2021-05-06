@@ -19,7 +19,7 @@
  *
  * ## Compilation ##
  *
- *     gcc -Wall @file `pkg-config fuse3 --cflags --libs` -o invalidate_path
+ *     gcc -Wall invalidate_path.c `pkg-config fuse3 --cflags --libs` -o invalidate_path
  *
  */
 
