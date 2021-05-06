@@ -667,6 +667,10 @@ struct fuse_operations {
 	 */
 	int (*bmap) (const char *, size_t blocksize, uint64_t *idx);
 
+#if FUSE_USE_VERSION < 35
+	int (*ioctl) (const char *, int cmd, void *arg,
+		      struct fuse_file_info *, unsigned int flags, void *data);
+#else
 	/**
 	 * Ioctl
 	 *
@@ -683,10 +687,6 @@ struct fuse_operations {
 	 * Note : the unsigned long request submitted by the application
 	 * is truncated to 32 bits.
 	 */
-#if FUSE_USE_VERSION < 35
-	int (*ioctl) (const char *, int cmd, void *arg,
-		      struct fuse_file_info *, unsigned int flags, void *data);
-#else
 	int (*ioctl) (const char *, unsigned int cmd, void *arg,
 		      struct fuse_file_info *, unsigned int flags, void *data);
 #endif
