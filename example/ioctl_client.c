@@ -16,9 +16,6 @@
  * Compile with:
  *
  *     gcc -Wall ioctl_client.c -o ioctl_client
- *
- * ## Source code ##
- * \include ioctl_client.c
  */
 
 #include <sys/types.h>

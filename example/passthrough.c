@@ -17,9 +17,6 @@
  * Compile with
  *
  *     gcc -Wall passthrough.c `pkg-config fuse3 --cflags --libs` -o passthrough
- *
- * ## Source code ##
- * \include passthrough.c
  */
 
 

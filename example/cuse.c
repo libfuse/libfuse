@@ -25,9 +25,6 @@
  * To compile this example, run
  *
  *     gcc -Wall cuse.c `pkg-config fuse3 --cflags --libs` -o cuse
- *
- * ## Source code ##
- * \include cuse.c
  */
 
 

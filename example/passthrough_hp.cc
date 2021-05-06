@@ -38,9 +38,6 @@
  * the writeback cache requires the kernel to be able to issue read
  * requests for all files (which the passthrough filesystem cannot
  * satisfy if it can't read the file in the underlying filesystem).
- *
- * ## Source code ##
- * \include passthrough_hp.cc
  */
 
 #define FUSE_USE_VERSION 35

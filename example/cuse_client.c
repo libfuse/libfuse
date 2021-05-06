@@ -31,9 +31,6 @@
  * Compiling this example
  *
  *     gcc -Wall cuse_client.c -o cuse_client
- *
- * ## Source Code ##
- * \include cuse_client.c
  */
 
 

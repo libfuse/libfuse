@@ -17,8 +17,6 @@
  *
  *     gcc -Wall poll.c `pkg-config fuse3 --cflags --libs` -o poll
  *
- * ## Source code ##
- * \include poll.c
  */
 
 #define FUSE_USE_VERSION 31

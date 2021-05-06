@@ -53,9 +53,6 @@
  * ## Compilation ##
  *
  *     gcc -Wall notify_inval_inode.c `pkg-config fuse3 --cflags --libs` -o notify_inval_inode
- *
- * ## Source code ##
- * \include notify_inval_inode.c
  */
 
 
