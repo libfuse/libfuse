@@ -1967,6 +1967,11 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
  */
 int fuse_session_loop(struct fuse_session *se);
 
+#if FUSE_USE_VERSION < 32
+int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
+#define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
+#else
+#if (!defined(__UCLIBC__) && !defined(__APPLE__))
 /**
  * Enter a multi-threaded event loop.
  *
@@ -1978,11 +1983,6 @@ int fuse_session_loop(struct fuse_session *se);
  * @param config session loop configuration 
  * @return see fuse_session_loop()
  */
-#if FUSE_USE_VERSION < 32
-int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
-#define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
-#else
-#if (!defined(__UCLIBC__) && !defined(__APPLE__))
 int fuse_session_loop_mt(struct fuse_session *se, struct fuse_loop_config *config);
 #else
 int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
