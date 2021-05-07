@@ -15,6 +15,8 @@
  *
  *      gcc -Wall poll_client.c -o poll_client
  *
+ * ## Source code ##
+ * \include poll_client.c
  */
 
 #include <config.h>

@@ -13,6 +13,9 @@
  * Compile with:
  *
  *     gcc -Wall hello_ll.c `pkg-config fuse3 --cflags --libs` -o hello_ll
+ *
+ * ## Source code ##
+ * \include hello_ll.c
  */
 
 #define FUSE_USE_VERSION 34

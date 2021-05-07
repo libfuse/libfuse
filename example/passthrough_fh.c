@@ -19,6 +19,8 @@
  *
  *     gcc -Wall passthrough_fh.c `pkg-config fuse3 --cflags --libs` -lulockmgr -o passthrough_fh
  *
+ * ## Source code ##
+ * \include passthrough_fh.c
  */
 
 #define FUSE_USE_VERSION 31

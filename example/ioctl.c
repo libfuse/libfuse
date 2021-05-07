@@ -17,6 +17,9 @@
  * Compile with:
  *
  *     gcc -Wall ioctl.c `pkg-config fuse3 --cflags --libs` -o ioctl
+ *
+ * ## Source code ##
+ * \include ioctl.c
  */
 
 #define FUSE_USE_VERSION 35

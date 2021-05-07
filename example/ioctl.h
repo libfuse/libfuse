@@ -12,6 +12,8 @@
  *
  * Header file to share definitions between the ioctl.c example file
  * system and the ioctl_client.c test program.
+ *
+ * \include ioctl.h
  */
 
 

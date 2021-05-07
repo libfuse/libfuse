@@ -17,6 +17,8 @@
  *
  *     gcc -Wall null.c `pkg-config fuse3 --cflags --libs` -o null
  *
+ * ## Source code ##
+ * \include passthrough_fh.c
  */
 
 
