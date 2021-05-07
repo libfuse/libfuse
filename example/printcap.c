@@ -11,10 +11,12 @@
  * minimal example filesystem that prints out all capabilities
  * supported by the kernel and then exits.
  *
- * ## Compilation ##
+ * Compile with:
  *
  *     gcc -Wall printcap.c `pkg-config fuse3 --cflags --libs` -o printcap
  *
+ * ## Source code ##
+ * \include printcap.c
  */
 
 #define FUSE_USE_VERSION 31
