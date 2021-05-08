@@ -171,6 +171,17 @@ static void lo_init(void *userdata,
 	}
 }
 
+static void lo_destroy(void *userdata)
+{
+	struct lo_data *lo = (struct lo_data*) userdata;
+
+	while (lo->root.next != &lo->root) {
+		struct lo_inode* next = lo->root.next;
+		lo->root.next = next->next;
+		free(next);
+	}
+}
+
 static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 			     struct fuse_file_info *fi)
 {
@@ -1113,6 +1124,7 @@ static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 
 static const struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
+	.destroy	= lo_destroy,
 	.lookup		= lo_lookup,
 	.mkdir		= lo_mkdir,
 	.mknod		= lo_mknod,
