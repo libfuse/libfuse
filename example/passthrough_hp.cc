@@ -1126,7 +1126,11 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
 
     fs.debug = options.count("debug") != 0;
     fs.nosplice = options.count("nosplice") != 0;
-    fs.source = std::string {realpath(argv[1], NULL)};
+    char* resolved_path = realpath(argv[1], NULL);
+    if (resolved_path == NULL)
+        warn("WARNING: realpath() failed with");
+    fs.source = std::string {resolved_path};
+    free(resolved_path);
 
     return options;
 }
