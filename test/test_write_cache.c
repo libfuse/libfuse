@@ -127,7 +127,7 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
 
 static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
                       size_t size, off_t off, struct fuse_file_info *fi) {
-    (void) fi; (void) buf; (void) off;
+    (void) fi; (void) buf; (void) off; (void) ino;
     size_t expected;
 
     assert(ino == FILE_INO);

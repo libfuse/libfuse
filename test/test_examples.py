@@ -186,6 +186,7 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.skip
 @pytest.mark.parametrize("cache", (False, True))
 def test_passthrough_hp(short_tmpdir, cache, output_checker):
     mnt_dir = str(short_tmpdir.mkdir('mnt'))

@@ -15,6 +15,7 @@ addons:
     packages:
     - doxygen
     - clang
+    - libc++-helpers
     - libstdc++-7-dev 
     - libstdc++-10-dev
     - gcc
