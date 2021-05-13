@@ -35,4 +35,17 @@ foreach( EXAMPLE ${THREADED_EXAMPLES} )
     target_link_libraries(${EXAMPLE} ${CMAKE_THREAD_LIBS_INIT} fuse3)
 endforeach()
 
+# meson build has a check for CPP compiler use, we don't bother !
+#if not platform.endswith('bsd') and platform != 'dragonfly' and add_languages('cpp', required : false)
+if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "bsd$" AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "dragonfly")
+    add_executable(passthrough_hp passthrough_hp.cc)
+    target_link_libraries(passthrough_hp ${CMAKE_THREAD_LIBS_INIT} fuse3)
+    # The problem with setting global compile options !
+    get_target_property(_target_cxx_flags passthrough_hp COMPILE_OPTIONS)
+    if(_target_cxx_flags)
+        list(REMOVE_ITEM _target_cxx_flags -Wstrict-prototypes)
+        set_target_properties(passthrough_hp PROPERTIES COMPILE_OPTIONS "${_target_cxx_flags}")
+    endif()
+endif()
+
 # TODO: Link passthrough_fh with ulockmgr if available

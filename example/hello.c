@@ -18,6 +18,10 @@
  * \include hello.c
  */
 
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
 
 #define FUSE_USE_VERSION 31
 
@@ -177,3 +181,9 @@ int main(int argc, char *argv[])
 	fuse_opt_free_args(&args);
 	return ret;
 }
+
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif

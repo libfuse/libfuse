@@ -22,6 +22,10 @@
  * \include passthrough.c
  */
 
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
 
 #define FUSE_USE_VERSION 31
 
@@ -29,7 +33,9 @@
 #include "config.h"
 #endif
 
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
 
 #ifdef linux
 /* For pread()/pwrite()/utimensat() */
@@ -314,7 +320,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		fd = open(path, O_RDONLY);
 	else
 		fd = fi->fh;
-	
+
 	if (fd == -1)
 		return -errno;
 
@@ -338,7 +344,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 		fd = open(path, O_WRONLY);
 	else
 		fd = fi->fh;
-	
+
 	if (fd == -1)
 		return -errno;
 
@@ -397,7 +403,7 @@ static int xmp_fallocate(const char *path, int mode,
 		fd = open(path, O_WRONLY);
 	else
 		fd = fi->fh;
-	
+
 	if (fd == -1)
 		return -errno;
 
@@ -568,3 +574,9 @@ int main(int argc, char *argv[])
 	}
 	return fuse_main(new_argc, new_argv, &xmp_oper, NULL);
 }
+
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif

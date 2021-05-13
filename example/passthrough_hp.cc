@@ -43,14 +43,20 @@
  * \include passthrough_hp.cc
  */
 
+
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
+
 #define FUSE_USE_VERSION 35
 
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+    #include "config.h"
 #endif
 
 #ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+    #define _GNU_SOURCE
 #endif
 
 // C includes
@@ -1149,8 +1155,8 @@ static void maximize_fd_limit() {
         warn("WARNING: setrlimit() failed with");
 }
 
-
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
     // Parse command line options
     auto options {parse_options(argc, argv)};
@@ -1220,3 +1226,9 @@ err_out1:
     return ret ? 1 : 0;
 }
 
+
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif

@@ -24,6 +24,10 @@ target_sources(test_syscalls PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/test_syscalls.c)
 target_include_directories(test_syscalls PUBLIC ${INCLUDE_DIRS})
 #target_link_libraries(test_syscalls fuse3 ${CMAKE_THREAD_LIBS_INIT})
 
+add_executable(readdir_inode)
+target_sources(readdir_inode PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/readdir_inode.c)
+target_include_directories(readdir_inode PUBLIC ${INCLUDE_DIRS})
+
 set(TEST_SCRIPTS conftest.py pytest.ini test_examples.py util.py test_ctests.py)
 
 add_custom_target(test_scripts)

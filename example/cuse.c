@@ -30,6 +30,10 @@
  * \include cuse.c
  */
 
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
 
 #define FUSE_USE_VERSION 31
 
@@ -194,7 +198,7 @@ static void fioc_do_rw(fuse_req_t req, void *addr, const void *in_buf,
 	}
 }
 
-static void cusexmp_ioctl(fuse_req_t req, int cmd, void *arg,
+static void cusexmp_ioctl(fuse_req_t req, unsigned int cmd, void *arg,
 			  struct fuse_file_info *fi, unsigned flags,
 			  const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
@@ -318,3 +322,9 @@ int main(int argc, char **argv)
 	return cuse_lowlevel_main(args.argc, args.argv, &ci, &cusexmp_clop,
 				  NULL);
 }
+
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif
