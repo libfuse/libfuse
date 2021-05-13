@@ -35,7 +35,7 @@
  */
 
 #define _GNU_SOURCE
-#define FUSE_USE_VERSION 31
+#define FUSE_USE_VERSION 34
 
 #include "config.h"
 
@@ -168,6 +168,17 @@ static void lo_init(void *userdata,
 		if (lo->debug)
 			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
+	}
+}
+
+static void lo_destroy(void *userdata)
+{
+	struct lo_data *lo = (struct lo_data*) userdata;
+
+	while (lo->root.next != &lo->root) {
+		struct lo_inode* next = lo->root.next;
+		lo->root.next = next->next;
+		free(next);
 	}
 }
 
@@ -1113,6 +1124,7 @@ static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 
 static const struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
+	.destroy	= lo_destroy,
 	.lookup		= lo_lookup,
 	.mkdir		= lo_mkdir,
 	.mknod		= lo_mknod,
@@ -1156,6 +1168,7 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
+	struct fuse_loop_config config;
 	struct lo_data lo = { .debug = 0,
 	                      .writeback = 0 };
 	int ret = -1;
@@ -1255,8 +1268,11 @@ int main(int argc, char *argv[])
 	/* Block until ctrl+c or fusermount -u */
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
-	else
-		ret = fuse_session_loop_mt(se, opts.clone_fd);
+	else {
+		config.clone_fd = opts.clone_fd;
+		config.max_idle_threads = opts.max_idle_threads;
+		ret = fuse_session_loop_mt(se, &config);
+	}
 
 	fuse_session_unmount(se);
 err_out3:

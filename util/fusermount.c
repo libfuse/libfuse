@@ -397,26 +397,12 @@ static int chdir_to_parent(char *copy, const char **lastp)
 }
 
 #ifndef IGNORE_MTAB
-/* Check whether the kernel supports UMOUNT_NOFOLLOW flag */
-static int umount_nofollow_support(void)
-{
-	int res = umount2("", UMOUNT_UNUSED);
-	if (res != -1 || errno != EINVAL)
-		return 0;
-
-	res = umount2("", UMOUNT_NOFOLLOW);
-	if (res != -1 || errno != ENOENT)
-		return 0;
-
-	return 1;
-}
-
 static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 {
 	int res;
 	char *copy;
 	const char *last;
-	int umount_flags = lazy ? UMOUNT_DETACH : 0;
+	int umount_flags = (lazy ? UMOUNT_DETACH : 0) | UMOUNT_NOFOLLOW;
 
 	if (getuid() != 0) {
 		res = may_unmount(mnt, quiet);
@@ -435,14 +421,6 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 	restore_privs();
 	if (res == -1)
 		goto out;
-
-	if (umount_nofollow_support()) {
-		umount_flags |= UMOUNT_NOFOLLOW;
-	} else {
-		res = check_is_mount(last, mnt, NULL);
-		if (res == -1)
-			goto out;
-	}
 
 	res = umount2(last, umount_flags);
 	if (res == -1 && !quiet) {
@@ -795,7 +773,8 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 			blkdev = 1;
 		} else if (opt_eq(s, len, "auto_unmount")) {
 			auto_unmount = 1;
-		} else if (!begins_with(s, "fd=") &&
+		} else if (!opt_eq(s, len, "nonempty") &&
+			   !begins_with(s, "fd=") &&
 			   !begins_with(s, "rootmode=") &&
 			   !begins_with(s, "user_id=") &&
 			   !begins_with(s, "group_id=")) {
@@ -1021,6 +1000,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x00C36400 /* CEPH_SUPER_MAGIC */,
 		0xFF534D42 /* CIFS_MAGIC_NUMBER */,
 		0x0000F15F /* ECRYPTFS_SUPER_MAGIC */,
+		0X2011BAB0 /* EXFAT_SUPER_MAGIC */,
 		0x0000EF53 /* EXT[234]_SUPER_MAGIC */,
 		0xF2F52010 /* F2FS_SUPER_MAGIC */,
 		0x65735546 /* FUSE_SUPER_MAGIC */,
@@ -1291,7 +1271,7 @@ int main(int argc, char *argv[])
 		{"version", no_argument, NULL, 'V'},
 		{0, 0, 0, 0}};
 
-	progname = strdup(argv[0]);
+	progname = strdup(argc > 0 ? argv[0] : "fusermount");
 	if (progname == NULL) {
 		fprintf(stderr, "%s: failed to allocate memory\n", argv[0]);
 		exit(1);

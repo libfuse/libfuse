@@ -30,7 +30,7 @@
 #include <sys/mount.h>
 #include <sys/param.h>
 
-#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__)
+#if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
 #define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
 #endif
 

@@ -10,27 +10,16 @@
 
 /*
   Versioned symbols cannot be used in some cases because it
-    - confuse the dynamic linker in uClibc
     - not supported on MacOSX (in MachO binary format)
 */
-#if (!defined(__UCLIBC__) && !defined(__APPLE__))
-#define FUSE_SYMVER(x) __asm__(x)
+#ifndef __APPLE__
+# if HAVE_SYMVER_ATTRIBUTE
+#  define FUSE_SYMVER(sym1, sym2) __attribute__ ((symver (sym2)))
+# else
+#  define FUSE_SYMVER(sym1, sym2) __asm__("\t.symver " sym1 "," sym2);
+# endif
 #else
-#define FUSE_SYMVER(x)
-#endif
-
-#ifndef USE_UCLIBC
-#define fuse_mutex_init(mut) pthread_mutex_init(mut, NULL)
-#else
-/* Is this hack still needed? */
-static inline void fuse_mutex_init(pthread_mutex_t *mut)
-{
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init(&attr);
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ADAPTIVE_NP);
-	pthread_mutex_init(mut, &attr);
-	pthread_mutexattr_destroy(&attr);
-}
+#define FUSE_SYMVER(sym1, sym2)
 #endif
 
 #ifdef HAVE_STRUCT_STAT_ST_ATIM

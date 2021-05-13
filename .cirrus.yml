@@ -3,8 +3,8 @@
 task:
   name: FreeBSD
   freebsd_instance:
-    image: freebsd-12-0-release-amd64
-  install_script: pkg install -y meson ninja
+    image: freebsd-12-1-release-amd64
+  install_script: ASSUME_ALWAYS_YES=yes pkg bootstrap -f; pkg install -y meson ninja
   script:
     - mkdir build
     - cd build

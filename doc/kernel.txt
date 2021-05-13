@@ -70,7 +70,7 @@ The filesystem type given to mount(2) can be one of the following:
 Mount options
 ~~~~~~~~~~~~~
 
-See mount.fuse(8).
+See mount.fuse3(8).
 
 Control filesystem
 ~~~~~~~~~~~~~~~~~~
@@ -80,7 +80,7 @@ There's a control filesystem for FUSE, which can be mounted by:
   mount -t fusectl none /sys/fs/fuse/connections
 
 Mounting it under the '/sys/fs/fuse/connections' directory makes it
-backwards compatible with earlier versions.
+backwards compatible with versions before 2.6.0.
 
 Under the fuse control filesystem each connection has a directory
 named by a unique number.

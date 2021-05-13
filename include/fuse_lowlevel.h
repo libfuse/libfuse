@@ -697,7 +697,7 @@ struct fuse_lowlevel_ops {
 	 * values that was previously returned by readdir() for the same
 	 * directory handle. In this case, readdir() should skip over entries
 	 * coming before the position defined by the off_t value. If entries
-	 * are added or removed while the directory handle is open, they filesystem
+	 * are added or removed while the directory handle is open, the filesystem
 	 * may still include the entries that have been removed, and may not
 	 * report the entries that have been created. However, addition or
 	 * removal of entries must never cause readdir() to skip over unrelated
@@ -1251,9 +1251,9 @@ struct fuse_lowlevel_ops {
  * Reply with an error code or success.
  *
  * Possible requests:
- *   all except forget
+ *   all except forget, forget_multi, retrieve_reply
  *
- * Whereever possible, error codes should be chosen from the list of
+ * Wherever possible, error codes should be chosen from the list of
  * documented error conditions in the corresponding system calls
  * manpage.
  *
@@ -1967,6 +1967,11 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
  */
 int fuse_session_loop(struct fuse_session *se);
 
+#if FUSE_USE_VERSION < 32
+int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
+#define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
+#else
+#if (!defined(__UCLIBC__) && !defined(__APPLE__))
 /**
  * Enter a multi-threaded event loop.
  *
@@ -1978,11 +1983,11 @@ int fuse_session_loop(struct fuse_session *se);
  * @param config session loop configuration 
  * @return see fuse_session_loop()
  */
-#if FUSE_USE_VERSION < 32
-int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
-#define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
-#else
 int fuse_session_loop_mt(struct fuse_session *se, struct fuse_loop_config *config);
+#else
+int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
+#define fuse_session_loop_mt(se, config) fuse_session_loop_mt_32(se, config)
+#endif
 #endif
 
 /**

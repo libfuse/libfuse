@@ -32,7 +32,6 @@ struct fuse_worker {
 	struct fuse_worker *prev;
 	struct fuse_worker *next;
 	pthread_t thread_id;
-	size_t bufsize;
 
 	// We need to include fuse_buf so that we can properly free
 	// it when a thread is terminated by pthread_cancel().
@@ -65,7 +64,7 @@ static struct fuse_chan *fuse_chan_new(int fd)
 	memset(ch, 0, sizeof(*ch));
 	ch->fd = fd;
 	ch->ctr = 1;
-	fuse_mutex_init(&ch->lock);
+	pthread_mutex_init(&ch->lock, NULL);
 
 	return ch;
 }
@@ -304,7 +303,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	free(w);
 }
 
-FUSE_SYMVER(".symver fuse_session_loop_mt_32,fuse_session_loop_mt@@FUSE_3.2");
+FUSE_SYMVER("fuse_session_loop_mt_32", "fuse_session_loop_mt@@FUSE_3.2")
 int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config)
 {
 	int err;
@@ -321,7 +320,7 @@ int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *co
 	mt.main.thread_id = pthread_self();
 	mt.main.prev = mt.main.next = &mt.main;
 	sem_init(&mt.finish, 0, 0);
-	fuse_mutex_init(&mt.lock);
+	pthread_mutex_init(&mt.lock, NULL);
 
 	pthread_mutex_lock(&mt.lock);
 	err = fuse_loop_start_thread(&mt);
@@ -352,7 +351,7 @@ int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *co
 }
 
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
-FUSE_SYMVER(".symver fuse_session_loop_mt_31,fuse_session_loop_mt@FUSE_3.0");
+FUSE_SYMVER("fuse_session_loop_mt_31", "fuse_session_loop_mt@FUSE_3.0")
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd)
 {
 	struct fuse_loop_config config;
