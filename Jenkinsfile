@@ -5,6 +5,7 @@ pipeline {
         stage('Configure'){
             steps {
                 sh '''
+                rm -rf build;
                 mkdir -p build;
                 cd build;
                 cmake -G "Unix Makefiles" \
@@ -41,6 +42,11 @@ pipeline {
                 // etc/sudoers.d/jenkins looks like this:
                 //     jenkins <HOSTNAME> = (root) NOPASSWD: /usr/bin/chmod-jenkins, /usr/bin/chown-jenkins
                 // The two files just call the real chown and chmod like this:
+                // * Actually, they perform a basic sanity test on the parameters first
+                // * for example:    dirname and basename could be checked
+                // * as well as maybe even doing an 'nm' on the file to see if it
+                // * contains symbols that only fusermount3 would have
+                // * There are many other options to help you feel safe with this.
                 //  /usr/bin/chown "$@"
                 //   and
                 //  /usr/bin/chmod "$@"
