@@ -2,9 +2,7 @@
 
 set -e
 
-# Disable leak checking for now, there are some issues (or false positives)
-# that we still need to fix
-export ASAN_OPTIONS="detect_leaks=0"
+export ASAN_OPTIONS="detect_leaks=1"
 
 export LSAN_OPTIONS="suppressions=$(pwd)/test/lsan_suppress.txt"
 export CC
