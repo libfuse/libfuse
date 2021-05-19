@@ -990,6 +990,11 @@ struct fuse_lowlevel_ops {
 	void (*bmap) (fuse_req_t req, fuse_ino_t ino, size_t blocksize,
 		      uint64_t idx);
 
+#if FUSE_USE_VERSION < 35
+	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd,
+		       void *arg, struct fuse_file_info *fi, unsigned flags,
+		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#else
 	/**
 	 * Ioctl
 	 *
@@ -1018,11 +1023,6 @@ struct fuse_lowlevel_ops {
 	 * Note : the unsigned long request submitted by the application
 	 * is truncated to 32 bits.
 	 */
-#if FUSE_USE_VERSION < 35
-	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, int cmd,
-		       void *arg, struct fuse_file_info *fi, unsigned flags,
-		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
-#else
 	void (*ioctl) (fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 		       void *arg, struct fuse_file_info *fi, unsigned flags,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
