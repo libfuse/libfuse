@@ -55,7 +55,7 @@ pipeline {
                    cd build
                    sudo /usr/bin/chown-jenkins root:root util/fusermount3
                    sudo /usr/bin/chmod-jenkins 4755 util/fusermount3
-                   pytest-3 test/
+                   pytest test/
                    '''
             }
         }
