@@ -1624,7 +1624,7 @@ static int test_rename_dir_loop(void)
 
 	errno = 0;
 	res = rename(PATH("a/b"), PATH2("a/d"));
-	if (res == 0 || errno != ENOTEMPTY) {
+	if (res == 0 || (errno != ENOTEMPTY && errno != EEXIST)) {
 		PERROR("rename");
 		goto fail;
 	}
