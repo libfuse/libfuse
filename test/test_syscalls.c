@@ -21,6 +21,8 @@
 #endif
 
 
+static const char *basepath;
+static const char *basepath_r;
 static char testfile[1024];
 static char testfile2[1024];
 static char testdir[1024];
@@ -42,7 +44,7 @@ static long seekdir_offsets[4];
 static char zerodata[4096];
 static int testdatalen = sizeof(testdata) - 1;
 static int testdata2len = sizeof(testdata2) - 1;
-static unsigned int testnum = 1;
+static unsigned int testnum = 0;
 static unsigned int select_test = 0;
 static unsigned int skip_test = 0;
 
@@ -84,17 +86,20 @@ static void __start_test(const char *fmt, ...)
 {
 	unsigned int n;
 	va_list ap;
-	n = sprintf(testname, "%3i [", testnum++);
+	n = sprintf(testname, "%3i [", testnum);
 	va_start(ap, fmt);
 	n += vsprintf(testname + n, fmt, ap);
 	va_end(ap);
 	sprintf(testname + n, "]");
+	// Use dedicated testfile per test
+	sprintf(testfile, "%s/testfile.%d", basepath, testnum);
+	sprintf(testfile_r, "%s/testfile.%d", basepath_r, testnum);
 }
 
 #define start_test(msg, args...) { \
+	testnum++; \
 	if ((select_test && testnum != select_test) || \
 	    (testnum == skip_test)) { \
-		testnum++; \
 		return 0; \
 	} \
 	__start_test(msg, ##args);		\
@@ -1199,6 +1204,19 @@ static int do_test_open_acc(int flags, const char *flags_str, int mode, int err)
 		}
 		close(fd);
 	}
+
+	res = unlink(testfile);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testfile);
+	if (res == -1)
+		return -1;
+	res = check_nonexist(testfile_r);
+	if (res == -1)
+		return -1;
+
 	success();
 	return 0;
 }
@@ -1252,6 +1270,15 @@ static int test_symlink(void)
 	if (res == -1)
 		return -1;
 	if (err)
+		return -1;
+
+	res = unlink(testfile);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testfile);
+	if (res == -1)
 		return -1;
 
 	success();
@@ -1835,8 +1862,6 @@ static int do_test_create_ro_dir(int flags, const char *flags_str)
 
 int main(int argc, char *argv[])
 {
-	const char *basepath;
-	const char *realpath;
 	int err = 0;
 	int a;
 	int is_root;
@@ -1847,12 +1872,12 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	basepath = argv[1];
-	realpath = basepath;
+	basepath_r = basepath;
 	for (a = 2; a < argc; a++) {
 		char *endptr;
 		char *arg = argv[a];
 		if (arg[0] == ':') {
-			realpath = arg + 1;
+			basepath_r = arg + 1;
 		} else {
 			if (arg[0] == '-') {
 				arg++;
@@ -1867,7 +1892,7 @@ int main(int argc, char *argv[])
 		}
 	}
 	assert(strlen(basepath) < 512);
-	assert(strlen(realpath) < 512);
+	assert(strlen(basepath_r) < 512);
 	if (basepath[0] != '/') {
 		fprintf(stderr, "testdir must be an absolute path\n");
 		return 1;
@@ -1880,10 +1905,10 @@ int main(int argc, char *argv[])
 	sprintf(subfile, "%s/subfile", testdir2);
 	sprintf(testsock, "%s/testsock", basepath);
 
-	sprintf(testfile_r, "%s/testfile", realpath);
-	sprintf(testfile2_r, "%s/testfile2", realpath);
-	sprintf(testdir_r, "%s/testdir", realpath);
-	sprintf(testdir2_r, "%s/testdir2", realpath);
+	sprintf(testfile_r, "%s/testfile", basepath_r);
+	sprintf(testfile2_r, "%s/testfile2", basepath_r);
+	sprintf(testdir_r, "%s/testdir", basepath_r);
+	sprintf(testdir2_r, "%s/testdir2", basepath_r);
 	sprintf(subfile_r, "%s/subfile", testdir2_r);
 
 	is_root = (geteuid() == 0);
@@ -1959,7 +1984,6 @@ int main(int argc, char *argv[])
 	err += test_create_ro_dir(O_CREAT | O_TRUNC);
 	err += test_copy_file_range();
 
-	unlink(testfile);
 	unlink(testfile2);
 	unlink(testsock);
 	rmdir(testdir);
