@@ -49,6 +49,12 @@ static unsigned int select_test = 0;
 static unsigned int skip_test = 0;
 
 #define MAX_ENTRIES 1024
+#define MAX_TESTS 100
+
+static struct test {
+	int fd;
+	struct stat stat;
+} tests[MAX_TESTS];
 
 static void test_perror(const char *func, const char *msg)
 {
@@ -82,6 +88,9 @@ static void success(void)
 	fprintf(stderr, "%s OK\n", testname);
 }
 
+#define this_test (&tests[testnum-1])
+#define next_test (&tests[testnum])
+
 static void __start_test(const char *fmt, ...)
 {
 	unsigned int n;
@@ -94,6 +103,11 @@ static void __start_test(const char *fmt, ...)
 	// Use dedicated testfile per test
 	sprintf(testfile, "%s/testfile.%d", basepath, testnum);
 	sprintf(testfile_r, "%s/testfile.%d", basepath_r, testnum);
+	if (testnum > MAX_TESTS) {
+		fprintf(stderr, "%s - too many tests\n", testname);
+		exit(1);
+	}
+	this_test->fd = -1;
 }
 
 #define start_test(msg, args...) { \
@@ -129,6 +143,12 @@ static int check_size(const char *path, int len)
 		return -1;
 	}
 	return st_check_size(&stbuf, len);
+}
+
+static int check_testfile_size(const char *path, int len)
+{
+	this_test->stat.st_size = len;
+	return check_size(path, len);
 }
 
 static int st_check_type(struct stat *st, mode_t type)
@@ -170,6 +190,13 @@ static int check_mode(const char *path, mode_t mode)
 		return -1;
 	}
 	return st_check_mode(&stbuf, mode);
+}
+
+static int check_testfile_mode(const char *path, mode_t mode)
+{
+	this_test->stat.st_mode &= ~ALLPERMS;
+	this_test->stat.st_mode |= mode;
+	return check_mode(path, mode);
 }
 
 static int check_times(const char *path, time_t atime, time_t mtime)
@@ -241,12 +268,17 @@ static int check_nlink(const char *path, nlink_t nlink)
 	return st_check_nlink(&stbuf, nlink);
 }
 
-static int fcheck_stat(int fd, struct stat *st)
-
+static int fcheck_stat(int fd, int flags, struct stat *st)
 {
 	struct stat stbuf;
 	int res = fstat(fd, &stbuf);
 	if (res == -1) {
+		if (flags & O_PATH) {
+			// With O_PATH fd, the server does not have to keep
+			// the inode alive so FUSE inode may be stale or bad
+			if (errno == ESTALE || errno == EIO || errno == ENOENT)
+				return 0;
+		}
 		PERROR("fstat");
 		return -1;
 	}
@@ -477,6 +509,87 @@ static int create_file(const char *path, const char *data, int len)
 	return 0;
 }
 
+static int create_path_fd(const char *path, const char *data, int len)
+{
+	int path_fd;
+	int res;
+
+	res = create_file(path, data, len);
+	if (res == -1)
+		return -1;
+
+	path_fd = open(path, O_PATH);
+	if (path_fd == -1)
+		PERROR("open(O_PATH)");
+
+	return path_fd;
+}
+
+// Can be called once per test
+static int create_testfile(const char *path, const char *data, int len)
+{
+	struct test *t = this_test;
+	struct stat *st = &t->stat;
+	int res, fd;
+
+	if (t->fd > 0) {
+		ERROR("testfile already created");
+		return -1;
+	}
+
+	fd = create_path_fd(path, data, len);
+	if (fd == -1)
+		return -1;
+
+	t->fd = fd;
+
+	res = fstat(fd, st);
+	if (res == -1) {
+		PERROR("fstat");
+		return -1;
+	}
+
+	return 0;
+}
+
+static int check_unlinked_testfile(int fd)
+{
+	struct stat *st = &this_test->stat;
+
+	st->st_nlink = 0;
+	return fcheck_stat(fd, O_PATH, st);
+}
+
+// Check recorded testfiles after all tests completed
+static int check_unlinked_testfiles(void)
+{
+	int fd;
+	int res, err = 0;
+	int num = testnum;
+
+	testnum = 0;
+	while (testnum < num) {
+		fd = next_test->fd;
+		start_test("check_unlinked_testfile");
+		if (fd == -1)
+			continue;
+
+		err += check_unlinked_testfile(fd);
+		res = close(fd);
+		if (res == -1) {
+			PERROR("close(test_fd)");
+			err--;
+		}
+	}
+
+	if (err) {
+		fprintf(stderr, "%i unlinked testfile checks failed\n", -err);
+		return 1;
+	}
+
+	return err;
+}
+
 static int cleanup_dir(const char *path, const char **dir_files, int quiet)
 {
 	int i;
@@ -541,7 +654,7 @@ static int test_truncate(int len)
 	int res;
 
 	start_test("truncate(%u)", (int) len);
-	res = create_file(testfile, data, datalen);
+	res = create_testfile(testfile, data, datalen);
 	if (res == -1)
 		return -1;
 
@@ -550,7 +663,7 @@ static int test_truncate(int len)
 		PERROR("truncate");
 		return -1;
 	}
-	res = check_size(testfile, len);
+	res = check_testfile_size(testfile, len);
 	if (res == -1)
 		return -1;
 
@@ -590,7 +703,7 @@ static int test_ftruncate(int len, int mode)
 	int fd;
 
 	start_test("ftruncate(%u) mode: 0%03o", len, mode);
-	res = create_file(testfile, data, datalen);
+	res = create_testfile(testfile, data, datalen);
 	if (res == -1)
 		return -1;
 
@@ -606,7 +719,7 @@ static int test_ftruncate(int len, int mode)
 		close(fd);
 		return -1;
 	}
-	res = check_mode(testfile, mode);
+	res = check_testfile_mode(testfile, mode);
 	if (res == -1) {
 		close(fd);
 		return -1;
@@ -618,7 +731,7 @@ static int test_ftruncate(int len, int mode)
 		return -1;
 	}
 	close(fd);
-	res = check_size(testfile, len);
+	res = check_testfile_size(testfile, len);
 	if (res == -1)
 		return -1;
 
@@ -811,7 +924,7 @@ static int test_utime(void)
 	int res;
 
 	start_test("utime");
-	res = create_file(testfile, NULL, 0);
+	res = create_testfile(testfile, NULL, 0);
 	if (res == -1)
 		return -1;
 
@@ -933,7 +1046,7 @@ static int test_create_unlink(void)
 		.st_mode = S_IFREG | 0644,
 		.st_size = datalen,
 	};
-	err = fcheck_stat(fd, &st);
+	err = fcheck_stat(fd, O_RDWR, &st);
 	err += fcheck_data(fd, data, 0, datalen);
 	res = close(fd);
 	if (res == -1) {
@@ -1153,7 +1266,7 @@ static int do_test_open_acc(int flags, const char *flags_str, int mode, int err)
 	start_test("open_acc(%s) mode: 0%03o message: '%s'", flags_str, mode,
 		   strerror(err));
 	unlink(testfile);
-	res = create_file(testfile, data, datalen);
+	res = create_testfile(testfile, data, datalen);
 	if (res == -1)
 		return -1;
 
@@ -1163,7 +1276,7 @@ static int do_test_open_acc(int flags, const char *flags_str, int mode, int err)
 		return -1;
 	}
 
-	res = check_mode(testfile, mode);
+	res = check_testfile_mode(testfile, mode);
 	if (res == -1)
 		return -1;
 
@@ -1208,7 +1321,7 @@ static int test_symlink(void)
 	int res;
 
 	start_test("symlink");
-	res = create_file(testfile, data, datalen);
+	res = create_testfile(testfile, data, datalen);
 	if (res == -1)
 		return -1;
 
@@ -1270,7 +1383,7 @@ static int test_link(void)
 	int res;
 
 	start_test("link");
-	res = create_file(testfile, data, datalen);
+	res = create_testfile(testfile, data, datalen);
 	if (res == -1)
 		return -1;
 
@@ -1320,7 +1433,7 @@ static int test_link2(void)
 	int res;
 
 	start_test("link-unlink-link");
-	res = create_file(testfile, data, datalen);
+	res = create_testfile(testfile, data, datalen);
 	if (res == -1)
 		return -1;
 
@@ -1379,7 +1492,7 @@ static int test_rename_file(void)
 	int res;
 
 	start_test("rename file");
-	res = create_file(testfile, data, datalen);
+	res = create_testfile(testfile, data, datalen);
 	if (res == -1)
 		return -1;
 
@@ -1971,5 +2084,5 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	return 0;
+	return check_unlinked_testfiles();
 }
