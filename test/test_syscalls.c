@@ -110,6 +110,16 @@ static void __start_test(const char *fmt, ...)
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
+static int st_check_size(struct stat *st, int len)
+{
+	if (st->st_size != len) {
+		ERROR("length %u instead of %u", (int) st->st_size,
+		      (int) len);
+		return -1;
+	}
+	return 0;
+}
+
 static int check_size(const char *path, int len)
 {
 	struct stat stbuf;
@@ -118,25 +128,13 @@ static int check_size(const char *path, int len)
 		PERROR("stat");
 		return -1;
 	}
-	if (stbuf.st_size != len) {
-		ERROR("length %u instead of %u", (int) stbuf.st_size,
-		      (int) len);
-		return -1;
-	}
-	return 0;
+	return st_check_size(&stbuf, len);
 }
 
-static int fcheck_size(int fd, int len)
+static int st_check_type(struct stat *st, mode_t type)
 {
-	struct stat stbuf;
-	int res = fstat(fd, &stbuf);
-	if (res == -1) {
-		PERROR("fstat");
-		return -1;
-	}
-	if (stbuf.st_size != len) {
-		ERROR("length %u instead of %u", (int) stbuf.st_size,
-		      (int) len);
+	if ((st->st_mode & S_IFMT) != type) {
+		ERROR("type 0%o instead of 0%o", st->st_mode & S_IFMT, type);
 		return -1;
 	}
 	return 0;
@@ -150,23 +148,14 @@ static int check_type(const char *path, mode_t type)
 		PERROR("lstat");
 		return -1;
 	}
-	if ((stbuf.st_mode & S_IFMT) != type) {
-		ERROR("type 0%o instead of 0%o", stbuf.st_mode & S_IFMT, type);
-		return -1;
-	}
-	return 0;
+	return st_check_type(&stbuf, type);
 }
 
-static int fcheck_type(int fd, mode_t type)
+static int st_check_mode(struct stat *st, mode_t mode)
 {
-	struct stat stbuf;
-	int res = fstat(fd, &stbuf);
-	if (res == -1) {
-		PERROR("fstat");
-		return -1;
-	}
-	if ((stbuf.st_mode & S_IFMT) != type) {
-		ERROR("type 0%o instead of 0%o", stbuf.st_mode & S_IFMT, type);
+	if ((st->st_mode & ALLPERMS) != mode) {
+		ERROR("mode 0%o instead of 0%o", st->st_mode & ALLPERMS,
+		      mode);
 		return -1;
 	}
 	return 0;
@@ -180,28 +169,7 @@ static int check_mode(const char *path, mode_t mode)
 		PERROR("lstat");
 		return -1;
 	}
-	if ((stbuf.st_mode & ALLPERMS) != mode) {
-		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & ALLPERMS,
-		      mode);
-		return -1;
-	}
-	return 0;
-}
-
-static int fcheck_mode(int fd, mode_t mode)
-{
-	struct stat stbuf;
-	int res = fstat(fd, &stbuf);
-	if (res == -1) {
-		PERROR("fstat");
-		return -1;
-	}
-	if ((stbuf.st_mode & ALLPERMS) != mode) {
-		ERROR("mode 0%o instead of 0%o", stbuf.st_mode & ALLPERMS,
-		      mode);
-		return -1;
-	}
-	return 0;
+	return st_check_mode(&stbuf, mode);
 }
 
 static int check_times(const char *path, time_t atime, time_t mtime)
@@ -252,6 +220,16 @@ static int fcheck_times(int fd, time_t atime, time_t mtime)
 }
 #endif
 
+static int st_check_nlink(struct stat *st, nlink_t nlink)
+{
+	if (st->st_nlink != nlink) {
+		ERROR("nlink %li instead of %li", (long) st->st_nlink,
+		      (long) nlink);
+		return -1;
+	}
+	return 0;
+}
+
 static int check_nlink(const char *path, nlink_t nlink)
 {
 	struct stat stbuf;
@@ -260,15 +238,11 @@ static int check_nlink(const char *path, nlink_t nlink)
 		PERROR("lstat");
 		return -1;
 	}
-	if (stbuf.st_nlink != nlink) {
-		ERROR("nlink %li instead of %li", (long) stbuf.st_nlink,
-		      (long) nlink);
-		return -1;
-	}
-	return 0;
+	return st_check_nlink(&stbuf, nlink);
 }
 
-static int fcheck_nlink(int fd, nlink_t nlink)
+static int fcheck_stat(int fd, struct stat *st)
+
 {
 	struct stat stbuf;
 	int res = fstat(fd, &stbuf);
@@ -276,12 +250,14 @@ static int fcheck_nlink(int fd, nlink_t nlink)
 		PERROR("fstat");
 		return -1;
 	}
-	if (stbuf.st_nlink != nlink) {
-		ERROR("nlink %li instead of %li", (long) stbuf.st_nlink,
-		      (long) nlink);
-		return -1;
-	}
-	return 0;
+
+	int err = 0;
+	err += st_check_type(&stbuf, st->st_mode & S_IFMT);
+	err += st_check_mode(&stbuf, st->st_mode & ALLPERMS);
+	err += st_check_size(&stbuf, st->st_size);
+	err += st_check_nlink(&stbuf, st->st_nlink);
+
+	return err;
 }
 
 static int check_nonexist(const char *path)
@@ -953,10 +929,11 @@ static int test_create_unlink(void)
 		close(fd);
 		return -1;
 	}
-	err += fcheck_type(fd, S_IFREG);
-	err += fcheck_mode(fd, 0644);
-	err += fcheck_nlink(fd, 0);
-	err += fcheck_size(fd, datalen);
+	struct stat st = {
+		.st_mode = S_IFREG | 0644,
+		.st_size = datalen,
+	};
+	err = fcheck_stat(fd, &st);
 	err += fcheck_data(fd, data, 0, datalen);
 	res = close(fd);
 	if (res == -1) {
