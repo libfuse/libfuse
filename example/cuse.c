@@ -294,18 +294,21 @@ int main(int argc, char **argv)
 	char dev_name[128] = "DEVNAME=";
 	const char *dev_info_argv[] = { dev_name };
 	struct cuse_info ci;
+	int ret = 1;
 
 	if (fuse_opt_parse(&args, &param, cusexmp_opts, cusexmp_process_arg)) {
 		printf("failed to parse option\n");
-		return 1;
+		free(param.dev_name);
+		goto out;
 	}
 
 	if (!param.is_help) {
 		if (!param.dev_name) {
 			fprintf(stderr, "Error: device name missing\n");
-			return 1;
+			goto out;
 		}
-		strncat(dev_name, param.dev_name, sizeof(dev_name) - 9);
+		strncat(dev_name, param.dev_name, sizeof(dev_name) - sizeof("DEVNAME="));
+		free(param.dev_name);
 	}
 
 	memset(&ci, 0, sizeof(ci));
@@ -315,6 +318,9 @@ int main(int argc, char **argv)
 	ci.dev_info_argv = dev_info_argv;
 	ci.flags = CUSE_UNRESTRICTED_IOCTL;
 
-	return cuse_lowlevel_main(args.argc, args.argv, &ci, &cusexmp_clop,
-				  NULL);
+	ret = cuse_lowlevel_main(args.argc, args.argv, &ci, &cusexmp_clop, NULL);
+
+out:
+	fuse_opt_free_args(&args);
+	return ret;
 }
