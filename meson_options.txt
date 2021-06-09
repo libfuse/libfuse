@@ -13,3 +13,6 @@ option('examples', type : 'boolean', value : true,
 option('useroot', type : 'boolean', value : true,
        description: 'Set owner and setuid bits on installed files')
 
+option('tests', type : 'boolean', value : true,
+       description: 'Compile the test files')
+
