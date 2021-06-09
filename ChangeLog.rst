@@ -1,7 +1,10 @@
-UNRELEASED CHANGES
-==================
+libfuse 3.10.4 (2021-06-09)
+===========================
 
-* <please document user-visible changes here when committing them>
+* Building of unit tests is now optional.
+* Fixed a test failure when running tests under XFS.
+* Fixed memory leaks in examples.
+* Minor documentation fixes.  
 
 libfuse 3.10.3 (2021-04-12)
 ===========================
