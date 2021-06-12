@@ -123,6 +123,8 @@ struct Inode {
     int fd {-1};
     dev_t src_dev {0};
     ino_t src_ino {0};
+    int generation {0};
+    uint64_t nopen {0};
     uint64_t nlookup {0};
     std::mutex m;
 
@@ -340,12 +342,20 @@ static int do_lookup(fuse_ino_t parent, const char *name,
     }
     e->ino = reinterpret_cast<fuse_ino_t>(inode_p);
     Inode& inode {*inode_p};
+    e->generation = inode.generation;
 
-    if(inode.fd != -1) { // found existing inode
+    if (inode.fd == -ENOENT) { // found unlinked inode
+        if (fs.debug)
+            cerr << "DEBUG: lookup(): inode " << e->attr.st_ino
+                 << " recycled; generation=" << inode.generation << endl;
+	/* fallthrough to new inode but keep existing inode.nlookup */
+    }
+
+    if (inode.fd > 0) { // found existing inode
         fs_lock.unlock();
         if (fs.debug)
             cerr << "DEBUG: lookup(): inode " << e->attr.st_ino
-                 << " (userspace) already known." << endl;
+                 << " (userspace) already known; fd = " << inode.fd << endl;
         lock_guard<mutex> g {inode.m};
         inode.nlookup++;
         close(newfd);
@@ -357,13 +367,13 @@ static int do_lookup(fuse_ino_t parent, const char *name,
         lock_guard<mutex> g {inode.m};
         inode.src_ino = e->attr.st_ino;
         inode.src_dev = e->attr.st_dev;
-        inode.nlookup = 1;
+        inode.nlookup++;
         inode.fd = newfd;
         fs_lock.unlock();
 
         if (fs.debug)
             cerr << "DEBUG: lookup(): created userspace inode " << e->attr.st_ino
-                 << endl;
+                 << "; fd = " << inode.fd << endl;
     }
 
     return 0;
@@ -496,6 +506,30 @@ static void sfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name) {
     Inode& inode_p = get_inode(parent);
+    // Release inode.fd before last unlink like nfsd EXPORT_OP_CLOSE_BEFORE_UNLINK
+    // to test reused inode numbers.
+    // Skip this when inode has an open file and when writeback cache is enabled.
+    if (!fs.timeout) {
+	    fuse_entry_param e;
+	    auto err = do_lookup(parent, name, &e);
+	    if (err) {
+		    fuse_reply_err(req, err);
+		    return;
+	    }
+	    if (e.attr.st_nlink == 1) {
+		    Inode& inode = get_inode(e.ino);
+		    lock_guard<mutex> g {inode.m};
+		    if (inode.fd > 0 && !inode.nopen) {
+			    if (fs.debug)
+				    cerr << "DEBUG: unlink: release inode " << e.attr.st_ino
+					    << "; fd=" << inode.fd << endl;
+			    lock_guard<mutex> g_fs {fs.mutex};
+			    close(inode.fd);
+			    inode.fd = -ENOENT;
+			    inode.generation++;
+		    }
+	    }
+    }
     auto res = unlinkat(inode_p.fd, name, 0);
     fuse_reply_err(req, res == -1 ? errno : 0);
 }
@@ -764,8 +798,13 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (err == ENFILE || err == EMFILE)
             cerr << "ERROR: Reached maximum number of file descriptors." << endl;
         fuse_reply_err(req, err);
-    } else
-        fuse_reply_create(req, &e, fi);
+	return;
+    }
+
+    Inode& inode = get_inode(e.ino);
+    lock_guard<mutex> g {inode.m};
+    inode.nopen++;
+    fuse_reply_create(req, &e, fi);
 }
 
 
@@ -814,6 +853,8 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
         return;
     }
 
+    lock_guard<mutex> g {inode.m};
+    inode.nopen++;
     fi->keep_cache = (fs.timeout != 0);
     fi->fh = fd;
     fuse_reply_open(req, fi);
@@ -821,7 +862,9 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
 
 static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
-    (void) ino;
+    Inode& inode = get_inode(ino);
+    lock_guard<mutex> g {inode.m};
+    inode.nopen--;
     close(fi->fh);
     fuse_reply_err(req, 0);
 }
