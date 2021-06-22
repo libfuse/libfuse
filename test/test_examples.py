@@ -17,6 +17,8 @@ import tempfile
 import time
 import errno
 import sys
+import platform
+from distutils.version import LooseVersion
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
@@ -240,6 +242,11 @@ def test_passthrough_hp(short_tmpdir, cache, output_checker):
         if not cache:
             syscall_test_cmd = [ os.path.join(basename, 'test', 'test_syscalls'),
                              mnt_dir, ':' + src_dir ]
+            # unlinked testfiles check fails without kernel fix
+            # "fuse: fix illegal access to inode with reused nodeid"
+            # so opt-in for this test from kernel 5.14
+            if LooseVersion(platform.release()) >= '5.14':
+                syscall_test_cmd.append('-u')
             subprocess.check_call(syscall_test_cmd)
     except:
         cleanup(mount_process, mnt_dir)
