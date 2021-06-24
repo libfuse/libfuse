@@ -243,6 +243,7 @@ int main(int argc, char *argv[])
 	int dev = 1;
 	int suid = 1;
 	int pass_fuse_fd = 0;
+	int fuse_fd = 0;
 	int drop_privileges = 0;
 	char *dev_fd_mountpoint = NULL;
 
@@ -413,7 +414,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (pass_fuse_fd)  {
-		int fuse_fd = prepare_fuse_fd(mountpoint, type, options);
+		fuse_fd = prepare_fuse_fd(mountpoint, type, options);
 		dev_fd_mountpoint = xrealloc(NULL, 20);
 		snprintf(dev_fd_mountpoint, 20, "/dev/fd/%u", fuse_fd);
 		mountpoint = dev_fd_mountpoint;
@@ -441,5 +442,9 @@ int main(int argc, char *argv[])
 	execl("/bin/sh", "/bin/sh", "-c", command, NULL);
 	fprintf(stderr, "%s: failed to execute /bin/sh: %s\n", progname,
 		strerror(errno));
+	
+	if (pass_fuse_fd)
+		close(fuse_fd);
+	free(command);
 	return 1;
 }
