@@ -2,11 +2,6 @@
 
 set -e
 
-export ASAN_OPTIONS="detect_leaks=1"
-
-export LSAN_OPTIONS="suppressions=$(pwd)/test/lsan_suppress.txt"
-export CC
-
 TEST_CMD="python3 -m pytest --maxfail=99 test/"
 
 # Make sure binaries can be accessed when invoked by root.
@@ -21,9 +16,16 @@ SOURCE_DIR="$(readlink -f .)"
 TEST_DIR="$(mktemp -dt libfuse-build-XXXXXX)"
 chmod 0755 "${TEST_DIR}"
 cd "${TEST_DIR}"
+echo "Running in ${TEST_DIR}"
+
+cp -v "${SOURCE_DIR}/test/lsan_suppress.txt" .
+export LSAN_OPTIONS="suppressions=$(pwd)/lsan_suppress.txt"
+export ASAN_OPTIONS="detect_leaks=1"
+export CC
 
 # Standard build
 for CC in gcc gcc-7 gcc-10 clang; do
+    echo "=== Building with ${CC} ==="
     mkdir build-${CC}; cd build-${CC}
     if [ "${CC}" == "clang" ]; then
         export CXX="clang++"
@@ -52,6 +54,7 @@ done
 CC=clang
 CXX=clang++
 for san in undefined address; do
+    echo "=== Building with clang and ${san} sanitizer ==="
     mkdir build-${san}; cd build-${san}
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
