@@ -790,6 +790,12 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
 			ino, fi->flags);
 
+	/* File creation is handled by lo_create() */
+	if (fi->flags & (O_CREAT | O_TMPFILE)) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
 	/* With writeback cache, kernel may send read requests even
 	   when userspace opened write-only */
 	if (lo->writeback && (fi->flags & O_ACCMODE) == O_WRONLY) {
