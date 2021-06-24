@@ -270,8 +270,6 @@ int fuse_daemonize(int foreground)
 		(void) write(waiter[1], &completed, sizeof(completed));
 		close(waiter[0]);
 		close(waiter[1]);
-	} else {
-		(void) chdir("/");
 	}
 	return 0;
 }
