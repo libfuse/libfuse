@@ -9,7 +9,9 @@
   See the file COPYING.LIB
 */
 
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
 
 #include "config.h"
 #include "fuse_i.h"

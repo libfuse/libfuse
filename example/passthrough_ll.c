@@ -33,8 +33,15 @@
  * ## Source code ##
  * \include passthrough_ll.c
  */
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
 
-#define _GNU_SOURCE
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
+
 #define FUSE_USE_VERSION 34
 
 #include "config.h"
@@ -659,7 +666,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 					err = errno;
 					goto error;
 				} else {  // End of stream
-					break; 
+					break;
 				}
 			}
 		}
@@ -691,11 +698,11 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 						    &st, nextoff);
 		}
 		if (entsize > rem) {
-			if (entry_ino != 0) 
+			if (entry_ino != 0)
 				lo_forget_one(req, entry_ino, 1);
 			break;
 		}
-		
+
 		p += entsize;
 		rem -= entsize;
 
@@ -1163,7 +1170,8 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.lseek		= lo_lseek,
 };
 
-int main(int argc, char *argv[])
+
+int main(int argc, char* argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
@@ -1288,3 +1296,9 @@ err_out1:
 
 	return ret ? 1 : 0;
 }
+
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif

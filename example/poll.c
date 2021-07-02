@@ -21,9 +21,15 @@
  * \include poll.c
  */
 
+
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
+
 #define FUSE_USE_VERSION 31
 
-#include <config.h>
+#include "config.h"
 
 #include <fuse.h>
 #include <unistd.h>
@@ -294,3 +300,10 @@ int main(int argc, char *argv[])
 
 	return ret;
 }
+
+
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif

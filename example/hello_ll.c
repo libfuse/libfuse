@@ -18,6 +18,11 @@
  * \include hello_ll.c
  */
 
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
+
 #define FUSE_USE_VERSION 34
 
 #include <fuse_lowlevel.h>
@@ -148,6 +153,7 @@ static void hello_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t off, struct fuse_file_info *fi)
 {
 	(void) fi;
+	(void) ino;
 
 	assert(ino == 2);
 	reply_buf_limited(req, hello_str, strlen(hello_str), off, size);
@@ -224,3 +230,9 @@ err_out1:
 
 	return ret ? 1 : 0;
 }
+
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif

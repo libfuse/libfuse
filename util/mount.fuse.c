@@ -414,8 +414,8 @@ int main(int argc, char *argv[])
 
 	if (pass_fuse_fd)  {
 		int fuse_fd = prepare_fuse_fd(mountpoint, type, options);
-		dev_fd_mountpoint = xrealloc(NULL, 20);
-		snprintf(dev_fd_mountpoint, 20, "/dev/fd/%u", fuse_fd);
+		char *dev_fd_mountpoint = xrealloc(NULL, 20);
+		snprintf(dev_fd_mountpoint, 20, "/dev/fd/%i", fuse_fd);
 		mountpoint = dev_fd_mountpoint;
 	}
 

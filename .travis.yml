@@ -15,6 +15,7 @@ addons:
     packages:
     - doxygen
     - clang
+    - libc++-helpers
     - libstdc++-7-dev 
     - libstdc++-10-dev
     - gcc
@@ -23,6 +24,6 @@ addons:
     - python3-pip
     - python3-setuptools
     - ninja-build
-install: test/travis-install.sh
 script: test/travis-build.sh
+install: test/travis-install.sh
 

@@ -19,7 +19,7 @@
  * \include poll_client.c
  */
 
-#include <config.h>
+#include "config.h"
 
 #include <sys/select.h>
 #include <sys/time.h>

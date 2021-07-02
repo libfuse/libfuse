@@ -7,7 +7,9 @@
 */
 /* This program does the mounting and unmounting of FUSE filesystems */
 
-#define _GNU_SOURCE /* for clone */
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
 #include "config.h"
 #include "mount_util.h"
 
@@ -789,7 +791,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 				    sscanf(utsname.release, "%u.%u",
 					   &kmaj, &kmin) == 2 &&
 				    (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
-					fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %i.%i kernels\n", progname, kmaj, kmin);
+					fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %u.%u kernels\n", progname, kmaj, kmin);
 					skip_option = 1;
 				}
 			}

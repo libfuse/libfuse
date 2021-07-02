@@ -1,8 +1,16 @@
-libfuse
+libfuse (built with CMake)
 =======
 
 About
 -----
+
+This is a fork of the libfuse reference implementation which may be found here:
+[https://github.com/libfuse/libfuse](https://github.com/libfuse/libfuse)
+
+This fork is designed to build with CMake, otherwise it should be identical to
+the reference platform.  The best reference for using libfuse is the reference
+implementation.  BUT - This is the place to come for information about building
+libfuse with CMake instead of meson.
 
 FUSE (Filesystem in Userspace) is an interface for userspace programs
 to export a filesystem to the Linux kernel. The FUSE project consists
@@ -24,61 +32,68 @@ API, the callbacks must work with inodes and responses must be sent
 explicitly using a separate set of API functions.
 
 
-Development Status
-------------------
-
-libfuse is shipped by all major Linux distributions and has been in
-production use across a wide range of systems for many years. However,
-at present libfuse does not have any active, regular contributors. The
-current maintainer continues to apply pull requests and makes regular
-releases, but unfortunately has no capacity to do any development
-beyond addressing high-impact issues. When reporting bugs, please
-understand that unless you are including a pull request or are
-reporting a critical issue, you will probably not get a response. If
-you are using libfuse, please consider contributing to the project.
-
-
 Supported Platforms
 -------------------
 
 * Linux (fully)
 * BSD (mostly/best-effort)
 * For OS-X, please use [OSXFUSE](https://osxfuse.github.io/)
-  
+
 
 Installation
 ------------
 
-You can download libfuse from
-https://github.com/libfuse/libfuse/releases. To build and install, you
-must use [Meson](http://mesonbuild.com/) and
-[Ninja](https://ninja-build.org).  After extracting the libfuse
-tarball, create a (temporary) build directory and run Meson:
+You can download libfuse:
+
+git clone https://github.com/Smit-tay/libfuse-cmake
+
+To build and install, you are free to use meson or CMake
+
+We recommend to use [CMake](https://cmake.org/) the hugely superior meta-make
+system.  CMake allows a developer to use a wide variey of build systems and
+includes native support for various command-line or GUI environments such as
+Visual Studio, Eclipse, CodeBlocks, Ninja, or plain old Unix make.
+
+You are free to use the Unix make, Ninja, or any other CMake supported make
+system - see, CMake is better than meson !
+
+Out of source builds are *highly* recommended.  Simply create a (temporary)
+build directory and run CMake:
 
     $ mkdir build; cd build
-    $ meson ..
+    $ cmake ..
 
-Normally, the default build options will work fine. If you
-nevertheless want to adjust them, you can do so with the
-*meson configure* command:
+Normally, the default build options will work fine. However, to build examples,
+tests, and other recommended utilites, you will probably want to do this:
+(this also explicitly uses Unix Makefiles - the cmake default)
 
-    $ meson configure # list options
-    $ meson configure -D disable-mtab=true # set an option
+   $ cmake -G "Unix Makefiles" \
+                -DOPTION_BUILD_UTILS=ON \
+                -DOPTION_BUILD_EXAMPLES=ON \
+                -DCMAKE_INSTALL_PREFIX=/home/<USER>/FUSE/install \
+                -DCMAKE_BUILD_TYPE=Debug ..
 
-To build, test, and install libfuse, you then use Ninja:
+To build, test and install, you then use make (or other supported build systems):
 
-    $ ninja
-    $ sudo python3 -m pytest test/
-    $ sudo ninja install
+    $ make
+    $ python3 -m pytest test/
+    $ sudo make install
+
+NOTE:  One of the primary outstanding issues (with this libfuse-Cmake fork) is
+to remove any dependency upon python.  Expect to see native ctest replace python
+pytest soon.  IMPORTANT - Tests current perform best when run under python3.6.
+Issues have been reported attempting to use python3.7 with pytest.
 
 Running the tests requires the [py.test](http://www.pytest.org/)
-Python module. Instead of running the tests as root, the majority of
-tests can also be run as a regular user if *util/fusermount3* is made
-setuid root first:
+Python module. Instead of running the tests as root, the majority of tests can
+also be run as a regular user if *util/fusermount3* is made setuid root first:
 
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
-    $ python3 -m pytest test/
+    $ python3.6 -m pytest test/
+
+NOTE: Some tests are designed to "drop privileges" and so will be skipped if the
+user is not root.
 
 Security implications
 ---------------------
@@ -89,7 +104,7 @@ allow normal users to mount their own filesystem implementations.
 To limit the harm that malicious users can do this way, *fusermount3*
 enforces the following limitations:
 
-  - The user can only mount on a mountpoint for which they have write
+  - The user can only mount on a mountpoint for which he has write
     permission
 
   - The mountpoint must not be a sticky directory which isn't owned by
@@ -126,7 +141,7 @@ attributes.
 Building your own filesystem
 ------------------------------
 
-FUSE comes with several example file systems in the `example`
+FUSE comes with several example file systems in the `examples`
 directory. For example, the *passthrough* examples mirror the contents
 of the root directory under the mountpoint. Start from there and adapt
 the code!
@@ -141,9 +156,18 @@ directory and at http://libfuse.github.io/doxygen.
 Getting Help
 ------------
 
-If you need help, please ask on the <fuse-devel@lists.sourceforge.net>
-mailing list (subscribe at
+If you need help related to libfuse itself, please ask on the
+<fuse-devel@lists.sourceforge.net> mailing list (subscribe at
 https://lists.sourceforge.net/lists/listinfo/fuse-devel).
 
-Please report any bugs on the GitHub issue tracker at
+Please report any libfuse bugs on the GitHub issue tracker at
 https://github.com/libfuse/libfuse/issues.
+
+Please report CMake related libfuse bugs here:
+https://github.com/Smit-tay/libfuse-cmake/issues
+
+
+Professional Support
+--------------------
+
+Professional support is offered via [Rath Consulting](http://www.rath-consulting.biz).

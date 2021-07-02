@@ -1,4 +1,6 @@
-#define _GNU_SOURCE
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
 #include "config.h"
 
 #include <stdio.h>
@@ -94,7 +96,7 @@ static void success(void)
 
 static void __start_test(const char *fmt, ...)
 {
-	unsigned int n;
+	int n;
 	va_list ap;
 	n = sprintf(testname, "%3i [", testnum);
 	va_start(ap, fmt);
@@ -852,7 +854,11 @@ static int test_copy_file_range(void)
 		close(fd_in);
 		return -1;
 	}
-
+    res = fsync(fd_in);
+	if (res == -1) {
+		PERROR("fsync");
+		return -1;
+	}
 	unlink(testfile2);
 	fd_out = creat(testfile2, 0644);
 	if (fd_out == -1) {
@@ -1777,7 +1783,7 @@ fail:
 
 	rmdir(PATH("a/d/e"));
 	rmdir(PATH("a/d"));
- 
+
  	rmdir(PATH("a/b/c"));
 	rmdir(PATH("a/b"));
 	rmdir(PATH("a"));
@@ -2017,7 +2023,7 @@ int main(int argc, char *argv[])
 	err += test_symlink();
 	err += test_link();
 	err += test_link2();
-#ifndef __FreeBSD__	
+#ifndef __FreeBSD__
 	err += test_mknod();
 	err += test_mkfifo();
 #endif
