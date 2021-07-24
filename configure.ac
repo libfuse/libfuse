@@ -55,6 +55,7 @@ fi
 
 AC_CHECK_FUNCS([fork setxattr fdatasync splice vmsplice utimensat])
 AC_CHECK_FUNCS([posix_fallocate])
+AC_CHECK_FUNCS([closefrom])
 AC_CHECK_MEMBERS([struct stat.st_atim])
 AC_CHECK_MEMBERS([struct stat.st_atimespec])
 
