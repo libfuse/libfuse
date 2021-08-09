@@ -1,4 +1,4 @@
-project('libfuse3', ['c'], version: '3.10.3',
+project('libfuse3', ['c'], version: '3.10.4',
         meson_version: '>= 0.42',
         default_options: [
             'buildtype=debugoptimized',
@@ -96,20 +96,18 @@ endif
 # to have __has_attribute, then they are too old to support symver)
 # other compilers might not have __has_attribute, but in those cases
 # it is safe for this check to fail and for us to fallback to the old _asm_
-# method for symver
+# method for symver. Anyway the attributes not supported by __has_attribute()
+# unfortunately return true giving a false positive. So let's try to build
+# using __attribute__ ((symver )) and see the result.
 code = '''
-#if defined __has_attribute
-# if !__has_attribute (symver)
-# error symver attribute not supported
-# endif
-#else
-#error __has_attribute not defined, assume we do not have symver
-#endif
+__attribute__ ((symver ("test@TEST")))
+void foo(void) {
+}
 
 int main(void) {
     return 0;
 }'''
-if cc.compiles(code, args: [ '-O0', '-c'])
+if cc.compiles(code, args: [ '-O0', '-c', '-Werror'])
      message('Compiler supports symver attribute')
      add_project_arguments('-DHAVE_SYMVER_ATTRIBUTE', language: 'c')
 else
@@ -125,13 +123,17 @@ thread_dep = dependency('threads')
 #
 # Read build files from sub-directories
 #
-subdirs = [ 'lib', 'include', 'test' ]
+subdirs = [ 'lib', 'include']
 if get_option('utils') and not platform.endswith('bsd') and platform != 'dragonfly'
   subdirs += [ 'util', 'doc' ]
 endif
 
 if get_option('examples')
   subdirs += 'example'
+endif
+
+if get_option('tests')
+  subdirs += 'test'
 endif
 
 foreach n : subdirs
