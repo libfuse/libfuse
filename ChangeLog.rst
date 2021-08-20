@@ -4,13 +4,13 @@ libfuse 3.10.4 (2021-06-09)
 * Building of unit tests is now optional.
 * Fixed a test failure when running tests under XFS.
 * Fixed memory leaks in examples.
-* Minor documentation fixes.  
+* Minor documentation fixes.
 
 libfuse 3.10.3 (2021-04-12)
 ===========================
 
 * Fix returning d_ino and d_type from readdir(3) in non-plus mode
-  
+
 libfuse 3.10.2 (2021-02-05)
 ===========================
 
@@ -18,7 +18,7 @@ libfuse 3.10.2 (2021-02-05)
   option has no effect since mounting over non-empty directories is allowed by default.
 * Fix returning inode numbers from readdir() in offset==0 mode.
 * FUSE filesystems can now be mounted underneath EXFAT mountpoints.
-* Various minor bugfixes.  
+* Various minor bugfixes.
 
 libfuse 3.10.1 (2020-12-07)
 ===========================
@@ -29,7 +29,7 @@ libfuse 3.10.0 (2020-10-09)
 ===========================
 
 * Add FUSE_CAP_CACHE_SYMLINKS: allow caching symlinks in kernel page cache.
-* Various minor bugfixes and improvements.  
+* Various minor bugfixes and improvements.
 
 libfuse 3.9.4 (2020-08-09)
 ==========================
@@ -203,7 +203,7 @@ libfuse 3.2.4 (2018-07-11)
 libfuse 3.2.3 (2018-05-11)
 ==========================
 
-* Fixed a number of compiler warnings.  
+* Fixed a number of compiler warnings.
 
 libfuse 3.2.2 (2018-03-31)
 ==========================
@@ -211,7 +211,7 @@ libfuse 3.2.2 (2018-03-31)
 * Added example fuse.conf file.
 * Added "support" for -o nofail mount option (the option is accepted
   and ignored).
-* Various small bugfixes.  
+* Various small bugfixes.
 
 libfuse 3.2.1 (2017-11-14)
 ==========================

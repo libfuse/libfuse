@@ -15,7 +15,7 @@ addons:
     packages:
     - doxygen
     - clang
-    - libstdc++-7-dev 
+    - libstdc++-7-dev
     - libstdc++-10-dev
     - gcc
     - gcc-7
@@ -25,4 +25,3 @@ addons:
     - ninja-build
 install: test/travis-install.sh
 script: test/travis-build.sh
-

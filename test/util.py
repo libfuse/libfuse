@@ -25,7 +25,7 @@ def test_printcap():
             caps.add(line.strip())
             continue
 
-        hit = re.match(r'Protocol version: (\d+)\.(\d+)$', line) 
+        hit = re.match(r'Protocol version: (\d+)\.(\d+)$', line)
         if hit:
             proto = (int(hit.group(1)), int(hit.group(2)))
 
@@ -168,4 +168,3 @@ except:
     # Rely on test to raise error
     fuse_proto = (0,0)
     fuse_caps = set()
-

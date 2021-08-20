@@ -49,5 +49,3 @@ else
     echo "== FURTHER ACTION REQUIRED =="
     echo "Make sure that your init system will start the ${DESTDIR}/etc/init.d/fuse3 init script"
 fi
-
-

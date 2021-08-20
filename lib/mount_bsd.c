@@ -217,11 +217,11 @@ mount:
 		if (pid == 0) {
 			const char *argv[32];
 			int a = 0;
-			int ret = -1; 
-			
+			int ret = -1;
+
 			if (! fdnam)
 			{
-				ret = asprintf(&fdnam, "%d", fd); 
+				ret = asprintf(&fdnam, "%d", fd);
 				if(ret == -1)
 				{
 					perror("fuse: failed to assemble mount arguments");

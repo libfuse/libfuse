@@ -13,7 +13,7 @@ if platform == 'darwin'
         'Take a look at http://osxfuse.github.io/ instead')
 elif platform == 'cygwin' or platform == 'windows'
   error('libfuse does not support Windows.\n' +
-        'Take a look at http://www.secfs.net/winfsp/ instead')       
+        'Take a look at http://www.secfs.net/winfsp/ instead')
 endif
 
 #
@@ -45,9 +45,9 @@ foreach func : test_funcs
     cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))
 endforeach
-cfg.set('HAVE_SETXATTR', 
+cfg.set('HAVE_SETXATTR',
         cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
-cfg.set('HAVE_ICONV', 
+cfg.set('HAVE_ICONV',
         cc.has_function('iconv', prefix: '#include <iconv.h>'))
 
 # Test if structs have specific member
@@ -118,7 +118,7 @@ endif
 include_dirs = include_directories('include', 'lib', '.')
 
 # Common dependencies
-thread_dep = dependency('threads') 
+thread_dep = dependency('threads')
 
 #
 # Read build files from sub-directories

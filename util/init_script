@@ -1,9 +1,9 @@
 #! /bin/sh
 ### BEGIN INIT INFO
 # Provides:          fuse
-# Required-Start:    
+# Required-Start:
 # Should-Start:      udev
-# Required-Stop:     
+# Required-Stop:
 # Default-Start:     S
 # Default-Stop:
 # Short-Description: Start and stop fuse.
@@ -23,7 +23,7 @@ which fusermount3 &>/dev/null || exit 5
 . /lib/lsb/init-functions
 
 case "$1" in
-    start|restart|force-reload)
+  start|restart|force-reload)
 	if ! grep -qw fuse /proc/filesystems; then
 		echo -n "Loading fuse module"
 		if ! modprobe fuse >/dev/null 2>&1; then
@@ -48,7 +48,7 @@ case "$1" in
 		echo "Fuse control filesystem already available."
 	fi
 	;;
-    stop)
+  stop)
 	if ! grep -qw fuse /proc/filesystems; then
 		echo "Fuse filesystem not loaded."
 		exit 7
@@ -74,7 +74,7 @@ case "$1" in
 		echo "Fuse module not loaded."
 	fi
 	;;
-    status)
+  status)
 	echo -n "Checking fuse filesystem"
 	if ! grep -qw fuse /proc/filesystems; then
 		echo " not available."

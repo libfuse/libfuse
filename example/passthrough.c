@@ -314,7 +314,7 @@ static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		fd = open(path, O_RDONLY);
 	else
 		fd = fi->fh;
-	
+
 	if (fd == -1)
 		return -errno;
 
@@ -338,7 +338,7 @@ static int xmp_write(const char *path, const char *buf, size_t size,
 		fd = open(path, O_WRONLY);
 	else
 		fd = fi->fh;
-	
+
 	if (fd == -1)
 		return -errno;
 
@@ -397,7 +397,7 @@ static int xmp_fallocate(const char *path, int mode,
 		fd = open(path, O_WRONLY);
 	else
 		fd = fi->fh;
-	
+
 	if (fd == -1)
 		return -errno;
 

@@ -44,7 +44,7 @@ Supported Platforms
 * Linux (fully)
 * BSD (mostly/best-effort)
 * For OS-X, please use [OSXFUSE](https://osxfuse.github.io/)
-  
+
 
 Installation
 ------------

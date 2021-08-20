@@ -9,7 +9,7 @@ assignees: ''
 
 PLEASE READ BEFORE REPORTING AN ISSUE
 
-libfuse does not have any active, regular contributors or developers.  The current maintainer continues to apply pull requests and tries to make regular releases, but unfortunately has no capacity to do any development beyond addressing high-impact issues. When reporting bugs, please understand that unless you are including a pull request or are reporting a critical issue, you will probably not get a response.
+libfuse does not have any active, regular contributors or developers. The current maintainer continues to apply pull requests and tries to make regular releases, but unfortunately has no capacity to do any development beyond addressing high-impact issues. When reporting bugs, please understand that unless you are including a pull request or are reporting a critical issue, you will probably not get a response.
 
 To prevent the issue tracker from being flooded with issues that no-one is intending to work on, and to give more visibilty to critical issues that users should be aware of and that most urgently need attention, I will also close most bug reports once they've been inactive for a while.
 

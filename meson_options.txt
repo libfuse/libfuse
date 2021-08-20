@@ -15,4 +15,3 @@ option('useroot', type : 'boolean', value : true,
 
 option('tests', type : 'boolean', value : true,
        description: 'Compile the test files')
-

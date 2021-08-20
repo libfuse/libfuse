@@ -1777,7 +1777,7 @@ fail:
 
 	rmdir(PATH("a/d/e"));
 	rmdir(PATH("a/d"));
- 
+
  	rmdir(PATH("a/b/c"));
 	rmdir(PATH("a/b"));
 	rmdir(PATH("a"));
@@ -2017,7 +2017,7 @@ int main(int argc, char *argv[])
 	err += test_symlink();
 	err += test_link();
 	err += test_link2();
-#ifndef __FreeBSD__	
+#ifndef __FreeBSD__
 	err += test_mknod();
 	err += test_mkfifo();
 #endif

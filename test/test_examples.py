@@ -143,7 +143,7 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
             pytest.skip('example does not support writeback caching')
         cmdline.append('-o')
         cmdline.append('writeback')
-        
+
     mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
                                      stderr=output_checker.fd)
     try:
@@ -199,7 +199,7 @@ def test_passthrough_hp(short_tmpdir, cache, output_checker):
 
     if not cache:
         cmdline.append('--nocache')
-        
+
     mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
                                      stderr=output_checker.fd)
     try:
@@ -254,14 +254,14 @@ def test_passthrough_hp(short_tmpdir, cache, output_checker):
     else:
         umount(mount_process, mnt_dir)
 
-        
+
 @pytest.mark.skipif(fuse_proto < (7,11),
                     reason='not supported by running kernel')
 def test_ioctl(tmpdir, output_checker):
     progname = pjoin(basename, 'example', 'ioctl')
     if not os.path.exists(progname):
         pytest.skip('%s not built' % os.path.basename(progname))
-    
+
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
     cmdline = base_cmdline + [progname, '-f', mnt_dir ]
@@ -307,7 +307,7 @@ def test_null(tmpdir, output_checker):
     progname = pjoin(basename, 'example', 'null')
     if not os.path.exists(progname):
         pytest.skip('%s not built' % os.path.basename(progname))
-    
+
     mnt_file = str(tmpdir) + '/file'
     with open(mnt_file, 'w') as fh:
         fh.write('dummy')
@@ -541,10 +541,10 @@ def tst_seek(src_dir, mnt_dir):
     with os_open(fullname, os.O_WRONLY) as fd:
         os.lseek(fd, 4, os.SEEK_SET)
         os.write(fd, b'com')
-        
+
     with open(fullname, 'rb') as fh:
         assert fh.read() == b'\0foocom\n'
-        
+
 def tst_open_unlink(mnt_dir):
     name = pjoin(mnt_dir, name_generator())
     data1 = b'foo'
@@ -757,5 +757,3 @@ def tst_passthrough(src_dir, mnt_dir):
 
 # avoid warning about unused import
 test_printcap
-
-    
