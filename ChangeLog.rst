@@ -1,3 +1,9 @@
+libfuse 3.10.5 (2021-09-06)
+===========================
+
+* Various improvements to make unit tests more robust.
+  
+
 libfuse 3.10.4 (2021-06-09)
 ===========================
 

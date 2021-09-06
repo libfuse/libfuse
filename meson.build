@@ -1,4 +1,4 @@
-project('libfuse3', ['c'], version: '3.10.4',
+project('libfuse3', ['c'], version: '3.10.5',
         meson_version: '>= 0.42',
         default_options: [
             'buildtype=debugoptimized',
