@@ -1,3 +1,8 @@
+Unreleased Changes
+==================
+
+* Add support for flag FOPEN_NOFLUSH for avoiding flush on close.
+
 libfuse 3.10.5 (2021-09-06)
 ===========================
 
