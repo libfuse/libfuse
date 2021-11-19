@@ -277,7 +277,8 @@ static int fcheck_stat(int fd, int flags, struct stat *st)
 		if (flags & O_PATH) {
 			// With O_PATH fd, the server does not have to keep
 			// the inode alive so FUSE inode may be stale or bad
-			if (errno == ESTALE || errno == EIO || errno == ENOENT)
+			if (errno == ESTALE || errno == EIO ||
+			    errno == ENOENT || errno == EBADF)
 				return 0;
 		}
 		PERROR("fstat");
