@@ -248,6 +248,14 @@ struct fuse_config {
 	int auto_cache;
 
 	/**
+	 * By default, fuse waits for all pending writes to complete
+	 * and calls the FLUSH operation on close(2) of every fuse fd.
+	 * With this option, wait and FLUSH are not done for read-only
+	 * fuse fd, similar to the behavior of NFS/SMB clients.
+	 */
+	int no_rofd_flush;
+
+	/**
 	 * The timeout in seconds for which file attributes are cached
 	 * for the purpose of checking if auto_cache should flush the
 	 * file data on open.
