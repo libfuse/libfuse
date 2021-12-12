@@ -560,10 +560,16 @@ struct fuse_operations {
 			struct fuse_file_info *, enum fuse_readdir_flags);
 
 	/** Release directory
+	 *
+	 * If the directory has been removed after the call to opendir, the
+	 * path parameter will be NULL.
 	 */
 	int (*releasedir) (const char *, struct fuse_file_info *);
 
 	/** Synchronize directory contents
+	 *
+	 * If the directory has been removed after the call to opendir, the
+	 * path parameter will be NULL.
 	 *
 	 * If the datasync parameter is non-zero, then only the user data
 	 * should be flushed, not the meta data
