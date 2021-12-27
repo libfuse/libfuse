@@ -1942,7 +1942,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
  * @return 0 on success, -1 on failure.
  **/
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
-
+int fuse_session_mount2(struct fuse_session *se, const char *mountpoint, int mfd);
 /**
  * Enter a single threaded, blocking event loop.
  *
@@ -2092,7 +2092,10 @@ void fuse_session_process_buf(struct fuse_session *se,
  * @return the actual size of the raw request, or -errno on error
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
-
+void fuse_session_recovery(struct fuse_session *se, void * oldse);
+int fuse_session_size(void);
+void fuse_session_set_saveptr(void * ptr);
+void fuse_session_save(struct fuse_session *se);
 #ifdef __cplusplus
 }
 #endif

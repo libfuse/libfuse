@@ -36,6 +36,7 @@
 
 #define _GNU_SOURCE
 #define FUSE_USE_VERSION 34
+#define FUSE_DEV_IOC_RECOVERY 2147804672
 
 #include "config.h"
 
@@ -54,6 +55,10 @@
 #include <pthread.h>
 #include <sys/file.h>
 #include <sys/xattr.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 
 #include "passthrough_helpers.h"
 
@@ -799,13 +804,13 @@ static void lo_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 
 static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
-	int fd;
+	//int fd;
 	char buf[64];
 	struct lo_data *lo = lo_data(req);
 
 	if (lo_debug(req))
-		fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
-			ino, fi->flags);
+		fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d, fd=%d)\n",
+			ino, fi->flags, lo_fd(req, ino));
 
 	/* With writeback cache, kernel may send read requests even
 	   when userspace opened write-only */
@@ -824,11 +829,8 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fi->flags &= ~O_APPEND;
 
 	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
-	fd = open(buf, fi->flags & ~O_NOFOLLOW);
-	if (fd == -1)
-		return (void) fuse_reply_err(req, errno);
 
-	fi->fh = fd;
+	fi->fh = lo_fd(req, ino);
 	if (lo->cache == CACHE_NEVER)
 		fi->direct_io = 1;
 	else if (lo->cache == CACHE_ALWAYS)
@@ -839,8 +841,8 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	(void) ino;
-
-	close(fi->fh);
+	(void) fi;
+	//close(fi->fh);
 	fuse_reply_err(req, 0);
 }
 
@@ -1182,12 +1184,19 @@ static const struct fuse_lowlevel_ops lo_oper = {
 
 int main(int argc, char *argv[])
 {
+	pid_t pid;
+	int mfd, status;
+	int recovery = 0, se_size;
+	void *gse;
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-	struct fuse_session *se;
+	struct fuse_session *se = NULL;
 	struct fuse_cmdline_opts opts;
 	struct fuse_loop_config config;
 	struct lo_data lo = { .debug = 0,
 	                      .writeback = 0 };
+	struct lo_inode *prev, *next;
+	struct lo_inode gnode;
+	struct stat statbuf;
 	int ret = -1;
 
 	/* Don't mask creation mode, kernel already did that */
@@ -1226,6 +1235,17 @@ int main(int argc, char *argv[])
 
 	lo.debug = opts.debug;
 	lo.root.refcount = 2;
+
+	/* make source directory and test file "test1.file" */
+	mkdir("/tmp/test", 0777);
+	system("dd if=/dev/zero of=/tmp/test/test1.file bs=1M count=200");
+	gnode.fd = open("/tmp/test/test1.file", O_RDWR);
+	fstat(gnode.fd, &statbuf);
+	gnode.ino = statbuf.st_ino;
+	gnode.dev = statbuf.st_dev;
+	gnode.refcount =1;
+
+	lo.source = "/tmp/test";
 	if (lo.source) {
 		struct stat stat;
 		int res;
@@ -1270,39 +1290,77 @@ int main(int argc, char *argv[])
 			 lo.source);
 		exit(1);
 	}
+	/* add gnode into lo.root list for lookup */
+	prev = &lo.root;
+        next = prev->next;
+        next->prev = &gnode;
+        gnode.next = next;
+        gnode.prev = prev;
+        prev->next = &gnode;
+	mfd = open("/dev/fuse", O_RDWR);
+	if (mfd < 0)
+		exit(1);
+	se_size = fuse_session_size();
+	gse = (void *) mmap(NULL, se_size, PROT_WRITE|PROT_READ, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+	memset(gse,0,se_size);
+	fuse_session_set_saveptr(gse);
 
-	se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
-	if (se == NULL)
-	    goto err_out1;
+RECOVERY:
+	pid = fork();
+	if (pid < 0)
+		exit(1);
+	if (pid == 0) { /* in child process */
+		se = fuse_session_new(&args, &lo_oper, sizeof(lo_oper), &lo);
+		if (se == NULL)
+			exit(1);
+		if (recovery == 0) {
+			if (fuse_session_mount2(se, opts.mountpoint, mfd) != 0) {
+				fuse_session_destroy(se);
+				exit(1);
+			}
+		}
+		if (recovery == 1) {
+			fuse_session_recovery(se, gse);
+		}
+		fuse_daemonize(opts.foreground);
 
-	if (fuse_set_signal_handlers(se) != 0)
-	    goto err_out2;
-
-	if (fuse_session_mount(se, opts.mountpoint) != 0)
-	    goto err_out3;
-
-	fuse_daemonize(opts.foreground);
-
-	/* Block until ctrl+c or fusermount -u */
-	if (opts.singlethread)
-		ret = fuse_session_loop(se);
-	else {
-		config.clone_fd = opts.clone_fd;
-		config.max_idle_threads = opts.max_idle_threads;
-		ret = fuse_session_loop_mt(se, &config);
+		if (opts.singlethread)
+			ret = fuse_session_loop(se);
+		else {
+			config.clone_fd = opts.clone_fd;
+			config.max_idle_threads = opts.max_idle_threads;
+			ret = fuse_session_loop_mt(se, &config);
+		}
+		exit(0);
 	}
 
-	fuse_session_unmount(se);
-err_out3:
-	fuse_remove_signal_handlers(se);
-err_out2:
-	fuse_session_destroy(se);
+	if (pid > 0) {
+		if (pid == wait(&status)) {
+			if (WIFEXITED(status) && (WEXITSTATUS(status) == 0) &&  \
+				(WIFSIGNALED(status) == 0) && (WIFSTOPPED(status) == 0))
+				printf(" child normal end \n");
+			else {
+				ioctl(mfd, FUSE_DEV_IOC_RECOVERY, 0);
+				recovery = 1;
+				goto RECOVERY;
+			}
+		} else {
+			ioctl(mfd, FUSE_DEV_IOC_RECOVERY, 0);
+			recovery = 1;
+			goto RECOVERY;
+		}
+		if (se) {
+			fuse_session_unmount(se);
+			fuse_session_destroy(se);
+		}
+		munmap(gse, se_size);
 err_out1:
-	free(opts.mountpoint);
-	fuse_opt_free_args(&args);
+		free(opts.mountpoint);
+		fuse_opt_free_args(&args);
 
-	if (lo.root.fd >= 0)
-		close(lo.root.fd);
+		if (lo.root.fd >= 0)
+			close(lo.root.fd);
 
-	return ret ? 1 : 0;
+		return ret ? 1 : 0;
+	}
 }

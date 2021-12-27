@@ -382,14 +382,14 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 #endif
 
 static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
-			  const char *mnt_opts)
+			  const char *mnt_opts, int mfd)
 {
 	char tmp[128];
 	const char *devname = "/dev/fuse";
 	char *source = NULL;
 	char *type = NULL;
 	struct stat stbuf;
-	int fd;
+	int fd = mfd;
 	int res;
 
 	if (!mnt) {
@@ -410,14 +410,16 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		return -2;
 	}
 
-	fd = open(devname, O_RDWR | O_CLOEXEC);
-	if (fd == -1) {
-		if (errno == ENODEV || errno == ENOENT)
-			fuse_log(FUSE_LOG_ERR, "fuse: device not found, try 'modprobe fuse' first\n");
-		else
-			fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n",
-				devname, strerror(errno));
-		return -1;
+	if (fd <= 0) {
+		fd = open(devname, O_RDWR | O_CLOEXEC);
+		if (fd == -1) {
+			if (errno == ENODEV || errno == ENOENT)
+				fuse_log(FUSE_LOG_ERR, "fuse: device not found, try 'modprobe fuse' first\n");
+			else
+				fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n",
+					devname, strerror(errno));
+			return -1;
+		}
 	}
 	if (!O_CLOEXEC)
 		fcntl(fd, F_SETFD, FD_CLOEXEC);
@@ -558,7 +560,7 @@ void destroy_mount_opts(struct mount_opts *mo)
 }
 
 
-int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
+int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo, int mfd)
 {
 	int res = -1;
 	char *mnt_opts = NULL;
@@ -571,7 +573,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 	if (mo->mtab_opts &&  fuse_opt_add_opt(&mnt_opts, mo->mtab_opts) == -1)
 		goto out;
 
-	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
+	res = fuse_mount_sys(mountpoint, mo, mnt_opts, mfd);
 	if (res == -2) {
 		if (mo->fusermount_opts &&
 		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)

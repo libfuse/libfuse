@@ -433,7 +433,7 @@ int fuse_open_channel(const char *mountpoint, const char* options)
 	if (opts == NULL)
 		return -1;
 
-	fd = fuse_kern_mount(mountpoint, opts);
+	fd = fuse_kern_mount(mountpoint, opts, -1);
 	destroy_mount_opts(opts);
 
 	return fd;

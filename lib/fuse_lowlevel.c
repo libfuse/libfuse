@@ -128,6 +128,48 @@ static void destroy_req(fuse_req_t req)
 	free(req);
 }
 
+int fuse_session_size(void)
+{
+	int size;
+	size = sizeof(struct fuse_session);
+	return size;
+}
+
+static struct fuse_session * global_se = NULL;
+
+void fuse_session_set_saveptr(void * ptr)
+{
+	global_se = (struct fuse_session *) ptr;
+}
+
+void fuse_session_save(struct fuse_session *se)
+{
+	memcpy(global_se, se, sizeof(struct fuse_session));
+	fuse_log(FUSE_LOG_ERR," fuse_session_save minor=%d,%d \n", se->conn.proto_minor, global_se->conn.proto_minor);
+}
+
+void fuse_session_recovery(struct fuse_session *se, void * oldse)
+{
+	struct fuse_session * save_se = (struct fuse_session *) oldse;
+	se->conn.proto_major = save_se->conn.proto_major;
+	se->conn.proto_minor = save_se->conn.proto_minor;
+	se->conn.capable = save_se->conn.capable;
+	se->conn.want = save_se->conn.want;
+	se->conn.capable = save_se->conn.capable;
+	se->conn.max_readahead = save_se->conn.max_readahead;
+	se->conn.want = save_se->conn.want;
+	se->conn.time_gran = save_se->conn.time_gran;
+	se->bufsize = save_se->bufsize;
+	se->got_init = save_se->got_init;
+	se->conn.max_background = save_se->conn.max_background;
+	se->conn.congestion_threshold = save_se->conn.congestion_threshold;
+	se->exited = 0;
+	se->fd = save_se->fd;
+	se->mountpoint = save_se->mountpoint;
+	se->pipe_key = save_se->pipe_key;
+}
+
+
 void fuse_free_req(fuse_req_t req)
 {
 	int ctr;
@@ -2149,6 +2191,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	else if (arg->minor < 23)
 		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
 
+	/* save init state */
+	fuse_session_save(se);
 	send_reply_ok(req, &outarg, outargsize);
 }
 
@@ -3007,6 +3051,56 @@ out1:
 	return NULL;
 }
 
+int fuse_session_mount2(struct fuse_session *se, const char *mountpoint, int mfd)
+{
+	int fd;
+
+        /*
+         * Make sure file descriptors 0, 1 and 2 are open, otherwise chaos
+         * would ensue.
+         */
+	do {
+		fd = open("/dev/null", O_RDWR);
+		if (fd > 2)
+			close(fd);
+	} while (fd >= 0 && fd <= 2);
+
+        /*
+         * To allow FUSE daemons to run without privileges, the caller may open
+         * /dev/fuse before launching the file system and pass on the file
+         * descriptor by specifying /dev/fd/N as the mount point. Note that the
+         * parent process takes care of performing the mount in this case.
+         */
+	fd = fuse_mnt_parse_fuse_fd(mountpoint);
+	if (fd != -1) {
+		if (fcntl(fd, F_GETFD) == -1) {
+			fuse_log(FUSE_LOG_ERR,
+                                "fuse: Invalid file descriptor /dev/fd/%u\n",
+                                fd);
+			return -1;
+		}
+		se->fd = fd;
+		return 0;
+	}
+
+	/* Open channel */
+	fd = fuse_kern_mount(mountpoint, se->mo, mfd);
+	if (fd == -1)
+		return -1;
+	se->fd = fd;
+
+	/* Save mountpoint */
+	se->mountpoint = strdup(mountpoint);
+	if (se->mountpoint == NULL)
+		goto error_out;
+
+	return 0;
+
+error_out:
+	fuse_kern_unmount(mountpoint, fd);
+	return -1;
+}
+
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
 	int fd;
@@ -3040,7 +3134,7 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 	}
 
 	/* Open channel */
-	fd = fuse_kern_mount(mountpoint, se->mo);
+	fd = fuse_kern_mount(mountpoint, se->mo, -1);
 	if (fd == -1)
 		return -1;
 	se->fd = fd;

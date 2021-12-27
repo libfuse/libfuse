@@ -20,6 +20,10 @@ FUSE_3.0 {
 		fuse_session_loop_mt;
 		fuse_session_reset;
 		fuse_session_fd;
+		fuse_session_recovery;
+		fuse_session_save;
+		fuse_session_set_saveptr;
+		fuse_session_size;
 		fuse_opt_parse;
 		fuse_opt_add_opt;
 		fuse_opt_add_arg;
@@ -40,6 +44,7 @@ FUSE_3.0 {
 		fuse_main_real;
 		fuse_mount;
 		fuse_session_mount;
+		fuse_session_mount2;
 		fuse_new;
 		fuse_opt_insert_arg;
 		fuse_reply_lock;
