@@ -34,9 +34,11 @@
 struct options {
     int writeback;
     int data_size;
+    int delay_ms;
 } options = {
     .writeback = 0,
     .data_size = 4096,
+    .delay_ms = 0,
 };
 
 #define OPTION(t, p)                           \
@@ -44,9 +46,14 @@ struct options {
 static const struct fuse_opt option_spec[] = {
     OPTION("writeback_cache", writeback),
     OPTION("--data-size=%d", data_size),
+    OPTION("--delay_ms=%d", delay_ms),
     FUSE_OPT_END
 };
 static int got_write;
+
+pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static int write_start, write_done;
 
 static void tfs_init (void *userdata, struct fuse_conn_info *conn)
 {
@@ -117,6 +124,9 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
         fuse_reply_err(req, EISDIR);
     else {
         assert(ino == FILE_INO);
+        /* Test close(rofd) does not block waiting for pending writes */
+        fi->noflush = !options.writeback && options.delay_ms &&
+                      (fi->flags & O_ACCMODE) == O_RDONLY;
         fuse_reply_open(req, fi);
     }
 }
@@ -136,6 +146,22 @@ static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
                 expected, size);
     else
         got_write = 1;
+
+    /* Simulate waiting for pending writes */
+    if (options.delay_ms) {
+        pthread_mutex_lock(&lock);
+        write_start = 1;
+        pthread_cond_signal(&cond);
+        pthread_mutex_unlock(&lock);
+
+        usleep(options.delay_ms * 1000);
+
+        pthread_mutex_lock(&lock);
+        write_done = 1;
+        pthread_cond_signal(&cond);
+        pthread_mutex_unlock(&lock);
+    }
+
     fuse_reply_write(req, size);
 }
 
@@ -147,6 +173,25 @@ static struct fuse_lowlevel_ops tfs_oper = {
     .write	= tfs_write,
 };
 
+static void* close_rofd(void *data) {
+    int rofd = (int)(long) data;
+
+    /* Wait for first write to start */
+    pthread_mutex_lock(&lock);
+    while (!write_start && !write_done)
+        pthread_cond_wait(&cond, &lock);
+    pthread_mutex_unlock(&lock);
+
+    close(rofd);
+    printf("rofd closed. write_start: %d write_done: %d\n", write_start, write_done);
+
+    /* First write should not have been completed */
+    if (write_done)
+        fprintf(stderr, "ERROR: close(rofd) blocked on write!\n");
+
+    return NULL;
+}
+
 static void* run_fs(void *data) {
     struct fuse_session *se = (struct fuse_session*) data;
     assert(fuse_session_loop(se) == 0);
@@ -157,7 +202,8 @@ static void test_fs(char *mountpoint) {
     char fname[PATH_MAX];
     char *buf;
     size_t dsize = options.data_size;
-    int fd;
+    int fd, rofd;
+    pthread_t rofd_thread;
 
     buf = malloc(dsize);
     assert(buf != NULL);
@@ -173,10 +219,23 @@ static void test_fs(char *mountpoint) {
         assert(0);
     }
 
+    if (options.delay_ms) {
+        /* Verify that close(rofd) does not block waiting for pending writes */
+        rofd = open(fname, O_RDONLY);
+        assert(pthread_create(&rofd_thread, NULL, close_rofd, (void *)(long)rofd) == 0);
+        /* Give close_rofd time to start */
+        usleep(options.delay_ms * 1000);
+    }
+
     assert(write(fd, buf, dsize) == dsize);
     assert(write(fd, buf, dsize) == dsize);
     free(buf);
     close(fd);
+
+    if (options.delay_ms) {
+        printf("rwfd closed. write_start: %d write_done: %d\n", write_start, write_done);
+        assert(pthread_join(rofd_thread, NULL) == 0);
+    }
 }
 
 int main(int argc, char *argv[]) {
