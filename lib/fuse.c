@@ -1037,7 +1037,7 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 
 	for (node = get_node(f, nodeid); node->nodeid != FUSE_ROOT_ID;
 	     node = node->parent) {
-		err = -ENOENT;
+		err = -ESTALE;
 		if (node->name == NULL || node->parent == NULL)
 			goto out_unlock;
 
@@ -1246,7 +1246,7 @@ static int get_path_nullok(struct fuse *f, fuse_ino_t nodeid, char **path)
 		*path = NULL;
 	} else {
 		err = get_path_common(f, nodeid, NULL, path, NULL);
-		if (err == -ENOENT)
+		if (err == -ESTALE)
 			err = 0;
 	}
 
