@@ -422,7 +422,7 @@ libfuse 3.0.0 (2016-12-08)
 
 * The ``-o nopath`` option has been dropped - it never actually did
   anything (since it is unconditionally overwritten with the value of
-  the `nopath` flag in `struct fuse_operations).
+  the `nopath` flag in `struct fuse_operations`).
 
 * The ``-o large_read`` mount option has been dropped. Hopefully no
   one uses a Linux 2.4 kernel anymore.
@@ -446,7 +446,7 @@ libfuse 3.0.0 (2016-12-08)
 
 * The `fuse_session_new` function no longer accepts the ``-o
   clone_fd`` option. Instead, this has become a parameter of the
-  `fuse_session_loop_mt` and ``fuse_loop_mt` functions.
+  `fuse_session_loop_mt` and `fuse_loop_mt` functions.
 
 * For low-level file systems that implement the `write_buf` handler,
   the `splice_read` option is now enabled by default. As usual, this
@@ -636,7 +636,7 @@ libfuse 3.0.0 (2016-12-08)
 * The *fuse_off_t* and *fuse_ino_t* changed from *unsigned long* to
   *uint64_t*, i.e. they are now 64 bits also on 32-bit systems.
 
-* The type of the *generation* member of `struct fuse_entry_param*
+* The type of the *generation* member of `struct fuse_entry_param*`
   changed from *unsigned* to *uint64_t*.
 
 * The (low-level) `setattr` handler gained a *FUSE_SET_ATTR_CTIME* bit
