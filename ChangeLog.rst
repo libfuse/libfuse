@@ -1,3 +1,5 @@
+* Fixed returning an error condition to ioctl(2)
+
 libfuse 3.10.5 (2021-09-06)
 ===========================
 
