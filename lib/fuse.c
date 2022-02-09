@@ -4289,6 +4289,8 @@ static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 	fuse_finish_interrupt(f, req, &d);
 	free_path(f, ino, path);
 
+	if (err < 0)
+		goto err;
 	fuse_reply_ioctl(req, err, out_buf, out_bufsz);
 	goto out;
 err:
