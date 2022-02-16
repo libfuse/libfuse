@@ -1039,7 +1039,7 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 
 	for (node = get_node(f, nodeid); node->nodeid != FUSE_ROOT_ID;
 	     node = node->parent) {
-		err = -ENOENT;
+		err = -ESTALE;
 		if (node->name == NULL || node->parent == NULL)
 			goto out_unlock;
 
@@ -1248,7 +1248,7 @@ static int get_path_nullok(struct fuse *f, fuse_ino_t nodeid, char **path)
 		*path = NULL;
 	} else {
 		err = get_path_common(f, nodeid, NULL, path, NULL);
-		if (err == -ENOENT)
+		if (err == -ESTALE)
 			err = 0;
 	}
 
@@ -4291,6 +4291,8 @@ static void fuse_lib_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 	fuse_finish_interrupt(f, req, &d);
 	free_path(f, ino, path);
 
+	if (err < 0)
+		goto err;
 	fuse_reply_ioctl(req, err, out_buf, out_bufsz);
 	goto out;
 err:
