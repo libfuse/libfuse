@@ -395,6 +395,15 @@ struct fuse_loop_config {
 #define FUSE_CAP_EXPLICIT_INVAL_DATA    (1 << 25)
 
 /**
+ * Indicates support for atomic open supported in FUSE user space.
+ *
+ * If this flag is set then avoid separate lookup which is used before open
+ * call, instead perform lookup as part of open call into libfuse.
+ */
+#define FUSE_CAP_ATOMIC_OPEN           (1 << 26)
+
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
