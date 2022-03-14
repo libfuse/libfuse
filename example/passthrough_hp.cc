@@ -856,6 +856,7 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
     fi->keep_cache = (fs.timeout != 0);
+    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
     fi->fh = fd;
     fuse_reply_open(req, fi);
 }
