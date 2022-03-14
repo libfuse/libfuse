@@ -39,8 +39,6 @@ static void pc_init(void *userdata,
 	printf("Protocol version: %d.%d\n", conn->proto_major,
 	       conn->proto_minor);
 	printf("Capabilities:\n");
-	if(conn->capable & FUSE_CAP_WRITEBACK_CACHE)
-		printf("\tFUSE_CAP_WRITEBACK_CACHE\n");
 	if(conn->capable & FUSE_CAP_ASYNC_READ)
 			printf("\tFUSE_CAP_ASYNC_READ\n");
 	if(conn->capable & FUSE_CAP_POSIX_LOCKS)
