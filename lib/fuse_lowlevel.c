@@ -123,6 +123,7 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
 
 static void destroy_req(fuse_req_t req)
 {
+	assert(req->ch == NULL);
 	pthread_mutex_destroy(&req->lock);
 	free(req);
 }
@@ -1712,8 +1713,11 @@ static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
 
 			pthread_mutex_lock(&se->lock);
 			curr->ctr--;
-			if (!curr->ctr)
+			if (!curr->ctr) {
+				fuse_chan_put(req->ch);
+				req->ch = NULL;
 				destroy_req(curr);
+			}
 
 			return 1;
 		}
@@ -1739,9 +1743,11 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	req->u.i.unique = arg->unique;
 
 	pthread_mutex_lock(&se->lock);
-	if (find_interrupted(se, req))
+	if (find_interrupted(se, req)) {
+		fuse_chan_put(req->ch);
+		req->ch = NULL;
 		destroy_req(req);
-	else
+	} else
 		list_add_req(req, &se->interrupts);
 	pthread_mutex_unlock(&se->lock);
 }
