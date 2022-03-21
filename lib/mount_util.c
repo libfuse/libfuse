@@ -273,7 +273,7 @@ int fuse_mnt_remove_mount(const char *progname, const char *mnt)
 
 char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 {
-	char buf[PATH_MAX];
+	char buf[PATH_MAX] = {0,};
 	char *copy;
 	char *dst;
 	char *end;
@@ -340,7 +340,7 @@ char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 
 int fuse_mnt_check_fuseblk(void)
 {
-	char buf[256];
+	char buf[256] = {0,};
 	FILE *f = fopen("/proc/filesystems", "r");
 	if (!f)
 		return 1;

@@ -111,7 +111,7 @@ static ssize_t fuse_buf_fd_to_fd(const struct fuse_buf *dst, size_t dst_off,
 				 const struct fuse_buf *src, size_t src_off,
 				 size_t len)
 {
-	char buf[4096];
+	char buf[4096] = {0,};
 	struct fuse_buf tmp = {
 		.size = sizeof(buf),
 		.flags = 0,
