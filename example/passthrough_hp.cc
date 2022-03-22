@@ -357,7 +357,14 @@ static int do_lookup(fuse_ino_t parent, const char *name,
             cerr << "DEBUG: lookup(): inode " << e->attr.st_ino
                  << " (userspace) already known; fd = " << inode.fd << endl;
         lock_guard<mutex> g {inode.m};
+
         inode.nlookup++;
+        if (fs.debug)
+            cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+                 <<  "inode " << inode.src_ino
+                 << " count " << inode.nlookup << endl;
+
+
         close(newfd);
     } else { // no existing inode
         /* This is just here to make Helgrind happy. It violates the
@@ -367,7 +374,13 @@ static int do_lookup(fuse_ino_t parent, const char *name,
         lock_guard<mutex> g {inode.m};
         inode.src_ino = e->attr.st_ino;
         inode.src_dev = e->attr.st_dev;
+
         inode.nlookup++;
+        if (fs.debug)
+            cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+                 <<  "inode " << inode.src_ino
+                 << " count " << inode.nlookup << endl;
+
         inode.fd = newfd;
         fs_lock.unlock();
 
@@ -474,6 +487,10 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
     {
         lock_guard<mutex> g {inode.m};
         inode.nlookup++;
+        if (fs.debug)
+            cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+                 <<  "inode " << inode.src_ino
+                 << " count " << inode.nlookup << endl;
     }
 
     fuse_reply_entry(req, &e);
@@ -529,6 +546,9 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name) {
 			    inode.generation++;
 		    }
 	    }
+
+        // decrease the ref which lookup above had increased
+        forget_one(e.ino, 1);
     }
     auto res = unlinkat(inode_p.fd, name, 0);
     fuse_reply_err(req, res == -1 ? errno : 0);
@@ -545,6 +565,12 @@ static void forget_one(fuse_ino_t ino, uint64_t n) {
         abort();
     }
     inode.nlookup -= n;
+
+    if (fs.debug)
+        cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+             <<  "inode " << inode.src_ino
+             << " count " << inode.nlookup << endl;
+
     if (!inode.nlookup) {
         if (fs.debug)
             cerr << "DEBUG: forget: cleaning up inode " << inode.src_ino << endl;
