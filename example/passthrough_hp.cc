@@ -82,6 +82,9 @@
 
 using namespace std;
 
+#define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
+#define SFS_DEFAULT_CLONE_FD "0"
+
 /* We are re-using pointers to our `struct sfs_inode` and `struct
    sfs_dirp` elements as inodes and file handles. This means that we
    must be able to store pointer a pointer in both a fuse_ino_t
@@ -149,11 +152,15 @@ struct Fs {
     Inode root;
     double timeout;
     bool debug;
+    bool debug_fuse;
+    bool foreground;
     std::string source;
     size_t blocksize;
     dev_t src_dev;
     bool nosplice;
     bool nocache;
+    size_t num_threads;
+    bool clone_fd;
 };
 static Fs fs{};
 
@@ -1176,10 +1183,16 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     opt_parser.add_options()
         ("debug", "Enable filesystem debug messages")
         ("debug-fuse", "Enable libfuse debug messages")
+        ("foreground", "Run in foreground")
         ("help", "Print help")
         ("nocache", "Disable all caching")
         ("nosplice", "Do not use splice(2) to transfer data")
-        ("single", "Run single-threaded");
+        ("single", "Run single-threaded")
+        ("num-threads", "Number of libfuse worker threads",
+                        cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
+        ("clone-fd", "use separate fuse device fd for each thread",
+                        cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD));
+
 
     // FIXME: Find a better way to limit the try clause to just
     // opt_parser.parse() (cf. https://github.com/jarro2783/cxxopts/issues/146)
@@ -1201,7 +1214,15 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     }
 
     fs.debug = options.count("debug") != 0;
+    fs.debug_fuse = options.count("debug-fuse") != 0;
+
+    fs.foreground = options.count("foreground") != 0;
+    if (fs.debug || fs.debug_fuse)
+        fs.foreground = true;
+
     fs.nosplice = options.count("nosplice") != 0;
+    fs.num_threads = options["num-threads"].as<int>();
+    fs.clone_fd = options["clone-fd"].as<bool>();
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
         warn("WARNING: realpath() failed with");
@@ -1233,6 +1254,7 @@ int main(int argc, char *argv[]) {
     // Parse command line options
     auto options {parse_options(argc, argv)};
 
+
     // We need an fd for every dentry in our the filesystem that the
     // kernel knows about. This is way more than most processes need,
     // so try to get rid of any resource softlimit.
@@ -1260,7 +1282,7 @@ int main(int argc, char *argv[]) {
     if (fuse_opt_add_arg(&args, argv[0]) ||
         fuse_opt_add_arg(&args, "-o") ||
         fuse_opt_add_arg(&args, "default_permissions,fsname=hpps") ||
-        (options.count("debug-fuse") && fuse_opt_add_arg(&args, "-odebug")))
+        (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory");
 
     fuse_lowlevel_ops sfs_oper {};
@@ -1275,8 +1297,13 @@ int main(int argc, char *argv[]) {
     // Don't apply umask, use modes exactly as specified
     umask(0);
 
+    fuse_daemonize(fs.foreground);
+
     // Mount and run main loop
     loop_config = fuse_loop_cfg_create();
+
+    if (fs.num_threads != -1)
+        fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
 
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;

@@ -197,6 +197,8 @@ def test_passthrough_hp(short_tmpdir, cache, output_checker):
               [ pjoin(basename, 'example', 'passthrough_hp'),
                 src_dir, mnt_dir ]
 
+    cmdline.append('--foreground')
+
     if not cache:
         cmdline.append('--nocache')
         
