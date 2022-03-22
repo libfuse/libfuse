@@ -35,6 +35,9 @@
 #define FUSE_LOOP_MT_DEF_IDLE_THREADS -1 /* thread destruction is disabled
                                           * by default */
 
+/* an arbitrary large value that cannot be valid */
+#define FUSE_LOOP_MT_MAX_THREADS      (100U * 1000)
+
 struct fuse_worker {
 	struct fuse_worker *prev;
 	struct fuse_worker *next;
@@ -460,6 +463,12 @@ void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 void fuse_loop_cfg_set_idle_threads(struct fuse_loop_config *config,
 				    unsigned int value)
 {
+	if (value > FUSE_LOOP_MT_MAX_THREADS) {
+		fuse_log(FUSE_LOG_ERR,
+			 "Ignoring invalid max threads value "
+			 "%u > max (%u).\n", value, FUSE_LOOP_MT_MAX_THREADS);
+		return;
+	}
 	config->max_idle_threads = value;
 }
 
