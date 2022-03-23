@@ -695,7 +695,7 @@ static bool is_dot_or_dotdot(const char *name) {
 
 
 static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-                    off_t offset, fuse_file_info *fi, int plus) {
+                    off_t offset, fuse_file_info *fi, const int plus) {
     auto d = get_dir_handle(fi);
     Inode& inode = get_inode(ino);
     lock_guard<mutex> g {inode.m};
@@ -740,28 +740,23 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
         fuse_entry_param e{};
         size_t entsize;
-        if(plus) {
+        if (plus) {
             err = do_lookup(ino, entry->d_name, &e);
             if (err)
                 goto error;
             entsize = fuse_add_direntry_plus(req, p, rem, entry->d_name, &e, entry->d_off);
-
-            if (entsize > rem) {
-                if (fs.debug)
-                    cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
-                forget_one(e.ino, 1);
-                break;
-            }
         } else {
             e.attr.st_ino = entry->d_ino;
             e.attr.st_mode = entry->d_type << 12;
             entsize = fuse_add_direntry(req, p, rem, entry->d_name, &e.attr, entry->d_off);
+        }
 
-            if (entsize > rem) {
-                if (fs.debug)
-                    cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
-                break;
-            }
+        if (entsize > rem) {
+            if (fs.debug)
+                cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
+            if (plus)
+                forget_one(e.ino, 1);
+            break;
         }
 
         p += entsize;
