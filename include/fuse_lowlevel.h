@@ -1868,6 +1868,11 @@ void fuse_cmdline_help(void);
  * Filesystem setup & teardown                                 *
  * ----------------------------------------------------------- */
 
+/**
+ * Note: Any addition to this struct needs to create a compatibility symbol
+ *       for fuse_parse_cmdline(). For ABI compatibility reasons it is also
+ *       not possible to remove struct members.
+ */
 struct fuse_cmdline_opts {
 	int singlethread;
 	int foreground;
@@ -1877,7 +1882,11 @@ struct fuse_cmdline_opts {
 	int show_version;
 	int show_help;
 	int clone_fd;
-	unsigned int max_idle_threads;
+	unsigned int max_idle_threads; /* discouraged, due to thread
+	                                * destruct overhead */
+
+	/* Added in libfuse-3.12 */
+	unsigned int max_threads;
 };
 
 /**
@@ -1898,8 +1907,20 @@ struct fuse_cmdline_opts {
  * @param opts output argument for parsed options
  * @return 0 on success, -1 on failure
  */
+#if (!defined(__UCLIBC__) && !defined(__APPLE__))
 int fuse_parse_cmdline(struct fuse_args *args,
 		       struct fuse_cmdline_opts *opts);
+#else
+#if FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
+int fuse_parse_cmdline_30(struct fuse_args *args,
+			   struct fuse_cmdline_opts *opts);
+#define fuse_parse_cmdline(args, opts) fuse_parse_cmdline_30(args, opts)
+#else
+int fuse_parse_cmdline_312(struct fuse_args *args,
+			   struct fuse_cmdline_opts *opts);
+#define fuse_parse_cmdline(args, opts) fuse_parse_cmdline_312(args, opts)
+#endif
+#endif
 
 /**
  * Create a low level session.

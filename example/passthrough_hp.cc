@@ -43,7 +43,7 @@
  * \include passthrough_hp.cc
  */
 
-#define FUSE_USE_VERSION 35
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -1228,6 +1228,8 @@ static void maximize_fd_limit() {
 
 int main(int argc, char *argv[]) {
 
+    struct fuse_loop_config *loop_config = NULL;
+
     // Parse command line options
     auto options {parse_options(argc, argv)};
 
@@ -1274,15 +1276,15 @@ int main(int argc, char *argv[]) {
     umask(0);
 
     // Mount and run main loop
-    struct fuse_loop_config loop_config;
-    loop_config.clone_fd = 0;
-    loop_config.max_idle_threads = 10;
+    loop_config = fuse_loop_cfg_create();
+
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
     if (options.count("single"))
         ret = fuse_session_loop(se);
     else
-        ret = fuse_session_loop_mt(se, &loop_config);
+        ret = fuse_session_loop_mt(se, loop_config);
+
 
     fuse_session_unmount(se);
 
@@ -1291,6 +1293,8 @@ err_out3:
 err_out2:
     fuse_session_destroy(se);
 err_out1:
+
+    fuse_loop_cfg_destroy(loop_config);
     fuse_opt_free_args(&args);
 
     return ret ? 1 : 0;

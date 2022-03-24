@@ -178,8 +178,12 @@ FUSE_3.12 {
 		fuse_loop_cfg_create;
 		fuse_loop_cfg_destroy;
 		fuse_loop_cfg_set_idle_threads;
+		fuse_loop_cfg_set_max_threads;
 		fuse_loop_cfg_set_clone_fd;
 		fuse_loop_cfg_convert;
+		fuse_parse_cmdline;
+		fuse_parse_cmdline_30;
+		fuse_parse_cmdline_312;
 } FUSE_3.4;
 
 # Local Variables:

@@ -50,6 +50,7 @@ static const struct fuse_opt fuse_helper_opts[] = {
 #endif
 	FUSE_HELPER_OPT("clone_fd",	clone_fd),
 	FUSE_HELPER_OPT("max_idle_threads=%u", max_idle_threads),
+	FUSE_HELPER_OPT("max_threads=%u", max_threads),
 	FUSE_OPT_END
 };
 
@@ -136,6 +137,8 @@ void fuse_cmdline_help(void)
 	       "    -o clone_fd            use separate fuse device fd for each thread\n"
 	       "                           (may improve performance)\n"
 	       "    -o max_idle_threads    the maximum number of idle worker threads\n"
+	       "                           allowed (default: -1)\n"
+	       "    -o max_threads         the maximum number of worker threads\n"
 	       "                           allowed (default: 10)\n");
 }
 
@@ -199,12 +202,16 @@ static int add_default_subtype(const char *progname, struct fuse_args *args)
 	return res;
 }
 
-int fuse_parse_cmdline(struct fuse_args *args,
-		       struct fuse_cmdline_opts *opts)
+int fuse_parse_cmdline_312(struct fuse_args *args,
+			   struct fuse_cmdline_opts *opts);
+FUSE_SYMVER("fuse_parse_cmdline_312", "fuse_parse_cmdline@@FUSE_3.12")
+int fuse_parse_cmdline_312(struct fuse_args *args,
+			   struct fuse_cmdline_opts *opts)
 {
 	memset(opts, 0, sizeof(struct fuse_cmdline_opts));
 
-	opts->max_idle_threads = 10;
+	opts->max_idle_threads = -1; /* new default in fuse version 3.12 */
+	opts->max_threads = 10;
 
 	if (fuse_opt_parse(args, opts, fuse_helper_opts,
 			   fuse_helper_opt_proc) == -1)
@@ -220,6 +227,40 @@ int fuse_parse_cmdline(struct fuse_args *args,
 
 	return 0;
 }
+
+/**
+ * struct fuse_cmdline_opts got extended in libfuse-3.12
+ */
+int fuse_parse_cmdline_30(struct fuse_args *args,
+		       struct fuse_cmdline_opts *opts);
+FUSE_SYMVER("fuse_parse_cmdline_37", "fuse_parse_cmdline@FUSE_3.0")
+int fuse_parse_cmdline_30(struct fuse_args *args,
+			  struct fuse_cmdline_opts *out_opts)
+{
+	struct fuse_cmdline_opts opts;
+
+
+	int rc = fuse_parse_cmdline_312(args, &opts);
+	if (rc == 0) {
+		/* copy up to the size of the old pre 3.12 struct */
+		memcpy(out_opts, &opts,
+		       offsetof(struct fuse_cmdline_opts, max_idle_threads) +
+		       sizeof(opts.max_idle_threads));
+	}
+
+	return rc;
+}
+
+/**
+ * Compatibility ABI symbol for systems that do not support version symboling
+ */
+#if (defined(__UCLIBC__) || defined(__APPLE__))
+int fuse_parse_cmdline(struct fuse_args *args,
+		       struct fuse_cmdline_opts *opts)
+{
+	return fuse_parse_cmdline_30(args, out_opts);
+}
+#endif
 
 
 int fuse_daemonize(int foreground)
