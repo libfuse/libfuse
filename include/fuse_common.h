@@ -857,13 +857,19 @@ struct fuse_loop_config *fuse_loop_cfg_create(void);
 void fuse_loop_cfg_destroy(struct fuse_loop_config *config);
 
 /**
- * fuse_loop_config2 setter to set the number of max idle threads.
+ * fuse_loop_config setter to set the number of max idle threads.
  */
 void fuse_loop_cfg_set_idle_threads(struct fuse_loop_config *config,
 				    unsigned int value);
 
 /**
- * fuse_loop_config2 setter to enable the clone_fd feature
+ * fuse_loop_config setter to set the number of max threads.
+ */
+void fuse_loop_cfg_set_max_threads(struct fuse_loop_config *config,
+				   unsigned int value);
+
+/**
+ * fuse_loop_config setter to enable the clone_fd feature
  */
 void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 				unsigned int value);

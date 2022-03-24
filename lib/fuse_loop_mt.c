@@ -31,6 +31,7 @@
 
 #define FUSE_LOOP_MT_V2_IDENTIFIER	 INT_MAX - 2
 #define FUSE_LOOP_MT_DEF_CLONE_FD	 0
+#define FUSE_LOOP_MT_DEF_MAX_THREADS 10
 #define FUSE_LOOP_MT_DEF_IDLE_THREADS -1 /* thread destruction is disabled
                                           * by default */
 
@@ -57,6 +58,7 @@ struct fuse_mt {
 	int error;
 	int clone_fd;
 	int max_idle;
+	int max_threads;
 };
 
 static struct fuse_chan *fuse_chan_new(int fd)
@@ -161,7 +163,7 @@ static void *fuse_do_work(void *data)
 
 		if (!isforget)
 			mt->numavail--;
-		if (mt->numavail == 0)
+		if (mt->numavail == 0 && mt->numworker < mt->max_threads)
 			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
@@ -170,7 +172,14 @@ static void *fuse_do_work(void *data)
 		pthread_mutex_lock(&mt->lock);
 		if (!isforget)
 			mt->numavail++;
-		if (mt->numavail > mt->max_idle) {
+
+		/* creating and destroying threads is rather expensive - and there is
+		 * not much gain from destroying existing threads. It is therefore
+		 * discouraged to set max_idle to anything else than -1. If there
+		 * is indeed a good reason to destruct threads it should be done
+		 * delayed, a moving average might be useful for that.
+		 */
+		if (mt->max_idle != -1 && mt->numavail > mt->max_idle) {
 			if (mt->exit) {
 				pthread_mutex_unlock(&mt->lock);
 				return NULL;
@@ -202,7 +211,10 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	pthread_attr_t attr;
 	char *stack_size;
 
-	/* Override default stack size */
+	/* Override default stack size
+	 * XXX: This should ideally be a parameter option. It is rather
+	 *      well hidden here.
+	 */
 	pthread_attr_init(&attr);
 	stack_size = getenv(ENVNAME_THREAD_STACK);
 	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
@@ -328,6 +340,7 @@ int err;
 	mt.numworker = 0;
 	mt.numavail = 0;
 	mt.max_idle = config->max_idle_threads;
+	mt.max_threads = config->max_threads;
 	mt.main.thread_id = pthread_self();
 	mt.main.prev = mt.main.next = &mt.main;
 	sem_init(&mt.finish, 0, 0);
@@ -400,6 +413,7 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 
 	config->version_id       = FUSE_LOOP_MT_V2_IDENTIFIER;
 	config->max_idle_threads = FUSE_LOOP_MT_DEF_IDLE_THREADS;
+	config->max_threads      = FUSE_LOOP_MT_DEF_MAX_THREADS;
 	config->clone_fd         = FUSE_LOOP_MT_DEF_CLONE_FD;
 
 	return config;
@@ -430,6 +444,12 @@ void fuse_loop_cfg_set_idle_threads(struct fuse_loop_config *config,
 				    unsigned int value)
 {
 	config->max_idle_threads = value;
+}
+
+void fuse_loop_cfg_set_max_threads(struct fuse_loop_config *config,
+				   unsigned int value)
+{
+	config->max_threads = value;
 }
 
 void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
