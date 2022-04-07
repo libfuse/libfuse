@@ -56,6 +56,10 @@ struct fuse_file_info {
 	/** Can be filled in by open, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
+	/** Can be filled by open/create, to allow parallel writes on this
+	 *  file */
+	unsigned int parallel_direct_writes;
+
 	/** Can be filled in by open. It signals the kernel that any
 	    currently cached file data (ie., data that the filesystem
 	    provided the last time the file was open) need not be

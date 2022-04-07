@@ -3230,7 +3230,9 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 					fi->direct_io = 1;
 				if (f->conf.kernel_cache)
 					fi->keep_cache = 1;
-
+				if (fi->direct_io &&
+				    f->conf.parallel_direct_writes)
+					fi->parallel_direct_writes = 1;
 			}
 		}
 		fuse_finish_interrupt(f, req, &d);
@@ -3310,6 +3312,10 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 
 			if (f->conf.auto_cache)
 				open_auto_cache(f, ino, path, fi);
+
+			if (fi->direct_io && f->conf.parallel_direct_writes)
+				fi->parallel_direct_writes = 1;
+
 		}
 		fuse_finish_interrupt(f, req, &d);
 	}
@@ -4780,6 +4786,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_LIB_OPT("noforget",              remember, -1),
 	FUSE_LIB_OPT("remember=%u",           remember, 0),
 	FUSE_LIB_OPT("modules=%s",	      modules, 0),
+	FUSE_LIB_OPT("parallel_direct_write=%d",parallel_direct_writes, 0),
 	FUSE_OPT_END
 };
 
