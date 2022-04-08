@@ -3344,11 +3344,22 @@ static void fuse_lib_atomic_open(fuse_req_t req, fuse_ino_t parent,
 		fuse_prepare_interrupt(f, req, &d);
 
 		err = fuse_fs_atomic_open(f->fs, path, &e.attr, fi);
+		/* If atomic open is not implemented by FUSE then fall back to
+		 * open and lookup_path to open the file and fill in the
+		 * attributes.
+		 */
 		if (!err) {
 			err = do_lookup(f, parent, name, &e);
 			if (err == 0 && f->conf.debug) {
 				fuse_log(FUSE_LOG_DEBUG, "   NODEID: %llu\n",
 					 (unsigned long long) e.ino);
+			}
+		} else if (err == -ENOSYS) {
+			err = fuse_fs_open(f->fs, path, fi);
+			if (!err) {
+				err = lookup_path(f, parent, name, path, &e, fi);
+				if (err)
+					fuse_fs_release(f->fs, path, fi);
 			}
 		}
 		if (!err) {
