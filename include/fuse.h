@@ -1011,6 +1011,9 @@ void fuse_exit(struct fuse *f);
 #if FUSE_USE_VERSION < 32
 int fuse_loop_mt_31(struct fuse *f, int clone_fd);
 #define fuse_loop_mt(f, clone_fd) fuse_loop_mt_31(f, clone_fd)
+#elif FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
+int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
+#define fuse_loop_mt(f, config) fuse_loop_mt_32(f, config)
 #else
 /**
  * FUSE event loop with multiple threads

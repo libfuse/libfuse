@@ -283,6 +283,7 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	struct fuse *fuse;
 	struct fuse_cmdline_opts opts;
 	int res;
+	struct fuse_loop_config *loop_config = NULL;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
@@ -338,13 +339,19 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 	if (opts.singlethread)
 		res = fuse_loop(fuse);
 	else {
-		struct fuse_loop_config loop_config;
-		loop_config.clone_fd = opts.clone_fd;
-		loop_config.max_idle_threads = opts.max_idle_threads;
-		res = fuse_loop_mt_32(fuse, &loop_config);
+		loop_config = fuse_loop_cfg_create();
+		if (loop_config == NULL) {
+			res = 7;
+			goto out3;
+		}
+
+		fuse_loop_cfg_set_clone_fd(loop_config, opts.clone_fd);
+
+		fuse_loop_cfg_set_idle_threads(loop_config, opts.max_idle_threads);
+		res = fuse_loop_mt(fuse, loop_config);
 	}
 	if (res)
-		res = 7;
+		res = 8;
 
 	fuse_remove_signal_handlers(se);
 out3:
@@ -352,6 +359,7 @@ out3:
 out2:
 	fuse_destroy(fuse);
 out1:
+	fuse_loop_cfg_destroy(loop_config);
 	free(opts.mountpoint);
 	fuse_opt_free_args(&args);
 	return res;
