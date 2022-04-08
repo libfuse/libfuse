@@ -37,7 +37,7 @@ libfuse = library('fuse3', libfuse_sources, version: meson.project_version(),
                   soversion: '3', include_directories: include_dirs,
                   dependencies: deps, install: true,
                   link_depends: 'fuse_versionscript',
-                  c_args: [ '-DFUSE_USE_VERSION=35',
+                  c_args: [ '-DFUSE_USE_VERSION=312',
                             '-DFUSERMOUNT_DIR="@0@"'.format(fusermount_path) ],
                   link_args: ['-Wl,--version-script,' + meson.current_source_dir()
                               + '/fuse_versionscript' ])

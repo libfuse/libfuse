@@ -11,6 +11,9 @@
 /*
   Versioned symbols cannot be used in some cases because it
     - not supported on MacOSX (in MachO binary format)
+
+  Note: "@@" denotes the default symbol, "@" is binary a compat version.
+
 */
 #ifndef __APPLE__
 # if HAVE_SYMVER_ATTRIBUTE
