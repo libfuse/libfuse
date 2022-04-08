@@ -438,6 +438,16 @@ struct fuse_operations {
 	 */
 	int (*open) (const char *, struct fuse_file_info *);
 
+	/** Open the file and fill in the attributes.
+	 *
+	 * Note that all rules which apply on open also apply here.
+	 * It fills in file attributes along with opening the file
+	 * which are used by libfuse and fuse kernel (Thus we avoid
+	 * unnecessary lookup calls into libfuse from fuse kernel).
+	 */
+	int (*atomic_open) (const char *, struct stat *buf,
+			    struct fuse_file_info *);
+
 	/** Read data from an open file
 	 *
 	 * Read should return exactly the number of bytes requested except
@@ -1225,6 +1235,8 @@ ssize_t fuse_fs_copy_file_range(struct fuse_fs *fs, const char *path_in,
 				size_t len, int flags);
 off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
 		    struct fuse_file_info *fi);
+int fuse_fs_atomic_open(struct fuse_fs *fs, const char *path,
+			struct stat *buf, struct fuse_file_info *fi);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		struct fuse_config *cfg);
 void fuse_fs_destroy(struct fuse_fs *fs);

@@ -274,6 +274,7 @@ struct fuse_file_lock {
  * FUSE_CACHE_SYMLINKS: cache READLINK responses
  * FUSE_NO_OPENDIR_SUPPORT: kernel supports zero-message opendir
  * FUSE_EXPLICIT_INVAL_DATA: only invalidate cached pages on explicit request
+ * FUSE_DO_ATOMIC_OPEN: do atomic open (LOOKUP+OPEN in one)
  */
 #define FUSE_ASYNC_READ		(1 << 0)
 #define FUSE_POSIX_LOCKS	(1 << 1)
@@ -302,6 +303,7 @@ struct fuse_file_lock {
 #define FUSE_NO_OPENDIR_SUPPORT (1 << 24)
 #define FUSE_EXPLICIT_INVAL_DATA (1 << 25)
 #define FUSE_INIT_EXT		(1 << 30)
+#define FUSE_DO_ATOMIC_OPEN	(1ULL << 34)
 
 /**
  * CUSE INIT request/reply flags
@@ -423,6 +425,7 @@ enum fuse_opcode {
 	FUSE_RENAME2		= 45,
 	FUSE_LSEEK		= 46,
 	FUSE_COPY_FILE_RANGE	= 47,
+	FUSE_ATOMIC_OPEN	= 51,
 
 	/* CUSE specific operations */
 	CUSE_INIT		= 4096
