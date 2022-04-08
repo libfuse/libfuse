@@ -127,6 +127,23 @@ static const struct fuse_opt lo_opts[] = {
 	FUSE_OPT_END
 };
 
+static void passthrough_ll_help(void)
+{
+	printf(
+"    -o writeback           Enable writeback\n"
+"    -o no_writeback        Disable write back\n"
+"    -o source=/home/dir    Source directory to be mounted\n"
+"    -o flock               Enable flock\n"
+"    -o no_flock            Disable flock\n"
+"    -o xattr               Enable xattr\n"
+"    -o no_xattr            Disable xattr\n"
+"    -o timeout=1.0         Caching timeout\n"
+"    -o timeout=0/1         Timeout is set\n"
+"    -o cache=never         Disable cache\n"
+"    -o cache=auto          Auto enable cache\n"
+"    -o cache=always        Cache always\n");
+}
+
 static struct lo_data *lo_data(fuse_req_t req)
 {
 	return (struct lo_data *) fuse_req_userdata(req);
@@ -1187,6 +1204,7 @@ int main(int argc, char *argv[])
 		printf("usage: %s [options] <mountpoint>\n\n", argv[0]);
 		fuse_cmdline_help();
 		fuse_lowlevel_help();
+		passthrough_ll_help();
 		ret = 0;
 		goto err_out1;
 	} else if (opts.show_version) {
