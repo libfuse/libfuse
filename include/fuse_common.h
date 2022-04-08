@@ -59,7 +59,7 @@ struct fuse_file_info {
 	    requests if write caching had been disabled. */
 	unsigned int writepage : 1;
 
-	/** Can be filled in by open, to use direct I/O on this file. */
+	/** Can be filled in by open/create, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
 	/** Can be filled in by open and opendir. It signals the kernel that any
@@ -67,6 +67,10 @@ struct fuse_file_info {
 	    last time the file/directory was open) need not be invalidated when
 	    the file/directory is closed. */
 	unsigned int keep_cache : 1;
+
+	/** Can be filled by open/create, to allow parallel direct writes on this
+         *  file */
+        unsigned int parallel_direct_writes : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
 	    maybe set in highlevel lock operation and lowlevel release
@@ -93,7 +97,7 @@ struct fuse_file_info {
 	unsigned int noflush : 1;
 
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 24;
+	unsigned int padding : 23;
 	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,

@@ -274,6 +274,20 @@ struct fuse_config {
 	 * fuse_file_info argument is NULL.
 	 */
 	int nullpath_ok;
+	/**
+	 *  Allow parallel direct-io writes to operate on the same file.
+	 *
+	 *  FUSE implementations which do not handle parallel writes on
+	 *  same file/region should NOT enable this option at all as it
+	 *  might lead to data inconsistencies.
+	 *
+	 *  For the FUSE implementations which have their own mechanism
+	 *  of cache/data integrity are beneficiaries of this setting as
+	 *  it now open doors to parallel writes on the same file (without
+	 *  enabling this setting, all direct writes on the same file are
+	 *  serialized, resulting in huge data bandwidth loss).
+	 */
+	int parallel_direct_writes;
 
 	/**
 	 * The remaining options are used by libfuse internally and
