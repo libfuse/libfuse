@@ -328,10 +328,18 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 int err;
 	struct fuse_mt mt;
 	struct fuse_worker *w;
+	int created_config = 0;
 
-	err = fuse_loop_cfg_verify(config);
-	if (err)
-		return err;
+	if (config) {
+		err = fuse_loop_cfg_verify(config);
+		if (err)
+			return err;
+	} else {
+		/* The caller does not care about parameters - use the default */
+		config = fuse_loop_cfg_create();
+		created_config = 1;
+	}
+
 
 	memset(&mt, 0, sizeof(struct fuse_mt));
 	mt.se = se;
@@ -372,6 +380,11 @@ int err;
 		err = se->error;
 	fuse_session_reset(se);
 
+	if (created_config) {
+		fuse_loop_cfg_destroy(config);
+		config = NULL;
+	}
+
 	return err;
 }
 
@@ -380,12 +393,16 @@ FUSE_SYMVER("fuse_session_loop_mt_32", "fuse_session_loop_mt@FUSE_3.2")
 int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config_v1 *config_v1)
 {
 	int err;
+	struct fuse_loop_config *config = NULL;
 
-	struct fuse_loop_config *config = fuse_loop_cfg_create();
-	if (config == NULL)
-		return ENOMEM;
+	if (config_v1 != NULL) {
+		/* convert the given v1 config */
+		config = fuse_loop_cfg_create();
+		if (config == NULL)
+			return ENOMEM;
 
-	fuse_loop_cfg_convert(config, config_v1);
+		fuse_loop_cfg_convert(config, config_v1);
+	}
 
 	err = fuse_session_loop_mt_312(se, config);
 

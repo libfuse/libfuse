@@ -1041,7 +1041,7 @@ int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
  * in the callback function of fuse_operations is also thread-safe.
  *
  * @param f the FUSE handle
- * @param config loop configuration
+ * @param config loop configuration, may be NULL and defaults will be used then
  * @return see fuse_session_loop()
  *
  * See also: fuse_loop()
