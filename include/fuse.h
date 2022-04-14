@@ -563,6 +563,10 @@ struct fuse_operations {
 	 * passes non-zero offset to the filler function.  When the buffer
 	 * is full (or an error happens) the filler function will return
 	 * '1'.
+	 *
+	 * The file attributes argument of the fuse_fill_dir_t parameter is only used
+	 * when FUSE_READDIR_PLUS is set in the fuse_readdir_flags parameter.
+	 * Otherwise, it is ignored.
 	 */
 	int (*readdir) (const char *, void *, fuse_fill_dir_t, off_t,
 			struct fuse_file_info *, enum fuse_readdir_flags);
