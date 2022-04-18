@@ -563,6 +563,13 @@ struct fuse_operations {
 	 * passes non-zero offset to the filler function.  When the buffer
 	 * is full (or an error happens) the filler function will return
 	 * '1'.
+	 *
+	 * When FUSE_READDIR_PLUS is not set, only some parameters of the
+	 * fill function (the fuse_fill_dir_t parameter) are actually used:
+	 * The file type (which is part of stat::st_mode) is used. And if
+	 * fuse_config::use_ino is set, the inode (stat::st_ino) is also
+	 * used. The other fields are ignored when FUSE_READDIR_PLUS is not
+	 * set.
 	 */
 	int (*readdir) (const char *, void *, fuse_fill_dir_t, off_t,
 			struct fuse_file_info *, enum fuse_readdir_flags);
