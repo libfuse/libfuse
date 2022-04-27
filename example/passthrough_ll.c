@@ -784,6 +784,51 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		fuse_reply_create(req, &e, fi);
 }
 
+static void lo_create_ext(fuse_req_t req, fuse_ino_t parent, const char *name,
+			  mode_t mode, struct fuse_file_info *fi)
+{
+	int fd;
+	struct lo_data *lo = lo_data(req);
+	struct fuse_entry_param e;
+	int err;
+	int newfd;
+	bool new_file = false;
+
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "lo_create_ext(parent=%" PRIu64 ", name=%s)\n",
+			 parent, name);
+	/* Get to know if file exist or not */
+	newfd = openat(lo_fd(req, parent), name, O_PATH | O_NOFOLLOW);
+
+	if (newfd == -1) {
+		err = errno;
+		if (err != ENOENT)
+			goto out;
+		new_file = true;
+	}
+	else
+		close(newfd);
+
+	fd = openat(lo_fd(req, parent), name,
+		    (fi->flags | O_CREAT) & ~O_NOFOLLOW, mode);
+	if (fd == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	fi->fh = fd;
+	fi->file_created = new_file ? 1 : 0;
+	if (lo->cache == CACHE_NEVER)
+		fi->direct_io = 1;
+	else if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
+
+	err = lo_do_lookup(req, parent, name, &e);
+out:
+	if (err)
+		fuse_reply_err(req, err);
+	else
+		fuse_reply_create(req, &e, fi);
+}
+
 static void lo_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 			struct fuse_file_info *fi)
 {
@@ -1161,6 +1206,7 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.releasedir	= lo_releasedir,
 	.fsyncdir	= lo_fsyncdir,
 	.create		= lo_create,
+	.create_ext  	= lo_create_ext,
 	.open		= lo_open,
 	.release	= lo_release,
 	.flush		= lo_flush,
