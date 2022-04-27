@@ -633,6 +633,30 @@ struct fuse_operations {
 	int (*create) (const char *, mode_t, struct fuse_file_info *);
 
 	/**
+	 *
+	 * Note: This call is an optimization to avoid lookups before create.
+	 * If this call is implemented, fuse kernel would avoid unnecessary lookups
+	 * performed before creating the file (since this is create, most likely
+	 * file does not exist yet in FS but we do lookups on such files before
+	 * actually creating them)
+	 *
+	 * Create and open a file
+	 *
+	 * There are two cases to be handled here:
+	 *  a) File does not exist yet(most likely)
+	 *  	- Create it with specified mode.
+	 *  	- Set 'file_created' bit in 'struct fuse_file_info'.
+	 *  	- Fill in the file attributes.
+	 *  	- Open it.
+	 *  b) File already exist(exception is O_EXCL)
+	 *  	- Fill in the file attributes.
+	 *  	- Do not set 'file_created' bit for such files.
+	 *  	- Open the file
+	 */
+
+	int (*create_ext) (const char *, struct stat *, mode_t,
+			   struct fuse_file_info *);
+	/**
 	 * Perform POSIX file locking operation
 	 *
 	 * The cmd argument will be either F_GETLK, F_SETLK or F_SETLKW.
@@ -1191,6 +1215,8 @@ int fuse_fs_releasedir(struct fuse_fs *fs, const char *path,
 		       struct fuse_file_info *fi);
 int fuse_fs_create(struct fuse_fs *fs, const char *path, mode_t mode,
 		   struct fuse_file_info *fi);
+int fuse_fs_create_ext(struct fuse_fs *fs, const char *path, struct stat *,
+		       mode_t mode, struct fuse_file_info *fi);
 int fuse_fs_lock(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi, int cmd, struct flock *lock);
 int fuse_fs_flock(struct fuse_fs *fs, const char *path,

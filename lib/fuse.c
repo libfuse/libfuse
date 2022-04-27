@@ -2075,6 +2075,29 @@ int fuse_fs_create(struct fuse_fs *fs, const char *path, mode_t mode,
 	}
 }
 
+int fuse_fs_create_ext(struct fuse_fs *fs, const char *path,
+		       struct stat *buf, mode_t mode,
+		       struct fuse_file_info *fi)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.create_ext) {
+		int err;
+		if (fs->debug)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "Extended create flags: 0x%x %s 0%o umask=0%03o\n",
+				 fi->flags, path, mode,
+				 fuse_get_context()->umask);
+		err = fs->op.create_ext(path, buf, mode, fi);
+
+		if (fs->debug && !err)
+			fuse_log(FUSE_LOG_DEBUG, "   Extended create[%llu] flags: 0x%x %s\n",
+				(unsigned long long) fi->fh, fi->flags, path);
+		return err;
+	} else {
+		 return -ENOSYS;
+	}
+}
+
 int fuse_fs_lock(struct fuse_fs *fs, const char *path,
 		 struct fuse_file_info *fi, int cmd, struct flock *lock)
 {
@@ -3181,6 +3204,57 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 		err = fuse_fs_create(f->fs, path, mode, fi);
 		if (!err) {
 			err = lookup_path(f, parent, name, path, &e, fi);
+			if (err)
+				fuse_fs_release(f->fs, path, fi);
+			else if (!S_ISREG(e.attr.st_mode)) {
+				err = -EIO;
+				fuse_fs_release(f->fs, path, fi);
+				forget_node(f, e.ino, 1);
+			} else {
+				if (f->conf.direct_io)
+					fi->direct_io = 1;
+				if (f->conf.kernel_cache)
+					fi->keep_cache = 1;
+
+			}
+		}
+		fuse_finish_interrupt(f, req, &d);
+	}
+	if (!err) {
+		pthread_mutex_lock(&f->lock);
+		get_node(f, e.ino)->open_count++;
+		pthread_mutex_unlock(&f->lock);
+		if (fuse_reply_create(req, &e, fi) == -ENOENT) {
+			/* The open syscall was interrupted, so it
+			   must be cancelled */
+			fuse_do_release(f, e.ino, path, fi);
+			forget_node(f, e.ino, 1);
+		}
+	} else {
+		reply_err(req, err);
+	}
+
+	free_path(f, parent, path);
+}
+
+
+
+static void fuse_lib_create_ext(fuse_req_t req, fuse_ino_t parent,
+			        const char *name, mode_t mode,
+			        struct fuse_file_info *fi)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	struct fuse_intr_data d;
+	struct fuse_entry_param e;
+	char *path;
+	int err;
+
+	err = get_path_name(f, parent, name, &path);
+	if (!err) {
+		fuse_prepare_interrupt(f, req, &d);
+		err = fuse_fs_create_ext(f->fs, path, &e.attr, mode, fi);
+		if (!err) {
+			err = do_lookup(f, parent, name, &e);
 			if (err)
 				fuse_fs_release(f->fs, path, fi);
 			else if (!S_ISREG(e.attr.st_mode)) {
@@ -4480,6 +4554,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.rename = fuse_lib_rename,
 	.link = fuse_lib_link,
 	.create = fuse_lib_create,
+	.create_ext = fuse_lib_create_ext,
 	.open = fuse_lib_open,
 	.read = fuse_lib_read,
 	.write_buf = fuse_lib_write_buf,
