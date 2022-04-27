@@ -927,6 +927,38 @@ struct fuse_lowlevel_ops {
 			mode_t mode, struct fuse_file_info *fi);
 
 	/**
+	 * Lookup, create and open a file
+	 *
+	 * Do a lookup on the file, if it does not exits then create it with specified
+	 * mode, and then open it.
+	 *
+	 * If this method is not implemented then we fall back to create() and all
+	 * comments of create apply to it.
+	 *
+	 * If this request is answered with erro code ENOSYS, the handler is treated as not
+	 * implemented(i.e for this and future requests, create() handler is called instead).
+	 *
+	 * Note: USER SPACE implementations should first do lookup on the file. If it exist then
+	 * fill in the attributes and open it and return. If file is newly created then USER
+	 * SPACE is supposed to open it, fill in attributes and fill in `file_created` bit in
+	 * `struct fuse_file_info` for such file. This bit is used by libfuse to convey same
+	 * info to the fuse kernel.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_create
+	 *   fuse_reply_err
+	 *
+	 *  @param req request handle
+	 *  @param parent inode number of the parent directory
+	 *  @param name to create
+	 *  @param mode file type and mode with which to create the new file
+	 *  @param fi file information
+	 *
+	 */
+	void (*atomic_create) (fuse_req_t req, fuse_ino_t parent,
+			       const char *name, mode_t mode,
+			       struct fuse_file_info *fi);
+	/**
 	 * Test for a POSIX file lock
 	 *
 	 * Valid replies:

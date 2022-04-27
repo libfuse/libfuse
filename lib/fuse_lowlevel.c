@@ -398,6 +398,8 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_NONSEEKABLE;
 	if (f->noflush)
 		arg->open_flags |= FOPEN_NOFLUSH;
+	if (f->file_created)
+		arg->open_flags |= FOPEN_FILE_CREATED;
 }
 
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
@@ -1315,6 +1317,26 @@ static void do_create(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			name = (char *) inarg + sizeof(struct fuse_open_in);
 
 		req->se->op.create(req, nodeid, name, arg->mode, &fi);
+	} else
+		fuse_reply_err(req, ENOSYS);
+}
+
+static void do_atomic_create(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
+
+	if (req->se->op.atomic_create) {
+		struct fuse_file_info fi;
+		char *name = PARAM(arg);
+
+		memset(&fi, 0, sizeof(fi));
+		fi.flags = arg->flags;
+
+		if (req->se->conn.proto_minor >= 12)
+			req->ctx.umask = arg->umask;
+		else
+			name = (char *) inarg + sizeof(struct fuse_open_in);
+		req->se->op.atomic_create(req, nodeid, name, arg->mode, &fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
 }
@@ -2512,6 +2534,7 @@ static struct {
 	[FUSE_SETLKW]	   = { do_setlkw,      "SETLKW"	     },
 	[FUSE_ACCESS]	   = { do_access,      "ACCESS"	     },
 	[FUSE_CREATE]	   = { do_create,      "CREATE"	     },
+	[FUSE_ATOMIC_CREATE] = { do_atomic_create, "ATOMIC_CREATE" },
 	[FUSE_INTERRUPT]   = { do_interrupt,   "INTERRUPT"   },
 	[FUSE_BMAP]	   = { do_bmap,	       "BMAP"	     },
 	[FUSE_IOCTL]	   = { do_ioctl,       "IOCTL"	     },

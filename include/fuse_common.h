@@ -87,8 +87,13 @@ struct fuse_file_info {
 	    on close. */
 	unsigned int noflush : 1;
 
+	/** Can be filled in by atomic_create, to indicate that new file was
+	    created. It must not be set if the file was found to be existing
+	    already. */
+	unsigned int file_created : 1;
+
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 24;
+	unsigned int padding : 23;
 	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
