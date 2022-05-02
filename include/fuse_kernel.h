@@ -312,7 +312,6 @@ struct fuse_file_lock {
 /* bits 32..63 get shifted down 32 bits into the flags2 field */
 #define FUSE_SECURITY_CTX	(1ULL << 32)
 #define FUSE_HAS_INODE_DAX	(1ULL << 33)
-
 /**
  * CUSE INIT request/reply flags
  *
@@ -433,6 +432,7 @@ enum fuse_opcode {
 	FUSE_RENAME2		= 45,
 	FUSE_LSEEK		= 46,
 	FUSE_COPY_FILE_RANGE	= 47,
+	FUSE_ATOMIC_OPEN	= 52,
 
 	/* CUSE specific operations */
 	CUSE_INIT		= 4096

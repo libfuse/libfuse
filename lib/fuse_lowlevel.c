@@ -432,6 +432,12 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 			     entrysize + sizeof(struct fuse_open_out));
 }
 
+int fuse_reply_atomic_open(fuse_req_t req, const struct fuse_entry_param *e,
+			   const struct fuse_file_info *f)
+{
+	return fuse_reply_create(req, e, f);
+}
+
 int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 		    double attr_timeout)
 {
@@ -1333,6 +1339,28 @@ static void do_open(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_open(req, &fi);
 }
 
+static void do_atomic_open(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
+
+	if (req->se->op.atomic_open) {
+		struct fuse_file_info fi;
+		char *name = PARAM(arg);
+
+		memset(&fi, 0, sizeof(fi));
+		fi.flags = arg->flags;
+
+		if (req->se->conn.proto_minor >= 12)
+			req->ctx.umask = arg->umask;
+		else
+			name = (char *) inarg + sizeof(struct fuse_open_in);
+
+		req->se->op.atomic_open(req, nodeid, name, &fi);
+
+	} else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_read(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_read_in *arg = (struct fuse_read_in *) inarg;
@@ -2029,7 +2057,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	LL_SET_DEFAULT(se->op.readdirplus && se->op.readdir,
 		       FUSE_CAP_READDIRPLUS_AUTO);
 	se->conn.time_gran = 1;
-	
+
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fuse_log(FUSE_LOG_ERR, "fuse: warning: buffer size too small: %zu\n",
 			bufsize);
@@ -2105,7 +2133,6 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargflags |= FUSE_CACHE_SYMLINKS;
 	if (se->conn.want & FUSE_CAP_EXPLICIT_INVAL_DATA)
 		outargflags |= FUSE_EXPLICIT_INVAL_DATA;
-
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
 		outarg.flags2 = outargflags >> 32;
@@ -2255,7 +2282,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 
 	if (se->conn.proto_minor < 12)
 		return -ENOSYS;
-	
+
 	outarg.ino = ino;
 	outarg.off = off;
 	outarg.len = len;
@@ -2524,6 +2551,7 @@ static struct {
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
+	[FUSE_ATOMIC_OPEN] = { do_atomic_open, "ATOMIC_OPEN" },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
