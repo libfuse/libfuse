@@ -386,6 +386,43 @@ static void lo_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		fuse_reply_entry(req, &e);
 }
 
+static bool lo_do_open(fuse_req_t req, fuse_ino_t ino,
+		       struct fuse_file_info *fi);
+static void unref_inode(struct lo_data *lo,
+			struct lo_inode *inode, uint64_t n);
+
+static void lo_atomic_open(fuse_req_t req, fuse_ino_t parent,
+			   const char *name, struct fuse_file_info *fi)
+{
+	struct fuse_entry_param e;
+	int saveerr;
+	bool success;
+	struct lo_data *lo = lo_data(req);
+
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "lo_atomic_open(parent=%" PRIu64,
+			 "name=%s)\n", parent, name);
+
+	saveerr = lo_do_lookup(req, parent, name, &e);
+	if (saveerr)
+		goto out_err;
+
+	success = lo_do_open(req, e.ino, fi);
+	if (!success) {
+		saveerr = errno;
+		struct lo_inode *ino = lo_inode(req, e.ino);
+		unref_inode(lo, ino, 1);
+		goto out_err;
+	}
+
+	fuse_reply_create(req, &e, fi);
+	return;
+
+out_err:
+	fuse_reply_err(req, saveerr);
+}
+
+
 static void lo_mknod_symlink(fuse_req_t req, fuse_ino_t parent,
 			     const char *name, mode_t mode, dev_t rdev,
 			     const char *link)
@@ -676,7 +713,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 					err = errno;
 					goto error;
 				} else {  // End of stream
-					break; 
+					break;
 				}
 			}
 		}
@@ -708,11 +745,11 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 						    &st, nextoff);
 		}
 		if (entsize > rem) {
-			if (entry_ino != 0) 
+			if (entry_ino != 0)
 				lo_forget_one(req, entry_ino, 1);
 			break;
 		}
-		
+
 		p += entsize;
 		rem -= entsize;
 
@@ -797,15 +834,12 @@ static void lo_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+static bool lo_do_open(fuse_req_t req, fuse_ino_t ino,
+		       struct fuse_file_info *fi)
 {
 	int fd;
 	char buf[64];
 	struct lo_data *lo = lo_data(req);
-
-	if (lo_debug(req))
-		fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
-			ino, fi->flags);
 
 	/* With writeback cache, kernel may send read requests even
 	   when userspace opened write-only */
@@ -826,14 +860,28 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	sprintf(buf, "/proc/self/fd/%i", lo_fd(req, ino));
 	fd = open(buf, fi->flags & ~O_NOFOLLOW);
 	if (fd == -1)
-		return (void) fuse_reply_err(req, errno);
+		return false;
 
 	fi->fh = fd;
 	if (lo->cache == CACHE_NEVER)
 		fi->direct_io = 1;
 	else if (lo->cache == CACHE_ALWAYS)
 		fi->keep_cache = 1;
-	fuse_reply_open(req, fi);
+	return true;
+}
+
+static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
+{
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "lo_open(ino=%" PRIu64 ", flags=%d)\n",
+			 ino, fi->flags);
+
+	bool success = lo_do_open(req, ino, fi);
+
+	if (success)
+		fuse_reply_open(req, fi);
+	else
+		fuse_reply_err(req, errno);
 }
 
 static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
@@ -1162,6 +1210,7 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.fsyncdir	= lo_fsyncdir,
 	.create		= lo_create,
 	.open		= lo_open,
+	.atomic_open	= lo_atomic_open,
 	.release	= lo_release,
 	.flush		= lo_flush,
 	.fsync		= lo_fsync,
