@@ -1868,9 +1868,10 @@ static int test_socket(void)
 	int fd;
 	int res;
 	int err = 0;
+    const size_t test_sock_len = strlen(testsock) + 1;
 
 	start_test("socket");
-	if (strlen(testsock) + 1 > sizeof(su.sun_path)) {
+	if (test_sock_len > sizeof(su.sun_path)) {
 		fprintf(stderr, "Need to shorten mount point by %zu chars\n",
 			strlen(testsock) + 1 - sizeof(su.sun_path));
 		return -1;
@@ -1882,7 +1883,8 @@ static int test_socket(void)
 		return -1;
 	}
 	su.sun_family = AF_UNIX;
-	strncpy(su.sun_path, testsock, sizeof(su.sun_path) - 1);
+
+	strncpy(su.sun_path, testsock, test_sock_len);
 	su.sun_path[sizeof(su.sun_path) - 1] = '\0';
 	res = bind(fd, (struct sockaddr*)&su, sizeof(su));
 	if (res == -1) {
