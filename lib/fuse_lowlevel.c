@@ -125,6 +125,7 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
 
 static void destroy_req(fuse_req_t req)
 {
+	assert(req->ch == NULL);
 	pthread_mutex_destroy(&req->lock);
 	free(req);
 }
@@ -397,6 +398,8 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_CACHE_DIR;
 	if (f->nonseekable)
 		arg->open_flags |= FOPEN_NONSEEKABLE;
+	if (f->noflush)
+		arg->open_flags |= FOPEN_NOFLUSH;
 }
 
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
@@ -1712,8 +1715,11 @@ static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
 
 			pthread_mutex_lock(&se->lock);
 			curr->ctr--;
-			if (!curr->ctr)
+			if (!curr->ctr) {
+				fuse_chan_put(req->ch);
+				req->ch = NULL;
 				destroy_req(curr);
+			}
 
 			return 1;
 		}
@@ -1739,9 +1745,11 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	req->u.i.unique = arg->unique;
 
 	pthread_mutex_lock(&se->lock);
-	if (find_interrupted(se, req))
+	if (find_interrupted(se, req)) {
+		fuse_chan_put(req->ch);
+		req->ch = NULL;
 		destroy_req(req);
-	else
+	} else
 		list_add_req(req, &se->interrupts);
 	pthread_mutex_unlock(&se->lock);
 }
@@ -1900,7 +1908,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_session *se = req->se;
 	size_t bufsize = se->bufsize;
 	size_t outargsize = sizeof(outarg);
-
+	uint64_t inargflags = 0;
+	uint64_t outargflags = 0;
 	(void) nodeid;
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG, "INIT: %u.%u\n", arg->major, arg->minor);
@@ -1935,43 +1944,46 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (arg->minor >= 6) {
 		if (arg->max_readahead < se->conn.max_readahead)
 			se->conn.max_readahead = arg->max_readahead;
-		if (arg->flags & FUSE_ASYNC_READ)
+		inargflags = arg->flags;
+		if (inargflags & FUSE_INIT_EXT)
+			inargflags = inargflags | (uint64_t) arg->flags2 << 32;
+		if (inargflags & FUSE_ASYNC_READ)
 			se->conn.capable |= FUSE_CAP_ASYNC_READ;
-		if (arg->flags & FUSE_POSIX_LOCKS)
+		if (inargflags & FUSE_POSIX_LOCKS)
 			se->conn.capable |= FUSE_CAP_POSIX_LOCKS;
-		if (arg->flags & FUSE_ATOMIC_O_TRUNC)
+		if (inargflags & FUSE_ATOMIC_O_TRUNC)
 			se->conn.capable |= FUSE_CAP_ATOMIC_O_TRUNC;
-		if (arg->flags & FUSE_EXPORT_SUPPORT)
+		if (inargflags & FUSE_EXPORT_SUPPORT)
 			se->conn.capable |= FUSE_CAP_EXPORT_SUPPORT;
-		if (arg->flags & FUSE_DONT_MASK)
+		if (inargflags & FUSE_DONT_MASK)
 			se->conn.capable |= FUSE_CAP_DONT_MASK;
-		if (arg->flags & FUSE_FLOCK_LOCKS)
+		if (inargflags & FUSE_FLOCK_LOCKS)
 			se->conn.capable |= FUSE_CAP_FLOCK_LOCKS;
-		if (arg->flags & FUSE_AUTO_INVAL_DATA)
+		if (inargflags & FUSE_AUTO_INVAL_DATA)
 			se->conn.capable |= FUSE_CAP_AUTO_INVAL_DATA;
-		if (arg->flags & FUSE_DO_READDIRPLUS)
+		if (inargflags & FUSE_DO_READDIRPLUS)
 			se->conn.capable |= FUSE_CAP_READDIRPLUS;
-		if (arg->flags & FUSE_READDIRPLUS_AUTO)
+		if (inargflags & FUSE_READDIRPLUS_AUTO)
 			se->conn.capable |= FUSE_CAP_READDIRPLUS_AUTO;
-		if (arg->flags & FUSE_ASYNC_DIO)
+		if (inargflags & FUSE_ASYNC_DIO)
 			se->conn.capable |= FUSE_CAP_ASYNC_DIO;
-		if (arg->flags & FUSE_WRITEBACK_CACHE)
+		if (inargflags & FUSE_WRITEBACK_CACHE)
 			se->conn.capable |= FUSE_CAP_WRITEBACK_CACHE;
-		if (arg->flags & FUSE_NO_OPEN_SUPPORT)
+		if (inargflags & FUSE_NO_OPEN_SUPPORT)
 			se->conn.capable |= FUSE_CAP_NO_OPEN_SUPPORT;
-		if (arg->flags & FUSE_PARALLEL_DIROPS)
+		if (inargflags & FUSE_PARALLEL_DIROPS)
 			se->conn.capable |= FUSE_CAP_PARALLEL_DIROPS;
-		if (arg->flags & FUSE_POSIX_ACL)
+		if (inargflags & FUSE_POSIX_ACL)
 			se->conn.capable |= FUSE_CAP_POSIX_ACL;
-		if (arg->flags & FUSE_HANDLE_KILLPRIV)
+		if (inargflags & FUSE_HANDLE_KILLPRIV)
 			se->conn.capable |= FUSE_CAP_HANDLE_KILLPRIV;
-		if (arg->flags & FUSE_CACHE_SYMLINKS)
+		if (inargflags & FUSE_CACHE_SYMLINKS)
 			se->conn.capable |= FUSE_CAP_CACHE_SYMLINKS;
-		if (arg->flags & FUSE_NO_OPENDIR_SUPPORT)
+		if (inargflags & FUSE_NO_OPENDIR_SUPPORT)
 			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
-		if (arg->flags & FUSE_EXPLICIT_INVAL_DATA)
+		if (inargflags & FUSE_EXPLICIT_INVAL_DATA)
 			se->conn.capable |= FUSE_CAP_EXPLICIT_INVAL_DATA;
-		if (!(arg->flags & FUSE_MAX_PAGES)) {
+		if (!(inargflags & FUSE_MAX_PAGES)) {
 			size_t max_bufsize =
 				FUSE_DEFAULT_MAX_PAGES_PER_REQ * getpagesize()
 				+ FUSE_BUFFER_HEADER_SIZE;
@@ -2062,39 +2074,47 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outarg.flags |= FUSE_MAX_PAGES;
 		outarg.max_pages = (se->conn.max_write - 1) / getpagesize() + 1;
 	}
-
+	outargflags = outarg.flags;
 	/* Always enable big writes, this is superseded
 	   by the max_write option */
-	outarg.flags |= FUSE_BIG_WRITES;
+	outargflags |= FUSE_BIG_WRITES;
 
 	if (se->conn.want & FUSE_CAP_ASYNC_READ)
-		outarg.flags |= FUSE_ASYNC_READ;
+		outargflags |= FUSE_ASYNC_READ;
 	if (se->conn.want & FUSE_CAP_POSIX_LOCKS)
-		outarg.flags |= FUSE_POSIX_LOCKS;
+		outargflags |= FUSE_POSIX_LOCKS;
 	if (se->conn.want & FUSE_CAP_ATOMIC_O_TRUNC)
-		outarg.flags |= FUSE_ATOMIC_O_TRUNC;
+		outargflags |= FUSE_ATOMIC_O_TRUNC;
 	if (se->conn.want & FUSE_CAP_EXPORT_SUPPORT)
-		outarg.flags |= FUSE_EXPORT_SUPPORT;
+		outargflags |= FUSE_EXPORT_SUPPORT;
 	if (se->conn.want & FUSE_CAP_DONT_MASK)
-		outarg.flags |= FUSE_DONT_MASK;
+		outargflags |= FUSE_DONT_MASK;
 	if (se->conn.want & FUSE_CAP_FLOCK_LOCKS)
-		outarg.flags |= FUSE_FLOCK_LOCKS;
+		outargflags |= FUSE_FLOCK_LOCKS;
 	if (se->conn.want & FUSE_CAP_AUTO_INVAL_DATA)
-		outarg.flags |= FUSE_AUTO_INVAL_DATA;
+		outargflags |= FUSE_AUTO_INVAL_DATA;
 	if (se->conn.want & FUSE_CAP_READDIRPLUS)
-		outarg.flags |= FUSE_DO_READDIRPLUS;
+		outargflags |= FUSE_DO_READDIRPLUS;
 	if (se->conn.want & FUSE_CAP_READDIRPLUS_AUTO)
-		outarg.flags |= FUSE_READDIRPLUS_AUTO;
+		outargflags |= FUSE_READDIRPLUS_AUTO;
 	if (se->conn.want & FUSE_CAP_ASYNC_DIO)
-		outarg.flags |= FUSE_ASYNC_DIO;
+		outargflags |= FUSE_ASYNC_DIO;
 	if (se->conn.want & FUSE_CAP_WRITEBACK_CACHE)
-		outarg.flags |= FUSE_WRITEBACK_CACHE;
+		outargflags |= FUSE_WRITEBACK_CACHE;
 	if (se->conn.want & FUSE_CAP_POSIX_ACL)
-		outarg.flags |= FUSE_POSIX_ACL;
+		outargflags |= FUSE_POSIX_ACL;
 	if (se->conn.want & FUSE_CAP_CACHE_SYMLINKS)
-		outarg.flags |= FUSE_CACHE_SYMLINKS;
+		outargflags |= FUSE_CACHE_SYMLINKS;
 	if (se->conn.want & FUSE_CAP_EXPLICIT_INVAL_DATA)
-		outarg.flags |= FUSE_EXPLICIT_INVAL_DATA;
+		outargflags |= FUSE_EXPLICIT_INVAL_DATA;
+
+	if (inargflags & FUSE_INIT_EXT) {
+		outargflags |= FUSE_INIT_EXT;
+		outarg.flags2 = outargflags >> 32;
+	}
+
+	outarg.flags = outargflags;
+
 	outarg.max_readahead = se->conn.max_readahead;
 	outarg.max_write = se->conn.max_write;
 	if (se->conn.proto_minor >= 13) {

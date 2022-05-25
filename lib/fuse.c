@@ -3274,6 +3274,10 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 
 			if (f->conf.auto_cache)
 				open_auto_cache(f, ino, path, fi);
+
+			if (f->conf.no_rofd_flush &&
+			    (fi->flags & O_ACCMODE) == O_RDONLY)
+				fi->noflush = 1;
 		}
 		fuse_finish_interrupt(f, req, &d);
 	}
@@ -4657,6 +4661,7 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_LIB_OPT("kernel_cache",	      kernel_cache, 1),
 	FUSE_LIB_OPT("auto_cache",	      auto_cache, 1),
 	FUSE_LIB_OPT("noauto_cache",	      auto_cache, 0),
+	FUSE_LIB_OPT("no_rofd_flush",	      no_rofd_flush, 1),
 	FUSE_LIB_OPT("umask=",		      set_mode, 1),
 	FUSE_LIB_OPT("umask=%o",	      umask, 0),
 	FUSE_LIB_OPT("uid=",		      set_uid, 1),
@@ -4709,6 +4714,7 @@ void fuse_lib_help(struct fuse_args *args)
 	printf(
 "    -o kernel_cache        cache files in kernel\n"
 "    -o [no]auto_cache      enable caching based on modification times (off)\n"
+"    -o no_rofd_flush       disable flushing of read-only fd on close (off)\n"
 "    -o umask=M             set file permissions (octal)\n"
 "    -o uid=N               set file owner\n"
 "    -o gid=N               set file group\n"

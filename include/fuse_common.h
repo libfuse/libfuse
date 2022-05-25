@@ -23,7 +23,7 @@
 #define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 10
+#define FUSE_MINOR_VERSION 11
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -83,8 +83,12 @@ struct fuse_file_info {
 	    nothing when set by open()). */
 	unsigned int cache_readdir : 1;
 
+	/** Can be filled in by open, to indicate that flush is not needed
+	    on close. */
+	unsigned int noflush : 1;
+
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 25;
+	unsigned int padding : 24;
 	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
