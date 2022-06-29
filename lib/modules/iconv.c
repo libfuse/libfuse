@@ -82,7 +82,8 @@ static int iconv_convpath(struct iconv *ic, const char *path, char **newpathp,
 			if (!tmp)
 				goto err;
 
-			p = tmp + (p - newpath);
+			if (tmp != newpath)
+				p = tmp;
 			plen += inc;
 			newpath = tmp;
 		}
