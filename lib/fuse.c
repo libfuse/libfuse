@@ -59,7 +59,6 @@
 
 struct fuse_fs {
 	struct fuse_operations op;
-	struct fuse_module *m;
 	void *user_data;
 	int debug;
 };
@@ -2668,8 +2667,6 @@ void fuse_fs_destroy(struct fuse_fs *fs)
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.destroy)
 		fs->op.destroy(fs->user_data);
-	if (fs->m)
-		fuse_put_module(fs->m);
 	free(fs);
 }
 
@@ -4811,7 +4808,6 @@ static int fuse_push_module(struct fuse *f, const char *module,
 		fuse_put_module(m);
 		return -1;
 	}
-	newfs->m = m;
 	f->fs = newfs;
 	return 0;
 }
@@ -5022,8 +5018,6 @@ out_free_name_table:
 out_free_session:
 	fuse_session_destroy(f->se);
 out_free_fs:
-	if (f->fs->m)
-		fuse_put_module(f->fs->m);
 	free(f->fs);
 	free(f->conf.modules);
 out_delete_context_key:
