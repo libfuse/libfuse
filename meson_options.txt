@@ -4,6 +4,9 @@ option('disable-mtab', type : 'boolean', value : false,
 option('udevrulesdir', type : 'string', value : '',
        description: 'Where to install udev rules (if empty, query pkg-config(1))')
 
+option('initscriptdir', type : 'string', value : '/etc/init.d/',
+       description: 'Init script installation location (if empty, disable init script installation)')
+
 option('utils', type : 'boolean', value : true,
        description: 'Whether or not to build and install helper programs')
 
