@@ -24,6 +24,5 @@ meson.add_install_script('install_helper.sh',
                          join_paths(get_option('prefix'), get_option('sysconfdir')),
                          join_paths(get_option('prefix'), get_option('bindir')),
                          udevrulesdir,
-                         '@0@'.format(get_option('useroot')))
-
-
+                         '@0@'.format(get_option('useroot')),
+                         get_option('initscriptdir'))
