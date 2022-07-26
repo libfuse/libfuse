@@ -1762,7 +1762,9 @@ static struct fuse_req *check_interrupt(struct fuse_session *se,
 		if (curr->u.i.unique == req->unique) {
 			req->interrupted = 1;
 			list_del_req(curr);
-			free(curr);
+			fuse_chan_put(curr->ch);
+			curr->ch = NULL;
+			destroy_req(curr);
 			return NULL;
 		}
 	}
