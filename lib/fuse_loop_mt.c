@@ -26,6 +26,12 @@
 #include <assert.h>
 #include <limits.h>
 
+#define HAVE_URING
+
+#ifdef HAVE_URING
+#include "fuse_uring_i.h"
+#endif
+
 /* Environment var controlling the thread stack size */
 #define ENVNAME_THREAD_STACK "FUSE_THREAD_STACK"
 
@@ -34,6 +40,15 @@
 #define FUSE_LOOP_MT_DEF_MAX_THREADS 10
 #define FUSE_LOOP_MT_DEF_IDLE_THREADS -1 /* thread destruction is disabled
                                           * by default */
+#define FUSE_LOOP_MT_DEF_USE_URING 1 /* uring is disabled by default, until
+				      * it is proven to work stable
+				      * enabling this does still might not use
+				      * uring, if uring is not supported by
+				      * the kernel
+				      */
+#define FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE 0
+#define FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH 1
+
 
 /* an arbitrary large value that cannot be valid */
 #define FUSE_LOOP_MT_MAX_THREADS      (100U * 1000)
@@ -328,7 +343,7 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 FUSE_SYMVER("fuse_session_loop_mt_312", "fuse_session_loop_mt@@FUSE_3.12")
 int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *config)
 {
-int err;
+	int err;
 	struct fuse_mt mt;
 	struct fuse_worker *w;
 	int created_config = 0;
@@ -343,6 +358,24 @@ int err;
 		created_config = 1;
 	}
 
+	/* io_uring has a different thread model */
+	if (config->uring.use_uring) {
+#ifdef HAVE_URING
+		err = fuse_session_start_uring(se, config);
+		if (err) {
+			fuse_log(FUSE_LOG_WARNING,
+				 "Failed to start uring, "
+				 "fall back from uring to threads.\n");
+			config->uring.use_uring = 0;
+		} else
+			goto out;
+#else
+		fuse_log(FUSE_LOG_WARNING,
+			 "libfuse not compiled with uring, falling back to "
+			 "threads.");
+		config->uring.use_uring = false;
+#endif
+	}
 
 	memset(&mt, 0, sizeof(struct fuse_mt));
 	mt.se = se;
@@ -357,9 +390,11 @@ int err;
 	sem_init(&mt.finish, 0, 0);
 	pthread_mutex_init(&mt.lock, NULL);
 
+	/* threads reading requests from /dev/fuse */
 	pthread_mutex_lock(&mt.lock);
 	err = fuse_loop_start_thread(&mt);
 	pthread_mutex_unlock(&mt.lock);
+
 	if (!err) {
 		/* sem_wait() is interruptible */
 		while (!fuse_session_exited(se))
@@ -381,6 +416,8 @@ int err;
 	sem_destroy(&mt.finish);
 	if(se->error != 0)
 		err = se->error;
+
+out:
 	fuse_session_reset(se);
 
 	if (created_config) {
@@ -436,6 +473,10 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 	config->max_threads      = FUSE_LOOP_MT_DEF_MAX_THREADS;
 	config->clone_fd         = FUSE_LOOP_MT_DEF_CLONE_FD;
 
+	config->uring.use_uring = FUSE_LOOP_MT_DEF_USE_URING;
+	config->uring.per_core_queue = FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE;
+	config->uring.queue_depth = FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH;
+
 	return config;
 }
 
@@ -486,3 +527,11 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 	config->clone_fd = value;
 }
 
+void fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
+				       bool use_uring, bool per_core_queue,
+				       unsigned int queue_depth)
+{
+	config->uring.use_uring = use_uring;
+	config->uring.per_core_queue = per_core_queue;
+	config->uring.queue_depth = queue_depth;
+}

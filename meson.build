@@ -71,6 +71,15 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
                        prefix: include_default,
                        args: args_default))
 
+# XXX: Check for version > X
+if cc.check_header('liburing.h', required: true)
+   private_cfg.set('HAVE_URING', true)
+
+   # for uring we also need libnuma
+   cc.check_header('numa.h', required: true)
+endif
+
+
 #
 # Compiler configuration
 #

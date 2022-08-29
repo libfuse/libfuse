@@ -17,6 +17,8 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "mount_util.h"
+#include "fuse_lowlevel_i.h"
+#include "fuse_uring_i.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -133,16 +135,23 @@ void fuse_free_req(fuse_req_t req)
 	int ctr;
 	struct fuse_session *se = req->se;
 
-	pthread_mutex_lock(&se->lock);
-	req->u.ni.func = NULL;
-	req->u.ni.data = NULL;
-	list_del_req(req);
-	ctr = --req->ctr;
-	fuse_chan_put(req->ch);
-	req->ch = NULL;
-	pthread_mutex_unlock(&se->lock);
-	if (!ctr)
-		destroy_req(req);
+	if (!req->is_uring) {
+		pthread_mutex_lock(&se->lock);
+		req->u.ni.func = NULL;
+		req->u.ni.data = NULL;
+		ctr = --req->ctr;
+		list_del_req(req);
+		fuse_chan_put(req->ch);
+		req->ch = NULL;
+		pthread_mutex_unlock(&se->lock);
+		if (!ctr)
+			destroy_req(req);
+	} else {
+		/* requests are part of ring queue - cannot be freed */
+		req->u.ni.func = NULL;
+		req->u.ni.data = NULL;
+		ctr = --req->ctr;
+	}
 }
 
 static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
@@ -157,16 +166,46 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 		req->ctr = 1;
 		list_init_req(req);
 		pthread_mutex_init(&req->lock, NULL);
+		req->is_uring = false;
 	}
 
 	return req;
 }
 
-/* Send data. If *ch* is NULL, send via session master fd */
+/**
+ * Send data to fuse-kernel using an fd of the fuse device.
+ */
+static int fuse_write_msg_dev(struct fuse_session *se, struct fuse_chan *ch,
+			     struct iovec *iov, int count)
+{
+	ssize_t res;
+	if (se->io != NULL)
+		/* se->io->writev is never NULL if se->io is not NULL as
+		   specified by fuse_session_custom_io()*/
+		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
+				     se->userdata);
+	else
+		res = writev(ch ? ch->fd : se->fd, iov, count);
+
+	int err = errno;
+
+	if (res == -1) {
+		/* ENOENT means the operation was interrupted */
+		if (!fuse_session_exited(se) && err != ENOENT)
+				perror("fuse: writing device");
+		return -err;
+	}
+
+	return 0;
+}
+
 static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
-			 struct iovec *iov, int count)
+			 struct iovec *iov, int count, fuse_req_t req)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
+
+	if (req->is_uring)
+		fuse_send_msg_uring(req, iov, count);
 
 	assert(se != NULL);
 	out->len = iov_length(iov, count);
@@ -186,27 +225,8 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 		}
 	}
 
-	ssize_t res;
-	if (se->io != NULL)
-		/* se->io->writev is never NULL if se->io is not NULL as
-		specified by fuse_session_custom_io()*/
-		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
-					   se->userdata);
-	else
-		res = writev(ch ? ch->fd : se->fd, iov, count);
-
-	int err = errno;
-
-	if (res == -1) {
-		/* ENOENT means the operation was interrupted */
-		if (!fuse_session_exited(se) && err != ENOENT)
-			perror("fuse: writing device");
-		return -err;
-	}
-
-	return 0;
+	return fuse_write_msg_dev(se, ch, iov, count);
 }
-
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count)
@@ -229,7 +249,7 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
-	return fuse_send_msg(req->se, req->ch, iov, count);
+	return fuse_send_msg(req->se, req->ch, iov, count, req);
 }
 
 static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
@@ -245,6 +265,9 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 static int send_reply(fuse_req_t req, int error, const void *arg,
 		      size_t argsize)
 {
+	if (req->is_uring)
+		return send_reply_uring(req, error, arg, argsize);
+
 	struct iovec iov[2];
 	int count = 1;
 	if (argsize) {
@@ -259,6 +282,11 @@ int fuse_reply_iov(fuse_req_t req, const struct iovec *iov, int count)
 {
 	int res;
 	struct iovec *padded_iov;
+
+	if (req->is_uring) {
+		fuse_log(FUSE_LOG_CRIT, "FIXME, copy into the buffer");
+		abort();
+	}
 
 	padded_iov = malloc((count + 1) * sizeof(struct iovec));
 	if (padded_iov == NULL)
@@ -494,7 +522,7 @@ static int fuse_send_data_iov_fallback(struct fuse_session *se,
 				       struct fuse_chan *ch,
 				       struct iovec *iov, int iov_count,
 				       struct fuse_bufvec *buf,
-				       size_t len)
+				       size_t len, fuse_req_t req)
 {
 	struct fuse_bufvec mem_buf = FUSE_BUFVEC_INIT(len);
 	void *mbuf;
@@ -509,7 +537,7 @@ static int fuse_send_data_iov_fallback(struct fuse_session *se,
 		iov[iov_count].iov_base = buf->buf[0].mem;
 		iov[iov_count].iov_len = len;
 		iov_count++;
-		return fuse_send_msg(se, ch, iov, iov_count);
+		return fuse_send_msg(se, ch, iov, iov_count, req);
 	}
 
 	res = posix_memalign(&mbuf, pagesize, len);
@@ -527,7 +555,7 @@ static int fuse_send_data_iov_fallback(struct fuse_session *se,
 	iov[iov_count].iov_base = mbuf;
 	iov[iov_count].iov_len = len;
 	iov_count++;
-	res = fuse_send_msg(se, ch, iov, iov_count);
+	res = fuse_send_msg(se, ch, iov, iov_count, req);
 	free(mbuf);
 
 	return res;
@@ -657,8 +685,9 @@ static int grow_pipe_to_max(int pipefd)
 }
 
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
-			       struct iovec *iov, int iov_count,
-			       struct fuse_bufvec *buf, unsigned int flags)
+			      struct iovec *iov, int iov_count,
+			      struct fuse_bufvec *buf, unsigned int flags,
+			      fuse_req_t req)
 {
 	int res;
 	size_t len = fuse_buf_size(buf);
@@ -810,7 +839,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			iov[iov_count].iov_base = mbuf;
 			iov[iov_count].iov_len = len;
 			iov_count++;
-			res = fuse_send_msg(se, ch, iov, iov_count);
+			res = fuse_send_msg(se, ch, iov, iov_count, req);
 			free(mbuf);
 			return res;
 		}
@@ -857,17 +886,17 @@ clear_pipe:
 	return res;
 
 fallback:
-	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len);
+	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len, req);
 }
 #else
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			       struct iovec *iov, int iov_count,
-			       struct fuse_bufvec *buf, unsigned int flags)
+			       struct fuse_bufvec *req_data, unsigned int flags)
 {
-	size_t len = fuse_buf_size(buf);
+	size_t len = fuse_buf_size(req_data);
 	(void) flags;
 
-	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len);
+	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, req_data, len);
 }
 #endif
 
@@ -878,13 +907,16 @@ int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 	struct fuse_out_header out;
 	int res;
 
+	if (req->is_uring)
+		return fuse_reply_data_uring(req, bufv, flags);
+
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
 	out.unique = req->unique;
 	out.error = 0;
 
-	res = fuse_send_data_iov(req->se, req->ch, iov, 1, bufv, flags);
+	res = fuse_send_data_iov(req->se, req->ch, iov, 1, bufv, flags, req);
 	if (res <= 0) {
 		fuse_free_req(req);
 		return res;
@@ -2259,6 +2291,7 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 			   struct iovec *iov, int count)
 {
 	struct fuse_out_header out;
+	struct fuse_req *req = NULL;
 
 	if (!se->got_init)
 		return -ENOTCONN;
@@ -2268,7 +2301,15 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
-	return fuse_send_msg(se, NULL, iov, count);
+	if (se->is_uring) {
+		/* XXX this requires another ring which userspace side can use
+		 * without a kernel request
+		 *
+		 */
+		return -ENOSYS;
+	}
+
+	return fuse_send_msg(se, NULL, iov, count, req);
 }
 
 int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
@@ -2410,6 +2451,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	struct iovec iov[3];
 	size_t size = fuse_buf_size(bufv);
 	int res;
+	struct fuse_req *req = NULL;
 
 	if (!se)
 		return -EINVAL;
@@ -2430,7 +2472,14 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	res = fuse_send_data_iov(se, NULL, iov, 2, bufv, flags);
+	if (se->is_uring) {
+		/* XXX this requires another ring which userspace side can use
+		 * without a kernel requests
+		 */
+		return -ENOSYS;
+	}
+
+	res = fuse_send_data_iov(se, NULL, iov, 2, bufv, flags, req);
 	if (res > 0)
 		res = -res;
 
@@ -2614,6 +2663,57 @@ static struct {
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
 
+/**
+ *
+ * @return 0 if sanity is ok, error otherwise
+ */
+static inline int
+fuse_req_opcode_sanity_ok(struct fuse_session *se, enum fuse_opcode in_op)
+{
+	int err = EIO;
+
+	if (!se->got_init) {
+		enum fuse_opcode expected;
+
+		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
+		if (in_op != expected)
+			return err;
+	} else if (in_op == FUSE_INIT || in_op == CUSE_INIT)
+		return err;
+
+	return 0;
+}
+
+static inline void
+fuse_session_in2req(struct fuse_req *req, struct fuse_in_header *in)
+{
+	req->unique = in->unique;
+	req->ctx.uid = in->uid;
+	req->ctx.gid = in->gid;
+	req->ctx.pid = in->pid;
+}
+
+/**
+ * Implement -o allow_root
+ */
+static inline int
+fuse_req_check_allow_root(struct fuse_session *se, enum fuse_opcode in_op,
+			  uid_t in_uid)
+{
+	int err = EACCES;
+
+	if (se->deny_others && in_uid != se->owner && in_uid != 0 &&
+		 in_op != FUSE_INIT && in_op != FUSE_READ &&
+		 in_op != FUSE_WRITE && in_op != FUSE_FSYNC &&
+		 in_op != FUSE_RELEASE && in_op != FUSE_READDIR &&
+		 in_op != FUSE_FSYNCDIR && in_op != FUSE_RELEASEDIR &&
+		 in_op != FUSE_NOTIFY_REPLY &&
+		 in_op != FUSE_READDIRPLUS)
+		return err;
+
+	return 0;
+}
+
 static const char *opname(enum fuse_opcode opcode)
 {
 	if (opcode >= FUSE_MAXOP || !fuse_ll_ops[opcode].name)
@@ -2696,40 +2796,26 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 			.iov_len = sizeof(struct fuse_out_header),
 		};
 
-		fuse_send_msg(se, ch, &iov, 1);
+		fuse_send_msg(se, ch, &iov, 1, NULL);
 		goto clear_pipe;
 	}
 
-	req->unique = in->unique;
-	req->ctx.uid = in->uid;
-	req->ctx.gid = in->gid;
-	req->ctx.pid = in->pid;
-	req->ch = ch ? fuse_chan_get(ch) : NULL;
+	fuse_session_in2req(req, in);
 
-	err = EIO;
-	if (!se->got_init) {
-		enum fuse_opcode expected;
-
-		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
-		if (in->opcode != expected)
-			goto reply_err;
-	} else if (in->opcode == FUSE_INIT || in->opcode == CUSE_INIT)
+	err = fuse_req_opcode_sanity_ok(se, in->opcode);
+	if (err)
 		goto reply_err;
 
-	err = EACCES;
-	/* Implement -o allow_root */
-	if (se->deny_others && in->uid != se->owner && in->uid != 0 &&
-		 in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
-		 in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&
-		 in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
-		 in->opcode != FUSE_FSYNCDIR && in->opcode != FUSE_RELEASEDIR &&
-		 in->opcode != FUSE_NOTIFY_REPLY &&
-		 in->opcode != FUSE_READDIRPLUS)
+	err = fuse_req_check_allow_root(se, in->opcode, in->uid);
+	if (err)
 		goto reply_err;
 
 	err = ENOSYS;
 	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
 		goto reply_err;
+
+	req->ch = ch ? fuse_chan_get(ch) : NULL;
+
 	if (in->opcode != FUSE_INTERRUPT) {
 		struct fuse_req *intr;
 		pthread_mutex_lock(&se->lock);
@@ -2780,6 +2866,63 @@ clear_pipe:
 	if (buf->flags & FUSE_BUF_IS_FD)
 		fuse_ll_clear_pipe(se);
 	goto out_free;
+}
+
+void
+fuse_session_process_uring_cqe(struct fuse_session *se, struct fuse_req *req,
+			       struct fuse_in_header *in,
+			       void *inarg, size_t in_arg_len)
+{
+	int err;
+
+	fuse_session_in2req(req, in);
+
+	err = fuse_req_opcode_sanity_ok(se, in->opcode);
+	if (err)
+		goto reply_err;
+
+	err = fuse_req_check_allow_root(se, in->opcode, in->uid);
+	if (err)
+		goto reply_err;
+
+	err = ENOSYS;
+	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
+		goto reply_err;
+
+	if (se->debug) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			(unsigned long long) in->unique,
+			opname((enum fuse_opcode) in->opcode), in->opcode,
+			(unsigned long long) in->nodeid, in_arg_len, in->pid);
+	}
+
+	if (in->opcode == FUSE_WRITE && se->op.write_buf) {
+		struct fuse_buf buf = {
+			.size = in_arg_len + sizeof(struct fuse_in_header),
+			.flags = 0,
+			.mem = inarg
+		};
+
+		do_write_buf(req, in->nodeid, inarg, &buf);
+	} else if (in->opcode == FUSE_NOTIFY_REPLY) {
+		struct fuse_buf buf = {
+			/* Same as above (FUSE_WRITE) regarding size addition */
+			.size = in_arg_len + sizeof(struct fuse_in_header),
+			.flags = 0,
+			.mem = inarg
+		};
+		do_notify_reply(req, in->nodeid, inarg, &buf);
+	} else
+		fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
+
+	return;
+
+reply_err:
+	fuse_reply_err(req, err);
+	return;
+
+
 }
 
 #define LL_OPTION(n,o,v) \
@@ -3141,6 +3284,7 @@ int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io 
 	return 0;
 }
 
+
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
 	int fd;
@@ -3170,19 +3314,18 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 			return -1;
 		}
 		se->fd = fd;
-		return 0;
+	} else {
+		/* Open channel */
+		fd = fuse_kern_mount(mountpoint, se->mo);
+		if (fd == -1)
+			return -1;
+		se->fd = fd;
+
+		/* Save mountpoint */
+		se->mountpoint = strdup(mountpoint);
+		if (se->mountpoint == NULL)
+			goto error_out;
 	}
-
-	/* Open channel */
-	fd = fuse_kern_mount(mountpoint, se->mo);
-	if (fd == -1)
-		return -1;
-	se->fd = fd;
-
-	/* Save mountpoint */
-	se->mountpoint = strdup(mountpoint);
-	if (se->mountpoint == NULL)
-		goto error_out;
 
 	return 0;
 

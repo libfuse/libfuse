@@ -6,6 +6,12 @@
   See the file COPYING.LIB
 */
 
+#ifndef LIB_FUSE_I_H_
+#define LIB_FUSE_I_H_
+
+#include <stdbool.h>
+#include <errno.h>
+
 #include "fuse.h"
 #include "fuse_lowlevel.h"
 
@@ -29,8 +35,12 @@ struct fuse_req {
 			void *data;
 		} ni;
 	} u;
+
 	struct fuse_req *next;
 	struct fuse_req *prev;
+
+	bool is_uring;
+
 };
 
 struct fuse_notify_req {
@@ -65,6 +75,7 @@ struct fuse_session {
 	struct fuse_notify_req notify_list;
 	size_t bufsize;
 	int error;
+	bool is_uring;
 };
 
 struct fuse_chan {
@@ -136,12 +147,29 @@ struct fuse_loop_config
 	 *  As of now threads are created dynamically
 	 */
 	unsigned int max_threads;
+
+	struct uring_cfg
+	{
+		/**
+		 * wether to use io_uring to handle requests.
+		 */
+		bool use_uring;
+
+		/**
+		 * wether to use a separate queue per core
+		 */
+		bool per_core_queue;
+
+		unsigned int queue_depth;
+
+	} uring;
 };
 #endif
 
 /* ----------------------------------------------------------- *
  * Channel interface (when using -o clone_fd)		       *
  * ----------------------------------------------------------- */
+
 
 /**
  * Obtain counted reference to the channel
@@ -197,3 +225,4 @@ int fuse_loop_cfg_verify(struct fuse_loop_config *config);
 /* room needed in buffer to accommodate header */
 #define FUSE_BUFFER_HEADER_SIZE 0x1000
 
+#endif // LIB_FUSE_I_H_
