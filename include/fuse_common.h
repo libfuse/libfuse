@@ -23,6 +23,7 @@
 #include "fuse_opt.h"
 #include "fuse_log.h"
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/types.h>
 
 /** Major version of FUSE library interface */
@@ -921,6 +922,10 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
  */
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 			   struct fuse_loop_config_v1 *v1_conf);
+
+void fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
+				       bool use_uring, bool per_core_queue,
+				       unsigned int queue_depth);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *
