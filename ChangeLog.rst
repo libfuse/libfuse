@@ -1,56 +1,24 @@
-libfuse 3.12.0 (<unreleased>)
+libfuse 3.12.0 (2022-09-08)
 ===========================
-* The 'max_idle_threads' parameter has performance implication
-  due to run time thread creation and destruction per request
-  and it is deprecated in favor of the new max_threads parameter.
 
-  * API changes:
-    In order to avoid future version symboling and also to
-    allow to set fuse_loop_config defaults an API change has been
-    introduced beginning with API version (FUSE_USE_VERSION) 312.
-    'struct fuse_loop_config' is now private and has to be
-    constructed using fuse_loop_cfg_create(). Besides allocating
-    memory this function also sets struct member default.
-    Desctruction (free) is done through fuse_loop_cfg_destroy().
-    Struct parameters can be changed using fuse_loop_cfg_set_*()
-    functions.
-    New  functions regarding the fuse-loop configuration are:
-      fuse_loop_cfg_create
-      fuse_loop_cfg_destroy
-      fuse_loop_cfg_set_idle_threads
-      fuse_loop_cfg_set_max_threads
-      fuse_loop_cfg_set_clone_fd
-      fuse_loop_cfg_convert (internal for API/ABI compatibility)
-    Functions details can be found in fuse_common.h
+* There is a new build parameter to specify where the SysV init script should be
+  installed.
+  
+* The *max_idle_threads* parameter has been deprecated in favor of the new max_threads*
+  parameter (which avoids the excessive overhead of creating and destructing threads).
+  Using max_threads == 1 and calling fuse_session_loop_mt() will run single threaded
+  similar to fuse_session_loop().
 
-    In API version 312 the fuse_session_loop_mt() function now
-    also accepts struct fuse_loop_config * as NULL pointer and
-    uses defaults then.
+The following changes apply when using the most recent API (-DFUSE_USE_VERSION=312,
+see `example/passthrough_hp.cc` for an example for how to usse the new API):
 
-  * Users of fuse_parse_cmdline() get the new option
-    'max_threads' with API version 312.
+* `struct fuse_loop_config` is now private and has to be constructed using
+  *fuse_loop_cfg_create()* and detroyed with *fuse_loop_cfg_destroy()*.  Parameters can be
+  changed using `fuse_loop_cfg_set_*()` functions.
 
-  * File system conversion help:
-    - See example/passthrough_hp.cc
+* *fuse_session_loop_mt()* now accepts `struct fuse_loop_config *` as NULL pointer.
 
-    #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
-
-    ...
-    main(int argc, char *argv[])
-    ...
-    struct fuse_loop_config *loop_config;
-    ...
-    loop_config = fuse_loop_cfg_create();
-    ...
-    ret = fuse_session_loop_mt(se, loop_config);
-    ...
-    fuse_loop_cfg_destroy(loop_config);
-
-  * Further notes:
-    Using max_threads == 1 and calling fuse_session_loop_mt() works,
-    it will run single threaded similar to fuse_session_loop(). In
-    fact, fuse_session_loop() might get deprecated in future
-    versions.
+* *fuse_parse_cmdline()* now accepts a *max_threads* option.
 
 
 libfuse 3.11.0 (2022-05-02)
