@@ -1914,11 +1914,19 @@ int fuse_parse_cmdline(struct fuse_args *args,
 #if FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
 int fuse_parse_cmdline_30(struct fuse_args *args,
 			   struct fuse_cmdline_opts *opts);
-#define fuse_parse_cmdline(args, opts) fuse_parse_cmdline_30(args, opts)
+static int fuse_parse_cmdline(struct fuse_args *args,
+			      struct fuse_cmdline_opts *opts)
+{
+	return fuse_parse_cmdline_30(args, opts);
+}
 #else
 int fuse_parse_cmdline_312(struct fuse_args *args,
 			   struct fuse_cmdline_opts *opts);
-#define fuse_parse_cmdline(args, opts) fuse_parse_cmdline_312(args, opts)
+static int fuse_parse_cmdline(struct fuse_args *args,
+			      struct fuse_cmdline_opts *opts)
+{
+	return fuse_parse_cmdline_312(args, opts);
+}
 #endif
 #endif
 
