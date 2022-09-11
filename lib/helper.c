@@ -233,7 +233,7 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
  */
 int fuse_parse_cmdline_30(struct fuse_args *args,
 		       struct fuse_cmdline_opts *opts);
-FUSE_SYMVER("fuse_parse_cmdline_37", "fuse_parse_cmdline@FUSE_3.0")
+FUSE_SYMVER("fuse_parse_cmdline_30", "fuse_parse_cmdline@FUSE_3.0")
 int fuse_parse_cmdline_30(struct fuse_args *args,
 			  struct fuse_cmdline_opts *out_opts)
 {
