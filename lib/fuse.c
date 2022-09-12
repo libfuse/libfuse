@@ -80,8 +80,6 @@ struct lock_queue_element {
 	char **path2;
 	struct node **wnode2;
 	int err;
-	bool first_locked : 1;
-	bool second_locked : 1;
 	bool done : 1;
 };
 
@@ -1075,22 +1073,6 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 	return err;
 }
 
-static void queue_element_unlock(struct fuse *f, struct lock_queue_element *qe)
-{
-	struct node *wnode;
-
-	if (qe->first_locked) {
-		wnode = qe->wnode1 ? *qe->wnode1 : NULL;
-		unlock_path(f, qe->nodeid1, wnode, NULL);
-		qe->first_locked = false;
-	}
-	if (qe->second_locked) {
-		wnode = qe->wnode2 ? *qe->wnode2 : NULL;
-		unlock_path(f, qe->nodeid2, wnode, NULL);
-		qe->second_locked = false;
-	}
-}
-
 static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 			 fuse_ino_t nodeid2, const char *name2,
 			 char **path1, char **path2,
@@ -1115,7 +1097,6 @@ static int try_get_path2(struct fuse *f, fuse_ino_t nodeid1, const char *name1,
 static void queue_element_wakeup(struct fuse *f, struct lock_queue_element *qe)
 {
 	int err;
-	bool first = (qe == f->lockq);
 
 	if (!qe->path1) {
 		/* Just waiting for it to be unlocked */
@@ -1125,44 +1106,21 @@ static void queue_element_wakeup(struct fuse *f, struct lock_queue_element *qe)
 		return;
 	}
 
-	if (!qe->first_locked) {
+	if (qe->done)
+		return;  // Don't try to double-lock the element
+
+	if (!qe->path2) {
 		err = try_get_path(f, qe->nodeid1, qe->name1, qe->path1,
 				   qe->wnode1, true);
-		if (!err)
-			qe->first_locked = true;
-		else if (err != -EAGAIN)
-			goto err_unlock;
-	}
-	if (!qe->second_locked && qe->path2) {
-		err = try_get_path(f, qe->nodeid2, qe->name2, qe->path2,
-				   qe->wnode2, true);
-		if (!err)
-			qe->second_locked = true;
-		else if (err != -EAGAIN)
-			goto err_unlock;
+	} else {
+		err = try_get_path2(f, qe->nodeid1, qe->name1, qe->nodeid2,
+				    qe->name2, qe->path1, qe->path2, qe->wnode1,
+				    qe->wnode2);
 	}
 
-	if (qe->first_locked && (qe->second_locked || !qe->path2)) {
-		err = 0;
-		goto done;
-	}
+	if (err == -EAGAIN)
+		return;  /* keep trying */
 
-	/*
-	 * Only let the first element be partially locked otherwise there could
-	 * be a deadlock.
-	 *
-	 * But do allow the first element to be partially locked to prevent
-	 * starvation.
-	 */
-	if (!first)
-		queue_element_unlock(f, qe);
-
-	/* keep trying */
-	return;
-
-err_unlock:
-	queue_element_unlock(f, qe);
-done:
 	qe->err = err;
 	qe->done = true;
 	pthread_cond_signal(&qe->cond);
@@ -1200,8 +1158,6 @@ static void queue_path(struct fuse *f, struct lock_queue_element *qe)
 	struct lock_queue_element **qp;
 
 	qe->done = false;
-	qe->first_locked = false;
-	qe->second_locked = false;
 	pthread_cond_init(&qe->cond, NULL);
 	qe->next = NULL;
 	for (qp = &f->lockq; *qp != NULL; qp = &(*qp)->next);
