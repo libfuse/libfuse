@@ -251,18 +251,6 @@ int fuse_parse_cmdline_30(struct fuse_args *args,
 	return rc;
 }
 
-/**
- * Compatibility ABI symbol for systems that do not support version symboling
- */
-#if (defined(__UCLIBC__) || defined(__APPLE__))
-int fuse_parse_cmdline(struct fuse_args *args,
-		       struct fuse_cmdline_opts *opts)
-{
-	return fuse_parse_cmdline_30(args, out_opts);
-}
-#endif
-
-
 int fuse_daemonize(int foreground)
 {
 	if (!foreground) {
