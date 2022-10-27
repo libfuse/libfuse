@@ -185,6 +185,7 @@ FUSE_3.12 {
 		fuse_parse_cmdline;
 		fuse_parse_cmdline_30;
 		fuse_parse_cmdline_312;
+		fuse_lowlevel_notify_expire_entry;
 } FUSE_3.4;
 
 # Local Variables:
