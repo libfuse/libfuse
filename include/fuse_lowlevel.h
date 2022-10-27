@@ -1675,6 +1675,14 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen);
 
+enum fuse_expire_flags {
+	FUSE_LL_EXPIRE_ONLY	= (1 << 0),
+};
+
+int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
+                                      const char *name, size_t namelen,
+                                      enum fuse_expire_flags flags);
+
 /**
  * This function behaves like fuse_lowlevel_notify_inval_entry() with
  * the following additional effect (at least as of Linux kernel 4.8):

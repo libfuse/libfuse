@@ -2268,21 +2268,24 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	return send_notify_iov(se, FUSE_NOTIFY_INVAL_INODE, iov, 2);
 }
 
-int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
-				     const char *name, size_t namelen)
+int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
+				      const char *name, size_t namelen,
+				      enum fuse_expire_flags flags)
 {
 	struct fuse_notify_inval_entry_out outarg;
 	struct iovec iov[3];
 
 	if (!se)
 		return -EINVAL;
-	
+
 	if (se->conn.proto_minor < 12)
 		return -ENOSYS;
 
 	outarg.parent = parent;
 	outarg.namelen = namelen;
-	outarg.padding = 0;
+	outarg.flags = 0;
+	if (flags & FUSE_LL_EXPIRE_ONLY)
+		outarg.flags |= FUSE_EXPIRE_ONLY;
 
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
@@ -2291,6 +2294,13 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 	return send_notify_iov(se, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
 }
+
+int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
+				     const char *name, size_t namelen)
+{
+	return fuse_lowlevel_notify_expire_entry(se, parent, name, namelen, 0);
+}
+
 
 int fuse_lowlevel_notify_delete(struct fuse_session *se,
 				fuse_ino_t parent, fuse_ino_t child,
