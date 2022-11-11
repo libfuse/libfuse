@@ -332,12 +332,14 @@ fuse_setup_configure_kernel(struct fuse_session *se,
 	int rc;
 
 	struct fuse_uring_cfg ioc_cfg = {
-		.compat_flags = 0,
+		.flags = FUSE_URING_IOCTL_FLAG_CFG,
 		.num_queues = n_queues,
-		.per_core_queue = cfg->uring.per_core_queue,
 		.queue_depth = cfg->uring.queue_depth,
 		.mmap_req_size = req_buf_size,
 	};
+
+	if (cfg->uring.per_core_queue)
+		ioc_cfg.flags |= FUSE_URING_IOCTL_FLAG_PER_CORE_QUEUE;
 
 	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
 	if (rc != 0) {
@@ -358,6 +360,9 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 	for (size_t qid = 0; qid < fuse_ring->num_queues; qid++) {
 		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
 
+		if (queue->tid != 0)
+			pthread_join(queue->tid, NULL);
+
 		if (queue->fd != -1)
 			close(queue->fd);
 
@@ -368,6 +373,7 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			struct fuse_ring_req *req = &queue->req[tag];
 			munmap(req->req_buf, fuse_ring->req_buf_size);
 		}
+
 	}
 
 
@@ -383,6 +389,53 @@ fuse_ring_queue_size(const size_t n_queues, const size_t q_depth)
 		n_queues * (sizeof(struct fuse_ring_queue) + q_req_size);
 
 	return fuse_ring_req_size;
+}
+
+static void *
+fuse_ring_cleanup_thread(void *arg)
+{
+	struct fuse_session *se = arg;
+	int rc;
+
+	/* Wait in the kernel till stop time and cleanup will then be done
+	 * inside of the kernel without further action here
+	 */
+	struct fuse_uring_cfg ioc_cfg = {
+		.flags = FUSE_URING_IOCTL_FLAG_WAIT,
+	};
+
+	while (!fuse_session_exited(se)) {
+		rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
+		if (rc != 0) {
+			if (errno == ENOTTY)
+				fuse_log(FUSE_LOG_INFO, "Kernel does not support fuse uring\n");
+			else
+				fuse_log(FUSE_LOG_ERR,
+					"Unexpected kernel uring ioctl result: %s\n",
+					strerror(errno));
+			break;
+		}
+	}
+
+
+	return NULL;
+}
+
+static int
+fuse_ring_start_cleanup_thread(struct fuse_session *se)
+{
+	int rc = pthread_create(&se->ring.cleanup_tid, NULL,
+				fuse_ring_cleanup_thread, se);
+
+	if (rc != 0) {
+		fuse_log(FUSE_LOG_ERR,
+			"Failed to start the cleanup thread: %s\n",
+			strerror(errno));
+	} else {
+		/* test/check with another ioctl when it is running `*/
+	}
+
+	return rc;
 }
 
 static struct fuse_ring_pool *
@@ -401,6 +454,10 @@ fuse_create_user_ring(struct fuse_session *se,
 			 page_size);
 
 	rc = fuse_setup_configure_kernel(se, cfg, 1, req_buf_size);
+	if (rc != 0)
+		return NULL;
+
+	rc = fuse_ring_start_cleanup_thread(se);
 	if (rc != 0)
 		return NULL;
 
@@ -576,15 +633,16 @@ static void *fuse_uring_thread(void *arg)
 		ret = io_uring_wait_cqe(&queue->ring, &cqe);
 		if (ret < 0) {
 			fuse_log(FUSE_LOG_ERR, "cqe wait failed %d\n", ret);
-			goto err;
 		}
 
-		if (cqe->res != 0) {
+		if (ret == 0 && cqe->res != 0) {
 			fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
-			goto err;
+			ret = cqe->res;
+
 		}
 
-		fuse_uring_handle_cqe(queue, cqe);
+		if (ret == 0)
+			fuse_uring_handle_cqe(queue, cqe);
 		io_uring_cqe_seen(&queue->ring, cqe);
 
 #if 0
@@ -610,23 +668,28 @@ static void *fuse_uring_thread(void *arg)
 
 err:
 	se->error = -EIO;
-	se->exited = 1;
+	fuse_session_exit(se);
 	return NULL;
 }
 
 static int fuse_session_run_uring(struct fuse_ring_pool *fuse_ring)
 {
+	int rc;
 	for (int qid = 0; qid < fuse_ring->num_queues; qid++) {
 		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
-		pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
+		rc = pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
+		if (rc != 0)
+			break;
 	}
 
+#if 0
 	for (int qid = 0; qid < fuse_ring->num_queues; qid++) {
 		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
 		pthread_join(queue->tid, NULL);
 	}
+#endif
 
-	return 0;
+	return rc;
 }
 
 static int fuse_session_sanity_check(void)
@@ -657,14 +720,34 @@ int fuse_session_start_uring(struct fuse_session *se,
 	rc = fuse_session_run_uring(fuse_ring);
 
 out:
-	if (fuse_ring != NULL)
-		fuse_session_destruct_uring(fuse_ring);
-
 	if (rc != 0)
 		se->is_uring = false;
-
+	else
+		se->ring.pool = fuse_ring;
 
 	return rc;
 }
 
+int fuse_session_stop_uring(struct fuse_session *se)
+{
+	int rc;
 
+	/* Wake up the waiting thread to let it stop uring within the kernel
+	 */
+	struct fuse_uring_cfg ioc_cfg = {
+		.flags = FUSE_URING_IOCTL_FLAG_STOP,
+	};
+
+	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
+	if (rc != 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "Unexpected kernel uring ioctl result: %s\n",
+			 strerror(errno));
+	}
+
+	pthread_join(se->ring.cleanup_tid, NULL);
+
+	fuse_session_destruct_uring(se->ring.pool);
+
+	return 0;
+}
