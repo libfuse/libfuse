@@ -16,6 +16,7 @@
 #include "fuse_lowlevel.h"
 
 struct mount_opts;
+struct fuse_ring_pool;
 
 struct fuse_req {
 	struct fuse_session *se;
@@ -76,6 +77,11 @@ struct fuse_session {
 	size_t bufsize;
 	int error;
 	bool is_uring;
+	
+	struct {
+		pthread_t cleanup_tid;
+		struct fuse_ring_pool *pool;
+	} ring;
 };
 
 struct fuse_chan {

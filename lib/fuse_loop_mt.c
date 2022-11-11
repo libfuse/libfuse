@@ -366,9 +366,12 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 			fuse_log(FUSE_LOG_WARNING,
 				 "Failed to start uring, "
 				 "fall back from uring to threads.\n");
-			config->uring.use_uring = 0;
-		} else
-			goto out;
+		}
+
+		/* threads are also started with uring for
+		 * 1 - stop uring on the kernel side on daemon exit
+		 * 2 - special request not handled by uring yet
+		 */
 #else
 		fuse_log(FUSE_LOG_WARNING,
 			 "libfuse not compiled with uring, falling back to "
@@ -412,12 +415,14 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 		err = mt.error;
 	}
 
+	if (se->is_uring)
+		fuse_session_stop_uring(se);
+
 	pthread_mutex_destroy(&mt.lock);
 	sem_destroy(&mt.finish);
 	if(se->error != 0)
 		err = se->error;
 
-out:
 	fuse_session_reset(se);
 
 	if (created_config) {
