@@ -39,6 +39,7 @@ FUSE_3.0 {
 		fuse_session_new;
 		fuse_main_real;
 		fuse_mount;
+		fuse_custom_session_fd;
 		fuse_session_mount;
 		fuse_new;
 		fuse_opt_insert_arg;
