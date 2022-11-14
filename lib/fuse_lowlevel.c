@@ -3009,6 +3009,10 @@ out1:
 	return NULL;
 }
 
+void fuse_custom_session_fd(struct fuse_session *se, int fd) {
+	se->fd = fd;
+}
+
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
 	int fd;

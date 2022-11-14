@@ -1955,6 +1955,25 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      size_t op_size, void *userdata);
 
 /**
+ * Set a file descriptor for the session.
+ *
+ * This function can be used if you want to have a custom communication
+ * interface instead of using a mountpoint. In practice, this means that instead
+ * of calling fuse_session_mount() and fuse_session_unmount(), one could call
+ * fuse_custom_session_fd() where fuse_session_mount() would have otherwise been
+ * called.
+ *
+ * This function does not open or close any file descriptors, meaning it is the
+ * responsibility of the caller to provide a valid file descriptor, such as a
+ * accepted socket. It is also the responsibility to close the socket.
+ *
+ * @param se session object
+ * @param fd file descriptor for the session
+ *
+ **/
+void fuse_custom_session_fd(struct fuse_session *se, int fd);
+
+/**
  * Mount a FUSE file system.
  *
  * @param mountpoint the mount point path
