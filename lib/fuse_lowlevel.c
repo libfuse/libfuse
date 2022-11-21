@@ -204,7 +204,7 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 {
 	struct fuse_out_header *out = iov[0].iov_base;
 
-	if (req->is_uring)
+	if (req && req->is_uring)
 		fuse_send_msg_uring(req, iov, count);
 
 	assert(se != NULL);
@@ -2300,14 +2300,6 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 	out.error = notify_code;
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
-
-	if (se->is_uring) {
-		/* XXX this requires another ring which userspace side can use
-		 * without a kernel request
-		 *
-		 */
-		return -ENOSYS;
-	}
 
 	return fuse_send_msg(se, NULL, iov, count, req);
 }
