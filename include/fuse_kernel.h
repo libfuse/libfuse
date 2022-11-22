@@ -1073,10 +1073,13 @@ struct fuse_uring_cfg {
 	/* for all queues and their requests */
 	uint32_t mmap_req_size;
 
-	uint32_t padding1;
+	/* max number of background requests
+	 * max foreground is calculated as queue_depth - max_background
+	 */
+	uint32_t max_background;
 
 	/* reserved space for future additions */
-	uint64_t padding2[8];
+	uint64_t padding[8];
 };
 
 /* Device ioctls: */
@@ -1200,6 +1203,10 @@ enum fuse_ring_req_cmd {
 	/* report an error */
 	FUSE_RING_BUF_CMD_ERROR = 2,
 };
+
+/* background request type. Might be used by user space to handle the request
+ * with a lower priority */
+#define FUSE_RING_REQ_FLAG_BACKGROUND 1 << 0
 
 /**
  * This structure mapped onto the

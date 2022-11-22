@@ -166,7 +166,12 @@ struct fuse_loop_config
 		 */
 		bool per_core_queue;
 
+		/** The ring queue depth */
 		unsigned int queue_depth;
+
+		/** Maximum number of background requests. Number of
+		 *  foreground requests is the difference to queue-depth */
+		unsigned int max_background_req;
 
 	} uring;
 };
