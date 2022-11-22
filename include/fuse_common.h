@@ -916,9 +916,20 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 			   struct fuse_loop_config_v1 *v1_conf);
 
-void fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
-				       bool use_uring, bool per_core_queue,
-				       unsigned int queue_depth);
+/**
+ * fuse_loop_config setter for the basic ring configuration
+ * @param use_uring if uring should be used at all
+ * @param per_core_queue if each cpu core gets its own queue
+ * @param queue_depth number of requests per queue, optional, will be ignored
+ *        if 0
+ * @param max_background_req number of requests reserved for background
+ *        operations. The reserved number of foreground requests is the
+ *        difference to queue_depth. Optional, will be ignored if 0
+ */
+int fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
+				      bool use_uring, bool per_core_queue,
+				      unsigned int queue_depth,
+				      unsigned int max_background_req);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *

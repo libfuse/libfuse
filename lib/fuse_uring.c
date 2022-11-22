@@ -336,6 +336,7 @@ fuse_setup_configure_kernel(struct fuse_session *se,
 		.num_queues = n_queues,
 		.queue_depth = cfg->uring.queue_depth,
 		.mmap_req_size = req_buf_size,
+		.max_background = cfg->uring.max_background_req,
 	};
 
 	if (cfg->uring.per_core_queue)
@@ -497,13 +498,16 @@ fuse_create_user_ring(struct fuse_session *se,
 			const int flags = MAP_SHARED_VALIDATE | MAP_POPULATE;
 
 			/* offset needs to be page aligned */
-			loff_t off = (tag * pg_size) + (qid * n_queues * pg_size);
+			loff_t off = (tag + (qid * q_depth)) * pg_size;
 
 			ring_req->req_buf = mmap(NULL, req_buf_size, prot,
 						 flags, se->fd, off);
+			fuse_log(FUSE_LOG_ERR, "qid=%d tag=%d off=%lld buf=%p\n",
+				 qid, tag, off, (void *)ring_req->req_buf);
 			if (ring_req->req_buf == MAP_FAILED) {
 				fuse_log(FUSE_LOG_ERR,
-					 "qid=%d tag=%d mmap of size %zu failed");
+					 "qid=%d tag=%d mmap of size %zu failed: %s\n",
+					 qid, tag, req_buf_size, strerror(errno));
 				goto err;
 			}
 

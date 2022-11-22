@@ -47,7 +47,8 @@
 				      * the kernel
 				      */
 #define FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE 0
-#define FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH 1
+#define FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH 2
+#define FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND 1
 
 
 /* an arbitrary large value that cannot be valid */
@@ -481,6 +482,7 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 	config->uring.use_uring = FUSE_LOOP_MT_DEF_USE_URING;
 	config->uring.per_core_queue = FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE;
 	config->uring.queue_depth = FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH;
+	config->uring.max_background_req = FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND;
 
 	return config;
 }
@@ -532,11 +534,22 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 	config->clone_fd = value;
 }
 
-void fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
-				       bool use_uring, bool per_core_queue,
-				       unsigned int queue_depth)
+int fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
+				      bool use_uring, bool per_core_queue,
+				      unsigned int queue_depth,
+				      unsigned int max_background_req)
 {
 	config->uring.use_uring = use_uring;
 	config->uring.per_core_queue = per_core_queue;
-	config->uring.queue_depth = queue_depth;
+
+	if (max_background_req >= queue_depth)
+		return -EINVAL;
+
+	if (queue_depth != 0)
+		config->uring.queue_depth = queue_depth;
+
+	if (max_background_req != 0)
+		config->uring.max_background_req = max_background_req;
+
+	return 0;
 }
