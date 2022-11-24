@@ -488,6 +488,7 @@ fuse_create_user_ring(struct fuse_session *se,
 			struct fuse_ring_req *ring_req = &queue->req[0];
 			ring_req->ring_queue = queue;
 			ring_req->tag = tag;
+			int pg_size = sysconf(_SC_PAGE_SIZE);
 
 			/* Allocate one big chunk of memory, which will be divided into per
 			 * request buffers
@@ -495,9 +496,11 @@ fuse_create_user_ring(struct fuse_session *se,
 			const int prot =  PROT_READ | PROT_WRITE;
 			const int flags = MAP_SHARED_VALIDATE | MAP_POPULATE;
 
+			/* offset needs to be page aligned */
+			loff_t off = (tag * pg_size) + (qid * n_queues * pg_size);
+
 			ring_req->req_buf = mmap(NULL, req_buf_size, prot,
-						 flags, se->fd,
-						 tag + qid * n_queues);
+						 flags, se->fd, off);
 			if (ring_req->req_buf == MAP_FAILED) {
 				fuse_log(FUSE_LOG_ERR,
 					 "qid=%d tag=%d mmap of size %zu failed");
