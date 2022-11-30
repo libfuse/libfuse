@@ -75,8 +75,11 @@ struct fuse_ring_queue {
 
 	/* size depends on queue depth */
 	struct fuse_ring_req req[];
-} ;
+};
 
+/**
+ * Main fuse_ring structure, holds all fuse-ring data
+ */
 struct fuse_ring_pool {
 	struct fuse_session *se;
 
@@ -84,14 +87,31 @@ struct fuse_ring_pool {
 	size_t num_queues;  /* number of queues */
 	size_t queue_depth; /* number of per queue entries */
 	size_t req_buf_size;
-
-	struct fuse_ring_queue queue[];
+	size_t queue_size;
+	struct fuse_ring_queue *queues;
 };
+
+
+static size_t
+fuse_ring_queue_size(const size_t q_depth)
+{
+	const size_t req_size = sizeof(struct fuse_ring_req) * q_depth;
+	return sizeof(struct fuse_ring_queue) + req_size;
+}
+
+
+static struct fuse_ring_queue *
+fuse_uring_get_queue(struct fuse_ring_pool *fuse_ring, int qid)
+{
+	char *ptr = ((char *)fuse_ring->queues) + (qid * fuse_ring->queue_size);
+
+	return (struct fuse_ring_queue *)ptr;
+}
 
 /**
  * return a pointer to the 80B area
  */
-static inline void *fuse_uring_get_sqe_cmd(struct io_uring_sqe *sqe)
+static void *fuse_uring_get_sqe_cmd(struct io_uring_sqe *sqe)
 {
 	return (void *)&sqe->cmd[0];
 }
@@ -289,7 +309,7 @@ static int fuse_setup_ring(struct io_uring *ring, size_t qid,
 
 
 	params.flags =
-		IORING_SETUP_CQSIZE | IORING_SETUP_SQE128 | IORING_SETUP_CQE32;
+		IORING_SETUP_CQSIZE | IORING_SETUP_SQE128;
 	params.cq_entries = depth;
 
 	rc = io_uring_queue_init_params(depth, ring, &params);
@@ -359,7 +379,8 @@ fuse_setup_configure_kernel(struct fuse_session *se,
 static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 {
 	for (size_t qid = 0; qid < fuse_ring->num_queues; qid++) {
-		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
 
 		if (queue->tid != 0)
 			pthread_join(queue->tid, NULL);
@@ -374,22 +395,10 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			struct fuse_ring_req *req = &queue->req[tag];
 			munmap(req->req_buf, fuse_ring->req_buf_size);
 		}
-
 	}
 
-
+	free(fuse_ring->queues);
 	free(fuse_ring);
-}
-
-static size_t
-fuse_ring_queue_size(const size_t n_queues, const size_t q_depth)
-{
-	/* FIXME: q_req_size not right + 1 not needed */
-	const size_t q_req_size = sizeof(struct fuse_ring_req) * (q_depth + 1);
-	const size_t fuse_ring_req_size =
-		n_queues * (sizeof(struct fuse_ring_queue) + q_req_size);
-
-	return fuse_ring_req_size;
 }
 
 static void *
@@ -445,7 +454,7 @@ fuse_create_user_ring(struct fuse_session *se,
 {
 	int rc;
 	const size_t page_size = getpagesize();
-	const size_t n_queues = cfg->uring.per_core_queue ? get_nprocs() : 1;
+	const size_t nr_queues = cfg->uring.per_core_queue ? get_nprocs() : 1;
 	const size_t q_depth = cfg->uring.queue_depth;
 
 	const size_t ring_data_buf_size = FUSE_RING_DATA_BUF_SIZE;
@@ -462,23 +471,30 @@ fuse_create_user_ring(struct fuse_session *se,
 	if (rc != 0)
 		return NULL;
 
-	size_t ring_queue_sz = fuse_ring_queue_size(n_queues, q_depth);
-
-	struct fuse_ring_pool *fuse_ring =
-		calloc(1, sizeof(fuse_ring) + ring_queue_sz);
+	struct fuse_ring_pool *fuse_ring = calloc(1, sizeof(*fuse_ring));
 	if (fuse_ring == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Allocating the ring failed\n");
 		goto err;
 	}
 
+	size_t queue_sz = fuse_ring_queue_size(q_depth);
+	fuse_ring->queues = calloc(1, queue_sz * nr_queues);
+	if (fuse_ring->queues == NULL) {
+		fuse_log(FUSE_LOG_ERR, "Allocating the queues failed\n");
+		goto err;
+	}
+
 	fuse_ring->se = se;
-	fuse_ring->num_queues = n_queues;
+	fuse_ring->num_queues = nr_queues;
 	fuse_ring->queue_depth = q_depth;
 	fuse_ring->per_core_queue = cfg->uring.per_core_queue;
+	fuse_ring->req_buf_size = req_buf_size;
+	fuse_ring->queue_size = queue_sz;
 
 	/* very basic queue initialization */
-	for (int qid = 0; qid < n_queues; qid++) {
-		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
+	for (int qid = 0; qid < nr_queues; qid++) {
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
 		queue->fd = -1;
 		queue->ring.ring_fd = -1;
 		queue->numa_node = -1;
@@ -486,13 +502,16 @@ fuse_create_user_ring(struct fuse_session *se,
 		queue->ring_pool = fuse_ring;
 
 		for (int tag = 0; tag < q_depth; tag++) {
-			struct fuse_ring_req *ring_req = &queue->req[0];
+			struct fuse_ring_req *ring_req = &queue->req[tag];
 			ring_req->ring_queue = queue;
 			ring_req->tag = tag;
+
+			fuse_log(FUSE_LOG_ERR, "req=%p tag=%d\n", ring_req, tag);
+
 			int pg_size = sysconf(_SC_PAGE_SIZE);
 
-			/* Allocate one big chunk of memory, which will be divided into per
-			 * request buffers
+			/* Allocate one big chunk of memory, which will be
+			 * divided into per-request buffers
 			 */
 			const int prot =  PROT_READ | PROT_WRITE;
 			const int flags = MAP_SHARED_VALIDATE | MAP_POPULATE;
@@ -518,13 +537,15 @@ fuse_create_user_ring(struct fuse_session *se,
 		}
 	}
 
-	for (int qid = 0; qid < n_queues; qid++) {
-		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
+	for (int qid = 0; qid < nr_queues; qid++) {
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
 
 		fprintf(stderr, "%s:%d qid=%d here\n", __func__, __LINE__, qid);
 
 		queue->q_id = qid;
 
+		/* XXX Any advantage in cloning the session? */
 		queue->fd = dup(se->fd);
 		if (queue->fd == -1) {
 			fuse_log(FUSE_LOG_ERR, "Session fd dup failed: %s\n",
@@ -582,6 +603,13 @@ static void *fuse_uring_thread(void *arg)
 	for (tag = 0; tag < ring_pool->queue_depth; tag++) {
 		struct fuse_ring_req *req = &queue->req[tag];
 
+		if (req->tag != tag) {
+			fuse_log(FUSE_LOG_ERR,
+				 "req=%p tag mismatch, got %d expected %d\n",
+				 req, req->tag, tag);
+			goto err;
+		}
+
 		struct io_uring_sqe *sqe =
 			io_uring_get_sqe(&queue->ring);
 		if (sqe == NULL) {
@@ -593,12 +621,6 @@ static void *fuse_uring_thread(void *arg)
 			fuse_log(FUSE_LOG_ERR, "Failed to get all ring SQEs");
 			goto err;
 		}
-
-		if (req->tag != tag) {
-			fuse_log(FUSE_LOG_ERR, "tag mismatch, got %d expected %d\n");
-			goto err;
-		}
-
 
 		fuse_uring_sqe_prepare(sqe, req, FUSE_URING_REQ_FETCH);
 		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
@@ -653,9 +675,9 @@ static void *fuse_uring_thread(void *arg)
 		io_uring_cqe_seen(&queue->ring, cqe);
 
 #if 0
-		io_uring_for_each_cqe(&queue->ring, head, cqe) {
+		io_uring_for_each_cqe(&queues->ring, head, cqe) {
 
-			fuse_uring_handle_cqe(queue, cqe);
+			fuse_uring_handle_cqe(queues, cqe);
 
 			/* Unsure which is better - submit all at once or
 			* submit one by one. The former has less overhead,
@@ -663,11 +685,11 @@ static void *fuse_uring_thread(void *arg)
 			* XXX: Multiple queues per code - fast queue and
 			*      async queue?
 			*/
-			io_uring_submit(&queue->ring);
+			io_uring_submit(&queues->ring);
 			count += 1;
 		}
-		io_uring_cq_advance(&queue->ring, count);
-		io_uring_submit_and_wait(&queue->ring, 1);
+		io_uring_cq_advance(&queues->ring, count);
+		io_uring_submit_and_wait(&queues->ring, 1);
 #endif
 	}
 
@@ -679,20 +701,20 @@ err:
 	return NULL;
 }
 
-static int fuse_session_run_uring(struct fuse_ring_pool *fuse_ring)
+static int fuse_session_run_uring(struct fuse_ring_pool *ring)
 {
 	int rc;
-	for (int qid = 0; qid < fuse_ring->num_queues; qid++) {
-		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
+	for (int qid = 0; qid < ring->num_queues; qid++) {
+		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
 		rc = pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
 		if (rc != 0)
 			break;
 	}
 
 #if 0
-	for (int qid = 0; qid < fuse_ring->num_queues; qid++) {
-		struct fuse_ring_queue *queue = &fuse_ring->queue[qid];
-		pthread_join(queue->tid, NULL);
+	for (int qid = 0; qid < ring->num_queues; qid++) {
+		struct fuse_ring_queue *queues = &ring->queues[qid];
+		pthread_join(queues->tid, NULL);
 	}
 #endif
 
