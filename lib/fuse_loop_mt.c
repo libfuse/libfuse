@@ -179,7 +179,7 @@ static void *fuse_do_work(void *data)
 		 * is indeed a good reason to destruct threads it should be done
 		 * delayed, a moving average might be useful for that.
 		 */
-		if (mt->max_idle != -1 && mt->numavail > mt->max_idle) {
+		if (mt->max_idle != -1 && mt->numavail > mt->max_idle && mt->numworker > 1) {
 			if (mt->exit) {
 				pthread_mutex_unlock(&mt->lock);
 				return NULL;
