@@ -186,8 +186,13 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 		}
 	}
 
-	ssize_t res = writev(ch ? ch->fd : se->fd,
-			     iov, count);
+	ssize_t res;
+	if (se->io != NULL)
+		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
+					   se->userdata);
+	else
+		res = writev(ch ? ch->fd : se->fd, iov, count);
+
 	int err = errno;
 
 	if (res == -1) {
@@ -663,6 +668,9 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	if (flags & FUSE_BUF_NO_SPLICE)
 		goto fallback;
 
+	if (se->io != NULL && se->io->splice_send == NULL)
+		goto fallback;
+
 	total_buf_size = 0;
 	for (idx = buf->idx; idx < buf->count; idx++) {
 		total_buf_size += buf->buf[idx].size;
@@ -817,8 +825,14 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	    (se->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
-	res = splice(llp->pipe[0], NULL, ch ? ch->fd : se->fd,
-		     NULL, out->len, splice_flags);
+	if (se->io != NULL) {
+		res = se->io->splice_send(llp->pipe[0], NULL,
+						  ch ? ch->fd : se->fd, NULL, out->len,
+					  	  splice_flags, se->userdata);
+	} else {
+		res = splice(llp->pipe[0], NULL, ch ? ch->fd : se->fd, NULL,
+			       out->len, splice_flags);
+	}
 	if (res == -1) {
 		res = -errno;
 		perror("fuse: splice from pipe");
@@ -2755,6 +2769,8 @@ void fuse_session_destroy(struct fuse_session *se)
 	free(se->cuse_data);
 	if (se->fd != -1)
 		close(se->fd);
+	if (se->io != NULL)
+		free(se->io);
 	destroy_mount_opts(se->mo);
 	free(se);
 }
@@ -2784,6 +2800,9 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 	if (se->conn.proto_minor < 14 || !(se->conn.want & FUSE_CAP_SPLICE_READ))
 		goto fallback;
 
+	if (se->io != NULL && se->io->splice_receive == NULL)
+		goto fallback;
+
 	llp = fuse_ll_get_pipe(se);
 	if (llp == NULL)
 		goto fallback;
@@ -2804,8 +2823,14 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 			goto fallback;
 	}
 
-	res = splice(ch ? ch->fd : se->fd,
-		     NULL, llp->pipe[1], NULL, bufsize, 0);
+	if (se->io != NULL) {
+		res = se->io->splice_receive(ch ? ch->fd : se->fd, NULL,
+						     llp->pipe[1], NULL, bufsize, 0,
+						     se->userdata);
+	} else {
+		res = splice(ch ? ch->fd : se->fd, NULL, llp->pipe[1], NULL,
+				 bufsize, 0);
+	}
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -2891,7 +2916,12 @@ fallback:
 	}
 
 restart:
-	res = read(ch ? ch->fd : se->fd, buf->mem, se->bufsize);
+	if (se->io != NULL) {
+		res = se->io->read(ch ? ch->fd : se->fd, buf->mem, se->bufsize,
+					 se->userdata);
+	} else {
+		res = read(ch ? ch->fd : se->fd, buf->mem, se->bufsize);
+	}
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -3019,6 +3049,36 @@ out2:
 	free(se);
 out1:
 	return NULL;
+}
+
+int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io *io,
+			   int fd)
+{
+	if (fd < 0) {
+		fuse_log(FUSE_LOG_ERR, "Invalid file descriptor value %d passed to "
+			"fuse_session_custom_io()\n", fd);
+		return -EBADF;
+	}
+	if (io == NULL) {
+		fuse_log(FUSE_LOG_ERR, "No custom IO passed to "
+			"fuse_session_custom_io()\n");
+		return -EINVAL;
+	} else if (io->read == NULL || io->writev == NULL) {
+		fuse_log(FUSE_LOG_ERR, "io passed to fuse_session_custom_io() must "
+			"implement both io->read() and io->writev\n");
+		return -EINVAL;
+	}
+
+	se->io = malloc(sizeof(struct fuse_custom_io));
+	if (se->io == NULL) {
+		fuse_log(FUSE_LOG_ERR, "Failed to allocate memory for custom io. "
+			"Error: %s\n", strerror(errno));
+		return -errno;
+	}
+
+	se->fd = fd;
+	*se->io = *io;
+	return 0;
 }
 
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
