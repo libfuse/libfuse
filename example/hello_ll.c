@@ -20,6 +20,15 @@
 
 #define FUSE_USE_VERSION 34
 
+#ifdef IO_UDS_STREAMS
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fuse_kernel.h>
+#endif
+
 #include <fuse_lowlevel.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -161,19 +170,165 @@ static const struct fuse_lowlevel_ops hello_ll_oper = {
 	.read		= hello_ll_read,
 };
 
+#ifdef IO_UDS_STREAMS
+static int create_socket(const char *socket_path) {
+	struct sockaddr_un addr;
+
+	if (strnlen(socket_path, sizeof(addr.sun_path)) >=
+		sizeof(addr.sun_path)) {
+		printf("Socket path may not be longer than %lu characters\n",
+			 sizeof(addr.sun_path) - 1);
+		return -1;
+	}
+
+	if (remove(socket_path) == -1 && errno != ENOENT) {
+		printf("Could not delete previous socket file entry at %s. Error: "
+			 "%s\n", socket_path, strerror(errno));
+		return -1;
+	}
+
+	memset(&addr, 0, sizeof(struct sockaddr_un));
+	strcpy(addr.sun_path, socket_path);
+
+	int sfd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (sfd == -1) {
+		printf("Could not create socket. Error: %s\n", strerror(errno));
+		return -1;
+	}
+
+	addr.sun_family = AF_UNIX;
+	if (bind(sfd, (struct sockaddr *) &addr,
+		   sizeof(struct sockaddr_un)) == -1) {
+		printf("Could not bind socket. Error: %s\n", strerror(errno));
+		return -1;
+	}
+
+	if (listen(sfd, 1) == -1)
+		return -1;
+
+	printf("Awaiting connection on socket at %s...\n", socket_path);
+	int cfd = accept(sfd, NULL, NULL);
+	if (cfd == -1) {
+		printf("Could not accept connection. Error: %s\n",
+			 strerror(errno));
+		return -1;
+	} else {
+		printf("Accepted connection!\n");
+	}
+	return cfd;
+}
+
+static ssize_t stream_writev(int fd, struct iovec *iov, int count,
+                             void *userdata) {
+	(void)userdata;
+
+	ssize_t written = 0;
+	int cur = 0;
+	for (;;) {
+		written = writev(fd, iov+cur, count-cur);
+		if (written < 0)
+			return written;
+
+		while (cur < count && written >= iov[cur].iov_len)
+			written -= iov[cur++].iov_len;
+		if (cur == count)
+			break;
+
+		iov[cur].iov_base = (char *)iov[cur].iov_base + written;
+		iov[cur].iov_len -= written;
+	}
+	return written;
+}
+
+
+static ssize_t readall(int fd, void *buf, size_t len) {
+	size_t count = 0;
+
+	while (count < len) {
+		int i = read(fd, (char *)buf + count, len - count);
+		if (!i)
+			break;
+
+		if (i < 0)
+			return i;
+
+		count += i;
+	}
+	return count;
+}
+
+static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
+    (void)userdata;
+
+	int res = readall(fd, buf, sizeof(struct fuse_in_header));
+	if (res == -1)
+    	return res;
+
+
+    uint32_t packet_len = ((struct fuse_in_header *)buf)->len;
+    if (packet_len > buf_len)
+    	return -1;
+
+    int prev_res = res;
+
+    res = readall(fd, (char *)buf + sizeof(struct fuse_in_header),
+                  packet_len - sizeof(struct fuse_in_header));
+
+    return  (res == -1) ? res : (res + prev_res);
+}
+
+static ssize_t stream_splice_send(int fdin, __off64_t *offin, int fdout,
+					    __off64_t *offout, size_t len,
+                                  unsigned int flags, void *userdata) {
+	(void)userdata;
+
+	size_t count = 0;
+	while (count < len) {
+		int i = splice(fdin, offin, fdout, offout, len - count, flags);
+		if (i < 1)
+			return i;
+
+		count += i;
+	}
+	return count;
+}
+
+static void fuse_cmdline_help_uds(void)
+{
+	printf("    -h   --help            print help\n"
+	       "    -V   --version         print version\n"
+	       "    -d   -o debug          enable debug output (implies -f)\n");
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
+#ifdef IO_UDS_STREAMS
+	const struct fuse_custom_io io = {
+		.writev = stream_writev,
+		.read = stream_read,
+		.splice_receive = NULL,
+		.splice_send = stream_splice_send,
+	};
+	int cfd = -1;
+#else
 	struct fuse_loop_config config;
+#endif
 	int ret = -1;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
 	if (opts.show_help) {
+#ifdef IO_UDS_STREAMS
+		printf("usage: %s [options]\n\n", argv[0]);
+		fuse_cmdline_help_uds();
+#else
 		printf("usage: %s [options] <mountpoint>\n\n", argv[0]);
 		fuse_cmdline_help();
+#endif
 		fuse_lowlevel_help();
 		ret = 0;
 		goto err_out1;
@@ -184,12 +339,14 @@ int main(int argc, char *argv[])
 		goto err_out1;
 	}
 
+#ifndef IO_UDS_STREAMS
 	if(opts.mountpoint == NULL) {
 		printf("usage: %s [options] <mountpoint>\n", argv[0]);
 		printf("       %s --help\n", argv[0]);
 		ret = 1;
 		goto err_out1;
 	}
+#endif
 
 	se = fuse_session_new(&args, &hello_ll_oper,
 			      sizeof(hello_ll_oper), NULL);
@@ -199,12 +356,24 @@ int main(int argc, char *argv[])
 	if (fuse_set_signal_handlers(se) != 0)
 	    goto err_out2;
 
+#ifdef IO_UDS_STREAMS
+	cfd = create_socket("/tmp/libfuse-hello-ll.sock");
+	if (cfd == -1)
+		goto err_out3;
+
+	if (fuse_session_custom_io(se, &io, cfd) != 0)
+		goto err_out3;
+#else
 	if (fuse_session_mount(se, opts.mountpoint) != 0)
 	    goto err_out3;
 
 	fuse_daemonize(opts.foreground);
+#endif
 
 	/* Block until ctrl+c or fusermount -u */
+#ifdef IO_UDS_STREAMS
+	ret = fuse_session_loop(se);
+#else
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
 	else {
@@ -214,6 +383,8 @@ int main(int argc, char *argv[])
 	}
 
 	fuse_session_unmount(se);
+#endif
+
 err_out3:
 	fuse_remove_signal_handlers(se);
 err_out2:

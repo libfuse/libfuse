@@ -19,6 +19,11 @@ threaded_examples = [ 'notify_inval_inode',
                       'poll' ]
 
 foreach ex : examples
+    if ex == 'hello_ll'
+        executable(ex + '_uds', ex + '.c',
+                   dependencies: [ libfuse_dep ],
+                   install: false, c_args: [ '-DIO_UDS_STREAMS' ])
+    endif
     executable(ex, ex + '.c',
                dependencies: [ libfuse_dep ],
                install: false)
