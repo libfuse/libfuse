@@ -60,10 +60,6 @@ cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
                        prefix: include_default,
                        args: args_default))
 
-# Write the test results into config.h (stored in build directory)
-configure_file(output: 'config.h',
-               configuration : cfg)
-
 #
 # Compiler configuration
 #
@@ -90,29 +86,63 @@ if not cc.compiles(code, args: [ '-O0', '-Werror=unused-result' ])
      add_project_arguments('-Wno-unused-result', language: 'c')
 endif
 
-# gcc-10 and newer support the symver attribute which we need to use if we
-# want to support LTO
-# recent clang and gcc both support __has_attribute (and if they are too old
-# to have __has_attribute, then they are too old to support symver)
-# other compilers might not have __has_attribute, but in those cases
-# it is safe for this check to fail and for us to fallback to the old _asm_
-# method for symver. Anyway the attributes not supported by __has_attribute()
-# unfortunately return true giving a false positive. So let's try to build
-# using __attribute__ ((symver )) and see the result.
-code = '''
-__attribute__ ((symver ("test@TEST")))
-void foo(void) {
-}
+# It is hard to detect if the libc supports versioned symbols. Only gnu-libc
+# seems to provide that, but then glibc is the main target for libfuse, so
+# enable it by default
+versioned_symbols = 1
 
+# This is an attempt to detect if another libc is used.
+code = '''
 int main(void) {
+#if (defined(__UCLIBC__) || defined(__APPLE__))
+#error /* libc does not have versioned symbols */
+#endif
     return 0;
 }'''
-if cc.compiles(code, args: [ '-O0', '-c', '-Werror'])
-     message('Compiler supports symver attribute')
-     add_project_arguments('-DHAVE_SYMVER_ATTRIBUTE', language: 'c')
-else
-     message('Compiler does not support symver attribute')
+if not cc.compiles(code, args: [ '-O0' ])
+  versioned_symbols = 0
 endif
+
+# The detection can be overriden, which is useful for other (above unhandled)
+# libcs and also especially useful for testing
+if get_option('disable-libc-symbol-version')
+     versioned_symbols = 0
+endif
+
+if versioned_symbols == 1
+     message('Enabling versioned libc symbols')
+     cfg.set('HAVE_LIBC_VERSIONED_SYMBOLS', 1)
+
+     # gcc-10 and newer support the symver attribute which we need to use if we
+     # want to support LTO
+     # recent clang and gcc both support __has_attribute (and if they are too old
+     # to have __has_attribute, then they are too old to support symver)
+     # other compilers might not have __has_attribute, but in those cases
+     # it is safe for this check to fail and for us to fallback to the old _asm_
+     # method for symver. Anyway the attributes not supported by __has_attribute()
+     # unfortunately return true giving a false positive. So let's try to build
+     # using __attribute__ ((symver )) and see the result.
+     code = '''
+     __attribute__ ((symver ("test@TEST")))
+     void foo(void) {
+     }
+
+     int main(void) {
+         return 0;
+     }'''
+     if cc.compiles(code, args: [ '-O0', '-c', '-Werror'])
+          message('Compiler supports symver attribute')
+          add_project_arguments('-DHAVE_SYMVER_ATTRIBUTE', language: 'c')
+     else
+          message('Compiler does not support symver attribute')
+     endif
+else
+     message('Disabling versioned libc symbols')
+endif
+
+# Write the test results into config.h (stored in build directory)
+configure_file(output: 'config.h',
+               configuration : cfg)
 
 # '.' will refer to current build directory, which contains config.h
 include_dirs = include_directories('include', 'lib', '.')

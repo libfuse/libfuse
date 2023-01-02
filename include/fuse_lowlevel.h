@@ -1907,7 +1907,7 @@ struct fuse_cmdline_opts {
  * @param opts output argument for parsed options
  * @return 0 on success, -1 on failure
  */
-#if (!defined(__UCLIBC__) && !defined(__APPLE__))
+#if (defined(HAVE_LIBC_VERSIONED_SYMBOLS))
 int fuse_parse_cmdline(struct fuse_args *args,
 		       struct fuse_cmdline_opts *opts);
 #else
@@ -1995,7 +1995,7 @@ int fuse_session_loop(struct fuse_session *se);
 	int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
 	#define fuse_session_loop_mt(se, config) fuse_session_loop_mt_32(se, config)
 #else
-	#if (!defined(__UCLIBC__) && !defined(__APPLE__))
+	#if (defined(HAVE_LIBC_VERSIONED_SYMBOLS))
 		/**
 		 * Enter a multi-threaded event loop.
 		 *

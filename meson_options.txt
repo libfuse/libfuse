@@ -19,3 +19,6 @@ option('useroot', type : 'boolean', value : true,
 option('tests', type : 'boolean', value : true,
        description: 'Compile the test files')
 
+option('disable-libc-symbol-version', type : 'boolean', value : false,
+       description: 'Disable versioned symbols through libc')
+

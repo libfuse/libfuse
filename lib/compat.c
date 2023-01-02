@@ -34,7 +34,7 @@
 /**
  * Compatibility ABI symbol for systems that do not support version symboling
  */
-#if (defined(__UCLIBC__) || defined(__APPLE__))
+#if (!defined(HAVE_LIBC_VERSIONED_SYMBOLS))
 /* With current libfuse fuse_parse_cmdline is a macro pointing to the
  * versioned function. Here in this file we need to provide the ABI symbol
  * and the redirecting macro is conflicting.
