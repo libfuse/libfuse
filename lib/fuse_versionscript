@@ -139,6 +139,7 @@ FUSE_3.1 {
 	        fuse_lib_help;
 		fuse_invalidate_path;
 		fuse_new_30;
+		fuse_new_31;
 		fuse_new;
 } FUSE_3.0;
 

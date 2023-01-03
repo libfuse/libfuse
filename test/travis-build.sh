@@ -50,15 +50,20 @@ for CC in gcc gcc-7 gcc-10 clang; do
 done
 (cd build-$CC; sudo ninja install)
 
-# Sanitized build
-CC=clang
-CXX=clang++
-for san in undefined address; do
+sanitized_build()
+{
+    san=$1
+    additonal_option=$2
+
     echo "=== Building with clang and ${san} sanitizer ==="
-    mkdir build-${san}; cd build-${san}
+    [ -n ${additonal_option} ] || echo "Additional option: ${additonal_option}"
+
+    mkdir build-${san}; pushd build-${san}
+
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
-    meson -D b_sanitize=${san} -D b_lundef=false -D werror=true "${SOURCE_DIR}" \
+    meson -D b_sanitize=${san} -D b_lundef=false -D werror=true\
+           ${additonal_option} "${SOURCE_DIR}" \
            || (cat meson-logs/meson-log.txt; false)
     ninja
 
@@ -66,11 +71,27 @@ for san in undefined address; do
     sudo ${TEST_CMD}
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
-    # Cleanup temporary files (since they're now owned by root)
+    # Cleanup temporary files (since they are now owned by root)
     sudo rm -rf test/.pytest_cache/ test/__pycache__
 
     ${TEST_CMD}
-    cd ..
+    
+    popd
+    rm -fr build-${san}
+}
+
+# Sanitized build
+CC=clang
+CXX=clang++
+for san in undefined address; do
+    sanitized_build ${san}
+done
+
+# Sanitized build without libc versioned symbols
+CC=clang
+CXX=clang++
+for san in undefined address; do
+    sanitized_build ${san} "-Ddisable-libc-symbol-version=true"
 done
 
 # Documentation.
