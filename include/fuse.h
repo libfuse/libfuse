@@ -948,8 +948,15 @@ struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *o
 			 size_t op_size, void *private_data);
 #define fuse_new(args, op, size, data) fuse_new_30(args, op, size, data)
 #else
+#if (defined(HAVE_LIBC_VERSIONED_SYMBOLS))
 struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
 		      size_t op_size, void *private_data);
+#else /* HAVE_LIBC_VERSIONED_SYMBOLS */
+struct fuse *fuse_new_31(struct fuse_args *args,
+		      const struct fuse_operations *op,
+		      size_t op_size, void *user_data);
+#define fuse_new(args, op, size, data) fuse_new_31(args, op, size, data)
+#endif /* HAVE_LIBC_VERSIONED_SYMBOLS */
 #endif
 
 /**
@@ -1046,8 +1053,13 @@ int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
  *
  * See also: fuse_loop()
  */
+#if (defined(HAVE_LIBC_VERSIONED_SYMBOLS))
 int fuse_loop_mt(struct fuse *f, struct fuse_loop_config *config);
+#else
+#define fuse_loop_mt(f, config) fuse_loop_mt_312(f, config)
+#endif /* HAVE_LIBC_VERSIONED_SYMBOLS */
 #endif
+
 
 /**
  * Get the current context
