@@ -188,6 +188,8 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 
 	ssize_t res;
 	if (se->io != NULL)
+		/* se->io->writev is never NULL if se->io is not NULL as
+		specified by fuse_session_custom_io()*/
 		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
 					   se->userdata);
 	else
@@ -668,9 +670,6 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	if (flags & FUSE_BUF_NO_SPLICE)
 		goto fallback;
 
-	if (se->io != NULL && se->io->splice_send == NULL)
-		goto fallback;
-
 	total_buf_size = 0;
 	for (idx = buf->idx; idx < buf->count; idx++) {
 		total_buf_size += buf->buf[idx].size;
@@ -825,7 +824,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	    (se->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
-	if (se->io != NULL) {
+	if (se->io != NULL && se->io->splice_send != NULL) {
 		res = se->io->splice_send(llp->pipe[0], NULL,
 						  ch ? ch->fd : se->fd, NULL, out->len,
 					  	  splice_flags, se->userdata);
@@ -2014,9 +2013,13 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->conn.proto_minor >= 14) {
 #ifdef HAVE_SPLICE
 #ifdef HAVE_VMSPLICE
-		se->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
+		if ((se->io == NULL) || (se->io->splice_send != NULL)) {
+			se->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
+		}
 #endif
-		se->conn.capable |= FUSE_CAP_SPLICE_READ;
+		if ((se->io == NULL) || (se->io->splice_receive != NULL)) {
+			se->conn.capable |= FUSE_CAP_SPLICE_READ;
+		}
 #endif
 	}
 	if (se->conn.proto_minor >= 18)
@@ -2800,9 +2803,6 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 	if (se->conn.proto_minor < 14 || !(se->conn.want & FUSE_CAP_SPLICE_READ))
 		goto fallback;
 
-	if (se->io != NULL && se->io->splice_receive == NULL)
-		goto fallback;
-
 	llp = fuse_ll_get_pipe(se);
 	if (llp == NULL)
 		goto fallback;
@@ -2823,7 +2823,7 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 			goto fallback;
 	}
 
-	if (se->io != NULL) {
+	if (se->io != NULL && se->io->splice_receive != NULL) {
 		res = se->io->splice_receive(ch ? ch->fd : se->fd, NULL,
 						     llp->pipe[1], NULL, bufsize, 0,
 						     se->userdata);
@@ -2917,6 +2917,8 @@ fallback:
 
 restart:
 	if (se->io != NULL) {
+		/* se->io->read is never NULL if se->io is not NULL as
+		specified by fuse_session_custom_io()*/
 		res = se->io->read(ch ? ch->fd : se->fd, buf->mem, se->bufsize,
 					 se->userdata);
 	} else {
@@ -3064,6 +3066,10 @@ int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io 
 			"fuse_session_custom_io()\n");
 		return -EINVAL;
 	} else if (io->read == NULL || io->writev == NULL) {
+		/* If the user provides their own file descriptor, we can't
+		guarantee that the default behavior of the io operations made
+		in libfuse will function properly. Therefore, we enforce the
+		user to implement these io operations when using custom io. */
 		fuse_log(FUSE_LOG_ERR, "io passed to fuse_session_custom_io() must "
 			"implement both io->read() and io->writev\n");
 		return -EINVAL;

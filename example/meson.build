@@ -1,7 +1,7 @@
 examples = [ 'passthrough', 'passthrough_fh',
-             'hello', 'hello_ll', 'printcap',
-             'ioctl_client', 'poll_client', 'ioctl',
-             'cuse', 'cuse_client' ]
+             'hello', 'hello_ll', 'hello_ll_uds',
+             'printcap', 'ioctl_client', 'poll_client',
+             'ioctl', 'cuse', 'cuse_client' ]
 
 if not platform.endswith('bsd') and platform != 'dragonfly'
     examples += 'passthrough_ll'
@@ -19,11 +19,6 @@ threaded_examples = [ 'notify_inval_inode',
                       'poll' ]
 
 foreach ex : examples
-    if ex == 'hello_ll'
-        executable(ex + '_uds', ex + '.c',
-                   dependencies: [ libfuse_dep ],
-                   install: false, c_args: [ '-DIO_UDS_STREAMS' ])
-    endif
     executable(ex, ex + '.c',
                dependencies: [ libfuse_dep ],
                install: false)
