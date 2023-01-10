@@ -1,3 +1,9 @@
+libfuse next.release.version (xxxx-xx-xx)
+=========================================
+* There is a new low-level API function `fuse_session_custom_io` that allows to implement
+  a daemon with a custom io. This can be used to create a daemon that can process incoming
+  FUSE requests to other destinations than `/dev/fuse`.
+
 libfuse 3.12.0 (2022-09-08)
 ===========================
 

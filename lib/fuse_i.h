@@ -45,6 +45,7 @@ struct fuse_session {
 	char *mountpoint;
 	volatile int exited;
 	int fd;
+	struct fuse_custom_io *io;
 	struct mount_opts *mo;
 	int debug;
 	int deny_others;

@@ -127,6 +127,17 @@ struct fuse_forget_data {
 	uint64_t nlookup;
 };
 
+struct fuse_custom_io {
+	ssize_t (*writev)(int fd, struct iovec *iov, int count, void *userdata);
+	ssize_t (*read)(int fd, void *buf, size_t buf_len, void *userdata);
+	ssize_t (*splice_receive)(int fdin, __off64_t *offin, int fdout,
+					  __off64_t *offout, size_t len,
+				  	  unsigned int flags, void *userdata);
+	ssize_t (*splice_send)(int fdin, __off64_t *offin, int fdout,
+				     __off64_t *offout, size_t len,
+			           unsigned int flags, void *userdata);
+};
+
 /**
  * Flags for fuse_lowlevel_notify_expire_entry()
  * 0 = invalidate entry
@@ -1993,6 +2004,36 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      const struct fuse_lowlevel_ops *op,
 				      size_t op_size, void *userdata);
+
+/**
+ * Set a file descriptor for the session.
+ *
+ * This function can be used if you want to have a custom communication
+ * interface instead of using a mountpoint. In practice, this means that instead
+ * of calling fuse_session_mount() and fuse_session_unmount(), one could call
+ * fuse_session_custom_io() where fuse_session_mount() would have otherwise been
+ * called.
+ *
+ * In `io`, implementations for read and writev MUST be provided. Otherwise -1
+ * will be returned and `fd` will not be used. Implementations for `splice_send`
+ * and `splice_receive` are optional. If they are not provided splice will not
+ * be used for send or receive respectively.
+ *
+ * The provided file descriptor `fd` will be closed when fuse_session_destroy()
+ * is called.
+ *
+ * @param se session object
+ * @param io Custom io to use when retrieving/sending requests/responses
+ * @param fd file descriptor for the session
+ *
+ * @return 0  on success
+ * @return -EINVAL if `io`, `io->read` or `ìo->writev` are NULL
+ * @return -EBADF  if `fd` was smaller than 0
+ * @return -errno  if failed to allocate memory to store `io`
+ *
+ **/
+int fuse_session_custom_io(struct fuse_session *se,
+				   const struct fuse_custom_io *io, int fd);
 
 /**
  * Mount a FUSE file system.
