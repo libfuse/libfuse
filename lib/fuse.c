@@ -249,7 +249,7 @@ static int fuse_load_so_module(const char *module)
 	int ret = -1;
 	char *tmp;
 	struct fusemod_so *so;
-	fuse_module_factory_t factory;
+	fuse_module_factory_t *factory;
 
 	tmp = malloc(strlen(module) + 64);
 	if (!tmp) {
@@ -271,13 +271,13 @@ static int fuse_load_so_module(const char *module)
 	}
 
 	sprintf(tmp, "fuse_module_%s_factory", module);
-	*(void**)(&factory) = dlsym(so->handle, tmp);
+	factory = (fuse_module_factory_t*)dlsym(so->handle, tmp);
 	if (factory == NULL) {
 		fuse_log(FUSE_LOG_ERR, "fuse: symbol <%s> not found in module: %s\n",
 			tmp, dlerror());
 		goto out_dlclose;
 	}
-	ret = fuse_register_module(module, factory, so);
+	ret = fuse_register_module(module, *factory, so);
 	if (ret)
 		goto out_dlclose;
 
