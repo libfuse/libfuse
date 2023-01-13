@@ -1,8 +1,17 @@
-libfuse next.release.version (xxxx-xx-xx)
-=========================================
+libfuse 3.13.0 (2023-01-13)
+===========================
+
 * There is a new low-level API function `fuse_session_custom_io` that allows to implement
   a daemon with a custom io. This can be used to create a daemon that can process incoming
   FUSE requests to other destinations than `/dev/fuse`.
+
+* A segfault when loading custom FUSE modules has been fixed.
+
+* There is a new `fuse_notify_expire_entry` function.
+
+* A deadlock when resolving paths in the high-level API has been fixed.
+
+* libfuse can now be build explicitly for C libraries without symbol versioning support.
 
 libfuse 3.12.0 (2022-09-08)
 ===========================
