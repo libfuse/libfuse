@@ -130,11 +130,11 @@ struct fuse_forget_data {
 struct fuse_custom_io {
 	ssize_t (*writev)(int fd, struct iovec *iov, int count, void *userdata);
 	ssize_t (*read)(int fd, void *buf, size_t buf_len, void *userdata);
-	ssize_t (*splice_receive)(int fdin, __off64_t *offin, int fdout,
-					  __off64_t *offout, size_t len,
+	ssize_t (*splice_receive)(int fdin, off_t *offin, int fdout,
+					  off_t *offout, size_t len,
 				  	  unsigned int flags, void *userdata);
-	ssize_t (*splice_send)(int fdin, __off64_t *offin, int fdout,
-				     __off64_t *offout, size_t len,
+	ssize_t (*splice_send)(int fdin, off_t *offin, int fdout,
+				     off_t *offout, size_t len,
 			           unsigned int flags, void *userdata);
 };
 
