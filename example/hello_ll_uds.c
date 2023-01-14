@@ -277,8 +277,8 @@ static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
     return  (res == -1) ? res : (res + prev_res);
 }
 
-static ssize_t stream_splice_send(int fdin, __off64_t *offin, int fdout,
-					    __off64_t *offout, size_t len,
+static ssize_t stream_splice_send(int fdin, off_t *offin, int fdout,
+					    off_t *offout, size_t len,
                                   unsigned int flags, void *userdata) {
 	(void)userdata;
 
