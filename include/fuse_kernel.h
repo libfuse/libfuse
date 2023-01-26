@@ -1050,7 +1050,7 @@ struct fuse_notify_retrieve_in {
 };
 
 /* ioctl is a configuration command */
-#define FUSE_URING_IOCTL_FLAG_CFG		1UL << 0
+#define FUSE_URING_IOCTL_FLAG_QUEUE_CFG		1UL << 0
 
 /* wait in the kernel until the process gets terminated, to stop uring */
 #define FUSE_URING_IOCTL_FLAG_WAIT 		1UL << 1
@@ -1064,19 +1064,30 @@ struct fuse_notify_retrieve_in {
 struct fuse_uring_cfg {
 	uint64_t flags;
 
-	/* number of queues */
-	uint32_t num_queues;
+	union
+	{
+		struct {
+			/* qid the config command is for */
+			uint32_t qid;
 
-	/* number of entries per queue */
-	uint32_t queue_depth;
+			/* number of queues */
+			uint32_t nr_queues;
 
-	/* for all queues and their requests */
-	uint32_t mmap_req_size;
+			/* number of entries per queue */
+			uint32_t queue_depth;
 
-	/* max number of background requests
-	 * max foreground is calculated as queue_depth - max_background
-	 */
-	uint32_t max_background;
+			/* buffer size of a single request */
+			uint32_t req_size;
+
+			/* max number of background requests
+			 * max foreground is calculated as queue_depth - max_background
+			 */
+			uint32_t max_background;
+
+			/* numa node this queue runs on; UINT32_MAX if any*/
+			uint32_t numa_node_id;
+		} queue;
+	};
 
 	/* reserved space for future additions */
 	uint64_t padding[8];
@@ -1259,10 +1270,10 @@ struct fuse_uring_cmd_req {
 	/* queue entry (array index) */
 	uint16_t tag;
 
-	uint32_t req_buf_len;
+	/* numa node the request is on */
+	uint16_t numa_node;
 
-	/* pointer to struct fuse_uring_buf_req */
-	uint64_t req_buf;
+	uint16_t padding;
 };
 
 #endif /* _LINUX_FUSE_H */
