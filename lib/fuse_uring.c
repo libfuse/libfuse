@@ -310,7 +310,6 @@ static int fuse_setup_ring(struct io_uring *ring, size_t qid,
 
 	int files[1] = {fd};
 
-
 	params.flags =
 		IORING_SETUP_CQSIZE | IORING_SETUP_SQE128;
 	params.cq_entries = depth;
