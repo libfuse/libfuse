@@ -9,7 +9,7 @@
 
 #define FUSE_USE_VERSION 30
 
-#include <config.h>
+#include <fuse_config.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>
 #include <stdlib.h>

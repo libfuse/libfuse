@@ -14,6 +14,7 @@
 #ifndef FUSE_COMMON_H_
 #define FUSE_COMMON_H_
 
+#include "fuse_config.h"
 #include "fuse_opt.h"
 #include "fuse_log.h"
 #include <stdint.h>

@@ -1,5 +1,5 @@
 project('libfuse3', ['c'], version: '3.13.0',
-        meson_version: '>= 0.42',
+        meson_version: '>= 0.50',
         default_options: [
             'buildtype=debugoptimized',
             'cpp_std=c++11',
@@ -141,8 +141,8 @@ else
 endif
 
 # Write the test results into config.h (stored in build directory)
-configure_file(output: 'config.h',
-               configuration : cfg)
+configure_file(output: 'fuse_config.h',
+               configuration : cfg, install: true, install_dir: 'include/fuse3')
 
 # '.' will refer to current build directory, which contains config.h
 include_dirs = include_directories('include', 'lib', '.')
@@ -169,3 +169,4 @@ endif
 foreach n : subdirs
     subdir(n)
 endforeach
+
