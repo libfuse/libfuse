@@ -24,7 +24,7 @@ export ASAN_OPTIONS="detect_leaks=1"
 export CC
 
 # Standard build
-for CC in gcc gcc-7 gcc-10 clang; do
+for CC in gcc gcc-9 gcc-10 clang; do
     echo "=== Building with ${CC} ==="
     mkdir build-${CC}; cd build-${CC}
     if [ "${CC}" == "clang" ]; then
