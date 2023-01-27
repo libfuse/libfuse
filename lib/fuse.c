@@ -13,7 +13,7 @@
 /* For pthread_rwlock_t */
 #define _GNU_SOURCE
 
-#include "config.h"
+#include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
 #include "fuse_opt.h"

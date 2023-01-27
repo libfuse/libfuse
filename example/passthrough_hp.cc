@@ -45,10 +45,6 @@
 
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
