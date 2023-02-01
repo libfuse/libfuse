@@ -936,7 +936,8 @@ void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 int fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
 				      bool use_uring, bool per_core_queue,
 				      unsigned int queue_depth,
-				      unsigned int max_background_req);
+				      unsigned int max_background_req,
+				      unsigned int max_backgnd_coalesc);
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *

@@ -350,7 +350,7 @@ static int
 fuse_uring_configure_kernel_queue(struct fuse_session *se,
 				  struct fuse_loop_config *cfg,
 				  int qid, size_t nr_queues,
-				  size_t req_size)
+				  size_t req_buf_size)
 {
 	int rc;
 
@@ -359,8 +359,8 @@ fuse_uring_configure_kernel_queue(struct fuse_session *se,
 		.queue.qid = qid,
 		.queue.nr_queues = nr_queues,
 		.queue.queue_depth = cfg->uring.queue_depth,
-		.queue.req_size = req_size,
-		.queue.max_background = cfg->uring.max_background_req,
+		.queue.req_buf_sz = req_buf_size,
+		.queue.backgnd_queue_depth = cfg->uring.max_background_queue_depth,
 	};
 
 	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
