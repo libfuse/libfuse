@@ -171,7 +171,14 @@ struct fuse_loop_config
 
 		/** Maximum number of background requests. Number of
 		 *  foreground requests is the difference to queue-depth */
-		unsigned int max_background_req;
+		unsigned int max_background_queue_depth;
+
+		/**
+		 * maximum number of background requests that might go to the
+		 * same queue, before switching to the next qid. Allows to peek
+		 * at multiple arrived CQEs and to handle as large IO request.
+		 */
+		unsigned int max_background_coalescence;
 
 	} uring;
 };
