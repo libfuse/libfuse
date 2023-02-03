@@ -1,3 +1,10 @@
+libfuse 3.13.1 (2023-02-03)
+===========================
+
+* Fixed an issue that resulted in errors when attempting to compile against
+  installed libfuse headers (because libc symbol versioning support was not
+  detected correctly in this case).
+
 libfuse 3.13.0 (2023-01-13)
 ===========================
 
