@@ -14,7 +14,12 @@
 #ifndef FUSE_COMMON_H_
 #define FUSE_COMMON_H_
 
+#ifdef HAVE_LIBFUSE_PRIVATE_CONFIG_H
 #include "fuse_config.h"
+#endif
+
+#include "libfuse_config.h"
+
 #include "fuse_opt.h"
 #include "fuse_log.h"
 #include <stdint.h>
