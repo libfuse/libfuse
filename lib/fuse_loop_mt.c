@@ -46,10 +46,10 @@
 				      * uring, if uring is not supported by
 				      * the kernel
 				      */
-#define FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE 1
-#define FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH 16
-#define FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND 8
-#define FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND_COALESCENCE 4
+#define FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE 0
+#define FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH 2
+#define FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND 1
+#define FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND_COALESCENCE 1
 
 
 /* an arbitrary large value that cannot be valid */

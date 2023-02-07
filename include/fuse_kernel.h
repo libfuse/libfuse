@@ -1275,7 +1275,7 @@ enum fuse_uring_cmd {
  */
 struct fuse_uring_cmd_req {
 	/* queue the command is for (queue index) */
-	uint16_t q_id;
+	uint16_t qid;
 
 	/* queue entry (array index) */
 	uint16_t tag;
