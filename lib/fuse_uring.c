@@ -67,7 +67,7 @@ struct fuse_ring_queue {
 
 	int fd; /* dup of se->fd */
 
-	int q_id;
+	int qid;
 	int numa_node;
 	pthread_t tid;
 
@@ -125,7 +125,7 @@ static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
 					const unsigned int tag,
 					const unsigned int numa_node)
 {
-	req->q_id = qid;
+	req->qid = qid;
 	req->tag = tag;
 	req->numa_node = numa_node;
 }
@@ -179,7 +179,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	req_data->cmd = FUSE_RING_BUF_CMD_IOVEC;
 
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
-				    queue->q_id, ring_req->tag,
+				    queue->qid, ring_req->tag,
 				    queue->numa_node);
 
 	/* leave io_uring_submit() to the main thread function */
@@ -205,7 +205,6 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg,
 	else if (argsize)
 		memcpy(buf_req->in_out_arg, arg, argsize);
 	buf_req->in_out_arg_len = argsize;
-	fuse_log(FUSE_LOG_ERR, "argsize=%zu\n", argsize);
 
 	struct fuse_out_header *out = &buf_req->out;
 	out->error  = error;
@@ -502,7 +501,7 @@ fuse_create_user_ring(struct fuse_session *se,
 		queue->fd = -1;
 		queue->ring.ring_fd = -1;
 		queue->numa_node = -1;
-		queue->q_id = -1;
+		queue->qid = -1;
 		queue->ring_pool = NULL;
 		queue->mmap_buf = NULL;
 	}
@@ -518,7 +517,7 @@ fuse_create_user_ring(struct fuse_session *se,
 		}
 
 		queue->ring_pool = fuse_ring;
-		queue->q_id = qid;
+		queue->qid = qid;
 		queue->numa_node = numa_node_of_cpu(qid);
 
 		/* XXX Any advantage in cloning the session? */
@@ -604,10 +603,10 @@ static void *fuse_uring_thread(void *arg)
 	int res;
 
 	if (ring_pool->per_core_queue)
-		numa_run_on_node(queue->q_id); // qid == core index
+		numa_run_on_node(queue->qid); // qid == core index
 
 	char thread_name[16] = { 0 };
-	snprintf(thread_name, 16, "fuse-ring-%d", queue->q_id);
+	snprintf(thread_name, 16, "fuse-ring-%d", queue->qid);
 	thread_name[15] = '\0';
 	pthread_setname_np(queue->tid, thread_name);
 
@@ -635,7 +634,7 @@ static void *fuse_uring_thread(void *arg)
 
 		fuse_uring_sqe_prepare(sqe, req, FUSE_URING_REQ_FETCH);
 		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
-					    queue->q_id, req->tag,
+					    queue->qid, req->tag,
 					    queue->numa_node);
 	}
 
@@ -667,8 +666,6 @@ static void *fuse_uring_thread(void *arg)
 				 "uring submit and wait failed %d\n", ret);
 			goto err;
 		}
-
-		fuse_log(FUSE_LOG_ERR, "submit and wait: %d\n", ret);
 
 		ret = io_uring_wait_cqe(&queue->ring, &cqe);
 		if (ret < 0) {
