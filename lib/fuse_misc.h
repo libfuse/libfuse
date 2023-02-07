@@ -15,7 +15,7 @@
   Note: "@@" denotes the default symbol, "@" is binary a compat version.
 
 */
-#ifdef HAVE_LIBC_VERSIONED_SYMBOLS
+#ifdef LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS
 # if HAVE_SYMVER_ATTRIBUTE
 #  define FUSE_SYMVER(sym1, sym2) __attribute__ ((symver (sym2)))
 # else
