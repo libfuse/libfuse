@@ -156,7 +156,15 @@ enum fuse_expire_flags {
 #define FUSE_SET_ATTR_MTIME	(1 << 5)
 #define FUSE_SET_ATTR_ATIME_NOW	(1 << 7)
 #define FUSE_SET_ATTR_MTIME_NOW	(1 << 8)
+#define FUSE_SET_ATTR_FORCE	(1 << 9)
 #define FUSE_SET_ATTR_CTIME	(1 << 10)
+#define FUSE_SET_ATTR_KILL_SUID	(1 << 11)
+#define FUSE_SET_ATTR_KILL_SGID	(1 << 12)
+#define FUSE_SET_ATTR_FILE	(1 << 13)
+#define FUSE_SET_ATTR_KILL_PRIV	(1 << 14)
+#define FUSE_SET_ATTR_OPEN	(1 << 15)
+#define FUSE_SET_ATTR_TIMES_SET	(1 << 16)
+#define FUSE_SET_ATTR_TOUCH	(1 << 17)
 
 /* ----------------------------------------------------------- *
  * Request methods and replies				       *
