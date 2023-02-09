@@ -1186,6 +1186,8 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			FUSE_SET_ATTR_SIZE	|
 			FUSE_SET_ATTR_ATIME	|
 			FUSE_SET_ATTR_MTIME	|
+			FUSE_SET_ATTR_KILL_SUID |
+			FUSE_SET_ATTR_KILL_SGID |
 			FUSE_SET_ATTR_ATIME_NOW	|
 			FUSE_SET_ATTR_MTIME_NOW |
 			FUSE_SET_ATTR_CTIME;
