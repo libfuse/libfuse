@@ -1,3 +1,13 @@
+libfuse 3.14.0 (2023-02-17)
+===========================
+
+* Properly fix the header installation issue. The fix in 3.13.1 resulted
+  in conflicts with other packages.
+
+* Introduce additional setattr() flags (FORCE, KILL_SUID, KILL_SGID, FILE, KILL_PRIV,
+  OPEN, TIMES_SET)
+
+
 libfuse 3.13.1 (2023-02-03)
 ===========================
 
