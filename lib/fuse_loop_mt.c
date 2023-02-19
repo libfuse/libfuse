@@ -464,9 +464,11 @@ void fuse_loop_cfg_set_idle_threads(struct fuse_loop_config *config,
 				    unsigned int value)
 {
 	if (value > FUSE_LOOP_MT_MAX_THREADS) {
-		fuse_log(FUSE_LOG_ERR,
-			 "Ignoring invalid max threads value "
-			 "%u > max (%u).\n", value, FUSE_LOOP_MT_MAX_THREADS);
+		if (value != UINT_MAX)
+			fuse_log(FUSE_LOG_ERR,
+				 "Ignoring invalid max threads value "
+				 "%u > max (%u).\n", value,
+				 FUSE_LOOP_MT_MAX_THREADS);
 		return;
 	}
 	config->max_idle_threads = value;
