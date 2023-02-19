@@ -355,11 +355,11 @@ fuse_uring_configure_kernel_queue(struct fuse_session *se,
 
 	struct fuse_uring_cfg ioc_cfg = {
 		.flags = FUSE_URING_IOCTL_FLAG_QUEUE_CFG,
-		.queue.qid = qid,
-		.queue.nr_queues = nr_queues,
-		.queue.queue_depth = cfg->uring.queue_depth,
-		.queue.req_buf_sz = req_buf_size,
-		.queue.backgnd_queue_depth = cfg->uring.max_background_queue_depth,
+		.qid = qid,
+		.nr_queues = nr_queues,
+		.queue_depth = cfg->uring.queue_depth,
+		.req_buf_sz = req_buf_size,
+		.backgnd_queue_depth = cfg->uring.max_background_queue_depth,
 	};
 
 	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
@@ -427,7 +427,6 @@ fuse_ring_cleanup_thread(void *arg)
 			break;
 		}
 	}
-
 
 	return NULL;
 }
@@ -674,8 +673,8 @@ static void *fuse_uring_thread(void *arg)
 
 		if (ret == 0 && cqe->res != 0) {
 			fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
+			fuse_session_exit(se);
 			ret = cqe->res;
-
 		}
 
 		if (ret == 0)
