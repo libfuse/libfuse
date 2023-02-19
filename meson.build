@@ -77,7 +77,7 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
 add_project_arguments('-D_REENTRANT', '-DHAVE_LIBFUSE_PRIVATE_CONFIG_H', '-Wno-sign-compare',
                       '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
                       '-fno-strict-aliasing', language: 'c')
-add_project_arguments('-D_REENTRANT', '-DHAVE_CONFIG_H', '-D_GNU_SOURCE',
+add_project_arguments('-D_REENTRANT', '-DHAVE_LIBFUSE_PRIVATE_CONFIG_H', '-D_GNU_SOURCE',
                      '-Wno-sign-compare', '-Wmissing-declarations',
                      '-Wwrite-strings', '-fno-strict-aliasing', language: 'cpp')
 
