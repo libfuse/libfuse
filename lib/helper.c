@@ -210,7 +210,7 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 {
 	memset(opts, 0, sizeof(struct fuse_cmdline_opts));
 
-	opts->max_idle_threads = -1; /* new default in fuse version 3.12 */
+	opts->max_idle_threads = UINT_MAX; /* new default in fuse version 3.12 */
 	opts->max_threads = 10;
 
 	if (fuse_opt_parse(args, opts, fuse_helper_opts,
@@ -238,7 +238,6 @@ int fuse_parse_cmdline_30(struct fuse_args *args,
 			  struct fuse_cmdline_opts *out_opts)
 {
 	struct fuse_cmdline_opts opts;
-
 
 	int rc = fuse_parse_cmdline_312(args, &opts);
 	if (rc == 0) {
