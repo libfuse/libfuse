@@ -29,6 +29,9 @@ for CC in gcc gcc-9 gcc-10 clang; do
     mkdir build-${CC}; cd build-${CC}
     if [ "${CC}" == "clang" ]; then
         export CXX="clang++"
+        export TEST_WITH_VALGRIND=false
+    else
+        export TEST_WITH_VALGRIND=true
     fi
     if [ ${CC} == 'gcc-7' ]; then
         build_opts='-D b_lundef=false'
@@ -45,7 +48,7 @@ for CC in gcc gcc-9 gcc-10 clang; do
 
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
-    TEST_WITH_VALGRIND=true ${TEST_CMD}
+    ${TEST_CMD}
     cd ..
 done
 (cd build-$CC; sudo ninja install)
@@ -83,6 +86,7 @@ sanitized_build()
 # Sanitized build
 CC=clang
 CXX=clang++
+TEST_WITH_VALGRIND=false
 for san in undefined address; do
     sanitized_build ${san}
 done

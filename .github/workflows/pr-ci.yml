@@ -1,4 +1,4 @@
-name: Converted Workflow
+name: 'Build & Test'
 on:
   push:
     branches:
@@ -21,6 +21,6 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 libstdc++-10-dev libstdc++-9-dev ninja-build python3-pip python3-setuptools valgrind
       - uses: actions/checkout@v3
-      - run: test/travis-install.sh
-      - run: test/travis-build.sh
+      - run: test/ci-install.sh
+      - run: test/ci-build.sh
 
