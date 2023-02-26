@@ -420,6 +420,8 @@ fuse_ring_cleanup_thread(void *arg)
 		if (rc != 0) {
 			if (errno == ENOTTY)
 				fuse_log(FUSE_LOG_INFO, "Kernel does not support fuse uring\n");
+			else if (errno == EINTR)
+				fuse_session_exit(se);
 			else
 				fuse_log(FUSE_LOG_ERR,
 					"Unexpected kernel uring ioctl result: %s\n",
@@ -427,6 +429,7 @@ fuse_ring_cleanup_thread(void *arg)
 			break;
 		}
 	}
+	fuse_log(FUSE_LOG_INFO, "Exiting cleanup thread\n");
 
 	return NULL;
 }
@@ -551,14 +554,9 @@ fuse_create_user_ring(struct fuse_session *se,
 			struct fuse_ring_req *ring_req = &queue->req[tag];
 			ring_req->ring_queue = queue;
 			ring_req->tag = tag;
-
-			fuse_log(FUSE_LOG_ERR, "req=%p tag=%d\n", ring_req, tag);
-
 			ring_req->req_buf = (struct fuse_uring_buf_req *)
 				(queue->mmap_buf + req_buf_size * tag);
 
-			fuse_log(FUSE_LOG_DEBUG, "qid=%d tag=%d off=%lld buf=%p\n",
-				 qid, tag, off, (void *)ring_req->req_buf);
 			if (ring_req->req_buf == MAP_FAILED) {
 				fuse_log(FUSE_LOG_ERR,
 					 "qid=%d tag=%d mmap of size %zu failed: %s\n",
@@ -774,6 +772,8 @@ int fuse_session_stop_uring(struct fuse_session *se)
 		.flags = FUSE_URING_IOCTL_FLAG_STOP,
 	};
 
+	fuse_log(FUSE_LOG_ERR, "Sending flag stop\n");
+
 	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
 	if (rc != 0) {
 		fuse_log(FUSE_LOG_ERR,
@@ -781,7 +781,9 @@ int fuse_session_stop_uring(struct fuse_session *se)
 			 strerror(errno));
 	}
 
+	fuse_log(FUSE_LOG_ERR, "Joining cleanup tid\n");
 	pthread_join(se->ring.cleanup_tid, NULL);
+	fuse_log(FUSE_LOG_ERR, "Joined cleanup tid\n");
 
 	fuse_session_destruct_uring(se->ring.pool);
 
