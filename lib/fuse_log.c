@@ -12,12 +12,17 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <syslog.h>
 
 static void default_log_func(
 		__attribute__(( unused )) enum fuse_log_level level,
 		const char *fmt, va_list ap)
 {
+	//char log[512];
 	vfprintf(stderr, fmt, ap);
+	//vsnprintf(log, 512, fmt, ap);
+
+	//syslog(LOG_INFO, "%s", log);
 }
 
 static fuse_log_func_t log_func = default_log_func;
