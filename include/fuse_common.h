@@ -62,11 +62,10 @@ struct fuse_file_info {
 	/** Can be filled in by open, to use direct I/O on this file. */
 	unsigned int direct_io : 1;
 
-	/** Can be filled in by open. It signals the kernel that any
-	    currently cached file data (ie., data that the filesystem
-	    provided the last time the file was open) need not be
-	    invalidated. Has no effect when set in other contexts (in
-	    particular it does nothing when set by opendir()). */
+	/** Can be filled in by open and opendir. It signals the kernel that any
+	    currently cached data (ie., data that the filesystem provided the
+	    last time the file/directory was open) need not be invalidated when
+	    the file/directory is closed. */
 	unsigned int keep_cache : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
