@@ -44,11 +44,12 @@ static int iconv_convpath(struct iconv *ic, const char *path, char **newpathp,
 {
 	size_t pathlen;
 	size_t newpathlen;
-	char *newpath;
-	size_t plen;
-	char *p;
+	char *newpath, *outbuf_ptr;
+	size_t outbytesleft;
 	size_t res;
 	int err;
+	char **inbuf_ptr = (char **restrict)&path;
+	size_t inbuf_left;
 
 	if (path == NULL) {
 		*newpathp = NULL;
@@ -56,20 +57,26 @@ static int iconv_convpath(struct iconv *ic, const char *path, char **newpathp,
 	}
 
 	pathlen = strlen(path);
+	inbuf_left = pathlen;
+
 	newpathlen = pathlen * 4;
 	newpath = malloc(newpathlen + 1);
 	if (!newpath)
 		return -ENOMEM;
 
-	plen = newpathlen;
-	p = newpath;
+	outbytesleft = newpathlen;
+	outbuf_ptr = newpath;
 	pthread_mutex_lock(&ic->lock);
 	do {
-		res = iconv(fromfs ? ic->fromfs : ic->tofs, (char **) &path,
-			    &pathlen, &p, &plen);
+		res = iconv(fromfs ? ic->fromfs : ic->tofs, inbuf_ptr,
+			    &inbuf_left, &outbuf_ptr, &outbytesleft);
 		if (res == (size_t) -1) {
 			char *tmp;
 			size_t inc;
+
+			/* iconv increases in and out pointers, to allow to
+			 * continue in error case. */
+			loff_t out_ptr_off = outbuf_ptr - newpath;
 
 			err = -EILSEQ;
 			if (errno != E2BIG)
@@ -82,13 +89,17 @@ static int iconv_convpath(struct iconv *ic, const char *path, char **newpathp,
 			if (!tmp)
 				goto err;
 
-			p = tmp + (p - newpath);
-			plen += inc;
+			/* newpath might now be a totally different pointer,
+			 * outbuf_ptr needs to be updated to that with the right
+			 * offset
+			 */
 			newpath = tmp;
+			outbuf_ptr = newpath + out_ptr_off;
+			outbytesleft += inc;
 		}
 	} while (res == (size_t) -1);
 	pthread_mutex_unlock(&ic->lock);
-	*p = '\0';
+	*outbuf_ptr = '\0';
 	*newpathp = newpath;
 	return 0;
 
