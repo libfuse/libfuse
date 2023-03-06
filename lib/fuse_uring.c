@@ -50,7 +50,7 @@
 	(((val) + (round_to - 1)) & ~(round_to - 1))
 
 /* Should be ideally in fuse_uring_i.h, but would cause a circular dependency */
-struct fuse_ring_req {
+struct fuse_ring_ent {
 	struct fuse_ring_queue *ring_queue; /* back pointer */
 	struct fuse_req req;
 
@@ -77,7 +77,7 @@ struct fuse_ring_queue {
 	struct io_uring ring;
 
 	/* size depends on queue depth */
-	struct fuse_ring_req req[];
+	struct fuse_ring_ent ent[];
 };
 
 /**
@@ -99,7 +99,7 @@ struct fuse_ring_pool {
 static size_t
 fuse_ring_queue_size(const size_t q_depth)
 {
-	const size_t req_size = sizeof(struct fuse_ring_req) * q_depth;
+	const size_t req_size = sizeof(struct fuse_ring_ent) * q_depth;
 	return sizeof(struct fuse_ring_queue) + req_size;
 }
 
@@ -131,7 +131,7 @@ static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
 }
 
 static void
-fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_req *req,
+fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
 		       __u32 cmd_op)
 {
 	/* These fields should be written once, never change */
@@ -154,7 +154,7 @@ fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_req *req,
 
 static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
-				 struct fuse_ring_req *ring_req)
+				 struct fuse_ring_ent *ring_ent)
 {
 	struct fuse_session *se = ring_pool->se;
 
@@ -173,13 +173,13 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		return -EIO;
 	}
 
-	fuse_uring_sqe_prepare(sqe, ring_req, FUSE_URING_REQ_COMMIT_AND_FETCH);
+	fuse_uring_sqe_prepare(sqe, ring_ent, FUSE_URING_REQ_COMMIT_AND_FETCH);
 
-	struct fuse_uring_buf_req *req_data = ring_req->req_buf;
+	struct fuse_uring_buf_req *req_data = ring_ent->req_buf;
 	req_data->cmd = FUSE_RING_BUF_CMD_IOVEC;
 
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
-				    queue->qid, ring_req->tag,
+				    queue->qid, ring_ent->tag,
 				    queue->numa_node);
 
 	/* leave io_uring_submit() to the main thread function */
@@ -189,12 +189,12 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 int send_reply_uring(fuse_req_t req, int error, const void *arg,
 		     size_t argsize)
 {
-	struct fuse_ring_req *ring_req =
-		container_of(req, struct fuse_ring_req, req);
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
 
-	struct fuse_ring_queue *queue = ring_req->ring_queue;
+	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_buf_req *buf_req = ring_req->req_buf;
+	struct fuse_uring_buf_req *buf_req = ring_ent->req_buf;
 	size_t max_buf = sizeof(buf_req->in_out_arg) + ring_pool->req_buf_size;
 
 	if (argsize > max_buf) {
@@ -210,18 +210,18 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg,
 	out->error  = error;
 	out->unique = req->unique;
 
-	return fuse_uring_commit_sqe(ring_pool, queue, ring_req);
+	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 }
 
 int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
 		    enum fuse_buf_copy_flags flags)
 {
-	struct fuse_ring_req *ring_req =
-		container_of(req, struct fuse_ring_req, req);
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
 
-	struct fuse_ring_queue *queue = ring_req->ring_queue;
+	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_buf_req *buf_req = ring_req->req_buf;
+	struct fuse_uring_buf_req *buf_req = ring_ent->req_buf;
 	size_t max_buf = sizeof(buf_req->in_out_arg) + ring_pool->req_buf_size;
 	struct fuse_bufvec dest_vec = FUSE_BUFVEC_INIT(max_buf);
 	int res;
@@ -237,7 +237,7 @@ int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
 
 	buf_req->in_out_arg_len = res > 0 ? res : 0;
 
-	return fuse_uring_commit_sqe(ring_pool, queue, ring_req);
+	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 }
 
 /**
@@ -245,12 +245,12 @@ int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
  */
 int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 {
-	struct fuse_ring_req *ring_req =
-		container_of(req, struct fuse_ring_req, req);
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
 
-	struct fuse_ring_queue *queue = ring_req->ring_queue;
+	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_buf_req *buf_req = ring_req->req_buf;
+	struct fuse_uring_buf_req *buf_req = ring_ent->req_buf;
 	size_t max_buf = sizeof(buf_req->in_out_arg) + ring_pool->req_buf_size;
 	size_t off = 0;
 	int res = 0;
@@ -277,19 +277,19 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 	out->error  = res;
 	out->unique = req->unique;
 
-	return fuse_uring_commit_sqe(ring_pool, queue, ring_req);
+	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 }
 
 static void
 fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 		      struct io_uring_cqe *cqe)
 {
-	struct fuse_ring_req *ring_req = io_uring_cqe_get_data(cqe);
-	struct fuse_req *req = &ring_req->req;
+	struct fuse_ring_ent *ring_ent = io_uring_cqe_get_data(cqe);
+	struct fuse_req *req = &ring_ent->req;
 	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
-	struct fuse_uring_buf_req *req_buf = ring_req->req_buf;
+	struct fuse_uring_buf_req *req_buf = ring_ent->req_buf;
 
-	struct fuse_in_header *in = &ring_req->req_buf->in;
+	struct fuse_in_header *in = &ring_ent->req_buf->in;
 
 	void *inarg = req_buf->in_out_arg;
 
@@ -392,7 +392,7 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			close(queue->ring.ring_fd);
 
 		for (int tag = 0; tag < fuse_ring->queue_depth; tag++) {
-			struct fuse_ring_req *req = &queue->req[tag];
+			struct fuse_ring_ent *req = &queue->ent[tag];
 			req->req_buf = 0;
 		}
 		munmap(queue->mmap_buf, fuse_ring->queue_mmap_size);
@@ -551,20 +551,20 @@ fuse_create_user_ring(struct fuse_session *se,
 					 flags, se->fd, off);
 
 		for (int tag = 0; tag < q_depth; tag++) {
-			struct fuse_ring_req *ring_req = &queue->req[tag];
-			ring_req->ring_queue = queue;
-			ring_req->tag = tag;
-			ring_req->req_buf = (struct fuse_uring_buf_req *)
+			struct fuse_ring_ent *ring_ent = &queue->ent[tag];
+			ring_ent->ring_queue = queue;
+			ring_ent->tag = tag;
+			ring_ent->req_buf = (struct fuse_uring_buf_req *)
 				(queue->mmap_buf + req_buf_size * tag);
 
-			if (ring_req->req_buf == MAP_FAILED) {
+			if (ring_ent->req_buf == MAP_FAILED) {
 				fuse_log(FUSE_LOG_ERR,
 					 "qid=%d tag=%d mmap of size %zu failed: %s\n",
 					 qid, tag, req_buf_size, strerror(errno));
 				goto err;
 			}
 
-			struct fuse_req *req = &ring_req->req;
+			struct fuse_req *req = &ring_ent->req;
 			req->se = se;
 			pthread_mutex_init(&req->lock, NULL);
 			req->is_uring = true;
@@ -608,7 +608,7 @@ static void *fuse_uring_thread(void *arg)
 	pthread_setname_np(queue->tid, thread_name);
 
 	for (tag = 0; tag < ring_pool->queue_depth; tag++) {
-		struct fuse_ring_req *req = &queue->req[tag];
+		struct fuse_ring_ent *req = &queue->ent[tag];
 
 		if (req->tag != tag) {
 			fuse_log(FUSE_LOG_ERR,
