@@ -1164,7 +1164,7 @@ enum fuse_ring_req_cmd {
 /**
  * This structure mapped onto the
  */
-struct fuse_uring_buf_req {
+struct fuse_ring_req {
 
 	union {
 		/* The first 4K are command data */

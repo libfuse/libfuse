@@ -54,7 +54,7 @@ struct fuse_ring_ent {
 	struct fuse_ring_queue *ring_queue; /* back pointer */
 	struct fuse_req req;
 
-	struct fuse_uring_buf_req *req_buf;
+	struct fuse_ring_req *ring_req;
 
 	int tag;
 };
@@ -175,8 +175,8 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 
 	fuse_uring_sqe_prepare(sqe, ring_ent, FUSE_URING_REQ_COMMIT_AND_FETCH);
 
-	struct fuse_uring_buf_req *req_data = ring_ent->req_buf;
-	req_data->cmd = FUSE_RING_BUF_CMD_IOVEC;
+	struct fuse_ring_req *rreq = ring_ent->ring_req;
+	rreq->cmd = FUSE_RING_BUF_CMD_IOVEC;
 
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
 				    queue->qid, ring_ent->tag,
@@ -194,8 +194,8 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg,
 
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_buf_req *buf_req = ring_ent->req_buf;
-	size_t max_buf = sizeof(buf_req->in_out_arg) + ring_pool->req_buf_size;
+	struct fuse_ring_req *rreq = ring_ent->ring_req;
+	size_t max_buf = sizeof(rreq->in_out_arg) + ring_pool->req_buf_size;
 
 	if (argsize > max_buf) {
 		fuse_log(FUSE_LOG_ERR, "argsize %zu exceeds buffer size %zu",
@@ -203,10 +203,10 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg,
 		error = -EINVAL;
 	}
 	else if (argsize)
-		memcpy(buf_req->in_out_arg, arg, argsize);
-	buf_req->in_out_arg_len = argsize;
+		memcpy(rreq->in_out_arg, arg, argsize);
+	rreq->in_out_arg_len = argsize;
 
-	struct fuse_out_header *out = &buf_req->out;
+	struct fuse_out_header *out = &rreq->out;
 	out->error  = error;
 	out->unique = req->unique;
 
@@ -221,21 +221,21 @@ int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
 
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_buf_req *buf_req = ring_ent->req_buf;
-	size_t max_buf = sizeof(buf_req->in_out_arg) + ring_pool->req_buf_size;
+	struct fuse_ring_req *rreq = ring_ent->ring_req;
+	size_t max_buf = sizeof(rreq->in_out_arg) + ring_pool->req_buf_size;
 	struct fuse_bufvec dest_vec = FUSE_BUFVEC_INIT(max_buf);
 	int res;
 
-	dest_vec.buf[0].mem = buf_req->in_out_arg;
+	dest_vec.buf[0].mem = rreq->in_out_arg;
 	dest_vec.buf[0].size = max_buf;
 
 	res = fuse_buf_copy(&dest_vec, bufv, flags);
 
-	struct fuse_out_header *out = &buf_req->out;
+	struct fuse_out_header *out = &rreq->out;
 	out->error  = res < 0 ? res : 0;
 	out->unique = req->unique;
 
-	buf_req->in_out_arg_len = res > 0 ? res : 0;
+	rreq->in_out_arg_len = res > 0 ? res : 0;
 
 	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 }
@@ -250,8 +250,8 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_buf_req *buf_req = ring_ent->req_buf;
-	size_t max_buf = sizeof(buf_req->in_out_arg) + ring_pool->req_buf_size;
+	struct fuse_ring_req *rreq = ring_ent->ring_req;
+	size_t max_buf = sizeof(rreq->in_out_arg) + ring_pool->req_buf_size;
 	size_t off = 0;
 	int res = 0;
 
@@ -266,14 +266,14 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 			break;
 		}
 
-		memcpy(buf_req->in_out_arg + off, cur->iov_base, cur->iov_len);
+		memcpy(rreq->in_out_arg + off, cur->iov_base, cur->iov_len);
 		off += cur->iov_len;
 	}
 
-	buf_req->in_out_arg_len = off;
+	rreq->in_out_arg_len = off;
 	fuse_log(FUSE_LOG_ERR, "res=%d off=%zu\n", res, off);
 
-	struct fuse_out_header *out = &buf_req->out;
+	struct fuse_out_header *out = &rreq->out;
 	out->error  = res;
 	out->unique = req->unique;
 
@@ -287,17 +287,17 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	struct fuse_ring_ent *ring_ent = io_uring_cqe_get_data(cqe);
 	struct fuse_req *req = &ring_ent->req;
 	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
-	struct fuse_uring_buf_req *req_buf = ring_ent->req_buf;
+	struct fuse_ring_req *rreq = ring_ent->ring_req;
 
-	struct fuse_in_header *in = &ring_ent->req_buf->in;
+	struct fuse_in_header *in = &ring_ent->ring_req->in;
 
-	void *inarg = req_buf->in_out_arg;
+	void *inarg = rreq->in_out_arg;
 
 	req->is_uring = true;
 	req->ch = NULL; /* not needed for uring */
 
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, inarg,
-				       req_buf->in_out_arg_len);
+				       rreq->in_out_arg_len);
 }
 
 
@@ -393,7 +393,7 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 
 		for (int tag = 0; tag < fuse_ring->queue_depth; tag++) {
 			struct fuse_ring_ent *req = &queue->ent[tag];
-			req->req_buf = 0;
+			req->ring_req = 0;
 		}
 		munmap(queue->mmap_buf, fuse_ring->queue_mmap_size);
 	}
@@ -469,7 +469,7 @@ fuse_create_user_ring(struct fuse_session *se,
 	const size_t ring_data_buf_size = FUSE_RING_DATA_BUF_SIZE;
 
 	const size_t req_buf_size =
-		ROUND_UP(sizeof(struct fuse_uring_buf_req) + ring_data_buf_size,
+		ROUND_UP(sizeof(struct fuse_ring_req) + ring_data_buf_size,
 			 pg_size);
 
 	size_t mmap_size = req_buf_size * q_depth;
@@ -554,10 +554,10 @@ fuse_create_user_ring(struct fuse_session *se,
 			struct fuse_ring_ent *ring_ent = &queue->ent[tag];
 			ring_ent->ring_queue = queue;
 			ring_ent->tag = tag;
-			ring_ent->req_buf = (struct fuse_uring_buf_req *)
+			ring_ent->ring_req = (struct fuse_ring_req *)
 				(queue->mmap_buf + req_buf_size * tag);
 
-			if (ring_ent->req_buf == MAP_FAILED) {
+			if (ring_ent->ring_req == MAP_FAILED) {
 				fuse_log(FUSE_LOG_ERR,
 					 "qid=%d tag=%d mmap of size %zu failed: %s\n",
 					 qid, tag, req_buf_size, strerror(errno));
