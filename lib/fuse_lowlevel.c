@@ -203,12 +203,12 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 			 struct iovec *iov, int count, fuse_req_t req)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
+	bool is_uring = req && req->is_uring ? true : false;
 
-	if (req && req->is_uring)
-		fuse_send_msg_uring(req, iov, count);
-
-	assert(se != NULL);
+	if (!is_uring)
+		assert(se != NULL);
 	out->len = iov_length(iov, count);
+
 	if (se->debug) {
 		if (out->unique == 0) {
 			fuse_log(FUSE_LOG_DEBUG, "NOTIFY: code=%d length=%u\n",
@@ -225,7 +225,10 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 		}
 	}
 
-	return fuse_write_msg_dev(se, ch, iov, count);
+	if (is_uring)
+		return fuse_send_msg_uring(req, iov, count);
+	else
+		return fuse_write_msg_dev(se, ch, iov, count);
 }
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
