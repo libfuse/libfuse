@@ -179,8 +179,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	rreq->cmd = FUSE_RING_BUF_CMD_IOVEC;
 
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
-				    queue->qid, ring_ent->tag,
-				    queue->numa_node);
+				    queue->qid, ring_ent->tag);
 
 	/* leave io_uring_submit() to the main thread function */
 	return 0;
@@ -300,24 +299,28 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 				       rreq->in_out_arg_len);
 }
 
-
-static int fuse_setup_ring(struct io_uring *ring, size_t qid,
-			   size_t depth, int fd)
+static int fuse_queue_setup_ring(struct io_uring *ring, size_t qid,
+				 size_t depth, int fd)
 {
 	int rc;
 	struct io_uring_params params = {0};
 
 	int files[1] = {fd};
 
-	params.flags =
-		IORING_SETUP_CQSIZE | IORING_SETUP_SQE128;
+	params.flags = IORING_SETUP_CQSIZE | IORING_SETUP_SQE128;
 	params.cq_entries = depth;
+
+	/* seems to slow down runs */
+#if 0
+	params.flags |= IORING_SETUP_COOP_TASKRUN |
+			IORING_SETUP_SINGLE_ISSUER;
+#endif
 
 	rc = io_uring_queue_init_params(depth, ring, &params);
 	if (rc != 0) {
 		rc = -errno;
-		fuse_log(FUSE_LOG_ERR, "Failed to setup qid %zu: %s\n",
-			 qid, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "Failed to setup qid %zu: %d (%s)\n",
+			 qid, errno, strerror(errno));
 		return rc;
 	}
 
@@ -328,6 +331,8 @@ static int fuse_setup_ring(struct io_uring *ring, size_t qid,
 			 "ring idx %zu: %s", qid, strerror(errno));
 		return rc;
 	}
+
+	fuse_log(FUSE_LOG_INFO, "setup complete for qid=%zu\n", qid);
 
 	return 0;
 }
@@ -537,10 +542,6 @@ fuse_create_user_ring(struct fuse_session *se,
 		loff_t off = (qid * q_depth) * pg_size;
 
 
-		/* XXX Add ioctl per queue to allocate mem and to know
-		 * add in the node id in that request
-		 */
-
 		/* Allocate one big chunk of memory per queue, which will be
 		 * divided into per-request buffers
 		 * Kernel allocation of this buffer is supposed to be
@@ -568,14 +569,6 @@ fuse_create_user_ring(struct fuse_session *se,
 			req->se = se;
 			pthread_mutex_init(&req->lock, NULL);
 			req->is_uring = true;
-		}
-
-		rc = fuse_setup_ring(&queue->ring, qid, fuse_ring->queue_depth,
-				     queue->fd);
-		if (rc != 0) {
-			fuse_log(FUSE_LOG_ERR, "qid=%d uring init failed\n",
-				 strerror(errno));
-			goto err;
 		}
 	}
 
@@ -607,6 +600,15 @@ static void *fuse_uring_thread(void *arg)
 	thread_name[15] = '\0';
 	pthread_setname_np(queue->tid, thread_name);
 
+	res = fuse_queue_setup_ring(&queue->ring, queue->qid,
+				    ring_pool->queue_depth,
+				    queue->fd);
+	if (res != 0) {
+		fuse_log(FUSE_LOG_ERR, "qid=%d uring init failed\n",
+			 queue->qid);
+		goto err;
+	}
+
 	for (tag = 0; tag < ring_pool->queue_depth; tag++) {
 		struct fuse_ring_ent *req = &queue->ent[tag];
 
@@ -617,8 +619,7 @@ static void *fuse_uring_thread(void *arg)
 			goto err;
 		}
 
-		struct io_uring_sqe *sqe =
-			io_uring_get_sqe(&queue->ring);
+		struct io_uring_sqe *sqe = io_uring_get_sqe(&queue->ring);
 		if (sqe == NULL) {
 
 			/* All SQEs are idle here - no good reason this
@@ -642,13 +643,6 @@ static void *fuse_uring_thread(void *arg)
 		goto err;
 	}
 
-	res = io_uring_submit(&queue->ring);
-	if (res != ring_pool->queue_depth) {
-		fuse_log(FUSE_LOG_ERR, "SQE submit mismatch, expected %d got %d\n",
-			 ring_pool->queue_depth, res);
-		goto err;
-	}
-
 	while (!se->exited) {
 		struct io_uring_cqe *cqe;
 //		unsigned head;
@@ -659,8 +653,7 @@ static void *fuse_uring_thread(void *arg)
 		if (ret == -EINTR)
 			continue;
 		if (ret < 0) {
-			fuse_log(FUSE_LOG_ERR,
-				 "uring submit and wait failed %d\n", ret);
+			fuse_log(FUSE_LOG_ERR, "uring submit failed %d\n", ret);
 			goto err;
 		}
 
