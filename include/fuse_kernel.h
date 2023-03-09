@@ -995,9 +995,6 @@ struct fuse_notify_retrieve_in {
 /* explicit stop of the waiting process */
 #define FUSE_URING_IOCTL_FLAG_STOP		1UL << 2
 
-/* configure one queue per core */
-#define FUSE_URING_IOCTL_FLAG_PER_CORE_QUEUE 	1UL << 3
-
 struct fuse_uring_cfg {
 	uint64_t flags;
 
@@ -1007,29 +1004,17 @@ struct fuse_uring_cfg {
 	/* number of queues */
 	uint32_t nr_queues;
 
-	/* number of entries per queue */
-	uint32_t queue_depth;
+	/* number of foreground entries per queue */
+	uint32_t fg_queue_depth;
 
-	/* buffer size of a single request */
-	uint32_t req_buf_sz;
+	/* number of background entries per queue */
+	uint32_t bg_queue_depth;
 
-	/* max number of background requests
-	 * max foreground is calculated as queue_depth - max_background
-	 */
-	uint32_t backgnd_queue_depth;
+	/* argument (data length) of a request */
+	uint32_t req_arg_len;
 
 	/* numa node this queue runs on; UINT32_MAX if any*/
 	uint32_t numa_node_id;
-
-	/* For background requests, specifies max number of req
-	 * on the same queue, before it switches to the next
-	 * queue (core). Reduces queue/core parallism.
-	 * Max is max_background, min is 1 (0 is accepted and
-	 * treated as 1)
-	 */
-	uint32_t max_backgnd_aggr;
-
-	uint32_t padding;
 
 	/* reserved space for future additions */
 	uint64_t reserve[8];
@@ -1145,7 +1130,7 @@ struct fuse_supp_groups {
  * Size of the ring buffer header
  */
 #define FUSE_RING_HEADER_BUF_SIZE 4096
-#define FUSE_RING_IN_OUT_ARG_SIZE 4096
+#define FUSE_RING_MIN_IN_OUT_ARG_SIZE 4096
 
 enum fuse_ring_req_cmd {
 	FUSE_RING_BUF_CMD_INVALID = 0,
@@ -1185,8 +1170,7 @@ struct fuse_ring_req {
 		};
 	};
 
-	char in_out_arg[FUSE_RING_IN_OUT_ARG_SIZE];
-	char data[];
+	char in_out_arg[];
 };
 
 /**
@@ -1212,10 +1196,7 @@ struct fuse_uring_cmd_req {
 	/* queue entry (array index) */
 	uint16_t tag;
 
-	/* numa node the request is on */
-	uint16_t numa_node;
-
-	uint16_t padding;
+	uint32_t padding;
 };
 
 #endif /* _LINUX_FUSE_H */
