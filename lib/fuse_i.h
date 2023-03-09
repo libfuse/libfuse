@@ -166,19 +166,14 @@ struct fuse_loop_config
 		 */
 		bool per_core_queue;
 
-		/** The ring queue depth */
-		unsigned int queue_depth;
+		/** The ring foreground request queue depth */
+		unsigned int fg_queue_depth;
 
-		/** Maximum number of background requests. Number of
-		 *  foreground requests is the difference to queue-depth */
-		unsigned int max_background_queue_depth;
+		/** The ring background request queue depth  */
+		unsigned int bg_queue_depth;
 
-		/**
-		 * maximum number of background requests that might go to the
-		 * same queue, before switching to the next qid. Allows to peek
-		 * at multiple arrived CQEs and to handle as large IO request.
-		 */
-		unsigned int max_background_coalescence;
+		/** maximum argument size of ring requests */
+		unsigned int ring_req_arg_len;
 
 	} uring;
 };

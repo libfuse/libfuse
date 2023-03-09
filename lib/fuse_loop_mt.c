@@ -47,9 +47,11 @@
 				      * the kernel
 				      */
 #define FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE 1
-#define FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH 16
-#define FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND 8
-#define FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND_COALESCENCE 1
+#define FUSE_LOOP_MT_DEF_URING_FG_DEPTH 16
+#define FUSE_LOOP_MT_DEF_URING_BG_DEPTH 8 /* background queue depth */
+
+/* 4K argument header + 1M data */
+#define FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN ((1024 * 1024) + 4096)
 
 
 /* an arbitrary large value that cannot be valid */
@@ -484,11 +486,9 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 
 	config->uring.use_uring = FUSE_LOOP_MT_DEF_USE_URING;
 	config->uring.per_core_queue = FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE;
-	config->uring.queue_depth = FUSE_LOOP_MT_DEF_URING_QUEUE_DEPTH;
-	config->uring.max_background_queue_depth =
-		FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND;
-	config->uring.max_background_coalescence =
-		FUSE_LOOP_MT_DEF_URING_MAX_BACKGROUND_COALESCENCE;
+	config->uring.fg_queue_depth = FUSE_LOOP_MT_DEF_URING_FG_DEPTH;
+	config->uring.bg_queue_depth = FUSE_LOOP_MT_DEF_URING_BG_DEPTH;
+	config->uring.ring_req_arg_len = FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN;
 
 	return config;
 }
@@ -542,24 +542,24 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 
 int fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
 				      bool use_uring, bool per_core_queue,
-				      unsigned int queue_depth,
-				      unsigned int max_background_req,
-				      unsigned int max_backgnd_coalesc)
+				      unsigned int fg_queue_depth,
+				      unsigned int bg_queue_depth,
+				      unsigned int arg_len)
 {
 	config->uring.use_uring = use_uring;
 	config->uring.per_core_queue = per_core_queue;
 
-	if (max_background_req >= queue_depth)
+	if (bg_queue_depth >= fg_queue_depth)
 		return -EINVAL;
 
-	if (queue_depth != 0)
-		config->uring.queue_depth = queue_depth;
+	if (fg_queue_depth != 0)
+		config->uring.fg_queue_depth = fg_queue_depth;
 
-	if (max_background_req != 0)
-		config->uring.max_background_queue_depth = max_background_req;
+	if (bg_queue_depth != 0)
+		config->uring.bg_queue_depth = bg_queue_depth;
 
-	if (max_backgnd_coalesc != 0)
-		config->uring.max_background_coalescence = max_backgnd_coalesc;
+	if (arg_len != 0)
+		config->uring.ring_req_arg_len = arg_len;
 
 	return 0;
 }

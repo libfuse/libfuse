@@ -30,13 +30,6 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 
-/**
- *  Size of the bulk data ring buffer
- * Different (smaller) values might be possible later, if zerocopy can
- * be implemented
- */
-#define FUSE_RING_DATA_BUF_SIZE 1024 * 1024
-
 
 /* defined somewhere in uring? */
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
@@ -89,7 +82,7 @@ struct fuse_ring_pool {
 	bool   per_core_queue;
 	size_t num_queues;  /* number of queues */
 	size_t queue_depth; /* number of per queue entries */
-	size_t req_buf_size;
+	size_t req_arg_len;
 	size_t queue_size;
 	size_t queue_mmap_size;
 	struct fuse_ring_queue *queues;
@@ -122,12 +115,10 @@ static void *fuse_uring_get_sqe_cmd(struct io_uring_sqe *sqe)
 
 static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
 					const unsigned int qid,
-					const unsigned int tag,
-					const unsigned int numa_node)
+					const unsigned int tag)
 {
 	req->qid = qid;
 	req->tag = tag;
-	req->numa_node = numa_node;
 }
 
 static void
@@ -194,7 +185,7 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg,
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	struct fuse_ring_req *rreq = ring_ent->ring_req;
-	size_t max_buf = sizeof(rreq->in_out_arg) + ring_pool->req_buf_size;
+	size_t max_buf = ring_pool->req_arg_len;
 
 	if (argsize > max_buf) {
 		fuse_log(FUSE_LOG_ERR, "argsize %zu exceeds buffer size %zu",
@@ -221,7 +212,7 @@ int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	struct fuse_ring_req *rreq = ring_ent->ring_req;
-	size_t max_buf = sizeof(rreq->in_out_arg) + ring_pool->req_buf_size;
+	size_t max_buf = ring_pool->req_arg_len;
 	struct fuse_bufvec dest_vec = FUSE_BUFVEC_INIT(max_buf);
 	int res;
 
@@ -250,7 +241,7 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	struct fuse_ring_req *rreq = ring_ent->ring_req;
-	size_t max_buf = sizeof(rreq->in_out_arg) + ring_pool->req_buf_size;
+	size_t max_buf = ring_pool->req_arg_len;
 	size_t off = 0;
 	int res = 0;
 
@@ -354,7 +345,8 @@ static int
 fuse_uring_configure_kernel_queue(struct fuse_session *se,
 				  struct fuse_loop_config *cfg,
 				  int qid, size_t nr_queues,
-				  size_t req_buf_size)
+				  size_t req_arg_len,
+				  uint32_t numa_node_id)
 {
 	int rc;
 
@@ -362,9 +354,10 @@ fuse_uring_configure_kernel_queue(struct fuse_session *se,
 		.flags = FUSE_URING_IOCTL_FLAG_QUEUE_CFG,
 		.qid = qid,
 		.nr_queues = nr_queues,
-		.queue_depth = cfg->uring.queue_depth,
-		.req_buf_sz = req_buf_size,
-		.backgnd_queue_depth = cfg->uring.max_background_queue_depth,
+		.fg_queue_depth = cfg->uring.fg_queue_depth,
+		.bg_queue_depth = cfg->uring.bg_queue_depth,
+		.req_arg_len = req_arg_len,
+		.numa_node_id = numa_node_id,
 	};
 
 	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
@@ -469,12 +462,13 @@ fuse_create_user_ring(struct fuse_session *se,
 	int rc;
 	const size_t pg_size = getpagesize();
 	const size_t nr_queues = cfg->uring.per_core_queue ? get_nprocs() : 1;
-	const size_t q_depth = cfg->uring.queue_depth;
+	const size_t q_depth = cfg->uring.fg_queue_depth +
+			       cfg->uring.bg_queue_depth;
 
-	const size_t ring_data_buf_size = FUSE_RING_DATA_BUF_SIZE;
+	const size_t ring_req_arg_len = cfg->uring.ring_req_arg_len;
 
 	const size_t req_buf_size =
-		ROUND_UP(sizeof(struct fuse_ring_req) + ring_data_buf_size,
+		ROUND_UP(sizeof(struct fuse_ring_req) + ring_req_arg_len,
 			 pg_size);
 
 	size_t mmap_size = req_buf_size * q_depth;
@@ -495,7 +489,7 @@ fuse_create_user_ring(struct fuse_session *se,
 	fuse_ring->num_queues = nr_queues;
 	fuse_ring->queue_depth = q_depth;
 	fuse_ring->per_core_queue = cfg->uring.per_core_queue;
-	fuse_ring->req_buf_size = req_buf_size;
+	fuse_ring->req_arg_len = ring_req_arg_len;
 	fuse_ring->queue_size = queue_sz;
 	fuse_ring->queue_mmap_size = mmap_size;
 
@@ -507,25 +501,26 @@ fuse_create_user_ring(struct fuse_session *se,
 			fuse_uring_get_queue(fuse_ring, qid);
 		queue->fd = -1;
 		queue->ring.ring_fd = -1;
-		queue->numa_node = -1;
+		queue->numa_node = cfg->uring.per_core_queue ?
+			numa_node_of_cpu(qid) : UINT32_MAX;
 		queue->qid = -1;
 		queue->ring_pool = NULL;
 		queue->mmap_buf = NULL;
 	}
 
 	for (int qid = 0; qid < nr_queues; qid++) {
-			struct fuse_ring_queue *queue =
+		struct fuse_ring_queue *queue =
 				fuse_uring_get_queue(fuse_ring, qid);
 
 		rc = fuse_uring_configure_kernel_queue(se, cfg, qid, nr_queues,
-						       req_buf_size);
+						       ring_req_arg_len,
+						       queue->numa_node);
 		if (rc != 0) {
 			goto err;
 		}
 
 		queue->ring_pool = fuse_ring;
 		queue->qid = qid;
-		queue->numa_node = numa_node_of_cpu(qid);
 
 		/* XXX Any advantage in cloning the session? */
 		queue->fd = dup(se->fd);
@@ -632,8 +627,7 @@ static void *fuse_uring_thread(void *arg)
 
 		fuse_uring_sqe_prepare(sqe, req, FUSE_URING_REQ_FETCH);
 		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
-					    queue->qid, req->tag,
-					    queue->numa_node);
+					    queue->qid, req->tag);
 	}
 
 	res = io_uring_sq_ready(&queue->ring);
