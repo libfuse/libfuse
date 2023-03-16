@@ -986,17 +986,33 @@ struct fuse_notify_retrieve_in {
 	uint64_t	dummy4;
 };
 
-/* ioctl is a configuration command */
-#define FUSE_URING_IOCTL_FLAG_QUEUE_CFG		1UL << 0
+enum fuse_uring_ioctl_cmd {
+	/* not correctly initialized when set */
+	FUSE_URING_IOCTL_CMD_INVALID    = 0,
 
-/* wait in the kernel until the process gets terminated, to stop uring */
-#define FUSE_URING_IOCTL_FLAG_WAIT 		1UL << 1
+	/* The ioctl is a queue configuration command */
+	FUSE_URING_IOCTL_CMD_QUEUE_CFG = 1,
 
-/* explicit stop of the waiting process */
-#define FUSE_URING_IOCTL_FLAG_STOP		1UL << 2
+	/* Wait in the kernel until the process gets terminated, process
+	 * termination will wake up the waitq and initiate ring shutdown.
+	 * This avoids the need to run a check in intervals if ring termination
+	 * should be started (less cpu cycles) and also helps for faster ring
+	 * shutdown.*/
+	FUSE_URING_IOCTL_CMD_WAIT      = 2,
+
+	/* Daemon side wants to explicitly stop the waiter thread. This will
+	 * restart the interval termination checker. */
+	FUSE_URING_IOCTL_CMD_STOP      = 3,
+};
 
 struct fuse_uring_cfg {
-	uint64_t flags;
+	/* currently unused */
+	uint32_t flags;
+
+	/* configuration command */
+	uint16_t cmd;
+
+	uint16_t padding;
 
 	/* qid the config command is for */
 	uint32_t qid;
@@ -1142,8 +1158,8 @@ enum fuse_ring_req_cmd {
 	FUSE_RING_BUF_CMD_ERROR = 2,
 };
 
-/* background request type. Might be used by user space to handle the request
- * with a lower priority */
+/* Request is background type. Daemon side is free to use this information
+ * to handle foreground/background CQEs with different priorities. */
 #define FUSE_RING_REQ_FLAG_BACKGROUND 1 << 0
 
 /**

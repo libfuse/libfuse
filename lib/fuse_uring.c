@@ -351,7 +351,7 @@ fuse_uring_configure_kernel_queue(struct fuse_session *se,
 	int rc;
 
 	struct fuse_uring_cfg ioc_cfg = {
-		.flags = FUSE_URING_IOCTL_FLAG_QUEUE_CFG,
+		.cmd = FUSE_URING_IOCTL_CMD_QUEUE_CFG,
 		.qid = qid,
 		.nr_queues = nr_queues,
 		.fg_queue_depth = cfg->uring.fg_queue_depth,
@@ -410,7 +410,7 @@ fuse_ring_cleanup_thread(void *arg)
 	 * inside of the kernel without further action here
 	 */
 	struct fuse_uring_cfg ioc_cfg = {
-		.flags = FUSE_URING_IOCTL_FLAG_WAIT,
+		.cmd = FUSE_URING_IOCTL_CMD_WAIT,
 	};
 
 	while (!fuse_session_exited(se)) {
@@ -756,7 +756,7 @@ int fuse_session_stop_uring(struct fuse_session *se)
 	/* Wake up the waiting thread to let it stop uring within the kernel
 	 */
 	struct fuse_uring_cfg ioc_cfg = {
-		.flags = FUSE_URING_IOCTL_FLAG_STOP,
+		.cmd = FUSE_URING_IOCTL_CMD_STOP,
 	};
 
 	fuse_log(FUSE_LOG_ERR, "Sending flag stop\n");
