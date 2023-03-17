@@ -1288,8 +1288,6 @@ int main(int argc, char *argv[]) {
     // Don't apply umask, use modes exactly as specified
     umask(0);
 
-    fuse_daemonize(fs.foreground);
-
     // Mount and run main loop
     loop_config = fuse_loop_cfg_create();
 
@@ -1298,6 +1296,9 @@ int main(int argc, char *argv[]) {
 
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
+
+    fuse_daemonize(fs.foreground);
+
     if (options.count("single"))
         ret = fuse_session_loop(se);
     else
