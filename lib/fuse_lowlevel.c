@@ -2774,7 +2774,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG,
-			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			"dev unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
 			(unsigned long long) in->unique,
 			opname((enum fuse_opcode) in->opcode), in->opcode,
 			(unsigned long long) in->nodeid, buf->size, in->pid);
@@ -2886,7 +2886,7 @@ fuse_session_process_uring_cqe(struct fuse_session *se, struct fuse_req *req,
 
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG,
-			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			"cqe unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
 			(unsigned long long) in->unique,
 			opname((enum fuse_opcode) in->opcode), in->opcode,
 			(unsigned long long) in->nodeid, in_arg_len, in->pid);
