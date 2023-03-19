@@ -594,6 +594,14 @@ static struct mount_flags mount_flags[] = {
 	{"sync",    MS_SYNCHRONOUS, 1, 1},
 	{"atime",   MS_NOATIME,	    0, 1},
 	{"noatime", MS_NOATIME,	    1, 1},
+	{"diratime",        MS_NODIRATIME,  0, 1},
+	{"nodiratime",      MS_NODIRATIME,  1, 1},
+	{"lazytime",        MS_LAZYTIME,    1, 1},
+	{"nolazytime",      MS_LAZYTIME,    0, 1},
+	{"relatime",        MS_RELATIME,    1, 1},
+	{"norelatime",      MS_RELATIME,    0, 1},
+	{"strictatime",     MS_STRICTATIME, 1, 1},
+	{"nostrictatime",   MS_STRICTATIME, 0, 1},
 	{"dirsync", MS_DIRSYNC,	    1, 1},
 	{NULL,	    0,		    0, 0}
 };
