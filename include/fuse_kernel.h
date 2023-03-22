@@ -1060,11 +1060,13 @@ enum fuse_uring_ioctl_cmd {
 	 * termination will wake up the waitq and initiate ring shutdown.
 	 * This avoids the need to run a check in intervals if ring termination
 	 * should be started (less cpu cycles) and also helps for faster ring
-	 * shutdown.*/
+	 * shutdown.
+	 */
 	FUSE_URING_IOCTL_CMD_WAIT      = 2,
 
 	/* Daemon side wants to explicitly stop the waiter thread. This will
-	 * restart the interval termination checker. */
+	 * restart the interval termination checker.
+	 */
 	FUSE_URING_IOCTL_CMD_STOP      = 3,
 };
 
@@ -1222,8 +1224,9 @@ enum fuse_ring_req_cmd {
 };
 
 /* Request is background type. Daemon side is free to use this information
- * to handle foreground/background CQEs with different priorities. */
-#define FUSE_RING_REQ_FLAG_BACKGROUND 1 << 0
+ * to handle foreground/background CQEs with different priorities.
+ */
+#define FUSE_RING_REQ_FLAG_BACKGROUND (1ull << 0)
 
 /**
  * This structure mapped onto the
