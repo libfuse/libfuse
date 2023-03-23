@@ -160,5 +160,5 @@ endif()
 
 configure_file (
     "${PROJECT_SOURCE_DIR}/config.h.in"
-    "${PROJECT_BINARY_DIR}/fuse_config.h"
+    "${PROJECT_BINARY_DIR}/libfuse_config.h"
 )
