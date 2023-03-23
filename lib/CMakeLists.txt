@@ -48,7 +48,7 @@ endif()
 set(BINDIR "bindir" CACHE STRING "mount path subdirectory default: [bindir]")
 set(FUSERMOUNT_DIR "${CMAKE_INSTALL_PREFIX}/${BINDIR}" CACHE STRING "The mount path (not exactly sure what this is)" )
 
-target_compile_definitions(fuse3 PUBLIC FUSE_USE_VERSION=35
+target_compile_definitions(fuse3 PUBLIC FUSE_USE_VERSION=312
                                         FUSERMOUNT_DIR=\"${FUSERMOUNT_DIR}\"
                                         PACKAGE_VERSION=\"${CMAKE_PROJECT_VERSION}\")
 # Should be changed to target_link_options (requires 3.13.X)
