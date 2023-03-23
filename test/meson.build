@@ -15,7 +15,7 @@ td += executable('readdir_inode', 'readdir_inode.c',
                  install: false)
 
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
-                 'util.py', 'test_ctests.py' ]
+                 'util.py', 'test_ctests.py', 'test_custom_io.py' ]
 td += custom_target('test_scripts', input: test_scripts,
                       output: test_scripts, build_by_default: true,
                       command: ['cp', '-fPp',

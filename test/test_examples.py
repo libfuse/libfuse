@@ -198,6 +198,8 @@ def test_passthrough_hp(short_tmpdir, cache, output_checker):
               [ pjoin(basename, 'example', 'passthrough_hp'),
                 src_dir, mnt_dir ]
 
+    cmdline.append('--foreground')
+
     if not cache:
         cmdline.append('--nocache')
         
@@ -332,8 +334,9 @@ def test_null(tmpdir, output_checker):
 
 @pytest.mark.skipif(fuse_proto < (7,12),
                     reason='not supported by running kernel')
+@pytest.mark.parametrize("only_expire", ("invalidate_entries", "expire_entries"))
 @pytest.mark.parametrize("notify", (True, False))
-def test_notify_inval_entry(tmpdir, notify, output_checker):
+def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'notify_inval_entry'),
@@ -341,6 +344,8 @@ def test_notify_inval_entry(tmpdir, notify, output_checker):
                 '--timeout=5', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
+    if only_expire == "expire_entries":
+        cmdline.append('--only-expire')
     mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
                                      stderr=output_checker.fd)
     try:

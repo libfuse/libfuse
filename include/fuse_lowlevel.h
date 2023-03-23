@@ -127,6 +127,26 @@ struct fuse_forget_data {
 	uint64_t nlookup;
 };
 
+struct fuse_custom_io {
+	ssize_t (*writev)(int fd, struct iovec *iov, int count, void *userdata);
+	ssize_t (*read)(int fd, void *buf, size_t buf_len, void *userdata);
+	ssize_t (*splice_receive)(int fdin, off_t *offin, int fdout,
+					  off_t *offout, size_t len,
+				  	  unsigned int flags, void *userdata);
+	ssize_t (*splice_send)(int fdin, off_t *offin, int fdout,
+				     off_t *offout, size_t len,
+			           unsigned int flags, void *userdata);
+};
+
+/**
+ * Flags for fuse_lowlevel_notify_expire_entry()
+ * 0 = invalidate entry
+ * FUSE_LL_EXPIRE_ONLY = expire entry
+*/
+enum fuse_expire_flags {
+	FUSE_LL_EXPIRE_ONLY	= (1 << 0),
+};
+
 /* 'to_set' flags in setattr */
 #define FUSE_SET_ATTR_MODE	(1 << 0)
 #define FUSE_SET_ATTR_UID	(1 << 1)
@@ -136,7 +156,15 @@ struct fuse_forget_data {
 #define FUSE_SET_ATTR_MTIME	(1 << 5)
 #define FUSE_SET_ATTR_ATIME_NOW	(1 << 7)
 #define FUSE_SET_ATTR_MTIME_NOW	(1 << 8)
+#define FUSE_SET_ATTR_FORCE	(1 << 9)
 #define FUSE_SET_ATTR_CTIME	(1 << 10)
+#define FUSE_SET_ATTR_KILL_SUID	(1 << 11)
+#define FUSE_SET_ATTR_KILL_SGID	(1 << 12)
+#define FUSE_SET_ATTR_FILE	(1 << 13)
+#define FUSE_SET_ATTR_KILL_PRIV	(1 << 14)
+#define FUSE_SET_ATTR_OPEN	(1 << 15)
+#define FUSE_SET_ATTR_TIMES_SET	(1 << 16)
+#define FUSE_SET_ATTR_TOUCH	(1 << 17)
 
 /* ----------------------------------------------------------- *
  * Request methods and replies				       *
@@ -1676,6 +1704,37 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen);
 
 /**
+ * Notify to expire or invalidate parent attributes and the dentry 
+ * matching parent/name
+ * 
+ * Underlying function for fuse_lowlevel_notify_inval_entry().
+ * 
+ * In addition to invalidating an entry, it also allows to expire an entry.
+ * In that case, the entry is not forcefully removed from kernel cache 
+ * but instead the next access to it forces a lookup from the filesystem.
+ * 
+ * This makes a difference for overmounted dentries, where plain invalidation
+ * would detach all submounts before dropping the dentry from the cache. 
+ * If only expiry is set on the dentry, then any overmounts are left alone and
+ * until ->d_revalidate() is called.
+ * 
+ * Note: ->d_revalidate() is not called for the case of following a submount,
+ * so invalidation will only be triggered for the non-overmounted case.
+ * The dentry could also be mounted in a different mount instance, in which case
+ * any submounts will still be detached.
+ *
+ * @param se the session object
+ * @param parent inode number
+ * @param name file name
+ * @param namelen strlen() of file name
+ * @param flags flags to control if the entry should be expired or invalidated
+ * @return zero for success, -errno for failure
+*/
+int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
+                                      const char *name, size_t namelen,
+                                      enum fuse_expire_flags flags);
+
+/**
  * This function behaves like fuse_lowlevel_notify_inval_entry() with
  * the following additional effect (at least as of Linux kernel 4.8):
  *
@@ -1868,6 +1927,11 @@ void fuse_cmdline_help(void);
  * Filesystem setup & teardown                                 *
  * ----------------------------------------------------------- */
 
+/**
+ * Note: Any addition to this struct needs to create a compatibility symbol
+ *       for fuse_parse_cmdline(). For ABI compatibility reasons it is also
+ *       not possible to remove struct members.
+ */
 struct fuse_cmdline_opts {
 	int singlethread;
 	int foreground;
@@ -1877,7 +1941,11 @@ struct fuse_cmdline_opts {
 	int show_version;
 	int show_help;
 	int clone_fd;
-	unsigned int max_idle_threads;
+	unsigned int max_idle_threads; /* discouraged, due to thread
+	                                * destruct overhead */
+
+	/* Added in libfuse-3.12 */
+	unsigned int max_threads;
 };
 
 /**
@@ -1898,8 +1966,20 @@ struct fuse_cmdline_opts {
  * @param opts output argument for parsed options
  * @return 0 on success, -1 on failure
  */
+#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
 int fuse_parse_cmdline(struct fuse_args *args,
 		       struct fuse_cmdline_opts *opts);
+#else
+#if FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
+int fuse_parse_cmdline_30(struct fuse_args *args,
+			   struct fuse_cmdline_opts *opts);
+#define fuse_parse_cmdline(args, opts) fuse_parse_cmdline_30(args, opts)
+#else
+int fuse_parse_cmdline_312(struct fuse_args *args,
+			   struct fuse_cmdline_opts *opts);
+#define fuse_parse_cmdline(args, opts) fuse_parse_cmdline_312(args, opts)
+#endif
+#endif
 
 /**
  * Create a low level session.
@@ -1932,6 +2012,36 @@ int fuse_parse_cmdline(struct fuse_args *args,
 struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      const struct fuse_lowlevel_ops *op,
 				      size_t op_size, void *userdata);
+
+/**
+ * Set a file descriptor for the session.
+ *
+ * This function can be used if you want to have a custom communication
+ * interface instead of using a mountpoint. In practice, this means that instead
+ * of calling fuse_session_mount() and fuse_session_unmount(), one could call
+ * fuse_session_custom_io() where fuse_session_mount() would have otherwise been
+ * called.
+ *
+ * In `io`, implementations for read and writev MUST be provided. Otherwise -1
+ * will be returned and `fd` will not be used. Implementations for `splice_send`
+ * and `splice_receive` are optional. If they are not provided splice will not
+ * be used for send or receive respectively.
+ *
+ * The provided file descriptor `fd` will be closed when fuse_session_destroy()
+ * is called.
+ *
+ * @param se session object
+ * @param io Custom io to use when retrieving/sending requests/responses
+ * @param fd file descriptor for the session
+ *
+ * @return 0  on success
+ * @return -EINVAL if `io`, `io->read` or `ìo->writev` are NULL
+ * @return -EBADF  if `fd` was smaller than 0
+ * @return -errno  if failed to allocate memory to store `io`
+ *
+ **/
+int fuse_session_custom_io(struct fuse_session *se,
+				   const struct fuse_custom_io *io, int fd);
 
 /**
  * Mount a FUSE file system.
@@ -1968,26 +2078,29 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
 int fuse_session_loop(struct fuse_session *se);
 
 #if FUSE_USE_VERSION < 32
-int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
-#define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
+	int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
+	#define fuse_session_loop_mt(se, clone_fd) fuse_session_loop_mt_31(se, clone_fd)
+#elif FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
+	int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
+	#define fuse_session_loop_mt(se, config) fuse_session_loop_mt_32(se, config)
 #else
-#if (!defined(__UCLIBC__) && !defined(__APPLE__))
-/**
- * Enter a multi-threaded event loop.
- *
- * For a description of the return value and the conditions when the
- * event loop exits, refer to the documentation of
- * fuse_session_loop().
- *
- * @param se the session
- * @param config session loop configuration 
- * @return see fuse_session_loop()
- */
-int fuse_session_loop_mt(struct fuse_session *se, struct fuse_loop_config *config);
-#else
-int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
-#define fuse_session_loop_mt(se, config) fuse_session_loop_mt_32(se, config)
-#endif
+	#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
+		/**
+		 * Enter a multi-threaded event loop.
+		 *
+		 * For a description of the return value and the conditions when the
+		 * event loop exits, refer to the documentation of
+		 * fuse_session_loop().
+		 *
+		 * @param se the session
+		 * @param config session loop configuration
+		 * @return see fuse_session_loop()
+		 */
+		int fuse_session_loop_mt(struct fuse_session *se, struct fuse_loop_config *config);
+	#else
+		int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *config);
+		#define fuse_session_loop_mt(se, config) fuse_session_loop_mt_312(se, config)
+	#endif
 #endif
 
 /**

@@ -8,7 +8,7 @@
   See the file COPYING.LIB.
 */
 
-#include "config.h"
+#include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_misc.h"
 #include "fuse_opt.h"
@@ -97,6 +97,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("rootcontext=",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("max_read=",		KEY_KERN_OPT),
 	FUSE_OPT_KEY("user=",			KEY_MTAB_OPT),
+	FUSE_OPT_KEY("-n",			KEY_MTAB_OPT),
 	FUSE_OPT_KEY("-r",			KEY_RO),
 	FUSE_OPT_KEY("ro",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("rw",			KEY_KERN_FLAG),
@@ -111,6 +112,14 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("dirsync",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("atime",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("diratime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("nodiratime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("lazytime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("nolazytime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("relatime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("norelatime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("strictatime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("nostrictatime",		KEY_KERN_FLAG),
 	FUSE_OPT_END
 };
 
@@ -150,6 +159,14 @@ static const struct mount_flags mount_flags[] = {
 	{"sync",    MS_SYNCHRONOUS, 1},
 	{"atime",   MS_NOATIME,	    0},
 	{"noatime", MS_NOATIME,	    1},
+	{"diratime",	    MS_NODIRATIME,	0},
+	{"nodiratime",	    MS_NODIRATIME,	1},
+	{"lazytime",	    MS_LAZYTIME,	1},
+	{"nolazytime",	    MS_LAZYTIME,	0},
+	{"relatime",	    MS_RELATIME,	1},
+	{"norelatime",	    MS_RELATIME,	0},
+	{"strictatime",	    MS_STRICTATIME,	1},
+	{"nostrictatime",   MS_STRICTATIME,	0},
 #ifndef __NetBSD__
 	{"dirsync", MS_DIRSYNC,	    1},
 #endif

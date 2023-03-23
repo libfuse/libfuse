@@ -1,0 +1,26 @@
+name: 'Build & Test'
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  build:
+    runs-on: '${{ matrix.os }}'
+    strategy:
+      matrix:
+        os:
+          # 18.04 does not work because of ‘no_sanitize’ attribute
+          # cc1: all warnings being treated as errors
+          # - ubuntu-18.04
+          - ubuntu-latest
+    steps:
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 libstdc++-10-dev libstdc++-9-dev ninja-build python3-pip python3-setuptools valgrind
+      - uses: actions/checkout@v3
+      - run: test/ci-install.sh
+      - run: test/ci-build.sh
+

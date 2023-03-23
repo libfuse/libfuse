@@ -13,7 +13,7 @@
     #define _GNU_SOURCE
 #endif
 
-#include "config.h"
+#include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_kernel.h"
 #include "fuse_opt.h"
@@ -188,8 +188,15 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 		}
 	}
 
-	ssize_t res = writev(ch ? ch->fd : se->fd,
-			     iov, count);
+	ssize_t res;
+	if (se->io != NULL)
+		/* se->io->writev is never NULL if se->io is not NULL as
+		specified by fuse_session_custom_io()*/
+		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
+					   se->userdata);
+	else
+		res = writev(ch ? ch->fd : se->fd, iov, count);
+
 	int err = errno;
 
 	if (res == -1) {
@@ -400,6 +407,8 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_NONSEEKABLE;
 	if (f->noflush)
 		arg->open_flags |= FOPEN_NOFLUSH;
+	if (f->parallel_direct_writes)
+		arg->open_flags |= FOPEN_PARALLEL_DIRECT_WRITES;
 }
 
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
@@ -819,8 +828,14 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	    (se->conn.want & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
-	res = splice(llp->pipe[0], NULL, ch ? ch->fd : se->fd,
-		     NULL, out->len, splice_flags);
+	if (se->io != NULL && se->io->splice_send != NULL) {
+		res = se->io->splice_send(llp->pipe[0], NULL,
+						  ch ? ch->fd : se->fd, NULL, out->len,
+					  	  splice_flags, se->userdata);
+	} else {
+		res = splice(llp->pipe[0], NULL, ch ? ch->fd : se->fd, NULL,
+			       out->len, splice_flags);
+	}
 	if (res == -1) {
 		res = -errno;
 		perror("fuse: splice from pipe");
@@ -1175,6 +1190,8 @@ static void do_setattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			FUSE_SET_ATTR_SIZE	|
 			FUSE_SET_ATTR_ATIME	|
 			FUSE_SET_ATTR_MTIME	|
+			FUSE_SET_ATTR_KILL_SUID |
+			FUSE_SET_ATTR_KILL_SGID |
 			FUSE_SET_ATTR_ATIME_NOW	|
 			FUSE_SET_ATTR_MTIME_NOW |
 			FUSE_SET_ATTR_CTIME;
@@ -1764,7 +1781,9 @@ static struct fuse_req *check_interrupt(struct fuse_session *se,
 		if (curr->u.i.unique == req->unique) {
 			req->interrupted = 1;
 			list_del_req(curr);
-			free(curr);
+			fuse_chan_put(curr->ch);
+			curr->ch = NULL;
+			destroy_req(curr);
 			return NULL;
 		}
 	}
@@ -1991,6 +2010,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 				bufsize = max_bufsize;
 			}
 		}
+		if (arg->minor >= 38)
+			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -1998,9 +2019,13 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->conn.proto_minor >= 14) {
 #ifdef HAVE_SPLICE
 #ifdef HAVE_VMSPLICE
-		se->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
+		if ((se->io == NULL) || (se->io->splice_send != NULL)) {
+			se->conn.capable |= FUSE_CAP_SPLICE_WRITE | FUSE_CAP_SPLICE_MOVE;
+		}
 #endif
-		se->conn.capable |= FUSE_CAP_SPLICE_READ;
+		if ((se->io == NULL) || (se->io->splice_receive != NULL)) {
+			se->conn.capable |= FUSE_CAP_SPLICE_READ;
+		}
 #endif
 	}
 	if (se->conn.proto_minor >= 18)
@@ -2268,8 +2293,9 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	return send_notify_iov(se, FUSE_NOTIFY_INVAL_INODE, iov, 2);
 }
 
-int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
-				     const char *name, size_t namelen)
+int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
+				      const char *name, size_t namelen,
+				      enum fuse_expire_flags flags)
 {
 	struct fuse_notify_inval_entry_out outarg;
 	struct iovec iov[3];
@@ -2282,7 +2308,9 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 	outarg.parent = parent;
 	outarg.namelen = namelen;
-	outarg.padding = 0;
+	outarg.flags = 0;
+	if (flags & FUSE_LL_EXPIRE_ONLY)
+		outarg.flags |= FUSE_EXPIRE_ONLY;
 
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
@@ -2291,6 +2319,13 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 	return send_notify_iov(se, FUSE_NOTIFY_INVAL_ENTRY, iov, 3);
 }
+
+int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
+				     const char *name, size_t namelen)
+{
+	return fuse_lowlevel_notify_expire_entry(se, parent, name, namelen, 0);
+}
+
 
 int fuse_lowlevel_notify_delete(struct fuse_session *se,
 				fuse_ino_t parent, fuse_ino_t child,
@@ -2743,6 +2778,8 @@ void fuse_session_destroy(struct fuse_session *se)
 	free(se->cuse_data);
 	if (se->fd != -1)
 		close(se->fd);
+	if (se->io != NULL)
+		free(se->io);
 	destroy_mount_opts(se->mo);
 	free(se);
 }
@@ -2792,8 +2829,14 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 			goto fallback;
 	}
 
-	res = splice(ch ? ch->fd : se->fd,
-		     NULL, llp->pipe[1], NULL, bufsize, 0);
+	if (se->io != NULL && se->io->splice_receive != NULL) {
+		res = se->io->splice_receive(ch ? ch->fd : se->fd, NULL,
+						     llp->pipe[1], NULL, bufsize, 0,
+						     se->userdata);
+	} else {
+		res = splice(ch ? ch->fd : se->fd, NULL, llp->pipe[1], NULL,
+				 bufsize, 0);
+	}
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -2879,7 +2922,14 @@ fallback:
 	}
 
 restart:
-	res = read(ch ? ch->fd : se->fd, buf->mem, se->bufsize);
+	if (se->io != NULL) {
+		/* se->io->read is never NULL if se->io is not NULL as
+		specified by fuse_session_custom_io()*/
+		res = se->io->read(ch ? ch->fd : se->fd, buf->mem, se->bufsize,
+					 se->userdata);
+	} else {
+		res = read(ch ? ch->fd : se->fd, buf->mem, se->bufsize);
+	}
 	err = errno;
 
 	if (fuse_session_exited(se))
@@ -3007,6 +3057,40 @@ out2:
 	free(se);
 out1:
 	return NULL;
+}
+
+int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io *io,
+			   int fd)
+{
+	if (fd < 0) {
+		fuse_log(FUSE_LOG_ERR, "Invalid file descriptor value %d passed to "
+			"fuse_session_custom_io()\n", fd);
+		return -EBADF;
+	}
+	if (io == NULL) {
+		fuse_log(FUSE_LOG_ERR, "No custom IO passed to "
+			"fuse_session_custom_io()\n");
+		return -EINVAL;
+	} else if (io->read == NULL || io->writev == NULL) {
+		/* If the user provides their own file descriptor, we can't
+		guarantee that the default behavior of the io operations made
+		in libfuse will function properly. Therefore, we enforce the
+		user to implement these io operations when using custom io. */
+		fuse_log(FUSE_LOG_ERR, "io passed to fuse_session_custom_io() must "
+			"implement both io->read() and io->writev\n");
+		return -EINVAL;
+	}
+
+	se->io = malloc(sizeof(struct fuse_custom_io));
+	if (se->io == NULL) {
+		fuse_log(FUSE_LOG_ERR, "Failed to allocate memory for custom io. "
+			"Error: %s\n", strerror(errno));
+		return -errno;
+	}
+
+	se->fd = fd;
+	*se->io = *io;
+	return 0;
 }
 
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)

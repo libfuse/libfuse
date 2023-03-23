@@ -39,6 +39,7 @@ FUSE_3.0 {
 		fuse_session_new;
 		fuse_main_real;
 		fuse_mount;
+		fuse_session_custom_io;
 		fuse_session_mount;
 		fuse_new;
 		fuse_opt_insert_arg;
@@ -139,6 +140,7 @@ FUSE_3.1 {
 	        fuse_lib_help;
 		fuse_invalidate_path;
 		fuse_new_30;
+		fuse_new_31;
 		fuse_new;
                 fuse_mnt_resolve_path;
                 fuse_mnt_add_mount;
@@ -170,6 +172,25 @@ FUSE_3.7 {
 	global:
 		fuse_set_log_func;
 		fuse_log;
+} FUSE_3.4;
+
+FUSE_3.12 {
+	global:
+		fuse_session_loop_mt;
+		fuse_session_loop_mt_312;
+		fuse_loop_mt;
+		fuse_loop_mt_32;
+		fuse_loop_mt_312;
+		fuse_loop_cfg_create;
+		fuse_loop_cfg_destroy;
+		fuse_loop_cfg_set_idle_threads;
+		fuse_loop_cfg_set_max_threads;
+		fuse_loop_cfg_set_clone_fd;
+		fuse_loop_cfg_convert;
+		fuse_parse_cmdline;
+		fuse_parse_cmdline_30;
+		fuse_parse_cmdline_312;
+		fuse_lowlevel_notify_expire_entry;
 } FUSE_3.4;
 
 # Local Variables:

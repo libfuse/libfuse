@@ -6,7 +6,7 @@
   See the file COPYING.LIB
 */
 
-#include "config.h"
+#include <fuse_config.h>
 
 #include <fuse.h>
 #include <stdio.h>

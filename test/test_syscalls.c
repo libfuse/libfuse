@@ -1,7 +1,7 @@
 #ifndef _GNU_SOURCE
     #define _GNU_SOURCE
 #endif
-#include "config.h"
+#include "fuse_config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,7 +96,7 @@ static void success(void)
 
 static void __start_test(const char *fmt, ...)
 {
-	int n;
+	unsigned int n;
 	va_list ap;
 	n = sprintf(testname, "%3i [", testnum);
 	va_start(ap, fmt);

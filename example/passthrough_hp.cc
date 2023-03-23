@@ -43,17 +43,7 @@
  * \include passthrough_hp.cc
  */
 
-
-#ifdef FUSE_USE_VERSION
-    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
-    #undef FUSE_USE_VERSION
-#endif
-
-#define FUSE_USE_VERSION 35
-
-#ifdef HAVE_CONFIG_H
-    #include "config.h"
-#endif
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #ifndef _GNU_SOURCE
     #define _GNU_SOURCE
@@ -87,6 +77,9 @@
 #include <iomanip>
 
 using namespace std;
+
+#define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
+#define SFS_DEFAULT_CLONE_FD "0"
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
    sfs_dirp` elements as inodes and file handles. This means that we
@@ -155,11 +148,15 @@ struct Fs {
     Inode root;
     double timeout;
     bool debug;
+    bool debug_fuse;
+    bool foreground;
     std::string source;
     size_t blocksize;
     dev_t src_dev;
     bool nosplice;
     bool nocache;
+    size_t num_threads;
+    bool clone_fd;
 };
 static Fs fs{};
 
@@ -694,7 +691,7 @@ static bool is_dot_or_dotdot(const char *name) {
 
 
 static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-                    off_t offset, fuse_file_info *fi, int plus) {
+                    off_t offset, fuse_file_info *fi, const int plus) {
     auto d = get_dir_handle(fi);
     Inode& inode = get_inode(ino);
     lock_guard<mutex> g {inode.m};
@@ -739,28 +736,21 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
         fuse_entry_param e{};
         size_t entsize;
-        if(plus) {
+        if (plus) {
             err = do_lookup(ino, entry->d_name, &e);
             if (err)
                 goto error;
             entsize = fuse_add_direntry_plus(req, p, rem, entry->d_name, &e, entry->d_off);
-
-            if (entsize > rem) {
-                if (fs.debug)
-                    cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
-                forget_one(e.ino, 1);
-                break;
-            }
         } else {
             e.attr.st_ino = entry->d_ino;
             e.attr.st_mode = entry->d_type << 12;
             entsize = fuse_add_direntry(req, p, rem, entry->d_name, &e.attr, entry->d_off);
+        }
 
-            if (entsize > rem) {
-                if (fs.debug)
-                    cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
-                break;
-            }
+        if (entsize > rem) {
+            if (fs.debug)
+                cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
+            break;
         }
 
         p += entsize;
@@ -1182,10 +1172,16 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     opt_parser.add_options()
         ("debug", "Enable filesystem debug messages")
         ("debug-fuse", "Enable libfuse debug messages")
+        ("foreground", "Run in foreground")
         ("help", "Print help")
         ("nocache", "Disable all caching")
         ("nosplice", "Do not use splice(2) to transfer data")
-        ("single", "Run single-threaded");
+        ("single", "Run single-threaded")
+        ("num-threads", "Number of libfuse worker threads",
+                        cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
+        ("clone-fd", "use separate fuse device fd for each thread",
+                        cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD));
+
 
     // FIXME: Find a better way to limit the try clause to just
     // opt_parser.parse() (cf. https://github.com/jarro2783/cxxopts/issues/146)
@@ -1207,7 +1203,15 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     }
 
     fs.debug = options.count("debug") != 0;
+    fs.debug_fuse = options.count("debug-fuse") != 0;
+
+    fs.foreground = options.count("foreground") != 0;
+    if (fs.debug || fs.debug_fuse)
+        fs.foreground = true;
+
     fs.nosplice = options.count("nosplice") != 0;
+    fs.num_threads = options["num-threads"].as<int>();
+    fs.clone_fd = options["clone-fd"].as<bool>();
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
         warn("WARNING: realpath() failed with");
@@ -1231,11 +1235,14 @@ static void maximize_fd_limit() {
         warn("WARNING: setrlimit() failed with");
 }
 
-int main(int argc, char *argv[])
-{
+
+int main(int argc, char *argv[]) {
+
+    struct fuse_loop_config *loop_config = NULL;
 
     // Parse command line options
     auto options {parse_options(argc, argv)};
+
 
     // We need an fd for every dentry in our the filesystem that the
     // kernel knows about. This is way more than most processes need,
@@ -1264,7 +1271,7 @@ int main(int argc, char *argv[])
     if (fuse_opt_add_arg(&args, argv[0]) ||
         fuse_opt_add_arg(&args, "-o") ||
         fuse_opt_add_arg(&args, "default_permissions,fsname=hpps") ||
-        (options.count("debug-fuse") && fuse_opt_add_arg(&args, "-odebug")))
+        (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory");
 
     fuse_lowlevel_ops sfs_oper {};
@@ -1279,16 +1286,21 @@ int main(int argc, char *argv[])
     // Don't apply umask, use modes exactly as specified
     umask(0);
 
+    fuse_daemonize(fs.foreground);
+
     // Mount and run main loop
-    struct fuse_loop_config loop_config;
-    loop_config.clone_fd = 0;
-    loop_config.max_idle_threads = 10;
+    loop_config = fuse_loop_cfg_create();
+
+    if (fs.num_threads != -1)
+        fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
+
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
     if (options.count("single"))
         ret = fuse_session_loop(se);
     else
-        ret = fuse_session_loop_mt(se, &loop_config);
+        ret = fuse_session_loop_mt(se, loop_config);
+
 
     fuse_session_unmount(se);
 
@@ -1297,14 +1309,10 @@ err_out3:
 err_out2:
     fuse_session_destroy(se);
 err_out1:
+
+    fuse_loop_cfg_destroy(loop_config);
     fuse_opt_free_args(&args);
 
     return ret ? 1 : 0;
 }
 
-
-#ifdef ORIG_FUSE_USE_VERSION
-    #undef FUSE_USE_VERSION
-    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
-    #undef ORIG_FUSE_USE_VERSION
-#endif

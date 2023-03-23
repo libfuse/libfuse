@@ -11,8 +11,8 @@
  * This example implements a file system with a single file whose
  * file name changes dynamically to reflect the current time.
  *
- * It illustrates the use of the fuse_lowlevel_notify_inval_entry()
- * function.
+ * It illustrates the use of the fuse_lowlevel_notify_inval_entry() and
+ * fuse_lowlevel_notify_expire_entry() functions.
  *
  * To see the effect, first start the file system with the
  * ``--no-notify``
@@ -64,6 +64,9 @@
  *     $ sleep 1; stat mnt/$file
  *     stat: cannot stat ‘mnt/Time_is_20h_42m_11s’: No such file or directory
  *
+ * To use the function fuse_lowlevel_notify_expire_entry() instead of
+ * fuse_lowlevel_notify_inval_entry(), use the command line option --only-expire
+ *
  * ## Compilation ##
  *
  *     gcc -Wall notify_inval_entry.c `pkg-config fuse3 --cflags --libs` -o notify_inval_entry
@@ -100,11 +103,13 @@ struct options {
     int no_notify;
     float timeout;
     int update_interval;
+    int only_expire;
 };
 static struct options options = {
     .timeout = 5,
     .no_notify = 0,
     .update_interval = 1,
+    .only_expire = 0,
 };
 
 #define OPTION(t, p)                           \
@@ -113,6 +118,7 @@ static const struct fuse_opt option_spec[] = {
     OPTION("--no-notify", no_notify),
     OPTION("--update-interval=%d", update_interval),
     OPTION("--timeout=%f", timeout),
+    OPTION("--only-expire", only_expire),
     FUSE_OPT_END
 };
 
@@ -254,9 +260,15 @@ static void* update_fs_loop(void *data) {
     while(1) {
         old_name = strdup(file_name);
         update_fs();
-        if (!options.no_notify && lookup_cnt)
-            assert(fuse_lowlevel_notify_inval_entry
-                   (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
+        if (!options.no_notify && lookup_cnt) {
+            if(options.only_expire) {
+                assert(fuse_lowlevel_notify_expire_entry
+                   (se, FUSE_ROOT_ID, old_name, strlen(old_name), FUSE_LL_EXPIRE_ONLY) == 0);
+            } else {
+                assert(fuse_lowlevel_notify_inval_entry
+                      (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
+            }
+        }
         free(old_name);
         sleep(options.update_interval);
     }
@@ -270,6 +282,7 @@ static void show_help(const char *progname)
                "    --timeout=<secs>       Timeout for kernel caches\n"
                "    --update-interval=<secs>  Update-rate of file system contents\n"
                "    --no-notify            Disable kernel notifications\n"
+               "    --only-expire            Expire entries instead of invalidating them\n"
                "\n");
 }
 

@@ -45,6 +45,7 @@ struct fuse_session {
 	char *mountpoint;
 	volatile int exited;
 	int fd;
+	struct fuse_custom_io *io;
 	struct mount_opts *mo;
 	int debug;
 	int deny_others;
@@ -87,6 +88,57 @@ struct fuse_module {
 	int ctr;
 };
 
+/**
+ * Configuration parameters passed to fuse_session_loop_mt() and
+ * fuse_loop_mt().
+ *
+ * Internal API to avoid exposing the plain data structure and
+ * causing compat issues after adding or removing struct members.
+ *
+ */
+#if FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 12)
+struct fuse_loop_config
+{
+	/* verififier that a correct struct was was passed. This is especially
+	 * needed, as versions below (3, 12) were using a public struct
+	 * (now called  fuse_loop_config_v1), which was hard to extend with
+	 * additional parameters, without risking that file system implementations
+	 * would not have noticed and might either pass uninitialized members
+	 * or even too small structs.
+	 * fuse_loop_config_v1 has clone_fd at this offset, which should be either 0
+	 * or 1. v2 or even higher version just need to set a value here
+	 * which not conflicting and very unlikely as having been set by
+	 * file system implementation.
+	 */
+	int version_id;
+
+	/**
+	 * whether to use separate device fds for each thread
+	 * (may increase performance)
+	 */
+	int clone_fd;
+	/**
+	 * The maximum number of available worker threads before they
+	 * start to get deleted when they become idle. If not
+	 * specified, the default is 10.
+	 *
+	 * Adjusting this has performance implications; a very small number
+	 * of threads in the pool will cause a lot of thread creation and
+	 * deletion overhead and performance may suffer. When set to 0, a new
+	 * thread will be created to service every operation.
+	 * The special value of -1 means that this parameter is disabled.
+	 */
+	int max_idle_threads;
+
+	/**
+	 *  max number of threads taking and processing kernel requests
+	 *
+	 *  As of now threads are created dynamically
+	 */
+	unsigned int max_threads;
+};
+#endif
+
 /* ----------------------------------------------------------- *
  * Channel interface (when using -o clone_fd)		       *
  * ----------------------------------------------------------- */
@@ -128,8 +180,16 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 
 struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
 		      size_t op_size, void *private_data);
-int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
-int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config *config);
+int fuse_loop_mt_312(struct fuse *f, struct fuse_loop_config *config);
+int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *config);
+
+/**
+ * Internal verifier for the given config.
+ *
+ * @return negative standard error code or 0 on success
+ */
+int fuse_loop_cfg_verify(struct fuse_loop_config *config);
+
 
 #define FUSE_MAX_MAX_PAGES 256
 #define FUSE_DEFAULT_MAX_PAGES_PER_REQ 32

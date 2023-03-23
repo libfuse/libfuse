@@ -44,8 +44,6 @@
 
 #define FUSE_USE_VERSION 34
 
-#include "config.h"
-
 #include <fuse_lowlevel.h>
 #include <unistd.h>
 #include <stdlib.h>
