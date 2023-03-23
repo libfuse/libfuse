@@ -391,9 +391,12 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 
 		for (int tag = 0; tag < fuse_ring->queue_depth; tag++) {
 			struct fuse_ring_ent *req = &queue->ent[tag];
-			req->ring_req = 0;
+			req->ring_req = NULL;
 		}
-		munmap(queue->mmap_buf, fuse_ring->queue_mmap_size);
+
+		if (queue->mmap_buf != NULL)
+			munmap(queue->mmap_buf, fuse_ring->queue_mmap_size);
+
 	}
 
 	free(fuse_ring->queues);
