@@ -142,10 +142,12 @@ FUSE_3.1 {
 		fuse_new_30;
 		fuse_new_31;
 		fuse_new;
-                fuse_mnt_resolve_path;
-                fuse_mnt_add_mount;
-                fuse_mnt_check_fuseblk;
-                fuse_mnt_umount;
+		fuse_mnt_resolve_path;
+        fuse_mnt_add_mount;
+        fuse_mnt_check_fuseblk;
+        fuse_mnt_umount;
+
+
 } FUSE_3.0;
 
 FUSE_3.2 {

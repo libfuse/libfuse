@@ -76,6 +76,7 @@ check_function_exists("posix_fallocate" HAVE_POSIX_FALLOCATE)
 check_function_exists("fdatasync"       HAVE_FDATASYNC)
 check_function_exists("utimensat"       HAVE_UTIMENSAT)
 check_function_exists("copy_file_range" HAVE_COPY_FILE_RANGE)
+check_function_exists("fallocate"       HAVE_FALLOCATE)
 
 # For some reason the meson build checks these seperatly
 check_symbol_exists("setxattr" "sys/xattr.h" HAVE_SETXATTR)
@@ -160,5 +161,5 @@ endif()
 
 configure_file (
     "${PROJECT_SOURCE_DIR}/config.h.in"
-    "${PROJECT_BINARY_DIR}/libfuse_config.h"
+    "${PROJECT_BINARY_DIR}/fuse_config.h"
 )

@@ -43,6 +43,10 @@
  * \include passthrough_hp.cc
  */
 
+#ifdef FUSE_USE_VERSION
+    #define ORIG_FUSE_USE_VERSION FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+#endif
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #ifndef _GNU_SOURCE
@@ -750,6 +754,8 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         if (entsize > rem) {
             if (fs.debug)
                 cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
+            if (plus)
+                forget_one(e.ino, 1);
             break;
         }
 
@@ -1316,3 +1322,8 @@ err_out1:
     return ret ? 1 : 0;
 }
 
+#ifdef ORIG_FUSE_USE_VERSION
+    #undef FUSE_USE_VERSION
+    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
+    #undef ORIG_FUSE_USE_VERSION
+#endif

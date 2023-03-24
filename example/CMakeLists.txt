@@ -9,8 +9,10 @@ if( DEFINED NDEBUG )
         message(WARNING "NDEBUG is defined, you will almost definitely experience problems")
 endif()
 
-set(EXAMPLES passthrough passthrough_fh hello hello_ll printcap ioctl_client
-             poll_client ioctl cuse cuse_client)
+set(EXAMPLES passthrough passthrough_fh
+             hello hello_ll hello_ll_uds
+             printcap ioctl_client poll_client
+             ioctl cuse cuse_client)
 
 if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "bsd$" AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "dragonfly")
     list(APPEND EXAMPLES passthrough_ll)
@@ -21,8 +23,11 @@ if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "bsd$" AND NOT ${CMAKE_SYSTEM_NAME} STREQUA
     list(APPEND EXAMPLES "null")
 endif()
 
-set(THREADED_EXAMPLES notify_inval_inode invalidate_path notify_store_retrieve
-                      notify_inval_entry poll)
+set(THREADED_EXAMPLES notify_inval_inode
+                      invalidate_path
+                      notify_store_retrieve
+                      notify_inval_entry
+                      poll)
 
 foreach( EXAMPLE ${EXAMPLES} )
     add_executable(${EXAMPLE} ${EXAMPLE}.c)

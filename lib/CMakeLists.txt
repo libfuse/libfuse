@@ -7,9 +7,14 @@ set (CMAKE_VERBOSE_MAKEFILE FALSE)
 
 # We do this slightly out of order compared to meson.build (because CMake is more logical ?)
 # In meson it seems you collect all your variables first, then construct the target from them
-add_library(fuse3 SHARED fuse.c fuse_i.h fuse_loop.c fuse_loop_mt.c fuse_lowlevel.c
-              fuse_misc.h fuse_opt.c fuse_signals.c buffer.c cuse_lowlevel.c helper.c
-              mount_util.c fuse_log.c modules/subdir.c)
+add_library(fuse3 SHARED fuse.c fuse_i.h
+                         fuse_loop.c fuse_loop_mt.c
+                         fuse_lowlevel.c fuse_misc.h fuse_opt.c
+                         fuse_signals.c buffer.c mount_util.c
+                         cuse_lowlevel.c helper.c
+                         modules/subdir.c
+                         fuse_log.c compat.c)
+
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "BSD")
   target_sources(fuse3 PUBLIC mount_bsd.c)

@@ -18,7 +18,7 @@
 #include "fuse_config.h"
 #endif
 
-#include "libfuse_config.h"
+#include "fuse_config.h"
 
 #include "fuse_opt.h"
 #include "fuse_log.h"
@@ -419,15 +419,15 @@ struct fuse_loop_config_v1 {
 
 /**
  * Indicates support that dentries can be expired or invalidated.
- * 
- * Expiring dentries, instead of invalidating them, makes a difference for 
- * overmounted dentries, where plain invalidation would detach all submounts 
- * before dropping the dentry from the cache. If only expiry is set on the 
- * dentry, then any overmounts are left alone and until ->d_revalidate() 
+ *
+ * Expiring dentries, instead of invalidating them, makes a difference for
+ * overmounted dentries, where plain invalidation would detach all submounts
+ * before dropping the dentry from the cache. If only expiry is set on the
+ * dentry, then any overmounts are left alone and until ->d_revalidate()
  * is called.
- * 
+ *
  * Note: ->d_revalidate() is not called for the case of following a submount,
- * so invalidation will only be triggered for the non-overmounted case. 
+ * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
 */
