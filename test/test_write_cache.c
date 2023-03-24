@@ -21,6 +21,10 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+// assert is used profusely in here, make sure it is enabled
+#ifdef NDEBUG
+    #undef NDEBUG
+#endif
 #include <assert.h>
 #include <stddef.h>
 #include <unistd.h>
@@ -34,6 +38,7 @@
 
 #define FILE_INO 2
 #define FILE_NAME "write_me"
+
 
 /* Command line parsing */
 struct options {
@@ -200,6 +205,7 @@ static void* close_rofd(void *data) {
 static void* run_fs(void *data) {
     struct fuse_session *se = (struct fuse_session*) data;
     assert(fuse_session_loop(se) == 0);
+    (void) se;
     return NULL;
 }
 

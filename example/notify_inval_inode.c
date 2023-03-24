@@ -72,6 +72,10 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
+// assert is used profusely in here, make sure it is enabled
+#ifdef NDEBUG
+    #undef NDEBUG
+#endif
 #include <assert.h>
 #include <stddef.h>
 #include <unistd.h>

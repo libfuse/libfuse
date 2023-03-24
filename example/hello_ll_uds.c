@@ -41,6 +41,10 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+// assert is used profusely in here, make sure it is enabled
+#ifdef NDEBUG
+    #undef NDEBUG
+#endif
 #include <assert.h>
 #include <sys/socket.h>
 #include <sys/un.h>

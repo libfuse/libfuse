@@ -77,12 +77,14 @@ static int iconv_convpath(struct iconv *ic, const char *path, char **newpathp,
 
 			inc = (pathlen + 1) * 4;
 			newpathlen += inc;
+			ptrdiff_t p_offset = p - newpath;
 			tmp = realloc(newpath, newpathlen + 1);
 			err = -ENOMEM;
 			if (!tmp)
 				goto err;
 
-			p = tmp + (p - newpath);
+			//p = tmp + (p - newpath);
+			p = tmp + p_offset;
 			plen += inc;
 			newpath = tmp;
 		}
