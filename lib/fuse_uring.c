@@ -772,7 +772,8 @@ int fuse_session_stop_uring(struct fuse_session *se)
 	}
 
 	fuse_log(FUSE_LOG_ERR, "Joining cleanup tid\n");
-	pthread_join(se->ring.cleanup_tid, NULL);
+	if (se->ring.cleanup_tid != 0)
+		pthread_join(se->ring.cleanup_tid, NULL);
 	fuse_log(FUSE_LOG_ERR, "Joined cleanup tid\n");
 
 	fuse_session_destruct_uring(se->ring.pool);
