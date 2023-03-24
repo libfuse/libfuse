@@ -631,7 +631,7 @@ static void *fuse_uring_thread(void *arg)
 			fuse_log(FUSE_LOG_ERR,
 				 "req=%p tag mismatch, got %d expected %d\n",
 				 req, req->tag, tag);
-			goto err;
+			goto eio;
 		}
 
 		struct io_uring_sqe *sqe = io_uring_get_sqe(&queue->ring);
@@ -642,7 +642,7 @@ static void *fuse_uring_thread(void *arg)
 			 */
 
 			fuse_log(FUSE_LOG_ERR, "Failed to get all ring SQEs");
-			goto err;
+			goto eio;
 		}
 
 		fuse_uring_sqe_prepare(sqe, req, FUSE_URING_REQ_FETCH);
@@ -654,61 +654,39 @@ static void *fuse_uring_thread(void *arg)
 	if (res != ring_pool->queue_depth) {
 		fuse_log(FUSE_LOG_ERR, "SQE ready mismatch, expected %d got %d\n",
 			 ring_pool->queue_depth, res);
-		goto err;
+		goto eio;
 	}
 
 	while (!se->exited) {
 		struct io_uring_cqe *cqe;
-//		unsigned head;
-//		unsigned int count = 0;
-		int ret;
+		unsigned head;
+		unsigned int count = 0;
 
-		ret = io_uring_submit(&queue->ring);
-		if (ret == -EINTR)
-			continue;
-		if (ret < 0) {
-			fuse_log(FUSE_LOG_ERR, "uring submit failed %d\n", ret);
-			goto err;
-		}
+		io_uring_submit_and_wait(&queue->ring, 1);
+		io_uring_for_each_cqe(&queue->ring, head, cqe) {
 
-		ret = io_uring_wait_cqe(&queue->ring, &cqe);
-		if (ret < 0) {
-			fuse_log(FUSE_LOG_ERR, "cqe wait failed %d\n", ret);
-		}
-
-		if (ret == 0 && cqe->res != 0) {
-			fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
-			fuse_session_exit(se);
-			ret = cqe->res;
-		}
-
-		if (ret == 0)
+			if (cqe->res != 0) {
+				fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
+				se->error = cqe->res;
+				goto err;
+			}
 			fuse_uring_handle_cqe(queue, cqe);
-		io_uring_cqe_seen(&queue->ring, cqe);
 
-#if 0
-		io_uring_for_each_cqe(&queues->ring, head, cqe) {
+			/* XXX: Submit immediately, to shorten latencies?
+			 * Or submit fg (synchronous immediately and bg only
+			 * bundled?
+			 */
 
-			fuse_uring_handle_cqe(queues, cqe);
-
-			/* Unsure which is better - submit all at once or
-			* submit one by one. The former has less overhead,
-			* the latter has less latency.
-			* XXX: Multiple queues per code - fast queue and
-			*      async queue?
-			*/
-			io_uring_submit(&queues->ring);
 			count += 1;
 		}
-		io_uring_cq_advance(&queues->ring, count);
-		io_uring_submit_and_wait(&queues->ring, 1);
-#endif
+		io_uring_cq_advance(&queue->ring, count);
 	}
 
 	return NULL;
 
-err:
+eio:
 	se->error = -EIO;
+err:
 	fuse_session_exit(se);
 	return NULL;
 }
