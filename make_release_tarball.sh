@@ -21,9 +21,9 @@ mkdir "${TAG}"
 
 git archive --format=tar "${TAG}" | tar -x "--directory=${TAG}"
 find "${TAG}" -name .gitignore -delete
-rm "${TAG}/make_release_tarball.sh" \
-   "${TAG}/.travis.yml" \
-   "${TAG}/.cirrus.yml"
+rm -r "${TAG}/make_release_tarball.sh" \
+      "${TAG}/.github" \
+      "${TAG}/.cirrus.yml"
 cp -a doc/html "${TAG}/doc/"
 tar -cJf "${TAG}.tar.xz" "${TAG}/"
 gpg --armor --detach-sign "${TAG}.tar.xz"
