@@ -1,3 +1,15 @@
+libfuse 3.14.1 (2023-03-26)
+===========================
+
+* The extended attribute name passed to the setxattr() handler is no longer
+  truncated at the beginning (bug introduced in 3.13.0).
+  
+* As a result of the above, the additional setattr() flags introduced in 3.14 are no
+  longer available for now. They will hopefully be reintroduced in the next release.
+
+* Further improvements of configuration header handling.
+
+
 libfuse 3.14.0 (2023-02-17)
 ===========================
 
