@@ -14,7 +14,7 @@
 #include "fuse_opt.h"
 
 #include <sys/param.h>
-#include <sys/mount.h>
+#include "fuse_mount_compat.h"
 
 #include <sys/stat.h>
 #include <sys/wait.h>
