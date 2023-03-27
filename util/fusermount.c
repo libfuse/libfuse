@@ -1190,6 +1190,40 @@ static int send_fd(int sock_fd, int fd)
 	return 0;
 }
 
+static int mnt_is_ENOTCONN_for_owner(const char *mnt)
+{
+	int pid = fork();
+	if(pid == -1) {
+		perror("fuse: mnt_is_ENOTCONN_for_owner can't fork");
+		_exit(EXIT_FAILURE);
+	} else if(pid == 0) {
+		uid_t uid = getuid();
+		gid_t gid = getgid();
+		if(setresgid(gid, gid, gid) == -1) {
+			perror("fuse: can't set resgid");
+			_exit(EXIT_FAILURE);
+		}
+		if(setresuid(uid, uid, uid) == -1) {
+			perror("fuse: can't set resuid");
+			_exit(EXIT_FAILURE);
+		}
+
+		int fd = open(mnt, O_RDONLY);
+		if(fd == -1 && errno == ENOTCONN)
+			_exit(EXIT_SUCCESS);
+		else
+			_exit(EXIT_FAILURE);
+	} else {
+		int status;
+		int res = waitpid(pid, &status, 0);
+		if (res == -1) {
+			perror("fuse: waiting for child failed");
+			_exit(EXIT_FAILURE);
+		}
+		return WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS;
+	}
+}
+
 /* The parent fuse process has died: decide whether to auto_unmount.
  *
  * In the normal case (umount or fusermount -u), the filesystem
@@ -1225,10 +1259,21 @@ static int should_auto_unmount(const char *mnt, const char *type)
 		goto out;
 
 	fd = open(mnt, O_RDONLY);
+
 	if (fd != -1) {
 		close(fd);
 	} else {
-		result = errno == ENOTCONN;
+		switch(errno) {
+		case ENOTCONN:
+			result = 1;
+			break;
+		case EACCES:
+			result = mnt_is_ENOTCONN_for_owner(mnt);
+			break;
+		default:
+			result = 0;
+			break;
+		}
 	}
 out:
 	free(copy);
