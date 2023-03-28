@@ -1190,11 +1190,17 @@ static int send_fd(int sock_fd, int fd)
 	return 0;
 }
 
-static int mnt_is_ENOTCONN_for_owner(const char *mnt)
+/* Helper for should_auto_unmount
+ *
+ * fusermount typically has the s-bit set - initial open of `mnt` was as root
+ * and got EACCESS as 'allow_other' was not specified.
+ * Try opening `mnt` again with uid and guid of the calling process.
+ */
+static int recheck_ENOTCONN_as_owner(const char *mnt)
 {
 	int pid = fork();
 	if(pid == -1) {
-		perror("fuse: mnt_is_ENOTCONN_for_owner can't fork");
+		perror("fuse: recheck_ENOTCONN_as_owner can't fork");
 		_exit(EXIT_FAILURE);
 	} else if(pid == 0) {
 		uid_t uid = getuid();
@@ -1268,7 +1274,7 @@ static int should_auto_unmount(const char *mnt, const char *type)
 			result = 1;
 			break;
 		case EACCES:
-			result = mnt_is_ENOTCONN_for_owner(mnt);
+			result = recheck_ENOTCONN_as_owner(mnt);
 			break;
 		default:
 			result = 0;
