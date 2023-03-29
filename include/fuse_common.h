@@ -923,8 +923,8 @@ void fuse_loop_cfg_convert(struct fuse_loop_config *config,
  * @param fg_queue_depth number of foreground requests per queue
  * @param bg_queue_depth number of background requests per queue
  */
-int fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
-				      bool use_uring, bool per_core_queue,
+int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
+				      bool use_uring, unsigned int per_core_queue,
 				      unsigned int fg_queue_depth,
 				      unsigned int bg_queue_depth,
 				      unsigned int arg_len);

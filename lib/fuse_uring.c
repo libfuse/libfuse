@@ -462,6 +462,12 @@ static struct fuse_ring_pool *
 fuse_create_user_ring(struct fuse_session *se,
 		      struct fuse_loop_config *cfg)
 {
+	fuse_log(FUSE_LOG_ERR,
+		 "Creating user ring per-core-queue=%d "
+		 "fg-depth=%d bg-depth=%d arglen=%d\n",
+		 cfg->uring.per_core_queue, cfg->uring.fg_queue_depth,
+		 cfg->uring.bg_queue_depth, cfg->uring.ring_req_arg_len);
+
 	int rc;
 	const size_t pg_size = getpagesize();
 	const size_t nr_queues = cfg->uring.per_core_queue ? get_nprocs_conf() : 1;

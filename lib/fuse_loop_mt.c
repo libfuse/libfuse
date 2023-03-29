@@ -538,17 +538,16 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 	config->clone_fd = value;
 }
 
-int fuse_loop_cfg_set_base_uring_opts(struct fuse_loop_config *config,
-				      bool use_uring, bool per_core_queue,
-				      unsigned int fg_queue_depth,
-				      unsigned int bg_queue_depth,
-				      unsigned int arg_len)
+int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
+				 bool use_uring, unsigned int per_core_queue,
+				 unsigned int fg_queue_depth,
+				 unsigned int bg_queue_depth,
+				 unsigned int arg_len)
 {
 	config->uring.use_uring = use_uring;
-	config->uring.per_core_queue = per_core_queue;
 
-	if (bg_queue_depth >= fg_queue_depth)
-		return -EINVAL;
+	if (per_core_queue > 0 )
+		config->uring.per_core_queue = per_core_queue;
 
 	if (fg_queue_depth != 0)
 		config->uring.fg_queue_depth = fg_queue_depth;
