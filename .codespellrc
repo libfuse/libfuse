@@ -1,3 +1,6 @@
 [codespell]
-skip = .git,*.pdf,*.svg
-# ignore-words-list = 
+skip = .git,*.pdf,*.svg,AUTHORS
+# alse - used in regex
+# siz - wanted short
+# fiter - variable
+ignore-words-list = alse,siz,fiter
