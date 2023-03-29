@@ -187,6 +187,11 @@ FUSE_3.12 {
 		fuse_lowlevel_notify_expire_entry;
 } FUSE_3.4;
 
+FUSE_3.14 {
+	global:
+		fuse_loop_cfg_set_uring_opts;
+} FUSE_3.4;
+
 # Local Variables:
 # indent-tabs-mode: t
 # End:
