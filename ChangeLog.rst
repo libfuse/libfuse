@@ -57,7 +57,7 @@ The following changes apply when using the most recent API (-DFUSE_USE_VERSION=3
 see `example/passthrough_hp.cc` for an example for how to usse the new API):
 
 * `struct fuse_loop_config` is now private and has to be constructed using
-  *fuse_loop_cfg_create()* and detroyed with *fuse_loop_cfg_destroy()*.  Parameters can be
+  *fuse_loop_cfg_create()* and destroyed with *fuse_loop_cfg_destroy()*.  Parameters can be
   changed using `fuse_loop_cfg_set_*()` functions.
 
 * *fuse_session_loop_mt()* now accepts `struct fuse_loop_config *` as NULL pointer.

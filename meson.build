@@ -114,7 +114,7 @@ if not cc.compiles(code, args: [ '-O0' ])
   versioned_symbols = 0
 endif
 
-# The detection can be overriden, which is useful for other (above unhandled)
+# The detection can be overridden, which is useful for other (above unhandled)
 # libcs and also especially useful for testing
 if get_option('disable-libc-symbol-version')
      versioned_symbols = 0

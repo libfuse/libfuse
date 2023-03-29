@@ -44,7 +44,7 @@ static unsigned fsel_open_mask;
 static const char fsel_hex_map[] = "0123456789ABCDEF";
 static struct fuse *fsel_fuse;	/* needed for poll notification */
 
-#define FSEL_CNT_MAX	10	/* each file can store upto 10 chars */
+#define FSEL_CNT_MAX	10	/* each file can store up to 10 chars */
 #define FSEL_FILES	16
 
 static pthread_mutex_t fsel_mutex;	/* protects notify_mask and cnt array */
