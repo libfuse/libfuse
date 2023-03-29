@@ -736,7 +736,11 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 		    char **mnt_optsp)
 {
 	int res;
+	#ifdef NO_PRIVS
+	int flags = 0;
+	#else
 	int flags = MS_NOSUID | MS_NODEV;
+	#endif
 	char *optbuf;
 	char *mnt_opts = NULL;
 	const char *s;
