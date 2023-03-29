@@ -999,7 +999,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	 * originally the same list as used by the ecryptfs mount helper
 	 * (https://bazaar.launchpad.net/~ecryptfs/ecryptfs/trunk/view/head:/src/utils/mount.ecryptfs_private.c#L225)
 	 * but got expanded as we found more filesystems that needed to be
-	 * overlayed. */
+	 * overlaid. */
 	typeof(fs_buf.f_type) f_type_whitelist[] = {
 		0x61756673 /* AUFS_SUPER_MAGIC */,
 		0x00000187 /* AUTOFS_SUPER_MAGIC */,
