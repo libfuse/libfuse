@@ -56,7 +56,7 @@ must use [Meson](http://mesonbuild.com/) and
 tarball, create a (temporary) build directory and run Meson:
 
     $ mkdir build; cd build
-    $ meson ..
+    $ meson setup ..
 
 Normally, the default build options will work fine. If you
 nevertheless want to adjust them, you can do so with the
