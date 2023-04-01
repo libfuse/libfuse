@@ -160,7 +160,7 @@ static void hello_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	assert(ino == 2);
 	if (strcmp(name, "hello_ll_getxattr_name") == 0)
 	{
-		char *buf = "hello_ll_getxattr_value";
+		const char *buf = "hello_ll_getxattr_value";
 		fuse_reply_buf(req, buf, strlen(buf));
 	}
 	else
@@ -175,8 +175,10 @@ static void hello_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	(void)flags;
 	(void)size;
 	assert(ino == 2);
+	const char* exp_val = "hello_ll_setxattr_value";
 	if (strcmp(name, "hello_ll_setxattr_name") == 0 &&
-		strcmp(value, "hello_ll_setxattr_value") == 0)
+	    strlen(exp_val) == size &&
+	    strncmp(value, exp_val, size) == 0)
 	{
 		fuse_reply_err(req, 0);
 	}
