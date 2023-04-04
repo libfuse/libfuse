@@ -7,7 +7,7 @@
 */
 /* This program does the mounting and unmounting of FUSE filesystems */
 
-#define _GNU_SOURCE /* for clone */
+#define _GNU_SOURCE /* for clone and strchrnul */
 #include "fuse_config.h"
 #include "mount_util.h"
 
@@ -62,6 +62,59 @@ static int user_allow_other = 0;
 static int mount_max = 1000;
 
 static int auto_unmount = 0;
+
+#ifdef GETMNTENT_NEEDS_UNESCAPING
+// Older versions of musl libc don't unescape entries in /etc/mtab
+
+// unescapes octal sequences like \040 in-place
+// That's ok, because unescaping can not extend the length of the string.
+static void unescape(char *buf) {
+	char *src = buf;
+	char *dest = buf;
+	while (1) {
+		char *next_src = strchrnul(src, '\\');
+		int offset = next_src - src;
+		memmove(dest, src, offset);
+		src = next_src;
+		dest += offset;
+
+		if(*src == '\0') {
+			*dest = *src;
+			return;
+		}
+		src++;
+
+		if('0' <= src[0] && src[0] < '2' &&
+		   '0' <= src[1] && src[1] < '8' &&
+		   '0' <= src[2] && src[2] < '8') {
+			*dest++ = (src[0] - '0') << 6
+			        | (src[1] - '0') << 3
+			        | (src[2] - '0') << 0;
+			src += 3;
+		} else if (src[0] == '\\') {
+			*dest++ = '\\';
+			src += 1;
+		} else {
+			*dest++ = '\\';
+		}
+	}
+}
+
+static struct mntent *GETMNTENT(FILE *stream)
+{
+	struct mntent *entp = getmntent(stream);
+	if(entp != NULL) {
+		unescape(entp->mnt_fsname);
+		unescape(entp->mnt_dir);
+		unescape(entp->mnt_type);
+		unescape(entp->mnt_opts);
+	}
+	return entp;
+}
+#else
+#define GETMNTENT getmntent
+#endif // GETMNTENT_NEEDS_UNESCAPING
+
 
 static const char *get_user_name(void)
 {
@@ -169,7 +222,7 @@ static int may_unmount(const char *mnt, int quiet)
 	uidlen = sprintf(uidstr, "%u", getuid());
 
 	found = 0;
-	while ((entp = getmntent(fp)) != NULL) {
+	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
 		    (strcmp(entp->mnt_type, "fuse") == 0 ||
 		     strcmp(entp->mnt_type, "fuseblk") == 0 ||
@@ -261,7 +314,7 @@ static int check_is_mount_child(void *p)
 	}
 
 	count = 0;
-	while (getmntent(fp) != NULL)
+	while (GETMNTENT(fp) != NULL)
 		count++;
 	endmntent(fp);
 
@@ -280,7 +333,7 @@ static int check_is_mount_child(void *p)
 	}
 
 	found = 0;
-	while ((entp = getmntent(fp)) != NULL) {
+	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (count > 0) {
 			count--;
 			continue;
@@ -464,7 +517,7 @@ static int count_fuse_fs(void)
 			strerror(errno));
 		return -1;
 	}
-	while ((entp = getmntent(fp)) != NULL) {
+	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (strcmp(entp->mnt_type, "fuse") == 0 ||
 		    strncmp(entp->mnt_type, "fuse.", 5) == 0)
 			count ++;
