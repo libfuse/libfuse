@@ -22,10 +22,10 @@ endif
 if private_cfg.get('HAVE_URING')
   libfuse_sources += [ 'fuse_uring.c' ]
 
-  liburing = cc.find_library('liburing', required: true)
+  liburing = cc.find_library('uring', required: true)
   deps += [ liburing ]
 
-  libnuma = cc.find_library('libnuma', required: true)
+  libnuma = cc.find_library('numa', required: true)
   deps += [ libnuma ]
 endif
 
