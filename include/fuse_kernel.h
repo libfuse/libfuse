@@ -1089,7 +1089,7 @@ struct fuse_uring_cfg {
 	uint32_t fg_queue_depth;
 
 	/* number of background entries per queue */
-	uint32_t bg_queue_depth;
+	uint32_t async_queue_depth;
 
 	/* argument (data length) of a request */
 	uint32_t req_arg_len;
@@ -1226,7 +1226,7 @@ enum fuse_ring_req_cmd {
 /* Request is background type. Daemon side is free to use this information
  * to handle foreground/background CQEs with different priorities.
  */
-#define FUSE_RING_REQ_FLAG_BACKGROUND (1ull << 0)
+#define FUSE_RING_REQ_FLAG_ASYNC (1ull << 0)
 
 /**
  * This structure mapped onto the
