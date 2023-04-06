@@ -24,7 +24,9 @@
 #include <mntent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
-#include <sys/mount.h>
+
+#include "fuse_mount_compat.h"
+
 #include <sys/fsuid.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
@@ -35,26 +37,6 @@
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
 #define FUSE_DEV "/dev/fuse"
-
-#ifndef MS_DIRSYNC
-#define MS_DIRSYNC 128
-#endif
-#ifndef MS_REC
-#define MS_REC 16384
-#endif
-#ifndef MS_PRIVATE
-#define MS_PRIVATE (1<<18)
-#endif
-
-#ifndef UMOUNT_DETACH
-#define UMOUNT_DETACH	0x00000002	/* Just detach from the tree */
-#endif
-#ifndef UMOUNT_NOFOLLOW
-#define UMOUNT_NOFOLLOW	0x00000008	/* Don't follow symlink on umount */
-#endif
-#ifndef UMOUNT_UNUSED
-#define UMOUNT_UNUSED	0x80000000	/* Flag guaranteed to be unused */
-#endif
 
 static const char *progname;
 

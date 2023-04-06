@@ -25,7 +25,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <sys/mount.h>
+
+#include "fuse_mount_compat.h"
 
 #ifdef __NetBSD__
 #include <perfuse.h>
