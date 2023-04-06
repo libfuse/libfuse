@@ -165,8 +165,8 @@ struct Fs {
     struct {
         bool enable;
         bool per_core_queue;
-        int fg_queue_depth;
-        int bg_queue_depth;
+        int sync_queue_depth;
+        int async_queue_depth;
         int arglen;
     } uring;
 
@@ -1283,8 +1283,8 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
 
     fs.uring.enable = options["uring"].as<bool>();
     fs.uring.per_core_queue = options["uring-per-core-queue"].as<bool>();
-    fs.uring.fg_queue_depth = options["uring-fg-depth"].as<int>();
-    fs.uring.bg_queue_depth = options["uring-bg-depth"].as<int>();
+    fs.uring.sync_queue_depth = options["uring-fg-depth"].as<int>();
+    fs.uring.async_queue_depth = options["uring-bg-depth"].as<int>();
     fs.uring.arglen = options["uring-arglen"].as<int>();
 
     char* resolved_path = realpath(argv[1], NULL);
@@ -1392,8 +1392,10 @@ int main(int argc, char *argv[]) {
 
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 
-    fuse_loop_cfg_set_uring_opts(loop_config, fs.uring.enable, fs.uring.per_core_queue,
-                                 fs.uring.fg_queue_depth, fs.uring.bg_queue_depth,
+    fuse_loop_cfg_set_uring_opts(loop_config, fs.uring.enable,
+                                 fs.uring.per_core_queue,
+                                 fs.uring.sync_queue_depth,
+                                 fs.uring.async_queue_depth,
                                  fs.uring.arglen);
 
     if (fuse_session_mount(se, argv[2]) != 0)

@@ -362,8 +362,8 @@ fuse_uring_configure_kernel_queue(struct fuse_session *se,
 		.cmd = FUSE_URING_IOCTL_CMD_QUEUE_CFG,
 		.qid = qid,
 		.nr_queues = nr_queues,
-		.fg_queue_depth = cfg->uring.fg_queue_depth,
-		.bg_queue_depth = cfg->uring.bg_queue_depth,
+		.fg_queue_depth = cfg->uring.sync_queue_depth,
+		.async_queue_depth = cfg->uring.async_queue_depth,
 		.req_arg_len = req_arg_len,
 		.numa_node_id = numa_node_id,
 	};
@@ -471,15 +471,15 @@ fuse_create_user_ring(struct fuse_session *se,
 {
 	fuse_log(FUSE_LOG_ERR,
 		 "Creating user ring per-core-queue=%d "
-		 "fg-depth=%d bg-depth=%d arglen=%d\n",
-		 cfg->uring.per_core_queue, cfg->uring.fg_queue_depth,
-		 cfg->uring.bg_queue_depth, cfg->uring.ring_req_arg_len);
+		 "sync-depth=%d async-depth=%d arglen=%d\n",
+		 cfg->uring.per_core_queue, cfg->uring.sync_queue_depth,
+		 cfg->uring.async_queue_depth, cfg->uring.ring_req_arg_len);
 
 	int rc;
 	const size_t pg_size = getpagesize();
 	const size_t nr_queues = cfg->uring.per_core_queue ? get_nprocs_conf() : 1;
-	const size_t q_depth = cfg->uring.fg_queue_depth +
-			       cfg->uring.bg_queue_depth;
+	const size_t q_depth = cfg->uring.sync_queue_depth +
+			       cfg->uring.async_queue_depth;
 
 	const size_t ring_req_arg_len = cfg->uring.ring_req_arg_len;
 
@@ -694,7 +694,7 @@ static void *fuse_uring_thread(void *arg)
 			io_uring_submit(&queue->ring);
 
 			/* XXX: Submit immediately, to shorten latencies?
-			 * Or submit fg (synchronous immediately and bg only
+			 * Or submit fg (synchronous immediately and async only
 			 * bundled?
 			 */
 

@@ -167,10 +167,10 @@ struct fuse_loop_config
 		bool per_core_queue;
 
 		/** The ring foreground request queue depth */
-		unsigned int fg_queue_depth;
+		unsigned int sync_queue_depth;
 
 		/** The ring background request queue depth  */
-		unsigned int bg_queue_depth;
+		unsigned int async_queue_depth;
 
 		/** maximum argument size of ring requests */
 		unsigned int ring_req_arg_len;

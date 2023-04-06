@@ -48,7 +48,7 @@
 				      */
 #define FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE 1
 #define FUSE_LOOP_MT_DEF_URING_FG_DEPTH 16
-#define FUSE_LOOP_MT_DEF_URING_BG_DEPTH 8 /* background queue depth */
+#define FUSE_LOOP_MT_DEF_URING_ASYNC_DEPTH 8 /* async queue depth */
 
 /* 4K argument header + 1M data */
 #define FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN ((1024 * 1024) + 4096)
@@ -484,8 +484,8 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 
 	config->uring.use_uring = FUSE_LOOP_MT_DEF_USE_URING;
 	config->uring.per_core_queue = FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE;
-	config->uring.fg_queue_depth = FUSE_LOOP_MT_DEF_URING_FG_DEPTH;
-	config->uring.bg_queue_depth = FUSE_LOOP_MT_DEF_URING_BG_DEPTH;
+	config->uring.sync_queue_depth = FUSE_LOOP_MT_DEF_URING_FG_DEPTH;
+	config->uring.async_queue_depth = FUSE_LOOP_MT_DEF_URING_ASYNC_DEPTH;
 	config->uring.ring_req_arg_len = FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN;
 
 	return config;
@@ -540,8 +540,8 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 
 int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
 				 bool use_uring, unsigned int per_core_queue,
-				 unsigned int fg_queue_depth,
-				 unsigned int bg_queue_depth,
+				 unsigned int sync_queue_depth,
+				 unsigned int async_queue_depth,
 				 unsigned int arg_len)
 {
 	config->uring.use_uring = use_uring;
@@ -549,11 +549,11 @@ int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
 	if (per_core_queue > 0 )
 		config->uring.per_core_queue = per_core_queue;
 
-	if (fg_queue_depth != 0)
-		config->uring.fg_queue_depth = fg_queue_depth;
+	if (sync_queue_depth != 0)
+		config->uring.sync_queue_depth = sync_queue_depth;
 
-	if (bg_queue_depth != 0)
-		config->uring.bg_queue_depth = bg_queue_depth;
+	if (async_queue_depth != 0)
+		config->uring.async_queue_depth = async_queue_depth;
 
 	if (arg_len != 0)
 		config->uring.ring_req_arg_len = arg_len;
