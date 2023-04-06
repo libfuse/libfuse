@@ -1329,7 +1329,6 @@ static void usage(void)
 	       " -V		    print version\n"
 	       " -o opt[,opt...]    mount options\n"
 	       " -u		    unmount\n"
-	       " -U 		    setup auto-unmount only\n"
 	       " -q		    quiet\n"
 	       " -z		    lazy unmount\n",
 	       progname);
@@ -1361,7 +1360,9 @@ int main(int argc, char *argv[])
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
-		{"setup-auto-unmount-only", no_argument, NULL, 'U'},
+		// Note: auto-unmount deliberately does not have a short version.
+		// It's meant for internal use by mount.c's setup_auto_unmount.
+		{"auto-unmount", no_argument, NULL, 'U'},
 		{"lazy",    no_argument, NULL, 'z'},
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},

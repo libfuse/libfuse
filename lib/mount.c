@@ -322,7 +322,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	waitpid(pid, NULL, 0);
 }
 
-static int fuse_mount_fusermount_setup_auto_unmount_only(const char *mountpoint, int quiet)
+static int setup_auto_unmount(const char *mountpoint, int quiet)
 {
 	int fds[2], pid;
 	int res;
@@ -360,7 +360,7 @@ static int fuse_mount_fusermount_setup_auto_unmount_only(const char *mountpoint,
 		}
 
 		argv[a++] = FUSERMOUNT_PROG;
-		argv[a++] = "--setup-auto-unmount-only";
+		argv[a++] = "--auto-unmount";
 		argv[a++] = "--";
 		argv[a++] = mountpoint;
 		argv[a++] = NULL;
@@ -644,7 +644,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 
 	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
 	if (res >= 0 && mo->auto_unmount) {
-		if(0 > fuse_mount_fusermount_setup_auto_unmount_only(mountpoint, 0)) {
+		if(0 > setup_auto_unmount(mountpoint, 0)) {
 			// Something went wrong, let's umount like in fuse_mount_sys.
 			umount2(mountpoint, 2); /* lazy umount */
 			res = -1;
