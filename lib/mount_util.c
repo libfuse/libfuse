@@ -10,6 +10,7 @@
 
 #include "fuse_config.h"
 #include "mount_util.h"
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -27,7 +28,9 @@
 #endif
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/mount.h>
+
+#include "fuse_mount_compat.h"
+
 #include <sys/param.h>
 
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
