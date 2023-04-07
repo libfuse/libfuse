@@ -11,7 +11,7 @@ import itertools
 
 basename = pjoin(os.path.dirname(__file__), '..')
 
-def test_printcap():
+def get_printcap():
     cmdline = base_cmdline + [ pjoin(basename, 'example', 'printcap') ]
     proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE,
                             universal_newlines=True)
@@ -31,6 +31,8 @@ def test_printcap():
 
     return (proto, caps)
 
+def test_printcap():
+    get_printcap()
 
 def wait_for_mount(mount_process, mnt_dir,
                    test_fn=os.path.ismount):
@@ -163,7 +165,7 @@ os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'util'), os.environ['PATH'])
 os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'example'), os.environ['PATH'])
 
 try:
-    (fuse_proto, fuse_caps) = test_printcap()
+    (fuse_proto, fuse_caps) = get_printcap()
 except:
     # Rely on test to raise error
     fuse_proto = (0,0)
