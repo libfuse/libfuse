@@ -43,7 +43,7 @@ for CC in gcc gcc-9 gcc-10 clang; do
     else
         build_opts=''
     fi
-    meson -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
+    meson setup -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
     ninja
 
     sudo chown root:root util/fusermount3
@@ -65,7 +65,7 @@ sanitized_build()
 
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
-    meson -D b_sanitize=${san} -D b_lundef=false -D werror=true\
+    meson setup -D b_sanitize=${san} -D b_lundef=false -D werror=true\
            ${additonal_option} "${SOURCE_DIR}" \
            || (cat meson-logs/meson-log.txt; false)
     ninja
