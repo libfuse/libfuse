@@ -8,5 +8,5 @@ task:
   script:
     - mkdir build
     - cd build
-    - meson ..
+    - meson setup ..
     - ninja
