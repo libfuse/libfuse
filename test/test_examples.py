@@ -347,6 +347,8 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
         cmdline.append('--no-notify')
     if only_expire == "expire_entries":
         cmdline.append('--only-expire')
+        if fuse_proto < (7,38):
+            pytest.skip('only-expire not supported by running kernel')
     mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
                                      stderr=output_checker.fd)
     try:

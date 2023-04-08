@@ -228,7 +228,18 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     }
 }
 
+static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
+    (void) userdata;
+    if(options.only_expire && !(conn->capable & FUSE_CAP_EXPIRE_ONLY)) {
+        fprintf(stderr, "FUSE_CAP_EXPIRE_ONLY not supported by kernel\n");
+        exit(1);
+    }
+    if(options.only_expire)
+        conn->want |= FUSE_CAP_EXPIRE_ONLY;
+}
+
 static const struct fuse_lowlevel_ops tfs_oper = {
+    .init	= tfs_init,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
@@ -260,6 +271,10 @@ static void* update_fs_loop(void *data) {
             if(options.only_expire) {
                 assert(fuse_lowlevel_notify_expire_entry
                    (se, FUSE_ROOT_ID, old_name, strlen(old_name), FUSE_LL_EXPIRE_ONLY) == 0);
+                // For some reason, the kernel doesn't send a forget request,
+                // so we have to do it ourselves.
+                // (At least that's the behaviour on 6.2.9)
+                lookup_cnt = 0;
             } else {
                 assert(fuse_lowlevel_notify_inval_entry
                       (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
