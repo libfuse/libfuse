@@ -1241,6 +1241,10 @@ int main(int argc, char *argv[])
 
 	} else {
 		lo.source = strdup("/");
+		if(!lo.source) {
+			fuse_log(FUSE_LOG_ERR, "fuse: memory allocation failed\n");
+			exit(1);
+		}
 	}
 	if (!lo.timeout_set) {
 		switch (lo.cache) {
