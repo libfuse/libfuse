@@ -646,7 +646,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 	if (res >= 0 && mo->auto_unmount) {
 		if(0 > setup_auto_unmount(mountpoint, 0)) {
 			// Something went wrong, let's umount like in fuse_mount_sys.
-			umount2(mountpoint, 2); /* lazy umount */
+			umount2(mountpoint, MNT_DETACH); /* lazy umount */
 			res = -1;
 		}
 	} else if (res == -2) {
