@@ -229,13 +229,10 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
-    (void) userdata;
     if(options.only_expire && !(conn->capable & FUSE_CAP_EXPIRE_ONLY)) {
         fprintf(stderr, "FUSE_CAP_EXPIRE_ONLY not supported by kernel\n");
-        exit(1);
+        fuse_session_exit(*(struct fuse_session **) userdata);
     }
-    if(options.only_expire)
-        conn->want |= FUSE_CAP_EXPIRE_ONLY;
 }
 
 static const struct fuse_lowlevel_ops tfs_oper = {
@@ -327,7 +324,7 @@ int main(int argc, char *argv[]) {
     update_fs();
 
     se = fuse_session_new(&args, &tfs_oper,
-                          sizeof(tfs_oper), NULL);
+                          sizeof(tfs_oper), &se);
     if (se == NULL)
         goto err_out1;
 
