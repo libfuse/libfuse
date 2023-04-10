@@ -386,10 +386,10 @@ def test_dev_auto_unmount(short_tmpdir, output_checker):
     try:
         wait_for_mount(mount_process, mnt_dir)
         if os.getuid() == 0:
-            open(pjoin(mnt_dir, 'null'))
+            open(pjoin(mnt_dir, 'null')).close()
         else:
             with pytest.raises(PermissionError):
-                open(pjoin(mnt_dir, 'null'))
+                open(pjoin(mnt_dir, 'null')).close()
     except:
         cleanup(mount_process, mnt_dir)
         raise
