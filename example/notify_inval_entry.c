@@ -93,6 +93,7 @@
 static char file_name[MAX_STR_LEN];
 static fuse_ino_t file_ino = 2;
 static int lookup_cnt = 0;
+static int old_lookup_cnt = 0;
 
 /* Command line parsing */
 struct options {
@@ -266,12 +267,16 @@ static void* update_fs_loop(void *data) {
         update_fs();
         if (!options.no_notify && lookup_cnt) {
             if(options.only_expire) {
-                assert(fuse_lowlevel_notify_expire_entry
-                   (se, FUSE_ROOT_ID, old_name, strlen(old_name), FUSE_LL_EXPIRE_ONLY) == 0);
-                // For some reason, the kernel doesn't send a forget request,
-                // so we have to do it ourselves.
-                // (At least that's the behaviour on 6.2.9)
-                lookup_cnt = 0;
+                int ret = fuse_lowlevel_notify_expire_entry
+                   (se, FUSE_ROOT_ID, old_name, strlen(old_name), FUSE_LL_EXPIRE_ONLY);
+               // forget is not being called
+               // the dentry is running just into a timeout
+               if (old_lookup_cnt == lookup_cnt) {
+                 assert(ret == -ENOENT);
+               } else {
+                 assert(ret == 0);
+                 old_lookup_cnt = lookup_cnt;
+               }
             } else {
                 assert(fuse_lowlevel_notify_inval_entry
                       (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
