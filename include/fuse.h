@@ -968,7 +968,7 @@ struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
 #else /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 struct fuse *fuse_new_31(struct fuse_args *args,
 		      const struct fuse_operations *op,
-		      size_t op_size, void *user_data);
+		      size_t op_size, void *private_data);
 #define fuse_new(args, op, size, data) fuse_new_31(args, op, size, data)
 #endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 #endif
