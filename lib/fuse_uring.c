@@ -160,7 +160,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		 */
 
 		se->error = -EIO;
-		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs");
+		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
 
 		return -EIO;
 	}
@@ -172,6 +172,15 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
 				    queue->qid, ring_ent->tag);
+
+	if (se->debug) {
+		struct fuse_ring_req *rreq = ring_ent->ring_req;
+		struct fuse_out_header *out = &rreq->out;
+		fuse_log(FUSE_LOG_DEBUG,
+			 "    unique: %llu, result=%d\n",
+			 out->unique, rreq->in_out_arg_len);
+
+	}
 
 	/* leave io_uring_submit() to the main thread function */
 	return 0;
@@ -323,8 +332,6 @@ static int fuse_queue_setup_ring(struct io_uring *ring, size_t qid,
 			 "ring idx %zu: %s", qid, strerror(errno));
 		return rc;
 	}
-
-	fuse_log(FUSE_LOG_INFO, "setup complete for qid=%zu\n", qid);
 
 	return 0;
 }
@@ -630,6 +637,9 @@ static void *fuse_uring_thread(void *arg)
 		goto err;
 	}
 
+	fuse_log(FUSE_LOG_INFO, "setup complete for qid=%zu depht=%d\n",
+		 queue->qid, ring_pool->queue_depth);
+
 	for (tag = 0; tag < ring_pool->queue_depth; tag++) {
 		struct fuse_ring_ent *req = &queue->ent[tag];
 
@@ -670,13 +680,18 @@ static void *fuse_uring_thread(void *arg)
 
 		io_uring_submit_and_wait(&queue->ring, 1);
 		io_uring_for_each_cqe(&queue->ring, head, cqe) {
-
 			if (cqe->res != 0) {
 				fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
 				se->error = cqe->res;
 				goto err;
 			}
 			fuse_uring_handle_cqe(queue, cqe);
+
+			/* submit as soon as there is something availalble,
+			 * so that possibly async kernel side can already
+			 * move ahead
+			 */
+			io_uring_submit(&queue->ring);
 
 			/* XXX: Submit immediately, to shorten latencies?
 			 * Or submit fg (synchronous immediately and bg only
@@ -685,6 +700,7 @@ static void *fuse_uring_thread(void *arg)
 
 			count += 1;
 		}
+
 		io_uring_cq_advance(&queue->ring, count);
 	}
 
