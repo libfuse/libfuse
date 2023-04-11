@@ -301,7 +301,7 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 }
 
 static int fuse_queue_setup_ring(struct io_uring *ring, size_t qid,
-				 size_t depth, int fd)
+				 size_t depth, int fd, bool per_core_queue)
 {
 	int rc;
 	struct io_uring_params params = {0};
@@ -311,11 +311,11 @@ static int fuse_queue_setup_ring(struct io_uring *ring, size_t qid,
 	params.flags = IORING_SETUP_CQSIZE | IORING_SETUP_SQE128;
 	params.cq_entries = depth;
 
-	/* seems to slow down runs */
-#if 0
-	params.flags |= IORING_SETUP_COOP_TASKRUN |
-			IORING_SETUP_SINGLE_ISSUER;
-#endif
+	/* seems to slow down runs, although it should make it faster
+	 * XXX investigate why */
+	if (per_core_queue)
+		params.flags |= IORING_SETUP_COOP_TASKRUN |
+				IORING_SETUP_SINGLE_ISSUER;
 
 	rc = io_uring_queue_init_params(depth, ring, &params);
 	if (rc != 0) {
@@ -630,7 +630,7 @@ static void *fuse_uring_thread(void *arg)
 
 	res = fuse_queue_setup_ring(&queue->ring, queue->qid,
 				    ring_pool->queue_depth,
-				    queue->fd);
+				    queue->fd, ring_pool->per_core_queue);
 	if (res != 0) {
 		fuse_log(FUSE_LOG_ERR, "qid=%d uring init failed\n",
 			 queue->qid);
