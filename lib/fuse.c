@@ -3092,9 +3092,9 @@ static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
 	struct node *node;
 	int unlink_hidden = 0;
 
+	pthread_mutex_lock(&f->lock);
 	fuse_fs_release(f->fs, path, fi);
 
-	pthread_mutex_lock(&f->lock);
 	node = get_node(f, ino);
 	assert(node->open_count > 0);
 	--node->open_count;
