@@ -434,6 +434,13 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_EXPIRE_ONLY      (1 << 26)
 
 /**
+ * Indicates that an extended 'struct fuse_setxattr' is used by the kernel
+ * side - extra_flags are passed, which are used (as of now by acl) processing.
+ * For example FUSE_SETXATTR_ACL_KILL_SGID might be set.
+ */
+#define FUSE_CAP_SETXATTR_EXT     (1 << 27)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
