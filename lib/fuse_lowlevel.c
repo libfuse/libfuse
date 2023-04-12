@@ -1582,10 +1582,14 @@ static void do_statfs(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
+	struct fuse_session *se = req->se;
+	unsigned int xattr_ext = !!(se->conn.want & FUSE_CAP_SETXATTR_EXT);
 	struct fuse_setxattr_in *arg = (struct fuse_setxattr_in *) inarg;
-	char *name = PARAM(arg);
+	char *name = xattr_ext ? PARAM(arg) :
+		     (char *)arg + FUSE_COMPAT_SETXATTR_IN_SIZE;
 	char *value = name + strlen(name) + 1;
 
+	/* XXX:The API should be extended to support extra_flags/setxattr_flags */
 	if (req->se->op.setxattr)
 		req->se->op.setxattr(req, nodeid, name, value, arg->size,
 				    arg->flags);
@@ -2000,6 +2004,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
 		if (inargflags & FUSE_EXPLICIT_INVAL_DATA)
 			se->conn.capable |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+		if (inargflags & FUSE_SETXATTR_EXT)
+			se->conn.capable |= FUSE_CAP_SETXATTR_EXT;
 		if (!(inargflags & FUSE_MAX_PAGES)) {
 			size_t max_bufsize =
 				FUSE_DEFAULT_MAX_PAGES_PER_REQ * getpagesize()
@@ -2053,6 +2059,12 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	LL_SET_DEFAULT(se->op.readdirplus, FUSE_CAP_READDIRPLUS);
 	LL_SET_DEFAULT(se->op.readdirplus && se->op.readdir,
 		       FUSE_CAP_READDIRPLUS_AUTO);
+
+	/* This could safely become default, but libfuse needs an API extension
+	 * to support it
+	 * LL_SET_DEFAULT(1, FUSE_CAP_SETXATTR_EXT);
+	 */
+
 	se->conn.time_gran = 1;
 	
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
@@ -2130,6 +2142,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargflags |= FUSE_CACHE_SYMLINKS;
 	if (se->conn.want & FUSE_CAP_EXPLICIT_INVAL_DATA)
 		outargflags |= FUSE_EXPLICIT_INVAL_DATA;
+	if (se->conn.want & FUSE_CAP_SETXATTR_EXT)
+		outargflags |= FUSE_SETXATTR_EXT;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;

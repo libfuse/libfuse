@@ -9,7 +9,7 @@ import subprocess
 import pytest
 import platform
 import sys
-from distutils.version import LooseVersion
+from looseversion import LooseVersion
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker, fuse_caps,
                   fuse_proto)

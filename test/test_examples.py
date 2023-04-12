@@ -18,7 +18,7 @@ import time
 import errno
 import sys
 import platform
-from distutils.version import LooseVersion
+from looseversion import LooseVersion
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
