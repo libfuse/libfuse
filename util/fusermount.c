@@ -1356,9 +1356,13 @@ int main(int argc, char *argv[])
 	int cfd;
 	const char *opts = "";
 	const char *type = NULL;
+	int setup_auto_unmount_only = 0;
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
+		// Note: auto-unmount deliberately does not have a short version.
+		// It's meant for internal use by mount.c's setup_auto_unmount.
+		{"auto-unmount", no_argument, NULL, 'U'},
 		{"lazy",    no_argument, NULL, 'z'},
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},
@@ -1390,7 +1394,11 @@ int main(int argc, char *argv[])
 		case 'u':
 			unmount = 1;
 			break;
-
+		case 'U':
+			unmount = 1;
+			auto_unmount = 1;
+			setup_auto_unmount_only = 1;
+			break;
 		case 'z':
 			lazy = 1;
 			break;
@@ -1434,7 +1442,7 @@ int main(int argc, char *argv[])
 		exit(1);
 
 	umask(033);
-	if (unmount)
+	if (!setup_auto_unmount_only && unmount)
 		goto do_unmount;
 
 	commfd = getenv(FUSE_COMMFD_ENV);
@@ -1444,11 +1452,15 @@ int main(int argc, char *argv[])
 		goto err_out;
 	}
 
+	cfd = atoi(commfd);
+
+	if (setup_auto_unmount_only)
+		goto wait_for_auto_unmount;
+
 	fd = mount_fuse(mnt, opts, &type);
 	if (fd == -1)
 		goto err_out;
 
-	cfd = atoi(commfd);
 	res = send_fd(cfd, fd);
 	if (res == -1)
 		goto err_out;
@@ -1459,6 +1471,7 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
+wait_for_auto_unmount:
 	/* Become a daemon and wait for the parent to exit or die.
 	   ie For the control socket to get closed.
 	   btw We don't want to use daemon() function here because

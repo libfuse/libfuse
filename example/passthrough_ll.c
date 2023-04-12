@@ -89,7 +89,7 @@ struct lo_data {
 	int writeback;
 	int flock;
 	int xattr;
-	const char *source;
+	char *source;
 	double timeout;
 	int cache;
 	int timeout_set;
@@ -1240,7 +1240,11 @@ int main(int argc, char *argv[])
 		}
 
 	} else {
-		lo.source = "/";
+		lo.source = strdup("/");
+		if(!lo.source) {
+			fuse_log(FUSE_LOG_ERR, "fuse: memory allocation failed\n");
+			exit(1);
+		}
 	}
 	if (!lo.timeout_set) {
 		switch (lo.cache) {
@@ -1302,5 +1306,6 @@ err_out1:
 	if (lo.root.fd >= 0)
 		close(lo.root.fd);
 
+	free(lo.source);
 	return ret ? 1 : 0;
 }

@@ -372,6 +372,37 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.parametrize("intended_user", ('root', 'non_root'))
+def test_dev_auto_unmount(short_tmpdir, output_checker, intended_user):
+    """Check that root can mount with dev and auto_unmount
+    (but non-root cannot).
+    Split into root vs non-root, so that the output of pytest
+    makes clear what functionality is being tested."""
+    if os.getuid() == 0 and intended_user == 'non_root':
+        pytest.skip('needs to run as non-root')
+    if os.getuid() != 0 and intended_user == 'root':
+        pytest.skip('needs to run as root')
+    mnt_dir = str(short_tmpdir.mkdir('mnt'))
+    src_dir = str('/dev')
+    cmdline = base_cmdline + \
+                [ pjoin(basename, 'example', 'passthrough_ll'),
+                '-o', f'source={src_dir},dev,auto_unmount',
+                '-f', mnt_dir ]
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        if os.getuid() == 0:
+            open(pjoin(mnt_dir, 'null')).close()
+        else:
+            with pytest.raises(PermissionError):
+                open(pjoin(mnt_dir, 'null')).close()
+    except:
+        cleanup(mount_process, mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
 @pytest.mark.skipif(os.getuid() != 0,
                     reason='needs to run as root')
 def test_cuse(output_checker):

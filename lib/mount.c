@@ -322,6 +322,65 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	waitpid(pid, NULL, 0);
 }
 
+static int setup_auto_unmount(const char *mountpoint, int quiet)
+{
+	int fds[2], pid;
+	int res;
+
+	if (!mountpoint) {
+		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
+		return -1;
+	}
+
+	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
+	if(res == -1) {
+		perror("fuse: socketpair() failed");
+		return -1;
+	}
+
+	pid = fork();
+	if(pid == -1) {
+		perror("fuse: fork() failed");
+		close(fds[0]);
+		close(fds[1]);
+		return -1;
+	}
+
+	if(pid == 0) {
+		char env[10];
+		const char *argv[32];
+		int a = 0;
+
+		if (quiet) {
+			int fd = open("/dev/null", O_RDONLY);
+			if (fd != -1) {
+				dup2(fd, 1);
+				dup2(fd, 2);
+			}
+		}
+
+		argv[a++] = FUSERMOUNT_PROG;
+		argv[a++] = "--auto-unmount";
+		argv[a++] = "--";
+		argv[a++] = mountpoint;
+		argv[a++] = NULL;
+
+		close(fds[1]);
+		fcntl(fds[0], F_SETFD, 0);
+		snprintf(env, sizeof(env), "%i", fds[0]);
+		setenv(FUSE_COMMFD_ENV, env, 1);
+		exec_fusermount(argv);
+		perror("fuse: failed to exec fusermount3");
+		_exit(1);
+	}
+
+	close(fds[0]);
+
+	// Now fusermount3 will only exit when fds[1] closes automatically when our
+	// process exits.
+	return 0;
+}
+
 static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		const char *opts, int quiet)
 {
@@ -420,12 +479,6 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to access mountpoint %s: %s\n",
 			mnt, strerror(errno));
 		return -1;
-	}
-
-	if (mo->auto_unmount) {
-		/* Tell the caller to fallback to fusermount3 because
-		   auto-unmount does not work otherwise. */
-		return -2;
 	}
 
 	fd = open(devname, O_RDWR | O_CLOEXEC);
@@ -590,7 +643,13 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 		goto out;
 
 	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
-	if (res == -2) {
+	if (res >= 0 && mo->auto_unmount) {
+		if(0 > setup_auto_unmount(mountpoint, 0)) {
+			// Something went wrong, let's umount like in fuse_mount_sys.
+			umount2(mountpoint, MNT_DETACH); /* lazy umount */
+			res = -1;
+		}
+	} else if (res == -2) {
 		if (mo->fusermount_opts &&
 		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)
 			goto out;
