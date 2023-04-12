@@ -372,9 +372,16 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
     else:
         umount(mount_process, mnt_dir)
 
-def test_dev_auto_unmount(short_tmpdir, output_checker):
+@pytest.mark.parametrize("intended_user", ('root', 'non_root'))
+def test_dev_auto_unmount(short_tmpdir, output_checker, intended_user):
     """Check that root can mount with dev and auto_unmount
-    (but non-root cannot)."""
+    (but non-root cannot).
+    Split into root vs non-root, so that the output of pytest
+    makes clear what functionality is being tested."""
+    if os.getuid() == 0 and intended_user == 'non_root':
+        pytest.skip('needs to run as non-root')
+    if os.getuid() != 0 and intended_user == 'root':
+        pytest.skip('needs to run as root')
     mnt_dir = str(short_tmpdir.mkdir('mnt'))
     src_dir = str('/dev')
     cmdline = base_cmdline + \
