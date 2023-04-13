@@ -34,7 +34,8 @@ int fuse_session_loop(struct fuse_session *se)
 		fuse_session_process_buf_int(se, &fbuf, NULL);
 	}
 
-	free(fbuf.mem);
+	if (fbuf.mem)
+		free(fbuf.mem);
 	if(res > 0)
 		/* No error, just the length of the most recently read
 		   request */
