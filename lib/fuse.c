@@ -2623,7 +2623,6 @@ void fuse_fs_destroy(struct fuse_fs *fs)
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.destroy)
 		fs->op.destroy(fs->user_data);
-	free(fs);
 }
 
 static void fuse_lib_destroy(void *data)
@@ -2632,7 +2631,6 @@ static void fuse_lib_destroy(void *data)
 
 	fuse_create_context(f);
 	fuse_fs_destroy(f->fs);
-	f->fs = NULL;
 }
 
 static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
@@ -5091,6 +5089,7 @@ void fuse_destroy(struct fuse *f)
 	free(f->name_table.array);
 	pthread_mutex_destroy(&f->lock);
 	fuse_session_destroy(f->se);
+	free(f->fs);
 	free(f->conf.modules);
 	free(f);
 	fuse_delete_context_key();
