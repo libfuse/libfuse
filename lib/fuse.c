@@ -2967,6 +2967,20 @@ static void fuse_lib_unlink(fuse_req_t req, fuse_ino_t parent,
 		fuse_prepare_interrupt(f, req, &d);
 		if (!f->conf.hard_remove && is_open(f, parent, name)) {
 			err = hide_node(f, path, parent, name);
+			if (!err) {
+				/* we have hidden the node so now check again under a lock in case it is not used any more */
+				if (!is_open(f, parent, wnode->name)) {
+					char *unlinkpath;
+
+					/* get the hidden file path, to unlink it */
+					if (try_get_path(f, wnode->nodeid, NULL, &unlinkpath, NULL, false) == 0) {
+						err = fuse_fs_unlink(f->fs, unlinkpath);
+						if (!err)
+							remove_node(f, parent, wnode->name);
+						free(unlinkpath);
+					}
+				}
+			}
 		} else {
 			err = fuse_fs_unlink(f->fs, path);
 			if (!err)
