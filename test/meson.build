@@ -14,6 +14,20 @@ td += executable('readdir_inode', 'readdir_inode.c',
                  include_directories: include_dirs,
                  install: false)
 
+td += custom_target('test746.so',
+                      input: 'test746.c',
+                      output: 'test746.so',
+                      build_by_default: true,
+                      command: [
+                        'gcc', '-W', '-Wall', '-fPIC',
+                        '-Wl,-init,test746_init',
+                        '-Wl,-z,initfirst',
+                        '-shared',
+                        '-o', '@OUTPUT@',
+                        '@INPUT@',
+                        '-ldl'
+                      ])
+
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
                  'util.py', 'test_ctests.py', 'test_custom_io.py' ]
 td += custom_target('test_scripts', input: test_scripts,
