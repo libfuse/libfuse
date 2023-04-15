@@ -476,66 +476,52 @@ def test_746(tmpdir, output_checker):
     # TEST746_DELAY_DISABLE=1 python3 -m pytest test/test_examples.py::test_746
 
     # set the path for the library to preload
-    preloadLib = base_cmdline + \
+    preload_library_path = base_cmdline + \
         [ pjoin(basename, "test", "libtest746.so") ]
-    preloadLib = preloadLib[0]
-    #print("preloadLib: ", preloadLib)
+    preload_library_path = preload_library_path[0]
 
-    fuseMNT = str(tmpdir)
-    #print("fuseMNT: ", fuseMNT)
+    fuse_mountpoint = str(tmpdir)
 
     # set the FUSE binary path and command
-    fuseCMD = base_cmdline + \
+    fuse_binary_command = base_cmdline + \
         [ pjoin(basename, 'example', 'passthrough_fh'),
-        "-f", fuseMNT]
-    #print("fuseCMD: ", str(fuseCMD))
+        "-f", fuse_mountpoint]
 
     # start FUSE with our preload library
-    os.environ["LD_PRELOAD"] = preloadLib
-    fuseProcess = subprocess.Popen(fuseCMD,
+    os.environ["LD_PRELOAD"] = preload_library_path
+    fuse_process = subprocess.Popen(fuse_binary_command,
                                    stdout=output_checker.fd,
                                    stderr=output_checker.fd)
     os.environ["LD_PRELOAD"] = ""
 
-    leftoverFilesCount = -1
     try:
-        wait_for_mount(fuseProcess, fuseMNT)
+        wait_for_mount(fuse_process, fuse_mountpoint)
 
         # use TemporaryDirectory so that it gets cleaned up automatically
-        tempDir = tempfile.TemporaryDirectory(dir=fuseMNT + "/tmp/")
-        tempDirPath = tempDir.name
-        #print("tempDir: " + tempDirPath);
+        temp_dir = tempfile.TemporaryDirectory(dir=fuse_mountpoint + "/tmp/")
+        temp_dir_path = temp_dir.name
 
         ## test for the race condition
 
         # create the test file
-        tempFile, tempFilePath = tempfile.mkstemp(dir=tempDir.name)
-        #print("tempFile: " + tempFilePath);
+        temp_file, temp_file_path = tempfile.mkstemp(dir=temp_dir.name)
 
         # close and delete it back-to-back. with the induced
         # delays, these two FUSE OPs should execute in parallel
-        os.close(tempFile)
-        os.unlink(tempFilePath)
+        os.close(temp_file)
+        os.unlink(temp_file_path)
 
         # check if any ".fuse_hidden" files are still there
-        tempDirFiles = os.listdir(tempDirPath)
-        #print(tempDirFiles)
-
-        leftoverFilesCount = len(tempDirFiles)
-
-        if leftoverFilesCount == 0:
-            print("*** TEST746 PASS ***")
-        else:
-            print("*** TEST746 FAIL ***")
-            print("leftover files:", ", ".join(tempDirFiles))
+        temp_dir_files = os.listdir(temp_dir_path)
+        leftover_files_count = len(temp_dir_files)
 
     except:
-        cleanup(fuseProcess, fuseMNT)
+        cleanup(fuse_process, fuse_mountpoint)
 
     else:
-        umount(fuseProcess, fuseMNT)
+        umount(fuse_process, fuse_mountpoint)
 
-    assert leftoverFilesCount == 0
+    assert leftover_files_count == 0
 
 
 @contextmanager

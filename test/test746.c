@@ -21,8 +21,6 @@ void test746_init(void);
 
 void test746_init(void)
 {
-	fprintf(stderr, "*** TEST746 PRELOAD ACTIVE ***\n");
-
 	original_close = dlsym(RTLD_NEXT, "close");
 	original_rename = dlsym(RTLD_NEXT, "rename");
 }
