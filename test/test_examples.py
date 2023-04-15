@@ -477,7 +477,7 @@ def test_746(tmpdir, output_checker):
 
     # set the path for the library to preload
     preloadLib = base_cmdline + \
-        [ pjoin(basename, "test", "test746.so") ]
+        [ pjoin(basename, "test", "libtest746.so") ]
     preloadLib = preloadLib[0]
     #print("preloadLib: ", preloadLib)
 

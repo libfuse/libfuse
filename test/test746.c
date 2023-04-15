@@ -16,6 +16,9 @@ set TEST746_DELAY_DISABLE env variable to disable the delay on demand at runtime
 static int (*original_close)(int fd) = NULL;
 static int (*original_rename)(const char *oldpath, const char *newpath) = NULL;
 
+/* suppress "missing-declarations" compiler warning */
+void test746_init(void);
+
 void test746_init(void)
 {
 	fprintf(stderr, "*** TEST746 PRELOAD ACTIVE ***\n");
