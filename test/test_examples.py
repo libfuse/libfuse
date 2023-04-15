@@ -449,14 +449,15 @@ def test_746(tmpdir, output_checker):
     #
     # If RELEASE and UNLINK opcodes are sent back to back, and fuse_fs_release()
     # and fuse_fs_rename() are slow to execute, UNLINK will run while RELEASE is
-    # still executing, UNLINK will try to rename the file, and while the rename
-    # is happening the RELEASE will finish executing. So at the end, RELEASE will
+    # still executing. UNLINK will try to rename the file and, while the rename
+    # is happening, the RELEASE will finish executing. As a result, RELEASE will
     # not detect in time that UNLINK has happened, and UNLINK will not detect in
     # time that RELEASE has happened.
     #
+    #
     # NOTE: This is triggered only when nullpath_ok is set.
     #
-    # If it is not SET then get_path_nullok() called by fuse_lib_release() will
+    # If it is NOT SET then get_path_nullok() called by fuse_lib_release() will
     # call get_path_common() and lock the path, and then the fuse_lib_unlink()
     # will wait for the path to be unlocked before executing and thus synchronise
     # with fuse_lib_release().
@@ -464,63 +465,69 @@ def test_746(tmpdir, output_checker):
     # If it is SET then get_path_nullok() will just set the path to null and
     # return without locking anything and thus allowing fuse_lib_unlink() to
     # eventually execute unimpeded while fuse_lib_release() is still running.
-
-    ## Normal run:
-    # python3 test746.py
     #
-    ## Disable release() & rename() runtime delay injection:
-    # TEST746_DELAY_DISABLE=1 python3 test746.py
+    #
+    # This test relies on an external library (test746.so) that is LD_PRELOADed
+    # to intercept the libc's close() and rename() calls and add a show delay
+    # before forwarding the calls to libc.
+    #
+    # The delay can be disabled at call-time by setting the TEST746_DELAY_DISABLE
+    # environment variable. e.g:
+    # TEST746_DELAY_DISABLE=1 python3 -m pytest test/test_examples.py::test_746
 
     # set the path for the library to preload
     preloadLib = base_cmdline + \
         [ pjoin(basename, "test", "test746.so") ]
     preloadLib = preloadLib[0]
-    print("preloadLib: ", preloadLib)
+    #print("preloadLib: ", preloadLib)
 
-    # create the FUSE mountpoint
     fuseMNT = str(tmpdir)
-    print("fuseMNT: ", fuseMNT)
-    os.makedirs(fuseMNT, exist_ok=True)
+    #print("fuseMNT: ", fuseMNT)
 
-    # set the FUSE binary path
+    # set the FUSE binary path and command
     fuseCMD = base_cmdline + \
         [ pjoin(basename, 'example', 'passthrough_fh'),
         "-f", fuseMNT]
-    print("fuseCMD: ", str(fuseCMD))
+    #print("fuseCMD: ", str(fuseCMD))
 
-    # start FUSE with out preload library
+    # start FUSE with our preload library
     os.environ["LD_PRELOAD"] = preloadLib
     fuseProcess = subprocess.Popen(fuseCMD,
                                    stdout=output_checker.fd,
                                    stderr=output_checker.fd)
     os.environ["LD_PRELOAD"] = ""
 
-    ret = -1
+    leftoverFilesCount = -1
     try:
         wait_for_mount(fuseProcess, fuseMNT)
 
-        # use TemporaryDirectory so that it gets cleaned up at the end automatically
+        # use TemporaryDirectory so that it gets cleaned up automatically
         tempDir = tempfile.TemporaryDirectory(dir=fuseMNT + "/tmp/")
         tempDirPath = tempDir.name
         #print("tempDir: " + tempDirPath);
 
+        ## test for the race condition
+
+        # create the test file
         tempFile, tempFilePath = tempfile.mkstemp(dir=tempDir.name)
         #print("tempFile: " + tempFilePath);
 
-        # test for the race condition
+        # close and delete it back-to-back. with the induced
+        # delays, these two FUSE OPs should execute in parallel
         os.close(tempFile)
         os.unlink(tempFilePath)
 
-        # check if any leftover files are still there
+        # check if any ".fuse_hidden" files are still there
         tempDirFiles = os.listdir(tempDirPath)
         #print(tempDirFiles)
 
-        if len(tempDirFiles) == 0:
-            print(" *** TEST746 PASS ***")
-            ret = 0
+        leftoverFilesCount = len(tempDirFiles)
+
+        if leftoverFilesCount == 0:
+            print("*** TEST746 PASS ***")
         else:
-            print(" *** TEST746 FAIL ***")
-            ret = 1
+            print("*** TEST746 FAIL ***")
+            print("leftover files:", ", ".join(tempDirFiles))
 
     except:
         cleanup(fuseProcess, fuseMNT)
@@ -528,9 +535,7 @@ def test_746(tmpdir, output_checker):
     else:
         umount(fuseProcess, fuseMNT)
 
-    os.removedirs(fuseMNT);
-
-    assert ret == 0
+    assert leftoverFilesCount == 0
 
 
 @contextmanager
