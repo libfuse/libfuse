@@ -17,14 +17,6 @@ td += executable('issue_746_helper', 'issue_746_helper.c',
                  dependencies: [ libfuse_dep ],
                  install: false)
 
-td += shared_library('test746', 'test746.c',
-                      link_args: [
-                        '-Wl,-init,test746_init',
-                        '-Wl,-z,initfirst',
-                        '-ldl'
-                      ],
-                      install: false)
-
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
                  'util.py', 'test_ctests.py', 'test_custom_io.py' ]
 td += custom_target('test_scripts', input: test_scripts,
