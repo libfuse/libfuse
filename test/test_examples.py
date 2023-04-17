@@ -466,62 +466,36 @@ def test_746(tmpdir, output_checker):
     # return without locking anything and thus allowing fuse_lib_unlink() to
     # eventually execute unimpeded while fuse_lib_release() is still running.
     #
-    #
-    # This test relies on an external library (test746.so) that is LD_PRELOADed
-    # to intercept the libc's close() and rename() calls and add a show delay
-    # before forwarding the calls to libc.
-    #
-    # The delay can be disabled at call-time by setting the TEST746_DELAY_DISABLE
-    # environment variable. e.g:
-    # TEST746_DELAY_DISABLE=1 python3 -m pytest test/test_examples.py::test_746
-
-    # set the path for the library to preload
-    preload_library_path = base_cmdline + \
-        [ pjoin(basename, "test", "libtest746.so") ]
-    preload_library_path = preload_library_path[0]
 
     fuse_mountpoint = str(tmpdir)
 
-    # set the FUSE binary path and command
     fuse_binary_command = base_cmdline + \
-        [ pjoin(basename, 'example', 'passthrough_fh'),
+        [ pjoin(basename, 'test', 'issue_746_helper'),
         "-f", fuse_mountpoint]
 
-    # start FUSE with our preload library
-    os.environ["LD_PRELOAD"] = preload_library_path
     fuse_process = subprocess.Popen(fuse_binary_command,
                                    stdout=output_checker.fd,
                                    stderr=output_checker.fd)
-    os.environ["LD_PRELOAD"] = ""
 
     try:
         wait_for_mount(fuse_process, fuse_mountpoint)
 
-        # use TemporaryDirectory so that it gets cleaned up automatically
         temp_dir = tempfile.TemporaryDirectory(dir=fuse_mountpoint + "/tmp/")
         temp_dir_path = temp_dir.name
 
-        ## test for the race condition
-
-        # create the test file
         temp_file, temp_file_path = tempfile.mkstemp(dir=temp_dir.name)
 
-        # close and delete it back-to-back. with the induced
-        # delays, these two FUSE OPs should execute in parallel
         os.close(temp_file)
         os.unlink(temp_file_path)
 
-        # check if any ".fuse_hidden" files are still there
-        temp_dir_files = os.listdir(temp_dir_path)
-        leftover_files_count = len(temp_dir_files)
-
+        assert os.listdir(temp_dir_path) == []
+    
     except:
         cleanup(fuse_process, fuse_mountpoint)
+        raise
 
     else:
         umount(fuse_process, fuse_mountpoint)
-
-    assert leftover_files_count == 0
 
 
 @contextmanager

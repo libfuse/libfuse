@@ -13,6 +13,9 @@ td += executable('test_syscalls', 'test_syscalls.c',
 td += executable('readdir_inode', 'readdir_inode.c',
                  include_directories: include_dirs,
                  install: false)
+td += executable('issue_746_helper', 'issue_746_helper.c',
+                 dependencies: [ libfuse_dep ],
+                 install: false)
 
 td += shared_library('test746', 'test746.c',
                       link_args: [
