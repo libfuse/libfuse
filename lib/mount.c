@@ -318,40 +318,11 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	waitpid(pid, NULL, 0);
 }
 
-// copy environment variables, and prepend "FUSE_COMMFD_ENV={fd}"
-static char** prep_environ(char** env_fd_p, int fd)
-{
-	*env_fd_p = NULL;
-	size_t argc = 0;
-	for (char **env = environ; *env++; argc++);
-	char** env = calloc(argc + 2, sizeof(char*));
-	if(env == NULL)
-		return NULL;
-
-	char env_fd[sizeof(FUSE_COMMFD_ENV) + 30];
-	snprintf(env_fd, sizeof(env_fd), FUSE_COMMFD_ENV "=%i", fd);
-	*env_fd_p = env[0] = strdup(env_fd);
-	if(env_fd_p == NULL) {
-		free(env);
-		return NULL;
-	}
-	memcpy(env + 1, environ, (argc + 1) * sizeof(*env));
-	return env;
-}
-
 static int setup_auto_unmount(const char *mountpoint, int quiet)
 {
 	int fds[2];
 	pid_t pid;
 	int res;
-
-	char const *const argv[] = {
-		FUSERMOUNT_PROG,
-		"--auto-unmount",
-		"--",
-		mountpoint,
-		NULL,
-	};
 
 	if (!mountpoint) {
 		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
@@ -364,6 +335,18 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 		return -1;
 	}
 
+	char arg_fd_entry[30];
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
+
+	char const *const argv[] = {
+		FUSERMOUNT_PROG,
+		"--auto-unmount",
+		"--comm-fd", arg_fd_entry,
+		"--",
+		mountpoint,
+		NULL,
+	};
+
 	// TODO: add error handling for all manipulations of action.
 	posix_spawn_file_actions_t action;
 	posix_spawn_file_actions_init(&action);
@@ -374,20 +357,10 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 	}
 	posix_spawn_file_actions_addclose(&action, fds[1]);
 
-	char *env_fd_entry = NULL;
-	char **envp = prep_environ(&env_fd_entry, fds[0]);
-	int status;
-	if(envp == NULL) {
-		perror("fuse: could not allocate enough memory for env when starting fusermount");
-		status = -1;
-	} else {
-		status = posix_spawn(
-			&pid, FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp)
-			&& posix_spawnp(
-				&pid, FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp);
-	}
-	free(env_fd_entry);
-	free(envp);
+	int status = posix_spawn(&pid, FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, &action,
+			NULL, (char *const *) argv, environ)
+		&& posix_spawnp(&pid, FUSERMOUNT_PROG, &action,
+			NULL, (char *const *) argv, environ);
 	posix_spawn_file_actions_destroy(&action);
 
 	if(status != 0) {
@@ -412,15 +385,6 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	pid_t pid;
 	int res;
 
-	char const *const argv[] = {
-			FUSERMOUNT_PROG,
-			"-o",
-			opts ? opts : "",
-			"--",
-			mountpoint,
-			NULL,
-	};
-
 	if (!mountpoint) {
 		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
 		return -1;
@@ -432,6 +396,19 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		return -1;
 	}
 
+	char arg_fd_entry[30];
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
+
+	char const *const argv[] = {
+		FUSERMOUNT_PROG,
+		"--comm-fd", arg_fd_entry,
+		"-o", opts ? opts : "",
+		"--",
+		mountpoint,
+		NULL,
+	};
+
+
 	posix_spawn_file_actions_t action;
 	posix_spawn_file_actions_init(&action);
 
@@ -441,19 +418,10 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	}
 	posix_spawn_file_actions_addclose(&action, fds[1]);
 
-	char *env_fd_entry = NULL;
-	char **envp = prep_environ(&env_fd_entry, fds[0]);
-
-	int status;
-	if(envp == NULL) {
-		perror("fuse: could not allocate enough memory for env when starting fusermount");
-		status = -1;
-	} else {
-		status = posix_spawnp(
-			&pid, FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp);
-	}
-	free(env_fd_entry);
-	free(envp);
+	int status = posix_spawn(&pid, FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, &action,
+			NULL, (char *const *) argv, environ)
+		&& posix_spawnp(&pid, FUSERMOUNT_PROG, &action,
+			NULL, (char *const *) argv, environ);
 	posix_spawn_file_actions_destroy(&action);
 
 	if(status != 0) {

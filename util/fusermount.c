@@ -1352,7 +1352,7 @@ int main(int argc, char *argv[])
 	static int unmount = 0;
 	static int lazy = 0;
 	static int quiet = 0;
-	char *commfd;
+	char *commfd = NULL;
 	int cfd;
 	const char *opts = "";
 	const char *type = NULL;
@@ -1360,14 +1360,15 @@ int main(int argc, char *argv[])
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
-		// Note: auto-unmount deliberately does not have a short version.
-		// It's meant for internal use by mount.c's setup_auto_unmount.
-		{"auto-unmount", no_argument, NULL, 'U'},
 		{"lazy",    no_argument, NULL, 'z'},
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'V'},
 		{"options", required_argument, NULL, 'o'},
+		// Note: auto-unmount and comm-fd don't have short versions.
+		// They'ne meant for internal use by mount.c
+		{"auto-unmount", no_argument, NULL, 'U'},
+		{"comm-fd", required_argument, NULL, 'c'},
 		{0, 0, 0, 0}};
 
 	progname = strdup(argc > 0 ? argv[0] : "fusermount");
@@ -1376,7 +1377,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	while ((ch = getopt_long(argc, argv, "hVo:uzq", long_opts,
+	while ((ch = getopt_long(argc, argv, "hVo:uzqc", long_opts,
 				 NULL)) != -1) {
 		switch (ch) {
 		case 'h':
@@ -1398,6 +1399,9 @@ int main(int argc, char *argv[])
 			unmount = 1;
 			auto_unmount = 1;
 			setup_auto_unmount_only = 1;
+			break;
+		case 'c':
+			commfd = optarg;
 			break;
 		case 'z':
 			lazy = 1;
@@ -1445,7 +1449,8 @@ int main(int argc, char *argv[])
 	if (!setup_auto_unmount_only && unmount)
 		goto do_unmount;
 
-	commfd = getenv(FUSE_COMMFD_ENV);
+	if(commfd == NULL)
+		commfd = getenv(FUSE_COMMFD_ENV);
 	if (commfd == NULL) {
 		fprintf(stderr, "%s: old style mounting not supported\n",
 			progname);
