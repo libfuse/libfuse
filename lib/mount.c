@@ -402,7 +402,7 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	char const *const argv[] = {
 		FUSERMOUNT_PROG,
 		"--comm-fd", arg_fd_entry,
-		"-o", opts ? opts : "",
+		"--options", opts ? opts : "",
 		"--",
 		mountpoint,
 		NULL,
