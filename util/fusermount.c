@@ -1457,7 +1457,8 @@ int main(int argc, char *argv[])
 		struct stat statbuf;
 		fstat(cfd, &statbuf);
 		if(!S_ISSOCK(statbuf.st_mode)) {
-			fprintf(stderr, "%s: file descriptor %i is not a socket\n",
+			fprintf(stderr,
+				"%s: file descriptor %i is not a socket, can't send fuse fd\n",
 				progname, cfd);
 			goto err_out;
 		}
