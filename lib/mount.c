@@ -8,6 +8,9 @@
   See the file COPYING.LIB.
 */
 
+/* For environ */
+#define _GNU_SOURCE
+
 #include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_misc.h"
@@ -48,8 +51,6 @@
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC 128
 #endif
-
-extern char **environ;
 
 enum {
 	KEY_KERN_FLAG,
