@@ -125,12 +125,12 @@ static const struct fuse_opt fuse_mount_opts[] = {
 
 void fuse_mount_version(void)
 {
-	char const * const argv[] = { FUSERMOUNT_PROG, "--version", NULL };
+	char const *const argv[] = {FUSERMOUNT_PROG, "--version", NULL};
 	pid_t pid;
-	int status = posix_spawn(
-		&pid, FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, NULL, NULL, (char * const *) argv, environ)
-		&& posix_spawnp(
-			&pid, FUSERMOUNT_PROG, NULL, NULL, (char * const *) argv, environ);
+	int status = posix_spawn(&pid, FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, NULL,
+			NULL, (char * const *) argv, environ)
+		&& posix_spawnp(&pid, FUSERMOUNT_PROG, NULL,
+			NULL, (char * const *) argv, environ);
 	if(status != 0)
 		perror("posix_spawn");
 	else
