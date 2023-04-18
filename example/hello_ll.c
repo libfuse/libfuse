@@ -29,8 +29,6 @@
 #include <unistd.h>
 #include <assert.h>
 
-#include <time.h>
-
 static const char *hello_str = "Hello World!\n";
 static const char *hello_name = "hello";
 
@@ -252,15 +250,8 @@ int main(int argc, char *argv[])
 	if (fuse_set_signal_handlers(se) != 0)
 	    goto err_out2;
 
-	char* _p = calloc(10UL * 1024 * 1024 * 1024, sizeof(char));
-	clock_t t;
-    t = clock();
 	if (fuse_session_mount(se, opts.mountpoint) != 0)
 	    goto err_out3;
-	t = clock() - t;
-	free(_p);
-	double time_taken = ((double)t)/CLOCKS_PER_SEC; // in seconds
-    printf("mount() took %f seconds to execute \n", time_taken);
 
 	fuse_daemonize(opts.foreground);
 
