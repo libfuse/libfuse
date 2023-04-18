@@ -412,7 +412,6 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	pid_t pid;
 	int res;
 
-	// TODO: Use this way to build argv everywhere?
 	char const *const argv[] = {
 			FUSERMOUNT_PROG,
 			"-o",
@@ -445,8 +444,6 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	char *env_fd_entry = NULL;
 	char **envp = prep_environ(&env_fd_entry, fds[0]);
 
-	// TODO: recreate logic of exec_fusermount,
-	// ie do posix_spawn first, then posix_spawnp.
 	int status;
 	if(envp == NULL) {
 		perror("fuse: could not allocate enough memory for env when starting fusermount");
