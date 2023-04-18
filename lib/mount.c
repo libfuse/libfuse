@@ -376,18 +376,16 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 
 	char *env_fd_entry = NULL;
 	char **envp = prep_environ(&env_fd_entry, fds[0]);
+	int status;
 	if(envp == NULL) {
 		perror("fuse: could not allocate enough memory for env when starting fusermount");
-		free(env_fd_entry);
-		close(fds[0]);
-		close(fds[1]);
-		return -1;
+		status = -1;
+	} else {
+		status = posix_spawn(
+			&pid, FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp)
+			&& posix_spawnp(
+				&pid, FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp);
 	}
-
-	int status = posix_spawn(
-		&pid, FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp)
-		&& posix_spawnp(
-			&pid, FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp);
 	free(env_fd_entry);
 	free(envp);
 	posix_spawn_file_actions_destroy(&action);
