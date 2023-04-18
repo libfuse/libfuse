@@ -45,10 +45,6 @@
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
-#ifndef HAVE_FORK
-#define fork() vfork()
-#endif
-
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC 128
 #endif
@@ -339,7 +335,7 @@ static char** prep_environ(char** env_fd_p, int fd)
 		free(env);
 		return NULL;
 	}
-	memcpy(env + 1, environ, argc + 1);
+	memcpy(env + 1, environ, (argc + 1) * sizeof(*env));
 	return env;
 }
 
