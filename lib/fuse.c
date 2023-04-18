@@ -11,9 +11,7 @@
 
 
 /* For pthread_rwlock_t */
-#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
-#endif
 
 #include "fuse_config.h"
 #include "fuse_i.h"
