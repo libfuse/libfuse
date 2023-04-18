@@ -1377,7 +1377,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	while ((ch = getopt_long(argc, argv, "hVo:uzqc", long_opts,
+	while ((ch = getopt_long(argc, argv, "hVo:uzq", long_opts,
 				 NULL)) != -1) {
 		switch (ch) {
 		case 'h':
@@ -1458,6 +1458,14 @@ int main(int argc, char *argv[])
 	}
 
 	cfd = atoi(commfd);
+	{
+		struct stat statbuf;
+		fstat(cfd, &statbuf);
+		if(!S_ISSOCK(statbuf.st_mode)) {
+			fprintf(stderr, "%s: file descriptor %i is not a socket\n", progname, cfd);
+			goto err_out;
+		}
+	}
 
 	if (setup_auto_unmount_only)
 		goto wait_for_auto_unmount;
@@ -1467,8 +1475,10 @@ int main(int argc, char *argv[])
 		goto err_out;
 
 	res = send_fd(cfd, fd);
-	if (res == -1)
+	if (res == -1) {
+		umount2(mnt, MNT_DETACH); /* lazy umount */
 		goto err_out;
+	}
 	close(fd);
 
 	if (!auto_unmount) {
