@@ -409,6 +409,7 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		const char *opts, int quiet)
 {
 	int fds[2];
+	pid_t pid;
 	int res;
 
 	// TODO: Use this way to build argv everywhere?
@@ -444,11 +445,16 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	char *env_fd_entry = NULL;
 	char **envp = prep_environ(&env_fd_entry, fds[0]);
 
-	pid_t pid;
 	// TODO: recreate logic of exec_fusermount,
 	// ie do posix_spawn first, then posix_spawnp.
-	int status = posix_spawnp(
-		&pid, FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp);
+	int status;
+	if(envp == NULL) {
+		perror("fuse: could not allocate enough memory for env when starting fusermount");
+		status = -1;
+	} else {
+		status = posix_spawnp(
+			&pid, FUSERMOUNT_PROG, &action, NULL, (char *const *) argv, envp);
+	}
 	free(env_fd_entry);
 	free(envp);
 	posix_spawn_file_actions_destroy(&action);
