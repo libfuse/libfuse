@@ -1477,7 +1477,7 @@ int main(int argc, char *argv[])
 		goto err_out;
 
 	res = send_fd(cfd, fd);
-	if (res == -1) {
+	if (res != 0) {
 		umount2(mnt, MNT_DETACH); /* lazy umount */
 		goto err_out;
 	}
