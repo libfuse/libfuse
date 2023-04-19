@@ -218,52 +218,6 @@ static int xmp_rename(const char *from, const char *to, unsigned int flags)
 	return 0;
 }
 
-static int xmp_chmod(const char *path, mode_t mode,
-		     struct fuse_file_info *fi)
-{
-	int res;
-
-	if(fi)
-		res = fchmod(fi->fh, mode);
-	else
-		res = chmod(path, mode);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int xmp_chown(const char *path, uid_t uid, gid_t gid,
-		     struct fuse_file_info *fi)
-{
-	int res;
-
-	if (fi)
-		res = fchown(fi->fh, uid, gid);
-	else
-		res = lchown(path, uid, gid);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int xmp_truncate(const char *path, off_t size,
-			 struct fuse_file_info *fi)
-{
-	int res;
-
-	if(fi)
-		res = ftruncate(fi->fh, size);
-	else
-		res = truncate(path, size);
-
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
 static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
 	int fd;
@@ -273,72 +227,6 @@ static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 		return -errno;
 
 	fi->fh = fd;
-	return 0;
-}
-
-static int xmp_open(const char *path, struct fuse_file_info *fi)
-{
-	int fd;
-
-	fd = open(path, fi->flags);
-	if (fd == -1)
-		return -errno;
-
-	fi->fh = fd;
-	return 0;
-}
-
-static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
-		    struct fuse_file_info *fi)
-{
-	int res;
-
-	(void) path;
-	res = pread(fi->fh, buf, size, offset);
-	if (res == -1)
-		res = -errno;
-
-	return res;
-}
-
-static int xmp_write(const char *path, const char *buf, size_t size,
-		     off_t offset, struct fuse_file_info *fi)
-{
-	int res;
-
-	(void) path;
-	res = pwrite(fi->fh, buf, size, offset);
-	if (res == -1)
-		res = -errno;
-
-	return res;
-}
-
-static int xmp_statfs(const char *path, struct statvfs *stbuf)
-{
-	int res;
-
-	res = statvfs(path, stbuf);
-	if (res == -1)
-		return -errno;
-
-	return 0;
-}
-
-static int xmp_flush(const char *path, struct fuse_file_info *fi)
-{
-	int res;
-
-	(void) path;
-	/* This is called from every close on an open file, so call the
-	   close on the underlying filesystem.	But since flush may be
-	   called multiple times for an open file, this must not really
-	   close the file.  This is important if used on a network
-	   filesystem like NFS which flush the data/metadata on close() */
-	res = close(dup(fi->fh));
-	if (res == -1)
-		return -errno;
-
 	return 0;
 }
 
@@ -364,15 +252,7 @@ static const struct fuse_operations xmp_oper = {
 	.unlink		= xmp_unlink,
 	.rmdir		= xmp_rmdir,
 	.rename		= xmp_rename,
-	.chmod		= xmp_chmod,
-	.chown		= xmp_chown,
-	.truncate	= xmp_truncate,
 	.create		= xmp_create,
-	.open		= xmp_open,
-	.read		= xmp_read,
-	.write		= xmp_write,
-	.statfs		= xmp_statfs,
-	.flush		= xmp_flush,
 	.release	= xmp_release,
 };
 

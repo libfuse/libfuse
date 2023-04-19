@@ -443,29 +443,27 @@ def test_cuse(output_checker):
         mount_process.terminate()
 
 def test_746(tmpdir, output_checker):
-    # ###
-    # ### test case for Issue #746
-    # ###
-    #
-    # If RELEASE and UNLINK opcodes are sent back to back, and fuse_fs_release()
-    # and fuse_fs_rename() are slow to execute, UNLINK will run while RELEASE is
-    # still executing. UNLINK will try to rename the file and, while the rename
-    # is happening, the RELEASE will finish executing. As a result, RELEASE will
-    # not detect in time that UNLINK has happened, and UNLINK will not detect in
-    # time that RELEASE has happened.
-    #
-    #
-    # NOTE: This is triggered only when nullpath_ok is set.
-    #
-    # If it is NOT SET then get_path_nullok() called by fuse_lib_release() will
-    # call get_path_common() and lock the path, and then the fuse_lib_unlink()
-    # will wait for the path to be unlocked before executing and thus synchronise
-    # with fuse_lib_release().
-    #
-    # If it is SET then get_path_nullok() will just set the path to null and
-    # return without locking anything and thus allowing fuse_lib_unlink() to
-    # eventually execute unimpeded while fuse_lib_release() is still running.
-    #
+    """test case for Issue #746
+
+    If RELEASE and UNLINK opcodes are sent back to back, and fuse_fs_release()
+    and fuse_fs_rename() are slow to execute, UNLINK will run while RELEASE is
+    still executing. UNLINK will try to rename the file and, while the rename
+    is happening, the RELEASE will finish executing. As a result, RELEASE will
+    not detect in time that UNLINK has happened, and UNLINK will not detect in
+    time that RELEASE has happened.
+
+
+    NOTE: This is triggered only when nullpath_ok is set.
+
+    If it is NOT SET then get_path_nullok() called by fuse_lib_release() will
+    call get_path_common() and lock the path, and then the fuse_lib_unlink()
+    will wait for the path to be unlocked before executing and thus synchronise
+    with fuse_lib_release().
+
+    If it is SET then get_path_nullok() will just set the path to null and
+    return without locking anything and thus allowing fuse_lib_unlink() to
+    eventually execute unimpeded while fuse_lib_release() is still running.
+    """
 
     fuse_mountpoint = str(tmpdir)
 
@@ -491,10 +489,12 @@ def test_746(tmpdir, output_checker):
         assert os.listdir(temp_dir_path) == []
     
     except:
+        temp_dir.cleanup()
         cleanup(fuse_process, fuse_mountpoint)
         raise
 
     else:
+        temp_dir.cleanup()
         umount(fuse_process, fuse_mountpoint)
 
 
