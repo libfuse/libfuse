@@ -442,7 +442,7 @@ def test_cuse(output_checker):
     finally:
         mount_process.terminate()
 
-def test_746(tmpdir, output_checker):
+def test_release_unlink_race(tmpdir, output_checker):
     """test case for Issue #746
 
     If RELEASE and UNLINK opcodes are sent back to back, and fuse_fs_release()
@@ -468,7 +468,7 @@ def test_746(tmpdir, output_checker):
     fuse_mountpoint = str(tmpdir)
 
     fuse_binary_command = base_cmdline + \
-        [ pjoin(basename, 'test', 'issue_746_helper'),
+        [ pjoin(basename, 'test', 'release_unlink_race'),
         "-f", fuse_mountpoint]
 
     fuse_process = subprocess.Popen(fuse_binary_command,

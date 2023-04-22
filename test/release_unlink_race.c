@@ -63,7 +63,7 @@ static int xmp_rename(const char *from, const char *to, unsigned int flags)
 	if (flags)
 		return -EINVAL;
 
-        if(!getenv("TEST746_DELAY_DISABLE")) usleep(100000);
+        if(!getenv("RELEASEUNLINKRACE_DELAY_DISABLE")) usleep(100000);
 
 	res = rename(from, to);
 	if (res == -1)
@@ -88,7 +88,7 @@ static int xmp_release(const char *path, struct fuse_file_info *fi)
 {
 	(void) path;
 
-        if(!getenv("TEST746_DELAY_DISABLE")) usleep(100000);
+        if(!getenv("RELEASEUNLINKRACE_DELAY_DISABLE")) usleep(100000);
 
 	close(fi->fh);
 
