@@ -478,13 +478,13 @@ def test_746(tmpdir, output_checker):
     try:
         wait_for_mount(fuse_process, fuse_mountpoint)
 
-        temp_dir = tempfile.TemporaryDirectory(dir=fuse_mountpoint + "/tmp/")
+        temp_dir = tempfile.TemporaryDirectory(dir="/tmp/")
         temp_dir_path = temp_dir.name
 
-        temp_file, temp_file_path = tempfile.mkstemp(dir=temp_dir.name)
+        fuse_temp_file, fuse_temp_file_path = tempfile.mkstemp(dir=(fuse_mountpoint + temp_dir_path))
 
-        os.close(temp_file)
-        os.unlink(temp_file_path)
+        os.close(fuse_temp_file)
+        os.unlink(fuse_temp_file_path)
 
         assert os.listdir(temp_dir_path) == []
     
