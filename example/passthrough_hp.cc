@@ -1242,7 +1242,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("uring", "use uring communication",
             cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_URING))
         ("uring-per-core-queue", "Use a queue per cpu core",
-            cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_URING_PER_CORE_QUEUE))
+            cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_PER_CORE_QUEUE))
         ("uring-fg-depth", "Uring foreground queue depth",
             cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_FG_DEPTH))
         ("uring-bg-depth", "Uring background queue depth",
@@ -1282,7 +1282,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     fs.direct_io = options.count("direct-io");
 
     fs.uring.enable = options["uring"].as<bool>();
-    fs.uring.per_core_queue = options["uring-per-core-queue"].as<bool>();
+    fs.uring.per_core_queue = options["uring-per-core-queue"].as<int>();
     fs.uring.sync_queue_depth = options["uring-fg-depth"].as<int>();
     fs.uring.async_queue_depth = options["uring-bg-depth"].as<int>();
     fs.uring.arglen = options["uring-arglen"].as<int>();
