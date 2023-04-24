@@ -618,13 +618,26 @@ static void fuse_uring_set_thread_core(int qid)
 {
 	cpu_set_t mask;
 	int rc;
+	const int policy = SCHED_IDLE;
+	const struct sched_param param = {
+		.sched_priority = sched_get_priority_min(policy),
+	};
 
 	CPU_ZERO(&mask);
 	CPU_SET(qid, &mask);
 
 	rc = sched_setaffinity(0, sizeof(cpu_set_t), &mask);
 	if (rc != 0)
-		fuse_log(FUSE_LOG_ERR, "Failed to bind qid=%d to its core\n", qid);
+		fuse_log(FUSE_LOG_ERR, "Failed to bind qid=%d to its core: %s\n",
+			 qid, strerror(errno));
+
+	/* Set the lowest possible priority, so that the application submitting
+	 * requests is not moved away from the current core.
+	 */
+	rc = sched_setscheduler(0, policy, &param);
+	if (rc != 0)
+		fuse_log(FUSE_LOG_ERR, "Failed to set scheduler: %s\n",
+			 strerror(errno));
 }
 
 static void *fuse_uring_thread(void *arg)
