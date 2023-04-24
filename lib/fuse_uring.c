@@ -309,19 +309,34 @@ static int fuse_queue_setup_ring(struct io_uring *ring, size_t qid,
 	int files[1] = {fd};
 
 	params.flags = IORING_SETUP_CQSIZE | IORING_SETUP_SQE128;
+
+	if (0) {
+		params.flags |= IORING_SETUP_SQPOLL;
+
+		// causes persistent in kernel spinning
+		// params.flags |= IORING_SETUP_IOPOLL;
+
+		if (per_core_queue) {
+			params.flags |= IORING_SETUP_SQ_AFF;
+			params.sq_thread_cpu = qid;
+			params.sq_thread_idle = 1;
+		}
+
+	}
+
 	params.cq_entries = depth;
 
 	/* seems to slow down runs, although it should make it faster
 	 * XXX investigate why */
-	if (per_core_queue)
-		params.flags |= IORING_SETUP_COOP_TASKRUN |
-				IORING_SETUP_SINGLE_ISSUER;
+	if (0 || per_core_queue) {
+		params.flags |= IORING_SETUP_COOP_TASKRUN;
+		params.flags |= IORING_SETUP_SINGLE_ISSUER;
+	}
 
 	rc = io_uring_queue_init_params(depth, ring, &params);
 	if (rc != 0) {
-		rc = -errno;
 		fuse_log(FUSE_LOG_ERR, "Failed to setup qid %zu: %d (%s)\n",
-			 qid, errno, strerror(errno));
+			 qid, rc, strerror(-rc));
 		return rc;
 	}
 
