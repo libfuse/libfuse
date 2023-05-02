@@ -270,20 +270,20 @@ static void* update_fs_loop(void *data) {
             if(options.only_expire) {
                 int ret = fuse_lowlevel_notify_expire_entry
                    (se, FUSE_ROOT_ID, old_name, strlen(old_name));
-               // forget is not being called
-               // the dentry is running just into a timeout
-	       if (ret == -ENOSYS) {
-		 printf("fuse_lowlevel_notify_expire_entry not supported by kernel\n");
-		 printf("Stopping mountpoint...\n");
-		 raise(SIGINT);
-		 return NULL;
-	       }
-               if (old_lookup_cnt == lookup_cnt) {
-                 assert(ret == -ENOENT);
-               } else {
-                 assert(ret == 0);
-                 old_lookup_cnt = lookup_cnt;
-               }
+                if (ret == -ENOSYS) {
+                    printf("fuse_lowlevel_notify_expire_entry not supported by kernel\n");
+                    printf("Next call to mountpoint will kill it...\n");
+                    raise(SIGINT);
+                    return NULL;
+                }
+                // forget is not being called
+                // the dentry is running just into a timeout
+                if (old_lookup_cnt == lookup_cnt) {
+                    assert(ret == -ENOENT);
+                } else {
+                    assert(ret == 0);
+                    old_lookup_cnt = lookup_cnt;
+                }
             } else {
                 assert(fuse_lowlevel_notify_inval_entry
                       (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
