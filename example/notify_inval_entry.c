@@ -85,6 +85,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <assert.h>
+#include <signal.h>
 #include <stddef.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -93,6 +94,7 @@
 static char file_name[MAX_STR_LEN];
 static fuse_ino_t file_ino = 2;
 static int lookup_cnt = 0;
+static int old_lookup_cnt = 0;
 
 /* Command line parsing */
 struct options {
@@ -228,7 +230,15 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     }
 }
 
+static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
+    if(options.only_expire && !(conn->capable & FUSE_CAP_EXPIRE_ONLY)) {
+        fprintf(stderr, "FUSE_CAP_EXPIRE_ONLY not supported by kernel\n");
+        fuse_session_exit(*(struct fuse_session **) userdata);
+    }
+}
+
 static const struct fuse_lowlevel_ops tfs_oper = {
+    //.init	= tfs_init,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
@@ -258,8 +268,22 @@ static void* update_fs_loop(void *data) {
         update_fs();
         if (!options.no_notify && lookup_cnt) {
             if(options.only_expire) {
-                assert(fuse_lowlevel_notify_expire_entry
-                   (se, FUSE_ROOT_ID, old_name, strlen(old_name), FUSE_LL_EXPIRE_ONLY) == 0);
+                int ret = fuse_lowlevel_notify_expire_entry
+                   (se, FUSE_ROOT_ID, old_name, strlen(old_name));
+               // forget is not being called
+               // the dentry is running just into a timeout
+	       if (ret == -ENOSYS) {
+		 printf("fuse_lowlevel_notify_expire_entry not supported by kernel\n");
+		 printf("Stopping mountpoint...\n");
+		 raise(SIGINT);
+		 return NULL;
+	       }
+               if (old_lookup_cnt == lookup_cnt) {
+                 assert(ret == -ENOENT);
+               } else {
+                 assert(ret == 0);
+                 old_lookup_cnt = lookup_cnt;
+               }
             } else {
                 assert(fuse_lowlevel_notify_inval_entry
                       (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
@@ -312,7 +336,7 @@ int main(int argc, char *argv[]) {
     update_fs();
 
     se = fuse_session_new(&args, &tfs_oper,
-                          sizeof(tfs_oper), NULL);
+                          sizeof(tfs_oper), &se);
     if (se == NULL)
         goto err_out1;
 
