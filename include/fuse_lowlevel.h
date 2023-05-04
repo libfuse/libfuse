@@ -1688,6 +1688,10 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
  * Underlying function for fuse_lowlevel_notify_inval_entry() and
  * fuse_lowlevel_notify_expire_entry().
  * 
+ * @warning
+ * Only checks if fuse_lowlevel_notify_inval_entry() is supported by
+ * the kernel. All other flags will fall back to 
+ * fuse_lowlevel_notify_inval_entry() if not supported! 
  *
  * @param se the session object
  * @param parent inode number
@@ -1745,12 +1749,16 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
  * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
+ * 
+ * Added in FUSE protocol version 7.38. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do
+ * nothing.
  *
  * @param se the session object
  * @param parent inode number
  * @param name file name
  * @param namelen strlen() of file name
- * @return zero for success, -errno for failure
+ * @return zero for success, -errno for failure, -enosys if kernel does not support
 */
 int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
                                       const char *name, size_t namelen);
