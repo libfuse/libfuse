@@ -721,16 +721,10 @@ static void *fuse_uring_thread(void *arg)
 
 			/* submit as soon as there is something availalble,
 			 * so that possibly async kernel side can already
-			 * move ahead
+			 * move ahead?
 			 */
-			io_uring_submit(&queue->ring);
-
-			/* XXX: Submit immediately, to shorten latencies?
-			 * Or submit fg (synchronous immediately and async only
-			 * bundled?
-			 */
-
-			count += 1;
+			// io_uring_submit(&queue->ring);
+			count++;
 		}
 
 		io_uring_cq_advance(&queue->ring, count);
