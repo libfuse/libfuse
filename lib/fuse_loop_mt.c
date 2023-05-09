@@ -548,8 +548,7 @@ int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
 {
 	config->uring.use_uring = use_uring;
 
-	if (per_core_queue > 0 )
-		config->uring.per_core_queue = per_core_queue;
+	config->uring.per_core_queue = per_core_queue ? 1 : 0;
 
 	if (sync_queue_depth != 0)
 		config->uring.sync_queue_depth = sync_queue_depth;
