@@ -6,7 +6,7 @@ to fix the issue before public exposure, reducing the chance that the exploit wi
 used before a patch is released.
 
 Please submit information on the vulnerability as a
-[private report](https://github.com/libarchive/libarchive/security/advisories/new).
+[private report](https://github.com/libfuse/libfuse/security/advisories/new).
 
 Please provide the following information in your report:
 
