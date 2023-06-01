@@ -36,7 +36,7 @@
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
-#define FUSE_DEV "/dev/fuse"
+#define FUSE_DEV "/dev/red"
 
 static const char *progname;
 
@@ -206,10 +206,10 @@ static int may_unmount(const char *mnt, int quiet)
 	found = 0;
 	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
-		    (strcmp(entp->mnt_type, "fuse") == 0 ||
-		     strcmp(entp->mnt_type, "fuseblk") == 0 ||
-		     strncmp(entp->mnt_type, "fuse.", 5) == 0 ||
-		     strncmp(entp->mnt_type, "fuseblk.", 8) == 0)) {
+		    (strcmp(entp->mnt_type, "redfs") == 0 ||
+		     strcmp(entp->mnt_type, "redfsblk") == 0 ||
+		     strncmp(entp->mnt_type, "redfs.", 5) == 0 ||
+		     strncmp(entp->mnt_type, "redfsblk.", 8) == 0)) {
 			char *p = strstr(entp->mnt_opts, "user=");
 			if (p &&
 			    (p == entp->mnt_opts || *(p-1) == ',') &&
@@ -883,9 +883,9 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	}
 
 	if (subtype)
-		sprintf(type, "%s.%s", blkdev ? "fuseblk" : "fuse", subtype);
+		sprintf(type, "%s.%s", blkdev ? "redfsblk" : "redfs", subtype);
 	else
-		strcpy(type, blkdev ? "fuseblk" : "fuse");
+		strcpy(type, blkdev ? "rdfsblk" : "redfs");
 
 	if (fsname)
 		strcpy(source, fsname);
@@ -895,7 +895,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	res = mount_notrunc(source, mnt, type, flags, optbuf);
 	if (res == -1 && errno == ENODEV && subtype) {
 		/* Probably missing subtype support */
-		strcpy(type, blkdev ? "fuseblk" : "fuse");
+		strcpy(type, blkdev ? "redfsblk" : "redfs");
 		if (fsname) {
 			if (!blkdev)
 				sprintf(source, "%s#%s", subtype, fsname);
@@ -914,7 +914,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	if (res == -1) {
 		int errno_save = errno;
 		if (blkdev && errno == ENODEV && !fuse_mnt_check_fuseblk())
-			fprintf(stderr, "%s: 'fuseblk' support missing\n",
+			fprintf(stderr, "%s: 'redfsblk' support missing\n",
 				progname);
 		else
 			fprintf(stderr, "%s: mount failed: %s\n", progname,
@@ -1118,7 +1118,7 @@ static int open_fuse_device(char **devp)
 		return fd;
 
 	fprintf(stderr,
-		"%s: fuse device not found, try 'modprobe fuse' first\n",
+		"%s: red device not found, try 'modprobe redfs' first\n",
 		progname);
 
 	return -1;

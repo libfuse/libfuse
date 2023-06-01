@@ -3165,7 +3165,7 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 	if (fd != -1) {
 		if (fcntl(fd, F_GETFD) == -1) {
 			fuse_log(FUSE_LOG_ERR,
-				"fuse: Invalid file descriptor /dev/fd/%u\n",
+				"redfs: Invalid file descriptor /dev/fd/%u\n",
 				fd);
 			return -1;
 		}

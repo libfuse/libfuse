@@ -258,9 +258,9 @@ int main(int argc, char *argv[])
 	else
 		basename = argv[0];
 
-	if (strncmp(basename, "mount.fuse.", 11) == 0)
+	if (strncmp(basename, "mount.redfs.", 11) == 0)
 		type = basename + 11;
-	if (strncmp(basename, "mount.fuseblk.", 14) == 0)
+	if (strncmp(basename, "mount.redfsblk.", 14) == 0)
 		type = basename + 14;
 
 	if (type && !type[0])
@@ -292,9 +292,9 @@ int main(int argc, char *argv[])
 				exit(1);
 			}
 			type = argv[i];
-			if (strncmp(type, "fuse.", 5) == 0)
+			if (strncmp(type, "redfs.", 5) == 0)
 				type += 5;
-			else if (strncmp(type, "fuseblk.", 8) == 0)
+			else if (strncmp(type, "redfsblk.", 8) == 0)
 				type += 8;
 
 			if (!type[0]) {
@@ -355,7 +355,7 @@ int main(int argc, char *argv[])
 		uint64_t required_caps = CAP_TO_MASK(CAP_SETPCAP) |
 				CAP_TO_MASK(CAP_SYS_ADMIN);
 		if ((get_capabilities() & required_caps) != required_caps) {
-			fprintf(stderr, "%s: drop_privileges was requested, which launches the FUSE file system fully unprivileged. In order to do so %s must be run with privileges, please invoke with CAP_SYS_ADMIN and CAP_SETPCAP (e.g. as root).\n",
+			fprintf(stderr, "%s: drop_privileges was requested, which launches the REDFS file system fully unprivileged. In order to do so %s must be run with privileges, please invoke with CAP_SYS_ADMIN and CAP_SETPCAP (e.g. as root).\n",
 			progname, progname);
 			exit(1);
 		}

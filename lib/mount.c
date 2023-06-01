@@ -287,7 +287,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	}
 
 	if (geteuid() == 0) {
-		fuse_mnt_umount("fuse", mountpoint, mountpoint,  1);
+		fuse_mnt_umount("redfs", mountpoint, mountpoint,  1);
 		return;
 	}
 
@@ -449,7 +449,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			  const char *mnt_opts)
 {
 	char tmp[128];
-	const char *devname = "/dev/fuse";
+	const char *devname = "/dev/red";
 	char *source = NULL;
 	char *type = NULL;
 	struct stat stbuf;
@@ -471,9 +471,9 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
-			fuse_log(FUSE_LOG_ERR, "fuse: device not found, try 'modprobe fuse' first\n");
+			fuse_log(FUSE_LOG_ERR, "red: device not found, try 'modprobe redfs' first\n");
 		else
-			fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n",
+			fuse_log(FUSE_LOG_ERR, "redfs: failed to open %s: %s\n",
 				devname, strerror(errno));
 		return -1;
 	}
@@ -493,11 +493,11 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 
 	type = malloc((mo->subtype ? strlen(mo->subtype) : 0) + 32);
 	if (!type || !source) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate memory\n");
+		fuse_log(FUSE_LOG_ERR, "redfs: failed to allocate memory\n");
 		goto out_close;
 	}
 
-	strcpy(type, mo->blkdev ? "fuseblk" : "fuse");
+	strcpy(type, mo->blkdev ? "redfsblk" : "redfs");
 	if (mo->subtype) {
 		strcat(type, ".");
 		strcat(type, mo->subtype);
@@ -508,7 +508,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	res = mount(source, mnt, type, mo->flags, mo->kernel_opts);
 	if (res == -1 && errno == ENODEV && mo->subtype) {
 		/* Probably missing subtype support */
-		strcpy(type, mo->blkdev ? "fuseblk" : "fuse");
+		strcpy(type, mo->blkdev ? "redfsblk" : "redfs");
 		if (mo->fsname) {
 			if (!mo->blkdev)
 				sprintf(source, "%s#%s", mo->subtype,
@@ -530,9 +530,9 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			if (mo->blkdev && errno == ENODEV &&
 			    !fuse_mnt_check_fuseblk())
 				fuse_log(FUSE_LOG_ERR,
-					"fuse: 'fuseblk' support missing\n");
+					"redfs: 'redfsblk' support missing\n");
 			else
-				fuse_log(FUSE_LOG_ERR, "fuse: mount failed: %s\n",
+				fuse_log(FUSE_LOG_ERR, "redfs: mount failed: %s\n",
 					strerror(errno_save));
 		}
 
@@ -541,12 +541,12 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 
 #ifndef IGNORE_MTAB
 	if (geteuid() == 0) {
-		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
+		char *newmnt = fuse_mnt_resolve_path("redfs", mnt);
 		res = -1;
 		if (!newmnt)
 			goto out_umount;
 
-		res = fuse_mnt_add_mount("fuse", source, newmnt, type,
+		res = fuse_mnt_add_mount("redfs", source, newmnt, type,
 					 mnt_opts);
 		free(newmnt);
 		if (res == -1)
