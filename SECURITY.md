@@ -5,10 +5,8 @@ privately. **Do not disclose it as a public issue.** This gives me time to work 
 to fix the issue before public exposure, reducing the chance that the exploit will be
 used before a patch is released.
 
-You may submit the report in the following ways:
-
-- send an email to Nikolaus@rath.org; and/or
-- send me a [private vulnerability report](https://github.com/libarchive/libarchive/security/advisories/new)
+Please submit information on the vulnerability as a
+[private report](https://github.com/libarchive/libarchive/security/advisories/new).
 
 Please provide the following information in your report:
 
