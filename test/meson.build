@@ -24,13 +24,24 @@ td += custom_target('test_scripts', input: test_scripts,
                       command: ['cp', '-fPp',
                                 '@INPUT@', meson.current_build_dir() ])
 
-# Provide something helpful when running 'ninja test'
 
 if meson.is_subproject()
-	test('libfuse is a subproject, skipping tests', executable('wrong_command',
-                      'wrong_command.c', install: false,
-                       c_args: [ '-DMESON_IS_SUBPROJECT' ]))
+
+	message('libfuse tests will be skipped because it is a meson subproject.')
+
 else
-	test('wrong_command', executable('wrong_command', 'wrong_command.c',
-                      install: false))
+
+	python3 = find_program('python3', required: false)
+
+	if python3.found()
+		test(
+			'run tests',
+			python3,
+			args: ['-m', 'pytest'],
+			workdir: meson.current_source_dir()
+		)
+	else
+		message('libfuse tests will be skipped because python3 is missing')
+	endif
+
 endif
