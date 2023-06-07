@@ -37,8 +37,10 @@ if $useroot; then
     fi
 fi
 
-install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
+if [ "${udevrulesdir}" != "" ]; then
+    install -D -m 644 "${MESON_SOURCE_ROOT}/util/udev.rules" \
         "${DESTDIR}${udevrulesdir}/99-fuse3.rules"
+fi
 
 if [ "$initscriptdir" != "" ]; then
     install -D -m 755 "${MESON_SOURCE_ROOT}/util/init_script" \
