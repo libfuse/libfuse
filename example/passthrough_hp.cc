@@ -157,6 +157,7 @@ struct Fs {
     bool nocache;
     size_t num_threads;
     bool clone_fd;
+    std::string fuse_mount_options;
 };
 static Fs fs{};
 
@@ -1169,8 +1170,36 @@ static cxxopts::ParseResult parse_wrapper(cxxopts::Options& parser, int& argc, c
 }
 
 
+static void string_split(std::string s, std::vector<std::string>& out, std::string delimiter) {
+    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+    std::string token;
+
+    while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos) {
+        token = s.substr(pos_start, pos_end - pos_start);
+        pos_start = pos_end + delim_len;
+        out.push_back(token);
+    }
+
+    out.push_back(s.substr(pos_start));
+}
+
+
+static std::string string_join(const std::vector<std::string>& elems, char delim)
+{
+    std::ostringstream out;
+    for (auto ii = elems.begin(); ii != elems.end(); ++ii) {
+        out << (*ii);
+        if (ii + 1 != elems.end()) {
+            out << delim;
+        }
+    }
+    return out.str();
+}
+
+
 static cxxopts::ParseResult parse_options(int argc, char **argv) {
     cxxopts::Options opt_parser(argv[0]);
+    std::vector<std::string> mount_options;
     opt_parser.add_options()
         ("debug", "Enable filesystem debug messages")
         ("debug-fuse", "Enable libfuse debug messages")
@@ -1179,6 +1208,8 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("nocache", "Disable all caching")
         ("nosplice", "Do not use splice(2) to transfer data")
         ("single", "Run single-threaded")
+        ("o", "Mount options (see mount.fuse(5) - only use if you know what "
+              "you are doing)", cxxopts::value(mount_options))
         ("num-threads", "Number of libfuse worker threads",
                         cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
         ("clone-fd", "use separate fuse device fd for each thread",
@@ -1220,6 +1251,30 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     fs.source = std::string {resolved_path};
     free(resolved_path);
 
+    std::vector<std::string> flattened_mount_opts;
+    for (auto opt : mount_options) {
+        string_split(opt, flattened_mount_opts, ",");
+    }
+
+    bool found_fsname = false;
+    for (auto opt : flattened_mount_opts) {
+        if (opt.find("fsname=") == 0) {
+            found_fsname = true;
+            continue;
+        }
+
+        /* Filter out some obviously incorrect options. */
+        if (opt == "fd") {
+            std::cout << argv[0] << ": Unsupported mount option: " << opt << "\n";
+            print_usage(argv[0]);
+            exit(2);
+        }
+    }
+    if (!found_fsname) {
+        flattened_mount_opts.push_back("fsname=" + fs.source);
+    }
+    flattened_mount_opts.push_back("default_permissions");
+    fs.fuse_mount_options = string_join(flattened_mount_opts, ',');
     return options;
 }
 
@@ -1244,7 +1299,6 @@ int main(int argc, char *argv[]) {
 
     // Parse command line options
     auto options {parse_options(argc, argv)};
-
 
     // We need an fd for every dentry in our the filesystem that the
     // kernel knows about. This is way more than most processes need,
@@ -1272,7 +1326,7 @@ int main(int argc, char *argv[]) {
     fuse_args args = FUSE_ARGS_INIT(0, nullptr);
     if (fuse_opt_add_arg(&args, argv[0]) ||
         fuse_opt_add_arg(&args, "-o") ||
-        fuse_opt_add_arg(&args, "default_permissions,fsname=hpps") ||
+        fuse_opt_add_arg(&args, fs.fuse_mount_options.c_str()) ||
         (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory");
 
@@ -1288,8 +1342,6 @@ int main(int argc, char *argv[]) {
     // Don't apply umask, use modes exactly as specified
     umask(0);
 
-    fuse_daemonize(fs.foreground);
-
     // Mount and run main loop
     loop_config = fuse_loop_cfg_create();
 
@@ -1298,6 +1350,9 @@ int main(int argc, char *argv[]) {
 
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
+
+    fuse_daemonize(fs.foreground);
+
     if (options.count("single"))
         ret = fuse_session_loop(se);
     else
