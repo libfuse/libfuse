@@ -9,10 +9,6 @@
   See the file COPYING.LIB
 */
 
-
-/* For pthread_rwlock_t */
-#define _GNU_SOURCE
-
 #include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
