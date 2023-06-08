@@ -16,8 +16,14 @@ executable('mount.fuse3', ['mount.fuse.c'],
 
 udevrulesdir = get_option('udevrulesdir')
 if udevrulesdir == ''
-  udev = dependency('udev')
-  udevrulesdir = join_paths(udev.get_variable(pkgconfig: 'udevdir'), 'rules.d')
+  udev = dependency('udev', required: false)
+  if udev.found()
+     udevrulesdir = join_paths(udev.get_variable(pkgconfig: 'udevdir'), 'rules.d')
+  endif
+endif
+
+if udevrulesdir == ''
+  warning('could not determine udevdir, udev.rules will not be installed')
 endif
 
 meson.add_install_script('install_helper.sh',
