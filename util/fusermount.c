@@ -1480,6 +1480,7 @@ int main(int argc, char *argv[])
 
 	if (!auto_unmount) {
 		free(mnt);
+		free((void*) type);
 		return 0;
 	}
 
@@ -1532,10 +1533,12 @@ do_unmount:
 		goto err_out;
 
 success_out:
+	free((void*) type);
 	free(mnt);
 	return 0;
 
 err_out:
+	free((void*) type);
 	free(mnt);
 	exit(1);
 }

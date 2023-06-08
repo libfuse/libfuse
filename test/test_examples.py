@@ -442,6 +442,65 @@ def test_cuse(output_checker):
     finally:
         mount_process.terminate()
 
+def test_release_unlink_race(tmpdir, output_checker):
+    """test case for Issue #746
+
+    If RELEASE and UNLINK opcodes are sent back to back, and fuse_fs_release()
+    and fuse_fs_rename() are slow to execute, UNLINK will run while RELEASE is
+    still executing. UNLINK will try to rename the file and, while the rename
+    is happening, the RELEASE will finish executing. As a result, RELEASE will
+    not detect in time that UNLINK has happened, and UNLINK will not detect in
+    time that RELEASE has happened.
+
+
+    NOTE: This is triggered only when nullpath_ok is set.
+
+    If it is NOT SET then get_path_nullok() called by fuse_lib_release() will
+    call get_path_common() and lock the path, and then the fuse_lib_unlink()
+    will wait for the path to be unlocked before executing and thus synchronise
+    with fuse_lib_release().
+
+    If it is SET then get_path_nullok() will just set the path to null and
+    return without locking anything and thus allowing fuse_lib_unlink() to
+    eventually execute unimpeded while fuse_lib_release() is still running.
+    """
+
+    fuse_mountpoint = str(tmpdir)
+
+    fuse_binary_command = base_cmdline + \
+        [ pjoin(basename, 'test', 'release_unlink_race'),
+        "-f", fuse_mountpoint]
+
+    fuse_process = subprocess.Popen(fuse_binary_command,
+                                   stdout=output_checker.fd,
+                                   stderr=output_checker.fd)
+
+    try:
+        wait_for_mount(fuse_process, fuse_mountpoint)
+
+        temp_dir = tempfile.TemporaryDirectory(dir="/tmp/")
+        temp_dir_path = temp_dir.name
+
+        fuse_temp_file, fuse_temp_file_path = tempfile.mkstemp(dir=(fuse_mountpoint + temp_dir_path))
+
+        os.close(fuse_temp_file)
+        os.unlink(fuse_temp_file_path)
+
+        # needed for slow CI/CD pipelines for unlink OP to complete processing
+        safe_sleep(3)
+
+        assert os.listdir(temp_dir_path) == []
+    
+    except:
+        temp_dir.cleanup()
+        cleanup(fuse_process, fuse_mountpoint)
+        raise
+
+    else:
+        temp_dir.cleanup()
+        umount(fuse_process, fuse_mountpoint)
+
+
 @contextmanager
 def os_open(name, flags):
     fd = os.open(name, flags)

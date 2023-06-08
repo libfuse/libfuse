@@ -313,6 +313,12 @@ struct fuse_lowlevel_ops {
 	 * expected to reset the setuid and setgid bits if the file
 	 * size or owner is being changed.
 	 *
+	 * This method will not be called to update st_atime or st_ctime implicitly
+	 * (eg. after a read() request), and only be called to implicitly update st_mtime
+	 * if writeback caching is active. It is the filesystem's responsibility to update
+	 * these timestamps when needed, and (if desired) to implement mount options like
+	 * `noatime` or `relatime`.
+	 *
 	 * If the setattr was invoked from the ftruncate() system call
 	 * under Linux kernel versions 2.6.15 or later, the fi->fh will
 	 * contain the value set by the open method or will be undefined

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+ulimit -n 1048576
+
+# It would be easier if we could just set SCRATCH_DEV and TEST_DEV to the source directory
+# path in local.options. Unfortunately, setting these variables to a path seems get
+# xfstests all worked up (even though it should treat these as opaque values), and it
+# refuses to even start running any tests).
+dev="$1"
+shift
+if [ "$dev" = "${SCRATCH_DEV}" ]; then
+  source="${SCRATCH_SOURCE}"
+else
+  source="${TEST_SOURCE}"
+fi
+
+exec "$PASSTHROUGH_PATH" -o fsname=$dev,allow_other "${source}" "$@"
