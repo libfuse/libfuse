@@ -29,7 +29,7 @@
 #define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 14
+#define FUSE_MINOR_VERSION 15
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)

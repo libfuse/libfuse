@@ -1,3 +1,13 @@
+libfuse 3.15.0 (2023-06-09)
+===========================
+
+* Improved support for some less common systems (32 bit, alternative libcs)
+
+* Unsupported mount options are no longer silently accepted.
+
+* auto_unmount is now compatible with allow_other.
+
+
 libfuse 3.14.1 (2023-03-26)
 ===========================
 
