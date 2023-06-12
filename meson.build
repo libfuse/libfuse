@@ -177,10 +177,12 @@ int main()
 }
 '''
 
-result = cc.run(detect_getmntent_needs_unescape)
-if result.compiled() and result.returncode() == 0 and result.stdout().strip() == 'needs escaping'
-  message('getmntent does not unescape')
-  add_project_arguments('-DGETMNTENT_NEEDS_UNESCAPING', language: 'c')
+if not meson.is_cross_build()
+  result = cc.run(detect_getmntent_needs_unescape)
+  if result.compiled() and result.returncode() == 0 and result.stdout().strip() == 'needs escaping'
+    message('getmntent does not unescape')
+    add_project_arguments('-DGETMNTENT_NEEDS_UNESCAPING', language: 'c')
+  endif
 endif
 
 # Write private test results into fuse_config.h (stored in build directory)
