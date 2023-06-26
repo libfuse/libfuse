@@ -371,8 +371,6 @@ int main(int argc, char *argv[]) {
         ret = fuse_session_loop_mt(se, &config);
     }
 
-    pthread_join(updater, NULL);
-
     // fuse session was cancelled within update_fs_loop()
     if (ret == -FUSE_DESTROY) {
         goto err_out3;
