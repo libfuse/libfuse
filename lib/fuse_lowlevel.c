@@ -2305,7 +2305,26 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	return send_notify_iov(se, FUSE_NOTIFY_INVAL_INODE, iov, 2);
 }
 
-int fuse_lowlevel_notify_entry(struct fuse_session *se, fuse_ino_t parent,
+/**
+ * Notify parent attributes and the dentry matching parent/name
+ * 
+ * Underlying base function for fuse_lowlevel_notify_inval_entry() and
+ * fuse_lowlevel_notify_expire_entry().
+ * 
+ * @warning
+ * Only checks if fuse_lowlevel_notify_inval_entry() is supported by
+ * the kernel. All other flags will fall back to 
+ * fuse_lowlevel_notify_inval_entry() if not supported!
+ * DO THE PROPER CHECKS IN THE DERIVED FUNCTION!
+ *
+ * @param se the session object
+ * @param parent inode number
+ * @param name file name
+ * @param namelen strlen() of file name
+ * @param flags flags to control if the entry should be expired or invalidated
+ * @return zero for success, -errno for failure
+*/
+static int fuse_lowlevel_notify_entry(struct fuse_session *se, fuse_ino_t parent,
 							const char *name, size_t namelen,
 							enum fuse_notify_entry_flags flags)
 {

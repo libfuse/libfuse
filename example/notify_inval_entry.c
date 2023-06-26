@@ -78,6 +78,8 @@
 
 #define FUSE_USE_VERSION 34
 
+#include <fuse_i.h>
+#include <fuse_kernel.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -230,15 +232,7 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     }
 }
 
-static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
-    if(options.only_expire && !(conn->capable & FUSE_CAP_EXPIRE_ONLY)) {
-        fprintf(stderr, "FUSE_CAP_EXPIRE_ONLY not supported by kernel\n");
-        fuse_session_exit(*(struct fuse_session **) userdata);
-    }
-}
-
 static const struct fuse_lowlevel_ops tfs_oper = {
-    //.init	= tfs_init,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
@@ -263,28 +257,40 @@ static void* update_fs_loop(void *data) {
     struct fuse_session *se = (struct fuse_session*) data;
     char *old_name;
 
-    while(1) {
+
+    while(!fuse_session_exited(se)) {
         old_name = strdup(file_name);
         update_fs();
-        if (!options.no_notify && lookup_cnt) {
-            if(options.only_expire) {
+
+        int curr_lookup_cnt = lookup_cnt;
+        if (!options.no_notify && curr_lookup_cnt) {
+            if(options.only_expire) { // expire entry
                 int ret = fuse_lowlevel_notify_expire_entry
                    (se, FUSE_ROOT_ID, old_name, strlen(old_name));
+
+                // no kernel support
                 if (ret == -ENOSYS) {
                     printf("fuse_lowlevel_notify_expire_entry not supported by kernel\n");
-                    printf("Next call to mountpoint will kill it...\n");
-                    raise(SIGINT);
-                    return NULL;
+                    printf("Exiting...\n");
+                    se->error = ret;
+
+                    fuse_session_exit(se);
+                    while(!fuse_session_exited(se)) {
+                        sleep(1);
+                    }
+                    fuse_session_unmount(se);
+
+                    break;
                 }
-                // forget is not being called
-                // the dentry is running just into a timeout
-                if (old_lookup_cnt == lookup_cnt) {
+                // kernel cache timeout deletes dentry without calling forget()
+                // lookup_cnt is therefore not decreased
+                if (old_lookup_cnt == curr_lookup_cnt) {
                     assert(ret == -ENOENT);
-                } else {
+                } else { // expire was successful
                     assert(ret == 0);
-                    old_lookup_cnt = lookup_cnt;
+                    old_lookup_cnt = curr_lookup_cnt;
                 }
-            } else {
+            } else { // invalidate entry
                 assert(fuse_lowlevel_notify_inval_entry
                       (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
             }
@@ -357,12 +363,19 @@ int main(int argc, char *argv[]) {
     }
 
     /* Block until ctrl+c or fusermount -u */
-    if (opts.singlethread)
+    if (opts.singlethread) {
         ret = fuse_session_loop(se);
-    else {
+    } else {
         config.clone_fd = opts.clone_fd;
         config.max_idle_threads = opts.max_idle_threads;
         ret = fuse_session_loop_mt(se, &config);
+    }
+
+    pthread_join(updater, NULL);
+
+    // fuse session was cancelled within update_fs_loop()
+    if (ret == -FUSE_DESTROY) {
+        goto err_out3;
     }
 
     fuse_session_unmount(se);
