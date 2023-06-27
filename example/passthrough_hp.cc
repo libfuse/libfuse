@@ -81,6 +81,12 @@ using namespace std;
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
 #define SFS_DEFAULT_CLONE_FD "0"
 
+/* In read/write bypass mode typically a buffer copy is done, with buf_copy = 2
+ * that is avoided as well. For read() that is not possible right now,
+ * though.
+ */
+#define SFS_BYPASS_BUF_COPY 2
+
 /* We are re-using pointers to our `struct sfs_inode` and `struct
    sfs_dirp` elements as inodes and file handles. This means that we
    must be able to store pointer a pointer in both a fuse_ino_t
@@ -158,6 +164,12 @@ struct Fs {
     size_t num_threads;
     bool clone_fd;
     std::string fuse_mount_options;
+
+    /* for fuse benchmarking, to avoid the need of an indefinitely fast
+     * backend file system - will skip file writes/reads
+     */
+    bool bypass_rw;
+    char *bypass_buf;
 };
 static Fs fs{};
 
@@ -928,8 +940,22 @@ static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) 
         FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
     buf.buf[0].fd = fi->fh;
     buf.buf[0].pos = off;
+    enum fuse_buf_copy_flags copy_flags = FUSE_BUF_COPY_FLAGS;
 
-    fuse_reply_data(req, &buf, FUSE_BUF_COPY_FLAGS);
+    if (fs.bypass_rw) {
+        /* special benchmark, to see how fast fuse works - just copy
+         * from a memory buffer
+         *
+         * Note: Without modifying fuse_reply_data() this copy cannot be
+         *        avoided ,SFS_BYPASS_BUF_COPY is not possible
+         */
+        buf.buf[0].fd = -1;
+        buf.buf[0].flags = static_cast<fuse_buf_flags>(0);
+        buf.buf[0].mem = static_cast<void *>(fs.bypass_buf);
+        copy_flags = static_cast<fuse_buf_copy_flags>(0);
+    }
+
+    fuse_reply_data(req, &buf, copy_flags);
 }
 
 static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
@@ -946,8 +972,30 @@ static void do_write_buf(fuse_req_t req, size_t size, off_t off,
         FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
     out_buf.buf[0].fd = fi->fh;
     out_buf.buf[0].pos = off;
+    fuse_buf_copy_flags copy_flags = FUSE_BUF_COPY_FLAGS;
 
-    auto res = fuse_buf_copy(&out_buf, in_buf, FUSE_BUF_COPY_FLAGS);
+    const int bypass = fs.bypass_rw;
+
+    if (bypass) {
+
+        /* special benchmark, to see how fast fuse works - the destination
+         * file is not modified
+         */
+        if (bypass == SFS_BYPASS_BUF_COPY) {
+            /* the received buffer is not used at all */
+            size_t res = size;
+            fuse_reply_write(req, (size_t)res);
+            return;
+        }
+
+        /* the received buffer is used for another memory copy */
+        out_buf.buf[0].fd = -1;
+        out_buf.buf[0].flags = static_cast<fuse_buf_flags>(0);
+        out_buf.buf[0].mem = static_cast<void *>(fs.bypass_buf);
+        copy_flags = static_cast<fuse_buf_copy_flags>(0);
+    }
+
+    auto res = fuse_buf_copy(&out_buf, in_buf, copy_flags);
     if (res < 0)
         fuse_reply_err(req, -res);
     else
@@ -1211,9 +1259,12 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("o", "Mount options (see mount.fuse(5) - only use if you know what "
               "you are doing)", cxxopts::value(mount_options))
         ("num-threads", "Number of libfuse worker threads",
-                        cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
+            cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
         ("clone-fd", "use separate fuse device fd for each thread",
-                        cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD));
+            cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD))
+        ("bypass-rw", "Bypass write/reads - fuse interface benchmark mode "
+                      "(1 to bypass writes, 2 to also avoid buffer copies)",
+            cxxopts::value<int>()->default_value("0"));
 
 
     // FIXME: Find a better way to limit the try clause to just
@@ -1245,6 +1296,14 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     fs.nosplice = options.count("nosplice") != 0;
     fs.num_threads = options["num-threads"].as<int>();
     fs.clone_fd = options["clone-fd"].as<bool>();
+
+    fs.bypass_rw = options["bypass-rw"].as<int>();
+    if (fs.bypass_rw) {
+        std::cout << "===== Warning RW IO bypassed! Data corruption expected! ====="
+                  << std::endl;
+        fs.bypass_buf = reinterpret_cast<char *>(new uint8_t [1024 * 1024 * 2]);
+    }
+
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
         warn("WARNING: realpath() failed with");
@@ -1371,6 +1430,9 @@ err_out1:
 
     fuse_loop_cfg_destroy(loop_config);
     fuse_opt_free_args(&args);
+
+    if (fs.bypass_rw)
+	    delete fs.bypass_buf;
 
     return ret ? 1 : 0;
 }
