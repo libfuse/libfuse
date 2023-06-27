@@ -835,6 +835,7 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     }
 
     fi->fh = fd;
+    fi->parallel_direct_writes = 1;
     fuse_entry_param e;
     auto err = do_lookup(parent, name, &e);
     if (err) {
@@ -901,6 +902,7 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     fi->keep_cache = (fs.timeout != 0);
     fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
     fi->fh = fd;
+    fi->parallel_direct_writes = 1;
     fuse_reply_open(req, fi);
 }
 
