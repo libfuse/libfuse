@@ -2112,9 +2112,12 @@ int fuse_session_loop(struct fuse_session *se);
 /**
  * Flag a session as terminated.
  *
- * This function is invoked by the POSIX signal handlers, when
- * registered using fuse_set_signal_handlers(). It will cause any
- * running event loops to terminate on the next opportunity.
+ * This will cause any running event loops to terminate on the next opportunity. If this function is
+ * called by a thread that is not a FUSE worker thread, the next
+ * opportunity will be when FUSE a request is received (which may be far in the future if the
+ * filesystem is not currently being used by any clients). One way to avoid this delay is to
+ * afterwards sent a signal to the main thread (if fuse_set_signal_handlers() is used, SIGPIPE
+ * will cause the main thread to wake-up but otherwise be ignored).
  *
  * @param se the session
  */
