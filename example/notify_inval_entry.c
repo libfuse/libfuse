@@ -96,7 +96,7 @@
 static char file_name[MAX_STR_LEN];
 static fuse_ino_t file_ino = 2;
 static int lookup_cnt = 0;
-static int old_lookup_cnt = 0;
+static pthread_t main_thread;
 
 /* Command line parsing */
 struct options {
@@ -262,8 +262,7 @@ static void* update_fs_loop(void *data) {
         old_name = strdup(file_name);
         update_fs();
 
-        int curr_lookup_cnt = lookup_cnt;
-        if (!options.no_notify && curr_lookup_cnt) {
+        if (!options.no_notify && lookup_cnt) {
             if(options.only_expire) { // expire entry
                 int ret = fuse_lowlevel_notify_expire_entry
                    (se, FUSE_ROOT_ID, old_name, strlen(old_name));
@@ -275,21 +274,15 @@ static void* update_fs_loop(void *data) {
                     se->error = ret;
 
                     fuse_session_exit(se);
-                    while(!fuse_session_exited(se)) {
-                        sleep(1);
-                    }
-                    fuse_session_unmount(se);
+                    // needed to correctly exit fuse_session_loop()
+                    pthread_kill(main_thread, SIGPIPE);
 
                     break;
                 }
-                // kernel cache timeout deletes dentry without calling forget()
-                // lookup_cnt is therefore not decreased
-                if (old_lookup_cnt == curr_lookup_cnt) {
-                    assert(ret == -ENOENT);
-                } else { // expire was successful
-                    assert(ret == 0);
-                    old_lookup_cnt = curr_lookup_cnt;
-                }
+                // 1) ret == 0: successful expire of an existing entry
+                // 2) ret == -ENOENT: kernel has already expired the entry /
+                //                    entry does not exist anymore in the kernel
+                assert(ret == 0 || ret == -ENOENT);
             } else { // invalidate entry
                 assert(fuse_lowlevel_notify_inval_entry
                       (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
@@ -354,6 +347,9 @@ int main(int argc, char *argv[]) {
 
     fuse_daemonize(opts.foreground);
 
+    // needed to correctly exit fuse_session_loop()
+    main_thread = pthread_self();
+
     /* Start thread to update file contents */
     ret = pthread_create(&updater, NULL, update_fs_loop, (void *)se);
     if (ret != 0) {
@@ -369,11 +365,6 @@ int main(int argc, char *argv[]) {
         config.clone_fd = opts.clone_fd;
         config.max_idle_threads = opts.max_idle_threads;
         ret = fuse_session_loop_mt(se, &config);
-    }
-
-    // fuse session was cancelled within update_fs_loop()
-    if (ret == -FUSE_DESTROY) {
-        goto err_out3;
     }
 
     fuse_session_unmount(se);
