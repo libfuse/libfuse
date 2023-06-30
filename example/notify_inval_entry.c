@@ -78,7 +78,6 @@
 
 #define FUSE_USE_VERSION 34
 
-#include <fuse_kernel.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>
 #include <stdlib.h>
