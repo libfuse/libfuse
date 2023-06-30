@@ -78,7 +78,6 @@
 
 #define FUSE_USE_VERSION 34
 
-#include <fuse_i.h>
 #include <fuse_kernel.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>
@@ -271,10 +270,9 @@ static void* update_fs_loop(void *data) {
                 if (ret == -ENOSYS) {
                     printf("fuse_lowlevel_notify_expire_entry not supported by kernel\n");
                     printf("Exiting...\n");
-                    se->error = ret;
 
                     fuse_session_exit(se);
-                    // needed to correctly exit fuse_session_loop()
+                    // Make sure to exit now, rather than on next request from userspace
                     pthread_kill(main_thread, SIGPIPE);
 
                     break;
@@ -347,7 +345,9 @@ int main(int argc, char *argv[]) {
 
     fuse_daemonize(opts.foreground);
 
-    // needed to correctly exit fuse_session_loop()
+    // Needed to ensure that the main thread continues/restarts processing as soon
+    // as the fuse session ends (immediately after calling fuse_session_exit() ) 
+    // and not only on the next request from userspace
     main_thread = pthread_self();
 
     /* Start thread to update file contents */
