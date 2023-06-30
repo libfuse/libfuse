@@ -139,11 +139,12 @@ struct fuse_custom_io {
 };
 
 /**
- * Flags for fuse_lowlevel_notify_expire_entry()
+ * Flags for fuse_lowlevel_notify_entry()
  * 0 = invalidate entry
  * FUSE_LL_EXPIRE_ONLY = expire entry
 */
-enum fuse_expire_flags {
+enum fuse_notify_entry_flags {
+	FUSE_LL_INVALIDATE = 0,
 	FUSE_LL_EXPIRE_ONLY	= (1 << 0),
 };
 
@@ -1682,8 +1683,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 				     off_t off, off_t len);
 
 /**
- * Notify to invalidate parent attributes and the dentry matching
- * parent/name
+ * Notify to invalidate parent attributes and the dentry matching parent/name
  *
  * To avoid a deadlock this function must not be called in the
  * execution path of a related filesystem operation or within any code
@@ -1710,14 +1710,13 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen);
 
 /**
- * Notify to expire or invalidate parent attributes and the dentry 
- * matching parent/name
+ * Notify to expire parent attributes and the dentry matching parent/name
  * 
- * Underlying function for fuse_lowlevel_notify_inval_entry().
+ * Same restrictions apply as for fuse_lowlevel_notify_inval_entry()
  * 
- * In addition to invalidating an entry, it also allows to expire an entry.
- * In that case, the entry is not forcefully removed from kernel cache 
- * but instead the next access to it forces a lookup from the filesystem.
+ * Compared to invalidating an entry, expiring the entry results not in a
+ * forceful removal of that entry from kernel cache but instead the next access
+ * to it forces a lookup from the filesystem.
  * 
  * This makes a difference for overmounted dentries, where plain invalidation
  * would detach all submounts before dropping the dentry from the cache. 
@@ -1728,17 +1727,18 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
  * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
+ * 
+ * Added in FUSE protocol version 7.38. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do nothing.
  *
  * @param se the session object
  * @param parent inode number
  * @param name file name
  * @param namelen strlen() of file name
- * @param flags flags to control if the entry should be expired or invalidated
- * @return zero for success, -errno for failure
+ * @return zero for success, -errno for failure, -enosys if no kernel support
 */
 int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
-                                      const char *name, size_t namelen,
-                                      enum fuse_expire_flags flags);
+                                      const char *name, size_t namelen);
 
 /**
  * This function behaves like fuse_lowlevel_notify_inval_entry() with

@@ -418,7 +418,7 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_EXPLICIT_INVAL_DATA    (1 << 25)
 
 /**
- * Indicates support that dentries can be expired or invalidated.
+ * Indicates support that dentries can be expired.
  * 
  * Expiring dentries, instead of invalidating them, makes a difference for 
  * overmounted dentries, where plain invalidation would detach all submounts 
