@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <pthread.h>
 
 #ifndef __linux__

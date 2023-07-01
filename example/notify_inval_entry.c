@@ -87,6 +87,7 @@
 #include <assert.h>
 #include <signal.h>
 #include <stddef.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
 
