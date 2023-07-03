@@ -901,6 +901,57 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     fi->fh = fd;
     fuse_reply_open(req, fi);
 }
+static void sfs_open_atomic(fuse_req_t req, fuse_ino_t parent, const char *name,
+                            mode_t mode, fuse_file_info *fi) {
+    Inode& parent_ino = get_inode(parent);
+    int err = 0;
+
+    int flags = sfs_open_update_flags(fi->flags);
+    const bool is_create = flags & O_CREAT ? true : false;
+
+    /* kernel side needs to know if the file was created, remove O_CREATE first.
+     * O_EXCL is left, as it might be a block device open and the flag has
+     * a different meaning for that */
+    if (is_create)
+        flags &= ~O_CREAT;
+
+retry:
+    const auto fd = openat(parent_ino.fd, name, flags & ~O_NOFOLLOW, mode);
+    if (fd == -1) {
+        err = errno;
+
+        if (err == ENOENT && is_create && !(flags & O_CREAT)) {
+            /* Now we know that file does not exist, try to create it */
+            flags |= O_CREAT;
+            goto retry;
+        }
+
+        if (err == ENFILE || err == EMFILE)
+            cerr << "ERROR: Reached maximum number of file descriptors." << endl;
+
+        fuse_reply_err(req, err);
+        return;
+    }
+
+    if (flags & O_CREAT)
+        fi->file_created = 1;
+
+    fi->fh = fd;
+    fuse_entry_param e;
+    err = do_lookup(parent, name, &e);
+    if (err) {
+        if (err == ENFILE || err == EMFILE)
+            cerr << "ERROR: Reached maximum number of file descriptors." << endl;
+        fuse_reply_err(req, err);
+	return;
+    }
+
+    Inode& inode = get_inode(e.ino);
+    lock_guard<mutex> g {inode.m};
+    inode.nopen++;
+    fuse_reply_create(req, &e, fi);
+}
+
 
 static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     Inode& inode = get_inode(ino);
@@ -1145,6 +1196,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper) {
     sfs_oper.fsyncdir = sfs_fsyncdir;
     sfs_oper.create = sfs_create;
     sfs_oper.open = sfs_open;
+    sfs_oper.open_atomic = sfs_open_atomic;
     sfs_oper.release = sfs_release;
     sfs_oper.flush = sfs_flush;
     sfs_oper.fsync = sfs_fsync;

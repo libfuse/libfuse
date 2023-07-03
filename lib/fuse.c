@@ -1723,6 +1723,30 @@ int fuse_fs_open(struct fuse_fs *fs, const char *path,
 	}
 }
 
+int fuse_fs_open_atomic(struct fuse_fs *fs, const char *path,
+			struct stat *buf, mode_t mode, struct fuse_file_info *fi)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.open_atomic) {
+		int err;
+		if (fs->debug)
+			fuse_log(FUSE_LOG_DEBUG, "open_atomic flags: 0x%x %s\n", fi->flags,
+				 path);
+
+		err = fs->op.open_atomic(path, buf, mode, fi);
+
+		if (fs->debug && !err)
+			fuse_log(FUSE_LOG_DEBUG, "   open_atomic[%llu] flags: 0x%x "
+				 "getattr[%s] %s\n",
+				 (unsigned long long) fi->fh, fi->flags,
+				 file_info_string(fi, (char *)buf,
+				 sizeof(buf)), path);
+		return err;
+	} else {
+		return -ENOSYS;
+	}
+}
+
 static void fuse_free_buf(struct fuse_bufvec *buf)
 {
 	if (buf != NULL) {
@@ -2629,13 +2653,13 @@ static void fuse_lib_destroy(void *data)
 	fuse_fs_destroy(f->fs);
 }
 
-static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
-			    const char *name)
+static void fuse_do_get_node_dot_dotdot(fuse_req_t req, fuse_ino_t parent,
+					const char *name,
+					fuse_ino_t *ret_parent,
+					struct node **ret_dot)
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_entry_param e;
-	char *path;
-	int err;
 	struct node *dot = NULL;
 
 	if (name[0] == '.') {
@@ -2662,7 +2686,20 @@ static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 			name = NULL;
 		}
 	}
+	*ret_parent = parent;
+	*ret_dot = dot;
+}
 
+static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
+			    const char *name)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	struct fuse_entry_param e;
+	char *path;
+	int err;
+	struct node *dot = NULL;
+
+	fuse_do_get_node_dot_dotdot(req, parent, name, &parent, &dot);
 	err = get_path_name(f, parent, name, &path);
 	if (!err) {
 		struct fuse_intr_data d;
@@ -3260,6 +3297,7 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 
 	free_path(f, ino, path);
 }
+
 
 static void fuse_lib_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 			  off_t off, struct fuse_file_info *fi)
@@ -4825,6 +4863,8 @@ struct fuse_fs *fuse_fs_new(const struct fuse_operations *op, size_t op_size,
 		return NULL;
 	}
 
+	if (op->open_atomic)
+		fuse_log(FUSE_LOG_DEBUG, "created fs with open atomic\n");
 	fs->user_data = user_data;
 	if (op)
 		memcpy(&fs->op, op, op_size);

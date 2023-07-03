@@ -96,8 +96,15 @@ struct fuse_file_info {
 	    on close. */
 	unsigned int noflush : 1;
 
+	/** Has to be filled in by atomic open to tell the kernel that a new
+	 * file was created. If this bit is not set correctly, parent directory
+	 * attributes would remain valid which might lead to issues in lookup and
+	 * also file would be truncated if O_TRUNC was passed in open.
+	 * Bit must not be set if file exist already. */
+	unsigned int file_created : 1;
+
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 23;
+	unsigned int padding : 22;
 	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,

@@ -1280,6 +1280,49 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		       struct fuse_file_info *fi);
+	/**
+	 * Lookup + create + Open a file
+	 *
+	 * There are two cases to be handled here:
+	 *
+	 * a) File does not exist
+	 * O_CREAT || (O_CREAT | O_EXCL):
+	 * - Create file with specified mode
+	 * - Set `file_created` bit in `struct fuse_file_info`
+	 * - Open the file
+	 * - Fill in the attributes
+	 * Set `file_created` bit in `struct fuse_file_info`. This bit is used by to
+	 * convey same info to the fuse kernel and let it set the vfs FMODE_CREATED
+	 * bit.
+	 *
+	 * ~O_CREAT:
+	 * - ENOENT
+	 *
+	 * b) File exist already
+	 * O_CREAT || ~O_CREAT:
+	 * - Open the file
+	 * - Fill in the attributes.
+	 *
+	 * O_CREAT | O_EXCL:
+	 * - EEXIST
+	 *
+	 * If this function is implemented, we avoids unnecessary lookups  from
+	 * fuse kernel into libfuse which are otherwise triggered before open.
+	 * With this implementation, we combine lookup + open into single call.
+	 *
+	 * If this func is not implemented then behaviour remains same i.e fuse
+	 * kernel would trigger lookups before open.
+	 *
+	 * Valid replies:
+	 *	fuse_reply_create
+	 *	fuse_reply_err
+	 * @param req request handle
+	 * @param parent inode number of the parent directory
+	 * @param name file to be opened
+	 * @param fi file information
+	 */
+	void (*open_atomic) (fuse_req_t req, fuse_ino_t parent,
+			     const char *name, mode_t mode, struct fuse_file_info *fi);
 };
 
 /**
@@ -1331,6 +1374,23 @@ void fuse_reply_none(fuse_req_t req);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
+
+/**
+ * Reply with directory entry and attributes
+ *
+ * Possible requests:
+ *   open
+ *
+ * Side effects:
+ *   increments the lookup count on success
+ *
+ * @param req request handle
+ * @param e the entry parameters
+ * @param fi file information
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_open_atomic(fuse_req_t req, const struct fuse_entry_param *e,
+			   const struct fuse_file_info *fi);
 
 /**
  * Reply with a directory entry and open parameters

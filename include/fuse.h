@@ -460,6 +460,59 @@ struct fuse_operations {
 	 */
 	int (*open) (const char *, struct fuse_file_info *);
 
+	/** Open the file and fill in the attributes.
+	 *
+	 * - None of create/open flags are filtered by the Fuse Kernel
+	 *   (except O_NOCTTY).
+	 *
+	 * - O_TRUNC is already filtered out by VFS for O_CREAT, O_EXCL combination.
+	 *
+	 * - User Space should be prepared to handle rest of the flags in open/create.
+	 *
+	 * - All comments mentioned in `open call are also applicable except creation
+	 *   flags.
+	 *
+	 * In this call, USER SPACE implementations should first do a lookup on
+	 * the file. Then dependng upon flags combination, either do create, open
+	 * or open only. In all successful cases, fill in `stat`.
+	 *
+	 * If file was indeed newly created (as a result of O_CREAT), then set
+	 * `file_created` bit in `struct fuse_file_info`. This bit is used by
+	 * libfuse to convey same information to the fuse kernel.
+	 *
+	 * There are two cases to be handled here:
+	 *
+	 *  a) File does not exist
+	 *    O_CREAT:
+	 *  	- Create file with specified mode
+	 *  	- Set `file_created` bit in `struct fuse_file_info`
+	 *  	- Open the file
+	 *  	- Fill in the attributes
+	 *   ~O_CREAT:
+	 *   	- ENOENT
+	 *
+	 *  b) File exist already (exception is O_EXCL)
+	 *    O_CREAT:
+	 *  	- Fill in the file attributes.
+	 *  	- Open the file
+	 *    O_EXCL:
+	 *      - EEXIST
+	 *
+	 * Note that all rules which apply on open also apply here.
+	 * It fills in the file attributes along with opening the file.
+	 * These attributes are used by fuse kernel to make inode stand/revalidate.
+	 *
+	 * If this function is implemented by USER SPACE, then fuse kernel avoids
+	 * lookup which is generally triggered otherwise before opening the file.
+	 *
+	 * Fuse kernel automatically detects if open atomic is implemented by USER
+	 * SPACE/libfuse or not. If it finds that open atomic is not implemented
+	 * then it falls back to normal open i.e lookup is performed before opening
+	 * the file.
+	 */
+	int (*open_atomic) (const char *, struct stat *buf,
+			    mode_t mode, struct fuse_file_info *);
+
 	/** Read data from an open file
 	 *
 	 * Read should return exactly the number of bytes requested except
@@ -1269,6 +1322,8 @@ ssize_t fuse_fs_copy_file_range(struct fuse_fs *fs, const char *path_in,
 				size_t len, int flags);
 off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
 		    struct fuse_file_info *fi);
+int fuse_fs_open_atomic(struct fuse_fs *fs, const char *path,
+			struct stat *buf, mode_t mode, struct fuse_file_info *fi);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		struct fuse_config *cfg);
 void fuse_fs_destroy(struct fuse_fs *fs);
