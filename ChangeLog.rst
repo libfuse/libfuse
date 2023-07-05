@@ -1,3 +1,14 @@
+libfuse 3.15.1 (2023-07-05)
+===========================
+
+Future libfuse releases will be signed with `signify`_ rather than PGP (rationale_). This
+release is the last to be signed with PGP and contains the signify public key for current
+(3.15.X) and upcoming  (3.16.X) minor release cycle.
+
+.. _signify:  https://www.openbsd.org/papers/bsdcan-signify.html
+.. _rationale: https://latacora.micro.blog/2019/07/16/the-pgp-problem.html
+
+
 libfuse 3.15.0 (2023-06-09)
 ===========================
 
