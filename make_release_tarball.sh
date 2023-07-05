@@ -7,10 +7,12 @@
 set -e
 
 if [ -z "$1" ]; then
-    TAG="$(git tag --list 'fuse-3*' --sort=-taggerdate | head -1)"
+    TAG="$(git tag --list 'fuse-3*' --sort=-creatordate | head -1)"
 else
     TAG="$1"
 fi
+PREV_TAG="$(git tag --list 'fuse-3*' --sort=-creatordate --merged "${TAG}^"| head -1)"
+MAJOR_REV=${TAG%.*}
 
 echo "Creating release tarball for ${TAG}..."
 
@@ -25,10 +27,11 @@ rm -r "${TAG}/make_release_tarball.sh" \
       "${TAG}/.github" \
       "${TAG}/.cirrus.yml"
 cp -a doc/html "${TAG}/doc/"
-tar -cJf "${TAG}.tar.xz" "${TAG}/"
-gpg --armor --detach-sign "${TAG}.tar.xz"
+tar -czf "${TAG}.tar.gz" "${TAG}/"
 
-PREV_TAG="$(git tag --list 'fuse-3*' --sort=-taggerdate --merged "${TAG}^"| head -1)"
+signify-openbsd -S -z -s signify/$MAJOR_REV.sec -m $TAG.tar.gz
+
+
 echo "Contributors from ${PREV_TAG} to ${TAG}:"
 git log --pretty="format:%an <%aE>" "${PREV_TAG}..${TAG}" | sort -u
 

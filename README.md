@@ -52,9 +52,20 @@ Installation
 You can download libfuse from
 https://github.com/libfuse/libfuse/releases. To build and install, you
 must use [Meson](http://mesonbuild.com/) and
-[Ninja](https://ninja-build.org).  After extracting the libfuse
-tarball, create a (temporary) build directory and run Meson:
+[Ninja](https://ninja-build.org).  After downloading the tarball, verify
+it using [signify])(https://www.openbsd.org/papers/bsdcan-signify.html):
 
+    signify -V -z -m fuse-X.Y.Z.tar.gz -p fuse-X.Y.pub
+    
+The `fuse-X.Y.pub` file contains the signing key and needs to be obtained from a
+trustworthy source. Each libfuse release contains the signing key for the release after it
+in the `signify` directory, so you only need to manually acquire this file once when you
+install libfuse for the first time.
+
+After you have validated the tarball, extract it, create a (temporary) build directory and
+run Meson:
+
+    $ tar xzf fuse-X.Y.Z.tar.gz; cd fuse-X.Y.Z
     $ mkdir build; cd build
     $ meson setup ..
 
