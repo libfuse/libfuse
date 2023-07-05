@@ -29,7 +29,7 @@ rm -r "${TAG}/make_release_tarball.sh" \
 cp -a doc/html "${TAG}/doc/"
 tar -czf "${TAG}.tar.gz" "${TAG}/"
 
-signify-openbsd -S -z -s signify/$MAJOR_REV.sec -m $TAG.tar.gz
+signify-openbsd -S -s signify/$MAJOR_REV.sec -m $TAG.tar.gz
 
 
 echo "Contributors from ${PREV_TAG} to ${TAG}:"
