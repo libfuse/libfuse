@@ -838,7 +838,6 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     fuse_reply_create(req, &e, fi);
 }
 
-
 static void sfs_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
                          fuse_file_info *fi) {
     (void) ino;
@@ -851,15 +850,19 @@ static void sfs_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
     fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-
-static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
-    Inode& inode = get_inode(ino);
+/**
+ * Flags for the underlying file system fd are different than those
+ * given by the application
+ */
+static int sfs_open_update_flags(const int fi_flags)
+{
+    int flags = fi_flags;
 
     /* With writeback cache, kernel may send read requests even
        when userspace opened write-only */
-    if (fs.timeout && (fi->flags & O_ACCMODE) == O_WRONLY) {
-        fi->flags &= ~O_ACCMODE;
-        fi->flags |= O_RDWR;
+    if (fs.timeout && (flags & O_ACCMODE) == O_WRONLY) {
+        flags &= ~O_ACCMODE;
+        flags |= O_RDWR;
     }
 
     /* With writeback cache, O_APPEND is handled by the kernel.  This
@@ -868,14 +871,21 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
        isn't accurate anymore). However, no process should modify the
        file in the underlying filesystem once it has been read, so
        this is not a problem. */
-    if (fs.timeout && fi->flags & O_APPEND)
-        fi->flags &= ~O_APPEND;
+    if (fs.timeout && flags & O_APPEND)
+        flags &= ~O_APPEND;
+
+    return flags;
+}
+
+static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
+    Inode& inode = get_inode(ino);
+    const int flags = sfs_open_update_flags(fi->flags);
 
     /* Unfortunately we cannot use inode.fd, because this was opened
        with O_PATH (so it doesn't allow read/write access). */
     char buf[64];
     sprintf(buf, "/proc/self/fd/%i", inode.fd);
-    auto fd = open(buf, fi->flags & ~O_NOFOLLOW);
+    auto fd = open(buf, flags & ~O_NOFOLLOW);
     if (fd == -1) {
         auto err = errno;
         if (err == ENFILE || err == EMFILE)
@@ -887,11 +897,10 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
     fi->keep_cache = (fs.timeout != 0);
-    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
+    fi->noflush = (fs.timeout == 0 && (flags & O_ACCMODE) == O_RDONLY);
     fi->fh = fd;
     fuse_reply_open(req, fi);
 }
-
 
 static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     Inode& inode = get_inode(ino);
