@@ -83,7 +83,6 @@ FUSE_3.0 {
 		fuse_fs_unlink;
 		fuse_fs_utimens;
 		fuse_fs_write;
-		fuse_register_module;
 		fuse_reply_iov;
 		fuse_version;
 		fuse_pkgversion;
@@ -161,7 +160,6 @@ FUSE_3.3 {
 FUSE_3.4 {
 	global:
 		fuse_fs_copy_file_range;
-		fuse_reply_copy_file_range;
 } FUSE_3.3;
 
 FUSE_3.7 {
