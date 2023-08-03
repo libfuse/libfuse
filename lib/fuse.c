@@ -3374,6 +3374,8 @@ static void fuse_lib_opendir(fuse_req_t req, fuse_ino_t ino,
 		err = fuse_fs_opendir(f->fs, path, &fi);
 		fuse_finish_interrupt(f, req, &d);
 		dh->fh = fi.fh;
+		llfi->cache_readdir = fi.cache_readdir;
+		llfi->keep_cache = fi.keep_cache;
 	}
 	if (!err) {
 		if (fuse_reply_open(req, llfi) == -ENOENT) {
