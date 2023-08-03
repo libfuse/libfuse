@@ -1,3 +1,8 @@
+libfuse next.release.version (xxxx-xx-xx)
+===========================
+
+* Readdir kernel cache can be enabled from high-level API.
+
 libfuse 3.15.1 (2023-07-05)
 ===========================
 
