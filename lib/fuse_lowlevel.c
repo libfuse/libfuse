@@ -213,7 +213,12 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 {
 	struct fuse_out_header out;
 
+#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 32
+	const char *str = strerrordesc_np(error * -1);
+	if ((str == NULL && error != 0) || error > 0) {
+#else
 	if (error <= -1000 || error > 0) {
+#endif
 		fuse_log(FUSE_LOG_ERR, "fuse: bad error value: %i\n",	error);
 		error = -ERANGE;
 	}
