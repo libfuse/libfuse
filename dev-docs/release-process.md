@@ -1,6 +1,9 @@
 Release Process
 ===============
 
+NOTE: Before releasing 3.17.1, we *must* release at least 3.16.2, because the
+signify/fuse-3.17.pub was accidentally not included in the 3.16.1 release tarball.
+
 * `set TAG fuse-A.B.C`
 * Update version in
   * `ChangeLog.rst`
@@ -8,11 +11,11 @@ Release Process
   * `include/fuse_common.h` (`#define FUSE_{MINOR/MAJOR}_VERSION`)
 * When creating new minor release:
   * Create signing key for the next release: `P=fuse-<A.B+1> signify-openbsd -G -n -p signify/$P.pub -s
-  signify/$P.sec`
+  signify/$P.sec; git add signify/$P.pub`
   * Expire old release signing keys (keep one around just in case)
 * Update authors: `git log --all --pretty="format:%an <%aE>" | sort -u >> AUTHORS`
 * `git commit --all -m "Released $TAG"`
-* `git tag -s $TAG`
+* `git tag $TAG`
 * Build tarball, `./make_release_tarball.sh`
 * Test build:
   * `cd fuse-x.y.z`
@@ -22,8 +25,11 @@ Release Process
   * `(cd build; python3 -m pytest test/)`
 * Upload API docs:
   * `rm -r ../libfuse.github.io/doxygen && cp -a doc/html ../libfuse.github.io/doxygen`
-  * `(cd ../libfuse.github.io; git add doxygen/; git commit --all -m "Re-generated doxygen documentation"; git push)`
-* `git push && git push --tags`, create release on Github
+  * `git -C ../libfuse.github.io add doxygen/`
+  * `git -C ../libfuse.github.io commit --all -m "Re-generated doxygen documentation"`
+  * `git -C ../libfuse.github.io push`
+* `git checkout master && git push && git push --tags`
+* Create release on Github
 * Write announcement to fuse-devel
 
 
