@@ -358,7 +358,7 @@ static int do_lookup(fuse_ino_t parent, const char *name,
         if (fs.debug)
             cerr << "DEBUG: lookup(): inode " << e->attr.st_ino
                  << " recycled; generation=" << inode.generation << endl;
-	/* fallthrough to new inode but keep existing inode.nlookup */
+            /* fallthrough to new inode but keep existing inode.nlookup */
     }
 
     if (inode.fd > 0) { // found existing inode
@@ -901,6 +901,18 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     fi->fh = fd;
     fuse_reply_open(req, fi);
 }
+
+static void sfs_atomic_open_dir_error(DirHandle *dhandle, fuse_ino_t ino,
+				      int fd, fuse_req_t req, int err)
+{
+	forget_one(ino, 1);
+	fuse_reply_err(req, err);
+
+	close(fd);
+	delete dhandle;
+	return;
+}
+
 static void sfs_open_atomic(fuse_req_t req, fuse_ino_t parent, const char *name,
                             mode_t mode, fuse_file_info *fi) {
     Inode& parent_ino = get_inode(parent);
@@ -943,12 +955,32 @@ retry:
         if (err == ENFILE || err == EMFILE)
             cerr << "ERROR: Reached maximum number of file descriptors." << endl;
         fuse_reply_err(req, err);
-	return;
+        return;
     }
+
+    if ((e.attr.st_mode & S_IFMT) == S_IFDIR) {
+        /* directory requires special handling */
+        auto dh = new (nothrow) DirHandle();
+        if (dh == nullptr) {
+            sfs_atomic_open_dir_error(dh, e.ino, fd, req, ENOMEM);
+            return;
+        }
+
+        dh->dp = fdopendir(fd);
+        if(dh->dp == nullptr) {
+            sfs_atomic_open_dir_error(dh, e.ino, fd, req, errno);
+            return;
+        }
+
+        fi->fh = reinterpret_cast<uint64_t>(dh);
+    }
+
+    // cerr << "node-id=" << e.ino << " gen=" << e.generation << endl;
 
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
+
     fuse_reply_create(req, &e, fi);
 }
 
