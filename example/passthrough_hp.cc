@@ -1220,8 +1220,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
               "you are doing)", cxxopts::value(mount_options))
         ("num-threads", "Number of libfuse worker threads",
                         cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
-        ("clone-fd", "use separate fuse device fd for each thread",
-                        cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD))
+        ("clone-fd", "use separate fuse device fd for each thread")
         ("direct-io", "enable fuse kernel internal direct-io");
 
 
@@ -1253,7 +1252,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
 
     fs.nosplice = options.count("nosplice") != 0;
     fs.num_threads = options["num-threads"].as<int>();
-    fs.clone_fd = options["clone-fd"].as<bool>();
+    fs.clone_fd = options.count("clone-fd");
     fs.direct_io = options.count("direct-io");
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
