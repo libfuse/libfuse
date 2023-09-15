@@ -158,6 +158,7 @@ struct Fs {
     size_t num_threads;
     bool clone_fd;
     std::string fuse_mount_options;
+    bool direct_io;
 };
 static Fs fs{};
 
@@ -832,6 +833,9 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	return;
     }
 
+    if (fs.direct_io)
+	    fi->direct_io = 1;
+
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
@@ -888,6 +892,10 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     inode.nopen++;
     fi->keep_cache = (fs.timeout != 0);
     fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
+
+    if (fs.direct_io)
+	    fi->direct_io = 1;
+
     fi->fh = fd;
     fuse_reply_open(req, fi);
 }
@@ -1205,7 +1213,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("debug-fuse", "Enable libfuse debug messages")
         ("foreground", "Run in foreground")
         ("help", "Print help")
-        ("nocache", "Disable all caching")
+        ("nocache", "Disable attribute all caching")
         ("nosplice", "Do not use splice(2) to transfer data")
         ("single", "Run single-threaded")
         ("o", "Mount options (see mount.fuse(5) - only use if you know what "
@@ -1213,7 +1221,8 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("num-threads", "Number of libfuse worker threads",
                         cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
         ("clone-fd", "use separate fuse device fd for each thread",
-                        cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD));
+                        cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD))
+        ("direct-io", "enable fuse kernel internal direct-io");
 
 
     // FIXME: Find a better way to limit the try clause to just
@@ -1245,6 +1254,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     fs.nosplice = options.count("nosplice") != 0;
     fs.num_threads = options["num-threads"].as<int>();
     fs.clone_fd = options["clone-fd"].as<bool>();
+    fs.direct_io = options.count("direct-io");
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
         warn("WARNING: realpath() failed with");
