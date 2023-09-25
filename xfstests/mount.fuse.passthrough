@@ -12,17 +12,14 @@ mntopts="$1"
 shift
 
 # source can be provided as NFS style device (e.g. TEST_DEV=source:/${TEST_SOURCE})
-# or by exporting the {TEST,SCRATCH}_SOURCE env vars
 # and/or it can already be inside mount options (passthrough_ll style)
 if ( echo "$mntopts" | grep -q "source=" ) ; then
 	# Don't pass source as position argument
 	source=
 elif [[ "$dev" == "source:"* ]]; then
 	source="${dev#"source:"}"
-elif [ "$dev" = "${SCRATCH_DEV}" ]; then
-	source="${SCRATCH_SOURCE}"
-elif [ "$dev" = "${TEST_DEV}" ]; then
-	source="${TEST_SOURCE}"
+else
+    >&2 echo "passthrough source is undefined, aborting!"
 fi
 
 if ( echo "$mntopts" | grep -q remount ) ; then
