@@ -2,16 +2,37 @@
 
 ulimit -n 1048576
 
-# It would be easier if we could just set SCRATCH_DEV and TEST_DEV to the source directory
-# path in local.options. Unfortunately, setting these variables to a path seems get
-# xfstests all worked up (even though it should treat these as opaque values), and it
-# refuses to even start running any tests).
 dev="$1"
 shift
-if [ "$dev" = "${SCRATCH_DEV}" ]; then
-  source="${SCRATCH_SOURCE}"
+mnt="$1"
+shift
+# -o
+shift
+mntopts="$1"
+shift
+
+# source can be provided as NFS style device (e.g. TEST_DEV=source:/${TEST_SOURCE})
+# and/or it can already be inside mount options (passthrough_ll style)
+if ( echo "$mntopts" | grep -q "source=" ) ; then
+	# Don't pass source as position argument
+	source=
+elif [[ "$dev" == "source:"* ]]; then
+	source="${dev#"source:"}"
 else
-  source="${TEST_SOURCE}"
+    >&2 echo "passthrough source is undefined, aborting!"
 fi
 
-exec "$PASSTHROUGH_PATH" -o fsname=$dev,allow_other "${source}" "$@"
+if ( echo "$mntopts" | grep -q remount ) ; then
+	exec mount -i "$dev" "$mnt" -o "$mntopts"
+fi
+
+# set default to SUBTYPE (extracted from this script name)
+# example:
+#   Copy or link this script to /sbin/mount.fuse.passthrough_hp
+#   If xfstests local.config does not set PASSTHROUGH_PATH,
+#   PASSTHROUGH_PATH will be set to 'passthrough_hp' and exec below
+#   will look that up from $PATH
+
+[ -n "$PASSTHROUGH_PATH" ] || PASSTHROUGH_PATH=${0#*mount.fuse.}
+
+exec "$PASSTHROUGH_PATH" -o fsname=$dev,allow_other $source "$mnt" -o "$mntopts" "$@"
