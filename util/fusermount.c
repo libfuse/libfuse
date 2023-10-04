@@ -37,6 +37,7 @@
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
 #define FUSE_DEV "/dev/red"
+#define FUSE_DEV_FALLBACK "/dev/fuse"
 
 static const char *progname;
 
@@ -1104,9 +1105,13 @@ static int try_open(const char *dev, char **devp, int silent)
 static int try_open_fuse_device(char **devp)
 {
 	int fd;
-
 	drop_privs();
 	fd = try_open(FUSE_DEV, devp, 0);
+	if (fd == -ENOENT) {
+		fprintf(stderr, "Failed to open %s, falling back to %s\n",
+			FUSE_DEV, FUSE_DEV_FALLBACK);
+		fd = try_open(FUSE_DEV_FALLBACK, devp, 0);
+	}
 	restore_privs();
 	return fd;
 }

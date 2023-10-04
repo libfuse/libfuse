@@ -449,7 +449,11 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			  const char *mnt_opts)
 {
 	char tmp[128];
-	const char *devname = "/dev/red";
+
+	const char *preferred_devname = "/dev/red";
+	const char *fallback_devname="/dev/fuse";
+	const char *devname = preferred_devname;
+
 	char *source = NULL;
 	char *type = NULL;
 	struct stat stbuf;
@@ -468,11 +472,17 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		return -1;
 	}
 
+again:
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
-		if (errno == ENODEV || errno == ENOENT)
+		if (errno == ENODEV || errno == ENOENT) {
 			fuse_log(FUSE_LOG_ERR, "red: device not found, try 'modprobe redfs' first\n");
-		else
+			if (devname == preferred_devname) {
+				fuse_log(FUSE_LOG_ERR, "Trying to fallback to fuse\n");
+				devname = fallback_devname;
+				goto again;
+			}
+		} else
 			fuse_log(FUSE_LOG_ERR, "redfs: failed to open %s: %s\n",
 				devname, strerror(errno));
 		return -1;
