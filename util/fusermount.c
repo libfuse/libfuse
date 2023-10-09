@@ -36,7 +36,7 @@
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
-#define FUSE_DEV "/dev/red"
+#define FUSE_DEV "/dev/redfs"
 #define FUSE_DEV_FALLBACK "/dev/fuse"
 
 static const char *progname;

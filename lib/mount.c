@@ -450,7 +450,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 {
 	char tmp[128];
 
-	const char *preferred_devname = "/dev/red";
+	const char *preferred_devname = "/dev/redfs";
 	const char *fallback_devname="/dev/fuse";
 	const char *devname = preferred_devname;
 
