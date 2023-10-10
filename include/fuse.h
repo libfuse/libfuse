@@ -454,7 +454,7 @@ struct fuse_operations {
 	 * If this request is answered with an error code of ENOSYS
 	 * and FUSE_CAP_NO_OPEN_SUPPORT is set in
 	 * `fuse_conn_info.capable`, this is treated as success and
-	 * future calls to open will also succeed without being send
+	 * future calls to open will also succeed without being sent
 	 * to the filesystem process.
 	 *
 	 */

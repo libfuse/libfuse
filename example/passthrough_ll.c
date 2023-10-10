@@ -35,9 +35,10 @@
  */
 
 #define _GNU_SOURCE
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #include <fuse_lowlevel.h>
+#include <openbsd_tree.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -55,6 +56,8 @@
 
 #include "passthrough_helpers.h"
 
+
+
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
    store uintptr_t values in a fuse_ino_t variable. The following
@@ -69,13 +72,20 @@ struct _uintptr_to_must_hold_fuse_ino_t_dummy_struct \
 #endif
 
 struct lo_inode {
-	struct lo_inode *next; /* protected by lo->mutex */
-	struct lo_inode *prev; /* protected by lo->mutex */
+	RB_ENTRY(lo_inode) lo_ino_tentry;
 	int fd;
 	ino_t ino;
 	dev_t dev;
 	uint64_t refcount; /* protected by lo->mutex */
 };
+
+static inline int
+lo_ino_cmp(const struct lo_inode *left, const struct lo_inode *right);
+
+RB_HEAD(lo_ino_tree, lo_inode);
+RB_PROTOTYPE(lo_ino_tree, lo_inode, lo_ino_tentry, lo_ino_cmp);
+RB_GENERATE(lo_ino_tree, lo_inode, lo_ino_tentry, lo_ino_cmp);
+
 
 enum {
 	CACHE_NEVER,
@@ -93,6 +103,7 @@ struct lo_data {
 	double timeout;
 	int cache;
 	int timeout_set;
+	struct lo_ino_tree ino_tree_head; /*  protected by lo->mutex */
 	struct lo_inode root; /* protected by lo->mutex */
 };
 
@@ -142,6 +153,22 @@ static void passthrough_ll_help(void)
 "    -o cache=always        Cache always\n");
 }
 
+static inline int
+lo_ino_cmp(const struct lo_inode *left, const struct lo_inode *right)
+{
+	if (left->dev > right->dev)
+		return -1;
+	if (left->dev < right->dev)
+		return 1;
+
+	if (left->ino > right->ino)
+		return 1;
+	else if (left->ino < right->ino)
+		return -1;
+
+    return 0;
+}
+
 static struct lo_data *lo_data(fuse_req_t req)
 {
 	return (struct lo_data *) fuse_req_userdata(req);
@@ -189,12 +216,19 @@ static void lo_init(void *userdata,
 static void lo_destroy(void *userdata)
 {
 	struct lo_data *lo = (struct lo_data*) userdata;
+	struct lo_inode *inode, *iter_tmp, *remove_tmp;
 
-	while (lo->root.next != &lo->root) {
-		struct lo_inode* next = lo->root.next;
-		lo->root.next = next->next;
-		free(next);
+	pthread_mutex_lock(&lo->mutex);
+	RB_FOREACH_SAFE(inode, lo_ino_tree, &lo->ino_tree_head, iter_tmp) {
+		/* root inode is not allocated and stays in the tree */
+		if (inode == &lo->root)
+			continue;
+
+		remove_tmp = RB_REMOVE(lo_ino_tree, &lo->ino_tree_head, inode);
+		assert(remove_tmp == inode);
+		free(inode);
 	}
+	pthread_mutex_unlock(&lo->mutex);
 }
 
 static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -290,18 +324,15 @@ out_err:
 
 static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st)
 {
-	struct lo_inode *p;
 	struct lo_inode *ret = NULL;
+	struct lo_inode tmp_ino = { .ino = st->st_ino,
+				    .dev = st->st_dev,
+	};
 
 	pthread_mutex_lock(&lo->mutex);
-	for (p = lo->root.next; p != &lo->root; p = p->next) {
-		if (p->ino == st->st_ino && p->dev == st->st_dev) {
-			assert(p->refcount > 0);
-			ret = p;
-			ret->refcount++;
-			break;
-		}
-	}
+	ret = RB_FIND(lo_ino_tree, &lo->ino_tree_head, &tmp_ino);
+	if (ret != NULL)
+		ret->refcount++;
 	pthread_mutex_unlock(&lo->mutex);
 	return ret;
 }
@@ -313,7 +344,7 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int res;
 	int saverr;
 	struct lo_data *lo = lo_data(req);
-	struct lo_inode *inode;
+	struct lo_inode *inode, *tmp;
 
 	memset(e, 0, sizeof(*e));
 	e->attr_timeout = lo->timeout;
@@ -332,8 +363,6 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		close(newfd);
 		newfd = -1;
 	} else {
-		struct lo_inode *prev, *next;
-
 		saverr = ENOMEM;
 		inode = calloc(1, sizeof(struct lo_inode));
 		if (!inode)
@@ -345,12 +374,10 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		inode->dev = e->attr.st_dev;
 
 		pthread_mutex_lock(&lo->mutex);
-		prev = &lo->root;
-		next = prev->next;
-		next->prev = inode;
-		inode->next = next;
-		inode->prev = prev;
-		prev->next = inode;
+		tmp = RB_INSERT(lo_ino_tree, &lo->ino_tree_head, inode);
+
+		/* inode was allocated above - cannot be in the tree already */
+		assert(tmp == NULL);
 		pthread_mutex_unlock(&lo->mutex);
 	}
 	e->ino = (uintptr_t) inode;
@@ -518,12 +545,10 @@ static void unref_inode(struct lo_data *lo, struct lo_inode *inode, uint64_t n)
 	assert(inode->refcount >= n);
 	inode->refcount -= n;
 	if (!inode->refcount) {
-		struct lo_inode *prev, *next;
+		struct lo_inode *tmp;
 
-		prev = inode->prev;
-		next = inode->next;
-		next->prev = prev;
-		prev->next = next;
+		tmp = RB_REMOVE(lo_ino_tree, &lo->ino_tree_head, inode);
+		assert(tmp == inode);
 
 		pthread_mutex_unlock(&lo->mutex);
 		close(inode->fd);
@@ -775,6 +800,8 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	else if (lo->cache == CACHE_ALWAYS)
 		fi->keep_cache = 1;
 
+	fi->parallel_direct_writes = 1;
+
 	err = lo_do_lookup(req, parent, name, &e);
 	if (err)
 		fuse_reply_err(req, err);
@@ -831,6 +858,9 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 		fi->direct_io = 1;
 	else if (lo->cache == CACHE_ALWAYS)
 		fi->keep_cache = 1;
+
+	fi->parallel_direct_writes = 1;
+
 	fuse_reply_open(req, fi);
 }
 
@@ -1183,7 +1213,7 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
-	struct fuse_loop_config config;
+	struct fuse_loop_config *config;
 	struct lo_data lo = { .debug = 0,
 	                      .writeback = 0 };
 	int ret = -1;
@@ -1192,8 +1222,12 @@ int main(int argc, char *argv[])
 	umask(0);
 
 	pthread_mutex_init(&lo.mutex, NULL);
-	lo.root.next = lo.root.prev = &lo.root;
+	RB_INIT(&lo.ino_tree_head);
+
+	lo.root.refcount = 2;
 	lo.root.fd = -1;
+	RB_INSERT(lo_ino_tree, &lo.ino_tree_head, &lo.root);
+
 	lo.cache = CACHE_NORMAL;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
@@ -1223,7 +1257,6 @@ int main(int argc, char *argv[])
 		return 1;
 
 	lo.debug = opts.debug;
-	lo.root.refcount = 2;
 	if (lo.source) {
 		struct stat stat;
 		int res;
@@ -1289,9 +1322,12 @@ int main(int argc, char *argv[])
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
 	else {
-		config.clone_fd = opts.clone_fd;
-		config.max_idle_threads = opts.max_idle_threads;
-		ret = fuse_session_loop_mt(se, &config);
+		config = fuse_loop_cfg_create();
+		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+		fuse_loop_cfg_set_max_threads(config, opts.max_threads);
+		ret = fuse_session_loop_mt(se, config);
+		fuse_loop_cfg_destroy(config);
+		config = NULL;
 	}
 
 	fuse_session_unmount(se);

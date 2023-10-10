@@ -366,6 +366,7 @@ static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 		return -errno;
 
 	fi->fh = fd;
+	fi->parallel_direct_writes = 1;
 	return 0;
 }
 
@@ -378,6 +379,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 		return -errno;
 
 	fi->fh = fd;
+	fi->parallel_direct_writes = 1;
 	return 0;
 }
 

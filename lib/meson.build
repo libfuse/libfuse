@@ -19,6 +19,18 @@ if private_cfg.get('HAVE_ICONV')
    endif
 endif
 
+if private_cfg.get('HAVE_URING')
+  libfuse_sources += [ 'fuse_uring.c' ]
+
+  liburing = cc.find_library('uring', required: true)
+  deps += [ liburing ]
+
+  libnuma = cc.find_library('numa', required: true)
+  deps += [ libnuma ]
+endif
+
+
+
 libdl = cc.find_library('dl', required: false)
 if libdl.found()
    deps += [ libdl ]

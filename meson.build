@@ -1,4 +1,4 @@
-project('libfuse3', ['c'], version: '3.16.1',
+project('libfuse3', ['c'], version: '3.16.2',
         meson_version: '>= 0.51',
         default_options: [
             'buildtype=debugoptimized',
@@ -70,6 +70,15 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
          cc.has_member('struct stat', 'st_atimespec',
                        prefix: include_default,
                        args: args_default))
+
+# XXX: Check for version > X
+if cc.check_header('liburing.h', required: true)
+   private_cfg.set('HAVE_URING', true)
+
+   # for uring we also need libnuma
+   cc.check_header('numa.h', required: true)
+endif
+
 
 #
 # Compiler configuration

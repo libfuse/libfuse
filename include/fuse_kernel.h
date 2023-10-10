@@ -986,9 +986,63 @@ struct fuse_notify_retrieve_in {
 	uint64_t	dummy4;
 };
 
+enum fuse_uring_ioctl_cmd {
+	/* not correctly initialized when set */
+	FUSE_URING_IOCTL_CMD_INVALID    = 0,
+
+	/* The ioctl is a queue configuration command */
+	FUSE_URING_IOCTL_CMD_QUEUE_CFG = 1,
+
+	/* Wait in the kernel until the process gets terminated, process
+	 * termination will wake up the waitq and initiate ring shutdown.
+	 * This avoids the need to run a check in intervals if ring termination
+	 * should be started (less cpu cycles) and also helps for faster ring
+	 * shutdown.
+	 */
+	FUSE_URING_IOCTL_CMD_WAIT      = 2,
+
+	/* Daemon side wants to explicitly stop the waiter thread. This will
+	 * restart the interval termination checker.
+	 */
+	FUSE_URING_IOCTL_CMD_STOP      = 3,
+};
+
+struct fuse_uring_cfg {
+	/* currently unused */
+	uint32_t flags;
+
+	/* configuration command */
+	uint16_t cmd;
+
+	uint16_t padding;
+
+	/* qid the config command is for */
+	uint32_t qid;
+
+	/* number of queues */
+	uint32_t nr_queues;
+
+	/* number of foreground entries per queue */
+	uint32_t fg_queue_depth;
+
+	/* number of background entries per queue */
+	uint32_t async_queue_depth;
+
+	/* argument (data length) of a request */
+	uint32_t req_arg_len;
+
+	/* numa node this queue runs on; UINT32_MAX if any*/
+	uint32_t numa_node_id;
+
+	/* reserved space for future additions */
+	uint64_t reserve[8];
+};
+
 /* Device ioctls: */
 #define FUSE_DEV_IOC_MAGIC		229
 #define FUSE_DEV_IOC_CLONE		_IOR(FUSE_DEV_IOC_MAGIC, 0, uint32_t)
+#define FUSE_DEV_IOC_URING		_IOR(FUSE_DEV_IOC_MAGIC, 1, \
+					     struct fuse_uring_cfg)
 
 struct fuse_lseek_in {
 	uint64_t	fh;
@@ -1088,6 +1142,70 @@ struct fuse_ext_header {
 struct fuse_supp_groups {
 	uint32_t	nr_groups;
 	uint32_t	groups[];
+};
+
+/**
+ * Size of the ring buffer header
+ */
+#define FUSE_RING_HEADER_BUF_SIZE 4096
+#define FUSE_RING_MIN_IN_OUT_ARG_SIZE 4096
+
+/* Request is background type. Daemon side is free to use this information
+ * to handle foreground/background CQEs with different priorities.
+ */
+#define FUSE_RING_REQ_FLAG_ASYNC (1ull << 0)
+
+/**
+ * This structure mapped onto the
+ */
+struct fuse_ring_req {
+
+	union {
+		/* The first 4K are command data */
+		char ring_header[FUSE_RING_HEADER_BUF_SIZE];
+
+		struct {
+			uint64_t flags;
+
+			/* enum fuse_ring_buf_cmd */
+			uint32_t in_out_arg_len;
+			uint32_t padding;
+
+			/* kernel fills in, reads out */
+			union {
+				struct fuse_in_header in;
+				struct fuse_out_header out;
+			};
+		};
+	};
+
+	char in_out_arg[];
+};
+
+/**
+ * sqe commands to the kernel
+ */
+enum fuse_uring_cmd {
+	FUSE_URING_REQ_INVALID = 0,
+
+	/* submit sqe to kernel to get a request */
+	FUSE_URING_REQ_FETCH = 1,
+
+	/* commit result and fetch next request */
+	FUSE_URING_REQ_COMMIT_AND_FETCH = 2,
+};
+
+/**
+ * In the 80B command area of the SQE.
+ */
+struct fuse_uring_cmd_req {
+	/* queue the command is for (queue index) */
+	uint16_t qid;
+
+	/* queue entry (array index) */
+	uint16_t tag;
+
+	uint32_t padding;
 };
 
 #endif /* _LINUX_FUSE_H */
