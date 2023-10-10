@@ -1213,16 +1213,6 @@ struct fuse_supp_groups {
 #define FUSE_RING_HEADER_BUF_SIZE 4096
 #define FUSE_RING_MIN_IN_OUT_ARG_SIZE 4096
 
-enum fuse_ring_req_cmd {
-	FUSE_RING_BUF_CMD_INVALID = 0,
-
-	/* return an iovec pointer */
-	FUSE_RING_BUF_CMD_IOVEC = 1,
-
-	/* report an error */
-	FUSE_RING_BUF_CMD_ERROR = 2,
-};
-
 /* Request is background type. Daemon side is free to use this information
  * to handle foreground/background CQEs with different priorities.
  */
@@ -1241,8 +1231,8 @@ struct fuse_ring_req {
 			uint64_t flags;
 
 			/* enum fuse_ring_buf_cmd */
-			uint32_t cmd;
 			uint32_t in_out_arg_len;
+			uint32_t padding;
 
 			/* kernel fills in, reads out */
 			union {
