@@ -836,6 +836,8 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     if (fs.direct_io)
 	    fi->direct_io = 1;
 
+    fi->parallel_direct_writes = 1;
+
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
@@ -895,6 +897,8 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     if (fs.direct_io)
 	    fi->direct_io = 1;
+
+    fi->parallel_direct_writes = 1;
 
     fi->fh = fd;
     fuse_reply_open(req, fi);
