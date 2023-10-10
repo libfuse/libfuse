@@ -307,6 +307,7 @@ static int fuse_queue_setup_ring(struct io_uring *ring, size_t qid,
 
 	params.flags = IORING_SETUP_CQSIZE | IORING_SETUP_SQE128;
 
+	/* preparation for SQPOLL, but disabled as it makes it quite slower */
 	if (0) {
 		params.flags |= IORING_SETUP_SQPOLL;
 
@@ -318,16 +319,23 @@ static int fuse_queue_setup_ring(struct io_uring *ring, size_t qid,
 			params.sq_thread_cpu = qid;
 			params.sq_thread_idle = 1;
 		}
-
 	}
 
 	params.cq_entries = depth;
 
-	/* seems to slow down runs, although it should make it faster
-	 * XXX investigate why */
-	if (0 || per_core_queue) {
-		params.flags |= IORING_SETUP_COOP_TASKRUN;
+	/* These flags should help to increase performance, but actually
+	 * make it a bit slower - reason should get investigated.
+	 */
+	if (0 && per_core_queue) {
+
+		/* Has the main slow down effect */
 		params.flags |= IORING_SETUP_SINGLE_ISSUER;
+
+		// params.flags |= IORING_SETUP_DEFER_TASKRUN;
+		params.flags |= IORING_SETUP_TASKRUN_FLAG;
+
+		/* Second main effect to make it slower */
+		params.flags |= IORING_SETUP_COOP_TASKRUN;
 	}
 
 	rc = io_uring_queue_init_params(depth, ring, &params);
