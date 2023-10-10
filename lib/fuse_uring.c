@@ -581,6 +581,12 @@ fuse_create_user_ring(struct fuse_session *se,
 		 */
 		queue->mmap_buf = mmap(NULL, mmap_size, prot,
 					 flags, se->fd, off);
+		if (queue->mmap_buf == MAP_FAILED) {
+			fuse_log(FUSE_LOG_ERR,
+				 "qid=%d mmap of size %zu failed: %s\n",
+				 qid, mmap_size, strerror(errno));
+			goto err;
+		}
 
 		for (int tag = 0; tag < q_depth; tag++) {
 			struct fuse_ring_ent *ring_ent = &queue->ent[tag];
@@ -588,13 +594,6 @@ fuse_create_user_ring(struct fuse_session *se,
 			ring_ent->tag = tag;
 			ring_ent->ring_req = (struct fuse_ring_req *)
 				(queue->mmap_buf + req_buf_size * tag);
-
-			if (ring_ent->ring_req == MAP_FAILED) {
-				fuse_log(FUSE_LOG_ERR,
-					 "qid=%d tag=%d mmap of size %zu failed: %s\n",
-					 qid, tag, req_buf_size, strerror(errno));
-				goto err;
-			}
 
 			struct fuse_req *req = &ring_ent->req;
 			req->se = se;
