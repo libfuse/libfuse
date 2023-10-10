@@ -100,7 +100,7 @@ static void forget_one(fuse_ino_t ino, uint64_t n);
 // be simplified to just ino_t since we require the source directory
 // not to contain any mountpoints. This hasn't been done yet in case
 // we need to reconsider this constraint (but relaxing this would have
-// the drawback that we can no longer re-use inode numbers, and thus
+// the drawback that we can no longer reuse inode numbers, and thus
 // readdir() would need to do a full lookup() in order to report the
 // right inode number).
 typedef std::pair<ino_t, dev_t> SrcId;
