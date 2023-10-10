@@ -167,9 +167,6 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 
 	fuse_uring_sqe_prepare(sqe, ring_ent, FUSE_URING_REQ_COMMIT_AND_FETCH);
 
-	struct fuse_ring_req *rreq = ring_ent->ring_req;
-	rreq->cmd = FUSE_RING_BUF_CMD_IOVEC;
-
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
 				    queue->qid, ring_ent->tag);
 
