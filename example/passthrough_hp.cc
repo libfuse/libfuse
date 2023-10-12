@@ -1361,6 +1361,8 @@ int main(int argc, char *argv[]) {
     if (fs.num_threads != -1)
         fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
 
+    fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
+	
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
 
