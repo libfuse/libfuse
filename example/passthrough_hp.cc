@@ -902,10 +902,10 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     fuse_reply_open(req, fi);
 }
 
-static void sfs_atomic_open_dir_error(DirHandle *dhandle, fuse_ino_t ino,
-				      int fd, fuse_req_t req, int err)
+static void sfs_atomic_open_error(DirHandle *dhandle, fuse_entry_param &e,
+				  int fd, fuse_req_t req, int err)
 {
-	forget_one(ino, 1);
+	forget_one(e.ino, 1);
 	fuse_reply_err(req, err);
 
 	close(fd);
@@ -962,17 +962,25 @@ retry:
         /* directory requires special handling */
         auto dh = new (nothrow) DirHandle();
         if (dh == nullptr) {
-            sfs_atomic_open_dir_error(dh, e.ino, fd, req, ENOMEM);
+            sfs_atomic_open_error(dh, e, fd, req, ENOMEM);
             return;
         }
 
         dh->dp = fdopendir(fd);
         if(dh->dp == nullptr) {
-            sfs_atomic_open_dir_error(dh, e.ino, fd, req, errno);
+            sfs_atomic_open_error(dh, e, fd, req, errno);
             return;
         }
 
         fi->fh = reinterpret_cast<uint64_t>(dh);
+    }
+
+    if ((e.attr.st_mode & S_IFMT) == S_IFLNK) {
+            /* symlink not supported in atomic open
+             * TODO: transfer the attributes
+             */
+            sfs_atomic_open_error(nullptr, e, fd, req, ELOOP);
+            return;
     }
 
     // cerr << "node-id=" << e.ino << " gen=" << e.generation << endl;
