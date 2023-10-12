@@ -2,7 +2,7 @@ name: Mirroring
 on:
   push:
     branches:
-      - main
+      - redfs-main
 
 jobs:
   red-libfuse-to-ghe:
