@@ -6,7 +6,7 @@ on:
 
 jobs:
   red-libfuse-to-ghe:
-    runs-on: ubuntu-latest
+    runs-on: dynamic
     steps:
       - uses: mickem/clean-after-action@v1
 
@@ -18,4 +18,12 @@ jobs:
         shell: bash
         run: |
           echo "Trying to mirror the repository in GHE .."
-          git push --mirror https://devops-bot:${{ secrets.DEVOPS_BOT_TOKEN }}@github.red.datadirectnet.com/3rdParty/libfuse.git ||:
+          git push --mirror https://devops-bot:${{ secrets.DEVOPS_BOT_TOKEN }}@github.red.datadirectnet.com/3rdParty/libfuse.git 2> err.log ||:
+          if [ -s err.log ]; then
+            cat err.log 
+            # Error occured
+            if grep -q "The requested URL returned error: 403" err.log; then
+              rm err.log && exit 128
+            fi
+            rm err.log
+          fi             
