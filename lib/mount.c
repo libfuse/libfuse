@@ -25,6 +25,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <sys/param.h>
 
 #include "fuse_mount_compat.h"
 
@@ -450,12 +451,14 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 {
 	char tmp[128];
 
-	const char *preferred_devname = "/dev/redfs";
-	const char *fallback_devname="/dev/fuse";
-	const char *devname = preferred_devname;
+	const char *redfs_devname = "/dev/redfs";
+	const char *fuse_devname="/dev/fuse";
+	const char *devname = redfs_devname;
 
 	char *source = NULL;
 	char *type = NULL;
+	const char *type_selection = NULL;
+	size_t typelen;
 	struct stat stbuf;
 	int fd;
 	int res;
@@ -476,16 +479,20 @@ again:
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT) {
-			fuse_log(FUSE_LOG_ERR, "red: device not found, try 'modprobe redfs' first\n");
-			if (devname == preferred_devname) {
-				fuse_log(FUSE_LOG_ERR, "Trying to fallback to fuse\n");
-				devname = fallback_devname;
+			fuse_log(FUSE_LOG_ERR, "redfs: device %s not found.\n",
+				 devname);
+			if (devname == redfs_devname) {
+				devname = fuse_devname;
+				fuse_log(FUSE_LOG_ERR, "redfs: Trying to fallback to %s\n",
+					 devname);
 				goto again;
+			} else {
+				fuse_log(FUSE_LOG_ERR, "redfs: failed to open %s: %s\n",
+					 devname, strerror(errno));
 			}
-		} else
-			fuse_log(FUSE_LOG_ERR, "redfs: failed to open %s: %s\n",
-				devname, strerror(errno));
-		return -1;
+
+			return -1;
+		}
 	}
 	if (!O_CLOEXEC)
 		fcntl(fd, F_SETFD, FD_CLOEXEC);
@@ -501,13 +508,24 @@ again:
 			(mo->subtype ? strlen(mo->subtype) : 0) +
 			strlen(devname) + 32);
 
-	type = malloc((mo->subtype ? strlen(mo->subtype) : 0) + 32);
+	if (mo->blkdev)
+		type_selection = "redfsblk";
+	else {
+		if (devname == redfs_devname)
+			type_selection = "redfs";
+		else
+			type_selection = "fuse";
+	}
+
+	typelen = MAX(strlen(type_selection) + 1, 32);
+
+	type = malloc((mo->subtype ? strlen(mo->subtype) : 0) + typelen);
 	if (!type || !source) {
-		fuse_log(FUSE_LOG_ERR, "redfs: failed to allocate memory\n");
+		fuse_log(FUSE_LOG_ERR, "redfs: failed to allocate type memory\n");
 		goto out_close;
 	}
 
-	strcpy(type, mo->blkdev ? "redfsblk" : "redfs");
+	strncpy(type, type_selection, typelen);
 	if (mo->subtype) {
 		strcat(type, ".");
 		strcat(type, mo->subtype);
@@ -518,7 +536,7 @@ again:
 	res = mount(source, mnt, type, mo->flags, mo->kernel_opts);
 	if (res == -1 && errno == ENODEV && mo->subtype) {
 		/* Probably missing subtype support */
-		strcpy(type, mo->blkdev ? "redfsblk" : "redfs");
+		strncpy(type, type_selection, typelen);
 		if (mo->fsname) {
 			if (!mo->blkdev)
 				sprintf(source, "%s#%s", mo->subtype,
