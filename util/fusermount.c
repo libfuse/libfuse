@@ -36,8 +36,9 @@
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
-#define FUSE_DEV "/dev/redfs"
-#define FUSE_DEV_FALLBACK "/dev/fuse"
+static const char * const redfs_dev = "/dev/redfs";
+static const char * const fuse_dev = "/dev/fuse";
+static const char *devname = redfs_dev;
 
 static const char *progname;
 
@@ -1090,13 +1091,16 @@ static int try_open(const char *dev, char **devp, int silent)
 			fprintf(stderr, "%s: failed to allocate memory\n",
 				progname);
 			close(fd);
-			fd = -1;
+			fd = -ENOMEM;
 		}
 	} else if (errno == ENODEV ||
 		   errno == ENOENT)/* check for ENOENT too, for the udev case */
-		return -2;
-	else if (!silent) {
-		fprintf(stderr, "%s: failed to open %s: %s\n", progname, dev,
+		fd = -errno;
+	else {
+		fd = -errno;
+		if (!silent)
+			fprintf(stderr, "%s: failed to open %s: %s\n",
+				progname, dev,
 			strerror(errno));
 	}
 	return fd;
@@ -1106,12 +1110,22 @@ static int try_open_fuse_device(char **devp)
 {
 	int fd;
 	drop_privs();
-	fd = try_open(FUSE_DEV, devp, 0);
-	if (fd == -ENOENT) {
-		fprintf(stderr, "Failed to open %s, falling back to %s\n",
-			FUSE_DEV, FUSE_DEV_FALLBACK);
-		fd = try_open(FUSE_DEV_FALLBACK, devp, 0);
+again:
+	fd = try_open(devname, devp, 0);
+	if (fd == -ENOENT || fd == -ENODEV) {
+		fprintf(stderr, "%s: Failed to open %s\n", progname, devname);
+		if (devname == redfs_dev) {
+			devname = fuse_dev;
+			fprintf(stderr, "%s: Trying to fallback to %s\n",
+				progname, devname);
+			goto again;
+		}
 	}
+
+	if (fd < 0)
+		fprintf(stderr, "%s: Failed to open %s: '%s'\n",
+			progname, devname, strerror(-fd));
+
 	restore_privs();
 	return fd;
 }
@@ -1134,7 +1148,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 {
 	int res;
 	int fd;
-	char *dev;
+	char *dev = NULL;
 	struct stat stbuf;
 	char *source = NULL;
 	char *mnt_opts = NULL;
