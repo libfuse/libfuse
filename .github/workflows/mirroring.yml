@@ -8,7 +8,7 @@ jobs:
   red-libfuse-to-ghe:
     runs-on: dynamic
     steps:
-      - uses: mickem/clean-after-action@v1
+      - uses: mickem/clean-after-action@v2
 
       - uses: actions/checkout@v3
         with:
