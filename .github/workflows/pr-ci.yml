@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 libstdc++-10-dev libstdc++-9-dev ninja-build python3-pip python3-setuptools valgrind
-      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - run: test/ci-install.sh
       - run: test/ci-build.sh
 
