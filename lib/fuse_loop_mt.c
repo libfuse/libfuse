@@ -259,7 +259,9 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 			strerror(errno));
 		return NULL;
 	}
+#ifndef O_CLOEXEC
 	fcntl(clonefd, F_SETFD, FD_CLOEXEC);
+#endif
 
 	masterfd = mt->se->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
