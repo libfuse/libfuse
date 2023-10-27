@@ -48,7 +48,7 @@ extern "C" {
  * descriptors can share a single file handle.
  */
 struct fuse_file_info {
-	/** Open flags.	 Available in open() and release() */
+	/** Open flags.	 Available in open(), release() and create() */
 	int flags;
 
 	/** In case of a write operation indicates if this was caused
