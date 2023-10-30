@@ -248,15 +248,25 @@ static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
 	int clonefd;
 	uint32_t masterfd;
 	struct fuse_chan *newch;
-	const char *devname = "/dev/fuse";
+
+	const char *redfs_devname = "/dev/redfs";
+	const char *fuse_devname = "/dev/fuse";
+	const char *devname = redfs_devname;
 
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
+fallback:
 	clonefd = open(devname, O_RDWR | O_CLOEXEC);
 	if (clonefd == -1) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n", devname,
+		fuse_log(FUSE_LOG_ERR, "redfs: failed to open %s: %s\n", devname,
 			strerror(errno));
+		if (devname == redfs_devname) {
+			devname = fuse_devname;
+			fuse_log(FUSE_LOG_INFO, "redfs: Trying to fall back to %s\n",
+				 devname);
+			goto fallback;
+		}
 		return NULL;
 	}
 #ifndef O_CLOEXEC
