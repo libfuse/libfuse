@@ -68,7 +68,7 @@ static struct fuse_chan *fuse_chan_new(int fd)
 {
 	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
 	if (ch == NULL) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate channel\n");
+		fuse_log(FUSE_LOG_ERR, "redfs failed to allocate channel\n");
 		return NULL;
 	}
 
@@ -221,7 +221,7 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	pthread_attr_init(&attr);
 	stack_size = getenv(ENVNAME_THREAD_STACK);
 	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
-		fuse_log(FUSE_LOG_ERR, "fuse: invalid stack size: %s\n", stack_size);
+		fuse_log(FUSE_LOG_ERR, "redfs invalid stack size: %s\n", stack_size);
 
 	/* Disallow signal reception in worker threads */
 	sigemptyset(&newset);
@@ -234,7 +234,7 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
 	pthread_attr_destroy(&attr);
 	if (res != 0) {
-		fuse_log(FUSE_LOG_ERR, "fuse: error creating thread: %s\n",
+		fuse_log(FUSE_LOG_ERR, "redfs error creating thread: %s\n",
 			strerror(res));
 		return -1;
 	}
@@ -276,7 +276,7 @@ fallback:
 	masterfd = mt->se->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
 	if (res == -1) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to clone device fd: %s\n",
+		fuse_log(FUSE_LOG_ERR, "redfs failed to clone device fd: %s\n",
 			strerror(errno));
 		close(clonefd);
 		return NULL;
@@ -294,7 +294,7 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
 	if (!w) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate worker structure\n");
+		fuse_log(FUSE_LOG_ERR, "redfs failed to allocate worker structure\n");
 		return -1;
 	}
 	memset(w, 0, sizeof(struct fuse_worker));
@@ -306,7 +306,7 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 		w->ch = fuse_clone_chan(mt);
 		if(!w->ch) {
 			/* Don't attempt this again */
-			fuse_log(FUSE_LOG_ERR, "fuse: trying to continue "
+			fuse_log(FUSE_LOG_ERR, "redfs trying to continue "
 				"without -o clone_fd.\n");
 			mt->clone_fd = 0;
 		}
