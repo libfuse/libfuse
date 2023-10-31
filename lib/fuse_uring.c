@@ -179,7 +179,12 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 
 	}
 
-	/* leave io_uring_submit() to the main thread function */
+	/* XXX: when submitted from other processing threads (like redfs does),
+	 * it actually has to submit here. But that causes liburing confusion
+	 * (like double cqe processing) when the ring thread submits.
+	 */
+	io_uring_submit(&queue->ring);
+
 	return 0;
 }
 
