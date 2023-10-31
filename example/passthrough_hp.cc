@@ -1398,6 +1398,8 @@ int main(int argc, char *argv[]) {
                                  fs.uring.async_queue_depth,
                                  fs.uring.arglen);
 
+    fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
+	
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
 
