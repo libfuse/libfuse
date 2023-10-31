@@ -47,13 +47,13 @@ static int set_one_signal_handler(int sig, void (*handler)(int), int remove)
 	sa.sa_flags = 0;
 
 	if (sigaction(sig, NULL, &old_sa) == -1) {
-		perror("fuse: cannot get old signal handler");
+		perror("redfs cannot get old signal handler");
 		return -1;
 	}
 
 	if (old_sa.sa_handler == (remove ? handler : SIG_DFL) &&
 	    sigaction(sig, &sa, NULL) == -1) {
-		perror("fuse: cannot set signal handler");
+		perror("redfs cannot set signal handler");
 		return -1;
 	}
 	return 0;
@@ -80,7 +80,7 @@ void fuse_remove_signal_handlers(struct fuse_session *se)
 {
 	if (fuse_instance != se)
 		fuse_log(FUSE_LOG_ERR,
-			"fuse: fuse_remove_signal_handlers: unknown session\n");
+			"redfs fuse_remove_signal_handlers: unknown session\n");
 	else
 		fuse_instance = NULL;
 

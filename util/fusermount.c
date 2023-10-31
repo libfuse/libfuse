@@ -1255,17 +1255,17 @@ static int recheck_ENOTCONN_as_owner(const char *mnt)
 {
 	int pid = fork();
 	if(pid == -1) {
-		perror("fuse: recheck_ENOTCONN_as_owner can't fork");
+		perror("redfs recheck_ENOTCONN_as_owner can't fork");
 		_exit(EXIT_FAILURE);
 	} else if(pid == 0) {
 		uid_t uid = getuid();
 		gid_t gid = getgid();
 		if(setresgid(gid, gid, gid) == -1) {
-			perror("fuse: can't set resgid");
+			perror("redfs can't set resgid");
 			_exit(EXIT_FAILURE);
 		}
 		if(setresuid(uid, uid, uid) == -1) {
-			perror("fuse: can't set resuid");
+			perror("redfs can't set resuid");
 			_exit(EXIT_FAILURE);
 		}
 
@@ -1278,7 +1278,7 @@ static int recheck_ENOTCONN_as_owner(const char *mnt)
 		int status;
 		int res = waitpid(pid, &status, 0);
 		if (res == -1) {
-			perror("fuse: waiting for child failed");
+			perror("redfs waiting for child failed");
 			_exit(EXIT_FAILURE);
 		}
 		return WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS;
