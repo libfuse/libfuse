@@ -1,9 +1,6 @@
 Release Process
 ===============
 
-NOTE: Before releasing 3.17.1, we *must* release at least 3.16.2, because the
-signify/fuse-3.17.pub was accidentally not included in the 3.16.1 release tarball.
-
 * `set TAG fuse-A.B.C`
 * Update version in
   * `ChangeLog.rst`

@@ -100,7 +100,7 @@ static void forget_one(fuse_ino_t ino, uint64_t n);
 // be simplified to just ino_t since we require the source directory
 // not to contain any mountpoints. This hasn't been done yet in case
 // we need to reconsider this constraint (but relaxing this would have
-// the drawback that we can no longer re-use inode numbers, and thus
+// the drawback that we can no longer reuse inode numbers, and thus
 // readdir() would need to do a full lookup() in order to report the
 // right inode number).
 typedef std::pair<ino_t, dev_t> SrcId;
@@ -836,6 +836,8 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     if (fs.direct_io)
 	    fi->direct_io = 1;
 
+    fi->parallel_direct_writes = 1;
+
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
@@ -895,6 +897,8 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     if (fs.direct_io)
 	    fi->direct_io = 1;
+
+    fi->parallel_direct_writes = 1;
 
     fi->fh = fd;
     fuse_reply_open(req, fi);
@@ -1357,6 +1361,8 @@ int main(int argc, char *argv[]) {
     if (fs.num_threads != -1)
         fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
 
+    fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
+	
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
 
