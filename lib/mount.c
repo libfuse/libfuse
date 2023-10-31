@@ -181,7 +181,7 @@ static void set_mount_flag(const char *s, int *flags)
 			return;
 		}
 	}
-	fuse_log(FUSE_LOG_ERR, "fuse: internal error, can't find mount flag\n");
+	fuse_log(FUSE_LOG_ERR, "redfs internal error, can't find mount flag\n");
 	abort();
 }
 
@@ -316,19 +316,19 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 	int res;
 
 	if (!mountpoint) {
-		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
+		fuse_log(FUSE_LOG_ERR, "redfs missing mountpoint parameter\n");
 		return -1;
 	}
 
 	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
 	if(res == -1) {
-		perror("fuse: socketpair() failed");
+		perror("redfs socketpair() failed");
 		return -1;
 	}
 
 	pid = fork();
 	if(pid == -1) {
-		perror("fuse: fork() failed");
+		perror("redfs fork() failed");
 		close(fds[0]);
 		close(fds[1]);
 		return -1;
@@ -358,7 +358,7 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 		snprintf(env, sizeof(env), "%i", fds[0]);
 		setenv(FUSE_COMMFD_ENV, env, 1);
 		exec_fusermount(argv);
-		perror("fuse: failed to exec fusermount3");
+		perror("redfs failed to exec fusermount3");
 		_exit(1);
 	}
 
@@ -377,19 +377,19 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	int rv;
 
 	if (!mountpoint) {
-		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
+		fuse_log(FUSE_LOG_ERR, "redfs missing mountpoint parameter\n");
 		return -1;
 	}
 
 	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
 	if(res == -1) {
-		perror("fuse: socketpair() failed");
+		perror("redfs socketpair() failed");
 		return -1;
 	}
 
 	pid = fork();
 	if(pid == -1) {
-		perror("fuse: fork() failed");
+		perror("redfs fork() failed");
 		close(fds[0]);
 		close(fds[1]);
 		return -1;
@@ -422,7 +422,7 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		snprintf(env, sizeof(env), "%i", fds[0]);
 		setenv(FUSE_COMMFD_ENV, env, 1);
 		exec_fusermount(argv);
-		perror("fuse: failed to exec fusermount3");
+		perror("redfs failed to exec fusermount3");
 		_exit(1);
 	}
 
@@ -464,13 +464,13 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	int res;
 
 	if (!mnt) {
-		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
+		fuse_log(FUSE_LOG_ERR, "redfs missing mountpoint parameter\n");
 		return -1;
 	}
 
 	res = stat(mnt, &stbuf);
 	if (res == -1) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to access mountpoint %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "redfs failed to access mountpoint %s: %s\n",
 			mnt, strerror(errno));
 		return -1;
 	}

@@ -48,7 +48,7 @@ void fuse_opt_free_args(struct fuse_args *args)
 
 static int alloc_failed(void)
 {
-	fuse_log(FUSE_LOG_ERR, "fuse: memory allocation failed\n");
+	fuse_log(FUSE_LOG_ERR, "redfs memory allocation failed\n");
 	return -1;
 }
 
@@ -100,7 +100,7 @@ int fuse_opt_insert_arg(struct fuse_args *args, int pos, const char *arg)
 static int next_arg(struct fuse_opt_context *ctx, const char *opt)
 {
 	if (ctx->argctr + 1 >= ctx->argc) {
-		fuse_log(FUSE_LOG_ERR, "fuse: missing argument after `%s'\n", opt);
+		fuse_log(FUSE_LOG_ERR, "redfs missing argument after `%s'\n", opt);
 		return -1;
 	}
 	ctx->argctr++;
@@ -218,7 +218,7 @@ static int process_opt_param(void *var, const char *format, const char *param,
 		*s = copy;
 	} else {
 		if (sscanf(param, format, var) != 1) {
-			fuse_log(FUSE_LOG_ERR, "fuse: invalid parameter in option `%s'\n", arg);
+			fuse_log(FUSE_LOG_ERR, "redfs invalid parameter in option `%s'\n", arg);
 			return -1;
 		}
 	}
@@ -337,7 +337,7 @@ static int process_option_group(struct fuse_opt_context *ctx, const char *opts)
 	char *copy = strdup(opts);
 
 	if (!copy) {
-		fuse_log(FUSE_LOG_ERR, "fuse: memory allocation failed\n");
+		fuse_log(FUSE_LOG_ERR, "redfs memory allocation failed\n");
 		return -1;
 	}
 	res = process_real_option_group(ctx, copy);
