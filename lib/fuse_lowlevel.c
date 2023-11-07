@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/file.h>
+#include <stdbool.h>
 
 #ifndef F_LINUX_SPECIFIC_BASE
 #define F_LINUX_SPECIFIC_BASE       1024
@@ -162,6 +163,11 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 	return req;
 }
 
+static inline bool fuse_is_custom_mem_bufv(struct fuse_session *se)
+{
+	return se->io && se->io->get_mem_bufv;
+}
+
 /* Send data. If *ch* is NULL, send via session master fd */
 static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
@@ -187,14 +193,29 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 	}
 
 	ssize_t res;
-	if (se->io != NULL)
+	if (se->io != NULL) {
 		/* se->io->writev is never NULL if se->io is not NULL as
 		specified by fuse_session_custom_io()*/
-		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
-					   se->userdata);
-	else
-		res = writev(ch ? ch->fd : se->fd, iov, count);
+		if (fuse_is_custom_mem_bufv((se))) {
+			struct fuse_bufvec *bufv = NULL;
+			int fd = ch ? ch->fd : se->fd;
 
+			res = se->io->get_reply_mem_bufv(fd, out->unique, &bufv, se->userdata);
+			if (res < 0) {
+				errno = ENOSYS;
+				goto out;
+			}
+			fuse_buf_copy_from_iov(bufv, iov, count);
+			res = se->io->commit_req(fd, out->unique, se->userdata);
+		} else {
+			res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
+					     se->userdata);
+		}
+	} else {
+		res = writev(ch ? ch->fd : se->fd, iov, count);
+	}
+
+out:
 	int err = errno;
 
 	if (res == -1) {
@@ -206,7 +227,6 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 
 	return 0;
 }
-
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count)
@@ -1442,6 +1462,30 @@ out:
 		fuse_ll_clear_pipe(se);
 }
 
+static void do_write_custom_buf(fuse_req_t req, fuse_ino_t nodeid,
+				const void *inarg, struct fuse_bufvec *bufv)
+{
+	struct fuse_session *se = req->se;
+	struct fuse_write_in *arg = (struct fuse_write_in *) inarg;
+	struct fuse_file_info fi;
+	size_t size;
+
+	size = fuse_buf_size(bufv) - sizeof(struct fuse_in_header) -
+			sizeof(struct fuse_write_in);
+	if (size < arg->size) {
+		fuse_log(FUSE_LOG_ERR, "fuse: do_write_buf: buffer size too small\n");
+		fuse_reply_err(req, EIO);
+	}
+
+	memset(&fi, 0, sizeof(fi));
+	fi.fh = arg->fh;
+	fi.writepage = arg->write_flags & FUSE_WRITE_CACHE;
+	fi.lock_owner = arg->lock_owner;
+	fi.flags = arg->flags;
+
+	se->op.write_buf(req, nodeid, bufv, arg->offset, &fi);
+}
+
 static void do_flush(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_flush_in *arg = (struct fuse_flush_in *) inarg;
@@ -2531,6 +2575,21 @@ void *fuse_req_userdata(fuse_req_t req)
 	return req->se->userdata;
 }
 
+struct fuse_bufvec *fuse_req_get_reply_bufvec(fuse_req_t req)
+{
+	struct fuse_bufvec *bufv = NULL;
+	ssize_t res;
+	int fd = req->ch ? req->ch->fd : req->se->fd;
+
+	if (!fuse_is_custom_mem_bufv(req->se))
+		return NULL;
+
+	res = req->se->io->get_reply_mem_bufv(fd, req->unique, &bufv, NULL);
+	if (res > 0)
+		return bufv;
+	return NULL;
+}
+
 const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
 {
 	return &req->ctx;
@@ -2640,15 +2699,27 @@ static int fuse_ll_copy_from_pipe(struct fuse_bufvec *dst,
 void fuse_session_process_buf(struct fuse_session *se,
 			      const struct fuse_buf *buf)
 {
-	fuse_session_process_buf_int(se, buf, NULL);
+	struct fuse_bufvec bufv;
+
+	bufv.count = 1;
+	bufv.idx = 0;
+	bufv.off = 0;
+	bufv.buf[0] = *buf;
+	fuse_session_process_bufvec_int(se, &bufv, NULL);
 }
 
-void fuse_session_process_buf_int(struct fuse_session *se,
-				  const struct fuse_buf *buf, struct fuse_chan *ch)
+void fuse_session_process_bufvec(struct fuse_session *se, struct fuse_bufvec *bufv)
+{
+	fuse_session_process_bufvec_int(se, bufv, NULL);
+}
+
+void fuse_session_process_bufvec_int(struct fuse_session *se,
+				     struct fuse_bufvec *bufv,
+				     struct fuse_chan *ch)
 {
 	const size_t write_header_size = sizeof(struct fuse_in_header) +
 		sizeof(struct fuse_write_in);
-	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
+	struct fuse_buf *buf = &bufv->buf[0];
 	struct fuse_bufvec tmpbuf = FUSE_BUFVEC_INIT(write_header_size);
 	struct fuse_in_header *in;
 	const void *inarg;
@@ -2656,6 +2727,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	void *mbuf = NULL;
 	int err;
 	int res;
+	bool custom_mem_bufv = fuse_is_custom_mem_bufv(se);
 
 	if (buf->flags & FUSE_BUF_IS_FD) {
 		if (buf->size < tmpbuf.buf[0].size)
@@ -2668,13 +2740,27 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		}
 		tmpbuf.buf[0].mem = mbuf;
 
-		res = fuse_ll_copy_from_pipe(&tmpbuf, &bufv);
+		res = fuse_ll_copy_from_pipe(&tmpbuf, bufv);
 		if (res < 0)
 			goto clear_pipe;
 
 		in = mbuf;
-	} else {
+	} else if (!custom_mem_bufv || bufv->count == 1) {
 		in = buf->mem;
+	} else {
+		size_t size;
+
+		in = buf->mem;
+		if (in->opcode != FUSE_WRITE)
+			size = fuse_buf_size(bufv);
+		else
+			size = write_header_size;
+
+		mbuf = malloc(size);
+		tmpbuf.buf[0].mem = mbuf;
+		tmpbuf.buf[0].size = size;
+		res = fuse_buf_copy(&tmpbuf, bufv, 0);
+		in = mbuf;
 	}
 
 	if (se->debug) {
@@ -2754,7 +2840,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 		tmpbuf = FUSE_BUFVEC_INIT(buf->size - write_header_size);
 		tmpbuf.buf[0].mem = (char *)mbuf + write_header_size;
 
-		res = fuse_ll_copy_from_pipe(&tmpbuf, &bufv);
+		res = fuse_ll_copy_from_pipe(&tmpbuf, bufv);
 		err = -res;
 		if (res < 0)
 			goto reply_err;
@@ -2763,9 +2849,12 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	}
 
 	inarg = (void *) &in[1];
-	if (in->opcode == FUSE_WRITE && se->op.write_buf)
-		do_write_buf(req, in->nodeid, inarg, buf);
-	else if (in->opcode == FUSE_NOTIFY_REPLY)
+	if (in->opcode == FUSE_WRITE && se->op.write_buf) {
+		if (custom_mem_bufv)
+			do_write_custom_buf(req, in->nodeid, inarg, bufv);
+		else
+			do_write_buf(req, in->nodeid, inarg, buf);
+	} else if (in->opcode == FUSE_NOTIFY_REPLY)
 		do_notify_reply(req, in->nodeid, inarg, buf);
 	else
 		fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
@@ -2839,13 +2928,23 @@ static void fuse_ll_pipe_destructor(void *data)
 	fuse_ll_pipe_free(llp);
 }
 
-int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
+static int fuse_session_receive_custom_mem_bufv(struct fuse_session *se,
+			struct fuse_chan *ch,
+			struct fuse_bufvec **bufv)
 {
-	return fuse_session_receive_buf_int(se, buf, NULL);
+	ssize_t res;
+
+	res = se->io->get_mem_bufv(ch ? ch->fd : se->fd, bufv, se->userdata);
+	if ((size_t) res < sizeof(struct fuse_in_header)) {
+		fuse_log(FUSE_LOG_ERR, "short read on custom mem bufv device\n");
+		return -EIO;
+	}
+	return res;
 }
 
-int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
-				 struct fuse_chan *ch)
+static int fuse_session_receive_buf_int(struct fuse_session *se,
+					struct fuse_buf *buf,
+					struct fuse_chan *ch)
 {
 	int err;
 	ssize_t res;
@@ -3011,6 +3110,42 @@ restart:
 	return res;
 }
 
+int fuse_session_receive_bufvec_int(struct fuse_session *se,
+		struct fuse_bufvec **bufv, struct fuse_chan *ch)
+{
+	if (fuse_is_custom_mem_bufv(se))
+		return fuse_session_receive_custom_mem_bufv(se, ch, bufv);
+
+	/*
+	 * For traditional non-custom mem bufv case, only need one fuse_buf
+	 * to hold whole raw request.
+	 */
+	if (!*bufv) {
+		*bufv = malloc(sizeof(struct fuse_bufvec));
+		if (!*bufv)
+			return -ENOMEM;
+	}
+	return fuse_session_receive_buf_int(se, &((*bufv)->buf[0]), ch);
+}
+
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
+{
+	if (fuse_is_custom_mem_bufv(se)) {
+		fuse_log(FUSE_LOG_ERR, "fuse: fuse_session_receive_buf() "
+			 "doesn't work with custom mem bufv. please use "
+			 "fuse_session_receive_bufvec()\n");
+		return -EOPNOTSUPP;
+	}
+
+	return fuse_session_receive_buf_int(se, buf, NULL);
+}
+
+int fuse_session_receive_bufvec(struct fuse_session *se,
+				struct fuse_bufvec **bufv)
+{
+	return fuse_session_receive_bufvec_int(se, bufv, NULL);
+}
+
 struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      const struct fuse_lowlevel_ops *op,
 				      size_t op_size, void *userdata)
@@ -3119,7 +3254,9 @@ int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io 
 		fuse_log(FUSE_LOG_ERR, "No custom IO passed to "
 			"fuse_session_custom_io()\n");
 		return -EINVAL;
-	} else if (io->read == NULL || io->writev == NULL) {
+	} else if ((io->read == NULL || io->writev == NULL) &&
+		   (io->get_mem_bufv == NULL || io->get_reply_mem_bufv == NULL ||
+		   io->commit_req == NULL)) {
 		/* If the user provides their own file descriptor, we can't
 		guarantee that the default behavior of the io operations made
 		in libfuse will function properly. Therefore, we enforce the

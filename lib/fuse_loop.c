@@ -19,22 +19,20 @@
 int fuse_session_loop(struct fuse_session *se)
 {
 	int res = 0;
-	struct fuse_buf fbuf = {
-		.mem = NULL,
-	};
+	struct fuse_bufvec *bufv = NULL;
 
 	while (!fuse_session_exited(se)) {
-		res = fuse_session_receive_buf_int(se, &fbuf, NULL);
+		res = fuse_session_receive_bufvec_int(se, &bufv, NULL);
 
 		if (res == -EINTR)
 			continue;
 		if (res <= 0)
 			break;
 
-		fuse_session_process_buf_int(se, &fbuf, NULL);
+		fuse_session_process_bufvec_int(se, bufv, NULL);
 	}
 
-	free(fbuf.mem);
+	fuse_free_buf(bufv);
 	if(res > 0)
 		/* No error, just the length of the most recently read
 		   request */

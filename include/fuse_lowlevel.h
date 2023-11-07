@@ -136,6 +136,11 @@ struct fuse_custom_io {
 	ssize_t (*splice_send)(int fdin, off_t *offin, int fdout,
 				     off_t *offout, size_t len,
 			           unsigned int flags, void *userdata);
+
+	ssize_t (*get_mem_bufv)(int fd, struct fuse_bufvec **bufv, void *userdata);
+	ssize_t (*get_reply_mem_bufv)(int fd, uint64_t unique,
+				      struct fuse_bufvec **bufv, void *userdata);
+	ssize_t (*commit_req)(int fd, uint64_t unique, void *userdata);
 };
 
 /**
@@ -1846,6 +1851,15 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 void *fuse_req_userdata(fuse_req_t req);
 
 /**
+ * Get the bufvec from the request
+ *
+ * If supported, user can use fuse_bufvec to hold fuse's reply data
+ * @param req request handle
+ * @return the fuse_bufvec
+ */
+struct fuse_bufvec *fuse_req_get_reply_bufvec(fuse_req_t req);
+
+/**
  * Get the context from the request
  *
  * The pointer returned by this function will only be valid for the
@@ -2214,6 +2228,35 @@ void fuse_session_process_buf(struct fuse_session *se,
  * @return the actual size of the raw request, or -errno on error
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
+
+/**
+ * Read a raw request into the supplied buffer.
+ *
+ * Depending on file system options, system capabilities, and request
+ * size the request is either read into a memory buffer or spliced
+ * into a temporary pipe.
+ *
+ * Note only if you have implemented struct fuse_custom_io methods:
+ *	get_mem_bufv
+ *	get_reply_mem_bufv
+ *	commit_req
+ * you should use fuse_session_receive_bufvec and fuse_session_process_bufvec.
+ *
+ * @param se the session
+ * @param bufv the fuse_bufvec to store the request in
+ * @return the actual size of the raw request, or -errno on error
+ */
+int fuse_session_receive_bufvec(struct fuse_session *se, struct fuse_bufvec **bufv);
+
+/**
+ * Process a raw request supplied in a generic buffer
+ *
+ * The fuse_bufvec may contain memory buffers or a pipe file descriptor.
+ *
+ * @param se the session
+ * @param buf the fuse_bufvec containing the request
+ */
+void fuse_session_process_bufvec(struct fuse_session *se, struct fuse_bufvec *bufv);
 
 #ifdef __cplusplus
 }

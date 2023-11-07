@@ -1723,18 +1723,6 @@ int fuse_fs_open(struct fuse_fs *fs, const char *path,
 	}
 }
 
-static void fuse_free_buf(struct fuse_bufvec *buf)
-{
-	if (buf != NULL) {
-		size_t i;
-
-		for (i = 0; i < buf->count; i++)
-			if (!(buf->buf[i].flags & FUSE_BUF_IS_FD))
-				free(buf->buf[i].mem);
-		free(buf);
-	}
-}
-
 int fuse_fs_read_buf(struct fuse_fs *fs, const char *path,
 		     struct fuse_bufvec **bufp, size_t size, off_t off,
 		     struct fuse_file_info *fi)
@@ -4496,9 +4484,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 		.fd = se->fd,
 		.events = POLLIN
 	};
-	struct fuse_buf fbuf = {
-		.mem = NULL,
-	};
+	struct fuse_bufvec *bufv = NULL;
 
 	curr_time(&now);
 	next_clean = now.tv_sec;
@@ -4518,14 +4504,14 @@ static int fuse_session_loop_remember(struct fuse *f)
 			else
 				break;
 		} else if (res > 0) {
-			res = fuse_session_receive_buf_int(se, &fbuf, NULL);
+			res = fuse_session_receive_bufvec_int(se, &bufv, NULL);
 
 			if (res == -EINTR)
 				continue;
 			if (res <= 0)
 				break;
 
-			fuse_session_process_buf_int(se, &fbuf, NULL);
+			fuse_session_process_bufvec_int(se, bufv, NULL);
 		} else {
 			timeout = fuse_clean_cache(f);
 			curr_time(&now);
@@ -4533,7 +4519,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 		}
 	}
 
-	free(fbuf.mem);
+	fuse_free_buf(bufv);
 	fuse_session_reset(se);
 	return res < 0 ? -1 : 0;
 }

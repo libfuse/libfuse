@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
+#include <stdlib.h>
 
 size_t fuse_buf_size(const struct fuse_bufvec *bufv)
 {
@@ -321,4 +322,41 @@ ssize_t fuse_buf_copy(struct fuse_bufvec *dstv, struct fuse_bufvec *srcv,
 	}
 
 	return copied;
+}
+
+ssize_t fuse_buf_copy_from_iov(struct fuse_bufvec *dstv,
+			       struct iovec *iov, int count)
+{
+	struct fuse_bufvec *srcv;
+	size_t copied = 0;
+	int i = 0;
+
+	srcv = malloc(sizeof(struct fuse_bufvec) +
+		      sizeof(struct fuse_buf) * (count - 1));
+	if (!srcv)
+		return 0;
+
+	for (i = 0; i < count; i++) {
+		srcv->buf[i].mem = iov[i].iov_base;
+		srcv->buf[i].size = iov[i].iov_len;
+	}
+	srcv->count = count;
+	srcv->idx = 0;
+	copied = fuse_buf_copy(dstv, srcv, 0);
+	free(srcv);
+	return copied;
+}
+
+void fuse_free_buf(struct fuse_bufvec *bufv)
+{
+	if (bufv != NULL) {
+		size_t i;
+
+		for (i = 0; i < bufv->count; i++) {
+			if (!(bufv->buf[i].flags & FUSE_BUF_IS_FD) &&
+			    !(bufv->buf[i].flags & FUSE_BUF_IS_CUSTOM_BUF))
+				free(bufv->buf[i].mem);
+		}
+		free(bufv);
+	}
 }

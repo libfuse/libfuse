@@ -694,7 +694,16 @@ enum fuse_buf_flags {
 	 * until .size bytes have been copied or an error or EOF is
 	 * detected.
 	 */
-	FUSE_BUF_FD_RETRY	= (1 << 3)
+	FUSE_BUF_FD_RETRY	= (1 << 3),
+
+	/**
+	 * Buffer contains a custom mem buf, see struct fuse_custom_io definition.
+	 *
+	 * Normally if this flag is set, buffer is a memory-mapped buffer and you
+	 * don't need to call free(3) on it. It depends on how fuse_custom_io's
+	 * implementation to drop this buf.
+	 */
+	FUSE_BUF_IS_CUSTOM_BUF	= (1 << 4)
 };
 
 /**
