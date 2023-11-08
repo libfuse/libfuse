@@ -2658,9 +2658,6 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	int res;
 
 	if (buf->flags & FUSE_BUF_IS_FD) {
-		if (buf->size < tmpbuf.buf[0].size)
-			tmpbuf.buf[0].size = buf->size;
-
 		mbuf = malloc(tmpbuf.buf[0].size);
 		if (mbuf == NULL) {
 			fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate header\n");
@@ -2740,7 +2737,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 			fuse_reply_err(intr, EAGAIN);
 	}
 
-	if ((buf->flags & FUSE_BUF_IS_FD) && write_header_size < buf->size &&
+	if ((buf->flags & FUSE_BUF_IS_FD) &&
 	    (in->opcode != FUSE_WRITE || !se->op.write_buf) &&
 	    in->opcode != FUSE_NOTIFY_REPLY) {
 		void *newmbuf;
