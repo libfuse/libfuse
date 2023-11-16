@@ -2141,6 +2141,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargflags |= FUSE_ASYNC_DIO;
 	if (se->conn.want & FUSE_CAP_WRITEBACK_CACHE)
 		outargflags |= FUSE_WRITEBACK_CACHE;
+	if (se->conn.want & FUSE_CAP_PARALLEL_DIROPS)
+		outargflags |= FUSE_PARALLEL_DIROPS;
 	if (se->conn.want & FUSE_CAP_POSIX_ACL)
 		outargflags |= FUSE_POSIX_ACL;
 	if (se->conn.want & FUSE_CAP_CACHE_SYMLINKS)
