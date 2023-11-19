@@ -1066,21 +1066,24 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Poll for IO readiness
 	 *
-	 * Note: If ph is non-NULL, the client should notify
-	 * when IO readiness events occur by calling
+	 * The client should immediately respond with fuse_reply_poll(),
+	 * setting revents appropriately according to which events are ready.
+	 *
+	 * Additionally, if ph is non-NULL, the client must retain it and
+	 * notify when all future IO readiness events occur by calling
 	 * fuse_lowlevel_notify_poll() with the specified ph.
 	 *
-	 * Regardless of the number of times poll with a non-NULL ph
-	 * is received, single notification is enough to clear all.
-	 * Notifying more times incurs overhead but doesn't harm
-	 * correctness.
+	 * Regardless of the number of times poll with a non-NULL ph is
+	 * received, a single notify_poll is enough to service all. (Notifying
+	 * more times incurs overhead but doesn't harm correctness.) Any
+	 * additional received handles can be immediately destroyed.
 	 *
 	 * The callee is responsible for destroying ph with
 	 * fuse_pollhandle_destroy() when no longer in use.
 	 *
 	 * If this request is answered with an error code of ENOSYS, this is
 	 * treated as success (with a kernel-defined default poll-mask) and
-	 * future calls to pull() will succeed the same way without being send
+	 * future calls to poll() will succeed the same way without being send
 	 * to the filesystem process.
 	 *
 	 * Valid replies:
