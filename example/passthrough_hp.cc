@@ -212,6 +212,10 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
         if (conn->capable & FUSE_CAP_SPLICE_READ)
             conn->want |= FUSE_CAP_SPLICE_READ;
     }
+
+    /* This is a local file system - no network coherency needed */
+    if (conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
+        conn->want |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
 }
 
 

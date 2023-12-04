@@ -441,6 +441,15 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_SETXATTR_EXT     (1 << 27)
 
 /**
+ * Files opened with FUSE_DIRECT_IO do not support MAP_SHARED mmap. This restriction
+ * is relaxed through FUSE_CAP_DIRECT_IO_RELAX (kernel flag: FUSE_DIRECT_IO_RELAX).
+ * MAP_SHARED is disabled by default for FUSE_DIRECT_IO, as this flag can be used to
+ * ensure coherency between mount points (or network clients) and with kernel page
+ * cache as enforced by mmap that cannot be guaranteed anymore.
+ */
+#define FUSE_CAP_DIRECT_IO_ALLOW_MMAP  (1 << 27)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine

@@ -2019,6 +2019,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 				bufsize = max_bufsize;
 			}
 		}
+		if (inargflags & FUSE_DIRECT_IO_ALLOW_MMAP)
+			se->conn.capable |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
 		if (arg->minor >= 38)
 			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
 	} else {
@@ -2151,6 +2153,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargflags |= FUSE_EXPLICIT_INVAL_DATA;
 	if (se->conn.want & FUSE_CAP_SETXATTR_EXT)
 		outargflags |= FUSE_SETXATTR_EXT;
+	if (se->conn.want & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
+		outargflags |= FUSE_DIRECT_IO_ALLOW_MMAP;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
