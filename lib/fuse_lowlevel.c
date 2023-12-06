@@ -2021,7 +2021,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		}
 		if (inargflags & FUSE_DIRECT_IO_ALLOW_MMAP)
 			se->conn.capable |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
-		if (arg->minor >= 38)
+		if (arg->minor >= 38 || (inargflags & FUSE_HAS_EXPIRE_ONLY))
 			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
 	} else {
 		se->conn.max_readahead = 0;
