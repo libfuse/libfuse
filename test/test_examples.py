@@ -106,6 +106,8 @@ def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
         assert exc_info.value.errno == errno.ENOENT
         if name == 'hello_ll':
             tst_xattr(mnt_dir)
+            path = os.path.join(mnt_dir, 'hello')
+            tst_xattr(path)
     except:
         cleanup(mount_process, mnt_dir)
         raise
@@ -855,8 +857,7 @@ def tst_passthrough(src_dir, mnt_dir):
     assert os.stat(src_name) == os.stat(mnt_name)
 
 
-def tst_xattr(mnt_dir):
-    path = os.path.join(mnt_dir, 'hello')
+def tst_xattr(path):
     os.setxattr(path, b'hello_ll_setxattr_name', b'hello_ll_setxattr_value')
     assert os.getxattr(path, b'hello_ll_getxattr_name') == b'hello_ll_getxattr_value'
     os.removexattr(path, b'hello_ll_removexattr_name')
