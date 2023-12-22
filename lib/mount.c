@@ -25,7 +25,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <sys/mount.h>
+
+#include "fuse_mount_compat.h"
 
 #ifdef __NetBSD__
 #include <perfuse.h>
@@ -110,15 +111,8 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("async",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("sync",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("dirsync",			KEY_KERN_FLAG),
-	FUSE_OPT_KEY("atime",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
-	FUSE_OPT_KEY("diratime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nodiratime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("lazytime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("nolazytime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("relatime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("norelatime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("strictatime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nostrictatime",		KEY_KERN_FLAG),
 	FUSE_OPT_END
 };
@@ -157,15 +151,9 @@ static const struct mount_flags mount_flags[] = {
 	{"noexec",  MS_NOEXEC,	    1},
 	{"async",   MS_SYNCHRONOUS, 0},
 	{"sync",    MS_SYNCHRONOUS, 1},
-	{"atime",   MS_NOATIME,	    0},
 	{"noatime", MS_NOATIME,	    1},
-	{"diratime",	    MS_NODIRATIME,	0},
 	{"nodiratime",	    MS_NODIRATIME,	1},
-	{"lazytime",	    MS_LAZYTIME,	1},
-	{"nolazytime",	    MS_LAZYTIME,	0},
-	{"relatime",	    MS_RELATIME,	1},
 	{"norelatime",	    MS_RELATIME,	0},
-	{"strictatime",	    MS_STRICTATIME,	1},
 	{"nostrictatime",   MS_STRICTATIME,	0},
 #ifndef __NetBSD__
 	{"dirsync", MS_DIRSYNC,	    1},
@@ -321,6 +309,65 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	waitpid(pid, NULL, 0);
 }
 
+static int setup_auto_unmount(const char *mountpoint, int quiet)
+{
+	int fds[2], pid;
+	int res;
+
+	if (!mountpoint) {
+		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
+		return -1;
+	}
+
+	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
+	if(res == -1) {
+		perror("fuse: socketpair() failed");
+		return -1;
+	}
+
+	pid = fork();
+	if(pid == -1) {
+		perror("fuse: fork() failed");
+		close(fds[0]);
+		close(fds[1]);
+		return -1;
+	}
+
+	if(pid == 0) {
+		char env[10];
+		const char *argv[32];
+		int a = 0;
+
+		if (quiet) {
+			int fd = open("/dev/null", O_RDONLY);
+			if (fd != -1) {
+				dup2(fd, 1);
+				dup2(fd, 2);
+			}
+		}
+
+		argv[a++] = FUSERMOUNT_PROG;
+		argv[a++] = "--auto-unmount";
+		argv[a++] = "--";
+		argv[a++] = mountpoint;
+		argv[a++] = NULL;
+
+		close(fds[1]);
+		fcntl(fds[0], F_SETFD, 0);
+		snprintf(env, sizeof(env), "%i", fds[0]);
+		setenv(FUSE_COMMFD_ENV, env, 1);
+		exec_fusermount(argv);
+		perror("fuse: failed to exec fusermount3");
+		_exit(1);
+	}
+
+	close(fds[0]);
+
+	// Now fusermount3 will only exit when fds[1] closes automatically when our
+	// process exits.
+	return 0;
+}
+
 static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		const char *opts, int quiet)
 {
@@ -419,12 +466,6 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to access mountpoint %s: %s\n",
 			mnt, strerror(errno));
 		return -1;
-	}
-
-	if (mo->auto_unmount) {
-		/* Tell the caller to fallback to fusermount3 because
-		   auto-unmount does not work otherwise. */
-		return -2;
 	}
 
 	fd = open(devname, O_RDWR | O_CLOEXEC);
@@ -589,7 +630,13 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 		goto out;
 
 	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
-	if (res == -2) {
+	if (res >= 0 && mo->auto_unmount) {
+		if(0 > setup_auto_unmount(mountpoint, 0)) {
+			// Something went wrong, let's umount like in fuse_mount_sys.
+			umount2(mountpoint, MNT_DETACH); /* lazy umount */
+			res = -1;
+		}
+	} else if (res == -2) {
 		if (mo->fusermount_opts &&
 		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)
 			goto out;

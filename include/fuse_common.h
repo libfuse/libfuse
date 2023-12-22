@@ -18,7 +18,7 @@
 #include "fuse_config.h"
 #endif
 
-#include "fuse_config.h"
+#include "libfuse_config.h"
 
 #include "fuse_opt.h"
 #include "fuse_log.h"
@@ -29,7 +29,7 @@
 #define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 14
+#define FUSE_MINOR_VERSION 16
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -48,7 +48,7 @@ extern "C" {
  * descriptors can share a single file handle.
  */
 struct fuse_file_info {
-	/** Open flags.	 Available in open() and release() */
+	/** Open flags.	 Available in open(), release() and create() */
 	int flags;
 
 	/** In case of a write operation indicates if this was caused
@@ -418,20 +418,27 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_EXPLICIT_INVAL_DATA    (1 << 25)
 
 /**
- * Indicates support that dentries can be expired or invalidated.
- *
- * Expiring dentries, instead of invalidating them, makes a difference for
- * overmounted dentries, where plain invalidation would detach all submounts
- * before dropping the dentry from the cache. If only expiry is set on the
- * dentry, then any overmounts are left alone and until ->d_revalidate()
+ * Indicates support that dentries can be expired.
+ * 
+ * Expiring dentries, instead of invalidating them, makes a difference for 
+ * overmounted dentries, where plain invalidation would detach all submounts 
+ * before dropping the dentry from the cache. If only expiry is set on the 
+ * dentry, then any overmounts are left alone and until ->d_revalidate() 
  * is called.
- *
+ * 
  * Note: ->d_revalidate() is not called for the case of following a submount,
- * so invalidation will only be triggered for the non-overmounted case.
+ * so invalidation will only be triggered for the non-overmounted case. 
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
 */
 #define FUSE_CAP_EXPIRE_ONLY      (1 << 26)
+
+/**
+ * Indicates that an extended 'struct fuse_setxattr' is used by the kernel
+ * side - extra_flags are passed, which are used (as of now by acl) processing.
+ * For example FUSE_SETXATTR_ACL_KILL_SGID might be set.
+ */
+#define FUSE_CAP_SETXATTR_EXT     (1 << 27)
 
 /**
  * Ioctl flags

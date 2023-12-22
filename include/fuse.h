@@ -454,7 +454,7 @@ struct fuse_operations {
 	 * If this request is answered with an error code of ENOSYS
 	 * and FUSE_CAP_NO_OPEN_SUPPORT is set in
 	 * `fuse_conn_info.capable`, this is treated as success and
-	 * future calls to open will also succeed without being send
+	 * future calls to open will also succeed without being sent
 	 * to the filesystem process.
 	 *
 	 */
@@ -968,7 +968,7 @@ struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
 #else /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 struct fuse *fuse_new_31(struct fuse_args *args,
 		      const struct fuse_operations *op,
-		      size_t op_size, void *user_data);
+		      size_t op_size, void *private_data);
 #define fuse_new(args, op, size, data) fuse_new_31(args, op, size, data)
 #endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 #endif

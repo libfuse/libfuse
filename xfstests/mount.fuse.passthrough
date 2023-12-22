@@ -1,0 +1,38 @@
+#!/bin/bash
+
+ulimit -n 1048576
+
+dev="$1"
+shift
+mnt="$1"
+shift
+# -o
+shift
+mntopts="$1"
+shift
+
+# source can be provided as NFS style device (e.g. TEST_DEV=source:/${TEST_SOURCE})
+# and/or it can already be inside mount options (passthrough_ll style)
+if ( echo "$mntopts" | grep -q "source=" ) ; then
+	# Don't pass source as position argument
+	source=
+elif [[ "$dev" == "source:"* ]]; then
+	source="${dev#"source:"}"
+else
+    >&2 echo "passthrough source is undefined, aborting!"
+fi
+
+if ( echo "$mntopts" | grep -q remount ) ; then
+	exec mount -i "$dev" "$mnt" -o "$mntopts"
+fi
+
+# set default to SUBTYPE (extracted from this script name)
+# example:
+#   Copy or link this script to /sbin/mount.fuse.passthrough_hp
+#   If xfstests local.config does not set PASSTHROUGH_PATH,
+#   PASSTHROUGH_PATH will be set to 'passthrough_hp' and exec below
+#   will look that up from $PATH
+
+[ -n "$PASSTHROUGH_PATH" ] || PASSTHROUGH_PATH=${0#*mount.fuse.}
+
+exec "$PASSTHROUGH_PATH" -o fsname=$dev,allow_other $source "$mnt" -o "$mntopts" "$@"

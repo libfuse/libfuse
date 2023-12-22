@@ -1,3 +1,46 @@
+libfuse 3.16.2 (2023-10-10)
+===========================
+
+* Various small fixes and improvements.
+
+libfuse 3.16.1 (2023-08-08)
+===========================
+
+* Readdir kernel cache can be enabled from high-level API.
+
+libfuse 3.15.1 (2023-07-05)
+===========================
+
+Future libfuse releases will be signed with `signify`_ rather than PGP (rationale_). This
+release is the last to be signed with PGP and contains the signify public key for current
+(3.15.X) and upcoming  (3.16.X) minor release cycle.
+
+.. _signify:  https://www.openbsd.org/papers/bsdcan-signify.html
+.. _rationale: https://latacora.micro.blog/2019/07/16/the-pgp-problem.html
+
+
+libfuse 3.15.0 (2023-06-09)
+===========================
+
+* Improved support for some less common systems (32 bit, alternative libcs)
+
+* Unsupported mount options are no longer silently accepted.
+
+* auto_unmount is now compatible with allow_other.
+
+
+libfuse 3.14.1 (2023-03-26)
+===========================
+
+* The extended attribute name passed to the setxattr() handler is no longer
+  truncated at the beginning (bug introduced in 3.13.0).
+  
+* As a result of the above, the additional setattr() flags introduced in 3.14 are no
+  longer available for now. They will hopefully be reintroduced in the next release.
+
+* Further improvements of configuration header handling.
+
+
 libfuse 3.14.0 (2023-02-17)
 ===========================
 
@@ -45,7 +88,7 @@ The following changes apply when using the most recent API (-DFUSE_USE_VERSION=3
 see `example/passthrough_hp.cc` for an example for how to usse the new API):
 
 * `struct fuse_loop_config` is now private and has to be constructed using
-  *fuse_loop_cfg_create()* and detroyed with *fuse_loop_cfg_destroy()*.  Parameters can be
+  *fuse_loop_cfg_create()* and destroyed with *fuse_loop_cfg_destroy()*.  Parameters can be
   changed using `fuse_loop_cfg_set_*()` functions.
 
 * *fuse_session_loop_mt()* now accepts `struct fuse_loop_config *` as NULL pointer.

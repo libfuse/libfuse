@@ -13,6 +13,9 @@ td += executable('test_syscalls', 'test_syscalls.c',
 td += executable('readdir_inode', 'readdir_inode.c',
                  include_directories: include_dirs,
                  install: false)
+td += executable('release_unlink_race', 'release_unlink_race.c',
+                 dependencies: [ libfuse_dep ],
+                 install: false)
 
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
                  'util.py', 'test_ctests.py', 'test_custom_io.py' ]

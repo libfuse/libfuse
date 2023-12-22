@@ -18,7 +18,7 @@ import time
 import errno
 import sys
 import platform
-from distutils.version import LooseVersion
+from looseversion import LooseVersion
 from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
@@ -104,6 +104,10 @@ def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
         with pytest.raises(IOError) as exc_info:
             open(filename + 'does-not-exist', 'r+')
         assert exc_info.value.errno == errno.ENOENT
+        if name == 'hello_ll':
+            tst_xattr(mnt_dir)
+            path = os.path.join(mnt_dir, 'hello')
+            tst_xattr(path)
     except:
         cleanup(mount_process, mnt_dir)
         raise
@@ -347,6 +351,8 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
         cmdline.append('--no-notify')
     if only_expire == "expire_entries":
         cmdline.append('--only-expire')
+        if fuse_proto < (7,38):
+            pytest.skip('only-expire not supported by running kernel')
     mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
                                      stderr=output_checker.fd)
     try:
@@ -366,6 +372,37 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
             safe_sleep(5)
         with pytest.raises(FileNotFoundError):
             os.stat(fname)
+    except:
+        cleanup(mount_process, mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+@pytest.mark.parametrize("intended_user", ('root', 'non_root'))
+def test_dev_auto_unmount(short_tmpdir, output_checker, intended_user):
+    """Check that root can mount with dev and auto_unmount
+    (but non-root cannot).
+    Split into root vs non-root, so that the output of pytest
+    makes clear what functionality is being tested."""
+    if os.getuid() == 0 and intended_user == 'non_root':
+        pytest.skip('needs to run as non-root')
+    if os.getuid() != 0 and intended_user == 'root':
+        pytest.skip('needs to run as root')
+    mnt_dir = str(short_tmpdir.mkdir('mnt'))
+    src_dir = str('/dev')
+    cmdline = base_cmdline + \
+                [ pjoin(basename, 'example', 'passthrough_ll'),
+                '-o', f'source={src_dir},dev,auto_unmount',
+                '-f', mnt_dir ]
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        if os.getuid() == 0:
+            open(pjoin(mnt_dir, 'null')).close()
+        else:
+            with pytest.raises(PermissionError):
+                open(pjoin(mnt_dir, 'null')).close()
     except:
         cleanup(mount_process, mnt_dir)
         raise
@@ -410,6 +447,65 @@ def test_cuse(output_checker):
         assert out == (b'\0' * off) + data
     finally:
         mount_process.terminate()
+
+def test_release_unlink_race(tmpdir, output_checker):
+    """test case for Issue #746
+
+    If RELEASE and UNLINK opcodes are sent back to back, and fuse_fs_release()
+    and fuse_fs_rename() are slow to execute, UNLINK will run while RELEASE is
+    still executing. UNLINK will try to rename the file and, while the rename
+    is happening, the RELEASE will finish executing. As a result, RELEASE will
+    not detect in time that UNLINK has happened, and UNLINK will not detect in
+    time that RELEASE has happened.
+
+
+    NOTE: This is triggered only when nullpath_ok is set.
+
+    If it is NOT SET then get_path_nullok() called by fuse_lib_release() will
+    call get_path_common() and lock the path, and then the fuse_lib_unlink()
+    will wait for the path to be unlocked before executing and thus synchronise
+    with fuse_lib_release().
+
+    If it is SET then get_path_nullok() will just set the path to null and
+    return without locking anything and thus allowing fuse_lib_unlink() to
+    eventually execute unimpeded while fuse_lib_release() is still running.
+    """
+
+    fuse_mountpoint = str(tmpdir)
+
+    fuse_binary_command = base_cmdline + \
+        [ pjoin(basename, 'test', 'release_unlink_race'),
+        "-f", fuse_mountpoint]
+
+    fuse_process = subprocess.Popen(fuse_binary_command,
+                                   stdout=output_checker.fd,
+                                   stderr=output_checker.fd)
+
+    try:
+        wait_for_mount(fuse_process, fuse_mountpoint)
+
+        temp_dir = tempfile.TemporaryDirectory(dir="/tmp/")
+        temp_dir_path = temp_dir.name
+
+        fuse_temp_file, fuse_temp_file_path = tempfile.mkstemp(dir=(fuse_mountpoint + temp_dir_path))
+
+        os.close(fuse_temp_file)
+        os.unlink(fuse_temp_file_path)
+
+        # needed for slow CI/CD pipelines for unlink OP to complete processing
+        safe_sleep(3)
+
+        assert os.listdir(temp_dir_path) == []
+    
+    except:
+        temp_dir.cleanup()
+        cleanup(fuse_process, fuse_mountpoint)
+        raise
+
+    else:
+        temp_dir.cleanup()
+        umount(fuse_process, fuse_mountpoint)
+
 
 @contextmanager
 def os_open(name, flags):
@@ -762,7 +858,12 @@ def tst_passthrough(src_dir, mnt_dir):
     assert name in os.listdir(mnt_dir)
     assert os.stat(src_name) == os.stat(mnt_name)
 
-# avoid warning about unused import
-test_printcap
 
-    
+def tst_xattr(path):
+    os.setxattr(path, b'hello_ll_setxattr_name', b'hello_ll_setxattr_value')
+    assert os.getxattr(path, b'hello_ll_getxattr_name') == b'hello_ll_getxattr_value'
+    os.removexattr(path, b'hello_ll_removexattr_name')
+
+
+# avoid warning about unused import
+assert test_printcap

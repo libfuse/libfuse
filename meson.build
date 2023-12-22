@@ -1,5 +1,5 @@
-project('libfuse3', ['c'], version: '3.14.0',
-        meson_version: '>= 0.50',
+project('libfuse3', ['c'], version: '3.16.2',
+        meson_version: '>= 0.51',
         default_options: [
             'buildtype=debugoptimized',
             'cpp_std=c++11',
@@ -74,10 +74,10 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
 #
 # Compiler configuration
 #
-add_project_arguments('-D_REENTRANT', '-DHAVE_LIBFUSE_PRIVATE_CONFIG_H', '-Wno-sign-compare',
+add_project_arguments('-D_REENTRANT', '-DHAVE_LIBFUSE_PRIVATE_CONFIG_H', '-Wno-sign-compare', '-D_FILE_OFFSET_BITS=64',
                       '-Wstrict-prototypes', '-Wmissing-declarations', '-Wwrite-strings',
                       '-fno-strict-aliasing', language: 'c')
-add_project_arguments('-D_REENTRANT', '-DHAVE_LIBFUSE_PRIVATE_CONFIG_H', '-D_GNU_SOURCE',
+add_project_arguments('-D_REENTRANT', '-DHAVE_LIBFUSE_PRIVATE_CONFIG_H', '-D_GNU_SOURCE', '-D_FILE_OFFSET_BITS=64',
                      '-Wno-sign-compare', '-Wmissing-declarations',
                      '-Wwrite-strings', '-fno-strict-aliasing', language: 'cpp')
 
@@ -114,7 +114,7 @@ if not cc.compiles(code, args: [ '-O0' ])
   versioned_symbols = 0
 endif
 
-# The detection can be overriden, which is useful for other (above unhandled)
+# The detection can be overridden, which is useful for other (above unhandled)
 # libcs and also especially useful for testing
 if get_option('disable-libc-symbol-version')
      versioned_symbols = 0
@@ -149,6 +149,40 @@ if versioned_symbols == 1
      endif
 else
      message('Disabling versioned libc symbols')
+endif
+
+# Older versions of musl libc don't unescape entries in /etc/mtab
+# Try to detect this behaviour, and work around, if necessary.
+detect_getmntent_needs_unescape = '''
+#define _GNU_SOURCE
+#include <mntent.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+#define dir_space_tab "dir\\040space\\011tab"
+
+int main()
+{
+    const char *fake_mtab = "name " dir_space_tab " type opts 0 0\n";
+    FILE *f = fmemopen((void *)fake_mtab, strlen(fake_mtab) + 1, "r");
+    struct mntent *entp = getmntent(f);
+    fclose(f);
+    if(NULL == entp)
+        exit(EXIT_FAILURE);
+    if (0 == strcmp(entp->mnt_dir, dir_space_tab))
+        printf("needs escaping\n");
+    else
+        printf("no need to escape\n");
+}
+'''
+
+if not meson.is_cross_build()
+  result = cc.run(detect_getmntent_needs_unescape)
+  if result.compiled() and result.returncode() == 0 and result.stdout().strip() == 'needs escaping'
+    message('getmntent does not unescape')
+    add_project_arguments('-DGETMNTENT_NEEDS_UNESCAPING', language: 'c')
+  endif
 endif
 
 # Write private test results into fuse_config.h (stored in build directory)

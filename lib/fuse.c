@@ -2625,7 +2625,6 @@ void fuse_fs_destroy(struct fuse_fs *fs)
 	fuse_get_context()->private_data = fs->user_data;
 	if (fs->op.destroy)
 		fs->op.destroy(fs->user_data);
-	free(fs);
 }
 
 static void fuse_lib_destroy(void *data)
@@ -2634,7 +2633,6 @@ static void fuse_lib_destroy(void *data)
 
 	fuse_create_context(f);
 	fuse_fs_destroy(f->fs);
-	f->fs = NULL;
 }
 
 static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
@@ -2971,6 +2969,20 @@ static void fuse_lib_unlink(fuse_req_t req, fuse_ino_t parent,
 		fuse_prepare_interrupt(f, req, &d);
 		if (!f->conf.hard_remove && is_open(f, parent, name)) {
 			err = hide_node(f, path, parent, name);
+			if (!err) {
+				/* we have hidden the node so now check again under a lock in case it is not used any more */
+				if (!is_open(f, parent, wnode->name)) {
+					char *unlinkpath;
+
+					/* get the hidden file path, to unlink it */
+					if (try_get_path(f, wnode->nodeid, NULL, &unlinkpath, NULL, false) == 0) {
+						err = fuse_fs_unlink(f->fs, unlinkpath);
+						if (!err)
+							remove_node(f, parent, wnode->name);
+						free(unlinkpath);
+					}
+				}
+			}
 		} else {
 			err = fuse_fs_unlink(f->fs, path);
 			if (!err)
@@ -3368,6 +3380,8 @@ static void fuse_lib_opendir(fuse_req_t req, fuse_ino_t ino,
 		err = fuse_fs_opendir(f->fs, path, &fi);
 		fuse_finish_interrupt(f, req, &d);
 		dh->fh = fi.fh;
+		llfi->cache_readdir = fi.cache_readdir;
+		llfi->keep_cache = fi.keep_cache;
 	}
 	if (!err) {
 		if (fuse_reply_open(req, llfi) == -ENOENT) {
@@ -4729,7 +4743,7 @@ void fuse_lib_help(struct fuse_args *args)
 			   fuse_lib_opt_proc) == -1
 	    || !conf.modules)
 		return;
-
+	
 	char *module;
 	char *next;
 	struct fuse_module *m;
@@ -4747,7 +4761,7 @@ void fuse_lib_help(struct fuse_args *args)
 	}
 }
 
-
+				      
 
 static int fuse_init_intr_signal(int signum, int *installed)
 {
@@ -5093,6 +5107,7 @@ void fuse_destroy(struct fuse *f)
 	free(f->name_table.array);
 	pthread_mutex_destroy(&f->lock);
 	fuse_session_destroy(f->se);
+	free(f->fs);
 	free(f->conf.modules);
 	free(f);
 	fuse_delete_context_key();
