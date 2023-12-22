@@ -18,7 +18,7 @@
 #include "fuse_config.h"
 #endif
 
-#include "libfuse_config.h"
+#include "fuse_config.h"
 
 #include "fuse_opt.h"
 #include "fuse_log.h"
