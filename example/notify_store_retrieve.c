@@ -70,6 +70,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 /* We can't actually tell the kernel that there is no
    timeout, so we just send a big value */
@@ -85,6 +86,12 @@ static size_t file_size;
 /* Keep track if we ever stored data (==1), and
    received it back correctly (==2) */
 static int retrieve_status = 0;
+
+static bool is_umount = false;
+
+/* updater thread tid */
+static pthread_t updater;
+
 
 /* Command line parsing */
 struct options {
@@ -268,6 +275,15 @@ static void tfs_retrieve_reply(fuse_req_t req, void *cookie, fuse_ino_t ino,
     fuse_reply_none(req);
 }
 
+static void tfs_destroy(void *userdata)
+{
+	(void)userdata;
+
+	is_umount = true;
+
+	pthread_join(updater, NULL);
+}
+
 
 static const struct fuse_lowlevel_ops tfs_oper = {
     .lookup	= tfs_lookup,
@@ -277,6 +293,7 @@ static const struct fuse_lowlevel_ops tfs_oper = {
     .read	= tfs_read,
     .forget     = tfs_forget,
     .retrieve_reply = tfs_retrieve_reply,
+    .destroy    = tfs_destroy,
 };
 
 static void update_fs(void) {
@@ -296,7 +313,7 @@ static void* update_fs_loop(void *data) {
     struct fuse_bufvec bufv;
     int ret;
 
-    while(1) {
+    while(!is_umount) {
         update_fs();
         if (!options.no_notify && lookup_cnt) {
             /* Only send notification if the kernel
@@ -311,11 +328,7 @@ static void* update_fs_loop(void *data) {
             /* This shouldn't fail, but apparently it sometimes
                does - see https://github.com/libfuse/libfuse/issues/105 */
             ret = fuse_lowlevel_notify_store(se, FILE_INO, 0, &bufv, 0);
-            if (-ret == ENODEV) {
-                // File system was unmounted
-                break;
-            }
-            else if (ret != 0) {
+            if (ret != 0 && !is_umount) {
                 fprintf(stderr, "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
                         strerror(-ret), -ret);
                 abort();
@@ -325,10 +338,7 @@ static void* update_fs_loop(void *data) {
                kernel to send us back the stored data */
             ret = fuse_lowlevel_notify_retrieve(se, FILE_INO, MAX_STR_LEN,
                                                 0, (void*) strdup(file_contents));
-            if (-ret == ENODEV) { // File system was unmounted
-                break;
-            }
-            assert(ret == 0);
+            assert(ret == 0 || is_umount);
             if(retrieve_status == 0)
                 retrieve_status = 1;
         }
@@ -351,7 +361,6 @@ int main(int argc, char *argv[]) {
     struct fuse_session *se;
     struct fuse_cmdline_opts opts;
     struct fuse_loop_config config;
-    pthread_t updater;
     int ret = -1;
 
     if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
