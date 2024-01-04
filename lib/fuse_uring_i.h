@@ -23,5 +23,3 @@ fuse_session_process_uring_cqe(struct fuse_session *se, struct fuse_req *req,
 
 int fuse_session_start_uring(struct fuse_session *se,
 			     struct fuse_loop_config *config);
-
-int fuse_session_stop_uring(struct fuse_session *se);

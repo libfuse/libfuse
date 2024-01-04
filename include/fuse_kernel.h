@@ -1097,6 +1097,9 @@ struct fuse_uring_cfg {
 	/* numa node this queue runs on; UINT32_MAX if any*/
 	uint32_t numa_node_id;
 
+	/* /dev/fuse fd that initiated the mount. */
+	uint32_t control_fd;
+
 	/* reserved space for future additions */
 	uint64_t reserve[8];
 };
