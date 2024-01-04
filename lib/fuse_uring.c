@@ -377,7 +377,7 @@ fuse_uring_get_sqe(struct io_uring *ring, int idx, bool is_sqe128)
 static int
 fuse_uring_configure_kernel_queue(struct fuse_session *se,
 				  struct fuse_loop_config *cfg,
-				  int qid, size_t nr_queues,
+				  int queue_fd, int qid, size_t nr_queues,
 				  size_t req_arg_len,
 				  uint32_t numa_node_id)
 {
@@ -391,9 +391,10 @@ fuse_uring_configure_kernel_queue(struct fuse_session *se,
 		.async_queue_depth = cfg->uring.async_queue_depth,
 		.req_arg_len = req_arg_len,
 		.numa_node_id = numa_node_id,
+		.control_fd = se->fd,
 	};
 
-	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
+	rc = ioctl(queue_fd, FUSE_DEV_IOC_URING, &ioc_cfg);
 	if (rc != 0) {
 		if (errno == ENOTTY)
 			fuse_log(FUSE_LOG_INFO, "Kernel does not support fuse uring\n");
@@ -436,58 +437,21 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 	free(fuse_ring);
 }
 
-static void *
-fuse_ring_cleanup_thread(void *arg)
-{
-	struct fuse_session *se = arg;
-	int rc;
-
-	/* Wait in the kernel till stop time and cleanup will then be done
-	 * inside of the kernel without further action here
-	 */
-	struct fuse_uring_cfg ioc_cfg = {
-		.cmd = FUSE_URING_IOCTL_CMD_WAIT,
-	};
-
-	while (!fuse_session_exited(se)) {
-		rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
-		if (rc != 0) {
-			if (errno == ENOTTY)
-				fuse_log(FUSE_LOG_INFO, "Kernel does not support fuse uring\n");
-			else if (errno == EINTR)
-				fuse_session_exit(se);
-			else
-				fuse_log(FUSE_LOG_ERR,
-					"Unexpected kernel uring ioctl result: %s\n",
-					strerror(errno));
-			break;
-		}
-	}
-
-	return NULL;
-}
-
-/**
- * Not essential, but nice to have, to avoid recurring checks for
- * need of cleanup within the kernel. The cleanup thread basically
- * waits in kernel for termination, until userspace gets stopped
- * and then starts the kernel uring cleanup task.
+/*
+ * Just open the device, must not clone (FUSE_DEV_IOC_CLONE) it as
+ * FUSE_DEV_IOC_URING automatically does that in the fuse module
  */
-static int
-fuse_ring_start_cleanup_thread(struct fuse_session *se)
+static int fuse_uring_open_dev(void)
 {
-	int rc = pthread_create(&se->ring.cleanup_tid, NULL,
-				fuse_ring_cleanup_thread, se);
+	int fd;
+	const char *devname = "/dev/fuse";
 
-	if (rc != 0) {
-		fuse_log(FUSE_LOG_ERR,
-			"Failed to start the cleanup thread: %s\n",
+	fd = open(devname, O_RDWR | O_CLOEXEC);
+	if (fd == -1)
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n", devname,
 			strerror(errno));
-	} else {
-		/* test/check with another ioctl when it is running `*/
-	}
 
-	return rc;
+	return fd;
 }
 
 static struct fuse_ring_pool *
@@ -553,23 +517,26 @@ fuse_create_user_ring(struct fuse_session *se,
 		struct fuse_ring_queue *queue =
 				fuse_uring_get_queue(fuse_ring, qid);
 
-		rc = fuse_uring_configure_kernel_queue(se, cfg, qid, nr_queues,
-						       ring_req_arg_len,
-						       queue->numa_node);
-		if (rc != 0) {
-			goto err;
-		}
-
-		queue->ring_pool = fuse_ring;
-		queue->qid = qid;
-
-		/* XXX Any advantage in cloning the session? */
-		queue->fd = dup(se->fd);
+		/*
+		 * file descriptor per queue is a protocol requirement
+		 */
+		queue->fd = fuse_uring_open_dev();
 		if (queue->fd == -1) {
 			fuse_log(FUSE_LOG_ERR, "Session fd dup failed: %s\n",
 				 strerror(errno));
 			goto err;
 		}
+
+		rc = fuse_uring_configure_kernel_queue(se, cfg,
+						       queue->fd, qid, nr_queues,
+						       ring_req_arg_len,
+						       queue->numa_node);
+		if (rc != 0)
+			goto err;
+
+		queue->ring_pool = fuse_ring;
+		queue->qid = qid;
+
 
 		const int prot =  PROT_READ | PROT_WRITE;
 		const int flags = MAP_SHARED_VALIDATE | MAP_POPULATE;
@@ -606,8 +573,6 @@ fuse_create_user_ring(struct fuse_session *se,
 			req->is_uring = true;
 		}
 	}
-
-	fuse_ring_start_cleanup_thread(se);
 
 	return fuse_ring;
 
@@ -798,33 +763,4 @@ out:
 		se->ring.pool = fuse_ring;
 
 	return rc;
-}
-
-int fuse_session_stop_uring(struct fuse_session *se)
-{
-	int rc;
-
-	/* Wake up the waiting thread to let it stop uring within the kernel
-	 */
-	struct fuse_uring_cfg ioc_cfg = {
-		.cmd = FUSE_URING_IOCTL_CMD_STOP,
-	};
-
-	fuse_log(FUSE_LOG_ERR, "Sending flag stop\n");
-
-	rc = ioctl(se->fd, FUSE_DEV_IOC_URING, &ioc_cfg);
-	if (rc != 0) {
-		fuse_log(FUSE_LOG_ERR,
-			 "Unexpected kernel uring ioctl result: %s\n",
-			 strerror(errno));
-	}
-
-	fuse_log(FUSE_LOG_ERR, "Joining cleanup tid\n");
-	if (se->ring.cleanup_tid != 0)
-		pthread_join(se->ring.cleanup_tid, NULL);
-	fuse_log(FUSE_LOG_ERR, "Joined cleanup tid\n");
-
-	fuse_session_destruct_uring(se->ring.pool);
-
-	return 0;
 }
