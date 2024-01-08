@@ -23,7 +23,7 @@ from tempfile import NamedTemporaryFile
 from contextlib import contextmanager
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker, test_printcap,
-                  fuse_proto, powerset)
+                  fuse_proto, fuse_caps, powerset)
 from os.path import join as pjoin
 
 pytestmark = fuse_test_marker()
@@ -349,7 +349,7 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
         cmdline.append('--no-notify')
     if only_expire == "expire_entries":
         cmdline.append('--only-expire')
-        if fuse_proto < (7,38):
+        if "FUSE_CAP_EXPIRE_ONLY" not in fuse_caps:
             pytest.skip('only-expire not supported by running kernel')
     mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
                                      stderr=output_checker.fd)
