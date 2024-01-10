@@ -336,8 +336,6 @@ struct fuse_loop_config_v1 {
  * is unset, the FUSE kernel module will ensure that lookup() and
  * readdir() requests are never issued concurrently for the same
  * directory.
- *
- * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_PARALLEL_DIROPS        (1 << 18)
 
