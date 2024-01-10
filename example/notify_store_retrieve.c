@@ -81,7 +81,9 @@
 #define FILE_NAME "current_time"
 static char file_contents[MAX_STR_LEN];
 static int lookup_cnt = 0;
+static int open_cnt = 0;
 static size_t file_size;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* Keep track if we ever stored data (==1), and
    received it back correctly (==2) */
@@ -139,7 +141,6 @@ static void tfs_lookup(fuse_req_t req, fuse_ino_t parent,
         goto err_out;
     else if (strcmp(name, FILE_NAME) == 0) {
         e.ino = FILE_INO;
-        lookup_cnt++;
     } else
         goto err_out;
 
@@ -148,6 +149,18 @@ static void tfs_lookup(fuse_req_t req, fuse_ino_t parent,
     if (tfs_stat(e.ino, &e.attr) != 0)
         goto err_out;
     fuse_reply_entry(req, &e);
+
+    /*
+     * must only be set when the kernel knows about the entry,
+     * otherwise update_fs_loop() might see a positive count, but kernel
+     * would not have the entry yet
+     */
+    if (e.ino == FILE_INO) {
+        pthread_mutex_lock(&lock);
+        lookup_cnt++;
+        pthread_mutex_unlock(&lock);
+    }
+
     return;
 
 err_out:
@@ -157,9 +170,11 @@ err_out:
 static void tfs_forget (fuse_req_t req, fuse_ino_t ino,
                         uint64_t nlookup) {
     (void) req;
-    if(ino == FILE_INO)
+    if(ino == FILE_INO) {
+        pthread_mutex_lock(&lock);
         lookup_cnt -= nlookup;
-    else
+        pthread_mutex_unlock(&lock);
+    } else
         assert(ino == FUSE_ROOT_ID);
     fuse_reply_none(req);
 }
@@ -232,9 +247,12 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino,
         fuse_reply_err(req, EISDIR);
     else if ((fi->flags & O_ACCMODE) != O_RDONLY)
         fuse_reply_err(req, EACCES);
-    else if (ino == FILE_INO)
+    else if (ino == FILE_INO) {
         fuse_reply_open(req, fi);
-    else {
+        pthread_mutex_lock(&lock);
+        open_cnt++;
+        pthread_mutex_unlock(&lock);
+    } else {
         // This should not happen
         fprintf(stderr, "Got open for non-existing inode!\n");
         fuse_reply_err(req, ENOENT);
@@ -315,7 +333,8 @@ static void* update_fs_loop(void *data) {
 
     while(!is_umount) {
         update_fs();
-        if (!options.no_notify && lookup_cnt) {
+        pthread_mutex_lock(&lock);
+        if (!options.no_notify && open_cnt && lookup_cnt) {
             /* Only send notification if the kernel
                is aware of the inode */
             bufv.count = 1;
@@ -325,11 +344,17 @@ static void* update_fs_loop(void *data) {
             bufv.buf[0].mem = file_contents;
             bufv.buf[0].flags = 0;
 
-            /* This shouldn't fail, but apparently it sometimes
-               does - see https://github.com/libfuse/libfuse/issues/105 */
+            /*
+             * Some errors (ENOENT, EBADFD, ENODEV) have to be accepted as they
+             * might come up during umount, when kernel side already releases
+             * all inodes, but does not send FUSE_DESTROY yet.
+             */
+
             ret = fuse_lowlevel_notify_store(se, FILE_INO, 0, &bufv, 0);
-            if (ret != 0 && !is_umount) {
-                fprintf(stderr, "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
+            if ((ret != 0 && !is_umount) &&
+                ret != -ENOENT && ret != -EBADFD && ret != -ENODEV) {
+                fprintf(stderr,
+                        "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
                         strerror(-ret), -ret);
                 abort();
             }
@@ -338,10 +363,12 @@ static void* update_fs_loop(void *data) {
                kernel to send us back the stored data */
             ret = fuse_lowlevel_notify_retrieve(se, FILE_INO, MAX_STR_LEN,
                                                 0, (void*) strdup(file_contents));
-            assert(ret == 0 || is_umount);
+            assert((ret == 0 || is_umount) || ret == -ENOENT || ret == -EBADFD ||
+                   ret != -ENODEV);
             if(retrieve_status == 0)
                 retrieve_status = 1;
         }
+        pthread_mutex_unlock(&lock);
         sleep(options.update_interval);
     }
     return NULL;
