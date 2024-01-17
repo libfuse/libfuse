@@ -363,7 +363,7 @@ struct fuse_loop_config_v1 {
  * setuid and setgid bits when a file is written, truncated, or
  * its owner is changed.
  *
- * This feature is enabled by default when supported by the kernel.
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
 
