@@ -988,54 +988,65 @@ struct fuse_notify_retrieve_in {
 
 enum fuse_uring_ioctl_cmd {
 	/* not correctly initialized when set */
-	FUSE_URING_IOCTL_CMD_INVALID    = 0,
+	FUSE_URING_IOCTL_CMD_INVALID   = 0,
+
+	/* ioctl to prepare communucation with io-uring */
+	FUSE_URING_IOCTL_CMD_RING_CFG  = 1,
 
 	/* The ioctl is a queue configuration command */
-	FUSE_URING_IOCTL_CMD_QUEUE_CFG = 1,
+	FUSE_URING_IOCTL_CMD_QUEUE_CFG = 2,
 
-	/* Wait in the kernel until the process gets terminated, process
-	 * termination will wake up the waitq and initiate ring shutdown.
-	 * This avoids the need to run a check in intervals if ring termination
-	 * should be started (less cpu cycles) and also helps for faster ring
-	 * shutdown.
-	 */
-	FUSE_URING_IOCTL_CMD_WAIT      = 2,
-
-	/* Daemon side wants to explicitly stop the waiter thread. This will
-	 * restart the interval termination checker.
-	 */
-	FUSE_URING_IOCTL_CMD_STOP      = 3,
+	/* Mmapped memory registration to a queue */
+	FUSE_URING_IOCTL_CMD_MEM_REG        = 3,
 };
 
 struct fuse_uring_cfg {
-	/* currently unused */
-	uint32_t flags;
+	/* struct flags */
+	uint64_t flags;
 
 	/* configuration command */
-	uint16_t cmd;
+	uint8_t cmd;
 
-	uint16_t padding;
+	uint8_t padding[7];
 
-	/* qid the config command is for */
-	uint32_t qid;
+	union {
+		struct fuse_ring_config {
+			/* number of queues */
+			uint32_t nr_queues;
 
-	/* number of queues */
-	uint32_t nr_queues;
+			/* number of foreground entries per queue */
+			uint32_t fg_queue_depth;
 
-	/* number of foreground entries per queue */
-	uint32_t fg_queue_depth;
+			/* number of background entries per queue */
+			uint32_t async_queue_depth;
 
-	/* number of background entries per queue */
-	uint32_t async_queue_depth;
+			/* argument (max data length) of a request */
+			uint32_t req_arg_len;
 
-	/* argument (data length) of a request */
-	uint32_t req_arg_len;
+			/*
+			 * buffer size userspace allocated per request buffer
+			 * from the mmaped queue buffer
+			 * */
+			uint32_t user_req_buf_sz;
 
-	/* numa node this queue runs on; UINT32_MAX if any*/
-	uint32_t numa_node_id;
+			/* ring config flags */
+			uint32_t numa_aware:1;
+		} rconf;
 
-	/* reserved space for future additions */
-	uint64_t reserve[8];
+		struct fuse_ring_queue_config {
+			/* mmaped buffser address */
+			uint64_t uaddr;
+
+			/* qid the command is for */
+			uint32_t qid;
+
+			/* /dev/fuse fd that initiated the mount. */
+			uint32_t control_fd;
+		} qconf;
+
+		/* space for future additions */
+		uint8_t union_size[128];
+	};
 };
 
 /* Device ioctls: */
@@ -1205,7 +1216,7 @@ struct fuse_uring_cmd_req {
 	/* queue entry (array index) */
 	uint16_t tag;
 
-	uint32_t padding;
+	uint32_t flags;
 };
 
 #endif /* _LINUX_FUSE_H */
