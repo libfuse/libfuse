@@ -468,7 +468,7 @@ static int fuse_uring_setup_kernel_ring(int session_fd,
 static int fuse_uring_open_dev(void)
 {
 	int fd;
-	const char *devname = "/dev/fuse";
+	const char *devname = "/dev/redfs";
 
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1)
