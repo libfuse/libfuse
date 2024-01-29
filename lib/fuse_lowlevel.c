@@ -2019,9 +2019,11 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 				bufsize = max_bufsize;
 			}
 		}
-		if (inargflags & FUSE_DIRECT_IO_ALLOW_MMAP)
+		if ((inargflags & FUSE_INIT_EXT) &&
+				(inargflags & FUSE_DIRECT_IO_ALLOW_MMAP))
 			se->conn.capable |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
-		if (arg->minor >= 38 || (inargflags & FUSE_HAS_EXPIRE_ONLY))
+		if (arg->minor >= 38 ||
+				((inargflags & FUSE_INIT_EXT) && (inargflags & FUSE_HAS_EXPIRE_ONLY)))
 			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
 	} else {
 		se->conn.max_readahead = 0;
