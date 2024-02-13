@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <linux/sched.h>
+#include <poll.h>
 
 
 /* defined somewhere in uring? */
@@ -81,6 +82,7 @@ struct fuse_ring_pool {
 	struct fuse_session *se;
 
 	bool   per_core_queue;
+	bool   polling;
 	size_t num_queues;  /* number of queues */
 	size_t queue_depth; /* number of per queue entries */
 	size_t req_arg_len;
@@ -284,6 +286,12 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 		      struct io_uring_cqe *cqe)
 {
 	struct fuse_ring_ent *ring_ent = io_uring_cqe_get_data(cqe);
+
+	if (!ring_ent) {
+		fprintf(stderr, "cqe=%p io_uring_cqe_get_data returned NULL\n", cqe);
+		return;
+	}
+
 	struct fuse_req *req = &ring_ent->req;
 	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
 	struct fuse_ring_req *rreq = ring_ent->ring_req;
@@ -505,6 +513,15 @@ fuse_uring_setup_queue(struct fuse_ring_queue *queue,
 	if (rc != 0)
 		return rc;
 
+	rc = fuse_queue_setup_io_uring(&queue->ring, queue->qid,
+					ring->queue_depth,
+					queue->fd, ring->per_core_queue);
+	if (rc != 0) {
+		fuse_log(FUSE_LOG_ERR, "qid=%d io_uring init failed\n",
+			 queue->qid);
+		return rc;
+	}
+
 	for (int tag = 0; tag < ring->queue_depth; tag++) {
 		struct fuse_ring_ent *ring_ent = &queue->ent[tag];
 		ring_ent->ring_queue = queue;
@@ -579,6 +596,7 @@ fuse_create_ring(struct fuse_session *se,
 	fuse_ring->queue_size = queue_sz;
 	fuse_ring->queue_mmap_size = mmap_size;
 	fuse_ring->queue_req_buf_size = req_buf_size;
+	fuse_ring->polling = cfg->uring.polling;
 
 	/*
 	 * very basic queue initialization, that cannot fail and will
@@ -652,6 +670,23 @@ static void fuse_uring_set_thread_core(int qid)
 			 strerror(errno));
 }
 
+/*
+ * Wait for the ring to be ready
+ */
+static int fuse_uring_poll(struct fuse_ring_queue *queue)
+{
+	int rc = 0;
+	struct io_uring *ring = &queue->ring;
+	struct pollfd fds[] = {{ .fd = ring->ring_fd, .events = POLLIN }};
+
+	// XXX This simulates random SQEs to check their kernel side handling
+	//struct io_uring_sqe *sqe = sqe = io_uring_get_sqe(ring);
+
+	rc = poll(fds, 1, -1);
+
+	return rc < 0 ? -errno : 0;
+}
+
 static void *fuse_uring_thread(void *arg)
 {
 	struct fuse_ring_queue *queue = arg;
@@ -659,6 +694,7 @@ static void *fuse_uring_thread(void *arg)
 	struct fuse_session *se = ring_pool->se;
 	int tag;
 	int res;
+	bool polling = ring_pool->polling;
 
 	if (ring_pool->per_core_queue)
 		fuse_uring_set_thread_core(queue->qid);
@@ -671,15 +707,6 @@ static void *fuse_uring_thread(void *arg)
 	res = fuse_uring_setup_queue(queue, se, ring_pool);
 	if (res != 0) {
 		fuse_log(FUSE_LOG_ERR, "qid=%d queue setup failed\n",
-			 queue->qid);
-		goto err;
-	}
-
-	res = fuse_queue_setup_io_uring(&queue->ring, queue->qid,
-					ring_pool->queue_depth,
-					queue->fd, ring_pool->per_core_queue);
-	if (res != 0) {
-		fuse_log(FUSE_LOG_ERR, "qid=%d io_uring init failed\n",
 			 queue->qid);
 		goto err;
 	}
@@ -720,10 +747,22 @@ static void *fuse_uring_thread(void *arg)
 	while (!se->exited) {
 		struct io_uring_cqe *cqe;
 		unsigned head;
-		unsigned int count = 0;
+		unsigned int num_completed = 0;
 
-		io_uring_submit_and_wait(&queue->ring, 1);
+		if (polling) {
+			io_uring_submit(&queue->ring);
+			fuse_uring_poll(queue);
+
+			if (!io_uring_cq_ready(&queue->ring))
+				continue;
+		} else {
+			io_uring_submit_and_wait(&queue->ring, 1);
+		}
+
 		io_uring_for_each_cqe(&queue->ring, head, cqe) {
+
+			fprintf(stderr, "cqe=%p res=%d\n", cqe, cqe->res);
+
 			if (cqe->res != 0) {
 				fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
 				se->error = cqe->res;
@@ -736,10 +775,11 @@ static void *fuse_uring_thread(void *arg)
 			 * move ahead?
 			 */
 			// io_uring_submit(&queue->ring);
-			count++;
+			num_completed++;
 		}
 
-		io_uring_cq_advance(&queue->ring, count);
+		if (num_completed)
+			io_uring_cq_advance(&queue->ring, num_completed);
 	}
 
 	return NULL;

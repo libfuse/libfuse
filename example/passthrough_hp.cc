@@ -165,6 +165,8 @@ struct Fs {
     struct {
         bool enable;
         bool per_core_queue;
+        bool polling;
+        bool external_threads;
         int sync_queue_depth;
         int async_queue_depth;
         int arglen;
@@ -1255,10 +1257,10 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
             cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
         ("clone-fd", "use separate fuse device fd for each thread")
         ("direct-io", "enable fuse kernel internal direct-io")
-        ("uring", "use uring communication",
-            cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_URING))
-        ("uring-per-core-queue", "Use a queue per cpu core",
-            cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_PER_CORE_QUEUE))
+        ("uring", "use uring communication")
+        ("uring-per-core-queue", "Use a queue per cpu core")
+        ("uring-polling", "For testing, use uring in CQE polling mode")
+        ("uring-external-threads", "For testing, threads are owned by passthough and not liburing.")
         ("uring-fg-depth", "Uring foreground queue depth",
             cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_FG_DEPTH))
         ("uring-bg-depth", "Uring background queue depth",
@@ -1297,8 +1299,10 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     fs.clone_fd = options.count("clone-fd");
     fs.direct_io = options.count("direct-io");
 
-    fs.uring.enable = options["uring"].as<bool>();
-    fs.uring.per_core_queue = options["uring-per-core-queue"].as<int>();
+    fs.uring.enable = options.count("uring");
+    fs.uring.per_core_queue = options.count("uring-per-core-queue");
+    fs.uring.polling = options.count("uring-polling");
+    fs.uring.external_threads = options.count("uring-external-threads");
     fs.uring.sync_queue_depth = options["uring-fg-depth"].as<int>();
     fs.uring.async_queue_depth = options["uring-bg-depth"].as<int>();
     fs.uring.arglen = options["uring-arglen"].as<int>();
@@ -1413,9 +1417,13 @@ int main(int argc, char *argv[]) {
                                  fs.uring.sync_queue_depth,
                                  fs.uring.async_queue_depth,
                                  fs.uring.arglen);
+    if (fs.uring.polling)
+        fuse_loop_cfg_set_uring_polling(loop_config);
+    if (fs.uring.external_threads)
+        fuse_loop_cfg_set_uring_ext_thread(loop_config);
 
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
-	
+
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
 
