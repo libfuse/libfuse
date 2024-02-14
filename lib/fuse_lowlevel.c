@@ -2119,6 +2119,15 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
 
+	if (se->ring.pool && se->op.init_ring_queue) {
+		for (int qid=0; qid < se->ring.nr_queues; qid++) {
+			se->op.init_ring_queue(qid, se->ring.pool,
+					       fuse_uring_init_queue,
+					       fuse_uring_submit_sqes,
+					       fuse_uring_queue_handle_cqes);
+		}
+	}
+
 	if (se->conn.want & (~se->conn.capable)) {
 		fuse_log(FUSE_LOG_ERR, "fuse: error: filesystem requested capabilities "
 			"0x%x that are not supported by kernel, aborting.\n",
@@ -2231,6 +2240,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;
 	else if (arg->minor < 23)
 		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
+
+
 
 	send_reply_ok(req, &outarg, outargsize);
 }
@@ -2470,13 +2481,6 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	iov[0].iov_len = sizeof(out);
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
-
-	if (se->is_uring) {
-		/* XXX this requires another ring which userspace side can use
-		 * without a kernel requests
-		 */
-		return -ENOSYS;
-	}
 
 	res = fuse_send_data_iov(se, NULL, iov, 2, bufv, flags, req);
 	if (res > 0)

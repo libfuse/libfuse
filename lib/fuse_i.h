@@ -79,7 +79,7 @@ struct fuse_session {
 	bool is_uring;
 	
 	struct {
-		pthread_t cleanup_tid;
+		int nr_queues;
 		struct fuse_ring_pool *pool;
 	} ring;
 };
@@ -178,7 +178,7 @@ struct fuse_loop_config
 		 * system, instead of spawning a new thread per queue by
 		 * the libfuse io-uring interface.
 		 */
-		bool external_thread:1;
+		bool external_threads:1;
 
 		/** The ring foreground request queue depth */
 		unsigned int sync_queue_depth;

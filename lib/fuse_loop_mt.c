@@ -366,10 +366,9 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 		created_config = 1;
 	}
 
-	/* io_uring has a different thread model */
 	if (config->uring.use_uring) {
 #ifdef HAVE_URING
-		err = fuse_session_start_uring(se, config);
+		err = fuse_uring_start(se, config);
 		if (err) {
 			fuse_log(FUSE_LOG_WARNING,
 				 "Failed to start uring, "
@@ -489,7 +488,7 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 	config->uring.async_queue_depth = FUSE_LOOP_MT_DEF_URING_ASYNC_DEPTH;
 	config->uring.ring_req_arg_len = FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN;
 	config->uring.polling = FUSE_LOOP_MT_DEV_URING_POLLING;
-	config->uring.external_thread = FUSE_LOOP_MT_DEV_URING_EXT_THREAD;
+	config->uring.external_threads = FUSE_LOOP_MT_DEV_URING_EXT_THREAD;
 
 	return config;
 }
@@ -570,5 +569,5 @@ void fuse_loop_cfg_set_uring_polling(struct fuse_loop_config *config)
 
 void fuse_loop_cfg_set_uring_ext_thread(struct fuse_loop_config *config)
 {
-	config->uring.external_thread = true;
+	config->uring.external_threads = true;
 }

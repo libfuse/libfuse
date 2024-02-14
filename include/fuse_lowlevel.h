@@ -218,6 +218,36 @@ struct fuse_lowlevel_ops {
 	void (*init) (void *userdata, struct fuse_conn_info *conn);
 
 	/**
+	 * Initialize fuse uring queues
+	 *
+	 * This function is called when fuse-uring is enabled, the kernel
+	 * supports the corresponding fuse-uring initialization ioctl
+	 * and fuse-uring configuration specifies an external queue thread.
+	 * Without the external queue thread libfuse itself spawns one thread
+	 * per queue, when external queue threads are demanded, the file system
+	 * implementation has to do that.
+	 *
+	 * @param qid    queue identifier
+	 * @param ring_pool The ring object holding all fuse-ring quues.
+	 * @param queue_init queue initialization callback into libfuse
+	 *                   Return is negative error code or io-uring file
+	 *                   descriptor that can be polled on
+	 * @param sq_submit SQE submitting callback into libfuse, return is
+	 *        0 or negative standard error and will then exit the file
+	 *        system.
+	 *        Note: SQE submission sumits fuse request results
+	 * @param cq_handler  CQE handler, callback into libfuse,
+	 * 	  Return is 0 or negative standard error and will then exit the
+	 * 	  file system.
+	 * 	  Note: CQEs point to fuse requests that need to be handled.
+	 */
+	void (*init_ring_queue)(int qid, void *ring_pool,
+				int (*queue_init)(int qid, void *ring_pool),
+				int (*sq_submit)(int qid, void *ring_pool,
+						bool blocking),
+				int (*cq_handler)(int qid, void *ring_pool));
+
+	/**
 	 * Clean up filesystem.
 	 *
 	 * Called on filesystem exit. When this method is called, the
