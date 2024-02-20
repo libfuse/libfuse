@@ -1740,8 +1740,6 @@ static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
 			pthread_mutex_lock(&se->lock);
 			curr->ctr--;
 			if (!curr->ctr) {
-				fuse_chan_put(req->ch);
-				req->ch = NULL;
 				destroy_req(curr);
 			}
 
