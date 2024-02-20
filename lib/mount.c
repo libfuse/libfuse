@@ -209,6 +209,12 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 	case KEY_MTAB_OPT:
 		return fuse_opt_add_opt(&mo->mtab_opts, arg);
+
+	/* Third party options like 'x-gvfs-notrash' */
+	case FUSE_OPT_KEY_OPT:
+		return (strncmp("x-", arg, 2) == 0) ?
+			fuse_opt_add_opt(&mo->mtab_opts, arg) :
+			1;
 	}
 
 	/* Pass through unknown options */
