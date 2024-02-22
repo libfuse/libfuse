@@ -1,0 +1,66 @@
+#
+# Copyright 2019-2021, Intel Corporation
+#
+# 'recipe' for Docker to build an Debian package
+#
+# Pull base image
+FROM ubuntu:20.04
+LABEL org.opencontainers.image.authors="daos@daos.groups.io"
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    curl gpg
+
+ARG REPO_FILE_URL
+RUN if [ -n "$REPO_FILE_URL" ]; then                                 \
+        cd /etc/apt/sources.list.d &&                                \
+        curl -f -o daos_ci-ubuntu20.04-artifactory.list.tmp          \
+             "$REPO_FILE_URL"daos_ci-ubuntu20.04-artifactory.list && \
+        true > ../sources.list &&                                    \
+        mv daos_ci-ubuntu20.04-artifactory.list.tmp                  \
+           daos_ci-ubuntu20.04-artifactory.list;                     \
+    fi;                                                              \
+    cd -;                                                            \
+    curl -f -O "$REPO_FILE_URL"esad_repo.key;                        \
+    gpg --no-default-keyring --keyring ./temp-keyring.gpg            \
+        --import esad_repo.key;                                      \
+    mkdir -p /usr/local/share/keyrings/;                             \
+    gpg --no-default-keyring --keyring ./temp-keyring.gpg --export   \
+        --output /usr/local/share/keyrings/daos-stack-public.gpg;    \
+    rm ./temp-keyring.gpg;                                           \
+    url_prefix=https://downloads.linux.hpe.com/SDR/;                 \
+    for url in hpPublicKey2048.pub                                   \
+               hpPublicKey2048_key1.pub                              \
+               hpePublicKey2048_key1.pub; do                         \
+        curl -f -O "$url_prefix$url";                                \
+        gpg --no-default-keyring --keyring ./temp-keyring.gpg        \
+            --import "$(basename $url)";                             \
+    done;                                                            \
+    gpg --no-default-keyring --keyring ./temp-keyring.gpg --export   \
+        --output /usr/local/share/keyrings/hpe-sdr-public.gpg;       \
+    rm ./temp-keyring.gpg
+
+# Install basic tools
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            autoconf bash ca-certificates curl debhelper dh-make        \
+            dpkg-dev dh-python doxygen gcc git git-buildpackage         \
+            javahelper locales make patch pbuilder pkg-config           \
+            python3-dev python3-distro python3-distutils rpm scons wget \
+            cmake valgrind rpmdevtools
+
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# Add build user (to keep chrootbuild happy)
+ENV USER build
+RUN useradd -u $UID -ms /bin/bash $USER
+
+# need to run the build command as root, as it needs to chroot
+RUN if ! grep "^#includedir /etc/sudoers.d" /etc/sudoers; then                                     \
+        echo "#includedir /etc/sudoers.d" >> /etc/sudoers;                                         \
+    fi;                                                                                            \
+    echo "Defaults env_keep += \"DPKG_GENSYMBOLS_CHECK_LEVEL\"" > /etc/sudoers.d/build;            \
+    echo "build ALL=(ALL) NOPASSWD: /usr/bin/tee /root/.pbuilderrc" >> /etc/sudoers.d/build; \
+    echo "build ALL=(ALL) NOPASSWD: /usr/sbin/pbuilder" >> /etc/sudoers.d/build;                   \
+    chmod 0440 /etc/sudoers.d/build;                                                               \
+    visudo -c;                                                                                     \
+    sudo -l -U build

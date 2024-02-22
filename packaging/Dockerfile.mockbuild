@@ -1,0 +1,60 @@
+#
+# Copyright 2018-2023 Intel Corporation
+#
+# 'recipe' for Docker to build an RPM
+#
+
+# Pull base image
+ARG FVERSION=38
+FROM fedora:$FVERSION
+# Needed for later use of FVERSION
+ARG FVERSION
+LABEL maintainer="daos@daos.groups.io"
+
+# Use local repo server if present
+ARG REPO_FILE_URL
+RUN if [ -n "$REPO_FILE_URL" ]; then                            \
+        cd /etc/yum.repos.d/ &&                                 \
+        curl -f -o daos_ci-fedora-artifactory.repo.tmp          \
+             "$REPO_FILE_URL"daos_ci-fedora-artifactory.repo && \
+        rm -f *.repo &&                                         \
+        mv daos_ci-fedora-artifactory.repo{.tmp,};              \
+    fi
+
+# Install basic tools
+RUN dnf -y install mock make                                        \
+                   rpm-build createrepo rpmlint redhat-lsb-core git \
+                   python-srpm-macros rpmdevtools
+
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# Add build user (to keep rpmbuild happy)
+ENV USER build
+ENV PASSWD build
+RUN useradd -u $UID -ms /bin/bash $USER
+RUN echo "$USER:$PASSWD" | chpasswd
+# add the user to the mock group so it can run mock
+RUN usermod -a -G mock $USER
+
+ARG CB0
+RUN dnf -y upgrade && \
+    dnf clean all
+
+# Monkey-patch rpmlint until a new release is made with
+# https://github.com/rpm-software-management/rpmlint/pull/795 in it
+# But make sure to patch after dnf upgrade so that an upgraded rpmlint
+# RPM doesn't wipe out our patch
+COPY packaging/rpmlint--ignore-unused-rpmlintrc.patch .
+RUN (cd $(python3 -c 'import site; print(site.getsitepackages()[-1])') &&                      \
+     if ! grep -e --ignore-unused-rpmlintrc rpmlint/cli.py; then                               \
+         if ! patch -p1; then                                                                  \
+             exit 1;                                                                           \
+         fi;                                                                                   \
+         rm -f rpmlint/__pycache__/{cli,lint}.*.pyc;                                           \
+     fi) < rpmlint--ignore-unused-rpmlintrc.patch;                                             \
+    rm -f  rpmlint--ignore-unused-rpmlintrc.patch
+
+# show the release that was built
+ARG CACHEBUST
+RUN cat /etc/os-release

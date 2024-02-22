@@ -1,0 +1,29 @@
+#
+# Copyright 2019, Intel Corporation
+#
+# 'recipe' for Docker to build an Debian package
+#
+# Pull base image
+FROM ubuntu:rolling
+Maintainer daos-stack <daos@daos.groups.io>
+
+# use same UID as host and default value of 1000 if not specified
+ARG UID=1000
+
+# Install basic tools
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            autoconf bash curl debhelper dh-make dpkg-dev doxygen gcc \
+            git git-buildpackage locales make patch pbuilder rpm wget
+
+# Add build user (to keep chrootbuild happy)
+ENV USER build
+RUN useradd -u $UID -ms /bin/bash $USER
+
+# need to run the build command as root, as it needs to chroot
+RUN if ! grep "^#includedir /etc/sudoers.d" /etc/sudoers; then              \
+        echo "#includedir /etc/sudoers.d" >> /etc/sudoers;                  \
+    fi;                                                                     \
+   echo "build ALL=(ALL) NOPASSWD: /usr/sbin/pbuilder" > /etc/sudoers.d/build; \
+   chmod 0440 /etc/sudoers.d/build;                                        \
+   visudo -c;                                                              \
+   sudo -l -U build

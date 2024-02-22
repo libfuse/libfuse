@@ -1,0 +1,64 @@
+#!/bin/bash
+
+set -uex
+
+if [ -n "${ARTIFACTORY_URL:-}" ] && "$LOCAL_REPOS"; then
+    echo "MIRRORSITE=${ARTIFACTORY_URL}artifactory/ubuntu-proxy" | sudo tee /root/.pbuilderrc
+fi
+
+# shellcheck disable=SC2086
+sudo pbuilder create                        \
+    --extrapackages "gnupg ca-certificates" \
+    $DISTRO_ID_OPT
+
+repo_args=""
+repos_added=()
+for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
+    branch="master"
+    build_number="lastSuccessfulBuild"
+    if [[ $repo = *@* ]]; then
+        branch="${repo#*@}"
+        repo="${repo%@*}"
+        if [[ $branch = *:* ]]; then
+            build_number="${branch#*:}"
+            branch="${branch%:*}"
+        fi
+    fi
+    if [[ " ${repos_added[*]} " = *\ ${repo}\ * ]]; then
+        # don't add duplicates, first found wins
+        continue
+    fi
+    repos_added+=("$repo")
+    repo_args="$repo_args|deb [trusted=yes] ${JENKINS_URL:-https://build.hpdd.intel.com/}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/$DISTRO/ ./"
+done
+
+repo_args+="|$(curl -sSf "$REPO_FILE_URL"daos_ci-"$DISTRO"-artifactory.list |
+            sed -e 's/#.*//' -e '/ubuntu-proxy/d' -e '/^$/d' -e '/^$/d'     \
+                -e 's/signed-by=.*\.gpg/trusted=yes/'                       |
+            sed -e ':a; N; $!ba; s/\n/|/g')"
+for repo in $JOB_REPOS; do
+    repo_name=${repo##*://}
+    repo_name=${repo_name//\//_}
+    if [[ " ${repos_added[*]} " = *\ ${repo_name}\ * ]]; then
+        # don't add duplicates, first found wins
+        continue
+    fi
+    repos_added+=("$repo_name")
+    repo_args+="|deb ${repo} $VERSION_CODENAME main"
+done
+# NB: This PPA is needed to support modern go toolchains on ubuntu 20.04.
+# After the build is updated to use 22.04, which supports go >= 1.18, it
+# should no longer be needed.
+repo_args="$repo_args|deb [trusted=yes] https://ppa.launchpadcontent.net/longsleep/golang-backports/ubuntu $VERSION_CODENAME main"
+echo "$repo_args"
+if [ "$repo_args" = "|" ]; then
+    repo_args=""
+else
+    #repo_args="--othermirror"${repo_args#|}\""
+    repo_args="${repo_args#|}"
+fi
+cd "$DEB_TOP"
+# shellcheck disable=SC2086
+sudo pbuilder update --override-config $DISTRO_ID_OPT ${repo_args:+--othermirror "$repo_args"}
+# fail the build if the *.symbols file(s) need updating
+sudo DPKG_GENSYMBOLS_CHECK_LEVEL="${DPKG_GENSYMBOLS_CHECK_LEVEL:-4}" pbuilder build "$DEB_DSC"
