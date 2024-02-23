@@ -775,6 +775,9 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	else if (lo->cache == CACHE_ALWAYS)
 		fi->keep_cache = 1;
 
+	/* parallel_direct_writes feature depends on direct_io features.
+	   To make parallel_direct_writes valid, need set fi->direct_io
+	   in current function. */
 	fi->parallel_direct_writes = 1;
 
 	err = lo_do_lookup(req, parent, name, &e);
@@ -834,6 +837,9 @@ static void lo_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	else if (lo->cache == CACHE_ALWAYS)
 		fi->keep_cache = 1;
 
+	/* parallel_direct_writes feature depends on direct_io features.
+	   To make parallel_direct_writes valid, need set fi->direct_io
+	   in current function. */
 	fi->parallel_direct_writes = 1;
 
 	fuse_reply_open(req, fi);

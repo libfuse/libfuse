@@ -840,6 +840,9 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     if (fs.direct_io)
 	    fi->direct_io = 1;
 
+    /* parallel_direct_writes feature depends on direct_io features.
+       To make parallel_direct_writes valid, need set fi->direct_io
+       in current function. */
     fi->parallel_direct_writes = 1;
 
     Inode& inode = get_inode(e.ino);
@@ -902,6 +905,9 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     if (fs.direct_io)
 	    fi->direct_io = 1;
 
+    /* parallel_direct_writes feature depends on direct_io features.
+       To make parallel_direct_writes valid, need set fi->direct_io
+       in current function. */
     fi->parallel_direct_writes = 1;
 
     fi->fh = fd;

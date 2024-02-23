@@ -59,6 +59,13 @@ static void *xmp_init(struct fuse_conn_info *conn,
 	(void) conn;
 	cfg->use_ino = 1;
 
+	/* parallel_direct_writes feature depends on direct_io features.
+	   To make parallel_direct_writes valid, need either set cfg->direct_io
+	   in current function (recommended in high level API) or set fi->direct_io
+	   in xmp_create() or xmp_open(). */
+	// cfg->direct_io = 1;
+	   cfg->parallel_direct_writes = 1;
+
 	/* Pick up changes from lower filesystem right away. This is
 	   also necessary for better hardlink support. When the kernel
 	   calls the unlink() handler, it does not know the inode of
@@ -285,7 +292,6 @@ static int xmp_create(const char *path, mode_t mode,
 		return -errno;
 
 	fi->fh = res;
-	fi->parallel_direct_writes = 1;
 	return 0;
 }
 
@@ -298,7 +304,6 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 		return -errno;
 
 	fi->fh = res;
-	fi->parallel_direct_writes = 1;
 	return 0;
 }
 
