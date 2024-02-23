@@ -384,6 +384,14 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 	if (fd == -1)
 		return -errno;
 
+        /* Enable direct_io when open has flags O_DIRECT to enjoy the feature
+           parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
+           for writes to the same file). */
+        if (fi->flags & O_DIRECT) {
+		fi->direct_io = 1;
+		fi->parallel_direct_writes = 1;
+	}
+
 	fi->fh = fd;
 	return 0;
 }
