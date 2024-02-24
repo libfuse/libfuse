@@ -97,6 +97,30 @@ static struct mntent *GETMNTENT(FILE *stream)
 #define GETMNTENT getmntent
 #endif // GETMNTENT_NEEDS_UNESCAPING
 
+/*
+ * Take a ',' separated option string and extract "x-" options
+ */
+static void extract_x_options(const char *original, char *non_x_opts, char *x_opts)
+{
+	size_t len;
+	const char *opt, *opt_end;
+	char *opt_buf;
+
+	len = strlen(original);
+
+	for (opt = original; opt < original + len; opt = opt_end + 1) {
+		opt_end = strchr(opt, ',');
+		if (opt_end == NULL)
+			opt_end = original + len;
+
+		opt_buf = strncmp(opt, "x-", 2) ? non_x_opts : x_opts;
+
+		if (strlen(opt_buf) > 1)
+			strncat(opt_buf, ",", 2);
+
+		strncat(opt_buf, opt, opt_end - opt);
+	}
+}
 
 static const char *get_user_name(void)
 {
@@ -1135,6 +1159,11 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	char *mnt_opts = NULL;
 	const char *real_mnt = mnt;
 	int mountpoint_fd = -1;
+	size_t opts_size;
+	char *do_mount_opts;
+	char *x_opts;
+	size_t add_mount_opts_size, add_mount_opts_len;
+	char *add_mount_opts;
 
 	fd = open_fuse_device(&dev);
 	if (fd == -1)
@@ -1151,11 +1180,17 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 		}
 	}
 
+	// Extract any options starting with "x-"
+	opts_size = strlen(opts) + 1;
+	do_mount_opts = malloc(opts_size);
+	x_opts = malloc(opts_size);
+	extract_x_options(opts, do_mount_opts, x_opts);
+
 	res = check_perm(&real_mnt, &stbuf, &mountpoint_fd);
 	restore_privs();
 	if (res != -1)
 		res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT,
-			       fd, opts, dev, &source, &mnt_opts);
+			       fd, do_mount_opts, dev, &source, &mnt_opts);
 
 	if (mountpoint_fd != -1)
 		close(mountpoint_fd);
@@ -1170,7 +1205,18 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	}
 
 	if (geteuid() == 0) {
-		res = add_mount(source, mnt, *type, mnt_opts);
+		// Add back the options starting with "x-" to opts from do_mount
+		add_mount_opts_size = strlen(mnt_opts) + strlen(x_opts) + 2;
+		add_mount_opts = malloc(add_mount_opts_size);
+
+		strncpy(add_mount_opts, mnt_opts, add_mount_opts_size - 1);
+		add_mount_opts_len = strlen(add_mount_opts);
+		if (add_mount_opts_len > 0)
+			strncat(add_mount_opts, ",", 2);
+		strncat(add_mount_opts, x_opts,
+			add_mount_opts_size - add_mount_opts_len - 2);
+
+		res = add_mount(source, mnt, *type, add_mount_opts);
 		if (res == -1) {
 			/* Can't clean up mount in a non-racy way */
 			goto fail_close_fd;
