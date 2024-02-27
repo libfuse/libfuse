@@ -51,7 +51,7 @@ def invoke_directly(mnt_dir, name, options):
     return cmdline
 
 def invoke_mount_fuse(mnt_dir, name, options):
-    return base_cmdline + [ pjoin(basename, 'util', 'mount.fuse3'),
+    return base_cmdline + [ pjoin(basename, 'util', 'mount.redfs'),
                             name, mnt_dir, '-o', ','.join(options) ]
 
 def invoke_mount_fuse_drop_privileges(mnt_dir, name, options):

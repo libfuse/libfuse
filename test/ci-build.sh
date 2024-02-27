@@ -38,10 +38,10 @@ non_sanitized_build()
         mkdir build-${CC}; pushd build-${CC}
         if [ "${CC}" == "clang" ]; then
             export CXX="clang++"
-            export TEST_WITH_VALGRIND=false
+            #export TEST_WITH_VALGRIND=false
         else
             unset CXX
-            export TEST_WITH_VALGRIND=true
+            #export TEST_WITH_VALGRIND=true
         fi
         if [ ${CC} == 'gcc-7' ]; then
             build_opts='-D b_lundef=false'
@@ -59,11 +59,11 @@ non_sanitized_build()
         sudo ninja install
 
         # libfuse will first try the install path and then system defaults
-        sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+        sudo chmod 4755 ${PREFIX_DIR}/bin/redfsmount
 
         # also needed for some of the tests
-        sudo chown root:root util/fusermount3
-        sudo chmod 4755 util/fusermount3
+        sudo chown root:root util/redfsmount
+        sudo chmod 4755 util/redfsmount
 
         ${TEST_CMD}
         popd
@@ -89,7 +89,7 @@ sanitized_build()
     meson configure -D b_lundef=false
 
     # additional options
-    if [ -n "$@" ]; then
+    if [[ $# -gt 0 ]]; then
         meson configure "$@"
     fi
 
@@ -100,11 +100,11 @@ sanitized_build()
     meson setup --reconfigure "${SOURCE_DIR}"
     ninja
     sudo ninja install
-    sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+    sudo chmod 4755 ${PREFIX_DIR}/bin/redfsmount
 
     # also needed for some of the tests
-    sudo chown root:root util/fusermount3
-    sudo chmod 4755 util/fusermount3
+    sudo chown root:root util/redfsmount
+    sudo chmod 4755 util/redfsmount
 
     # Test as root and regular user
     sudo ${TEST_CMD}
@@ -118,18 +118,20 @@ sanitized_build()
     sudo rm -fr ${PREFIX_DIR}
 )
 
+# valgrind does not work at all with redfs or recent gcc
+# XXX issue is with example/printcap
+export TEST_WITH_VALGRIND=false
+non_sanitized_build
+
 # Sanitized build
 export CC=clang
 export CXX=clang++
-TEST_WITH_VALGRIND=false
 sanitized_build
 
 # Sanitized build without libc versioned symbols
 export CC=clang
 export CXX=clang++
 sanitized_build "-Ddisable-libc-symbol-version=true"
-
-non_sanitized_build
 
 # Documentation.
 (cd "${SOURCE_DIR}"; doxygen doc/Doxyfile)
