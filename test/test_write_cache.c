@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <pthread.h>
+#include <stdatomic.h>
 
 #ifndef __linux__
 #include <limits.h>
@@ -42,6 +43,8 @@ struct options {
     .delay_ms = 0,
 };
 
+#define WRITE_SYSCALLS 64
+
 #define OPTION(t, p)                           \
     { t, offsetof(struct options, p), 1 }
 static const struct fuse_opt option_spec[] = {
@@ -51,6 +54,7 @@ static const struct fuse_opt option_spec[] = {
     FUSE_OPT_END
 };
 static int got_write;
+static atomic_int write_cnt;
 
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -142,11 +146,13 @@ static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
     if(options.writeback)
         expected *= 2;
 
-    if(size != expected)
-        fprintf(stderr, "ERROR: Expected %zd bytes, got %zd\n!",
-                expected, size);
-    else
-        got_write = 1;
+    write_cnt++;
+
+   if(size != expected && !options.writeback)
+       fprintf(stderr, "ERROR: Expected %zd bytes, got %zd\n!",
+               expected, size);
+   else
+      got_write = 1;
 
     /* Simulate waiting for pending writes */
     if (options.delay_ms) {
@@ -202,9 +208,11 @@ static void* run_fs(void *data) {
 static void test_fs(char *mountpoint) {
     char fname[PATH_MAX];
     char *buf;
-    size_t dsize = options.data_size;
+    const size_t iosize = options.data_size;
+    const size_t dsize = options.data_size * WRITE_SYSCALLS;
     int fd, rofd;
     pthread_t rofd_thread;
+    loff_t off = 0;
 
     buf = malloc(dsize);
     assert(buf != NULL);
@@ -228,8 +236,11 @@ static void test_fs(char *mountpoint) {
         usleep(options.delay_ms * 1000);
     }
 
-    assert(write(fd, buf, dsize) == dsize);
-    assert(write(fd, buf, dsize) == dsize);
+    for (int cnt = 0; cnt < WRITE_SYSCALLS; cnt++) {
+        assert(pwrite(fd, buf + off, iosize, off) == iosize);
+        off += iosize;
+        assert(off <= dsize);
+    }
     free(buf);
     close(fd);
 
@@ -270,6 +281,20 @@ int main(int argc, char *argv[]) {
     assert(pthread_join(fs_thread, NULL) == 0);
 
     assert(got_write == 1);
+
+    /*
+     * when writeback cache is enabled, kernel side can merge requests, but
+     * memory pressure, system 'sync' might trigger data flushes before - flush
+     * might happen in between write syscalls - merging subpage writes into
+     * a single page and pages into large fuse requests might or might not work.
+     * Though we can expect that that at least some (but maybe all) write
+     * system calls can be merged.
+     */
+    if (options.writeback)
+        assert(write_cnt < WRITE_SYSCALLS);
+    else
+        assert(write_cnt == WRITE_SYSCALLS);
+
     fuse_remove_signal_handlers(se);
     fuse_session_destroy(se);
 

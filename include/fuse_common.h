@@ -337,8 +337,6 @@ struct fuse_loop_config_v1 {
  * is unset, the FUSE kernel module will ensure that lookup() and
  * readdir() requests are never issued concurrently for the same
  * directory.
- *
- * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_PARALLEL_DIROPS        (1 << 18)
 
@@ -366,7 +364,7 @@ struct fuse_loop_config_v1 {
  * setuid and setgid bits when a file is written, truncated, or
  * its owner is changed.
  *
- * This feature is enabled by default when supported by the kernel.
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
 
@@ -440,6 +438,15 @@ struct fuse_loop_config_v1 {
  * For example FUSE_SETXATTR_ACL_KILL_SGID might be set.
  */
 #define FUSE_CAP_SETXATTR_EXT     (1 << 27)
+
+/**
+ * Files opened with FUSE_DIRECT_IO do not support MAP_SHARED mmap. This restriction
+ * is relaxed through FUSE_CAP_DIRECT_IO_RELAX (kernel flag: FUSE_DIRECT_IO_RELAX).
+ * MAP_SHARED is disabled by default for FUSE_DIRECT_IO, as this flag can be used to
+ * ensure coherency between mount points (or network clients) and with kernel page
+ * cache as enforced by mmap that cannot be guaranteed anymore.
+ */
+#define FUSE_CAP_DIRECT_IO_ALLOW_MMAP  (1 << 27)
 
 /**
  * Ioctl flags
@@ -928,6 +935,10 @@ int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
 				      unsigned int fg_queue_depth,
 				      unsigned int bg_queue_depth,
 				      unsigned int arg_len);
+
+void fuse_loop_cfg_set_uring_polling(struct fuse_loop_config *config);
+void fuse_loop_cfg_set_uring_ext_thread(struct fuse_loop_config *config);
+
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *
