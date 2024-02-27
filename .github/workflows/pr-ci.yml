@@ -23,7 +23,8 @@ jobs:
     steps:
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 libstdc++-10-dev libstdc++-9-dev ninja-build python3-pip python3-setuptools valgrind liburing-dev
+        # XXX add in liburing-dev when ubuntu gets updated for github
+        run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 libstdc++-10-dev libstdc++-9-dev ninja-build python3-pip python3-setuptools valgrind libnuma-dev && sudo wget https://launchpad.net/ubuntu/+archive/primary/+files/liburing2_2.3-3_amd64.deb && sudo wget https://launchpad.net/ubuntu/+archive/primary/+files/liburing-dev_2.3-3_amd64.deb && sudo dpkg -i liburing2_2.3-3_amd64.deb liburing-dev_2.3-3_amd64.deb
       - uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
       - run: test/ci-install.sh
       - run: test/ci-build.sh
