@@ -1775,8 +1775,6 @@ static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
 			pthread_mutex_lock(&se->lock);
 			curr->ctr--;
 			if (!curr->ctr) {
-				fuse_chan_put(req->ch);
-				req->ch = NULL;
 				destroy_req(curr);
 			}
 
@@ -2054,7 +2052,9 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 				bufsize = max_bufsize;
 			}
 		}
-		if (arg->minor >= 38)
+		if (inargflags & FUSE_DIRECT_IO_ALLOW_MMAP)
+			se->conn.capable |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
+		if (arg->minor >= 38 || (inargflags & FUSE_HAS_EXPIRE_ONLY))
 			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
 	} else {
 		se->conn.max_readahead = 0;
@@ -2086,9 +2086,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if ((cond) && (se->conn.capable & (cap))) \
 		se->conn.want |= (cap)
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
-	LL_SET_DEFAULT(1, FUSE_CAP_PARALLEL_DIROPS);
 	LL_SET_DEFAULT(1, FUSE_CAP_AUTO_INVAL_DATA);
-	LL_SET_DEFAULT(1, FUSE_CAP_HANDLE_KILLPRIV);
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_DIO);
 	LL_SET_DEFAULT(1, FUSE_CAP_IOCTL_DIR);
 	LL_SET_DEFAULT(1, FUSE_CAP_ATOMIC_O_TRUNC);
@@ -2120,6 +2118,15 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	se->got_init = 1;
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
+
+	if (se->ring.pool && se->op.init_ring_queue) {
+		for (int qid=0; qid < se->ring.nr_queues; qid++) {
+			se->op.init_ring_queue(qid, se->ring.pool,
+					       fuse_uring_init_queue,
+					       fuse_uring_submit_sqes,
+					       fuse_uring_queue_handle_cqes);
+		}
+	}
 
 	if (se->conn.want & (~se->conn.capable)) {
 		fuse_log(FUSE_LOG_ERR, "fuse: error: filesystem requested capabilities "
@@ -2176,14 +2183,20 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargflags |= FUSE_ASYNC_DIO;
 	if (se->conn.want & FUSE_CAP_WRITEBACK_CACHE)
 		outargflags |= FUSE_WRITEBACK_CACHE;
+	if (se->conn.want & FUSE_CAP_PARALLEL_DIROPS)
+		outargflags |= FUSE_PARALLEL_DIROPS;
 	if (se->conn.want & FUSE_CAP_POSIX_ACL)
 		outargflags |= FUSE_POSIX_ACL;
+	if (se->conn.want & FUSE_CAP_HANDLE_KILLPRIV)
+		outargflags |= FUSE_HANDLE_KILLPRIV;
 	if (se->conn.want & FUSE_CAP_CACHE_SYMLINKS)
 		outargflags |= FUSE_CACHE_SYMLINKS;
 	if (se->conn.want & FUSE_CAP_EXPLICIT_INVAL_DATA)
 		outargflags |= FUSE_EXPLICIT_INVAL_DATA;
 	if (se->conn.want & FUSE_CAP_SETXATTR_EXT)
 		outargflags |= FUSE_SETXATTR_EXT;
+	if (se->conn.want & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
+		outargflags |= FUSE_DIRECT_IO_ALLOW_MMAP;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -2227,6 +2240,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;
 	else if (arg->minor < 23)
 		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
+
+
 
 	send_reply_ok(req, &outarg, outargsize);
 }
@@ -2466,13 +2481,6 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	iov[0].iov_len = sizeof(out);
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
-
-	if (se->is_uring) {
-		/* XXX this requires another ring which userspace side can use
-		 * without a kernel requests
-		 */
-		return -ENOSYS;
-	}
 
 	res = fuse_send_data_iov(se, NULL, iov, 2, bufv, flags, req);
 	if (res > 0)

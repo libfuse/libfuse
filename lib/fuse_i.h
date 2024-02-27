@@ -79,7 +79,7 @@ struct fuse_session {
 	bool is_uring;
 	
 	struct {
-		pthread_t cleanup_tid;
+		int nr_queues;
 		struct fuse_ring_pool *pool;
 	} ring;
 };
@@ -157,14 +157,28 @@ struct fuse_loop_config
 	struct uring_cfg
 	{
 		/**
-		 * wether to use io_uring to handle requests.
+		 * whether to use io_uring to handle requests.
 		 */
-		bool use_uring;
+		bool use_uring:1;
 
 		/**
-		 * wether to use a separate queue per core
+		 * whether to use a separate queue per core
 		 */
-		bool per_core_queue;
+		bool per_core_queue:1;
+
+		/**
+		 * whether to use polling on the ring file descritpor instead
+		 * of a blocking io-uring call. Typically useful for external
+		 * threads that also do other tasks.
+		 */
+		bool polling:1;
+
+		/**
+		 * whether to use an external thread controlled by the file
+		 * system, instead of spawning a new thread per queue by
+		 * the libfuse io-uring interface.
+		 */
+		bool external_threads:1;
 
 		/** The ring foreground request queue depth */
 		unsigned int sync_queue_depth;

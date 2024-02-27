@@ -157,7 +157,7 @@ static void hello_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 							  size_t size)
 {
 	(void)size;
-	assert(ino == 2);
+	assert(ino == 1 || ino == 2);
 	if (strcmp(name, "hello_ll_getxattr_name") == 0)
 	{
 		const char *buf = "hello_ll_getxattr_value";
@@ -174,7 +174,7 @@ static void hello_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 {
 	(void)flags;
 	(void)size;
-	assert(ino == 2);
+	assert(ino == 1 || ino == 2);
 	const char* exp_val = "hello_ll_setxattr_value";
 	if (strcmp(name, "hello_ll_setxattr_name") == 0 &&
 	    strlen(exp_val) == size &&
@@ -190,7 +190,7 @@ static void hello_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 
 static void hello_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
-	assert(ino == 2);
+	assert(ino == 1 || ino == 2);
 	if (strcmp(name, "hello_ll_removexattr_name") == 0)
 	{
 		fuse_reply_err(req, 0);
