@@ -2,10 +2,10 @@ name: 'Build & Test'
 on:
   push:
     branches:
-      - master
+      - redfs-main
   pull_request:
     branches:
-      - master
+      - redfs-main
 
 permissions:
   contents: read
