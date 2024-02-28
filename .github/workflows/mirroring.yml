@@ -6,7 +6,9 @@ on:
 
 jobs:
   red-libfuse-to-ghe:
-    runs-on: ubuntu-latest
+    runs-on:
+      - self-hosted
+      - mirroring
     steps:
       - uses: mickem/clean-after-action@v2
 
