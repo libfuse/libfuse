@@ -6,7 +6,7 @@ on:
 
 jobs:
   red-libfuse-to-ghe:
-    runs-on: dynamic
+    runs-on: ubuntu-latest
     steps:
       - uses: mickem/clean-after-action@v2
 
