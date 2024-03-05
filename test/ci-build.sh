@@ -18,6 +18,9 @@ umask 0022
 # readable/executable.
 SOURCE_DIR="$(readlink -f .)"
 TEST_DIR="$(mktemp -dt libfuse-build-XXXXXX)"
+
+PREFIX_DIR="$(mktemp -dt libfuse-install-XXXXXXX)"
+
 chmod 0755 "${TEST_DIR}"
 cd "${TEST_DIR}"
 echo "Running in ${TEST_DIR}"
@@ -47,13 +50,17 @@ for CC in gcc gcc-9 gcc-10 clang; do
     else
         build_opts=''
     fi
-    meson setup -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
+    meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
     ninja
+    sudo ninja install
 
-    sudo chown root:root util/fusermount3
-    sudo chmod 4755 util/fusermount3
+    # libfuse will first try the install path and then system defaults
+    sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+
     ${TEST_CMD}
     popd
+    rm -fr build-${CC}
+    sudo rm -fr ${PREFIX_DIR}
 done
 
 sanitized_build()
@@ -62,7 +69,7 @@ sanitized_build()
 
     mkdir build-san; pushd build-san
 
-    meson setup -D werror=true\
+    meson setup -Dprefix=${PREFIX_DIR} -D werror=true\
            "${SOURCE_DIR}" \
            || (ct meson-logs/meson-log.txt; false)
     meson configure $SAN
@@ -73,11 +80,11 @@ sanitized_build()
 
     meson configure
     ninja
+    sudo ninja install
+    sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
 
     # Test as root and regular user
     sudo ${TEST_CMD}
-    sudo chown root:root util/fusermount3
-    sudo chmod 4755 util/fusermount3
     # Cleanup temporary files (since they are now owned by root)
     sudo rm -rf test/.pytest_cache/ test/__pycache__
 
@@ -85,6 +92,7 @@ sanitized_build()
     
     popd
     rm -fr build-san
+    sudo rm -fr ${PREFIX_DIR}
 )
 
 # Sanitized build
