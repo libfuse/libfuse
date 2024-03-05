@@ -3,6 +3,10 @@
 set -e
 
 TEST_CMD="python3 -m pytest --maxfail=99 test/"
+SAN="-Db_sanitize=address,undefined"
+
+# not default
+export UBSAN_OPTIONS=halt_on_error=1
 
 # Make sure binaries can be accessed when invoked by root.
 umask 0022
@@ -26,7 +30,7 @@ export CC
 # Standard build
 for CC in gcc gcc-9 gcc-10 clang; do
     echo "=== Building with ${CC} ==="
-    mkdir build-${CC}; cd build-${CC}
+    mkdir build-${CC}; pushd build-${CC}
     if [ "${CC}" == "clang" ]; then
         export CXX="clang++"
         export TEST_WITH_VALGRIND=false
@@ -49,25 +53,25 @@ for CC in gcc gcc-9 gcc-10 clang; do
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
     ${TEST_CMD}
-    cd ..
+    popd
 done
-(cd build-$CC; sudo ninja install)
 
 sanitized_build()
-{
-    san=$1
-    additonal_option=$2
+(
+    echo "=== Building with clang and sanitizers"
 
-    echo "=== Building with clang and ${san} sanitizer ==="
-    [ -n ${additonal_option} ] || echo "Additional option: ${additonal_option}"
+    mkdir build-san; pushd build-san
 
-    mkdir build-${san}; pushd build-${san}
+    meson setup -D werror=true\
+           "${SOURCE_DIR}" \
+           || (ct meson-logs/meson-log.txt; false)
+    meson configure $SAN
 
     # b_lundef=false is required to work around clang
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
-    meson setup -D b_sanitize=${san} -D b_lundef=false -D werror=true\
-           ${additonal_option} "${SOURCE_DIR}" \
-           || (cat meson-logs/meson-log.txt; false)
+    meson configure -D b_lundef=false
+
+    meson configure
     ninja
 
     # Test as root and regular user
@@ -80,23 +84,19 @@ sanitized_build()
     ${TEST_CMD}
     
     popd
-    rm -fr build-${san}
-}
+    rm -fr build-san
+)
 
 # Sanitized build
 CC=clang
 CXX=clang++
 TEST_WITH_VALGRIND=false
-for san in undefined address; do
-    sanitized_build ${san}
-done
+sanitized_build $SAN
 
 # Sanitized build without libc versioned symbols
 CC=clang
 CXX=clang++
-for san in undefined address; do
-    sanitized_build ${san} "-Ddisable-libc-symbol-version=true"
-done
+sanitized_build
 
 # Documentation.
 (cd "${SOURCE_DIR}"; doxygen doc/Doxyfile)
