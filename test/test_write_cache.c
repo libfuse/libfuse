@@ -9,6 +9,8 @@
 
 #define FUSE_USE_VERSION 30
 
+#define _GNU_SOURCE /* for loff_t */
+
 #include <fuse_config.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>
