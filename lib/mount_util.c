@@ -48,6 +48,13 @@ static int mtab_needs_update(const char *mnt)
 	int res;
 	struct stat stbuf;
 
+	char *env = getenv("FUSE_NO_MTAB_UPDATE");
+	if (env != NULL) {
+		int value = atoi(env);
+		if (value == 1)
+			return 0;
+	}
+
 	/* If mtab is within new mount, don't touch it */
 	if (strncmp(mnt, _PATH_MOUNTED, strlen(mnt)) == 0 &&
 	    _PATH_MOUNTED[strlen(mnt)] == '/')
