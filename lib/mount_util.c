@@ -8,6 +8,8 @@
   See the file LGPL2.txt.
 */
 
+#define _GNU_SOURCE
+
 #include "fuse_config.h"
 #include "mount_util.h"
 #ifdef __linux__
@@ -35,6 +37,7 @@
 #include "fuse_mount_compat.h"
 
 #include <sys/param.h>
+#include <spawn.h>
 
 /* Environment variable for FUSE kernel device */
 #define FUSE_KERN_DEVICE_ENV "FUSE_KERN_DEVICE"
@@ -184,13 +187,88 @@ static int mtab_needs_update(const char *mnt)
 }
 #endif /* IGNORE_MTAB */
 
+/*
+ * @brief Spawn @cmd with a clean environment and the given signal mask.
+ *
+ * @param[out] pid   Child pid on success.
+ * @param[in]  cmd   Absolute path of the executable.
+ * @param[in]  argv  NULL-terminated argument vector.
+ * @param[in]  mask  Signal mask to install in the child.
+ * @return 0 on success, positive errno on failure.
+ */
+static int fuse_mount_spawn(pid_t *pid, const char *cmd, char *const argv[],
+			    sigset_t *mask)
+{
+	posix_spawnattr_t attr;
+	char *const envp[] = { NULL };
+	uid_t ruid = getuid();
+	uid_t euid = geteuid();
+	int res;
+
+	res = posix_spawnattr_init(&attr);
+	if (res) {
+		fprintf(stderr, "Failed to init posix_spawn attr for cmd %s: %s\n",
+			cmd, strerror(res));
+		return res;
+	}
+
+	res = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);
+	if (res) {
+		fprintf(stderr, "Failed to set posix_spawn flags for cmd %s: %s\n",
+			cmd, strerror(res));
+		goto out_destroy;
+	}
+
+	res = posix_spawnattr_setsigmask(&attr, mask);
+	if (res) {
+		fprintf(stderr, "Failed to set posix_spawn sigmask for cmd %s: %s\n",
+			cmd, strerror(res));
+		goto out_destroy;
+	}
+
+	/*
+	 * Reached via setuid-root fusermount (ruid != euid, euid 0) or via
+	 * lib/mount.c in a privileged daemon after a direct mount (ruid ==
+	 * euid). /bin/mount keys "restricted" mode off the real uid, so raise
+	 * it to euid for the fusermount case; ruid == euid needs no change.
+	 * Done in this single-threaded parent as posix_spawn cannot do it.
+	 */
+	if (ruid != euid && setreuid(euid, -1) == -1) {
+		res = errno;
+		fprintf(stderr, "Failed to set real uid for cmd %s: %s\n",
+			cmd, strerror(res));
+		goto out_destroy;
+	}
+
+	res = posix_spawn(pid, cmd, NULL, &attr, argv, envp);
+
+	/*
+	 * A failed restore would leave this process with the raised real uid;
+	 * refuse to continue rather than run on privileged.
+	 */
+	if (ruid != euid && setreuid(ruid, -1) == -1) {
+		fprintf(stderr, "Failed to restore real uid for cmd %s: %s\n",
+			cmd, strerror(errno));
+		abort();
+	}
+
+out_destroy:
+	posix_spawnattr_destroy(&attr);
+	return res;
+}
+
+/*
+ * @return caller expects 0 or -1
+ */
 static int add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts)
 {
 	int res;
 	int status;
+	pid_t pid;
 	sigset_t blockmask;
 	sigset_t oldmask;
+	const char *cmd = "/bin/mount";
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -200,36 +278,28 @@ static int add_mount(const char *progname, const char *fsname,
 		return -1;
 	}
 
-	res = fork();
-	if (res == -1) {
-		fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
+	char const * const argv[] = {
+		cmd, "--no-canonicalize", "-i", "-f", "-t", type, "-o", opts,
+		fsname, mnt, NULL
+	};
+
+	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
+	if (res) {
+		fprintf(stderr, "%s: failed to execute %s: %s\n",
+			progname, cmd, strerror(res));
+		res = -1;
 		goto out_restore;
 	}
-	if (res == 0) {
-		char *env = NULL;
 
-		sigprocmask(SIG_SETMASK, &oldmask, NULL);
-
-		if(setuid(geteuid()) == -1) {
-			fprintf(stderr, "%s: setuid: %s\n", progname, strerror(errno));
-			res = -1;
-			goto out_restore;
-		}
-
-		execle("/bin/mount", "/bin/mount", "--no-canonicalize", "-i",
-		       "-f", "-t", type, "-o", opts, fsname, mnt, NULL, &env);
-		fprintf(stderr, "%s: failed to execute /bin/mount: %s\n",
-			progname, strerror(errno));
-		exit(1);
-	}
-	res = waitpid(res, &status, 0);
+	res = waitpid(pid, &status, 0);
 	if (res == -1)
-		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
+		fprintf(stderr, "%s: waitpid of %d: %s\n", progname,
+			pid, strerror(errno));
 
 	if (status != 0)
 		res = -1;
 
- out_restore:
+out_restore:
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
 
 	return res;
@@ -248,8 +318,10 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 {
 	int res;
 	int status;
+	pid_t pid;
 	sigset_t blockmask;
 	sigset_t oldmask;
+	const char *cmd = "/bin/umount";
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -259,34 +331,23 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 		return -1;
 	}
 
-	res = fork();
-	if (res == -1) {
-		fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
+	char const * const argv_lazy[] = {
+		cmd, "-i", "-l", rel_mnt, NULL
+	};
+	char const * const argv_normal[] = {
+		cmd, "-i", rel_mnt, NULL
+	};
+	char const * const *argv = lazy ? argv_lazy : argv_normal;
+
+	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
+	if (res) {
+		fprintf(stderr, "%s: failed to execute %s: %s\n",
+			progname, cmd, strerror(res));
+		res = -1;
 		goto out_restore;
 	}
-	if (res == 0) {
-		char *env = NULL;
 
-		sigprocmask(SIG_SETMASK, &oldmask, NULL);
-
-		if(setuid(geteuid()) == -1) {
-			fprintf(stderr, "%s: setuid: %s\n", progname, strerror(errno));
-			res = -1;
-			goto out_restore;
-		}
-
-		if (lazy) {
-			execle("/bin/umount", "/bin/umount", "-i", rel_mnt,
-			       "-l", NULL, &env);
-		} else {
-			execle("/bin/umount", "/bin/umount", "-i", rel_mnt,
-			       NULL, &env);
-		}
-		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
-			progname, strerror(errno));
-		exit(1);
-	}
-	res = waitpid(res, &status, 0);
+	res = waitpid(pid, &status, 0);
 	if (res == -1)
 		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
 
@@ -318,8 +379,10 @@ static int remove_mount(const char *progname, const char *mnt)
 {
 	int res;
 	int status;
+	pid_t pid;
 	sigset_t blockmask;
 	sigset_t oldmask;
+	const char *cmd = "/bin/umount";
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -329,29 +392,19 @@ static int remove_mount(const char *progname, const char *mnt)
 		return -1;
 	}
 
-	res = fork();
-	if (res == -1) {
-		fprintf(stderr, "%s: fork: %s\n", progname, strerror(errno));
+	char const * const argv[] =  {
+		cmd, "--no-canonicalize", "-i", "--fake", mnt, NULL
+	};
+
+	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
+	if (res) {
+		fprintf(stderr, "%s: failed to execute %s: %s\n",
+			 progname, cmd, strerror(res));
+		res = -1;
 		goto out_restore;
 	}
-	if (res == 0) {
-		char *env = NULL;
 
-		sigprocmask(SIG_SETMASK, &oldmask, NULL);
-
-		if(setuid(geteuid()) == -1) {
-			fprintf(stderr, "%s: setuid: %s\n", progname, strerror(errno));
-			res = -1;
-			goto out_restore;
-		}
-
-		execle("/bin/umount", "/bin/umount", "--no-canonicalize", "-i",
-		       "--fake", mnt, NULL, &env);
-		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
-			progname, strerror(errno));
-		exit(1);
-	}
-	res = waitpid(res, &status, 0);
+	res = waitpid(pid, &status, 0);
 	if (res == -1)
 		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
 
