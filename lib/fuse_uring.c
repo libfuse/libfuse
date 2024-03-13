@@ -672,7 +672,7 @@ static int _fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 	if (num_completed)
 		io_uring_cq_advance(&queue->ring, num_completed);
 
-	return 0;
+	return num_completed;
 }
 
 /**

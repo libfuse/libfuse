@@ -2121,10 +2121,20 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	if (se->ring.pool && se->op.init_ring_queue) {
 		for (int qid=0; qid < se->ring.nr_queues; qid++) {
-			se->op.init_ring_queue(qid, se->ring.pool,
-					       fuse_uring_init_queue,
-					       fuse_uring_submit_sqes,
-					       fuse_uring_queue_handle_cqes);
+			int rc =
+				se->op.init_ring_queue(qid, se->ring.pool,
+									   fuse_uring_init_queue,
+									   fuse_uring_submit_sqes,
+									   fuse_uring_queue_handle_cqes);
+			if (rc) {
+				/*
+				 * fuse over io-uring does not work if a queue cannot be
+				 * initializes
+				 */
+				fprintf(stderr, "fuse ring queue (qid=%d) initialization failed\n",
+						qid);
+				break;
+			}
 		}
 	}
 
