@@ -256,6 +256,9 @@ The user can only mount on a mountpoint, for which it has write permission
 The mountpoint is not a sticky directory which isn't owned by the user (like \fI/tmp\fP usually is)
 .IP 3.
 No other user (including root) can access the contents of the mounted filesystem.
+.SH Environment variables
+.TP
+FUSE_NO_MTAB_UPDATE can be set to 1 to disable mtab (nowadays actually /run/mount/utab) updates.
 .SH NOTE
 FUSE filesystems are unmounted using the \fBfusermount3\fP(1) command (\fBfusermount3 -u mountpoint\fP).
 .SH "AUTHORS"
