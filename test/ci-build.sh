@@ -57,6 +57,10 @@ for CC in gcc gcc-9 gcc-10 clang; do
     # libfuse will first try the install path and then system defaults
     sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
 
+    # also needed for some of the tests
+    sudo chown root:root util/fusermount3
+    sudo chmod 4755 util/fusermount3
+
     ${TEST_CMD}
     popd
     rm -fr build-${CC}
@@ -82,6 +86,10 @@ sanitized_build()
     ninja
     sudo ninja install
     sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+
+    # also needed for some of the tests
+    sudo chown root:root util/fusermount3
+    sudo chmod 4755 util/fusermount3
 
     # Test as root and regular user
     sudo ${TEST_CMD}
