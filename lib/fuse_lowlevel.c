@@ -2123,9 +2123,9 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		for (int qid=0; qid < se->ring.nr_queues; qid++) {
 			int rc =
 				se->op.init_ring_queue(qid, se->ring.pool,
-									   fuse_uring_init_queue,
-									   fuse_uring_submit_sqes,
-									   fuse_uring_queue_handle_cqes);
+						       fuse_uring_init_queue,
+						       fuse_uring_submit_sqes,
+						       fuse_uring_queue_handle_cqes);
 			if (rc) {
 				/*
 				 * fuse over io-uring does not work if a queue cannot be
