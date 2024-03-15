@@ -41,7 +41,6 @@ struct fuse_req {
 	struct fuse_req *prev;
 
 	bool is_uring;
-
 };
 
 struct fuse_notify_req {
@@ -77,10 +76,11 @@ struct fuse_session {
 	size_t bufsize;
 	int error;
 	bool is_uring;
-	
+
 	struct {
 		int nr_queues;
 		struct fuse_ring_pool *pool;
+		bool external_threads:1;
 	} ring;
 };
 
