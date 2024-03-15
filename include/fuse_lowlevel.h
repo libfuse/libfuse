@@ -1940,6 +1940,8 @@ void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
  */
 int fuse_req_interrupted(fuse_req_t req);
 
+bool fuse_req_is_uring(fuse_req_t req);
+
 
 /* ----------------------------------------------------------- *
  * Inquiry functions                                           *

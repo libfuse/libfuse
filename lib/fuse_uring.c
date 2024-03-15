@@ -82,8 +82,6 @@ struct fuse_ring_pool {
 	struct fuse_session *se;
 
 	bool per_core_queue:1; /* one queue per core */
-	bool polling:1;        /* cqe polling mode, instead of blocking wait */
-	bool external_threads:1; /* file system backend handles the queue thread */
 	size_t nr_queues;  /* number of queues */
 	size_t queue_depth; /* number of per queue entries */
 	size_t req_arg_len;
@@ -119,8 +117,8 @@ static void *fuse_uring_get_sqe_cmd(struct io_uring_sqe *sqe)
 }
 
 static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
-					const unsigned int qid,
-					const unsigned int tag)
+										const unsigned int qid,
+										const unsigned int tag)
 {
 	req->qid = qid;
 	req->tag = tag;
@@ -510,6 +508,8 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 		return -EINVAL;
 	}
 
+	io_uring_submit(&queue->ring);
+
 	return 0;
 }
 
@@ -571,8 +571,8 @@ fuse_create_ring(struct fuse_session *se,
 	fuse_ring->queue_size = queue_sz;
 	fuse_ring->queue_mmap_size = mmap_size;
 	fuse_ring->queue_req_buf_size = req_buf_size;
-	fuse_ring->polling = cfg->uring.polling;
-	fuse_ring->external_threads = cfg->uring.external_threads;
+
+	se->ring.external_threads = cfg->uring.external_threads;
 
 	/*
 	 * very basic queue initialization, that cannot fail and will
@@ -868,7 +868,7 @@ int fuse_uring_start(struct fuse_session *se,
 		goto out;
 	}
 
-	if (!config->uring.external_threads)
+	if (!se->ring.external_threads)
 		rc = fuse_uring_start_ring_threads(fuse_ring);
 
 out:

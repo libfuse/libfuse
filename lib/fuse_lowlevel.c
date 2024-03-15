@@ -2119,7 +2119,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
 
-	if (se->ring.pool && se->op.init_ring_queue) {
+	if (se->ring.pool && se->op.init_ring_queue && se->ring.external_threads) {
 		for (int qid=0; qid < se->ring.nr_queues; qid++) {
 			int rc =
 				se->op.init_ring_queue(qid, se->ring.pool,
@@ -2360,7 +2360,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 
 	if (se->conn.proto_minor < 12)
 		return -ENOSYS;
-	
+
 	outarg.ino = ino;
 	outarg.off = off;
 	outarg.len = len;
@@ -2620,6 +2620,11 @@ int fuse_req_interrupted(fuse_req_t req)
 	pthread_mutex_unlock(&req->se->lock);
 
 	return interrupted;
+}
+
+bool fuse_req_is_uring(fuse_req_t req)
+{
+	return req->is_uring;
 }
 
 static struct {
