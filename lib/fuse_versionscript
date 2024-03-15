@@ -190,8 +190,8 @@ FUSE_3.12 {
 FUSE_3.14 {
 	global:
 		fuse_loop_cfg_set_uring_opts;
-		fuse_loop_cfg_set_uring_polling;
 		fuse_loop_cfg_set_uring_ext_thread;
+		fuse_req_is_uring;
 } FUSE_3.4;
 
 # Local Variables:
