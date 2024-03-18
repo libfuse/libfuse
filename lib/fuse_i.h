@@ -167,13 +167,6 @@ struct fuse_loop_config
 		bool per_core_queue:1;
 
 		/**
-		 * whether to use polling on the ring file descritpor instead
-		 * of a blocking io-uring call. Typically useful for external
-		 * threads that also do other tasks.
-		 */
-		bool polling:1;
-
-		/**
 		 * whether to use an external thread controlled by the file
 		 * system, instead of spawning a new thread per queue by
 		 * the libfuse io-uring interface.
