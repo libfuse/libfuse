@@ -154,6 +154,7 @@ struct Fs {
     bool debug_fuse;
     bool foreground;
     std::string source;
+    std::string socket;
     size_t blocksize;
     dev_t src_dev;
     bool nosplice;
@@ -1211,6 +1212,7 @@ static std::string string_join(const std::vector<std::string>& elems, char delim
 static cxxopts::ParseResult parse_options(int argc, char **argv) {
     cxxopts::Options opt_parser(argv[0]);
     std::vector<std::string> mount_options;
+    const char* default_socket_path = "/tmp/libfuse-passthrough-hp.sock";
     opt_parser.add_options()
         ("debug", "Enable filesystem debug messages")
         ("debug-fuse", "Enable libfuse debug messages")
@@ -1239,12 +1241,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         std::cout << std::endl << "options:"
                   << help.substr(help.find("\n\n") + 1, string::npos);
         exit(0);
-
-    } /*else if (argc != 3) {
-        std::cout << argv[0] << ": invalid number of arguments\n";
-        print_usage(argv[0]);
-        exit(2);
-    }*/
+    }
 
     fs.debug = options.count("debug") != 0;
     fs.debug_fuse = options.count("debug-fuse") != 0;
@@ -1262,6 +1259,11 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         warn("WARNING: realpath() failed with");
     fs.source = std::string {resolved_path};
     free(resolved_path);
+    if (argc < 3) {
+        fs.socket = std::string {default_socket_path};
+    } else {
+        fs.socket = std::string {argv[2]};
+    }
 
     std::vector<std::string> flattened_mount_opts;
     for (auto opt : mount_options) {
@@ -1323,8 +1325,7 @@ static int create_socket(const char *socket_path) {
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	strcpy(addr.sun_path, socket_path);
 
-	int sfd = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (sfd == -1) {
+	int sfd = socket(AF_UNIX, SOCK_STREAM, 0); if (sfd == -1) {
 		printf("Could not create socket. Error: %s\n", strerror(errno));
 		return -1;
 	}
@@ -1398,7 +1399,6 @@ static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
 	printf("Res0: %d\n", res);
 	if (res == -1)
     	return res;
-
 
     uint32_t packet_len = ((struct fuse_in_header *)buf)->len;
     if (packet_len > buf_len)
@@ -1486,7 +1486,7 @@ int main(int argc, char *argv[]) {
         goto err_out2;
 
     // Use UDS
-    cfd = create_socket("/tmp/libfuse-passthrough-hp.sock");
+    cfd = create_socket(fs.socket.c_str());
 	if (cfd == -1)
 		goto err_out3;
 
@@ -1495,23 +1495,7 @@ int main(int argc, char *argv[]) {
 
     // Don't apply umask, use modes exactly as specified
     umask(0);
-
-    // Mount and run main loop
-    /*loop_config = fuse_loop_cfg_create();
-
-    if (fs.num_threads != -1)
-        fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);*/
-
-    //if (fuse_session_mount(se, argv[2]) != 0)
-    //    goto err_out3;
-
-    //fuse_daemonize(fs.foreground);
-
-    //if (options.count("single"))
     ret = fuse_session_loop(se);
-    //else
-    //    ret = fuse_session_loop_mt(se, loop_config);
-
 
     fuse_session_unmount(se);
 
