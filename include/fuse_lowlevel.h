@@ -241,7 +241,7 @@ struct fuse_lowlevel_ops {
 	 * 	  file system.
 	 * 	  Note: CQEs point to fuse requests that need to be handled.
 	 */
-	int (*init_ring_queue)(int qid, void *ring_pool,
+	int (*init_ring_queue)(void *userdata, int qid, void *ring_pool,
 				int (*queue_init)(int qid, void *ring_pool),
 				int (*sq_submit)(int qid, void *ring_pool,
 						bool blocking),

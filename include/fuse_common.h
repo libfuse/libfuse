@@ -936,7 +936,6 @@ int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
 				      unsigned int bg_queue_depth,
 				      unsigned int arg_len);
 
-void fuse_loop_cfg_set_uring_polling(struct fuse_loop_config *config);
 void fuse_loop_cfg_set_uring_ext_thread(struct fuse_loop_config *config);
 
 
