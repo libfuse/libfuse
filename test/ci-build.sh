@@ -88,7 +88,16 @@ sanitized_build()
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
     meson configure -D b_lundef=false
 
+    # additional options
+    if [ -n "$@" ]; then
+        meson configure "$@"
+    fi
+
+    # print all options
     meson configure --no-pager
+
+    # reconfigure to ensure it uses all additional options
+    meson setup --reconfigure "${SOURCE_DIR}"
     ninja
     sudo ninja install
     sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
@@ -110,15 +119,15 @@ sanitized_build()
 )
 
 # Sanitized build
-CC=clang
-CXX=clang++
+export CC=clang
+export CXX=clang++
 TEST_WITH_VALGRIND=false
-sanitized_build $SAN
+sanitized_build
 
 # Sanitized build without libc versioned symbols
-CC=clang
-CXX=clang++
-sanitized_build
+export CC=clang
+export CXX=clang++
+sanitized_build "-Ddisable-libc-symbol-version=true"
 
 non_sanitized_build
 
