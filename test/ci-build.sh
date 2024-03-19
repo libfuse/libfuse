@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 set -e
 
@@ -30,42 +30,48 @@ export LSAN_OPTIONS="suppressions=$(pwd)/lsan_suppress.txt"
 export ASAN_OPTIONS="detect_leaks=1"
 export CC
 
-# Standard build
-for CC in gcc gcc-9 gcc-10 clang; do
-    echo "=== Building with ${CC} ==="
-    mkdir build-${CC}; pushd build-${CC}
-    if [ "${CC}" == "clang" ]; then
-        export CXX="clang++"
-        export TEST_WITH_VALGRIND=false
-    else
-        export TEST_WITH_VALGRIND=true
-    fi
-    if [ ${CC} == 'gcc-7' ]; then
-        build_opts='-D b_lundef=false'
-    else
-        build_opts=''
-    fi
-    if [ ${CC} == 'gcc-10' ]; then
-        build_opts='-Dc_args=-flto=auto'
-    else
-        build_opts=''
-    fi
-    meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
-    ninja
-    sudo ninja install
+non_sanitized_build()
+(
+    echo "Standard build (without sanitizers)"
+    for CC in gcc gcc-9 gcc-10 clang; do
+        echo "=== Building with ${CC} ==="
+        mkdir build-${CC}; pushd build-${CC}
+        if [ "${CC}" == "clang" ]; then
+            export CXX="clang++"
+            export TEST_WITH_VALGRIND=false
+        else
+            unset CXX
+            export TEST_WITH_VALGRIND=true
+        fi
+        if [ ${CC} == 'gcc-7' ]; then
+            build_opts='-D b_lundef=false'
+        else
+            build_opts=''
+        fi
+        if [ ${CC} == 'gcc-10' ]; then
+            build_opts='-Dc_args=-flto=auto'
+        else
+            build_opts=''
+        fi
 
-    # libfuse will first try the install path and then system defaults
-    sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+        meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
+        ninja
+        sudo ninja install
 
-    # also needed for some of the tests
-    sudo chown root:root util/fusermount3
-    sudo chmod 4755 util/fusermount3
+        # libfuse will first try the install path and then system defaults
+        sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
 
-    ${TEST_CMD}
-    popd
-    rm -fr build-${CC}
-    sudo rm -fr ${PREFIX_DIR}
-done
+        # also needed for some of the tests
+        sudo chown root:root util/fusermount3
+        sudo chmod 4755 util/fusermount3
+
+        ${TEST_CMD}
+        popd
+        rm -fr build-${CC}
+        sudo rm -fr ${PREFIX_DIR}
+
+    done
+)
 
 sanitized_build()
 (
@@ -113,6 +119,8 @@ sanitized_build $SAN
 CC=clang
 CXX=clang++
 sanitized_build
+
+non_sanitized_build
 
 # Documentation.
 (cd "${SOURCE_DIR}"; doxygen doc/Doxyfile)
