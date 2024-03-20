@@ -75,6 +75,7 @@ def test_notify1(tmpdir, name, notify, output_checker):
         else:
             assert read1 == read2
     except:
+        print("Failure in notify test: '" + str(cmdline) + "'")
         cleanup(mount_process, mnt_dir)
         raise
     else:
