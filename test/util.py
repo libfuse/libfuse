@@ -52,7 +52,7 @@ def cleanup(mount_process, mnt_dir):
     if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
         cmd = [ 'umount', '-f', mnt_dir ]
     else:
-        cmd = [pjoin(basename, 'util', 'fusermount3'),
+        cmd = [pjoin(basename, 'util', 'redfsmount'),
                          '-z', '-u', mnt_dir]
     subprocess.call(cmd, stdout=subprocess.DEVNULL,
                     stderr=subprocess.STDOUT)
@@ -67,13 +67,13 @@ def umount(mount_process, mnt_dir):
     if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
         cmdline = [ 'umount', mnt_dir ]
     else:
-        # fusermount3 will be setuid root, so we can only trace it with
+        # redfsmount will be setuid root, so we can only trace it with
         # valgrind if we're root
         if os.getuid() == 0:
             cmdline = base_cmdline
         else:
             cmdline = []
-        cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount3'),
+        cmdline = cmdline + [ pjoin(basename, 'util', 'redfsmount'),
                               '-z', '-u', mnt_dir ]
 
     subprocess.check_call(cmdline)
@@ -120,7 +120,7 @@ def fuse_test_marker():
     if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
         return pytest.mark.uses_fuse()
 
-    with subprocess.Popen(['which', 'fusermount3'], stdout=subprocess.PIPE,
+    with subprocess.Popen(['which', 'redfsmount'], stdout=subprocess.PIPE,
                           universal_newlines=True) as which:
         fusermount_path = which.communicate()[0].strip()
 
@@ -151,6 +151,12 @@ def powerset(iterable):
   return itertools.chain.from_iterable(
       itertools.combinations(s, r) for r in range(len(s)+1))
 
+def create_tmpdir(mnt_dir):
+    if not os.path.exists(mnt_dir):
+        print("makedirs: '" + mnt_dir + "'")
+        os.makedirs(mnt_dir)
+    else:
+        print("mnt_dir exists: '" + mnt_dir + "'")
 
 # Use valgrind if requested
 if os.environ.get('TEST_WITH_VALGRIND', 'no').lower().strip() \
@@ -159,7 +165,7 @@ if os.environ.get('TEST_WITH_VALGRIND', 'no').lower().strip() \
 else:
     base_cmdline = []
 
-# Try to use local fusermount3
+# Try to use local redfsmount
 os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'util'), os.environ['PATH'])
 # Put example binaries on PATH
 os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'example'), os.environ['PATH'])

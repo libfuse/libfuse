@@ -279,9 +279,13 @@ static int may_unmount(const char *mnt, int quiet)
 	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
 		    (strcmp(entp->mnt_type, "redfs") == 0 ||
+		     strcmp(entp->mnt_type, "fuse") == 0 ||
 		     strcmp(entp->mnt_type, "redfsblk") == 0 ||
-		     strncmp(entp->mnt_type, "redfs.", 5) == 0 ||
-		     strncmp(entp->mnt_type, "redfsblk.", 8) == 0)) {
+		     strcmp(entp->mnt_type, "fuseblk") == 0 ||
+		     strncmp(entp->mnt_type, "redfs.", 6) == 0 ||
+		     strncmp(entp->mnt_type, "fuse.", 5) == 0 ||
+		     strncmp(entp->mnt_type, "redfsblk.", 9) == 0 ||
+		     strncmp(entp->mnt_type, "fuseblk.", 8) == 0)) {
 			char *p = strstr(entp->mnt_opts, "user=");
 			if (p &&
 			    (p == entp->mnt_opts || *(p-1) == ',') &&

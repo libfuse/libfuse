@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/bin/bash -x
 
 set -e
 
-TEST_CMD="python3 -m pytest --maxfail=99 test/"
+TEST_CMD="pytest -v --maxfail=1 --log-level=DEBUG --log-cli-level=DEBUG test/"
 SAN="-Db_sanitize=address,undefined"
 
 # not default
@@ -30,38 +30,48 @@ export LSAN_OPTIONS="suppressions=$(pwd)/lsan_suppress.txt"
 export ASAN_OPTIONS="detect_leaks=1"
 export CC
 
-# Standard build
-for CC in gcc gcc-9 gcc-10 clang; do
-    echo "=== Building with ${CC} ==="
-    mkdir build-${CC}; pushd build-${CC}
-    if [ "${CC}" == "clang" ]; then
-        export CXX="clang++"
-        export TEST_WITH_VALGRIND=false
-    else
-        export TEST_WITH_VALGRIND=true
-    fi
-    if [ ${CC} == 'gcc-7' ]; then
-        build_opts='-D b_lundef=false'
-    else
-        build_opts=''
-    fi
-    if [ ${CC} == 'gcc-10' ]; then
-        build_opts='-Dc_args=-flto=auto'
-    else
-        build_opts=''
-    fi
-    meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
-    ninja
-    sudo ninja install
+non_sanitized_build()
+(
+    echo "Standard build (without sanitizers)"
+    for CC in gcc gcc-9 gcc-10 clang; do
+        echo "=== Building with ${CC} ==="
+        mkdir build-${CC}; pushd build-${CC}
+        if [ "${CC}" == "clang" ]; then
+            export CXX="clang++"
+            #export TEST_WITH_VALGRIND=false
+        else
+            unset CXX
+            #export TEST_WITH_VALGRIND=true
+        fi
+        if [ ${CC} == 'gcc-7' ]; then
+            build_opts='-D b_lundef=false'
+        else
+            build_opts=''
+        fi
+        if [ ${CC} == 'gcc-10' ]; then
+            build_opts='-Dc_args=-flto=auto'
+        else
+            build_opts=''
+        fi
 
-    # libfuse will first try the install path and then system defaults
-    sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+        meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
+        ninja
+        sudo ninja install
 
-    ${TEST_CMD}
-    popd
-    rm -fr build-${CC}
-    sudo rm -fr ${PREFIX_DIR}
-done
+        # libfuse will first try the install path and then system defaults
+        sudo chmod 4755 ${PREFIX_DIR}/bin/redfsmount
+
+        # also needed for some of the tests
+        sudo chown root:root util/redfsmount
+        sudo chmod 4755 util/redfsmount
+
+        ${TEST_CMD}
+        popd
+        rm -fr build-${CC}
+        sudo rm -fr ${PREFIX_DIR}
+
+    done
+)
 
 sanitized_build()
 (
@@ -78,10 +88,23 @@ sanitized_build()
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
     meson configure -D b_lundef=false
 
-    meson configure
+    # additional options
+    if [[ $# -gt 0 ]]; then
+        meson configure "$@"
+    fi
+
+    # print all options
+    meson configure --no-pager
+
+    # reconfigure to ensure it uses all additional options
+    meson setup --reconfigure "${SOURCE_DIR}"
     ninja
     sudo ninja install
-    sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+    sudo chmod 4755 ${PREFIX_DIR}/bin/redfsmount
+
+    # also needed for some of the tests
+    sudo chown root:root util/redfsmount
+    sudo chmod 4755 util/redfsmount
 
     # Test as root and regular user
     sudo ${TEST_CMD}
@@ -95,16 +118,20 @@ sanitized_build()
     sudo rm -fr ${PREFIX_DIR}
 )
 
+# valgrind does not work at all with redfs or recent gcc
+# XXX issue is with example/printcap
+export TEST_WITH_VALGRIND=false
+non_sanitized_build
+
 # Sanitized build
-CC=clang
-CXX=clang++
-TEST_WITH_VALGRIND=false
-sanitized_build $SAN
+export CC=clang
+export CXX=clang++
+sanitized_build
 
 # Sanitized build without libc versioned symbols
-CC=clang
-CXX=clang++
-sanitized_build
+export CC=clang
+export CXX=clang++
+sanitized_build "-Ddisable-libc-symbol-version=true"
 
 # Documentation.
 (cd "${SOURCE_DIR}"; doxygen doc/Doxyfile)
