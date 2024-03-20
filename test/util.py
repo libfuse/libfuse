@@ -151,6 +151,12 @@ def powerset(iterable):
   return itertools.chain.from_iterable(
       itertools.combinations(s, r) for r in range(len(s)+1))
 
+def create_tmpdir(mnt_dir):
+    if not os.path.exists(mnt_dir):
+        print("makedirs: '" + mnt_dir + "'")
+        os.makedirs(mnt_dir)
+    else:
+        print("mnt_dir exists: '" + mnt_dir + "'")
 
 # Use valgrind if requested
 if os.environ.get('TEST_WITH_VALGRIND', 'no').lower().strip() \

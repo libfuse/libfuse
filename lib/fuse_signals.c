@@ -16,8 +16,22 @@
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <execinfo.h>
 
 static struct fuse_session *fuse_instance;
+
+static void dump_stack(void)
+{
+#ifdef HAVE_BACKTRACE
+	const size_t backtrace_sz = 1024 * 1024;
+	void* backtrace_buffer[backtrace_sz];
+
+	int err_fd = fileno(stderr);
+
+	int trace_len = backtrace(backtrace_buffer, backtrace_sz);
+	backtrace_symbols_fd(backtrace_buffer, trace_len, err_fd);
+#endif
+}
 
 static void exit_handler(int sig)
 {
@@ -25,6 +39,7 @@ static void exit_handler(int sig)
 		fuse_session_exit(fuse_instance);
 		if(sig <= 0) {
 			fuse_log(FUSE_LOG_ERR, "assertion error: signal value <= 0\n");
+			dump_stack();
 			abort();
 		}
 		fuse_instance->error = sig;
