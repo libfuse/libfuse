@@ -2,7 +2,7 @@
 
 set -e
 
-TEST_CMD="python3 -m pytest --maxfail=99 test/"
+TEST_CMD="pytest -v --maxfail=1 --log-level=DEBUG --log-cli-level=DEBUG test/"
 SAN="-Db_sanitize=address,undefined"
 
 # not default
