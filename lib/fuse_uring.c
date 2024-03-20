@@ -551,7 +551,7 @@ fuse_create_ring(struct fuse_session *se,
 					  req_buf_size);
 	if (rc) {
 		fuse_log(FUSE_LOG_ERR, "Kernel ring configuration failed: %s\n",
-			 strerror(-errno));
+			 strerror(-rc));
 		goto err;
 	}
 
