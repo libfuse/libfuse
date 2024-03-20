@@ -89,7 +89,7 @@ sanitized_build()
     meson configure -D b_lundef=false
 
     # additional options
-    if [ -n "$@" ]; then
+    if [[ $# -gt 0 ]]; then
         meson configure "$@"
     fi
 
