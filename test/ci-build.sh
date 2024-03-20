@@ -78,7 +78,7 @@ sanitized_build()
     # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
     meson configure -D b_lundef=false
 
-    meson configure
+    meson configure --no-pager
     ninja
     sudo ninja install
     sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
