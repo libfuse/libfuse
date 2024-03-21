@@ -2208,6 +2208,7 @@ static void do_destroy(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	(void) inarg;
 
 	se->got_destroy = 1;
+	se->got_init = 0;
 	if (se->op.destroy)
 		se->op.destroy(se->userdata);
 
