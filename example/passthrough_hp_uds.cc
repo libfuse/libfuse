@@ -3,6 +3,7 @@
   Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
   Copyright (C) 2017       Nikolaus Rath <Nikolaus@rath.org>
   Copyright (C) 2018       Valve, Inc
+  Copyright (C) 2024       Antmicro
 
   This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
@@ -10,37 +11,8 @@
 
 /** @file
  *
- * This is a "high-performance" version of passthrough_ll.c. While
- * passthrough_ll.c is designed to be as simple as possible, this
- * example intended to be as efficient and correct as possible.
- *
- * passthrough_hp.cc mirrors a specified "source" directory under a
- * specified the mountpoint with as much fidelity and performance as
- * possible.
- *
- * If --nocache is specified, the source directory may be changed
- * directly even while mounted and the filesystem will continue
- * to work correctly.
- *
- * Without --nocache, the source directory is assumed to be modified
- * only through the passthrough filesystem. This enables much better
- * performance, but if changes are made directly to the source, they
- * may not be immediately visible under the mountpoint and further
- * access to the mountpoint may result in incorrect behavior,
- * including data-loss.
- *
- * On its own, this filesystem fulfills no practical purpose. It is
- * intended as a template upon which additional functionality can be
- * built.
- *
- * Unless --nocache is specified, is only possible to write to files
- * for which the mounting user has read permissions. This is because
- * the writeback cache requires the kernel to be able to issue read
- * requests for all files (which the passthrough filesystem cannot
- * satisfy if it can't read the file in the underlying filesystem).
- *
- * ## Source code ##
- * \include passthrough_hp.cc
+ * This is a version of passthrough_hp.cc with IO over UNIX domain sockets.
+ * Optional custom path of the socket can be provided as a second argument.
  */
 
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
@@ -1168,7 +1140,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper) {
 
 static void print_usage(char *prog_name) {
     cout << "Usage: " << prog_name << " --help\n"
-         << "       " << prog_name << " [options] <source> <mountpoint>\n";
+         << "       " << prog_name << " [options] <source> <socket_path>\n";
 }
 
 static cxxopts::ParseResult parse_wrapper(cxxopts::Options& parser, int& argc, char**& argv) {
@@ -1380,7 +1352,6 @@ static ssize_t readall(int fd, void *buf, size_t len) {
 
 	while (count < len) {
 		int i = read(fd, (char *)buf + count, len - count);
-		printf("read %d\n", i);
 		if (!i)
 			break;
 
@@ -1396,7 +1367,6 @@ static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
     (void)userdata;
 
 	int res = readall(fd, buf, sizeof(struct fuse_in_header));
-	printf("Res0: %d\n", res);
 	if (res == -1)
     	return res;
 
@@ -1408,7 +1378,6 @@ static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
 
     res = readall(fd, (char *)buf + sizeof(struct fuse_in_header),
                   packet_len - sizeof(struct fuse_in_header));
-	printf("Res1: %d\n", res);
 
     return  (res == -1) ? res : (res + prev_res);
 }
@@ -1426,7 +1395,6 @@ static ssize_t stream_splice_send(int fdin, off_t *offin, int fdout,
 
 		count += i;
 	}
-	printf("Sent %ld\n", count);
 	return count;
 }
 
