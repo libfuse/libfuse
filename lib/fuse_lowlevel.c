@@ -215,7 +215,12 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 {
 	struct fuse_out_header out;
 
+#if __GLIBC__ >= 2 && __GLIBC_MINOR__ >= 32
+	const char *str = strerrordesc_np(error * -1);
+	if ((str == NULL && error != 0) || error > 0) {
+#else
 	if (error <= -1000 || error > 0) {
+#endif
 		fuse_log(FUSE_LOG_ERR, "fuse: bad error value: %i\n",	error);
 		error = -ERANGE;
 	}
@@ -1584,10 +1589,14 @@ static void do_statfs(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 static void do_setxattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
+	struct fuse_session *se = req->se;
+	unsigned int xattr_ext = !!(se->conn.want & FUSE_CAP_SETXATTR_EXT);
 	struct fuse_setxattr_in *arg = (struct fuse_setxattr_in *) inarg;
-	char *name = PARAM(arg);
+	char *name = xattr_ext ? PARAM(arg) :
+		     (char *)arg + FUSE_COMPAT_SETXATTR_IN_SIZE;
 	char *value = name + strlen(name) + 1;
 
+	/* XXX:The API should be extended to support extra_flags/setxattr_flags */
 	if (req->se->op.setxattr)
 		req->se->op.setxattr(req, nodeid, name, value, arg->size,
 				    arg->flags);
@@ -1733,8 +1742,6 @@ static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
 			pthread_mutex_lock(&se->lock);
 			curr->ctr--;
 			if (!curr->ctr) {
-				fuse_chan_put(req->ch);
-				req->ch = NULL;
 				destroy_req(curr);
 			}
 
@@ -2002,6 +2009,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_NO_OPENDIR_SUPPORT;
 		if (inargflags & FUSE_EXPLICIT_INVAL_DATA)
 			se->conn.capable |= FUSE_CAP_EXPLICIT_INVAL_DATA;
+		if (inargflags & FUSE_SETXATTR_EXT)
+			se->conn.capable |= FUSE_CAP_SETXATTR_EXT;
 		if (!(inargflags & FUSE_MAX_PAGES)) {
 			size_t max_bufsize =
 				FUSE_DEFAULT_MAX_PAGES_PER_REQ * getpagesize()
@@ -2010,7 +2019,9 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 				bufsize = max_bufsize;
 			}
 		}
-		if (arg->minor >= 38)
+		if (inargflags & FUSE_DIRECT_IO_ALLOW_MMAP)
+			se->conn.capable |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
+		if (arg->minor >= 38 || (inargflags & FUSE_HAS_EXPIRE_ONLY))
 			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
 	} else {
 		se->conn.max_readahead = 0;
@@ -2042,9 +2053,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if ((cond) && (se->conn.capable & (cap))) \
 		se->conn.want |= (cap)
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
-	LL_SET_DEFAULT(1, FUSE_CAP_PARALLEL_DIROPS);
 	LL_SET_DEFAULT(1, FUSE_CAP_AUTO_INVAL_DATA);
-	LL_SET_DEFAULT(1, FUSE_CAP_HANDLE_KILLPRIV);
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_DIO);
 	LL_SET_DEFAULT(1, FUSE_CAP_IOCTL_DIR);
 	LL_SET_DEFAULT(1, FUSE_CAP_ATOMIC_O_TRUNC);
@@ -2055,8 +2064,14 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	LL_SET_DEFAULT(se->op.readdirplus, FUSE_CAP_READDIRPLUS);
 	LL_SET_DEFAULT(se->op.readdirplus && se->op.readdir,
 		       FUSE_CAP_READDIRPLUS_AUTO);
-	se->conn.time_gran = 1;
 
+	/* This could safely become default, but libfuse needs an API extension
+	 * to support it
+	 * LL_SET_DEFAULT(1, FUSE_CAP_SETXATTR_EXT);
+	 */
+
+	se->conn.time_gran = 1;
+	
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fuse_log(FUSE_LOG_ERR, "fuse: warning: buffer size too small: %zu\n",
 			bufsize);
@@ -2126,12 +2141,20 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargflags |= FUSE_ASYNC_DIO;
 	if (se->conn.want & FUSE_CAP_WRITEBACK_CACHE)
 		outargflags |= FUSE_WRITEBACK_CACHE;
+	if (se->conn.want & FUSE_CAP_PARALLEL_DIROPS)
+		outargflags |= FUSE_PARALLEL_DIROPS;
 	if (se->conn.want & FUSE_CAP_POSIX_ACL)
 		outargflags |= FUSE_POSIX_ACL;
+	if (se->conn.want & FUSE_CAP_HANDLE_KILLPRIV)
+		outargflags |= FUSE_HANDLE_KILLPRIV;
 	if (se->conn.want & FUSE_CAP_CACHE_SYMLINKS)
 		outargflags |= FUSE_CACHE_SYMLINKS;
 	if (se->conn.want & FUSE_CAP_EXPLICIT_INVAL_DATA)
 		outargflags |= FUSE_EXPLICIT_INVAL_DATA;
+	if (se->conn.want & FUSE_CAP_SETXATTR_EXT)
+		outargflags |= FUSE_SETXATTR_EXT;
+	if (se->conn.want & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
+		outargflags |= FUSE_DIRECT_IO_ALLOW_MMAP;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -2282,7 +2305,7 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 
 	if (se->conn.proto_minor < 12)
 		return -ENOSYS;
-
+	
 	outarg.ino = ino;
 	outarg.off = off;
 	outarg.len = len;
@@ -2293,9 +2316,28 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	return send_notify_iov(se, FUSE_NOTIFY_INVAL_INODE, iov, 2);
 }
 
-int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
-				      const char *name, size_t namelen,
-				      enum fuse_expire_flags flags)
+/**
+ * Notify parent attributes and the dentry matching parent/name
+ * 
+ * Underlying base function for fuse_lowlevel_notify_inval_entry() and
+ * fuse_lowlevel_notify_expire_entry().
+ * 
+ * @warning
+ * Only checks if fuse_lowlevel_notify_inval_entry() is supported by
+ * the kernel. All other flags will fall back to 
+ * fuse_lowlevel_notify_inval_entry() if not supported!
+ * DO THE PROPER CHECKS IN THE DERIVED FUNCTION!
+ *
+ * @param se the session object
+ * @param parent inode number
+ * @param name file name
+ * @param namelen strlen() of file name
+ * @param flags flags to control if the entry should be expired or invalidated
+ * @return zero for success, -errno for failure
+*/
+static int fuse_lowlevel_notify_entry(struct fuse_session *se, fuse_ino_t parent,
+							const char *name, size_t namelen,
+							enum fuse_notify_entry_flags flags)
 {
 	struct fuse_notify_inval_entry_out outarg;
 	struct iovec iov[3];
@@ -2321,9 +2363,21 @@ int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent
 }
 
 int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
-				     const char *name, size_t namelen)
+						 const char *name, size_t namelen)
 {
-	return fuse_lowlevel_notify_expire_entry(se, parent, name, namelen, 0);
+	return fuse_lowlevel_notify_entry(se, parent, name, namelen, FUSE_LL_INVALIDATE);
+}
+
+int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
+							const char *name, size_t namelen)
+{
+	if (!se)
+		return -EINVAL;
+
+	if (!(se->conn.capable & FUSE_CAP_EXPIRE_ONLY))
+		return -ENOSYS;
+
+	return fuse_lowlevel_notify_entry(se, parent, name, namelen, FUSE_LL_EXPIRE_ONLY);
 }
 
 

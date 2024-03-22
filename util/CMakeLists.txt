@@ -10,6 +10,7 @@ include(GNUInstallDirs)
 set(MESON_SOURCE_ROOT ${CMAKE_PROJECT_SOURCE_DIR})
 set(FUSECONF_PATH ${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_SYSCONFDIR}/fuse.conf)
 
+# meson equiv
 #executable('fusermount3', ['fusermount.c', '../lib/mount_util.c'],
 #           include_directories: include_dirs,
 #           install: true,
@@ -25,12 +26,13 @@ install(TARGETS fusermount3 RUNTIME
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ)
 
+# meson equiv
 #executable('mount.fuse3', ['mount.fuse.c'],
 #           include_directories: include_dirs,
 #           link_with: [ libfuse ],
 #           install: true,
 #           install_dir: get_option('sbindir'),
-#           c_args: '-DFUSE_USE_VERSION=34')
+#           c_args: '-DFUSE_USE_VERSION=312')
 
 add_executable(mount.fuse3 mount.fuse.c )
 
@@ -39,11 +41,11 @@ target_include_directories(mount.fuse3
 target_link_libraries(mount.fuse3 fuse3)
 
 target_compile_definitions(mount.fuse3
-						   PUBLIC FUSE_USE_VERSION=35)
+						   PUBLIC FUSE_USE_VERSION=312)
 install(TARGETS mount.fuse3 RUNTIME
         DESTINATION ${CMAKE_INSTALL_SBINDIR})
 
-
+# meson equiv
 #udevrulesdir = get_option('udevrulesdir')
 #if udevrulesdir == ''
 #  udev = dependency('udev')
@@ -54,7 +56,7 @@ option(UDEV_RULES_DIR
        "/etc/udev/rules.d"
 )
 
-#
+# meson equiv
 #meson.add_install_script('install_helper.sh',
 #                         join_paths(get_option('prefix'), get_option('sysconfdir')),
 #                         join_paths(get_option('prefix'), get_option('bindir')),

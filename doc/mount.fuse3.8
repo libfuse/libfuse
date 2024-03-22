@@ -146,6 +146,21 @@ responsible for releasing the mountpoint, which means that the
 mountpoint becomes inaccessible if the filesystem terminates
 without first unmounting.
 
+This option is dangerous and should only be used after careful consideration of the
+risks.
+
+Automatically unmounting the filesystem means that if the filesystem crashes the
+mountpoint may suddenly appear empty, which may have unintended consequences. For example,
+a running backup and mirroring program may conclude that all the data in the filesystem
+has been deleted and proceed to propagate this deletion to the backup / remote system. If
+the mountpoint instead becomes inaccessible (the default), most programs will behave
+correctly (report an error).
+
+This feature may also accidentally unmount the wrong filesystem due to race
+conditions. For example, if another filesystem was mounted underneath the same mountpoint,
+or if a new filesystem is mounted after the FUSE process has crashed, it may accidentally
+get unmounted.
+
 At the moment, this option implies that the filesystem will also be
 mounted with \fBnodev\fP and \fBnosuid\fP (even when mounted by
 root). This restriction may be lifted in the future.

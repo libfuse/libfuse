@@ -26,7 +26,10 @@
 #include <mntent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
-#include <sys/mount.h>
+#include <sys/param.h>
+
+#include "fuse_mount_compat.h"
+
 #include <sys/fsuid.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
@@ -38,32 +41,134 @@
 
 #define FUSE_DEV "/dev/fuse"
 
-#ifndef MS_DIRSYNC
-#define MS_DIRSYNC 128
-#endif
-#ifndef MS_REC
-#define MS_REC 16384
-#endif
-#ifndef MS_PRIVATE
-#define MS_PRIVATE (1<<18)
-#endif
-
-#ifndef UMOUNT_DETACH
-#define UMOUNT_DETACH	0x00000002	/* Just detach from the tree */
-#endif
-#ifndef UMOUNT_NOFOLLOW
-#define UMOUNT_NOFOLLOW	0x00000008	/* Don't follow symlink on umount */
-#endif
-#ifndef UMOUNT_UNUSED
-#define UMOUNT_UNUSED	0x80000000	/* Flag guaranteed to be unused */
-#endif
-
 static const char *progname;
 
 static int user_allow_other = 0;
 static int mount_max = 1000;
 
 static int auto_unmount = 0;
+
+#ifdef GETMNTENT_NEEDS_UNESCAPING
+// Older versions of musl libc don't unescape entries in /etc/mtab
+
+// unescapes octal sequences like \040 in-place
+// That's ok, because unescaping can not extend the length of the string.
+static void unescape(char *buf) {
+	char *src = buf;
+	char *dest = buf;
+	while (1) {
+		char *next_src = strchrnul(src, '\\');
+		int offset = next_src - src;
+		memmove(dest, src, offset);
+		src = next_src;
+		dest += offset;
+
+		if(*src == '\0') {
+			*dest = *src;
+			return;
+		}
+		src++;
+
+		if('0' <= src[0] && src[0] < '2' &&
+		   '0' <= src[1] && src[1] < '8' &&
+		   '0' <= src[2] && src[2] < '8') {
+			*dest++ = (src[0] - '0') << 6
+			        | (src[1] - '0') << 3
+			        | (src[2] - '0') << 0;
+			src += 3;
+		} else if (src[0] == '\\') {
+			*dest++ = '\\';
+			src += 1;
+		} else {
+			*dest++ = '\\';
+		}
+	}
+}
+
+static struct mntent *GETMNTENT(FILE *stream)
+{
+	struct mntent *entp = getmntent(stream);
+	if(entp != NULL) {
+		unescape(entp->mnt_fsname);
+		unescape(entp->mnt_dir);
+		unescape(entp->mnt_type);
+		unescape(entp->mnt_opts);
+	}
+	return entp;
+}
+#else
+#define GETMNTENT getmntent
+#endif // GETMNTENT_NEEDS_UNESCAPING
+
+/*
+ * Take a ',' separated option string and extract "x-" options
+ */
+static int extract_x_options(const char *original, char **non_x_opts,
+			     char **x_opts)
+{
+	size_t orig_len;
+	const char *opt, *opt_end;
+
+	orig_len = strlen(original) + 1;
+
+	*non_x_opts = calloc(1, orig_len);
+	*x_opts    = calloc(1, orig_len);
+
+	size_t non_x_opts_len = orig_len;
+	size_t x_opts_len = orig_len;
+
+	if (*non_x_opts == NULL || *x_opts == NULL) {
+		fprintf(stderr, "%s: Failed to allocate %zuB.\n",
+			__func__, orig_len);
+		return -ENOMEM;
+	}
+
+	for (opt = original; opt < original + orig_len; opt = opt_end + 1) {
+		char *opt_buf;
+
+		opt_end = strchr(opt, ',');
+		if (opt_end == NULL)
+			opt_end = original + orig_len;
+
+		size_t opt_len = opt_end - opt;
+		size_t opt_len_left = orig_len - (opt - original);
+		size_t buf_len;
+		bool is_x_opts;
+
+		if (strncmp(opt, "x-", MIN(2, opt_len_left)) == 0) {
+			buf_len = x_opts_len;
+			is_x_opts = true;
+			opt_buf = *x_opts;
+		} else {
+			buf_len = non_x_opts_len;
+			is_x_opts = false;
+			opt_buf = *non_x_opts;
+		}
+
+		if (buf_len < orig_len) {
+			strncat(opt_buf, ",", 2);
+			buf_len -= 1;
+		}
+
+		/* omits ',' */
+		if ((ssize_t)(buf_len - opt_len) < 0) {
+			/* This would be a bug */
+			fprintf(stderr, "%s: no buf space left in copy, orig='%s'\n",
+				__func__, original);
+			return -EIO;
+		}
+
+		strncat(opt_buf, opt, opt_end - opt);
+		buf_len -= opt_len;
+
+		if (is_x_opts)
+			x_opts_len = buf_len;
+		else
+			non_x_opts_len = buf_len;
+	}
+
+	return 0;
+}
 
 static const char *get_user_name(void)
 {
@@ -171,7 +276,7 @@ static int may_unmount(const char *mnt, int quiet)
 	uidlen = sprintf(uidstr, "%u", getuid());
 
 	found = 0;
-	while ((entp = getmntent(fp)) != NULL) {
+	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
 		    (strcmp(entp->mnt_type, "fuse") == 0 ||
 		     strcmp(entp->mnt_type, "fuseblk") == 0 ||
@@ -263,7 +368,7 @@ static int check_is_mount_child(void *p)
 	}
 
 	count = 0;
-	while (getmntent(fp) != NULL)
+	while (GETMNTENT(fp) != NULL)
 		count++;
 	endmntent(fp);
 
@@ -282,7 +387,7 @@ static int check_is_mount_child(void *p)
 	}
 
 	found = 0;
-	while ((entp = getmntent(fp)) != NULL) {
+	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (count > 0) {
 			count--;
 			continue;
@@ -466,7 +571,7 @@ static int count_fuse_fs(void)
 			strerror(errno));
 		return -1;
 	}
-	while ((entp = getmntent(fp)) != NULL) {
+	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (strcmp(entp->mnt_type, "fuse") == 0 ||
 		    strncmp(entp->mnt_type, "fuse.", 5) == 0)
 			count ++;
@@ -799,7 +904,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 				    sscanf(utsname.release, "%u.%u",
 					   &kmaj, &kmin) == 2 &&
 				    (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
-					fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %u.%u kernels\n", progname, kmaj, kmin);
+					fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %i.%i kernels\n", progname, kmaj, kmin);
 					skip_option = 1;
 				}
 			}
@@ -1001,7 +1106,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	 * originally the same list as used by the ecryptfs mount helper
 	 * (https://bazaar.launchpad.net/~ecryptfs/ecryptfs/trunk/view/head:/src/utils/mount.ecryptfs_private.c#L225)
 	 * but got expanded as we found more filesystems that needed to be
-	 * overlayed. */
+	 * overlaid. */
 	typeof(fs_buf.f_type) f_type_whitelist[] = {
 		0x61756673 /* AUFS_SUPER_MAGIC */,
 		0x00000187 /* AUTOFS_SUPER_MAGIC */,
@@ -1025,6 +1130,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x00006969 /* NFS_SUPER_MAGIC */,
 		0x00003434 /* NILFS_SUPER_MAGIC */,
 		0x5346544E /* NTFS_SB_MAGIC */,
+		0x7366746E /* NTFS3_SUPER_MAGIC */,
 		0x5346414f /* OPENAFS_SUPER_MAGIC */,
 		0x794C7630 /* OVERLAYFS_SUPER_MAGIC */,
 		0x52654973 /* REISERFS_SUPER_MAGIC */,
@@ -1101,6 +1207,8 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	char *mnt_opts = NULL;
 	const char *real_mnt = mnt;
 	int mountpoint_fd = -1;
+	char *do_mount_opts = NULL;
+	char *x_opts = NULL;
 
 	fd = open_fuse_device(&dev);
 	if (fd == -1)
@@ -1117,11 +1225,16 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 		}
 	}
 
+	// Extract any options starting with "x-"
+	res= extract_x_options(opts, &do_mount_opts, &x_opts);
+	if (res)
+		goto fail_close_fd;
+
 	res = check_perm(&real_mnt, &stbuf, &mountpoint_fd);
 	restore_privs();
 	if (res != -1)
 		res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT,
-			       fd, opts, dev, &source, &mnt_opts);
+			       fd, do_mount_opts, dev, &source, &mnt_opts);
 
 	if (mountpoint_fd != -1)
 		close(mountpoint_fd);
@@ -1136,6 +1249,28 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	}
 
 	if (geteuid() == 0) {
+		if (x_opts && strlen(x_opts) > 0) {
+			/*
+			 * Add back the options starting with "x-" to opts from
+			 * do_mount. +2 for ',' and '\0'
+			 */
+			size_t mnt_opts_len = strlen(mnt_opts);
+			size_t x_mnt_opts_len =  mnt_opts_len+
+						 strlen(x_opts) + 2;
+			char *x_mnt_opts = malloc(x_mnt_opts_len);
+
+			if (mnt_opts_len) {
+				strcpy(x_mnt_opts, mnt_opts);
+				strncat(x_mnt_opts, ",", 2);
+			}
+
+			strncat(x_mnt_opts, x_opts,
+				x_mnt_opts_len - mnt_opts_len - 2);
+
+			free(mnt_opts);
+			mnt_opts = x_mnt_opts;
+		}
+
 		res = add_mount(source, mnt, *type, mnt_opts);
 		if (res == -1) {
 			/* Can't clean up mount in a non-racy way */
@@ -1147,6 +1282,8 @@ out_free:
 	free(source);
 	free(mnt_opts);
 	free(dev);
+	free(x_opts);
+	free(do_mount_opts);
 
 	return fd;
 
@@ -1192,6 +1329,46 @@ static int send_fd(int sock_fd, int fd)
 	return 0;
 }
 
+/* Helper for should_auto_unmount
+ *
+ * fusermount typically has the s-bit set - initial open of `mnt` was as root
+ * and got EACCESS as 'allow_other' was not specified.
+ * Try opening `mnt` again with uid and guid of the calling process.
+ */
+static int recheck_ENOTCONN_as_owner(const char *mnt)
+{
+	int pid = fork();
+	if(pid == -1) {
+		perror("fuse: recheck_ENOTCONN_as_owner can't fork");
+		_exit(EXIT_FAILURE);
+	} else if(pid == 0) {
+		uid_t uid = getuid();
+		gid_t gid = getgid();
+		if(setresgid(gid, gid, gid) == -1) {
+			perror("fuse: can't set resgid");
+			_exit(EXIT_FAILURE);
+		}
+		if(setresuid(uid, uid, uid) == -1) {
+			perror("fuse: can't set resuid");
+			_exit(EXIT_FAILURE);
+		}
+
+		int fd = open(mnt, O_RDONLY);
+		if(fd == -1 && errno == ENOTCONN)
+			_exit(EXIT_SUCCESS);
+		else
+			_exit(EXIT_FAILURE);
+	} else {
+		int status;
+		int res = waitpid(pid, &status, 0);
+		if (res == -1) {
+			perror("fuse: waiting for child failed");
+			_exit(EXIT_FAILURE);
+		}
+		return WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS;
+	}
+}
+
 /* The parent fuse process has died: decide whether to auto_unmount.
  *
  * In the normal case (umount or fusermount -u), the filesystem
@@ -1227,10 +1404,21 @@ static int should_auto_unmount(const char *mnt, const char *type)
 		goto out;
 
 	fd = open(mnt, O_RDONLY);
+
 	if (fd != -1) {
 		close(fd);
 	} else {
-		result = errno == ENOTCONN;
+		switch(errno) {
+		case ENOTCONN:
+			result = 1;
+			break;
+		case EACCES:
+			result = recheck_ENOTCONN_as_owner(mnt);
+			break;
+		default:
+			result = 0;
+			break;
+		}
 	}
 out:
 	free(copy);
@@ -1268,10 +1456,11 @@ int main(int argc, char *argv[])
 	static int unmount = 0;
 	static int lazy = 0;
 	static int quiet = 0;
-	char *commfd;
+	char *commfd = NULL;
 	int cfd;
 	const char *opts = "";
 	const char *type = NULL;
+	int setup_auto_unmount_only = 0;
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
@@ -1279,6 +1468,11 @@ int main(int argc, char *argv[])
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'V'},
+		{"options", required_argument, NULL, 'o'},
+		// Note: auto-unmount and comm-fd don't have short versions.
+		// They'ne meant for internal use by mount.c
+		{"auto-unmount", no_argument, NULL, 'U'},
+		{"comm-fd", required_argument, NULL, 'c'},
 		{0, 0, 0, 0}};
 
 	progname = strdup(argc > 0 ? argv[0] : "fusermount");
@@ -1305,7 +1499,14 @@ int main(int argc, char *argv[])
 		case 'u':
 			unmount = 1;
 			break;
-
+		case 'U':
+			unmount = 1;
+			auto_unmount = 1;
+			setup_auto_unmount_only = 1;
+			break;
+		case 'c':
+			commfd = optarg;
+			break;
 		case 'z':
 			lazy = 1;
 			break;
@@ -1349,31 +1550,50 @@ int main(int argc, char *argv[])
 		exit(1);
 
 	umask(033);
-	if (unmount)
+	if (!setup_auto_unmount_only && unmount)
 		goto do_unmount;
 
-	commfd = getenv(FUSE_COMMFD_ENV);
+	if(commfd == NULL)
+		commfd = getenv(FUSE_COMMFD_ENV);
 	if (commfd == NULL) {
 		fprintf(stderr, "%s: old style mounting not supported\n",
 			progname);
 		goto err_out;
 	}
 
+	cfd = atoi(commfd);
+	{
+		struct stat statbuf;
+		fstat(cfd, &statbuf);
+		if(!S_ISSOCK(statbuf.st_mode)) {
+			fprintf(stderr,
+				"%s: file descriptor %i is not a socket, can't send fuse fd\n",
+				progname, cfd);
+			goto err_out;
+		}
+	}
+
+	if (setup_auto_unmount_only)
+		goto wait_for_auto_unmount;
+
 	fd = mount_fuse(mnt, opts, &type);
 	if (fd == -1)
 		goto err_out;
 
-	cfd = atoi(commfd);
 	res = send_fd(cfd, fd);
-	if (res == -1)
+	if (res != 0) {
+		umount2(mnt, MNT_DETACH); /* lazy umount */
 		goto err_out;
+	}
 	close(fd);
 
 	if (!auto_unmount) {
 		free(mnt);
+		free((void*) type);
 		return 0;
 	}
 
+wait_for_auto_unmount:
 	/* Become a daemon and wait for the parent to exit or die.
 	   ie For the control socket to get closed.
 	   btw We don't want to use daemon() function here because
@@ -1422,10 +1642,12 @@ do_unmount:
 		goto err_out;
 
 success_out:
+	free((void*) type);
 	free(mnt);
 	return 0;
 
 err_out:
+	free((void*) type);
 	free(mnt);
 	exit(1);
 }

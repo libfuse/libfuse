@@ -139,11 +139,12 @@ struct fuse_custom_io {
 };
 
 /**
- * Flags for fuse_lowlevel_notify_expire_entry()
+ * Flags for fuse_lowlevel_notify_entry()
  * 0 = invalidate entry
  * FUSE_LL_EXPIRE_ONLY = expire entry
 */
-enum fuse_expire_flags {
+enum fuse_notify_entry_flags {
+	FUSE_LL_INVALIDATE = 0,
 	FUSE_LL_EXPIRE_ONLY	= (1 << 0),
 };
 
@@ -312,6 +313,12 @@ struct fuse_lowlevel_ops {
 	 * Unless FUSE_CAP_HANDLE_KILLPRIV is disabled, this method is
 	 * expected to reset the setuid and setgid bits if the file
 	 * size or owner is being changed.
+	 *
+	 * This method will not be called to update st_atime or st_ctime implicitly
+	 * (eg. after a read() request), and only be called to implicitly update st_mtime
+	 * if writeback caching is active. It is the filesystem's responsibility to update
+	 * these timestamps when needed, and (if desired) to implement mount options like
+	 * `noatime` or `relatime`.
 	 *
 	 * If the setattr was invoked from the ftruncate() system call
 	 * under Linux kernel versions 2.6.15 or later, the fi->fh will
@@ -1059,21 +1066,24 @@ struct fuse_lowlevel_ops {
 	/**
 	 * Poll for IO readiness
 	 *
-	 * Note: If ph is non-NULL, the client should notify
-	 * when IO readiness events occur by calling
+	 * The client should immediately respond with fuse_reply_poll(),
+	 * setting revents appropriately according to which events are ready.
+	 *
+	 * Additionally, if ph is non-NULL, the client must retain it and
+	 * notify when all future IO readiness events occur by calling
 	 * fuse_lowlevel_notify_poll() with the specified ph.
 	 *
-	 * Regardless of the number of times poll with a non-NULL ph
-	 * is received, single notification is enough to clear all.
-	 * Notifying more times incurs overhead but doesn't harm
-	 * correctness.
+	 * Regardless of the number of times poll with a non-NULL ph is
+	 * received, a single notify_poll is enough to service all. (Notifying
+	 * more times incurs overhead but doesn't harm correctness.) Any
+	 * additional received handles can be immediately destroyed.
 	 *
 	 * The callee is responsible for destroying ph with
 	 * fuse_pollhandle_destroy() when no longer in use.
 	 *
 	 * If this request is answered with an error code of ENOSYS, this is
 	 * treated as success (with a kernel-defined default poll-mask) and
-	 * future calls to pull() will succeed the same way without being send
+	 * future calls to poll() will succeed the same way without being send
 	 * to the filesystem process.
 	 *
 	 * Valid replies:
@@ -1676,11 +1686,10 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 				     off_t off, off_t len);
 
 /**
- * Notify to invalidate parent attributes and the dentry matching
- * parent/name
+ * Notify to invalidate parent attributes and the dentry matching parent/name
  *
  * To avoid a deadlock this function must not be called in the
- * execution path of a related filesytem operation or within any code
+ * execution path of a related filesystem operation or within any code
  * that could hold a lock that could be needed to execute such an
  * operation. As of kernel 4.18, a "related operation" is a lookup(),
  * symlink(), mknod(), mkdir(), unlink(), rename(), link() or create()
@@ -1704,14 +1713,13 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 				     const char *name, size_t namelen);
 
 /**
- * Notify to expire or invalidate parent attributes and the dentry 
- * matching parent/name
+ * Notify to expire parent attributes and the dentry matching parent/name
  * 
- * Underlying function for fuse_lowlevel_notify_inval_entry().
+ * Same restrictions apply as for fuse_lowlevel_notify_inval_entry()
  * 
- * In addition to invalidating an entry, it also allows to expire an entry.
- * In that case, the entry is not forcefully removed from kernel cache 
- * but instead the next access to it forces a lookup from the filesystem.
+ * Compared to invalidating an entry, expiring the entry results not in a
+ * forceful removal of that entry from kernel cache but instead the next access
+ * to it forces a lookup from the filesystem.
  * 
  * This makes a difference for overmounted dentries, where plain invalidation
  * would detach all submounts before dropping the dentry from the cache. 
@@ -1722,17 +1730,18 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
  * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
+ * 
+ * Added in FUSE protocol version 7.38. If the kernel does not support
+ * this (or a newer) version, the function will return -ENOSYS and do nothing.
  *
  * @param se the session object
  * @param parent inode number
  * @param name file name
  * @param namelen strlen() of file name
- * @param flags flags to control if the entry should be expired or invalidated
- * @return zero for success, -errno for failure
+ * @return zero for success, -errno for failure, -enosys if no kernel support
 */
 int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent,
-                                      const char *name, size_t namelen,
-                                      enum fuse_expire_flags flags);
+                                      const char *name, size_t namelen);
 
 /**
  * This function behaves like fuse_lowlevel_notify_inval_entry() with
@@ -1744,7 +1753,7 @@ int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent
  * that the dentry has been deleted.
  *
  * To avoid a deadlock this function must not be called while
- * executing a related filesytem operation or while holding a lock
+ * executing a related filesystem operation or while holding a lock
  * that could be needed to execute such an operation (see the
  * description of fuse_lowlevel_notify_inval_entry() for more
  * details).

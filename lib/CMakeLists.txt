@@ -5,21 +5,31 @@
 cmake_minimum_required (VERSION 3.12.0)
 set (CMAKE_VERBOSE_MAKEFILE FALSE)
 
-# We do this slightly out of order compared to meson.build (because CMake is more logical ?)
-# In meson it seems you collect all your variables first, then construct the target from them
-add_library(fuse3 SHARED fuse.c fuse_i.h
-                         fuse_loop.c fuse_loop_mt.c
-                         fuse_lowlevel.c fuse_misc.h fuse_opt.c
-                         fuse_signals.c buffer.c mount_util.c
-                         cuse_lowlevel.c helper.c
-                         modules/subdir.c
-                         fuse_log.c compat.c)
+add_library(fuse3 SHARED)
+
+target_sources(fuse3 PUBLIC 
+	${CMAKE_CURRENT_SOURCE_DIR}/fuse.c 
+	${CMAKE_CURRENT_SOURCE_DIR}/fuse_i.h 
+	${CMAKE_CURRENT_SOURCE_DIR}/fuse_loop.c 
+	${CMAKE_CURRENT_SOURCE_DIR}/fuse_loop_mt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/fuse_lowlevel.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/fuse_misc.h 
+    ${CMAKE_CURRENT_SOURCE_DIR}/fuse_opt.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/fuse_signals.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/buffer.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/cuse_lowlevel.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/helper.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/modules/subdir.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/mount_util.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/fuse_log.c 
+    ${CMAKE_CURRENT_SOURCE_DIR}/compat.c )
 
 
-if(${CMAKE_SYSTEM_NAME} MATCHES "BSD")
-  target_sources(fuse3 PUBLIC mount_bsd.c)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+	target_sources(fuse3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mount.c)
 else()
-  target_sources(fuse3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mount.c)
+	target_sources(fuse3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mount_bsd.c)
+  
 endif()
 
 if(HAVE_ICONV)

@@ -29,7 +29,7 @@
 #define FUSE_MAJOR_VERSION 3
 
 /** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 14
+#define FUSE_MINOR_VERSION 16
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -48,7 +48,7 @@ extern "C" {
  * descriptors can share a single file handle.
  */
 struct fuse_file_info {
-	/** Open flags.	 Available in open() and release() */
+	/** Open flags.	 Available in open(), release() and create() */
 	int flags;
 
 	/** In case of a write operation indicates if this was caused
@@ -336,8 +336,6 @@ struct fuse_loop_config_v1 {
  * is unset, the FUSE kernel module will ensure that lookup() and
  * readdir() requests are never issued concurrently for the same
  * directory.
- *
- * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_PARALLEL_DIROPS        (1 << 18)
 
@@ -365,7 +363,7 @@ struct fuse_loop_config_v1 {
  * setuid and setgid bits when a file is written, truncated, or
  * its owner is changed.
  *
- * This feature is enabled by default when supported by the kernel.
+ * This feature is disabled by default.
  */
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
 
@@ -418,7 +416,7 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_EXPLICIT_INVAL_DATA    (1 << 25)
 
 /**
- * Indicates support that dentries can be expired or invalidated.
+ * Indicates support that dentries can be expired.
  *
  * Expiring dentries, instead of invalidating them, makes a difference for
  * overmounted dentries, where plain invalidation would detach all submounts
@@ -432,6 +430,22 @@ struct fuse_loop_config_v1 {
  * any submounts will still be detached.
 */
 #define FUSE_CAP_EXPIRE_ONLY      (1 << 26)
+
+/**
+ * Indicates that an extended 'struct fuse_setxattr' is used by the kernel
+ * side - extra_flags are passed, which are used (as of now by acl) processing.
+ * For example FUSE_SETXATTR_ACL_KILL_SGID might be set.
+ */
+#define FUSE_CAP_SETXATTR_EXT     (1 << 27)
+
+/**
+ * Files opened with FUSE_DIRECT_IO do not support MAP_SHARED mmap. This restriction
+ * is relaxed through FUSE_CAP_DIRECT_IO_RELAX (kernel flag: FUSE_DIRECT_IO_RELAX).
+ * MAP_SHARED is disabled by default for FUSE_DIRECT_IO, as this flag can be used to
+ * ensure coherency between mount points (or network clients) and with kernel page
+ * cache as enforced by mmap that cannot be guaranteed anymore.
+ */
+#define FUSE_CAP_DIRECT_IO_ALLOW_MMAP  (1 << 27)
 
 /**
  * Ioctl flags

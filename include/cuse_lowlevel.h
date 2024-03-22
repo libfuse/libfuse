@@ -58,7 +58,7 @@ struct cuse_lowlevel_ops {
 	void (*flush) (fuse_req_t req, struct fuse_file_info *fi);
 	void (*release) (fuse_req_t req, struct fuse_file_info *fi);
 	void (*fsync) (fuse_req_t req, int datasync, struct fuse_file_info *fi);
-	void (*ioctl) (fuse_req_t req, unsigned int cmd, void *arg,
+	void (*ioctl) (fuse_req_t req, int cmd, void *arg,
 		       struct fuse_file_info *fi, unsigned int flags,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
 	void (*poll) (fuse_req_t req, struct fuse_file_info *fi,

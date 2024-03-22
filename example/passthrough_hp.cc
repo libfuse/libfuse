@@ -104,7 +104,7 @@ static void forget_one(fuse_ino_t ino, uint64_t n);
 // be simplified to just ino_t since we require the source directory
 // not to contain any mountpoints. This hasn't been done yet in case
 // we need to reconsider this constraint (but relaxing this would have
-// the drawback that we can no longer re-use inode numbers, and thus
+// the drawback that we can no longer reuse inode numbers, and thus
 // readdir() would need to do a full lookup() in order to report the
 // right inode number).
 typedef std::pair<ino_t, dev_t> SrcId;
@@ -161,6 +161,8 @@ struct Fs {
     bool nocache;
     size_t num_threads;
     bool clone_fd;
+    std::string fuse_mount_options;
+    bool direct_io;
 };
 static Fs fs{};
 
@@ -205,7 +207,7 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
         // FUSE_CAP_SPLICE_READ is enabled in libfuse3 by default,
         // see do_init() in in fuse_lowlevel.c
         // Just unset both, in case FUSE_CAP_SPLICE_WRITE would also get enabled
-        // by detault.
+        // by default.
         conn->want &= ~FUSE_CAP_SPLICE_READ;
         conn->want &= ~FUSE_CAP_SPLICE_WRITE;
     } else {
@@ -214,6 +216,10 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
         if (conn->capable & FUSE_CAP_SPLICE_READ)
             conn->want |= FUSE_CAP_SPLICE_READ;
     }
+
+    /* This is a local file system - no network coherency needed */
+    if (conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
+        conn->want |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
 }
 
 
@@ -835,6 +841,14 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	return;
     }
 
+    if (fs.direct_io)
+	    fi->direct_io = 1;
+
+    /* parallel_direct_writes feature depends on direct_io features.
+       To make parallel_direct_writes valid, need set fi->direct_io
+       in current function. */
+    fi->parallel_direct_writes = 1;
+
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
@@ -891,6 +905,21 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     inode.nopen++;
     fi->keep_cache = (fs.timeout != 0);
     fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
+
+    if (fs.direct_io)
+	    fi->direct_io = 1;
+
+    /* Enable direct_io when open has flags O_DIRECT to enjoy the feature
+       parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
+       for writes to the same file). */
+    if (fi->flags & O_DIRECT)
+	    fi->direct_io = 1;
+
+    /* parallel_direct_writes feature depends on direct_io features.
+       To make parallel_direct_writes valid, need set fi->direct_io
+       in current function. */
+    fi->parallel_direct_writes = 1;
+
     fi->fh = fd;
     fuse_reply_open(req, fi);
 }
@@ -1173,20 +1202,50 @@ static cxxopts::ParseResult parse_wrapper(cxxopts::Options& parser, int& argc, c
 }
 
 
+static void string_split(std::string s, std::vector<std::string>& out, std::string delimiter) {
+    size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+    std::string token;
+
+    while ((pos_end = s.find(delimiter, pos_start)) != std::string::npos) {
+        token = s.substr(pos_start, pos_end - pos_start);
+        pos_start = pos_end + delim_len;
+        out.push_back(token);
+    }
+
+    out.push_back(s.substr(pos_start));
+}
+
+
+static std::string string_join(const std::vector<std::string>& elems, char delim)
+{
+    std::ostringstream out;
+    for (auto ii = elems.begin(); ii != elems.end(); ++ii) {
+        out << (*ii);
+        if (ii + 1 != elems.end()) {
+            out << delim;
+        }
+    }
+    return out.str();
+}
+
+
 static cxxopts::ParseResult parse_options(int argc, char **argv) {
     cxxopts::Options opt_parser(argv[0]);
+    std::vector<std::string> mount_options;
     opt_parser.add_options()
         ("debug", "Enable filesystem debug messages")
         ("debug-fuse", "Enable libfuse debug messages")
         ("foreground", "Run in foreground")
         ("help", "Print help")
-        ("nocache", "Disable all caching")
+        ("nocache", "Disable attribute all caching")
         ("nosplice", "Do not use splice(2) to transfer data")
         ("single", "Run single-threaded")
+        ("o", "Mount options (see mount.fuse(5) - only use if you know what "
+              "you are doing)", cxxopts::value(mount_options))
         ("num-threads", "Number of libfuse worker threads",
                         cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
-        ("clone-fd", "use separate fuse device fd for each thread",
-                        cxxopts::value<bool>()->implicit_value(SFS_DEFAULT_CLONE_FD));
+        ("clone-fd", "use separate fuse device fd for each thread")
+        ("direct-io", "enable fuse kernel internal direct-io");
 
 
     // FIXME: Find a better way to limit the try clause to just
@@ -1217,13 +1276,38 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
 
     fs.nosplice = options.count("nosplice") != 0;
     fs.num_threads = options["num-threads"].as<int>();
-    fs.clone_fd = options["clone-fd"].as<bool>();
+    fs.clone_fd = options.count("clone-fd");
+    fs.direct_io = options.count("direct-io");
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
         warn("WARNING: realpath() failed with");
     fs.source = std::string {resolved_path};
     free(resolved_path);
 
+    std::vector<std::string> flattened_mount_opts;
+    for (auto opt : mount_options) {
+        string_split(opt, flattened_mount_opts, ",");
+    }
+
+    bool found_fsname = false;
+    for (auto opt : flattened_mount_opts) {
+        if (opt.find("fsname=") == 0) {
+            found_fsname = true;
+            continue;
+        }
+
+        /* Filter out some obviously incorrect options. */
+        if (opt == "fd") {
+            std::cout << argv[0] << ": Unsupported mount option: " << opt << "\n";
+            print_usage(argv[0]);
+            exit(2);
+        }
+    }
+    if (!found_fsname) {
+        flattened_mount_opts.push_back("fsname=" + fs.source);
+    }
+    flattened_mount_opts.push_back("default_permissions");
+    fs.fuse_mount_options = string_join(flattened_mount_opts, ',');
     return options;
 }
 
@@ -1248,7 +1332,6 @@ int main(int argc, char *argv[]) {
 
     // Parse command line options
     auto options {parse_options(argc, argv)};
-
 
     // We need an fd for every dentry in our the filesystem that the
     // kernel knows about. This is way more than most processes need,
@@ -1276,7 +1359,7 @@ int main(int argc, char *argv[]) {
     fuse_args args = FUSE_ARGS_INIT(0, nullptr);
     if (fuse_opt_add_arg(&args, argv[0]) ||
         fuse_opt_add_arg(&args, "-o") ||
-        fuse_opt_add_arg(&args, "default_permissions,fsname=hpps") ||
+        fuse_opt_add_arg(&args, fs.fuse_mount_options.c_str()) ||
         (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory");
 
@@ -1292,16 +1375,19 @@ int main(int argc, char *argv[]) {
     // Don't apply umask, use modes exactly as specified
     umask(0);
 
-    fuse_daemonize(fs.foreground);
-
     // Mount and run main loop
     loop_config = fuse_loop_cfg_create();
 
     if (fs.num_threads != -1)
         fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
 
+    fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
+	
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
+
+    fuse_daemonize(fs.foreground);
+
     if (options.count("single"))
         ret = fuse_session_loop(se);
     else

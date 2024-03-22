@@ -25,7 +25,6 @@
 #endif
 #define FUSE_USE_VERSION 31
 
-
 #include <fuse_lowlevel.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -38,7 +37,7 @@ static void pc_init(void *userdata,
 		    struct fuse_conn_info *conn)
 {
 	(void) userdata;
-
+	
 	printf("Protocol version: %d.%d\n", conn->proto_major,
 	       conn->proto_minor);
 	printf("Capabilities:\n");
@@ -105,7 +104,7 @@ int main(int argc, char **argv)
 		perror("mkdtemp");
 		return 1;
 	}
-
+	
 	printf("FUSE library version %s\n", fuse_pkgversion());
 	fuse_lowlevel_version();
 

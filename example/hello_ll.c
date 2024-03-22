@@ -159,12 +159,69 @@ static void hello_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	reply_buf_limited(req, hello_str, strlen(hello_str), off, size);
 }
 
+static void hello_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
+							  size_t size)
+{
+	(void)size;
+	assert(ino == 1 || ino == 2);
+	(void)ino; // Marking 'ino' as unused
+	
+	if (strcmp(name, "hello_ll_getxattr_name") == 0)
+	{
+		const char *buf = "hello_ll_getxattr_value";
+		fuse_reply_buf(req, buf, strlen(buf));
+	}
+	else
+	{
+		fuse_reply_err(req, ENOTSUP);
+	}
+}
+
+static void hello_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
+							  const char *value, size_t size, int flags)
+{
+	(void)flags;
+	(void)size;
+	assert(ino == 1 || ino == 2);
+	(void)ino; // Marking 'ino' as unused
+	
+	const char* exp_val = "hello_ll_setxattr_value";
+	if (strcmp(name, "hello_ll_setxattr_name") == 0 &&
+	    strlen(exp_val) == size &&
+	    strncmp(value, exp_val, size) == 0)
+	{
+		fuse_reply_err(req, 0);
+	}
+	else
+	{
+		fuse_reply_err(req, ENOTSUP);
+	}
+}
+
+static void hello_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *name)
+{
+	assert(ino == 1 || ino == 2);
+	(void)ino; // Marking 'ino' as unused
+	
+	if (strcmp(name, "hello_ll_removexattr_name") == 0)
+	{
+		fuse_reply_err(req, 0);
+	}
+	else
+	{
+		fuse_reply_err(req, ENOTSUP);
+	}
+}
+
 static const struct fuse_lowlevel_ops hello_ll_oper = {
-	.lookup		= hello_ll_lookup,
-	.getattr	= hello_ll_getattr,
-	.readdir	= hello_ll_readdir,
-	.open		= hello_ll_open,
-	.read		= hello_ll_read,
+	.lookup = hello_ll_lookup,
+	.getattr = hello_ll_getattr,
+	.readdir = hello_ll_readdir,
+	.open = hello_ll_open,
+	.read = hello_ll_read,
+	.setxattr = hello_ll_setxattr,
+	.getxattr = hello_ll_getxattr,
+	.removexattr = hello_ll_removexattr,
 };
 
 int main(int argc, char *argv[])

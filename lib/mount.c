@@ -8,6 +8,11 @@
   See the file COPYING.LIB.
 */
 
+/* For environ */
+#ifndef _GNU_SOURCE
+    #define _GNU_SOURCE
+#endif
+
 #include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_misc.h"
@@ -22,10 +27,12 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <poll.h>
+#include <spawn.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
-#include <sys/mount.h>
+
+#include "fuse_mount_compat.h"
 
 #ifdef __NetBSD__
 #include <perfuse.h>
@@ -42,10 +49,6 @@
 
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
-
-#ifndef HAVE_FORK
-#define fork() vfork()
-#endif
 
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC 128
@@ -110,34 +113,57 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("async",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("sync",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("dirsync",			KEY_KERN_FLAG),
-	FUSE_OPT_KEY("atime",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
-	FUSE_OPT_KEY("diratime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nodiratime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("lazytime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("nolazytime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("relatime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("norelatime",		KEY_KERN_FLAG),
-	FUSE_OPT_KEY("strictatime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nostrictatime",		KEY_KERN_FLAG),
 	FUSE_OPT_END
 };
 
-static void exec_fusermount(const char *argv[])
+/*
+ * Running fusermount by calling 'posix_spawn'
+ *
+ * @param out_pid might be NULL
+ */
+static int fusermount_posix_spawn(posix_spawn_file_actions_t *action,
+				  char const * const argv[], pid_t *out_pid)
 {
-	execv(FUSERMOUNT_DIR "/" FUSERMOUNT_PROG, (char **) argv);
-	execvp(FUSERMOUNT_PROG, (char **) argv);
+	const char *full_path = FUSERMOUNT_DIR "/" FUSERMOUNT_PROG;
+	pid_t pid;
+
+	/* See man 7 environ for the global environ pointer */
+
+	/* first try the install path */
+	int status = posix_spawn(&pid, full_path,  action, NULL,
+				 (char * const *) argv, environ);
+	if (status != 0) {
+		/* if that fails, try a system install */
+		status = posix_spawnp(&pid, FUSERMOUNT_PROG, action, NULL,
+				      (char * const *) argv, environ);
+	}
+
+	if (status != 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "On calling fusermount posix_spawn failed: %s\n",
+			 strerror(status));
+		return -status;
+	}
+
+	if (out_pid)
+		*out_pid = pid;
+	else
+		waitpid(pid, NULL, 0);
+
+	return 0;
 }
 
 void fuse_mount_version(void)
 {
-	int pid = fork();
-	if (!pid) {
-		const char *argv[] = { FUSERMOUNT_PROG, "--version", NULL };
-		exec_fusermount(argv);
-		_exit(1);
-	} else if (pid != -1)
-		waitpid(pid, NULL, 0);
+	char const *const argv[] = {FUSERMOUNT_PROG, "--version", NULL};
+	int status = fusermount_posix_spawn(NULL, argv, NULL);
+
+	if(status != 0)
+		fuse_log(FUSE_LOG_ERR, "Running '%s --version' failed",
+			 FUSERMOUNT_PROG);
 }
 
 struct mount_flags {
@@ -157,15 +183,9 @@ static const struct mount_flags mount_flags[] = {
 	{"noexec",  MS_NOEXEC,	    1},
 	{"async",   MS_SYNCHRONOUS, 0},
 	{"sync",    MS_SYNCHRONOUS, 1},
-	{"atime",   MS_NOATIME,	    0},
 	{"noatime", MS_NOATIME,	    1},
-	{"diratime",	    MS_NODIRATIME,	0},
 	{"nodiratime",	    MS_NODIRATIME,	1},
-	{"lazytime",	    MS_LAZYTIME,	1},
-	{"nolazytime",	    MS_LAZYTIME,	0},
-	{"relatime",	    MS_RELATIME,	1},
 	{"norelatime",	    MS_RELATIME,	0},
-	{"strictatime",	    MS_STRICTATIME,	1},
 	{"nostrictatime",   MS_STRICTATIME,	0},
 #ifndef __NetBSD__
 	{"dirsync", MS_DIRSYNC,	    1},
@@ -221,6 +241,12 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 	case KEY_MTAB_OPT:
 		return fuse_opt_add_opt(&mo->mtab_opts, arg);
+
+	/* Third party options like 'x-gvfs-notrash' */
+	case FUSE_OPT_KEY_OPT:
+		return (strncmp("x-", arg, 2) == 0) ?
+			fuse_opt_add_opt(&mo->mtab_opts, arg) :
+			1;
 	}
 
 	/* Pass through unknown options */
@@ -255,7 +281,7 @@ static int receive_fd(int fd)
 
 	while(((rv = recvmsg(fd, &msg, 0)) == -1) && errno == EINTR);
 	if (rv == -1) {
-		perror("recvmsg");
+		fuse_log(FUSE_LOG_ERR, "recvmsg failed: %s", strerror(errno));
 		return -1;
 	}
 	if(!rv) {
@@ -275,7 +301,6 @@ static int receive_fd(int fd)
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
 	int res;
-	int pid;
 
 	if (fd != -1) {
 		struct pollfd pfd;
@@ -307,26 +332,22 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	if (res == 0)
 		return;
 
-	pid = fork();
-	if(pid == -1)
+	char const * const argv[] =
+		{ FUSERMOUNT_PROG, "--unmount", "--quiet", "--lazy",
+				"--", mountpoint, NULL };
+	int status = fusermount_posix_spawn(NULL, argv, NULL);
+	if(status != 0) {
+		fuse_log(FUSE_LOG_ERR, "Spawaning %s to unumount failed",
+			 FUSERMOUNT_PROG);
 		return;
-
-	if(pid == 0) {
-		const char *argv[] = { FUSERMOUNT_PROG, "-u", "-q", "-z",
-				       "--", mountpoint, NULL };
-
-		exec_fusermount(argv);
-		_exit(1);
 	}
-	waitpid(pid, NULL, 0);
 }
 
-static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
-		const char *opts, int quiet)
+static int setup_auto_unmount(const char *mountpoint, int quiet)
 {
-	int fds[2], pid;
+	int fds[2];
+	pid_t pid;
 	int res;
-	int rv;
 
 	if (!mountpoint) {
 		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
@@ -335,51 +356,113 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 
 	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
 	if(res == -1) {
-		perror("fuse: socketpair() failed");
+		fuse_log(FUSE_LOG_ERR, "Setting up auto-unmountsocketpair() failed",
+			 strerror(errno));
 		return -1;
 	}
 
-	pid = fork();
-	if(pid == -1) {
-		perror("fuse: fork() failed");
+	char arg_fd_entry[30];
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
+	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
+
+	char const *const argv[] = {
+		FUSERMOUNT_PROG,
+		"--auto-unmount",
+		"--",
+		mountpoint,
+		NULL,
+	};
+
+	// TODO: add error handling for all manipulations of action.
+	posix_spawn_file_actions_t action;
+	posix_spawn_file_actions_init(&action);
+
+	if (quiet) {
+		posix_spawn_file_actions_addclose(&action, 1);
+		posix_spawn_file_actions_addclose(&action, 2);
+	}
+	posix_spawn_file_actions_addclose(&action, fds[1]);
+
+	/*
+	 * auto-umount runs in the background - it is not waiting for the
+	 * process
+	 */
+	int status = fusermount_posix_spawn(&action, argv, &pid);
+
+	posix_spawn_file_actions_destroy(&action);
+
+	if(status != 0) {
 		close(fds[0]);
 		close(fds[1]);
+		fuse_log(FUSE_LOG_ERR, "fuse: Setting up auto-unmount failed");
+		return -1;
+	}
+	// passed to child now, so can close here.
+	close(fds[0]);
+
+	// Now fusermount3 will only exit when fds[1] closes automatically when our
+	// process exits.
+	return 0;
+	// Note: fds[1] is leakend and doesn't get FD_CLOEXEC
+}
+
+static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
+		const char *opts, int quiet)
+{
+	int fds[2];
+	pid_t pid;
+	int res;
+
+	if (!mountpoint) {
+		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
 		return -1;
 	}
 
-	if(pid == 0) {
-		char env[10];
-		const char *argv[32];
-		int a = 0;
-
-		if (quiet) {
-			int fd = open("/dev/null", O_RDONLY);
-			if (fd != -1) {
-				dup2(fd, 1);
-				dup2(fd, 2);
-			}
-		}
-
-		argv[a++] = FUSERMOUNT_PROG;
-		if (opts) {
-			argv[a++] = "-o";
-			argv[a++] = opts;
-		}
-		argv[a++] = "--";
-		argv[a++] = mountpoint;
-		argv[a++] = NULL;
-
-		close(fds[1]);
-		fcntl(fds[0], F_SETFD, 0);
-		snprintf(env, sizeof(env), "%i", fds[0]);
-		setenv(FUSE_COMMFD_ENV, env, 1);
-		exec_fusermount(argv);
-		perror("fuse: failed to exec fusermount3");
-		_exit(1);
+	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
+	if(res == -1) {
+		fuse_log(FUSE_LOG_ERR, "Running %s: socketpair() failed: %s\n",
+			 FUSERMOUNT_PROG, strerror(errno));
+		return -1;
 	}
 
+	char arg_fd_entry[30];
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
+	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
+
+	char const *const argv[] = {
+		FUSERMOUNT_PROG,
+		"-o", opts ? opts : "",
+		"--",
+		mountpoint,
+		NULL,
+	};
+
+
+	posix_spawn_file_actions_t action;
+	posix_spawn_file_actions_init(&action);
+
+	if (quiet) {
+		posix_spawn_file_actions_addclose(&action, 1);
+		posix_spawn_file_actions_addclose(&action, 2);
+	}
+	posix_spawn_file_actions_addclose(&action, fds[1]);
+
+	int status = fusermount_posix_spawn(&action, argv, &pid);
+
+	posix_spawn_file_actions_destroy(&action);
+
+	if(status != 0) {
+		close(fds[0]);
+		close(fds[1]);
+		fuse_log(FUSE_LOG_ERR, "posix_spawnp() for %s failed",
+			 FUSERMOUNT_PROG, strerror(errno));
+		return -1;
+	}
+
+	// passed to child now, so can close here.
 	close(fds[0]);
-	rv = receive_fd(fds[1]);
+
+	int fd = receive_fd(fds[1]);
 
 	if (!mo->auto_unmount) {
 		/* with auto_unmount option fusermount3 will not exit until
@@ -388,10 +471,10 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 		waitpid(pid, NULL, 0); /* bury zombie */
 	}
 
-	if (rv >= 0)
-		fcntl(rv, F_SETFD, FD_CLOEXEC);
+	if (fd >= 0)
+		fcntl(fd, F_SETFD, FD_CLOEXEC);
 
-	return rv;
+	return fd;
 }
 
 #ifndef O_CLOEXEC
@@ -419,12 +502,6 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to access mountpoint %s: %s\n",
 			mnt, strerror(errno));
 		return -1;
-	}
-
-	if (mo->auto_unmount) {
-		/* Tell the caller to fallback to fusermount3 because
-		   auto-unmount does not work otherwise. */
-		return -2;
 	}
 
 	fd = open(devname, O_RDWR | O_CLOEXEC);
@@ -589,7 +666,13 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 		goto out;
 
 	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
-	if (res == -2) {
+	if (res >= 0 && mo->auto_unmount) {
+		if(0 > setup_auto_unmount(mountpoint, 0)) {
+			// Something went wrong, let's umount like in fuse_mount_sys.
+			umount2(mountpoint, MNT_DETACH); /* lazy umount */
+			res = -1;
+		}
+	} else if (res == -2) {
 		if (mo->fusermount_opts &&
 		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)
 			goto out;

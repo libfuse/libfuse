@@ -162,7 +162,7 @@ int main(int argc, char *argv[]) {
     pthread_t fs_thread;
 
     assert(fuse_parse_cmdline(&args, &fuse_opts) == 0);
-#ifndef __FreeBSD__
+#ifndef __FreeBSD__    
     assert(fuse_opt_add_arg(&args, "-oauto_unmount") == 0);
 #endif
     se = fuse_session_new(&args, &tfs_oper,
@@ -189,11 +189,6 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-#ifdef ORIG_FUSE_USE_VERSION
-    #undef FUSE_USE_VERSION
-    #define FUSE_USE_VERSION ORIG_FUSE_USE_VERSION
-    #undef ORIG_FUSE_USE_VERSION
-#endif
 
 /**
  * Local Variables:

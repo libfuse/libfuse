@@ -32,20 +32,42 @@ API, the callbacks must work with inodes and responses must be sent
 explicitly using a separate set of API functions.
 
 
+Development Status
+------------------
+
+libfuse is shipped by all major Linux distributions and has been in
+production use across a wide range of systems for many years. However,
+at present libfuse does not have any active, regular contributors. The
+current maintainer continues to apply pull requests and makes regular
+releases, but unfortunately has no capacity to do any development
+beyond addressing high-impact issues. When reporting bugs, please
+understand that unless you are including a pull request or are
+reporting a critical issue, you will probably not get a response. If
+you are using libfuse, please consider contributing to the project.
+
+
 Supported Platforms
 -------------------
 
 * Linux (fully)
 * BSD (mostly/best-effort)
 * For OS-X, please use [OSXFUSE](https://osxfuse.github.io/)
-
+  
 
 Installation
 ------------
 
-You can download libfuse:
+You can download libfuse from https://github.com/libfuse/libfuse/releases. To build and
+install, you must use [Meson](http://mesonbuild.com/) and
+[Ninja](https://ninja-build.org).  After downloading the tarball and `.sig` file, verify
+it using [signify](https://www.openbsd.org/papers/bsdcan-signify.html):
 
-git clone https://github.com/Smit-tay/libfuse-cmake
+    signify -V -m fuse-X.Y.Z.tar.gz -p fuse-X.Y.pub
+    
+The `fuse-X.Y.pub` file contains the signing key and needs to be obtained from a
+trustworthy source. Each libfuse release contains the signing key for the release after it
+in the `signify` directory, so you only need to manually acquire this file once when you
+install libfuse for the first time.
 
 To build and install, you are free to use meson or CMake
 
@@ -85,15 +107,13 @@ pytest soon.  IMPORTANT - Tests current perform best when run under python3.6.
 Issues have been reported attempting to use python3.7 with pytest.
 
 Running the tests requires the [py.test](http://www.pytest.org/)
-Python module. Instead of running the tests as root, the majority of tests can
-also be run as a regular user if *util/fusermount3* is made setuid root first:
+Python module. Instead of running the tests as root, the majority of
+tests can also be run as a regular user if *util/fusermount3* is made
+setuid root first:
 
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
-    $ python3.6 -m pytest test/
-
-NOTE: Some tests are designed to "drop privileges" and so will be skipped if the
-user is not root.
+    $ python3 -m pytest test/
 
 Security implications
 ---------------------
@@ -104,7 +124,7 @@ allow normal users to mount their own filesystem implementations.
 To limit the harm that malicious users can do this way, *fusermount3*
 enforces the following limitations:
 
-  - The user can only mount on a mountpoint for which he has write
+  - The user can only mount on a mountpoint for which they have write
     permission
 
   - The mountpoint must not be a sticky directory which isn't owned by
@@ -141,7 +161,7 @@ attributes.
 Building your own filesystem
 ------------------------------
 
-FUSE comes with several example file systems in the `examples`
+FUSE comes with several example file systems in the `example`
 directory. For example, the *passthrough* examples mirror the contents
 of the root directory under the mountpoint. Start from there and adapt
 the code!
@@ -156,11 +176,11 @@ directory and at http://libfuse.github.io/doxygen.
 Getting Help
 ------------
 
-If you need help related to libfuse itself, please ask on the
-<fuse-devel@lists.sourceforge.net> mailing list (subscribe at
+If you need help, please ask on the <fuse-devel@lists.sourceforge.net>
+mailing list (subscribe at
 https://lists.sourceforge.net/lists/listinfo/fuse-devel).
 
-Please report any libfuse bugs on the GitHub issue tracker at
+Please report any bugs on the GitHub issue tracker at
 https://github.com/libfuse/libfuse/issues.
 
 Please report CMake related libfuse bugs here:

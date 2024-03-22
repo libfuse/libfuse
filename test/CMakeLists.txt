@@ -27,6 +27,12 @@ target_include_directories(test_syscalls PUBLIC ${INCLUDE_DIRS})
 add_executable(readdir_inode)
 target_sources(readdir_inode PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/readdir_inode.c)
 target_include_directories(readdir_inode PUBLIC ${INCLUDE_DIRS})
+target_link_libraries(readdir_inode fuse3 ${CMAKE_THREAD_LIBS_INIT})
+
+add_executable(release_unlink_race)
+target_sources(release_unlink_race PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/release_unlink_race.c)
+target_include_directories(release_unlink_race PUBLIC ${INCLUDE_DIRS})
+target_link_libraries(release_unlink_race fuse3 ${CMAKE_THREAD_LIBS_INIT})
 
 set(TEST_SCRIPTS conftest.py pytest.ini test_examples.py util.py test_ctests.py)
 

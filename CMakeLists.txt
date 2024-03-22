@@ -6,7 +6,7 @@ cmake_minimum_required (VERSION 3.12.0)
 set (CMAKE_VERBOSE_MAKEFILE FALSE)
 
 project (libfuse3
-         VERSION 3.10.3
+         VERSION 3.16.2
          DESCRIPTION "The CMake implementation of the Linux FUSE (Filesystem in Userspace) interface"
          HOMEPAGE_URL https://github.com/Smit-tay/libfuse-cmake
          LANGUAGES C CXX)
@@ -60,25 +60,38 @@ include(CheckStructHasMember)
 check_include_file("stdio.h"        HAVE_STDIO_H)
 check_include_file("stdlib.h"       HAVE_STDLIB_H)
 check_include_file("stddef.h"       HAVE_STDDEF_H)
-check_include_file("unistd.h"       HAVE_MEMORY_H)
+check_include_file("unistd.h"       HAVE_UNISTD_H)
 check_include_file("sys/types.h"    HAVE_SYS_TYPES_H)
 check_include_file("sys/stat.h"     HAVE_SYS_STAT_H)
 check_include_file("fcntl.h"        HAVE_FCNTL_H)
 
-check_function_exists("fork"            HAVE_FORK)
-check_function_exists("fstatat"         HAVE_FSTATAT)
-check_function_exists("openat"          HAVE_OPENAT)
-check_function_exists("readlinkat"      HAVE_READLINKAT)
-check_function_exists("pipe2"           HAVE_PIPE2)
-check_function_exists("splice"          HAVE_SPLICE)
-check_function_exists("vmsplice"        HAVE_VMSPLICE)
-check_function_exists("posix_fallocate" HAVE_POSIX_FALLOCATE)
-check_function_exists("fdatasync"       HAVE_FDATASYNC)
-check_function_exists("utimensat"       HAVE_UTIMENSAT)
-check_function_exists("copy_file_range" HAVE_COPY_FILE_RANGE)
-check_function_exists("fallocate"       HAVE_FALLOCATE)
+# meson.build does this:
+#    args_default = [ '-D_GNU_SOURCE' ]
+# then passes that to every "has_member()" call
+# The equivalent in CMake is to set this variable
+# before calling check_function_exists()
+set(CMAKE_REQUIRED_DEFINITIONS "-D_GNU_SOURCE")
 
-# For some reason the meson build checks these seperatly
+set(include_default "stdio.h;stdlib.h;stddef.h;unistd.h;sys/types.h;sys/stat.h;fcntl.h")
+
+# Fork is actually implemented in the kernel.
+# It is declared as an external in "unistd.h"
+# Possibly because of that, testing with check_symbol_exists
+# fails, so we use check_function_exists instead
+check_function_exists("fork"                                HAVE_FORK)
+
+check_symbol_exists("fstatat"         ${include_default}    HAVE_FSTATAT)
+check_symbol_exists("openat"          ${include_default}    HAVE_OPENAT)
+check_symbol_exists("readlinkat"      ${include_default}    HAVE_READLINKAT)
+check_symbol_exists("pipe2"           ${include_default}    HAVE_PIPE2)
+check_symbol_exists("splice"          ${include_default}    HAVE_SPLICE)
+check_symbol_exists("vmsplice"        ${include_default}    HAVE_VMSPLICE)
+check_symbol_exists("posix_fallocate" ${include_default}    HAVE_POSIX_FALLOCATE)
+check_symbol_exists("fdatasync"       ${include_default}    HAVE_FDATASYNC)
+check_symbol_exists("utimensat"       ${include_default}    HAVE_UTIMENSAT)
+check_symbol_exists("copy_file_range" ${include_default}    HAVE_COPY_FILE_RANGE)
+check_symbol_exists("fallocate"       ${include_default}    HAVE_FALLOCATE)
+# For some reason the meson build checks these seperately
 check_symbol_exists("setxattr" "sys/xattr.h" HAVE_SETXATTR)
 check_symbol_exists("iconv" "iconv.h" HAVE_ICONV)
 
@@ -123,6 +136,55 @@ else()
     message(WARNING "Compiler does not support symver attribute")
 endif()
 
+# Older versions of musl libc don't unescape entries in /etc/mtab
+# Try to detect this behaviour, and work around, if necessary.
+set(COMPILE_ME [=[
+    #include <mntent.h>
+    #include <stdio.h>
+    #include <string.h>
+    #include <stdlib.h>
+
+    #define dir_space_tab "dir/040space/011tab"
+
+    int main(void)
+    {
+        const char *fake_mtab = "name " dir_space_tab " type opts 0 0\\n";
+        FILE *f = fmemopen((void *)fake_mtab, strlen(fake_mtab) + 1, "r");
+        struct mntent *entp = getmntent(f);
+        fclose(f);
+        if(NULL == entp)
+            exit(EXIT_FAILURE);
+        if (0 == strcmp(entp->mnt_dir, dir_space_tab))
+            return 99; // printf("needs escaping\n");
+        else
+            return 100; //printf("no need to escape\n");
+    }
+]=])
+
+try_run(
+	RUN_RESULT
+	COMPILE_RESULT
+	SOURCE_FROM_VAR "compile_me.cpp" COMPILE_ME
+	LINK_OPTIONS -lmount
+	WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+	COMPILE_OUTPUT_VARIABLE COMPILE_OUT_TXT
+	RUN_OUTPUT_VARIABLE RUN_OUT_TXT
+)
+
+if(NOT COMPILE_RESULT)
+	message(WARNING  "Compiling test for getmntent failed with output: ${COMPILE_OUT_TXT}")
+else()
+	# Check the result of try_run using regex
+	if(RUN_RESULT EQUAL 100)
+		message(STATUS "getmntent does NOT require escaping")
+	elseif(RUN_RESULT EQUAL 99)
+		set(GETMNTENT_NEEDS_UNESCAPING TRUE CACHE BOOL "getmntent requires escaping")
+		message(WARNING "getmntent REQUIRES escaping")
+	else()
+		message(WARNING "Unknown error returned from testing for getmntent. Value: ${RUN_RESULT}.\nOutput ${RUN_OUT_TXT}")
+	endif()
+endif()
+
 set(INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/lib"
         "${PROJECT_BINARY_DIR}/.")
@@ -139,6 +201,8 @@ add_compile_options(${CMAKE_THREAD_LIBS_INIT})
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lib)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+
+option(OPTION_BUILD_UTILS "Also build utils and docs" OFF)
 
 option(OPTION_BUILD_UTILS "Also build utils and docs" OFF)
 if(OPTION_BUILD_UTILS)

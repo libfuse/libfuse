@@ -1,0 +1,11 @@
+[codespell]
+skip = .git,*.pdf,*.svg,AUTHORS
+
+# The following strings shouldn't actually be accepted, but they're wrongly
+# identified as words and there is currently no way to exclude them on
+# a by-line basis (https://github.com/codespell-project/codespell/pull/2400).
+# Therefore, pretend that they are correctly spelled words:
+# - alse: used in regex
+# - siz:  wanted short
+# - fiter:  variable
+ignore-words-list = alse,siz,fiter
