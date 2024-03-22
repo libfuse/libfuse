@@ -88,9 +88,11 @@ tests, and other recommended utilites, you will probably want to do this:
                 -DCMAKE_BUILD_TYPE=Debug ..
 
 To build, test and install, you then use make (or other supported build systems):
+
 IMPORTANT !!! - Almost all tests will fail unless you either
   - run as root
   - change permissions on  util/fusermount3 (see blow)
+
 
     $ make
     $ python3 -m pytest test/
