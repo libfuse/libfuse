@@ -55,10 +55,13 @@
 #include <errno.h>
 #include <ftw.h>
 #include <fuse_lowlevel.h>
+#include <fuse_kernel.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>
 #include <sys/resource.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/xattr.h>
 #include <time.h>
 #include <unistd.h>
@@ -100,7 +103,7 @@ static void forget_one(fuse_ino_t ino, uint64_t n);
 // be simplified to just ino_t since we require the source directory
 // not to contain any mountpoints. This hasn't been done yet in case
 // we need to reconsider this constraint (but relaxing this would have
-// the drawback that we can no longer reuse inode numbers, and thus
+// the drawback that we can no longer re-use inode numbers, and thus
 // readdir() would need to do a full lookup() in order to report the
 // right inode number).
 typedef std::pair<ino_t, dev_t> SrcId;
@@ -212,10 +215,6 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
         if (conn->capable & FUSE_CAP_SPLICE_READ)
             conn->want |= FUSE_CAP_SPLICE_READ;
     }
-
-    /* This is a local file system - no network coherency needed */
-    if (conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
-        conn->want |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
 }
 
 
@@ -840,11 +839,6 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     if (fs.direct_io)
 	    fi->direct_io = 1;
 
-    /* parallel_direct_writes feature depends on direct_io features.
-       To make parallel_direct_writes valid, need set fi->direct_io
-       in current function. */
-    fi->parallel_direct_writes = 1;
-
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
@@ -904,17 +898,6 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     if (fs.direct_io)
 	    fi->direct_io = 1;
-
-    /* Enable direct_io when open has flags O_DIRECT to enjoy the feature
-       parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
-       for writes to the same file). */
-    if (fi->flags & O_DIRECT)
-	    fi->direct_io = 1;
-
-    /* parallel_direct_writes feature depends on direct_io features.
-       To make parallel_direct_writes valid, need set fi->direct_io
-       in current function. */
-    fi->parallel_direct_writes = 1;
 
     fi->fh = fd;
     fuse_reply_open(req, fi);
@@ -1257,11 +1240,11 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
                   << help.substr(help.find("\n\n") + 1, string::npos);
         exit(0);
 
-    } else if (argc != 3) {
+    } /*else if (argc != 3) {
         std::cout << argv[0] << ": invalid number of arguments\n";
         print_usage(argv[0]);
         exit(2);
-    }
+    }*/
 
     fs.debug = options.count("debug") != 0;
     fs.debug_fuse = options.count("debug-fuse") != 0;
@@ -1321,10 +1304,144 @@ static void maximize_fd_limit() {
         warn("WARNING: setrlimit() failed with");
 }
 
+static int create_socket(const char *socket_path) {
+	struct sockaddr_un addr;
+
+	if (strnlen(socket_path, sizeof(addr.sun_path)) >=
+		sizeof(addr.sun_path)) {
+		printf("Socket path may not be longer than %lu characters\n",
+			 sizeof(addr.sun_path) - 1);
+		return -1;
+	}
+
+	if (remove(socket_path) == -1 && errno != ENOENT) {
+		printf("Could not delete previous socket file entry at %s. Error: "
+			 "%s\n", socket_path, strerror(errno));
+		return -1;
+	}
+
+	memset(&addr, 0, sizeof(struct sockaddr_un));
+	strcpy(addr.sun_path, socket_path);
+
+	int sfd = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (sfd == -1) {
+		printf("Could not create socket. Error: %s\n", strerror(errno));
+		return -1;
+	}
+
+	addr.sun_family = AF_UNIX;
+	if (bind(sfd, (struct sockaddr *) &addr,
+		   sizeof(struct sockaddr_un)) == -1) {
+		printf("Could not bind socket. Error: %s\n", strerror(errno));
+		return -1;
+	}
+
+	if (listen(sfd, 1) == -1)
+		return -1;
+
+	printf("Awaiting connection on socket at %s...\n", socket_path);
+	int cfd = accept(sfd, NULL, NULL);
+	if (cfd == -1) {
+		printf("Could not accept connection. Error: %s\n",
+			 strerror(errno));
+		return -1;
+	} else {
+		printf("Accepted connection!\n");
+	}
+	return cfd;
+}
+
+
+static ssize_t stream_writev(int fd, struct iovec *iov, int count,
+                             void *userdata) {
+	(void)userdata;
+
+	ssize_t written = 0;
+	int cur = 0;
+	for (;;) {
+		written = writev(fd, iov+cur, count-cur);
+		if (written < 0)
+			return written;
+
+		while (cur < count && written >= iov[cur].iov_len)
+			written -= iov[cur++].iov_len;
+		if (cur == count)
+			break;
+
+		iov[cur].iov_base = (char *)iov[cur].iov_base + written;
+		iov[cur].iov_len -= written;
+	}
+	return written;
+}
+
+static ssize_t readall(int fd, void *buf, size_t len) {
+	size_t count = 0;
+
+	while (count < len) {
+		int i = read(fd, (char *)buf + count, len - count);
+		printf("read %d\n", i);
+		if (!i)
+			break;
+
+		if (i < 0)
+			return i;
+
+		count += i;
+	}
+	return count;
+}
+
+static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
+    (void)userdata;
+
+	int res = readall(fd, buf, sizeof(struct fuse_in_header));
+	printf("Res0: %d\n", res);
+	if (res == -1)
+    	return res;
+
+
+    uint32_t packet_len = ((struct fuse_in_header *)buf)->len;
+    if (packet_len > buf_len)
+    	return -1;
+
+    int prev_res = res;
+
+    res = readall(fd, (char *)buf + sizeof(struct fuse_in_header),
+                  packet_len - sizeof(struct fuse_in_header));
+	printf("Res1: %d\n", res);
+
+    return  (res == -1) ? res : (res + prev_res);
+}
+
+static ssize_t stream_splice_send(int fdin, off_t *offin, int fdout,
+					    off_t *offout, size_t len,
+                                  unsigned int flags, void *userdata) {
+	(void)userdata;
+
+	size_t count = 0;
+	while (count < len) {
+		int i = splice(fdin, offin, fdout, offout, len - count, flags);
+		if (i < 1)
+			return i;
+
+		count += i;
+	}
+	printf("Sent %ld\n", count);
+	return count;
+}
+
 
 int main(int argc, char *argv[]) {
 
     struct fuse_loop_config *loop_config = NULL;
+    const struct fuse_custom_io io = {
+		.writev = stream_writev,
+		.read = stream_read,
+		.splice_receive = NULL,
+		.splice_send = stream_splice_send,
+	};
+	int cfd = -1;
+	int ret = -1;
 
     // Parse command line options
     auto options {parse_options(argc, argv)};
@@ -1340,7 +1457,7 @@ int main(int argc, char *argv[]) {
     fs.timeout = options.count("nocache") ? 0 : 86400.0;
 
     struct stat stat;
-    auto ret = lstat(fs.source.c_str(), &stat);
+    ret = lstat(fs.source.c_str(), &stat);
     if (ret == -1)
         err(1, "ERROR: failed to stat source (\"%s\")", fs.source.c_str());
     if (!S_ISDIR(stat.st_mode))
@@ -1368,26 +1485,32 @@ int main(int argc, char *argv[]) {
     if (fuse_set_signal_handlers(se) != 0)
         goto err_out2;
 
+    // Use UDS
+    cfd = create_socket("/tmp/libfuse-passthrough-hp.sock");
+	if (cfd == -1)
+		goto err_out3;
+
+	if (fuse_session_custom_io(se, &io, cfd) != 0)
+		goto err_out3;
+
     // Don't apply umask, use modes exactly as specified
     umask(0);
 
     // Mount and run main loop
-    loop_config = fuse_loop_cfg_create();
+    /*loop_config = fuse_loop_cfg_create();
 
     if (fs.num_threads != -1)
-        fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
+        fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);*/
 
-    fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
-	
-    if (fuse_session_mount(se, argv[2]) != 0)
-        goto err_out3;
+    //if (fuse_session_mount(se, argv[2]) != 0)
+    //    goto err_out3;
 
-    fuse_daemonize(fs.foreground);
+    //fuse_daemonize(fs.foreground);
 
-    if (options.count("single"))
-        ret = fuse_session_loop(se);
-    else
-        ret = fuse_session_loop_mt(se, loop_config);
+    //if (options.count("single"))
+    ret = fuse_session_loop(se);
+    //else
+    //    ret = fuse_session_loop_mt(se, loop_config);
 
 
     fuse_session_unmount(se);
@@ -1397,7 +1520,6 @@ err_out3:
 err_out2:
     fuse_session_destroy(se);
 err_out1:
-
     fuse_loop_cfg_destroy(loop_config);
     fuse_opt_free_args(&args);
 
