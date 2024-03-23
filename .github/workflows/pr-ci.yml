@@ -7,8 +7,7 @@ on:
     branches:
       - master
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build:
@@ -24,7 +23,7 @@ jobs:
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 libstdc++-10-dev libstdc++-9-dev ninja-build python3-pip python3-setuptools valgrind
-      - uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
+      - uses: actions/checkout@v4
       - run: test/ci-install.sh
       - run: test/ci-build.sh
 
