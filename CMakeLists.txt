@@ -78,7 +78,7 @@ check_function_exists("utimensat"       HAVE_UTIMENSAT)
 check_function_exists("copy_file_range" HAVE_COPY_FILE_RANGE)
 check_function_exists("fallocate"       HAVE_FALLOCATE)
 
-# For some reason the meson build checks these seperatly
+# For some reason the meson build checks these separately
 check_symbol_exists("setxattr" "sys/xattr.h" HAVE_SETXATTR)
 check_symbol_exists("iconv" "iconv.h" HAVE_ICONV)
 
