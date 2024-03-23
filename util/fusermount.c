@@ -1464,6 +1464,9 @@ int main(int argc, char *argv[])
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
+		// Note: auto-unmount deliberately does not have a short version.
+		// It's meant for internal use by mount.c's setup_auto_unmount.
+		{"auto-unmount", no_argument, NULL, 'U'},
 		{"lazy",    no_argument, NULL, 'z'},
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},

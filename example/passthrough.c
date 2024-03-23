@@ -302,6 +302,7 @@ static int xmp_create(const char *path, mode_t mode,
 		return -errno;
 
 	fi->fh = res;
+	fi->parallel_direct_writes = 1;
 	return 0;
 }
 
@@ -322,6 +323,7 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 	}
 
 	fi->fh = res;
+	fi->parallel_direct_writes = 1;
 	return 0;
 }
 

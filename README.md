@@ -1,4 +1,4 @@
-libfuse (built with CMake)
+libfuse
 =======
 
 About
@@ -7,7 +7,7 @@ About
 This is a fork of the libfuse reference implementation which may be found here:
 [https://github.com/libfuse/libfuse](https://github.com/libfuse/libfuse)
 
-This fork is designed to build with CMake, otherwise it should be identical to
+This fork is designed to build with **CMake**, otherwise it should be identical to
 the reference platform.  The best reference for using libfuse is the reference
 implementation.  BUT - This is the place to come for information about building
 libfuse with CMake instead of meson.
@@ -72,7 +72,7 @@ install libfuse for the first time.
 To build and install, you are free to use meson or CMake
 
 We recommend to use [CMake](https://cmake.org/) the hugely superior meta-make
-system.  CMake allows a developer to use a wide variey of build systems and
+system.  CMake allows a developer to use a wide variety of build systems and
 includes native support for various command-line or GUI environments such as
 Visual Studio, Eclipse, CodeBlocks, Ninja, or plain old Unix make.
 
@@ -86,7 +86,7 @@ build directory and run CMake:
     $ cmake ..
 
 Normally, the default build options will work fine. However, to build examples,
-tests, and other recommended utilites, you will probably want to do this:
+tests, and other recommended utilities, you will probably want to do this:
 (this also explicitly uses Unix Makefiles - the cmake default)
 
    $ cmake -G "Unix Makefiles" \
@@ -97,6 +97,11 @@ tests, and other recommended utilites, you will probably want to do this:
 
 To build, test and install, you then use make (or other supported build systems):
 
+IMPORTANT !!! - Almost all tests will fail unless you either
+  - run as root
+  - change permissions on  util/fusermount3 (see blow)
+
+
     $ make
     $ python3 -m pytest test/
     $ sudo make install
@@ -106,14 +111,18 @@ to remove any dependency upon python.  Expect to see native ctest replace python
 pytest soon.  IMPORTANT - Tests current perform best when run under python3.6.
 Issues have been reported attempting to use python3.7 with pytest.
 
-Running the tests requires the [py.test](http://www.pytest.org/)
-Python module. Instead of running the tests as root, the majority of
+Running the tests requires the [py.test](http://www.pytest.org/) Python module. 
+
+Instead of running the tests as root, the majority of
 tests can also be run as a regular user if *util/fusermount3* is made
 setuid root first:
 
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
     $ python3 -m pytest test/
+
+NOTE: Some tests are designed to "drop privileges" and so will be skipped if the
+user is not root.
 
 Security implications
 ---------------------
