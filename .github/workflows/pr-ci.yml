@@ -23,8 +23,11 @@ jobs:
     steps:
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 libstdc++-10-dev libstdc++-9-dev ninja-build python3-pip python3-setuptools valgrind
+        run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 valgrind
       - uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2
-      - run: test/ci-install.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
       - run: test/ci-build.sh
 

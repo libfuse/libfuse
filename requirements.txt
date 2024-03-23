@@ -1,0 +1,8 @@
+# Packages required for building and testing libfuse only,
+# no python code is required when using libfuse.
+# Build packages: 
+meson
+ninja
+# Test packages:
+looseversion
+pytest
