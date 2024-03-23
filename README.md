@@ -64,7 +64,7 @@ git clone https://github.com/Smit-tay/libfuse-cmake
 To build and install, you are free to use meson or CMake
 
 We recommend to use [CMake](https://cmake.org/) the hugely superior meta-make
-system.  CMake allows a developer to use a wide variey of build systems and
+system.  CMake allows a developer to use a wide variety of build systems and
 includes native support for various command-line or GUI environments such as
 Visual Studio, Eclipse, CodeBlocks, Ninja, or plain old Unix make.
 
@@ -78,7 +78,7 @@ build directory and run CMake:
     $ cmake ..
 
 Normally, the default build options will work fine. However, to build examples,
-tests, and other recommended utilites, you will probably want to do this:
+tests, and other recommended utilities, you will probably want to do this:
 (this also explicitly uses Unix Makefiles - the cmake default)
 
    $ cmake -G "Unix Makefiles" \
