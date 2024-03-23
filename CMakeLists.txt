@@ -91,7 +91,7 @@ check_symbol_exists("fdatasync"       ${include_default}    HAVE_FDATASYNC)
 check_symbol_exists("utimensat"       ${include_default}    HAVE_UTIMENSAT)
 check_symbol_exists("copy_file_range" ${include_default}    HAVE_COPY_FILE_RANGE)
 check_symbol_exists("fallocate"       ${include_default}    HAVE_FALLOCATE)
-# For some reason the meson build checks these seperately
+# For some reason the meson build checks these separately
 check_symbol_exists("setxattr" "sys/xattr.h" HAVE_SETXATTR)
 check_symbol_exists("iconv" "iconv.h" HAVE_ICONV)
 
