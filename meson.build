@@ -10,7 +10,8 @@ project('libfuse3', ['c'], version: '3.16.2',
 platform = host_machine.system()
 if platform == 'darwin'
   error('libfuse does not support OS-X.\n' +
-        'Take a look at http://osxfuse.github.io/ instead')
+        'Take a look at http://osxfuse.github.io/ or the more recent\n' +
+        'https://www.fuse-t.org/ instead')
 elif platform == 'cygwin' or platform == 'windows'
   error('libfuse does not support Windows.\n' +
         'Take a look at http://www.secfs.net/winfsp/ instead')       
@@ -60,6 +61,8 @@ private_cfg.set('HAVE_SETXATTR',
         cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
 private_cfg.set('HAVE_ICONV', 
         cc.has_function('iconv', prefix: '#include <iconv.h>'))
+private_cfg.set('HAVE_BACKTRACE',
+        cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
 
 # Test if structs have specific member
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIM',

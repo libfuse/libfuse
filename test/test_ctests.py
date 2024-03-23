@@ -9,10 +9,11 @@ import subprocess
 import pytest
 import platform
 import sys
+import os
 from looseversion import LooseVersion
 from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   safe_sleep, basename, fuse_test_marker, fuse_caps,
-                  fuse_proto)
+                  fuse_proto, create_tmpdir)
 from os.path import join as pjoin
 import os.path
 
@@ -29,6 +30,9 @@ def test_write_cache(tmpdir, writeback, output_checker):
     # deadlock in valgrind, it probably assumes that until close() returns,
     # control does not come to the program.
     mnt_dir = str(tmpdir)
+    print("mnt_dir: '" + mnt_dir + "'")
+    create_tmpdir(mnt_dir)
+
     cmdline = [ pjoin(basename, 'test', 'test_write_cache'),
                 mnt_dir ]
     if writeback:
@@ -50,6 +54,7 @@ if fuse_proto >= (7,15):
 @pytest.mark.parametrize("notify", (True, False))
 def test_notify1(tmpdir, name, notify, output_checker):
     mnt_dir = str(tmpdir)
+    create_tmpdir(mnt_dir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', name),
                 '-f', '--update-interval=1', mnt_dir ]
@@ -70,6 +75,7 @@ def test_notify1(tmpdir, name, notify, output_checker):
         else:
             assert read1 == read2
     except:
+        print("Failure in notify test: '" + str(cmdline) + "'")
         cleanup(mount_process, mnt_dir)
         raise
     else:
@@ -80,6 +86,7 @@ def test_notify1(tmpdir, name, notify, output_checker):
 @pytest.mark.parametrize("notify", (True, False))
 def test_notify_file_size(tmpdir, notify, output_checker):
     mnt_dir = str(tmpdir)
+    create_tmpdir(mnt_dir)
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'invalidate_path'),
                 '-f', '--update-interval=1', mnt_dir ]

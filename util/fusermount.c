@@ -24,6 +24,7 @@
 #include <mntent.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 
 #include "fuse_mount_compat.h"
 
@@ -100,26 +101,71 @@ static struct mntent *GETMNTENT(FILE *stream)
 /*
  * Take a ',' separated option string and extract "x-" options
  */
-static void extract_x_options(const char *original, char *non_x_opts, char *x_opts)
+static int extract_x_options(const char *original, char **non_x_opts,
+			     char **x_opts)
 {
-	size_t len;
+	size_t orig_len;
 	const char *opt, *opt_end;
-	char *opt_buf;
 
-	len = strlen(original);
+	orig_len = strlen(original) + 1;
 
-	for (opt = original; opt < original + len; opt = opt_end + 1) {
+	*non_x_opts = calloc(1, orig_len);
+	*x_opts    = calloc(1, orig_len);
+
+	size_t non_x_opts_len = orig_len;
+	size_t x_opts_len = orig_len;
+
+	if (*non_x_opts == NULL || *x_opts == NULL) {
+		fprintf(stderr, "%s: Failed to allocate %zuB.\n",
+			__func__, orig_len);
+		return -ENOMEM;
+	}
+
+	for (opt = original; opt < original + orig_len; opt = opt_end + 1) {
+		char *opt_buf;
+
 		opt_end = strchr(opt, ',');
 		if (opt_end == NULL)
-			opt_end = original + len;
+			opt_end = original + orig_len;
 
-		opt_buf = strncmp(opt, "x-", 2) ? non_x_opts : x_opts;
+		size_t opt_len = opt_end - opt;
+		size_t opt_len_left = orig_len - (opt - original);
+		size_t buf_len;
+		bool is_x_opts;
 
-		if (strlen(opt_buf) > 1)
+		if (strncmp(opt, "x-", MIN(2, opt_len_left)) == 0) {
+			buf_len = x_opts_len;
+			is_x_opts = true;
+			opt_buf = *x_opts;
+		} else {
+			buf_len = non_x_opts_len;
+			is_x_opts = false;
+			opt_buf = *non_x_opts;
+		}
+
+		if (buf_len < orig_len) {
 			strncat(opt_buf, ",", 2);
+			buf_len -= 1;
+		}
+
+		/* omits ',' */
+		if ((ssize_t)(buf_len - opt_len) < 0) {
+			/* This would be a bug */
+			fprintf(stderr, "%s: no buf space left in copy, orig='%s'\n",
+				__func__, original);
+			return -EIO;
+		}
 
 		strncat(opt_buf, opt, opt_end - opt);
+		buf_len -= opt_len;
+
+		if (is_x_opts)
+			x_opts_len = buf_len;
+		else
+			non_x_opts_len = buf_len;
 	}
+
+	return 0;
 }
 
 static const char *get_user_name(void)
@@ -1159,11 +1205,8 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	char *mnt_opts = NULL;
 	const char *real_mnt = mnt;
 	int mountpoint_fd = -1;
-	size_t opts_size;
-	char *do_mount_opts;
-	char *x_opts;
-	size_t add_mount_opts_size, add_mount_opts_len;
-	char *add_mount_opts;
+	char *do_mount_opts = NULL;
+	char *x_opts = NULL;
 
 	fd = open_fuse_device(&dev);
 	if (fd == -1)
@@ -1181,10 +1224,9 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	}
 
 	// Extract any options starting with "x-"
-	opts_size = strlen(opts) + 1;
-	do_mount_opts = malloc(opts_size);
-	x_opts = malloc(opts_size);
-	extract_x_options(opts, do_mount_opts, x_opts);
+	res= extract_x_options(opts, &do_mount_opts, &x_opts);
+	if (res)
+		goto fail_close_fd;
 
 	res = check_perm(&real_mnt, &stbuf, &mountpoint_fd);
 	restore_privs();
@@ -1205,18 +1247,29 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	}
 
 	if (geteuid() == 0) {
-		// Add back the options starting with "x-" to opts from do_mount
-		add_mount_opts_size = strlen(mnt_opts) + strlen(x_opts) + 2;
-		add_mount_opts = malloc(add_mount_opts_size);
+		if (x_opts && strlen(x_opts) > 0) {
+			/*
+			 * Add back the options starting with "x-" to opts from
+			 * do_mount. +2 for ',' and '\0'
+			 */
+			size_t mnt_opts_len = strlen(mnt_opts);
+			size_t x_mnt_opts_len =  mnt_opts_len+
+						 strlen(x_opts) + 2;
+			char *x_mnt_opts = malloc(x_mnt_opts_len);
 
-		strncpy(add_mount_opts, mnt_opts, add_mount_opts_size - 1);
-		add_mount_opts_len = strlen(add_mount_opts);
-		if (add_mount_opts_len > 0)
-			strncat(add_mount_opts, ",", 2);
-		strncat(add_mount_opts, x_opts,
-			add_mount_opts_size - add_mount_opts_len - 2);
+			if (mnt_opts_len) {
+				strcpy(x_mnt_opts, mnt_opts);
+				strncat(x_mnt_opts, ",", 2);
+			}
 
-		res = add_mount(source, mnt, *type, add_mount_opts);
+			strncat(x_mnt_opts, x_opts,
+				x_mnt_opts_len - mnt_opts_len - 2);
+
+			free(mnt_opts);
+			mnt_opts = x_mnt_opts;
+		}
+
+		res = add_mount(source, mnt, *type, mnt_opts);
 		if (res == -1) {
 			/* Can't clean up mount in a non-racy way */
 			goto fail_close_fd;
@@ -1227,6 +1280,8 @@ out_free:
 	free(source);
 	free(mnt_opts);
 	free(dev);
+	free(x_opts);
+	free(do_mount_opts);
 
 	return fd;
 
@@ -1399,7 +1454,7 @@ int main(int argc, char *argv[])
 	static int unmount = 0;
 	static int lazy = 0;
 	static int quiet = 0;
-	char *commfd;
+	char *commfd = NULL;
 	int cfd;
 	const char *opts = "";
 	const char *type = NULL;
@@ -1407,14 +1462,15 @@ int main(int argc, char *argv[])
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
-		// Note: auto-unmount deliberately does not have a short version.
-		// It's meant for internal use by mount.c's setup_auto_unmount.
-		{"auto-unmount", no_argument, NULL, 'U'},
 		{"lazy",    no_argument, NULL, 'z'},
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'V'},
 		{"options", required_argument, NULL, 'o'},
+		// Note: auto-unmount and comm-fd don't have short versions.
+		// They'ne meant for internal use by mount.c
+		{"auto-unmount", no_argument, NULL, 'U'},
+		{"comm-fd", required_argument, NULL, 'c'},
 		{0, 0, 0, 0}};
 
 	progname = strdup(argc > 0 ? argv[0] : "fusermount");
@@ -1445,6 +1501,9 @@ int main(int argc, char *argv[])
 			unmount = 1;
 			auto_unmount = 1;
 			setup_auto_unmount_only = 1;
+			break;
+		case 'c':
+			commfd = optarg;
 			break;
 		case 'z':
 			lazy = 1;
@@ -1492,7 +1551,8 @@ int main(int argc, char *argv[])
 	if (!setup_auto_unmount_only && unmount)
 		goto do_unmount;
 
-	commfd = getenv(FUSE_COMMFD_ENV);
+	if(commfd == NULL)
+		commfd = getenv(FUSE_COMMFD_ENV);
 	if (commfd == NULL) {
 		fprintf(stderr, "%s: old style mounting not supported\n",
 			progname);
