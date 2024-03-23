@@ -56,7 +56,7 @@ non_sanitized_build()
 
         meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
         ninja
-        sudo ninja install
+        sudo env PATH=$PATH ninja install
 
         # libfuse will first try the install path and then system defaults
         sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
@@ -99,7 +99,7 @@ sanitized_build()
     # reconfigure to ensure it uses all additional options
     meson setup --reconfigure "${SOURCE_DIR}"
     ninja
-    sudo ninja install
+    sudo env PATH=$PATH ninja install
     sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
 
     # also needed for some of the tests
@@ -107,7 +107,7 @@ sanitized_build()
     sudo chmod 4755 util/fusermount3
 
     # Test as root and regular user
-    sudo ${TEST_CMD}
+    sudo env PATH=$PATH ${TEST_CMD}
     # Cleanup temporary files (since they are now owned by root)
     sudo rm -rf test/.pytest_cache/ test/__pycache__
 
