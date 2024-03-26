@@ -1252,11 +1252,6 @@ static cxxopts::ParseResult common_parse_options(int argc, char **argv, void (*p
         std::cout << std::endl << "options:"
                   << help.substr(help.find("\n\n") + 1, string::npos);
         exit(0);
-
-    } else if (argc != 3) {
-        std::cout << argv[0] << ": invalid number of arguments\n";
-        print_usage(argv[0]);
-        exit(2);
     }
 
     fs.debug = options.count("debug") != 0;

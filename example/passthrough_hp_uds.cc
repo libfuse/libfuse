@@ -222,21 +222,27 @@ int main(int argc, char *argv[]) {
 		auto se = init_passthrough_fs(&args);
     if (se == nullptr)
         goto err_out1;
-
     if (fuse_set_signal_handlers(se) != 0)
         goto err_out2;
 
 	    // Use UDS
     cfd = create_socket(fs.socket.c_str());
-	if (cfd == -1)
-		goto err_out3;
+		if (cfd == -1)
+			goto err_out3;
 
-	if (fuse_session_custom_io(se, &io, cfd) != 0)
-		goto err_out3;
+		if (fuse_session_custom_io(se, &io, cfd) != 0)
+			goto err_out3;
+
+	  if (fs.num_threads != -1)
+	    fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
 
     // Don't apply umask, use modes exactly as specified
     umask(0);
-    ret = fuse_session_loop(se);
+    if (options.count("single"))
+        ret = fuse_session_loop(se);
+    else
+        ret = fuse_session_loop_mt(se, loop_config);
+
 
     fuse_session_unmount(se);
 
