@@ -80,22 +80,11 @@ static void print_usage(char *prog_name) {
 }
 
 
-static cxxopts::ParseResult parse_options(int argc, char **argv) {
-    auto options = common_parse_options(argc, argv, print_usage);
-    if (argc != 3) {
-        std::cout << argv[0] << ": invalid number of arguments\n";
-        print_usage(argv[0]);
-        exit(2);
-    }
-    return options;
-}
-
-
 int main(int argc, char *argv[]) {
     struct fuse_loop_config *loop_config = NULL;
     int ret = -1;
     // Parse command line options
-    auto options {parse_options(argc, argv)};
+    auto options {parse_options(argc, argv, print_usage)};
     fs.timeout = options.count("nocache") ? 0 : 86400.0;
     // We need an fd for every dentry in our the filesystem that the
     // kernel knows about. This is way more than most processes need,

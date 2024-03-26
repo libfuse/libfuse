@@ -1221,7 +1221,8 @@ static std::string string_join(const std::vector<std::string>& elems, char delim
 }
 
 
-static cxxopts::ParseResult common_parse_options(int argc, char **argv, void (*print_usage)(char *)) {
+static cxxopts::ParseResult parse_options(int argc, char **argv, void (*print_usage)(char *)) {
+		const char* default_socket_path = "/tmp/libfuse-passthrough-hp.sock";
     cxxopts::Options opt_parser(argv[0]);
     std::vector<std::string> mount_options;
     opt_parser.add_options()
@@ -1237,8 +1238,9 @@ static cxxopts::ParseResult common_parse_options(int argc, char **argv, void (*p
         ("num-threads", "Number of libfuse worker threads",
                         cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
         ("clone-fd", "use separate fuse device fd for each thread")
-        ("direct-io", "enable fuse kernel internal direct-io");
-
+        ("direct-io", "enable fuse kernel internal direct-io")
+        ("socket", "Change UDS socket path",
+                        cxxopts::value<string>()->default_value(default_socket_path));
 
     // FIXME: Find a better way to limit the try clause to just
     // opt_parser.parse() (cf. https://github.com/jarro2783/cxxopts/issues/146)
@@ -1265,6 +1267,10 @@ static cxxopts::ParseResult common_parse_options(int argc, char **argv, void (*p
     fs.num_threads = options["num-threads"].as<int>();
     fs.clone_fd = options.count("clone-fd");
     fs.direct_io = options.count("direct-io");
+    fs.socket = options["socket"].as<string>();
+    if (fs.socket.empty()) {
+        fs.socket = std::string {default_socket_path};
+    }
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
         warn("WARNING: realpath() failed with");

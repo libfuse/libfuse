@@ -51,20 +51,7 @@
 
 static void print_usage(char *prog_name) {
     cout << "Usage: " << prog_name << " --help\n"
-         << "       " << prog_name << " [options] <source> [socket_path]\n";
-}
-
-
-static cxxopts::ParseResult parse_options(int argc, char **argv) {
-    auto options = common_parse_options(argc, argv, print_usage);
-		const char* default_socket_path = "/tmp/libfuse-passthrough-hp.sock";
-    if (argc < 3) {
-        fs.socket = std::string {default_socket_path};
-    } else {
-        fs.socket = std::string {argv[2]};
-    }
-
-    return options;
+         << "       " << prog_name << " [options] <source>\n";
 }
 
 
@@ -194,7 +181,7 @@ static ssize_t stream_splice_send(int fdin, off_t *offin, int fdout,
 
 int main(int argc, char *argv[]) {
     // Parse command line options
-    auto options {parse_options(argc, argv)};
+    auto options {parse_options(argc, argv, print_usage)};
     fs.timeout = options.count("nocache") ? 0 : 86400.0;
     // We need an fd for every dentry in our the filesystem that the
     // kernel knows about. This is way more than most processes need,
