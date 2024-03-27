@@ -170,9 +170,6 @@ static void lo_init(void *userdata,
 {
 	struct lo_data *lo = (struct lo_data*) userdata;
 
-	if(conn->capable & FUSE_CAP_EXPORT_SUPPORT)
-		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
-
 	if (lo->writeback &&
 	    conn->capable & FUSE_CAP_WRITEBACK_CACHE) {
 		if (lo->debug)

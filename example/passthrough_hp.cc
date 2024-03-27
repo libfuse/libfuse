@@ -190,9 +190,6 @@ static int get_fs_fd(fuse_ino_t ino) {
 
 static void sfs_init(void *userdata, fuse_conn_info *conn) {
     (void)userdata;
-    if (conn->capable & FUSE_CAP_EXPORT_SUPPORT)
-        conn->want |= FUSE_CAP_EXPORT_SUPPORT;
-
     if (fs.timeout && conn->capable & FUSE_CAP_WRITEBACK_CACHE)
         conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
