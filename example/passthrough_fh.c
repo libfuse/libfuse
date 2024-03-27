@@ -72,6 +72,15 @@ static void *xmp_init(struct fuse_conn_info *conn,
 	cfg->attr_timeout = 0;
 	cfg->negative_timeout = 0;
 
+	/* This is a passthrough file system - the underlying file system
+	 * handles privilege removal- no need for passthrough to do
+	 * anymore.
+	 */
+	if (conn->capable & FUSE_CAP_HANDLE_KILLPRIV)
+		conn->want |= FUSE_CAP_HANDLE_KILLPRIV;
+	if (conn->capable & FUSE_CAP_HANDLE_KILLPRIV_V2)
+		conn->want |= FUSE_CAP_HANDLE_KILLPRIV_V2;
+
 	return NULL;
 }
 
