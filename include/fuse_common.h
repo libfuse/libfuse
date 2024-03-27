@@ -182,6 +182,16 @@ struct fuse_loop_config_v1 {
 
 /**
  * Indicates that the filesystem supports lookups of "." and "..".
+ * Setting this flag can be dangerous and cause heap-buffer-overflows,
+ * if the file system server just uses the received node-id (fuse_ino_t)
+ * and casts it from uint64_t to a server object (as an inode object).
+ * If this flag is set there is no guarantee that the server side knows
+ * about that node-id - either after fresh restart or when kernel side releases
+ * its inode (kernel sends FUSE_FORGET to release userspace server references).
+ * An NFS client or open_by_handle_at call might try to bring back
+ * an inode into the kernel - with FUSE_EXPORT_SUPPORT server side
+ * has to use the 64-bit fuse_ino_t to look up the corresponding object or
+ * to return -ESTALE in lookup.
  *
  * This feature is disabled by default.
  */
