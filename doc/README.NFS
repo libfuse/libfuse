@@ -21,6 +21,13 @@ be requested on any inode, including non-directories, while the latter
 is only requested for directories.  Otherwise these special lookups
 should behave identically to ordinary lookups.
 
+Note: Setting FUSE_CAP_EXPORT_SUPPORT requires the file system
+to handle node-ids (fuse_ino_t) the file system does not know
+about - i.e. a fuse FORGET request might have been received 
+or the node-id was used in a previous instance of the file system daemon.
+The node-id might not be valid at all when an invalid handle is passed
+to open_by_handle_at(). 
+
 2) high-level interface
 
 Because the high-level interface is path based, it is not possible to
