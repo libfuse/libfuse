@@ -81,6 +81,14 @@ static void pc_init(void *userdata,
 			printf("\tFUSE_CAP_EXPLICIT_INVAL_DATA\n");
 	if(conn->capable & FUSE_CAP_EXPIRE_ONLY)
 			printf("\tFUSE_CAP_EXPIRE_ONLY\n");
+	if(conn->capable & FUSE_CAP_SETXATTR_EXT)
+			printf("\tFUSE_CAP_SETXATTR_EXT\n");
+	if(conn->capable & FUSE_CAP_HANDLE_KILLPRIV)
+			printf("\tFUSE_CAP_HANDLE_KILLPRIV\n");
+	if(conn->capable & FUSE_CAP_HANDLE_KILLPRIV_V2)
+			printf("\tFUSE_CAP_HANDLE_KILLPRIV_V2\n");
+	if(conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
+			printf("\tFUSE_CAP_DIRECT_IO_ALLOW_MMAP\n");
 	fuse_session_exit(se);
 }
 

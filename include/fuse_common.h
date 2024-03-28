@@ -369,6 +369,23 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_HANDLE_KILLPRIV         (1 << 20)
 
 /**
+ * Indicates that the filesystem is responsible for unsetting
+ * setuid and setgid bit and additionally cap (stored as xattr) when a
+ * file is written, truncated, or its owner is changed.
+ * Upon write/truncate suid/sgid is only killed if caller
+ * does not have CAP_FSETID. Additionally upon
+ * write/truncate sgid is killed only if file has group
+ * execute permission. (Same as Linux VFS behavior).
+ * KILLPRIV_V2 requires handling of
+ *   - FUSE_OPEN_KILL_SUIDGID (set in struct fuse_create_in::open_flags)
+ *   - FATTR_KILL_SUIDGID (set in struct fuse_setattr_in::valid)
+ *   - FUSE_WRITE_KILL_SUIDGID (set in struct fuse_write_in::write_flags)
+ *
+ * This feature is disabled by default.
+ */
+#define FUSE_CAP_HANDLE_KILLPRIV_V2         (1 << 21)
+
+/**
  * Indicates that the kernel supports caching symlinks in its page cache.
  *
  * When this feature is enabled, symlink targets are saved in the page cache.
