@@ -91,9 +91,9 @@ static int hello_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if (strcmp(path, "/") != 0)
 		return -ENOENT;
 
-	filler(buf, ".", NULL, 0, 0);
-	filler(buf, "..", NULL, 0, 0);
-	filler(buf, options.filename, NULL, 0, 0);
+	filler(buf, ".", NULL, 0, FUSE_FILL_DIR_DEFAULTS);
+	filler(buf, "..", NULL, 0, FUSE_FILL_DIR_DEFAULTS);
+	filler(buf, options.filename, NULL, 0, FUSE_FILL_DIR_DEFAULTS);
 
 	return 0;
 }

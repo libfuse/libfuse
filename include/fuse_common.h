@@ -446,7 +446,7 @@ struct fuse_loop_config_v1 {
  * ensure coherency between mount points (or network clients) and with kernel page
  * cache as enforced by mmap that cannot be guaranteed anymore.
  */
-#define FUSE_CAP_DIRECT_IO_ALLOW_MMAP  (1 << 27)
+#define FUSE_CAP_DIRECT_IO_ALLOW_MMAP  (1 << 28)
 
 /**
  * Ioctl flags
