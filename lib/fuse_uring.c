@@ -660,7 +660,8 @@ static int _fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 
 	io_uring_for_each_cqe(&queue->ring, head, cqe) {
 		if (cqe->res != 0) {
-			fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
+			// XXX: Needs a log once, otherwise log spam
+			// fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
 			se->error = cqe->res;
 			return cqe->res;
 		}

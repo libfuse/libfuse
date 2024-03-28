@@ -114,7 +114,7 @@ static int fsel_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	for (i = 0; i < FSEL_FILES; i++) {
 		name[0] = fsel_hex_map[i];
-		filler(buf, name, NULL, 0, 0);
+		filler(buf, name, NULL, 0, FUSE_FILL_DIR_DEFAULTS);
 	}
 
 	return 0;

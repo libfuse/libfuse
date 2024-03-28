@@ -167,7 +167,7 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	while (1) {
 		struct stat st;
 		off_t nextoff;
-		enum fuse_fill_dir_flags fill_flags = 0;
+		enum fuse_fill_dir_flags fill_flags = FUSE_FILL_DIR_DEFAULTS;
 
 		if (!d->entry) {
 			d->entry = readdir(d->dp);
