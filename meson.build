@@ -63,6 +63,8 @@ private_cfg.set('HAVE_ICONV',
         cc.has_function('iconv', prefix: '#include <iconv.h>'))
 private_cfg.set('HAVE_BACKTRACE',
         cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
+private_cfg.set('HAVE_CAPABILITIES',
+        cc.has_function('cap_get_proc', args: '-lcap', prefix: '#include <sys/capability.h>'))
 
 # Test if structs have specific member
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIM',

@@ -19,6 +19,13 @@ if private_cfg.get('HAVE_ICONV')
    endif
 endif
 
+if private_cfg.get('HAVE_CAPABILITIES')
+  libcap = cc.find_library('cap', required: false)
+  if libcap.found()
+    deps += [ libcap ]
+  endif
+endif
+
 libdl = cc.find_library('dl', required: false)
 if libdl.found()
    deps += [ libdl ]

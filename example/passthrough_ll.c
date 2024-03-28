@@ -52,6 +52,9 @@
 #include <pthread.h>
 #include <sys/file.h>
 #include <sys/xattr.h>
+#ifdef HAVE_CAPABILITIES
+#include <sys/capability.h>
+#endif
 
 #include "passthrough_helpers.h"
 
@@ -165,6 +168,42 @@ static bool lo_debug(fuse_req_t req)
 	return lo_data(req)->debug != 0;
 }
 
+#ifdef HAVE_CAPABILITIES
+int fuse_check_proc_capability(cap_flag_t flag)
+{
+	cap_flag_value_t value = 0;
+	int res;
+	cap_t caps = cap_get_proc();
+
+	if (caps == NULL) {
+		fuse_log(FUSE_LOG_WARNING, "Failed to get process capabilities: %s\n",
+			 strerror(errno));
+		return -errno;
+	}
+
+	cap_get_flag(caps, flag, CAP_EFFECTIVE, &value);
+	if (value == CAP_SET)
+		res = 1;
+	else
+		res = 0;
+
+	cap_free(caps);
+	return res;
+}
+#else
+/* capabilities not found - treat it as if the flag is set */
+#define fuse_check_proc_capability(a) (1)
+#endif
+
+static int fuse_check_cap_fsetid(void)
+{
+#ifdef HAVE_CAPABILITIES
+	return fuse_check_proc_capability(CAP_FSETID);
+#else
+	return 1;
+#endif
+}
+
 static void lo_init(void *userdata,
 		    struct fuse_conn_info *conn)
 {
@@ -183,6 +222,17 @@ static void lo_init(void *userdata,
 		if (lo->debug)
 			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
+	}
+
+	if (fuse_check_cap_fsetid() == 0) {
+		/* This is a passthrough file system - the underlying
+		 * file system handles privilege removal, if the process has
+		 * not CAP_FSETID set.
+		 */
+		if (conn->capable & FUSE_CAP_HANDLE_KILLPRIV)
+			conn->want |= FUSE_CAP_HANDLE_KILLPRIV;
+		if (conn->capable & FUSE_CAP_HANDLE_KILLPRIV_V2)
+			conn->want |= FUSE_CAP_HANDLE_KILLPRIV_V2;
 	}
 }
 

@@ -216,6 +216,15 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
     /* This is a local file system - no network coherency needed */
     if (conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
         conn->want |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
+
+    /* This is a passthrough file system - the underlying file system
+     * handles privilege removal - no need for passthrough to do
+     * anymore.
+     */
+    if (conn->capable & FUSE_CAP_HANDLE_KILLPRIV)
+        conn->want |= FUSE_CAP_HANDLE_KILLPRIV;
+    if (conn->capable & FUSE_CAP_HANDLE_KILLPRIV_V2)
+        conn->want |= FUSE_CAP_HANDLE_KILLPRIV_V2;
 }
 
 
