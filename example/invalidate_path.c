@@ -117,9 +117,9 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		(void) buf;
 		struct stat file_stat;
 		xmp_getattr("/" TIME_FILE_NAME, &file_stat, NULL);
-		filler(buf, TIME_FILE_NAME, &file_stat, 0, 0);
+		filler(buf, TIME_FILE_NAME, &file_stat, 0, FUSE_FILL_DIR_DEFAULTS);
 		xmp_getattr("/" GROW_FILE_NAME, &file_stat, NULL);
-		filler(buf, GROW_FILE_NAME, &file_stat, 0, 0);
+		filler(buf, GROW_FILE_NAME, &file_stat, 0, FUSE_FILL_DIR_DEFAULTS);
 		return 0;
 	}
 }

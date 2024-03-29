@@ -33,6 +33,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <poll.h>
+#include <stdbool.h>
 
 /*
  * fsel_open_mask is used to limit the number of opens to 1 per file.
@@ -51,6 +52,9 @@ static pthread_mutex_t fsel_mutex;	/* protects notify_mask and cnt array */
 static unsigned fsel_poll_notify_mask;	/* poll notification scheduled? */
 static struct fuse_pollhandle *fsel_poll_handle[FSEL_FILES]; /* poll notify handles */
 static unsigned fsel_cnt[FSEL_FILES];	/* nbytes stored in each file */
+static _Atomic bool fsel_stop = false;
+static pthread_t fsel_producer_thread;
+
 
 static int fsel_path_index(const char *path)
 {
@@ -59,6 +63,15 @@ static int fsel_path_index(const char *path)
 	if (strlen(path) != 2 || path[0] != '/' || !isxdigit(ch) || islower(ch))
 		return -1;
 	return ch <= '9' ? ch - '0' : ch - 'A' + 10;
+}
+
+static void fsel_destroy(void *private_data)
+{
+	(void)private_data;
+
+	fsel_stop = true;
+
+	pthread_join(fsel_producer_thread, NULL);
 }
 
 static int fsel_getattr(const char *path, struct stat *stbuf,
@@ -101,7 +114,7 @@ static int fsel_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	for (i = 0; i < FSEL_FILES; i++) {
 		name[0] = fsel_hex_map[i];
-		filler(buf, name, NULL, 0, 0);
+		filler(buf, name, NULL, 0, FUSE_FILL_DIR_DEFAULTS);
 	}
 
 	return 0;
@@ -205,6 +218,7 @@ static int fsel_poll(const char *path, struct fuse_file_info *fi,
 }
 
 static const struct fuse_operations fsel_oper = {
+	.destroy        = fsel_destroy,
 	.getattr	= fsel_getattr,
 	.readdir	= fsel_readdir,
 	.open		= fsel_open,
@@ -220,7 +234,7 @@ static void *fsel_producer(void *data)
 
 	(void) data;
 
-	while (1) {
+	while (!fsel_stop) {
 		int i, t;
 
 		pthread_mutex_lock(&fsel_mutex);
@@ -263,7 +277,6 @@ static void *fsel_producer(void *data)
 
 int main(int argc, char *argv[])
 {
-	pthread_t producer;
 	pthread_attr_t attr;
 	int ret;
 
@@ -279,16 +292,13 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	errno = pthread_create(&producer, &attr, fsel_producer, NULL);
+	errno = pthread_create(&fsel_producer_thread, &attr, fsel_producer, NULL);
 	if (errno) {
 		perror("pthread_create");
 		return 1;
 	}
 
 	ret = fuse_main(argc, argv, &fsel_oper, NULL);
-
-	pthread_cancel(producer);
-	pthread_join(producer, NULL);
 
 	return ret;
 }

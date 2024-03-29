@@ -3541,14 +3541,6 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 
 	if (statp && (flags & FUSE_FILL_DIR_PLUS)) {
 		e.attr = *statp;
-
-		if (!is_dot_or_dotdot(name)) {
-			res = do_lookup(f, dh->nodeid, name, &e);
-			if (res) {
-				dh->error = res;
-				return 1;
-			}
-		}
 	} else {
 		e.attr.st_ino = FUSE_UNKNOWN_INO;
 		if (statp) {
@@ -3576,6 +3568,16 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 		}
 		if (extend_contents(dh, dh->needlen) == -1)
 			return 1;
+
+		if (statp && (flags & FUSE_FILL_DIR_PLUS)) {
+			if (!is_dot_or_dotdot(name)) {
+				res = do_lookup(f, dh->nodeid, name, &e);
+				if (res) {
+					dh->error = res;
+					return 1;
+				}
+			}
+		}
 
 		newlen = dh->len +
 			fuse_add_direntry_plus(dh->req, dh->contents + dh->len,
@@ -3649,6 +3651,7 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 {
 	off_t pos;
 	struct fuse_direntry *de = dh->first;
+	int res;
 
 	dh->len = 0;
 
@@ -3673,6 +3676,16 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 				.ino = 0,
 				.attr = de->stat,
 			};
+
+			if (!is_dot_or_dotdot(de->name)) {
+				res = do_lookup(dh->fuse, dh->nodeid,
+						de->name, &e);
+				if (res) {
+					dh->error = res;
+					return 1;
+				}
+			}
+
 			thislen = fuse_add_direntry_plus(req, p, rem,
 							 de->name, &e, pos);
 		} else {

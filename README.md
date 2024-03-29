@@ -73,7 +73,10 @@ nevertheless want to adjust them, you can do so with the
 *meson configure* command:
 
     $ meson configure # list options
-    $ meson configure -D disable-mtab=true # set an option
+    $ meson configure -D disable-mtab=true # set an optionq
+
+    $ # ensure all meson options are applied to the final build system
+    $ meson setup --reconfigure ../
 
 To build, test, and install libfuse, you then use Ninja:
 
