@@ -820,7 +820,7 @@ static void *fuse_uring_thread(void *arg)
 		_fuse_uring_submit(queue, true);
 
 		res = _fuse_uring_queue_handle_cqes(queue);
-		if (res) {
+		if (res < 0) {
 			se->error = res;
 			goto err;
 		}
