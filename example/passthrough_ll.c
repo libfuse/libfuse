@@ -1154,6 +1154,17 @@ static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		fuse_reply_err(req, errno);
 }
 
+static void lo_access(fuse_req_t req, fuse_ino_t ino, int mask) {
+	int res;
+
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "lo_access(ino=%" PRIu64 ", mask=0x%x)\n", ino, mask);
+
+	res = faccessat(lo_fd(req, ino), ".", mask, 0);
+
+	fuse_reply_err(req, res == -1 ? errno : 0);
+}
+
 static const struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.destroy	= lo_destroy,
@@ -1193,6 +1204,7 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.copy_file_range = lo_copy_file_range,
 #endif
 	.lseek		= lo_lseek,
+	.access = lo_access,
 };
 
 int main(int argc, char *argv[])
