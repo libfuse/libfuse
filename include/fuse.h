@@ -276,6 +276,7 @@ struct fuse_config {
 	 * fuse_file_info argument is NULL.
 	 */
 	int nullpath_ok;
+
 	/**
 	 *  Allow parallel direct-io writes to operate on the same file.
 	 *

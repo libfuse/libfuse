@@ -68,10 +68,6 @@ struct fuse_file_info {
 	    the file/directory is closed. */
 	unsigned int keep_cache : 1;
 
-	/** Can be filled by open/create, to allow parallel direct writes on this
-         *  file */
-        unsigned int parallel_direct_writes : 1;
-
 	/** Indicates a flush operation.  Set in flush operation, also
 	    maybe set in highlevel lock operation and lowlevel release
 	    operation. */
@@ -95,6 +91,10 @@ struct fuse_file_info {
 	/** Can be filled in by open, to indicate that flush is not needed
 	    on close. */
 	unsigned int noflush : 1;
+
+	/** Can be filled by open/create, to allow parallel direct writes on this
+	 *  file */
+	unsigned int parallel_direct_writes : 1;
 
 	/** Padding.  Reserved for future use*/
 	unsigned int padding : 23;
