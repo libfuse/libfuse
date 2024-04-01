@@ -4890,11 +4890,19 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 	}
 }
 
-
-FUSE_SYMVER("fuse_new_31", "fuse_new@@FUSE_3.1")
-struct fuse *fuse_new_31(struct fuse_args *args,
-		      const struct fuse_operations *op,
-		      size_t op_size, void *user_data)
+/*
+ * Not supposed to be called directly, but supposed to be called
+ * through the fuse_new macro
+ */
+struct fuse *_fuse_new_317(struct fuse_args *args,
+			   const struct fuse_operations *op,
+			   size_t op_size, struct libfuse_version *version,
+			   void *user_data);
+FUSE_SYMVER("_fuse_new_317", "_fuse_new@@FUSE_3.17")
+struct fuse *_fuse_new_317(struct fuse_args *args,
+			   const struct fuse_operations *op,
+			   size_t op_size, struct libfuse_version *version,
+			   void *user_data)
 {
 	struct fuse *f;
 	struct node *root;
@@ -4976,7 +4984,7 @@ struct fuse *fuse_new_31(struct fuse_args *args,
 	f->conf.readdir_ino = 1;
 #endif
 
-	f->se = fuse_session_new(args, &llop, sizeof(llop), f);
+	f->se = _fuse_session_new(args, &llop, sizeof(llop), version, f);
 	if (f->se == NULL)
 		goto out_free_fs;
 
@@ -5041,16 +5049,62 @@ out:
 }
 
 /* Emulates 3.0-style fuse_new(), which processes --help */
+struct fuse *_fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
+			 size_t op_size,
+			 struct libfuse_version *version,
+			 void *user_data);
+FUSE_SYMVER("_fuse_new_30", "_fuse_new@FUSE_3.0")
+struct fuse *_fuse_new_30(struct fuse_args *args,
+			 const struct fuse_operations *op,
+			 size_t op_size,
+			 struct libfuse_version *version,
+			 void *user_data)
+{
+	struct fuse_config conf = {0};
+
+	const struct fuse_opt opts[] = {
+		FUSE_LIB_OPT("-h", show_help, 1),
+		FUSE_LIB_OPT("--help", show_help, 1),
+		FUSE_OPT_END
+	};
+
+	if (fuse_opt_parse(args, &conf, opts,
+			   fuse_lib_opt_proc) == -1)
+		return NULL;
+
+	if (conf.show_help) {
+		fuse_lib_help(args);
+		return NULL;
+	} else
+		return _fuse_new_317(args, op, op_size, version, user_data);
+}
+
+/* ABI compat version */
+struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
+			 size_t op_size, void *user_data);
+FUSE_SYMVER("fuse_new_31", "fuse_new@FUSE_3.1")
+struct fuse *fuse_new_31(struct fuse_args *args,
+			 const struct fuse_operations *op,
+			 size_t op_size, void *user_data)
+{
+		/* unknown version */
+	struct libfuse_version version = { 0 };
+
+	return _fuse_new_317(args, op, op_size, &version, user_data);
+}
+
+/*
+ * ABI compat version
+ * Emulates 3.0-style fuse_new(), which processes --help
+ */
 struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
-			 size_t op_size, void *private_data);
+			 size_t op_size, void *user_data);
 FUSE_SYMVER("fuse_new_30", "fuse_new@FUSE_3.0")
 struct fuse *fuse_new_30(struct fuse_args *args,
 			 const struct fuse_operations *op,
 			 size_t op_size, void *user_data)
 {
-	struct fuse_config conf;
-
-	memset(&conf, 0, sizeof(conf));
+	struct fuse_config conf = {0};
 
 	const struct fuse_opt opts[] = {
 		FUSE_LIB_OPT("-h", show_help, 1),
@@ -5068,6 +5122,7 @@ struct fuse *fuse_new_30(struct fuse_args *args,
 	} else
 		return fuse_new_31(args, op, op_size, user_data);
 }
+
 
 void fuse_destroy(struct fuse *f)
 {
