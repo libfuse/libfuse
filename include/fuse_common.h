@@ -25,12 +25,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-/** Major version of FUSE library interface */
-#define FUSE_MAJOR_VERSION 3
-
-/** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 16
-
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
 
@@ -830,6 +824,18 @@ struct fuse_bufvec {
 	 * Array of buffers
 	 */
 	struct fuse_buf buf[1];
+};
+
+/**
+ * libfuse version a file system was compiled with. Should be filled in from
+ * defines in 'libfuse_config.h'
+ */
+struct libfuse_version
+{
+	int major;
+	int minor;
+	int hotfix;
+	int padding;
 };
 
 /* Initialize bufvec with a single buffer of given size */

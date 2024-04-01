@@ -1990,6 +1990,17 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 #endif
 #endif
 
+/*
+ * This should not be called directly, but instead the fuse_session_new()
+ * macro should be used, which fills in the libfuse version compilation
+ * is done against automatically.
+ */
+struct fuse_session *fuse_session_new_317(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  struct libfuse_version *version,
+					  void *userdata);
+
 /**
  * Create a low level session.
  *
@@ -2014,13 +2025,21 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
  * @param args argument vector
  * @param op the (low-level) filesystem operations
  * @param op_size sizeof(struct fuse_lowlevel_ops)
+ * @param version the libfuse version a file system server was compiled against
  * @param userdata user data
- *
  * @return the fuse session on success, NULL on failure
  **/
-struct fuse_session *fuse_session_new(struct fuse_args *args,
-				      const struct fuse_lowlevel_ops *op,
-				      size_t op_size, void *userdata);
+#define fuse_session_new(args, op, op_size, userdata) ({ \
+	struct fuse_session *session;		\
+	struct libfuse_version version = {		\
+		.major = FUSE_MAJOR_VERSION,	\
+		.minor = FUSE_MINOR_VERSION,	\
+		.hotfix = FUSE_HOTFIX_VERSION,	\
+		.padding = 0			\
+	}; \
+	session = fuse_session_new_317(args, op, op_size, &version, userdata); \
+	session;\
+})
 
 /**
  * Set a file descriptor for the session.

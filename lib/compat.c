@@ -51,6 +51,36 @@ int fuse_parse_cmdline(struct fuse_args *args,
 {
 	return fuse_parse_cmdline_30(args, opts);
 }
+
+
+#ifdef fuse_session_new
+#undef fuse_session_new
+#endif
+struct fuse_session *fuse_session_new_317(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  struct libfuse_version *version,
+					  void *userdata);
+struct fuse_session *fuse_session_new(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  void *userdata);
+struct fuse_session *fuse_session_new(struct fuse_args *args,
+				      const struct fuse_lowlevel_ops *op,
+				      size_t op_size,
+				      void *userdata)
+{
+	/* unknown version */
+	struct libfuse_version version = {
+		.major = 0,
+		.minor = 0,
+		.hotfix = 0,
+		.padding = 0
+	};
+
+	return fuse_session_new_317(args, op, op_size, &version, userdata);
+}
+
 #endif
 
 
