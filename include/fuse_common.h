@@ -183,6 +183,11 @@ struct fuse_loop_config_v1 {
 /**
  * Indicates that the filesystem supports lookups of "." and "..".
  *
+ * When this flag is set, the filesystem must be prepared to receive requests
+ * for invalid inodes (i.e., for which a FORGET request was received or
+ * which have been used in a previous instance of the filesystem daemon) and
+ * must not reuse node-ids (even when setting generation numbers).
+ *
  * This feature is disabled by default.
  */
 #define FUSE_CAP_EXPORT_SUPPORT		(1 << 4)
