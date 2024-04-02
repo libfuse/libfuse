@@ -663,6 +663,15 @@ void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
 			  struct fuse_conn_info *conn);
 
 /**
+ * Get fuse_conn_info from the fuse session object.
+ * Note must not free the returned pointer.
+ *
+ * @param se the session object
+ * @return the fuse connection information on success, NULL on failure
+ */
+struct fuse_conn_info *fuse_get_conn_info(struct fuse_session *se);
+
+/**
  * Go into the background
  *
  * @param foreground if true, stay in the foreground

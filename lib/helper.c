@@ -458,6 +458,14 @@ struct fuse_conn_info_opts* fuse_parse_conn_info_opts(struct fuse_args *args)
 	return opts;
 }
 
+struct fuse_conn_info *fuse_get_conn_info(struct fuse_session *se)
+{
+	if (se == NULL)
+		return NULL;
+
+	return &se->conn;
+}
+
 int fuse_open_channel(const char *mountpoint, const char* options)
 {
 	struct mount_opts *opts = NULL;

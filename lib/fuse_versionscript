@@ -187,6 +187,11 @@ FUSE_3.12 {
 		fuse_lowlevel_notify_expire_entry;
 } FUSE_3.4;
 
+FUSE_3.17 {
+	global:
+		fuse_get_conn_info;
+} FUSE_3.12;
+
 # Local Variables:
 # indent-tabs-mode: t
 # End:

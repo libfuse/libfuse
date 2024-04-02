@@ -28,6 +28,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <assert.h>
+#include <stddef.h>
 
 static const char *hello_str = "Hello World!\n";
 static const char *hello_name = "hello";
@@ -212,13 +213,32 @@ static const struct fuse_lowlevel_ops hello_ll_oper = {
 	.removexattr = hello_ll_removexattr,
 };
 
+struct hello_ll_data {
+	int max_write;
+};
+
+/* Use this option to show how to use fuse_get_conn_info(). */
+static const struct fuse_opt hello_ll_opts[] = {
+	{ "max_write=%d",
+	  offsetof(struct hello_ll_data, max_write), 1 },
+
+	FUSE_OPT_END
+};
+
+static void hello_ll_help(void)
+{
+	printf("    -o max_write           Set maximum size of connection write buffer\n");
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
+	struct fuse_conn_info *conn;
 	struct fuse_cmdline_opts opts;
 	struct fuse_loop_config config;
 	int ret = -1;
+	struct hello_ll_data lo = { .max_write = 0 };
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
@@ -226,6 +246,7 @@ int main(int argc, char *argv[])
 		printf("usage: %s [options] <mountpoint>\n\n", argv[0]);
 		fuse_cmdline_help();
 		fuse_lowlevel_help();
+		hello_ll_help();
 		ret = 0;
 		goto err_out1;
 	} else if (opts.show_version) {
@@ -242,10 +263,18 @@ int main(int argc, char *argv[])
 		goto err_out1;
 	}
 
+	if (fuse_opt_parse(&args, &lo, hello_ll_opts, NULL) == -1)
+		return 1;
+
 	se = fuse_session_new(&args, &hello_ll_oper,
 			      sizeof(hello_ll_oper), NULL);
 	if (se == NULL)
 	    goto err_out1;
+
+	if (lo.max_write) {
+		conn = fuse_get_conn_info(se);
+		conn->max_write = lo.max_write;
+	}
 
 	if (fuse_set_signal_handlers(se) != 0)
 	    goto err_out2;
