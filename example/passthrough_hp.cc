@@ -46,32 +46,16 @@
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 // C includes
-#include <dirent.h>
 #include <err.h>
-#include <errno.h>
-#include <ftw.h>
 #include <fuse_lowlevel.h>
-#include <inttypes.h>
-#include <string.h>
 #include <sys/file.h>
 #include <sys/resource.h>
 #include <sys/xattr.h>
-#include <time.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <limits.h>
 
 // C++ includes
 #include <cstddef>
-#include <cstdio>
-#include <cstdlib>
-#include <list>
 #include "cxxopts.hpp"
-#include <mutex>
-#include <fstream>
-#include <thread>
-#include <iomanip>
-#include "passthrough_hp_common.hpp"
+#include "passthrough_hp.h"
 
 
 static void print_usage(char *prog_name) {

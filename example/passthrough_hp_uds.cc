@@ -18,35 +18,20 @@
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 // C includes
-#include <dirent.h>
 #include <err.h>
 #include <errno.h>
-#include <ftw.h>
 #include <fuse_lowlevel.h>
 #include <fuse_kernel.h>
 #include <inttypes.h>
 #include <string.h>
-#include <sys/file.h>
-#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/xattr.h>
-#include <time.h>
 #include <unistd.h>
-#include <pthread.h>
-#include <limits.h>
 
 // C++ includes
-#include <cstddef>
 #include <cstdio>
-#include <cstdlib>
-#include <list>
 #include "cxxopts.hpp"
-#include <mutex>
-#include <fstream>
-#include <thread>
-#include <iomanip>
-#include "passthrough_hp_common.hpp"
+#include "passthrough_hp.h"
 
 
 static void print_usage(char *prog_name) {
@@ -104,6 +89,8 @@ static int create_socket(const char *socket_path) {
 
 static ssize_t stream_writev(int fd, struct iovec *iov, int count,
                              void *userdata) {
+	static std::mutex mtx;
+	mtx.lock();
 	(void)userdata;
 
 	ssize_t written = 0;
@@ -121,11 +108,14 @@ static ssize_t stream_writev(int fd, struct iovec *iov, int count,
 		iov[cur].iov_base = (char *)iov[cur].iov_base + written;
 		iov[cur].iov_len -= written;
 	}
+	mtx.unlock();
 	return written;
 }
 
 
 static ssize_t readall(int fd, void *buf, size_t len) {
+	static std::mutex mtx;
+	mtx.lock();
 	size_t count = 0;
 
 	while (count < len) {
@@ -138,12 +128,15 @@ static ssize_t readall(int fd, void *buf, size_t len) {
 
 		count += i;
 	}
+	mtx.unlock();
 	return count;
 }
 
 
 static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
-    (void)userdata;
+	static std::mutex mtx;
+	mtx.lock();
+  (void)userdata;
 
 	int res = readall(fd, buf, sizeof(struct fuse_in_header));
 	if (res == -1)
@@ -157,7 +150,7 @@ static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
 
     res = readall(fd, (char *)buf + sizeof(struct fuse_in_header),
                   packet_len - sizeof(struct fuse_in_header));
-
+		mtx.unlock();
     return  (res == -1) ? res : (res + prev_res);
 }
 
@@ -165,6 +158,8 @@ static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
 static ssize_t stream_splice_send(int fdin, off_t *offin, int fdout,
 					    off_t *offout, size_t len,
                                   unsigned int flags, void *userdata) {
+	static std::mutex mtx;
+	mtx.lock();
 	(void)userdata;
 
 	size_t count = 0;
@@ -175,6 +170,7 @@ static ssize_t stream_splice_send(int fdin, off_t *offin, int fdout,
 
 		count += i;
 	}
+	mtx.unlock();
 	return count;
 }
 
@@ -220,6 +216,7 @@ int main(int argc, char *argv[]) {
 		if (fuse_session_custom_io(se, &io, cfd) != 0)
 			goto err_out3;
 
+    loop_config = fuse_loop_cfg_create();
 	  if (fs.num_threads != -1)
 	    fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
 
