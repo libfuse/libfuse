@@ -39,3 +39,4 @@ TAGS
 /GTAGS
 /test/test_setattr
 /build/
+cppcheck_report/
