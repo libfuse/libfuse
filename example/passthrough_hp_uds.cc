@@ -12,7 +12,20 @@
 /** @file
  *
  * This is a version of passthrough_hp.cc with IO over UNIX domain sockets.
- * Optional custom path of the socket can be provided as a second argument.
+ * If --socket is specified, the UDS socket path will be changed.
+ * 
+ * This allows for transferring FUSE requests and replies to a different
+ * destination than `/dev/fuse` for uses that require sending FUSE messages
+ * to different environments, such as emulators.
+ * UDS is a good choice for this use case, because it's fast for processes
+ * contained on the same host, and can easily be replaced with a network
+ * interface in case we want to enable remote communication.
+ * 
+ * It is intended as a ready to use template, providing
+ * basic filesystem functionality.
+ *
+ * ## Source code ##
+ * \include passthorugh_hp_uds.cc
  */
 
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
@@ -97,8 +110,10 @@ static ssize_t stream_writev(int fd, struct iovec *iov, int count,
 	int cur = 0;
 	for (;;) {
 		written = writev(fd, iov+cur, count-cur);
-		if (written < 0)
+		if (written < 0) {
+			mtx.unlock();
 			return written;
+		}
 
 		while (cur < count && written >= iov[cur].iov_len)
 			written -= iov[cur++].iov_len;
@@ -123,8 +138,10 @@ static ssize_t readall(int fd, void *buf, size_t len) {
 		if (!i)
 			break;
 
-		if (i < 0)
+		if (i < 0) {
+			mtx.unlock();
 			return i;
+		}
 
 		count += i;
 	}
@@ -138,13 +155,17 @@ static ssize_t stream_read(int fd, void *buf, size_t buf_len, void *userdata) {
 	mtx.lock();
   (void)userdata;
 
-	int res = readall(fd, buf, sizeof(struct fuse_in_header));
-	if (res == -1)
+		int res = readall(fd, buf, sizeof(struct fuse_in_header));
+		if (res == -1) {
+			mtx.unlock();
     	return res;
+		}
 
     uint32_t packet_len = ((struct fuse_in_header *)buf)->len;
-    if (packet_len > buf_len)
+    if (packet_len > buf_len) {
+		  mtx.unlock();
     	return -1;
+		}
 
     int prev_res = res;
 
@@ -165,8 +186,10 @@ static ssize_t stream_splice_send(int fdin, off_t *offin, int fdout,
 	size_t count = 0;
 	while (count < len) {
 		int i = splice(fdin, offin, fdout, offout, len - count, flags);
-		if (i < 1)
+		if (i < 1) {
+			mtx.unlock();
 			return i;
+		}
 
 		count += i;
 	}
