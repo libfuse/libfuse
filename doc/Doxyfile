@@ -959,6 +959,7 @@ INPUT_FILE_ENCODING    =
 
 FILE_PATTERNS          = *.h \
                          *.c \
+                         *.cc \
                          *.h \
                          *.dox
 

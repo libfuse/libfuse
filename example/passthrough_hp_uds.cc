@@ -25,7 +25,7 @@
  * basic filesystem functionality.
  *
  * ## Source code ##
- * \include passthorugh_hp_uds.cc
+ * \include passthrough_hp_uds.cc
  */
 
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
