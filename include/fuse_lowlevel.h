@@ -136,6 +136,7 @@ struct fuse_custom_io {
 	ssize_t (*splice_send)(int fdin, off_t *offin, int fdout,
 				     off_t *offout, size_t len,
 			           unsigned int flags, void *userdata);
+	int (*clone_fd)(int master_fd);
 };
 
 /**
