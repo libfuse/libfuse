@@ -3117,8 +3117,17 @@ out1:
 }
 
 int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io *io,
-			   int fd)
+			   size_t prog_custom_io_sz, int fd)
 {
+	size_t lib_custom_io_sz = sizeof(*se->io);
+
+	if (prog_custom_io_sz > lib_custom_io_sz) {
+		fuse_log(FUSE_LOG_ERR,
+			 "Provided 'fuse_custom_io_sz' (%zu) is larger than struct (%zu)\n",
+			 prog_custom_io_sz, lib_custom_io_sz);
+		return -EINVAL;
+	}
+
 	if (fd < 0) {
 		fuse_log(FUSE_LOG_ERR, "Invalid file descriptor value %d passed to "
 			"fuse_session_custom_io()\n", fd);
@@ -3138,7 +3147,7 @@ int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io 
 		return -EINVAL;
 	}
 
-	se->io = malloc(sizeof(struct fuse_custom_io));
+	se->io = calloc(1, lib_custom_io_sz);
 	if (se->io == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Failed to allocate memory for custom io. "
 			"Error: %s\n", strerror(errno));
@@ -3146,7 +3155,12 @@ int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io 
 	}
 
 	se->fd = fd;
-	*se->io = *io;
+
+	/* Above the struct was zeroed. For ABI compatibility we memcopy in
+	 * what the caller knows about.
+	 */
+	memcpy(se->io, io, prog_custom_io_sz);
+
 	return 0;
 }
 

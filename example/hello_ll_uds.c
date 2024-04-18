@@ -341,7 +341,7 @@ int main(int argc, char *argv[])
 	if (cfd == -1)
 		goto err_out3;
 
-	if (fuse_session_custom_io(se, &io, cfd) != 0)
+	if (fuse_session_custom_io(se, &io, sizeof(io), cfd) != 0)
 		goto err_out3;
 
 	/* Block until ctrl+c */

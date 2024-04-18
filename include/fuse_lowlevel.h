@@ -2043,7 +2043,10 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
  * @param se session object
  * @param io Custom io to use when retrieving/sending requests/responses
  * @param fd file descriptor for the session
- *
+ * @param custom_io_size the size of the struct the callers knows about.
+ *        The struct might be extended in higher libfuse versions and in order
+ *        to stay ABI compatible extended fields are zeroed - libuse needs to know
+ *        the size the caller knows about.
  * @return 0  on success
  * @return -EINVAL if `io`, `io->read` or `ìo->writev` are NULL
  * @return -EBADF  if `fd` was smaller than 0
@@ -2051,7 +2054,9 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
  *
  **/
 int fuse_session_custom_io(struct fuse_session *se,
-				   const struct fuse_custom_io *io, int fd);
+			   const struct fuse_custom_io *io,
+			   size_t custom_io_size,
+			   int fd);
 
 /**
  * Mount a FUSE file system.
