@@ -190,6 +190,7 @@ static void lo_destroy(void *userdata)
 	while (lo->root.next != &lo->root) {
 		struct lo_inode* next = lo->root.next;
 		lo->root.next = next->next;
+		close(next->fd);
 		free(next);
 	}
 }
