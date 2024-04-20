@@ -311,7 +311,7 @@ int main(int argc, char *argv[]) {
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_session *se;
     struct fuse_cmdline_opts opts;
-    struct fuse_loop_config config;
+    struct fuse_loop_config *config;
     pthread_t updater;
     int ret = -1;
 
@@ -364,9 +364,12 @@ int main(int argc, char *argv[]) {
     if (opts.singlethread)
         ret = fuse_session_loop(se);
     else {
-        config.clone_fd = opts.clone_fd;
-        config.max_idle_threads = opts.max_idle_threads;
-        ret = fuse_session_loop_mt(se, &config);
+	config = fuse_loop_cfg_create();
+	fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+	fuse_loop_cfg_set_max_threads(config, opts.max_threads);
+	ret = fuse_session_loop_mt(se, config);
+	fuse_loop_cfg_destroy(config);
+	config = NULL;
     }
 
     fuse_session_unmount(se);
