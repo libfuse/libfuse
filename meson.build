@@ -1,4 +1,4 @@
-project('libfuse3', ['c'], version: '3.16.2',
+project('libfuse3', ['c'], version: '3.17.0',
         meson_version: '>= 0.51',
         default_options: [
             'buildtype=debugoptimized',
@@ -6,6 +6,14 @@ project('libfuse3', ['c'], version: '3.16.2',
             'warning_level=2',
         ])
 
+# Would be better to create the version string
+# from integers, i.e. concatenating strings instead
+# of splitting a string, but 'project' needs to be
+# the first meson.build keyword...
+version_list = meson.project_version().split('.')
+FUSE_MAJOR_VERSION = version_list[0]
+FUSE_MINOR_VERSION = version_list[1]
+FUSE_HOTFIX_VERSION = version_list[2]
 
 platform = host_machine.system()
 if platform == 'darwin'
@@ -33,6 +41,10 @@ private_cfg = configuration_data()
 #       this config.
 #
 public_cfg = configuration_data()
+
+public_cfg.set('FUSE_MAJOR_VERSION', FUSE_MAJOR_VERSION)
+public_cfg.set('FUSE_MINOR_VERSION', FUSE_MINOR_VERSION)
+public_cfg.set('FUSE_HOTFIX_VERSION', FUSE_HOTFIX_VERSION)
 
 # Default includes when checking for presence of functions and
 # struct members
