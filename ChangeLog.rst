@@ -1,3 +1,11 @@
+libfuse 3.17.x (tbd)
+====================
+
+When using -DFUSE_USE_VERSION=317 then
+* Added new fuse_session_custom_io_317 function to allow extra callbacks.
+
+* Use clone_fd callback in struct fuse_custom_io
+
 libfuse 3.16.2 (2023-10-10)
 ===========================
 

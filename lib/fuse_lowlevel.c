@@ -3116,9 +3116,16 @@ out1:
 	return NULL;
 }
 
-int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io *io,
-			   int fd)
+int fuse_session_custom_io_317(struct fuse_session *se, const struct fuse_custom_io *io,
+			       size_t io_size, int fd)
 {
+
+	if (sizeof(struct fuse_custom_io) < io_size)
+	{
+		fuse_log(FUSE_LOG_ERR, "fuse: warning: library too old, some operations may not work\n");
+		io_size = sizeof(struct fuse_custom_io);
+	}
+
 	if (fd < 0) {
 		fuse_log(FUSE_LOG_ERR, "Invalid file descriptor value %d passed to "
 			"fuse_session_custom_io()\n", fd);
@@ -3138,7 +3145,7 @@ int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io 
 		return -EINVAL;
 	}
 
-	se->io = malloc(sizeof(struct fuse_custom_io));
+	se->io = calloc(1, sizeof(struct fuse_custom_io));
 	if (se->io == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Failed to allocate memory for custom io. "
 			"Error: %s\n", strerror(errno));
@@ -3146,8 +3153,19 @@ int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io 
 	}
 
 	se->fd = fd;
-	*se->io = *io;
+	memcpy(se->io, io, io_size);
 	return 0;
+}
+
+#undef fuse_session_custom_io
+
+int fuse_session_custom_io(struct fuse_session *se,
+			   const struct fuse_custom_io *io, int fd);
+
+int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io *io,
+			   int fd)
+{
+	return fuse_session_custom_io_317(se, io, offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)

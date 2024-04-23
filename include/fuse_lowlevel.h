@@ -136,7 +136,10 @@ struct fuse_custom_io {
 	ssize_t (*splice_send)(int fdin, off_t *offin, int fdout,
 				     off_t *offout, size_t len,
 			           unsigned int flags, void *userdata);
+
+#if FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 17)
 	int (*clone_fd)(int master_fd);
+#endif
 };
 
 /**
@@ -2042,6 +2045,7 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
  *
  * @param se session object
  * @param io Custom io to use when retrieving/sending requests/responses
+ * @param io_size sizeof(struct fuse_custom_io)
  * @param fd file descriptor for the session
  *
  * @return 0  on success
@@ -2050,8 +2054,14 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
  * @return -errno  if failed to allocate memory to store `io`
  *
  **/
+#if FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 17)
 int fuse_session_custom_io(struct fuse_session *se,
-				   const struct fuse_custom_io *io, int fd);
+			   const struct fuse_custom_io *io, int fd);
+#else
+int fuse_session_custom_io_317(struct fuse_session *se,
+			       const struct fuse_custom_io *io, size_t io_size, int fd);
+#define fuse_session_custom_io(_SE, _IO, _FD) fuse_session_custom_io_317(_SE, _IO, (sizeof(_IO)), _FD)
+#endif
 
 /**
  * Mount a FUSE file system.
