@@ -2,6 +2,7 @@ project('libfuse3', ['c'], version: '3.17.0',
         meson_version: '>= 0.51',
         default_options: [
             'buildtype=debugoptimized',
+            'c_std=gnu11',
             'cpp_std=c++11',
             'warning_level=2',
         ])
