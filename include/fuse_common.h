@@ -96,8 +96,16 @@ struct fuse_file_info {
 	    file */
 	uint32_t parallel_direct_writes : 1;
 
+	/**
+	 * Set in open, create and write when KILLPRIV_V2 was negotiated and
+	 * the application issuing the syscall lacks CAP_FSETID; the
+	 * filesystem's own privileges do not matter. The filesystem then
+	 * has to remove setuid/setgid bits.
+	 */
+	uint32_t kill_suidgid : 1;
+
 	/** Padding.  Reserved for future use*/
-	uint32_t padding : 23;
+	uint32_t padding : 22;
 	uint32_t padding2 : 32;
 	uint32_t padding3 : 32;
 
