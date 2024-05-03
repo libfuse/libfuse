@@ -440,10 +440,15 @@ int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
 FUSE_SYMVER("fuse_session_loop_mt_31", "fuse_session_loop_mt@FUSE_3.0")
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd)
 {
+	int err;
 	struct fuse_loop_config *config = fuse_loop_cfg_create();
 	if (clone_fd > 0)
 		 fuse_loop_cfg_set_clone_fd(config, clone_fd);
-	return fuse_session_loop_mt_312(se, config);
+	err = fuse_session_loop_mt_312(se, config);
+
+	fuse_loop_cfg_destroy(config);
+
+	return err;
 }
 
 struct fuse_loop_config *fuse_loop_cfg_create(void)
