@@ -65,6 +65,11 @@ struct fuse_session {
 	struct fuse_notify_req notify_list;
 	size_t bufsize;
 	int error;
+
+	/* This is useful if any kind of ABI incompatibility is found at
+	 * a later version, to 'fix' it at run time.
+	 */
+	struct libfuse_version version;
 };
 
 struct fuse_chan {

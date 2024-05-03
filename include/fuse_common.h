@@ -62,10 +62,6 @@ struct fuse_file_info {
 	    the file/directory is closed. */
 	unsigned int keep_cache : 1;
 
-	/** Can be filled by open/create, to allow parallel direct writes on this
-         *  file */
-        unsigned int parallel_direct_writes : 1;
-
 	/** Indicates a flush operation.  Set in flush operation, also
 	    maybe set in highlevel lock operation and lowlevel release
 	    operation. */
@@ -89,6 +85,10 @@ struct fuse_file_info {
 	/** Can be filled in by open, to indicate that flush is not needed
 	    on close. */
 	unsigned int noflush : 1;
+
+	/** Can be filled by open/create, to allow parallel direct writes on this
+	 *  file */
+	unsigned int parallel_direct_writes : 1;
 
 	/** Padding.  Reserved for future use*/
 	unsigned int padding : 23;
@@ -829,6 +829,18 @@ struct fuse_bufvec {
 	 * Array of buffers
 	 */
 	struct fuse_buf buf[1];
+};
+
+/**
+ * libfuse version a file system was compiled with. Should be filled in from
+ * defines in 'libfuse_config.h'
+ */
+struct libfuse_version
+{
+	int major;
+	int minor;
+	int hotfix;
+	int padding;
 };
 
 /* Initialize bufvec with a single buffer of given size */
