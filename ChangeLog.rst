@@ -26,6 +26,11 @@ Unreleased Changes
 * ``fuse_session_loop()`` below FUSE_USE_VERSION 319 is deprecated and warns
   at compile time.
 
+* With ``FUSE_CAP_HANDLE_KILLPRIV_V2`` enabled, ``open``, ``create``,
+  ``write`` and ``write_buf`` now get the kernel's per request kill
+  suid/sgid indication in the new ``fuse_file_info::kill_suidgid`` field.
+  Before, only ``setattr`` saw it, through ``FUSE_SET_ATTR_KILL_SUID``.
+
 
 libfuse 3.18.0 (2025-12-18)
 ===========================
