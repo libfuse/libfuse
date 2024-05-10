@@ -325,8 +325,10 @@ struct fuse_loop_config_v1 {
  * kernel. (If this flag is not set, returning ENOSYS will be treated
  * as an error and signaled to the caller).
  *
- * Setting (or unsetting) this flag in the `want` field has *no
- * effect*.
+ * Setting this flag in the `want` field enables this behavior automatically
+ * within libfuse for low level API users. If non-low level users wish to have
+ * this behavior you must return `ENOSYS` from the open() handler on supporting
+ * kernels.
  */
 #define FUSE_CAP_NO_OPEN_SUPPORT	(1 << 17)
 
@@ -404,7 +406,10 @@ struct fuse_loop_config_v1 {
  * flag is not set, returning ENOSYS will be treated as an error and signalled
  * to the caller.)
  *
- * Setting (or unsetting) this flag in the `want` field has *no effect*.
+ * Setting this flag in the `want` field enables this behavior automatically
+ * within libfuse for low level API users.  If non-low level users with to have
+ * this behavior you must return `ENOSYS` from the opendir() handler on
+ * supporting kernels.
  */
 #define FUSE_CAP_NO_OPENDIR_SUPPORT    (1 << 24)
 
