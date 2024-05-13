@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <assert.h>
 #include <sys/file.h>
+#include <sys/ioctl.h>
 
 #ifndef F_LINUX_SPECIFIC_BASE
 #define F_LINUX_SPECIFIC_BASE       1024
@@ -400,6 +401,10 @@ static void fill_open(struct fuse_open_out *arg,
 		      const struct fuse_file_info *f)
 {
 	arg->fh = f->fh;
+	if (f->backing_id > 0) {
+		arg->backing_id = f->backing_id;
+		arg->open_flags |= FOPEN_PASSTHROUGH;
+	}
 	if (f->direct_io)
 		arg->open_flags |= FOPEN_DIRECT_IO;
 	if (f->keep_cache)
@@ -464,6 +469,31 @@ int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 int fuse_reply_readlink(fuse_req_t req, const char *linkname)
 {
 	return send_reply_ok(req, linkname, strlen(linkname));
+}
+
+int fuse_passthrough_open(fuse_req_t req, int fd)
+{
+	struct fuse_backing_map map = { .fd = fd };
+	int ret;
+
+	ret = ioctl(req->se->fd, FUSE_DEV_IOC_BACKING_OPEN, &map);
+	if (ret <= 0) {
+		fuse_log(FUSE_LOG_ERR, "fuse: passthrough_open: %s\n", strerror(errno));
+		return 0;
+	}
+
+	return ret;
+}
+
+int fuse_passthrough_close(fuse_req_t req, int backing_id)
+{
+	int ret;
+
+	ret = ioctl(req->se->fd, FUSE_DEV_IOC_BACKING_CLOSE, &backing_id);
+	if (ret < 0)
+		fuse_log(FUSE_LOG_ERR, "fuse: passthrough_close: %s\n", strerror(errno));
+
+	return ret;
 }
 
 int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
@@ -2027,6 +2057,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
 		if (arg->minor >= 38 || (inargflags & FUSE_HAS_EXPIRE_ONLY))
 			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
+		if (inargflags & FUSE_PASSTHROUGH)
+			se->conn.capable |= FUSE_CAP_PASSTHROUGH;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -2161,6 +2193,14 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		outargflags |= FUSE_SETXATTR_EXT;
 	if (se->conn.want & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
 		outargflags |= FUSE_DIRECT_IO_ALLOW_MMAP;
+	if (se->conn.want & FUSE_CAP_PASSTHROUGH) {
+		outargflags |= FUSE_PASSTHROUGH;
+		/*
+		 * outarg.max_stack_depth includes the fuse stack layer,
+		 * so it is one more than max_backing_stack_depth.
+		 */
+		outarg.max_stack_depth = se->conn.max_backing_stack_depth + 1;
+	}
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -2199,6 +2239,9 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			outarg.congestion_threshold);
 		fuse_log(FUSE_LOG_DEBUG, "   time_gran=%u\n",
 			outarg.time_gran);
+		if (se->conn.want & FUSE_CAP_PASSTHROUGH)
+			fuse_log(FUSE_LOG_DEBUG, "   max_stack_depth=%u\n",
+				outarg.max_stack_depth);
 	}
 	if (arg->minor < 5)
 		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;
