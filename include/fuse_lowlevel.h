@@ -2005,6 +2005,36 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 #endif
 #endif
 
+/*
+ * This should mostly not be called directly, but instead the fuse_session_new()
+ * macro should be used, which fills in the libfuse version compilation
+ * is done against automatically.
+ */
+struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  struct libfuse_version *version,
+					  void *userdata);
+
+/* Do not call this directly, but only through fuse_session_new() */
+#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
+struct fuse_session *
+_fuse_session_new(struct fuse_args *args,
+		 const struct fuse_lowlevel_ops *op,
+		 size_t op_size,
+		 struct libfuse_version *version,
+		 void *userdata);
+#else
+struct fuse_session *
+_fuse_session_new_317(struct fuse_args *args,
+		      const struct fuse_lowlevel_ops *op,
+		      size_t op_size,
+		      struct libfuse_version *version,
+		      void *userdata);
+#define _fuse_session_new(args, op, op_size, version, userdata)	\
+	_fuse_session_new_317(args, op, op_size, version, userdata)
+#endif
+
 /**
  * Create a low level session.
  *
@@ -2029,13 +2059,25 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
  * @param args argument vector
  * @param op the (low-level) filesystem operations
  * @param op_size sizeof(struct fuse_lowlevel_ops)
+ * @param version the libfuse version a file system server was compiled against
  * @param userdata user data
- *
  * @return the fuse session on success, NULL on failure
  **/
-struct fuse_session *fuse_session_new(struct fuse_args *args,
-				      const struct fuse_lowlevel_ops *op,
-				      size_t op_size, void *userdata);
+static inline struct fuse_session *
+fuse_session_new(struct fuse_args *args,
+		 const struct fuse_lowlevel_ops *op,
+		 size_t op_size,
+		 void *userdata)
+{
+	struct libfuse_version version = {
+		.major = FUSE_MAJOR_VERSION,
+		.minor = FUSE_MINOR_VERSION,
+		.hotfix = FUSE_HOTFIX_VERSION,
+		.padding = 0
+	};
+
+	return _fuse_session_new(args, op, op_size, &version, userdata);
+}
 
 /**
  * Set a file descriptor for the session.

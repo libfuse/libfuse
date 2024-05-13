@@ -3024,9 +3024,12 @@ restart:
 	return res;
 }
 
-struct fuse_session *fuse_session_new(struct fuse_args *args,
-				      const struct fuse_lowlevel_ops *op,
-				      size_t op_size, void *userdata)
+FUSE_SYMVER("_fuse_session_new_317", "_fuse_session_new@@FUSE_3.17")
+struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  struct libfuse_version *version,
+					  void *userdata)
 {
 	int err;
 	struct fuse_session *se;
@@ -3105,6 +3108,14 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 	se->userdata = userdata;
 
 	se->mo = mo;
+
+	/* Fuse server application should pass the version it was compiled
+	 * against and pass it. If a libfuse version accidentally introduces an
+	 * ABI incompatibility, it might be possible to 'fix' that at run time,
+	 * by checking the version numbers.
+	 */
+	se->version = *version;
+
 	return se;
 
 out5:
@@ -3118,6 +3129,22 @@ out2:
 	free(se);
 out1:
 	return NULL;
+}
+
+struct fuse_session *fuse_session_new_30(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  void *userdata);
+FUSE_SYMVER("fuse_session_new_30", "fuse_session_new@FUSE_3.0")
+struct fuse_session *fuse_session_new_30(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  void *userdata)
+{
+	/* unknown version */
+	struct libfuse_version version = { 0 };
+
+	return _fuse_session_new_317(args, op, op_size, &version, userdata);
 }
 
 int fuse_session_custom_io(struct fuse_session *se, const struct fuse_custom_io *io,

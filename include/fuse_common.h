@@ -836,6 +836,18 @@ struct fuse_bufvec {
 	struct fuse_buf buf[1];
 };
 
+/**
+ * libfuse version a file system was compiled with. Should be filled in from
+ * defines in 'libfuse_config.h'
+ */
+struct libfuse_version
+{
+	int major;
+	int minor;
+	int hotfix;
+	int padding;
+};
+
 /* Initialize bufvec with a single buffer of given size */
 #define FUSE_BUFVEC_INIT(size__)				\
 	((struct fuse_bufvec) {					\
