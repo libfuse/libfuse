@@ -105,6 +105,11 @@ struct fuse_file_info {
 	/** Requested poll events.  Available in ->poll.  Only set on kernels
 	    which support it.  If unsupported, this field is set to zero. */
 	uint32_t poll_events;
+
+	/** Passthrough backing file id.  May be filled in by filesystem in
+	 * create and open.  It is used to create a passthrough connection
+	 * between FUSE file and backing file. */
+	int32_t backing_id;
 };
 
 
@@ -469,6 +474,18 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_DIRECT_IO_ALLOW_MMAP  (1 << 28)
 
 /**
+ * Indicates support for passthrough mode access for read/write operations.
+ *
+ * If this flag is set in the `capable` field of the `fuse_conn_info`
+ * structure, then the FUSE kernel module supports redirecting read/write
+ * operations to the backing file instead of letting them to be handled
+ * by the FUSE daemon.
+ *
+ * This feature is disabled by default.
+ */
+#define FUSE_CAP_PASSTHROUGH      (1 << 29)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
@@ -598,9 +615,29 @@ struct fuse_conn_info {
 	unsigned time_gran;
 
 	/**
+	 * When FUSE_CAP_PASSTHROUGH is enabled, this is the maximum allowed
+	 * stacking depth of the backing files.  In current kernel, the maximum
+	 * allowed stack depth if FILESYSTEM_MAX_STACK_DEPTH (2), which includes
+	 * the FUSE passthrough layer, so the maximum stacking depth for backing
+	 * files is 1.
+	 *
+	 * The default is FUSE_BACKING_STACKED_UNDER (0), meaning that the
+	 * backing files cannot be on a stacked filesystem, but another stacked
+	 * filesystem can be stacked over this FUSE passthrough filesystem.
+	 *
+	 * Set this to FUSE_BACKING_STACKED_OVER (1) if backing files may be on
+	 * a stacked filesystem, such as overlayfs or another FUSE passthrough.
+	 * In this configuration, another stacked filesystem cannot be stacked
+	 * over this FUSE passthrough filesystem.
+	 */
+#define FUSE_BACKING_STACKED_UNDER	(0)
+#define FUSE_BACKING_STACKED_OVER	(1)
+	unsigned max_backing_stack_depth;
+
+	/**
 	 * For future use.
 	 */
-	unsigned reserved[22];
+	unsigned reserved[21];
 };
 
 struct fuse_session;

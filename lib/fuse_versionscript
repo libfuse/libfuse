@@ -194,6 +194,8 @@ FUSE_3.17 {
 		_fuse_new_30;
 		_fuse_new_317;
 		fuse_main_real_317;
+		fuse_passthrough_open;
+		fuse_passthrough_close;
 } FUSE_3.12;
 
 # Local Variables:

@@ -1397,6 +1397,19 @@ int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 int fuse_reply_readlink(fuse_req_t req, const char *link);
 
 /**
+ * Setup passthrough backing file for open reply
+ *
+ * Possible requests:
+ *   open, opendir, create
+ *
+ * @param req request handle
+ * @param fd backing file descriptor
+ * @return positive backing id for success, 0 for failure
+ */
+int fuse_passthrough_open(fuse_req_t req, int fd);
+int fuse_passthrough_close(fuse_req_t req, int backing_id);
+
+/**
  * Reply with open parameters
  *
  * currently the following members of 'fi' are used:

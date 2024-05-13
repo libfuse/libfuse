@@ -123,6 +123,7 @@ struct Inode {
     dev_t src_dev {0};
     ino_t src_ino {0};
     int generation {0};
+    int backing_id {0};
     uint64_t nopen {0};
     uint64_t nlookup {0};
     std::mutex m;
@@ -159,6 +160,7 @@ struct Fs {
     bool clone_fd;
     std::string fuse_mount_options;
     bool direct_io;
+    bool passthrough;
 };
 static Fs fs{};
 
@@ -190,7 +192,15 @@ static int get_fs_fd(fuse_ino_t ino) {
 
 static void sfs_init(void *userdata, fuse_conn_info *conn) {
     (void)userdata;
-    if (fs.timeout && conn->capable & FUSE_CAP_WRITEBACK_CACHE)
+
+    if (fs.passthrough && conn->capable & FUSE_CAP_PASSTHROUGH)
+        conn->want |= FUSE_CAP_PASSTHROUGH;
+    else
+        fs.passthrough = false;
+
+    /* Passthrough and writeback cache are conflicting modes */
+    if (fs.timeout && !fs.passthrough &&
+        conn->capable & FUSE_CAP_WRITEBACK_CACHE)
         conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
     if (conn->capable & FUSE_CAP_FLOCK_LOCKS)
@@ -810,6 +820,30 @@ static void sfs_releasedir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 }
 
 
+static void do_passthrough_open(fuse_req_t req, fuse_ino_t ino, int fd,
+                                fuse_file_info *fi) {
+    Inode& inode = get_inode(ino);
+    /* Setup a shared backing file on first open of an inode */
+    if (inode.backing_id) {
+        if (fs.debug)
+            cerr << "DEBUG: reusing shared backing file "
+                 << inode.backing_id << " for inode " << ino << endl;
+        fi->backing_id = inode.backing_id;
+    } else if (!(inode.backing_id = fuse_passthrough_open(req, fd))) {
+        cerr << "DEBUG: fuse_passthrough_open failed for inode " << ino
+             << ", disabling rw passthrough." << endl;
+        fs.passthrough = false;
+    } else {
+        if (fs.debug)
+            cerr << "DEBUG: setup shared backing file "
+                 << inode.backing_id << " for inode " << ino << endl;
+        fi->backing_id = inode.backing_id;
+    }
+    /* open in passthrough mode must drop old page cache */
+    if (fi->backing_id)
+        fi->keep_cache = false;
+}
+
 static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
                        mode_t mode, fuse_file_info *fi) {
     Inode& inode_p = get_inode(parent);
@@ -845,6 +879,8 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
+    if (fs.passthrough)
+        do_passthrough_open(req, e.ino, fd, fi);
     fuse_reply_create(req, &e, fi);
 }
 
@@ -914,6 +950,8 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     fi->parallel_direct_writes = 1;
 
     fi->fh = fd;
+    if (fs.passthrough)
+        do_passthrough_open(req, ino, fd, fi);
     fuse_reply_open(req, fi);
 }
 
@@ -922,6 +960,19 @@ static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     Inode& inode = get_inode(ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen--;
+
+    /* Close the shared backing file on last file close of an inode */
+    if (inode.backing_id && !inode.nopen) {
+        if (fuse_passthrough_close(req, inode.backing_id) < 0) {
+            cerr << "DEBUG: fuse_passthrough_close failed for inode "
+                 << ino << " backing file " << inode.backing_id << endl;
+        } else if (fs.debug) {
+            cerr << "DEBUG: closed backing file " << inode.backing_id
+                 << " for inode " << ino << endl;
+        }
+        inode.backing_id = 0;
+    }
+
     close(fi->fh);
     fuse_reply_err(req, 0);
 }
@@ -960,6 +1011,11 @@ static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) 
 static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
                      fuse_file_info *fi) {
     (void) ino;
+    if (fs.passthrough && !fs.direct_io) {
+        cerr << "ERROR: fuse_passthrough read failed." << endl;
+        fuse_reply_err(req, EIO);
+        return;
+    }
     do_read(req, size, off, fi);
 }
 
@@ -983,6 +1039,11 @@ static void do_write_buf(fuse_req_t req, size_t size, off_t off,
 static void sfs_write_buf(fuse_req_t req, fuse_ino_t ino, fuse_bufvec *in_buf,
                           off_t off, fuse_file_info *fi) {
     (void) ino;
+    if (fs.passthrough && !fs.direct_io) {
+        cerr << "ERROR: fuse_passthrough write failed." << endl;
+        fuse_reply_err(req, EIO);
+        return;
+    }
     auto size {fuse_buf_size(in_buf)};
     do_write_buf(req, size, off, in_buf, fi);
 }
@@ -1232,6 +1293,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("help", "Print help")
         ("nocache", "Disable attribute all caching")
         ("nosplice", "Do not use splice(2) to transfer data")
+        ("nopassthrough", "Do not use pass-through mode for read/write")
         ("single", "Run single-threaded")
         ("o", "Mount options (see mount.fuse(5) - only use if you know what "
               "you are doing)", cxxopts::value(mount_options))
@@ -1239,7 +1301,6 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
                         cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
         ("clone-fd", "use separate fuse device fd for each thread")
         ("direct-io", "enable fuse kernel internal direct-io");
-
 
     // FIXME: Find a better way to limit the try clause to just
     // opt_parser.parse() (cf. https://github.com/jarro2783/cxxopts/issues/146)
@@ -1268,6 +1329,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         fs.foreground = true;
 
     fs.nosplice = options.count("nosplice") != 0;
+    fs.passthrough = options.count("nopassthrough") == 0;
     fs.num_threads = options["num-threads"].as<int>();
     fs.clone_fd = options.count("clone-fd");
     fs.direct_io = options.count("direct-io");
