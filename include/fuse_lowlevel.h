@@ -532,6 +532,13 @@ struct fuse_lowlevel_ops {
 	 * future calls to open and release will also succeed without being
 	 * sent to the filesystem process.
 	 *
+	 * To get this behavior without providing an opendir handler, you may
+	 * set FUSE_CAP_NO_OPEN_SUPPORT in `fuse_conn_info.want` on supported
+	 * kernels to automatically get the zero message open().
+	 *
+	 * If this callback is not provided and FUSE_CAP_NO_OPEN_SUPPORT is not
+	 * set in `fuse_conn_info.want` then an empty reply will be sent.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_open
 	 *   fuse_reply_err
@@ -704,6 +711,13 @@ struct fuse_lowlevel_ops {
 	 * releasedir will also succeed without being sent to the filesystem
 	 * process. In addition, the kernel will cache readdir results
 	 * as if opendir returned FOPEN_KEEP_CACHE | FOPEN_CACHE_DIR.
+	 *
+	 * To get this behavior without providing an opendir handler, you may
+	 * set FUSE_CAP_NO_OPENDIR_SUPPORT in `fuse_conn_info.want` on supported
+	 * kernels to automatically get the zero message opendir().
+	 *
+	 * If this callback is not provided and FUSE_CAP_NO_OPENDIR_SUPPORT is
+	 * not set in `fuse_conn_info.want` then an empty reply will be sent.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_open

@@ -325,8 +325,10 @@ struct fuse_loop_config_v1 {
  * kernel. (If this flag is not set, returning ENOSYS will be treated
  * as an error and signaled to the caller).
  *
- * Setting (or unsetting) this flag in the `want` field has *no
- * effect*.
+ * Setting this flag in the `want` field enables this behavior automatically
+ * within libfuse for low level API users. If non-low level users wish to have
+ * this behavior you must return `ENOSYS` from the open() handler on supporting
+ * kernels.
  */
 #define FUSE_CAP_NO_OPEN_SUPPORT	(1 << 17)
 
@@ -404,7 +406,10 @@ struct fuse_loop_config_v1 {
  * flag is not set, returning ENOSYS will be treated as an error and signalled
  * to the caller.)
  *
- * Setting (or unsetting) this flag in the `want` field has *no effect*.
+ * Setting this flag in the `want` field enables this behavior automatically
+ * within libfuse for low level API users.  If non-low level users with to have
+ * this behavior you must return `ENOSYS` from the opendir() handler on
+ * supporting kernels.
  */
 #define FUSE_CAP_NO_OPENDIR_SUPPORT    (1 << 24)
 
@@ -969,7 +974,7 @@ void fuse_loop_cfg_convert(struct fuse_loop_config *config,
  * On 32bit systems please add -D_FILE_OFFSET_BITS=64 to your compile flags!
  */
 
-#if defined(__GNUC__) && (__GNUC__ > 4 || __GNUC__ == 4 && __GNUC_MINOR__ >= 6) && !defined __cplusplus
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(off_t) == 8, "fuse: off_t must be 64bit");
 #else
 struct _fuse_off_t_must_be_64bit_dummy_struct \

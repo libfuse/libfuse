@@ -1351,6 +1351,8 @@ static void do_open(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	if (req->se->op.open)
 		req->se->op.open(req, nodeid, &fi);
+	else if (req->se->conn.want & FUSE_CAP_NO_OPEN_SUPPORT)
+		fuse_reply_err(req, ENOSYS);
 	else
 		fuse_reply_open(req, &fi);
 }
@@ -1507,6 +1509,8 @@ static void do_opendir(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	if (req->se->op.opendir)
 		req->se->op.opendir(req, nodeid, &fi);
+	else if (req->se->conn.want & FUSE_CAP_NO_OPENDIR_SUPPORT)
+		fuse_reply_err(req, ENOSYS);
 	else
 		fuse_reply_open(req, &fi);
 }
