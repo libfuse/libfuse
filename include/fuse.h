@@ -854,6 +854,22 @@ struct fuse_context {
 	mode_t umask;
 };
 
+#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
+/**
+ * The real main function
+ *
+ * Do not call this directly, use fuse_main()
+ */
+int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
+		   size_t op_size, struct libfuse_version *version,
+		   void *user_data);
+#else
+int fuse_main_real_317(int argc, char *argv[], const struct fuse_operations *op,
+		   size_t op_size, struct libfuse_version *version, void *user_data);
+#define fuse_main_real(argc, argv, op, op_size, version, user_data) \
+	fuse_main_real_317(argc, argv, op, op_size, version, user_data);
+#endif
+
 /**
  * Main function of FUSE.
  *
@@ -908,12 +924,19 @@ struct fuse_context {
  *
  * Example usage, see hello.c
  */
-/*
-  int fuse_main(int argc, char *argv[], const struct fuse_operations *op,
-  void *private_data);
-*/
-#define fuse_main(argc, argv, op, private_data)				\
-	fuse_main_real(argc, argv, op, sizeof(*(op)), private_data)
+static inline int
+fuse_main(int argc, char *argv[], const struct fuse_operations *op,
+	  void *user_data)
+{
+	struct libfuse_version version = {
+		.major  = FUSE_MAJOR_VERSION,
+		.minor  = FUSE_MINOR_VERSION,
+		.hotfix = FUSE_HOTFIX_VERSION,
+		.padding = 0
+	};
+	return fuse_main_real(argc, argv, op, sizeof(*(op)), &version,
+			      user_data);
+}
 
 /* ----------------------------------------------------------- *
  * More detailed API					       *
@@ -931,6 +954,11 @@ struct fuse_context {
  * @param args the argument vector.
  */
 void fuse_lib_help(struct fuse_args *args);
+
+struct fuse *_fuse_new(struct fuse_args *args,
+		       const struct fuse_operations *op,
+		       size_t op_size, struct libfuse_version *version,
+		       void *user_data);
 
 /**
  * Create a new FUSE filesystem.
@@ -960,18 +988,60 @@ void fuse_lib_help(struct fuse_args *args);
  * @return the created FUSE handle
  */
 #if FUSE_USE_VERSION == 30
-struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
-			 size_t op_size, void *private_data);
-#define fuse_new(args, op, size, data) fuse_new_30(args, op, size, data)
+struct fuse *_fuse_new_30(struct fuse_args *args,
+			 const struct fuse_operations *op,
+			 size_t op_size, void *user_data);
+static inline struct fuse *
+fuse_new(struct fuse_args *args,
+	 const struct fuse_operations *op, size_t op_size,
+	 void *user_data)
+{
+	struct libfuse_version version = {
+		.major = FUSE_MAJOR_VERSION,
+		.minor = FUSE_MINOR_VERSION,
+		.hotfix = FUSE_HOTFIX_VERSION,
+		.padding = 0
+	};
+
+	return _fuse_new_30(args, op, op_size, &version, user_data);
+}
 #else
 #if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
-struct fuse *fuse_new(struct fuse_args *args, const struct fuse_operations *op,
-		      size_t op_size, void *private_data);
+static inline struct fuse *
+fuse_new(struct fuse_args *args,
+	 const struct fuse_operations *op, size_t op_size,
+	 void *user_data)
+{
+	struct libfuse_version version = {
+		.major = FUSE_MAJOR_VERSION,
+		.minor = FUSE_MINOR_VERSION,
+		.hotfix = FUSE_HOTFIX_VERSION,
+		.padding = 0
+	};
+
+	return _fuse_new(args, op, op_size, &version, user_data);
+}
 #else /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
-struct fuse *fuse_new_31(struct fuse_args *args,
-		      const struct fuse_operations *op,
-		      size_t op_size, void *private_data);
-#define fuse_new(args, op, size, data) fuse_new_31(args, op, size, data)
+struct fuse *_fuse_new_317(struct fuse_args *args,
+                      const struct fuse_operations *op, size_t op_size,
+		      struct libfuse_version *version,
+		      void *private_data);
+#define _fuse_new(args, op, size, version, data) \
+	_fuse_new_317(args, op, size, version, data)
+static inline struct fuse *
+fuse_new(struct fuse_args *args,
+	 const struct fuse_operations *op, size_t op_size,
+	 void *user_data)
+{
+	struct libfuse_version version = {
+		.major = FUSE_MAJOR_VERSION,
+		.minor = FUSE_MINOR_VERSION,
+		.hotfix = FUSE_HOTFIX_VERSION,
+		.padding = 0
+	};
+
+	return _fuse_new(args, op, op_size, &version, user_data);
+}
 #endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 #endif
 
@@ -1126,14 +1196,6 @@ int fuse_interrupted(void);
  *         considered to be an error.
  */
 int fuse_invalidate_path(struct fuse *f, const char *path);
-
-/**
- * The real main function
- *
- * Do not call this directly, use fuse_main()
- */
-int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, void *private_data);
 
 /**
  * Start the cleanup thread when using option "remember".

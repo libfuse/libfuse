@@ -187,12 +187,19 @@ FUSE_3.12 {
 		fuse_lowlevel_notify_expire_entry;
 } FUSE_3.4;
 
-FUSE_3.14 {
+FUSE_3.17 {
 	global:
+		_fuse_session_new_317;
+		_fuse_new;
+		_fuse_new_30;
+		_fuse_new_317;
+		fuse_main_real_317;
+		fuse_passthrough_open;
+		fuse_passthrough_close;
 		fuse_loop_cfg_set_uring_opts;
 		fuse_loop_cfg_set_uring_ext_thread;
 		fuse_req_is_uring;
-} FUSE_3.4;
+} FUSE_3.12;
 
 # Local Variables:
 # indent-tabs-mode: t

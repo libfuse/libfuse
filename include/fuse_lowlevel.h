@@ -136,6 +136,7 @@ struct fuse_custom_io {
 	ssize_t (*splice_send)(int fdin, off_t *offin, int fdout,
 				     off_t *offout, size_t len,
 			           unsigned int flags, void *userdata);
+	int (*clone_fd)(int master_fd);
 };
 
 /**
@@ -561,6 +562,13 @@ struct fuse_lowlevel_ops {
 	 * future calls to open and release will also succeed without being
 	 * sent to the filesystem process.
 	 *
+	 * To get this behavior without providing an opendir handler, you may
+	 * set FUSE_CAP_NO_OPEN_SUPPORT in `fuse_conn_info.want` on supported
+	 * kernels to automatically get the zero message open().
+	 *
+	 * If this callback is not provided and FUSE_CAP_NO_OPEN_SUPPORT is not
+	 * set in `fuse_conn_info.want` then an empty reply will be sent.
+	 *
 	 * Valid replies:
 	 *   fuse_reply_open
 	 *   fuse_reply_err
@@ -733,6 +741,13 @@ struct fuse_lowlevel_ops {
 	 * releasedir will also succeed without being sent to the filesystem
 	 * process. In addition, the kernel will cache readdir results
 	 * as if opendir returned FOPEN_KEEP_CACHE | FOPEN_CACHE_DIR.
+	 *
+	 * To get this behavior without providing an opendir handler, you may
+	 * set FUSE_CAP_NO_OPENDIR_SUPPORT in `fuse_conn_info.want` on supported
+	 * kernels to automatically get the zero message opendir().
+	 *
+	 * If this callback is not provided and FUSE_CAP_NO_OPENDIR_SUPPORT is
+	 * not set in `fuse_conn_info.want` then an empty reply will be sent.
 	 *
 	 * Valid replies:
 	 *   fuse_reply_open
@@ -1412,6 +1427,19 @@ int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 int fuse_reply_readlink(fuse_req_t req, const char *link);
 
 /**
+ * Setup passthrough backing file for open reply
+ *
+ * Possible requests:
+ *   open, opendir, create
+ *
+ * @param req request handle
+ * @param fd backing file descriptor
+ * @return positive backing id for success, 0 for failure
+ */
+int fuse_passthrough_open(fuse_req_t req, int fd);
+int fuse_passthrough_close(fuse_req_t req, int backing_id);
+
+/**
  * Reply with open parameters
  *
  * currently the following members of 'fi' are used:
@@ -2022,6 +2050,36 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 #endif
 #endif
 
+/*
+ * This should mostly not be called directly, but instead the fuse_session_new()
+ * macro should be used, which fills in the libfuse version compilation
+ * is done against automatically.
+ */
+struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
+					  const struct fuse_lowlevel_ops *op,
+					  size_t op_size,
+					  struct libfuse_version *version,
+					  void *userdata);
+
+/* Do not call this directly, but only through fuse_session_new() */
+#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
+struct fuse_session *
+_fuse_session_new(struct fuse_args *args,
+		 const struct fuse_lowlevel_ops *op,
+		 size_t op_size,
+		 struct libfuse_version *version,
+		 void *userdata);
+#else
+struct fuse_session *
+_fuse_session_new_317(struct fuse_args *args,
+		      const struct fuse_lowlevel_ops *op,
+		      size_t op_size,
+		      struct libfuse_version *version,
+		      void *userdata);
+#define _fuse_session_new(args, op, op_size, version, userdata)	\
+	_fuse_session_new_317(args, op, op_size, version, userdata)
+#endif
+
 /**
  * Create a low level session.
  *
@@ -2046,13 +2104,25 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
  * @param args argument vector
  * @param op the (low-level) filesystem operations
  * @param op_size sizeof(struct fuse_lowlevel_ops)
+ * @param version the libfuse version a file system server was compiled against
  * @param userdata user data
- *
  * @return the fuse session on success, NULL on failure
  **/
-struct fuse_session *fuse_session_new(struct fuse_args *args,
-				      const struct fuse_lowlevel_ops *op,
-				      size_t op_size, void *userdata);
+static inline struct fuse_session *
+fuse_session_new(struct fuse_args *args,
+		 const struct fuse_lowlevel_ops *op,
+		 size_t op_size,
+		 void *userdata)
+{
+	struct libfuse_version version = {
+		.major = FUSE_MAJOR_VERSION,
+		.minor = FUSE_MINOR_VERSION,
+		.hotfix = FUSE_HOTFIX_VERSION,
+		.padding = 0
+	};
+
+	return _fuse_session_new(args, op, op_size, &version, userdata);
+}
 
 /**
  * Set a file descriptor for the session.

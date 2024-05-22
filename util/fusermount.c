@@ -1255,7 +1255,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 			size_t mnt_opts_len = strlen(mnt_opts);
 			size_t x_mnt_opts_len =  mnt_opts_len+
 						 strlen(x_opts) + 2;
-			char *x_mnt_opts = malloc(x_mnt_opts_len);
+			char *x_mnt_opts = calloc(1, x_mnt_opts_len);
 
 			if (mnt_opts_len) {
 				strcpy(x_mnt_opts, mnt_opts);

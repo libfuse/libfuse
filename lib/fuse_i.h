@@ -77,11 +77,19 @@ struct fuse_session {
 	int error;
 	bool is_uring;
 
+	/* 
+	 * This is useful if any kind of ABI incompatibility is found at
+	 * a later version, to 'fix' it at run time.
+	 */
+	struct libfuse_version version;
+
 	struct {
 		int nr_queues;
 		struct fuse_ring_pool *pool;
+
 		bool external_threads:1;
 	} ring;
+
 };
 
 struct fuse_chan {
