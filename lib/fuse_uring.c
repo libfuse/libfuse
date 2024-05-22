@@ -738,8 +738,8 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 	 * multiple queue mode.
 	 *
 	 */
-	queue->mmap_buf = mmap(NULL, ring->queue_mmap_size, prot,
-				 flags, se->fd, 0);
+	queue->mmap_buf = mmap(NULL, ring->queue_mmap_size, prot, flags, se->fd,
+			       FUSE_URING_MMAP_OFF);
 	if (queue->mmap_buf == MAP_FAILED) {
 		fuse_log(FUSE_LOG_ERR,
 			 "qid=%d mmap of size %zu failed: %s\n",
