@@ -15,21 +15,12 @@
     support version symboling
 */
 
-#include "fuse_config.h"
-#include "fuse_i.h"
-#include "fuse_misc.h"
-#include "fuse_opt.h"
-#include "fuse_lowlevel.h"
-#include "mount_util.h"
+#include "libfuse_config.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <unistd.h>
-#include <string.h>
-#include <limits.h>
-#include <errno.h>
-#include <sys/param.h>
+struct fuse_args;
+struct fuse_cmdline_opts;
+struct fuse_cmdline_opts;
+
 
 /**
  * Compatibility ABI symbol for systems that do not support version symboling
