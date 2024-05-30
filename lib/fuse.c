@@ -2612,6 +2612,10 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 	if(conn->capable & FUSE_CAP_EXPORT_SUPPORT)
 		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 	fuse_fs_init(f->fs, conn, &f->conf);
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	if (!f->conf.intr)
+		conn->no_interrupt = 1;
 }
 
 void fuse_fs_destroy(struct fuse_fs *fs)

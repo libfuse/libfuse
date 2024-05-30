@@ -77,6 +77,14 @@ static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 		fuse_reply_attr(req, &stbuf, 1.0);
 }
 
+static void hello_ll_init(void *userdata, struct fuse_conn_info *conn)
+{
+	(void)userdata;
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
+}
+
 static void hello_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct fuse_entry_param e;
@@ -164,6 +172,7 @@ static void hello_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static const struct fuse_lowlevel_ops hello_ll_oper = {
+	.init           = hello_ll_init,
 	.lookup		= hello_ll_lookup,
 	.getattr	= hello_ll_getattr,
 	.readdir	= hello_ll_readdir,

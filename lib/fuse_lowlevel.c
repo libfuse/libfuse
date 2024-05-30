@@ -134,14 +134,20 @@ void fuse_free_req(fuse_req_t req)
 	int ctr;
 	struct fuse_session *se = req->se;
 
-	pthread_mutex_lock(&se->lock);
-	req->u.ni.func = NULL;
-	req->u.ni.data = NULL;
-	list_del_req(req);
-	ctr = --req->ctr;
-	fuse_chan_put(req->ch);
-	req->ch = NULL;
-	pthread_mutex_unlock(&se->lock);
+	if (se->conn.no_interrupt) {
+		ctr = --req->ctr;
+		fuse_chan_put(req->ch);
+		req->ch = NULL;
+	} else {
+		pthread_mutex_lock(&se->lock);
+		req->u.ni.func = NULL;
+		req->u.ni.data = NULL;
+		list_del_req(req);
+		ctr = --req->ctr;
+		fuse_chan_put(req->ch);
+		req->ch = NULL;
+		pthread_mutex_unlock(&se->lock);
+	}
 	if (!ctr)
 		destroy_req(req);
 }
@@ -2786,7 +2792,13 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	err = ENOSYS;
 	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
 		goto reply_err;
-	if (in->opcode != FUSE_INTERRUPT) {
+	/* Do not process interrupt request */
+	if (se->conn.no_interrupt && in->opcode == FUSE_INTERRUPT) {
+		if (se->debug)
+			fuse_log(FUSE_LOG_DEBUG, "FUSE_INTERRUPT: reply to kernel to disable interrupt\n");
+		goto reply_err;
+	}
+	if (!se->conn.no_interrupt && in->opcode != FUSE_INTERRUPT) {
 		struct fuse_req *intr;
 		pthread_mutex_lock(&se->lock);
 		intr = check_interrupt(se, req);
