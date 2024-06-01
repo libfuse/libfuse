@@ -438,6 +438,9 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 			fuse_join_worker(&mt, mt.main.next);
 
 		err = mt.error;
+
+		if (config->uring.use_uring)
+			fuse_uring_join_threads(se);
 	}
 
 	pthread_mutex_destroy(&mt.lock);

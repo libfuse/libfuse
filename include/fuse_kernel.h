@@ -1110,7 +1110,7 @@ struct fuse_uring_cfg {
 			uint32_t nr_queues;
 
 			/* number of foreground entries per queue */
-			uint32_t fg_queue_depth;
+			uint32_t sync_queue_depth;
 
 			/* number of background entries per queue */
 			uint32_t async_queue_depth;

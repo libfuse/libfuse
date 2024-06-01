@@ -431,12 +431,12 @@ static int fuse_uring_setup_kernel_ring(int session_fd,
 	int rc;
 
 	struct fuse_ring_config rconf = {
-		.nr_queues = nr_queues,
-		.fg_queue_depth = sync_qdepth,
-		.async_queue_depth = async_qdepth,
-		.req_arg_len = req_arg_len,
-		.user_req_buf_sz = req_alloc_sz,
-		.numa_aware = nr_queues > 1,
+		.nr_queues		= nr_queues,
+		.sync_queue_depth	= sync_qdepth,
+		.async_queue_depth	= async_qdepth,
+		.req_arg_len		= req_arg_len,
+		.user_req_buf_sz	= req_alloc_sz,
+		.numa_aware		= nr_queues > 1,
 	};
 
 	struct fuse_uring_cfg ioc_cfg = {
@@ -877,4 +877,22 @@ out:
 	se->ring.nr_queues = fuse_ring ? fuse_ring->nr_queues : 0;
 
 	return rc;
+}
+
+int fuse_uring_join_threads(struct fuse_session *se)
+{
+	struct fuse_ring_pool *ring = se->ring.pool;
+
+	if (ring == NULL)
+		return 0;
+
+	for (int qid = 0; qid < ring->nr_queues; qid++)
+	{
+		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
+
+		pthread_kill(queue->tid, SIGTERM);
+		pthread_join(queue->tid, NULL);
+	}
+
+	return 0;
 }
