@@ -20,6 +20,8 @@
 struct fuse_args;
 struct fuse_cmdline_opts;
 struct fuse_cmdline_opts;
+struct fuse_session;
+struct fuse_custom_io;
 
 
 /**
@@ -41,6 +43,17 @@ int fuse_parse_cmdline(struct fuse_args *args,
 		       struct fuse_cmdline_opts *opts)
 {
 	return fuse_parse_cmdline_30(args, opts);
+}
+
+int fuse_session_custom_io_30(struct fuse_session *se,
+				const struct fuse_custom_io *io, int fd);
+int fuse_session_custom_io(struct fuse_session *se,
+				const struct fuse_custom_io *io, int fd);
+int fuse_session_custom_io(struct fuse_session *se,
+			const struct fuse_custom_io *io, int fd)
+
+{
+	return fuse_session_custom_io_30(se, io, fd);
 }
 #endif
 

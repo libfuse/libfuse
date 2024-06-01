@@ -11,7 +11,7 @@ executable('mount.fuse3', ['mount.fuse.c'],
            link_with: [ libfuse ],
            install: true,
            install_dir: get_option('sbindir'),
-           c_args: '-DFUSE_USE_VERSION=312')
+           c_args: '-DFUSE_USE_VERSION=317')
 
 
 udevrulesdir = get_option('udevrulesdir')
