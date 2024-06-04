@@ -14,7 +14,7 @@ struct mount_opts;
 struct fuse_req {
 	struct fuse_session *se;
 	uint64_t unique;
-	int ctr;
+	_Atomic int ref_cnt;
 	pthread_mutex_t lock;
 	struct fuse_ctx ctx;
 	struct fuse_chan *ch;
