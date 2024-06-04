@@ -2604,6 +2604,8 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		fs->user_data = fs->op.init(conn, cfg);
 }
 
+static int fuse_init_intr_signal(int signum, int *installed);
+
 static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 {
 	struct fuse *f = (struct fuse *) data;
@@ -2613,9 +2615,14 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 	fuse_fs_init(f->fs, conn, &f->conf);
 
-	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
-	if (!f->conf.intr)
+	if (f->conf.intr) {
+		if (fuse_init_intr_signal(f->conf.intr_signal,
+				&f->intr_installed) == -1)
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to init interrupt signal\n");
+	} else {
+		/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 		conn->no_interrupt = 1;
+	}
 }
 
 void fuse_fs_destroy(struct fuse_fs *fs)
@@ -5020,12 +5027,6 @@ struct fuse *_fuse_new_317(struct fuse_args *args,
 
 	strcpy(root->inline_name, "/");
 	root->name = root->inline_name;
-
-	if (f->conf.intr &&
-	    fuse_init_intr_signal(f->conf.intr_signal,
-				  &f->intr_installed) == -1)
-		goto out_free_root;
-
 	root->parent = NULL;
 	root->nodeid = FUSE_ROOT_ID;
 	inc_nlookup(root);
@@ -5033,8 +5034,6 @@ struct fuse *_fuse_new_317(struct fuse_args *args,
 
 	return f;
 
-out_free_root:
-	free(root);
 out_free_id_table:
 	free(f->id_table.array);
 out_free_name_table:
