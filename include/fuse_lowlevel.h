@@ -24,6 +24,7 @@
 
 #include "fuse_common.h"
 
+#include <stddef.h>
 #include <utime.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -2092,6 +2093,13 @@ fuse_session_new(struct fuse_args *args,
 	return _fuse_session_new(args, op, op_size, &version, userdata);
 }
 
+/*
+ * This should mostly not be called directly, but instead the
+ * fuse_session_custom_io() should be used.
+ */
+int fuse_session_custom_io_317(struct fuse_session *se,
+			const struct fuse_custom_io *io, size_t op_size, int fd);
+
 /**
  * Set a file descriptor for the session.
  *
@@ -2119,8 +2127,20 @@ fuse_session_new(struct fuse_args *args,
  * @return -errno  if failed to allocate memory to store `io`
  *
  **/
-int fuse_session_custom_io(struct fuse_session *se,
-				   const struct fuse_custom_io *io, int fd);
+#if FUSE_MAKE_VERSION(3, 17) <= FUSE_USE_VERSION
+static inline int fuse_session_custom_io(struct fuse_session *se,
+					const struct fuse_custom_io *io, size_t op_size, int fd)
+{
+	return fuse_session_custom_io_317(se, io, op_size, fd);
+}
+#else
+static inline int fuse_session_custom_io(struct fuse_session *se,
+					const struct fuse_custom_io *io, int fd)
+{
+	return fuse_session_custom_io_317(se, io,
+				offsetof(struct fuse_custom_io, clone_fd), fd);
+}
+#endif
 
 /**
  * Mount a FUSE file system.

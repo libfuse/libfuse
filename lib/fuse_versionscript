@@ -196,6 +196,8 @@ FUSE_3.17 {
 		fuse_main_real_317;
 		fuse_passthrough_open;
 		fuse_passthrough_close;
+		fuse_session_custom_io_30;
+		fuse_session_custom_io_317;
 } FUSE_3.12;
 
 # Local Variables:
