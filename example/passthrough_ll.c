@@ -181,6 +181,9 @@ static void lo_init(void *userdata,
 			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
 	}
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
 }
 
 static void lo_destroy(void *userdata)

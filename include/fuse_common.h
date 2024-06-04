@@ -635,9 +635,19 @@ struct fuse_conn_info {
 	unsigned max_backing_stack_depth;
 
 	/**
+	 * Disable FUSE_INTERRUPT requests.
+	 *
+	 * Enable `no_interrupt` option to:
+	 * 1) Avoid unnecessary locking operations and list operations,
+	 * 2) Return ENOSYS for the reply of FUSE_INTERRUPT request to
+	 * inform the kernel not to send the FUSE_INTERRUPT request.
+	 */
+	unsigned no_interrupt;
+
+	/**
 	 * For future use.
 	 */
-	unsigned reserved[21];
+	unsigned reserved[20];
 };
 
 struct fuse_session;

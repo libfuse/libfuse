@@ -132,6 +132,13 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
     return 0;
 }
 
+static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
+	(void)userdata;
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
+}
+
 static void tfs_lookup(fuse_req_t req, fuse_ino_t parent,
                        const char *name) {
     struct fuse_entry_param e;
@@ -304,6 +311,7 @@ static void tfs_destroy(void *userdata)
 
 
 static const struct fuse_lowlevel_ops tfs_oper = {
+    .init       = tfs_init,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
