@@ -1421,6 +1421,7 @@ int main(int argc, char *argv[]) {
         (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory");
 
+    ret = -1;
     fuse_lowlevel_ops sfs_oper {};
     assign_operations(sfs_oper);
     auto se = fuse_session_new(&args, &sfs_oper, sizeof(sfs_oper), &fs);
