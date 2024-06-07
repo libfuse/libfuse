@@ -35,4 +35,4 @@ fi
 
 [ -n "$PASSTHROUGH_PATH" ] || PASSTHROUGH_PATH=${0#*mount.fuse.}
 
-exec "$PASSTHROUGH_PATH" -o fsname=$dev,allow_other $source "$mnt" -o "$mntopts" "$@"
+exec "$PASSTHROUGH_PATH" --direct-io -o fsname=$dev,allow_other $source "$mnt" -o "$mntopts" "$@"
