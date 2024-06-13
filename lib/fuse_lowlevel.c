@@ -3353,6 +3353,7 @@ retry:
 		goto retry;
 	}
 
+	buf[ret] = '\0';
 	ret = -EIO;
 	s = strstr(buf, "\nGroups:");
 	if (s == NULL)
