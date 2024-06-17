@@ -189,6 +189,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 int send_reply_uring(fuse_req_t req, int error, const void *arg,
 		     size_t argsize)
 {
+	int res;
 	struct fuse_ring_ent *ring_ent =
 		container_of(req, struct fuse_ring_ent, req);
 
@@ -210,7 +211,11 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg,
 	out->error  = error;
 	out->unique = req->unique;
 
-	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+
+	fuse_free_req(req);
+
+	return res;
 }
 
 int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
@@ -237,7 +242,11 @@ int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
 
 	rreq->in_out_arg_len = res > 0 ? res : 0;
 
-	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+
+	fuse_free_req(req);
+
+	return res;
 }
 
 /**
@@ -277,7 +286,11 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 	out->error  = res;
 	out->unique = req->unique;
 
-	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+
+	fuse_free_req(req);
+
+	return res;
 }
 
 static void
@@ -300,6 +313,7 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	void *inarg = rreq->in_out_arg;
 
 	req->is_uring = true;
+	req->ref_cnt++;
 	req->ch = NULL; /* not needed for uring */
 
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, inarg,
@@ -772,6 +786,7 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		req->se = se;
 		pthread_mutex_init(&req->lock, NULL);
 		req->is_uring = true;
+		req->ref_cnt = 1;
 	}
 
 	res = fuse_uring_prepare_fetch_sqes(queue);

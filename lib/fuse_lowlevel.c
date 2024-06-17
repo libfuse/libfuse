@@ -126,6 +126,10 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
 
 static void destroy_req(fuse_req_t req)
 {
+	if (req->is_uring) {
+		fuse_log(FUSE_LOG_ERR, "Refusing to destruct uring req\n");
+		return;
+	}
 	assert(req->ch == NULL);
 	pthread_mutex_destroy(&req->lock);
 	free(req);
@@ -136,7 +140,7 @@ void fuse_free_req(fuse_req_t req)
 	int ctr;
 	struct fuse_session *se = req->se;
 
-	if (se->conn.no_interrupt) {
+	if (se->conn.no_interrupt || req->is_uring) {
 		ctr = --req->ref_cnt;
 		fuse_chan_put(req->ch);
 		req->ch = NULL;
