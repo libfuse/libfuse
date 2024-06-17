@@ -2870,6 +2870,7 @@ void fuse_session_process_buf_int(struct fuse_session *se,
 	}
 
 	fuse_session_in2req(req, in);
+	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
 	err = fuse_req_opcode_sanity_ok(se, in->opcode);
 	if (err)
