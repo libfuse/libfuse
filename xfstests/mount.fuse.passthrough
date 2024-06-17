@@ -35,4 +35,6 @@ fi
 
 [ -n "$PASSTHROUGH_PATH" ] || PASSTHROUGH_PATH=${0#*mount.fuse.}
 
-exec "$PASSTHROUGH_PATH" -o fsname=$dev,allow_other $source "$mnt" -o "$mntopts" "$@"
+#echo "EXTRA_BIN_OPTIONS='${EXTRA_BIN_OPTIONS}'"
+
+exec "$PASSTHROUGH_PATH" ${EXTRA_BIN_OPTIONS} -o fsname=$dev,allow_other $source "$mnt" -o "$mntopts" "$@"

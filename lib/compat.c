@@ -15,21 +15,14 @@
     support version symboling
 */
 
-#include "fuse_config.h"
-#include "fuse_i.h"
-#include "fuse_misc.h"
-#include "fuse_opt.h"
-#include "fuse_lowlevel.h"
-#include "mount_util.h"
+#include "libfuse_config.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stddef.h>
-#include <unistd.h>
-#include <string.h>
-#include <limits.h>
-#include <errno.h>
-#include <sys/param.h>
+struct fuse_args;
+struct fuse_cmdline_opts;
+struct fuse_cmdline_opts;
+struct fuse_session;
+struct fuse_custom_io;
+
 
 /**
  * Compatibility ABI symbol for systems that do not support version symboling
@@ -50,6 +43,17 @@ int fuse_parse_cmdline(struct fuse_args *args,
 		       struct fuse_cmdline_opts *opts)
 {
 	return fuse_parse_cmdline_30(args, opts);
+}
+
+int fuse_session_custom_io_30(struct fuse_session *se,
+				const struct fuse_custom_io *io, int fd);
+int fuse_session_custom_io(struct fuse_session *se,
+				const struct fuse_custom_io *io, int fd);
+int fuse_session_custom_io(struct fuse_session *se,
+			const struct fuse_custom_io *io, int fd)
+
+{
+	return fuse_session_custom_io_30(se, io, fd);
 }
 #endif
 

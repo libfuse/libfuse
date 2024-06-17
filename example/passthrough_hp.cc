@@ -237,6 +237,9 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
     /* This is a local file system - no network coherency needed */
     if (conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
         conn->want |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
+
+    /* Disable the receiving and processing of FUSE_INTERRUPT requests */
+    conn->no_interrupt = 1;
 }
 
 
@@ -1448,6 +1451,7 @@ int main(int argc, char *argv[]) {
         (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory");
 
+    ret = -1;
     fuse_lowlevel_ops sfs_oper {};
     assign_operations(sfs_oper);
     auto se = fuse_session_new(&args, &sfs_oper, sizeof(sfs_oper), &fs);
