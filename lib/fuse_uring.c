@@ -14,7 +14,6 @@
 
 #include "fuse_i.h"
 #include "fuse_kernel.h"
-#include "fuse_lowlevel_i.h"
 #include "fuse_uring_i.h"
 
 #include <stdlib.h>
@@ -50,6 +49,7 @@ struct fuse_ring_ent {
 	struct fuse_req req;
 
 	struct fuse_ring_req *ring_req;
+	size_t req_len;
 
 	int tag;
 };
@@ -117,9 +117,12 @@ static void *fuse_uring_get_sqe_cmd(struct io_uring_sqe *sqe)
 }
 
 static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
-										const unsigned int qid,
-										const unsigned int tag)
+					void *buf, size_t len,
+					const unsigned int qid,
+					const unsigned int tag)
 {
+	req->buf_ptr = (uint64_t) buf;
+	req->buf_len = len;
 	req->qid = qid;
 	req->tag = tag;
 	req->flags = 0;
@@ -171,6 +174,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	fuse_uring_sqe_prepare(sqe, ring_ent, FUSE_URING_REQ_COMMIT_AND_FETCH);
 
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
+				    ring_ent->ring_req, ring_ent->req_len,
 				    queue->qid, ring_ent->tag);
 
 	if (se->debug) {
@@ -512,6 +516,7 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 
 		fuse_uring_sqe_prepare(sqe, req, FUSE_URING_REQ_FETCH);
 		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
+					    req->ring_req, req->req_len,
 					    queue->qid, req->tag);
 	}
 
@@ -779,8 +784,16 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		struct fuse_ring_ent *ring_ent = &queue->ent[tag];
 		ring_ent->ring_queue = queue;
 		ring_ent->tag = tag;
-		ring_ent->ring_req = (struct fuse_ring_req *)
-			(queue->mmap_buf + ring->queue_req_buf_size * tag);
+		ring_ent->ring_req =
+			(struct fuse_ring_req *)(queue->mmap_buf +
+						 ring->queue_req_buf_size *
+							 tag);
+
+		/* override for testing */
+		ring_ent->req_len = sizeof(*ring_ent->ring_req) +
+				    2 * 4096 + 1024 * 1024;
+		ring_ent->ring_req = numa_alloc_local(ring_ent->req_len);
+		ring_ent->ring_req->in_out_arg_len = ring_ent->req_len;
 
 		struct fuse_req *req = &ring_ent->req;
 		req->se = se;

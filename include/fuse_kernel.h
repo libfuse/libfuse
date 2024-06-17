@@ -1311,6 +1311,10 @@ enum fuse_uring_cmd {
  * In the 80B command area of the SQE.
  */
 struct fuse_uring_cmd_req {
+	uint64_t buf_ptr;
+
+	uint32_t buf_len;
+
 	/* queue the command is for (queue index) */
 	uint16_t qid;
 
