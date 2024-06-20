@@ -287,14 +287,14 @@ static void* update_fs_loop(void *data) {
         if (!options.no_notify && lookup_cnt) {
             /* Only send notification if the kernel is aware of the inode */
 
-            /* Some errors (ENOENT, EBADFD, ENODEV) have to be accepted as the
+            /* Some errors (ENOENT, EBADF, ENODEV) have to be accepted as they
              * might come up during umount, when kernel side already releases
              * all inodes, but does not send FUSE_DESTROY yet.
              */
             int ret =
                 fuse_lowlevel_notify_inval_inode(se, FILE_INO, 0, 0);
             if ((ret != 0 && !is_stop) &&
-                 ret != -ENOENT && ret != -EBADFD && ret != -ENODEV) {
+                 ret != -ENOENT && ret != -EBADF && ret != -ENODEV) {
                 fprintf(stderr,
                         "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
                         strerror(-ret), -ret);
