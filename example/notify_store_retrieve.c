@@ -353,14 +353,14 @@ static void* update_fs_loop(void *data) {
             bufv.buf[0].flags = 0;
 
             /*
-             * Some errors (ENOENT, EBADFD, ENODEV) have to be accepted as they
+             * Some errors (ENOENT, EBADF, ENODEV) have to be accepted as they
              * might come up during umount, when kernel side already releases
              * all inodes, but does not send FUSE_DESTROY yet.
              */
 
             ret = fuse_lowlevel_notify_store(se, FILE_INO, 0, &bufv, 0);
             if ((ret != 0 && !is_umount) &&
-                ret != -ENOENT && ret != -EBADFD && ret != -ENODEV) {
+                ret != -ENOENT && ret != -EBADF && ret != -ENODEV) {
                 fprintf(stderr,
                         "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
                         strerror(-ret), -ret);
@@ -371,7 +371,7 @@ static void* update_fs_loop(void *data) {
                kernel to send us back the stored data */
             ret = fuse_lowlevel_notify_retrieve(se, FILE_INO, MAX_STR_LEN,
                                                 0, (void*) strdup(file_contents));
-            assert((ret == 0 || is_umount) || ret == -ENOENT || ret == -EBADFD ||
+            assert((ret == 0 || is_umount) || ret == -ENOENT || ret == -EBADF ||
                    ret != -ENODEV);
             if(retrieve_status == 0)
                 retrieve_status = 1;
