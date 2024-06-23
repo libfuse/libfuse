@@ -84,8 +84,8 @@ If \fBuse_ino\fP option is not given, still try to fill in the \fId_ino\fP field
 \fBnonempty\fP
 Allows mounts over a non-empty file or directory. By default these  mounts are rejected to prevent accidental covering up of data, which could for example prevent automatic backup.
 .TP
-\fBumask=M\fP
-Override the permission bits in \fIst_mode\fP set by the filesystem. The resulting permission bits are the ones missing from the given umask value.  The value is given in octal representation.
+\fBumask=M fmask=M dmask=M\fP
+Override the permission bits set by the filesystem in \fIst_mode\fP. The resulting permission bits are the ones missing from the mask value, which is given in octal representation. \fBfmask\fP and \fBdmask\fP (respectively) may be used to control the permission bits of files and directories separately. umask is overridden by the individual fmask and dmask options.
 .TP
 \fBuid=N\fP
 Override the \fIst_uid\fP field set by the filesystem (N is numeric).
