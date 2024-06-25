@@ -56,8 +56,6 @@ struct fuse_config {
 	unsigned int uid;
 	unsigned int gid;
 	unsigned int  umask;
-	unsigned int  fmask;
-	unsigned int  dmask;
 	double entry_timeout;
 	double negative_timeout;
 	double attr_timeout;
@@ -79,6 +77,8 @@ struct fuse_config {
 	int intr_signal;
 	int help;
 	char *modules;
+	unsigned int  fmask;
+	unsigned int  dmask;
 };
 
 struct fuse_fs {
