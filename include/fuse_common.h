@@ -94,8 +94,14 @@ struct fuse_file_info {
 	    on close. */
 	unsigned int noflush : 1;
 
+	/** Can be filled in by open and create. It signals the kernel to
+	    page align write data.
+	    Is set for informational purposes in write and write_buf, when
+	    a file was opened with this flag before. */
+	unsigned int write_aligned : 1;
+
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 23;
+	unsigned int padding : 22;
 	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
@@ -447,15 +453,15 @@ struct fuse_loop_config_v1 {
 
 /**
  * Indicates support that dentries can be expired.
- * 
- * Expiring dentries, instead of invalidating them, makes a difference for 
- * overmounted dentries, where plain invalidation would detach all submounts 
- * before dropping the dentry from the cache. If only expiry is set on the 
- * dentry, then any overmounts are left alone and until ->d_revalidate() 
+ *
+ * Expiring dentries, instead of invalidating them, makes a difference for
+ * overmounted dentries, where plain invalidation would detach all submounts
+ * before dropping the dentry from the cache. If only expiry is set on the
+ * dentry, then any overmounts are left alone and until ->d_revalidate()
  * is called.
- * 
+ *
  * Note: ->d_revalidate() is not called for the case of following a submount,
- * so invalidation will only be triggered for the non-overmounted case. 
+ * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
 */
@@ -839,6 +845,7 @@ struct fuse_buf {
 	 * Memory pointer
 	 *
 	 * Used unless FUSE_BUF_IS_FD flag is set.
+	 * Needs to be a page aligned buffer when FUSE_ALIGN_WRITES is used.
 	 */
 	void *mem;
 
