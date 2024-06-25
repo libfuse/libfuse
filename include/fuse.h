@@ -94,6 +94,9 @@ typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
  * fuse_new(), and then passed to the file system's init() handler
  * which should ensure that the configuration is compatible with the
  * file system implementation.
+ *
+ * Note: this data structure is ABI sensitive, new options have to be
+ * appended at the end of the structure
  */
 struct fuse_config {
 	/**
@@ -276,6 +279,7 @@ struct fuse_config {
 	 * fuse_file_info argument is NULL.
 	 */
 	int nullpath_ok;
+
 	/**
 	 *  Allow parallel direct-io writes to operate on the same file.
 	 *
@@ -292,7 +296,7 @@ struct fuse_config {
 	int parallel_direct_writes;
 
 	/**
-	 * The remaining options are used by libfuse internally and
+	 * These 3 options are used by libfuse internally and
 	 * should not be touched.
 	 */
 	int show_help;
