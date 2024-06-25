@@ -199,6 +199,9 @@ enum fuse_notify_entry_flags {
  * interrupted, and the reply discarded.  For example if
  * fuse_reply_open() return -ENOENT means, that the release method for
  * this file will not be called.
+ *
+ * This data structure is ABI sensitive, on adding new functions these need to
+ * be appended at the end of the struct
  */
 struct fuse_lowlevel_ops {
 	/**
@@ -509,7 +512,7 @@ struct fuse_lowlevel_ops {
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
 	 * 
-         *  - When writeback caching is enabled, the kernel will
+	 *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
 	 *    filesystem should thus either ignore the O_APPEND flag
@@ -744,7 +747,7 @@ struct fuse_lowlevel_ops {
 	 * Returning a directory entry from readdir() does not affect
 	 * its lookup count.
 	 *
-         * If off_t is non-zero, then it will correspond to one of the off_t
+	 * If off_t is non-zero, then it will correspond to one of the off_t
 	 * values that was previously returned by readdir() for the same
 	 * directory handle. In this case, readdir() should skip over entries
 	 * coming before the position defined by the off_t value. If entries
