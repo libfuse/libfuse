@@ -463,6 +463,7 @@ struct fuse_file_lock {
 #define FUSE_PASSTHROUGH	(1ULL << 37)
 #define FUSE_NO_EXPORT_SUPPORT	(1ULL << 38)
 #define FUSE_HAS_RESEND		(1ULL << 39)
+#define FUSE_ALIGN_WRITES   (1ULL << 40)
 
 /* Obsolete alias for FUSE_DIRECT_IO_ALLOW_MMAP */
 #define FUSE_DIRECT_IO_RELAX	FUSE_DIRECT_IO_ALLOW_MMAP
@@ -503,7 +504,6 @@ struct fuse_file_lock {
 
 /* Obsolete alias; this flag implies killing suid/sgid only. */
 #define FUSE_WRITE_KILL_PRIV	FUSE_WRITE_KILL_SUIDGID
-
 /**
  * Read flags
  */
@@ -804,6 +804,8 @@ struct fuse_read_in {
 };
 
 #define FUSE_COMPAT_WRITE_IN_SIZE 24
+#define FUSE_IN_HEADER_SIZE 40
+#define FUSE_ALIGNED_WRITE_IN_SIZE (4096 - FUSE_IN_HEADER_SIZE)
 
 struct fuse_write_in {
 	uint64_t	fh;
@@ -812,7 +814,7 @@ struct fuse_write_in {
 	uint32_t	write_flags;
 	uint64_t	lock_owner;
 	uint32_t	flags;
-	uint32_t	padding;
+	uint32_t	align_size;
 };
 
 struct fuse_write_out {

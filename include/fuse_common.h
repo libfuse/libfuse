@@ -486,6 +486,12 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_PASSTHROUGH      (1 << 29)
 
 /**
+ * Align IOs (less copies) and allows to pass through O_DIRECT open flags,
+ * affects only the FUSE_WRITE opcode
+ */
+#define FUSE_CAP_ALIGN_WRITES     (1 << 30)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
@@ -835,6 +841,7 @@ struct fuse_buf {
 	 * Memory pointer
 	 *
 	 * Used unless FUSE_BUF_IS_FD flag is set.
+	 * Needs to be a page aligned buffer when FUSE_ALIGN_WRITES is used.
 	 */
 	void *mem;
 
