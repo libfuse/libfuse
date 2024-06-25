@@ -298,6 +298,14 @@ struct fuse_config {
 	int show_help;
 	char *modules;
 	int debug;
+
+	/**
+	 * `fmask` and `dmask` function the same way as `umask`, but apply
+	 * to files and directories separately. If non-zero, `fmask` and
+	 * `dmask` take precedence over the `umask` setting.
+	 */
+	unsigned int fmask;
+	unsigned int dmask;
 };
 
 
