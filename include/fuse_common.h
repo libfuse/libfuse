@@ -642,7 +642,7 @@ struct fuse_conn_info {
 	 * 2) Return ENOSYS for the reply of FUSE_INTERRUPT request to
 	 * inform the kernel not to send the FUSE_INTERRUPT request.
 	 */
-	unsigned no_interrupt;
+	unsigned no_interrupt : 1;
 
 	/**
 	 * For future use.
