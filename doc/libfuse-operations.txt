@@ -1,0 +1,418 @@
+List of libfuse operations with their in/out arguments, created with
+help of chatgpt. As of kernel 6.9 (protocol 7.40). The list
+was only partly human verified - use with care.
+
+1. FUSE_LOOKUP (1)
+   - in_args[0]: Variable (up to PATH_MAX for the file name)
+   - in_args[1]: Not used
+   - in_args[2]: Not used
+   - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+2. FUSE_FORGET (2)
+   - in_args[0]: Size of fuse_forget_in (typically 8 bytes)
+   - in_args[1]: Not used
+   - in_args[2]: Not used
+   - out_args[0]: Not used
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+3. FUSE_GETATTR (3)
+   - in_args[0]: Size of fuse_getattr_in (16 bytes)
+   - in_args[1]: Not used
+   - in_args[2]: Not used
+   - out_args[0]: Size of fuse_attr_out (typically 96 bytes)
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+4. FUSE_SETATTR (4)
+   - in_args[0]: Size of fuse_setattr_in (typically 32 bytes)
+   - in_args[1]: Not used
+   - in_args[2]: Not used
+   - out_args[0]: Size of fuse_attr_out (typically 96 bytes)
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+5. FUSE_READLINK (5)
+   - in_args[0]: Size of fuse_readlink_in (16 bytes)
+   - in_args[1]: Not used
+   - in_args[2]: Not used
+   - out_args[0]: Variable (size of the link target path)
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+6. FUSE_SYMLINK (6)
+   - in_args[0]: Size of fuse_symlink_in (variable)
+   - in_args[1]: Variable (target path, up to PATH_MAX)
+   - in_args[2]: Not used
+   - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+7. Unused (7)
+
+8. FUSE_MKNOD (8)
+   - in_args[0]: Size of fuse_mknod_in (24 bytes)
+   - in_args[1]: Variable (file name, up to PATH_MAX)
+   - in_args[2]: Not used
+   - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+9. FUSE_MKDIR (9)
+   - in_args[0]: Size of fuse_mkdir_in (16 bytes)
+   - in_args[1]: Variable (directory name, up to PATH_MAX)
+   - in_args[2]: Not used
+   - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
+   - out_args[1]: Not used
+   - out_args[2]: Not used
+
+10. FUSE_UNLINK (10)
+    - in_args[0]: Variable (file name, up to PATH_MAX)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+11. FUSE_RMDIR (11)
+    - in_args[0]: Variable (directory name, up to PATH_MAX)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+12. FUSE_RENAME (12)
+    - in_args[0]: Size of fuse_rename_in (24 bytes)
+    - in_args[1]: Variable (old path, up to PATH_MAX)
+    - in_args[2]: Variable (new path, up to PATH_MAX)
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+13. FUSE_LINK (13)
+    - in_args[0]: Size of fuse_link_in (16 bytes)
+    - in_args[1]: Variable (new link path, up to PATH_MAX)
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+14. FUSE_OPEN (14)
+    - in_args[0]: Size of fuse_open_in (8 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_open_out (24 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+15. FUSE_READ (15)
+    - in_args[0]: Size of fuse_read_in (32 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Variable (data read from the file)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+16. FUSE_WRITE (16)
+    - in_args[0]: Size of fuse_write_in (32 bytes)
+    - in_args[1]: Variable (data to write)
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_write_out (24 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+17. FUSE_STATFS (17)
+    - in_args[0]: Size of fuse_statfs_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_statfs_out (typically 96 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+18. FUSE_RELEASE (18)
+    - in_args[0]: Size of fuse_release_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+19. Unused (19)
+
+20. FUSE_FSYNC (20)
+    - in_args[0]: Size of fuse_fsync_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+21. FUSE_SETXATTR (21)
+    - in_args[0]: Size of fuse_setxattr_in (24 bytes)
+    - in_args[1]: Variable (name of attribute, up to 255 bytes)
+    - in_args[2]: Variable (value of attribute)
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+    - When FUSE_SETXATTR_EXT is not set: Size of fuse_setxattr_in is 16 bytes (FUSE_COMPAT_SETXATTR_IN_SIZE).
+
+22. FUSE_GETXATTR (22)
+    - in_args[0]: Size of fuse_getxattr_in (24 bytes)
+    - in_args[1]: Variable (name of attribute, up to 255 bytes)
+    - in_args[2]: Not used
+    - out_args[0]: Variable (value of the attribute)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+23. FUSE_LISTXATTR (23)
+    - in_args[0]: Size of fuse_getxattr_in (24 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Variable (list of attribute names, each up to 255 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+24. FUSE_REMOVEXATTR (24)
+    - in_args[0]: Variable (name of attribute, up to 255 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+25. FUSE_FLUSH (25)
+    - in_args[0]: Size of fuse_flush_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+26. FUSE_INIT (26)
+    - in_args[0]: Size of fuse_init_in (64 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_init_out (typically 80 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+    - Flags:
+      - FUSE_SECURITY_CTX
+      - FUSE_CREATE_SUPP_GROUP
+      - FUSE_SETXATTR_EXT
+      - FUSE_COMPAT_SETXATTR_IN_SIZE
+      - Additional flags may include FUSE_ASYNC_READ, FUSE_POSIX_LOCKS, FUSE_FILE_OPS, etc.
+
+27. FUSE_OPENDIR (27)
+    - in_args[0]: Size of fuse_open_in (8 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_open_out (24 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+28. FUSE_READDIR (28)
+    - in_args[0]: Size of fuse_read_in (32 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Variable (directory entries)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+29. FUSE_RELEASEDIR (29)
+    - in_args[0]: Size of fuse_release_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+30. FUSE_FSYNCDIR (30)
+    - in_args[0]: Size of fuse_fsync_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+31. FUSE_GETLK (31)
+    - in_args[0]: Size of fuse_lk_in (32 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_lk_out (typically 32 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+32. FUSE_SETLK (32)
+    - in_args[0]: Size of fuse_lk_in (32 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+33. FUSE_SETLKW (33)
+    - in_args[0]: Size of fuse_lk_in (32 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+34. FUSE_ACCESS (34)
+    - in_args[0]: Size of fuse_access_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+35. FUSE_CREATE (35)
+    - in_args[0]: Size of fuse_create_in (16 bytes)
+    - in_args[1]: Variable (file name, up to PATH_MAX)
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
+    - out_args[1]: Size of fuse_open_out (24 bytes)
+    - out_args[2]: Not used
+    - When FUSE_SECURITY_CTX is set (fc->init_security): Additional security context included in in_args and/or out_args.
+    - When FUSE_CREATE_SUPP_GROUP is set (fc->create_supp_group): Additional supplementary group information included in in_args.
+
+36. FUSE_INTERRUPT (36)
+    - in_args[0]: Size of fuse_interrupt_in (8 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+37. FUSE_BMAP (37)
+    - in_args[0]: Size of fuse_bmap_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_bmap_out (16 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+38. FUSE_DESTROY (38)
+    - in_args[0]: Not used
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+39. FUSE_IOCTL (39)
+    - in_args[0]: Size of fuse_ioctl_in (64 bytes)
+    - in_args[1]: Variable (ioctl command data)
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_ioctl_out (32 bytes)
+    - out_args[1]: Variable (data returned by the ioctl command)
+    - out_args[2]: Not used
+
+40. FUSE_POLL (40)
+    - in_args[0]: Size of fuse_poll_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_poll_out (16 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+41. FUSE_NOTIFY_REPLY (41)
+    - in_args[0]: Variable (reply data)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+42. FUSE_BATCH_FORGET (42)
+    - in_args[0]: Variable (size depends on the number of forget requests)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+43. FUSE_FALLOCATE (43)
+    - in_args[0]: Size of fuse_fallocate_in (24 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+44. FUSE_READDIRPLUS (44)
+    - in_args[0]: Size of fuse_read_in (32 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Variable (directory entries)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+45. FUSE_RENAME2 (45)
+    - in_args[0]: Size of fuse_rename2_in (32 bytes)
+    - in_args[1]: Variable (old path, up to PATH_MAX)
+    - in_args[2]: Variable (new path, up to PATH_MAX)
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+46. FUSE_LSEEK (46)
+    - in_args[0]: Size of fuse_lseek_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_lseek_out (16 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+47. FUSE_COPY_FILE_RANGE (47)
+    - in_args[0]: Size of fuse_copy_file_range_in (48 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_write_out (24 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+48. FUSE_SETUPMAPPING (48)
+    - in_args[0]: Size of fuse_setupmapping_in (32 bytes)
+    - in_args[1]: Variable (data to map)
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+49. FUSE_REMOVEMAPPING (49)
+    - in_args[0]: Variable (size depends on the number of mappings to remove)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+50. FUSE_SYNCFS (50)
+    - in_args[0]: Size of fuse_syncfs_in (16 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Not used
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+51. FUSE_TMPFILE (51)
+    - in_args[0]: Size of fuse_create_in (16 bytes)
+    - in_args[1]: Variable (file name, up to PATH_MAX)
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
+    - out_args[1]: Size of fuse_open_out (24 bytes)
+    - out_args[2]: Not used
+    - When FUSE_SECURITY_CTX is set (fc->init_security): Additional security context included in in_args and/or out_args.
+    - When FUSE_CREATE_SUPP_GROUP is set (fc->create_supp_group): Additional supplementary group information included in in_args.
+
+52. FUSE_STATX (52)
+    - in_args[0]: Size of fuse_statx_in (32 bytes)
+    - in_args[1]: Variable (file name, up to PATH_MAX)
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_statx_out (typically 256 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
