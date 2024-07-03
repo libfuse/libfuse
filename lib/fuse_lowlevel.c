@@ -2976,6 +2976,10 @@ fuse_session_process_uring_cqe(struct fuse_session *se, struct fuse_req *req,
 
 	if (in->opcode == FUSE_WRITE && se->op.write_buf) {
 		struct fuse_buf buf = {
+			/* do_write_buf substracts the size of fuse-in-header,
+			 * which is not correct for ring-io - add in that
+			 * size here
+			 */
 			.size = in_arg_len + sizeof(struct fuse_in_header),
 			.flags = 0,
 			.mem = inarg
