@@ -747,15 +747,20 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
             break; // End of stream
         }
         d->offset = entry->d_off;
-        if (is_dot_or_dotdot(entry->d_name))
-            continue;
 
         fuse_entry_param e{};
         size_t entsize;
         if (plus) {
-            err = do_lookup(ino, entry->d_name, &e);
-            if (err)
-                goto error;
+            if (is_dot_or_dotdot(entry->d_name)) {
+		/* fuse kernel ignores attributes for these and also does
+		 * not increase lookup count (see fuse_direntplus_link) */
+		e.attr.st_ino = entry->d_ino;
+		e.attr.st_mode = entry->d_type << 12;
+            } else {
+                err = do_lookup(ino, entry->d_name, &e);
+                if (err)
+                    goto error;
+            }
             entsize = fuse_add_direntry_plus(req, p, rem, entry->d_name, &e, entry->d_off);
         } else {
             e.attr.st_ino = entry->d_ino;
