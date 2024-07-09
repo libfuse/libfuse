@@ -37,4 +37,4 @@ fi
 
 #echo "EXTRA_BIN_OPTIONS='${EXTRA_BIN_OPTIONS}'"
 
-exec "$PASSTHROUGH_PATH" ${EXTRA_BIN_OPTIONS} -o fsname=$dev,allow_other $source "$mnt" -o "$mntopts" "$@"
+exec "$PASSTHROUGH_PATH" ${EXTRA_BIN_OPTIONS} -o fsname=$dev,allow_other,dev $source "$mnt" -o "$mntopts" "$@"
