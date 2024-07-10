@@ -75,6 +75,18 @@ void fuse_set_log_func(fuse_log_func_t func);
  */
 void fuse_log(enum fuse_log_level level, const char *fmt, ...);
 
+/**
+ * Switch default log handler from stderr to syslog
+ *
+ * Passed options are according to 'man 3 openlog'
+ */
+void fuse_log_enable_syslog(const char *ident, int option, int facility);
+
+/**
+ * To be called at teardown to close syslog.
+*/
+void fuse_log_close_syslog(void);
+
 #ifdef __cplusplus
 }
 #endif

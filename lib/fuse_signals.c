@@ -17,34 +17,71 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <execinfo.h>
+#include <errno.h>
 
+static int teardown_sigs[] = { SIGHUP, SIGINT, SIGTERM };
+static int ignore_sigs[] = { SIGPIPE};
+static int fail_sigs[] = { SIGILL, SIGTRAP, SIGABRT, SIGBUS, SIGFPE, SIGSEGV };
 static struct fuse_session *fuse_instance;
+
+#define BT_STACK_SZ (1024 * 1024)
+static void *backtrace_buffer[BT_STACK_SZ];
 
 static void dump_stack(void)
 {
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 #ifdef HAVE_BACKTRACE
-	const size_t backtrace_sz = 1024 * 1024;
-	void* backtrace_buffer[backtrace_sz];
+	char **strings;
 
-	int err_fd = fileno(stderr);
+	int nptrs = backtrace(backtrace_buffer, BT_STACK_SZ);
+	strings = backtrace_symbols(backtrace_buffer, nptrs);
 
-	int trace_len = backtrace(backtrace_buffer, backtrace_sz);
-	backtrace_symbols_fd(backtrace_buffer, trace_len, err_fd);
+	fprintf(stderr, "%s: nptrs=%d\n", __func__, nptrs);
+
+	if (strings == NULL) {
+		fuse_log(FUSE_LOG_ERR, "Failed to get backtrace symbols: %s\n",
+			 strerror(errno));
+		return;
+	}
+
+	for (int idx = 0; idx < nptrs; idx++)
+		fuse_log(FUSE_LOG_ERR, "%s\n", strings[idx]);
+
+	free(strings);
 #endif
 }
 
 static void exit_handler(int sig)
 {
-	if (fuse_instance) {
-		fuse_session_exit(fuse_instance);
-		if(sig <= 0) {
-			fuse_log(FUSE_LOG_ERR, "assertion error: signal value <= 0\n");
-			dump_stack();
-			abort();
-		}
+	if (fuse_instance == NULL)
+		return;
+
+	fuse_session_exit(fuse_instance);
+
+	if (sig < 0) {
+		fuse_log(FUSE_LOG_ERR,
+				"assertion error: signal value <= 0\n");
+		dump_stack();
+		abort();
 		fuse_instance->error = sig;
 	}
+
+	fuse_instance->error = sig;
 }
+
+static void exit_backtrace(int sig)
+{
+	if (fuse_instance == NULL)
+		return;
+
+	fuse_session_exit(fuse_instance);
+
+	fuse_remove_signal_handlers(fuse_instance);
+	fuse_log(FUSE_LOG_ERR, "Got signal: %d\n", sig);
+	dump_stack();
+	abort();
+}
+
 
 static void do_nothing(int sig)
 {
@@ -74,33 +111,88 @@ static int set_one_signal_handler(int sig, void (*handler)(int), int remove)
 	return 0;
 }
 
+static int _fuse_set_signal_handlers(int signals[], int nr_signals,
+				     void (*handler)(int))
+{
+	for (int idx = 0; idx < nr_signals; idx++) {
+		int signal = signals[idx];
+
+		/*
+		 * If we used SIG_IGN instead of the do_nothing function,
+		 * then we would be unable to tell if we set SIG_IGN (and
+		 * thus should reset to SIG_DFL in fuse_remove_signal_handlers)
+		 * or if it was already set to SIG_IGN (and should be left
+		 * untouched.
+		*/
+		if (set_one_signal_handler(signal, handler, 0) == -1) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to install signal handler for sig %d\n",
+				 signal);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 int fuse_set_signal_handlers(struct fuse_session *se)
 {
-	/* If we used SIG_IGN instead of the do_nothing function,
-	   then we would be unable to tell if we set SIG_IGN (and
-	   thus should reset to SIG_DFL in fuse_remove_signal_handlers)
-	   or if it was already set to SIG_IGN (and should be left
-	   untouched. */
-	if (set_one_signal_handler(SIGHUP, exit_handler, 0) == -1 ||
-	    set_one_signal_handler(SIGINT, exit_handler, 0) == -1 ||
-	    set_one_signal_handler(SIGTERM, exit_handler, 0) == -1 ||
-	    set_one_signal_handler(SIGPIPE, do_nothing, 0) == -1)
-		return -1;
+	size_t nr_signals;
+	int rc;
 
-	fuse_instance = se;
+	nr_signals = sizeof(teardown_sigs) / sizeof(teardown_sigs[0]);
+	rc = _fuse_set_signal_handlers(teardown_sigs, nr_signals, exit_handler);
+	if (rc < 0)
+		return rc;
+
+	nr_signals = sizeof(ignore_sigs) / sizeof(ignore_sigs[0]);
+	rc = _fuse_set_signal_handlers(ignore_sigs, nr_signals, do_nothing);
+	if (rc < 0)
+		return rc;
+
+	if (fuse_instance == NULL)
+		fuse_instance = se;
 	return 0;
+}
+
+int fuse_set_fail_signal_handlers(struct fuse_session *se)
+{
+	size_t nr_signals = sizeof(fail_sigs) / sizeof(fail_sigs[0]);
+
+	int rc = _fuse_set_signal_handlers(fail_sigs, nr_signals,
+					   exit_backtrace);
+	if (rc < 0)
+		return rc;
+
+	if (fuse_instance == NULL)
+		fuse_instance = se;
+
+	return 0;
+}
+
+static void _fuse_remove_signal_handlers(int signals[], int nr_signals,
+					 void (*handler)(int))
+{
+	for (int idx = 0; idx < nr_signals; idx++)
+		set_one_signal_handler(signals[idx], handler, 1);
 }
 
 void fuse_remove_signal_handlers(struct fuse_session *se)
 {
+	size_t nr_signals;
+
 	if (fuse_instance != se)
 		fuse_log(FUSE_LOG_ERR,
 			"fuse: fuse_remove_signal_handlers: unknown session\n");
 	else
 		fuse_instance = NULL;
 
-	set_one_signal_handler(SIGHUP, exit_handler, 1);
-	set_one_signal_handler(SIGINT, exit_handler, 1);
-	set_one_signal_handler(SIGTERM, exit_handler, 1);
-	set_one_signal_handler(SIGPIPE, do_nothing, 1);
+	nr_signals = sizeof(teardown_sigs) / sizeof(teardown_sigs[0]);
+	_fuse_remove_signal_handlers(teardown_sigs, nr_signals, exit_handler);
+
+	nr_signals = sizeof(ignore_sigs) / sizeof(ignore_sigs[0]);
+	_fuse_remove_signal_handlers(ignore_sigs, nr_signals, do_nothing);
+
+	nr_signals = sizeof(fail_sigs) / sizeof(fail_sigs[0]);
+	_fuse_remove_signal_handlers(fail_sigs, nr_signals, exit_backtrace);
 }
