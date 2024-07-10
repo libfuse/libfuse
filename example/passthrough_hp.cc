@@ -75,6 +75,7 @@
 #include <fstream>
 #include <thread>
 #include <iomanip>
+#include <syslog.h>
 
 using namespace std;
 
@@ -1436,6 +1437,9 @@ int main(int argc, char *argv[]) {
     if (fuse_set_signal_handlers(se) != 0)
         goto err_out2;
 
+    if (fuse_set_fail_signal_handlers(se) != 0)
+        goto err_out2;
+
     // Don't apply umask, use modes exactly as specified
     umask(0);
 
@@ -1452,11 +1456,13 @@ int main(int argc, char *argv[]) {
 
     fuse_daemonize(fs.foreground);
 
+    if (!fs.foreground)
+        fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS, LOG_DAEMON);
+
     if (options.count("single"))
         ret = fuse_session_loop(se);
     else
         ret = fuse_session_loop_mt(se, loop_config);
-
 
     fuse_session_unmount(se);
 
@@ -1468,6 +1474,9 @@ err_out1:
 
     fuse_loop_cfg_destroy(loop_config);
     fuse_opt_free_args(&args);
+
+    if (!fs.foreground)
+        fuse_log_close_syslog();
 
     return ret ? 1 : 0;
 }

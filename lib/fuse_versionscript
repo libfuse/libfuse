@@ -198,6 +198,9 @@ FUSE_3.17 {
 		fuse_passthrough_close;
 		fuse_session_custom_io_30;
 		fuse_session_custom_io_317;
+		fuse_set_fail_signal_handlers;
+		fuse_log_enable_syslog;
+		fuse_log_close_syslog;
 } FUSE_3.12;
 
 # Local Variables:
