@@ -23,7 +23,7 @@ static void default_log_func(__attribute__((unused)) enum fuse_log_level level,
 			     const char *fmt, va_list ap)
 {
 	if (to_syslog) {
-		int sys_log_level;
+		int sys_log_level = LOG_ERR;
 
 		/*
 		 * with glibc fuse_log_level has identical values as
