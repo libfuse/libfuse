@@ -2289,6 +2289,11 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
 
+	if ((inargflags & FUSE_REQUEST_TIMEOUT) && se->conn.request_timeout) {
+		outargflags |= FUSE_REQUEST_TIMEOUT;
+		outarg.request_timeout = se->conn.request_timeout;
+	}
+
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
 		outarg.flags2 = outargflags >> 32;
