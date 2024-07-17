@@ -2720,6 +2720,11 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		enable_io_uring = true;
 	}
 
+	if ((inargflags & FUSE_REQUEST_TIMEOUT) && se->conn.request_timeout) {
+		outargflags |= FUSE_REQUEST_TIMEOUT;
+		outarg.request_timeout = se->conn.request_timeout;
+	}
+
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
 		outarg.flags2 = outargflags >> 32;

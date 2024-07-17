@@ -709,9 +709,15 @@ struct fuse_conn_info {
 	uint64_t want_ext;
 
 	/**
+	 * Request timeout (in seconds). If the request is not answered by
+	 * this timeout, the connection will be aborted by the kernel.
+	 */
+	uint16_t request_timeout;
+
+	/**
 	 * For future use.
 	 */
-	uint32_t reserved[16];
+	uint16_t reserved[31];
 };
 fuse_static_assert(sizeof(struct fuse_conn_info) == 128,
 		   "Size of struct fuse_conn_info must be 128 bytes");
