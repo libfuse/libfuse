@@ -16,8 +16,11 @@
 #include <string.h>
 #include <signal.h>
 #include <stdlib.h>
-#include <execinfo.h>
 #include <errno.h>
+
+#ifdef HAVE_BACKTRACE
+#include <execinfo.h>
+#endif
 
 static int teardown_sigs[] = { SIGHUP, SIGINT, SIGTERM };
 static int ignore_sigs[] = { SIGPIPE};
