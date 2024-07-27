@@ -708,6 +708,8 @@ static struct mount_flags mount_flags[] = {
 	{"strictatime",     MS_STRICTATIME, 1, 1},
 	{"nostrictatime",   MS_STRICTATIME, 0, 1},
 	{"dirsync", MS_DIRSYNC,	    1, 1},
+	{"symfollow",       MS_NOSYMFOLLOW, 0, 1},
+	{"nosymfollow",     MS_NOSYMFOLLOW, 1, 1},
 	{NULL,	    0,		    0, 0}
 };
 
