@@ -1487,9 +1487,17 @@ static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
 {
 	if (!f->conf.use_ino)
 		stbuf->st_ino = nodeid;
-	if (f->conf.set_mode)
-		stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
-				 (0777 & ~f->conf.umask);
+	if (f->conf.set_mode) {
+		if (f->conf.dmask && S_ISDIR(stbuf->st_mode))
+			stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
+					 (0777 & ~f->conf.dmask);
+		else if (f->conf.fmask)
+			stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
+					 (0777 & ~f->conf.fmask);
+		else
+			stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
+					 (0777 & ~f->conf.umask);
+	}
 	if (f->conf.set_uid)
 		stbuf->st_uid = f->conf.uid;
 	if (f->conf.set_gid)
@@ -2604,6 +2612,8 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		fs->user_data = fs->op.init(conn, cfg);
 }
 
+static int fuse_init_intr_signal(int signum, int *installed);
+
 static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 {
 	struct fuse *f = (struct fuse *) data;
@@ -2613,9 +2623,14 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 	fuse_fs_init(f->fs, conn, &f->conf);
 
-	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
-	if (!f->conf.intr)
+	if (f->conf.intr) {
+		if (fuse_init_intr_signal(f->conf.intr_signal,
+				&f->intr_installed) == -1)
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to init interrupt signal\n");
+	} else {
+		/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 		conn->no_interrupt = 1;
+	}
 }
 
 void fuse_fs_destroy(struct fuse_fs *fs)
@@ -4674,6 +4689,10 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_LIB_OPT("no_rofd_flush",	      no_rofd_flush, 1),
 	FUSE_LIB_OPT("umask=",		      set_mode, 1),
 	FUSE_LIB_OPT("umask=%o",	      umask, 0),
+	FUSE_LIB_OPT("fmask=",		      set_mode, 1),
+	FUSE_LIB_OPT("fmask=%o",	      fmask, 0),
+	FUSE_LIB_OPT("dmask=",		      set_mode, 1),
+	FUSE_LIB_OPT("dmask=%o",	      dmask, 0),
 	FUSE_LIB_OPT("uid=",		      set_uid, 1),
 	FUSE_LIB_OPT("uid=%d",		      uid, 0),
 	FUSE_LIB_OPT("gid=",		      set_gid, 1),
@@ -4727,6 +4746,8 @@ void fuse_lib_help(struct fuse_args *args)
 "    -o [no]auto_cache      enable caching based on modification times (off)\n"
 "    -o no_rofd_flush       disable flushing of read-only fd on close (off)\n"
 "    -o umask=M             set file permissions (octal)\n"
+"    -o fmask=M             set file permissions (octal)\n"
+"    -o dmask=M             set dir  permissions (octal)\n"
 "    -o uid=N               set file owner\n"
 "    -o gid=N               set file group\n"
 "    -o entry_timeout=T     cache timeout for names (1.0s)\n"
@@ -5020,12 +5041,6 @@ struct fuse *_fuse_new_317(struct fuse_args *args,
 
 	strcpy(root->inline_name, "/");
 	root->name = root->inline_name;
-
-	if (f->conf.intr &&
-	    fuse_init_intr_signal(f->conf.intr_signal,
-				  &f->intr_installed) == -1)
-		goto out_free_root;
-
 	root->parent = NULL;
 	root->nodeid = FUSE_ROOT_ID;
 	inc_nlookup(root);
@@ -5033,8 +5048,6 @@ struct fuse *_fuse_new_317(struct fuse_args *args,
 
 	return f;
 
-out_free_root:
-	free(root);
 out_free_id_table:
 	free(f->id_table.array);
 out_free_name_table:

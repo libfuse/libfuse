@@ -41,6 +41,10 @@ extern "C" {
  * concurrently open for the same file.  Generally, a client will create one
  * file handle per file descriptor, though in some cases multiple file
  * descriptors can share a single file handle.
+ *
+ * Note: This data structure is ABI sensitive, new parameters have to be
+ *       added within padding/padding2 bits and always below existing
+ *       parameters.
  */
 struct fuse_file_info {
 	/** Open flags.	 Available in open(), release() and create() */
@@ -64,8 +68,8 @@ struct fuse_file_info {
 	unsigned int keep_cache : 1;
 
 	/** Can be filled by open/create, to allow parallel direct writes on this
-         *  file */
-        unsigned int parallel_direct_writes : 1;
+	    file */
+	unsigned int parallel_direct_writes : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
 	    maybe set in highlevel lock operation and lowlevel release
@@ -950,6 +954,23 @@ ssize_t fuse_buf_copy(struct fuse_bufvec *dst, struct fuse_bufvec *src,
  * fuse_remove_signal_handlers()
  */
 int fuse_set_signal_handlers(struct fuse_session *se);
+
+/**
+ * Print a stack backtrace diagnostic on critical signals ()
+ *
+ * Stores session in a global variable.	 May only be called once per
+ * process until fuse_remove_signal_handlers() is called.
+ *
+ * Once either of the POSIX signals arrives, the signal handler calls
+ * fuse_session_exit().
+ *
+ * @param se the session to exit
+ * @return 0 on success, -1 on failure
+ *
+ * See also:
+ * fuse_remove_signal_handlers()
+ */
+int fuse_set_fail_signal_handlers(struct fuse_session *se);
 
 /**
  * Restore default signal handlers

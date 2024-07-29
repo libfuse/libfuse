@@ -9,8 +9,6 @@
 
 #define FUSE_USE_VERSION 30
 
-#define _GNU_SOURCE /* for loff_t */
-
 #include <fuse_config.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>
@@ -214,7 +212,7 @@ static void test_fs(char *mountpoint) {
     const size_t dsize = options.data_size * WRITE_SYSCALLS;
     int fd, rofd;
     pthread_t rofd_thread;
-    loff_t off = 0;
+    off_t off = 0;
 
     buf = malloc(dsize);
     assert(buf != NULL);

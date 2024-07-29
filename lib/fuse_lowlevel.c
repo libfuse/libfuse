@@ -3404,6 +3404,11 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
 	int fd;
 
+	if (mountpoint == NULL) {
+		fuse_log(FUSE_LOG_ERR, "Invalid null-ptr mountpoint!\n");
+		return -1;
+	}
+
 	/*
 	 * Make sure file descriptors 0, 1 and 2 are open, otherwise chaos
 	 * would ensue.
@@ -3500,6 +3505,7 @@ retry:
 		goto retry;
 	}
 
+	buf[ret] = '\0';
 	ret = -EIO;
 	s = strstr(buf, "\nGroups:");
 	if (s == NULL)

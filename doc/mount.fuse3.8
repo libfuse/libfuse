@@ -181,8 +181,8 @@ This option is an alternative to
 cached data is invalidated on \fBopen\fP(2) if the modification
 time or the size of the file has changed since it was last opened.
 .TP
-\fBumask=M\fP
-Override the permission bits in \fIst_mode\fP set by the filesystem. The resulting permission bits are the ones missing from the given umask value.  The value is given in octal representation.
+\fBumask=M fmask=M dmask=M\fP
+Override the permission bits set by the filesystem in \fIst_mode\fP. The resulting permission bits are the ones missing from the mask value, which is given in octal representation. \fBfmask\fP and \fBdmask\fP (respectively) may be used to control the permission bits of files and directories separately. umask is overridden by the individual fmask and dmask options.
 .TP
 \fBuid=N\fP
 Override the \fIst_uid\fP field set by the filesystem (N is numeric).

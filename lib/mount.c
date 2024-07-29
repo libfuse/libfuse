@@ -41,6 +41,7 @@
 #define MS_NOEXEC	MNT_NOEXEC
 #define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
 #define MS_NOATIME	MNT_NOATIME
+#define MS_NOSYMFOLLOW	MNT_NOSYMFOLLOW
 
 #define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
 #endif
@@ -114,6 +115,8 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nodiratime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nostrictatime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("symfollow",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("nosymfollow",		KEY_KERN_FLAG),
 	FUSE_OPT_END
 };
 
@@ -185,6 +188,8 @@ static const struct mount_flags mount_flags[] = {
 	{"nodiratime",	    MS_NODIRATIME,	1},
 	{"norelatime",	    MS_RELATIME,	0},
 	{"nostrictatime",   MS_STRICTATIME,	0},
+	{"symfollow",	    MS_NOSYMFOLLOW,	0},
+	{"nosymfollow",	    MS_NOSYMFOLLOW,	1},
 #ifndef __NetBSD__
 	{"dirsync", MS_DIRSYNC,	    1},
 #endif

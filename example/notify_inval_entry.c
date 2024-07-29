@@ -17,7 +17,7 @@
  * To see the effect, first start the file system with the
  * ``--no-notify``
  *
- *     $ notify_inval_entry --update-interval=1 --timeout 30 --no-notify mnt/
+ *     $ notify_inval_entry --update-interval=1 --timeout=30 --no-notify mnt/
  *
  * Observe that `ls` always prints the correct directory contents
  * (since `readdir` output is not cached)::
@@ -51,7 +51,7 @@
  * In contrast, if you enable notifications you will be unable to stat
  * the file as soon as the file system updates its name:
  *
- *     $ notify_inval_entry --update-interval=1 --timeout 30 --no-notify mnt/
+ *     $ notify_inval_entry --update-interval=1 --timeout=30 mnt/
  *     $ file=$(ls mnt/); stat mnt/$file
  *       File: ‘mnt/Time_is_20h_42m_11s’
  *       Size: 0                 Blocks: 0          IO Block: 4096   regular empty file
