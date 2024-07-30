@@ -14,17 +14,24 @@
 #include <sys/mount.h>
 
 /* Some libc don't define MS_*, so define them manually
- * (values taken from https://elixir.bootlin.com/linux/v4.0.9/source/include/uapi/linux/fs.h#L68 on)
+ * (values taken from https://elixir.bootlin.com/linux/v6.10/source/include/uapi/linux/mount.h#L13 on)
  */
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC	128
 #endif
+
+#ifndef MS_NOSYMFOLLOW
+#define MS_NOSYMFOLLOW 256
+#endif
+
 #ifndef MS_REC
 #define MS_REC		16384
 #endif
+
 #ifndef MS_PRIVATE
 #define MS_PRIVATE	(1<<18)
 #endif
+
 #ifndef MS_LAZYTIME
 #define MS_LAZYTIME	(1<<25)
 #endif

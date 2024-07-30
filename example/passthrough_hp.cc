@@ -749,6 +749,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
     }
 
     while (1) {
+        bool did_lookup = false;
         struct dirent *entry;
         errno = 0;
         entry = readdir(d->dp);
@@ -767,14 +768,15 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         size_t entsize;
         if (plus) {
             if (is_dot_or_dotdot(entry->d_name)) {
-		/* fuse kernel ignores attributes for these and also does
-		 * not increase lookup count (see fuse_direntplus_link) */
-		e.attr.st_ino = entry->d_ino;
-		e.attr.st_mode = entry->d_type << 12;
+                /* fuse kernel ignores attributes for these and also does
+                 * not increase lookup count (see fuse_direntplus_link) */
+                e.attr.st_ino = entry->d_ino;
+                e.attr.st_mode = entry->d_type << 12;
             } else {
                 err = do_lookup(ino, entry->d_name, &e);
                 if (err)
                     goto error;
+                did_lookup = true;
             }
             entsize = fuse_add_direntry_plus(req, p, rem, entry->d_name, &e, entry->d_off);
         } else {
@@ -786,7 +788,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         if (entsize > rem) {
             if (fs.debug)
                 cerr << "DEBUG: readdir(): buffer full, returning data. " << endl;
-            if (plus)
+            if (did_lookup)
                 forget_one(e.ino, 1);
             break;
         }
