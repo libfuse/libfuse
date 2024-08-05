@@ -23,7 +23,7 @@ if [ -z "$1" -o "$1" = "-h" -o "$1" = "--help" ]; then
     print_help
 fi
 
-while getopts "hf:t:" opt; do
+while getopts "hf:t:p:" opt; do
     case $opt in
     h)
         print_help
@@ -33,6 +33,9 @@ while getopts "hf:t:" opt; do
         ;;
     t)
         TRACE="$OPTARG"
+        ;;
+    p)
+        PROGRAM_PATH="$OPTARG"
         ;;
     *)
         print_help

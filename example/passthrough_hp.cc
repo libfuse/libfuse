@@ -69,12 +69,8 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
-#include <list>
 #include "cxxopts.hpp"
 #include <mutex>
-#include <fstream>
-#include <thread>
-#include <iomanip>
 #include <syslog.h>
 
 using namespace std;

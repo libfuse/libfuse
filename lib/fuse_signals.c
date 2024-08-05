@@ -32,14 +32,11 @@ static void *backtrace_buffer[BT_STACK_SZ];
 
 static void dump_stack(void)
 {
-	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 #ifdef HAVE_BACKTRACE
 	char **strings;
 
 	int nptrs = backtrace(backtrace_buffer, BT_STACK_SZ);
 	strings = backtrace_symbols(backtrace_buffer, nptrs);
-
-	fprintf(stderr, "%s: nptrs=%d\n", __func__, nptrs);
 
 	if (strings == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Failed to get backtrace symbols: %s\n",
