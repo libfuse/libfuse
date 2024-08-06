@@ -411,7 +411,7 @@ was only partly human verified - use with care.
 
 52. FUSE_STATX (52)
     - in_args[0]: Size of fuse_statx_in (32 bytes)
-    - in_args[1]: Variable (file name, up to PATH_MAX)
+    - in_args[1]: Not used
     - in_args[2]: Not used
     - out_args[0]: Size of fuse_statx_out (typically 256 bytes)
     - out_args[1]: Not used
