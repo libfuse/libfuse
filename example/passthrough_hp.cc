@@ -883,6 +883,9 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
        in current function. */
     fi->parallel_direct_writes = 1;
 
+    /* request page aligned write data */
+    fi->write_aligned = 1;
+
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
@@ -955,6 +958,9 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
        To make parallel_direct_writes valid, need set fi->direct_io
        in current function. */
     fi->parallel_direct_writes = 1;
+
+    /* request page aligned write data */
+    fi->write_aligned = 1;
 
     fi->fh = fd;
     if (fs.passthrough)
