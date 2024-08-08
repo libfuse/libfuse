@@ -70,6 +70,11 @@ struct fuse_session {
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
+
+	/* Used for max writes larger than the default limit of
+	 * FUSE_MAX_MAX_PAGES * PAGE_SIZE.
+	 */
+	unsigned int extended_max_write;
 };
 
 struct fuse_chan {

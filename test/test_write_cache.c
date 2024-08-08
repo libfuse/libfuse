@@ -37,10 +37,12 @@ struct options {
     int writeback;
     int data_size;
     int delay_ms;
+    unsigned int extended_max_write;
 } options = {
     .writeback = 0,
     .data_size = 2048,
     .delay_ms = 0,
+    .extended_max_write = 0,
 };
 
 #define WRITE_SYSCALLS 64
@@ -51,6 +53,7 @@ static const struct fuse_opt option_spec[] = {
     OPTION("writeback_cache", writeback),
     OPTION("--data-size=%d", data_size),
     OPTION("--delay_ms=%d", delay_ms),
+    OPTION("--extended_max_write=%u", extended_max_write),
     FUSE_OPT_END
 };
 static int got_write;
@@ -261,6 +264,12 @@ int main(int argc, char *argv[]) {
 #ifndef __FreeBSD__    
     assert(fuse_opt_add_arg(&args, "-oauto_unmount") == 0);
 #endif
+    if (options.extended_max_write) {
+	char max_write[32] = {};
+	assert(snprintf(max_write, sizeof(max_write), "-oextended_max_write=%u",
+		options.extended_max_write) > 0);
+	assert(fuse_opt_add_arg(&args, max_write) == 0);
+    }
     se = fuse_session_new(&args, &tfs_oper,
                           sizeof(tfs_oper), NULL);
     fuse_opt_free_args(&args);

@@ -2125,6 +2125,9 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
 
+	if (se->extended_max_write)
+		se->conn.max_write = se->extended_max_write;
+
 	if (se->conn.max_write > bufsize - FUSE_BUFFER_HEADER_SIZE)
 		se->conn.max_write = bufsize - FUSE_BUFFER_HEADER_SIZE;
 
@@ -2858,6 +2861,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("-d", debug, 1),
 	LL_OPTION("--debug", debug, 1),
 	LL_OPTION("allow_root", deny_others, 1),
+	LL_OPTION("extended_max_write=%u", extended_max_write, 0),
 	FUSE_OPT_END
 };
 
@@ -2875,7 +2879,9 @@ void fuse_lowlevel_help(void)
 	printf(
 "    -o allow_other         allow access by all users\n"
 "    -o allow_root          allow access by root\n"
-"    -o auto_unmount        auto unmount on process termination\n");
+"    -o auto_unmount        auto unmount on process termination\n"
+"    -o extended_max_write  maximum bytes to write per request for write sizes "
+			     "larger than default limit\n");
 }
 
 void fuse_session_destroy(struct fuse_session *se)
@@ -3089,6 +3095,7 @@ struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
 	int err;
 	struct fuse_session *se;
 	struct mount_opts *mo;
+	size_t bufsize;
 
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
 		fuse_log(FUSE_LOG_ERR, "fuse: warning: library too old, some operations may not work\n");
@@ -3142,8 +3149,17 @@ struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
 	if (se->debug)
 		fuse_log(FUSE_LOG_DEBUG, "FUSE library version: %s\n", PACKAGE_VERSION);
 
-	se->bufsize = FUSE_MAX_MAX_PAGES * getpagesize() +
-		FUSE_BUFFER_HEADER_SIZE;
+	bufsize = FUSE_MAX_MAX_PAGES * getpagesize();
+	if (se->extended_max_write) {
+		if (se->extended_max_write < bufsize) {
+			fuse_log(FUSE_LOG_ERR, "'extended_max_write' is only intended for "
+				 "values larger than the default max write size limit\n");
+			goto out4;
+		}
+		se->bufsize = se->extended_max_write + FUSE_BUFFER_HEADER_SIZE;
+	} else {
+		se->bufsize = bufsize + FUSE_BUFFER_HEADER_SIZE;
+	}
 
 	list_init_req(&se->list);
 	list_init_req(&se->interrupts);
