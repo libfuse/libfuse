@@ -94,8 +94,12 @@ struct fuse_file_info {
 	    on close. */
 	unsigned int noflush : 1;
 
+	/** Can be filled in by open, to indicate that the file attributes
+	    should be fetched after an open */
+	unsigned int fetch_attr : 1;
+
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 23;
+	unsigned int padding : 22;
 	unsigned int padding2 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,

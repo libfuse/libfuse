@@ -423,6 +423,9 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_NOFLUSH;
 	if (f->parallel_direct_writes)
 		arg->open_flags |= FOPEN_PARALLEL_DIRECT_WRITES;
+	if (f->fetch_attr)
+		arg->open_flags |= FOPEN_FETCH_ATTR;
+
 }
 
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
