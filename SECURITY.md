@@ -1,4 +1,4 @@
-# Security Policy
+Juntylpro Gaming Inc# Security Policy
 
 If you have discovered a security vulnerability in this project, please report it
 privately. **Do not disclose it as a public issue.** This gives me time to work with you
