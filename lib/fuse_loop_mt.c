@@ -472,8 +472,14 @@ void fuse_loop_cfg_destroy(struct fuse_loop_config *config)
 
 int fuse_loop_cfg_verify(struct fuse_loop_config *config)
 {
-	if (config->version_id != FUSE_LOOP_MT_V2_IDENTIFIER)
+	if (config->version_id != FUSE_LOOP_MT_V2_IDENTIFIER) {
+		fuse_log(
+			FUSE_LOG_ERR,
+			"fuse_loop_config::version_id has an invalid value %d. "
+			"Check for the correct FUSE_USE_VERSION.",
+			config->version_id);
 		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -481,8 +487,25 @@ int fuse_loop_cfg_verify(struct fuse_loop_config *config)
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 			   struct fuse_loop_config_v1 *v1_conf)
 {
-	fuse_loop_cfg_set_idle_threads(config, v1_conf->max_idle_threads);
+	if (config->clone_fd == FUSE_LOOP_MT_V2_IDENTIFIER) {
+		fuse_log(FUSE_LOG_ERR,
+				"Detected FUSE_LOOP_MT_V2_IDENTIFIER, "
+				"Check for the correct FUSE_USE_VERSION.\n"
+				"Auto adjusting config conversion, with defaults.\n");
+		/*
+			* probably a v2 config was passed, but we can only
+			* access up to size of v1_conf. Defaults for
+			* for the remaining.
+			*/
+		struct fuse_loop_config *tmp = fuse_loop_cfg_create();
+		*config = *tmp;
+		fuse_loop_cfg_destroy(tmp);
 
+		memcpy(config, v1_conf, sizeof(*v1_conf));
+		return;
+	}
+
+	fuse_loop_cfg_set_idle_threads(config, v1_conf->max_idle_threads);
 	fuse_loop_cfg_set_clone_fd(config, v1_conf->clone_fd);
 }
 
