@@ -1302,6 +1302,21 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		       struct fuse_file_info *fi);
+
+	/**
+	 * Open a file and also retrieve file attributes
+	 * Similar (*open) with the addition of file attributes
+	 *
+	 * Valid replies:
+	 *   fuse_reply_open_getattr
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param node_if the node id (called inode number for other methods)
+	 * @param fi file information
+	 */
+	void (*open_getattr)(fuse_req_t req, fuse_ino_t node_id,
+			     struct fuse_file_info *fi);
 };
 
 /**
@@ -1427,6 +1442,25 @@ int fuse_passthrough_close(fuse_req_t req, int backing_id);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *fi);
+
+/**
+ * Reply with open parameters
+ *
+ * currently the following members of 'fi' are used:
+ *   fh, direct_io, keep_cache
+ *
+ * Possible requests:
+ *   open, opendir
+ *
+ * @param req request handle
+ * @param fi file information
+ * @param attr inode attributes
+ * @param attr_timeout timeout for the attributes
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_open_getattr(fuse_req_t req, const struct fuse_file_info *fi,
+			    const struct stat *attr,
+			    struct timespec *attr_timeout);
 
 /**
  * Reply with number of bytes written

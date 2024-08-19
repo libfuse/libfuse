@@ -217,6 +217,9 @@
  *  - add backing_id to fuse_open_out, add FOPEN_PASSTHROUGH open flag
  *  - add FUSE_NO_EXPORT_SUPPORT init flag
  *  - add FUSE_NOTIFY_RESEND, add FUSE_HAS_RESEND init flag
+ *
+ * 7.41
+* - add FUSE_OPEN_GETATTR/FUSE_OPENDIR_GETATTR
  */
 
 #ifndef _LINUX_FUSE_H
@@ -633,6 +636,8 @@ enum fuse_opcode {
 	FUSE_SYNCFS		= 50,
 	FUSE_TMPFILE		= 51,
 	FUSE_STATX		= 52,
+	FUSE_OPEN_GETATTR	= 53,
+	FUSE_OPENDIR_GETATTR	= 54,
 
 	/* CUSE specific operations */
 	CUSE_INIT		= 4096,
