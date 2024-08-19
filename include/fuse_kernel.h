@@ -1091,58 +1091,44 @@ enum fuse_uring_ioctl_cmd {
 };
 
 enum fuse_uring_cfg_flags {
-	/* server/deamon side requests numa awareness */
+	/* server/daemon side requests numa awareness */
 	FUSE_URING_WANT_NUMA = 1ul << 0,
 };
 
-struct fuse_uring_cfg {
-	/* struct flags */
-	uint64_t flags;
+struct fuse_ring_config {
+	/* number of queues */
+	uint32_t nr_queues;
 
-	/* configuration command */
-	uint8_t cmd;
+	/* number of foreground entries per queue */
+	uint32_t sync_queue_depth;
 
-	uint8_t padding[7];
+	/* number of background entries per queue */
+	uint32_t async_queue_depth;
 
-	union {
-		struct fuse_ring_config {
-			/* number of queues */
-			uint32_t nr_queues;
+	/*
+	 * buffer size userspace allocated per request buffer
+	 * from the mmaped queue buffer
+	 */
+	uint32_t user_req_buf_sz;
 
-			/* number of foreground entries per queue */
-			uint32_t sync_queue_depth;
+	/* ring config flags */
+	uint64_t numa_aware:1;
 
-			/* number of background entries per queue */
-			uint32_t async_queue_depth;
-
-			/* argument (max data length) of a request */
-			uint32_t req_arg_len;
-
-			/*
-			 * buffer size userspace allocated per request buffer
-			 * from the mmaped queue buffer
-			 * */
-			uint32_t user_req_buf_sz;
-
-			/* ring config flags */
-			uint32_t numa_aware:1;
-		} rconf;
-
-		struct fuse_ring_queue_config {
-			/* mmaped buffser address */
-			uint64_t uaddr;
-
-			/* qid the command is for */
-			uint32_t qid;
-
-			/* /dev/fuse fd that initiated the mount. */
-			uint32_t control_fd;
-		} qconf;
-
-		/* space for future additions */
-		uint8_t union_size[128];
-	};
+	/* for future extensions */
+	uint8_t padding[64];
 };
+
+struct fuse_ring_queue_config {
+	/* qid the command is for */
+	uint32_t qid;
+
+	/* /dev/fuse fd that initiated the mount. */
+	uint32_t control_fd;
+
+	/* for future extensions */
+	uint8_t padding[64];
+};
+
 
 /* Device ioctls: */
 #define FUSE_DEV_IOC_MAGIC		229
@@ -1150,15 +1136,17 @@ struct fuse_uring_cfg {
 #define FUSE_DEV_IOC_BACKING_OPEN	_IOW(FUSE_DEV_IOC_MAGIC, 1, \
 					     struct fuse_backing_map)
 #define FUSE_DEV_IOC_BACKING_CLOSE	_IOW(FUSE_DEV_IOC_MAGIC, 2, uint32_t)
-#define FUSE_DEV_IOC_URING		_IOR(FUSE_DEV_IOC_MAGIC, 3, \
-					     struct fuse_uring_cfg)
+#define FUSE_DEV_IOC_URING_CFG		_IOR(FUSE_DEV_IOC_MAGIC, 3, \
+					     struct fuse_ring_config)
+#define FUSE_DEV_IOC_URING_QUEUE_CFG	_IOR(FUSE_DEV_IOC_MAGIC, 3, \
+					     struct fuse_ring_queue_config)
 
 struct fuse_lseek_in {
 	uint64_t	fh;
 	uint64_t	offset;
 	uint32_t	whence;
 	uint32_t	padding;
-					     };
+};
 
 struct fuse_lseek_out {
 	uint64_t	offset;
@@ -1259,9 +1247,6 @@ struct fuse_supp_groups {
 #define FUSE_RING_HEADER_BUF_SIZE 4096
 #define FUSE_RING_MIN_IN_OUT_ARG_SIZE 4096
 
-/* The offset parameter is used to identify the request type */
-#define FUSE_URING_MMAP_OFF 0xf8000000ULL
-
 /*
  * Request is background type. Daemon side is free to use this information
  * to handle foreground/background CQEs with different priorities.
@@ -1279,7 +1264,6 @@ struct fuse_ring_req {
 		struct {
 			uint64_t flags;
 
-			/* enum fuse_ring_buf_cmd */
 			uint32_t in_out_arg_len;
 			uint32_t padding;
 
@@ -1311,8 +1295,10 @@ enum fuse_uring_cmd {
  * In the 80B command area of the SQE.
  */
 struct fuse_uring_cmd_req {
+	/* User buffer */
 	uint64_t buf_ptr;
 
+	/* length of the user buffer */
 	uint32_t buf_len;
 
 	/* queue the command is for (queue index) */
@@ -1321,7 +1307,6 @@ struct fuse_uring_cmd_req {
 	/* queue entry (array index) */
 	uint16_t tag;
 
-	/* pointer to struct fuse_uring_buf_req */
 	uint32_t flags;
 };
 
