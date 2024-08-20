@@ -121,11 +121,15 @@ struct fuse_file_info {
 /**
  * Configuration parameters passed to fuse_session_loop_mt() and
  * fuse_loop_mt().
+ * For FUSE API versions less than 312, use a public struct
+ * fuse_loop_config in applications and struct fuse_loop_config_v1
+ * is used in library (i.e., libfuse.so). These two structs are binary
+ * compatible in earlier API versions and can be linked.
  * Deprecated and replaced by a newer private struct in FUSE API
- * version 312 (FUSE_MAKE_VERSION(3, 12)
+ * version 312 (FUSE_MAKE_VERSION(3, 12)).
  */
 #if FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
-struct fuse_loop_config_v1; /* forward declarition */
+struct fuse_loop_config_v1; /* forward declaration */
 struct fuse_loop_config {
 #else
 struct fuse_loop_config_v1 {
@@ -985,6 +989,12 @@ int fuse_set_fail_signal_handlers(struct fuse_session *se);
 void fuse_remove_signal_handlers(struct fuse_session *se);
 
 /**
+ * Config operations.
+ * These APIs are introduced in version 312 (FUSE_MAKE_VERSION(3, 12)).
+ * Using them in earlier versions will result in errors.
+ */
+#if FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 12)
+/**
  * Create and set default config for fuse_session_loop_mt and fuse_loop_mt.
  *
  * @return anonymous config struct
@@ -1022,6 +1032,7 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
  */
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 			   struct fuse_loop_config_v1 *v1_conf);
+#endif
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *
