@@ -19,7 +19,6 @@
  * \include poll_client.c
  */
 
-#include <fuse_config.h>
 
 #include <sys/select.h>
 #include <sys/time.h>
