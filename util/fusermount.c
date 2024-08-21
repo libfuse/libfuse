@@ -1448,6 +1448,21 @@ static void show_version(void)
 	exit(0);
 }
 
+/*
+ * Close all inherited fds that are not needed
+ * Ideally these wouldn't come up at all, applications should better
+ * use FD_CLOEXEC / O_CLOEXEC
+ */
+static void close_inherited_fds(int cfd)
+{
+	int max_fd = sysconf(_SC_OPEN_MAX);
+
+	for (int fd = 3; fd <= max_fd; fd++) {
+		if (fd != cfd)
+			close(fd);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	sigset_t sigset;
@@ -1599,8 +1614,11 @@ int main(int argc, char *argv[])
 wait_for_auto_unmount:
 	/* Become a daemon and wait for the parent to exit or die.
 	   ie For the control socket to get closed.
-	   btw We don't want to use daemon() function here because
+	   Btw, we don't want to use daemon() function here because
 	   it forks and messes with the file descriptors. */
+
+	close_inherited_fds(cfd);
+
 	setsid();
 	res = chdir("/");
 	if (res == -1) {
