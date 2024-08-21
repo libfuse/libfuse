@@ -1452,6 +1452,7 @@ int main(int argc, char *argv[])
 	int ch;
 	int fd;
 	int res;
+	int max_fd;
 	char *origmnt;
 	char *mnt;
 	static int unmount = 0;
@@ -1599,6 +1600,10 @@ wait_for_auto_unmount:
 	   ie For the control socket to get closed.
 	   btw We don't want to use daemon() function here because
 	   it forks and messes with the file descriptors. */
+
+        max_fd = sysconf(_SC_OPEN_MAX);
+        for(int fd=3; fd<=max_fd; fd++) { if (fd!=cfd) close(fd); }
+
 	setsid();
 	res = chdir("/");
 	if (res == -1) {
