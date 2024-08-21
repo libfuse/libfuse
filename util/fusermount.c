@@ -1602,7 +1602,9 @@ wait_for_auto_unmount:
 	   it forks and messes with the file descriptors. */
 
         max_fd = sysconf(_SC_OPEN_MAX);
-        for(int fd=3; fd<=max_fd; fd++) { if (fd!=cfd) close(fd); }
+        for(int fd=3; fd<=max_fd; fd++) { 
+		if (fd!=cfd) close(fd); 
+	}
 
 	setsid();
 	res = chdir("/");
