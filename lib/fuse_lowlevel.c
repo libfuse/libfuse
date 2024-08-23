@@ -1136,6 +1136,22 @@ int fuse_reply_lseek(fuse_req_t req, off_t off)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+#ifdef HAVE_STATX
+int fuse_reply_statx(fuse_req_t req, int flags, struct statx *statx,
+		     double attr_timeout)
+{
+	struct fuse_statx_out arg;
+
+	memset(&arg, 0, sizeof(arg));
+	arg.flags = flags;
+	arg.attr_valid = calc_timeout_sec(attr_timeout);
+	arg.attr_valid_nsec = calc_timeout_nsec(attr_timeout);
+	memcpy(&arg.stat, statx, sizeof(arg.stat));
+
+	return send_reply_ok(req, &arg, sizeof(arg));
+}
+#endif
+
 static void do_lookup(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	char *name = (char *) inarg;
@@ -2018,6 +2034,24 @@ static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
 	return 0;
 }
 
+static void do_statx(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_statx_in *arg = (struct fuse_statx_in *) inarg;
+	struct fuse_file_info *fip = NULL;
+	struct fuse_file_info fi;
+
+	if (arg->getattr_flags & FUSE_GETATTR_FH) {
+		memset(&fi, 0, sizeof(fi));
+		fi.fh = arg->fh;
+		fip = &fi;
+	}
+
+	if (req->se->op.statx)
+		req->se->op.statx(req, nodeid, arg->sx_flags, arg->sx_mask, fip);
+	else
+		fuse_reply_err(req, ENOSYS);
+}
+
 /* Prevent bogus data races (bogus since "init" is called before
  * multi-threading becomes relevant */
 static __attribute__((no_sanitize("thread")))
@@ -2753,6 +2787,7 @@ static struct {
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
+	[FUSE_STATX]	   = { do_statx,       "STATX"	     },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 

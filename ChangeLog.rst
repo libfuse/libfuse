@@ -29,6 +29,8 @@ libfuse 3.17 (2024-01-01)
 
 * Added support for FUSE_CAP_HANDLE_KILLPRIV_V2
 
+* Add statx for distributions with stax support
+
 Fixes:
 * Fixed compilation failure on FreeBSD (mount_bsd.c now points to correct
   header)
