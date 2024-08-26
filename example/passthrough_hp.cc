@@ -226,12 +226,12 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
 }
 
 
-static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
-    (void)fi;
-    Inode& inode = get_inode(ino);
+static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
+{
     struct stat attr;
-    auto res = fstatat(inode.fd, "", &attr,
-                       AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+    int fd = fi ? fi->fh : get_inode(ino).fd;
+
+    auto res = fstatat(fd, "", &attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
     if (res == -1) {
         fuse_reply_err(req, errno);
         return;
