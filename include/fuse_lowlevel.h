@@ -303,7 +303,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * @param req request handle
 	 * @param ino the inode number
-	 * @param fi for future use, currently always NULL
+	 * @param fi file information, or NULL
 	 */
 	void (*getattr) (fuse_req_t req, fuse_ino_t ino,
 			 struct fuse_file_info *fi);
