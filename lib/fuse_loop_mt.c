@@ -262,12 +262,11 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	return 0;
 }
 
-static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
+static int fuse_clone_chan_fd_default(struct fuse_session *se)
 {
 	int res;
 	int clonefd;
 	uint32_t masterfd;
-	struct fuse_chan *newch;
 
 	const char *redfs_devname = "/dev/redfs";
 	const char *fuse_devname = "/dev/fuse";
@@ -287,20 +286,40 @@ fallback:
 				 devname);
 			goto fallback;
 		}
-		return NULL;
+		return -1;
 	}
 #ifndef O_CLOEXEC
 	fcntl(clonefd, F_SETFD, FD_CLOEXEC);
 #endif
 
-	masterfd = mt->se->fd;
+	masterfd = se->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
 	if (res == -1) {
 		fuse_log(FUSE_LOG_ERR, "redfs failed to clone device fd: %s\n",
 			strerror(errno));
 		close(clonefd);
-		return NULL;
+		return -1;
 	}
+	return clonefd;
+}
+
+static struct fuse_chan *fuse_clone_chan(struct fuse_mt *mt)
+{
+	int clonefd;
+	struct fuse_session *se = mt->se;
+	struct fuse_chan *newch;
+
+	if (se->io != NULL) {
+		if (se->io->clone_fd != NULL)
+			clonefd = se->io->clone_fd(se->fd);
+		else
+			return NULL;
+	} else {
+		clonefd = fuse_clone_chan_fd_default(se);
+	}
+	if (clonefd < 0)
+		return NULL;
+
 	newch = fuse_chan_new(clonefd);
 	if (newch == NULL)
 		close(clonefd);
@@ -429,6 +448,9 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 			fuse_join_worker(&mt, mt.main.next);
 
 		err = mt.error;
+
+		if (config->uring.use_uring)
+			fuse_uring_join_threads(se);
 	}
 
 	pthread_mutex_destroy(&mt.lock);
@@ -474,10 +496,15 @@ int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
 FUSE_SYMVER("fuse_session_loop_mt_31", "fuse_session_loop_mt@FUSE_3.0")
 int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd)
 {
+	int err;
 	struct fuse_loop_config *config = fuse_loop_cfg_create();
 	if (clone_fd > 0)
 		 fuse_loop_cfg_set_clone_fd(config, clone_fd);
-	return fuse_session_loop_mt_312(se, config);
+	err = fuse_session_loop_mt_312(se, config);
+
+	fuse_loop_cfg_destroy(config);
+
+	return err;
 }
 
 struct fuse_loop_config *fuse_loop_cfg_create(void)

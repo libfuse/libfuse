@@ -1487,9 +1487,17 @@ static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
 {
 	if (!f->conf.use_ino)
 		stbuf->st_ino = nodeid;
-	if (f->conf.set_mode)
-		stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
-				 (0777 & ~f->conf.umask);
+	if (f->conf.set_mode) {
+		if (f->conf.dmask && S_ISDIR(stbuf->st_mode))
+			stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
+					 (0777 & ~f->conf.dmask);
+		else if (f->conf.fmask)
+			stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
+					 (0777 & ~f->conf.fmask);
+		else
+			stbuf->st_mode = (stbuf->st_mode & S_IFMT) |
+					 (0777 & ~f->conf.umask);
+	}
 	if (f->conf.set_uid)
 		stbuf->st_uid = f->conf.uid;
 	if (f->conf.set_gid)
@@ -2604,6 +2612,8 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		fs->user_data = fs->op.init(conn, cfg);
 }
 
+static int fuse_init_intr_signal(int signum, int *installed);
+
 static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 {
 	struct fuse *f = (struct fuse *) data;
@@ -2612,6 +2622,15 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 	if(conn->capable & FUSE_CAP_EXPORT_SUPPORT)
 		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
 	fuse_fs_init(f->fs, conn, &f->conf);
+
+	if (f->conf.intr) {
+		if (fuse_init_intr_signal(f->conf.intr_signal,
+				&f->intr_installed) == -1)
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to init interrupt signal\n");
+	} else {
+		/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+		conn->no_interrupt = 1;
+	}
 }
 
 void fuse_fs_destroy(struct fuse_fs *fs)
@@ -4670,6 +4689,10 @@ static const struct fuse_opt fuse_lib_opts[] = {
 	FUSE_LIB_OPT("no_rofd_flush",	      no_rofd_flush, 1),
 	FUSE_LIB_OPT("umask=",		      set_mode, 1),
 	FUSE_LIB_OPT("umask=%o",	      umask, 0),
+	FUSE_LIB_OPT("fmask=",		      set_mode, 1),
+	FUSE_LIB_OPT("fmask=%o",	      fmask, 0),
+	FUSE_LIB_OPT("dmask=",		      set_mode, 1),
+	FUSE_LIB_OPT("dmask=%o",	      dmask, 0),
 	FUSE_LIB_OPT("uid=",		      set_uid, 1),
 	FUSE_LIB_OPT("uid=%d",		      uid, 0),
 	FUSE_LIB_OPT("gid=",		      set_gid, 1),
@@ -4723,6 +4746,8 @@ void fuse_lib_help(struct fuse_args *args)
 "    -o [no]auto_cache      enable caching based on modification times (off)\n"
 "    -o no_rofd_flush       disable flushing of read-only fd on close (off)\n"
 "    -o umask=M             set file permissions (octal)\n"
+"    -o fmask=M             set file permissions (octal)\n"
+"    -o dmask=M             set dir  permissions (octal)\n"
 "    -o uid=N               set file owner\n"
 "    -o gid=N               set file group\n"
 "    -o entry_timeout=T     cache timeout for names (1.0s)\n"
@@ -4890,11 +4915,19 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 	}
 }
 
-
-FUSE_SYMVER("fuse_new_31", "fuse_new@@FUSE_3.1")
-struct fuse *fuse_new_31(struct fuse_args *args,
-		      const struct fuse_operations *op,
-		      size_t op_size, void *user_data)
+/*
+ * Not supposed to be called directly, but supposed to be called
+ * through the fuse_new macro
+ */
+struct fuse *_fuse_new_317(struct fuse_args *args,
+			   const struct fuse_operations *op,
+			   size_t op_size, struct libfuse_version *version,
+			   void *user_data);
+FUSE_SYMVER("_fuse_new_317", "_fuse_new@@FUSE_3.17")
+struct fuse *_fuse_new_317(struct fuse_args *args,
+			   const struct fuse_operations *op,
+			   size_t op_size, struct libfuse_version *version,
+			   void *user_data)
 {
 	struct fuse *f;
 	struct node *root;
@@ -4976,7 +5009,7 @@ struct fuse *fuse_new_31(struct fuse_args *args,
 	f->conf.readdir_ino = 1;
 #endif
 
-	f->se = fuse_session_new(args, &llop, sizeof(llop), f);
+	f->se = _fuse_session_new(args, &llop, sizeof(llop), version, f);
 	if (f->se == NULL)
 		goto out_free_fs;
 
@@ -5008,12 +5041,6 @@ struct fuse *fuse_new_31(struct fuse_args *args,
 
 	strcpy(root->inline_name, "/");
 	root->name = root->inline_name;
-
-	if (f->conf.intr &&
-	    fuse_init_intr_signal(f->conf.intr_signal,
-				  &f->intr_installed) == -1)
-		goto out_free_root;
-
 	root->parent = NULL;
 	root->nodeid = FUSE_ROOT_ID;
 	inc_nlookup(root);
@@ -5021,8 +5048,6 @@ struct fuse *fuse_new_31(struct fuse_args *args,
 
 	return f;
 
-out_free_root:
-	free(root);
 out_free_id_table:
 	free(f->id_table.array);
 out_free_name_table:
@@ -5041,16 +5066,62 @@ out:
 }
 
 /* Emulates 3.0-style fuse_new(), which processes --help */
+struct fuse *_fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
+			 size_t op_size,
+			 struct libfuse_version *version,
+			 void *user_data);
+FUSE_SYMVER("_fuse_new_30", "_fuse_new@FUSE_3.0")
+struct fuse *_fuse_new_30(struct fuse_args *args,
+			 const struct fuse_operations *op,
+			 size_t op_size,
+			 struct libfuse_version *version,
+			 void *user_data)
+{
+	struct fuse_config conf = {0};
+
+	const struct fuse_opt opts[] = {
+		FUSE_LIB_OPT("-h", show_help, 1),
+		FUSE_LIB_OPT("--help", show_help, 1),
+		FUSE_OPT_END
+	};
+
+	if (fuse_opt_parse(args, &conf, opts,
+			   fuse_lib_opt_proc) == -1)
+		return NULL;
+
+	if (conf.show_help) {
+		fuse_lib_help(args);
+		return NULL;
+	} else
+		return _fuse_new_317(args, op, op_size, version, user_data);
+}
+
+/* ABI compat version */
+struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
+			 size_t op_size, void *user_data);
+FUSE_SYMVER("fuse_new_31", "fuse_new@FUSE_3.1")
+struct fuse *fuse_new_31(struct fuse_args *args,
+			 const struct fuse_operations *op,
+			 size_t op_size, void *user_data)
+{
+		/* unknown version */
+	struct libfuse_version version = { 0 };
+
+	return _fuse_new_317(args, op, op_size, &version, user_data);
+}
+
+/*
+ * ABI compat version
+ * Emulates 3.0-style fuse_new(), which processes --help
+ */
 struct fuse *fuse_new_30(struct fuse_args *args, const struct fuse_operations *op,
-			 size_t op_size, void *private_data);
+			 size_t op_size, void *user_data);
 FUSE_SYMVER("fuse_new_30", "fuse_new@FUSE_3.0")
 struct fuse *fuse_new_30(struct fuse_args *args,
 			 const struct fuse_operations *op,
 			 size_t op_size, void *user_data)
 {
-	struct fuse_config conf;
-
-	memset(&conf, 0, sizeof(conf));
+	struct fuse_config conf = {0};
 
 	const struct fuse_opt opts[] = {
 		FUSE_LIB_OPT("-h", show_help, 1),
@@ -5068,6 +5139,7 @@ struct fuse *fuse_new_30(struct fuse_args *args,
 	} else
 		return fuse_new_31(args, op, op_size, user_data);
 }
+
 
 void fuse_destroy(struct fuse *f)
 {
