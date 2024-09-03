@@ -523,11 +523,13 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 
 	drop_privs();
 	res = chdir_to_parent(copy, &last);
-	restore_privs();
-	if (res == -1)
+	if (res == -1) {
+		restore_privs();
 		goto out;
+	}
 
 	res = umount2(last, umount_flags);
+	restore_privs();
 	if (res == -1 && !quiet) {
 		fprintf(stderr, "%s: failed to unmount %s: %s\n",
 			progname, mnt, strerror(errno));
