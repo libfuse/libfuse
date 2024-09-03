@@ -197,9 +197,6 @@ static void lo_init(void *userdata,
 {
 	struct lo_data *lo = (struct lo_data*) userdata;
 
-	if(conn->capable & FUSE_CAP_EXPORT_SUPPORT)
-		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
-
 	if (lo->writeback &&
 	    conn->capable & FUSE_CAP_WRITEBACK_CACHE) {
 		if (lo->debug)
@@ -211,6 +208,9 @@ static void lo_init(void *userdata,
 			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
 		conn->want |= FUSE_CAP_FLOCK_LOCKS;
 	}
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
 }
 
 static void lo_destroy(void *userdata)
@@ -226,6 +226,7 @@ static void lo_destroy(void *userdata)
 
 		remove_tmp = RB_REMOVE(lo_ino_tree, &lo->ino_tree_head, inode);
 		assert(remove_tmp == inode);
+		close(inode->fd);
 		free(inode);
 	}
 	pthread_mutex_unlock(&lo->mutex);

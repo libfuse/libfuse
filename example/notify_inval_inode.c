@@ -59,7 +59,7 @@
  */
 
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #include <fuse_lowlevel.h>
 #include <stdio.h>
@@ -121,6 +121,13 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
         return -1;
 
     return 0;
+}
+
+static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
+	(void)userdata;
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
 }
 
 static void tfs_destroy(void *userarg)
@@ -250,6 +257,7 @@ static void tfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static const struct fuse_lowlevel_ops tfs_oper = {
+    .init       = tfs_init,
     .destroy    = tfs_destroy,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
@@ -279,14 +287,14 @@ static void* update_fs_loop(void *data) {
         if (!options.no_notify && lookup_cnt) {
             /* Only send notification if the kernel is aware of the inode */
 
-            /* Some errors (ENOENT, EBADFD, ENODEV) have to be accepted as the
+            /* Some errors (ENOENT, EBADF, ENODEV) have to be accepted as they
              * might come up during umount, when kernel side already releases
              * all inodes, but does not send FUSE_DESTROY yet.
              */
             int ret =
                 fuse_lowlevel_notify_inval_inode(se, FILE_INO, 0, 0);
             if ((ret != 0 && !is_stop) &&
-                 ret != -ENOENT && ret != -EBADFD && ret != -ENODEV) {
+                 ret != -ENOENT && ret != -EBADF && ret != -ENODEV) {
                 fprintf(stderr,
                         "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
                         strerror(-ret), -ret);
@@ -311,7 +319,7 @@ int main(int argc, char *argv[]) {
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_session *se;
     struct fuse_cmdline_opts opts;
-    struct fuse_loop_config config;
+    struct fuse_loop_config *config;
     pthread_t updater;
     int ret = -1;
 
@@ -364,9 +372,12 @@ int main(int argc, char *argv[]) {
     if (opts.singlethread)
         ret = fuse_session_loop(se);
     else {
-        config.clone_fd = opts.clone_fd;
-        config.max_idle_threads = opts.max_idle_threads;
-        ret = fuse_session_loop_mt(se, &config);
+	config = fuse_loop_cfg_create();
+	fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+	fuse_loop_cfg_set_max_threads(config, opts.max_threads);
+	ret = fuse_session_loop_mt(se, config);
+	fuse_loop_cfg_destroy(config);
+	config = NULL;
     }
 
     fuse_session_unmount(se);

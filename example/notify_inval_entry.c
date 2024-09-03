@@ -17,7 +17,7 @@
  * To see the effect, first start the file system with the
  * ``--no-notify``
  *
- *     $ notify_inval_entry --update-interval=1 --timeout 30 --no-notify mnt/
+ *     $ notify_inval_entry --update-interval=1 --timeout=30 --no-notify mnt/
  *
  * Observe that `ls` always prints the correct directory contents
  * (since `readdir` output is not cached)::
@@ -51,7 +51,7 @@
  * In contrast, if you enable notifications you will be unable to stat
  * the file as soon as the file system updates its name:
  *
- *     $ notify_inval_entry --update-interval=1 --timeout 30 --no-notify mnt/
+ *     $ notify_inval_entry --update-interval=1 --timeout=30 mnt/
  *     $ file=$(ls mnt/); stat mnt/$file
  *       File: ‘mnt/Time_is_20h_42m_11s’
  *       Size: 0                 Blocks: 0          IO Block: 4096   regular empty file
@@ -76,7 +76,7 @@
  */
 
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #include <fuse_lowlevel.h>
 #include <stdio.h>
@@ -138,6 +138,13 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
         return -1;
 
     return 0;
+}
+
+static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
+	(void)userdata;
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
 }
 
 static void tfs_lookup(fuse_req_t req, fuse_ino_t parent,
@@ -232,6 +239,7 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 }
 
 static const struct fuse_lowlevel_ops tfs_oper = {
+    .init       = tfs_init,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
@@ -307,7 +315,7 @@ int main(int argc, char *argv[]) {
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_session *se;
     struct fuse_cmdline_opts opts;
-    struct fuse_loop_config config;
+    struct fuse_loop_config *config;
     pthread_t updater;
     int ret = -1;
 
@@ -362,9 +370,12 @@ int main(int argc, char *argv[]) {
     if (opts.singlethread) {
         ret = fuse_session_loop(se);
     } else {
-        config.clone_fd = opts.clone_fd;
-        config.max_idle_threads = opts.max_idle_threads;
-        ret = fuse_session_loop_mt(se, &config);
+		config = fuse_loop_cfg_create();
+		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+		fuse_loop_cfg_set_max_threads(config, opts.max_threads);
+		ret = fuse_session_loop_mt(se, config);
+		fuse_loop_cfg_destroy(config);
+		config = NULL;
     }
 
     fuse_session_unmount(se);

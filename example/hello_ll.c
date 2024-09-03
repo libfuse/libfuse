@@ -18,7 +18,7 @@
  * \include hello_ll.c
  */
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #include <fuse_lowlevel.h>
 #include <stdio.h>
@@ -51,6 +51,14 @@ static int hello_stat(fuse_ino_t ino, struct stat *stbuf)
 		return -1;
 	}
 	return 0;
+}
+
+static void hello_ll_init(void *userdata, struct fuse_conn_info *conn)
+{
+	(void)userdata;
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
 }
 
 static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -202,6 +210,7 @@ static void hello_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *nam
 }
 
 static const struct fuse_lowlevel_ops hello_ll_oper = {
+	.init = hello_ll_init,
 	.lookup = hello_ll_lookup,
 	.getattr = hello_ll_getattr,
 	.readdir = hello_ll_readdir,
@@ -217,7 +226,7 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
-	struct fuse_loop_config config;
+	struct fuse_loop_config *config;
 	int ret = -1;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
@@ -259,9 +268,12 @@ int main(int argc, char *argv[])
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
 	else {
-		config.clone_fd = opts.clone_fd;
-		config.max_idle_threads = opts.max_idle_threads;
-		ret = fuse_session_loop_mt(se, &config);
+		config = fuse_loop_cfg_create();
+		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+		fuse_loop_cfg_set_max_threads(config, opts.max_threads);
+		ret = fuse_session_loop_mt(se, config);
+		fuse_loop_cfg_destroy(config);
+		config = NULL;
 	}
 
 	fuse_session_unmount(se);

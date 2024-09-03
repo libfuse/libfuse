@@ -26,12 +26,6 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-/** Major version of FUSE library interface */
-#define FUSE_MAJOR_VERSION 3
-
-/** Minor version of FUSE library interface */
-#define FUSE_MINOR_VERSION 16
-
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
 
@@ -47,6 +41,10 @@ extern "C" {
  * concurrently open for the same file.  Generally, a client will create one
  * file handle per file descriptor, though in some cases multiple file
  * descriptors can share a single file handle.
+ *
+ * Note: This data structure is ABI sensitive, new parameters have to be
+ *       added within padding/padding2 bits and always below existing
+ *       parameters.
  */
 struct fuse_file_info {
 	/** Open flags.	 Available in open(), release() and create() */
@@ -70,8 +68,8 @@ struct fuse_file_info {
 	unsigned int keep_cache : 1;
 
 	/** Can be filled by open/create, to allow parallel direct writes on this
-         *  file */
-        unsigned int parallel_direct_writes : 1;
+	    file */
+	unsigned int parallel_direct_writes : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
 	    maybe set in highlevel lock operation and lowlevel release
@@ -112,6 +110,11 @@ struct fuse_file_info {
 	/** Requested poll events.  Available in ->poll.  Only set on kernels
 	    which support it.  If unsupported, this field is set to zero. */
 	uint32_t poll_events;
+
+	/** Passthrough backing file id.  May be filled in by filesystem in
+	 * create and open.  It is used to create a passthrough connection
+	 * between FUSE file and backing file. */
+	int32_t backing_id;
 };
 
 
@@ -183,6 +186,11 @@ struct fuse_loop_config_v1 {
 
 /**
  * Indicates that the filesystem supports lookups of "." and "..".
+ *
+ * When this flag is set, the filesystem must be prepared to receive requests
+ * for invalid inodes (i.e., for which a FORGET request was received or
+ * which have been used in a previous instance of the filesystem daemon) and
+ * must not reuse node-ids (even when setting generation numbers).
  *
  * This feature is disabled by default.
  */
@@ -327,8 +335,10 @@ struct fuse_loop_config_v1 {
  * kernel. (If this flag is not set, returning ENOSYS will be treated
  * as an error and signaled to the caller).
  *
- * Setting (or unsetting) this flag in the `want` field has *no
- * effect*.
+ * Setting this flag in the `want` field enables this behavior automatically
+ * within libfuse for low level API users. If non-low level users wish to have
+ * this behavior you must return `ENOSYS` from the open() handler on supporting
+ * kernels.
  */
 #define FUSE_CAP_NO_OPEN_SUPPORT	(1 << 17)
 
@@ -406,7 +416,10 @@ struct fuse_loop_config_v1 {
  * flag is not set, returning ENOSYS will be treated as an error and signalled
  * to the caller.)
  *
- * Setting (or unsetting) this flag in the `want` field has *no effect*.
+ * Setting this flag in the `want` field enables this behavior automatically
+ * within libfuse for low level API users.  If non-low level users with to have
+ * this behavior you must return `ENOSYS` from the opendir() handler on
+ * supporting kernels.
  */
 #define FUSE_CAP_NO_OPENDIR_SUPPORT    (1 << 24)
 
@@ -464,6 +477,18 @@ struct fuse_loop_config_v1 {
  * cache as enforced by mmap that cannot be guaranteed anymore.
  */
 #define FUSE_CAP_DIRECT_IO_ALLOW_MMAP  (1 << 28)
+
+/**
+ * Indicates support for passthrough mode access for read/write operations.
+ *
+ * If this flag is set in the `capable` field of the `fuse_conn_info`
+ * structure, then the FUSE kernel module supports redirecting read/write
+ * operations to the backing file instead of letting them to be handled
+ * by the FUSE daemon.
+ *
+ * This feature is disabled by default.
+ */
+#define FUSE_CAP_PASSTHROUGH      (1 << 29)
 
 /**
  * Ioctl flags
@@ -595,9 +620,39 @@ struct fuse_conn_info {
 	unsigned time_gran;
 
 	/**
+	 * When FUSE_CAP_PASSTHROUGH is enabled, this is the maximum allowed
+	 * stacking depth of the backing files.  In current kernel, the maximum
+	 * allowed stack depth if FILESYSTEM_MAX_STACK_DEPTH (2), which includes
+	 * the FUSE passthrough layer, so the maximum stacking depth for backing
+	 * files is 1.
+	 *
+	 * The default is FUSE_BACKING_STACKED_UNDER (0), meaning that the
+	 * backing files cannot be on a stacked filesystem, but another stacked
+	 * filesystem can be stacked over this FUSE passthrough filesystem.
+	 *
+	 * Set this to FUSE_BACKING_STACKED_OVER (1) if backing files may be on
+	 * a stacked filesystem, such as overlayfs or another FUSE passthrough.
+	 * In this configuration, another stacked filesystem cannot be stacked
+	 * over this FUSE passthrough filesystem.
+	 */
+#define FUSE_BACKING_STACKED_UNDER	(0)
+#define FUSE_BACKING_STACKED_OVER	(1)
+	unsigned max_backing_stack_depth;
+
+	/**
+	 * Disable FUSE_INTERRUPT requests.
+	 *
+	 * Enable `no_interrupt` option to:
+	 * 1) Avoid unnecessary locking operations and list operations,
+	 * 2) Return ENOSYS for the reply of FUSE_INTERRUPT request to
+	 * inform the kernel not to send the FUSE_INTERRUPT request.
+	 */
+	unsigned no_interrupt;
+
+	/**
 	 * For future use.
 	 */
-	unsigned reserved[22];
+	unsigned reserved[20];
 };
 
 struct fuse_session;
@@ -833,6 +888,18 @@ struct fuse_bufvec {
 	struct fuse_buf buf[1];
 };
 
+/**
+ * libfuse version a file system was compiled with. Should be filled in from
+ * defines in 'libfuse_config.h'
+ */
+struct libfuse_version
+{
+	int major;
+	int minor;
+	int hotfix;
+	int padding;
+};
+
 /* Initialize bufvec with a single buffer of given size */
 #define FUSE_BUFVEC_INIT(size__)				\
 	((struct fuse_bufvec) {					\
@@ -887,6 +954,23 @@ ssize_t fuse_buf_copy(struct fuse_bufvec *dst, struct fuse_bufvec *src,
  * fuse_remove_signal_handlers()
  */
 int fuse_set_signal_handlers(struct fuse_session *se);
+
+/**
+ * Print a stack backtrace diagnostic on critical signals ()
+ *
+ * Stores session in a global variable.	 May only be called once per
+ * process until fuse_remove_signal_handlers() is called.
+ *
+ * Once either of the POSIX signals arrives, the signal handler calls
+ * fuse_session_exit().
+ *
+ * @param se the session to exit
+ * @return 0 on success, -1 on failure
+ *
+ * See also:
+ * fuse_remove_signal_handlers()
+ */
+int fuse_set_fail_signal_handlers(struct fuse_session *se);
 
 /**
  * Restore default signal handlers
@@ -975,7 +1059,7 @@ void fuse_loop_cfg_set_uring_ext_thread(struct fuse_loop_config *config);
  * On 32bit systems please add -D_FILE_OFFSET_BITS=64 to your compile flags!
  */
 
-#if defined(__GNUC__) && (__GNUC__ > 4 || __GNUC__ == 4 && __GNUC_MINOR__ >= 6) && !defined __cplusplus
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(sizeof(off_t) == 8, "fuse: off_t must be 64bit");
 #else
 struct _fuse_off_t_must_be_64bit_dummy_struct \

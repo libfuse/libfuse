@@ -58,7 +58,7 @@
  */
 
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #include <fuse_lowlevel.h>
 #include <stdio.h>
@@ -130,6 +130,13 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
         return -1;
 
     return 0;
+}
+
+static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
+	(void)userdata;
+
+	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
+	conn->no_interrupt = 1;
 }
 
 static void tfs_lookup(fuse_req_t req, fuse_ino_t parent,
@@ -304,6 +311,7 @@ static void tfs_destroy(void *userdata)
 
 
 static const struct fuse_lowlevel_ops tfs_oper = {
+    .init       = tfs_init,
     .lookup	= tfs_lookup,
     .getattr	= tfs_getattr,
     .readdir	= tfs_readdir,
@@ -345,14 +353,14 @@ static void* update_fs_loop(void *data) {
             bufv.buf[0].flags = 0;
 
             /*
-             * Some errors (ENOENT, EBADFD, ENODEV) have to be accepted as they
+             * Some errors (ENOENT, EBADF, ENODEV) have to be accepted as they
              * might come up during umount, when kernel side already releases
              * all inodes, but does not send FUSE_DESTROY yet.
              */
 
             ret = fuse_lowlevel_notify_store(se, FILE_INO, 0, &bufv, 0);
             if ((ret != 0 && !is_umount) &&
-                ret != -ENOENT && ret != -EBADFD && ret != -ENODEV) {
+                ret != -ENOENT && ret != -EBADF && ret != -ENODEV) {
                 fprintf(stderr,
                         "ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
                         strerror(-ret), -ret);
@@ -363,7 +371,7 @@ static void* update_fs_loop(void *data) {
                kernel to send us back the stored data */
             ret = fuse_lowlevel_notify_retrieve(se, FILE_INO, MAX_STR_LEN,
                                                 0, (void*) strdup(file_contents));
-            assert((ret == 0 || is_umount) || ret == -ENOENT || ret == -EBADFD ||
+            assert((ret == 0 || is_umount) || ret == -ENOENT || ret == -EBADF ||
                    ret != -ENODEV);
             if(retrieve_status == 0)
                 retrieve_status = 1;
@@ -387,7 +395,7 @@ int main(int argc, char *argv[]) {
     struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     struct fuse_session *se;
     struct fuse_cmdline_opts opts;
-    struct fuse_loop_config config;
+    struct fuse_loop_config *config;
     int ret = -1;
 
     if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
@@ -436,9 +444,12 @@ int main(int argc, char *argv[]) {
     if (opts.singlethread)
         ret = fuse_session_loop(se);
     else {
-        config.clone_fd = opts.clone_fd;
-        config.max_idle_threads = opts.max_idle_threads;
-        ret = fuse_session_loop_mt(se, &config);
+	config = fuse_loop_cfg_create();
+	fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+	fuse_loop_cfg_set_max_threads(config, opts.max_threads);
+	ret = fuse_session_loop_mt(se, config);
+	fuse_loop_cfg_destroy(config);
+	config = NULL;
     }
 
     assert(retrieve_status != 1);

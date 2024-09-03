@@ -529,11 +529,13 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 
 	drop_privs();
 	res = chdir_to_parent(copy, &last);
-	restore_privs();
-	if (res == -1)
+	if (res == -1) {
+		restore_privs();
 		goto out;
+	}
 
 	res = umount2(last, umount_flags);
+	restore_privs();
 	if (res == -1 && !quiet) {
 		fprintf(stderr, "%s: failed to unmount %s: %s\n",
 			progname, mnt, strerror(errno));
@@ -714,6 +716,8 @@ static struct mount_flags mount_flags[] = {
 	{"strictatime",     MS_STRICTATIME, 1, 1},
 	{"nostrictatime",   MS_STRICTATIME, 0, 1},
 	{"dirsync", MS_DIRSYNC,	    1, 1},
+	{"symfollow",       MS_NOSYMFOLLOW, 0, 1},
+	{"nosymfollow",     MS_NOSYMFOLLOW, 1, 1},
 	{NULL,	    0,		    0, 0}
 };
 
@@ -1145,6 +1149,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x736675005346544e /* UFSD */,
 		0x58465342 /* XFS_SB_MAGIC */,
 		0x2FC12FC1 /* ZFS_SUPER_MAGIC */,
+		0x858458f6 /* RAMFS_MAGIC */,
 	};
 	for (i = 0; i < sizeof(f_type_whitelist)/sizeof(f_type_whitelist[0]); i++) {
 		if (f_type_whitelist[i] == fs_buf.f_type)
@@ -1278,7 +1283,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 			size_t mnt_opts_len = strlen(mnt_opts);
 			size_t x_mnt_opts_len =  mnt_opts_len+
 						 strlen(x_opts) + 2;
-			char *x_mnt_opts = malloc(x_mnt_opts_len);
+			char *x_mnt_opts = calloc(1, x_mnt_opts_len);
 
 			if (mnt_opts_len) {
 				strcpy(x_mnt_opts, mnt_opts);
