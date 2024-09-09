@@ -511,6 +511,29 @@ int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
+int fuse_reply_open_getattr(fuse_req_t req, const struct fuse_file_info *fi,
+			    const struct stat *attr,
+			    struct timespec *attr_timeout)
+{
+	struct fuse_open_out *open_arg;
+	struct fuse_attr_out *attr_arg;
+	size_t buf_sz = sizeof(*open_arg) + sizeof(*attr_arg);
+	char buf[buf_sz];
+
+	open_arg = (struct fuse_open_out *)buf;
+	attr_arg = (struct fuse_attr_out *)(buf + sizeof(*open_arg));
+
+	memset(buf, 0, sizeof(buf));
+
+	fill_open(open_arg, fi);
+
+	attr_arg->attr_valid = attr_timeout->tv_sec;
+	attr_arg->attr_valid_nsec = attr_timeout->tv_nsec;
+	convert_stat(attr, &attr_arg->attr);
+
+	return send_reply_ok(req, buf, buf_sz);
+}
+
 int fuse_reply_write(fuse_req_t req, size_t count)
 {
 	struct fuse_write_out arg;
@@ -1391,6 +1414,20 @@ static void do_open(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 	else
 		fuse_reply_open(req, &fi);
+}
+
+static void do_open_getattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_open_in *arg = (struct fuse_open_in *) inarg;
+	struct fuse_file_info fi;
+
+	memset(&fi, 0, sizeof(fi));
+	fi.flags = arg->flags;
+
+	if (req->se->op.open_getattr)
+		req->se->op.open_getattr(req, nodeid, &fi);
+	else
+		fuse_reply_err(req, ENOSYS);
 }
 
 static void do_read(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -2671,6 +2708,7 @@ static struct {
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
+	[FUSE_OPEN_GETATTR] = { do_open_getattr, "OPEN_GETATTR"			},
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
