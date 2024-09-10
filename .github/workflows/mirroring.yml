@@ -28,4 +28,16 @@ jobs:
               rm err.log && exit 128
             fi
             rm err.log
-          fi             
+          fi
+
+      - name: Slack Notification
+        if: failure()
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_COLOR: ${{ job.status }}
+          SLACK_TITLE: Mirror red-libfuse to GHE has failed
+          SLACK_USERNAME: GH Bot
+          SLACK_MSG_AUTHOR: red-libfuse
+          MSG_MINIMAL: true
+          SLACK_MESSAGE: "Mirror red-libfuse repository from github.com to GHE has failed. Please check the logs for more details."
