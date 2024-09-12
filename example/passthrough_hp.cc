@@ -55,6 +55,7 @@
 #include <errno.h>
 #include <ftw.h>
 #include <fuse_lowlevel.h>
+#include "fuse_helper.h"
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>
@@ -144,7 +145,7 @@ struct Fs {
     std::mutex mutex;
     InodeMap inodes; // protected by mutex
     Inode root;
-    double timeout;
+    struct timespec timeout;
     bool debug;
     bool debug_fuse;
     bool foreground;
@@ -196,7 +197,7 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
         fs.passthrough = false;
 
     /* Passthrough and writeback cache are conflicting modes */
-    if (fs.timeout && !fs.passthrough &&
+    if (!fuse_timeout_is_zero(&fs.timeout) && !fs.passthrough &&
         conn->capable & FUSE_CAP_WRITEBACK_CACHE)
         conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
@@ -236,7 +237,7 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
         fuse_reply_err(req, errno);
         return;
     }
-    fuse_reply_attr(req, &attr, fs.timeout);
+    fuse_reply_attr2(req, &attr, fs.timeout);
 }
 
 
@@ -324,7 +325,7 @@ static void sfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
 
 static int do_lookup(fuse_ino_t parent, const char *name,
-                     fuse_entry_param *e) {
+                     fuse_entry_param2 *e) {
     if (fs.debug)
         cerr << "DEBUG: lookup(): name=" << name
              << ", parent=" << parent << endl;
@@ -416,19 +417,20 @@ static int do_lookup(fuse_ino_t parent, const char *name,
 
 
 static void sfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
-    fuse_entry_param e {};
+    fuse_entry_param2 e {};
     auto err = do_lookup(parent, name, &e);
     if (err == ENOENT) {
+	    e.attr_timeout = fs.timeout;
         e.attr_timeout = fs.timeout;
         e.entry_timeout = fs.timeout;
         e.ino = e.attr.st_ino = 0;
-        fuse_reply_entry(req, &e);
+        fuse_reply_entry2(req, &e);
     } else if (err) {
         if (err == ENFILE || err == EMFILE)
             cerr << "ERROR: Reached maximum number of file descriptors." << endl;
         fuse_reply_err(req, err);
     } else {
-        fuse_reply_entry(req, &e);
+        fuse_reply_entry2(req, &e);
     }
 }
 
@@ -450,12 +452,12 @@ static void mknod_symlink(fuse_req_t req, fuse_ino_t parent,
     if (res == -1)
         goto out;
 
-    fuse_entry_param e;
+    fuse_entry_param2 e;
     saverr = do_lookup(parent, name, &e);
     if (saverr)
         goto out;
 
-    fuse_reply_entry(req, &e);
+    fuse_reply_entry2(req, &e);
     return;
 
 out:
@@ -487,7 +489,7 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
                      const char *name) {
     Inode& inode = get_inode(ino);
     Inode& inode_p = get_inode(parent);
-    fuse_entry_param e {};
+    fuse_entry_param2 e {};
 
     e.attr_timeout = fs.timeout;
     e.entry_timeout = fs.timeout;
@@ -515,7 +517,7 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
                  << " count " << inode.nlookup << endl;
     }
 
-    fuse_reply_entry(req, &e);
+    fuse_reply_entry2(req, &e);
     return;
 }
 
@@ -548,8 +550,8 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name) {
     // Release inode.fd before last unlink like nfsd EXPORT_OP_CLOSE_BEFORE_UNLINK
     // to test reused inode numbers.
     // Skip this when inode has an open file and when writeback cache is enabled.
-    if (!fs.timeout) {
-	    fuse_entry_param e;
+    if (!fuse_timeout_is_zero(&fs.timeout)) {
+	    fuse_entry_param2 e;
 	    auto err = do_lookup(parent, name, &e);
 	    if (err) {
 		    fuse_reply_err(req, err);
@@ -681,7 +683,7 @@ static void sfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     d->offset = 0;
 
     fi->fh = reinterpret_cast<uint64_t>(d);
-    if(fs.timeout) {
+    if(!fuse_timeout_is_zero(&fs.timeout)) {
         fi->keep_cache = 1;
         fi->cache_readdir = 1;
     }
@@ -746,7 +748,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
         }
         d->offset = entry->d_off;
 
-        fuse_entry_param e{};
+        fuse_entry_param2 e{};
         size_t entsize;
         if (plus) {
             if (is_dot_or_dotdot(entry->d_name)) {
@@ -760,7 +762,8 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
                     goto error;
                 did_lookup = true;
             }
-            entsize = fuse_add_direntry_plus(req, p, rem, entry->d_name, &e, entry->d_off);
+            entsize = fuse_add_direntry_plus2(req, p, rem, entry->d_name, &e,
+                                              entry->d_off);
         } else {
             e.attr.st_ino = entry->d_ino;
             e.attr.st_mode = entry->d_type << 12;
@@ -866,7 +869,7 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     }
 
     fi->fh = fd;
-    fuse_entry_param e;
+    fuse_entry_param2 e;
     auto err = do_lookup(parent, name, &e);
     if (err) {
         if (err == ENFILE || err == EMFILE)
@@ -888,7 +891,7 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     inode.nopen++;
     if (fs.passthrough)
         do_passthrough_open(req, e.ino, fd, fi);
-    fuse_reply_create(req, &e, fi);
+    fuse_reply_create2(req, &e, fi);
 }
 
 
@@ -910,7 +913,7 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     /* With writeback cache, kernel may send read requests even
        when userspace opened write-only */
-    if (fs.timeout && (fi->flags & O_ACCMODE) == O_WRONLY) {
+    if (!fuse_timeout_is_zero(&fs.timeout) && (fi->flags & O_ACCMODE) == O_WRONLY) {
         fi->flags &= ~O_ACCMODE;
         fi->flags |= O_RDWR;
     }
@@ -921,7 +924,7 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
        isn't accurate anymore). However, no process should modify the
        file in the underlying filesystem once it has been read, so
        this is not a problem. */
-    if (fs.timeout && fi->flags & O_APPEND)
+    if (!fuse_timeout_is_zero(&fs.timeout) && fi->flags & O_APPEND)
         fi->flags &= ~O_APPEND;
 
     /* Unfortunately we cannot use inode.fd, because this was opened
@@ -939,8 +942,9 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
-    fi->keep_cache = (fs.timeout != 0);
-    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
+    fi->keep_cache = (!fuse_timeout_is_zero(&fs.timeout));
+    fi->noflush = (fuse_timeout_is_zero(&fs.timeout) &&
+                  (fi->flags & O_ACCMODE) == O_RDONLY);
 
     if (fs.direct_io)
 	    fi->direct_io = 1;
@@ -1403,7 +1407,10 @@ int main(int argc, char *argv[]) {
     // Initialize filesystem root
     fs.root.fd = -1;
     fs.root.nlookup = 9999;
-    fs.timeout = options.count("nocache") ? 0 : 86400.0;
+    fs.timeout = {
+	    .tv_sec = options.count("nocache") ? 0 : 86400,
+	    .tv_nsec = 0
+    };
 
     struct stat stat;
     auto ret = lstat(fs.source.c_str(), &stat);

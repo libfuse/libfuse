@@ -43,8 +43,9 @@ extern "C" {
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
 
-/** Inode number type */
-typedef uint64_t fuse_ino_t;
+/** Uniqeue inode identifier */
+typedef uint64_t fuse_nodeid_t;
+typedef fuse_nodeid_t fuse_ino_t;
 
 /** Request pointer type */
 typedef struct fuse_req *fuse_req_t;
@@ -100,6 +101,54 @@ struct fuse_entry_param {
 	    large value. */
 	double entry_timeout;
 };
+
+/** Directory entry parameters supplied to fuse_reply_entry() */
+struct fuse_entry_param2 {
+	/** Unique inode identifier
+	 *
+	 * In lookup, zero means negative entry (from version 2.5)
+	 * Returning ENOENT also means negative entry, but by setting zero
+	 * ino the kernel may cache negative entries for entry_timeout
+	 * seconds.
+	 *
+	 * Can be different to the inode number
+	 */
+	fuse_nodeid_t ino;
+
+	/** Generation number for this entry.
+	 *
+	 * If the file system will be exported over NFS, the
+	 * ino/generation pairs need to be unique over the file
+	 * system's lifetime (rather than just the mount time). So if
+	 * the file system reuses an inode after it has been deleted,
+	 * it must assign a new, previously unused generation number
+	 * to the inode at the same time.
+	 *
+	 */
+	uint64_t generation;
+
+	/** Inode attributes.
+	 *
+	 * Even if attr_timeout == 0, attr must be correct. For example,
+	 * for open(), FUSE uses attr.st_size from lookup() to determine
+	 * how many bytes to request. If this value is not correct,
+	 * incorrect data will be returned.
+	 */
+	struct stat attr;
+
+	/** Validity timeout (in seconds) for inode attributes. If
+	    attributes only change as a result of requests that come
+	    through the kernel, this should be set to a very large
+	    value. */
+	struct timespec attr_timeout;
+
+	/** Validity timeout (in seconds) for the name. If directory
+	    entries are changed/deleted only as a result of requests
+	    that come through the kernel, this should be set to a very
+	    large value. */
+	struct timespec entry_timeout;
+};
+
 
 /**
  * Additional context associated with requests.
@@ -1353,6 +1402,7 @@ void fuse_reply_none(fuse_req_t req);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
+int fuse_reply_entry2(fuse_req_t req, const struct fuse_entry_param2 *e);
 
 /**
  * Reply with a directory entry and open parameters
@@ -1373,6 +1423,8 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
  */
 int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 		      const struct fuse_file_info *fi);
+int fuse_reply_create2(fuse_req_t req, const struct fuse_entry_param2 *e,
+		      const struct fuse_file_info *fi);
 
 /**
  * Reply with attributes
@@ -1387,6 +1439,8 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
  */
 int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 		    double attr_timeout);
+int fuse_reply_attr2(fuse_req_t req, const struct stat *attr,
+		     struct timespec attr_timeout);
 
 /**
  * Reply with the contents of a symbolic link
@@ -1611,6 +1665,9 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
 size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 			      const char *name,
 			      const struct fuse_entry_param *e, off_t off);
+size_t fuse_add_direntry_plus2(fuse_req_t req, char *buf, size_t bufsize,
+			      const char *name,
+			      const struct fuse_entry_param2 *e, off_t off);
 
 /**
  * Reply to ask for data fetch and output buffer preparation.  ioctl
