@@ -871,6 +871,9 @@ static void sfs_create_open_flags(fuse_file_info *fi)
     To make parallel_direct_writes valid, need set fi->direct_io
     in current function. */
     fi->parallel_direct_writes = 1;
+
+    fi->keep_cache = (fs.timeout != 0);
+    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
 }
 
 static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
@@ -956,8 +959,6 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
-    fi->keep_cache = (fs.timeout != 0);
-    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
 
     sfs_create_open_flags(fi);
 
