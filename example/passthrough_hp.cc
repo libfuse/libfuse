@@ -851,6 +851,28 @@ static void do_passthrough_open(fuse_req_t req, fuse_ino_t ino, int fd,
         fi->keep_cache = false;
 }
 
+static void sfs_create_open_flags(fuse_file_info *fi)
+{
+    if (fs.direct_io)
+        fi->direct_io = 1;
+
+    /*
+     * fi->direct_io (FOPEN_DIRECT_IO) is set to benefit from
+     * parallel_direct_writes, which kernel cannot do for plain O_DIRECT.
+     * However, passthrough is preferred, but which is not possible when
+     * FOPEN_DIRECT_IO is set.
+     */
+    if (!fs.passthrough) {
+        if (fi->flags & O_DIRECT)
+            fi->direct_io = 1;
+    }
+
+    /* parallel_direct_writes feature depends on direct_io features.
+    To make parallel_direct_writes valid, need set fi->direct_io
+    in current function. */
+    fi->parallel_direct_writes = 1;
+}
+
 static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
                        mode_t mode, fuse_file_info *fi) {
     Inode& inode_p = get_inode(parent);
@@ -872,20 +894,15 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (err == ENFILE || err == EMFILE)
             cerr << "ERROR: Reached maximum number of file descriptors." << endl;
         fuse_reply_err(req, err);
-	return;
+        return;
     }
-
-    if (fs.direct_io)
-	    fi->direct_io = 1;
-
-    /* parallel_direct_writes feature depends on direct_io features.
-       To make parallel_direct_writes valid, need set fi->direct_io
-       in current function. */
-    fi->parallel_direct_writes = 1;
 
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
+
+    sfs_create_open_flags(fi);
+
     if (fs.passthrough)
         do_passthrough_open(req, e.ino, fd, fi);
     fuse_reply_create(req, &e, fi);
@@ -942,19 +959,7 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     fi->keep_cache = (fs.timeout != 0);
     fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
 
-    if (fs.direct_io)
-	    fi->direct_io = 1;
-
-    /* Enable direct_io when open has flags O_DIRECT to enjoy the feature
-       parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
-       for writes to the same file). */
-    if (fi->flags & O_DIRECT)
-	    fi->direct_io = 1;
-
-    /* parallel_direct_writes feature depends on direct_io features.
-       To make parallel_direct_writes valid, need set fi->direct_io
-       in current function. */
-    fi->parallel_direct_writes = 1;
+    sfs_create_open_flags(fi);
 
     fi->fh = fd;
     if (fs.passthrough)
