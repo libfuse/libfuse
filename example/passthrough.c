@@ -77,6 +77,8 @@ static void *xmp_init(struct fuse_conn_info *conn,
 	cfg->attr_timeout = 0;
 	cfg->negative_timeout = 0;
 
+	cfg->write_aligned = 1;
+
 	return NULL;
 }
 
@@ -291,6 +293,14 @@ static int xmp_create(const char *path, mode_t mode,
 	if (res == -1)
 		return -errno;
 
+	/* Enable direct_io when open has flags O_DIRECT to enjoy the feature
+	 * parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
+	 * for writes to the same file). */
+	if (fi->flags & O_DIRECT) {
+		fi->direct_io = 1;
+		fi->parallel_direct_writes = 1;
+	}
+
 	fi->fh = res;
 	return 0;
 }
@@ -303,9 +313,9 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 	if (res == -1)
 		return -errno;
 
-        /* Enable direct_io when open has flags O_DIRECT to enjoy the feature
-        parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
-        for writes to the same file). */
+	/* Enable direct_io when open has flags O_DIRECT to enjoy the feature
+	 * parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
+	 * for writes to the same file). */
 	if (fi->flags & O_DIRECT) {
 		fi->direct_io = 1;
 		fi->parallel_direct_writes = 1;

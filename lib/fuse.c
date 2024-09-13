@@ -3175,6 +3175,8 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 				if (fi->direct_io &&
 				    f->conf.parallel_direct_writes)
 					fi->parallel_direct_writes = 1;
+				if (f->conf.write_aligned)
+					fi->write_aligned = 1;
 			}
 		}
 		fuse_finish_interrupt(f, req, &d);

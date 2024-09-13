@@ -28,6 +28,9 @@
 #include <assert.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+#include <inttypes.h>
+#include <stdbool.h>
+#include <stdalign.h>
 
 #ifndef F_LINUX_SPECIFIC_BASE
 #define F_LINUX_SPECIFIC_BASE       1024
@@ -44,12 +47,19 @@
 			const typeof( ((type *)0)->member ) *__mptr = (ptr); \
 			(type *)( (char *)__mptr - offsetof(type,member) );})
 
+#define ALIGN_UP(addr, align) \
+	((void *)(((uintptr_t)addr + align - 1) &  ~(align - 1)))
+
 struct fuse_pollhandle {
 	uint64_t kh;
 	struct fuse_session *se;
 };
 
-static size_t pagesize;
+static int fuse_ll_copy_from_pipe(struct fuse_bufvec *dst,
+				  struct fuse_bufvec *src);
+
+size_t pagesize;
+
 
 static __attribute__((constructor)) void fuse_ll_init_pagesize(void)
 {
@@ -423,6 +433,8 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_NOFLUSH;
 	if (f->parallel_direct_writes)
 		arg->open_flags |= FOPEN_PARALLEL_DIRECT_WRITES;
+	if (f->write_aligned)
+		arg->open_flags |= FOPEN_ALIGNED_WRITES;
 }
 
 int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
@@ -1420,6 +1432,7 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.writepage = (arg->write_flags & FUSE_WRITE_CACHE) != 0;
+	fi.write_aligned = (arg->write_flags & FUSE_WRITE_ALIGNED) != 0;
 
 	if (req->se->conn.proto_minor < 9) {
 		param = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
@@ -1427,6 +1440,11 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fi.lock_owner = arg->lock_owner;
 		fi.flags = arg->flags;
 		param = PARAM(arg);
+
+		if (fi.write_aligned) {
+			/* data are aligned to the next page if alignment is enabled */
+			param = ALIGN_UP(param, pagesize);
+		}
 	}
 
 	if (req->se->op.write)
@@ -1434,6 +1452,54 @@ static void do_write(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 				 arg->offset, &fi);
 	else
 		fuse_reply_err(req, ENOSYS);
+}
+
+/*
+ * Seek read off the unused non-aligned data off the buffer, in order
+ * to get the aligned data part
+ */
+static int align_pipe_writebuf(const struct fuse_buf *ibuf, fuse_req_t req)
+{
+	/*
+	 * a bit hackish to optimize for the typical page
+	 * size of 4096 - 'alignas' does not accept page size
+	 * from the constructor
+	 */
+	#define typical_pg_sz (4096)
+	alignas(typical_pg_sz) char mbuf[typical_pg_sz];
+	char *mbufp = &mbuf[0];
+	bool alloced = false;
+
+	if (pagesize != typical_pg_sz) {
+		mbufp = aligned_alloc(pagesize, pagesize);
+		alloced = true;
+	}
+
+	/*
+	 * buffer alignment is enabled and kernel sets the
+	 * alignment set - this size needs to be copied off
+	 * the input buffer - data follow after
+	 */
+	size_t align_off = pagesize - sizeof(struct fuse_in_header) -
+			   sizeof(struct fuse_write_in);
+	struct fuse_bufvec tmpbuf =
+		FUSE_BUFVEC_INIT(align_off);
+	struct fuse_bufvec bufv = { .buf[0] = *ibuf, .count = 1 };
+
+	tmpbuf.buf[0].mem = mbufp;
+
+	int res = fuse_ll_copy_from_pipe(&tmpbuf, &bufv);
+
+	if (alloced)
+		free(mbufp);
+
+	if (res < 0) {
+		fuse_log(FUSE_LOG_ERR, "Alignment copy failure\n");
+		fuse_reply_err(req, EIO);
+		return res;
+	}
+
+	return 0;
 }
 
 static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
@@ -1449,7 +1515,8 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
-	fi.writepage = arg->write_flags & FUSE_WRITE_CACHE;
+	fi.writepage = (arg->write_flags & FUSE_WRITE_CACHE) != 0;
+	fi.write_aligned = (arg->write_flags & FUSE_WRITE_ALIGNED) != 0;
 
 	if (se->conn.proto_minor < 9) {
 		bufv.buf[0].mem = ((char *) arg) + FUSE_COMPAT_WRITE_IN_SIZE;
@@ -1459,14 +1526,26 @@ static void do_write_buf(fuse_req_t req, fuse_ino_t nodeid, const void *inarg,
 	} else {
 		fi.lock_owner = arg->lock_owner;
 		fi.flags = arg->flags;
-		if (!(bufv.buf[0].flags & FUSE_BUF_IS_FD))
+
+		if (!(bufv.buf[0].flags & FUSE_BUF_IS_FD)) {
 			bufv.buf[0].mem = PARAM(arg);
+
+			if (fi.write_aligned)
+				bufv.buf[0].mem =
+					ALIGN_UP(bufv.buf[0].mem, pagesize);
+		} else if (fi.write_aligned) {
+			if (align_pipe_writebuf(ibuf, req) < 0)
+				goto out;
+		}
 
 		bufv.buf[0].size -= sizeof(struct fuse_in_header) +
 			sizeof(struct fuse_write_in);
 	}
 	if (bufv.buf[0].size < arg->size) {
-		fuse_log(FUSE_LOG_ERR, "fuse: do_write_buf: buffer size too small\n");
+		fuse_log(
+			FUSE_LOG_ERR,
+			"fuse: do_write_buf: buffer size too small, have=%zu need=%"PRIu32"\n",
+			bufv.buf[0].size, arg->size);
 		fuse_reply_err(req, EIO);
 		goto out;
 	}
@@ -2992,7 +3071,7 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 		struct fuse_bufvec dst = { .count = 1 };
 
 		if (!buf->mem) {
-			buf->mem = malloc(se->bufsize);
+			buf->mem = aligned_alloc(pagesize, se->bufsize);
 			if (!buf->mem) {
 				fuse_log(FUSE_LOG_ERR,
 					"fuse: failed to allocate read buffer\n");
@@ -3029,7 +3108,7 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 fallback:
 #endif
 	if (!buf->mem) {
-		buf->mem = malloc(se->bufsize);
+		buf->mem = aligned_alloc(pagesize, se->bufsize);
 		if (!buf->mem) {
 			fuse_log(FUSE_LOG_ERR,
 				"fuse: failed to allocate read buffer\n");
