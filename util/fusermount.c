@@ -1456,8 +1456,33 @@ static void show_version(void)
 static void close_inherited_fds(int cfd)
 {
 	int max_fd = sysconf(_SC_OPEN_MAX);
+	int rc;
 
-	for (int fd = 3; fd <= max_fd; fd++) {
+#ifdef CLOSE_RANGE_CLOEXEC
+	/* high range first to be able to log errors through stdout/err*/
+	rc = close_range(cfd + 1, ~0U, 0);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to close high range of FDs: %s",
+			strerror(errno));
+		goto fallback;
+	}
+
+	rc = close_range(0, cfd - 1, 0);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to close low range of FDs: %s",
+			strerror(errno));
+		goto fallback;
+	}
+#endif
+
+fallback:
+	/*
+	 * This also needs to close stdout/stderr, as the application
+	 * using libfuse might have closed these FDs and might be using
+	 * it. Although issue is now that logging errors won't be possible
+	 * after that.
+	 */
+	for (int fd = 0; fd <= max_fd; fd++) {
 		if (fd != cfd)
 			close(fd);
 	}
