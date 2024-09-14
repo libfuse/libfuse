@@ -1451,7 +1451,7 @@ int main(int argc, char *argv[]) {
     loop_config = fuse_loop_cfg_create();
 
     if (fs.num_threads != -1)
-        fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
+        fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
 
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 	
