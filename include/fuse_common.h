@@ -7,6 +7,7 @@
 
 /** @file */
 
+#include <stdbool.h>
 #if !defined(FUSE_H_) && !defined(FUSE_LOWLEVEL_H_)
 #error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h> instead."
 #endif
@@ -1033,6 +1034,23 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 			   struct fuse_loop_config_v1 *v1_conf);
 #endif
+
+
+static inline bool fuse_set_feature_flag(struct fuse_conn_info *conn,
+					 uint64_t flag)
+{
+	if (conn->capable & flag) {
+		conn->want |= flag;
+		return true;
+	}
+	return false;
+}
+
+static inline void fuse_unset_feature_flag(struct fuse_conn_info *conn,
+					 uint64_t flag)
+{
+	conn->want &= ~flag;
+}
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *
