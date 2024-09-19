@@ -214,6 +214,16 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
     /* This is a local file system - no network coherency needed */
     fuse_set_feature_flag(conn, FUSE_CAP_DIRECT_IO_ALLOW_MMAP);
 
+    /* Disable NFS export support, which also disabled name_to_handle_at.
+     * Goal is to make xfstests that test name_to_handle_at to fail with
+     * the right error code (EOPNOTSUPP) than to open_by_handle_at to fail with
+     * ESTALE and let those test fail.
+     * Perfect NFS export support is not possible with this FUSE filesystem needs
+     * more kernel work, in order to passthrough nfs handle encode/decode to
+     * fuse-server/daemon.
+     */
+    fuse_set_feature_flag(conn, FUSE_CAP_NO_EXPORT_SUPPORT);
+
     /* Disable the receiving and processing of FUSE_INTERRUPT requests */
     conn->no_interrupt = 1;
 }
