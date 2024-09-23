@@ -801,8 +801,9 @@ static int test_seekdir(void)
 	}
 
 	/* Walk until the end of directory */
-	while (de)
+	do {
 		de = readdir(dp);
+    } while (de);
 
 	/* Start from the last valid dir offset and seek backwards */
 	for (i--; i >= 0; i--) {
