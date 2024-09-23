@@ -31,11 +31,14 @@ extern "C" {
 struct fuse_session;
 
 struct cuse_info {
-	unsigned	dev_major;
-	unsigned	dev_minor;
-	unsigned	dev_info_argc;
+	uint32_t	flags;
+	uint32_t	dev_major;
+	uint32_t	dev_minor;
+	uint32_t	dev_info_argc;
 	const char	**dev_info_argv;
-	unsigned	flags;
+
+	/* for future additions and ABI compatibility */
+	uint64_t	reserved[16];
 };
 
 /*
