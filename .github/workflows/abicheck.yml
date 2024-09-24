@@ -1,0 +1,66 @@
+---
+name: 'libfuse ABI check'
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  abi:
+    runs-on: '${{ matrix.os }}'
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+
+    steps:
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install abigail-tools clang gcc
+
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          path: current
+
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          path: previous
+          fetch-depth: 2
+
+      - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Checkout previous
+        working-directory: previous
+        run: git checkout HEAD^
+
+      - name: Build current
+        working-directory: current
+        run: |
+          pip install -r requirements.txt
+          meson setup build --buildtype=debug
+          meson compile -C build
+
+      - name: Build previous
+        working-directory: previous
+        run: |
+          pip install -r requirements.txt
+          meson setup build --buildtype=debug
+          meson compile -C build
+
+      - name: Run abidiff
+        run: abidiff 
+          --headers-dir1 previous/include/ 
+          --headers-dir2 current/include/ 
+          previous/build/lib/libfuse3.so 
+          current/build/lib/libfuse3.so
