@@ -34,15 +34,11 @@ jobs:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           path: previous
-          fetch-depth: 2
+          ref: ${{ github.event.pull_request.base.ref }}
 
       - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
         with:
           python-version: '3.12'
-
-      - name: Checkout previous
-        working-directory: previous
-        run: git checkout HEAD^
 
       - name: Build current
         working-directory: current
@@ -54,6 +50,7 @@ jobs:
       - name: Build previous
         working-directory: previous
         run: |
+          echo "Commit-id before PR: $(git show HEAD)"
           pip install -r requirements.txt
           meson setup build --buildtype=debug
           meson compile -C build
