@@ -42,34 +42,44 @@ struct fuse_notify_req {
 };
 
 struct fuse_session {
-	char *mountpoint;
-	volatile int exited;
-	int fd;
-	struct fuse_custom_io *io;
-	struct mount_opts *mo;
-	int debug;
-	int deny_others;
-	struct fuse_lowlevel_ops op;
-	int got_init;
-	struct cuse_data *cuse_data;
-	void *userdata;
-	uid_t owner;
-	struct fuse_conn_info conn;
-	struct fuse_req list;
-	struct fuse_req interrupts;
-	pthread_mutex_t lock;
-	int got_destroy;
-	pthread_key_t pipe_key;
-	int broken_splice_nonblock;
 	uint64_t notify_ctr;
-	struct fuse_notify_req notify_list;
+	struct fuse_custom_io *io;
+	struct cuse_data *cuse_data;
 	size_t bufsize;
 	int error;
+	int fd;
+	int broken_splice_nonblock;
+
+	uint8_t exited : 1;
+	uint8_t got_init : 1;
+	uint8_t got_destroy : 1;
+	uint8_t reserved : 5;
+
+	uint8_t debug;
+	uint8_t deny_others;
+	uint8_t padding1;
+
+	uid_t owner;
+	pthread_key_t pipe_key;
+	struct mount_opts *mo;
+
+	struct fuse_conn_info conn;
+	struct fuse_req list;
+	struct fuse_lowlevel_ops op;
+
+	/* Aligned on cacheline to avoid two cache lines for the lock
+	 * TODO: Add meson test for the actual cache line size
+	 */
+	_Alignas(64) struct fuse_req interrupts;
+	_Alignas(64) struct fuse_notify_req notify_list;
+	void *userdata;
+	char *mountpoint;
 
 	/* This is useful if any kind of ABI incompatibility is found at
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
+	_Alignas(64) pthread_mutex_t lock;
 };
 
 struct fuse_chan {
@@ -121,7 +131,8 @@ struct fuse_loop_config
 	 * whether to use separate device fds for each thread
 	 * (may increase performance)
 	 */
-	int clone_fd;
+	uint32_t clone_fd : 1;
+
 	/**
 	 * The maximum number of available worker threads before they
 	 * start to get deleted when they become idle. If not
