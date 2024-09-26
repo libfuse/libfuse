@@ -2114,19 +2114,9 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	se->conn.time_gran = 1;
 
-	if (bufsize < FUSE_MIN_READ_BUFFER) {
-		fuse_log(FUSE_LOG_ERR, "fuse: warning: buffer size too small: %zu\n",
-			bufsize);
-		bufsize = FUSE_MIN_READ_BUFFER;
-	}
-	se->bufsize = bufsize;
-
 	se->got_init = 1;
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
-
-	if (se->conn.max_write > bufsize - FUSE_BUFFER_HEADER_SIZE)
-		se->conn.max_write = bufsize - FUSE_BUFFER_HEADER_SIZE;
 
 	if (se->conn.want & (~se->conn.capable)) {
 		fuse_log(FUSE_LOG_ERR, "fuse: error: filesystem requested capabilities "
@@ -2149,9 +2139,19 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		return;
 	}
 
-	if (se->conn.max_write < bufsize - FUSE_BUFFER_HEADER_SIZE) {
-		se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
+	if (bufsize < FUSE_MIN_READ_BUFFER) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: warning: buffer size too small: %zu\n",
+			 bufsize);
+		bufsize = FUSE_MIN_READ_BUFFER;
 	}
+
+	if (se->conn.max_write > bufsize - FUSE_BUFFER_HEADER_SIZE)
+		se->conn.max_write = bufsize - FUSE_BUFFER_HEADER_SIZE;
+	if (se->conn.max_write < bufsize - FUSE_BUFFER_HEADER_SIZE)
+		bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
+	se->bufsize = bufsize;
+
 	if (arg->flags & FUSE_MAX_PAGES) {
 		outarg.flags |= FUSE_MAX_PAGES;
 		outarg.max_pages = (se->conn.max_write - 1) / getpagesize() + 1;
