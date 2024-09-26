@@ -2907,6 +2907,29 @@ static void fuse_ll_pipe_destructor(void *data)
 	fuse_ll_pipe_free(llp);
 }
 
+static unsigned int get_max_pages(void)
+{
+	char buf[32];
+	int res;
+	int fd;
+
+	fd = open("/proc/sys/fs/fuse/max_pages_limit", O_RDONLY);
+	if (fd < 0)
+		return FUSE_MAX_MAX_PAGES;
+
+	res = read(fd, buf, sizeof(buf) - 1);
+
+	close(fd);
+
+	if (res < 0)
+		return FUSE_MAX_MAX_PAGES;
+
+	buf[res] = '\0';
+
+	res = strtol(buf, NULL, 10);
+	return res < 0 ? FUSE_MAX_MAX_PAGES : res;
+}
+
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
 {
 	return fuse_session_receive_buf_int(se, buf, NULL);
@@ -3142,7 +3165,7 @@ struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
 	if (se->debug)
 		fuse_log(FUSE_LOG_DEBUG, "FUSE library version: %s\n", PACKAGE_VERSION);
 
-	se->bufsize = FUSE_MAX_MAX_PAGES * getpagesize() +
+	se->bufsize = get_max_pages() * getpagesize() +
 		FUSE_BUFFER_HEADER_SIZE;
 
 	list_init_req(&se->list);
