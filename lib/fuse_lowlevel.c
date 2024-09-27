@@ -2146,11 +2146,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		bufsize = FUSE_MIN_READ_BUFFER;
 	}
 
-	if (se->conn.max_write > bufsize - FUSE_BUFFER_HEADER_SIZE)
-		se->conn.max_write = bufsize - FUSE_BUFFER_HEADER_SIZE;
-	if (se->conn.max_write < bufsize - FUSE_BUFFER_HEADER_SIZE)
-		bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
-	se->bufsize = bufsize;
+	se->conn.max_write = MIN(se->conn.max_write, bufsize - FUSE_BUFFER_HEADER_SIZE);
+	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 
 	if (arg->flags & FUSE_MAX_PAGES) {
 		outarg.flags |= FUSE_MAX_PAGES;
