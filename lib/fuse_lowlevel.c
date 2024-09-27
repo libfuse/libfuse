@@ -2915,19 +2915,19 @@ static unsigned int get_max_pages(void)
 
 	fd = open("/proc/sys/fs/fuse/max_pages_limit", O_RDONLY);
 	if (fd < 0)
-		return FUSE_MAX_MAX_PAGES;
+		return FUSE_DEFAULT_MAX_PAGES_LIMIT;
 
 	res = read(fd, buf, sizeof(buf) - 1);
 
 	close(fd);
 
 	if (res < 0)
-		return FUSE_MAX_MAX_PAGES;
+		return FUSE_DEFAULT_MAX_PAGES_LIMIT;
 
 	buf[res] = '\0';
 
 	res = strtol(buf, NULL, 10);
-	return res < 0 ? FUSE_MAX_MAX_PAGES : res;
+	return res < 0 ? FUSE_DEFAULT_MAX_PAGES_LIMIT : res;
 }
 
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
