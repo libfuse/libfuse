@@ -24,6 +24,7 @@
 #include "fuse_log.h"
 #include <stdint.h>
 #include <sys/types.h>
+#include <assert.h>
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
@@ -55,48 +56,49 @@ struct fuse_file_info {
 	    the *fh* value may not match the *fh* value that would
 	    have been sent with the corresponding individual write
 	    requests if write caching had been disabled. */
-	unsigned int writepage : 1;
+	uint32_t  writepage : 1;
 
 	/** Can be filled in by open/create, to use direct I/O on this file. */
-	unsigned int direct_io : 1;
+	uint32_t  direct_io : 1;
 
 	/** Can be filled in by open and opendir. It signals the kernel that any
 	    currently cached data (ie., data that the filesystem provided the
 	    last time the file/directory was open) need not be invalidated when
 	    the file/directory is closed. */
-	unsigned int keep_cache : 1;
+	uint32_t  keep_cache : 1;
 
 	/** Can be filled by open/create, to allow parallel direct writes on this
 	    file */
-	unsigned int parallel_direct_writes : 1;
+	uint32_t  parallel_direct_writes : 1;
 
 	/** Indicates a flush operation.  Set in flush operation, also
 	    maybe set in highlevel lock operation and lowlevel release
 	    operation. */
-	unsigned int flush : 1;
+	uint32_t  flush : 1;
 
 	/** Can be filled in by open, to indicate that the file is not
 	    seekable. */
-	unsigned int nonseekable : 1;
+	uint32_t  nonseekable : 1;
 
 	/* Indicates that flock locks for this file should be
 	   released.  If set, lock_owner shall contain a valid value.
 	   May only be set in ->release(). */
-	unsigned int flock_release : 1;
+	uint32_t  flock_release : 1;
 
 	/** Can be filled in by opendir. It signals the kernel to
 	    enable caching of entries returned by readdir().  Has no
 	    effect when set in other contexts (in particular it does
 	    nothing when set by open()). */
-	unsigned int cache_readdir : 1;
+	uint32_t  cache_readdir : 1;
 
 	/** Can be filled in by open, to indicate that flush is not needed
 	    on close. */
-	unsigned int noflush : 1;
+	uint32_t  noflush : 1;
 
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 23;
-	unsigned int padding2 : 32;
+	uint32_t  padding : 23;
+    uint32_t  padding2 : 32;
+    uint32_t  padding3 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the
@@ -115,8 +117,6 @@ struct fuse_file_info {
 	 * between FUSE file and backing file. */
 	int32_t backing_id;
 };
-
-
 
 /**
  * Configuration parameters passed to fuse_session_loop_mt() and
@@ -138,7 +138,7 @@ struct fuse_loop_config_v1 {
 	 * whether to use separate device fds for each thread
 	 * (may increase performance)
 	 */
-	int clone_fd;
+	uint32_t clone_fd;
 
 	/**
 	 * The maximum number of available worker threads before they
@@ -150,9 +150,8 @@ struct fuse_loop_config_v1 {
 	 * deletion overhead and performance may suffer. When set to 0, a new
 	 * thread will be created to service every operation.
 	 */
-	unsigned int max_idle_threads;
+	uint32_t  max_idle_threads;
 };
-
 
 /**************************************************************************
  * Capability bits for 'fuse_conn_info.capable' and 'fuse_conn_info.want' *
@@ -521,17 +520,17 @@ struct fuse_conn_info {
 	/**
 	 * Major version of the protocol (read-only)
 	 */
-	unsigned proto_major;
+	uint32_t  proto_major;
 
 	/**
 	 * Minor version of the protocol (read-only)
 	 */
-	unsigned proto_minor;
+	uint32_t  proto_minor;
 
 	/**
 	 * Maximum size of the write buffer
 	 */
-	unsigned max_write;
+	uint32_t  max_write;
 
 	/**
 	 * Maximum size of read requests. A value of zero indicates no
@@ -545,17 +544,17 @@ struct fuse_conn_info {
 	 * in the future, specifying the mount option will no longer
 	 * be necessary.
 	 */
-	unsigned max_read;
+	uint32_t  max_read;
 
 	/**
 	 * Maximum readahead
 	 */
-	unsigned max_readahead;
+	uint32_t  max_readahead;
 
 	/**
 	 * Capability flags that the kernel supports (read-only)
 	 */
-	unsigned capable;
+	uint32_t  capable;
 
 	/**
 	 * Capability flags that the filesystem wants to enable.
@@ -563,7 +562,7 @@ struct fuse_conn_info {
 	 * libfuse attempts to initialize this field with
 	 * reasonable default values before calling the init() handler.
 	 */
-	unsigned want;
+	uint32_t  want;
 
 	/**
 	 * Maximum number of pending "background" requests. A
@@ -593,7 +592,7 @@ struct fuse_conn_info {
 	 * call actually blocks, so these are also limited to one per
 	 * thread).
 	 */
-	unsigned max_background;
+	uint32_t  max_background;
 
 	/**
 	 * Kernel congestion threshold parameter. If the number of pending
@@ -603,7 +602,7 @@ struct fuse_conn_info {
 	 * adjust its algorithms accordingly (e.g. by putting a waiting thread
 	 * to sleep instead of using a busy-loop).
 	 */
-	unsigned congestion_threshold;
+	uint32_t  congestion_threshold;
 
 	/**
 	 * When FUSE_CAP_WRITEBACK_CACHE is enabled, the kernel is responsible
@@ -620,7 +619,7 @@ struct fuse_conn_info {
 	 * nano-second resolution. Filesystems supporting only second resolution
 	 * should set this to 1000000000.
 	 */
-	unsigned time_gran;
+	uint32_t  time_gran;
 
 	/**
 	 * When FUSE_CAP_PASSTHROUGH is enabled, this is the maximum allowed
@@ -640,7 +639,7 @@ struct fuse_conn_info {
 	 */
 #define FUSE_BACKING_STACKED_UNDER	(0)
 #define FUSE_BACKING_STACKED_OVER	(1)
-	unsigned max_backing_stack_depth;
+	uint32_t  max_backing_stack_depth;
 
 	/**
 	 * Disable FUSE_INTERRUPT requests.
@@ -650,13 +649,15 @@ struct fuse_conn_info {
 	 * 2) Return ENOSYS for the reply of FUSE_INTERRUPT request to
 	 * inform the kernel not to send the FUSE_INTERRUPT request.
 	 */
-	unsigned no_interrupt;
+	uint32_t  no_interrupt;
 
 	/**
 	 * For future use.
 	 */
-	unsigned reserved[20];
+	uint32_t  reserved[20];
 };
+static_assert(sizeof(struct fuse_conn_info) == 128,
+	      "struct size must not change");
 
 struct fuse_session;
 struct fuse_pollhandle;
