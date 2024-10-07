@@ -9,6 +9,8 @@
   See the file COPYING.LIB
 */
 
+#define _GNU_SOURCE
+
 #include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
@@ -1504,6 +1506,29 @@ static void set_stat(struct fuse *f, fuse_ino_t nodeid, struct stat *stbuf)
 		stbuf->st_gid = f->conf.gid;
 }
 
+#ifdef HAVE_STATX
+static void set_statx(struct fuse *f, fuse_ino_t nodeid, struct statx *stxbuf)
+{
+	if (!f->conf.use_ino)
+		stxbuf->stx_ino = nodeid;
+	if (f->conf.set_mode) {
+		if (f->conf.dmask && S_ISDIR(stxbuf->stx_mode))
+			stxbuf->stx_mode = (stxbuf->stx_mode & S_IFMT) |
+					 (0777 & ~f->conf.dmask);
+		else if (f->conf.fmask)
+			stxbuf->stx_mode = (stxbuf->stx_mode & S_IFMT) |
+					 (0777 & ~f->conf.fmask);
+		else
+			stxbuf->stx_mode = (stxbuf->stx_mode & S_IFMT) |
+					 (0777 & ~f->conf.umask);
+	}
+	if (f->conf.set_uid)
+		stxbuf->stx_uid = f->conf.uid;
+	if (f->conf.set_gid)
+		stxbuf->stx_gid = f->conf.gid;
+}
+#endif
+
 static struct fuse *req_fuse(fuse_req_t req)
 {
 	return (struct fuse *) fuse_req_userdata(req);
@@ -2359,6 +2384,25 @@ off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
 		return -ENOSYS;
 	}
 }
+
+#ifdef HAVE_STATX
+int fuse_fs_statx(struct fuse_fs *fs, const char *path, int flags, int mask,
+		  struct statx *stxbuf, struct fuse_file_info *fi)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.statx) {
+		if (fs->debug) {
+			char buf[10];
+			fuse_log(FUSE_LOG_DEBUG, "statx[%s] %s %d %d\n",
+				file_info_string(fi, buf, sizeof(buf)), path,
+				flags, mask);
+		}
+		return fs->op.statx(path, flags, mask, stxbuf, fi);
+	}
+
+	return -ENOSYS;
+}
+#endif
 
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
@@ -4408,6 +4452,55 @@ static void fuse_lib_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence
 		reply_err(req, res);
 }
 
+#ifdef HAVE_STATX
+static void fuse_lib_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
+			   struct fuse_file_info *fi)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	struct statx stxbuf;
+	char *path;
+	int err;
+
+	memset(&stxbuf, 0, sizeof(stxbuf));
+
+	if (fi != NULL)
+		err = get_path_nullok(f, ino, &path);
+	else
+		err = get_path(f, ino, &path);
+
+	if (!err) {
+		struct fuse_intr_data d;
+
+		if (!path)
+		    flags |= AT_EMPTY_PATH;
+		fuse_prepare_interrupt(f, req, &d);
+		err = fuse_fs_statx(f->fs, path, flags, mask, &stxbuf, fi);
+		fuse_finish_interrupt(f, req, &d);
+		free_path(f, ino, path);
+	}
+	if (!err) {
+		struct node *node;
+
+		pthread_mutex_lock(&f->lock);
+		node = get_node(f, ino);
+		if (node->is_hidden && stxbuf.stx_nlink > 0)
+			stxbuf.stx_nlink--;
+		if (f->conf.auto_cache) {
+			struct stat stbuf;
+
+			stbuf.st_mtime = stxbuf.stx_mtime.tv_nsec ;
+			ST_MTIM_NSEC(&stbuf) = stxbuf.stx_mtime.tv_nsec;
+			stbuf.st_size = stxbuf.stx_size;
+			update_stat(node, &stbuf);
+		}
+		pthread_mutex_unlock(&f->lock);
+		set_statx(f, ino, &stxbuf);
+		fuse_reply_statx(req, 0, &stxbuf, f->conf.attr_timeout);
+	} else
+		reply_err(req, err);
+}
+#endif
+
 static int clean_delay(struct fuse *f)
 {
 	/*
@@ -4506,6 +4599,9 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 	.fallocate = fuse_lib_fallocate,
 	.copy_file_range = fuse_lib_copy_file_range,
 	.lseek = fuse_lib_lseek,
+#ifdef HAVE_STATX
+	.statx = fuse_lib_statx,
+#endif
 };
 
 int fuse_notify_poll(struct fuse_pollhandle *ph)

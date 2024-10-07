@@ -1156,6 +1156,28 @@ static void lo_lseek(fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		fuse_reply_err(req, errno);
 }
 
+#ifdef HAVE_STATX
+static void lo_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
+		     struct fuse_file_info *fi)
+{
+	struct lo_data *lo = lo_data(req);
+	struct statx buf;
+	int res;
+	int fd;
+
+	if (fi)
+	    fd = fi->fh;
+	else
+	    fd = lo_fd(req, ino);
+
+	res = statx(fd, "", flags | AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW, mask, &buf);
+	if (res == -1)
+	    fuse_reply_err(req, errno);
+	else
+	    fuse_reply_statx(req, 0, &buf, lo->timeout);
+}
+#endif
+
 static const struct fuse_lowlevel_ops lo_oper = {
 	.init		= lo_init,
 	.destroy	= lo_destroy,
@@ -1195,6 +1217,9 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.copy_file_range = lo_copy_file_range,
 #endif
 	.lseek		= lo_lseek,
+#ifdef HAVE_STATX
+	.statx		= lo_statx,
+#endif
 };
 
 int main(int argc, char *argv[])

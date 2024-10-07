@@ -201,6 +201,8 @@ FUSE_3.17 {
 		fuse_set_fail_signal_handlers;
 		fuse_log_enable_syslog;
 		fuse_log_close_syslog;
+		fuse_fs_statx;
+		fuse_reply_statx;
 } FUSE_3.12;
 
 # Local Variables:

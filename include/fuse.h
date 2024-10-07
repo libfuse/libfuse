@@ -33,6 +33,9 @@ extern "C" {
  * Basic FUSE API					       *
  * ----------------------------------------------------------- */
 
+/* Forward declaration */
+struct statx;
+
 /** Handle for a FUSE filesystem */
 struct fuse;
 
@@ -839,6 +842,19 @@ struct fuse_operations {
 	 * Find next data or hole after the specified offset
 	 */
 	off_t (*lseek) (const char *, off_t off, int whence, struct fuse_file_info *);
+
+#ifdef HAVE_STATX
+	/**
+	 * Get extended file attributes.
+	 *
+	 * fi may be NULL.
+	 *
+	 * If path is NULL, then the AT_EMPTY_PATH bit in flags will be
+	 * already set.
+	 */
+	int (*statx) (const char *path, int flags, int mask, struct statx *stxbuf,
+		      struct fuse_file_info *fi);
+#endif
 };
 
 /** Extra context that may be needed by some filesystems
@@ -1345,6 +1361,10 @@ ssize_t fuse_fs_copy_file_range(struct fuse_fs *fs, const char *path_in,
 				size_t len, int flags);
 off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
 		    struct fuse_file_info *fi);
+#ifdef HAVE_STATX
+int fuse_fs_statx(struct fuse_fs *fs, const char *path, int flags, int mask,
+		  struct statx *stxbuf, struct fuse_file_info *fi);
+#endif
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		struct fuse_config *cfg);
 void fuse_fs_destroy(struct fuse_fs *fs);

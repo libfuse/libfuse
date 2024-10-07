@@ -11,6 +11,7 @@
 #include <utime.h>
 #include <errno.h>
 #include <assert.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -916,6 +917,53 @@ static int test_copy_file_range(void)
 }
 #else
 static int test_copy_file_range(void)
+{
+	return 0;
+}
+#endif
+
+#ifdef HAVE_STATX
+static int test_statx(void)
+{
+	struct statx sb;
+	char msg[] = "hi";
+	size_t msg_size = sizeof(msg);
+	struct timespec tp;
+	int res;
+
+	memset(&sb, 0, sizeof(sb));
+	unlink(testfile);
+
+	start_test("statx");
+
+	res = create_testfile(testfile, msg, msg_size);
+	if (res == -1)
+		return -1;
+
+	res = statx(-1, testfile, AT_EMPTY_PATH,
+		    STATX_BASIC_STATS | STATX_BTIME, &sb);
+	if (res == -1)
+		return -1;
+
+	if (sb.stx_size != msg_size)
+	    return -1;
+
+	clock_gettime(CLOCK_REALTIME, &tp);
+
+	if (sb.stx_btime.tv_sec > tp.tv_sec)
+	    return -1;
+
+	if (sb.stx_btime.tv_sec == tp.tv_sec &&
+	    sb.stx_btime.tv_nsec >= tp.tv_nsec)
+	    return -1;
+
+	unlink(testfile);
+
+	success();
+	return 0;
+}
+#else
+static int test_statx(void)
 {
 	return 0;
 }
@@ -2085,6 +2133,7 @@ int main(int argc, char *argv[])
 	err += test_create_ro_dir(O_CREAT | O_WRONLY);
 	err += test_create_ro_dir(O_CREAT | O_TRUNC);
 	err += test_copy_file_range();
+	err += test_statx();
 
 	unlink(testfile2);
 	unlink(testsock);

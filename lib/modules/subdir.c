@@ -553,6 +553,21 @@ static off_t subdir_lseek(const char *path, off_t off, int whence,
 	return res;
 }
 
+#ifdef HAVE_STATX
+static int subdir_statx(const char *path, int flags, int mask, struct statx *stxbuf,
+			struct fuse_file_info *fi)
+{
+	struct subdir *ic = subdir_get();
+	char *newpath;
+	int res = subdir_addpath(ic, path, &newpath);
+	if (!res) {
+		res = fuse_fs_statx(ic->next, newpath, flags, mask, stxbuf, fi);
+		free(newpath);
+	}
+	return res;
+}
+#endif
+
 static void *subdir_init(struct fuse_conn_info *conn,
 			 struct fuse_config *cfg)
 {
@@ -608,6 +623,9 @@ static const struct fuse_operations subdir_oper = {
 	.flock		= subdir_flock,
 	.bmap		= subdir_bmap,
 	.lseek		= subdir_lseek,
+#ifdef HAVE_STATX
+	.statx		= subdir_statx,
+#endif
 };
 
 static const struct fuse_opt subdir_opts[] = {
