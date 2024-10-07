@@ -13,6 +13,7 @@
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
 #include "fuse_i.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -220,8 +221,17 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	 */
 	pthread_attr_init(&attr);
 	stack_size = getenv(ENVNAME_THREAD_STACK);
-	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
-		fuse_log(FUSE_LOG_ERR, "fuse: invalid stack size: %s\n", stack_size);
+	if (stack_size) {
+		long size;
+
+		res = libfuse_strtol(stack_size, &size);
+		if (res)
+			fuse_log(FUSE_LOG_ERR, "fuse: invalid stack size: %s\n",
+				 stack_size);
+		else if (pthread_attr_setstacksize(&attr, size))
+			fuse_log(FUSE_LOG_ERR, "fuse: could not set stack size: %ld\n",
+				 size);
+	}
 
 	/* Disallow signal reception in worker threads */
 	sigemptyset(&newset);
