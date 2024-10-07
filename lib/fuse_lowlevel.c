@@ -17,6 +17,7 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "mount_util.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -685,7 +686,9 @@ static int grow_pipe_to_max(int pipefd)
 	close(maxfd);
 	buf[res] = '\0';
 
-	max = atoi(buf);
+	max = libfuse_strtol(buf);
+	if (max < 0)
+		return max;
 	res = fcntl(pipefd, F_SETPIPE_SZ, max);
 	if (res < 0)
 		return -errno;
@@ -2923,7 +2926,7 @@ static unsigned int get_max_pages(void)
 
 	buf[res] = '\0';
 
-	res = strtol(buf, NULL, 10);
+	res = libfuse_strtol(buf);
 	return res < 0 ? FUSE_DEFAULT_MAX_PAGES_LIMIT : res;
 }
 
