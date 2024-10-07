@@ -155,21 +155,16 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 	char *fdnam, *dev;
 	pid_t pid, cpid;
 	int status;
+	int err;
 
 	fdnam = getenv("FUSE_DEV_FD");
 
 	if (fdnam) {
-		char *ep;
-
-		fd = strtol(fdnam, &ep, 10);
-
-		if (*ep != '\0') {
+		err = libfuse_strtol(fdnam, &fd);
+		if (err) {
 			fuse_log(FUSE_LOG_ERR, "invalid value given in FUSE_DEV_FD\n");
 			return -1;
 		}
-
-		if (fd < 0)
-			return -1;
 
 		goto mount;
 	}
