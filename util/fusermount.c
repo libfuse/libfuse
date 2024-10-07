@@ -10,6 +10,7 @@
 #define _GNU_SOURCE /* for clone and strchrnul */
 #include "fuse_config.h"
 #include "mount_util.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1604,7 +1605,14 @@ int main(int argc, char *argv[])
 		goto err_out;
 	}
 
-	cfd = atoi(commfd);
+	cfd = libfuse_strtol(commfd);
+	if (cfd < 0) {
+		fprintf(stderr,
+			"%s: invalid _FUSE_COMMFD: %s\n",
+			progname, commfd);
+		goto err_out;
+
+	}
 	{
 		struct stat statbuf;
 		fstat(cfd, &statbuf);
