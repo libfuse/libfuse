@@ -521,6 +521,24 @@ static off_t xmp_lseek(const char *path, off_t off, int whence, struct fuse_file
 	return res;
 }
 
+#ifdef HAVE_STATX
+static int xmp_statx(const char *path, int flags, int mask, struct statx *stxbuf,
+		     struct fuse_file_info *fi)
+{
+	int fd = -1;
+	int res;
+
+	if (fi)
+	    fd = fi->fh;
+
+	res = statx(fd, path, flags | AT_SYMLINK_NOFOLLOW, mask, stxbuf);
+	if (res == -1)
+		return -errno;
+
+	return 0;
+}
+#endif
+
 static const struct fuse_operations xmp_oper = {
 	.init           = xmp_init,
 	.getattr	= xmp_getattr,
@@ -560,6 +578,9 @@ static const struct fuse_operations xmp_oper = {
 	.copy_file_range = xmp_copy_file_range,
 #endif
 	.lseek		= xmp_lseek,
+#ifdef HAVE_STATX
+	.statx		= xmp_statx,
+#endif
 };
 
 int main(int argc, char *argv[])

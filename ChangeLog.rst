@@ -5,6 +5,7 @@ libfuse 3.17 (unreleased)
   New public function: fuse_set_fail_signal_handlers()
 * Allows fuse_log() messages to be send to syslog instead of stderr
   New public functions: fuse_log_enable_syslog() and fuse_log_close_syslog()
+* Add statx for distributions with stax support
 
 libfuse 3.16.2 (2023-10-10)
 ===========================
