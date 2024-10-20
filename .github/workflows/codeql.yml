@@ -25,7 +25,7 @@ jobs:
     #   - https://gh.io/supported-runners-and-hardware-resources
     #   - https://gh.io/using-larger-runners (GitHub.com only)
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
-    runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    runs-on: ${{ 'ubuntu-latest' }}
     permissions:
       # required for all workflows
       security-events: write
@@ -69,7 +69,7 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        pip install --break-system-packages -r requirements.txt
+        sudo apt install meson ninja-build python3-pytest
         meson setup build --buildtype=debug
         meson compile -C build
 
