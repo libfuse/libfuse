@@ -554,28 +554,36 @@ static int _fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 	size_t num_completed = 0;
 	struct io_uring_cqe *cqe;
 	unsigned int head;
+	int ret = 0;
 
 	io_uring_for_each_cqe(&queue->ring, head, cqe) {
-		if (cqe->res != 0) {
-			// XXX: Needs a log once, otherwise log spam
-			// fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
-			se->error = cqe->res;
-			return cqe->res;
-		}
-		fuse_uring_handle_cqe(queue, cqe);
+		int err = 0;
 
-		/* submit as soon as there is something availalble,
-		 * so that possibly async kernel side can already
-		 * move ahead?
-		 */
-		// io_uring_submit(&queue->ring);
 		num_completed++;
+
+		err = cqe->res;
+		if (err != 0) {
+			// XXX: Needs rate limited logs, otherwise log spam
+			// fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
+
+			if (err != -EINTR && err != -EOPNOTSUPP &&
+			    err != -EAGAIN) {
+				se->error = cqe->res;
+
+				/* return first error */
+				if (ret == 0)
+					ret = err;
+			}
+
+		} else {
+			fuse_uring_handle_cqe(queue, cqe);
+		}
 	}
 
 	if (num_completed)
 		io_uring_cq_advance(&queue->ring, num_completed);
 
-	return num_completed;
+	return ret == 0 ? 0 : num_completed;
 }
 
 /**
@@ -679,7 +687,7 @@ static void *fuse_uring_thread(void *arg)
 	struct fuse_ring_queue *queue = arg;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	struct fuse_session *se = ring_pool->se;
-	int res;
+	int err;
 
 	if (ring_pool->per_core_queue)
 		fuse_uring_set_thread_core(queue->qid);
@@ -689,8 +697,8 @@ static void *fuse_uring_thread(void *arg)
 	thread_name[15] = '\0';
 	pthread_setname_np(queue->tid, thread_name);
 
-	res = _fuse_uring_init_queue(queue);
-	if (res < 0) {
+	err = _fuse_uring_init_queue(queue);
+	if (err < 0) {
 		fuse_log(FUSE_LOG_ERR, "qid=%d queue setup failed\n",
 			 queue->qid);
 		goto err;
@@ -700,9 +708,14 @@ static void *fuse_uring_thread(void *arg)
 		/* is always blocking here from this internal thread */
 		_fuse_uring_submit(queue, true);
 
-		res = _fuse_uring_queue_handle_cqes(queue);
-		if (res < 0) {
-			se->error = res;
+		err = _fuse_uring_queue_handle_cqes(queue);
+		if (err < 0) {
+			/*
+			 * fuse-over-io-uring is not supported, operation can
+			 * continue over /dev/fuse
+			 */
+			if (err == -EOPNOTSUPP)
+				goto ret;
 			goto err;
 		}
 	}
@@ -711,6 +724,7 @@ static void *fuse_uring_thread(void *arg)
 
 err:
 	fuse_session_exit(se);
+ret:
 	return NULL;
 }
 
