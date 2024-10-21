@@ -11,13 +11,15 @@
 
 #define _GNU_SOURCE
 
+#define FUSE_ATTR_TIMEOUT_AS_TIMESPEC
+
 #include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_kernel.h"
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "mount_util.h"
-#include "util.h"
+#include "fuse_util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -339,44 +341,35 @@ void fuse_reply_none(fuse_req_t req)
 	fuse_free_req(req);
 }
 
-static unsigned long calc_timeout_sec(double t)
-{
-	if (t > (double) ULONG_MAX)
-		return ULONG_MAX;
-	else if (t < 0.0)
-		return 0;
-	else
-		return (unsigned long) t;
-}
-
-static unsigned int calc_timeout_nsec(double t)
-{
-	double f = t - (double) calc_timeout_sec(t);
-	if (f < 0.0)
-		return 0;
-	else if (f >= 0.999999999)
-		return 999999999;
-	else
-		return (unsigned int) (f * 1.0e9);
-}
-
 static void fill_entry(struct fuse_entry_out *arg,
-		       const struct fuse_entry_param *e)
+		       const struct fuse_entry_param *e,
+		       unsigned int timeout_as_double)
 {
 	arg->nodeid = e->ino;
 	arg->generation = e->generation;
-	arg->entry_valid = calc_timeout_sec(e->entry_timeout);
-	arg->entry_valid_nsec = calc_timeout_nsec(e->entry_timeout);
-	arg->attr_valid = calc_timeout_sec(e->attr_timeout);
-	arg->attr_valid_nsec = calc_timeout_nsec(e->attr_timeout);
+	if (timeout_as_double) {
+		double entry_timeout = e->__do_not_use_entry_timeout_d;
+		double attr_timeout = e->__do_not_use_attr_timeout_d;
+
+		arg->entry_valid = fuse_calc_timeout_sec(entry_timeout);
+		arg->entry_valid_nsec = fuse_calc_timeout_nsec(entry_timeout);
+		arg->attr_valid = fuse_calc_timeout_sec(attr_timeout);
+		arg->attr_valid_nsec = fuse_calc_timeout_nsec(attr_timeout);
+	} else {
+		arg->entry_valid = e->entry_timeout.tv_sec;
+		arg->entry_valid_nsec = e->entry_timeout.tv_nsec;
+		arg->attr_valid = e->attr_timeout.tv_sec;
+		arg->attr_valid_nsec = e->attr_timeout.tv_nsec;
+	}
 	convert_stat(&e->attr, &arg->attr);
 }
 
 /* `buf` is allowed to be empty so that the proper size may be
    allocated by the caller */
-size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
-			      const char *name,
-			      const struct fuse_entry_param *e, off_t off)
+size_t _fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
+			       const char *name,
+			       const struct fuse_entry_param *e, off_t off,
+			       unsigned int timeout_as_double)
 {
 	(void)req;
 	size_t namelen;
@@ -391,7 +384,7 @@ size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
 
 	struct fuse_direntplus *dp = (struct fuse_direntplus *) buf;
 	memset(&dp->entry_out, 0, sizeof(dp->entry_out));
-	fill_entry(&dp->entry_out, e);
+	fill_entry(&dp->entry_out, e, timeout_as_double);
 
 	struct fuse_dirent *dirent = &dp->dirent;
 	dirent->ino = e->attr.st_ino;
@@ -426,7 +419,8 @@ static void fill_open(struct fuse_open_out *arg,
 		arg->open_flags |= FOPEN_PARALLEL_DIRECT_WRITES;
 }
 
-int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
+int _fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
+		      unsigned int timeout_as_double)
 {
 	struct fuse_entry_out arg;
 	size_t size = req->se->conn.proto_minor < 9 ?
@@ -438,12 +432,13 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 		return fuse_reply_err(req, ENOENT);
 
 	memset(&arg, 0, sizeof(arg));
-	fill_entry(&arg, e);
+	fill_entry(&arg, e, timeout_as_double);
 	return send_reply_ok(req, &arg, size);
 }
 
-int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
-		      const struct fuse_file_info *f)
+int _fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
+		       const struct fuse_file_info *f,
+		       unsigned int timeout_as_double)
 {
 	char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_open_out)];
 	size_t entrysize = req->se->conn.proto_minor < 9 ?
@@ -452,22 +447,23 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 	struct fuse_open_out *oarg = (struct fuse_open_out *) (buf + entrysize);
 
 	memset(buf, 0, sizeof(buf));
-	fill_entry(earg, e);
+	fill_entry(earg, e, timeout_as_double);
 	fill_open(oarg, f);
 	return send_reply_ok(req, buf,
 			     entrysize + sizeof(struct fuse_open_out));
 }
 
-int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
-		    double attr_timeout)
+int _fuse_reply_attr(fuse_req_t req, const struct stat *attr,
+		     struct timespec *attr_timeout)
 {
 	struct fuse_attr_out arg;
 	size_t size = req->se->conn.proto_minor < 9 ?
-		FUSE_COMPAT_ATTR_OUT_SIZE : sizeof(arg);
+			      FUSE_COMPAT_ATTR_OUT_SIZE :
+			      sizeof(arg);
 
 	memset(&arg, 0, sizeof(arg));
-	arg.attr_valid = calc_timeout_sec(attr_timeout);
-	arg.attr_valid_nsec = calc_timeout_nsec(attr_timeout);
+	arg.attr_valid = attr_timeout->tv_sec;
+	arg.attr_valid_nsec = attr_timeout->tv_nsec;
 	convert_stat(attr, &arg.attr);
 
 	return send_reply_ok(req, &arg, size);

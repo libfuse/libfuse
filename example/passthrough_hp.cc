@@ -43,7 +43,10 @@
  * \include passthrough_hp.cc
  */
 
+#include "fuse_util.h"
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
+
+#define FUSE_ATTR_TIMEOUT_AS_TIMESPEC
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -144,7 +147,7 @@ struct Fs {
     std::mutex mutex;
     InodeMap inodes; // protected by mutex
     Inode root;
-    double timeout;
+    struct timespec timeout;
     bool debug;
     bool debug_fuse;
     bool foreground;
@@ -196,7 +199,7 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
         fs.passthrough = false;
 
     /* Passthrough and writeback cache are conflicting modes */
-    if (fs.timeout && !fs.passthrough &&
+    if (!fuse_timeout_is_zero(&fs.timeout) && !fs.passthrough &&
         conn->capable & FUSE_CAP_WRITEBACK_CACHE)
         conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
@@ -236,7 +239,7 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
         fuse_reply_err(req, errno);
         return;
     }
-    fuse_reply_attr(req, &attr, fs.timeout);
+    fuse_reply_attr(req, &attr, &fs.timeout);
 }
 
 
@@ -548,7 +551,7 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name) {
     // Release inode.fd before last unlink like nfsd EXPORT_OP_CLOSE_BEFORE_UNLINK
     // to test reused inode numbers.
     // Skip this when inode has an open file and when writeback cache is enabled.
-    if (!fs.timeout) {
+    if (fuse_timeout_is_zero(&fs.timeout)) {
 	    fuse_entry_param e;
 	    auto err = do_lookup(parent, name, &e);
 	    if (err) {
@@ -681,7 +684,7 @@ static void sfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
     d->offset = 0;
 
     fi->fh = reinterpret_cast<uint64_t>(d);
-    if(fs.timeout) {
+    if(!fuse_timeout_is_zero(&fs.timeout)) {
         fi->keep_cache = 1;
         fi->cache_readdir = 1;
     }
@@ -872,8 +875,9 @@ static void sfs_create_open_flags(fuse_file_info *fi)
     in current function. */
     fi->parallel_direct_writes = 1;
 
-    fi->keep_cache = (fs.timeout != 0);
-    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
+    fi->keep_cache = (!fuse_timeout_is_zero(&fs.timeout));
+    fi->noflush = (fuse_timeout_is_zero(&fs.timeout) &&
+                   (fi->flags & O_ACCMODE) == O_RDONLY);
 }
 
 static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
@@ -930,7 +934,8 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     /* With writeback cache, kernel may send read requests even
        when userspace opened write-only */
-    if (fs.timeout && (fi->flags & O_ACCMODE) == O_WRONLY) {
+    if (!fuse_timeout_is_zero(&fs.timeout) &&
+         (fi->flags & O_ACCMODE) == O_WRONLY) {
         fi->flags &= ~O_ACCMODE;
         fi->flags |= O_RDWR;
     }
@@ -941,7 +946,7 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
        isn't accurate anymore). However, no process should modify the
        file in the underlying filesystem once it has been read, so
        this is not a problem. */
-    if (fs.timeout && fi->flags & O_APPEND)
+    if (!fuse_timeout_is_zero(&fs.timeout) && fi->flags & O_APPEND)
         fi->flags &= ~O_APPEND;
 
     /* Unfortunately we cannot use inode.fd, because this was opened
@@ -1409,7 +1414,10 @@ int main(int argc, char *argv[]) {
     // Initialize filesystem root
     fs.root.fd = -1;
     fs.root.nlookup = 9999;
-    fs.timeout = options.count("nocache") ? 0 : 86400.0;
+    fs.timeout = {
+        .tv_sec = options.count("nocache") ? 0 : 86400,
+        .tv_nsec = 0
+    };
 
     struct stat stat;
     auto ret = lstat(fs.source.c_str(), &stat);
@@ -1454,7 +1462,7 @@ int main(int argc, char *argv[]) {
         fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
 
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
-	
+
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
 

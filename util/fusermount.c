@@ -10,7 +10,7 @@
 #define _GNU_SOURCE /* for clone and strchrnul */
 #include "fuse_config.h"
 #include "mount_util.h"
-#include "util.h"
+#include <fuse_util.h>
 
 #include <stdio.h>
 #include <stdlib.h>

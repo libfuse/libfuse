@@ -14,7 +14,7 @@
  * Low level API
  *
  * IMPORTANT: you should define FUSE_USE_VERSION before including this
- * header.  To use the newest API define it to 35 (recommended for any
+ * header.  To use the newest API define it to 317 (recommended for any
  * new application).
  */
 
@@ -43,8 +43,9 @@ extern "C" {
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
 
-/** Inode number type */
-typedef uint64_t fuse_ino_t;
+/** Uniqeue inode identifier */
+typedef uint64_t fuse_nodeid_t;
+typedef uint64_t fuse_ino_t; /* for compatibility */
 
 /** Request pointer type */
 typedef struct fuse_req *fuse_req_t;
@@ -58,14 +59,14 @@ struct fuse_session;
 
 /** Directory entry parameters supplied to fuse_reply_entry() */
 struct fuse_entry_param {
-	/** Unique inode number
+	/** Unique inode identifier
 	 *
 	 * In lookup, zero means negative entry (from version 2.5)
 	 * Returning ENOENT also means negative entry, but by setting zero
 	 * ino the kernel may cache negative entries for entry_timeout
 	 * seconds.
 	 */
-	fuse_ino_t ino;
+	fuse_nodeid_t ino;
 
 	/** Generation number for this entry.
 	 *
@@ -88,17 +89,44 @@ struct fuse_entry_param {
 	 */
 	struct stat attr;
 
-	/** Validity timeout (in seconds) for inode attributes. If
-	    attributes only change as a result of requests that come
-	    through the kernel, this should be set to a very large
-	    value. */
-	double attr_timeout;
+/*
+ * defining FUSE_ATTR_TIMEOUT_AS_TIMESPEC is preferred, as it avoids converting
+ * double to uint32_t for every attribute related request.
+ */
+#ifdef FUSE_ATTR_TIMEOUT_AS_TIMESPEC
+	/** Validity timeout (in seconds) for inode attributes.
+	  *
+	  * If attributes only change as a result of requests
+	  * that come through the kernel, this should be set
+	  * to a very large value.
+	  */
+	union {
+		double __do_not_use_attr_timeout_d;
+		struct timespec attr_timeout;
+	};
 
-	/** Validity timeout (in seconds) for the name. If directory
-	    entries are changed/deleted only as a result of requests
-	    that come through the kernel, this should be set to a very
-	    large value. */
-	double entry_timeout;
+	/** Validity timeout (in seconds) for the name.
+	  *
+	  * If directory
+	  * entries are changed/deleted only as a result of requests
+	  * that come through the kernel, this should be set to a very
+	  * large value.
+	  */
+	union {
+		double __do_not_use_entry_timeout_d;
+		struct timespec entry_timeout;
+	};
+#else
+	union {
+		double attr_timeout;
+		struct timespec attr_timeout_ts;
+	};
+
+	union {
+		double entry_timeout;
+		struct timespec entry_timeout_ts;
+	};
+#endif
 };
 
 /**
@@ -1339,6 +1367,10 @@ int fuse_reply_err(fuse_req_t req, int err);
  */
 void fuse_reply_none(fuse_req_t req);
 
+/* Do not use directly, but the version without an underscore below. */
+int _fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e,
+		      unsigned int timeout_as_double);
+
 /**
  * Reply with a directory entry
  *
@@ -1352,7 +1384,20 @@ void fuse_reply_none(fuse_req_t req);
  * @param e the entry parameters
  * @return zero for success, -errno for failure to send reply
  */
-int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
+static inline int fuse_reply_entry(fuse_req_t req,
+				   const struct fuse_entry_param *e)
+{
+#ifndef FUSE_ATTR_TIMEOUT_AS_TIMESPEC
+	return _fuse_reply_entry(req, e, 1);
+#else
+	return _fuse_reply_entry(req, e, 0);
+#endif
+}
+
+/* Do not use directly, but the version without an underscore below. */
+int _fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
+		       const struct fuse_file_info *fi,
+		       unsigned int timeout_as_double);
 
 /**
  * Reply with a directory entry and open parameters
@@ -1371,8 +1416,19 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
  * @param fi file information
  * @return zero for success, -errno for failure to send reply
  */
-int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
-		      const struct fuse_file_info *fi);
+static inline int fuse_reply_create(fuse_req_t req,
+				    const struct fuse_entry_param *e,
+				    const struct fuse_file_info *fi)
+{
+#ifndef FUSE_ATTR_TIMEOUT_AS_TIMESPEC
+	return _fuse_reply_create(req, e, fi, 1);
+#else
+	return _fuse_reply_create(req, e, fi, 0);
+#endif
+}
+
+int _fuse_reply_attr(fuse_req_t req, const struct stat *attr,
+		     struct timespec *attr_timeout);
 
 /**
  * Reply with attributes
@@ -1385,8 +1441,24 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
  * @param attr_timeout	validity timeout (in seconds) for the attributes
  * @return zero for success, -errno for failure to send reply
  */
-int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
-		    double attr_timeout);
+#ifndef FUSE_ATTR_TIMEOUT_AS_TIMESPEC
+static inline int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
+				  double attr_timeout)
+{
+	struct timespec attr_timeout_ts;
+
+	attr_timeout_ts.tv_sec = attr_timeout;
+	attr_timeout_ts.tv_nsec = (attr_timeout - attr_timeout_ts.tv_sec) * 1e9;
+
+	return _fuse_reply_attr(req, attr, &attr_timeout_ts);
+}
+#else
+static inline int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
+				  struct timespec *attr_timeout)
+{
+	return _fuse_reply_attr(req, attr, attr_timeout);
+}
+#endif
 
 /**
  * Reply with the contents of a symbolic link
@@ -1592,8 +1664,13 @@ int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
  * @return the space needed for the entry
  */
 size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
-			 const char *name, const struct stat *stbuf,
-			 off_t off);
+			 const char *name, const struct stat *stbuf, off_t off);
+
+/* Do not use directly, but the version without an underscore below. */
+size_t _fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
+			       const char *name,
+			       const struct fuse_entry_param *e, off_t off,
+			       unsigned int timeout_as_double);
 
 /**
  * Add a directory entry to the buffer with the attributes
@@ -1608,9 +1685,17 @@ size_t fuse_add_direntry(fuse_req_t req, char *buf, size_t bufsize,
  * @param off the offset of the next entry
  * @return the space needed for the entry
  */
-size_t fuse_add_direntry_plus(fuse_req_t req, char *buf, size_t bufsize,
-			      const char *name,
-			      const struct fuse_entry_param *e, off_t off);
+static inline size_t fuse_add_direntry_plus(fuse_req_t req, char *buf,
+					    size_t bufsize, const char *name,
+					    const struct fuse_entry_param *e,
+					    off_t off)
+{
+#ifdef FUSE_ATTR_TIMEOUT_AS_TIMESPEC
+	return _fuse_add_direntry_plus(req, buf, bufsize, name, e, off, 0);
+#else
+	return _fuse_add_direntry_plus(req, buf, bufsize, name, e, off, 1);
+#endif
+}
 
 /**
  * Reply to ask for data fetch and output buffer preparation.  ioctl

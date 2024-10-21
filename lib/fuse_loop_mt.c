@@ -13,7 +13,7 @@
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
 #include "fuse_i.h"
-#include "util.h"
+#include "fuse_util.h"
 
 #include <stdio.h>
 #include <stdlib.h>

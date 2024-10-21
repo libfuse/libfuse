@@ -201,6 +201,12 @@ FUSE_3.17 {
 		fuse_set_fail_signal_handlers;
 		fuse_log_enable_syslog;
 		fuse_log_close_syslog;
+		fuse_calc_timeout_sec;
+		fuse_calc_timeout_nsec;
+		_fuse_reply_create;
+		_fuse_reply_entry;
+		_fuse_reply_attr;
+		_fuse_add_direntry_plus;
 } FUSE_3.12;
 
 # Local Variables:
