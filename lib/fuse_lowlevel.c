@@ -339,36 +339,15 @@ void fuse_reply_none(fuse_req_t req)
 	fuse_free_req(req);
 }
 
-static unsigned long calc_timeout_sec(double t)
-{
-	if (t > (double) ULONG_MAX)
-		return ULONG_MAX;
-	else if (t < 0.0)
-		return 0;
-	else
-		return (unsigned long) t;
-}
-
-static unsigned int calc_timeout_nsec(double t)
-{
-	double f = t - (double) calc_timeout_sec(t);
-	if (f < 0.0)
-		return 0;
-	else if (f >= 0.999999999)
-		return 999999999;
-	else
-		return (unsigned int) (f * 1.0e9);
-}
-
 static void fill_entry(struct fuse_entry_out *arg,
 		       const struct fuse_entry_param *e)
 {
 	arg->nodeid = e->ino;
 	arg->generation = e->generation;
-	arg->entry_valid = calc_timeout_sec(e->entry_timeout);
-	arg->entry_valid_nsec = calc_timeout_nsec(e->entry_timeout);
-	arg->attr_valid = calc_timeout_sec(e->attr_timeout);
-	arg->attr_valid_nsec = calc_timeout_nsec(e->attr_timeout);
+	arg->entry_valid = fuse_calc_timeout_sec(e->entry_timeout);
+	arg->entry_valid_nsec = fuse_calc_timeout_nsec(e->entry_timeout);
+	arg->attr_valid = fuse_calc_timeout_sec(e->attr_timeout);
+	arg->attr_valid_nsec = fuse_calc_timeout_nsec(e->attr_timeout);
 	convert_stat(&e->attr, &arg->attr);
 }
 
@@ -466,8 +445,8 @@ int fuse_reply_attr(fuse_req_t req, const struct stat *attr,
 		FUSE_COMPAT_ATTR_OUT_SIZE : sizeof(arg);
 
 	memset(&arg, 0, sizeof(arg));
-	arg.attr_valid = calc_timeout_sec(attr_timeout);
-	arg.attr_valid_nsec = calc_timeout_nsec(attr_timeout);
+	arg.attr_valid = fuse_calc_timeout_sec(attr_timeout);
+	arg.attr_valid_nsec = fuse_calc_timeout_nsec(attr_timeout);
 	convert_stat(attr, &arg.attr);
 
 	return send_reply_ok(req, &arg, size);
