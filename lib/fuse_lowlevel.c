@@ -17,7 +17,7 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "mount_util.h"
-#include "util.h"
+#include "fuse_util.h"
 
 #include <stdio.h>
 #include <stdlib.h>

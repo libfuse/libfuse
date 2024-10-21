@@ -1,7 +1,15 @@
+/*
+  FUSE: Filesystem in Userspace
+
+  This program can be distributed under the terms of the GNU GPLv2.
+  See the file COPYING.
+*/
+
 #include <stdlib.h>
 #include <errno.h>
+#include <limits.h>
 
-#include "util.h"
+#include <fuse_util.h>
 
 int libfuse_strtol(const char *str, long *res)
 {
@@ -17,7 +25,7 @@ int libfuse_strtol(const char *str, long *res)
 	val = strtol(str, &endptr, base);
 
 	if (errno)
-	       return -errno;
+		return -errno;
 
 	if (endptr == str || *endptr != '\0')
 		return -EINVAL;
