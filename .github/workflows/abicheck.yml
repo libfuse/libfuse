@@ -57,6 +57,7 @@ jobs:
 
       - name: Run abidiff
         run: abidiff 
+          --no-added-syms
           --headers-dir1 previous/include/ 
           --headers-dir2 current/include/ 
           previous/build/lib/libfuse3.so 
