@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <sys/uio.h>
+#include <assert.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,28 +98,39 @@ typedef int (*fuse_fill_dir_t) (void *buf, const char *name,
  *
  * Note: this data structure is ABI sensitive, new options have to be
  * appended at the end of the structure
+ *
+ * Note: This structure is ABI sensitive, only add new fields in reserved
+ *       bits.
  */
 struct fuse_config {
 	/**
 	 * If `set_gid` is non-zero, the st_gid attribute of each file
 	 * is overwritten with the value of `gid`.
 	 */
-	int set_gid;
-	unsigned int gid;
+	int32_t set_gid;
+	uint32_t gid;
 
 	/**
 	 * If `set_uid` is non-zero, the st_uid attribute of each file
 	 * is overwritten with the value of `uid`.
 	 */
-	int set_uid;
-	unsigned int uid;
+	int32_t set_uid;
+	uint32_t uid;
 
 	/**
 	 * If `set_mode` is non-zero, the any permissions bits set in
 	 * `umask` are unset in the st_mode attribute of each file.
 	 */
-	int set_mode;
-	unsigned int umask;
+	int32_t set_mode;
+	uint32_t umask;
+
+	/**
+	 * `fmask` and `dmask` function the same way as `umask`, but apply
+	 * to files and directories separately. If non-zero, `fmask` and
+	 * `dmask` take precedence over the `umask` setting.
+	 */
+	uint32_t fmask;
+	uint32_t dmask;
 
 	/**
 	 * The timeout in seconds for which name lookups will be
@@ -145,14 +157,14 @@ struct fuse_config {
 	/**
 	 * Allow requests to be interrupted
 	 */
-	int intr;
+	int32_t intr;
 
 	/**
 	 * Specify which signal number to send to the filesystem when
 	 * a request is interrupted.  The default is hardcoded to
 	 * USR1.
 	 */
-	int intr_signal;
+	int32_t intr_signal;
 
 	/**
 	 * Normally, FUSE assigns inodes to paths only for as long as
@@ -164,7 +176,7 @@ struct fuse_config {
 	 * A number of -1 means that inodes will be remembered for the
 	 * entire life-time of the file-system process.
 	 */
-	int remember;
+	int32_t remember;
 
 	/**
 	 * The default behavior is that if an open file is deleted,
@@ -182,7 +194,7 @@ struct fuse_config {
 	 * ENOENT): read(2), write(2), fsync(2), close(2), f*xattr(2),
 	 * ftruncate(2), fstat(2), fchmod(2), fchown(2)
 	 */
-	int hard_remove;
+	uint8_t hard_remove;
 
 	/**
 	 * Honor the st_ino field in the functions getattr() and
@@ -195,7 +207,7 @@ struct fuse_config {
 	 * Note that this does *not* affect the inode that libfuse 
 	 * and the kernel use internally (also called the "nodeid").
 	 */
-	int use_ino;
+	uint8_t use_ino;
 
 	/**
 	 * If use_ino option is not given, still try to fill in the
@@ -204,7 +216,7 @@ struct fuse_config {
 	 * found there will be used.  Otherwise it will be set to -1.
 	 * If use_ino option is given, this option is ignored.
 	 */
-	int readdir_ino;
+	uint8_t readdir_ino;
 
 	/**
 	 * This option disables the use of page cache (file content cache)
@@ -223,7 +235,7 @@ struct fuse_config {
 	 * `direct_io` field of `struct fuse_file_info` - overwriting
 	 * any value that was put there by the file system.
 	 */
-	int direct_io;
+	uint8_t direct_io;
 
 	/**
 	 * This option disables flushing the cache of the file
@@ -242,7 +254,7 @@ struct fuse_config {
 	 * `keep_cache` field of `struct fuse_file_info` - overwriting
 	 * any value that was put there by the file system.
 	 */
-	int kernel_cache;
+	uint8_t kernel_cache;
 
 	/**
 	 * This option is an alternative to `kernel_cache`. Instead of
@@ -250,7 +262,7 @@ struct fuse_config {
 	 * invalidated on open(2) if if the modification time or the
 	 * size of the file has changed since it was last opened.
 	 */
-	int auto_cache;
+	uint8_t auto_cache;
 
 	/**
 	 * By default, fuse waits for all pending writes to complete
@@ -258,15 +270,7 @@ struct fuse_config {
 	 * With this option, wait and FLUSH are not done for read-only
 	 * fuse fd, similar to the behavior of NFS/SMB clients.
 	 */
-	int no_rofd_flush;
-
-	/**
-	 * The timeout in seconds for which file attributes are cached
-	 * for the purpose of checking if auto_cache should flush the
-	 * file data on open.
-	 */
-	int ac_attr_timeout_set;
-	double ac_attr_timeout;
+	uint8_t no_rofd_flush;
 
 	/**
 	 * If this option is given the file-system handlers for the
@@ -278,7 +282,7 @@ struct fuse_config {
 	 * operations the path will be provided only if the struct
 	 * fuse_file_info argument is NULL.
 	 */
-	int nullpath_ok;
+	uint8_t nullpath_ok;
 
 	/**
 	 *  Allow parallel direct-io writes to operate on the same file.
@@ -293,24 +297,37 @@ struct fuse_config {
 	 *  enabling this setting, all direct writes on the same file are
 	 *  serialized, resulting in huge data bandwidth loss).
 	 */
-	int parallel_direct_writes;
+	uint8_t parallel_direct_writes;
+
+	uint8_t padding1[3];
+
+	int32_t padding2;
+
+	/**
+	 * The timeout in seconds for which file attributes are cached
+	 * for the purpose of checking if auto_cache should flush the
+	 * file data on open.
+	 */
+	int32_t ac_attr_timeout_set;
+	double ac_attr_timeout;
+
+	/* reserved bytes for ABI compatibility */
+	uint32_t reserved[32];
 
 	/**
 	 * These 3 options are used by libfuse internally and
 	 * should not be touched.
 	 */
-	int show_help;
 	char *modules;
-	int debug;
+	uint32_t show_help;
+	uint32_t debug;
 
-	/**
-	 * `fmask` and `dmask` function the same way as `umask`, but apply
-	 * to files and directories separately. If non-zero, `fmask` and
-	 * `dmask` take precedence over the `umask` setting.
-	 */
-	unsigned int fmask;
-	unsigned int dmask;
+	/* Adding new fields might break ABI compatibility */
 };
+
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+static_assert(sizeof(struct fuse_config) == 240, "struct size must not change");
+#endif
 
 
 /**
