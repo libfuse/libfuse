@@ -78,9 +78,7 @@ using namespace std;
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
 #define SFS_DEFAULT_CLONE_FD "0"
 #define SFS_DEFAULT_URING  "1"
-#define SFS_DEFAULT_URING_PER_CORE_QUEUE  "1"
-#define SFS_DEFAULT_URING_FG_DEPTH  "0"
-#define SFS_DEFAULT_URING_BG_DEPTH  "0"
+#define SFS_DEFAULT_URING_Q_DEPTH "0"
 #define SFS_DEFAULT_URING_ARGLEN    "0"
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
@@ -162,10 +160,8 @@ struct Fs {
     bool clone_fd;
     struct {
         bool enable;
-        bool per_core_queue;
         bool external_threads;
-        int sync_queue_depth;
-        int async_queue_depth;
+        int queue_depth;
         int arglen;
     } uring;
 
@@ -1022,12 +1018,11 @@ static void sfs_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
     fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
-
-static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi) {
-
+static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi)
+{
     fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
-    buf.buf[0].flags = static_cast<fuse_buf_flags>(
-        FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
+    buf.buf[0].flags =
+        static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
     buf.buf[0].fd = fi->fh;
     buf.buf[0].pos = off;
 
@@ -1328,12 +1323,10 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("clone-fd", "use separate fuse device fd for each thread")
         ("direct-io", "enable fuse kernel internal direct-io")
         ("uring", "use uring communication")
-        ("uring-per-core-queue", "Use a queue per cpu core")
-        ("uring-external-threads", "For testing, threads are owned by passthough and not liburing.")
-        ("uring-fg-depth", "Uring foreground queue depth",
-            cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_FG_DEPTH))
-        ("uring-bg-depth", "Uring background queue depth",
-            cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_BG_DEPTH))
+        ("uring-external-threads",
+         "For testing, threads are owned by passthough and not liburing.")
+        ("uring-q-depth", "io-uring queue depth",
+            cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_Q_DEPTH))
         ("uring-arglen", "uring buffer size",
             cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_ARGLEN));
     // FIXME: Find a better way to limit the try clause to just
@@ -1369,10 +1362,8 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     fs.direct_io = options.count("direct-io");
 
     fs.uring.enable = options.count("uring");
-    fs.uring.per_core_queue = options.count("uring-per-core-queue");
     fs.uring.external_threads = options.count("uring-external-threads");
-    fs.uring.sync_queue_depth = options["uring-fg-depth"].as<int>();
-    fs.uring.async_queue_depth = options["uring-bg-depth"].as<int>();
+    fs.uring.queue_depth = options["uring-q-depth"].as<int>();
     fs.uring.arglen = options["uring-arglen"].as<int>();
 
     char* resolved_path = realpath(argv[1], NULL);
@@ -1485,10 +1476,7 @@ int main(int argc, char *argv[]) {
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 
     fuse_loop_cfg_set_uring_opts(loop_config, fs.uring.enable,
-                                 fs.uring.per_core_queue,
-                                 fs.uring.sync_queue_depth,
-                                 fs.uring.async_queue_depth,
-                                 fs.uring.arglen);
+				 fs.uring.queue_depth, fs.uring.arglen);
     if (fs.uring.external_threads)
         fuse_loop_cfg_set_uring_ext_thread(loop_config);
 

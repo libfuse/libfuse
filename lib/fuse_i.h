@@ -10,7 +10,6 @@
 #define LIB_FUSE_I_H_
 
 #include <stdbool.h>
-#include <errno.h>
 
 #include "fuse.h"
 #include "fuse_lowlevel.h"
@@ -170,22 +169,13 @@ struct fuse_loop_config
 		bool use_uring:1;
 
 		/**
-		 * whether to use a separate queue per core
-		 */
-		bool per_core_queue:1;
-
-		/**
 		 * whether to use an external thread controlled by the file
 		 * system, instead of spawning a new thread per queue by
 		 * the libfuse io-uring interface.
 		 */
 		bool external_threads:1;
 
-		/** The ring foreground request queue depth */
-		unsigned int sync_queue_depth;
-
-		/** The ring background request queue depth  */
-		unsigned int async_queue_depth;
+		unsigned int queue_depth;
 
 		/** maximum argument size of ring requests */
 		unsigned int ring_req_arg_len;

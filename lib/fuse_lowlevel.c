@@ -17,7 +17,6 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "mount_util.h"
-#include "fuse_lowlevel_i.h"
 #include "fuse_uring_i.h"
 
 #include <stdio.h>
@@ -30,6 +29,7 @@
 #include <assert.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+#include <stdalign.h>
 
 #ifndef F_LINUX_SPECIFIC_BASE
 #define F_LINUX_SPECIFIC_BASE       1024
@@ -472,7 +472,8 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 		      const struct fuse_file_info *f)
 {
-	char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_open_out)];
+	alignas(sizeof(uint8_t)) char buf[sizeof(struct fuse_entry_out) +
+					  sizeof(struct fuse_open_out)];
 	size_t entrysize = req->se->conn.proto_minor < 9 ?
 		FUSE_COMPAT_ENTRY_OUT_SIZE : sizeof(struct fuse_entry_out);
 	struct fuse_entry_out *earg = (struct fuse_entry_out *) buf;
@@ -1692,18 +1693,6 @@ out:
 		fuse_ll_clear_pipe(se);
 }
 
-static void do_write_buf_cqe(fuse_req_t req, const fuse_ino_t nodeid,
-			     const void *op_in, void *in_payload,
-			     size_t payload_len)
-{
-	struct fuse_bufvec bufv = {
-		.buf[0] = { .size = payload_len, .flags = 0, .mem = in_payload },
-		.count = 1,
-	};
-
-	_do_write_buf(req, nodeid, op_in, &bufv);
-}
-
 static void _do_flush(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *op_in, const void *in_payload)
 {
@@ -1785,7 +1774,7 @@ static void _do_opendir(fuse_req_t req, const fuse_ino_t nodeid,
 			const void *op_in, const void *in_payload)
 {
 	(void)in_payload;
-	struct fuse_open_in *arg = op_in;
+	const struct fuse_open_in *arg = op_in;
 	struct fuse_file_info fi;
 
 	memset(&fi, 0, sizeof(fi));
@@ -2727,7 +2716,7 @@ static void list_init_nreq(struct fuse_notify_req *nreq)
 }
 
 static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
-			    const void *inarg, const struct fuse_buf *buf)
+			    const void *op_in, const struct fuse_buf *buf)
 {
 	struct fuse_session *se = req->se;
 	struct fuse_notify_req *nreq;
@@ -2744,7 +2733,7 @@ static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 	pthread_mutex_unlock(&se->lock);
 
 	if (nreq != head)
-		nreq->reply(nreq, req, nodeid, inarg, buf);
+		nreq->reply(nreq, req, nodeid, op_in, buf);
 }
 
 static int send_notify_iov(struct fuse_session *se, int notify_code,
@@ -3060,7 +3049,7 @@ bool fuse_req_is_uring(fuse_req_t req)
 }
 
 static struct {
-	void (*func)(fuse_req_t, fuse_ino_t, const void *);
+	void (*func)(fuse_req_t, const fuse_ino_t, const void *);
 	const char *name;
 } fuse_ll_ops[] = {
 	[FUSE_LOOKUP]	   = { do_lookup,      "LOOKUP"	     },
@@ -3109,6 +3098,59 @@ static struct {
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
+};
+
+static struct {
+	void (*func)(fuse_req_t, const fuse_ino_t, const void *op_in,
+		     const void *op_payload);
+	const char *name;
+} fuse_ll_ops2[] = {
+	[FUSE_LOOKUP] = { _do_lookup, "LOOKUP" },
+	[FUSE_FORGET] = { _do_forget, "FORGET" },
+	[FUSE_GETATTR] = { _do_getattr, "GETATTR" },
+	[FUSE_SETATTR] = { _do_setattr, "SETATTR" },
+	[FUSE_READLINK] = { _do_readlink, "READLINK" },
+	[FUSE_SYMLINK] = { _do_symlink, "SYMLINK" },
+	[FUSE_MKNOD] = { _do_mknod, "MKNOD" },
+	[FUSE_MKDIR] = { _do_mkdir, "MKDIR" },
+	[FUSE_UNLINK] = { _do_unlink, "UNLINK" },
+	[FUSE_RMDIR] = { _do_rmdir, "RMDIR" },
+	[FUSE_RENAME] = { _do_rename, "RENAME" },
+	[FUSE_LINK] = { _do_link, "LINK" },
+	[FUSE_OPEN] = { _do_open, "OPEN" },
+	[FUSE_READ] = { _do_read, "READ" },
+	[FUSE_WRITE] = { _do_write, "WRITE" },
+	[FUSE_STATFS] = { _do_statfs, "STATFS" },
+	[FUSE_RELEASE] = { _do_release, "RELEASE" },
+	[FUSE_FSYNC] = { _do_fsync, "FSYNC" },
+	[FUSE_SETXATTR] = { _do_setxattr, "SETXATTR" },
+	[FUSE_GETXATTR] = { _do_getxattr, "GETXATTR" },
+	[FUSE_LISTXATTR] = { _do_listxattr, "LISTXATTR" },
+	[FUSE_REMOVEXATTR] = { _do_removexattr, "REMOVEXATTR" },
+	[FUSE_FLUSH] = { _do_flush, "FLUSH" },
+	[FUSE_INIT] = { _do_init, "INIT" },
+	[FUSE_OPENDIR] = { _do_opendir, "OPENDIR" },
+	[FUSE_READDIR] = { _do_readdir, "READDIR" },
+	[FUSE_RELEASEDIR] = { _do_releasedir, "RELEASEDIR" },
+	[FUSE_FSYNCDIR] = { _do_fsyncdir, "FSYNCDIR" },
+	[FUSE_GETLK] = { _do_getlk, "GETLK" },
+	[FUSE_SETLK] = { _do_setlk, "SETLK" },
+	[FUSE_SETLKW] = { _do_setlkw, "SETLKW" },
+	[FUSE_ACCESS] = { _do_access, "ACCESS" },
+	[FUSE_CREATE] = { _do_create, "CREATE" },
+	[FUSE_INTERRUPT] = { _do_interrupt, "INTERRUPT" },
+	[FUSE_BMAP] = { _do_bmap, "BMAP" },
+	[FUSE_IOCTL] = { _do_ioctl, "IOCTL" },
+	[FUSE_POLL] = { _do_poll, "POLL" },
+	[FUSE_FALLOCATE] = { _do_fallocate, "FALLOCATE" },
+	[FUSE_DESTROY] = { _do_destroy, "DESTROY" },
+	[FUSE_NOTIFY_REPLY] = { (void *)1, "NOTIFY_REPLY" },
+	[FUSE_BATCH_FORGET] = { _do_batch_forget, "BATCH_FORGET" },
+	[FUSE_READDIRPLUS] = { _do_readdirplus, "READDIRPLUS" },
+	[FUSE_RENAME2] = { _do_rename2, "RENAME2" },
+	[FUSE_COPY_FILE_RANGE] = { _do_copy_file_range, "COPY_FILE_RANGE" },
+	[FUSE_LSEEK] = { _do_lseek, "LSEEK" },
+	[CUSE_INIT] = { _cuse_lowlevel_init, "CUSE_INIT" },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
@@ -3322,10 +3364,10 @@ clear_pipe:
 	goto out_free;
 }
 
-void
-fuse_session_process_uring_cqe(struct fuse_session *se, struct fuse_req *req,
-			       struct fuse_in_header *in,
-			       void *inarg, size_t in_arg_len)
+void fuse_session_process_uring_cqe(struct fuse_session *se,
+				    struct fuse_req *req,
+				    struct fuse_in_header *in, void *op_in,
+				    void *op_payload, size_t payload_len)
 {
 	int err;
 
@@ -3344,43 +3386,36 @@ fuse_session_process_uring_cqe(struct fuse_session *se, struct fuse_req *req,
 		goto reply_err;
 
 	if (se->debug) {
-		fuse_log(FUSE_LOG_DEBUG,
+		fuse_log(
+			FUSE_LOG_DEBUG,
 			"cqe unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
-			(unsigned long long) in->unique,
-			opname((enum fuse_opcode) in->opcode), in->opcode,
-			(unsigned long long) in->nodeid, in_arg_len, in->pid);
+			(unsigned long long)in->unique,
+			opname((enum fuse_opcode)in->opcode), in->opcode,
+			(unsigned long long)in->nodeid, payload_len, in->pid);
 	}
 
 	if (in->opcode == FUSE_WRITE && se->op.write_buf) {
-		struct fuse_buf buf = {
-			/* do_write_buf substracts the size of fuse-in-header,
-			 * which is not correct for ring-io - add in that
-			 * size here
-			 */
-			.size = in_arg_len + sizeof(struct fuse_in_header),
-			.flags = 0,
-			.mem = inarg
+		struct fuse_bufvec bufv = {
+			.buf[0] = { .size = payload_len,
+				    .flags = 0,
+				    .mem = op_payload },
+			.count = 1,
 		};
-
-		do_write_buf(req, in->nodeid, inarg, &buf);
+		_do_write_buf(req, in->nodeid, op_in, &bufv);
 	} else if (in->opcode == FUSE_NOTIFY_REPLY) {
-		struct fuse_buf buf = {
-			/* Same as above (FUSE_WRITE) regarding size addition */
-			.size = in_arg_len + sizeof(struct fuse_in_header),
-			.flags = 0,
-			.mem = inarg
-		};
-		do_notify_reply(req, in->nodeid, inarg, &buf);
-	} else
-		fuse_ll_ops[in->opcode].func(req, in->nodeid, inarg);
+		struct fuse_buf buf = { .size = payload_len,
+					.mem = op_payload };
+		do_notify_reply(req, in->nodeid, op_in, &buf);
+	} else {
+		fuse_ll_ops2[in->opcode].func(req, in->nodeid, op_in,
+					      op_payload);
+	}
 
 	return;
 
 reply_err:
 	fuse_reply_err(req, err);
 	return;
-
-
 }
 
 #define LL_OPTION(n,o,v) \
