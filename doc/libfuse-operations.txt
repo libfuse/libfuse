@@ -35,7 +35,7 @@ was only partly human verified - use with care.
    - out_args[2]: Not used
 
 5. FUSE_READLINK (5)
-   - in_args[0]: Size of fuse_readlink_in (16 bytes)
+   - in_args[0]: Not used
    - in_args[1]: Not used
    - in_args[2]: Not used
    - out_args[0]: Variable (size of the link target path)
