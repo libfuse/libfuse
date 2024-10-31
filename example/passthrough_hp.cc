@@ -454,8 +454,13 @@ static void mknod_symlink(fuse_req_t req, fuse_ino_t parent,
     Inode& inode_p = get_inode(parent);
     auto saverr = ENOMEM;
 
+    if (fs.debug)
+        cerr << "DEBUG: mknod_symlink(): name=" << name
+             << ", parent=" << parent << ", is_dir=" << S_ISDIR(mode) <<
+             ", is_symlink=" << S_ISLNK(mode) << endl;
+
     if (S_ISDIR(mode))
-        res = mkdirat(inode_p.fd, name, mode);
+	    res = mkdirat(inode_p.fd, name, mode);
     else if (S_ISLNK(mode))
         res = symlinkat(link, inode_p.fd, name);
     else
