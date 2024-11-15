@@ -868,6 +868,14 @@ struct fuse_buf {
 	 * Used if FUSE_BUF_FD_SEEK flag is set.
 	 */
 	off_t pos;
+
+	/**
+	 * Size of memory pointer
+	 *
+	 * Used only if mem was internally allocated.
+	 * Not used if mem was user-provided.
+	 */
+	size_t mem_size;
 };
 
 /**
@@ -924,6 +932,7 @@ struct libfuse_version
 			/* .mem =   */ NULL,			\
 			/* .fd =    */ -1,			\
 			/* .pos =   */ 0,			\
+			/* .mem_size = */ 0,                    \
 		} }						\
 	} )
 
