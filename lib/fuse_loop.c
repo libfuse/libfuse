@@ -24,14 +24,14 @@ int fuse_session_loop(struct fuse_session *se)
 	};
 
 	while (!fuse_session_exited(se)) {
-		res = fuse_session_receive_buf_int(se, &fbuf, NULL);
+		res = fuse_session_receive_buf(se, &fbuf);
 
 		if (res == -EINTR)
 			continue;
 		if (res <= 0)
 			break;
 
-		fuse_session_process_buf_int(se, &fbuf, NULL);
+		fuse_session_process_buf(se, &fbuf);
 	}
 
 	free(fbuf.mem);
