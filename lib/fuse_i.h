@@ -9,6 +9,8 @@
 #include "fuse.h"
 #include "fuse_lowlevel.h"
 
+#include <stdbool.h>
+
 #define MIN(a, b) \
 ({									\
 	typeof(a) _a = (a);						\
@@ -77,6 +79,7 @@ struct fuse_session {
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
+	bool buf_reallocable;
 };
 
 struct fuse_chan {
