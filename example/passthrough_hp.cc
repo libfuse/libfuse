@@ -190,36 +190,39 @@ static int get_fs_fd(fuse_ino_t ino) {
 static void sfs_init(void *userdata, fuse_conn_info *conn) {
     (void)userdata;
 
-    if (fs.passthrough && conn->capable & FUSE_CAP_PASSTHROUGH)
-        conn->want |= FUSE_CAP_PASSTHROUGH;
-    else
+    if (!fuse_set_feature_flag(conn, FUSE_CAP_PASSTHROUGH))
         fs.passthrough = false;
 
     /* Passthrough and writeback cache are conflicting modes */
-    if (fs.timeout && !fs.passthrough &&
-        conn->capable & FUSE_CAP_WRITEBACK_CACHE)
-        conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+    if (fs.timeout && !fs.passthrough)
+        fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
 
-    if (conn->capable & FUSE_CAP_FLOCK_LOCKS)
-        conn->want |= FUSE_CAP_FLOCK_LOCKS;
+    fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
 
     if (fs.nosplice) {
         // FUSE_CAP_SPLICE_READ is enabled in libfuse3 by default,
         // see do_init() in in fuse_lowlevel.c
         // Just unset both, in case FUSE_CAP_SPLICE_WRITE would also get enabled
         // by default.
-        conn->want &= ~FUSE_CAP_SPLICE_READ;
-        conn->want &= ~FUSE_CAP_SPLICE_WRITE;
+        fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_READ);
+        fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_WRITE);
     } else {
-        if (conn->capable & FUSE_CAP_SPLICE_WRITE)
-            conn->want |= FUSE_CAP_SPLICE_WRITE;
-        if (conn->capable & FUSE_CAP_SPLICE_READ)
-            conn->want |= FUSE_CAP_SPLICE_READ;
+        fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_WRITE);
+        fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_READ);
     }
 
     /* This is a local file system - no network coherency needed */
-    if (conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
-        conn->want |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
+    fuse_set_feature_flag(conn, FUSE_CAP_DIRECT_IO_ALLOW_MMAP);
+
+    /* Disable NFS export support, which also disabled name_to_handle_at.
+     * Goal is to make xfstests that test name_to_handle_at to fail with
+     * the right error code (EOPNOTSUPP) than to open_by_handle_at to fail with
+     * ESTALE and let those test fail.
+     * Perfect NFS export support is not possible with this FUSE filesystem needs
+     * more kernel work, in order to passthrough nfs handle encode/decode to
+     * fuse-server/daemon.
+     */
+    fuse_set_feature_flag(conn, FUSE_CAP_NO_EXPORT_SUPPORT);
 
     /* Disable the receiving and processing of FUSE_INTERRUPT requests */
     conn->no_interrupt = 1;

@@ -9,6 +9,7 @@
   See the file COPYING.LIB
 */
 
+#include <stdbool.h>
 #define _GNU_SOURCE
 
 #include "fuse_config.h"
@@ -1965,6 +1966,18 @@ static void do_lseek(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
+static bool want_flags_valid(uint64_t capable, uint64_t want)
+{
+	uint64_t unknown_flags = want & (~capable);
+	if (unknown_flags != 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: unknown connection 'want' flags: 0x%08lx\n",
+			unknown_flags);
+		return false;
+	}
+	return true;
+}
+
 /* Prevent bogus data races (bogus since "init" is called before
  * multi-threading becomes relevant */
 static __attribute__((no_sanitize("thread")))
@@ -2068,6 +2081,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable |= FUSE_CAP_EXPIRE_ONLY;
 		if (inargflags & FUSE_PASSTHROUGH)
 			se->conn.capable |= FUSE_CAP_PASSTHROUGH;
+		if (inargflags & FUSE_NO_EXPORT_SUPPORT)
+			se->conn.capable |= FUSE_CAP_NO_EXPORT_SUPPORT;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -2121,10 +2136,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
 
-	if (se->conn.want & (~se->conn.capable)) {
-		fuse_log(FUSE_LOG_ERR, "fuse: error: filesystem requested capabilities "
-			"0x%x that are not supported by kernel, aborting.\n",
-			se->conn.want & (~se->conn.capable));
+	if (!want_flags_valid(se->conn.capable, se->conn.want)) {
 		fuse_reply_err(req, EPROTO);
 		se->error = -EPROTO;
 		fuse_session_exit(se);
@@ -2207,6 +2219,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		 */
 		outarg.max_stack_depth = se->conn.max_backing_stack_depth + 1;
 	}
+	if (se->conn.want & FUSE_CAP_NO_EXPORT_SUPPORT)
+		outargflags |= FUSE_NO_EXPORT_SUPPORT;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
