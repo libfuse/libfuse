@@ -308,6 +308,55 @@ static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st)
 	return ret;
 }
 
+
+static struct lo_inode *create_new_inode(int fd, struct fuse_entry_param *e, struct lo_data* lo)
+{
+	struct lo_inode *inode = NULL;
+	struct lo_inode *prev, *next;
+	
+	inode = calloc(1, sizeof(struct lo_inode));
+	if (!inode)
+		return NULL;
+
+	inode->refcount = 1;
+	inode->fd = fd;
+	inode->ino = e->attr.st_ino;
+	inode->dev = e->attr.st_dev;
+
+	pthread_mutex_lock(&lo->mutex);
+	prev = &lo->root;
+	next = prev->next;
+	next->prev = inode;
+	inode->next = next;
+	inode->prev = prev;
+	prev->next = inode;
+	pthread_mutex_unlock(&lo->mutex);
+	return inode;
+}
+
+static int fill_entry_param_new_inode(fuse_req_t req, fuse_ino_t parent, int fd, struct fuse_entry_param *e)
+{
+	int res;
+	struct lo_data *lo = lo_data(req);
+
+	memset(e, 0, sizeof(*e));
+	e->attr_timeout = lo->timeout;
+	e->entry_timeout = lo->timeout;
+
+	res = fstatat(fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	if (res == -1)
+		return errno;
+
+	e->ino = (uintptr_t) create_new_inode(dup(fd), e, lo);
+
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "  %lli/%lli -> %lli\n",
+			(unsigned long long) parent, fd, (unsigned long long) e->ino);
+
+	return 0;
+
+}
+
 static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 			 struct fuse_entry_param *e)
 {
@@ -334,26 +383,9 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		close(newfd);
 		newfd = -1;
 	} else {
-		struct lo_inode *prev, *next;
-
-		saverr = ENOMEM;
-		inode = calloc(1, sizeof(struct lo_inode));
+		inode = create_new_inode(newfd, e, lo);
 		if (!inode)
 			goto out_err;
-
-		inode->refcount = 1;
-		inode->fd = newfd;
-		inode->ino = e->attr.st_ino;
-		inode->dev = e->attr.st_dev;
-
-		pthread_mutex_lock(&lo->mutex);
-		prev = &lo->root;
-		next = prev->next;
-		next->prev = inode;
-		inode->next = next;
-		inode->prev = prev;
-		prev->next = inode;
-		pthread_mutex_unlock(&lo->mutex);
 	}
 	e->ino = (uintptr_t) inode;
 
@@ -754,8 +786,43 @@ static void lo_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 	fuse_reply_err(req, 0);
 }
 
-static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+static void lo_tmpfile(fuse_req_t req, fuse_ino_t parent,
 		      mode_t mode, struct fuse_file_info *fi)
+{
+	int fd;
+	struct lo_data *lo = lo_data(req);
+	struct fuse_entry_param e;
+	int err;
+
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "lo_tmpfile(parent=%" PRIu64 ")\n",
+			parent);
+
+	fd = openat(lo_fd(req, parent), ".",
+		    (fi->flags | O_TMPFILE) & ~O_NOFOLLOW, mode);
+	if (fd == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	fi->fh = fd;
+	if (lo->cache == CACHE_NEVER)
+		fi->direct_io = 1;
+	else if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
+
+	/* parallel_direct_writes feature depends on direct_io features.
+	   To make parallel_direct_writes valid, need set fi->direct_io
+	   in current function. */
+	fi->parallel_direct_writes = 1; 
+	
+	err = fill_entry_param_new_inode(req, parent, fd, &e); 
+	if (err)
+		fuse_reply_err(req, err);
+	else
+		fuse_reply_create(req, &e, fi);
+}
+
+static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+						      mode_t mode, struct fuse_file_info *fi)
 {
 	int fd;
 	struct lo_data *lo = lo_data(req);
@@ -1178,6 +1245,7 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.releasedir	= lo_releasedir,
 	.fsyncdir	= lo_fsyncdir,
 	.create		= lo_create,
+	.tmpfile	= lo_tmpfile,
 	.open		= lo_open,
 	.release	= lo_release,
 	.flush		= lo_flush,
