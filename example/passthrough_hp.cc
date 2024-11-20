@@ -914,6 +914,86 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
     fuse_reply_create(req, &e, fi);
 }
 
+static Inode *create_new_inode(int fd, fuse_entry_param *e)
+{
+    memset(e, 0, sizeof(*e));
+    e->attr_timeout = fs.timeout;
+    e->entry_timeout = fs.timeout;
+
+    auto res = fstatat(fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+    if (res == -1) {
+        if (fs.debug)
+            cerr << "DEBUG: lookup(): fstatat failed" << endl;
+        return NULL;
+    }
+
+    SrcId id {e->attr.st_ino, e->attr.st_dev};
+    unique_lock<mutex> fs_lock {fs.mutex};
+    Inode* p_inode;
+    try {
+        p_inode = &fs.inodes[id];
+    } catch (std::bad_alloc&) {
+        return NULL;
+    }
+
+    e->ino = reinterpret_cast<fuse_ino_t>(p_inode);
+    e->generation = p_inode->generation;
+
+    lock_guard<mutex> g {p_inode->m};
+    p_inode->src_ino = e->attr.st_ino;
+    p_inode->src_dev = e->attr.st_dev;
+
+    p_inode->nlookup++;
+    if (fs.debug)
+        cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+                <<  "inode " << p_inode->src_ino
+                << " count " << p_inode->nlookup << endl;
+
+    p_inode->fd = fd;
+    fs_lock.unlock();
+
+    if (fs.debug)
+        cerr << "DEBUG: lookup(): created userspace inode " << e->attr.st_ino
+                << "; fd = " << p_inode->fd << endl;
+    return p_inode;
+} 
+
+static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent,
+                       mode_t mode, fuse_file_info *fi) {
+    Inode& parent_inode = get_inode(parent);
+
+    auto fd = openat(parent_inode.fd, ".",
+                     (fi->flags | O_TMPFILE) & ~O_NOFOLLOW, mode);
+    if (fd == -1) {
+        auto err = errno;
+        if (err == ENFILE || err == EMFILE)
+            cerr << "ERROR: Reached maximum number of file descriptors." << endl;
+        fuse_reply_err(req, err);
+        return;
+    }
+
+    fi->fh = fd;
+    fuse_entry_param e;
+
+    Inode *inode = create_new_inode(dup(fd), &e);
+    if (inode == NULL) {
+        auto err = errno;
+        cerr << "ERROR: could not create new inode." << endl;
+        close(fd);
+        fuse_reply_err(req, err);
+        return;
+    }
+
+    lock_guard<mutex> g {inode->m};
+
+    sfs_create_open_flags(fi);
+
+    if (fs.passthrough)
+        do_passthrough_open(req, e.ino, fd, fi);
+ 
+    fuse_reply_create(req, &e, fi);
+}
+
 
 static void sfs_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
                          fuse_file_info *fi) {
@@ -1237,6 +1317,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper) {
     sfs_oper.releasedir = sfs_releasedir;
     sfs_oper.fsyncdir = sfs_fsyncdir;
     sfs_oper.create = sfs_create;
+    sfs_oper.tmpfile = sfs_tmpfile;
     sfs_oper.open = sfs_open;
     sfs_oper.release = sfs_release;
     sfs_oper.flush = sfs_flush;

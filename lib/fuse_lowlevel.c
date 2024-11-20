@@ -1361,6 +1361,24 @@ static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		fuse_reply_err(req, ENOSYS);
 }
 
+static void do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
+
+	if (req->se->op.tmpfile) {
+		struct fuse_file_info fi;
+
+		memset(&fi, 0, sizeof(fi));
+		fi.flags = arg->flags;
+
+		if (req->se->conn.proto_minor >= 12)
+			req->ctx.umask = arg->umask;
+
+		req->se->op.tmpfile(req, nodeid, arg->mode, &fi);
+	} else
+		fuse_reply_err(req, ENOSYS);
+}
+
 static void do_create(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
@@ -2678,6 +2696,7 @@ static struct {
 	[FUSE_SETLKW]	   = { do_setlkw,      "SETLKW"	     },
 	[FUSE_ACCESS]	   = { do_access,      "ACCESS"	     },
 	[FUSE_CREATE]	   = { do_create,      "CREATE"	     },
+	[FUSE_TMPFILE]	   = { do_tmpfile,     "TMPFILE"	},
 	[FUSE_INTERRUPT]   = { do_interrupt,   "INTERRUPT"   },
 	[FUSE_BMAP]	   = { do_bmap,	       "BMAP"	     },
 	[FUSE_IOCTL]	   = { do_ioctl,       "IOCTL"	     },
