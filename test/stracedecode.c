@@ -38,6 +38,7 @@ static struct {
 	[FUSE_SETLKW]	   = { "SETLKW"	     },
 	[FUSE_ACCESS]	   = { "ACCESS"	     },
 	[FUSE_CREATE]	   = { "CREATE"	     },
+	[FUSE_TMPFILE]	   = { "TMPFILE"	 },
 	[FUSE_INTERRUPT]   = { "INTERRUPT"   },
 	[FUSE_BMAP]	   = { "BMAP"	     },
 	[FUSE_DESTROY]	   = { "DESTROY"     },
