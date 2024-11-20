@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdalign.h>
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
@@ -446,7 +447,7 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e)
 int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 		      const struct fuse_file_info *f)
 {
-	char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_open_out)];
+	alignas(uint64_t) char buf[sizeof(struct fuse_entry_out) + sizeof(struct fuse_open_out)];
 	size_t entrysize = req->se->conn.proto_minor < 9 ?
 		FUSE_COMPAT_ENTRY_OUT_SIZE : sizeof(struct fuse_entry_out);
 	struct fuse_entry_out *earg = (struct fuse_entry_out *) buf;
