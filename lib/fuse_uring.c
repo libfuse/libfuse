@@ -30,6 +30,9 @@
 #include <linux/sched.h>
 #include <poll.h>
 
+#ifndef READ_ONCE
+#define READ_ONCE(x) (*(volatile typeof(x) *)&(x))
+#endif
 
 /* defined somewhere in uring? */
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
@@ -50,6 +53,9 @@ struct fuse_ring_ent {
 	struct fuse_uring_req_header req_header;
 	void *op_payload;
 	size_t req_payload_sz;
+
+	/* commit id of a fuse request */
+	uint64_t req_commit_id;
 
 	struct iovec iov[2]; /* header and payload */
 };
@@ -164,11 +170,11 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		return -EIO;
 	}
 
-	fuse_uring_sqe_prepare(sqe, ring_ent, FUSE_URING_REQ_COMMIT_AND_FETCH);
+	fuse_uring_sqe_prepare(sqe, ring_ent,
+			       FUSE_IO_URING_CMD_COMMIT_AND_FETCH);
 
-	/* kernel uses out->unique as commit identifier */
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid,
-				    out->unique);
+				    ring_ent->req_commit_id);
 
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG, "    unique: %llu, result=%d\n",
@@ -311,6 +317,8 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 
+	ent->req_commit_id = ent_in_out->commit_id;
+
 	req->is_uring = true;
 	req->ref_cnt++;
 	req->ch = NULL; /* not needed for uring */
@@ -409,7 +417,7 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 			return -EIO;
 		}
 
-		fuse_uring_sqe_prepare(sqe, ent, FUSE_URING_REQ_FETCH);
+		fuse_uring_sqe_prepare(sqe, ent, FUSE_IO_URING_CMD_REGISTER);
 
 		/* only needed for fetch */
 		ent->iov[0].iov_base = &ent->req_header;

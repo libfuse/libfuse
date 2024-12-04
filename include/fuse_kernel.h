@@ -1225,11 +1225,17 @@ struct fuse_supp_groups {
 struct fuse_uring_ent_in_out {
 	uint64_t flags;
 
+	/*
+	 * commit ID to be used in a reply to a ring request (see also
+	 * struct fuse_uring_cmd_req)
+	 */
+	uint64_t commit_id;
+
 	/* size of use payload buffer */
 	uint32_t payload_sz;
 	uint32_t padding;
 
-	uint8_t reserved[30];
+	uint64_t reserved;
 };
 
 /**
@@ -1250,13 +1256,13 @@ struct fuse_uring_req_header {
  * sqe commands to the kernel
  */
 enum fuse_uring_cmd {
-	FUSE_URING_REQ_INVALID = 0,
+	FUSE_IO_URING_CMD_INVALID = 0,
 
 	/* submit sqe to kernel to get a request */
-	FUSE_URING_REQ_FETCH = 1,
+	FUSE_IO_URING_CMD_REGISTER = 1,
 
 	/* commit result and fetch next request */
-	FUSE_URING_REQ_COMMIT_AND_FETCH = 2,
+	FUSE_IO_URING_CMD_COMMIT_AND_FETCH = 2,
 };
 
 /**
