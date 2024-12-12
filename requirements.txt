@@ -4,5 +4,4 @@
 meson
 ninja
 # Test packages:
-looseversion
 pytest
