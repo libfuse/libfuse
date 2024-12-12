@@ -2,7 +2,7 @@
 
 set -e
 
-TEST_CMD="pytest -v --maxfail=1 --log-level=DEBUG --log-cli-level=DEBUG test/"
+TEST_CMD="pytest -v --maxfail=1 --log-level=INFO --log-cli-level=INFO test/"
 SAN="-Db_sanitize=address,undefined"
 
 # not default
