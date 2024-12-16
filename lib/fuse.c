@@ -4550,14 +4550,13 @@ static int fuse_session_loop_remember(struct fuse *f)
 			else
 				break;
 		} else if (res > 0) {
-			res = fuse_session_receive_buf(se, &fbuf);
-
+			res = fuse_session_receive_buf_int(se, &fbuf, NULL);
 			if (res == -EINTR)
 				continue;
 			if (res <= 0)
 				break;
 
-			fuse_session_process_buf(se, &fbuf);
+			fuse_session_process_buf_int(se, &fbuf, NULL);
 		} else {
 			timeout = fuse_clean_cache(f);
 			curr_time(&now);
