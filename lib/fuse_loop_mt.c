@@ -194,7 +194,7 @@ static void *fuse_do_work(void *data)
 			pthread_mutex_unlock(&mt->lock);
 
 			pthread_detach(w->thread_id);
-			free(w->fbuf.mem);
+			fuse_buf_free(&w->fbuf);
 			fuse_chan_put(w->ch);
 			free(w);
 			return NULL;
@@ -350,7 +350,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	pthread_mutex_lock(&mt->lock);
 	list_del_worker(w);
 	pthread_mutex_unlock(&mt->lock);
-	free(w->fbuf.mem);
+	fuse_buf_free(&w->fbuf);
 	fuse_chan_put(w->ch);
 	free(w);
 }

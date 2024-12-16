@@ -2945,13 +2945,52 @@ static void fuse_ll_pipe_destructor(void *data)
 	fuse_ll_pipe_free(llp);
 }
 
-int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
+void fuse_buf_free(struct fuse_buf *buf)
 {
-	return fuse_session_receive_buf_int(se, buf, NULL);
+	if (buf->mem == NULL)
+		return;
+
+	size_t write_header_sz =
+		sizeof(struct fuse_in_header) + sizeof(struct fuse_write_in);
+
+	char *ptr = (char *)buf->mem - pagesize + write_header_sz;
+	free(ptr);
+	buf->mem = NULL;
 }
 
-int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
-				 struct fuse_chan *ch)
+/*
+ * This is used to allocate buffers that hold fuse requests
+ */
+static void *buf_alloc(size_t size, bool internal)
+{
+	/*
+	 * For libfuse internal caller add in alignment. That cannot be done
+	 * for an external caller, as it is not guaranteed that the external
+	 * caller frees the raw pointer.
+	 */
+	if (internal) {
+		size_t write_header_sz = sizeof(struct fuse_in_header) +
+					 sizeof(struct fuse_write_in);
+		size_t new_size = ROUND_UP(size + write_header_sz, pagesize);
+
+		char *buf = aligned_alloc(pagesize, new_size);
+		if (buf == NULL)
+			return NULL;
+
+		buf += pagesize - write_header_sz;
+
+		return buf;
+	} else {
+		return malloc(size);
+	}
+}
+
+/*
+ *@param internal true if called from libfuse internal code
+ */
+static int _fuse_session_receive_buf(struct fuse_session *se,
+				     struct fuse_buf *buf, struct fuse_chan *ch,
+				     bool internal)
 {
 	int err;
 	ssize_t res;
@@ -2960,7 +2999,8 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 	struct fuse_ll_pipe *llp;
 	struct fuse_buf tmpbuf;
 
-	if (se->conn.proto_minor < 14 || !(se->conn.want & FUSE_CAP_SPLICE_READ))
+	if (se->conn.proto_minor < 14 ||
+	    !(se->conn.want & FUSE_CAP_SPLICE_READ))
 		goto fallback;
 
 	llp = fuse_ll_get_pipe(se);
@@ -2985,11 +3025,11 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 
 	if (se->io != NULL && se->io->splice_receive != NULL) {
 		res = se->io->splice_receive(ch ? ch->fd : se->fd, NULL,
-						     llp->pipe[1], NULL, bufsize, 0,
-						     se->userdata);
+					     llp->pipe[1], NULL, bufsize, 0,
+					     se->userdata);
 	} else {
 		res = splice(ch ? ch->fd : se->fd, NULL, llp->pipe[1], NULL,
-				 bufsize, 0);
+			     bufsize, 0);
 	}
 	err = errno;
 
@@ -3013,7 +3053,7 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 		return -EIO;
 	}
 
-	tmpbuf = (struct fuse_buf) {
+	tmpbuf = (struct fuse_buf){
 		.size = res,
 		.flags = FUSE_BUF_IS_FD,
 		.fd = llp->pipe[0],
@@ -3024,20 +3064,22 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 	 * fuse_loop_mt() needs to check for FORGET so this more than
 	 * just an optimization.
 	 */
-	if (res < sizeof(struct fuse_in_header) +
-	    sizeof(struct fuse_write_in) + pagesize) {
+	if (res < sizeof(struct fuse_in_header) + sizeof(struct fuse_write_in) +
+			  pagesize) {
 		struct fuse_bufvec src = { .buf[0] = tmpbuf, .count = 1 };
 		struct fuse_bufvec dst = { .count = 1 };
 
 		if (!buf->mem) {
-			buf->mem = malloc(se->bufsize);
+			buf->mem = buf_alloc(se->bufsize, internal);
 			if (!buf->mem) {
-				fuse_log(FUSE_LOG_ERR,
+				fuse_log(
+					FUSE_LOG_ERR,
 					"fuse: failed to allocate read buffer\n");
 				return -ENOMEM;
 			}
 			buf->mem_size = se->bufsize;
-			se->buf_reallocable = true;
+			if (internal)
+				se->buf_reallocable = true;
 		}
 		buf->size = se->bufsize;
 		buf->flags = 0;
@@ -3046,12 +3088,13 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 		res = fuse_buf_copy(&dst, &src, 0);
 		if (res < 0) {
 			fuse_log(FUSE_LOG_ERR, "fuse: copy from pipe: %s\n",
-				strerror(-res));
+				 strerror(-res));
 			fuse_ll_clear_pipe(se);
 			return res;
 		}
 		if (res < tmpbuf.size) {
-			fuse_log(FUSE_LOG_ERR, "fuse: copy from pipe: short read\n");
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: copy from pipe: short read\n");
 			fuse_ll_clear_pipe(se);
 			return -EIO;
 		}
@@ -3069,24 +3112,25 @@ int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
 fallback:
 #endif
 	if (!buf->mem) {
-		buf->mem = malloc(se->bufsize);
+		buf->mem = buf_alloc(se->bufsize, internal);
 		if (!buf->mem) {
 			fuse_log(FUSE_LOG_ERR,
-				"fuse: failed to allocate read buffer\n");
+				 "fuse: failed to allocate read buffer\n");
 			return -ENOMEM;
 		}
 		buf->mem_size = se->bufsize;
-		se->buf_reallocable = true;
+		if (internal)
+			se->buf_reallocable = true;
 	}
 
 restart:
 	if (se->buf_reallocable)
-	    bufsize = buf->mem_size;
+		bufsize = buf->mem_size;
 	if (se->io != NULL) {
 		/* se->io->read is never NULL if se->io is not NULL as
 		specified by fuse_session_custom_io()*/
 		res = se->io->read(ch ? ch->fd : se->fd, buf->mem, bufsize,
-					 se->userdata);
+				   se->userdata);
 	} else {
 		res = read(ch ? ch->fd : se->fd, buf->mem, bufsize);
 	}
@@ -3095,18 +3139,20 @@ restart:
 	if (fuse_session_exited(se))
 		return 0;
 	if (res == -1) {
-		if (err == EINVAL && se->buf_reallocable && se->bufsize > buf->mem_size)  {
-		    void *newbuf  = malloc(se->bufsize);
-		    if (!newbuf) {
-			fuse_log(FUSE_LOG_ERR,
-				"fuse: failed to (re)allocate read buffer\n");
-			return -ENOMEM;
-		    }
-		    free(buf->mem);
-		    buf->mem = newbuf;
-		    buf->mem_size = se->bufsize;
-		    se->buf_reallocable = true;
-		    goto restart;
+		if (err == EINVAL && se->buf_reallocable &&
+		    se->bufsize > buf->mem_size) {
+			void *newbuf = buf_alloc(se->bufsize, internal);
+			if (!newbuf) {
+				fuse_log(
+					FUSE_LOG_ERR,
+					"fuse: failed to (re)allocate read buffer\n");
+				return -ENOMEM;
+			}
+			fuse_buf_free(buf);
+			buf->mem = newbuf;
+			buf->mem_size = se->bufsize;
+			se->buf_reallocable = true;
+			goto restart;
 		}
 
 		/* ENOENT means the operation was interrupted, it's safe
@@ -3127,7 +3173,7 @@ restart:
 			perror("fuse: reading device");
 		return -err;
 	}
-	if ((size_t) res < sizeof(struct fuse_in_header)) {
+	if ((size_t)res < sizeof(struct fuse_in_header)) {
 		fuse_log(FUSE_LOG_ERR, "short read on fuse device\n");
 		return -EIO;
 	}
@@ -3135,6 +3181,18 @@ restart:
 	buf->size = res;
 
 	return res;
+}
+
+int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf)
+{
+	return _fuse_session_receive_buf(se, buf, NULL, false);
+}
+
+/* libfuse internal handler */
+int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
+				 struct fuse_chan *ch)
+{
+	return _fuse_session_receive_buf(se, buf, ch, true);
 }
 
 FUSE_SYMVER("_fuse_session_new_317", "_fuse_session_new@@FUSE_3.17")
