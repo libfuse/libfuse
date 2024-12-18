@@ -35,6 +35,9 @@ if not platform.endswith('bsd') and platform != 'dragonfly' and add_languages('c
     executable('passthrough_hp', 'passthrough_hp.cc',
                dependencies: [ thread_dep, libfuse_dep ],
                install: false)
+    executable('memfs_ll', 'memfs_ll.cc',
+               dependencies: [ thread_dep, libfuse_dep ],
+               install: false)
 endif
 
 # TODO: Link passthrough_fh with ulockmgr if available

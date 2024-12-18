@@ -200,48 +200,51 @@ static int get_fs_fd(fuse_ino_t ino) {
 static void sfs_init(void *userdata, fuse_conn_info *conn) {
     (void)userdata;
 
-    if (fs.passthrough && conn->capable & FUSE_CAP_PASSTHROUGH)
-        conn->want |= FUSE_CAP_PASSTHROUGH;
-    else
+    if (!fuse_set_feature_flag(conn, FUSE_CAP_PASSTHROUGH))
         fs.passthrough = false;
 
     /* Passthrough and writeback cache are conflicting modes */
-    if (fs.timeout && !fs.passthrough &&
-        conn->capable & FUSE_CAP_WRITEBACK_CACHE)
-        conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+    if (fs.timeout && !fs.passthrough)
+        fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
 
-    if (conn->capable & FUSE_CAP_FLOCK_LOCKS)
-        conn->want |= FUSE_CAP_FLOCK_LOCKS;
+    fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
 
     if (fs.nosplice) {
         // FUSE_CAP_SPLICE_READ is enabled in libfuse3 by default,
         // see do_init() in in fuse_lowlevel.c
         // Just unset both, in case FUSE_CAP_SPLICE_WRITE would also get enabled
         // by default.
-        conn->want &= ~FUSE_CAP_SPLICE_READ;
-        conn->want &= ~FUSE_CAP_SPLICE_WRITE;
+        fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_READ);
+        fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_WRITE);
     } else {
-        if (conn->capable & FUSE_CAP_SPLICE_WRITE)
-            conn->want |= FUSE_CAP_SPLICE_WRITE;
-        if (conn->capable & FUSE_CAP_SPLICE_READ)
-            conn->want |= FUSE_CAP_SPLICE_READ;
+        fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_WRITE);
+        fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_READ);
     }
 
     /* This is a local file system - no network coherency needed */
-    if (conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
-        conn->want |= FUSE_CAP_DIRECT_IO_ALLOW_MMAP;
+    fuse_set_feature_flag(conn, FUSE_CAP_DIRECT_IO_ALLOW_MMAP);
+
+    /* Disable NFS export support, which also disabled name_to_handle_at.
+     * Goal is to make xfstests that test name_to_handle_at to fail with
+     * the right error code (EOPNOTSUPP) than to open_by_handle_at to fail with
+     * ESTALE and let those test fail.
+     * Perfect NFS export support is not possible with this FUSE filesystem needs
+     * more kernel work, in order to passthrough nfs handle encode/decode to
+     * fuse-server/daemon.
+     */
+    fuse_set_feature_flag(conn, FUSE_CAP_NO_EXPORT_SUPPORT);
 
     /* Disable the receiving and processing of FUSE_INTERRUPT requests */
     conn->no_interrupt = 1;
 }
 
 
-static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
-    (void)fi;
-    Inode& inode = get_inode(ino);
+static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
+{
     struct stat attr;
-    auto res = fstatat(inode.fd, "", &attr,
-                       AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+    int fd = fi ? fi->fh : get_inode(ino).fd;
+
+    auto res = fstatat(fd, "", &attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
     if (res == -1) {
         fuse_reply_err(req, errno);
         return;
@@ -866,6 +869,31 @@ static void do_passthrough_open(fuse_req_t req, fuse_ino_t ino, int fd,
         fi->keep_cache = false;
 }
 
+static void sfs_create_open_flags(fuse_file_info *fi)
+{
+    if (fs.direct_io)
+        fi->direct_io = 1;
+
+    /*
+     * fi->direct_io (FOPEN_DIRECT_IO) is set to benefit from
+     * parallel_direct_writes, which kernel cannot do for plain O_DIRECT.
+     * However, passthrough is preferred, but which is not possible when
+     * FOPEN_DIRECT_IO is set.
+     */
+    if (!fs.passthrough) {
+        if (fi->flags & O_DIRECT)
+            fi->direct_io = 1;
+    }
+
+    /* parallel_direct_writes feature depends on direct_io features.
+    To make parallel_direct_writes valid, need set fi->direct_io
+    in current function. */
+    fi->parallel_direct_writes = 1;
+
+    fi->keep_cache = (fs.timeout != 0);
+    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
+}
+
 static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
                        mode_t mode, fuse_file_info *fi) {
     Inode& inode_p = get_inode(parent);
@@ -887,22 +915,97 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
         if (err == ENFILE || err == EMFILE)
             cerr << "ERROR: Reached maximum number of file descriptors." << endl;
         fuse_reply_err(req, err);
-	return;
+        return;
     }
-
-    if (fs.direct_io)
-	    fi->direct_io = 1;
-
-    /* parallel_direct_writes feature depends on direct_io features.
-       To make parallel_direct_writes valid, need set fi->direct_io
-       in current function. */
-    fi->parallel_direct_writes = 1;
 
     Inode& inode = get_inode(e.ino);
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
+
+    sfs_create_open_flags(fi);
+
     if (fs.passthrough)
         do_passthrough_open(req, e.ino, fd, fi);
+    fuse_reply_create(req, &e, fi);
+}
+
+static Inode *create_new_inode(int fd, fuse_entry_param *e)
+{
+    memset(e, 0, sizeof(*e));
+    e->attr_timeout = fs.timeout;
+    e->entry_timeout = fs.timeout;
+
+    auto res = fstatat(fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+    if (res == -1) {
+        if (fs.debug)
+            cerr << "DEBUG: lookup(): fstatat failed" << endl;
+        return NULL;
+    }
+
+    SrcId id {e->attr.st_ino, e->attr.st_dev};
+    unique_lock<mutex> fs_lock {fs.mutex};
+    Inode* p_inode;
+    try {
+        p_inode = &fs.inodes[id];
+    } catch (std::bad_alloc&) {
+        return NULL;
+    }
+
+    e->ino = reinterpret_cast<fuse_ino_t>(p_inode);
+    e->generation = p_inode->generation;
+
+    lock_guard<mutex> g {p_inode->m};
+    p_inode->src_ino = e->attr.st_ino;
+    p_inode->src_dev = e->attr.st_dev;
+
+    p_inode->nlookup++;
+    if (fs.debug)
+        cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+                <<  "inode " << p_inode->src_ino
+                << " count " << p_inode->nlookup << endl;
+
+    p_inode->fd = fd;
+    fs_lock.unlock();
+
+    if (fs.debug)
+        cerr << "DEBUG: lookup(): created userspace inode " << e->attr.st_ino
+                << "; fd = " << p_inode->fd << endl;
+    return p_inode;
+} 
+
+static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent,
+                       mode_t mode, fuse_file_info *fi) {
+    Inode& parent_inode = get_inode(parent);
+
+    auto fd = openat(parent_inode.fd, ".",
+                     (fi->flags | O_TMPFILE) & ~O_NOFOLLOW, mode);
+    if (fd == -1) {
+        auto err = errno;
+        if (err == ENFILE || err == EMFILE)
+            cerr << "ERROR: Reached maximum number of file descriptors." << endl;
+        fuse_reply_err(req, err);
+        return;
+    }
+
+    fi->fh = fd;
+    fuse_entry_param e;
+
+    Inode *inode = create_new_inode(dup(fd), &e);
+    if (inode == NULL) {
+        auto err = errno;
+        cerr << "ERROR: could not create new inode." << endl;
+        close(fd);
+        fuse_reply_err(req, err);
+        return;
+    }
+
+    lock_guard<mutex> g {inode->m};
+
+    sfs_create_open_flags(fi);
+
+    if (fs.passthrough)
+        do_passthrough_open(req, e.ino, fd, fi);
+ 
     fuse_reply_create(req, &e, fi);
 }
 
@@ -954,22 +1057,8 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi) {
 
     lock_guard<mutex> g {inode.m};
     inode.nopen++;
-    fi->keep_cache = (fs.timeout != 0);
-    fi->noflush = (fs.timeout == 0 && (fi->flags & O_ACCMODE) == O_RDONLY);
 
-    if (fs.direct_io)
-	    fi->direct_io = 1;
-
-    /* Enable direct_io when open has flags O_DIRECT to enjoy the feature
-       parallel_direct_writes (i.e., to get a shared lock, not exclusive lock,
-       for writes to the same file). */
-    if (fi->flags & O_DIRECT)
-	    fi->direct_io = 1;
-
-    /* parallel_direct_writes feature depends on direct_io features.
-       To make parallel_direct_writes valid, need set fi->direct_io
-       in current function. */
-    fi->parallel_direct_writes = 1;
+    sfs_create_open_flags(fi);
 
     fi->fh = fd;
     if (fs.passthrough)
@@ -1242,6 +1331,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper) {
     sfs_oper.releasedir = sfs_releasedir;
     sfs_oper.fsyncdir = sfs_fsyncdir;
     sfs_oper.create = sfs_create;
+    sfs_oper.tmpfile = sfs_tmpfile;
     sfs_oper.open = sfs_open;
     sfs_oper.release = sfs_release;
     sfs_oper.flush = sfs_flush;
@@ -1471,7 +1561,7 @@ int main(int argc, char *argv[]) {
     loop_config = fuse_loop_cfg_create();
 
     if (fs.num_threads != -1)
-        fuse_loop_cfg_set_idle_threads(loop_config, fs.num_threads);
+        fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
 
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 

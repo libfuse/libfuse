@@ -13,6 +13,7 @@
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
 #include "fuse_i.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -152,7 +153,8 @@ static void *fuse_do_work(void *data)
 		int res;
 
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		res = fuse_session_receive_buf_int(mt->se, &w->fbuf, w->ch);
+		res = fuse_session_receive_buf_internal(mt->se, &w->fbuf,
+							w->ch);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
@@ -188,7 +190,7 @@ static void *fuse_do_work(void *data)
 			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
-		fuse_session_process_buf_int(mt->se, &w->fbuf, w->ch);
+		fuse_session_process_buf_internal(mt->se, &w->fbuf, w->ch);
 
 		pthread_mutex_lock(&mt->lock);
 		if (!isforget)
@@ -211,7 +213,7 @@ static void *fuse_do_work(void *data)
 			pthread_mutex_unlock(&mt->lock);
 
 			pthread_detach(w->thread_id);
-			free(w->fbuf.mem);
+			fuse_buf_free(&w->fbuf);
 			fuse_chan_put(w->ch);
 			free(w);
 			return NULL;
@@ -238,8 +240,17 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	 */
 	pthread_attr_init(&attr);
 	stack_size = getenv(ENVNAME_THREAD_STACK);
-	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
-		fuse_log(FUSE_LOG_ERR, "fuse: invalid stack size: %s\n", stack_size);
+	if (stack_size) {
+		long size;
+
+		res = libfuse_strtol(stack_size, &size);
+		if (res)
+			fuse_log(FUSE_LOG_ERR, "fuse: invalid stack size: %s\n",
+				 stack_size);
+		else if (pthread_attr_setstacksize(&attr, size))
+			fuse_log(FUSE_LOG_ERR, "fuse: could not set stack size: %ld\n",
+				 size);
+	}
 
 	/* Disallow signal reception in worker threads */
 	sigemptyset(&newset);
@@ -358,7 +369,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	pthread_mutex_lock(&mt->lock);
 	list_del_worker(w);
 	pthread_mutex_unlock(&mt->lock);
-	free(w->fbuf.mem);
+	fuse_buf_free(&w->fbuf);
 	fuse_chan_put(w->ch);
 	free(w);
 }

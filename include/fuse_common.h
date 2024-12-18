@@ -7,6 +7,7 @@
 
 /** @file */
 
+#include <stdbool.h>
 #if !defined(FUSE_H_) && !defined(FUSE_LOWLEVEL_H_)
 #error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h> instead."
 #endif
@@ -122,11 +123,15 @@ struct fuse_file_info {
 /**
  * Configuration parameters passed to fuse_session_loop_mt() and
  * fuse_loop_mt().
+ * For FUSE API versions less than 312, use a public struct
+ * fuse_loop_config in applications and struct fuse_loop_config_v1
+ * is used in library (i.e., libfuse.so). These two structs are binary
+ * compatible in earlier API versions and can be linked.
  * Deprecated and replaced by a newer private struct in FUSE API
- * version 312 (FUSE_MAKE_VERSION(3, 12)
+ * version 312 (FUSE_MAKE_VERSION(3, 12)).
  */
 #if FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
-struct fuse_loop_config_v1; /* forward declarition */
+struct fuse_loop_config_v1; /* forward declaration */
 struct fuse_loop_config {
 #else
 struct fuse_loop_config_v1 {
@@ -489,6 +494,14 @@ struct fuse_loop_config_v1 {
  * This feature is disabled by default.
  */
 #define FUSE_CAP_PASSTHROUGH      (1 << 29)
+
+/**
+ * Indicates that the file system cannot handle NFS export
+ *
+ * If this flag is set NFS export and name_to_handle_at
+ * is not going to work at all and will fail with EOPNOTSUPP.
+ */
+#define FUSE_CAP_NO_EXPORT_SUPPORT  (1 << 30)
 
 /**
  * Ioctl flags
@@ -856,6 +869,14 @@ struct fuse_buf {
 	 * Used if FUSE_BUF_FD_SEEK flag is set.
 	 */
 	off_t pos;
+
+	/**
+	 * Size of memory pointer
+	 *
+	 * Used only if mem was internally allocated.
+	 * Not used if mem was user-provided.
+	 */
+	size_t mem_size;
 };
 
 /**
@@ -912,6 +933,7 @@ struct libfuse_version
 			/* .mem =   */ NULL,			\
 			/* .fd =    */ -1,			\
 			/* .pos =   */ 0,			\
+			/* .mem_size = */ 0,                    \
 		} }						\
 	} )
 
@@ -986,6 +1008,12 @@ int fuse_set_fail_signal_handlers(struct fuse_session *se);
 void fuse_remove_signal_handlers(struct fuse_session *se);
 
 /**
+ * Config operations.
+ * These APIs are introduced in version 312 (FUSE_MAKE_VERSION(3, 12)).
+ * Using them in earlier versions will result in errors.
+ */
+#if FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 12)
+/**
  * Create and set default config for fuse_session_loop_mt and fuse_loop_mt.
  *
  * @return anonymous config struct
@@ -1023,6 +1051,24 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
  */
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 			   struct fuse_loop_config_v1 *v1_conf);
+#endif
+
+
+static inline bool fuse_set_feature_flag(struct fuse_conn_info *conn,
+					 uint64_t flag)
+{
+	if (conn->capable & flag) {
+		conn->want |= flag;
+		return true;
+	}
+	return false;
+}
+
+static inline void fuse_unset_feature_flag(struct fuse_conn_info *conn,
+					 uint64_t flag)
+{
+	conn->want &= ~flag;
+}
 
 /**
  * fuse_loop_config setter for the basic ring configuration

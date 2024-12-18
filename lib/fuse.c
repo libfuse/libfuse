@@ -4550,14 +4550,14 @@ static int fuse_session_loop_remember(struct fuse *f)
 			else
 				break;
 		} else if (res > 0) {
-			res = fuse_session_receive_buf_int(se, &fbuf, NULL);
-
+			res = fuse_session_receive_buf_internal(se, &fbuf,
+								NULL);
 			if (res == -EINTR)
 				continue;
 			if (res <= 0)
 				break;
 
-			fuse_session_process_buf_int(se, &fbuf, NULL);
+			fuse_session_process_buf_internal(se, &fbuf, NULL);
 		} else {
 			timeout = fuse_clean_cache(f);
 			curr_time(&now);
@@ -4775,7 +4775,7 @@ void fuse_lib_help(struct fuse_args *args)
 			   fuse_lib_opt_proc) == -1
 	    || !conf.modules)
 		return;
-	
+
 	char *module;
 	char *next;
 	struct fuse_module *m;
@@ -4792,8 +4792,6 @@ void fuse_lib_help(struct fuse_args *args)
 			print_module_help(module, &m->factory);
 	}
 }
-
-				      
 
 static int fuse_init_intr_signal(int signum, int *installed)
 {

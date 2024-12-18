@@ -14,6 +14,15 @@
 #include "fuse.h"
 #include "fuse_lowlevel.h"
 
+#include <stdbool.h>
+
+#define MIN(a, b) \
+({									\
+	typeof(a) _a = (a);						\
+	typeof(b) _b = (b);						\
+	_a < _b ? _a : _b;						\
+})
+
 struct mount_opts;
 struct fuse_ring_pool;
 
@@ -81,7 +90,9 @@ struct fuse_session {
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
-
+	
+	bool buf_reallocable;
+	
 	struct {
 		int nr_queues;
 		struct fuse_ring_pool *pool;
@@ -221,10 +232,14 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeide, const void *inarg);
 
 int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg);
 
-int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
-				 struct fuse_chan *ch);
-void fuse_session_process_buf_int(struct fuse_session *se,
-				  const struct fuse_buf *buf, struct fuse_chan *ch);
+void fuse_buf_free(struct fuse_buf *buf);
+
+int fuse_session_receive_buf_internal(struct fuse_session *se,
+				      struct fuse_buf *buf,
+				      struct fuse_chan *ch);
+void fuse_session_process_buf_internal(struct fuse_session *se,
+				       const struct fuse_buf *buf,
+				       struct fuse_chan *ch);
 
 struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
 		      size_t op_size, void *private_data);
@@ -239,7 +254,13 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 int fuse_loop_cfg_verify(struct fuse_loop_config *config);
 
 
-#define FUSE_MAX_MAX_PAGES 256
+/*
+ * This can be changed dynamically on recent kernels through the
+ * /proc/sys/fs/fuse/max_pages_limit interface.
+ *
+ * Older kernels will always use the default value.
+ */
+#define FUSE_DEFAULT_MAX_PAGES_LIMIT 256
 #define FUSE_DEFAULT_MAX_PAGES_PER_REQ 32
 
 /* room needed in buffer to accommodate header */

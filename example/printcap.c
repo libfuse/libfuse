@@ -88,7 +88,9 @@ static void pc_init(void *userdata,
 	if(conn->capable & FUSE_CAP_HANDLE_KILLPRIV_V2)
 			printf("\tFUSE_CAP_HANDLE_KILLPRIV_V2\n");
 	if(conn->capable & FUSE_CAP_DIRECT_IO_ALLOW_MMAP)
-			printf("\tFUSE_CAP_DIRECT_IO_ALLOW_MMAP\n");
+		printf("\tFUSE_CAP_DIRECT_IO_ALLOW_MMAP\n");
+	if (conn->capable & FUSE_CAP_NO_EXPORT_SUPPORT)
+		printf("\tFUSE_CAP_NO_EXPORT_SUPPORT\n");
 	fuse_session_exit(se);
 }
 

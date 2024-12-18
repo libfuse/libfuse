@@ -333,7 +333,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * @param req request handle
 	 * @param ino the inode number
-	 * @param fi for future use, currently always NULL
+	 * @param fi file information, or NULL
 	 */
 	void (*getattr) (fuse_req_t req, fuse_ino_t ino,
 			 struct fuse_file_info *fi);
@@ -1332,6 +1332,29 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		       struct fuse_file_info *fi);
+
+
+	/**
+	 * Create a tempfile
+	 * 
+	 * Tempfile means an anonymous file. It can be made into a normal file later
+	 * by using linkat or such.
+	 * 
+	 * If this is answered with an error ENOSYS this is treated by the kernel as 
+	 * a permanent failure and it will disable the feature and not ask again.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_create
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param parent inode number of the parent directory
+	 * @param mode file type and mode with which to create the new file
+	 * @param fi file information
+	 */
+	void (*tmpfile) (fuse_req_t req, fuse_ino_t parent,
+			mode_t mode, struct fuse_file_info *fi);
+
 };
 
 /**

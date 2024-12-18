@@ -21,7 +21,7 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <paths.h>
-#if !defined( __NetBSD__) && !defined(__FreeBSD__) && !defined(__DragonFly__)
+#if !defined( __NetBSD__) && !defined(__FreeBSD__) && !defined(__DragonFly__) && !defined(__ANDROID__)
 #include <mntent.h>
 #else
 #define IGNORE_MTAB

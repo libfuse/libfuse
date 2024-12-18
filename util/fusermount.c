@@ -10,6 +10,7 @@
 #define _GNU_SOURCE /* for clone and strchrnul */
 #include "fuse_config.h"
 #include "mount_util.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1448,6 +1449,46 @@ static void show_version(void)
 	exit(0);
 }
 
+/*
+ * Close all inherited fds that are not needed
+ * Ideally these wouldn't come up at all, applications should better
+ * use FD_CLOEXEC / O_CLOEXEC
+ */
+static void close_inherited_fds(int cfd)
+{
+	int max_fd = sysconf(_SC_OPEN_MAX);
+	int rc;
+
+#ifdef CLOSE_RANGE_CLOEXEC
+	/* high range first to be able to log errors through stdout/err*/
+	rc = close_range(cfd + 1, ~0U, 0);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to close high range of FDs: %s",
+			strerror(errno));
+		goto fallback;
+	}
+
+	rc = close_range(0, cfd - 1, 0);
+	if (rc < 0) {
+		fprintf(stderr, "Failed to close low range of FDs: %s",
+			strerror(errno));
+		goto fallback;
+	}
+#endif
+
+fallback:
+	/*
+	 * This also needs to close stdout/stderr, as the application
+	 * using libfuse might have closed these FDs and might be using
+	 * it. Although issue is now that logging errors won't be possible
+	 * after that.
+	 */
+	for (int fd = 0; fd <= max_fd; fd++) {
+		if (fd != cfd)
+			close(fd);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	sigset_t sigset;
@@ -1460,7 +1501,7 @@ int main(int argc, char *argv[])
 	static int lazy = 0;
 	static int quiet = 0;
 	char *commfd = NULL;
-	int cfd;
+	long cfd;
 	const char *opts = "";
 	const char *type = NULL;
 	int setup_auto_unmount_only = 0;
@@ -1564,13 +1605,20 @@ int main(int argc, char *argv[])
 		goto err_out;
 	}
 
-	cfd = atoi(commfd);
+	res = libfuse_strtol(commfd, &cfd);
+	if (res) {
+		fprintf(stderr,
+			"%s: invalid _FUSE_COMMFD: %s\n",
+			progname, commfd);
+		goto err_out;
+
+	}
 	{
 		struct stat statbuf;
 		fstat(cfd, &statbuf);
 		if(!S_ISSOCK(statbuf.st_mode)) {
 			fprintf(stderr,
-				"%s: file descriptor %i is not a socket, can't send fuse fd\n",
+				"%s: file descriptor %li is not a socket, can't send fuse fd\n",
 				progname, cfd);
 			goto err_out;
 		}
@@ -1599,8 +1647,11 @@ int main(int argc, char *argv[])
 wait_for_auto_unmount:
 	/* Become a daemon and wait for the parent to exit or die.
 	   ie For the control socket to get closed.
-	   btw We don't want to use daemon() function here because
+	   Btw, we don't want to use daemon() function here because
 	   it forks and messes with the file descriptors. */
+
+	close_inherited_fds(cfd);
+
 	setsid();
 	res = chdir("/");
 	if (res == -1) {
