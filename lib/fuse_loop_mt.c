@@ -39,17 +39,9 @@
 #define FUSE_LOOP_MT_V2_IDENTIFIER	 INT_MAX - 2
 #define FUSE_LOOP_MT_DEF_CLONE_FD	 0
 #define FUSE_LOOP_MT_DEF_MAX_THREADS 10
-#define FUSE_LOOP_MT_DEF_IDLE_THREADS -1 /* thread destruction is disabled
+#define FUSE_LOOP_MT_DEF_IDLE_THREADS \
+	-1 /* thread destruction is disabled
                                           * by default */
-#define FUSE_LOOP_MT_DEF_USE_URING 1 /* uring is disabled by default, until
-				      * it is proven to work stable
-				      * enabling this does still might not use
-				      * uring, if uring is not supported by
-				      * the kernel
-				      */
-#define FUSE_LOOP_MT_DEF_URING_Q_DEPTH 8 /* queue depth */
-#define FUSE_LOOP_MT_DEV_URING_EXT_THREAD false
-
 /* 4K argument header + 1M data */
 #define FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN ((1024 * 1024) + 4096)
 
@@ -393,27 +385,6 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 		created_config = 1;
 	}
 
-	if (config->uring.use_uring) {
-#ifdef HAVE_URING
-		err = fuse_uring_start(se, config);
-		if (err) {
-			fuse_log(FUSE_LOG_WARNING,
-				 "Failed to start uring, "
-				 "fall back from uring to threads.\n");
-		}
-
-		/* threads are also started with uring for
-		 * 1 - stop uring on the kernel side on daemon exit
-		 * 2 - special request not handled by uring yet
-		 */
-#else
-		fuse_log(FUSE_LOG_WARNING,
-			 "libfuse not compiled with uring, falling back to "
-			 "threads.");
-		config->uring.use_uring = false;
-#endif
-	}
-
 	memset(&mt, 0, sizeof(struct fuse_mt));
 	mt.se = se;
 	mt.clone_fd = config->clone_fd;
@@ -448,8 +419,8 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 
 		err = mt.error;
 
-		if (config->uring.use_uring)
-			fuse_uring_join_threads(se);
+		if (se->uring.pool)
+			fuse_uring_stop(se);
 	}
 
 	pthread_mutex_destroy(&mt.lock);
@@ -517,11 +488,6 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 	config->max_threads      = FUSE_LOOP_MT_DEF_MAX_THREADS;
 	config->clone_fd         = FUSE_LOOP_MT_DEF_CLONE_FD;
 
-	config->uring.use_uring = FUSE_LOOP_MT_DEF_USE_URING;
-	config->uring.queue_depth = FUSE_LOOP_MT_DEF_URING_Q_DEPTH;
-	config->uring.ring_req_arg_len = FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN;
-	config->uring.external_threads = FUSE_LOOP_MT_DEV_URING_EXT_THREAD;
-
 	return config;
 }
 
@@ -570,24 +536,4 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 				unsigned int value)
 {
 	config->clone_fd = value;
-}
-
-int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
-				 bool use_uring, unsigned int queue_depth,
-				 unsigned int arg_len)
-{
-	config->uring.use_uring = use_uring;
-
-	if (queue_depth != 0)
-		config->uring.queue_depth = queue_depth;
-
-	if (arg_len != 0)
-		config->uring.ring_req_arg_len = arg_len;
-
-	return 0;
-}
-
-void fuse_loop_cfg_set_uring_ext_thread(struct fuse_loop_config *config)
-{
-	config->uring.external_threads = true;
 }

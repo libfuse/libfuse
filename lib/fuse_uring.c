@@ -446,19 +446,14 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 	return 0;
 }
 
-static struct fuse_ring_pool *
-fuse_create_ring(struct fuse_session *se,
-		      struct fuse_loop_config *cfg)
+static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 {
 	struct fuse_ring_pool *fuse_ring = NULL;
-
 	const size_t nr_queues = get_nprocs_conf();
-	const size_t q_depth = cfg->uring.queue_depth;
+	size_t payload_sz = se->bufsize - FUSE_BUFFER_HEADER_SIZE;
 
-	const size_t ring_req_arg_len = cfg->uring.ring_req_arg_len;
-
-	fuse_log(FUSE_LOG_ERR, "Creating ring depth=%d arglen=%d\n",
-		 cfg->uring.queue_depth, cfg->uring.ring_req_arg_len);
+	fuse_log(FUSE_LOG_DEBUG, "Creating ring depth=%d payload_size=%d\n",
+		 se->uring.q_depth, payload_sz);
 
 	fuse_ring = calloc(1, sizeof(*fuse_ring));
 	if (fuse_ring == NULL) {
@@ -466,7 +461,7 @@ fuse_create_ring(struct fuse_session *se,
 		goto err;
 	}
 
-	size_t queue_sz = fuse_ring_queue_size(q_depth);
+	size_t queue_sz = fuse_ring_queue_size(se->uring.q_depth);
 	fuse_ring->queues = calloc(1, queue_sz * nr_queues);
 	if (fuse_ring->queues == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Allocating the queues failed\n");
@@ -475,11 +470,9 @@ fuse_create_ring(struct fuse_session *se,
 
 	fuse_ring->se = se;
 	fuse_ring->nr_queues = nr_queues;
-	fuse_ring->queue_depth = q_depth;
-	fuse_ring->max_req_payload_sz = ring_req_arg_len;
+	fuse_ring->queue_depth = se->uring.q_depth;
+	fuse_ring->max_req_payload_sz = payload_sz;
 	fuse_ring->queue_mem_size = queue_sz;
-
-	se->ring.external_threads = cfg->uring.external_threads;
 
 	/*
 	 * very basic queue initialization, that cannot fail and will
@@ -755,33 +748,54 @@ static int fuse_uring_sanity_check(void)
 	return 0;
 }
 
-int fuse_uring_start(struct fuse_session *se,
-		     struct fuse_loop_config *config)
+static int fuse_uring_init_ext_threads(struct fuse_session *se)
 {
-	int rc = 0;
+	int err;
+
+	for (int qid = 0; qid < se->uring.nr_queues; qid++) {
+		err = se->op.init_ring_ext_threads(
+			se->userdata, qid, se->uring.pool,
+			fuse_uring_init_queue, fuse_uring_submit_sqes,
+			fuse_uring_queue_handle_cqes);
+		if (err) {
+			fuse_log(
+				FUSE_LOG_ERR,
+				"fuse ring queue (qid=%d) initialization failed\n",
+				qid);
+			break;
+		}
+	}
+
+	return err;
+}
+
+int fuse_uring_start(struct fuse_session *se)
+{
+	int err = 0;
 	struct fuse_ring_pool *fuse_ring;
 
 	fuse_uring_sanity_check();
 
-	fuse_ring = fuse_create_ring(se, config);
+	fuse_ring = fuse_create_ring(se);
 	if (fuse_ring == NULL) {
-		rc = -EADDRNOTAVAIL;
+		err = -EADDRNOTAVAIL;
 		goto out;
 	}
 
-	if (!se->ring.external_threads)
-		rc = fuse_uring_start_ring_threads(fuse_ring);
-
+	if (!se->op.init_ring_ext_threads)
+		err = fuse_uring_start_ring_threads(fuse_ring);
+	else
+		err = fuse_uring_init_ext_threads(se);
 out:
-	se->ring.pool = fuse_ring;
-	se->ring.nr_queues = fuse_ring ? fuse_ring->nr_queues : 0;
+	se->uring.pool = fuse_ring;
+	se->uring.nr_queues = fuse_ring ? fuse_ring->nr_queues : 0;
 
-	return rc;
+	return err;
 }
 
-int fuse_uring_join_threads(struct fuse_session *se)
+int fuse_uring_stop(struct fuse_session *se)
 {
-	struct fuse_ring_pool *ring = se->ring.pool;
+	struct fuse_ring_pool *ring = se->uring.pool;
 
 	if (ring == NULL)
 		return 0;
@@ -793,6 +807,9 @@ int fuse_uring_join_threads(struct fuse_session *se)
 		pthread_kill(queue->tid, SIGTERM);
 		pthread_join(queue->tid, NULL);
 	}
+
+	free(ring->queues);
+	free(ring);
 
 	return 0;
 }

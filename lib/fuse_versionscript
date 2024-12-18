@@ -201,8 +201,6 @@ FUSE_3.17 {
 		fuse_set_fail_signal_handlers;
 		fuse_log_enable_syslog;
 		fuse_log_close_syslog;
-		fuse_loop_cfg_set_uring_opts;
-		fuse_loop_cfg_set_uring_ext_thread;
 		fuse_req_is_uring;
 } FUSE_3.12;
 

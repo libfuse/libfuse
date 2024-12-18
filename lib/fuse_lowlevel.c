@@ -41,6 +41,9 @@
 #define F_SETPIPE_SZ	(F_LINUX_SPECIFIC_BASE + 7)
 #endif
 
+/* io-uring defaults */
+#define SESSION_DEF_URING_ENABLE (0)
+#define SESSION_DEF_URING_Q_DEPTH (8)
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 #define OFFSET_MAX 0x7fffffffffffffffLL
@@ -2497,6 +2500,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 			se->conn.capable |= FUSE_CAP_PASSTHROUGH;
 		if (inargflags & FUSE_NO_EXPORT_SUPPORT)
 			se->conn.capable |= FUSE_CAP_NO_EXPORT_SUPPORT;
+		if (inargflags & FUSE_OVER_IO_URING)
+			se->conn.capable |= FUSE_CAP_OVER_IO_URING;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -2538,6 +2543,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	LL_SET_DEFAULT(se->op.readdirplus, FUSE_CAP_READDIRPLUS);
 	LL_SET_DEFAULT(se->op.readdirplus && se->op.readdir,
 		       FUSE_CAP_READDIRPLUS_AUTO);
+	LL_SET_DEFAULT(1, FUSE_CAP_OVER_IO_URING);
 
 	/* This could safely become default, but libfuse needs an API extension
 	 * to support it
@@ -2551,25 +2557,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		se->op.init(se->userdata, &se->conn);
 
 	if (!want_flags_valid(se->conn.capable, se->conn.want)) {
-	if (se->ring.pool && se->op.init_ring_queue && se->ring.external_threads) {
-		for (int qid=0; qid < se->ring.nr_queues; qid++) {
-			int rc =
-				se->op.init_ring_queue(se->userdata, qid, se->ring.pool,
-						       fuse_uring_init_queue,
-						       fuse_uring_submit_sqes,
-						       fuse_uring_queue_handle_cqes);
-			if (rc) {
-				/*
-				 * fuse over io-uring does not work if a queue cannot be
-				 * initializes
-				 */
-				fprintf(stderr, "fuse ring queue (qid=%d) initialization failed\n",
-						qid);
-				break;
-			}
-		}
-	}
-
 		fuse_reply_err(req, EPROTO);
 		se->error = -EPROTO;
 		fuse_session_exit(se);
@@ -2656,6 +2643,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 	if (se->conn.want & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
+	if (se->conn.want & FUSE_CAP_OVER_IO_URING)
+		outargflags |= FUSE_OVER_IO_URING;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -2706,6 +2695,9 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 
 	send_reply_ok(req, &outarg, outargsize);
+
+	if (se->uring.enable && se->conn.want & FUSE_CAP_OVER_IO_URING)
+		fuse_uring_start(se);
 }
 
 static __attribute__((no_sanitize("thread"))) void
@@ -3474,6 +3466,8 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("-d", debug, 1),
 	LL_OPTION("--debug", debug, 1),
 	LL_OPTION("allow_root", deny_others, 1),
+	LL_OPTION("io_uring", uring.enable, 1),
+	LL_OPTION("io_uring_q_depth=%u", uring.q_depth, -1),
 	FUSE_OPT_END
 };
 
@@ -3491,7 +3485,11 @@ void fuse_lowlevel_help(void)
 	printf(
 "    -o allow_other         allow access by all users\n"
 "    -o allow_root          allow access by root\n"
-"    -o auto_unmount        auto unmount on process termination\n");
+"    -o auto_unmount        auto unmount on process termination\n"
+"    -o auto_unmount        auto unmount on process termination\n"
+"    -o io_uring            enable io-uring\n"
+"    -o io_uring_q_depth=<n> io-uring queue depth\n"
+);
 }
 
 void fuse_session_destroy(struct fuse_session *se)
@@ -3804,6 +3802,8 @@ struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
+	se->uring.enable = SESSION_DEF_URING_ENABLE;
+	se->uring.q_depth = SESSION_DEF_URING_Q_DEPTH;
 
 	/* Parse options */
 	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)

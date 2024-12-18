@@ -493,7 +493,12 @@ struct fuse_loop_config_v1 {
  *
  * This feature is disabled by default.
  */
-#define FUSE_CAP_PASSTHROUGH      (1 << 29)
+#define FUSE_CAP_PASSTHROUGH (1 << 29)
+
+/**
+ * Indicates support for io-uring between fuse-server and fuse-client
+ */
+#define FUSE_CAP_OVER_IO_URING (1 << 30)
 
 /**
  * Indicates that the file system cannot handle NFS export
@@ -1069,18 +1074,6 @@ static inline void fuse_unset_feature_flag(struct fuse_conn_info *conn,
 {
 	conn->want &= ~flag;
 }
-
-/**
- * fuse_loop_config setter for the basic ring configuration
- * @param use_uring if uring should be used at all
- * @param queue_depth number of foreground requests per queue
- */
-int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
-				 bool use_uring, unsigned int queue_depth,
-				 unsigned int arg_len);
-
-void fuse_loop_cfg_set_uring_ext_thread(struct fuse_loop_config *config);
-
 
 /* ----------------------------------------------------------- *
  * Compatibility stuff					       *

@@ -971,7 +971,7 @@ static Inode *create_new_inode(int fd, fuse_entry_param *e)
         cerr << "DEBUG: lookup(): created userspace inode " << e->attr.st_ino
                 << "; fd = " << p_inode->fd << endl;
     return p_inode;
-} 
+}
 
 static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent,
                        mode_t mode, fuse_file_info *fi) {
@@ -1005,7 +1005,7 @@ static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent,
 
     if (fs.passthrough)
         do_passthrough_open(req, e.ino, fd, fi);
- 
+
     fuse_reply_create(req, &e, fi);
 }
 
@@ -1539,7 +1539,14 @@ int main(int argc, char *argv[]) {
         fuse_opt_add_arg(&args, "-o") ||
         fuse_opt_add_arg(&args, fs.fuse_mount_options.c_str()) ||
         (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
-        errx(3, "ERROR: Out of memory");
+        errx(3, "ERROR: Out of memory adding arguments");
+
+    if (fs.uring.enable) {
+        if (fuse_opt_add_arg(&args, "-oio_uring") ||
+            fuse_opt_add_arg(&args, ("-oio_uring_q_depth=" +
+            std::to_string(fs.uring.queue_depth)).c_str()))
+            errx(3, "ERROR: Out of memory adding io-uring arguments");
+    }
 
     ret = -1;
     fuse_lowlevel_ops sfs_oper {};
@@ -1562,13 +1569,6 @@ int main(int argc, char *argv[]) {
 
     if (fs.num_threads != -1)
         fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
-
-    fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
-
-    fuse_loop_cfg_set_uring_opts(loop_config, fs.uring.enable,
-				 fs.uring.queue_depth, fs.uring.arglen);
-    if (fs.uring.external_threads)
-        fuse_loop_cfg_set_uring_ext_thread(loop_config);
 
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 

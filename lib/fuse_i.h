@@ -59,6 +59,13 @@ struct fuse_notify_req {
 	struct fuse_notify_req *prev;
 };
 
+struct fuse_session_uring {
+	unsigned int enable;
+	unsigned int q_depth;
+	size_t nr_queues;
+	struct fuse_ring_pool *pool;
+};
+
 struct fuse_session {
 	char *mountpoint;
 	volatile int exited;
@@ -83,23 +90,17 @@ struct fuse_session {
 	struct fuse_notify_req notify_list;
 	size_t bufsize;
 	int error;
-	bool is_uring;
 
-	/* 
+	/*
 	 * This is useful if any kind of ABI incompatibility is found at
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
-	
+
 	bool buf_reallocable;
-	
-	struct {
-		int nr_queues;
-		struct fuse_ring_pool *pool;
 
-		bool external_threads:1;
-	} ring;
-
+	/* io_uring */
+	struct fuse_session_uring uring;
 };
 
 struct fuse_chan {
@@ -171,27 +172,6 @@ struct fuse_loop_config
 	 *  As of now threads are created dynamically
 	 */
 	unsigned int max_threads;
-
-	struct uring_cfg
-	{
-		/**
-		 * whether to use io_uring to handle requests.
-		 */
-		bool use_uring:1;
-
-		/**
-		 * whether to use an external thread controlled by the file
-		 * system, instead of spawning a new thread per queue by
-		 * the libfuse io-uring interface.
-		 */
-		bool external_threads:1;
-
-		unsigned int queue_depth;
-
-		/** maximum argument size of ring requests */
-		unsigned int ring_req_arg_len;
-
-	} uring;
 };
 #endif
 
