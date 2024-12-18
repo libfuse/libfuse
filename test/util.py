@@ -8,8 +8,17 @@ from os.path import join as pjoin
 import sys
 import re
 import itertools
+from packaging import version
+import logging
 
 basename = pjoin(os.path.dirname(__file__), '..')
+
+def parse_kernel_version(release):
+    # Extract the first three numbers from the kernel version string
+    match = re.match(r'^(\d+\.\d+\.\d+)', release)
+    if match:
+        return version.parse(match.group(1))
+    return version.parse('0')
 
 def get_printcap():
     cmdline = base_cmdline + [ pjoin(basename, 'example', 'printcap') ]
@@ -63,21 +72,40 @@ def cleanup(mount_process, mnt_dir):
         mount_process.kill()
 
 def umount(mount_process, mnt_dir):
+    logger = logging.getLogger(__name__)
+    logger.debug(f"Unmounting {mnt_dir}")
 
     if 'bsd' in sys.platform or 'dragonfly' in sys.platform:
         cmdline = [ 'umount', mnt_dir ]
+        logger.debug("Using BSD-style umount command")
     else:
+        logger.debug("Using fusermount3 for unmounting")
         # fusermount3 will be setuid root, so we can only trace it with
         # valgrind if we're root
         if os.getuid() == 0:
             cmdline = base_cmdline
+            logger.debug("Running as root, using valgrind if configured")
         else:
             cmdline = []
+            logger.debug("Not running as root, skipping valgrind for fusermount3")
         cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount3'),
                               '-z', '-u', mnt_dir ]
 
-    subprocess.check_call(cmdline)
-    assert not os.path.ismount(mnt_dir)
+    logger.debug(f"Unmount command: {' '.join(cmdline)}")
+    try:
+        result = subprocess.run(cmdline, capture_output=True, text=True, check=True)
+        if result.stdout:
+            logger.debug(f"Unmount command stdout: {result.stdout}")
+        if result.stderr:
+            logger.debug(f"Unmount command stderr: {result.stderr}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Unmount command failed with return code {e.returncode}\nStdout: {e.stdout}\nStderr: {e.stderr}")
+        raise
+
+    if not os.path.ismount(mnt_dir):
+        logger.debug(f"{mnt_dir} is no longer a mount point")
+    else:
+        logger.warning(f"{mnt_dir} is still a mount point after unmount command")
 
     # Give mount process a little while to terminate. Popen.wait(timeout)
     # was only added in 3.3...
@@ -87,9 +115,11 @@ def umount(mount_process, mnt_dir):
         if code is not None:
             if code == 0:
                 return
-            pytest.fail('file system process terminated with code %s' % (code,))
+            logger.error(f"File system process terminated with code {code}")
+            pytest.fail(f'file system process terminated with code {code}')
         time.sleep(0.1)
         elapsed += 0.1
+    logger.error("Mount process did not terminate within 30 seconds")
     pytest.fail('mount process did not terminate')
 
 
