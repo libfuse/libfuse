@@ -1043,6 +1043,7 @@ static void memfs_statfs(fuse_req_t req, [[maybe_unused]] fuse_ino_t ino)
 
 static const struct fuse_lowlevel_ops memfs_oper = {
 	.init = nullptr,
+	.init_ring_queue = nullptr,
 	.destroy = nullptr,
 	.lookup = memfs_lookup,
 	.forget = memfs_forget,

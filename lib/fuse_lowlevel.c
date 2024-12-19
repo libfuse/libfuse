@@ -1511,9 +1511,11 @@ static void _do_link(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		fuse_reply_err(req, ENOSYS);
 }
 
-static void do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+static void _do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *op_in,
+			const void *in_payload)
 {
-	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
+	(void)in_payload;
+	const struct fuse_create_in *arg = op_in;
 
 	if (req->se->op.tmpfile) {
 		struct fuse_file_info fi;
@@ -1527,6 +1529,13 @@ static void do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		req->se->op.tmpfile(req, nodeid, arg->mode, &fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
+}
+
+static void do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
+
+	_do_tmpfile(req, nodeid, arg, NULL);
 }
 
 static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
@@ -3142,52 +3151,53 @@ static struct {
 		     const void *op_payload);
 	const char *name;
 } fuse_ll_ops2[] = {
-	[FUSE_LOOKUP] = { _do_lookup, "LOOKUP" },
-	[FUSE_FORGET] = { _do_forget, "FORGET" },
-	[FUSE_GETATTR] = { _do_getattr, "GETATTR" },
-	[FUSE_SETATTR] = { _do_setattr, "SETATTR" },
-	[FUSE_READLINK] = { _do_readlink, "READLINK" },
-	[FUSE_SYMLINK] = { _do_symlink, "SYMLINK" },
-	[FUSE_MKNOD] = { _do_mknod, "MKNOD" },
-	[FUSE_MKDIR] = { _do_mkdir, "MKDIR" },
-	[FUSE_UNLINK] = { _do_unlink, "UNLINK" },
-	[FUSE_RMDIR] = { _do_rmdir, "RMDIR" },
-	[FUSE_RENAME] = { _do_rename, "RENAME" },
-	[FUSE_LINK] = { _do_link, "LINK" },
-	[FUSE_OPEN] = { _do_open, "OPEN" },
-	[FUSE_READ] = { _do_read, "READ" },
-	[FUSE_WRITE] = { _do_write, "WRITE" },
-	[FUSE_STATFS] = { _do_statfs, "STATFS" },
-	[FUSE_RELEASE] = { _do_release, "RELEASE" },
-	[FUSE_FSYNC] = { _do_fsync, "FSYNC" },
-	[FUSE_SETXATTR] = { _do_setxattr, "SETXATTR" },
-	[FUSE_GETXATTR] = { _do_getxattr, "GETXATTR" },
-	[FUSE_LISTXATTR] = { _do_listxattr, "LISTXATTR" },
-	[FUSE_REMOVEXATTR] = { _do_removexattr, "REMOVEXATTR" },
-	[FUSE_FLUSH] = { _do_flush, "FLUSH" },
-	[FUSE_INIT] = { _do_init, "INIT" },
-	[FUSE_OPENDIR] = { _do_opendir, "OPENDIR" },
-	[FUSE_READDIR] = { _do_readdir, "READDIR" },
-	[FUSE_RELEASEDIR] = { _do_releasedir, "RELEASEDIR" },
-	[FUSE_FSYNCDIR] = { _do_fsyncdir, "FSYNCDIR" },
-	[FUSE_GETLK] = { _do_getlk, "GETLK" },
-	[FUSE_SETLK] = { _do_setlk, "SETLK" },
-	[FUSE_SETLKW] = { _do_setlkw, "SETLKW" },
-	[FUSE_ACCESS] = { _do_access, "ACCESS" },
-	[FUSE_CREATE] = { _do_create, "CREATE" },
-	[FUSE_INTERRUPT] = { _do_interrupt, "INTERRUPT" },
-	[FUSE_BMAP] = { _do_bmap, "BMAP" },
-	[FUSE_IOCTL] = { _do_ioctl, "IOCTL" },
-	[FUSE_POLL] = { _do_poll, "POLL" },
-	[FUSE_FALLOCATE] = { _do_fallocate, "FALLOCATE" },
-	[FUSE_DESTROY] = { _do_destroy, "DESTROY" },
-	[FUSE_NOTIFY_REPLY] = { (void *)1, "NOTIFY_REPLY" },
-	[FUSE_BATCH_FORGET] = { _do_batch_forget, "BATCH_FORGET" },
-	[FUSE_READDIRPLUS] = { _do_readdirplus, "READDIRPLUS" },
-	[FUSE_RENAME2] = { _do_rename2, "RENAME2" },
-	[FUSE_COPY_FILE_RANGE] = { _do_copy_file_range, "COPY_FILE_RANGE" },
-	[FUSE_LSEEK] = { _do_lseek, "LSEEK" },
-	[CUSE_INIT] = { _cuse_lowlevel_init, "CUSE_INIT" },
+	[FUSE_LOOKUP]		= { _do_lookup,		"LOOKUP" },
+	[FUSE_FORGET]		= { _do_forget,		"FORGET" },
+	[FUSE_GETATTR]		= { _do_getattr,	"GETATTR" },
+	[FUSE_SETATTR]		= { _do_setattr,	"SETATTR" },
+	[FUSE_READLINK]		= { _do_readlink,	"READLINK" },
+	[FUSE_SYMLINK]		= { _do_symlink,	"SYMLINK" },
+	[FUSE_MKNOD]		= { _do_mknod,		"MKNOD" },
+	[FUSE_MKDIR]		= { _do_mkdir,		"MKDIR" },
+	[FUSE_UNLINK]		= { _do_unlink,		"UNLINK" },
+	[FUSE_RMDIR]		= { _do_rmdir,		"RMDIR" },
+	[FUSE_RENAME]		= { _do_rename,		"RENAME" },
+	[FUSE_LINK]		= { _do_link,		"LINK" },
+	[FUSE_OPEN]		= { _do_open,		"OPEN" },
+	[FUSE_READ]		= { _do_read,		"READ" },
+	[FUSE_WRITE]		= { _do_write,		"WRITE" },
+	[FUSE_STATFS]		= { _do_statfs,		"STATFS" },
+	[FUSE_RELEASE]		= { _do_release,	"RELEASE" },
+	[FUSE_FSYNC]		= { _do_fsync,		"FSYNC" },
+	[FUSE_SETXATTR]		= { _do_setxattr,	"SETXATTR" },
+	[FUSE_GETXATTR]		= { _do_getxattr,	"GETXATTR" },
+	[FUSE_LISTXATTR]	= { _do_listxattr,	"LISTXATTR" },
+	[FUSE_REMOVEXATTR]	= { _do_removexattr,	"REMOVEXATTR" },
+	[FUSE_FLUSH]		= { _do_flush,		"FLUSH" },
+	[FUSE_INIT]		= { _do_init,		"INIT" },
+	[FUSE_OPENDIR]		= { _do_opendir,	"OPENDIR" },
+	[FUSE_READDIR]		= { _do_readdir,	"READDIR" },
+	[FUSE_RELEASEDIR]	= { _do_releasedir,	"RELEASEDIR" },
+	[FUSE_FSYNCDIR]		= { _do_fsyncdir,	"FSYNCDIR" },
+	[FUSE_GETLK]		= { _do_getlk,		"GETLK" },
+	[FUSE_SETLK]		= { _do_setlk,		"SETLK" },
+	[FUSE_SETLKW]		= { _do_setlkw,		"SETLKW" },
+	[FUSE_ACCESS]		= { _do_access,		"ACCESS" },
+	[FUSE_CREATE]		= { _do_create,		"CREATE" },
+	[FUSE_TMPFILE]		= { _do_tmpfile,	"TMPFILE"},
+	[FUSE_INTERRUPT]	= { _do_interrupt,	"INTERRUPT" },
+	[FUSE_BMAP]		= { _do_bmap,		"BMAP" },
+	[FUSE_IOCTL]		= { _do_ioctl,		"IOCTL" },
+	[FUSE_POLL]		= { _do_poll,		"POLL" },
+	[FUSE_FALLOCATE]	= { _do_fallocate,	"FALLOCATE" },
+	[FUSE_DESTROY]		= { _do_destroy,	"DESTROY" },
+	[FUSE_NOTIFY_REPLY]	= { (void *)1,		"NOTIFY_REPLY" },
+	[FUSE_BATCH_FORGET]	= { _do_batch_forget,	"BATCH_FORGET" },
+	[FUSE_READDIRPLUS]	= { _do_readdirplus,	"READDIRPLUS" },
+	[FUSE_RENAME2]		= { _do_rename2,	"RENAME2" },
+	[FUSE_COPY_FILE_RANGE]	= { _do_copy_file_range, "COPY_FILE_RANGE" },
+	[FUSE_LSEEK]		= { _do_lseek,		"LSEEK" },
+	[CUSE_INIT]		= { _cuse_lowlevel_init, "CUSE_INIT" },
 };
 
 #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
