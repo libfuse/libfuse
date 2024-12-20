@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <linux/sched.h>
 #include <poll.h>
+#include <sys/eventfd.h>
 
 #ifndef READ_ONCE
 #define READ_ONCE(x) (*(volatile typeof(x) *)&(x))
@@ -71,6 +72,7 @@ struct fuse_ring_queue {
 	int qid;
 	int numa_node;
 	pthread_t tid;
+	int eventfd;
 
 	struct io_uring ring;
 
@@ -328,12 +330,13 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 }
 
 static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
-				     size_t depth, int fd)
+				     size_t depth, int fd, int evfd)
 {
 	int rc;
 	struct io_uring_params params = {0};
+	int files[2] = { fd, evfd };
 
-	int files[1] = {fd};
+	depth += 1; /* for the eventfd poll SQE */
 
 	params.flags = IORING_SETUP_SQE128;
 
@@ -402,11 +405,12 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 {
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	int idx, res;
+	struct io_uring_sqe *sqe;
 
 	for (idx = 0; idx < ring_pool->queue_depth; idx++) {
 		struct fuse_ring_ent *ent = &queue->ent[idx];
 
-		struct io_uring_sqe *sqe = io_uring_get_sqe(&queue->ring);
+		sqe = io_uring_get_sqe(&queue->ring);
 		if (sqe == NULL) {
 
 			/* All SQEs are idle here - no good reason this
@@ -441,7 +445,18 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 		return -EINVAL;
 	}
 
+	// Add the poll SQE for the eventfd to wake up on teardown
+	sqe = io_uring_get_sqe(&queue->ring);
+	if (sqe == NULL) {
+		fuse_log(FUSE_LOG_ERR, "Failed to get eventfd SQE");
+		return -EIO;
+	}
+
+	io_uring_prep_poll_add(sqe, queue->eventfd, POLLIN);
+	io_uring_sqe_set_data(sqe, (void *)(uintptr_t)queue->eventfd);
+
 	io_uring_submit(&queue->ring);
+	/* */
 
 	return 0;
 }
@@ -559,8 +574,14 @@ static int _fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 
 		err = cqe->res;
 		if (err != 0) {
+			if (err > 0 && ((uintptr_t)io_uring_cqe_get_data(cqe) ==
+					queue->eventfd)) {
+				/* teardown from eventfd */
+				return -ENOTCONN;
+			}
+
 			// XXX: Needs rate limited logs, otherwise log spam
-			// fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
+			//fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
 
 			if (err != -EINTR && err != -EOPNOTSUPP &&
 			    err != -EAGAIN) {
@@ -609,8 +630,9 @@ static int _fuse_uring_submit(struct fuse_ring_queue *queue, bool blocking)
 	 * of that request.
 	 */
 	unsigned int wait_nr = blocking ? 1 : 0;
+	int res;
 
-	int res = io_uring_submit_and_wait(&queue->ring, wait_nr);
+	res = io_uring_submit_and_wait(&queue->ring, wait_nr);
 
 	return res;
 }
@@ -633,12 +655,22 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 	struct fuse_session *se = ring->se;
 	int res;
 
+	queue->eventfd = eventfd(0, EFD_CLOEXEC);
+	if (queue->eventfd < 0) {
+		res = -errno;
+		fuse_log(FUSE_LOG_ERR,
+			 "Failed to create eventfd for qid %d: %s\n",
+			 queue->qid, strerror(errno));
+		return res;
+	}
+
 	res = fuse_queue_setup_io_uring(&queue->ring, queue->qid,
-					ring->queue_depth, queue->fd);
+					ring->queue_depth, queue->fd,
+					queue->eventfd);
 	if (res != 0) {
 		fuse_log(FUSE_LOG_ERR, "qid=%d io_uring init failed\n",
 			 queue->qid);
-		return res;
+		goto err;
 	}
 
 	for (int idx = 0; idx < ring->queue_depth; idx++) {
@@ -670,6 +702,10 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 	}
 
 	return queue->ring.ring_fd;
+
+err:
+	close(queue->eventfd);
+	return res;
 }
 
 int fuse_uring_init_queue(int qid, void *ring_pool)
@@ -804,8 +840,12 @@ int fuse_uring_stop(struct fuse_session *se)
 	{
 		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
 
-		pthread_kill(queue->tid, SIGTERM);
+		// Signal the thread to stop using the eventfd
+		uint64_t value = 1;
+		write(queue->eventfd, &value, sizeof(value));
+
 		pthread_join(queue->tid, NULL);
+		close(queue->eventfd);
 	}
 
 	free(ring->queues);
