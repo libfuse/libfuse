@@ -15,6 +15,7 @@
 #include "fuse_i.h"
 #include "fuse_kernel.h"
 #include "fuse_uring_i.h"
+#include "util.h"
 
 #include <stdlib.h>
 #include <liburing.h>
@@ -30,10 +31,6 @@
 #include <linux/sched.h>
 #include <poll.h>
 #include <sys/eventfd.h>
-
-#ifndef READ_ONCE
-#define READ_ONCE(x) (*(volatile typeof(x) *)&(x))
-#endif
 
 /* defined somewhere in uring? */
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
@@ -306,8 +303,8 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	struct fuse_ring_ent *ent = io_uring_cqe_get_data(cqe);
 
 	if (!ent) {
-		fprintf(stderr, "cqe=%p io_uring_cqe_get_data returned NULL\n",
-			cqe);
+		fuse_log(FUSE_LOG_ERR,
+			 "cqe=%p io_uring_cqe_get_data returned NULL\n", cqe);
 		return;
 	}
 
@@ -320,6 +317,14 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 
 	ent->req_commit_id = ent_in_out->commit_id;
+	if (unlikely(ent->req_commit_id == 0)) {
+		/*
+		 * If this happens kernel will not find the response - it will
+		 * be stuck forever - better to abort immediately.
+		 */
+		fuse_log(FUSE_LOG_ERR, "Received invalid commit_id=0\n");
+		abort();
+	}
 
 	req->is_uring = true;
 	req->ref_cnt++;
