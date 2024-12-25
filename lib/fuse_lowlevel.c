@@ -1503,17 +1503,6 @@ static void do_rename2(fuse_req_t req, const fuse_ino_t nodeid,
 	_do_rename2(req, nodeid, arg, payload);
 }
 
-static void _do_link(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
-		     const void *in_payload)
-{
-	struct fuse_link_in *arg = (struct fuse_link_in *)op_in;
-
-	if (req->se->op.link)
-		req->se->op.link(req, arg->oldnodeid, nodeid, in_payload);
-	else
-		fuse_reply_err(req, ENOSYS);
-}
-
 static void _do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *op_in,
 			const void *in_payload)
 {
@@ -1539,6 +1528,17 @@ static void do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
 
 	_do_tmpfile(req, nodeid, arg, NULL);
+}
+
+static void _do_link(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
+		     const void *in_payload)
+{
+	struct fuse_link_in *arg = (struct fuse_link_in *)op_in;
+
+	if (req->se->op.link)
+		req->se->op.link(req, arg->oldnodeid, nodeid, in_payload);
+	else
+		fuse_reply_err(req, ENOSYS);
 }
 
 static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
