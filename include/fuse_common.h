@@ -934,10 +934,10 @@ struct fuse_bufvec {
  */
 struct libfuse_version
 {
-	int major;
-	int minor;
-	int hotfix;
-	int padding;
+	uint32_t major;
+	uint32_t minor;
+	uint32_t hotfix;
+	uint32_t padding;
 };
 
 /* Initialize bufvec with a single buffer of given size */
