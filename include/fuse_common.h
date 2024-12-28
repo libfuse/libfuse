@@ -660,7 +660,10 @@ struct fuse_conn_info {
 	 * 2) Return ENOSYS for the reply of FUSE_INTERRUPT request to
 	 * inform the kernel not to send the FUSE_INTERRUPT request.
 	 */
-	uint32_t no_interrupt;
+	uint32_t no_interrupt : 1;
+
+	/* reserved bits for future use */
+	uint32_t padding : 31;
 
 	/**
 	 * For future use.
