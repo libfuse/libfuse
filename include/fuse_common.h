@@ -98,6 +98,7 @@ struct fuse_file_info {
 	/** Padding.  Reserved for future use*/
 	unsigned int padding : 23;
 	unsigned int padding2 : 32;
+	unsigned int padding3 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the
