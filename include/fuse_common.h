@@ -540,6 +540,10 @@ struct fuse_loop_config_v1 {
  * Some of the elements are read-write, these can be changed to
  * indicate the value requested by the filesystem.  The requested
  * value must usually be smaller than the indicated value.
+ *
+ * Note: The `capable` and `want` fields are limited to 32 bits for
+ * ABI compatibility. For full 64-bit capability support, use the
+ * `capable_ext` and `want_ext` fields instead.
  */
 struct fuse_conn_info {
 	/**
@@ -578,6 +582,8 @@ struct fuse_conn_info {
 
 	/**
 	 * Capability flags that the kernel supports (read-only)
+	 *
+	 * Deprecated left over for ABI compatibility, use capable_ext
 	 */
 	uint32_t capable;
 
@@ -586,6 +592,10 @@ struct fuse_conn_info {
 	 *
 	 * libfuse attempts to initialize this field with
 	 * reasonable default values before calling the init() handler.
+	 *
+	 * Deprecated left over for ABI compatibility.
+	 * Use want_ext with the helper functions
+	 * fuse_set_feature_flag() / fuse_unset_feature_flag()
 	 */
 	uint32_t want;
 
@@ -680,9 +690,25 @@ struct fuse_conn_info {
 	uint32_t padding : 31;
 
 	/**
+	 * Extended capability flags that the kernel supports (read-only)
+	 * This field provides full 64-bit capability support.
+	 */
+	uint64_t capable_ext;
+
+	/**
+	 * Extended capability flags that the filesystem wants to enable.
+	 * This field provides full 64-bit capability support.
+	 *
+	 * Don't set this field directly, but use the helper functions
+	 * fuse_set_feature_flag() / fuse_unset_feature_flag()
+	 *
+	 */
+	uint64_t want_ext;
+
+	/**
 	 * For future use.
 	 */
-	uint32_t reserved[20];
+	uint32_t reserved[16];
 };
 fuse_static_assert(sizeof(struct fuse_conn_info) == 128,
 		   "Size of struct fuse_conn_info must be 128 bytes");
@@ -1076,8 +1102,8 @@ void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 static inline bool fuse_set_feature_flag(struct fuse_conn_info *conn,
 					 uint64_t flag)
 {
-	if (conn->capable & flag) {
-		conn->want |= flag;
+	if (conn->capable_ext & flag) {
+		conn->want_ext |= flag;
 		return true;
 	}
 	return false;
@@ -1086,7 +1112,13 @@ static inline bool fuse_set_feature_flag(struct fuse_conn_info *conn,
 static inline void fuse_unset_feature_flag(struct fuse_conn_info *conn,
 					 uint64_t flag)
 {
-	conn->want &= ~flag;
+	conn->want_ext &= ~flag;
+}
+
+static inline bool fuse_get_feature_flag(struct fuse_conn_info *conn,
+					     uint64_t flag)
+{
+	return conn->capable_ext & flag ? true : false;
 }
 
 /* ----------------------------------------------------------- *
