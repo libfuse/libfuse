@@ -25,9 +25,18 @@
 #include "fuse_log.h"
 #include <stdint.h>
 #include <sys/types.h>
+#include <assert.h>
 
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
+
+#if (defined(__cplusplus) && __cplusplus >= 201103L) ||        \
+	(!defined(__cplusplus) && defined(__STDC_VERSION__) && \
+	 __STDC_VERSION__ >= 201112L)
+#define fuse_static_assert(condition, message) static_assert(condition, message)
+#else
+#define fuse_static_assert(condition, message)
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -116,9 +125,14 @@ struct fuse_file_info {
 	 * create and open.  It is used to create a passthrough connection
 	 * between FUSE file and backing file. */
 	int32_t backing_id;
+
+	/** struct fuse_file_info api and abi flags  */
+	uint64_t compat_flags;
+
+	uint64_t reserved[2];
 };
-
-
+fuse_static_assert(sizeof(struct fuse_file_info) == 64,
+		   "fuse_file_info size mismatch");
 
 /**
  * Configuration parameters passed to fuse_session_loop_mt() and
@@ -670,6 +684,8 @@ struct fuse_conn_info {
 	 */
 	uint32_t reserved[20];
 };
+fuse_static_assert(sizeof(struct fuse_conn_info) == 128,
+		   "Size of struct fuse_conn_info must be 128 bytes");
 
 struct fuse_session;
 struct fuse_pollhandle;
