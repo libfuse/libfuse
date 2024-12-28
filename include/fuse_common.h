@@ -96,9 +96,9 @@ struct fuse_file_info {
 	uint32_t parallel_direct_writes : 1;
 
 	/** Padding.  Reserved for future use*/
-	unsigned int padding : 23;
-	unsigned int padding2 : 32;
-	unsigned int padding3 : 32;
+	uint32_t padding : 23;
+	uint32_t padding2 : 32;
+	uint32_t padding3 : 32;
 
 	/** File handle id.  May be filled in by filesystem in create,
 	 * open, and opendir().  Available in most other file operations on the
@@ -531,17 +531,17 @@ struct fuse_conn_info {
 	/**
 	 * Major version of the protocol (read-only)
 	 */
-	unsigned proto_major;
+	uint32_t proto_major;
 
 	/**
 	 * Minor version of the protocol (read-only)
 	 */
-	unsigned proto_minor;
+	uint32_t proto_minor;
 
 	/**
 	 * Maximum size of the write buffer
 	 */
-	unsigned max_write;
+	uint32_t max_write;
 
 	/**
 	 * Maximum size of read requests. A value of zero indicates no
@@ -555,17 +555,17 @@ struct fuse_conn_info {
 	 * in the future, specifying the mount option will no longer
 	 * be necessary.
 	 */
-	unsigned max_read;
+	uint32_t max_read;
 
 	/**
 	 * Maximum readahead
 	 */
-	unsigned max_readahead;
+	uint32_t max_readahead;
 
 	/**
 	 * Capability flags that the kernel supports (read-only)
 	 */
-	unsigned capable;
+	uint32_t capable;
 
 	/**
 	 * Capability flags that the filesystem wants to enable.
@@ -573,7 +573,7 @@ struct fuse_conn_info {
 	 * libfuse attempts to initialize this field with
 	 * reasonable default values before calling the init() handler.
 	 */
-	unsigned want;
+	uint32_t want;
 
 	/**
 	 * Maximum number of pending "background" requests. A
@@ -603,7 +603,7 @@ struct fuse_conn_info {
 	 * call actually blocks, so these are also limited to one per
 	 * thread).
 	 */
-	unsigned max_background;
+	uint32_t max_background;
 
 	/**
 	 * Kernel congestion threshold parameter. If the number of pending
@@ -613,7 +613,7 @@ struct fuse_conn_info {
 	 * adjust its algorithms accordingly (e.g. by putting a waiting thread
 	 * to sleep instead of using a busy-loop).
 	 */
-	unsigned congestion_threshold;
+	uint32_t congestion_threshold;
 
 	/**
 	 * When FUSE_CAP_WRITEBACK_CACHE is enabled, the kernel is responsible
@@ -630,7 +630,7 @@ struct fuse_conn_info {
 	 * nano-second resolution. Filesystems supporting only second resolution
 	 * should set this to 1000000000.
 	 */
-	unsigned time_gran;
+	uint32_t time_gran;
 
 	/**
 	 * When FUSE_CAP_PASSTHROUGH is enabled, this is the maximum allowed
@@ -650,7 +650,7 @@ struct fuse_conn_info {
 	 */
 #define FUSE_BACKING_STACKED_UNDER	(0)
 #define FUSE_BACKING_STACKED_OVER	(1)
-	unsigned max_backing_stack_depth;
+	uint32_t max_backing_stack_depth;
 
 	/**
 	 * Disable FUSE_INTERRUPT requests.
@@ -660,12 +660,12 @@ struct fuse_conn_info {
 	 * 2) Return ENOSYS for the reply of FUSE_INTERRUPT request to
 	 * inform the kernel not to send the FUSE_INTERRUPT request.
 	 */
-	unsigned no_interrupt;
+	uint32_t no_interrupt;
 
 	/**
 	 * For future use.
 	 */
-	unsigned reserved[20];
+	uint32_t reserved[20];
 };
 
 struct fuse_session;
