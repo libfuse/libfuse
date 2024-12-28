@@ -2712,7 +2712,12 @@ static struct {
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
-#define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
+/*
+ * For ABI compatibility we cannot allow higher values than CUSE_INIT.
+ * Without ABI compatibility we could use the size of the array.
+ * #define FUSE_MAXOP (sizeof(fuse_ll_ops) / sizeof(fuse_ll_ops[0]))
+ */
+#define FUSE_MAXOP (CUSE_INIT + 1)
 
 static const char *opname(enum fuse_opcode opcode)
 {
