@@ -65,7 +65,7 @@ static void tfs_init (void *userdata, struct fuse_conn_info *conn)
     (void) userdata;
 
     if(options.writeback) {
-        assert(conn->capable & FUSE_CAP_WRITEBACK_CACHE);
+        assert(fuse_get_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE));
         conn->want |= FUSE_CAP_WRITEBACK_CACHE;
     }
 }
