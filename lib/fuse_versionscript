@@ -187,17 +187,17 @@ FUSE_3.12 {
 		fuse_lowlevel_notify_expire_entry;
 } FUSE_3.4;
 
-FUSE_3.17 {
+FUSE_4.0 {
 	global:
-		_fuse_session_new_317;
+		_fuse_session_new_400;
 		_fuse_new;
 		_fuse_new_30;
-		_fuse_new_317;
-		fuse_main_real_317;
+		_fuse_new_400;
+		fuse_main_real_400;
 		fuse_passthrough_open;
 		fuse_passthrough_close;
 		fuse_session_custom_io_30;
-		fuse_session_custom_io_317;
+		fuse_session_custom_io_400;
 		fuse_set_fail_signal_handlers;
 		fuse_log_enable_syslog;
 		fuse_log_close_syslog;

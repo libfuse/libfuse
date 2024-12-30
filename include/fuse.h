@@ -887,10 +887,10 @@ int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
 		   size_t op_size, struct libfuse_version *version,
 		   void *user_data);
 #else
-int fuse_main_real_317(int argc, char *argv[], const struct fuse_operations *op,
+int fuse_main_real_400(int argc, char *argv[], const struct fuse_operations *op,
 		   size_t op_size, struct libfuse_version *version, void *user_data);
 #define fuse_main_real(argc, argv, op, op_size, version, user_data) \
-	fuse_main_real_317(argc, argv, op, op_size, version, user_data);
+	fuse_main_real_400(argc, argv, op, op_size, version, user_data);
 #endif
 
 /**
@@ -1045,12 +1045,12 @@ fuse_new(struct fuse_args *args,
 	return _fuse_new(args, op, op_size, &version, user_data);
 }
 #else /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
-struct fuse *_fuse_new_317(struct fuse_args *args,
+struct fuse *_fuse_new_400(struct fuse_args *args,
                       const struct fuse_operations *op, size_t op_size,
 		      struct libfuse_version *version,
 		      void *private_data);
 #define _fuse_new(args, op, size, version, data) \
-	_fuse_new_317(args, op, size, version, data)
+	_fuse_new_400(args, op, size, version, data)
 static inline struct fuse *
 fuse_new(struct fuse_args *args,
 	 const struct fuse_operations *op, size_t op_size,

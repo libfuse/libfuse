@@ -3246,8 +3246,8 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 	return _fuse_session_receive_buf(se, buf, ch, true);
 }
 
-FUSE_SYMVER("_fuse_session_new_317", "_fuse_session_new@@FUSE_3.17")
-struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
+FUSE_SYMVER("_fuse_session_new_400", "_fuse_session_new@@FUSE_4.0")
+struct fuse_session *_fuse_session_new_400(struct fuse_args *args,
 					  const struct fuse_lowlevel_ops *op,
 					  size_t op_size,
 					  struct libfuse_version *version,
@@ -3364,11 +3364,11 @@ struct fuse_session *fuse_session_new_30(struct fuse_args *args,
 	/* unknown version */
 	struct libfuse_version version = { 0 };
 
-	return _fuse_session_new_317(args, op, op_size, &version, userdata);
+	return _fuse_session_new_400(args, op, op_size, &version, userdata);
 }
 
-FUSE_SYMVER("fuse_session_custom_io_317", "fuse_session_custom_io@@FUSE_3.17")
-int fuse_session_custom_io_317(struct fuse_session *se,
+FUSE_SYMVER("fuse_session_custom_io_400", "fuse_session_custom_io@@FUSE_4.0")
+int fuse_session_custom_io_400(struct fuse_session *se,
 				const struct fuse_custom_io *io, size_t op_size, int fd)
 {
 	if (sizeof(struct fuse_custom_io) < op_size) {
@@ -3413,7 +3413,7 @@ FUSE_SYMVER("fuse_session_custom_io_30", "fuse_session_custom_io@FUSE_3.0")
 int fuse_session_custom_io_30(struct fuse_session *se,
 			const struct fuse_custom_io *io, int fd)
 {
-	return fuse_session_custom_io_317(se, io,
+	return fuse_session_custom_io_400(se, io,
 			offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 

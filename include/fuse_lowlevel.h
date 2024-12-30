@@ -2050,7 +2050,7 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
  * macro should be used, which fills in the libfuse version compilation
  * is done against automatically.
  */
-struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
+struct fuse_session *_fuse_session_new_400(struct fuse_args *args,
 					  const struct fuse_lowlevel_ops *op,
 					  size_t op_size,
 					  struct libfuse_version *version,
@@ -2066,13 +2066,13 @@ _fuse_session_new(struct fuse_args *args,
 		 void *userdata);
 #else
 struct fuse_session *
-_fuse_session_new_317(struct fuse_args *args,
+_fuse_session_new_400(struct fuse_args *args,
 		      const struct fuse_lowlevel_ops *op,
 		      size_t op_size,
 		      struct libfuse_version *version,
 		      void *userdata);
 #define _fuse_session_new(args, op, op_size, version, userdata)	\
-	_fuse_session_new_317(args, op, op_size, version, userdata)
+	_fuse_session_new_400(args, op, op_size, version, userdata)
 #endif
 
 /**
@@ -2123,7 +2123,7 @@ fuse_session_new(struct fuse_args *args,
  * This should mostly not be called directly, but instead the
  * fuse_session_custom_io() should be used.
  */
-int fuse_session_custom_io_317(struct fuse_session *se,
+int fuse_session_custom_io_400(struct fuse_session *se,
 			const struct fuse_custom_io *io, size_t op_size, int fd);
 
 /**
@@ -2153,17 +2153,17 @@ int fuse_session_custom_io_317(struct fuse_session *se,
  * @return -errno  if failed to allocate memory to store `io`
  *
  **/
-#if FUSE_MAKE_VERSION(3, 17) <= FUSE_USE_VERSION
+#if FUSE_MAKE_VERSION(4, 0) <= FUSE_USE_VERSION
 static inline int fuse_session_custom_io(struct fuse_session *se,
 					const struct fuse_custom_io *io, size_t op_size, int fd)
 {
-	return fuse_session_custom_io_317(se, io, op_size, fd);
+	return fuse_session_custom_io_400(se, io, op_size, fd);
 }
 #else
 static inline int fuse_session_custom_io(struct fuse_session *se,
 					const struct fuse_custom_io *io, int fd)
 {
-	return fuse_session_custom_io_317(se, io,
+	return fuse_session_custom_io_400(se, io,
 				offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 #endif
