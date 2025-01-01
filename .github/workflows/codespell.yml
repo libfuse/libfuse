@@ -3,9 +3,13 @@ name: Codespell
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
+      - '[0-9]+.[0-9]+'  # This will match branches like 3.17, 3.18, 4.0, etc.
   pull_request:
-    branches: [master]
+    branches:
+      - master
+      - '[0-9]+.[0-9]+'
 
 permissions:
   contents: read
