@@ -652,8 +652,10 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	d->entry = NULL;
 
 	fi->fh = (uintptr_t) d;
-	if (lo->cache == CACHE_ALWAYS)
+	if (lo->cache != CACHE_NEVER)
 		fi->cache_readdir = 1;
+	if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
 	fuse_reply_open(req, fi);
 	return;
 
