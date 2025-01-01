@@ -9,6 +9,9 @@
 
 #define FUSE_USE_VERSION 30
 
+/* Not really needed - just to test build with FUSE_USE_VERSION == 30 */
+#include <fuse.h>
+
 #include <fuse_config.h>
 #include <fuse_lowlevel.h>
 #include <stdio.h>

@@ -1013,7 +1013,9 @@ struct fuse *_fuse_new(struct fuse_args *args,
 #if FUSE_USE_VERSION == 30
 struct fuse *_fuse_new_30(struct fuse_args *args,
 			 const struct fuse_operations *op,
-			 size_t op_size, void *user_data);
+			 size_t op_size,
+			 struct libfuse_version *version,
+			 void *user_data);
 static inline struct fuse *
 fuse_new(struct fuse_args *args,
 	 const struct fuse_operations *op, size_t op_size,
