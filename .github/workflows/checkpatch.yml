@@ -1,0 +1,22 @@
+name: Checkpatch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  checkpatch:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        fetch-depth: 0
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y perl
+    - name: Run checkpatch.pl
+      run: |
+        git fetch origin ${{ github.base_ref }}
+        base_commit=$(git merge-base FETCH_HEAD ${{ github.event.pull_request.head.sha }})
+        ./checkpatch.pl --no-tree -g $base_commit
