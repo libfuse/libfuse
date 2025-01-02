@@ -18,5 +18,14 @@ jobs:
     - name: Run checkpatch.pl
       run: |
         git fetch origin ${{ github.base_ref }}
-        base_commit=$(git merge-base FETCH_HEAD ${{ github.event.pull_request.head.sha }})
-        ./checkpatch.pl --no-tree -g $base_commit
+        base_commit=$(git merge-base origin/${{ github.base_ref }} HEAD)
+        echo "Base commit: $base_commit"
+        echo "Running checkpatch.pl on all commits in the PR:"
+        git rev-list --reverse $base_commit..HEAD | while read commit; do
+          subject=$(git log -1 --format=%s $commit)
+          echo "Checking commit: $commit - $subject"
+          if ! ./checkpatch.pl --no-tree --ignore MAINTAINERS,SPDX_LICENSE_TAG,COMMIT_MESSAGE,FILE_PATH_CHANGES,EMAIL_SUBJECT -g $commit; then
+            echo "checkpatch.pl found issues in commit $commit - $subject"
+            exit 1
+          fi
+        done
