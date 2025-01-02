@@ -73,9 +73,11 @@ static void *xmp_init(struct fuse_conn_info *conn,
 	   the cache of the associated inode - resulting in an
 	   incorrect st_nlink value being reported for any remaining
 	   hardlinks to this inode. */
-	cfg->entry_timeout = 0;
-	cfg->attr_timeout = 0;
-	cfg->negative_timeout = 0;
+	if (!cfg->auto_cache) {
+		cfg->entry_timeout = 0;
+		cfg->attr_timeout = 0;
+		cfg->negative_timeout = 0;
+	}
 
 	return NULL;
 }
@@ -134,9 +136,14 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	while ((de = readdir(dp)) != NULL) {
 		struct stat st;
-		memset(&st, 0, sizeof(st));
-		st.st_ino = de->d_ino;
-		st.st_mode = de->d_type << 12;
+		if (fill_dir_plus) {
+			fstatat(dirfd(dp), de->d_name, &st,
+				AT_SYMLINK_NOFOLLOW);
+		} else {
+			memset(&st, 0, sizeof(st));
+			st.st_ino = de->d_ino;
+			st.st_mode = de->d_type << 12;
+		}
 		if (filler(buf, de->d_name, &st, 0, fill_dir_plus))
 			break;
 	}
