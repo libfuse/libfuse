@@ -37,6 +37,7 @@ if not platform.endswith('bsd') and platform != 'dragonfly' and add_languages('c
                install: false)
     executable('memfs_ll', 'memfs_ll.cc',
                dependencies: [ thread_dep, libfuse_dep ],
+               cpp_args : '-std=c++17',
                install: false)
 endif
 
