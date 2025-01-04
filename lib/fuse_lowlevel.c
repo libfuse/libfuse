@@ -3248,10 +3248,15 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 
 FUSE_SYMVER("_fuse_session_new_317", "_fuse_session_new@@FUSE_3.17")
 struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
-					  const struct fuse_lowlevel_ops *op,
-					  size_t op_size,
-					  struct libfuse_version *version,
-					  void *userdata)
+					   const struct fuse_lowlevel_ops *op,
+					   size_t op_size,
+					   struct libfuse_version *version,
+					   void *userdata);
+struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
+					   const struct fuse_lowlevel_ops *op,
+					   size_t op_size,
+					   struct libfuse_version *version,
+					   void *userdata)
 {
 	int err;
 	struct fuse_session *se;
