@@ -304,9 +304,10 @@ int fuse_daemonize(int foreground)
 	return 0;
 }
 
+/* Not symboled, as not part of the official API */
 int fuse_main_real_317(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, struct libfuse_version *version, void *user_data);
-FUSE_SYMVER("fuse_main_real_317", "fuse_main_real@@FUSE_3.17")
+		       size_t op_size, struct libfuse_version *version,
+		       void *user_data);
 int fuse_main_real_317(int argc, char *argv[], const struct fuse_operations *op,
 		   size_t op_size, struct libfuse_version *version, void *user_data)
 {
@@ -400,14 +401,13 @@ out1:
 	return res;
 }
 
+/* Not symboled, as not part of the official API */
 int fuse_main_real_30(int argc, char *argv[], const struct fuse_operations *op,
 		      size_t op_size, void *user_data);
-FUSE_SYMVER("fuse_main_real_30", "fuse_main_real@FUSE_3.0")
 int fuse_main_real_30(int argc, char *argv[], const struct fuse_operations *op,
 		      size_t op_size, void *user_data)
 {
 	struct libfuse_version version = { 0 };
-
 	return fuse_main_real_317(argc, argv, op, op_size, &version, user_data);
 }
 

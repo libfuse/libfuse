@@ -877,21 +877,32 @@ struct fuse_context {
 	mode_t umask;
 };
 
-#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
 /**
  * The real main function
  *
  * Do not call this directly, use fuse_main()
  */
-int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, struct libfuse_version *version,
-		   void *user_data);
-#else
-int fuse_main_real_317(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, struct libfuse_version *version, void *user_data);
-#define fuse_main_real(argc, argv, op, op_size, version, user_data) \
-	fuse_main_real_317(argc, argv, op, op_size, version, user_data);
-#endif
+static inline int fuse_main_real(int argc, char *argv[],
+				 const struct fuse_operations *op,
+				 size_t op_size, void *user_data)
+{
+	struct libfuse_version version = { .major = FUSE_MAJOR_VERSION,
+					   .minor = FUSE_MINOR_VERSION,
+					   .hotfix = FUSE_HOTFIX_VERSION,
+					   .padding = 0 };
+
+	fuse_log(FUSE_LOG_ERR,
+		 "%s is a libfuse internal function, please use fuse_main()\n",
+		 __func__);
+
+	/* not declared globally, to restrict usage of this function */
+	int fuse_main_real_317(int argc, char *argv[],
+			       const struct fuse_operations *op, size_t op_size,
+			       struct libfuse_version *version,
+			       void *user_data);
+
+	return fuse_main_real_317(argc, argv, op, op_size, &version, user_data);
+}
 
 /**
  * Main function of FUSE.
@@ -957,8 +968,14 @@ fuse_main(int argc, char *argv[], const struct fuse_operations *op,
 		.hotfix = FUSE_HOTFIX_VERSION,
 		.padding = 0
 	};
-	return fuse_main_real(argc, argv, op, sizeof(*(op)), &version,
-			      user_data);
+
+	/* not declared globally, to restrict usage of this function */
+	int fuse_main_real_317(int argc, char *argv[],
+			       const struct fuse_operations *op, size_t op_size,
+			       struct libfuse_version *version,
+			       void *user_data);
+	return fuse_main_real_317(argc, argv, op, sizeof(*(op)), &version,
+				  user_data);
 }
 
 /* ----------------------------------------------------------- *
