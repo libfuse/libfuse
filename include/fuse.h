@@ -76,7 +76,7 @@ enum fuse_fill_dir_flags {
  * stream. It does not need to be the actual physical position. A
  * value of zero is reserved to indicate that seeking in directories
  * is not supported.
- * 
+ *
  * @param buf the buffer passed to the readdir() operation
  * @param name the file name of the directory entry
  * @param stbuf file attributes, can be NULL
@@ -192,7 +192,7 @@ struct fuse_config {
 	 * have to guarantee uniqueness, however some applications
 	 * rely on this value being unique for the whole filesystem.
 	 *
-	 * Note that this does *not* affect the inode that libfuse 
+	 * Note that this does *not* affect the inode that libfuse
 	 * and the kernel use internally (also called the "nodeid").
 	 */
 	int32_t use_ino;
@@ -522,9 +522,9 @@ struct fuse_operations {
 	 *
 	 * Flush is called on each close() of a file descriptor, as opposed to
 	 * release which is called on the close of the last file descriptor for
-	 * a file.  Under Linux, errors returned by flush() will be passed to 
+	 * a file.  Under Linux, errors returned by flush() will be passed to
 	 * userspace as errors from close(), so flush() is a good place to write
-	 * back any cached dirty data. However, many applications ignore errors 
+	 * back any cached dirty data. However, many applications ignore errors
 	 * on close(), and on non-Linux systems, close() may succeed even if flush()
 	 * returns an error. For these reasons, filesystems should not assume
 	 * that errors returned by flush will ever be noticed or even
@@ -978,11 +978,6 @@ fuse_main(int argc, char *argv[], const struct fuse_operations *op,
  */
 void fuse_lib_help(struct fuse_args *args);
 
-struct fuse *_fuse_new(struct fuse_args *args,
-		       const struct fuse_operations *op,
-		       size_t op_size, struct libfuse_version *version,
-		       void *user_data);
-
 /**
  * Create a new FUSE filesystem.
  *
@@ -1021,6 +1016,12 @@ fuse_new(struct fuse_args *args,
 	 const struct fuse_operations *op, size_t op_size,
 	 void *user_data)
 {
+	/* not declared globally, to restrict usage of this function */
+	struct fuse *_fuse_new(struct fuse_args *args,
+			       const struct fuse_operations *op, size_t op_size,
+			       struct libfuse_version *version,
+			       void *user_data);
+
 	struct libfuse_version version = {
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
@@ -1043,6 +1044,12 @@ fuse_new(struct fuse_args *args,
 		.hotfix = FUSE_HOTFIX_VERSION,
 		.padding = 0
 	};
+
+	/* not declared globally, to restrict usage of this function */
+	struct fuse *_fuse_new(struct fuse_args *args,
+			       const struct fuse_operations *op, size_t op_size,
+			       struct libfuse_version *version,
+			       void *user_data);
 
 	return _fuse_new(args, op, op_size, &version, user_data);
 }
