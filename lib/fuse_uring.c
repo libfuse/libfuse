@@ -48,7 +48,8 @@ struct fuse_ring_ent {
 	struct fuse_ring_queue *ring_queue; /* back pointer */
 	struct fuse_req req;
 
-	struct fuse_uring_req_header req_header;
+	struct fuse_uring_req_header *req_header;
+	size_t req_header_sz;
 	void *op_payload;
 	size_t req_payload_sz;
 
@@ -150,7 +151,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_ent *ring_ent)
 {
 	struct fuse_session *se = ring_pool->se;
-	struct fuse_uring_req_header *rrh = &ring_ent->req_header;
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
@@ -189,7 +190,7 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg, size_t argsize)
 	int res;
 	struct fuse_ring_ent *ring_ent =
 		container_of(req, struct fuse_ring_ent, req);
-	struct fuse_uring_req_header *rrh = &ring_ent->req_header;
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
@@ -225,7 +226,7 @@ int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
 
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_req_header *rrh = &ring_ent->req_header;
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
@@ -260,7 +261,7 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 
 	struct fuse_ring_queue *queue = ring_ent->ring_queue;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	struct fuse_uring_req_header *rrh = &ring_ent->req_header;
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
@@ -310,7 +311,7 @@ fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 
 	struct fuse_req *req = &ent->req;
 	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
-	struct fuse_uring_req_header *rrh = &ent->req_header;
+	struct fuse_uring_req_header *rrh = ent->req_header;
 
 	struct fuse_in_header *in = (struct fuse_in_header *)&rrh->in_out;
 	struct fuse_uring_ent_in_out *ent_in_out =
@@ -398,7 +399,8 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 
 		for (int idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
-			free(ent->op_payload);
+			numa_free(ent->op_payload, ent->req_payload_sz);
+			numa_free(ent->req_header, ent->req_header_sz);
 		}
 	}
 
@@ -429,8 +431,8 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 		fuse_uring_sqe_prepare(sqe, ent, FUSE_IO_URING_CMD_REGISTER);
 
 		/* only needed for fetch */
-		ent->iov[0].iov_base = &ent->req_header;
-		ent->iov[0].iov_len = sizeof(ent->req_header);
+		ent->iov[0].iov_base = ent->req_header;
+		ent->iov[0].iov_len = ent->req_header_sz;
 
 		ent->iov[1].iov_base = ent->op_payload;
 		ent->iov[1].iov_len = ent->req_payload_sz;
@@ -659,6 +661,7 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 	struct fuse_ring_pool *ring = queue->ring_pool;
 	struct fuse_session *se = ring->se;
 	int res;
+	size_t page_sz = sysconf(_SC_PAGESIZE);
 
 	queue->eventfd = eventfd(0, EFD_CLOEXEC);
 	if (queue->eventfd < 0) {
@@ -684,9 +687,13 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		struct fuse_req *req = &ring_ent->req;
 
 		/*
-		 * XXX: Make a big queue allocation, for each of both
-		 * 	(at least the payload needs to be mem aligned)?
+		 * Also allocate the header to have it page aligned, which
+		 * is a requirement for page pinning
 		 */
+		size_t header_sz = sizeof(*ring_ent->req_header);
+		ring_ent->req_header_sz = ROUND_UP(header_sz, page_sz);
+		ring_ent->req_header =
+			numa_alloc_local(ring_ent->req_header_sz);
 		ring_ent->req_payload_sz = ring->max_req_payload_sz;
 		ring_ent->op_payload =
 			numa_alloc_local(ring_ent->req_payload_sz);
