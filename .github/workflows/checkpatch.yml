@@ -1,0 +1,31 @@
+name: Checkpatch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  checkpatch:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      with:
+        fetch-depth: 0
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y perl
+    - name: Run checkpatch.pl
+      run: |
+        git fetch origin ${{ github.base_ref }}
+        base_commit=$(git merge-base origin/${{ github.base_ref }} HEAD)
+        echo "Base commit: $base_commit"
+        echo "Running checkpatch.pl on all commits in the PR:"
+        git rev-list --reverse $base_commit..HEAD | while read commit; do
+          subject=$(git log -1 --format=%s $commit)
+          echo "Checking commit: $commit - $subject"
+          if ! ./checkpatch.pl --no-tree --ignore MAINTAINERS,SPDX_LICENSE_TAG,COMMIT_MESSAGE,FILE_PATH_CHANGES,EMAIL_SUBJECT,AVOID_EXTERNS,GIT_COMMIT_ID -g $commit; then
+            echo "checkpatch.pl found issues in commit $commit - $subject"
+            exit 1
+          fi
+        done

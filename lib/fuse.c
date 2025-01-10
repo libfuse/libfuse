@@ -163,6 +163,7 @@ struct node_lru {
 
 struct fuse_direntry {
 	struct stat stat;
+	enum fuse_fill_dir_flags flags;
 	char *name;
 	struct fuse_direntry *next;
 };
@@ -2619,8 +2620,7 @@ static void fuse_lib_init(void *data, struct fuse_conn_info *conn)
 	struct fuse *f = (struct fuse *) data;
 
 	fuse_create_context(f);
-	if(conn->capable & FUSE_CAP_EXPORT_SUPPORT)
-		conn->want |= FUSE_CAP_EXPORT_SUPPORT;
+	fuse_set_feature_flag(conn, FUSE_CAP_EXPORT_SUPPORT);
 	fuse_fs_init(f->fs, conn, &f->conf);
 
 	if (f->conf.intr) {
@@ -3438,7 +3438,7 @@ static int extend_contents(struct fuse_dh *dh, unsigned minsize)
 }
 
 static int fuse_add_direntry_to_dh(struct fuse_dh *dh, const char *name,
-				   struct stat *st)
+				   struct stat *st, enum fuse_fill_dir_flags flags)
 {
 	struct fuse_direntry *de;
 
@@ -3453,6 +3453,7 @@ static int fuse_add_direntry_to_dh(struct fuse_dh *dh, const char *name,
 		free(de);
 		return -1;
 	}
+	de->flags = flags;
 	de->stat = *st;
 	de->next = NULL;
 
@@ -3530,7 +3531,7 @@ static int fill_dir(void *dh_, const char *name, const struct stat *statp,
 	} else {
 		dh->filled = 1;
 
-		if (fuse_add_direntry_to_dh(dh, name, &stbuf) == -1)
+		if (fuse_add_direntry_to_dh(dh, name, &stbuf, flags) == -1)
 			return 1;
 	}
 	return 0;
@@ -3608,7 +3609,7 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 	} else {
 		dh->filled = 1;
 
-		if (fuse_add_direntry_to_dh(dh, name, &e.attr) == -1)
+		if (fuse_add_direntry_to_dh(dh, name, &e.attr, flags) == -1)
 			return 1;
 	}
 
@@ -3696,7 +3697,8 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 				.attr = de->stat,
 			};
 
-			if (!is_dot_or_dotdot(de->name)) {
+			if (de->flags & FUSE_FILL_DIR_PLUS &&
+			    !is_dot_or_dotdot(de->name)) {
 				res = do_lookup(dh->fuse, dh->nodeid,
 						de->name, &e);
 				if (res) {
@@ -5006,6 +5008,12 @@ struct fuse *_fuse_new_317(struct fuse_args *args,
 	 */
 	f->conf.readdir_ino = 1;
 #endif
+
+	/* not declared globally, to restrict usage of this function */
+	struct fuse_session *_fuse_session_new(
+		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
+		size_t op_size, struct libfuse_version *version,
+		void *userdata);
 
 	f->se = _fuse_session_new(args, &llop, sizeof(llop), version, f);
 	if (f->se == NULL)

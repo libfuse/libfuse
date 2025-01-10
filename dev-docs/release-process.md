@@ -10,7 +10,7 @@ Release Process
   * Create signing key for the next release: `P=fuse-<A.B+1> signify-openbsd -G -n -p signify/$P.pub -s
   signify/$P.sec; git add signify/$P.pub`
   * Expire old release signing keys (keep one around just in case)
-* Update authors: `git log --all --pretty="format:%an <%aE>" | sort -u >> AUTHORS`
+* To update authors run : dev-docs/extend-authors.sh
 * `git commit --all -m "Released $TAG"`
 * `git tag $TAG`
 * Build tarball, `./make_release_tarball.sh`

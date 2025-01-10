@@ -210,8 +210,10 @@ void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
 	}
 	se->conn.proto_major = arg->major;
 	se->conn.proto_minor = arg->minor;
-	se->conn.capable = 0;
-	se->conn.want = 0;
+
+	/* XXX This is not right.*/
+	se->conn.capable_ext = 0;
+	se->conn.want_ext = 0;
 
 	if (arg->major < 7) {
 		fuse_log(FUSE_LOG_ERR, "cuse: unsupported protocol version: %u.%u\n",

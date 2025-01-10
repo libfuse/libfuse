@@ -168,18 +168,20 @@ static bool lo_debug(fuse_req_t req)
 static void lo_init(void *userdata,
 		    struct fuse_conn_info *conn)
 {
-	struct lo_data *lo = (struct lo_data*) userdata;
+	struct lo_data *lo = (struct lo_data *)userdata;
+	bool has_flag;
 
-	if (lo->writeback &&
-	    conn->capable & FUSE_CAP_WRITEBACK_CACHE) {
-		if (lo->debug)
-			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating writeback\n");
-		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+	if (lo->writeback) {
+		has_flag = fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
+		if (lo->debug && has_flag)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "lo_init: activating writeback\n");
 	}
 	if (lo->flock && conn->capable & FUSE_CAP_FLOCK_LOCKS) {
-		if (lo->debug)
-			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
-		conn->want |= FUSE_CAP_FLOCK_LOCKS;
+		has_flag = fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
+		if (lo->debug && has_flag)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "lo_init: activating flock locks\n");
 	}
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
@@ -649,8 +651,10 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	d->entry = NULL;
 
 	fi->fh = (uintptr_t) d;
-	if (lo->cache == CACHE_ALWAYS)
+	if (lo->cache != CACHE_NEVER)
 		fi->cache_readdir = 1;
+	if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
 	fuse_reply_open(req, fi);
 	return;
 
