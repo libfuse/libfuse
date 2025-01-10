@@ -2522,7 +2522,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		if (inargflags & FUSE_NO_EXPORT_SUPPORT)
 			se->conn.capable_ext |= FUSE_CAP_NO_EXPORT_SUPPORT;
 		if (inargflags & FUSE_OVER_IO_URING)
-			se->conn.capable |= FUSE_CAP_OVER_IO_URING;
+			se->conn.capable_ext |= FUSE_CAP_OVER_IO_URING;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -2687,7 +2687,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
-	if (se->conn.want & FUSE_CAP_OVER_IO_URING)
+	if (se->conn.want_ext & FUSE_CAP_OVER_IO_URING)
 		outargflags |= FUSE_OVER_IO_URING;
 
 	if (inargflags & FUSE_INIT_EXT) {
