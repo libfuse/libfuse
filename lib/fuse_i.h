@@ -10,10 +10,18 @@
 #define LIB_FUSE_I_H_
 
 #include <stdbool.h>
-#include <errno.h>
 
 #include "fuse.h"
 #include "fuse_lowlevel.h"
+
+#include <stdbool.h>
+
+#define MIN(a, b) \
+({									\
+	typeof(a) _a = (a);						\
+	typeof(b) _b = (b);						\
+	_a < _b ? _a : _b;						\
+})
 
 struct mount_opts;
 struct fuse_ring_pool;
@@ -51,6 +59,12 @@ struct fuse_notify_req {
 	struct fuse_notify_req *prev;
 };
 
+struct fuse_session_uring {
+	unsigned int enable;
+	unsigned int q_depth;
+	struct fuse_ring_pool *pool;
+};
+
 struct fuse_session {
 	char *mountpoint;
 	volatile int exited;
@@ -75,21 +89,17 @@ struct fuse_session {
 	struct fuse_notify_req notify_list;
 	size_t bufsize;
 	int error;
-	bool is_uring;
 
-	/* 
+	/*
 	 * This is useful if any kind of ABI incompatibility is found at
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
 
-	struct {
-		int nr_queues;
-		struct fuse_ring_pool *pool;
+	bool buf_reallocable;
 
-		bool external_threads:1;
-	} ring;
-
+	/* io_uring */
+	struct fuse_session_uring uring;
 };
 
 struct fuse_chan {
@@ -161,36 +171,6 @@ struct fuse_loop_config
 	 *  As of now threads are created dynamically
 	 */
 	unsigned int max_threads;
-
-	struct uring_cfg
-	{
-		/**
-		 * whether to use io_uring to handle requests.
-		 */
-		bool use_uring:1;
-
-		/**
-		 * whether to use a separate queue per core
-		 */
-		bool per_core_queue:1;
-
-		/**
-		 * whether to use an external thread controlled by the file
-		 * system, instead of spawning a new thread per queue by
-		 * the libfuse io-uring interface.
-		 */
-		bool external_threads:1;
-
-		/** The ring foreground request queue depth */
-		unsigned int sync_queue_depth;
-
-		/** The ring background request queue depth  */
-		unsigned int async_queue_depth;
-
-		/** maximum argument size of ring requests */
-		unsigned int ring_req_arg_len;
-
-	} uring;
 };
 #endif
 
@@ -225,14 +205,20 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count);
 void fuse_free_req(fuse_req_t req);
 
+void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
+			 const void *req_header, const void *req_payload);
 void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeide, const void *inarg);
 
 int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg);
 
-int fuse_session_receive_buf_int(struct fuse_session *se, struct fuse_buf *buf,
-				 struct fuse_chan *ch);
-void fuse_session_process_buf_int(struct fuse_session *se,
-				  const struct fuse_buf *buf, struct fuse_chan *ch);
+void fuse_buf_free(struct fuse_buf *buf);
+
+int fuse_session_receive_buf_internal(struct fuse_session *se,
+				      struct fuse_buf *buf,
+				      struct fuse_chan *ch);
+void fuse_session_process_buf_internal(struct fuse_session *se,
+				       const struct fuse_buf *buf,
+				       struct fuse_chan *ch);
 
 struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
 		      size_t op_size, void *private_data);
@@ -247,7 +233,13 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 int fuse_loop_cfg_verify(struct fuse_loop_config *config);
 
 
-#define FUSE_MAX_MAX_PAGES 256
+/*
+ * This can be changed dynamically on recent kernels through the
+ * /proc/sys/fs/fuse/max_pages_limit interface.
+ *
+ * Older kernels will always use the default value.
+ */
+#define FUSE_DEFAULT_MAX_PAGES_LIMIT 256
 #define FUSE_DEFAULT_MAX_PAGES_PER_REQ 32
 
 /* room needed in buffer to accommodate header */

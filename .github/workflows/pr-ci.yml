@@ -1,11 +1,14 @@
+---
 name: 'Build & Test'
 on:
   push:
     branches:
       - redfs-main
+      - '[0-9]+.[0-9]+'  # This will match branches like 3.17, 3.18, 4.0, etc.
   pull_request:
     branches:
       - redfs-main
+      - '[0-9]+.[0-9]+'
 
 permissions:
   contents: read
@@ -23,9 +26,8 @@ jobs:
     steps:
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
-        # XXX add in liburing-dev when ubuntu gets updated for github
-        run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 valgrind libnuma-dev && sudo wget https://launchpad.net/ubuntu/+archive/primary/+files/liburing2_2.3-3_amd64.deb && sudo wget https://launchpad.net/ubuntu/+archive/primary/+files/liburing-dev_2.3-3_amd64.deb && sudo dpkg -i liburing2_2.3-3_amd64.deb liburing-dev_2.3-3_amd64.deb
-      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        run: sudo apt-get update && sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 valgrind liburing-dev libnuma-dev
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

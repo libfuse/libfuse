@@ -246,7 +246,7 @@ struct fuse_lowlevel_ops {
 	 * 	  file system.
 	 * 	  Note: CQEs point to fuse requests that need to be handled.
 	 */
-	int (*init_ring_queue)(void *userdata, int qid, void *ring_pool,
+	int (*init_ring_ext_threads)(void *userdata, int qid, void *ring_pool,
 				int (*queue_init)(int qid, void *ring_pool),
 				int (*sq_submit)(int qid, void *ring_pool,
 						bool blocking),
@@ -333,7 +333,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * @param req request handle
 	 * @param ino the inode number
-	 * @param fi for future use, currently always NULL
+	 * @param fi file information, or NULL
 	 */
 	void (*getattr) (fuse_req_t req, fuse_ino_t ino,
 			 struct fuse_file_info *fi);
@@ -541,7 +541,7 @@ struct fuse_lowlevel_ops {
 	 *  - When writeback caching is disabled, the filesystem is
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
-	 * 
+	 *
 	 *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
@@ -1332,6 +1332,29 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		       struct fuse_file_info *fi);
+
+
+	/**
+	 * Create a tempfile
+	 *
+	 * Tempfile means an anonymous file. It can be made into a normal file later
+	 * by using linkat or such.
+	 *
+	 * If this is answered with an error ENOSYS this is treated by the kernel as
+	 * a permanent failure and it will disable the feature and not ask again.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_create
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param parent inode number of the parent directory
+	 * @param mode file type and mode with which to create the new file
+	 * @param fi file information
+	 */
+	void (*tmpfile) (fuse_req_t req, fuse_ino_t parent,
+			mode_t mode, struct fuse_file_info *fi);
+
 };
 
 /**
@@ -1776,23 +1799,23 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 /**
  * Notify to expire parent attributes and the dentry matching parent/name
- * 
+ *
  * Same restrictions apply as for fuse_lowlevel_notify_inval_entry()
- * 
+ *
  * Compared to invalidating an entry, expiring the entry results not in a
  * forceful removal of that entry from kernel cache but instead the next access
  * to it forces a lookup from the filesystem.
- * 
+ *
  * This makes a difference for overmounted dentries, where plain invalidation
- * would detach all submounts before dropping the dentry from the cache. 
+ * would detach all submounts before dropping the dentry from the cache.
  * If only expiry is set on the dentry, then any overmounts are left alone and
  * until ->d_revalidate() is called.
- * 
+ *
  * Note: ->d_revalidate() is not called for the case of following a submount,
  * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
- * 
+ *
  * Added in FUSE protocol version 7.38. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do nothing.
  *
@@ -2054,26 +2077,8 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 #endif
 #endif
 
-/*
- * This should mostly not be called directly, but instead the fuse_session_new()
- * macro should be used, which fills in the libfuse version compilation
- * is done against automatically.
- */
-struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
-					  const struct fuse_lowlevel_ops *op,
-					  size_t op_size,
-					  struct libfuse_version *version,
-					  void *userdata);
-
 /* Do not call this directly, but only through fuse_session_new() */
-#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
-struct fuse_session *
-_fuse_session_new(struct fuse_args *args,
-		 const struct fuse_lowlevel_ops *op,
-		 size_t op_size,
-		 struct libfuse_version *version,
-		 void *userdata);
-#else
+#if (!defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
 struct fuse_session *
 _fuse_session_new_317(struct fuse_args *args,
 		      const struct fuse_lowlevel_ops *op,
@@ -2124,6 +2129,12 @@ fuse_session_new(struct fuse_args *args,
 		.hotfix = FUSE_HOTFIX_VERSION,
 		.padding = 0
 	};
+
+	/* not declared globally, to restrict usage of this function */
+	struct fuse_session *_fuse_session_new(
+		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
+		size_t op_size, struct libfuse_version *version,
+		void *userdata);
 
 	return _fuse_session_new(args, op, op_size, &version, userdata);
 }
