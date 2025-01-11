@@ -2740,7 +2740,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	send_reply_ok(req, &outarg, outargsize);
 
-	if (se->uring.enable && se->conn.want & FUSE_CAP_OVER_IO_URING)
+	if (se->uring.enable && se->conn.want_ext & FUSE_CAP_OVER_IO_URING &&
+	    se->uring.enable)
 		fuse_uring_start(se);
 }
 

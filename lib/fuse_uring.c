@@ -181,7 +181,9 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 			 out->unique, ent_in_out->payload_sz);
 	}
 
-	/* leave io_uring_submit() to the main thread function */
+	/* XXX: This needs to be a ring config option */
+	io_uring_submit(&queue->ring);
+
 	return 0;
 }
 
@@ -397,7 +399,7 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 		if (queue->ring.ring_fd != -1)
 			close(queue->ring.ring_fd);
 
-		for (int idx = 0; idx < fuse_ring->queue_depth; idx++) {
+		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
 			numa_free(ent->op_payload, ent->req_payload_sz);
 			numa_free(ent->req_header, ent->req_header_sz);
@@ -411,10 +413,10 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 {
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
-	int idx, res;
+	unsigned int sq_ready;
 	struct io_uring_sqe *sqe;
 
-	for (idx = 0; idx < ring_pool->queue_depth; idx++) {
+	for (size_t idx = 0; idx < ring_pool->queue_depth; idx++) {
 		struct fuse_ring_ent *ent = &queue->ent[idx];
 
 		sqe = io_uring_get_sqe(&queue->ring);
@@ -445,10 +447,11 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 					    queue->qid, 0);
 	}
 
-	res = io_uring_sq_ready(&queue->ring);
-	if (res != ring_pool->queue_depth) {
-		fuse_log(FUSE_LOG_ERR, "SQE ready mismatch, expected %d got %d\n",
-			 ring_pool->queue_depth, res);
+	sq_ready = io_uring_sq_ready(&queue->ring);
+	if (sq_ready != ring_pool->queue_depth) {
+		fuse_log(FUSE_LOG_ERR,
+			 "SQE ready mismatch, expected %d got %d\n",
+			 ring_pool->queue_depth, sq_ready);
 		return -EINVAL;
 	}
 
@@ -501,7 +504,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	 * allow easy cleanup if something (like mmap) fails in the middle
 	 * below
 	 */
-	for (int qid = 0; qid < nr_queues; qid++) {
+	for (size_t qid = 0; qid < nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
 		queue->fd = -1;
@@ -511,7 +514,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->ring_pool = fuse_ring;
 	}
 
-	for (int qid = 0; qid < nr_queues; qid++) {
+	for (size_t qid = 0; qid < nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 				fuse_uring_get_queue(fuse_ring, qid);
 
@@ -582,7 +585,7 @@ static int _fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 		err = cqe->res;
 		if (err != 0) {
 			if (err > 0 && ((uintptr_t)io_uring_cqe_get_data(cqe) ==
-					queue->eventfd)) {
+					(unsigned)queue->eventfd)) {
 				/* teardown from eventfd */
 				return -ENOTCONN;
 			}
@@ -681,7 +684,7 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		goto err;
 	}
 
-	for (int idx = 0; idx < ring->queue_depth; idx++) {
+	for (size_t idx = 0; idx < ring->queue_depth; idx++) {
 		struct fuse_ring_ent *ring_ent = &queue->ent[idx];
 		ring_ent->ring_queue = queue;
 		struct fuse_req *req = &ring_ent->req;
@@ -777,7 +780,7 @@ ret:
 static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 {
 	int rc;
-	for (int qid = 0; qid < ring->nr_queues; qid++) {
+	for (size_t qid = 0; qid < ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
 		rc = pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
 		if (rc != 0)
@@ -796,11 +799,15 @@ static int fuse_uring_sanity_check(void)
 	return 0;
 }
 
-static int fuse_uring_init_ext_threads(struct fuse_session *se)
+static int fuse_uring_init_ext_threads(struct fuse_ring_pool *rp,
+				       struct fuse_session *se)
 {
 	int err;
 
-	for (int qid = 0; qid < se->uring.nr_queues; qid++) {
+	if (!rp->nr_queues)
+		return -EINVAL;
+
+	for (unsigned int qid = 0; qid < rp->nr_queues; qid++) {
 		err = se->op.init_ring_ext_threads(
 			se->userdata, qid, se->uring.pool,
 			fuse_uring_init_queue, fuse_uring_submit_sqes,
@@ -830,14 +837,13 @@ int fuse_uring_start(struct fuse_session *se)
 		goto out;
 	}
 
+	se->uring.pool = fuse_ring;
+
 	if (!se->op.init_ring_ext_threads)
 		err = fuse_uring_start_ring_threads(fuse_ring);
 	else
-		err = fuse_uring_init_ext_threads(se);
+		err = fuse_uring_init_ext_threads(fuse_ring, se);
 out:
-	se->uring.pool = fuse_ring;
-	se->uring.nr_queues = fuse_ring ? fuse_ring->nr_queues : 0;
-
 	return err;
 }
 
@@ -848,15 +854,14 @@ int fuse_uring_stop(struct fuse_session *se)
 	if (ring == NULL)
 		return 0;
 
-	for (int qid = 0; qid < ring->nr_queues; qid++)
-	{
+	for (size_t qid = 0; qid < ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
 
 		// Signal the thread to stop using the eventfd
 		uint64_t value = 1;
 		write(queue->eventfd, &value, sizeof(value));
-
-		pthread_join(queue->tid, NULL);
+		if (!se->op.init_ring_ext_threads)
+			pthread_join(queue->tid, NULL);
 		close(queue->eventfd);
 	}
 
