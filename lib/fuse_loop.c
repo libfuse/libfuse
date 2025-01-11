@@ -24,17 +24,17 @@ int fuse_session_loop(struct fuse_session *se)
 	};
 
 	while (!fuse_session_exited(se)) {
-		res = fuse_session_receive_buf_int(se, &fbuf, NULL);
+		res = fuse_session_receive_buf_internal(se, &fbuf, NULL);
 
 		if (res == -EINTR)
 			continue;
 		if (res <= 0)
 			break;
 
-		fuse_session_process_buf_int(se, &fbuf, NULL);
+		fuse_session_process_buf(se, &fbuf);
 	}
 
-	free(fbuf.mem);
+	fuse_buf_free(&fbuf);
 	if(res > 0)
 		/* No error, just the length of the most recently read
 		   request */

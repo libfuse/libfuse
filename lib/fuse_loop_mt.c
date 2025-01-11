@@ -13,6 +13,7 @@
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
 #include "fuse_i.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,19 +39,9 @@
 #define FUSE_LOOP_MT_V2_IDENTIFIER	 INT_MAX - 2
 #define FUSE_LOOP_MT_DEF_CLONE_FD	 0
 #define FUSE_LOOP_MT_DEF_MAX_THREADS 10
-#define FUSE_LOOP_MT_DEF_IDLE_THREADS -1 /* thread destruction is disabled
+#define FUSE_LOOP_MT_DEF_IDLE_THREADS \
+	-1 /* thread destruction is disabled
                                           * by default */
-#define FUSE_LOOP_MT_DEF_USE_URING 1 /* uring is disabled by default, until
-				      * it is proven to work stable
-				      * enabling this does still might not use
-				      * uring, if uring is not supported by
-				      * the kernel
-				      */
-#define FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE 1
-#define FUSE_LOOP_MT_DEF_URING_FG_DEPTH 16
-#define FUSE_LOOP_MT_DEF_URING_ASYNC_DEPTH 8 /* async queue depth */
-#define FUSE_LOOP_MT_DEV_URING_EXT_THREAD false
-
 /* 4K argument header + 1M data */
 #define FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN ((1024 * 1024) + 4096)
 
@@ -88,7 +79,7 @@ static struct fuse_chan *fuse_chan_new(int fd)
 {
 	struct fuse_chan *ch = (struct fuse_chan *) malloc(sizeof(*ch));
 	if (ch == NULL) {
-		fuse_log(FUSE_LOG_ERR, "redfs failed to allocate channel\n");
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate channel\n");
 		return NULL;
 	}
 
@@ -154,7 +145,8 @@ static void *fuse_do_work(void *data)
 		int res;
 
 		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-		res = fuse_session_receive_buf_int(mt->se, &w->fbuf, w->ch);
+		res = fuse_session_receive_buf_internal(mt->se, &w->fbuf,
+							w->ch);
 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
@@ -190,7 +182,7 @@ static void *fuse_do_work(void *data)
 			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&mt->lock);
 
-		fuse_session_process_buf_int(mt->se, &w->fbuf, w->ch);
+		fuse_session_process_buf_internal(mt->se, &w->fbuf, w->ch);
 
 		pthread_mutex_lock(&mt->lock);
 		if (!isforget)
@@ -213,7 +205,7 @@ static void *fuse_do_work(void *data)
 			pthread_mutex_unlock(&mt->lock);
 
 			pthread_detach(w->thread_id);
-			free(w->fbuf.mem);
+			fuse_buf_free(&w->fbuf);
 			fuse_chan_put(w->ch);
 			free(w);
 			return NULL;
@@ -240,8 +232,17 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	 */
 	pthread_attr_init(&attr);
 	stack_size = getenv(ENVNAME_THREAD_STACK);
-	if (stack_size && pthread_attr_setstacksize(&attr, atoi(stack_size)))
-		fuse_log(FUSE_LOG_ERR, "redfs invalid stack size: %s\n", stack_size);
+	if (stack_size) {
+		long size;
+
+		res = libfuse_strtol(stack_size, &size);
+		if (res)
+			fuse_log(FUSE_LOG_ERR, "fuse: invalid stack size: %s\n",
+				 stack_size);
+		else if (pthread_attr_setstacksize(&attr, size))
+			fuse_log(FUSE_LOG_ERR, "fuse: could not set stack size: %ld\n",
+				 size);
+	}
 
 	/* Disallow signal reception in worker threads */
 	sigemptyset(&newset);
@@ -254,7 +255,7 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
 	pthread_attr_destroy(&attr);
 	if (res != 0) {
-		fuse_log(FUSE_LOG_ERR, "redfs error creating thread: %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse: error creating thread: %s\n",
 			strerror(res));
 		return -1;
 	}
@@ -267,25 +268,15 @@ static int fuse_clone_chan_fd_default(struct fuse_session *se)
 	int res;
 	int clonefd;
 	uint32_t masterfd;
-
-	const char *redfs_devname = "/dev/redfs";
-	const char *fuse_devname = "/dev/fuse";
-	const char *devname = redfs_devname;
+	const char *devname = "/dev/fuse";
 
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
-fallback:
 	clonefd = open(devname, O_RDWR | O_CLOEXEC);
 	if (clonefd == -1) {
-		fuse_log(FUSE_LOG_ERR, "redfs: failed to open %s: %s\n", devname,
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n", devname,
 			strerror(errno));
-		if (devname == redfs_devname) {
-			devname = fuse_devname;
-			fuse_log(FUSE_LOG_INFO, "redfs: Trying to fall back to %s\n",
-				 devname);
-			goto fallback;
-		}
 		return -1;
 	}
 #ifndef O_CLOEXEC
@@ -295,7 +286,7 @@ fallback:
 	masterfd = se->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
 	if (res == -1) {
-		fuse_log(FUSE_LOG_ERR, "redfs failed to clone device fd: %s\n",
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to clone device fd: %s\n",
 			strerror(errno));
 		close(clonefd);
 		return -1;
@@ -333,7 +324,7 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 
 	struct fuse_worker *w = malloc(sizeof(struct fuse_worker));
 	if (!w) {
-		fuse_log(FUSE_LOG_ERR, "redfs failed to allocate worker structure\n");
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate worker structure\n");
 		return -1;
 	}
 	memset(w, 0, sizeof(struct fuse_worker));
@@ -345,7 +336,7 @@ static int fuse_loop_start_thread(struct fuse_mt *mt)
 		w->ch = fuse_clone_chan(mt);
 		if(!w->ch) {
 			/* Don't attempt this again */
-			fuse_log(FUSE_LOG_ERR, "redfs trying to continue "
+			fuse_log(FUSE_LOG_ERR, "fuse: trying to continue "
 				"without -o clone_fd.\n");
 			mt->clone_fd = 0;
 		}
@@ -370,7 +361,7 @@ static void fuse_join_worker(struct fuse_mt *mt, struct fuse_worker *w)
 	pthread_mutex_lock(&mt->lock);
 	list_del_worker(w);
 	pthread_mutex_unlock(&mt->lock);
-	free(w->fbuf.mem);
+	fuse_buf_free(&w->fbuf);
 	fuse_chan_put(w->ch);
 	free(w);
 }
@@ -392,27 +383,6 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 		/* The caller does not care about parameters - use the default */
 		config = fuse_loop_cfg_create();
 		created_config = 1;
-	}
-
-	if (config->uring.use_uring) {
-#ifdef HAVE_URING
-		err = fuse_uring_start(se, config);
-		if (err) {
-			fuse_log(FUSE_LOG_WARNING,
-				 "Failed to start uring, "
-				 "fall back from uring to threads.\n");
-		}
-
-		/* threads are also started with uring for
-		 * 1 - stop uring on the kernel side on daemon exit
-		 * 2 - special request not handled by uring yet
-		 */
-#else
-		fuse_log(FUSE_LOG_WARNING,
-			 "libfuse not compiled with uring, falling back to "
-			 "threads.");
-		config->uring.use_uring = false;
-#endif
 	}
 
 	memset(&mt, 0, sizeof(struct fuse_mt));
@@ -449,8 +419,8 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 
 		err = mt.error;
 
-		if (config->uring.use_uring)
-			fuse_uring_join_threads(se);
+		if (se->uring.pool)
+			fuse_uring_stop(se);
 	}
 
 	pthread_mutex_destroy(&mt.lock);
@@ -518,13 +488,6 @@ struct fuse_loop_config *fuse_loop_cfg_create(void)
 	config->max_threads      = FUSE_LOOP_MT_DEF_MAX_THREADS;
 	config->clone_fd         = FUSE_LOOP_MT_DEF_CLONE_FD;
 
-	config->uring.use_uring = FUSE_LOOP_MT_DEF_USE_URING;
-	config->uring.per_core_queue = FUSE_LOOP_MT_DEF_URING_PER_CORE_QUEUE;
-	config->uring.sync_queue_depth = FUSE_LOOP_MT_DEF_URING_FG_DEPTH;
-	config->uring.async_queue_depth = FUSE_LOOP_MT_DEF_URING_ASYNC_DEPTH;
-	config->uring.ring_req_arg_len = FUSE_LOOP_MT_DEF_URING_REQ_ARG_LEN;
-	config->uring.external_threads = FUSE_LOOP_MT_DEV_URING_EXT_THREAD;
-
 	return config;
 }
 
@@ -573,31 +536,4 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 				unsigned int value)
 {
 	config->clone_fd = value;
-}
-
-int fuse_loop_cfg_set_uring_opts(struct fuse_loop_config *config,
-				 bool use_uring, unsigned int per_core_queue,
-				 unsigned int sync_queue_depth,
-				 unsigned int async_queue_depth,
-				 unsigned int arg_len)
-{
-	config->uring.use_uring = use_uring;
-
-	config->uring.per_core_queue = per_core_queue ? true : false;
-
-	if (sync_queue_depth != 0)
-		config->uring.sync_queue_depth = sync_queue_depth;
-
-	if (async_queue_depth != 0)
-		config->uring.async_queue_depth = async_queue_depth;
-
-	if (arg_len != 0)
-		config->uring.ring_req_arg_len = arg_len;
-
-	return 0;
-}
-
-void fuse_loop_cfg_set_uring_ext_thread(struct fuse_loop_config *config)
-{
-	config->uring.external_threads = true;
 }

@@ -1957,6 +1957,104 @@ static int do_test_create_ro_dir(int flags, const char *flags_str)
 	return 0;
 }
 
+/* 	this tests open with O_TMPFILE
+	note that this will only work with the fuse low level api 
+	you will get ENOTSUP with the high level api */
+static int test_create_tmpfile(void) 
+{
+	rmdir(testdir);
+	int res = mkdir(testdir, 0777);
+	if (res)
+		return -1;
+	
+	start_test("create tmpfile");
+
+	int fd = open(testdir, O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+	if(fd == -1) {
+		if (errno == ENOTSUP) {
+			/* don't bother if we're working on an old kernel 
+					or on the high level API */
+			return 0;
+		}
+
+		PERROR("open O_TMPFILE | O_RDWR");
+		return -1;
+	}
+	close(fd);
+
+	fd = open(testdir, O_TMPFILE | O_WRONLY | O_EXCL, S_IRUSR | S_IWUSR);
+	if(fd == -1){
+		PERROR("open with O_TMPFILE | O_WRONLY | O_EXCL");
+		return -1;
+	};
+	close(fd);
+
+	fd = open(testdir, O_TMPFILE | O_RDONLY, S_IRUSR);
+	if (fd != -1) {
+		ERROR("open with O_TMPFILE | O_RDONLY succeeded");
+		return -1;
+	}
+	
+	success();
+	return 0;	
+}
+
+static int test_create_and_link_tmpfile(void) 
+{
+	/* skip this test for now since the github runner will fail in the linkat call below */
+	return 0;
+
+	rmdir(testdir);
+	unlink(testfile);
+
+	int res = mkdir(testdir, 0777);
+	if (res)
+		return -1;
+
+	start_test("create and link tmpfile");
+
+	int fd = open(testdir, O_TMPFILE | O_RDWR | O_EXCL, S_IRUSR | S_IWUSR);
+	if(fd == -1) {
+		if (errno == ENOTSUP) {
+			/* don't bother if we're working on an old kernel
+				or on the high level API */
+			return 0;
+		}
+		PERROR("open with O_TMPFILE | O_RDWR | O_EXCL");
+		return -1;
+	}
+
+	if (!linkat(fd, "", AT_FDCWD, testfile, AT_EMPTY_PATH)) {
+		ERROR("linkat succeeded on a tmpfile opened with O_EXCL");
+		return -1;
+	}
+	close(fd);
+
+	fd = open(testdir, O_TMPFILE | O_RDWR, S_IRUSR | S_IWUSR);
+	if(fd == -1) {
+		PERROR("open O_TMPFILE");
+		return -1;
+	}
+	
+	if (check_nonexist(testfile)) {
+		return -1;
+	}
+
+	if (linkat(fd, "", AT_FDCWD, testfile, AT_EMPTY_PATH)) {
+		PERROR("linkat tempfile");
+		return -1;
+	}
+	close(fd);
+
+	if (check_nlink(testfile, 1)) {
+		return -1;
+	}
+	unlink(testfile);
+
+	success();
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	int err = 0;
@@ -2085,6 +2183,8 @@ int main(int argc, char *argv[])
 	err += test_create_ro_dir(O_CREAT | O_WRONLY);
 	err += test_create_ro_dir(O_CREAT | O_TRUNC);
 	err += test_copy_file_range();
+	err += test_create_tmpfile();
+	err += test_create_and_link_tmpfile();
 
 	unlink(testfile2);
 	unlink(testsock);

@@ -192,9 +192,11 @@ static int cuse_reply_init(fuse_req_t req, struct cuse_init_out *arg,
 	return fuse_send_reply_iov_nofree(req, 0, iov, 3);
 }
 
-void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
+			 const void *req_header, const void *req_payload)
 {
-	struct fuse_init_in *arg = (struct fuse_init_in *) inarg;
+	(void)req_payload;
+	struct fuse_init_in *arg = (struct fuse_init_in *)req_header;
 	struct cuse_init_out outarg;
 	struct fuse_session *se = req->se;
 	struct cuse_data *cd = se->cuse_data;
@@ -208,8 +210,10 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 	se->conn.proto_major = arg->major;
 	se->conn.proto_minor = arg->minor;
-	se->conn.capable = 0;
-	se->conn.want = 0;
+
+	/* XXX This is not right.*/
+	se->conn.capable_ext = 0;
+	se->conn.want_ext = 0;
 
 	if (arg->major < 7) {
 		fuse_log(FUSE_LOG_ERR, "cuse: unsupported protocol version: %u.%u\n",
@@ -259,6 +263,11 @@ void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		clop->init_done(se->userdata);
 
 	fuse_free_req(req);
+}
+
+void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	_cuse_lowlevel_init(req, nodeid, inarg, NULL);
 }
 
 struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],

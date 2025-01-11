@@ -1,6 +1,6 @@
 fuseconf_path = join_paths(get_option('prefix'), get_option('sysconfdir'), 'fuse.conf')
 
-executable('redfsmount', ['fusermount.c', '../lib/mount_util.c'],
+executable('redfsmount3', ['fusermount.c', '../lib/mount_util.c', '../lib/util.c'],
            include_directories: include_dirs,
            install: true,
            install_dir: get_option('bindir'),

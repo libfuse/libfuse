@@ -217,6 +217,17 @@
  *  - add backing_id to fuse_open_out, add FOPEN_PASSTHROUGH open flag
  *  - add FUSE_NO_EXPORT_SUPPORT init flag
  *  - add FUSE_NOTIFY_RESEND, add FUSE_HAS_RESEND init flag
+ *
+ *  7.41
+ *  - add FUSE_ALLOW_IDMAP
+ *  7.42
+ *  - Add FUSE_OVER_IO_URING and all other io-uring related flags and data
+ *    structures:
+ *    - fuse_uring_ent_in_out
+ *    - fuse_uring_req_header
+ *    - fuse_uring_cmd_req
+ *    - FUSE_URING_IN_OUT_HEADER_SZ
+ *    - FUSE_URING_OP_IN_OUT_SZ
  */
 
 #ifndef _LINUX_FUSE_H
@@ -252,7 +263,7 @@
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 40
+#define FUSE_KERNEL_MINOR_VERSION 41
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
@@ -421,6 +432,8 @@ struct fuse_file_lock {
  * FUSE_NO_EXPORT_SUPPORT: explicitly disable export support
  * FUSE_HAS_RESEND: kernel supports resending pending requests, and the high bit
  *		    of the request ID indicates resend requests
+ * FUSE_ALLOW_IDMAP: allow creation of idmapped mounts
+ * FUSE_OVER_IO_URING: Indicate that Client supports io-uring
  */
 #define FUSE_ASYNC_READ		(1 << 0)
 #define FUSE_POSIX_LOCKS	(1 << 1)
@@ -466,6 +479,8 @@ struct fuse_file_lock {
 
 /* Obsolete alias for FUSE_DIRECT_IO_ALLOW_MMAP */
 #define FUSE_DIRECT_IO_RELAX	FUSE_DIRECT_IO_ALLOW_MMAP
+#define FUSE_ALLOW_IDMAP	(1ULL << 40)
+#define FUSE_OVER_IO_URING	(1ULL << 41)
 
 /**
  * CUSE INIT request/reply flags
@@ -984,6 +999,21 @@ struct fuse_fallocate_in {
  */
 #define FUSE_UNIQUE_RESEND (1ULL << 63)
 
+/**
+ * This value will be set by the kernel to
+ * (struct fuse_in_header).{uid,gid} fields in
+ * case when:
+ * - fuse daemon enabled FUSE_ALLOW_IDMAP
+ * - idmapping information is not available and uid/gid
+ *   can not be mapped in accordance with an idmapping.
+ *
+ * Note: an idmapping information always available
+ * for inode creation operations like:
+ * FUSE_MKNOD, FUSE_SYMLINK, FUSE_MKDIR, FUSE_TMPFILE,
+ * FUSE_CREATE and FUSE_RENAME2 (with RENAME_WHITEOUT).
+ */
+#define FUSE_INVALID_UIDGID ((uint32_t)(-1))
+
 struct fuse_in_header {
 	uint32_t	len;
 	uint32_t	opcode;
@@ -1079,67 +1109,12 @@ struct fuse_backing_map {
 	uint64_t	padding;
 };
 
-enum fuse_uring_ioctl_cmd {
-	/* not correctly initialized when set */
-	FUSE_URING_IOCTL_CMD_INVALID    = 0,
-
-	/* Ioctl to prepare communucation with io-uring */
-	FUSE_URING_IOCTL_CMD_RING_CFG   = 1,
-
-	/* Ring queue configuration ioctl */
-	FUSE_URING_IOCTL_CMD_QUEUE_CFG  = 2,
-};
-
-enum fuse_uring_cfg_flags {
-	/* server/daemon side requests numa awareness */
-	FUSE_URING_WANT_NUMA = 1ul << 0,
-};
-
-struct fuse_ring_config {
-	/* number of queues */
-	uint32_t nr_queues;
-
-	/* number of foreground entries per queue */
-	uint32_t sync_queue_depth;
-
-	/* number of background entries per queue */
-	uint32_t async_queue_depth;
-
-	/*
-	 * buffer size userspace allocated per request buffer
-	 * from the mmaped queue buffer
-	 */
-	uint32_t user_req_buf_sz;
-
-	/* ring config flags */
-	uint64_t numa_aware:1;
-
-	/* for future extensions */
-	uint8_t padding[64];
-};
-
-struct fuse_ring_queue_config {
-	/* qid the command is for */
-	uint32_t qid;
-
-	/* /dev/fuse fd that initiated the mount. */
-	uint32_t control_fd;
-
-	/* for future extensions */
-	uint8_t padding[64];
-};
-
-
 /* Device ioctls: */
 #define FUSE_DEV_IOC_MAGIC		229
 #define FUSE_DEV_IOC_CLONE		_IOR(FUSE_DEV_IOC_MAGIC, 0, uint32_t)
 #define FUSE_DEV_IOC_BACKING_OPEN	_IOW(FUSE_DEV_IOC_MAGIC, 1, \
 					     struct fuse_backing_map)
 #define FUSE_DEV_IOC_BACKING_CLOSE	_IOW(FUSE_DEV_IOC_MAGIC, 2, uint32_t)
-#define FUSE_DEV_IOC_URING_CFG		_IOR(FUSE_DEV_IOC_MAGIC, 3, \
-					     struct fuse_ring_config)
-#define FUSE_DEV_IOC_URING_QUEUE_CFG	_IOR(FUSE_DEV_IOC_MAGIC, 3, \
-					     struct fuse_ring_queue_config)
 
 struct fuse_lseek_in {
 	uint64_t	fh;
@@ -1244,70 +1219,64 @@ struct fuse_supp_groups {
 /**
  * Size of the ring buffer header
  */
-#define FUSE_RING_HEADER_BUF_SIZE 4096
-#define FUSE_RING_MIN_IN_OUT_ARG_SIZE 4096
+#define FUSE_URING_IN_OUT_HEADER_SZ 128
+#define FUSE_URING_OP_IN_OUT_SZ 128
 
-/*
- * Request is background type. Daemon side is free to use this information
- * to handle foreground/background CQEs with different priorities.
- */
-#define FUSE_RING_REQ_FLAG_ASYNC (1ull << 0)
+struct fuse_uring_ent_in_out {
+	uint64_t flags;
+
+	/*
+	 * commit ID to be used in a reply to a ring request (see also
+	 * struct fuse_uring_cmd_req)
+	 */
+	uint64_t commit_id;
+
+	/* size of use payload buffer */
+	uint32_t payload_sz;
+	uint32_t padding;
+
+	uint64_t reserved;
+};
 
 /**
  * This structure mapped onto the
  */
-struct fuse_ring_req {
-	union {
-		/* The first 4K are command data */
-		char ring_header[FUSE_RING_HEADER_BUF_SIZE];
+struct fuse_uring_req_header {
+	/* struct fuse_in / struct fuse_out */
+	char in_out[FUSE_URING_IN_OUT_HEADER_SZ];
 
-		struct {
-			uint64_t flags;
+	/* per op code structs */
+	char op_in[FUSE_URING_OP_IN_OUT_SZ];
 
-			uint32_t in_out_arg_len;
-			uint32_t padding;
-
-			/* kernel fills in, reads out */
-			union {
-				struct fuse_in_header in;
-				struct fuse_out_header out;
-			};
-		};
-	};
-
-	char in_out_arg[];
+	/* struct fuse_ring_in_out */
+	char ring_ent_in_out[sizeof(struct fuse_uring_ent_in_out)];
 };
 
 /**
  * sqe commands to the kernel
  */
 enum fuse_uring_cmd {
-	FUSE_URING_REQ_INVALID = 0,
+	FUSE_IO_URING_CMD_INVALID = 0,
 
 	/* submit sqe to kernel to get a request */
-	FUSE_URING_REQ_FETCH = 1,
+	FUSE_IO_URING_CMD_REGISTER = 1,
 
 	/* commit result and fetch next request */
-	FUSE_URING_REQ_COMMIT_AND_FETCH = 2,
+	FUSE_IO_URING_CMD_COMMIT_AND_FETCH = 2,
 };
 
 /**
  * In the 80B command area of the SQE.
  */
 struct fuse_uring_cmd_req {
-	/* User buffer */
-	uint64_t buf_ptr;
+	uint64_t flags;
 
-	/* length of the user buffer */
-	uint32_t buf_len;
+	/* entry identifier */
+	uint64_t commit_id;
 
 	/* queue the command is for (queue index) */
 	uint16_t qid;
-
-	/* queue entry (array index) */
-	uint16_t tag;
-
-	uint32_t flags;
+	uint8_t padding[6];
 };
 
 #endif /* _LINUX_FUSE_H */

@@ -2,7 +2,7 @@ libfuse_sources = ['fuse.c', 'fuse_i.h', 'fuse_loop.c', 'fuse_loop_mt.c',
                    'fuse_lowlevel.c', 'fuse_misc.h', 'fuse_opt.c',
                    'fuse_signals.c', 'buffer.c', 'cuse_lowlevel.c',
                    'helper.c', 'modules/subdir.c', 'mount_util.c',
-                   'fuse_log.c', 'compat.c' ]
+                   'fuse_log.c', 'compat.c', 'util.c', 'util.h' ]
 
 if host_machine.system().startswith('linux')
    libfuse_sources += [ 'mount.c' ]
@@ -46,7 +46,7 @@ endif
 
 fusermount_path = join_paths(get_option('prefix'), get_option('bindir'))
 libfuse = library('redfs', libfuse_sources, version: meson.project_version(),
-                  soversion: '3', include_directories: include_dirs,
+                  soversion: '4', include_directories: include_dirs,
                   dependencies: deps, install: true,
                   link_depends: 'fuse_versionscript',
                   c_args: [ '-DFUSE_USE_VERSION=317',

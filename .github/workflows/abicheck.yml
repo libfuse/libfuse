@@ -1,0 +1,64 @@
+---
+name: 'libfuse ABI check'
+
+on:
+  push:
+    branches:
+      - master
+      - '[0-9]+.[0-9]+'  # This will match branches like 3.17, 3.18, 4.0, etc.
+  pull_request:
+    branches:
+      - master
+      - '[0-9]+.[0-9]+'
+permissions:
+  contents: read
+
+jobs:
+  abi:
+    runs-on: '${{ matrix.os }}'
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+
+    steps:
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install abigail-tools clang gcc liburing-dev libnuma-dev
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: current
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: previous
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
+        with:
+          python-version: '3.12'
+
+      - name: Build current
+        working-directory: current
+        run: |
+          pip install -r requirements.txt
+          meson setup build --buildtype=debug
+          meson compile -C build
+
+      - name: Build previous
+        working-directory: previous
+        run: |
+          echo "Commit-id before PR: $(git show HEAD)"
+          pip install -r requirements.txt
+          meson setup build --buildtype=debug
+          meson compile -C build
+
+      - name: Run abidiff
+        run: abidiff 
+          --headers-dir1 previous/include/ 
+          --headers-dir2 current/include/ 
+          previous/build/lib/libfuse3.so 
+          current/build/lib/libfuse3.so

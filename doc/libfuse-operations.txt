@@ -35,7 +35,7 @@ was only partly human verified - use with care.
    - out_args[2]: Not used
 
 5. FUSE_READLINK (5)
-   - in_args[0]: Size of fuse_readlink_in (16 bytes)
+   - in_args[0]: Not used
    - in_args[1]: Not used
    - in_args[2]: Not used
    - out_args[0]: Variable (size of the link target path)
@@ -43,8 +43,8 @@ was only partly human verified - use with care.
    - out_args[2]: Not used
 
 6. FUSE_SYMLINK (6)
-   - in_args[0]: Size of fuse_symlink_in (variable)
-   - in_args[1]: Variable (target path, up to PATH_MAX)
+   - in_args[0]: Variable (new link file name, up to PATH_MAX)
+   - in_args[1]: Variable (target path for the symlink, up to PATH_MAX)
    - in_args[2]: Not used
    - out_args[0]: Size of fuse_entry_out (typically 128 bytes)
    - out_args[1]: Not used

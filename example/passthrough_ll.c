@@ -38,7 +38,6 @@
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #include <fuse_lowlevel.h>
-#include <openbsd_tree.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -56,8 +55,6 @@
 
 #include "passthrough_helpers.h"
 
-
-
 /* We are re-using pointers to our `struct lo_inode` and `struct
    lo_dirp` elements as inodes. This means that we must be able to
    store uintptr_t values in a fuse_ino_t variable. The following
@@ -72,20 +69,13 @@ struct _uintptr_to_must_hold_fuse_ino_t_dummy_struct \
 #endif
 
 struct lo_inode {
-	RB_ENTRY(lo_inode) lo_ino_tentry;
+	struct lo_inode *next; /* protected by lo->mutex */
+	struct lo_inode *prev; /* protected by lo->mutex */
 	int fd;
 	ino_t ino;
 	dev_t dev;
 	uint64_t refcount; /* protected by lo->mutex */
 };
-
-static inline int
-lo_ino_cmp(const struct lo_inode *left, const struct lo_inode *right);
-
-RB_HEAD(lo_ino_tree, lo_inode);
-RB_PROTOTYPE(lo_ino_tree, lo_inode, lo_ino_tentry, lo_ino_cmp);
-RB_GENERATE(lo_ino_tree, lo_inode, lo_ino_tentry, lo_ino_cmp);
-
 
 enum {
 	CACHE_NEVER,
@@ -103,7 +93,6 @@ struct lo_data {
 	double timeout;
 	int cache;
 	int timeout_set;
-	struct lo_ino_tree ino_tree_head; /*  protected by lo->mutex */
 	struct lo_inode root; /* protected by lo->mutex */
 };
 
@@ -153,22 +142,6 @@ static void passthrough_ll_help(void)
 "    -o cache=always        Cache always\n");
 }
 
-static inline int
-lo_ino_cmp(const struct lo_inode *left, const struct lo_inode *right)
-{
-	if (left->dev > right->dev)
-		return -1;
-	if (left->dev < right->dev)
-		return 1;
-
-	if (left->ino > right->ino)
-		return 1;
-	else if (left->ino < right->ino)
-		return -1;
-
-    return 0;
-}
-
 static struct lo_data *lo_data(fuse_req_t req)
 {
 	return (struct lo_data *) fuse_req_userdata(req);
@@ -195,18 +168,20 @@ static bool lo_debug(fuse_req_t req)
 static void lo_init(void *userdata,
 		    struct fuse_conn_info *conn)
 {
-	struct lo_data *lo = (struct lo_data*) userdata;
+	struct lo_data *lo = (struct lo_data *)userdata;
+	bool has_flag;
 
-	if (lo->writeback &&
-	    conn->capable & FUSE_CAP_WRITEBACK_CACHE) {
-		if (lo->debug)
-			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating writeback\n");
-		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
+	if (lo->writeback) {
+		has_flag = fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
+		if (lo->debug && has_flag)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "lo_init: activating writeback\n");
 	}
 	if (lo->flock && conn->capable & FUSE_CAP_FLOCK_LOCKS) {
-		if (lo->debug)
-			fuse_log(FUSE_LOG_DEBUG, "lo_init: activating flock locks\n");
-		conn->want |= FUSE_CAP_FLOCK_LOCKS;
+		has_flag = fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
+		if (lo->debug && has_flag)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "lo_init: activating flock locks\n");
 	}
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
@@ -216,20 +191,12 @@ static void lo_init(void *userdata,
 static void lo_destroy(void *userdata)
 {
 	struct lo_data *lo = (struct lo_data*) userdata;
-	struct lo_inode *inode, *iter_tmp, *remove_tmp;
 
-	pthread_mutex_lock(&lo->mutex);
-	RB_FOREACH_SAFE(inode, lo_ino_tree, &lo->ino_tree_head, iter_tmp) {
-		/* root inode is not allocated and stays in the tree */
-		if (inode == &lo->root)
-			continue;
-
-		remove_tmp = RB_REMOVE(lo_ino_tree, &lo->ino_tree_head, inode);
-		assert(remove_tmp == inode);
-		close(inode->fd);
-		free(inode);
+	while (lo->root.next != &lo->root) {
+		struct lo_inode* next = lo->root.next;
+		lo->root.next = next->next;
+		free(next);
 	}
-	pthread_mutex_unlock(&lo->mutex);
 }
 
 static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -238,10 +205,11 @@ static void lo_getattr(fuse_req_t req, fuse_ino_t ino,
 	int res;
 	struct stat buf;
 	struct lo_data *lo = lo_data(req);
+	int fd = fi ? fi->fh : lo_fd(req, ino);
 
 	(void) fi;
 
-	res = fstatat(lo_fd(req, ino), "", &buf, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	res = fstatat(fd, "", &buf, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
 	if (res == -1)
 		return (void) fuse_reply_err(req, errno);
 
@@ -325,17 +293,69 @@ out_err:
 
 static struct lo_inode *lo_find(struct lo_data *lo, struct stat *st)
 {
+	struct lo_inode *p;
 	struct lo_inode *ret = NULL;
-	struct lo_inode tmp_ino = { .ino = st->st_ino,
-				    .dev = st->st_dev,
-	};
 
 	pthread_mutex_lock(&lo->mutex);
-	ret = RB_FIND(lo_ino_tree, &lo->ino_tree_head, &tmp_ino);
-	if (ret != NULL)
-		ret->refcount++;
+	for (p = lo->root.next; p != &lo->root; p = p->next) {
+		if (p->ino == st->st_ino && p->dev == st->st_dev) {
+			assert(p->refcount > 0);
+			ret = p;
+			ret->refcount++;
+			break;
+		}
+	}
 	pthread_mutex_unlock(&lo->mutex);
 	return ret;
+}
+
+
+static struct lo_inode *create_new_inode(int fd, struct fuse_entry_param *e, struct lo_data* lo)
+{
+	struct lo_inode *inode = NULL;
+	struct lo_inode *prev, *next;
+	
+	inode = calloc(1, sizeof(struct lo_inode));
+	if (!inode)
+		return NULL;
+
+	inode->refcount = 1;
+	inode->fd = fd;
+	inode->ino = e->attr.st_ino;
+	inode->dev = e->attr.st_dev;
+
+	pthread_mutex_lock(&lo->mutex);
+	prev = &lo->root;
+	next = prev->next;
+	next->prev = inode;
+	inode->next = next;
+	inode->prev = prev;
+	prev->next = inode;
+	pthread_mutex_unlock(&lo->mutex);
+	return inode;
+}
+
+static int fill_entry_param_new_inode(fuse_req_t req, fuse_ino_t parent, int fd, struct fuse_entry_param *e)
+{
+	int res;
+	struct lo_data *lo = lo_data(req);
+
+	memset(e, 0, sizeof(*e));
+	e->attr_timeout = lo->timeout;
+	e->entry_timeout = lo->timeout;
+
+	res = fstatat(fd, "", &e->attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	if (res == -1)
+		return errno;
+
+	e->ino = (uintptr_t) create_new_inode(dup(fd), e, lo);
+
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "  %lli/%lli -> %lli\n",
+			(unsigned long long) parent, fd, (unsigned long long) e->ino);
+
+	return 0;
+
 }
 
 static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
@@ -345,7 +365,7 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int res;
 	int saverr;
 	struct lo_data *lo = lo_data(req);
-	struct lo_inode *inode, *tmp;
+	struct lo_inode *inode;
 
 	memset(e, 0, sizeof(*e));
 	e->attr_timeout = lo->timeout;
@@ -364,22 +384,9 @@ static int lo_do_lookup(fuse_req_t req, fuse_ino_t parent, const char *name,
 		close(newfd);
 		newfd = -1;
 	} else {
-		saverr = ENOMEM;
-		inode = calloc(1, sizeof(struct lo_inode));
+		inode = create_new_inode(newfd, e, lo);
 		if (!inode)
 			goto out_err;
-
-		inode->refcount = 1;
-		inode->fd = newfd;
-		inode->ino = e->attr.st_ino;
-		inode->dev = e->attr.st_dev;
-
-		pthread_mutex_lock(&lo->mutex);
-		tmp = RB_INSERT(lo_ino_tree, &lo->ino_tree_head, inode);
-
-		/* inode was allocated above - cannot be in the tree already */
-		assert(tmp == NULL);
-		pthread_mutex_unlock(&lo->mutex);
 	}
 	e->ino = (uintptr_t) inode;
 
@@ -546,10 +553,12 @@ static void unref_inode(struct lo_data *lo, struct lo_inode *inode, uint64_t n)
 	assert(inode->refcount >= n);
 	inode->refcount -= n;
 	if (!inode->refcount) {
-		struct lo_inode *tmp;
+		struct lo_inode *prev, *next;
 
-		tmp = RB_REMOVE(lo_ino_tree, &lo->ino_tree_head, inode);
-		assert(tmp == inode);
+		prev = inode->prev;
+		next = inode->next;
+		next->prev = prev;
+		prev->next = next;
 
 		pthread_mutex_unlock(&lo->mutex);
 		close(inode->fd);
@@ -642,8 +651,10 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	d->entry = NULL;
 
 	fi->fh = (uintptr_t) d;
-	if (lo->cache == CACHE_ALWAYS)
+	if (lo->cache != CACHE_NEVER)
 		fi->cache_readdir = 1;
+	if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
 	fuse_reply_open(req, fi);
 	return;
 
@@ -778,8 +789,43 @@ static void lo_releasedir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 	fuse_reply_err(req, 0);
 }
 
-static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+static void lo_tmpfile(fuse_req_t req, fuse_ino_t parent,
 		      mode_t mode, struct fuse_file_info *fi)
+{
+	int fd;
+	struct lo_data *lo = lo_data(req);
+	struct fuse_entry_param e;
+	int err;
+
+	if (lo_debug(req))
+		fuse_log(FUSE_LOG_DEBUG, "lo_tmpfile(parent=%" PRIu64 ")\n",
+			parent);
+
+	fd = openat(lo_fd(req, parent), ".",
+		    (fi->flags | O_TMPFILE) & ~O_NOFOLLOW, mode);
+	if (fd == -1)
+		return (void) fuse_reply_err(req, errno);
+
+	fi->fh = fd;
+	if (lo->cache == CACHE_NEVER)
+		fi->direct_io = 1;
+	else if (lo->cache == CACHE_ALWAYS)
+		fi->keep_cache = 1;
+
+	/* parallel_direct_writes feature depends on direct_io features.
+	   To make parallel_direct_writes valid, need set fi->direct_io
+	   in current function. */
+	fi->parallel_direct_writes = 1; 
+	
+	err = fill_entry_param_new_inode(req, parent, fd, &e); 
+	if (err)
+		fuse_reply_err(req, err);
+	else
+		fuse_reply_create(req, &e, fi);
+}
+
+static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
+						      mode_t mode, struct fuse_file_info *fi)
 {
 	int fd;
 	struct lo_data *lo = lo_data(req);
@@ -1202,6 +1248,7 @@ static const struct fuse_lowlevel_ops lo_oper = {
 	.releasedir	= lo_releasedir,
 	.fsyncdir	= lo_fsyncdir,
 	.create		= lo_create,
+	.tmpfile	= lo_tmpfile,
 	.open		= lo_open,
 	.release	= lo_release,
 	.flush		= lo_flush,
@@ -1235,12 +1282,8 @@ int main(int argc, char *argv[])
 	umask(0);
 
 	pthread_mutex_init(&lo.mutex, NULL);
-	RB_INIT(&lo.ino_tree_head);
-
-	lo.root.refcount = 2;
+	lo.root.next = lo.root.prev = &lo.root;
 	lo.root.fd = -1;
-	RB_INSERT(lo_ino_tree, &lo.ino_tree_head, &lo.root);
-
 	lo.cache = CACHE_NORMAL;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
@@ -1270,6 +1313,7 @@ int main(int argc, char *argv[])
 		return 1;
 
 	lo.debug = opts.debug;
+	lo.root.refcount = 2;
 	if (lo.source) {
 		struct stat stat;
 		int res;
