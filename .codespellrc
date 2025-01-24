@@ -8,4 +8,6 @@ skip = .git,*.pdf,*.svg,AUTHORS
 # - alse: used in regex
 # - siz:  wanted short
 # - fiter:  variable
-ignore-words-list = alse,siz,fiter
+# - re-used: intentional hyphenation
+# - re-using: intentional hyphenation
+ignore-words-list = alse,siz,fiter,re-used,re-using
