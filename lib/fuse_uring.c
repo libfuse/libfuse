@@ -287,16 +287,11 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 	}
 
 	ent_in_out->payload_sz = off;
-	fuse_log(FUSE_LOG_ERR, "res=%d off=%zu\n", res, off);
 
 	out->error  = res;
 	out->unique = req->unique;
 
-	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
-
-	fuse_free_req(req);
-
-	return res;
+	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 }
 
 static void
