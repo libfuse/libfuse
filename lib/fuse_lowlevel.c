@@ -1999,8 +1999,6 @@ static bool want_flags_valid(uint64_t capable, uint64_t want)
 
 /**
  * Get the wanted capability flags, converting from old format if necessary
- * Also applies the first 32 bits of capable_ext to capable
- *
  */
 static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
 					   uint64_t want_ext_default)
