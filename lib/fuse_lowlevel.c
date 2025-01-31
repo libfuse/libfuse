@@ -2178,7 +2178,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 
 	se->got_init = 1;
 	if (se->op.init) {
-		uint32_t want_ext_default = se->conn.want_ext;
+		uint64_t want_ext_default = se->conn.want_ext;
 		int rc;
 
 		// Apply the first 32 bits of capable_ext to capable
