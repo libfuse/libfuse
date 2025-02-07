@@ -472,8 +472,9 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	const size_t nr_queues = get_nprocs_conf();
 	size_t payload_sz = se->bufsize - FUSE_BUFFER_HEADER_SIZE;
 
-	fuse_log(FUSE_LOG_DEBUG, "Creating ring depth=%d payload_size=%d\n",
-		 se->uring.q_depth, payload_sz);
+	if (se->debug)
+		fuse_log(FUSE_LOG_DEBUG, "starting io-uring q-depth=%d\n",
+			 se->uring.q_depth);
 
 	fuse_ring = calloc(1, sizeof(*fuse_ring));
 	if (fuse_ring == NULL) {
