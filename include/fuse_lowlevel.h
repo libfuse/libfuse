@@ -1411,7 +1411,8 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
  * Reply with a directory entry and open parameters
  *
  * currently the following members of 'fi' are used:
- *   fh, direct_io, keep_cache
+ *   fh, direct_io, keep_cache, cache_readdir, nonseekable, noflush,
+ *   parallel_direct_writes
  *
  * Possible requests:
  *   create
@@ -1470,7 +1471,8 @@ int fuse_passthrough_close(fuse_req_t req, int backing_id);
  * Reply with open parameters
  *
  * currently the following members of 'fi' are used:
- *   fh, direct_io, keep_cache
+ *   fh, direct_io, keep_cache, cache_readdir, nonseekable, noflush,
+ *   parallel_direct_writes,
  *
  * Possible requests:
  *   open, opendir

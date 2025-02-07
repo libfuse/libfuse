@@ -9,6 +9,8 @@
   See the file COPYING.LIB
 */
 
+#define _GNU_SOURCE
+
 #include "fuse_config.h"
 #include "fuse_i.h"
 #include "fuse_lowlevel.h"
@@ -4889,6 +4891,8 @@ static void *fuse_prune_nodes(void *fuse)
 {
 	struct fuse *f = fuse;
 	int sleep_time;
+
+	pthread_setname_np(pthread_self(), "fuse_prune_nodes");
 
 	while(1) {
 		sleep_time = fuse_clean_cache(f);
