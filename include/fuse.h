@@ -896,12 +896,14 @@ static inline int fuse_main_real(int argc, char *argv[],
 		 __func__);
 
 	/* not declared globally, to restrict usage of this function */
-	int fuse_main_real_317(int argc, char *argv[],
-			       const struct fuse_operations *op, size_t op_size,
-			       struct libfuse_version *version,
-			       void *user_data);
+	int fuse_main_real_versioned(int argc, char *argv[],
+				     const struct fuse_operations *op,
+				     size_t op_size,
+				     struct libfuse_version *version,
+				     void *user_data);
 
-	return fuse_main_real_317(argc, argv, op, op_size, &version, user_data);
+	return fuse_main_real_versioned(argc, argv, op, op_size, &version,
+					user_data);
 }
 
 /**
@@ -970,12 +972,13 @@ fuse_main(int argc, char *argv[], const struct fuse_operations *op,
 	};
 
 	/* not declared globally, to restrict usage of this function */
-	int fuse_main_real_317(int argc, char *argv[],
-			       const struct fuse_operations *op, size_t op_size,
-			       struct libfuse_version *version,
-			       void *user_data);
-	return fuse_main_real_317(argc, argv, op, sizeof(*(op)), &version,
-				  user_data);
+	int fuse_main_real_versioned(int argc, char *argv[],
+				     const struct fuse_operations *op,
+				     size_t op_size,
+				     struct libfuse_version *version,
+				     void *user_data);
+	return fuse_main_real_versioned(argc, argv, op, sizeof(*(op)), &version,
+					user_data);
 }
 
 /* ----------------------------------------------------------- *

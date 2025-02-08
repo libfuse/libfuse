@@ -305,11 +305,12 @@ int fuse_daemonize(int foreground)
 }
 
 /* Not symboled, as not part of the official API */
-int fuse_main_real_317(int argc, char *argv[], const struct fuse_operations *op,
-		       size_t op_size, struct libfuse_version *version,
-		       void *user_data);
-int fuse_main_real_317(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, struct libfuse_version *version, void *user_data)
+int fuse_main_real_versioned(int argc, char *argv[],
+			     const struct fuse_operations *op, size_t op_size,
+			     struct libfuse_version *version, void *user_data);
+int fuse_main_real_versioned(int argc, char *argv[],
+			     const struct fuse_operations *op, size_t op_size,
+			     struct libfuse_version *version, void *user_data)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse *fuse;
@@ -408,7 +409,8 @@ int fuse_main_real_30(int argc, char *argv[], const struct fuse_operations *op,
 		      size_t op_size, void *user_data)
 {
 	struct libfuse_version version = { 0 };
-	return fuse_main_real_317(argc, argv, op, op_size, &version, user_data);
+	return fuse_main_real_versioned(argc, argv, op, op_size, &version,
+					user_data);
 }
 
 void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
