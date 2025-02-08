@@ -960,9 +960,9 @@ static inline int fuse_main_real(int argc, char *argv[],
  *
  * Example usage, see hello.c
  */
-static inline int
-fuse_main(int argc, char *argv[], const struct fuse_operations *op,
-	  void *user_data)
+static inline int fuse_main_fn(int argc, char *argv[],
+			       const struct fuse_operations *op,
+			       void *user_data)
 {
 	struct libfuse_version version = {
 		.major  = FUSE_MAJOR_VERSION,
@@ -980,6 +980,8 @@ fuse_main(int argc, char *argv[], const struct fuse_operations *op,
 	return fuse_main_real_versioned(argc, argv, op, sizeof(*(op)), &version,
 					user_data);
 }
+#define fuse_main(argc, argv, op, user_data) \
+	fuse_main_fn(argc, argv, op, user_data)
 
 /* ----------------------------------------------------------- *
  * More detailed API					       *
