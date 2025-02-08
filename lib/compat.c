@@ -60,6 +60,18 @@ int fuse_session_custom_io(struct fuse_session *se,
 	return fuse_session_custom_io_30(se, io, fd);
 }
 
+#endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
+
+int fuse_main_real_30(int argc, char *argv[], const struct fuse_operations *op,
+		      size_t op_size, void *user_data);
+int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
+		   size_t op_size, void *user_data);
+int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
+		   size_t op_size, void *user_data)
+{
+	return fuse_main_real_30(argc, argv, op, op_size, user_data);
+}
+
 struct fuse_session *fuse_session_new_30(struct fuse_args *args,
 					 const struct fuse_lowlevel_ops *op,
 					 size_t op_size, void *userdata);
@@ -71,16 +83,4 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 				      size_t op_size, void *userdata)
 {
 	return fuse_session_new_30(args, op, op_size, userdata);
-}
-
-#endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
-
-int fuse_main_real_30(int argc, char *argv[], const struct fuse_operations *op,
-		      size_t op_size, void *user_data);
-int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, void *user_data);
-int fuse_main_real(int argc, char *argv[], const struct fuse_operations *op,
-		   size_t op_size, void *user_data)
-{
-	return fuse_main_real_30(argc, argv, op, op_size, user_data);
 }
