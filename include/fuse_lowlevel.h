@@ -2047,18 +2047,6 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 #endif
 #endif
 
-/* Do not call this directly, but only through fuse_session_new() */
-#if (!defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
-struct fuse_session *
-_fuse_session_new_317(struct fuse_args *args,
-		      const struct fuse_lowlevel_ops *op,
-		      size_t op_size,
-		      struct libfuse_version *version,
-		      void *userdata);
-#define _fuse_session_new(args, op, op_size, version, userdata)	\
-	_fuse_session_new_317(args, op, op_size, version, userdata)
-#endif
-
 /**
  * Create a low level session.
  *
@@ -2088,10 +2076,8 @@ _fuse_session_new_317(struct fuse_args *args,
  * @return the fuse session on success, NULL on failure
  **/
 static inline struct fuse_session *
-fuse_session_new(struct fuse_args *args,
-		 const struct fuse_lowlevel_ops *op,
-		 size_t op_size,
-		 void *userdata)
+fuse_session_new_fn(struct fuse_args *args, const struct fuse_lowlevel_ops *op,
+		    size_t op_size, void *userdata)
 {
 	struct libfuse_version version = {
 		.major = FUSE_MAJOR_VERSION,
@@ -2101,13 +2087,16 @@ fuse_session_new(struct fuse_args *args,
 	};
 
 	/* not declared globally, to restrict usage of this function */
-	struct fuse_session *_fuse_session_new(
+	struct fuse_session *fuse_session_new_versioned(
 		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
 		size_t op_size, struct libfuse_version *version,
 		void *userdata);
 
-	return _fuse_session_new(args, op, op_size, &version, userdata);
+	return fuse_session_new_versioned(args, op, op_size, &version,
+					  userdata);
 }
+#define fuse_session_new(args, op, op_size, userdata) \
+	fuse_session_new_fn(args, op, op_size, userdata)
 
 /*
  * This should mostly not be called directly, but instead the

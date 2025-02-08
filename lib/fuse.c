@@ -5014,12 +5014,12 @@ struct fuse *_fuse_new_317(struct fuse_args *args,
 #endif
 
 	/* not declared globally, to restrict usage of this function */
-	struct fuse_session *_fuse_session_new(
+	struct fuse_session *fuse_session_new_versioned(
 		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
 		size_t op_size, struct libfuse_version *version,
 		void *userdata);
-
-	f->se = _fuse_session_new(args, &llop, sizeof(llop), version, f);
+	f->se = fuse_session_new_versioned(args, &llop, sizeof(llop), version,
+					   f);
 	if (f->se == NULL)
 		goto out_free_fs;
 
