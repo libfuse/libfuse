@@ -1,0 +1,62 @@
+# Safe: fuse_lowlevel_ops only adds new function pointers at the end
+[suppress_type]
+  name = "fuse_lowlevel_ops"
+  type_kind = "struct"
+  has_data_member_inserted_at = end
+
+# Safe: fuse_config changes are safe as new options are added with safe defaults
+[suppress_type]
+  name = "fuse_config"
+  type_kind = "struct"
+  has_data_member_inserted_at = end
+
+# Safe: fuse_bufvec changes are internal to libfuse's buffer handling
+# and don't affect ABI as it's only used for memory management within controlled
+# copy operations
+[suppress_type]
+  name = "fuse_bufvec"
+  type_kind = "struct"
+  has_data_member_inserted_at = end
+  has_size_change = yes
+
+# Hard to check "indirect sub-type"
+[suppress_function]
+  name = "cuse_lowlevel_main"
+
+# Hard to check "indirect sub-type"
+[suppress_function]
+  name = "cuse_lowlevel_new"
+
+# Hard to check "indirect sub-type"
+[suppress_function]
+  name = "cuse_lowlevel_setup"
+
+# Safe: fuse_conn_info changes are safe as we only use reserved space
+# and maintain total structure size
+[suppress_type]
+  name = "fuse_conn_info"
+  type_kind = "struct"
+  has_data_member_inserted_at = end
+  has_size_change = no
+
+# Safe: fuse_file_info changes are safe as struct is internally allocated
+[suppress_type]
+  name = "fuse_file_info"
+  type_kind = "struct"
+  has_data_member_inserted_at = end
+  has_size_change = yes
+
+# Safe: fuse_apply_conn_info_opts changes are safe as we only use reserved space
+# and maintain total structure size
+[suppress_function]
+  name = "fuse_apply_conn_info_opts"
+  parameter = 2
+  parameter_type_change = yes
+  parameter_subtype_change_recursive = yes
+  changed_member = "max_backing_stack_depth"
+  changed_member = "no_interrupt"
+  changed_member = "padding"
+  changed_member = "capable_ext"
+  changed_member = "want_ext"
+  array_changed_member = "reserved"
+

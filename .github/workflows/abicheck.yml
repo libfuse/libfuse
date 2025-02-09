@@ -28,14 +28,22 @@ jobs:
           sudo apt-get update
           sudo apt-get -y install abigail-tools clang gcc
 
+      # current version
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: current
 
+      # previous version
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           path: previous
           ref: ${{ github.event.pull_request.base.ref }}
+
+      # baseline version (3.10)
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          path: baseline_310
+          ref: fuse-3.10.0
 
       - uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5.2.0
         with:
@@ -45,7 +53,7 @@ jobs:
         working-directory: current
         run: |
           pip install -r requirements.txt
-          meson setup build --buildtype=debug
+          meson setup build --buildtype=debug -Dexamples=false
           meson compile -C build
 
       - name: Build previous
@@ -53,13 +61,34 @@ jobs:
         run: |
           echo "Commit-id before PR: $(git show HEAD)"
           pip install -r requirements.txt
-          meson setup build --buildtype=debug
+          meson setup build --buildtype=debug -Dexamples=false
           meson compile -C build
 
-      - name: Run abidiff
+      - name: Build baseline (3.10)
+        working-directory: baseline_310
+        run: |
+          echo "Building libfuse-3.10.0..."
+          pwd
+          cp ../current/requirements.txt .
+          ls -l
+          pip install -r requirements.txt
+          meson setup build --buildtype=debug -Dexamples=false
+          meson compile -C build
+
+      - name: Run abidiff against previous
         run: abidiff
           --no-added-syms
           --headers-dir1 previous/include/ 
           --headers-dir2 current/include/ 
           previous/build/lib/libfuse3.so 
+          current/build/lib/libfuse3.so
+
+      - name: Run abidiff against 3.10
+        run: abidiff
+          --no-added-syms
+          --ignore-soname
+          --suppressions current/.github/workflows/abi-suppressions.txt
+          --headers-dir1 baseline_310/include/
+          --headers-dir2 current/include/
+          baseline_310/build/lib/libfuse3.so
           current/build/lib/libfuse3.so
