@@ -1094,7 +1094,7 @@ fuse_new(struct fuse_args *args,
 		.padding = 0
 	};
 
-	return _fuse_new(args, op, op_size, &version, user_data);
+	return _fuse_new_317(args, op, op_size, &version, user_data);
 }
 #endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 #endif
