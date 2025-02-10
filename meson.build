@@ -1,4 +1,5 @@
-project('libfuse3', ['c'], version: '3.17.0',
+project('libfuse3', ['c'],
+        version: '3.17.1',  # Use a valid version number
         meson_version: '>= 0.51',
         default_options: [
             'buildtype=debugoptimized',
@@ -6,6 +7,11 @@ project('libfuse3', ['c'], version: '3.17.0',
             'cpp_std=c++17',
             'warning_level=2',
         ])
+
+# Define the full version string separately
+full_version = '3.17.1-rc0'
+conf_data = configuration_data()
+conf_data.set_quoted('PACKAGE_VERSION', full_version)
 
 # Would be better to create the version string
 # from integers, i.e. concatenating strings instead
