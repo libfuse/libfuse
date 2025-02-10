@@ -773,7 +773,7 @@ static int test_seekdir(void)
 	int i;
 	int res;
 	DIR *dp;
-	struct dirent *de;
+	struct dirent *de = NULL;
 
 	start_test("seekdir");
 	res = create_dir(testdir, testdir_files);
