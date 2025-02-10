@@ -1034,12 +1034,12 @@ struct fuse *_fuse_new_30(struct fuse_args *args,
 			 struct libfuse_version *version,
 			 void *user_data);
 static inline struct fuse *
-fuse_new(struct fuse_args *args,
+fuse_new_fn(struct fuse_args *args,
 	 const struct fuse_operations *op, size_t op_size,
 	 void *user_data)
 {
 	/* not declared globally, to restrict usage of this function */
-	struct fuse *_fuse_new(struct fuse_args *args,
+	struct fuse *_fuse_new_30(struct fuse_args *args,
 			       const struct fuse_operations *op, size_t op_size,
 			       struct libfuse_version *version,
 			       void *user_data);
@@ -1053,10 +1053,9 @@ fuse_new(struct fuse_args *args,
 
 	return _fuse_new_30(args, op, op_size, &version, user_data);
 }
-#else
-#if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
+#else /* FUSE_USE_VERSION */
 static inline struct fuse *
-fuse_new(struct fuse_args *args,
+fuse_new_fn(struct fuse_args *args,
 	 const struct fuse_operations *op, size_t op_size,
 	 void *user_data)
 {
@@ -1068,36 +1067,14 @@ fuse_new(struct fuse_args *args,
 	};
 
 	/* not declared globally, to restrict usage of this function */
-	struct fuse *_fuse_new(struct fuse_args *args,
-			       const struct fuse_operations *op, size_t op_size,
-			       struct libfuse_version *version,
-			       void *user_data);
-
-	return _fuse_new(args, op, op_size, &version, user_data);
+	struct fuse *_fuse_new_31(struct fuse_args *args,
+		const struct fuse_operations *op,
+		size_t op_size, struct libfuse_version *version,
+		void *user_data);
+	return _fuse_new_31(args, op, op_size, &version, user_data);
 }
-#else /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
-struct fuse *_fuse_new_317(struct fuse_args *args,
-                      const struct fuse_operations *op, size_t op_size,
-		      struct libfuse_version *version,
-		      void *private_data);
-#define _fuse_new(args, op, size, version, data) \
-	_fuse_new_317(args, op, size, version, data)
-static inline struct fuse *
-fuse_new(struct fuse_args *args,
-	 const struct fuse_operations *op, size_t op_size,
-	 void *user_data)
-{
-	struct libfuse_version version = {
-		.major = FUSE_MAJOR_VERSION,
-		.minor = FUSE_MINOR_VERSION,
-		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
-	};
-
-	return _fuse_new_317(args, op, op_size, &version, user_data);
-}
-#endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 #endif
+#define fuse_new(args, op, size, data) fuse_new_fn(args, op, size, data)
 
 /**
  * Mount a FUSE file system.
