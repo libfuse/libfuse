@@ -1684,7 +1684,7 @@ int fuse_fs_release(struct fuse_fs *fs,	 const char *path,
 
 		return fs->op.release(path, fi);
 	} else {
-		return 0;
+		return -ENOSYS;
 	}
 }
 
@@ -1707,7 +1707,7 @@ int fuse_fs_opendir(struct fuse_fs *fs, const char *path,
 
 		return err;
 	} else {
-		return 0;
+		return -ENOSYS;
 	}
 }
 
@@ -1730,7 +1730,7 @@ int fuse_fs_open(struct fuse_fs *fs, const char *path,
 
 		return err;
 	} else {
-		return 0;
+		return -ENOSYS;
 	}
 }
 
