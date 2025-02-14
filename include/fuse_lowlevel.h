@@ -1427,6 +1427,8 @@ int fuse_reply_readlink(fuse_req_t req, const char *link);
 /**
  * Setup passthrough backing file for open reply
  *
+ * Currently there should be only one backing id per node / backing file.
+ *
  * Possible requests:
  *   open, opendir, create
  *
