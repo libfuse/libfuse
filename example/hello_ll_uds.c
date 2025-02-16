@@ -185,8 +185,8 @@ static int create_socket(const char *socket_path) {
 
 	if (strnlen(socket_path, sizeof(addr.sun_path)) >=
 		sizeof(addr.sun_path)) {
-		printf("Socket path may not be longer than %lu characters\n",
-			 sizeof(addr.sun_path) - 1);
+		printf("Socket path may not be longer than %zu characters\n",
+		       sizeof(addr.sun_path) - 1);
 		return -1;
 	}
 
