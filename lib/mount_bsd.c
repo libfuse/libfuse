@@ -12,6 +12,7 @@
 #include "fuse_i.h"
 #include "fuse_misc.h"
 #include "fuse_opt.h"
+#include "util.h"
 
 #include <sys/param.h>
 #include "fuse_mount_compat.h"
@@ -151,7 +152,7 @@ static int init_backgrounded(void)
 static int fuse_mount_core(const char *mountpoint, const char *opts)
 {
 	const char *mountprog = FUSERMOUNT_PROG;
-	int fd;
+	long fd;
 	char *fdnam, *dev;
 	pid_t pid, cpid;
 	int status;
@@ -161,7 +162,7 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 
 	if (fdnam) {
 		err = libfuse_strtol(fdnam, &fd);
-		if (err) {
+		if (err || fd < 0) {
 			fuse_log(FUSE_LOG_ERR, "invalid value given in FUSE_DEV_FD\n");
 			return -1;
 		}
@@ -216,7 +217,7 @@ mount:
 			
 			if (! fdnam)
 			{
-				ret = asprintf(&fdnam, "%d", fd); 
+				ret = asprintf(&fdnam, "%ld", fd);
 				if(ret == -1)
 				{
 					perror("fuse: failed to assemble mount arguments");
