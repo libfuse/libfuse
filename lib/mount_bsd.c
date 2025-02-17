@@ -128,8 +128,11 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
-	close(fd);
-	unmount(mountpoint, MNT_FORCE);
+	if (close(fd) < 0)
+		fuse_log(FUSE_LOG_ERR, "closing FD %d failed: %s", fd, strerror(errno));
+	if (unmount(mountpoint, MNT_FORCE) < 0)
+		fuse_log(FUSE_LOG_ERR, "unmounting %s failed: %s",
+			mountpoint, strerror(errno));
 }
 
 static int fuse_mount_core(const char *mountpoint, const char *opts)
@@ -220,7 +223,8 @@ mount:
 
 	if (waitpid(cpid, &status, 0) == -1 || WEXITSTATUS(status) != 0) {
 		perror("fuse: failed to mount file system");
-		close(fd);
+		if (close(fd) < 0)
+			perror("fuse: closing FD");
 		return -1;
 	}
 
