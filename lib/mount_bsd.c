@@ -189,7 +189,7 @@ mount:
 			const char *argv[32];
 			int a = 0;
 			int ret = -1; 
-			
+
 			if (! fdnam)
 			{
 				ret = asprintf(&fdnam, "%ld", fd);
@@ -197,7 +197,7 @@ mount:
 				{
 					perror("fuse: failed to assemble mount arguments");
 					close(fd);
-					exit(1);
+					_exit(EXIT_FAILURE);
 				}
 			}
 
@@ -212,10 +212,10 @@ mount:
 			execvp(mountprog, (char **) argv);
 			perror("fuse: failed to exec mount program");
 			free(fdnam);
-			exit(1);
+			_exit(EXIT_FAILURE);
 		}
 
-		exit(0);
+		_exit(EXIT_SUCCESS);
 	}
 
 	if (waitpid(cpid, &status, 0) == -1 || WEXITSTATUS(status) != 0) {
