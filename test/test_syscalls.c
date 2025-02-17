@@ -1957,6 +1957,7 @@ static int do_test_create_ro_dir(int flags, const char *flags_str)
 	return 0;
 }
 
+#ifndef __FreeBSD__
 /* 	this tests open with O_TMPFILE
 	note that this will only work with the fuse low level api 
 	you will get ENOTSUP with the high level api */
@@ -2054,6 +2055,7 @@ static int test_create_and_link_tmpfile(void)
 	success();
 	return 0;
 }
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -2183,8 +2185,10 @@ int main(int argc, char *argv[])
 	err += test_create_ro_dir(O_CREAT | O_WRONLY);
 	err += test_create_ro_dir(O_CREAT | O_TRUNC);
 	err += test_copy_file_range();
+#ifndef __FreeBSD__
 	err += test_create_tmpfile();
 	err += test_create_and_link_tmpfile();
+#endif
 
 	unlink(testfile2);
 	unlink(testsock);
