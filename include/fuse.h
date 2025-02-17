@@ -882,6 +882,9 @@ struct fuse_context {
  *
  * Do not call this directly, use fuse_main()
  */
+int fuse_main_real_versioned(int argc, char *argv[],
+			     const struct fuse_operations *op, size_t op_size,
+			     struct libfuse_version *version, void *user_data);
 static inline int fuse_main_real(int argc, char *argv[],
 				 const struct fuse_operations *op,
 				 size_t op_size, void *user_data)
@@ -894,13 +897,6 @@ static inline int fuse_main_real(int argc, char *argv[],
 	fuse_log(FUSE_LOG_ERR,
 		 "%s is a libfuse internal function, please use fuse_main()\n",
 		 __func__);
-
-	/* not declared globally, to restrict usage of this function */
-	int fuse_main_real_versioned(int argc, char *argv[],
-				     const struct fuse_operations *op,
-				     size_t op_size,
-				     struct libfuse_version *version,
-				     void *user_data);
 
 	return fuse_main_real_versioned(argc, argv, op, op_size, &version,
 					user_data);
@@ -960,6 +956,9 @@ static inline int fuse_main_real(int argc, char *argv[],
  *
  * Example usage, see hello.c
  */
+int fuse_main_real_versioned(int argc, char *argv[],
+			     const struct fuse_operations *op, size_t op_size,
+			     struct libfuse_version *version, void *user_data);
 static inline int fuse_main_fn(int argc, char *argv[],
 			       const struct fuse_operations *op,
 			       void *user_data)
@@ -971,12 +970,6 @@ static inline int fuse_main_fn(int argc, char *argv[],
 		.padding = 0
 	};
 
-	/* not declared globally, to restrict usage of this function */
-	int fuse_main_real_versioned(int argc, char *argv[],
-				     const struct fuse_operations *op,
-				     size_t op_size,
-				     struct libfuse_version *version,
-				     void *user_data);
 	return fuse_main_real_versioned(argc, argv, op, sizeof(*(op)), &version,
 					user_data);
 }
@@ -999,6 +992,14 @@ static inline int fuse_main_fn(int argc, char *argv[],
  * @param args the argument vector.
  */
 void fuse_lib_help(struct fuse_args *args);
+
+/* Do not call this directly, use fuse_new() instead */
+struct fuse *_fuse_new_30(struct fuse_args *args,
+			  const struct fuse_operations *op, size_t op_size,
+			  struct libfuse_version *version, void *user_data);
+struct fuse *_fuse_new_31(struct fuse_args *args,
+			  const struct fuse_operations *op, size_t op_size,
+			  struct libfuse_version *version, void *user_data);
 
 /**
  * Create a new FUSE filesystem.
@@ -1028,22 +1029,10 @@ void fuse_lib_help(struct fuse_args *args);
  * @return the created FUSE handle
  */
 #if FUSE_USE_VERSION == 30
-struct fuse *_fuse_new_30(struct fuse_args *args,
-			 const struct fuse_operations *op,
-			 size_t op_size,
-			 struct libfuse_version *version,
-			 void *user_data);
-static inline struct fuse *
-fuse_new_fn(struct fuse_args *args,
-	 const struct fuse_operations *op, size_t op_size,
-	 void *user_data)
+static inline struct fuse *fuse_new_fn(struct fuse_args *args,
+				       const struct fuse_operations *op,
+				       size_t op_size, void *user_data)
 {
-	/* not declared globally, to restrict usage of this function */
-	struct fuse *_fuse_new_30(struct fuse_args *args,
-			       const struct fuse_operations *op, size_t op_size,
-			       struct libfuse_version *version,
-			       void *user_data);
-
 	struct libfuse_version version = {
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
@@ -1054,10 +1043,9 @@ fuse_new_fn(struct fuse_args *args,
 	return _fuse_new_30(args, op, op_size, &version, user_data);
 }
 #else /* FUSE_USE_VERSION */
-static inline struct fuse *
-fuse_new_fn(struct fuse_args *args,
-	 const struct fuse_operations *op, size_t op_size,
-	 void *user_data)
+static inline struct fuse *fuse_new_fn(struct fuse_args *args,
+				       const struct fuse_operations *op,
+				       size_t op_size, void *user_data)
 {
 	struct libfuse_version version = {
 		.major = FUSE_MAJOR_VERSION,
@@ -1066,11 +1054,6 @@ fuse_new_fn(struct fuse_args *args,
 		.padding = 0
 	};
 
-	/* not declared globally, to restrict usage of this function */
-	struct fuse *_fuse_new_31(struct fuse_args *args,
-		const struct fuse_operations *op,
-		size_t op_size, struct libfuse_version *version,
-		void *user_data);
 	return _fuse_new_31(args, op, op_size, &version, user_data);
 }
 #endif

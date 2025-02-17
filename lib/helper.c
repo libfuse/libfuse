@@ -304,10 +304,6 @@ int fuse_daemonize(int foreground)
 	return 0;
 }
 
-/* Not symboled, as not part of the official API */
-int fuse_main_real_versioned(int argc, char *argv[],
-			     const struct fuse_operations *op, size_t op_size,
-			     struct libfuse_version *version, void *user_data);
 int fuse_main_real_versioned(int argc, char *argv[],
 			     const struct fuse_operations *op, size_t op_size,
 			     struct libfuse_version *version, void *user_data)
