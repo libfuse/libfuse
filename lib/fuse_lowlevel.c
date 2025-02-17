@@ -3247,10 +3247,6 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 struct fuse_session *
 fuse_session_new_versioned(struct fuse_args *args,
 			   const struct fuse_lowlevel_ops *op, size_t op_size,
-			   struct libfuse_version *version, void *userdata);
-struct fuse_session *
-fuse_session_new_versioned(struct fuse_args *args,
-			   const struct fuse_lowlevel_ops *op, size_t op_size,
 			   struct libfuse_version *version, void *userdata)
 {
 	int err;
