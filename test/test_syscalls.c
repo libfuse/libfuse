@@ -1065,7 +1065,6 @@ static int test_create_unlink(void)
 	return 0;
 }
 
-#ifndef __FreeBSD__
 static int test_mknod(void)
 {
 	int err = 0;
@@ -1098,7 +1097,6 @@ static int test_mknod(void)
 	success();
 	return 0;
 }
-#endif
 
 #define test_open(exist, flags, mode)  do_test_open(exist, flags, #flags, mode)
 
@@ -1792,7 +1790,6 @@ fail:
 #undef PATH
 }
 
-#ifndef __FreeBSD__
 static int test_mkfifo(void)
 {
 	int res;
@@ -1824,7 +1821,6 @@ static int test_mkfifo(void)
 	success();
 	return 0;
 }
-#endif
 
 static int test_mkdir(void)
 {
@@ -2120,10 +2116,8 @@ int main(int argc, char *argv[])
 	err += test_symlink();
 	err += test_link();
 	err += test_link2();
-#ifndef __FreeBSD__	
 	err += test_mknod();
 	err += test_mkfifo();
-#endif
 	err += test_mkdir();
 	err += test_rename_file();
 	err += test_rename_dir();
