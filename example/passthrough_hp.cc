@@ -175,7 +175,7 @@ static Fs fs{};
 #define FUSE_BUF_COPY_FLAGS                      \
         (fs.nosplice ?                           \
             FUSE_BUF_NO_SPLICE :                 \
-            static_cast<fuse_buf_copy_flags>(0))
+            static_cast<fuse_buf_copy_flags>(FUSE_BUF_SPLICE_MOVE))
 
 
 static Inode& get_inode(fuse_ino_t ino) {
@@ -212,13 +212,15 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
     if (fs.nosplice) {
         // FUSE_CAP_SPLICE_READ is enabled in libfuse3 by default,
         // see do_init() in in fuse_lowlevel.c
-        // Just unset both, in case FUSE_CAP_SPLICE_WRITE would also get enabled
-        // by default.
+        // Just unset all, in case FUSE_CAP_SPLICE_WRITE or
+        // FUSE_CAP_SPLICE_MOVE would also get enabled by default.
         fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_READ);
         fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_WRITE);
+        fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_MOVE);
     } else {
         fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_WRITE);
         fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_READ);
+        fuse_set_feature_flag(conn, FUSE_CAP_SPLICE_MOVE);
     }
 
     /* This is a local file system - no network coherency needed */

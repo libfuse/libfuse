@@ -189,11 +189,10 @@ FUSE_3.12 {
 
 FUSE_3.17 {
 	global:
-		fuse_main_real_317;
-#if !defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS)
-		_fuse_session_new_317;
-		_fuse_new_317;
-#endif
+		fuse_main_real_versioned;
+		fuse_session_new_versioned;
+		_fuse_new_30;
+		_fuse_new_31;
 		fuse_passthrough_open;
 		fuse_passthrough_close;
 		fuse_session_custom_io_30;

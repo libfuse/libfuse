@@ -45,9 +45,13 @@ else
 endif
 
 fusermount_path = join_paths(get_option('prefix'), get_option('bindir'))
-libfuse = library('fuse3', libfuse_sources, version: meson.project_version(),
-                  soversion: '4', include_directories: include_dirs,
-                  dependencies: deps, install: true,
+libfuse = library('fuse3',
+                  libfuse_sources,
+                  version: base_version,
+                  soversion: '4',
+                  include_directories: include_dirs,
+                  dependencies: deps,
+                  install: true,
                   link_depends: 'fuse_versionscript',
                   c_args: [ '-DFUSE_USE_VERSION=317',
                             '-DFUSERMOUNT_DIR="@0@"'.format(fusermount_path) ],
