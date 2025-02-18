@@ -684,6 +684,9 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		struct fuse_ring_ent *ring_ent = &queue->ent[idx];
 		ring_ent->ring_queue = queue;
 		struct fuse_req *req = &ring_ent->req;
+		void *(*alloc_payload)(size_t size) =
+			se->uring.alloc_payload ? se->uring.alloc_payload :
+						  numa_alloc_local;
 
 		/*
 		 * Also allocate the header to have it page aligned, which
@@ -694,8 +697,12 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		ring_ent->req_header =
 			numa_alloc_local(ring_ent->req_header_sz);
 		ring_ent->req_payload_sz = ring->max_req_payload_sz;
-		ring_ent->op_payload =
-			numa_alloc_local(ring_ent->req_payload_sz);
+
+		/*
+		 * The application might want to allocate the payload on
+		 * on its own, for example to register RDMA memory.
+		 */
+		ring_ent->op_payload = alloc_payload(ring_ent->req_payload_sz);
 
 		req->se = se;
 		pthread_mutex_init(&req->lock, NULL);
@@ -865,4 +872,10 @@ int fuse_uring_stop(struct fuse_session *se)
 	free(ring);
 
 	return 0;
+}
+
+void fuse_uring_set_payload_allocator(struct fuse_session *se,
+				      void *(*alloc_payload)(size_t size))
+{
+	se->uring.alloc_payload = alloc_payload;
 }

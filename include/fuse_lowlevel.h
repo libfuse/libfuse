@@ -2347,6 +2347,19 @@ void fuse_session_process_buf(struct fuse_session *se,
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
 
+/**
+ * Set a custom allocator for the payload of io-uring requests
+ *
+ * This allocator is used to allocate the payload of io-uring requests.
+ * This is useful for example when the application wants to register
+ * these buffers for RDMA transfer.
+ *
+ * @param se the session
+ * @param alloc_payload the allocator function
+ */
+void fuse_uring_set_payload_allocator(struct fuse_session *se,
+				      void *(*alloc_payload)(size_t size));
+
 #ifdef __cplusplus
 }
 #endif
