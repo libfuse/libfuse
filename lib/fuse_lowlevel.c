@@ -2393,8 +2393,6 @@ static bool want_flags_valid(uint64_t capable, uint64_t want)
 
 /**
  * Get the wanted capability flags, converting from old format if necessary
- * Also applies the first 32 bits of capable_ext to capable
- *
  */
 static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
 					   uint64_t want_ext_default)
@@ -2577,7 +2575,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	se->got_init = 1;
 	if (se->op.init) {
-		uint32_t want_ext_default = se->conn.want_ext;
+		uint64_t want_ext_default = se->conn.want_ext;
 		int rc;
 
 		// Apply the first 32 bits of capable_ext to capable
@@ -3823,17 +3821,10 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 	return _fuse_session_receive_buf(se, buf, ch, true);
 }
 
-FUSE_SYMVER("_fuse_session_new_317", "_fuse_session_new@@FUSE_3.17")
-struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
-					   const struct fuse_lowlevel_ops *op,
-					   size_t op_size,
-					   struct libfuse_version *version,
-					   void *userdata);
-struct fuse_session *_fuse_session_new_317(struct fuse_args *args,
-					   const struct fuse_lowlevel_ops *op,
-					   size_t op_size,
-					   struct libfuse_version *version,
-					   void *userdata)
+struct fuse_session *
+fuse_session_new_versioned(struct fuse_args *args,
+			   const struct fuse_lowlevel_ops *op, size_t op_size,
+			   struct libfuse_version *version, void *userdata)
 {
 	int err;
 	struct fuse_session *se;
@@ -3936,10 +3927,8 @@ out1:
 }
 
 struct fuse_session *fuse_session_new_30(struct fuse_args *args,
-					  const struct fuse_lowlevel_ops *op,
-					  size_t op_size,
-					  void *userdata);
-FUSE_SYMVER("fuse_session_new_30", "fuse_session_new@FUSE_3.0")
+					 const struct fuse_lowlevel_ops *op,
+					 size_t op_size, void *userdata);
 struct fuse_session *fuse_session_new_30(struct fuse_args *args,
 					  const struct fuse_lowlevel_ops *op,
 					  size_t op_size,
@@ -3948,7 +3937,8 @@ struct fuse_session *fuse_session_new_30(struct fuse_args *args,
 	/* unknown version */
 	struct libfuse_version version = { 0 };
 
-	return _fuse_session_new_317(args, op, op_size, &version, userdata);
+	return fuse_session_new_versioned(args, op, op_size, &version,
+					  userdata);
 }
 
 FUSE_SYMVER("fuse_session_custom_io_317", "fuse_session_custom_io@@FUSE_3.17")

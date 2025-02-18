@@ -12,14 +12,12 @@
 #include "fuse_i.h"
 #include "fuse_misc.h"
 #include "fuse_opt.h"
+#include "util.h"
 
 #include <sys/param.h>
 #include "fuse_mount_compat.h"
 
-#include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/sysctl.h>
-#include <sys/user.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,8 +25,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
-#include <paths.h>
-#include <limits.h>
 
 #define FUSERMOUNT_PROG		"mount_fusefs"
 #define FUSE_DEV_TRUNK		"/dev/fuse"
@@ -85,7 +81,6 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_DUAL_OPT_KEY("private",		KEY_KERN),
 	FUSE_DUAL_OPT_KEY("neglect_shares",	KEY_KERN),
 	FUSE_DUAL_OPT_KEY("push_symlinks_in",	KEY_KERN),
-	FUSE_OPT_KEY("nosync_unmount",		KEY_KERN),
 #if __FreeBSD_version >= 1200519
 	FUSE_DUAL_OPT_KEY("intr",		KEY_KERN),
 #endif
@@ -129,29 +124,17 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
-	close(fd);
-	unmount(mountpoint, MNT_FORCE);
+	if (close(fd) < 0)
+		fuse_log(FUSE_LOG_ERR, "closing FD %d failed: %s", fd, strerror(errno));
+	if (unmount(mountpoint, MNT_FORCE) < 0)
+		fuse_log(FUSE_LOG_ERR, "unmounting %s failed: %s",
+			mountpoint, strerror(errno));
 }
-
-/* Check if kernel is doing init in background */
-static int init_backgrounded(void)
-{
-	unsigned ibg;
-	size_t len;
-
-	len = sizeof(ibg);
-
-	if (sysctlbyname("vfs.fuse.init_backgrounded", &ibg, &len, NULL, 0))
-		return 0;
-
-	return ibg;
-}
-
 
 static int fuse_mount_core(const char *mountpoint, const char *opts)
 {
 	const char *mountprog = FUSERMOUNT_PROG;
-	int fd;
+	long fd;
 	char *fdnam, *dev;
 	pid_t pid, cpid;
 	int status;
@@ -161,7 +144,7 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 
 	if (fdnam) {
 		err = libfuse_strtol(fdnam, &fd);
-		if (err) {
+		if (err || fd < 0) {
 			fuse_log(FUSE_LOG_ERR, "invalid value given in FUSE_DEV_FD\n");
 			return -1;
 		}
@@ -193,35 +176,27 @@ mount:
 	}
 
 	if (pid == 0) {
-		if (! init_backgrounded()) {
-			/*
-			 * If init is not backgrounded, we have to
-			 * call the mount util backgrounded, to avoid
-			 * deadlock.
-			 */
+		pid = fork();
 
-			pid = fork();
-
-			if (pid == -1) {
-				perror("redfs fork() failed");
-				close(fd);
-				exit(1);
-			}
+		if (pid == -1) {
+			perror("fuse: fork() failed");
+			close(fd);
+			_exit(EXIT_FAILURE);
 		}
 
 		if (pid == 0) {
 			const char *argv[32];
 			int a = 0;
 			int ret = -1; 
-			
+
 			if (! fdnam)
 			{
-				ret = asprintf(&fdnam, "%d", fd); 
+				ret = asprintf(&fdnam, "%ld", fd);
 				if(ret == -1)
 				{
 					perror("redfs failed to assemble mount arguments");
 					close(fd);
-					exit(1);
+					_exit(EXIT_FAILURE);
 				}
 			}
 
@@ -236,15 +211,16 @@ mount:
 			execvp(mountprog, (char **) argv);
 			perror("redfs failed to exec mount program");
 			free(fdnam);
-			exit(1);
+			_exit(EXIT_FAILURE);
 		}
 
-		exit(0);
+		_exit(EXIT_SUCCESS);
 	}
 
 	if (waitpid(cpid, &status, 0) == -1 || WEXITSTATUS(status) != 0) {
 		perror("redfs failed to mount file system");
-		close(fd);
+		if (close(fd) < 0)
+			perror("fuse: closing FD");
 		return -1;
 	}
 

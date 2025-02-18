@@ -1411,7 +1411,8 @@ int fuse_reply_entry(fuse_req_t req, const struct fuse_entry_param *e);
  * Reply with a directory entry and open parameters
  *
  * currently the following members of 'fi' are used:
- *   fh, direct_io, keep_cache
+ *   fh, direct_io, keep_cache, cache_readdir, nonseekable, noflush,
+ *   parallel_direct_writes
  *
  * Possible requests:
  *   create
@@ -1456,6 +1457,8 @@ int fuse_reply_readlink(fuse_req_t req, const char *link);
 /**
  * Setup passthrough backing file for open reply
  *
+ * Currently there should be only one backing id per node / backing file.
+ *
  * Possible requests:
  *   open, opendir, create
  *
@@ -1470,7 +1473,8 @@ int fuse_passthrough_close(fuse_req_t req, int backing_id);
  * Reply with open parameters
  *
  * currently the following members of 'fi' are used:
- *   fh, direct_io, keep_cache
+ *   fh, direct_io, keep_cache, cache_readdir, nonseekable, noflush,
+ *   parallel_direct_writes,
  *
  * Possible requests:
  *   open, opendir
@@ -2077,17 +2081,11 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 #endif
 #endif
 
-/* Do not call this directly, but only through fuse_session_new() */
-#if (!defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
+/* Do not call this directly, use fuse_session_new() instead */
 struct fuse_session *
-_fuse_session_new_317(struct fuse_args *args,
-		      const struct fuse_lowlevel_ops *op,
-		      size_t op_size,
-		      struct libfuse_version *version,
-		      void *userdata);
-#define _fuse_session_new(args, op, op_size, version, userdata)	\
-	_fuse_session_new_317(args, op, op_size, version, userdata)
-#endif
+fuse_session_new_versioned(struct fuse_args *args,
+			   const struct fuse_lowlevel_ops *op, size_t op_size,
+			   struct libfuse_version *version, void *userdata);
 
 /**
  * Create a low level session.
@@ -2118,10 +2116,8 @@ _fuse_session_new_317(struct fuse_args *args,
  * @return the fuse session on success, NULL on failure
  **/
 static inline struct fuse_session *
-fuse_session_new(struct fuse_args *args,
-		 const struct fuse_lowlevel_ops *op,
-		 size_t op_size,
-		 void *userdata)
+fuse_session_new_fn(struct fuse_args *args, const struct fuse_lowlevel_ops *op,
+		    size_t op_size, void *userdata)
 {
 	struct libfuse_version version = {
 		.major = FUSE_MAJOR_VERSION,
@@ -2130,14 +2126,11 @@ fuse_session_new(struct fuse_args *args,
 		.padding = 0
 	};
 
-	/* not declared globally, to restrict usage of this function */
-	struct fuse_session *_fuse_session_new(
-		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
-		size_t op_size, struct libfuse_version *version,
-		void *userdata);
-
-	return _fuse_session_new(args, op, op_size, &version, userdata);
+	return fuse_session_new_versioned(args, op, op_size, &version,
+					  userdata);
 }
+#define fuse_session_new(args, op, op_size, userdata) \
+	fuse_session_new_fn(args, op, op_size, userdata)
 
 /*
  * This should mostly not be called directly, but instead the
@@ -2353,6 +2346,19 @@ void fuse_session_process_buf(struct fuse_session *se,
  * @return the actual size of the raw request, or -errno on error
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
+
+/**
+ * Set a custom allocator for the payload of io-uring requests
+ *
+ * This allocator is used to allocate the payload of io-uring requests.
+ * This is useful for example when the application wants to register
+ * these buffers for RDMA transfer.
+ *
+ * @param se the session
+ * @param alloc_payload the allocator function
+ */
+void fuse_uring_set_payload_allocator(struct fuse_session *se,
+				      void *(*alloc_payload)(size_t size));
 
 #ifdef __cplusplus
 }

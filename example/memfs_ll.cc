@@ -150,7 +150,7 @@ class Inode {
 
 	void read_content(char *buf, size_t size, off_t offset) const
 	{
-		size_t bytes_to_read = std::min(size, content.size() - offset);
+		size_t bytes_to_read = std::min(size, content.size() - (size_t)offset);
 		std::copy(content.begin() + offset,
 			  content.begin() + offset + bytes_to_read, buf);
 	}
@@ -613,7 +613,7 @@ static void memfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	}
 
 	std::vector<char> content(
-		std::min(size, inode->content_size() - offset));
+		std::min(size, inode->content_size() - (size_t)offset));
 	inode->read_content(content.data(), content.size(), offset);
 
 	inode->unlock();

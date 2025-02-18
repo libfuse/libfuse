@@ -287,16 +287,11 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 	}
 
 	ent_in_out->payload_sz = off;
-	fuse_log(FUSE_LOG_ERR, "res=%d off=%zu\n", res, off);
 
 	out->error  = res;
 	out->unique = req->unique;
 
-	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
-
-	fuse_free_req(req);
-
-	return res;
+	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 }
 
 static void
@@ -477,8 +472,9 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	const size_t nr_queues = get_nprocs_conf();
 	size_t payload_sz = se->bufsize - FUSE_BUFFER_HEADER_SIZE;
 
-	fuse_log(FUSE_LOG_DEBUG, "Creating ring depth=%d payload_size=%d\n",
-		 se->uring.q_depth, payload_sz);
+	if (se->debug)
+		fuse_log(FUSE_LOG_DEBUG, "starting io-uring q-depth=%d\n",
+			 se->uring.q_depth);
 
 	fuse_ring = calloc(1, sizeof(*fuse_ring));
 	if (fuse_ring == NULL) {
@@ -688,6 +684,9 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		struct fuse_ring_ent *ring_ent = &queue->ent[idx];
 		ring_ent->ring_queue = queue;
 		struct fuse_req *req = &ring_ent->req;
+		void *(*alloc_payload)(size_t size) =
+			se->uring.alloc_payload ? se->uring.alloc_payload :
+						  numa_alloc_local;
 
 		/*
 		 * Also allocate the header to have it page aligned, which
@@ -698,8 +697,12 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		ring_ent->req_header =
 			numa_alloc_local(ring_ent->req_header_sz);
 		ring_ent->req_payload_sz = ring->max_req_payload_sz;
-		ring_ent->op_payload =
-			numa_alloc_local(ring_ent->req_payload_sz);
+
+		/*
+		 * The application might want to allocate the payload on
+		 * on its own, for example to register RDMA memory.
+		 */
+		ring_ent->op_payload = alloc_payload(ring_ent->req_payload_sz);
 
 		req->se = se;
 		pthread_mutex_init(&req->lock, NULL);
@@ -779,7 +782,8 @@ ret:
 
 static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 {
-	int rc;
+	int rc = 0;
+
 	for (size_t qid = 0; qid < ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
 		rc = pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
@@ -802,7 +806,7 @@ static int fuse_uring_sanity_check(void)
 static int fuse_uring_init_ext_threads(struct fuse_ring_pool *rp,
 				       struct fuse_session *se)
 {
-	int err;
+	int err = 0;
 
 	if (!rp->nr_queues)
 		return -EINVAL;
@@ -869,4 +873,10 @@ int fuse_uring_stop(struct fuse_session *se)
 	free(ring);
 
 	return 0;
+}
+
+void fuse_uring_set_payload_allocator(struct fuse_session *se,
+				      void *(*alloc_payload)(size_t size))
+{
+	se->uring.alloc_payload = alloc_payload;
 }

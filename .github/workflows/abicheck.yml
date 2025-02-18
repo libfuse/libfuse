@@ -57,7 +57,8 @@ jobs:
           meson compile -C build
 
       - name: Run abidiff
-        run: abidiff 
+        run: abidiff
+          --no-added-syms
           --headers-dir1 previous/include/ 
           --headers-dir2 current/include/ 
           previous/build/lib/libfuse3.so 

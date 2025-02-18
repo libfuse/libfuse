@@ -63,6 +63,7 @@ struct fuse_session_uring {
 	unsigned int enable;
 	unsigned int q_depth;
 	struct fuse_ring_pool *pool;
+	void *(*alloc_payload)(size_t size); /* external payload allocator */
 };
 
 struct fuse_session {
