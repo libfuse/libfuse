@@ -3,6 +3,8 @@ name: Checkpatch
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  branches:
+    - master
 
 jobs:
   checkpatch:
