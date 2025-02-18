@@ -782,7 +782,8 @@ ret:
 
 static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 {
-	int rc;
+	int rc = 0;
+
 	for (size_t qid = 0; qid < ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
 		rc = pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
@@ -805,7 +806,7 @@ static int fuse_uring_sanity_check(void)
 static int fuse_uring_init_ext_threads(struct fuse_ring_pool *rp,
 				       struct fuse_session *se)
 {
-	int err;
+	int err = 0;
 
 	if (!rp->nr_queues)
 		return -EINVAL;
