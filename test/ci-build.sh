@@ -81,7 +81,7 @@ sanitized_build()
 
     meson setup -Dprefix=${PREFIX_DIR} -D werror=true\
            "${SOURCE_DIR}" \
-           || (ct meson-logs/meson-log.txt; false)
+           || (cat meson-logs/meson-log.txt; false)
     meson configure $SAN
 
     # b_lundef=false is required to work around clang
