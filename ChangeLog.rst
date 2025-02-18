@@ -1,4 +1,12 @@
-libfuse 3.17.1-rc0 (2024-02.10)
+libfuse 3.17.1-rc1 (2025-02-18)
+===============================
+- several BSD fixes
+- x86 (32bit) build fixes
+- nested declarations moved out of the inlined functions to avoid
+  build warnings
+- signify public key added for future 3.18
+
+libfuse 3.17.1-rc0 (2025-02.10)
 ===============================
 
 * Fix libfuse build with FUSE_USE_VERSION 30
@@ -14,7 +22,7 @@ libfuse 3.17.1-rc0 (2024-02.10)
   exported to be able to silence leak checkers
 
 
-libfuse 3.17 (2024-01-01, not officially releaesed)
+libfuse 3.17 (2025-01-01, not officially releaesed)
 ==================================================
 
 * 3.11 and 3.14.2 introduced ABI incompatibilities, the ABI is restored

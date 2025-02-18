@@ -1,5 +1,5 @@
 project('libfuse3', ['c'],
-        version: '3.17.1-rc0',  # Version with RC suffix
+        version: '3.17.1-rc1',  # Version with RC suffix
         meson_version: '>= 0.51.0',
         default_options: [
             'buildtype=debugoptimized',
