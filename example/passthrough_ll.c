@@ -633,7 +633,7 @@ static void lo_opendir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 	int error = ENOMEM;
 	struct lo_data *lo = lo_data(req);
 	struct lo_dirp *d;
-	int fd;
+	int fd = -1;
 
 	d = calloc(1, sizeof(struct lo_dirp));
 	if (d == NULL)

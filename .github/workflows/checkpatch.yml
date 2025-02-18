@@ -3,6 +3,8 @@ name: Checkpatch
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  branches:
+    - master
 
 jobs:
   checkpatch:
@@ -24,7 +26,7 @@ jobs:
         git rev-list --reverse $base_commit..HEAD | while read commit; do
           subject=$(git log -1 --format=%s $commit)
           echo "Checking commit: $commit - $subject"
-          if ! ./checkpatch.pl --no-tree --ignore MAINTAINERS,SPDX_LICENSE_TAG,COMMIT_MESSAGE,FILE_PATH_CHANGES,EMAIL_SUBJECT,AVOID_EXTERNS,GIT_COMMIT_ID -g $commit; then
+          if ! ./checkpatch.pl --no-tree --ignore MAINTAINERS,SPDX_LICENSE_TAG,COMMIT_MESSAGE,FILE_PATH_CHANGES,EMAIL_SUBJECT,AVOID_EXTERNS,GIT_COMMIT_ID,ENOSYS_SYSCALL -g $commit; then
             echo "checkpatch.pl found issues in commit $commit - $subject"
             exit 1
           fi

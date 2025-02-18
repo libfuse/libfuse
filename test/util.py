@@ -79,24 +79,16 @@ def umount(mount_process, mnt_dir):
         cmdline = [ 'umount', mnt_dir ]
         logger.debug("Using BSD-style umount command")
     else:
-<<<<<<< HEAD
+        logger.debug("Using redfsmount for unmounting")
         # redfsmount will be setuid root, so we can only trace it with
-=======
-        logger.debug("Using fusermount3 for unmounting")
-        # fusermount3 will be setuid root, so we can only trace it with
->>>>>>> uring
         # valgrind if we're root
         if os.getuid() == 0:
             cmdline = base_cmdline
             logger.debug("Running as root, using valgrind if configured")
         else:
             cmdline = []
-<<<<<<< HEAD
+            logger.debug("Not running as root, skipping valgrind for redfsmount")
         cmdline = cmdline + [ pjoin(basename, 'util', 'redfsmount'),
-=======
-            logger.debug("Not running as root, skipping valgrind for fusermount3")
-        cmdline = cmdline + [ pjoin(basename, 'util', 'fusermount3'),
->>>>>>> uring
                               '-z', '-u', mnt_dir ]
 
     logger.debug(f"Unmount command: {' '.join(cmdline)}")

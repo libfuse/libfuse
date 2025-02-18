@@ -1,5 +1,21 @@
-libfuse 3.17 (2024-01-01)
-=========================
+libfuse 3.17.1-rc0 (2024-02.10)
+===============================
+
+* Fix libfuse build with FUSE_USE_VERSION 30
+* Fix build of memfs_ll without manual meson reconfigure
+* Fix junk readdirplus results when filesystem not filling stat info
+* Fix conn.want_ext truncation to 32bit
+* Fix some build warnings with -Og
+* Fix fuse_main_real symbols
+* Several changes related to functions/symbols that added in
+  the libfuse version in 3.17
+* Add thread names to libfuse threads
+* With auto-umounts the FUSE_COMMFD2 (parent process fd is
+  exported to be able to silence leak checkers
+
+
+libfuse 3.17 (2024-01-01, not officially releaesed)
+==================================================
 
 * 3.11 and 3.14.2 introduced ABI incompatibilities, the ABI is restored
   to 3.10, .so version was increased since there were releases with
