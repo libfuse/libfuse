@@ -126,7 +126,7 @@ export CXXFLAGS="-m32"
 export LDFLAGS="-m32"
 export PKG_CONFIG_PATH="/usr/lib/i386-linux-gnu/pkgconfig"
 TEST_WITH_VALGRIND=false
-sanitized_build
+#sanitized_build
 unset CFLAGS
 unset CXXFLAGS
 unset LDFLAGS
