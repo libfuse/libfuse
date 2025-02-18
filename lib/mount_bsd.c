@@ -17,9 +17,7 @@
 #include <sys/param.h>
 #include "fuse_mount_compat.h"
 
-#include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/user.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -27,8 +25,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
-#include <paths.h>
-#include <limits.h>
 
 #define FUSERMOUNT_PROG		"mount_fusefs"
 #define FUSE_DEV_TRUNK		"/dev/fuse"
