@@ -57,6 +57,14 @@ struct fuse_ring_ent {
 	uint64_t req_commit_id;
 
 	struct iovec iov[2]; /* header and payload */
+
+	/*
+	 * Optional memory registration handle for the payload buffer.
+	 * Used by transports that require registered memory for data transfers.
+	 * For example: RDMA (via ibv_reg_mr), but could be used by other
+	 * mechanisms that need memory registration.
+	 */
+	void *payload_mr;
 };
 
 struct fuse_ring_queue {
@@ -684,9 +692,6 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		struct fuse_ring_ent *ring_ent = &queue->ent[idx];
 		ring_ent->ring_queue = queue;
 		struct fuse_req *req = &ring_ent->req;
-		void *(*alloc_payload)(size_t size) =
-			se->uring.alloc_payload ? se->uring.alloc_payload :
-						  numa_alloc_local;
 
 		/*
 		 * Also allocate the header to have it page aligned, which
@@ -702,7 +707,13 @@ static int _fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		 * The application might want to allocate the payload on
 		 * on its own, for example to register RDMA memory.
 		 */
-		ring_ent->op_payload = alloc_payload(ring_ent->req_payload_sz);
+		if (se->uring.alloc_payload)
+			ring_ent->op_payload = se->uring.alloc_payload(
+				ring_ent->req_payload_sz,
+				&ring_ent->payload_mr);
+		else
+			ring_ent->op_payload =
+				numa_alloc_local(ring_ent->req_payload_sz);
 
 		req->se = se;
 		pthread_mutex_init(&req->lock, NULL);
@@ -876,7 +887,21 @@ int fuse_uring_stop(struct fuse_session *se)
 }
 
 void fuse_uring_set_payload_allocator(struct fuse_session *se,
-				      void *(*alloc_payload)(size_t size))
+				      void *(*alloc_payload_buf)(size_t size,
+								 void **key),
+				      void (*free_payload_buf)(void *payload,
+							       void *key))
 {
-	se->uring.alloc_payload = alloc_payload;
+	se->uring.alloc_payload = alloc_payload_buf;
+	se->uring.free_payload_buf = free_payload_buf;
+}
+
+void *fuse_uring_get_req_payload_mr(struct fuse_req *req)
+{
+	if (!req->is_uring)
+		return NULL; /* not a uring request */
+
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
+	return ring_ent->payload_mr;
 }
