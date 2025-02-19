@@ -27,9 +27,15 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <spawn.h>
 
 #define FUSERMOUNT_PROG		"mount_fusefs"
+#define FUSERMOUNT_PATH		"/sbin/" FUSERMOUNT_PROG
 #define FUSE_DEV_TRUNK		"/dev/fuse"
+
+#ifndef HAVE_ENVIRON_DECL
+extern char **environ __weak_symbol;
+#endif
 
 enum {
 	KEY_RO,
@@ -130,19 +136,16 @@ static int fuse_mount_opt_proc(void *data, const char *arg, int key,
 void fuse_kern_unmount(const char *mountpoint, int fd)
 {
 	if (close(fd) < 0)
-		fuse_log(FUSE_LOG_ERR, "closing FD %d failed: %s", fd, strerror(errno));
+		fuse_log(FUSE_LOG_WARNING, "closing FD %d failed: %s\n", fd, strerror(errno));
 	if (unmount(mountpoint, MNT_FORCE) < 0)
-		fuse_log(FUSE_LOG_ERR, "unmounting %s failed: %s",
-			mountpoint, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "unmounting %s failed: %s\n",
+			 mountpoint, strerror(errno));
 }
 
 static int fuse_mount_core(const char *mountpoint, const char *opts)
 {
-	const char *mountprog = FUSERMOUNT_PROG;
 	long fd;
 	char *fdnam, *dev;
-	pid_t pid, cpid;
-	int status;
 	int err;
 
 	fdnam = getenv("FUSE_DEV_FD");
@@ -169,71 +172,69 @@ static int fuse_mount_core(const char *mountpoint, const char *opts)
 
 mount:
 	if (getenv("FUSE_NO_MOUNT") || ! mountpoint)
-		goto out;
+		return fd;
 
-	pid = fork();
-	cpid = pid;
-
-	if (pid == -1) {
-		perror("fuse: fork() failed");
-		close(fd);
-		return -1;
-	}
-
-	if (pid == 0) {
-		pid = fork();
-
-		if (pid == -1) {
-			perror("fuse: fork() failed");
-			close(fd);
-			_exit(EXIT_FAILURE);
+	_Bool fdnam_alloc = 0;
+	if (!fdnam) {
+		err = asprintf(&fdnam, "%ld", fd);
+		if (err < 0) {
+			perror("fuse: failed to assemble mount arguments for " FUSERMOUNT_PROG);
+			goto err_out;
 		}
-
-		if (pid == 0) {
-			const char *argv[32];
-			int a = 0;
-			int ret = -1;
-
-			if (! fdnam)
-			{
-				ret = asprintf(&fdnam, "%ld", fd);
-				if(ret == -1)
-				{
-					perror("fuse: failed to assemble mount arguments");
-					close(fd);
-					_exit(EXIT_FAILURE);
-				}
-			}
-
-			argv[a++] = mountprog;
-			if (opts) {
-				argv[a++] = "-o";
-				argv[a++] = opts;
-			}
-			argv[a++] = fdnam;
-			argv[a++] = mountpoint;
-			argv[a++] = NULL;
-			execvp(mountprog, (char **) argv);
-			perror("fuse: failed to exec mount program");
-			free(fdnam);
-			_exit(EXIT_FAILURE);
-		}
-
-		waitpid(pid, &status, 0);
-		if (!WIFEXITED(status))
-			_exit(EXIT_FAILURE);
-		_exit(WEXITSTATUS(status));
+		fdnam_alloc = 1;
 	}
 
-	if (waitpid(cpid, &status, 0) == -1 || WEXITSTATUS(status) != 0) {
-		perror("fuse: failed to mount file system");
-		if (close(fd) < 0)
-			perror("fuse: closing FD");
-		return -1;
+	const char *argv[6];
+	unsigned char a = 0;
+
+	argv[a++] = FUSERMOUNT_PROG;
+	if (opts) {
+		argv[a++] = "-o";
+		argv[a++] = opts;
+	}
+	argv[a++] = fdnam;
+	argv[a++] = mountpoint;
+	argv[a] = NULL;
+
+	pid_t pid;
+
+	int status = posix_spawn(&pid, FUSERMOUNT_PATH, NULL, NULL, (char *const *) argv, environ);
+
+	if (fdnam_alloc)
+		free(fdnam);
+
+	if (status) {
+		fuse_log(FUSE_LOG_CRIT, "spawning " FUSERMOUNT_PROG " failed: %s (%d)\n",
+			 strerror(status), status);
+		goto err_out;
 	}
 
-out:
+	do
+		err = waitpid(pid, &status, 0);
+	while (err < 0 && errno == EINTR);
+
+	if (err < 0) {
+		fuse_log(FUSE_LOG_ERR, "waiting for " FUSERMOUNT_PROG " failed: %s\n",
+			 strerror(errno));
+		goto err_out;
+	}
+
+	if (WIFEXITED(status) && WEXITSTATUS(status)) {
+		fuse_log(FUSE_LOG_ERR, FUSERMOUNT_PROG " exited with code %d\n",
+			 WEXITSTATUS(status));
+		goto err_out;
+	}
+	if (WIFSIGNALED(status)) {
+		fuse_log(FUSE_LOG_ERR, FUSERMOUNT_PROG " was killed by %s\n",
+			 strsignal(WTERMSIG(status)));
+		goto err_out;
+	}
+
 	return fd;
+
+err_out:
+	(void)close(fd);
+	return -1;
 }
 
 struct mount_opts *parse_mount_opts(struct fuse_args *args)
