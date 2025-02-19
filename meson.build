@@ -83,6 +83,8 @@ private_cfg.set('HAVE_ICONV',
         cc.has_function('iconv', prefix: '#include <iconv.h>'))
 private_cfg.set('HAVE_BACKTRACE',
         cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
+private_cfg.set('HAVE_ENVIRON_DECL',
+        cc.has_header_symbol('unistd.h', 'environ', args: args_default))
 
 # Test if structs have specific member
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
