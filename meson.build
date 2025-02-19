@@ -222,6 +222,10 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
                   prefix: include_default + '#include <sys/stat.h>',
                   args: args_default))
 
+# Variable declaration checks
+private_cfg.set('HAVE_ENVIRON_DECL',
+        cc.has_header_symbol('unistd.h', 'environ', args: args_default))
+
 private_cfg.set('USDT_ENABLED', get_option('enable-usdt'))
 
 # What a session starts with; fuse_session_set_sync_init() still overrides it.
