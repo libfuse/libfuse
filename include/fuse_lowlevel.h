@@ -2355,10 +2355,24 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
  * these buffers for RDMA transfer.
  *
  * @param se the session
- * @param alloc_payload the allocator function
+ * @param alloc_payload Function to allocate payload buffer. Takes requested size
+ *                      and optional pointer to store RDMA registration key.
+ *                      Returns allocated buffer or NULL on failure.
+ * @param free_payload Function to free payload buffer. Takes the buffer pointer
+ *                     and optional RDMA unregistration key.
  */
-void fuse_uring_set_payload_allocator(struct fuse_session *se,
-				      void *(*alloc_payload)(size_t size));
+void fuse_uring_set_payload_allocator(
+	struct fuse_session *se, void *(*alloc_payload)(size_t size, void **mr),
+	void (*free_payload)(void *buf, void *mr));
+
+/**
+ * Get memory registration handle associated with request payload. The mr handle
+ * has to be obtained by a custom payload buf allocator.
+ *
+ * @param req The FUSE request
+ * @return Memory registration handle if set, NULL otherwise
+ */
+void *fuse_uring_get_req_payload_mr(struct fuse_req *req);
 
 #ifdef __cplusplus
 }
