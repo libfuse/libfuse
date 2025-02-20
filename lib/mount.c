@@ -154,7 +154,7 @@ static int fusermount_posix_spawn(posix_spawn_file_actions_t *action,
 	if (out_pid)
 		*out_pid = pid;
 	else
-		waitpid(pid, NULL, 0);
+		waitpid(pid, NULL, 0); /* FIXME: check exit code and return error if any */
 
 	return 0;
 }
@@ -342,8 +342,8 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 				"--", mountpoint, NULL };
 	int status = fusermount_posix_spawn(NULL, argv, NULL);
 	if(status != 0) {
-		fuse_log(FUSE_LOG_ERR, "Spawaning %s to unumount failed",
-			 FUSERMOUNT_PROG);
+		fuse_log(FUSE_LOG_ERR, "Spawning %s to unmount failed: %s",
+			 FUSERMOUNT_PROG, strerror(-status));
 		return;
 	}
 }
@@ -391,8 +391,8 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 	posix_spawn_file_actions_init(&action);
 
 	if (quiet) {
-		posix_spawn_file_actions_addclose(&action, 1);
-		posix_spawn_file_actions_addclose(&action, 2);
+		posix_spawn_file_actions_addopen(&action, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+		posix_spawn_file_actions_addopen(&action, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
 	}
 	posix_spawn_file_actions_addclose(&action, fds[1]);
 
@@ -407,7 +407,8 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 	if(status != 0) {
 		close(fds[0]);
 		close(fds[1]);
-		fuse_log(FUSE_LOG_ERR, "fuse: Setting up auto-unmount failed");
+		fuse_log(FUSE_LOG_ERR, "fuse: Setting up auto-unmount failed (spawn): %s",
+			     strerror(-status));
 		return -1;
 	}
 	// passed to child now, so can close here.
@@ -463,8 +464,8 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	posix_spawn_file_actions_init(&action);
 
 	if (quiet) {
-		posix_spawn_file_actions_addclose(&action, 1);
-		posix_spawn_file_actions_addclose(&action, 2);
+		posix_spawn_file_actions_addopen(&action, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+		posix_spawn_file_actions_addopen(&action, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
 	}
 	posix_spawn_file_actions_addclose(&action, fds[1]);
 
@@ -475,8 +476,8 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 	if(status != 0) {
 		close(fds[0]);
 		close(fds[1]);
-		fuse_log(FUSE_LOG_ERR, "posix_spawnp() for %s failed",
-			 FUSERMOUNT_PROG, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "posix_spawn(p)() for %s failed: %s",
+			 FUSERMOUNT_PROG, strerror(-status));
 		return -1;
 	}
 

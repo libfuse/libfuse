@@ -3,8 +3,8 @@ name: Checkpatch
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-  branches:
-    - master
+    branches:
+      - master
 
 jobs:
   checkpatch:
@@ -19,6 +19,10 @@ jobs:
         sudo apt-get install -y perl
     - name: Run checkpatch.pl
       run: |
+        if [ -z "${{ github.base_ref }}" ]; then
+          echo "Not a pull request, skipping checkpatch"
+          exit 0
+        fi
         git fetch origin ${{ github.base_ref }}
         base_commit=$(git merge-base origin/${{ github.base_ref }} HEAD)
         echo "Base commit: $base_commit"
