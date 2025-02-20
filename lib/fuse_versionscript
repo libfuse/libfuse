@@ -200,9 +200,14 @@ FUSE_3.17 {
 		fuse_set_fail_signal_handlers;
 		fuse_log_enable_syslog;
 		fuse_log_close_syslog;
+} FUSE_3.12;
+
+FUSE_3.18 {
+	global:
 		fuse_req_is_uring;
 		fuse_uring_set_payload_allocator;
-} FUSE_3.12;
+		fuse_uring_get_req_payload_mr;
+} FUSE_3.17;
 
 # Local Variables:
 # indent-tabs-mode: t
