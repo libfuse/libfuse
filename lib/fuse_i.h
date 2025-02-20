@@ -66,7 +66,7 @@ struct fuse_session_uring {
 
 	/* external payload buffer allocator */
 	void *(*alloc_payload)(size_t size, void **key);
-	void (*free_payload_buf)(void *buf, void *key);
+	void (*free_payload_buf)(void *buf, size_t size, void *key);
 };
 
 struct fuse_session {

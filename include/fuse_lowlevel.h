@@ -2363,7 +2363,7 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
  */
 void fuse_uring_set_payload_allocator(
 	struct fuse_session *se, void *(*alloc_payload)(size_t size, void **mr),
-	void (*free_payload)(void *buf, void *mr));
+	void (*free_payload)(void *buf, size_t size, void *mr));
 
 /**
  * Get memory registration handle associated with request payload. The mr handle

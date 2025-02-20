@@ -387,6 +387,19 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 	return 0;
 }
 
+static void free_payload(struct fuse_ring_ent *ent)
+{
+	struct fuse_ring_queue *queue = ent->ring_queue;
+	struct fuse_ring_pool *ring_pool = queue->ring_pool;
+	struct fuse_session *se = ring_pool->se;
+
+	if (se->uring.free_payload_buf)
+		se->uring.free_payload_buf(ent->op_payload, ent->req_payload_sz,
+					   ent->payload_mr);
+	else
+		numa_free(ent->op_payload, ent->req_payload_sz);
+}
+
 static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 {
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
@@ -404,7 +417,8 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 
 		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
-			numa_free(ent->op_payload, ent->req_payload_sz);
+
+			free_payload(ent);
 			numa_free(ent->req_header, ent->req_header_sz);
 		}
 	}
@@ -886,11 +900,10 @@ int fuse_uring_stop(struct fuse_session *se)
 	return 0;
 }
 
-void fuse_uring_set_payload_allocator(struct fuse_session *se,
-				      void *(*alloc_payload_buf)(size_t size,
-								 void **key),
-				      void (*free_payload_buf)(void *payload,
-							       void *key))
+void fuse_uring_set_payload_allocator(
+	struct fuse_session *se,
+	void *(*alloc_payload_buf)(size_t size, void **key),
+	void (*free_payload_buf)(void *payload, size_t size, void *key))
 {
 	se->uring.alloc_payload = alloc_payload_buf;
 	se->uring.free_payload_buf = free_payload_buf;
