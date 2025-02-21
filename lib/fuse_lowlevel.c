@@ -18,6 +18,7 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "mount_util.h"
+#include "usdt.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -57,6 +58,23 @@ static size_t pagesize;
 static __attribute__((constructor)) void fuse_ll_init_pagesize(void)
 {
 	pagesize = getpagesize();
+}
+
+/* tracepoints */
+static void trace_request_receive(int err)
+{
+	USDT(libfuse, request_receive, err);
+}
+
+static void trace_request_process(unsigned int opcode, unsigned int unique)
+{
+	USDT(libfuse, request_process, opcode, unique);
+}
+
+static void trace_request_reply(uint64_t unique, unsigned int len,
+				int error, int reply_err)
+{
+	USDT(libfuse, request_reply, unique, len, error, reply_err);
 }
 
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
@@ -206,6 +224,7 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 		res = writev(ch ? ch->fd : se->fd, iov, count);
 
 	int err = errno;
+	trace_request_reply(out->unique, out->len, out->error, err);
 
 	if (res == -1) {
 		/* ENOENT means the operation was interrupted */
@@ -2825,6 +2844,8 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 		in = buf->mem;
 	}
 
+	trace_request_process(in->opcode, in->unique);
+
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG,
 			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
@@ -3080,6 +3101,7 @@ static int _fuse_session_receive_buf(struct fuse_session *se,
 			     bufsize, 0);
 	}
 	err = errno;
+	trace_request_receive(err);
 
 	if (fuse_session_exited(se))
 		return 0;
@@ -3183,6 +3205,7 @@ restart:
 		res = read(ch ? ch->fd : se->fd, buf->mem, bufsize);
 	}
 	err = errno;
+	trace_request_receive(err);
 
 	if (fuse_session_exited(se))
 		return 0;
