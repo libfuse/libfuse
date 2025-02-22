@@ -1459,35 +1459,38 @@ static void show_version(void)
 static void close_inherited_fds(int cfd)
 {
 	int max_fd = sysconf(_SC_OPEN_MAX);
-	int rc;
+	int rc = -1;
+	int nullfd;
+
+	/* Open /dev/null for redirecting standard streams */
+	nullfd = open("/dev/null", O_RDWR);
+	if (nullfd != -1) {
+		/* Redirect stdin, stdout, stderr to /dev/null */
+		dup2(nullfd, STDIN_FILENO);
+		dup2(nullfd, STDOUT_FILENO);
+		dup2(nullfd, STDERR_FILENO);
+		if (nullfd > STDERR_FILENO)
+			close(nullfd);
+	}
 
 #ifdef CLOSE_RANGE_CLOEXEC
-	/* high range first to be able to log errors through stdout/err*/
-	rc = close_range(cfd + 1, ~0U, 0);
-	if (rc < 0) {
-		fprintf(stderr, "Failed to close high range of FDs: %s",
-			strerror(errno));
-		goto fallback;
+	/* Close low range only if cfd is higher than STDERR_FILENO */
+	if (cfd > STDERR_FILENO) {
+		rc = close_range(STDERR_FILENO + 1, cfd - 1, 0);
+		if (rc < 0)
+			goto fallback;
 	}
 
-	rc = close_range(0, cfd - 1, 0);
-	if (rc < 0) {
-		fprintf(stderr, "Failed to close low range of FDs: %s",
-			strerror(errno));
-		goto fallback;
-	}
+	/* Close high range first to be able to log errors */
+	rc = close_range(cfd + 1, ~0U, 0);
 #endif
 
 fallback:
-	/*
-	 * This also needs to close stdout/stderr, as the application
-	 * using libfuse might have closed these FDs and might be using
-	 * it. Although issue is now that logging errors won't be possible
-	 * after that.
-	 */
-	for (int fd = 0; fd <= max_fd; fd++) {
-		if (fd != cfd)
-			close(fd);
+	if (rc < 0) {
+		for (int fd = STDERR_FILENO + 1; fd <= max_fd; fd++) {
+			if (fd != cfd)
+				close(fd);
+		}
 	}
 }
 
