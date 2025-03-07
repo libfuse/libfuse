@@ -72,14 +72,14 @@ struct fuse_session {
 	int broken_splice_nonblock;
 	uint64_t notify_ctr;
 	struct fuse_notify_req notify_list;
-	size_t bufsize;
+	_Atomic size_t bufsize;
 	int error;
 
 	/* This is useful if any kind of ABI incompatibility is found at
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
-	bool buf_reallocable;
+	_Atomic bool buf_reallocable;
 };
 
 struct fuse_chan {
