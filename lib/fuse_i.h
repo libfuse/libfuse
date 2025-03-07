@@ -91,7 +91,7 @@ struct fuse_session {
 	int broken_splice_nonblock;
 	uint64_t notify_ctr;
 	struct fuse_notify_req notify_list;
-	size_t bufsize;
+	_Atomic size_t bufsize;
 	int error;
 
 	/*
@@ -100,7 +100,7 @@ struct fuse_session {
 	 */
 	struct libfuse_version version;
 
-	bool buf_reallocable;
+	_Atomic bool buf_reallocable;
 
 	/* io_uring */
 	struct fuse_session_uring uring;
