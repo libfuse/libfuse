@@ -3042,10 +3042,13 @@ static int _fuse_session_receive_buf(struct fuse_session *se,
 {
 	int err;
 	ssize_t res;
-	size_t bufsize = se->bufsize;
+	size_t bufsize;
 #ifdef HAVE_SPLICE
 	struct fuse_ll_pipe *llp;
 	struct fuse_buf tmpbuf;
+
+pipe_retry:
+	bufsize = se->bufsize;
 
 	if (se->conn.proto_minor < 14 ||
 	    !(se->conn.want_ext & FUSE_CAP_SPLICE_READ))
@@ -3091,6 +3094,13 @@ static int _fuse_session_receive_buf(struct fuse_session *se,
 			fuse_session_exit(se);
 			return 0;
 		}
+
+		/* FUSE_INIT might have increased the required bufsize */
+		if (err == EINVAL && bufsize < se->bufsize) {
+			fuse_ll_clear_pipe(se);
+			goto pipe_retry;
+		}
+
 		if (err != EINTR && err != EAGAIN)
 			perror("fuse: splice from device");
 		return -err;
