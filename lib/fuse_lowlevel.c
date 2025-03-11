@@ -3136,8 +3136,6 @@ pipe_retry:
 				return -ENOMEM;
 			}
 			buf->mem_size = se->bufsize;
-			if (internal)
-				se->buf_reallocable = true;
 		}
 		buf->size = se->bufsize;
 		buf->flags = 0;
@@ -3177,13 +3175,9 @@ fallback:
 			return -ENOMEM;
 		}
 		buf->mem_size = se->bufsize;
-		if (internal)
-			se->buf_reallocable = true;
 	}
 
 restart:
-	if (se->buf_reallocable)
-		bufsize = buf->mem_size;
 	if (se->io != NULL) {
 		/* se->io->read is never NULL if se->io is not NULL as
 		specified by fuse_session_custom_io()*/
@@ -3197,9 +3191,10 @@ restart:
 	if (fuse_session_exited(se))
 		return 0;
 	if (res == -1) {
-		if (err == EINVAL && se->buf_reallocable &&
-		    se->bufsize > buf->mem_size) {
-			void *newbuf = buf_alloc(se->bufsize, internal);
+		if (err == EINVAL && internal && se->bufsize > buf->mem_size) {
+			/* FUSE_INIT might have increased the required bufsize */
+			bufsize = se->bufsize;
+			void *newbuf = buf_alloc(bufsize, internal);
 			if (!newbuf) {
 				fuse_log(
 					FUSE_LOG_ERR,
@@ -3208,8 +3203,7 @@ restart:
 			}
 			fuse_buf_free(buf);
 			buf->mem = newbuf;
-			buf->mem_size = se->bufsize;
-			se->buf_reallocable = true;
+			buf->mem_size = bufsize;
 			goto restart;
 		}
 
@@ -3251,6 +3245,13 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 				      struct fuse_buf *buf,
 				      struct fuse_chan *ch)
 {
+	/*
+	 * if run internally thread buffers are from libfuse - we can
+	 * reallocate them
+	 */
+	if (unlikely(!se->got_init) && !se->buf_reallocable)
+		se->buf_reallocable = true;
+
 	return _fuse_session_receive_buf(se, buf, ch, true);
 }
 

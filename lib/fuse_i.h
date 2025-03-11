@@ -79,7 +79,9 @@ struct fuse_session {
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
-	_Atomic bool buf_reallocable;
+
+	/* true if reading requests from /dev/fuse are handled internally */
+	bool buf_reallocable;
 };
 
 struct fuse_chan {
