@@ -1136,6 +1136,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x7366746E /* NTFS3_SUPER_MAGIC */,
 		0x5346414f /* OPENAFS_SUPER_MAGIC */,
 		0x794C7630 /* OVERLAYFS_SUPER_MAGIC */,
+		0xAAD7AAEA /* PANFS_SUPER_MAGIC */,
 		0x52654973 /* REISERFS_SUPER_MAGIC */,
 		0xFE534D42 /* SMB2_SUPER_MAGIC */,
 		0x73717368 /* SQUASHFS_MAGIC */,
