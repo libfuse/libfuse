@@ -292,7 +292,7 @@ struct fuse_lowlevel_ops {
 	 * If writeback caching is enabled, the kernel may have a
 	 * better idea of a file's length than the FUSE file system
 	 * (eg if there has been a write that extended the file size,
-	 * but that has not yet been passed to the filesystem.n
+	 * but that has not yet been passed to the filesystem.
 	 *
 	 * In this case, the st_size value provided by the file system
 	 * will be ignored.
