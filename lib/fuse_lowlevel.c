@@ -2105,11 +2105,7 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		if (inargflags & FUSE_FLOCK_LOCKS)
 			se->conn.capable_ext |= FUSE_CAP_FLOCK_LOCKS;
 		if (inargflags & FUSE_AUTO_INVAL_DATA)
-			se->conn.capable_ext |= FUSE_CAP_AUTO_INVAL_DATA;
-		if (inargflags & FUSE_DO_READDIRPLUS)
-			se->conn.capable_ext |= FUSE_CAP_READDIRPLUS;
-		if (inargflags & FUSE_READDIRPLUS_AUTO)
-			se->conn.capable_ext |= FUSE_CAP_READDIRPLUS_AUTO;
+			se->conn.capable |= FUSE_CAP_AUTO_INVAL_DATA;
 		if (inargflags & FUSE_ASYNC_DIO)
 			se->conn.capable_ext |= FUSE_CAP_ASYNC_DIO;
 		if (inargflags & FUSE_WRITEBACK_CACHE)
@@ -2149,6 +2145,15 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 			se->conn.capable_ext |= FUSE_CAP_PASSTHROUGH;
 		if (inargflags & FUSE_NO_EXPORT_SUPPORT)
 			se->conn.capable_ext |= FUSE_CAP_NO_EXPORT_SUPPORT;
+		if (inargflags & FUSE_DAX_FMAP)
+			se->conn.capable_ext |= FUSE_CAP_DAX_FMAP;
+		else {
+			/* Avoid READDIRPLUS for famfs */
+			if (inargflags & FUSE_DO_READDIRPLUS)
+				se->conn.capable_ext |= FUSE_CAP_READDIRPLUS;
+			if (inargflags & FUSE_READDIRPLUS_AUTO)
+				se->conn.capable_ext |= FUSE_CAP_READDIRPLUS_AUTO;
+		}
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -2314,6 +2319,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	}
 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
+	if (se->conn.want & FUSE_CAP_DAX_FMAP)
+		outargflags |= FUSE_DAX_FMAP;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -2377,6 +2384,30 @@ static void do_destroy(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		se->op.destroy(se->userdata);
 
 	send_reply_ok(req, NULL, 0);
+}
+
+static void
+do_get_fmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_session *se = req->se;
+	(void)inarg;
+
+	if (se->op.get_fmap)
+		se->op.get_fmap(req, nodeid);
+	else
+		fuse_reply_err(req, -EOPNOTSUPP);
+}
+
+static void
+do_get_daxdev(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
+{
+	struct fuse_session *se = req->se;
+	(void)inarg;
+
+	if (se->op.get_daxdev)
+		se->op.get_daxdev(req, nodeid); /* Use nodeid as daxdev_index */
+	else
+		fuse_reply_err(req, -EOPNOTSUPP);
 }
 
 static void list_del_nreq(struct fuse_notify_req *nreq)
@@ -2780,6 +2811,8 @@ static struct {
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
+	[FUSE_GET_FMAP]    = { do_get_fmap, "GET_FMAP" },
+	[FUSE_GET_DAXDEV]  = { do_get_daxdev, "GET_DAXDEV" },
 };
 
 /*

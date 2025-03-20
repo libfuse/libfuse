@@ -1303,7 +1303,6 @@ struct fuse_lowlevel_ops {
 	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		       struct fuse_file_info *fi);
 
-
 	/**
 	 * Create a tempfile
 	 * 
@@ -1325,6 +1324,15 @@ struct fuse_lowlevel_ops {
 	void (*tmpfile) (fuse_req_t req, fuse_ino_t parent,
 			mode_t mode, struct fuse_file_info *fi);
 
+	/**
+	 * Get a famfs/devdax/fsdax fmap
+	 */
+	void (*get_fmap) (fuse_req_t req, fuse_ino_t ino);
+
+	/**
+	 * Get a daxdev by index
+	 */
+	void (*get_daxdev) (fuse_req_t req, int daxdev_index);
 };
 
 /**
