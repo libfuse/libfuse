@@ -3459,6 +3459,11 @@ int fuse_session_custom_io_30(struct fuse_session *se,
 			offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 
+int fuse_add_kernel_mount_opt(struct fuse_session *se, const char *mount_opt)
+{
+	return __fuse_add_kernel_mount_opt(se, mount_opt);
+}
+
 int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 {
 	int fd;

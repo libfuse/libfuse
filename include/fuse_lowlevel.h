@@ -2150,6 +2150,16 @@ static inline int fuse_session_custom_io(struct fuse_session *se,
 #endif
 
 /**
+ * Allow a libfuse caller to directly add kernel mount opts
+ *
+ * @param se session object
+ * @param mount_opt the option to add
+ *
+ * @return 0 on success, -1 on failure
+ */
+int fuse_add_kernel_mount_opt(struct fuse_session *se, const char *mount_opt);
+
+/**
  * Mount a FUSE file system.
  *
  * @param mountpoint the mount point path
