@@ -59,6 +59,10 @@ static void hello_ll_init(void *userdata, struct fuse_conn_info *conn)
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 	conn->no_interrupt = 1;
+
+	/* Test setting flags the old way */
+	conn->want = FUSE_CAP_ASYNC_READ;
+	conn->want &= ~FUSE_CAP_ASYNC_READ;
 }
 
 static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino,
