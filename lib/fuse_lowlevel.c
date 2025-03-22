@@ -9,7 +9,6 @@
   See the file COPYING.LIB
 */
 
-#include <stdbool.h>
 #define _GNU_SOURCE
 
 #include "fuse_config.h"
@@ -20,6 +19,8 @@
 #include "mount_util.h"
 #include "util.h"
 
+#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -1997,25 +1998,6 @@ static bool want_flags_valid(uint64_t capable, uint64_t want)
 	return true;
 }
 
-/**
- * Get the wanted capability flags, converting from old format if necessary
- */
-static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
-					   uint64_t want_ext_default)
-{
-	/* Convert want to want_ext if necessary */
-	if (conn->want != 0) {
-		if (conn->want_ext != want_ext_default) {
-			fuse_log(FUSE_LOG_ERR,
-				 "fuse: both 'want' and 'want_ext' are set\n");
-			return -EINVAL;
-		}
-		conn->want_ext |= conn->want;
-	}
-
-	return 0;
-}
-
 /* Prevent bogus data races (bogus since "init" is called before
  * multi-threading becomes relevant */
 static __attribute__((no_sanitize("thread")))
@@ -2177,11 +2159,12 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	se->got_init = 1;
 	if (se->op.init) {
 		uint64_t want_ext_default = se->conn.want_ext;
+		uint32_t want_default = fuse_lower_32_bits(se->conn.want_ext);
 		int rc;
 
 		// Apply the first 32 bits of capable_ext to capable
-		se->conn.capable =
-			(uint32_t)(se->conn.capable_ext & 0xFFFFFFFF);
+		se->conn.capable = fuse_lower_32_bits(se->conn.capable_ext);
+		se->conn.want = want_default;
 
 		se->op.init(se->userdata, &se->conn);
 
@@ -2190,7 +2173,8 @@ void do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 		 * se->conn.want_ext
 		 * Userspace might still use conn.want - we need to convert it
 		 */
-		rc = convert_to_conn_want_ext(&se->conn, want_ext_default);
+		rc = convert_to_conn_want_ext(&se->conn, want_ext_default,
+					      want_default);
 		if (rc != 0) {
 			fuse_reply_err(req, EPROTO);
 			se->error = -EPROTO;
