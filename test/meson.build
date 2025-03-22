@@ -16,6 +16,9 @@ td += executable('readdir_inode', 'readdir_inode.c',
 td += executable('release_unlink_race', 'release_unlink_race.c',
                  dependencies: [ libfuse_dep ],
                  install: false)
+td += executable('test_want_conversion', 'test_want_conversion.c',
+                 dependencies: [ libfuse_dep ],
+                 install: false)
 
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
                  'util.py', 'test_ctests.py', 'test_custom_io.py' ]
