@@ -423,10 +423,17 @@ void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
 	if(opts->set_max_readahead)
 		conn->max_readahead = opts->max_readahead;
 
-#define LL_ENABLE(cond,cap) \
-	if (cond) conn->want |= (cap)
-#define LL_DISABLE(cond,cap) \
-	if (cond) conn->want &= ~(cap)
+#define LL_ENABLE(cond, cap)                     \
+	do {                                     \
+		if (cond)                        \
+			conn->want |= (cap); \
+	} while (0)
+
+#define LL_DISABLE(cond, cap)                     \
+	do {                                      \
+		if (cond)                         \
+			conn->want &= ~(cap); \
+	} while (0)
 
 	LL_ENABLE(opts->splice_read, FUSE_CAP_SPLICE_READ);
 	LL_DISABLE(opts->no_splice_read, FUSE_CAP_SPLICE_READ);
