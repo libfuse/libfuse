@@ -61,6 +61,7 @@ struct fuse_notify_req {
 };
 
 struct fuse_session_uring {
+	bool enable;
 	unsigned int q_depth;
 	struct fuse_ring_pool *pool;
 };
