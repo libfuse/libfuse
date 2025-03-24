@@ -561,6 +561,9 @@ int fuse_uring_start(struct fuse_session *se)
 	int err = 0;
 	struct fuse_ring_pool *fuse_ring;
 
+	/* For now disabled*/
+	return 0;
+
 	fuse_uring_sanity_check();
 
 	fuse_ring = fuse_create_ring(se);
