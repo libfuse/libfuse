@@ -224,11 +224,41 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 	return req;
 }
 
+/*
+ * Send data to fuse-kernel using an fd of the fuse device.
+ */
+static int _fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
+			  struct iovec *iov, int count)
+{
+	ssize_t res;
+	int err;
+
+	if (se->io != NULL) {
+		/* se->io->writev is never NULL if se->io is not NULL as
+		 * specified by fuse_session_custom_io()
+		 */
+		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
+				     se->userdata);
+	} else {
+		res = writev(ch ? ch->fd : se->fd, iov, count);
+	}
+	if (res == -1) {
+		/* ENOENT means the operation was interrupted */
+		err = errno;
+		if (!fuse_session_exited(se) && err != ENOENT)
+			perror("fuse: writing device");
+		return -err;
+	}
+
+	return 0;
+}
+
 /* Send data. If *ch* is NULL, send via session master fd */
 static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 			 struct iovec *iov, int count)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
+	int err;
 
 	assert(se != NULL);
 	out->len = iov_length(iov, count);
@@ -248,26 +278,9 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 		}
 	}
 
-	ssize_t res;
-	if (se->io != NULL)
-		/* se->io->writev is never NULL if se->io is not NULL as
-		specified by fuse_session_custom_io()*/
-		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
-					   se->userdata);
-	else
-		res = writev(ch ? ch->fd : se->fd, iov, count);
-
-	int err = errno;
+	err = _fuse_send_msg(se, ch, iov, count);
 	trace_request_reply(out->unique, out->len, out->error, err);
-
-	if (res == -1) {
-		/* ENOENT means the operation was interrupted */
-		if (!fuse_session_exited(se) && err != ENOENT)
-			perror("fuse: writing device");
-		return -err;
-	}
-
-	return 0;
+	return err;
 }
 
 
