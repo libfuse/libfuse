@@ -15,6 +15,7 @@
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
 #include "fuse_i.h"
+#include "fuse_uring_i.h"
 #include "util.h"
 
 #include <stdio.h>
@@ -407,11 +408,15 @@ int err;
 			fuse_join_worker(&mt, mt.main.next);
 
 		err = mt.error;
+
+		if (se->uring.pool)
+			fuse_uring_stop(se);
 	}
 
 	pthread_mutex_destroy(&se->mt_lock);
 	if(se->error != 0)
 		err = se->error;
+
 
 	if (created_config) {
 		fuse_loop_cfg_destroy(config);
