@@ -132,6 +132,32 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
 
 private_cfg.set('USDT_ENABLED', get_option('enable-usdt'))
 
+# Check for liburing with SQE128 support
+code = '''
+#include <liburing.h>
+#include <stdio.h>
+int main(void) {
+    struct io_uring ring;
+    int ret = io_uring_queue_init(1, &ring, 0);
+#ifndef IORING_SETUP_SQE128
+#error "No SQE128 support"
+#endif
+    return ret;
+}'''
+
+liburing = get_option('enable-io-uring') ? \
+    dependency('liburing', required: false) :\
+    dependency('', required: false)
+libnuma = dependency('numa', required: false)
+
+if liburing.found() and libnuma.found()
+   if cc.links(code,
+              name: 'liburing linking and SQE128 support',
+              dependencies: [liburing])
+      private_cfg.set('HAVE_URING', true)
+   endif
+endif
+
 #
 # Compiler configuration
 #

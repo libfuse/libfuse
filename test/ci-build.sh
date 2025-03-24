@@ -146,6 +146,12 @@ export CC=clang
 export CXX=clang++
 sanitized_build "-Ddisable-libc-symbol-version=true"
 
+# Sanitized build without fuse-io-uring
+export CC=clang
+export CXX=clang++
+sanitized_build "-Denable-io-uring=false"
+
+# Build without any sanitizer
 non_sanitized_build
 
 # Documentation.
