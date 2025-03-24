@@ -73,7 +73,7 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        sudo apt install meson ninja-build python3-pytest
+        sudo apt install meson ninja-build python3-pytest liburing-dev libnuma-dev
         meson setup build --buildtype=debug
         meson compile -C build
 
