@@ -6,6 +6,9 @@
   See the file COPYING.LIB
 */
 
+#ifndef LIB_FUSE_I_H_
+#define LIB_FUSE_I_H_
+
 #include "fuse.h"
 #include "fuse_lowlevel.h"
 #include "util.h"
@@ -24,6 +27,7 @@
 })
 
 struct mount_opts;
+struct fuse_ring_pool;
 
 struct fuse_req {
 	struct fuse_session *se;
@@ -34,6 +38,7 @@ struct fuse_req {
 	struct fuse_chan *ch;
 	int interrupted;
 	unsigned int ioctl_64bit : 1;
+	unsigned int is_uring : 1;
 	union {
 		struct {
 			uint64_t unique;
@@ -53,6 +58,11 @@ struct fuse_notify_req {
 		      const void *, const struct fuse_buf *);
 	struct fuse_notify_req *next;
 	struct fuse_notify_req *prev;
+};
+
+struct fuse_session_uring {
+	unsigned int q_depth;
+	struct fuse_ring_pool *pool;
 };
 
 struct fuse_session {
@@ -79,7 +89,8 @@ struct fuse_session {
 	_Atomic size_t bufsize;
 	int error;
 
-	/* This is useful if any kind of ABI incompatibility is found at
+	/*
+	 * This is useful if any kind of ABI incompatibility is found at
 	 * a later version, to 'fix' it at run time.
 	 */
 	struct libfuse_version version;
@@ -91,6 +102,9 @@ struct fuse_session {
 
 	/* true if reading requests from /dev/fuse are handled internally */
 	bool buf_reallocable;
+
+	/* io_uring */
+	struct fuse_session_uring uring;
 };
 
 struct fuse_chan {
@@ -269,3 +283,5 @@ static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
 
 	return 0;
 }
+
+#endif /* LIB_FUSE_I_H_*/
