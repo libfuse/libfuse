@@ -18,6 +18,7 @@
 #include "fuse_misc.h"
 #include "mount_util.h"
 #include "util.h"
+#include "fuse_uring_i.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -32,6 +33,7 @@
 #include <assert.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+#include <stdalign.h>
 
 #ifdef USDT_ENABLED
 #include "usdt.h"
@@ -43,7 +45,6 @@
 #ifndef F_SETPIPE_SZ
 #define F_SETPIPE_SZ	(F_LINUX_SPECIFIC_BASE + 7)
 #endif
-
 
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 #define OFFSET_MAX 0x7fffffffffffffffLL
@@ -167,6 +168,10 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
 
 static void destroy_req(fuse_req_t req)
 {
+	if (req->is_uring) {
+		fuse_log(FUSE_LOG_ERR, "Refusing to destruct uring req\n");
+		return;
+	}
 	assert(req->ch == NULL);
 	pthread_mutex_destroy(&req->lock);
 	free(req);
@@ -177,7 +182,11 @@ void fuse_free_req(fuse_req_t req)
 	int ctr;
 	struct fuse_session *se = req->se;
 
-	if (se->conn.no_interrupt) {
+	/* XXX: for now no support for interrupts with io-uring
+	 *      It actually might work alreasdy, though. But then would add
+	 *      a lock across ring queues.
+	 */
+	if (se->conn.no_interrupt || req->is_uring) {
 		ctr = --req->ref_cnt;
 		fuse_chan_put(req->ch);
 		req->ch = NULL;
@@ -207,6 +216,7 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 		req->ref_cnt = 1;
 		list_init_req(req);
 		pthread_mutex_init(&req->lock, NULL);
+		req->is_uring = false;
 	}
 
 	return req;
@@ -2671,6 +2681,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
+	if (se->conn.want_ext & FUSE_CAP_OVER_IO_URING)
+		outargflags |= FUSE_OVER_IO_URING;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -2719,6 +2731,17 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
 
 	send_reply_ok(req, &outarg, outargsize);
+
+	/* XXX: Split the start, and send SQEs only after send_reply_ok() */
+	if (se->uring.enable && se->conn.want_ext & FUSE_CAP_OVER_IO_URING) {
+		int ring_rc = fuse_uring_start(se);
+
+		if (ring_rc != 0) {
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to start io-uring: %s\n",
+				 strerror(ring_rc));
+			fuse_session_exit(se);
+		}
+	}
 }
 
 static __attribute__((no_sanitize("thread"))) void
