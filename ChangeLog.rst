@@ -1,10 +1,16 @@
+libfuse 3.17.1 (2025-03-24)
+===========================
+* fuse: Fix want conn.want flag conversion
+* Prevent re-usage of stdio FDs for fusermount
+* PanFS added to fusermount whitelist
+
 libfuse 3.17.1-rc1 (2025-02-18)
 ===============================
-- several BSD fixes
-- x86 (32bit) build fixes
-- nested declarations moved out of the inlined functions to avoid
+* several BSD fixes
+* x86 (32bit) build fixes
+* nested declarations moved out of the inlined functions to avoid
   build warnings
-- signify public key added for future 3.18
+* signify public key added for future 3.18
 
 libfuse 3.17.1-rc0 (2025-02.10)
 ===============================
