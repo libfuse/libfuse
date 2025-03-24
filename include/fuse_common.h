@@ -7,7 +7,6 @@
 
 /** @file */
 
-#include <stdbool.h>
 #if !defined(FUSE_H_) && !defined(FUSE_LOWLEVEL_H_)
 #error "Never include <fuse_common.h> directly; use <fuse.h> or <fuse_lowlevel.h> instead."
 #endif
@@ -24,6 +23,7 @@
 #include "fuse_opt.h"
 #include "fuse_log.h"
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <assert.h>
 
@@ -514,6 +514,11 @@ struct fuse_loop_config_v1 {
  * is not going to work at all and will fail with EOPNOTSUPP.
  */
 #define FUSE_CAP_NO_EXPORT_SUPPORT (1 << 30)
+
+/**
+ * Indicates support for io-uring between fuse-server and fuse-client
+ */
+#define FUSE_CAP_OVER_IO_URING (1 << 31)
 
 /**
  * Ioctl flags
