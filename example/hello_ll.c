@@ -14,6 +14,10 @@
  *
  *     gcc -Wall hello_ll.c `pkg-config fuse3 --cflags --libs` -o hello_ll
  *
+ * Note: If the pkg-config command fails due to the absence of the fuse3.pc
+ *     file, you should configure the path to the fuse3.pc file in the
+ *     PKG_CONFIG_PATH variable.
+ *
  * ## Source code ##
  * \include hello_ll.c
  */
