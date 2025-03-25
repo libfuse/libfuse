@@ -336,12 +336,101 @@ err:
 	return NULL;
 }
 
-/* stub function */
+/* stub function*/
+static void fuse_session_process_uring_cqe(struct fuse_session *se,
+					   struct fuse_req *req,
+					   struct fuse_in_header *in,
+					   void *op_in, void *op_payload,
+					   size_t op_payload_sz)
+{
+	(void)se;
+	(void)req;
+	(void)in;
+	(void)op_in;
+	(void)op_payload;
+	(void)op_payload_sz;
+}
+
+static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
+				  struct io_uring_cqe *cqe)
+{
+	struct fuse_ring_ent *ent = io_uring_cqe_get_data(cqe);
+
+	if (!ent) {
+		fuse_log(FUSE_LOG_ERR,
+			 "cqe=%p io_uring_cqe_get_data returned NULL\n", cqe);
+		return;
+	}
+
+	struct fuse_req *req = &ent->req;
+	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
+	struct fuse_uring_req_header *rrh = ent->req_header;
+
+	struct fuse_in_header *in = (struct fuse_in_header *)&rrh->in_out;
+	struct fuse_uring_ent_in_out *ent_in_out = &rrh->ring_ent_in_out;
+
+	ent->req_commit_id = ent_in_out->commit_id;
+	if (unlikely(ent->req_commit_id == 0)) {
+		/*
+		 * If this happens kernel will not find the response - it will
+		 * be stuck forever - better to abort immediately.
+		 */
+		fuse_log(FUSE_LOG_ERR, "Received invalid commit_id=0\n");
+		abort();
+	}
+
+	req->is_uring = true;
+	req->ref_cnt++;
+	req->ch = NULL; /* not needed for uring */
+
+	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
+				       ent->op_payload, ent_in_out->payload_sz);
+}
+
 static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 {
-	(void)queue;
+	struct fuse_ring_pool *ring_pool = queue->ring_pool;
+	struct fuse_session *se = ring_pool->se;
+	size_t num_completed = 0;
+	struct io_uring_cqe *cqe;
+	unsigned int head;
+	int ret = 0;
 
-	return 0;
+	io_uring_for_each_cqe(&queue->ring, head, cqe) {
+		int err = 0;
+
+		num_completed++;
+
+		err = cqe->res;
+		if (err != 0) {
+			if (err > 0 && ((uintptr_t)io_uring_cqe_get_data(cqe) ==
+					(unsigned int)queue->eventfd)) {
+				/* teardown from eventfd */
+				return -ENOTCONN;
+			}
+
+			// XXX: Needs rate limited logs, otherwise log spam
+			//fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
+
+			/* -ENOTCONN is ok on umount  */
+			if (err != -EINTR && err != -EOPNOTSUPP &&
+			    err != -EAGAIN && err != -ENOTCONN) {
+				se->error = cqe->res;
+
+				/* return first error */
+				if (ret == 0)
+					ret = err;
+			}
+
+		} else {
+			fuse_uring_handle_cqe(queue, cqe);
+		}
+	}
+
+	if (num_completed)
+		io_uring_cq_advance(&queue->ring, num_completed);
+
+	return ret == 0 ? 0 : num_completed;
 }
 
 /**
