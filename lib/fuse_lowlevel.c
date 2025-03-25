@@ -3142,7 +3142,7 @@ int fuse_req_interrupted(fuse_req_t req)
 }
 
 static struct {
-	void (*func)(fuse_req_t, fuse_ino_t, const void *);
+	void (*func)(fuse_req_t req, const fuse_ino_t node, const void *arg);
 	const char *name;
 } fuse_ll_ops[] = {
 	[FUSE_LOOKUP]	   = { do_lookup,      "LOOKUP"	     },
