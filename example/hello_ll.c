@@ -14,6 +14,11 @@
  *
  *     gcc -Wall hello_ll.c `pkg-config fuse3 --cflags --libs` -o hello_ll
  *
+ * Note: On CentOS, if the libfuse library is manually built and installed
+ *     using Meson, use the following compilation command:
+ *     gcc -Wall hello_ll.c `PKG_CONFIG_PATH=/usr/local/lib64/pkgconfig \
+ *     pkg-config fuse3 --cflags --libs` -o hello_ll
+ *
  * ## Source code ##
  * \include hello_ll.c
  */
