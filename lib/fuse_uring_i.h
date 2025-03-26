@@ -24,4 +24,11 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 				    struct fuse_in_header *in, void *in_header,
 				    void *in_payload, size_t payload_len);
 
+int send_reply_uring(fuse_req_t req, int error, const void *arg,
+		     size_t argsize);
+
+int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
+			  enum fuse_buf_copy_flags flags);
+int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count);
+
 #endif // FUSE_URING_I_H_
