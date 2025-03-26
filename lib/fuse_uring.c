@@ -336,21 +336,6 @@ err:
 	return NULL;
 }
 
-/* stub function*/
-static void fuse_session_process_uring_cqe(struct fuse_session *se,
-					   struct fuse_req *req,
-					   struct fuse_in_header *in,
-					   void *op_in, void *op_payload,
-					   size_t op_payload_sz)
-{
-	(void)se;
-	(void)req;
-	(void)in;
-	(void)op_in;
-	(void)op_payload;
-	(void)op_payload_sz;
-}
-
 static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 				  struct io_uring_cqe *cqe)
 {
