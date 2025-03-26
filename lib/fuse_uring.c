@@ -141,6 +141,156 @@ fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
 	sqe->__pad1 = 0;
 }
 
+static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
+				 struct fuse_ring_queue *queue,
+				 struct fuse_ring_ent *ring_ent)
+{
+	struct fuse_session *se = ring_pool->se;
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
+	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
+	struct fuse_uring_ent_in_out *ent_in_out =
+		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
+	struct io_uring_sqe *sqe = io_uring_get_sqe(&queue->ring);
+
+	if (sqe == NULL) {
+		/* This is an impossible condition, unless there is a bug.
+		 * The kernel sent back an SQEs, which is assigned to a request.
+		 * There is no way to get out of SQEs, as the number of
+		 * SQEs matches the number tof requests.
+		 */
+
+		se->error = -EIO;
+		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
+
+		return -EIO;
+	}
+
+	fuse_uring_sqe_prepare(sqe, ring_ent,
+			       FUSE_IO_URING_CMD_COMMIT_AND_FETCH);
+
+	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid,
+				    ring_ent->req_commit_id);
+
+	if (se->debug) {
+		fuse_log(FUSE_LOG_DEBUG, "    unique: %llu, result=%d\n",
+			 out->unique, ent_in_out->payload_sz);
+	}
+
+	/* XXX: This needs to be a ring config option */
+	io_uring_submit(&queue->ring);
+
+	return 0;
+}
+
+int send_reply_uring(fuse_req_t req, int error, const void *arg, size_t argsize)
+{
+	int res;
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
+	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
+	struct fuse_uring_ent_in_out *ent_in_out =
+		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
+
+	struct fuse_ring_queue *queue = ring_ent->ring_queue;
+	struct fuse_ring_pool *ring_pool = queue->ring_pool;
+	size_t max_payload_sz = ring_pool->max_req_payload_sz;
+
+	if (argsize > max_payload_sz) {
+		fuse_log(FUSE_LOG_ERR, "argsize %zu exceeds buffer size %zu",
+			 argsize, max_payload_sz);
+		error = -EINVAL;
+	} else if (argsize) {
+		memcpy(ring_ent->op_payload, arg, argsize);
+	}
+	ent_in_out->payload_sz = argsize;
+
+	out->error  = error;
+	out->unique = req->unique;
+
+	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+
+	fuse_free_req(req);
+
+	return res;
+}
+
+int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
+		    enum fuse_buf_copy_flags flags)
+{
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
+
+	struct fuse_ring_queue *queue = ring_ent->ring_queue;
+	struct fuse_ring_pool *ring_pool = queue->ring_pool;
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
+	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
+	struct fuse_uring_ent_in_out *ent_in_out =
+		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
+	size_t max_payload_sz = ring_ent->req_payload_sz;
+	struct fuse_bufvec dest_vec = FUSE_BUFVEC_INIT(max_payload_sz);
+	int res;
+
+	dest_vec.buf[0].mem = ring_ent->op_payload;
+	dest_vec.buf[0].size = max_payload_sz;
+
+	res = fuse_buf_copy(&dest_vec, bufv, flags);
+
+	out->error  = res < 0 ? res : 0;
+	out->unique = req->unique;
+
+	ent_in_out->payload_sz = res > 0 ? res : 0;
+
+	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+
+	fuse_free_req(req);
+
+	return res;
+}
+
+/**
+ * Copy the iov into the ring buffer and submit and commit/fetch sqe
+ */
+int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
+{
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
+
+	struct fuse_ring_queue *queue = ring_ent->ring_queue;
+	struct fuse_ring_pool *ring_pool = queue->ring_pool;
+	struct fuse_uring_req_header *rrh = ring_ent->req_header;
+	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
+	struct fuse_uring_ent_in_out *ent_in_out =
+		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
+	size_t max_buf = ring_pool->max_req_payload_sz;
+	size_t len = 0;
+	int res = 0;
+
+	/* copy iov into the payload, idx=0 is the header section */
+	for (int idx = 1; idx < count; idx++) {
+		struct iovec *cur = &iov[idx];
+
+		if (len + cur->iov_len > max_buf) {
+			fuse_log(FUSE_LOG_ERR,
+				 "iov[%d] exceeds buffer size %zu",
+				 idx, max_buf);
+			res = -EINVAL; /* Gracefully handle this? */
+			break;
+		}
+
+		memcpy(ring_ent->op_payload + len, cur->iov_base, cur->iov_len);
+		len += cur->iov_len;
+	}
+
+	ent_in_out->payload_sz = len;
+
+	out->error  = res;
+	out->unique = req->unique;
+	out->len = len;
+
+	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
+}
+
 static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 				     size_t depth, int fd, int evfd)
 {

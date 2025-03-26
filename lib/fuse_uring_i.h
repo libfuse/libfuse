@@ -27,6 +27,12 @@ struct fuse_in_header;
 
 int fuse_uring_start(struct fuse_session *se);
 int fuse_uring_stop(struct fuse_session *se);
+int send_reply_uring(fuse_req_t req, int error, const void *arg,
+		     size_t argsize);
+
+int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
+			  enum fuse_buf_copy_flags flags);
+int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count);
 
 #else // HAVE_URING
 
@@ -36,6 +42,29 @@ static inline int fuse_uring_start(struct fuse_session *se FUSE_VAR_UNUSED)
 }
 
 static inline int fuse_uring_stop(struct fuse_session *se FUSE_VAR_UNUSED)
+{
+	return -ENOTSUP;
+}
+
+static inline int send_reply_uring(fuse_req_t req FUSE_VAR_UNUSED,
+				   int error FUSE_VAR_UNUSED,
+				   const void *arg FUSE_VAR_UNUSED,
+				   size_t argsize FUSE_VAR_UNUSED)
+{
+	return -ENOTSUP;
+}
+
+static inline int
+fuse_reply_data_uring(fuse_req_t req FUSE_VAR_UNUSED,
+		      struct fuse_bufvec *bufv FUSE_VAR_UNUSED,
+		      enum fuse_buf_copy_flags flags FUSE_VAR_UNUSED)
+{
+	return -ENOTSUP;
+}
+
+static inline int fuse_send_msg_uring(fuse_req_t req FUSE_VAR_UNUSED,
+				      struct iovec *iov FUSE_VAR_UNUSED,
+				      int count FUSE_VAR_UNUSED)
 {
 	return -ENOTSUP;
 }
