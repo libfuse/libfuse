@@ -227,21 +227,22 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 /*
  * Send data to fuse-kernel using an fd of the fuse device.
  */
-static int _fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
-			  struct iovec *iov, int count)
+static int fuse_write_msg_dev(struct fuse_session *se, struct fuse_chan *ch,
+			     struct iovec *iov, int count)
 {
 	ssize_t res;
 	int err;
 
-	if (se->io != NULL) {
+	if (se->io != NULL)
+
 		/* se->io->writev is never NULL if se->io is not NULL as
 		 * specified by fuse_session_custom_io()
 		 */
 		res = se->io->writev(ch ? ch->fd : se->fd, iov, count,
 				     se->userdata);
-	} else {
+	else
 		res = writev(ch ? ch->fd : se->fd, iov, count);
-	}
+
 	if (res == -1) {
 		/* ENOENT means the operation was interrupted */
 		err = errno;
@@ -253,15 +254,17 @@ static int _fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 	return 0;
 }
 
-/* Send data. If *ch* is NULL, send via session master fd */
 static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
-			 struct iovec *iov, int count)
+			 struct iovec *iov, int count, fuse_req_t req)
 {
 	struct fuse_out_header *out = iov[0].iov_base;
 	int err;
+	bool is_uring = req && req->is_uring ? true : false;
 
-	assert(se != NULL);
+	if (!is_uring)
+		assert(se != NULL);
 	out->len = iov_length(iov, count);
+
 	if (se->debug) {
 		if (out->unique == 0) {
 			fuse_log(FUSE_LOG_DEBUG, "NOTIFY: code=%d length=%u\n",
@@ -278,11 +281,14 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 		}
 	}
 
-	err = _fuse_send_msg(se, ch, iov, count);
+	if (is_uring)
+		err = fuse_send_msg_uring(req, iov, count);
+	else
+		err = fuse_write_msg_dev(se, ch, iov, count);
+
 	trace_request_reply(out->unique, out->len, out->error, err);
 	return err;
 }
-
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count)
@@ -305,7 +311,7 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
-	return fuse_send_msg(req->se, req->ch, iov, count);
+	return fuse_send_msg(req->se, req->ch, iov, count, req);
 }
 
 static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
@@ -321,6 +327,9 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 static int send_reply(fuse_req_t req, int error, const void *arg,
 		      size_t argsize)
 {
+	if (req->is_uring)
+		return send_reply_uring(req, error, arg, argsize);
+
 	struct iovec iov[2];
 	int count = 1;
 	if (argsize) {
@@ -599,7 +608,7 @@ static int fuse_send_data_iov_fallback(struct fuse_session *se,
 				       struct fuse_chan *ch,
 				       struct iovec *iov, int iov_count,
 				       struct fuse_bufvec *buf,
-				       size_t len)
+				       size_t len, fuse_req_t req)
 {
 	struct fuse_bufvec mem_buf = FUSE_BUFVEC_INIT(len);
 	void *mbuf;
@@ -614,7 +623,7 @@ static int fuse_send_data_iov_fallback(struct fuse_session *se,
 		iov[iov_count].iov_base = buf->buf[0].mem;
 		iov[iov_count].iov_len = len;
 		iov_count++;
-		return fuse_send_msg(se, ch, iov, iov_count);
+		return fuse_send_msg(se, ch, iov, iov_count, req);
 	}
 
 	res = posix_memalign(&mbuf, pagesize, len);
@@ -632,7 +641,7 @@ static int fuse_send_data_iov_fallback(struct fuse_session *se,
 	iov[iov_count].iov_base = mbuf;
 	iov[iov_count].iov_len = len;
 	iov_count++;
-	res = fuse_send_msg(se, ch, iov, iov_count);
+	res = fuse_send_msg(se, ch, iov, iov_count, req);
 	free(mbuf);
 
 	return res;
@@ -764,8 +773,9 @@ static int grow_pipe_to_max(int pipefd)
 }
 
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
-			       struct iovec *iov, int iov_count,
-			       struct fuse_bufvec *buf, unsigned int flags)
+			      struct iovec *iov, int iov_count,
+			      struct fuse_bufvec *buf, unsigned int flags,
+			      fuse_req_t req)
 {
 	int res;
 	size_t len = fuse_buf_size(buf);
@@ -917,7 +927,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			iov[iov_count].iov_base = mbuf;
 			iov[iov_count].iov_len = len;
 			iov_count++;
-			res = fuse_send_msg(se, ch, iov, iov_count);
+			res = fuse_send_msg(se, ch, iov, iov_count, req);
 			free(mbuf);
 			return res;
 		}
@@ -964,17 +974,17 @@ clear_pipe:
 	return res;
 
 fallback:
-	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len);
+	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len, req);
 }
 #else
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			       struct iovec *iov, int iov_count,
-			       struct fuse_bufvec *buf, unsigned int flags)
+			       struct fuse_bufvec *req_data, unsigned int flags)
 {
-	size_t len = fuse_buf_size(buf);
+	size_t len = fuse_buf_size(req_data);
 	(void) flags;
 
-	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, buf, len);
+	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, req_data, len);
 }
 #endif
 
@@ -985,13 +995,16 @@ int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 	struct fuse_out_header out;
 	int res;
 
+	if (req->is_uring)
+		return fuse_reply_data_uring(req, bufv, flags);
+
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
 	out.unique = req->unique;
 	out.error = 0;
 
-	res = fuse_send_data_iov(req->se, req->ch, iov, 1, bufv, flags);
+	res = fuse_send_data_iov(req->se, req->ch, iov, 1, bufv, flags, req);
 	if (res <= 0) {
 		fuse_free_req(req);
 		return res;
@@ -1743,8 +1756,8 @@ static void do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
 				    sizeof(struct fuse_write_in);
 	}
 	if (bufv.buf[0].size < arg->size) {
-		fuse_log(FUSE_LOG_ERR, "fuse: %s: buffer size too small\n",
-			 __func__);
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: %s: buffer size too small\n", __func__);
 		fuse_reply_err(req, EIO);
 		goto out;
 	}
@@ -2576,6 +2589,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	LL_SET_DEFAULT(se->op.readdirplus, FUSE_CAP_READDIRPLUS);
 	LL_SET_DEFAULT(se->op.readdirplus && se->op.readdir,
 		       FUSE_CAP_READDIRPLUS_AUTO);
+	LL_SET_DEFAULT(1, FUSE_CAP_OVER_IO_URING);
 
 	/* This could safely become default, but libfuse needs an API extension
 	 * to support it
@@ -2840,6 +2854,7 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 			   struct iovec *iov, int count)
 {
 	struct fuse_out_header out;
+	struct fuse_req *req = NULL;
 
 	if (!se->got_init)
 		return -ENOTCONN;
@@ -2849,7 +2864,7 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 	iov[0].iov_base = &out;
 	iov[0].iov_len = sizeof(struct fuse_out_header);
 
-	return fuse_send_msg(se, NULL, iov, count);
+	return fuse_send_msg(se, NULL, iov, count, req);
 }
 
 int fuse_lowlevel_notify_poll(struct fuse_pollhandle *ph)
@@ -2991,6 +3006,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	struct iovec iov[3];
 	size_t size = fuse_buf_size(bufv);
 	int res;
+	struct fuse_req *req = NULL;
 
 	if (!se)
 		return -EINVAL;
@@ -3011,7 +3027,7 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 	iov[1].iov_base = &outarg;
 	iov[1].iov_len = sizeof(outarg);
 
-	res = fuse_send_data_iov(se, NULL, iov, 2, bufv, flags);
+	res = fuse_send_data_iov(se, NULL, iov, 2, bufv, flags, req);
 	if (res > 0)
 		res = -res;
 
@@ -3392,7 +3408,7 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 			.iov_len = sizeof(struct fuse_out_header),
 		};
 
-		fuse_send_msg(se, ch, &iov, 1);
+		fuse_send_msg(se, ch, &iov, 1, NULL);
 		goto clear_pipe;
 	}
 
