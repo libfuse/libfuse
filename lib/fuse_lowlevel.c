@@ -3255,6 +3255,58 @@ static struct {
  */
 #define FUSE_MAXOP (CUSE_INIT + 1)
 
+
+/**
+ *
+ * @return 0 if sanity is ok, error otherwise
+ */
+static inline int
+fuse_req_opcode_sanity_ok(struct fuse_session *se, enum fuse_opcode in_op)
+{
+	int err = EIO;
+
+	if (!se->got_init) {
+		enum fuse_opcode expected;
+
+		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
+		if (in_op != expected)
+			return err;
+	} else if (in_op == FUSE_INIT || in_op == CUSE_INIT)
+		return err;
+
+	return 0;
+}
+
+static inline void
+fuse_session_in2req(struct fuse_req *req, struct fuse_in_header *in)
+{
+	req->unique = in->unique;
+	req->ctx.uid = in->uid;
+	req->ctx.gid = in->gid;
+	req->ctx.pid = in->pid;
+}
+
+/**
+ * Implement -o allow_root
+ */
+static inline int
+fuse_req_check_allow_root(struct fuse_session *se, enum fuse_opcode in_op,
+			  uid_t in_uid)
+{
+	int err = EACCES;
+
+	if (se->deny_others && in_uid != se->owner && in_uid != 0 &&
+		 in_op != FUSE_INIT && in_op != FUSE_READ &&
+		 in_op != FUSE_WRITE && in_op != FUSE_FSYNC &&
+		 in_op != FUSE_RELEASE && in_op != FUSE_READDIR &&
+		 in_op != FUSE_FSYNCDIR && in_op != FUSE_RELEASEDIR &&
+		 in_op != FUSE_NOTIFY_REPLY &&
+		 in_op != FUSE_READDIRPLUS)
+		return err;
+
+	return 0;
+}
+
 static const char *opname(enum fuse_opcode opcode)
 {
 	if (opcode >= FUSE_MAXOP || !fuse_ll_ops[opcode].name)
@@ -3323,7 +3375,7 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG,
-			"unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			"dev unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
 			(unsigned long long) in->unique,
 			opname((enum fuse_opcode) in->opcode), in->opcode,
 			(unsigned long long) in->nodeid, buf->size, in->pid);
@@ -3344,31 +3396,15 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 		goto clear_pipe;
 	}
 
-	req->unique = in->unique;
-	req->ctx.uid = in->uid;
-	req->ctx.gid = in->gid;
-	req->ctx.pid = in->pid;
+	fuse_session_in2req(req, in);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
-	err = EIO;
-	if (!se->got_init) {
-		enum fuse_opcode expected;
-
-		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
-		if (in->opcode != expected)
-			goto reply_err;
-	} else if (in->opcode == FUSE_INIT || in->opcode == CUSE_INIT)
+	err = fuse_req_opcode_sanity_ok(se, in->opcode);
+	if (err)
 		goto reply_err;
 
-	err = EACCES;
-	/* Implement -o allow_root */
-	if (se->deny_others && in->uid != se->owner && in->uid != 0 &&
-		 in->opcode != FUSE_INIT && in->opcode != FUSE_READ &&
-		 in->opcode != FUSE_WRITE && in->opcode != FUSE_FSYNC &&
-		 in->opcode != FUSE_RELEASE && in->opcode != FUSE_READDIR &&
-		 in->opcode != FUSE_FSYNCDIR && in->opcode != FUSE_RELEASEDIR &&
-		 in->opcode != FUSE_NOTIFY_REPLY &&
-		 in->opcode != FUSE_READDIRPLUS)
+	err = fuse_req_check_allow_root(se, in->opcode, in->uid);
+	if (err)
 		goto reply_err;
 
 	err = ENOSYS;
@@ -3430,6 +3466,59 @@ clear_pipe:
 	if (buf->flags & FUSE_BUF_IS_FD)
 		fuse_ll_clear_pipe(se);
 	goto out_free;
+}
+
+void fuse_session_process_uring_cqe(struct fuse_session *se,
+				    struct fuse_req *req,
+				    struct fuse_in_header *in, void *op_in,
+				    void *op_payload, size_t payload_len)
+{
+	int err;
+
+	fuse_session_in2req(req, in);
+
+	err = fuse_req_opcode_sanity_ok(se, in->opcode);
+	if (err)
+		goto reply_err;
+
+	err = fuse_req_check_allow_root(se, in->opcode, in->uid);
+	if (err)
+		goto reply_err;
+
+	err = ENOSYS;
+	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
+		goto reply_err;
+
+	if (se->debug) {
+		fuse_log(
+			FUSE_LOG_DEBUG,
+			"cqe unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			(unsigned long long)in->unique,
+			opname((enum fuse_opcode)in->opcode), in->opcode,
+			(unsigned long long)in->nodeid, payload_len, in->pid);
+	}
+
+	if (in->opcode == FUSE_WRITE && se->op.write_buf) {
+		struct fuse_bufvec bufv = {
+			.buf[0] = { .size = payload_len,
+				    .flags = 0,
+				    .mem = op_payload },
+			.count = 1,
+		};
+		_do_write_buf(req, in->nodeid, op_in, &bufv);
+	} else if (in->opcode == FUSE_NOTIFY_REPLY) {
+		struct fuse_buf buf = { .size = payload_len,
+					.mem = op_payload };
+		do_notify_reply(req, in->nodeid, op_in, &buf);
+	} else {
+		fuse_ll_ops2[in->opcode].func(req, in->nodeid, op_in,
+					      op_payload);
+	}
+
+	return;
+
+reply_err:
+	fuse_reply_err(req, err);
 }
 
 #define LL_OPTION(n,o,v) \
