@@ -1,6 +1,6 @@
 project('libfuse3', ['c'],
         version: '3.18.0-rc0',  # Version with RC suffix
-        meson_version: '>= 0.51.0',
+        meson_version: '>= 0.54.0',
         default_options: [
             'buildtype=debugoptimized',
             'c_std=gnu11',
@@ -93,6 +93,30 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
          cc.has_member('struct stat', 'st_atimespec',
                        prefix: include_default,
                        args: args_default))
+
+# Check for liburing with SQE128 support
+code = '''
+#include <liburing.h>
+#include <stdio.h>
+int main(void) {
+    struct io_uring ring;
+    int ret = io_uring_queue_init(1, &ring, 0);
+#ifndef IORING_SETUP_SQE128
+#error "No SQE128 support"
+#endif
+    return ret;
+}'''
+
+liburing = dependency('liburing', required: false)
+libnuma = dependency('numa', required: false)
+
+if liburing.found() and libnuma.found()
+   if cc.links(code,
+              name: 'liburing linking and SQE128 support',
+              dependencies: [liburing])
+      private_cfg.set('HAVE_URING', true)
+   endif
+endif
 
 #
 # Compiler configuration
