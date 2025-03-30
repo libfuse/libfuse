@@ -22,7 +22,12 @@
 #include <execinfo.h>
 #endif
 
+/*
+ * Must not handle SIGCANCEL, as that is used to wake up threads from
+ * syscalls reading requests from /dev/fuse
+ */
 static int teardown_sigs[] = { SIGHUP, SIGINT, SIGTERM };
+
 static int ignore_sigs[] = { SIGPIPE};
 static int fail_sigs[] = { SIGILL, SIGTRAP, SIGABRT, SIGBUS, SIGFPE, SIGSEGV };
 static struct fuse_session *fuse_instance;
@@ -53,8 +58,14 @@ static void dump_stack(void)
 
 static void exit_handler(int sig)
 {
-	if (fuse_instance == NULL)
+	if (fuse_instance == NULL) {
+		fuse_log(FUSE_LOG_ERR, "fuse_instance is NULL\n");
 		return;
+	}
+
+	if (fuse_instance->debug)
+		fuse_log(FUSE_LOG_ERR, "exit_handler called with sig %d\n",
+			 sig);
 
 	fuse_session_exit(fuse_instance);
 
