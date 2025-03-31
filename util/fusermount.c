@@ -36,7 +36,7 @@
 #include <stdbool.h>
 #include <sys/vfs.h>
 
-#ifdef HAVE_CLOSE_RANGE
+#ifdef HAVE_LINUX_CLOSE_RANGE_H
 #include <linux/close_range.h>
 #endif
 
@@ -1477,7 +1477,7 @@ static int close_inherited_fds(int cfd)
 	if (cfd <= STDERR_FILENO)
 		return -EINVAL;
 
-#ifdef HAVE_CLOSE_RANGE
+#ifdef HAVE_LINUX_CLOSE_RANGE_H
 	if (cfd < STDERR_FILENO + 2) {
 		close_range_loop(STDERR_FILENO + 1, cfd - 1, cfd);
 	} else {
