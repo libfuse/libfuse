@@ -72,7 +72,7 @@ private_cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
-               'utimensat', 'copy_file_range', 'fallocate', 'close_range' ]
+               'utimensat', 'copy_file_range', 'fallocate' ]
 foreach func : test_funcs
     private_cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))
@@ -83,6 +83,10 @@ private_cfg.set('HAVE_ICONV',
         cc.has_function('iconv', prefix: '#include <iconv.h>'))
 private_cfg.set('HAVE_BACKTRACE',
         cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
+
+# Test if headers exist
+private_cfg.set('HAVE_LINUX_CLOSE_RANGE_H',
+        cc.check_header('#include <linux/close_range.h>'))
 
 # Test if structs have specific member
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
