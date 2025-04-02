@@ -98,6 +98,8 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
                        prefix: include_default,
                        args: args_default))
 
+private_cfg.set('USDT_ENABLED', get_option('enable-usdt'))
+
 #
 # Compiler configuration
 #

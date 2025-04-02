@@ -17,7 +17,6 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "mount_util.h"
-#include "usdt.h"
 #include "util.h"
 
 #include <stdint.h>
@@ -33,6 +32,10 @@
 #include <assert.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+
+#ifdef USDT_ENABLED
+#include "usdt.h"
+#endif
 
 #ifndef F_LINUX_SPECIFIC_BASE
 #define F_LINUX_SPECIFIC_BASE       1024
@@ -61,6 +64,7 @@ static __attribute__((constructor)) void fuse_ll_init_pagesize(void)
 	pagesize = getpagesize();
 }
 
+#ifdef USDT_ENABLED
 /* tracepoints */
 static void trace_request_receive(int err)
 {
@@ -77,6 +81,27 @@ static void trace_request_reply(uint64_t unique, unsigned int len,
 {
 	USDT(libfuse, request_reply, unique, len, error, reply_err);
 }
+#else
+static void trace_request_receive(int err)
+{
+	(void)err;
+}
+
+static void trace_request_process(unsigned int opcode, unsigned int unique)
+{
+	(void)opcode;
+	(void)unique;
+}
+
+static void trace_request_reply(uint64_t unique, unsigned int len,
+				int error, int reply_err)
+{
+	(void)unique;
+	(void)len;
+	(void)error;
+	(void)reply_err;
+}
+#endif
 
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 {
