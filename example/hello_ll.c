@@ -14,6 +14,10 @@
  *
  *     gcc -Wall hello_ll.c `pkg-config fuse3 --cflags --libs` -o hello_ll
  *
+ * Note: If the pkg-config command fails due to the absence of the fuse3.pc
+ *     file, you should configure the path to the fuse3.pc file in the
+ *     PKG_CONFIG_PATH variable.
+ *
  * ## Source code ##
  * \include hello_ll.c
  */
@@ -59,6 +63,10 @@ static void hello_ll_init(void *userdata, struct fuse_conn_info *conn)
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 	conn->no_interrupt = 1;
+
+	/* Test setting flags the old way */
+	conn->want = FUSE_CAP_ASYNC_READ;
+	conn->want &= ~FUSE_CAP_ASYNC_READ;
 }
 
 static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino,

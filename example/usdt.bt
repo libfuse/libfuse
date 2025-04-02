@@ -1,0 +1,19 @@
+#!/usr/bin/env bpftrace
+
+// To run, do `sudo bpftrace usdt.bt`
+
+usdt:../build/lib/libfuse3.so:libfuse:request_receive
+{
+    printf("libfuse:request_receive hit, err=%d\n", arg0);
+}
+
+usdt:../build/lib/libfuse3.so:libfuse:request_process
+{
+    printf("libfuse:request_process hit, opcode=%u, unique=%u\n", arg0, arg1);
+}
+
+usdt:../build/lib/libfuse3.so:libfuse:request_reply
+{
+    printf("libfuse:request_reply hit, unique=%lu, len=%u, err=%u, reply_err=%d\n",
+	    arg0, arg1, arg2, arg3);
+}

@@ -84,6 +84,10 @@ private_cfg.set('HAVE_ICONV',
 private_cfg.set('HAVE_BACKTRACE',
         cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
 
+# Test if headers exist
+private_cfg.set('HAVE_LINUX_CLOSE_RANGE_H',
+        cc.check_header('#include <linux/close_range.h>'))
+
 # Test if structs have specific member
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
          cc.has_member('struct stat', 'st_atim',
