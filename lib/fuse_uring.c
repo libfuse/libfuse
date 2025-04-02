@@ -10,6 +10,7 @@
   See the file COPYING.LIB
 */
 
+#include "fuse_log.h"
 #define _GNU_SOURCE
 
 #include "fuse_i.h"
@@ -891,6 +892,7 @@ int fuse_uring_start(struct fuse_session *se)
 		goto out;
 	}
 
+	fuse_log(FUSE_LOG_DEBUG, "start uring");
 	se->uring.pool = fuse_ring;
 
 	if (!se->op.init_ring_ext_threads)
