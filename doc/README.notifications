@@ -1,0 +1,37 @@
+During the life-cycle of a user-space filesystem the usual flow is:
+
+  1. User-space application does a filesystem-related syscall
+  2. Kernel VFS calls into the FUSE kernel driver
+  3. FUSE kernel redirects request to the user-space filesystem
+  4. User-space server replies to request
+  5. FUSE returns reply to VFS
+  6. User-space application gets reply from the kernel
+
+However, there are occasions where the filesystem needs to send notifications to
+the kernel that are not in reply to any particular request.  If, for example,
+when a READ request of 4096 bytes results in the filesystem having more data
+available for the specific inode, it may be useful to provide this extra data to
+the kernel cache so that future read operations will be faster.
+
+FUSE provides mechanisms for a user-space server to send the kernel certain
+types of asynchronous notifications.  Currently, these are the available
+notifications:
+
+|-------------+----------------------------------|
+| Operation   | libfuse function                 |
+|-------------+----------------------------------|
+| POLL        | fuse_lowlevel_notify_poll        |
+| INVAL_INODE | fuse_lowlevel_notify_inval_inode |
+| ENTRY       | fuse_lowlevel_notify_inval_entry |
+| STORE       | fuse_lowlevel_notify_store       |
+| RETRIEVE    | fuse_lowlevel_notify_retrieve    |
+| DELETE      | fuse_lowlevel_notify_delete      |
+| RESEND      | -                                |
+|-------------+----------------------------------|
+
+One important restriction is that these asynchronous operations SHALL NOT be
+performed while executing other FUSE requests.  Doing so will likely result in
+deadlocking the user-space filesystem server.  In the example above, if the
+server is replying to a READ request and has extra data to add to the kernel
+cache, it needs to reply to the READ request first, and, e.g., signal a
+different thread to do the STORE.

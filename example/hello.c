@@ -57,6 +57,11 @@ static void *hello_init(struct fuse_conn_info *conn,
 {
 	(void) conn;
 	cfg->kernel_cache = 1;
+
+	/* Test setting flags the old way */
+	conn->want = FUSE_CAP_ASYNC_READ;
+	conn->want &= ~FUSE_CAP_ASYNC_READ;
+
 	return NULL;
 }
 
