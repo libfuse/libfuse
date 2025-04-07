@@ -3159,16 +3159,16 @@ pipe_retry:
 		struct fuse_bufvec dst = { .count = 1 };
 
 		if (!buf->mem) {
-			buf->mem = buf_alloc(se->bufsize, internal);
+			buf->mem = buf_alloc(bufsize, internal);
 			if (!buf->mem) {
 				fuse_log(
 					FUSE_LOG_ERR,
 					"fuse: failed to allocate read buffer\n");
 				return -ENOMEM;
 			}
-			buf->mem_size = se->bufsize;
+			buf->mem_size = bufsize;
 		}
-		buf->size = se->bufsize;
+		buf->size = bufsize;
 		buf->flags = 0;
 		dst.buf[0] = *buf;
 
@@ -3198,14 +3198,18 @@ pipe_retry:
 
 fallback:
 #endif
+	bufsize = internal ? buf->mem_size : se->bufsize;
 	if (!buf->mem) {
-		buf->mem = buf_alloc(se->bufsize, internal);
+		bufsize = se->bufsize; /* might have changed */
+		buf->mem = buf_alloc(bufsize, internal);
 		if (!buf->mem) {
 			fuse_log(FUSE_LOG_ERR,
 				 "fuse: failed to allocate read buffer\n");
 			return -ENOMEM;
 		}
-		buf->mem_size = se->bufsize;
+
+		if (internal)
+			buf->mem_size = bufsize;
 	}
 
 restart:
@@ -3223,7 +3227,7 @@ restart:
 	if (fuse_session_exited(se))
 		return 0;
 	if (res == -1) {
-		if (err == EINVAL && internal && se->bufsize > buf->mem_size) {
+		if (err == EINVAL && internal && se->bufsize > bufsize) {
 			/* FUSE_INIT might have increased the required bufsize */
 			bufsize = se->bufsize;
 			void *newbuf = buf_alloc(bufsize, internal);
