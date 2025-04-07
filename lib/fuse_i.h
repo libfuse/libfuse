@@ -103,8 +103,7 @@ struct fuse_session {
 	 */
 	struct libfuse_version version;
 
-	/* true if reading requests from /dev/fuse are handled internally */
-	bool buf_reallocable;
+	_Atomic bool buf_reallocable;
 
 	/* io_uring */
 	struct fuse_session_uring uring;
