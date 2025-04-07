@@ -226,6 +226,9 @@ static void sfs_init(void *userdata, fuse_conn_info *conn) {
 
     /* Disable the receiving and processing of FUSE_INTERRUPT requests */
     conn->no_interrupt = 1;
+
+    /* Try a large IO by default */
+    conn->max_write = 4 * 1024 * 1024;
 }
 
 
