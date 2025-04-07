@@ -9,7 +9,6 @@
   See the file COPYING.LIB
 */
 
-#include <stdbool.h>
 #define _GNU_SOURCE
 
 #include "fuse_config.h"
@@ -21,6 +20,8 @@
 #include "util.h"
 #include "fuse_uring_i.h"
 
+#include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
@@ -33,6 +34,10 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <stdalign.h>
+
+#ifdef USDT_ENABLED
+#include "usdt.h"
+#endif
 
 #ifndef F_LINUX_SPECIFIC_BASE
 #define F_LINUX_SPECIFIC_BASE       1024
@@ -63,6 +68,45 @@ static __attribute__((constructor)) void fuse_ll_init_pagesize(void)
 {
 	pagesize = getpagesize();
 }
+
+#ifdef USDT_ENABLED
+/* tracepoints */
+static void trace_request_receive(int err)
+{
+	USDT(libfuse, request_receive, err);
+}
+
+static void trace_request_process(unsigned int opcode, unsigned int unique)
+{
+	USDT(libfuse, request_process, opcode, unique);
+}
+
+static void trace_request_reply(uint64_t unique, unsigned int len,
+				int error, int reply_err)
+{
+	USDT(libfuse, request_reply, unique, len, error, reply_err);
+}
+#else
+static void trace_request_receive(int err)
+{
+	(void)err;
+}
+
+static void trace_request_process(unsigned int opcode, unsigned int unique)
+{
+	(void)opcode;
+	(void)unique;
+}
+
+static void trace_request_reply(uint64_t unique, unsigned int len,
+				int error, int reply_err)
+{
+	(void)unique;
+	(void)len;
+	(void)error;
+	(void)reply_err;
+}
+#endif
 
 static void convert_stat(const struct stat *stbuf, struct fuse_attr *attr)
 {
@@ -214,6 +258,7 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 {
 	struct fuse_out_header *out = iov[0].iov_base;
 	bool is_uring = req && req->is_uring ? true : false;
+	int err;
 
 	if (!is_uring)
 		assert(se != NULL);
@@ -236,9 +281,12 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 	}
 
 	if (is_uring)
-		return fuse_send_msg_uring(req, iov, count);
+		err = fuse_send_msg_uring(req, iov, count);
 	else
-		return fuse_write_msg_dev(se, ch, iov, count);
+		err = fuse_write_msg_dev(se, ch, iov, count);
+	trace_request_reply(out->unique, out->len, out->error, err);
+
+	return err;
 }
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
@@ -2391,25 +2439,6 @@ static bool want_flags_valid(uint64_t capable, uint64_t want)
 	return true;
 }
 
-/**
- * Get the wanted capability flags, converting from old format if necessary
- */
-static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
-					   uint64_t want_ext_default)
-{
-	/* Convert want to want_ext if necessary */
-	if (conn->want != 0) {
-		if (conn->want_ext != want_ext_default) {
-			fuse_log(FUSE_LOG_ERR,
-				 "fuse: both 'want' and 'want_ext' are set\n");
-			return -EINVAL;
-		}
-		conn->want_ext |= conn->want;
-	}
-
-	return 0;
-}
-
 /* Prevent bogus data races (bogus since "init" is called before
  * multi-threading becomes relevant */
 static __attribute__((no_sanitize("thread"))) void
@@ -2576,11 +2605,12 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	se->got_init = 1;
 	if (se->op.init) {
 		uint64_t want_ext_default = se->conn.want_ext;
+		uint32_t want_default = fuse_lower_32_bits(se->conn.want_ext);
 		int rc;
 
 		// Apply the first 32 bits of capable_ext to capable
-		se->conn.capable =
-			(uint32_t)(se->conn.capable_ext & 0xFFFFFFFF);
+		se->conn.capable = fuse_lower_32_bits(se->conn.capable_ext);
+		se->conn.want = want_default;
 
 		se->op.init(se->userdata, &se->conn);
 
@@ -2589,7 +2619,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		 * se->conn.want_ext
 		 * Userspace might still use conn.want - we need to convert it
 		 */
-		rc = convert_to_conn_want_ext(&se->conn, want_ext_default);
+		rc = convert_to_conn_want_ext(&se->conn, want_ext_default,
+					      want_default);
 		if (rc != 0) {
 			fuse_reply_err(req, EPROTO);
 			se->error = -EPROTO;
@@ -3358,6 +3389,8 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 		in = buf->mem;
 	}
 
+	trace_request_process(in->opcode, in->unique);
+
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG,
 			"dev unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
@@ -3660,6 +3693,7 @@ pipe_retry:
 			     bufsize, 0);
 	}
 	err = errno;
+	trace_request_receive(err);
 
 	if (fuse_session_exited(se))
 		return 0;
@@ -3705,18 +3739,16 @@ pipe_retry:
 		struct fuse_bufvec dst = { .count = 1 };
 
 		if (!buf->mem) {
-			buf->mem = buf_alloc(se->bufsize, internal);
+			buf->mem = buf_alloc(bufsize, internal);
 			if (!buf->mem) {
 				fuse_log(
 					FUSE_LOG_ERR,
 					"fuse: failed to allocate read buffer\n");
 				return -ENOMEM;
 			}
-			buf->mem_size = se->bufsize;
-			if (internal)
-				se->buf_reallocable = true;
+			buf->mem_size = bufsize;
 		}
-		buf->size = se->bufsize;
+		buf->size = bufsize;
 		buf->flags = 0;
 		dst.buf[0] = *buf;
 
@@ -3746,21 +3778,21 @@ pipe_retry:
 
 fallback:
 #endif
+	bufsize = internal ? buf->mem_size : se->bufsize;
 	if (!buf->mem) {
-		buf->mem = buf_alloc(se->bufsize, internal);
+		bufsize = se->bufsize; /* might have changed */
+		buf->mem = buf_alloc(bufsize, internal);
 		if (!buf->mem) {
 			fuse_log(FUSE_LOG_ERR,
 				 "fuse: failed to allocate read buffer\n");
 			return -ENOMEM;
 		}
-		buf->mem_size = se->bufsize;
+
 		if (internal)
-			se->buf_reallocable = true;
+			buf->mem_size = bufsize;
 	}
 
 restart:
-	if (se->buf_reallocable)
-		bufsize = buf->mem_size;
 	if (se->io != NULL) {
 		/* se->io->read is never NULL if se->io is not NULL as
 		specified by fuse_session_custom_io()*/
@@ -3770,13 +3802,15 @@ restart:
 		res = read(ch ? ch->fd : se->fd, buf->mem, bufsize);
 	}
 	err = errno;
+	trace_request_receive(err);
 
 	if (fuse_session_exited(se))
 		return 0;
 	if (res == -1) {
-		if (err == EINVAL && se->buf_reallocable &&
-		    se->bufsize > buf->mem_size) {
-			void *newbuf = buf_alloc(se->bufsize, internal);
+		if (err == EINVAL && internal && se->bufsize > bufsize) {
+			/* FUSE_INIT might have increased the required bufsize */
+			bufsize = se->bufsize;
+			void *newbuf = buf_alloc(bufsize, internal);
 			if (!newbuf) {
 				fuse_log(
 					FUSE_LOG_ERR,
@@ -3785,8 +3819,7 @@ restart:
 			}
 			fuse_buf_free(buf);
 			buf->mem = newbuf;
-			buf->mem_size = se->bufsize;
-			se->buf_reallocable = true;
+			buf->mem_size = bufsize;
 			goto restart;
 		}
 
@@ -3828,6 +3861,13 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 				      struct fuse_buf *buf,
 				      struct fuse_chan *ch)
 {
+	/*
+	 * if run internally thread buffers are from libfuse - we can
+	 * reallocate them
+	 */
+	if (unlikely(!se->got_init) && !se->buf_reallocable)
+		se->buf_reallocable = true;
+
 	return _fuse_session_receive_buf(se, buf, ch, true);
 }
 

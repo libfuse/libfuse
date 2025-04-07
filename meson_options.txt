@@ -22,3 +22,5 @@ option('tests', type : 'boolean', value : true,
 option('disable-libc-symbol-version', type : 'boolean', value : false,
        description: 'Disable versioned symbols through libc')
 
+option('enable-usdt', type : 'boolean', value : false,
+       description: 'Enable user statically defined tracepoints for extra observability')

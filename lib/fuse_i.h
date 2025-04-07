@@ -13,8 +13,11 @@
 
 #include "fuse.h"
 #include "fuse_lowlevel.h"
+#include "util.h"
 
+#include <stdint.h>
 #include <stdbool.h>
+#include <errno.h>
 
 #define MIN(a, b) \
 ({									\
@@ -248,5 +251,37 @@ int fuse_loop_cfg_verify(struct fuse_loop_config *config);
 
 /* room needed in buffer to accommodate header */
 #define FUSE_BUFFER_HEADER_SIZE 0x1000
+
+/**
+ * Get the wanted capability flags, converting from old format if necessary
+ */
+static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
+					   uint64_t want_ext_default,
+					   uint32_t want_default)
+{
+	/*
+	 * Convert want to want_ext if necessary.
+	 * For the high level interface this function might be called
+	 * twice, once from the high level interface and once from the
+	 * low level interface. Both, with different want_ext_default and
+	 * want_default values. In order to suppress a failure for the
+	 * second call, we check if the lower 32 bits of want_ext are
+	 * already set to the value of want.
+	 */
+	if (conn->want != want_default &&
+	    fuse_lower_32_bits(conn->want_ext) != conn->want) {
+		if (conn->want_ext != want_ext_default) {
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: both 'want' and 'want_ext' are set\n");
+			return -EINVAL;
+		}
+
+		/* high bits from want_ext, low bits from want */
+		conn->want_ext = fuse_higher_32_bits(conn->want_ext) |
+				 conn->want;
+	}
+
+	return 0;
+}
 
 #endif // LIB_FUSE_I_H_

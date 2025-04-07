@@ -7,7 +7,7 @@
 */
 /* This program does the mounting and unmounting of FUSE filesystems */
 
-#define _GNU_SOURCE /* for clone and strchrnul */
+#define _GNU_SOURCE /* for clone,strchrnul and close_range */
 #include "fuse_config.h"
 #include "mount_util.h"
 #include "util.h"
@@ -35,6 +35,10 @@
 #include <sched.h>
 #include <stdbool.h>
 #include <sys/vfs.h>
+
+#ifdef HAVE_LINUX_CLOSE_RANGE_H
+#include <linux/close_range.h>
+#endif
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 
@@ -1142,6 +1146,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x7366746E /* NTFS3_SUPER_MAGIC */,
 		0x5346414f /* OPENAFS_SUPER_MAGIC */,
 		0x794C7630 /* OVERLAYFS_SUPER_MAGIC */,
+		0xAAD7AAEA /* PANFS_SUPER_MAGIC */,
 		0x52654973 /* REISERFS_SUPER_MAGIC */,
 		0xFE534D42 /* SMB2_SUPER_MAGIC */,
 		0x73717368 /* SQUASHFS_MAGIC */,
@@ -1474,44 +1479,63 @@ static void show_version(void)
 	exit(0);
 }
 
+static void close_range_loop(int min_fd, int max_fd, int cfd)
+{
+	for (int fd = min_fd; fd <= max_fd; fd++)
+		if (fd != cfd)
+			close(fd);
+}
+
 /*
  * Close all inherited fds that are not needed
  * Ideally these wouldn't come up at all, applications should better
  * use FD_CLOEXEC / O_CLOEXEC
  */
-static void close_inherited_fds(int cfd)
+static int close_inherited_fds(int cfd)
 {
-	int max_fd = sysconf(_SC_OPEN_MAX);
-	int rc;
+	int rc = -1;
+	int nullfd;
 
-#ifdef CLOSE_RANGE_CLOEXEC
-	/* high range first to be able to log errors through stdout/err*/
+	/* We can't even report an error */
+	if (cfd <= STDERR_FILENO)
+		return -EINVAL;
+
+#ifdef HAVE_LINUX_CLOSE_RANGE_H
+	if (cfd < STDERR_FILENO + 2) {
+		close_range_loop(STDERR_FILENO + 1, cfd - 1, cfd);
+	} else {
+		rc = close_range(STDERR_FILENO + 1, cfd - 1, 0);
+		if (rc < 0)
+			goto fallback;
+	}
+
+	/* Close high range */
 	rc = close_range(cfd + 1, ~0U, 0);
-	if (rc < 0) {
-		fprintf(stderr, "Failed to close high range of FDs: %s",
-			strerror(errno));
-		goto fallback;
-	}
-
-	rc = close_range(0, cfd - 1, 0);
-	if (rc < 0) {
-		fprintf(stderr, "Failed to close low range of FDs: %s",
-			strerror(errno));
-		goto fallback;
-	}
+#else
+	goto fallback; /* make use of fallback to avoid compiler warnings */
 #endif
 
 fallback:
-	/*
-	 * This also needs to close stdout/stderr, as the application
-	 * using libfuse might have closed these FDs and might be using
-	 * it. Although issue is now that logging errors won't be possible
-	 * after that.
-	 */
-	for (int fd = 0; fd <= max_fd; fd++) {
-		if (fd != cfd)
-			close(fd);
+	if (rc < 0) {
+		int max_fd = sysconf(_SC_OPEN_MAX) - 1;
+
+		close_range_loop(STDERR_FILENO + 1, max_fd, cfd);
 	}
+
+	nullfd = open("/dev/null", O_RDWR);
+	if (nullfd < 0) {
+		perror("fusermount: cannot open /dev/null");
+		return -errno;
+	}
+
+	/* Redirect stdin, stdout, stderr to /dev/null */
+	dup2(nullfd, STDIN_FILENO);
+	dup2(nullfd, STDOUT_FILENO);
+	dup2(nullfd, STDERR_FILENO);
+	if (nullfd > STDERR_FILENO)
+		close(nullfd);
+
+	return 0;
 }
 
 int main(int argc, char *argv[])
@@ -1638,6 +1662,7 @@ int main(int argc, char *argv[])
 		goto err_out;
 
 	}
+
 	{
 		struct stat statbuf;
 		fstat(cfd, &statbuf);
@@ -1675,7 +1700,9 @@ wait_for_auto_unmount:
 	   Btw, we don't want to use daemon() function here because
 	   it forks and messes with the file descriptors. */
 
-	close_inherited_fds(cfd);
+	res = close_inherited_fds(cfd);
+	if (res < 0)
+		exit(EXIT_FAILURE);
 
 	setsid();
 	res = chdir("/");
