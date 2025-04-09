@@ -1894,6 +1894,43 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 				  size_t size, off_t offset, void *cookie);
 
+/**
+ * Resend all pending requests
+ *
+ * Ask the kernel to resend all requests that are currently pending.  This
+ * is useful mostly for FUSE servers that try to recover previous
+ * connections when, for example, the server crashed.
+ *
+ * @param se the session object
+ */
+int fuse_lowlevel_notify_resend(struct fuse_session *se);
+
+/**
+ * Verify if a request is a new request or a resent.
+ */
+int fuse_lowlevel_req_is_resend(fuse_req_t req);
+
+/**
+ * Re-initialize a FUSE session using a previously stored file descriptor
+ *
+ * Using a FUSE connection that resulted from a previously initialized
+ * session, initialize a new session object.  This is useful when trying to
+ * recover a session that was previously broken, for example after a server
+ * crash or after a server upgrade.
+ *
+ * This function can be used *instead* of the fuse_session_mount(), whic is
+ * used for new FUSE sessions.  Note that all the parameters but the session
+ * need to be explicitly store by the FUSE server from the session it is
+ * trying to recover.
+ *
+ * @param se a new session created with fuse_session_new()
+ * @param conn a connection object kept from a previous session
+ * @param fd the file descriptor from the previous session
+ * @param mountpoint the mount point to restore
+ */
+int fuse_session_reinitialize(struct fuse_session *se,
+			      struct fuse_conn_info *conn,
+			      int fd, const char *mountpoint);
 
 /* ----------------------------------------------------------- *
  * Utility functions					       *

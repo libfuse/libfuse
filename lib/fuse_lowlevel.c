@@ -3131,6 +3131,42 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	return err;
 }
 
+int fuse_lowlevel_notify_resend(struct fuse_session *se)
+{
+	struct iovec iov[1];
+
+	if (!se)
+		return -EINVAL;
+
+	if (se->conn.proto_minor < 40)
+		return -ENOSYS;
+
+	return send_notify_iov(se, FUSE_NOTIFY_RESEND, iov, 1);
+}
+
+int fuse_lowlevel_req_is_resend(fuse_req_t req)
+{
+	return !!(req->unique & FUSE_UNIQUE_RESEND);
+}
+
+int fuse_session_reinitialize(struct fuse_session *se,
+			      struct fuse_conn_info *conn,
+			      int fd, const char *mountpoint)
+{
+	if (!se || !conn)
+		return -EINVAL;
+
+	se->mountpoint = strdup(mountpoint);
+	if (!se->mountpoint)
+		return -ENOMEM;
+
+	memcpy(&se->conn, conn, sizeof(*conn));
+	se->fd = fd;
+	se->got_init = 1;
+
+	return 0;
+}
+
 void *fuse_req_userdata(fuse_req_t req)
 {
 	return req->se->userdata;
