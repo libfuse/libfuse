@@ -956,9 +956,6 @@ static inline int fuse_main_real(int argc, char *argv[],
  *
  * Example usage, see hello.c
  */
-int fuse_main_real_versioned(int argc, char *argv[],
-			     const struct fuse_operations *op, size_t op_size,
-			     struct libfuse_version *version, void *user_data);
 static inline int fuse_main_fn(int argc, char *argv[],
 			       const struct fuse_operations *op,
 			       void *user_data)
