@@ -894,8 +894,11 @@ int fuse_uring_stop(struct fuse_session *se)
 		close(queue->eventfd);
 	}
 
-	free(ring->queues);
-	free(ring);
+	/* API bug workaround - no control when the queues are needed */
+	if (!se->op.init_ring_ext_threads) {
+		free(ring->queues);
+		free(ring);
+	}
 
 	return 0;
 }
