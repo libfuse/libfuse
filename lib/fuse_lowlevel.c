@@ -3545,6 +3545,8 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("-d", debug, 1),
 	LL_OPTION("--debug", debug, 1),
 	LL_OPTION("allow_root", deny_others, 1),
+	LL_OPTION("io_uring", uring.enable, 1),
+	LL_OPTION("io_uring_q_depth=%u", uring.q_depth, -1),
 	FUSE_OPT_END
 };
 
@@ -3562,7 +3564,11 @@ void fuse_lowlevel_help(void)
 	printf(
 "    -o allow_other         allow access by all users\n"
 "    -o allow_root          allow access by root\n"
-"    -o auto_unmount        auto unmount on process termination\n");
+"    -o auto_unmount        auto unmount on process termination\n"
+"    -o auto_unmount        auto unmount on process termination\n"
+"    -o io_uring            enable io-uring\n"
+"    -o io_uring_q_depth=<n> io-uring queue depth\n"
+);
 }
 
 void fuse_session_destroy(struct fuse_session *se)
@@ -3892,6 +3898,8 @@ fuse_session_new_versioned(struct fuse_args *args,
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
+	se->uring.enable = SESSION_DEF_URING_ENABLE;
+	se->uring.q_depth = SESSION_DEF_URING_Q_DEPTH;
 
 	/* Parse options */
 	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
