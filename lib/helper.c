@@ -139,7 +139,11 @@ void fuse_cmdline_help(void)
 	       "    -o max_idle_threads    the maximum number of idle worker threads\n"
 	       "                           allowed (default: -1)\n"
 	       "    -o max_threads         the maximum number of worker threads\n"
-	       "                           allowed (default: 10)\n");
+	       "                           allowed (default: 10)\n"
+	       /* fuse_ll_opts in fuse_lowlevel.c, FIXME, call into that file */
+	       "    -o io_uring            enable io-uring\n"
+	       "    -o io_uring_q_depth=<n> io-uring queue depth\n"
+);
 }
 
 static int fuse_helper_opt_proc(void *data, const char *arg, int key,
