@@ -3157,6 +3157,11 @@ int fuse_req_interrupted(fuse_req_t req)
 	return interrupted;
 }
 
+bool fuse_req_is_uring(fuse_req_t req)
+{
+	return req->is_uring;
+}
+
 static struct {
 	void (*func)(fuse_req_t req, const fuse_ino_t node, const void *arg);
 	const char *name;
