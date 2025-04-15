@@ -50,10 +50,6 @@
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 #define OFFSET_MAX 0x7fffffffffffffffLL
 
-#define container_of(ptr, type, member) ({				\
-			const typeof( ((type *)0)->member ) *__mptr = (ptr); \
-			(type *)( (char *)__mptr - offsetof(type,member) );})
-
 struct fuse_pollhandle {
 	uint64_t kh;
 	struct fuse_session *se;
