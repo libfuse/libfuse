@@ -2315,6 +2315,11 @@ void fuse_session_process_buf(struct fuse_session *se,
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
 
+/**
+ * Check if the request is submitted through fuse-io-uring
+ */
+bool fuse_req_is_uring(fuse_req_t req);
+
 #ifdef __cplusplus
 }
 #endif
