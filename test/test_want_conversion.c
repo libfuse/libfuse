@@ -1,11 +1,11 @@
 #include "util.h"
-#include <string.h>
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 17)
 
 #include "fuse_i.h"
 #include <stdio.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <stdbool.h>
 
 static void print_conn_info(const char *prefix, struct fuse_conn_info *conn)
 {
@@ -13,14 +13,21 @@ static void print_conn_info(const char *prefix, struct fuse_conn_info *conn)
 	       conn->want, conn->want_ext);
 }
 
-static void application_init(struct fuse_conn_info *conn)
+static void application_init_old_style(struct fuse_conn_info *conn)
 {
-	/* Simulate application init */
+	/* Simulate application init the old style */
 	conn->want |= FUSE_CAP_ASYNC_READ;
 	conn->want &= ~FUSE_CAP_SPLICE_READ;
 }
 
-static void test_fuse_fs_init(struct fuse_conn_info *conn)
+static void application_init_new_style(struct fuse_conn_info *conn)
+{
+	/* Simulate application init the new style */
+	fuse_set_feature_flag(conn, FUSE_CAP_ASYNC_READ);
+	fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_READ);
+}
+
+static void test_fuse_fs_init(struct fuse_conn_info *conn, bool new_style)
 {
 	uint64_t want_ext_default = conn->want_ext;
 	uint32_t want_default = fuse_lower_32_bits(conn->want_ext);
@@ -31,18 +38,22 @@ static void test_fuse_fs_init(struct fuse_conn_info *conn)
 
 	conn->want = want_default;
 
-	application_init(conn);
+	if (new_style)
+		application_init_new_style(conn);
+	else
+		application_init_old_style(conn);
 
 	rc = convert_to_conn_want_ext(conn, want_ext_default, want_default);
 	assert(rc == 0);
 }
 
-static void test_do_init(struct fuse_conn_info *conn)
+static void test_do_init(struct fuse_conn_info *conn, bool new_style)
 {
 	/* Initial setup */
 	conn->capable_ext = FUSE_CAP_SPLICE_READ | FUSE_CAP_SPLICE_WRITE |
 			    FUSE_CAP_SPLICE_MOVE | FUSE_CAP_POSIX_LOCKS |
-			    FUSE_CAP_FLOCK_LOCKS | FUSE_CAP_EXPORT_SUPPORT;
+			    FUSE_CAP_FLOCK_LOCKS | FUSE_CAP_EXPORT_SUPPORT |
+			    FUSE_CAP_ASYNC_READ;
 	conn->capable = fuse_lower_32_bits(conn->capable_ext);
 	conn->want_ext = conn->capable_ext;
 
@@ -55,7 +66,7 @@ static void test_do_init(struct fuse_conn_info *conn)
 	conn->want = want_default;
 	conn->capable = fuse_lower_32_bits(conn->capable_ext);
 
-	test_fuse_fs_init(conn);
+	test_fuse_fs_init(conn, new_style);
 
 	rc = convert_to_conn_want_ext(conn, want_ext_default, want_default);
 	assert(rc == 0);
@@ -82,7 +93,8 @@ static void test_want_conversion_basic(void)
 	struct fuse_conn_info conn = { 0 };
 
 	printf("\nTesting basic want conversion:\n");
-	test_do_init(&conn);
+	test_do_init(&conn, false);
+	test_do_init(&conn, true);
 	print_conn_info("After init", &conn);
 }
 
