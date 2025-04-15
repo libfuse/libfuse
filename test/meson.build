@@ -1,6 +1,6 @@
 # Compile helper programs
 td = []
-foreach prog: [ 'test_write_cache', 'test_setattr' ]
+foreach prog: [ 'test_write_cache', 'test_setattr', 'hello' ]
     td += executable(prog, prog + '.c',
                      include_directories: include_dirs,
                      link_with: [ libfuse ],
