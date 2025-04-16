@@ -30,4 +30,12 @@ static inline uint64_t fuse_higher_32_bits(uint64_t nr)
 #define FUSE_VAR_UNUSED(var) (__attribute__((unused)) var)
 #endif
 
+#define container_of(ptr, type, member)                      \
+	({                                                   \
+		unsigned long __mptr = (unsigned long)(ptr); \
+		((type *)(__mptr - offsetof(type, member))); \
+	})
+
+#define ROUND_UP(val, round_to) (((val) + (round_to - 1)) & ~(round_to - 1))
+
 #endif
