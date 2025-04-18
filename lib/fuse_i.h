@@ -281,6 +281,9 @@ static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
 				 conn->want;
 	}
 
+	/* ensure there won't be a second conversion */
+	conn->want = fuse_lower_32_bits(conn->want_ext);
+
 	return 0;
 }
 

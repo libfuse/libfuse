@@ -50,6 +50,7 @@
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 #define FUSE_COMMFD2_ENV	"_FUSE_COMMFD2"
+#define FUSE_KERN_DEVICE_ENV	"FUSE_KERN_DEVICE"
 
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC 128
@@ -507,11 +508,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			  const char *mnt_opts)
 {
 	char tmp[128];
-
-	const char *redfs_devname = "/dev/redfs";
-	const char *fuse_devname="/dev/fuse";
-	const char *devname = redfs_devname;
-
+	const char *devname = getenv(FUSE_KERN_DEVICE_ENV) ?: "/dev/fuse";
 	char *source = NULL;
 	char *type = NULL;
 	const char *type_selection = NULL;
@@ -532,24 +529,16 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		return -1;
 	}
 
-again:
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
-		if (errno == ENODEV || errno == ENOENT) {
-			fuse_log(FUSE_LOG_ERR, "redfs: device %s not found.\n",
-				 devname);
-			if (devname == redfs_devname) {
-				devname = fuse_devname;
-				fuse_log(FUSE_LOG_ERR, "redfs: Trying to fallback to %s\n",
-					 devname);
-				goto again;
-			} else {
-				fuse_log(FUSE_LOG_ERR, "redfs: failed to open %s: %s\n",
-					 devname, strerror(errno));
-			}
-
-			return -1;
-		}
+		if (errno == ENODEV || errno == ENOENT)
+			fuse_log(FUSE_LOG_ERR,
+				"fuse: device %s not found. Kernel module not loaded?\n",
+				devname);
+		else
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n",
+				devname, strerror(errno));
+		return -1;
 	}
 	if (!O_CLOEXEC)
 		fcntl(fd, F_SETFD, FD_CLOEXEC);
@@ -568,7 +557,7 @@ again:
 	if (mo->blkdev)
 		type_selection = "redfsblk";
 	else {
-		if (devname == redfs_devname)
+		if (strcmp(devname, "/dev/redfs") == 0)
 			type_selection = "redfs";
 		else
 			type_selection = "fuse";
