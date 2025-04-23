@@ -1,3 +1,19 @@
+libfuse 3.17.2 (2025-04-23)
+===========================
+* Fixed uninitized bufsize value (compilation warning and real
+  issue when HAVE_SPLICE was not defined)
+* Fixed initialization races related to buffer realocation when
+  large buf sizes are used (/proc/sys/fs/fuse/max_pages_limit)
+* Fix build with kernel < 5.9
+* Fix static_assert build failure with C++ version < 11
+* Compilation fix (remove second fuse_main_real_versioned declaration)
+* Another conn.want flag conversion fix for high-level applications
+* Check if pthread_setname_np() exists before use it
+* fix example/memfs_ll rename deadlock error
+* signal handlers: Store fuse_session unconditionally and restore
+  previous behavior that with multiple sessions the last session
+  was used for the signal exist handler
+
 libfuse 3.17.1 (2025-03-24)
 ===========================
 * fuse: Fix want conn.want flag conversion
