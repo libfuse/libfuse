@@ -150,8 +150,13 @@ int fuse_set_signal_handlers(struct fuse_session *se)
 	if (rc < 0)
 		return rc;
 
-	if (fuse_instance == NULL)
-		fuse_instance = se;
+	/*
+	 * needs to be set independently if already set, as some  applications
+	 * may have multiple sessions and might rely on traditional behavior
+	 * that the last session is used.
+	 */
+	fuse_instance = se;
+
 	return 0;
 }
 
@@ -164,8 +169,8 @@ int fuse_set_fail_signal_handlers(struct fuse_session *se)
 	if (rc < 0)
 		return rc;
 
-	if (fuse_instance == NULL)
-		fuse_instance = se;
+	/* See fuse_set_signal_handlers, why set unconditionally */
+	fuse_instance = se;
 
 	return 0;
 }
