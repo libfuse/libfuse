@@ -9,6 +9,7 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 int libfuse_strtol(const char *str, long *res);
+void fuse_set_thread_name(unsigned long tid, const char *name);
 
 /**
  * Return the low bits of a number
@@ -36,4 +37,4 @@ static inline uint64_t fuse_higher_32_bits(uint64_t nr)
 		((type *)(__mptr - offsetof(type, member))); \
 	})
 
-#endif
+#endif /* FUSE_UTIL_H_ */
