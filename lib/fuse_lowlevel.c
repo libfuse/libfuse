@@ -3903,8 +3903,17 @@ fuse_session_new_versioned(struct fuse_args *args,
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
-	se->uring.enable = SESSION_DEF_URING_ENABLE;
-	se->uring.q_depth = SESSION_DEF_URING_Q_DEPTH;
+
+	/*
+	 * Allow overriding with env, mostly to avoid the need to modify
+	 * all tests. I.e. to test with and without io-uring being enabled.
+	 */
+	se->uring.enable = getenv("FUSE_URING_ENABLE") ?
+				   atoi(getenv("FUSE_URING_ENABLE")) :
+				   SESSION_DEF_URING_ENABLE;
+	se->uring.q_depth = getenv("FUSE_URING_QUEUE_DEPTH") ?
+				    atoi(getenv("FUSE_URING_QUEUE_DEPTH")) :
+				    SESSION_DEF_URING_Q_DEPTH;
 
 	/* Parse options */
 	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
