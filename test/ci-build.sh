@@ -118,6 +118,13 @@ sanitized_build()
     sudo rm -fr ${PREFIX_DIR}
 )
 
+# Sanitized with io-uring
+export CC=clang
+export CXX=clang++
+export FUSE_URING_ENABLE=1
+sanitized_build
+unset FUSE_URING_ENABLE
+
 # 32-bit sanitized build
 export CC=clang
 export CXX=clang++
