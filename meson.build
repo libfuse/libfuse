@@ -59,6 +59,8 @@ include_default = '''
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <assert.h>     /* For static_assert */
+#include <pthread.h>    /* For pthread_setname_np */
 '''
 args_default = [ '-D_GNU_SOURCE' ]
 
@@ -72,32 +74,61 @@ private_cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
-               'utimensat', 'copy_file_range', 'fallocate', 'static_assert',
-               'pthread_setname_np' ]
+               'utimensat', 'copy_file_range', 'fallocate' ]
 foreach func : test_funcs
     private_cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))
 endforeach
-private_cfg.set('HAVE_SETXATTR', 
-        cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
-private_cfg.set('HAVE_ICONV', 
-        cc.has_function('iconv', prefix: '#include <iconv.h>'))
+
+# Special case checks that need custom code
+special_funcs = {
+    'static_assert': '''
+        #include <assert.h>
+        static_assert(1, "test");
+        int main(void) { return 0; }
+    ''',
+    'pthread_setname_np': '''
+        #include <pthread.h>
+        int main(void) {
+            pthread_t thread = pthread_self();
+            pthread_setname_np(thread, "test");
+            return 0;
+        }
+    ''',
+    'close_range': '''
+        #include <unistd.h>
+        #include <fcntl.h>
+        #include <linux/close_range.h>
+        int main(void) {
+            unsigned int flags = CLOSE_RANGE_UNSHARE;
+            return close_range(3, ~0U, flags);
+        }
+    '''
+}
+
+foreach name, code : special_funcs
+    private_cfg.set('HAVE_' + name.to_upper(),
+        cc.compiles(code, args: ['-Werror'] + args_default,
+                 name: name + ' check'))
+endforeach
+
+# Regular function checks
+private_cfg.set('HAVE_SETXATTR',
+    cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
+private_cfg.set('HAVE_ICONV',
+    cc.has_function('iconv', prefix: '#include <iconv.h>'))
 private_cfg.set('HAVE_BACKTRACE',
-        cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
+    cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
 
-# Test if headers exist
-private_cfg.set('HAVE_LINUX_CLOSE_RANGE_H',
-        cc.check_header('#include <linux/close_range.h>'))
-
-# Test if structs have specific member
+# Struct member checks
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
-         cc.has_member('struct stat', 'st_atim',
-                       prefix: include_default,
-                       args: args_default))
+    cc.has_member('struct stat', 'st_atim',
+                  prefix: include_default + '#include <sys/stat.h>',
+                  args: args_default))
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
-         cc.has_member('struct stat', 'st_atimespec',
-                       prefix: include_default,
-                       args: args_default))
+    cc.has_member('struct stat', 'st_atimespec',
+                  prefix: include_default + '#include <sys/stat.h>',
+                  args: args_default))
 
 #
 # Compiler configuration
