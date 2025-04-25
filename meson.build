@@ -1,6 +1,6 @@
 project('libfuse3', ['c'],
         version: '3.18.0-rc0',  # Version with RC suffix
-        meson_version: '>= 0.51.0',
+        meson_version: '>= 0.60.0',
         default_options: [
             'buildtype=debugoptimized',
             'c_std=gnu11',
@@ -108,7 +108,7 @@ special_funcs = {
 
 foreach name, code : special_funcs
     private_cfg.set('HAVE_' + name.to_upper(),
-        cc.compiles(code, args: ['-Werror'] + args_default,
+        cc.links(code, args: args_default,
                  name: name + ' check'))
 endforeach
 
