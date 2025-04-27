@@ -675,6 +675,14 @@ void destroy_mount_opts(struct mount_opts *mo)
 	free(mo);
 }
 
+int __fuse_add_kernel_mount_opt(struct fuse_session *se, const char *mount_opt)
+{
+	if (!se->mo)
+		return -1;
+	if (!mount_opt)
+		return -1;
+	return fuse_opt_add_opt(&se->mo->kernel_opts, mount_opt);
+}
 
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 {
