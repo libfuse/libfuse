@@ -1,6 +1,6 @@
 project('libfuse3', ['c'],
         version: '3.18.0-rc0',  # Version with RC suffix
-        meson_version: '>= 0.51.0',
+        meson_version: '>= 0.60.0',
         default_options: [
             'buildtype=debugoptimized',
             'c_std=gnu11',
@@ -59,6 +59,8 @@ include_default = '''
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <assert.h>     /* For static_assert */
+#include <pthread.h>    /* For pthread_setname_np */
 '''
 args_default = [ '-D_GNU_SOURCE' ]
 
@@ -77,22 +79,84 @@ foreach func : test_funcs
     private_cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))
 endforeach
-private_cfg.set('HAVE_SETXATTR', 
-        cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
-private_cfg.set('HAVE_ICONV', 
-        cc.has_function('iconv', prefix: '#include <iconv.h>'))
-private_cfg.set('HAVE_BACKTRACE',
-        cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
 
-# Test if structs have specific member
+# Special case checks that need custom code
+special_funcs = {
+    'static_assert': '''
+        #include <assert.h>
+        static_assert(1, "test");
+        int main(void) { return 0; }
+    ''',
+    'pthread_setname_np': '''
+        #include <pthread.h>
+        int main(void) {
+            pthread_t thread = pthread_self();
+            pthread_setname_np(thread, "test");
+            return 0;
+        }
+    ''',
+    'close_range': '''
+        #include <unistd.h>
+        #include <fcntl.h>
+        #include <linux/close_range.h>
+        int main(void) {
+            unsigned int flags = CLOSE_RANGE_UNSHARE;
+            return close_range(3, ~0U, flags);
+        }
+    '''
+}
+
+foreach name, code : special_funcs
+    private_cfg.set('HAVE_' + name.to_upper(),
+        cc.links(code, args: args_default,
+                 name: name + ' check'))
+endforeach
+
+# Regular function checks
+private_cfg.set('HAVE_SETXATTR',
+    cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
+private_cfg.set('HAVE_ICONV',
+    cc.has_function('iconv', prefix: '#include <iconv.h>'))
+private_cfg.set('HAVE_BACKTRACE',
+    cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
+
+# Struct member checks
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIM',
-         cc.has_member('struct stat', 'st_atim',
-                       prefix: include_default,
-                       args: args_default))
+    cc.has_member('struct stat', 'st_atim',
+                  prefix: include_default + '#include <sys/stat.h>',
+                  args: args_default))
 private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
-         cc.has_member('struct stat', 'st_atimespec',
-                       prefix: include_default,
-                       args: args_default))
+    cc.has_member('struct stat', 'st_atimespec',
+                  prefix: include_default + '#include <sys/stat.h>',
+                  args: args_default))
+
+private_cfg.set('USDT_ENABLED', get_option('enable-usdt'))
+
+# Check for liburing with SQE128 support
+code = '''
+#include <liburing.h>
+#include <stdio.h>
+int main(void) {
+    struct io_uring ring;
+    int ret = io_uring_queue_init(1, &ring, 0);
+#ifndef IORING_SETUP_SQE128
+#error "No SQE128 support"
+#endif
+    return ret;
+}'''
+
+liburing = get_option('enable-io-uring') ? \
+    dependency('liburing', required: false) :\
+    dependency('', required: false)
+libnuma = dependency('numa', required: false)
+
+if liburing.found() and libnuma.found()
+   if cc.links(code,
+              name: 'liburing linking and SQE128 support',
+              dependencies: [liburing])
+      private_cfg.set('HAVE_URING', true)
+   endif
+endif
 
 #
 # Compiler configuration

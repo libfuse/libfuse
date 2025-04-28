@@ -292,7 +292,7 @@ struct fuse_lowlevel_ops {
 	 * If writeback caching is enabled, the kernel may have a
 	 * better idea of a file's length than the FUSE file system
 	 * (eg if there has been a write that extended the file size,
-	 * but that has not yet been passed to the filesystem.n
+	 * but that has not yet been passed to the filesystem.
 	 *
 	 * In this case, the st_size value provided by the file system
 	 * will be ignored.
@@ -2314,6 +2314,11 @@ void fuse_session_process_buf(struct fuse_session *se,
  * @return the actual size of the raw request, or -errno on error
  */
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
+
+/**
+ * Check if the request is submitted through fuse-io-uring
+ */
+bool fuse_req_is_uring(fuse_req_t req);
 
 #ifdef __cplusplus
 }

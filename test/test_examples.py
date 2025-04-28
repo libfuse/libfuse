@@ -44,8 +44,13 @@ if sys.platform == 'linux':
     options.append('clone_fd')
 
 def invoke_directly(mnt_dir, name, options):
-    cmdline = base_cmdline + [ pjoin(basename, 'example', name),
-                               '-f', mnt_dir, '-o', ','.join(options) ]
+    # Handle test/hello specially since it's not in example/
+    if name.startswith('test/'):
+        path = pjoin(basename, name)
+    else:
+        path = pjoin(basename, 'example', name)
+
+    cmdline = base_cmdline + [ path, '-f', mnt_dir, '-o', ','.join(options) ]
     if name == 'hello_ll':
         # supports single-threading only
         cmdline.append('-s')
@@ -88,7 +93,7 @@ def readdir_inode(dir):
 @pytest.mark.parametrize("cmdline_builder", (invoke_directly, invoke_mount_fuse,
                                              invoke_mount_fuse_drop_privileges))
 @pytest.mark.parametrize("options", powerset(options))
-@pytest.mark.parametrize("name", ('hello', 'hello_ll'))
+@pytest.mark.parametrize("name", ('hello', 'hello_ll', 'test/hello'))
 def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
     logger = logging.getLogger(__name__)
     mnt_dir = str(tmpdir)
@@ -152,10 +157,20 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
         cmdline = base_cmdline + \
                   [ pjoin(basename, 'example', 'passthrough'),
                     '--plus', '-f', mnt_dir ]
-    else:
+    elif name == 'passthrough_ll':
+        cmdline = base_cmdline + \
+                  [ pjoin(basename, 'example', name),
+                    '-f', mnt_dir, '-o', 'timeout=0' ]
+    else:  # passthrough and passthrough_fh
         cmdline = base_cmdline + \
                   [ pjoin(basename, 'example', name),
                     '-f', mnt_dir ]
+
+    # Set all timeouts to 0 for everything except passthrough_ll
+    # (this includes passthrough, passthrough_plus, and passthrough_fh)
+    if name != 'passthrough_ll':
+        cmdline.extend(['-o', 'entry_timeout=0,negative_timeout=0,attr_timeout=0,ac_attr_timeout=0'])
+
     if debug:
         cmdline.append('-d')
 
@@ -164,7 +179,9 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
             pytest.skip('example does not support writeback caching')
         cmdline.append('-o')
         cmdline.append('writeback')
-        
+
+    print(f"\nDebug: Command line: {' '.join(cmdline)}")
+
     mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
                                      stderr=output_checker.fd)
     try:
@@ -866,25 +883,58 @@ def tst_utimens(mnt_dir, ns_tol=0):
 def tst_passthrough(src_dir, mnt_dir):
     name = name_generator()
     src_name = pjoin(src_dir, name)
-    mnt_name = pjoin(src_dir, name)
+    mnt_name = pjoin(mnt_dir, name)
+
+    print(f"\nDebug: Creating file {name}")
+    print(f"Debug: src_name={src_name}")
+    print(f"Debug: mnt_name={mnt_name}")
+
+    # First test: write to source directory
     assert name not in os.listdir(src_dir)
     assert name not in os.listdir(mnt_dir)
     with open(src_name, 'w') as fh:
         fh.write('Hello, world')
+
+    print(f"Debug: File written to src_name")
+
+    start_time = time.time()
+    while time.time() - start_time < 10:  # 10 second timeout
+        if name in os.listdir(mnt_dir):
+            break
+        print(f"Debug: Waiting for file to appear... ({time.time() - start_time:.1f}s)")
+        time.sleep(0.1)
+    else:
+        pytest.fail("File did not appear in mount directory within 10 seconds")
+
     assert name in os.listdir(src_dir)
     assert name in os.listdir(mnt_dir)
-    assert os.stat(src_name) == os.stat(mnt_name)
 
+    # Compare relevant stat attributes
+    src_stat = os.stat(src_name)
+    mnt_stat = os.stat(mnt_name)
+    assert src_stat.st_mode == mnt_stat.st_mode
+    assert src_stat.st_ino == mnt_stat.st_ino
+    assert src_stat.st_size == mnt_stat.st_size
+    assert src_stat.st_mtime == mnt_stat.st_mtime
+
+    # Second test: write to mount directory
     name = name_generator()
     src_name = pjoin(src_dir, name)
-    mnt_name = pjoin(src_dir, name)
+    mnt_name = pjoin(mnt_dir, name)
     assert name not in os.listdir(src_dir)
     assert name not in os.listdir(mnt_dir)
     with open(mnt_name, 'w') as fh:
         fh.write('Hello, world')
     assert name in os.listdir(src_dir)
     assert name in os.listdir(mnt_dir)
-    assert os.stat(src_name) == os.stat(mnt_name)
+
+    # Compare relevant stat attributes
+    src_stat = os.stat(src_name)
+    mnt_stat = os.stat(mnt_name)
+    assert src_stat.st_mode == mnt_stat.st_mode
+    assert src_stat.st_ino == mnt_stat.st_ino
+    assert src_stat.st_size == mnt_stat.st_size
+    assert abs(src_stat.st_mtime - mnt_stat.st_mtime) < 0.01
 
 
 def tst_xattr(path):

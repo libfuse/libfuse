@@ -10,6 +10,8 @@
 */
 
 #define _GNU_SOURCE
+#include "fuse.h"
+#include <pthread.h>
 
 #include "fuse_config.h"
 #include "fuse_i.h"
@@ -17,7 +19,9 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
+#include "util.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -87,10 +91,6 @@ struct node_table {
 	size_t size;
 	size_t split;
 };
-
-#define container_of(ptr, type, member) ({                              \
-			const typeof( ((type *)0)->member ) *__mptr = (ptr); \
-			(type *)( (char *)__mptr - offsetof(type,member) );})
 
 #define list_entry(ptr, type, member)           \
 	container_of(ptr, type, member)
@@ -2555,13 +2555,34 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 {
 	fuse_get_context()->private_data = fs->user_data;
 	if (!fs->op.write_buf)
-		conn->want &= ~FUSE_CAP_SPLICE_READ;
+		fuse_unset_feature_flag(conn, FUSE_CAP_SPLICE_READ);
 	if (!fs->op.lock)
-		conn->want &= ~FUSE_CAP_POSIX_LOCKS;
+		fuse_unset_feature_flag(conn, FUSE_CAP_POSIX_LOCKS);
 	if (!fs->op.flock)
-		conn->want &= ~FUSE_CAP_FLOCK_LOCKS;
-	if (fs->op.init)
+		fuse_unset_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
+	if (fs->op.init) {
+		uint64_t want_ext_default = conn->want_ext;
+		uint32_t want_default = fuse_lower_32_bits(conn->want_ext);
+		int rc;
+
+		conn->want = want_default;
 		fs->user_data = fs->op.init(conn, cfg);
+
+		rc = convert_to_conn_want_ext(conn, want_ext_default,
+					      want_default);
+
+		if (rc != 0) {
+			/*
+			 * This is a grave developer error, but
+			 * we cannot return an error here, as the function
+			 * signature does not allow it.
+			 */
+			fuse_log(
+				FUSE_LOG_ERR,
+				"fuse: Aborting due to invalid conn want flags.\n");
+			_exit(EXIT_FAILURE);
+		}
+	}
 }
 
 static int fuse_init_intr_signal(int signum, int *installed);
@@ -4519,7 +4540,6 @@ static int fuse_session_loop_remember(struct fuse *f)
 	}
 
 	free(fbuf.mem);
-	fuse_session_reset(se);
 	return res < 0 ? -1 : 0;
 }
 
@@ -4841,7 +4861,7 @@ static void *fuse_prune_nodes(void *fuse)
 	struct fuse *f = fuse;
 	int sleep_time;
 
-	pthread_setname_np(pthread_self(), "fuse_prune_nodes");
+	fuse_set_thread_name(pthread_self(), "fuse_prune_nodes");
 
 	while(1) {
 		sleep_time = fuse_clean_cache(f);

@@ -1,0 +1,4 @@
+Note:
+  * If the pkg-config command fails due to the absence of the fuse3.pc file,
+  you should configure the path to the fuse3.pc file in the PKG_CONFIG_PATH
+  variable.
