@@ -193,10 +193,12 @@ static int cuse_reply_init(fuse_req_t req, struct cuse_init_out *arg,
 }
 
 void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
-			 const void *op_in, const void *req_payload)
+			 const void *op_in, const void *req_payload,
+			 const size_t payload_sz)
 {
 	const struct fuse_init_in *arg = op_in;
 	(void)req_payload;
+	(void)payload_sz;
 	struct cuse_init_out outarg;
 	struct fuse_session *se = req->se;
 	struct cuse_data *cd = se->cuse_data;
@@ -267,7 +269,7 @@ void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
 
 void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_cuse_lowlevel_init(req, nodeid, inarg, NULL);
+	_cuse_lowlevel_init(req, nodeid, inarg, NULL, 0);
 }
 
 struct fuse_session *cuse_lowlevel_setup(int argc, char *argv[],
