@@ -2,8 +2,7 @@
  * FUSE: Filesystem in Userspace
  * Copyright (C) 2025  Bernd Schubert <bschubert@ddn.com>
  *
- * Implementation of (most of) the low-level FUSE API. The session loop
- * functions are implemented in separate files.
+ * Implementation of (most of) FUSE-over-io-uring.
  *
  * This program can be distributed under the terms of the GNU LGPLv2.
  * See the file COPYING.LIB
