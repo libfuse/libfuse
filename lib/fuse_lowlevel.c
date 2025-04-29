@@ -185,7 +185,7 @@ void fuse_free_req(fuse_req_t req)
 	struct fuse_session *se = req->se;
 
 	/* XXX: for now no support for interrupts with io-uring
-	 *      It actually might work alreasdy, though. But then would add
+	 *      It actually might work already, though. But then would add
 	 *      a lock across ring queues.
 	 */
 	if (se->conn.no_interrupt || req->is_uring) {
