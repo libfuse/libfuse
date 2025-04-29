@@ -279,7 +279,8 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 	size_t off = 0;
 	int res = 0;
 
-	for (int idx = 0; idx < count; idx++) {
+	/* copy iov into the payload, idx=0 is the header section */
+	for (int idx = 1; idx < count; idx++) {
 		struct iovec *cur = &iov[idx];
 
 		if (off + cur->iov_len > max_buf) {
