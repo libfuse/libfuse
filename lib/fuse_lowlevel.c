@@ -2056,8 +2056,8 @@ static void do_listxattr(fuse_req_t req, const fuse_ino_t nodeid,
 static void _do_removexattr(fuse_req_t req, const fuse_ino_t nodeid,
 			    const void *inarg, const void *in_payload)
 {
-	(void)in_payload;
-	char *name = (char *) inarg;
+	(void)inarg;
+	const char *name = in_payload;
 
 	if (req->se->op.removexattr)
 		req->se->op.removexattr(req, nodeid, name);
@@ -2066,7 +2066,7 @@ static void _do_removexattr(fuse_req_t req, const fuse_ino_t nodeid,
 }
 static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_removexattr(req, nodeid, inarg, NULL);
+	_do_removexattr(req, nodeid, NULL, inarg);
 }
 
 static void convert_fuse_file_lock(const struct fuse_file_lock *fl,
