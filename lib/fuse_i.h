@@ -257,6 +257,15 @@ static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
 					   uint64_t want_ext_default,
 					   uint32_t want_default)
 {
+	/* Check if want has bits set that want_ext doesn't.
+	 * In this case assume the application has used a mix of functions
+	 * and direct modification of want and copy those bits over to want_ext
+	 */
+	uint32_t want_diff = conn->want ^ fuse_lower_32_bits(conn->want_ext);
+
+	if ((conn->want_ext & want_diff) == 0)
+		conn->want_ext |= want_diff;
+
 	/*
 	 * Convert want to want_ext if necessary.
 	 * For the high level interface this function might be called
