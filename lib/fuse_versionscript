@@ -205,6 +205,9 @@ FUSE_3.17 {
 FUSE_3.18 {
 	global:
 		fuse_req_is_uring;
+		fuse_lowlevel_notify_resend;
+		fuse_lowlevel_req_is_resend;
+		fuse_session_reinitialize;
 } FUSE_3.17;
 
 # Local Variables:
