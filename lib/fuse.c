@@ -2563,25 +2563,11 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 	if (fs->op.init) {
 		uint64_t want_ext_default = conn->want_ext;
 		uint32_t want_default = fuse_lower_32_bits(conn->want_ext);
-		int rc;
 
 		conn->want = want_default;
 		fs->user_data = fs->op.init(conn, cfg);
 
-		rc = convert_to_conn_want_ext(conn, want_ext_default,
-					      want_default);
-
-		if (rc != 0) {
-			/*
-			 * This is a grave developer error, but
-			 * we cannot return an error here, as the function
-			 * signature does not allow it.
-			 */
-			fuse_log(
-				FUSE_LOG_ERR,
-				"fuse: Aborting due to invalid conn want flags.\n");
-			_exit(EXIT_FAILURE);
-		}
+		convert_to_conn_want_ext(conn, want_ext_default, want_default);
 	}
 }
 

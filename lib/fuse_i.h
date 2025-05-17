@@ -268,11 +268,8 @@ static inline int convert_to_conn_want_ext(struct fuse_conn_info *conn,
 	 */
 	if (conn->want != want_default &&
 	    fuse_lower_32_bits(conn->want_ext) != conn->want) {
-		if (conn->want_ext != want_ext_default) {
-			fuse_log(FUSE_LOG_ERR,
-				 "fuse: both 'want' and 'want_ext' are set\n");
+		if (conn->want_ext != want_ext_default)
 			return -EINVAL;
-		}
 
 		/* high bits from want_ext, low bits from want */
 		conn->want_ext = fuse_higher_32_bits(conn->want_ext) |
