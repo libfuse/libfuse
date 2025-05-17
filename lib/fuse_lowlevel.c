@@ -2605,7 +2605,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	if (se->op.init) {
 		uint64_t want_ext_default = se->conn.want_ext;
 		uint32_t want_default = fuse_lower_32_bits(se->conn.want_ext);
-		int rc;
 
 		// Apply the first 32 bits of capable_ext to capable
 		se->conn.capable = fuse_lower_32_bits(se->conn.capable_ext);
@@ -2618,14 +2617,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		 * se->conn.want_ext
 		 * Userspace might still use conn.want - we need to convert it
 		 */
-		rc = convert_to_conn_want_ext(&se->conn, want_ext_default,
+		convert_to_conn_want_ext(&se->conn, want_ext_default,
 					      want_default);
-		if (rc != 0) {
-			fuse_reply_err(req, EPROTO);
-			se->error = -EPROTO;
-			fuse_session_exit(se);
-			return;
-		}
 	}
 
 	if (!want_flags_valid(se->conn.capable_ext, se->conn.want_ext)) {
