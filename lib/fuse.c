@@ -2611,15 +2611,8 @@ void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		fuse_unset_feature_flag(conn, FUSE_CAP_POSIX_LOCKS);
 	if (!fs->op.flock)
 		fuse_unset_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
-	if (fs->op.init) {
-		uint64_t want_ext_default = conn->want_ext;
-		uint32_t want_default = fuse_lower_32_bits(conn->want_ext);
-
-		conn->want = want_default;
+	if (fs->op.init)
 		fs->user_data = fs->op.init(conn, cfg);
-
-		convert_to_conn_want_ext(conn, want_ext_default, want_default);
-	}
 }
 
 static int fuse_init_intr_signal(int signum, int *installed);
