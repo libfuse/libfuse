@@ -1,7 +1,14 @@
 #include <stdlib.h>
 #include <errno.h>
 
+#ifndef FUSE_USE_VERSION
+#define FUSE_USE_VERSION (FUSE_MAKE_VERSION(3, 18))
+#endif
+
 #include "util.h"
+#include "fuse_log.h"
+#include "fuse_lowlevel.h"
+#include <stdio.h>
 
 int libfuse_strtol(const char *str, long *res)
 {
@@ -25,3 +32,4 @@ int libfuse_strtol(const char *str, long *res)
 	*res = val;
 	return 0;
 }
+
