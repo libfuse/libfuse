@@ -205,6 +205,12 @@ FUSE_3.17 {
 FUSE_3.18 {
 	global:
 		fuse_req_is_uring;
+		fuse_set_feature_flag;
+		fuse_unset_feature_flag;
+		fuse_get_feature_flag;
+
+		# Not part of public API, for internal test use only
+		fuse_convert_to_conn_want_ext;
 } FUSE_3.17;
 
 # Local Variables:
