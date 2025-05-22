@@ -12,7 +12,7 @@
 struct fuse_conn_info;
 
 int libfuse_strtol(const char *str, long *res);
-void fuse_set_thread_name(unsigned long tid, const char *name);
+void fuse_set_thread_name(const char *name);
 
 /**
  * Return the low bits of a number

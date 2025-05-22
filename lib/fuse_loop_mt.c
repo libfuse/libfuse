@@ -132,7 +132,7 @@ static void *fuse_do_work(void *data)
 	struct fuse_mt *mt = w->mt;
 	struct fuse_session *se = mt->se;
 
-	fuse_set_thread_name(pthread_self(), "fuse_worker");
+	fuse_set_thread_name("fuse_worker");
 
 	while (!fuse_session_exited(se)) {
 		int isforget = 0;

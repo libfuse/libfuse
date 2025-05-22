@@ -4840,7 +4840,7 @@ static void *fuse_prune_nodes(void *fuse)
 	struct fuse *f = fuse;
 	int sleep_time;
 
-	fuse_set_thread_name(pthread_self(), "fuse_prune_nodes");
+	fuse_set_thread_name("fuse_prune_nodes");
 
 	while(1) {
 		sleep_time = fuse_clean_cache(f);
