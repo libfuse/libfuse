@@ -42,12 +42,11 @@ int libfuse_strtol(const char *str, long *res)
 	return 0;
 }
 
-void fuse_set_thread_name(unsigned long tid, const char *name)
+void fuse_set_thread_name(const char *name)
 {
 #ifdef HAVE_PTHREAD_SETNAME_NP
-	pthread_setname_np(tid, name);
+	pthread_setname_np(pthread_self(), name);
 #else
-	(void)tid;
 	(void)name;
 #endif
 }

@@ -679,7 +679,7 @@ static void *fuse_uring_thread(void *arg)
 
 	snprintf(thread_name, 16, "fuse-ring-%d", queue->qid);
 	thread_name[15] = '\0';
-	fuse_set_thread_name(pthread_self(), thread_name);
+	fuse_set_thread_name(thread_name);
 
 	fuse_uring_set_thread_core(queue->qid);
 
