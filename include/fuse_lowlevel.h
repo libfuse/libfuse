@@ -1745,6 +1745,20 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 				     off_t off, off_t len);
 
 /**
+ * Notify to increment the epoch for the current
+ *
+ * Each fuse connection has an 'epoch', which is initialized during INIT.
+ * Caching will then be validated against the epoch value: if the current epoch
+ * is higher than an object being revalidated, the object is invalid.
+ *
+ * This function simply increment the current epoch value.
+ *
+ * @param se the session object
+ * @return zero for success, -errno for failure
+ */
+int fuse_lowlevel_notify_increment_epoch(struct fuse_session *se);
+
+/**
  * Notify to invalidate parent attributes and the dentry matching parent/name
  *
  * To avoid a deadlock this function must not be called in the
