@@ -208,6 +208,7 @@ FUSE_3.18 {
 		fuse_set_feature_flag;
 		fuse_unset_feature_flag;
 		fuse_get_feature_flag;
+		fuse_lowlevel_notify_increment_epoch;
 
 		# Not part of public API, for internal test use only
 		fuse_convert_to_conn_want_ext;

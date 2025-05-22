@@ -2973,6 +2973,19 @@ int fuse_lowlevel_notify_inval_inode(struct fuse_session *se, fuse_ino_t ino,
 	return send_notify_iov(se, FUSE_NOTIFY_INVAL_INODE, iov, 2);
 }
 
+int fuse_lowlevel_notify_increment_epoch(struct fuse_session *se)
+{
+	struct iovec iov[1];
+
+	if (!se)
+		return -EINVAL;
+
+	if (se->conn.proto_minor < 44)
+		return -ENOSYS;
+
+	return send_notify_iov(se, FUSE_NOTIFY_INC_EPOCH, iov, 1);
+}
+
 /**
  * Notify parent attributes and the dentry matching parent/name
  *
