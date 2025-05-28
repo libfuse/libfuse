@@ -1158,10 +1158,38 @@ static void sfs_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 static void do_read(fuse_req_t req, size_t size, off_t off, fuse_file_info *fi)
 {
 	fuse_bufvec buf = FUSE_BUFVEC_INIT(size);
-	buf.buf[0].flags =
-		static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
-	buf.buf[0].fd = fi->fh;
-	buf.buf[0].pos = off;
+	char *payload = NULL;
+	size_t payload_size = 0;
+	int res = fuse_req_get_payload(req, &payload, &payload_size, NULL);
+
+	/*
+	 * This is a demonstration how to use io-uring payload. For FUSE_BUF_IS_FD
+	 * it shouldn't make much of a difference because fuse_reply_data() ->
+	 * fuse_reply_data_uring() also has access to the payload and will
+	 * read directly from the FD into the payload.
+	 * It is more useful for file systems that need a buffer for decryption,
+	 * decompression, etc.
+	 */
+	if (res == 0) {
+		/* This is an io-uring request - write directly to the payload */
+		assert(payload_size >= size);
+
+		buf.buf[0].mem = payload;
+		buf.buf[0].size = payload_size;
+
+		res = pread(fi->fh, payload, size, off);
+		if (res < 0) {
+			fuse_reply_err(req, errno);
+			return;
+		}
+
+		buf.buf[0].size = res;
+	} else {
+		buf.buf[0].flags = static_cast<fuse_buf_flags>(
+			FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
+		buf.buf[0].fd = fi->fh;
+		buf.buf[0].pos = off;
+	}
 
 	fuse_reply_data(req, &buf, FUSE_BUF_COPY_FLAGS);
 }

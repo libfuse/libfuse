@@ -190,6 +190,30 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	return 0;
 }
 
+int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
+			 void **mr)
+{
+	struct fuse_ring_ent *ring_ent;
+
+	/* Not possible without io-uring interface */
+	if (!req->is_uring)
+		return -EINVAL;
+
+	ring_ent = container_of(req, struct fuse_ring_ent, req);
+
+	*payload = ring_ent->op_payload;
+	*payload_sz = ring_ent->req_payload_sz;
+
+	/*
+	 * For now unused, but will be used later when the application can
+	 * allocate the buffers itself and register them for rdma.
+	 */
+	if (mr)
+		*mr = NULL;
+
+	return 0;
+}
+
 int send_reply_uring(fuse_req_t req, int error, const void *arg, size_t argsize)
 {
 	int res;

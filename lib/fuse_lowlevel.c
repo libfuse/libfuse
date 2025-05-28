@@ -3317,6 +3317,18 @@ bool fuse_req_is_uring(fuse_req_t req)
 	return req->is_uring;
 }
 
+#ifndef HAVE_URING
+int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
+			 void **mr)
+{
+	(void)req;
+	(void)payload;
+	(void)payload_sz;
+	(void)mr;
+	return -ENOTSUP;
+}
+#endif
+
 static struct {
 	void (*func)(fuse_req_t req, const fuse_ino_t node, const void *arg);
 	const char *name;
