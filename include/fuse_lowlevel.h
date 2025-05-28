@@ -2367,6 +2367,24 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
  */
 bool fuse_req_is_uring(fuse_req_t req);
 
+/**
+ * Get the payload of a request
+ * (for requests submitted through fuse-io-uring only)
+ *
+ * This is useful for a file system that wants to write data directly
+ * to the request buffer. With io-uring the req is the buffer owner
+ * and the file system can write directly to the buffer and avoid
+ * extra copying. For example useful for network file systems.
+ *
+ * @param req the request
+ * @param payload pointer to the payload
+ * @param payload_sz size of the payload
+ * @param mr  memory registration handle, currently unused
+ * @return 0 on success, -errno on failure
+ */
+int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
+			 void **mr);
+
 #ifdef __cplusplus
 }
 #endif
