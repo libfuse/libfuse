@@ -206,6 +206,7 @@ FUSE_3.18 {
 	global:
 		fuse_req_is_uring;
 		fuse_uring_set_payload_allocator;
+		fuse_req_get_payload;
 		fuse_uring_get_req_payload_mr;
 } FUSE_3.17;
 
