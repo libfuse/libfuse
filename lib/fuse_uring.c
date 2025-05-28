@@ -233,7 +233,8 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg, size_t argsize)
 			 argsize, max_payload_sz);
 		error = -EINVAL;
 	} else if (argsize) {
-		memcpy(ring_ent->op_payload, arg, argsize);
+		if (arg != ring_ent->op_payload)
+			memcpy(ring_ent->op_payload, arg, argsize);
 	}
 	ent_in_out->payload_sz = argsize;
 
