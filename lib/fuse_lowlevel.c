@@ -3637,7 +3637,6 @@ void fuse_lowlevel_help(void)
 "    -o allow_other         allow access by all users\n"
 "    -o allow_root          allow access by root\n"
 "    -o auto_unmount        auto unmount on process termination\n"
-"    -o auto_unmount        auto unmount on process termination\n"
 "    -o io_uring            enable io-uring\n"
 "    -o io_uring_q_depth=<n> io-uring queue depth\n"
 );
