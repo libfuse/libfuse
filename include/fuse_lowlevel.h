@@ -1333,7 +1333,6 @@ struct fuse_lowlevel_ops {
 	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		       struct fuse_file_info *fi);
 
-
 	/**
 	 * Create a tempfile
 	 *
@@ -2373,6 +2372,24 @@ void fuse_uring_set_payload_allocator(
  * @return Memory registration handle if set, NULL otherwise
  */
 void *fuse_uring_get_req_payload_mr(struct fuse_req *req);
+
+/**
+ * Get the payload of a request
+ * (for requests submitted through fuse-io-uring only)
+ *
+ * This is useful for a file system that wants to write data directly
+ * to the request buffer. With io-uring the req is the buffer owner
+ * and the file system can write directly to the buffer and avoid
+ * extra copying. For example useful for network file systems.
+ *
+ * @param req the request
+ * @param payload pointer to the payload
+ * @param payload_sz size of the payload
+ * @param mr  memory registration handle, currently unused
+ * @return 0 on success, -errno on failure
+ */
+int fuse_req_get_payload(fuse_req_t req, void **payload, size_t *payload_sz,
+			 void **mr);
 
 #ifdef __cplusplus
 }
