@@ -212,7 +212,8 @@ int fuse_req_get_payload(fuse_req_t req, void **payload, size_t *payload_sz,
 	 * For now unused, but will be used later when the application can
 	 * allocate the buffers itself and register them for rdma.
 	 */
-	*mr = NULL;
+	if (mr)
+		*mr = ring_ent->payload_mr;
 
 	return 0;
 }
@@ -236,7 +237,8 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg, size_t argsize)
 			 argsize, max_payload_sz);
 		error = -EINVAL;
 	} else if (argsize) {
-		memcpy(ring_ent->op_payload, arg, argsize);
+		if (arg != ring_ent->op_payload)
+			memcpy(ring_ent->op_payload, arg, argsize);
 	}
 	ent_in_out->payload_sz = argsize;
 
