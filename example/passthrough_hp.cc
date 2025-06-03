@@ -77,9 +77,6 @@ using namespace std;
 
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
 #define SFS_DEFAULT_CLONE_FD "0"
-#define SFS_DEFAULT_URING  "1"
-#define SFS_DEFAULT_URING_Q_DEPTH "0"
-#define SFS_DEFAULT_URING_ARGLEN    "0"
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
    sfs_dirp` elements as inodes and file handles. This means that we
@@ -158,10 +155,6 @@ struct Fs {
     bool nocache;
     size_t num_threads;
     bool clone_fd;
-    struct {
-        bool enable;
-        int queue_depth;
-    } uring;
 
     std::string fuse_mount_options;
     bool direct_io;
@@ -1410,10 +1403,8 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
         ("num-threads", "Number of libfuse worker threads",
             cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
         ("clone-fd", "use separate fuse device fd for each thread")
-        ("direct-io", "enable fuse kernel internal direct-io")
-        ("uring", "use uring communication")
-        ("uring-q-depth", "io-uring queue depth",
-            cxxopts::value<int>()->default_value(SFS_DEFAULT_URING_Q_DEPTH));
+        ("direct-io", "enable fuse kernel internal direct-io");
+
     // FIXME: Find a better way to limit the try clause to just
     // opt_parser.parse() (cf. https://github.com/jarro2783/cxxopts/issues/146)
     auto options = parse_wrapper(opt_parser, argc, argv);
@@ -1445,9 +1436,6 @@ static cxxopts::ParseResult parse_options(int argc, char **argv) {
     fs.num_threads = options["num-threads"].as<int>();
     fs.clone_fd = options.count("clone-fd");
     fs.direct_io = options.count("direct-io");
-
-    fs.uring.enable = options.count("uring");
-    fs.uring.queue_depth = options["uring-q-depth"].as<int>();
 
     char* resolved_path = realpath(argv[1], NULL);
     if (resolved_path == NULL)
@@ -1533,13 +1521,6 @@ int main(int argc, char *argv[]) {
         fuse_opt_add_arg(&args, fs.fuse_mount_options.c_str()) ||
         (fs.debug_fuse && fuse_opt_add_arg(&args, "-odebug")))
         errx(3, "ERROR: Out of memory adding arguments");
-
-    if (fs.uring.enable) {
-        if (fuse_opt_add_arg(&args, "-oio_uring") ||
-            fuse_opt_add_arg(&args, ("-oio_uring_q_depth=" +
-            std::to_string(fs.uring.queue_depth)).c_str()))
-            errx(3, "ERROR: Out of memory adding io-uring arguments");
-    }
 
     ret = -1;
     fuse_lowlevel_ops sfs_oper {};
