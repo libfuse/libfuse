@@ -1,0 +1,5 @@
+Note:
+  * The cxxopts tool does not support parsing arguments like -oio_uring.
+  For example, if using -oio_uring causes a format error in the
+  passthrough_hp example, you should use the format -o io_uring instead.
+
