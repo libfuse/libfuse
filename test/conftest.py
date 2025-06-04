@@ -77,8 +77,11 @@ class OutputChecker:
             cp = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
             hit = cp.search(buf)
             if hit:
-                raise AssertionError('Suspicious output to stderr (matched "%s")'
-                                     % hit.group(0))
+                # Skip FUSE error messages in the format "unique: X, error: -Y (...), outsize: Z"
+                # These are no errors, but just fuse debug messages with the return code
+                if re.search(r'unique: \d+, error: -\d+ \(.*\), outsize: \d+', hit.group(0)):
+                    continue
+                raise AssertionError(f'Suspicious output to stderr (matched "{hit.group(0)}")')
 
 @pytest.fixture()
 def output_checker(request):
