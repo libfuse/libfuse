@@ -11,6 +11,7 @@
 
 struct fuse_conn_info;
 
+int _libfuse_strtol(const char *str, long *res, int base);
 int libfuse_strtol(const char *str, long *res);
 void fuse_set_thread_name(const char *name);
 

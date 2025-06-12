@@ -65,8 +65,20 @@ struct fuse_notify_req {
 };
 
 struct fuse_session_uring {
+	/* Does the kernel allow less than one queue per core? */
+	uint32_t reduced_queues : 1;
+
+	uint32_t reserved : 31;
+
 	bool enable;
 	unsigned int q_depth;
+
+	/* number of queues, default is 1 per core */
+	unsigned int nr_queues;
+
+	/* core mask for queue selection */
+	char *q_mask;
+
 	struct fuse_ring_pool *pool;
 };
 

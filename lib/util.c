@@ -16,13 +16,17 @@
 
 #include "util.h"
 #include "fuse_log.h"
-#include "fuse_lowlevel.h"
-#include <stdio.h>
 
-int libfuse_strtol(const char *str, long *res)
+/**
+ * Internal helper for string to long conversion with specified base
+ * @param str String to convert
+ * @param res Pointer to store the result
+ * @param base Base for conversion (0 for auto-detection)
+ * @return 0 on success, -errno on failure
+ */
+int _libfuse_strtol(const char *str, long *res, int base)
 {
 	char *endptr;
-	int base = 10;
 	long val;
 
 	errno = 0;
@@ -33,13 +37,18 @@ int libfuse_strtol(const char *str, long *res)
 	val = strtol(str, &endptr, base);
 
 	if (errno)
-	       return -errno;
+		return -errno;
 
 	if (endptr == str || *endptr != '\0')
 		return -EINVAL;
 
 	*res = val;
 	return 0;
+}
+
+int libfuse_strtol(const char *str, long *res)
+{
+	return _libfuse_strtol(str, res, 10);
 }
 
 void fuse_set_thread_name(const char *name)
