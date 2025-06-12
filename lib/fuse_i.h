@@ -84,6 +84,8 @@ typedef void (*fuse_teardown_waiting_fn)(void);
 struct fuse_session_uring {
 	/* the wish until FUSE_INIT is negotiated, the result afterwards */
 	bool enabled;
+	/* Does the kernel allow less than one queue per core? */
+	bool reduced_queues;
 	unsigned int q_depth;
 
 	/*
@@ -92,6 +94,12 @@ struct fuse_session_uring {
 	 * FUSE_CAP_IO_URING_BUFPOOL.
 	 */
 	bool bufpool;
+
+	/* number of queues, default is 1 per core */
+	unsigned int nr_queues;
+
+	/* core mask for queue selection */
+	char *q_mask;
 
 	struct fuse_ring_pool *pool;
 	_Atomic fuse_teardown_waiting_fn fsu_test_teardown_waiting;
