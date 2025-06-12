@@ -13,6 +13,7 @@
 \#*#
 *.orig
 *~
+.DS_Store
 Makefile.in
 Makefile
 *.m4
