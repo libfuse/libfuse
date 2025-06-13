@@ -205,6 +205,7 @@ FUSE_3.17 {
 FUSE_3.18 {
 	global:
 		fuse_req_is_uring;
+		fuse_req_get_payload;
 		fuse_set_feature_flag;
 		fuse_unset_feature_flag;
 		fuse_get_feature_flag;
