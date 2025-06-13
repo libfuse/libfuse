@@ -12,6 +12,7 @@
 *.gz
 \#*#
 *.orig
+*.patch
 *~
 .DS_Store
 Makefile.in
