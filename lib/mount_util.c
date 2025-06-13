@@ -54,6 +54,7 @@ static int mtab_needs_update(const char *mnt)
 	 * Skip mtab update if /etc/mtab:
 	 *
 	 *  - doesn't exist,
+	 *  - is a symlink,
 	 *  - is on a read-only filesystem.
 	 */
 	res = lstat(_PATH_MOUNTED, &stbuf);
@@ -63,6 +64,9 @@ static int mtab_needs_update(const char *mnt)
 	} else {
 		uid_t ruid;
 		int err;
+
+		if (S_ISLNK(stbuf.st_mode))
+			return 0;
 
 		ruid = getuid();
 		if (ruid != 0)
