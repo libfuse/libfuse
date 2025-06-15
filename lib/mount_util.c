@@ -75,6 +75,10 @@ static int mtab_needs_update(const char *mnt)
 
 		if (err == EROFS)
 			return 0;
+
+		res = access("/run/mount/utab", F_OK);
+		if (res == -1)
+			return 0;
 	}
 
 	return 1;
