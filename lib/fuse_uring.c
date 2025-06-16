@@ -345,9 +345,15 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			fuse_uring_get_queue(fuse_ring, qid);
 
 		if (queue->tid != 0) {
-			int value = 1;
+			uint64_t value = 1ULL;
+			int rc;
 
-			write(queue->eventfd, &value, sizeof(value));
+			rc = write(queue->eventfd, &value, sizeof(value));
+			if (rc != sizeof(value))
+				fprintf(stderr,
+					"Wrote to eventfd=%d err=%s: rc=%d\n",
+					queue->eventfd, strerror(errno), rc);
+			pthread_cancel(queue->tid);
 			pthread_join(queue->tid, NULL);
 			queue->tid = 0;
 		}
@@ -416,7 +422,7 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 		return -EINVAL;
 	}
 
-	// Add the poll SQE for the eventfd to wake up on teardown
+	/* Poll SQE for the eventfd to wake up on teardown */
 	sqe = io_uring_get_sqe(&queue->ring);
 	if (sqe == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Failed to get eventfd SQE");
