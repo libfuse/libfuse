@@ -1455,6 +1455,8 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 		std::cout << std::endl
 			  << "options:"
 			  << help.substr(help.find("\n\n") + 1, string::npos);
+		std::cout << "\nFuse lowlevel options:\n";
+		fuse_lowlevel_help();
 		exit(0);
 
 	} else if (argc != 3) {
