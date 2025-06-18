@@ -67,6 +67,12 @@
  * To use the function fuse_lowlevel_notify_expire_entry() instead of
  * fuse_lowlevel_notify_inval_entry(), use the command line option --only-expire
  *
+ * Another possible command-line option is --inc-epoch, which will use the FUSE
+ * low-level function fuse_lowlevel_notify_increment_epoch() instead.  This will
+ * function will force the invalidation of all dentries next time they are
+ * revalidated.  Note that --inc-epoch and --only-expire options are mutually
+ * exclusive.
+ *
  * ## Compilation ##
  *
  *     gcc -Wall notify_inval_entry.c `pkg-config fuse3 --cflags --libs` -o notify_inval_entry
@@ -103,12 +109,14 @@ struct options {
     float timeout;
     int update_interval;
     int only_expire;
+    int inc_epoch;
 };
 static struct options options = {
     .timeout = 5,
     .no_notify = 0,
     .update_interval = 1,
     .only_expire = 0,
+    .inc_epoch = 0,
 };
 
 #define OPTION(t, p)                           \
@@ -118,6 +126,7 @@ static const struct fuse_opt option_spec[] = {
     OPTION("--update-interval=%d", update_interval),
     OPTION("--timeout=%f", timeout),
     OPTION("--only-expire", only_expire),
+    OPTION("--inc-epoch", inc_epoch),
     FUSE_OPT_END
 };
 
@@ -263,7 +272,7 @@ static void update_fs(void) {
 static void* update_fs_loop(void *data) {
     struct fuse_session *se = (struct fuse_session*) data;
     char *old_name;
-
+    int ret = 0;
 
     while(!fuse_session_exited(se)) {
         old_name = strdup(file_name);
@@ -271,24 +280,27 @@ static void* update_fs_loop(void *data) {
 
         if (!options.no_notify && lookup_cnt) {
             if(options.only_expire) { // expire entry
-                int ret = fuse_lowlevel_notify_expire_entry
-                   (se, FUSE_ROOT_ID, old_name, strlen(old_name));
+                ret = fuse_lowlevel_notify_expire_entry
+                    (se, FUSE_ROOT_ID, old_name, strlen(old_name));
 
                 // no kernel support
                 if (ret == -ENOSYS) {
                     printf("fuse_lowlevel_notify_expire_entry not supported by kernel\n");
-                    printf("Exiting...\n");
-
-                    fuse_session_exit(se);
-                    // Make sure to exit now, rather than on next request from userspace
-                    pthread_kill(main_thread, SIGPIPE);
-
                     break;
                 }
+
                 // 1) ret == 0: successful expire of an existing entry
                 // 2) ret == -ENOENT: kernel has already expired the entry /
                 //                    entry does not exist anymore in the kernel
                 assert(ret == 0 || ret == -ENOENT);
+            } else if (options.inc_epoch) { // increment epoch
+                ret = fuse_lowlevel_notify_increment_epoch(se);
+
+                if (ret == -ENOSYS) {
+                    printf("fuse_lowlevel_notify_increment_epoch not supported by kernel\n");
+                    break;
+                }
+                assert(ret == 0);
             } else { // invalidate entry
                 assert(fuse_lowlevel_notify_inval_entry
                       (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
@@ -297,6 +309,15 @@ static void* update_fs_loop(void *data) {
         free(old_name);
         sleep(options.update_interval);
     }
+
+    if (ret == -ENOSYS) {
+        printf("Exiting...\n");
+
+        fuse_session_exit(se);
+        // Make sure to exit now, rather than on next request from userspace
+        pthread_kill(main_thread, SIGPIPE);
+    }
+
     return NULL;
 }
 
@@ -307,7 +328,8 @@ static void show_help(const char *progname)
                "    --timeout=<secs>       Timeout for kernel caches\n"
                "    --update-interval=<secs>  Update-rate of file system contents\n"
                "    --no-notify            Disable kernel notifications\n"
-               "    --only-expire            Expire entries instead of invalidating them\n"
+               "    --only-expire          Expire entries instead of invalidating them\n"
+               "    --inc-epoch            Increment epoch, invalidating all dentries\n"
                "\n");
 }
 
@@ -333,6 +355,11 @@ int main(int argc, char *argv[]) {
     } else if (opts.show_version) {
         printf("FUSE library version %s\n", fuse_pkgversion());
         fuse_lowlevel_version();
+        ret = 0;
+        goto err_out1;
+    }
+    if (options.only_expire && options.inc_epoch) {
+        printf("'only-expire' and 'inc-epoch' options are exclusive\n");
         ret = 0;
         goto err_out1;
     }
