@@ -3,8 +3,6 @@
   Copyright (C) 2008       SUSE Linux Products GmbH
   Copyright (C) 2008       Tejun Heo <teheo@suse.de>
 
-  This program tests the ioctl.c example file systsem.
-
   This program can be distributed under the terms of the GNU GPLv2.
   See the file COPYING.
 */
