@@ -1,0 +1,33 @@
+---
+# TODO: integrate into matrix.os in pr-ci.yml
+# TODO: add NetBSD and DragonFlyBSD
+name: 'Build (FreeBSD)'
+on:
+  push:
+    branches:
+      - master
+      - 'fuse-[0-9]+.[0-9]+*'
+  pull_request:
+    branches:
+      - master
+      - 'fuse-[0-9]+.[0-9]+*'
+
+jobs:
+  build_bsd:
+    runs-on: ubuntu-latest
+    name: Build under FreeBSD
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Build
+      uses: vmactions/freebsd-vm@v1
+      with:
+        usesh: true
+        prepare: |
+          pkg install -y meson ninja
+        run: |
+          mkdir build
+          cd build
+          meson setup ..
+          ninja -v
+...
