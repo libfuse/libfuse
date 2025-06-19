@@ -5,7 +5,7 @@
   Copyright (C) 2018       Valve, Inc
 
   This program can be distributed under the terms of the GNU GPLv2.
-  See the file COPYING.
+  See the file GPL2.txt.
 */
 
 /** @file

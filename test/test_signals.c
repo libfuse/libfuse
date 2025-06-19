@@ -5,7 +5,7 @@
  * Test for signal handling in libfuse.
  *
  * This program can be distributed under the terms of the GNU LGPLv2.
- * See the file COPYING.LIB
+ * See the file GPL2.txt
  */
 
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 17)

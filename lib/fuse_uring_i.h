@@ -2,7 +2,7 @@
  * FUSE: Filesystem in Userspace
  * Copyright (C) 2025       Bernd Schubert <bschubert@ddn.com>
  * This program can be distributed under the terms of the GNU LGPLv2.
- * See the file COPYING.LIB
+ * See the file LGPL2.txt
  */
 
 #ifndef FUSE_URING_I_H_
