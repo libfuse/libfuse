@@ -4,7 +4,7 @@
   Copyright (C) 2008-2009  Tejun Heo <tj@kernel.org>
 
   This program can be distributed under the terms of the GNU LGPLv2.
-  See the file COPYING.LIB.
+  See the file LGPL2.txt.
 
   Read example/cusexmp.c for usages.
 */
