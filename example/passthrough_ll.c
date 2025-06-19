@@ -37,6 +37,7 @@
 #define _GNU_SOURCE
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
+#include <sys/param.h>
 #include <fuse_lowlevel.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -314,7 +315,7 @@ static struct lo_inode *create_new_inode(int fd, struct fuse_entry_param *e, str
 {
 	struct lo_inode *inode = NULL;
 	struct lo_inode *prev, *next;
-	
+
 	inode = calloc(1, sizeof(struct lo_inode));
 	if (!inode)
 		return NULL;
@@ -711,7 +712,7 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 					err = errno;
 					goto error;
 				} else {  // End of stream
-					break; 
+					break;
 				}
 			}
 		}
@@ -743,11 +744,11 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 						    &st, nextoff);
 		}
 		if (entsize > rem) {
-			if (entry_ino != 0) 
+			if (entry_ino != 0)
 				lo_forget_one(req, entry_ino, 1);
 			break;
 		}
-		
+
 		p += entsize;
 		rem -= entsize;
 
@@ -815,9 +816,9 @@ static void lo_tmpfile(fuse_req_t req, fuse_ino_t parent,
 	/* parallel_direct_writes feature depends on direct_io features.
 	   To make parallel_direct_writes valid, need set fi->direct_io
 	   in current function. */
-	fi->parallel_direct_writes = 1; 
-	
-	err = fill_entry_param_new_inode(req, parent, fd, &e); 
+	fi->parallel_direct_writes = 1;
+
+	err = fill_entry_param_new_inode(req, parent, fd, &e);
 	if (err)
 		fuse_reply_err(req, err);
 	else

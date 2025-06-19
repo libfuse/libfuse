@@ -1088,6 +1088,7 @@ static const struct fuse_lowlevel_ops memfs_oper = {
 	.copy_file_range = nullptr,
 	.lseek = nullptr,
 	.tmpfile = nullptr,
+	.dlm_lock = nullptr
 };
 
 int main(int argc, char *argv[])

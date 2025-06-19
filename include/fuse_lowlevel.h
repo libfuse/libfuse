@@ -1354,6 +1354,19 @@ struct fuse_lowlevel_ops {
 	void (*tmpfile) (fuse_req_t req, fuse_ino_t parent,
 			mode_t mode, struct fuse_file_info *fi);
 
+	/**
+	 * Request a lock for the given byterange
+	 *
+	 * This has only an important role when writeback caching is used.
+	 * When the kernel prepares pages to write into the cache, it will request
+	 * a lock for the pages to write back later.
+	 * Mostly this will become important for data consistency in distributed
+	 * filesystems if multiple clients write into the same file.
+	 * The actual problem arises when the kernel reads this pages to prepare 
+	 * unaligned writes.
+	 */
+	void (*dlm_lock) (fuse_req_t req, fuse_ino_t ino, off_t offset, uint32_t length, 
+			uint32_t type, struct fuse_file_info *fi);
 };
 
 /**
@@ -1603,6 +1616,17 @@ int fuse_reply_xattr(fuse_req_t req, size_t count);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_lock(fuse_req_t req, const struct flock *lock);
+
+/**
+ * Reply with byte range lock information 
+ * 
+ * Possible requests:
+ * 	dlm_lock
+ * 
+ * @param req request handle
+ * @param locksize the locked size
+ */
+int fuse_reply_dlm_lock(fuse_req_t req, uint32_t locksize);
 
 /**
  * Reply with block index
