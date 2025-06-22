@@ -2402,6 +2402,10 @@ static void do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
 	_do_copy_file_range(req, nodeid_in, inarg, NULL);
 }
 
+/*
+ * Note that the uint64_t offset in struct fuse_lseek_in is derived from
+ * linux kernel loff_t and is therefore signed.
+ */
 static void _do_lseek(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *op_in, const void *in_payload)
 {
