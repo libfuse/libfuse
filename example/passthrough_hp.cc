@@ -1012,6 +1012,7 @@ static Inode *create_new_inode(int fd, fuse_entry_param *e)
 	return p_inode;
 }
 
+#ifdef O_TMPFILE
 static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 			fuse_file_info *fi)
 {
@@ -1049,7 +1050,7 @@ static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 
 	fuse_reply_create(req, &e, fi);
 }
-
+#endif
 static void sfs_fsyncdir(fuse_req_t req, fuse_ino_t ino, int datasync,
 			 fuse_file_info *fi)
 {
@@ -1378,7 +1379,9 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper)
 	sfs_oper.releasedir = sfs_releasedir;
 	sfs_oper.fsyncdir = sfs_fsyncdir;
 	sfs_oper.create = sfs_create;
+#ifdef O_TMPFILE
 	sfs_oper.tmpfile = sfs_tmpfile;
+#endif
 	sfs_oper.open = sfs_open;
 	sfs_oper.release = sfs_release;
 	sfs_oper.flush = sfs_flush;
