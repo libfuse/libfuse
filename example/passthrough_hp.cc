@@ -66,6 +66,10 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <limits.h>
+#ifdef __FreeBSD__
+#include <fcntl.h>
+#include <sys/user.h>
+#endif
 
 // C++ includes
 #include <cstddef>
@@ -248,6 +252,21 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 	fuse_reply_attr(req, &attr, fs.timeout);
 }
 
+static int with_fd_path(int fd, const std::function<int(const char*)>& f)
+{
+#ifdef __FreeBSD__
+    struct kinfo_file kf;
+    kf.kf_structsize = sizeof(kf);
+    int ret = fcntl(fd, F_KINFO, &kf);
+    if (ret == -1)
+        return ret;
+    return f (kf.kf_path);
+#else // Linux
+    char procname[64];
+    sprintf(procname, "/proc/self/fd/%i", fd);
+    return f(procname);
+#endif
+}
 static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		       int valid, struct fuse_file_info *fi)
 {
@@ -259,9 +278,9 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		if (fi) {
 			res = fchmod(fi->fh, attr->st_mode);
 		} else {
-			char procname[64];
-			sprintf(procname, "/proc/self/fd/%i", ifd);
-			res = chmod(procname, attr->st_mode);
+			res = with_fd_path(ifd, [attr](const char* procname) {
+				return chmod(procname, attr->st_mode);
+			});
 		}
 		if (res == -1)
 			goto out_err;
@@ -283,9 +302,9 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		if (fi) {
 			res = ftruncate(fi->fh, attr->st_size);
 		} else {
-			char procname[64];
-			sprintf(procname, "/proc/self/fd/%i", ifd);
-			res = truncate(procname, attr->st_size);
+			res = with_fd_path(ifd, [attr](const char* procname) {
+				return truncate(procname, attr->st_size);
+			});
 		}
 		if (res == -1)
 			goto out_err;
@@ -312,9 +331,9 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			res = futimens(fi->fh, tv);
 		else {
 #ifdef HAVE_UTIMENSAT
-			char procname[64];
-			sprintf(procname, "/proc/self/fd/%i", ifd);
-			res = utimensat(AT_FDCWD, procname, tv, 0);
+			res = with_fd_path(ifd, [&tv](const char* procname) {
+				return utimensat(AT_FDCWD, procname, tv, 0);
+			});
 #else
 			res = -1;
 			errno = EOPNOTSUPP;
@@ -1067,9 +1086,9 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 
 	/* Unfortunately we cannot use inode.fd, because this was opened
        with O_PATH (so it doesn't allow read/write access). */
-	char buf[64];
-	sprintf(buf, "/proc/self/fd/%i", inode.fd);
-	auto fd = open(buf, fi->flags & ~O_NOFOLLOW);
+	auto fd = with_fd_path(inode.fd, [fi](const char* buf) {
+		return open(buf, fi->flags & ~O_NOFOLLOW);
+	});
 	if (fd == -1) {
 		auto err = errno;
 		if (err == ENFILE || err == EMFILE)
