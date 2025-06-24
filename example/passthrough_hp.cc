@@ -59,7 +59,9 @@
 #include <string.h>
 #include <sys/file.h>
 #include <sys/resource.h>
+#ifdef HAVE_SYS_XATTR_H
 #include <sys/xattr.h>
+#endif
 #include <time.h>
 #include <unistd.h>
 #include <pthread.h>
