@@ -6,7 +6,6 @@
   See the file COPYING.
 */
 
-#include <linux/limits.h>
 #define FUSE_USE_VERSION 317
 
 #include <algorithm>
@@ -28,6 +27,9 @@
 #include <string_view>
 #include <cstdint>
 #include <fuse_lowlevel.h>
+#ifdef HAVE_LINUX_LIMITS_H
+#include <linux/limits.h>
+#endif
 
 #define MEMFS_ATTR_TIMEOUT 0.0
 #define MEMFS_ENTRY_TIMEOUT 0.0
