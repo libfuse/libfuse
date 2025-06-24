@@ -979,12 +979,13 @@ fallback:
 #else
 static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 			       struct iovec *iov, int iov_count,
-			       struct fuse_bufvec *req_data, unsigned int flags)
+			       struct fuse_bufvec *req_data, unsigned int flags,
+			       fuse_req_t req)
 {
 	size_t len = fuse_buf_size(req_data);
 	(void) flags;
 
-	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, req_data, len);
+	return fuse_send_data_iov_fallback(se, ch, iov, iov_count, req_data, len, req);
 }
 #endif
 
