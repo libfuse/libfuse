@@ -112,6 +112,13 @@ foreach name, code : special_funcs
                  name: name + ' check'))
 endforeach
 
+# Headers checks
+test_headers = [ 'sys/xattr.h', 'linux/limits.h' ]
+foreach header : test_headers
+    private_cfg.set('HAVE_' + header.underscorify().to_upper(),
+        cc.has_header(header))
+endforeach
+
 # Regular function checks
 private_cfg.set('HAVE_SETXATTR',
     cc.has_function('setxattr', prefix: '#include <sys/xattr.h>'))
