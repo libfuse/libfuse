@@ -905,10 +905,12 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	Dentry *child_dentry_copy = nullptr;
 	Dentry *existing_dentry = nullptr;
 
+#if defined(RENAME_EXCHANGE) && defined(RENAME_NOREPLACE)
 	if (flags & (RENAME_EXCHANGE | RENAME_NOREPLACE)) {
 		fuse_reply_err(req, EINVAL);
 		return;
 	}
+#endif
 
 	Inodes.lock();
 
