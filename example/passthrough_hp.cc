@@ -967,6 +967,7 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	fuse_reply_create(req, &e, fi);
 }
 
+#ifdef O_TMPFILE
 static Inode *create_new_inode(int fd, fuse_entry_param *e)
 {
 	memset(e, 0, sizeof(*e));
@@ -1012,7 +1013,6 @@ static Inode *create_new_inode(int fd, fuse_entry_param *e)
 	return p_inode;
 }
 
-#ifdef O_TMPFILE
 static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 			fuse_file_info *fi)
 {
