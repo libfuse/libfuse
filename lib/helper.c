@@ -426,13 +426,13 @@ void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
 #define LL_ENABLE(cond, cap)                     \
 	do {                                     \
 		if (cond)                        \
-			conn->want_ext |= (cap); \
+			fuse_set_feature_flag(conn, cap); \
 	} while (0)
 
 #define LL_DISABLE(cond, cap)                     \
 	do {                                      \
 		if (cond)                         \
-			conn->want_ext &= ~(cap); \
+			fuse_unset_feature_flag(conn, cap); \
 	} while (0)
 
 	LL_ENABLE(opts->splice_read, FUSE_CAP_SPLICE_READ);

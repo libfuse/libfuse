@@ -6,7 +6,6 @@
   See the file COPYING.
 */
 
-#include <linux/limits.h>
 #define FUSE_USE_VERSION 317
 
 #include <algorithm>
@@ -28,6 +27,9 @@
 #include <string_view>
 #include <cstdint>
 #include <fuse_lowlevel.h>
+#ifdef HAVE_LINUX_LIMITS_H
+#include <linux/limits.h>
+#endif
 
 #define MEMFS_ATTR_TIMEOUT 0.0
 #define MEMFS_ENTRY_TIMEOUT 0.0
@@ -900,17 +902,20 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	Inode *parentInode = nullptr;
 	Inode *newparentInode = nullptr;
 	Dentry *child_dentry = nullptr;
+	Dentry *child_dentry_copy = nullptr;
 	Dentry *existing_dentry = nullptr;
 
+#if defined(RENAME_EXCHANGE) && defined(RENAME_NOREPLACE)
 	if (flags & (RENAME_EXCHANGE | RENAME_NOREPLACE)) {
 		fuse_reply_err(req, EINVAL);
 		return;
 	}
+#endif
 
 	Inodes.lock();
 
-	parentInode = Inodes.find(parent);
-	newparentInode = Inodes.find(newparent);
+	parentInode = Inodes.find_locked(parent);
+	newparentInode = Inodes.find_locked(newparent);
 	if (!parentInode || !parentInode->is_dir() || !newparentInode ||
 	    !newparentInode->is_dir()) {
 		error = ENOENT;
@@ -941,9 +946,9 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		existing_dentry->get_inode()->dec_nlink();
 	}
 
+	child_dentry_copy = new Dentry(newname, child_dentry->get_inode());
 	parentInode->remove_child(name);
-	child_dentry->name = newname;
-	newparentInode->add_child(newname, child_dentry);
+	newparentInode->add_child_locked(newname, child_dentry_copy);
 
 out_unlock:
 	parentInode->unlock();

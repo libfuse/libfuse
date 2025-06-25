@@ -11,7 +11,7 @@
 #include "fuse_config.h"
 #include "fuse_lowlevel.h"
 #include "fuse_i.h"
-
+#include "fuse_uring_i.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -41,6 +41,8 @@ int fuse_session_loop(struct fuse_session *se)
 		res = 0;
 	if(se->error != 0)
 		res = se->error;
-	fuse_session_reset(se);
+
+	if (se->uring.pool)
+		fuse_uring_stop(se);
 	return res;
 }

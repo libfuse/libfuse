@@ -187,7 +187,7 @@ mount:
 		if (pid == 0) {
 			const char *argv[32];
 			int a = 0;
-			int ret = -1; 
+			int ret = -1;
 
 			if (! fdnam)
 			{
@@ -214,6 +214,7 @@ mount:
 			_exit(EXIT_FAILURE);
 		}
 
+		waitpid(pid, &status, 0);
 		_exit(EXIT_SUCCESS);
 	}
 

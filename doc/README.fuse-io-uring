@@ -1,0 +1,38 @@
+fuse-over-io-uring uses io-uring for transport of kernel/userspace
+messages. See also https://docs.kernel.org/filesystems/fuse-io-uring.html
+
+In order to enable it, the kernel module needs to have it enabled:
+echo 1 > /sys/module/fuse/parameters/enable_uring
+
+Additionally, FUSE_CAP_OVER_IO_URING needs to be set and
+se->uring.enable has to be true. The latter can be
+achieved with the libfuse option '-o io_uring'.
+
+Default queue-depth is 8 and can be changed with the parameter
+'-oio_uring_q_depth'.
+
+As of now there is always one queue per core. A reduced number
+of cores in development.
+
+Benefits:
+- Improved performance by using io_uring for kernel/userspace communication
+- Reduced system call overhead compared to traditional FUSE
+- Asynchronous I/O operations
+
+Usage:
+To enable io_uring support when mounting a FUSE filesystem:
+1. Enable kernel support: echo 1 > /sys/module/fuse/parameters/enable_uring
+2. Mount with io_uring option:    -o io_uring
+3. Optionally adjust queue depth: -o io_uring_q_depth=<depth>
+
+Example:
+./my_fuse_fs /source /mountpoint -o io_uring -o io_uring_q_depth=16
+
+Requirements:
+- Linux kernel with io_uring and FUSE io_uring support enabled
+- libfuse compiled with io_uring support
+
+Build Dependencies:
+- liburing (for io_uring support)
+- libnuma (required alongside liburing)
+- meson build system with option: -Denable-io-uring=true
