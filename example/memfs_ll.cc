@@ -910,6 +910,8 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		fuse_reply_err(req, EINVAL);
 		return;
 	}
+#else
+	(void)flags;
 #endif
 
 	Inodes.lock();
