@@ -511,7 +511,7 @@ struct fuse_lowlevel_ops {
 	 *  - When writeback caching is disabled, the filesystem is
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
-	 * 
+	 *
 	 *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
@@ -1303,14 +1303,13 @@ struct fuse_lowlevel_ops {
 	void (*lseek) (fuse_req_t req, fuse_ino_t ino, off_t off, int whence,
 		       struct fuse_file_info *fi);
 
-
 	/**
 	 * Create a tempfile
-	 * 
+	 *
 	 * Tempfile means an anonymous file. It can be made into a normal file later
 	 * by using linkat or such.
-	 * 
-	 * If this is answered with an error ENOSYS this is treated by the kernel as 
+	 *
+	 * If this is answered with an error ENOSYS this is treated by the kernel as
 	 * a permanent failure and it will disable the feature and not ask again.
 	 *
 	 * Valid replies:
@@ -1787,23 +1786,23 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 /**
  * Notify to expire parent attributes and the dentry matching parent/name
- * 
+ *
  * Same restrictions apply as for fuse_lowlevel_notify_inval_entry()
- * 
+ *
  * Compared to invalidating an entry, expiring the entry results not in a
  * forceful removal of that entry from kernel cache but instead the next access
  * to it forces a lookup from the filesystem.
- * 
+ *
  * This makes a difference for overmounted dentries, where plain invalidation
- * would detach all submounts before dropping the dentry from the cache. 
+ * would detach all submounts before dropping the dentry from the cache.
  * If only expiry is set on the dentry, then any overmounts are left alone and
  * until ->d_revalidate() is called.
- * 
+ *
  * Note: ->d_revalidate() is not called for the case of following a submount,
  * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
- * 
+ *
  * Added in FUSE protocol version 7.38. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do nothing.
  *
@@ -2333,6 +2332,24 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
  * Check if the request is submitted through fuse-io-uring
  */
 bool fuse_req_is_uring(fuse_req_t req);
+
+/**
+ * Get the payload of a request
+ * (for requests submitted through fuse-io-uring only)
+ *
+ * This is useful for a file system that wants to write data directly
+ * to the request buffer. With io-uring the req is the buffer owner
+ * and the file system can write directly to the buffer and avoid
+ * extra copying. For example useful for network file systems.
+ *
+ * @param req the request
+ * @param payload pointer to the payload
+ * @param payload_sz size of the payload
+ * @param mr  memory registration handle, currently unused
+ * @return 0 on success, -errno on failure
+ */
+int fuse_req_get_payload(fuse_req_t req, void **payload, size_t *payload_sz,
+			 void **mr);
 
 #ifdef __cplusplus
 }
