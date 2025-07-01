@@ -2700,6 +2700,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 
 	unsigned max_read_mo = get_max_read(se->mo);
+
+	
 	if (se->conn.max_read != max_read_mo) {
 		fuse_log(FUSE_LOG_ERR, "fuse: error: init() and fuse_session_new() "
 			"requested different maximum read size (%u vs %u)\n",
