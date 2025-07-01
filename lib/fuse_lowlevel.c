@@ -2700,7 +2700,11 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 
 	unsigned max_read_mo = get_max_read(se->mo);
-
+	
+	fprintf(stderr, "[FUSE - fuse_lowlevel.c] max_read_mo = %u bytes\n", max_read_mo);
+	fprintf(stderr, "[FUSE - fuse_lowlevel.c] se->conn.max_read = %u bytes\n", se->conn.max_read);
+	se->conn.max_read = max_read_mo; //Forces "high-level max_read" to take the value of "low-level max_read"
+	fprintf(stderr, "[FUSE - fuse_lowlevel.c] Forces se->conn.max_read to equal max_read_mo. se->conn.max_read = %u bytes\n", se->conn.max_read);
 	
 	if (se->conn.max_read != max_read_mo) {
 		fuse_log(FUSE_LOG_ERR, "fuse: error: init() and fuse_session_new() "
