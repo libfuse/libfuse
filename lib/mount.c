@@ -650,7 +650,8 @@ struct mount_opts *parse_mount_opts(struct fuse_args *args)
 	if (mo == NULL)
 		return NULL;
 
-	memset(mo, 0, sizeof(struct mount_opts));
+	memset(mo, 0, sizeof(*mo));
+	mo->max_read = 131072;      /* 128 KiB default -- same as found in cuse_lowlevel.c*/
 	mo->flags = MS_NOSUID | MS_NODEV;
 
 	if (args &&
