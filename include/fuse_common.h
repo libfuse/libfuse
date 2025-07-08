@@ -33,7 +33,8 @@
 #ifdef HAVE_STATIC_ASSERT
 #define fuse_static_assert(condition, message) static_assert(condition, message)
 #else
-#define fuse_static_assert(condition, message)
+#define fuse_static_assert(condition, message) \
+	int fuse_static_assert_dummy_func(int [(condition) ? 1 : -1])
 #endif
 
 #ifdef __cplusplus
@@ -1161,11 +1162,6 @@ int fuse_convert_to_conn_want_ext(struct fuse_conn_info *conn);
  * On 32bit systems please add -D_FILE_OFFSET_BITS=64 to your compile flags!
  */
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-_Static_assert(sizeof(off_t) == 8, "fuse: off_t must be 64bit");
-#else
-struct _fuse_off_t_must_be_64bit_dummy_struct \
-	{ unsigned _fuse_off_t_must_be_64bit:((sizeof(off_t) == 8) ? 1 : -1); };
-#endif
+fuse_static_assert(sizeof(off_t) == 8, "fuse: off_t must be 64bit");
 
 #endif /* FUSE_COMMON_H_ */
