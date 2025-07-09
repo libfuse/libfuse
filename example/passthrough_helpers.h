@@ -50,6 +50,19 @@ static inline int do_fallocate(int fd, int mode, off_t offset, off_t length)
 		return -posix_fallocate(fd, offset, length);
 #endif
 
+#ifdef HAVE_FSPACECTL
+	// 0x3 == FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE
+	if (mode == 0x3) {
+		struct spacectl_range sr;
+
+		sr.r_offset = offset;
+		sr.r_len = length;
+		if (fspacectl(fd, SPACECTL_DEALLOC, &sr, 0, NULL) == -1)
+			return -errno;
+		return 0;
+	}
+#endif
+
 	return -EOPNOTSUPP;
 #endif  // HAVE_FALLOCATE
 }
