@@ -40,10 +40,6 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
-#ifdef __FreeBSD__
-#include <sys/socket.h>
-#include <sys/un.h>
-#endif
 #include <sys/time.h>
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>

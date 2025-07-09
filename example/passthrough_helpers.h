@@ -23,6 +23,20 @@
  * SUCH DAMAGE
  */
 
+#ifndef FUSE_EXAMPLE_PASSTHROUGH_HELPERS_H_
+#define FUSE_EXAMPLE_PASSTHROUGH_HELPERS_H_
+
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#ifdef __FreeBSD__
+#include <sys/socket.h>
+#include <sys/un.h>
+#endif
+
 static inline int do_fallocate(int fd, int mode, off_t offset, off_t length)
 {
 #ifdef HAVE_FALLOCATE
@@ -44,7 +58,7 @@ static inline int do_fallocate(int fd, int mode, off_t offset, off_t length)
  * Creates files on the underlying file system in response to a FUSE_MKNOD
  * operation
  */
-static int mknod_wrapper(int dirfd, const char *path, const char *link,
+static inline int mknod_wrapper(int dirfd, const char *path, const char *link,
 	int mode, dev_t rdev)
 {
 	int res;
@@ -91,3 +105,5 @@ static int mknod_wrapper(int dirfd, const char *path, const char *link,
 
 	return res;
 }
+
+#endif  // FUSE_PASSTHROUGH_HELPERS_H_
