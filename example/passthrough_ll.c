@@ -1006,22 +1006,10 @@ static void lo_statfs(fuse_req_t req, fuse_ino_t ino)
 static void lo_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 			 off_t offset, off_t length, struct fuse_file_info *fi)
 {
-	int err = EOPNOTSUPP;
+	int err;
 	(void) ino;
 
-#ifdef HAVE_FALLOCATE
-	err = fallocate(fi->fh, mode, offset, length);
-	if (err < 0)
-		err = errno;
-
-#elif defined(HAVE_POSIX_FALLOCATE)
-	if (mode) {
-		fuse_reply_err(req, EOPNOTSUPP);
-		return;
-	}
-
-	err = posix_fallocate(fi->fh, offset, length);
-#endif
+	err = -do_fallocate(fi->fh, mode, offset, length);
 
 	fuse_reply_err(req, err);
 }
