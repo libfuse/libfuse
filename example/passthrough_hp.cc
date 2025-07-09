@@ -79,6 +79,8 @@
 #include <mutex>
 #include <syslog.h>
 
+#include "passthrough_helpers.h"
+
 using namespace std;
 
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
@@ -1216,20 +1218,15 @@ static void sfs_statfs(fuse_req_t req, fuse_ino_t ino)
 		fuse_reply_statfs(req, &stbuf);
 }
 
-#ifdef HAVE_POSIX_FALLOCATE
 static void sfs_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 			  off_t offset, off_t length, fuse_file_info *fi)
 {
 	(void)ino;
-	if (mode) {
-		fuse_reply_err(req, EOPNOTSUPP);
-		return;
-	}
 
-	auto err = posix_fallocate(fi->fh, offset, length);
+	auto err = -do_fallocate(fi->fh, mode, offset, length);
+
 	fuse_reply_err(req, err);
 }
-#endif
 
 static void sfs_flock(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi,
 		      int op)
@@ -1389,9 +1386,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper)
 	sfs_oper.read = sfs_read;
 	sfs_oper.write_buf = sfs_write_buf;
 	sfs_oper.statfs = sfs_statfs;
-#ifdef HAVE_POSIX_FALLOCATE
 	sfs_oper.fallocate = sfs_fallocate;
-#endif
 	sfs_oper.flock = sfs_flock;
 #ifdef HAVE_SETXATTR
 	sfs_oper.setxattr = sfs_setxattr;

@@ -23,6 +23,23 @@
  * SUCH DAMAGE
  */
 
+static inline int do_fallocate(int fd, int mode, off_t offset, off_t length)
+{
+#ifdef HAVE_FALLOCATE
+	if (fallocate(fd, mode, offset, length) == -1)
+		return -errno;
+	return 0;
+#else  // HAVE_FALLOCATE
+
+#ifdef HAVE_POSIX_FALLOCATE
+	if (mode == 0)
+		return -posix_fallocate(fd, offset, length);
+#endif
+
+	return -EOPNOTSUPP;
+#endif  // HAVE_FALLOCATE
+}
+
 /*
  * Creates files on the underlying file system in response to a FUSE_MKNOD
  * operation
