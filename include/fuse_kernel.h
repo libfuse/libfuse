@@ -434,6 +434,8 @@ struct fuse_file_lock {
  *		    of the request ID indicates resend requests
  * FUSE_ALLOW_IDMAP: allow creation of idmapped mounts
  * FUSE_OVER_IO_URING: Indicate that Client supports io-uring
+ * FUSE_INVAL_INODE_ENTRY: invalidate inode aliases when doing inode invalidation
+ * FUSE_EXPIRE_INODE_ENTRY: expire inode aliases when doing inode invalidation
  */
 #define FUSE_ASYNC_READ		(1 << 0)
 #define FUSE_POSIX_LOCKS	(1 << 1)
@@ -481,6 +483,8 @@ struct fuse_file_lock {
 #define FUSE_DIRECT_IO_RELAX	FUSE_DIRECT_IO_ALLOW_MMAP
 #define FUSE_ALLOW_IDMAP	(1ULL << 40)
 #define FUSE_OVER_IO_URING	(1ULL << 41)
+#define FUSE_INVAL_INODE_ENTRY  (1ULL << 60)
+#define FUSE_EXPIRE_INODE_ENTRY (1ULL << 61)
 
 /**
  * CUSE INIT request/reply flags
