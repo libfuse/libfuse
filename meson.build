@@ -98,7 +98,9 @@ special_funcs = {
     'close_range': '''
         #include <unistd.h>
         #include <fcntl.h>
+        #ifdef linux
         #include <linux/close_range.h>
+        #endif
         int main(void) {
             unsigned int flags = CLOSE_RANGE_UNSHARE;
             return close_range(3, ~0U, flags);
