@@ -2859,10 +2859,14 @@ static void _do_destroy(fuse_req_t req, const fuse_ino_t nodeid,
 			const void *op_in, const void *in_payload)
 {
 	struct fuse_session *se = req->se;
+	char *mountpoint;
 
 	(void) nodeid;
 	(void)op_in;
 	(void)in_payload;
+
+	mountpoint = atomic_exchange(&se->mountpoint, NULL);
+	free(mountpoint);
 
 	se->got_destroy = 1;
 	se->got_init = 0;
@@ -4142,12 +4146,20 @@ int fuse_session_custom_io_30(struct fuse_session *se,
 			offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 
-int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
+int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 {
 	int fd;
+	char *mountpoint;
 
-	if (mountpoint == NULL) {
+	if (_mountpoint == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Invalid null-ptr mountpoint!\n");
+		return -1;
+	}
+
+	mountpoint = strdup(_mountpoint);
+	if (mountpoint == NULL) {
+		fuse_log(FUSE_LOG_ERR, "Failed to allocate memory for mountpoint. Error: %s\n",
+			strerror(errno));
 		return -1;
 	}
 
@@ -4173,7 +4185,7 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 			fuse_log(FUSE_LOG_ERR,
 				"fuse: Invalid file descriptor /dev/fd/%u\n",
 				fd);
-			return -1;
+			goto error_out;
 		}
 		se->fd = fd;
 		return 0;
@@ -4182,18 +4194,16 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint)
 	/* Open channel */
 	fd = fuse_kern_mount(mountpoint, se->mo);
 	if (fd == -1)
-		return -1;
+		goto error_out;
 	se->fd = fd;
 
 	/* Save mountpoint */
-	se->mountpoint = strdup(mountpoint);
-	if (se->mountpoint == NULL)
-		goto error_out;
+	se->mountpoint = mountpoint;
 
 	return 0;
 
 error_out:
-	fuse_kern_unmount(mountpoint, fd);
+	free(mountpoint);
 	return -1;
 }
 
@@ -4205,10 +4215,11 @@ int fuse_session_fd(struct fuse_session *se)
 void fuse_session_unmount(struct fuse_session *se)
 {
 	if (se->mountpoint != NULL) {
-		fuse_kern_unmount(se->mountpoint, se->fd);
+		char *mountpoint = atomic_exchange(&se->mountpoint, NULL);
+
+		fuse_kern_unmount(mountpoint, se->fd);
 		se->fd = -1;
-		free(se->mountpoint);
-		se->mountpoint = NULL;
+		free(mountpoint);
 	}
 }
 
