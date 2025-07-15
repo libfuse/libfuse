@@ -36,7 +36,7 @@
 #include <stdbool.h>
 #include <sys/vfs.h>
 
-#ifdef HAVE_CLOSE_RANGE
+#if defined HAVE_CLOSE_RANGE && defined linux
 #include <linux/close_range.h>
 #endif
 
