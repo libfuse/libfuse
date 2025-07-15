@@ -4,7 +4,7 @@ project('libfuse3', ['c'],
         default_options: [
             'buildtype=debugoptimized',
             'c_std=gnu11',
-            'cpp_std=c++17',
+            'cpp_std=c++20',
             'warning_level=2',
         ])
 
