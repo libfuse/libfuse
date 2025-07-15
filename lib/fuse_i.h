@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <errno.h>
+#include <stdatomic.h>
 
 #define MIN(a, b) \
 ({									\
@@ -54,7 +55,7 @@ struct fuse_notify_req {
 };
 
 struct fuse_session {
-	char *mountpoint;
+	_Atomic(char *)mountpoint;
 	volatile int exited;
 	int fd;
 	struct fuse_custom_io *io;
