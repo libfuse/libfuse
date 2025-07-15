@@ -37,7 +37,7 @@ if platform != 'dragonfly' and add_languages('cpp', required : false)
                install: false)
     executable('memfs_ll', 'memfs_ll.cc',
                dependencies: [ thread_dep, libfuse_dep ],
-               cpp_args : '-std=c++17',
+               cpp_args : '-std=c++20',
                install: false)
 endif
 
