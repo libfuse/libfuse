@@ -197,7 +197,6 @@ class Inode {
 
 	void truncate(off_t size)
 	{
-		std::lock_guard<std::mutex> lock(mutex);
 		std::lock_guard<std::mutex> attr_lock(attr_mutex);
 		if (size < content.size()) {
 			content.resize(size);
