@@ -1093,6 +1093,9 @@ static const struct fuse_lowlevel_ops memfs_oper = {
 	.copy_file_range = nullptr,
 	.lseek = nullptr,
 	.tmpfile = nullptr,
+#ifdef HAVE_STATX
+	.statx = nullptr,
+#endif
 };
 
 int main(int argc, char *argv[])
