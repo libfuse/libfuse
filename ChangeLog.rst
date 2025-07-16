@@ -1,3 +1,9 @@
+libfuse 3.17.3 (2025-07-16)
+===========================
+* more conn->want / conn->want_ext conversion fixes
+* Fix feature detection for close_range
+* Avoid double unmount on FUSE_DESTROY
+
 libfuse 3.17.2 (2025-04-23)
 ===========================
 * Fixed uninitized bufsize value (compilation warning and real
