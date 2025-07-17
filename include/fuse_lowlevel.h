@@ -169,6 +169,15 @@ enum fuse_notify_entry_flags {
 #define FUSE_SET_ATTR_TIMES_SET	(1 << 16)
 #define FUSE_SET_ATTR_TOUCH	(1 << 17)
 
+/**
+ * Type of the dlm lock requested
+ */
+enum fuse_ll_dlm_lock_type {
+	FUSE_LL_DLM_LOCK_NONE = 0,
+	FUSE_LL_DLM_LOCK_READ = 1,
+	FUSE_LL_DLM_LOCK_WRITE = 2,
+};
+
 /* ----------------------------------------------------------- *
  * Request methods and replies				       *
  * ----------------------------------------------------------- */
@@ -1362,10 +1371,10 @@ struct fuse_lowlevel_ops {
 	 * a lock for the pages to write back later.
 	 * Mostly this will become important for data consistency in distributed
 	 * filesystems if multiple clients write into the same file.
-	 * The actual problem arises when the kernel reads this pages to prepare 
+	 * The actual problem arises when the kernel reads this pages to prepare
 	 * unaligned writes.
 	 */
-	void (*dlm_lock) (fuse_req_t req, fuse_ino_t ino, off_t offset, uint32_t length, 
+	void (*dlm_lock) (fuse_req_t req, fuse_ino_t ino, off_t offset, uint32_t length,
 			uint32_t type, struct fuse_file_info *fi);
 };
 
@@ -1618,11 +1627,11 @@ int fuse_reply_xattr(fuse_req_t req, size_t count);
 int fuse_reply_lock(fuse_req_t req, const struct flock *lock);
 
 /**
- * Reply with byte range lock information 
- * 
+ * Reply with byte range lock information
+ *
  * Possible requests:
  * 	dlm_lock
- * 
+ *
  * @param req request handle
  * @param locksize the locked size
  */

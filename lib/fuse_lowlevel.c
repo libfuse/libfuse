@@ -3253,7 +3253,7 @@ static struct {
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
-	[FUSE_DLM_LOCK]		= { do_dlm_lock, "DLM_LOCK" },
+	[FUSE_DLM_WB_LOCK] = { do_dlm_lock,	"DLM_WB_LOCK" },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
@@ -3308,7 +3308,7 @@ static struct {
 	[FUSE_RENAME2]		= { _do_rename2,	"RENAME2" },
 	[FUSE_COPY_FILE_RANGE]	= { _do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_LSEEK]		= { _do_lseek,		"LSEEK" },
-	[FUSE_DLM_LOCK]		= { _do_dlm_lock, "DLM_LOCK" },
+	[FUSE_DLM_WB_LOCK]	= { _do_dlm_lock,	"DLM_WB_LOCK" },
 	[CUSE_INIT]		= { _cuse_lowlevel_init, "CUSE_INIT" },
 };
 
