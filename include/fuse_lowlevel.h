@@ -176,6 +176,7 @@ enum fuse_ll_dlm_lock_type {
 	FUSE_LL_DLM_LOCK_NONE = 0,
 	FUSE_LL_DLM_LOCK_READ = 1,
 	FUSE_LL_DLM_LOCK_WRITE = 2,
+	FUSE_LL_DLM_PAGE_MKWRITE = 3,
 };
 
 /* ----------------------------------------------------------- *
