@@ -652,7 +652,9 @@ enum fuse_opcode {
 	FUSE_SYNCFS		= 50,
 	FUSE_TMPFILE		= 51,
 	FUSE_STATX		= 52,
-	FUSE_DLM_LOCK 	= 53,
+
+	/* Operations which have not been merged into upstream */
+	FUSE_DLM_WB_LOCK	= 100,
 
 	/* CUSE specific operations */
 	CUSE_INIT		= 4096,
@@ -1227,7 +1229,8 @@ struct fuse_supp_groups {
 enum fuse_dlm_lock_type {
 	FUSE_DLM_LOCK_NONE = 0,
 	FUSE_DLM_LOCK_READ = 1,
-	FUSE_DLM_LOCK_WRITE = 2
+	FUSE_DLM_LOCK_WRITE = 2,
+	FUSE_DLM_PAGE_MKWRITE = 3,
 };
 
 /**
