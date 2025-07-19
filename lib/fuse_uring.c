@@ -553,8 +553,8 @@ static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 			//fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
 
 			/* -ENOTCONN is ok on umount  */
-			if (err != -EINTR && err != -EOPNOTSUPP &&
-			    err != -EAGAIN && err != -ENOTCONN) {
+			if (err != -EINTR && err != -EAGAIN &&
+			    err != -ENOTCONN) {
 				se->error = cqe->res;
 
 				/* return first error */
@@ -701,22 +701,14 @@ static void *fuse_uring_thread(void *arg)
 		io_uring_submit_and_wait(&queue->ring, 1);
 
 		err = fuse_uring_queue_handle_cqes(queue);
-		if (err < 0) {
-			/*
-			 * fuse-over-io-uring is not supported, operation can
-			 * continue over /dev/fuse
-			 */
-			if (err == -EOPNOTSUPP)
-				goto ret;
+		if (err < 0)
 			goto err;
-		}
 	}
 
 	return NULL;
 
 err:
 	fuse_session_exit(se);
-ret:
 	return NULL;
 }
 
