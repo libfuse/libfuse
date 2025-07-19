@@ -1047,56 +1047,30 @@ static void memfs_statfs(fuse_req_t req, [[maybe_unused]] fuse_ino_t ino)
 	fuse_reply_statfs(req, &stbuf);
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 static const struct fuse_lowlevel_ops memfs_oper = {
-	.init = nullptr,
-	.destroy = nullptr,
 	.lookup = memfs_lookup,
 	.forget = memfs_forget,
 	.getattr = memfs_getattr,
 	.setattr = memfs_setattr,
-	.readlink = nullptr,
-	.mknod = nullptr,
 	.mkdir = memfs_mkdir,
 	.unlink = memfs_unlink,
 	.rmdir = memfs_rmdir,
-	.symlink = nullptr,
 	.rename = memfs_rename,
 	.link = memfs_link,
 	.open = memfs_open,
 	.read = memfs_read,
 	.write = memfs_write,
-	.flush = nullptr,
 	.release = memfs_release,
-	.fsync = nullptr,
 	.opendir = memfs_opendir,
 	.readdir = memfs_readdir,
 	.releasedir = memfs_releasedir,
-	.fsyncdir = nullptr,
 	.statfs = memfs_statfs,
-	.setxattr = nullptr,
-	.getxattr = nullptr,
-	.listxattr = nullptr,
-	.removexattr = nullptr,
-	.access = nullptr,
 	.create = memfs_create,
-	.getlk = nullptr,
-	.setlk = nullptr,
-	.bmap = nullptr,
-	.ioctl = nullptr,
-	.poll = nullptr,
-	.write_buf = nullptr,
-	.retrieve_reply = nullptr,
 	.forget_multi = memfs_forget_multi,
-	.flock = nullptr,
-	.fallocate = nullptr,
-	.readdirplus = nullptr,
-	.copy_file_range = nullptr,
-	.lseek = nullptr,
-	.tmpfile = nullptr,
-#ifdef HAVE_STATX
-	.statx = nullptr,
-#endif
 };
+#pragma GCC diagnostic pop
 
 int main(int argc, char *argv[])
 {
