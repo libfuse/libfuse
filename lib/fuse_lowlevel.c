@@ -2897,18 +2897,22 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	else if (arg->minor < 23)
 		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
 
-	send_reply_ok(req, &outarg, outargsize);
-
-	/* XXX: Split the start, and send SQEs only after send_reply_ok() */
+	/* XXX: Add an option to make non-available io-uring fatal */
 	if (enable_io_uring) {
 		int ring_rc = fuse_uring_start(se);
 
 		if (ring_rc != 0) {
-			fuse_log(FUSE_LOG_ERR, "fuse: failed to start io-uring: %s\n",
+			fuse_log(FUSE_LOG_INFO,
+				 "fuse: failed to start io-uring: %s\n",
 				 strerror(ring_rc));
-			fuse_session_exit(se);
+			outargflags &= ~FUSE_OVER_IO_URING;
+			enable_io_uring = false;
 		}
 	}
+
+	send_reply_ok(req, &outarg, outargsize);
+	if (enable_io_uring)
+		fuse_uring_wake_ring_threads(se);
 }
 
 static __attribute__((no_sanitize("thread"))) void
