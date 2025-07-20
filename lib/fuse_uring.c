@@ -727,8 +727,13 @@ static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 	return rc;
 }
 
-static int fuse_uring_sanity_check(void)
+static int fuse_uring_sanity_check(struct fuse_session *se)
 {
+	if (se->uring.q_depth == 0) {
+		fuse_log(FUSE_LOG_ERR, "io-uring queue depth must be > 0\n");
+		return -EINVAL;
+	}
+
 	_Static_assert(sizeof(struct fuse_uring_cmd_req) <=
 		       FUSE_URING_MAX_SQE128_CMD_DATA,
 		       "SQE128_CMD_DATA has 80B cmd data");
@@ -741,7 +746,7 @@ int fuse_uring_start(struct fuse_session *se)
 	int err = 0;
 	struct fuse_ring_pool *fuse_ring;
 
-	fuse_uring_sanity_check();
+	fuse_uring_sanity_check(se);
 
 	fuse_ring = fuse_create_ring(se);
 	if (fuse_ring == NULL) {
