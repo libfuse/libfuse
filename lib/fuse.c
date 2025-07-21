@@ -5073,10 +5073,6 @@ struct fuse *_fuse_new_31(struct fuse_args *args,
 	if (f->se == NULL)
 		goto out_free_fs;
 
-	if (f->conf.debug) {
-		fuse_log(FUSE_LOG_DEBUG, "nullpath_ok: %i\n", f->conf.nullpath_ok);
-	}
-
 	/* Trace topmost layer by default */
 	f->fs->debug = f->conf.debug;
 	f->ctr = 0;
