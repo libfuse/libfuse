@@ -158,12 +158,10 @@ int main(void) {
     return ret;
 }'''
 
-liburing = get_option('enable-io-uring') ? \
-    dependency('liburing', required: false) :\
-    dependency('', required: false)
+liburing = dependency('liburing', required: false)
 libnuma = dependency('numa', required: false)
 
-if liburing.found() and libnuma.found()
+if get_option('enable-io-uring') and liburing.found() and libnuma.found()
    if cc.links(code,
               name: 'liburing linking and SQE128 support',
               dependencies: [liburing])
