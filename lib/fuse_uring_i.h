@@ -16,6 +16,8 @@
 #include "util.h"
 #endif
 
+#include <errno.h> // IWYU pragma: keep
+
 /* io-uring defaults */
 #define SESSION_DEF_URING_ENABLE (0)
 #define SESSION_DEF_URING_Q_DEPTH (8)
