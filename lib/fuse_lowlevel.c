@@ -2739,7 +2739,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	se->conn.time_gran = 1;
 
-	se->got_init = 1;
 	if (se->op.init) {
 		// Apply the first 32 bits of capable_ext to capable
 		se->conn.capable = fuse_lower_32_bits(se->conn.capable_ext);
@@ -2913,6 +2912,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	send_reply_ok(req, &outarg, outargsize);
 	if (enable_io_uring)
 		fuse_uring_wake_ring_threads(se);
+	se->got_init = 1;
 }
 
 static __attribute__((no_sanitize("thread"))) void
@@ -3820,7 +3820,7 @@ static int _fuse_session_receive_buf(struct fuse_session *se,
 pipe_retry:
 	bufsize = se->bufsize;
 
-	if (se->conn.proto_minor < 14 ||
+	if (se->conn.proto_minor < 14 || !se->got_init ||
 	    !(se->conn.want_ext & FUSE_CAP_SPLICE_READ))
 		goto fallback;
 
