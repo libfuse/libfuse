@@ -215,7 +215,9 @@ mount:
 		}
 
 		waitpid(pid, &status, 0);
-		_exit(EXIT_SUCCESS);
+		if (!WIFEXITED(status))
+			_exit(EXIT_FAILURE);
+		_exit(WEXITSTATUS(status));
 	}
 
 	if (waitpid(cpid, &status, 0) == -1 || WEXITSTATUS(status) != 0) {
