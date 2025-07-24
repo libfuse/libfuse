@@ -1244,9 +1244,11 @@ int fuse_reply_statx(fuse_req_t req, int flags, struct statx *statx,
 #endif
 
 static void _do_lookup(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	(void)op_in;
+	(void)payload_sz;
 
 	char *name = (char *)in_payload;
 
@@ -1259,13 +1261,15 @@ static void _do_lookup(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_lookup(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *inarg)
 {
-	_do_lookup(req, nodeid, NULL, inarg);
+	_do_lookup(req, nodeid, NULL, inarg, strlen((const char *)inarg) + 1);
 }
 
 static void _do_forget(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 
 	struct fuse_forget_in *arg = (struct fuse_forget_in *)op_in;
 
@@ -1278,13 +1282,15 @@ static void _do_forget(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_forget(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *inarg)
 {
-	_do_forget(req, nodeid, inarg, NULL);
+	_do_forget(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_batch_forget(fuse_req_t req, const fuse_ino_t nodeid,
-			     const void *op_in, const void *in_payload)
+			     const void *op_in, const void *in_payload,
+			     const size_t payload_sz)
 {
 	(void)nodeid;
+	(void)payload_sz;
 	unsigned int i;
 
 	const struct fuse_batch_forget_in *arg = op_in;
@@ -1321,14 +1327,16 @@ static void do_batch_forget(fuse_req_t req, const fuse_ino_t nodeid,
 	struct fuse_batch_forget_in *arg = (void *)inarg;
 	struct fuse_forget_one *param = (void *)PARAM(arg);
 
-	_do_batch_forget(req, nodeid, inarg, param);
+	_do_batch_forget(req, nodeid, inarg, param, 0);
 }
 
 static void _do_getattr(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			const size_t payload_sz)
 {
 	struct fuse_getattr_in *arg = (struct fuse_getattr_in *)op_in;
 	(void)in_payload;
+	(void)payload_sz;
 
 	struct fuse_file_info *fip = NULL;
 	struct fuse_file_info fi;
@@ -1350,13 +1358,15 @@ static void _do_getattr(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_getattr(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *inarg)
 {
-	_do_getattr(req, nodeid, inarg, NULL);
+	_do_getattr(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_setattr(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_setattr_in *arg = op_in;
 	uint32_t valid = arg->valid;
 
@@ -1387,13 +1397,15 @@ static void _do_setattr(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_setattr(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *inarg)
 {
-	_do_setattr(req, nodeid, inarg, NULL);
+	_do_setattr(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_access(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_access_in *arg = op_in;
 
 	if (req->se->op.access)
@@ -1405,14 +1417,16 @@ static void _do_access(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_access(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *inarg)
 {
-	_do_access(req, nodeid, inarg, NULL);
+	_do_access(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_readlink(fuse_req_t req, const fuse_ino_t nodeid,
-			 const void *op_in, const void *in_payload)
+			 const void *op_in, const void *in_payload,
+			 size_t payload_sz)
 {
 	(void)op_in;
 	(void)in_payload;
+	(void)payload_sz;
 
 	if (req->se->op.readlink)
 		req->se->op.readlink(req, nodeid);
@@ -1423,14 +1437,16 @@ static void _do_readlink(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_readlink(fuse_req_t req, const fuse_ino_t nodeid,
 			const void *inarg)
 {
-	_do_readlink(req, nodeid, inarg, NULL);
+	_do_readlink(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_mknod(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      size_t payload_sz)
 {
 	const struct fuse_mknod_in *arg = (struct fuse_mknod_in *)op_in;
 	const char *name = in_payload;
+	(void)payload_sz;
 
 	if (req->se->conn.proto_minor >= 12)
 		req->ctx.umask = arg->umask;
@@ -1449,14 +1465,16 @@ static void do_mknod(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 	if (req->se->conn.proto_minor < 12)
 		name = (char *)inarg + FUSE_COMPAT_MKNOD_IN_SIZE;
 
-	_do_mknod(req, nodeid, inarg, name);
+	_do_mknod(req, nodeid, inarg, name, 0);
 }
 
 static void _do_mkdir(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	const char *name = in_payload;
 	const struct fuse_mkdir_in *arg = op_in;
+	(void)payload_sz;
 
 	if (req->se->conn.proto_minor >= 12)
 		req->ctx.umask = arg->umask;
@@ -1472,14 +1490,16 @@ static void do_mkdir(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 	const struct fuse_mkdir_in *arg = inarg;
 	const char *name = PARAM(arg);
 
-	_do_mkdir(req, nodeid, inarg, name);
+	_do_mkdir(req, nodeid, inarg, name, 0);
 }
 
 static void _do_unlink(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	(void)op_in;
 	const char *name = in_payload;
+	(void)payload_sz;
 
 	if (req->se->op.unlink)
 		req->se->op.unlink(req, nodeid, name);
@@ -1490,14 +1510,16 @@ static void _do_unlink(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_unlink(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *inarg)
 {
-	_do_unlink(req, nodeid, NULL, inarg);
+	_do_unlink(req, nodeid, NULL, inarg, 0);
 }
 
 static void _do_rmdir(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	(void)op_in;
 	const char *name = in_payload;
+	(void)payload_sz;
 
 	if (req->se->op.rmdir)
 		req->se->op.rmdir(req, nodeid, name);
@@ -1507,15 +1529,17 @@ static void _do_rmdir(fuse_req_t req, const fuse_ino_t nodeid,
 
 static void do_rmdir(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_rmdir(req, nodeid, NULL, inarg);
+	_do_rmdir(req, nodeid, NULL, inarg, 0);
 }
 
 static void _do_symlink(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			const size_t payload_sz)
 {
 	(void)op_in;
 	const char *name = (char *)in_payload;
 	const char *linkname = name + strlen(name) + 1;
+	(void)payload_sz;
 
 	if (req->se->op.symlink)
 		req->se->op.symlink(req, linkname, nodeid, name);
@@ -1526,15 +1550,17 @@ static void _do_symlink(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_symlink(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *inarg)
 {
-	_do_symlink(req, nodeid, NULL, inarg);
+	_do_symlink(req, nodeid, NULL, inarg, 0);
 }
 
 static void _do_rename(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	const struct fuse_rename_in *arg = (struct fuse_rename_in *)op_in;
 	const char *oldname = in_payload;
 	const char *newname = oldname + strlen(oldname) + 1;
+	(void)payload_sz;
 
 	if (req->se->op.rename)
 		req->se->op.rename(req, nodeid, oldname, arg->newdir, newname,
@@ -1549,15 +1575,17 @@ static void do_rename(fuse_req_t req, const fuse_ino_t nodeid,
 	const struct fuse_rename_in *arg = inarg;
 	const void *payload = PARAM(arg);
 
-	_do_rename(req, nodeid, arg, payload);
+	_do_rename(req, nodeid, arg, payload, 0);
 }
 
 static void _do_rename2(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			const size_t payload_sz)
 {
 	const struct fuse_rename2_in *arg = op_in;
 	const char *oldname = in_payload;
 	const char *newname = oldname + strlen(oldname) + 1;
+	(void)payload_sz;
 
 	if (req->se->op.rename)
 		req->se->op.rename(req, nodeid, oldname, arg->newdir, newname,
@@ -1572,13 +1600,14 @@ static void do_rename2(fuse_req_t req, const fuse_ino_t nodeid,
 	const struct fuse_rename2_in *arg = inarg;
 	const void *payload = PARAM(arg);
 
-	_do_rename2(req, nodeid, arg, payload);
+	_do_rename2(req, nodeid, arg, payload, 0);
 }
 
 static void _do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *op_in,
-			const void *in_payload)
+			const void *in_payload, const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_create_in *arg = op_in;
 
 	if (req->se->op.tmpfile) {
@@ -1599,13 +1628,14 @@ static void do_tmpfile(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	struct fuse_create_in *arg = (struct fuse_create_in *) inarg;
 
-	_do_tmpfile(req, nodeid, arg, NULL);
+	_do_tmpfile(req, nodeid, arg, NULL, 0);
 }
 
 static void _do_link(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
-		     const void *in_payload)
+		     const void *in_payload, const size_t payload_sz)
 {
 	struct fuse_link_in *arg = (struct fuse_link_in *)op_in;
+	(void)payload_sz;
 
 	if (req->se->op.link)
 		req->se->op.link(req, arg->oldnodeid, nodeid, in_payload);
@@ -1618,14 +1648,16 @@ static void do_link(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	const struct fuse_link_in *arg = inarg;
 	const void *name = PARAM(arg);
 
-	_do_link(req, nodeid, inarg, name);
+	_do_link(req, nodeid, inarg, name, 0);
 }
 
 static void _do_create(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	const struct fuse_create_in *arg = op_in;
 	const char *name = in_payload;
+	(void)payload_sz;
 
 	if (req->se->op.create) {
 		struct fuse_file_info fi;
@@ -1653,13 +1685,14 @@ static void do_create(fuse_req_t req, const fuse_ino_t nodeid,
 	if (req->se->conn.proto_minor < 12)
 		payload = (char *)inarg + sizeof(struct fuse_open_in);
 
-	_do_create(req, nodeid, arg, payload);
+	_do_create(req, nodeid, arg, payload, 0);
 }
 
 static void _do_open(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
-		     const void *in_payload)
+		     const void *in_payload, const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_open_in *arg = (struct fuse_open_in *)op_in;
 	struct fuse_file_info fi;
 
@@ -1678,13 +1711,14 @@ static void _do_open(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 static void do_open(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_open(req, nodeid, inarg, NULL);
+	_do_open(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_read(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
-		     const void *in_payload)
+		     const void *in_payload, const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_read_in *arg = (struct fuse_read_in *)op_in;
 
 	if (req->se->op.read) {
@@ -1703,14 +1737,16 @@ static void _do_read(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 static void do_read(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_read(req, nodeid, inarg, NULL);
+	_do_read(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_write(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	struct fuse_write_in *arg = (struct fuse_write_in *)op_in;
 	const char *buf = in_payload;
+	(void)payload_sz;
 	struct fuse_file_info fi;
 
 	memset(&fi, 0, sizeof(fi));
@@ -1739,14 +1775,14 @@ static void do_write(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 	else
 		payload = PARAM(arg);
 
-	_do_write(req, nodeid, arg, payload);
+	_do_write(req, nodeid, arg, payload, 0);
 }
 
 static void _do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
-			  const void *op_in, struct fuse_bufvec *bufv)
+			  const struct fuse_write_in *arg,
+			  struct fuse_bufvec *bufv)
 {
 	struct fuse_session *se = req->se;
-	struct fuse_write_in *arg = (struct fuse_write_in *)op_in;
 	struct fuse_file_info fi;
 
 	memset(&fi, 0, sizeof(fi));
@@ -1759,6 +1795,26 @@ static void _do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
 	}
 
 	se->op.write_buf(req, nodeid, bufv, arg->offset, &fi);
+}
+
+static void write_cqe(fuse_req_t req, const fuse_ino_t nodeid,
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
+{
+	struct fuse_write_in *arg = (struct fuse_write_in *)op_in;
+
+	if (req->se->op.write_buf != NULL) {
+		struct fuse_bufvec bufv = {
+			.buf[0] = {
+				.mem = (void *)in_payload,
+				.size = payload_sz,
+			},
+			.count = 1,
+		};
+
+		_do_write_buf(req, nodeid, arg, &bufv);
+		return;
+	}
 }
 
 static void do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
@@ -1784,8 +1840,8 @@ static void do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
 				    sizeof(struct fuse_write_in);
 	}
 	if (bufv.buf[0].size < arg->size) {
-		fuse_log(FUSE_LOG_ERR,
-			 "fuse: %s: buffer size too small\n", __func__);
+		fuse_log(FUSE_LOG_ERR, "fuse: %s: buffer size too small\n",
+			 __func__);
 		fuse_reply_err(req, EIO);
 		goto out;
 	}
@@ -1800,9 +1856,11 @@ out:
 }
 
 static void _do_flush(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_flush_in *arg = (struct fuse_flush_in *)op_in;
 	struct fuse_file_info fi;
 
@@ -1820,13 +1878,15 @@ static void _do_flush(fuse_req_t req, const fuse_ino_t nodeid,
 
 static void do_flush(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_flush(req, nodeid, inarg, NULL);
+	_do_flush(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_release(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_release_in *arg = op_in;
 	struct fuse_file_info fi;
 
@@ -1851,13 +1911,15 @@ static void _do_release(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_release(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *inarg)
 {
-	_do_release(req, nodeid, inarg, NULL);
+	_do_release(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_fsync(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_fsync_in *arg = op_in;
 	struct fuse_file_info fi;
 	int datasync = arg->fsync_flags & 1;
@@ -1873,13 +1935,15 @@ static void _do_fsync(fuse_req_t req, const fuse_ino_t nodeid,
 
 static void do_fsync(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_fsync(req, nodeid, inarg, NULL);
+	_do_fsync(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_opendir(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_open_in *arg = op_in;
 	struct fuse_file_info fi;
 
@@ -1898,13 +1962,15 @@ static void _do_opendir(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_opendir(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *inarg)
 {
-	_do_opendir(req, nodeid, inarg, NULL);
+	_do_opendir(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_readdir(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_read_in *arg = (struct fuse_read_in *)op_in;
 	struct fuse_file_info fi;
 
@@ -1920,13 +1986,15 @@ static void _do_readdir(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_readdir(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *inarg)
 {
-	_do_readdir(req, nodeid, inarg, NULL);
+	_do_readdir(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_readdirplus(fuse_req_t req, const fuse_ino_t nodeid,
-			    const void *op_in, const void *in_payload)
+			    const void *op_in, const void *in_payload,
+			    const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_read_in *arg = (struct fuse_read_in *)op_in;
 	struct fuse_file_info fi;
 
@@ -1942,13 +2010,15 @@ static void _do_readdirplus(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_readdirplus(fuse_req_t req, const fuse_ino_t nodeid,
 			   const void *inarg)
 {
-	_do_readdirplus(req, nodeid, inarg, NULL);
+	_do_readdirplus(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_releasedir(fuse_req_t req, const fuse_ino_t nodeid,
-			   const void *op_in, const void *in_payload)
+			   const void *op_in, const void *in_payload,
+			   const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_release_in *arg = (struct fuse_release_in *)op_in;
 	struct fuse_file_info fi;
 
@@ -1965,13 +2035,15 @@ static void _do_releasedir(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_releasedir(fuse_req_t req, const fuse_ino_t nodeid,
 			  const void *inarg)
 {
-	_do_releasedir(req, nodeid, inarg, NULL);
+	_do_releasedir(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_fsyncdir(fuse_req_t req, const fuse_ino_t nodeid,
-			 const void *op_in, const void *in_payload)
+			 const void *op_in, const void *in_payload,
+			 const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_fsync_in *arg = (struct fuse_fsync_in *)op_in;
 	struct fuse_file_info fi;
 	int datasync = arg->fsync_flags & 1;
@@ -1987,15 +2059,17 @@ static void _do_fsyncdir(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_fsyncdir(fuse_req_t req, const fuse_ino_t nodeid,
 			const void *inarg)
 {
-	_do_fsyncdir(req, nodeid, inarg, NULL);
+	_do_fsyncdir(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_statfs(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	(void) nodeid;
 	(void)op_in;
 	(void)in_payload;
+	(void)payload_sz;
 
 	if (req->se->op.statfs)
 		req->se->op.statfs(req, nodeid);
@@ -2010,15 +2084,17 @@ static void _do_statfs(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_statfs(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *inarg)
 {
-	_do_statfs(req, nodeid, inarg, NULL);
+	_do_statfs(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_setxattr(fuse_req_t req, const fuse_ino_t nodeid,
-			 const void *op_in, const void *in_payload)
+			 const void *op_in, const void *in_payload,
+			 const size_t payload_sz)
 {
 	struct fuse_setxattr_in *arg = (struct fuse_setxattr_in *)op_in;
 	const char *name = in_payload;
 	const char *value = name + strlen(name) + 1;
+	(void)payload_sz;
 
 	/* XXX:The API should be extended to support extra_flags/setxattr_flags */
 
@@ -2037,12 +2113,14 @@ static void do_setxattr(fuse_req_t req, const fuse_ino_t nodeid,
 	char *payload = xattr_ext ? PARAM(arg) :
 				    (char *)arg + FUSE_COMPAT_SETXATTR_IN_SIZE;
 
-	_do_setxattr(req, nodeid, arg, payload);
+	_do_setxattr(req, nodeid, arg, payload, 0);
 }
 
 static void _do_getxattr(fuse_req_t req, const fuse_ino_t nodeid,
-			 const void *op_in, const void *in_payload)
+			 const void *op_in, const void *in_payload,
+			 const size_t payload_sz)
 {
+	(void)payload_sz;
 	const struct fuse_getxattr_in *arg = op_in;
 
 	if (req->se->op.getxattr)
@@ -2057,13 +2135,15 @@ static void do_getxattr(fuse_req_t req, const fuse_ino_t nodeid,
 	const struct fuse_getxattr_in *arg = inarg;
 	const void *payload = PARAM(arg);
 
-	_do_getxattr(req, nodeid, arg, payload);
+	_do_getxattr(req, nodeid, arg, payload, 0);
 }
 
 static void _do_listxattr(fuse_req_t req, const fuse_ino_t nodeid,
-			  const void *inarg, const void *in_payload)
+			  const void *inarg, const void *in_payload,
+			  const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_getxattr_in *arg = inarg;
 
 	if (req->se->op.listxattr)
@@ -2074,13 +2154,15 @@ static void _do_listxattr(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_listxattr(fuse_req_t req, const fuse_ino_t nodeid,
 			 const void *inarg)
 {
-	_do_listxattr(req, nodeid, inarg, NULL);
+	_do_listxattr(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_removexattr(fuse_req_t req, const fuse_ino_t nodeid,
-			    const void *inarg, const void *in_payload)
+			    const void *inarg, const void *in_payload,
+			    const size_t payload_sz)
 {
 	(void)inarg;
+	(void)payload_sz;
 	const char *name = in_payload;
 
 	if (req->se->op.removexattr)
@@ -2090,7 +2172,7 @@ static void _do_removexattr(fuse_req_t req, const fuse_ino_t nodeid,
 }
 static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_removexattr(req, nodeid, NULL, inarg);
+	_do_removexattr(req, nodeid, NULL, inarg, 0);
 }
 
 static void convert_fuse_file_lock(const struct fuse_file_lock *fl,
@@ -2108,9 +2190,11 @@ static void convert_fuse_file_lock(const struct fuse_file_lock *fl,
 }
 
 static void _do_getlk(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_lk_in *arg = op_in;
 	struct fuse_file_info fi;
 	struct flock flock;
@@ -2127,7 +2211,7 @@ static void _do_getlk(fuse_req_t req, const fuse_ino_t nodeid,
 }
 static void do_getlk(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_getlk(req, nodeid, inarg, NULL);
+	_do_getlk(req, nodeid, inarg, NULL, 0);
 }
 
 static void do_setlk_common(fuse_req_t req, const fuse_ino_t nodeid,
@@ -2172,26 +2256,30 @@ static void do_setlk_common(fuse_req_t req, const fuse_ino_t nodeid,
 }
 
 static void _do_setlk(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	do_setlk_common(req, nodeid, op_in, 0);
 }
 
 static void do_setlk(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_setlk(req, nodeid, inarg, NULL);
+	_do_setlk(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_setlkw(fuse_req_t req, const fuse_ino_t nodeid,
-		       const void *op_in, const void *in_payload)
+		       const void *op_in, const void *in_payload,
+		       const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	do_setlk_common(req, nodeid, op_in, 1);
 }
 static void do_setlkw(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_setlkw(req, nodeid, inarg, NULL);
+	_do_setlkw(req, nodeid, inarg, NULL, 0);
 }
 
 static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
@@ -2235,9 +2323,11 @@ static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
 }
 
 static void _do_interrupt(fuse_req_t req, const fuse_ino_t nodeid,
-			  const void *op_in, const void *in_payload)
+			  const void *op_in, const void *in_payload,
+			  const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_interrupt_in *arg = op_in;
 	struct fuse_session *se = req->se;
 
@@ -2259,7 +2349,7 @@ static void _do_interrupt(fuse_req_t req, const fuse_ino_t nodeid,
 }
 static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_interrupt(req, nodeid, inarg, NULL);
+	_do_interrupt(req, nodeid, inarg, NULL, 0);
 }
 
 static struct fuse_req *check_interrupt(struct fuse_session *se,
@@ -2288,9 +2378,10 @@ static struct fuse_req *check_interrupt(struct fuse_session *se,
 }
 
 static void _do_bmap(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
-		     const void *in_payload)
+		     const void *in_payload, const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_bmap_in *arg = op_in;
 
 	if (req->se->op.bmap)
@@ -2300,12 +2391,14 @@ static void _do_bmap(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 }
 static void do_bmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_bmap(req, nodeid, inarg, NULL);
+	_do_bmap(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_ioctl(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
+	(void)payload_sz;
 	struct fuse_ioctl_in *arg = (struct fuse_ioctl_in *)op_in;
 	unsigned int flags = arg->flags;
 	const void *in_buf = in_payload;
@@ -2337,7 +2430,7 @@ static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	const struct fuse_ioctl_in *arg = inarg;
 	void *in_buf = arg->in_size ? PARAM(arg) : NULL;
 
-	_do_ioctl(req, nodeid, arg, in_buf);
+	_do_ioctl(req, nodeid, arg, in_buf, 0);
 }
 
 void fuse_pollhandle_destroy(struct fuse_pollhandle *ph)
@@ -2346,9 +2439,10 @@ void fuse_pollhandle_destroy(struct fuse_pollhandle *ph)
 }
 
 static void _do_poll(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
-		     const void *in_payload)
+		     const void *in_payload, const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	struct fuse_poll_in *arg = (struct fuse_poll_in *)op_in;
 	struct fuse_file_info fi;
 
@@ -2377,13 +2471,15 @@ static void _do_poll(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 static void do_poll(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_poll(req, nodeid, inarg, NULL);
+	_do_poll(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_fallocate(fuse_req_t req, const fuse_ino_t nodeid,
-			  const void *op_in, const void *in_payload)
+			  const void *op_in, const void *in_payload,
+			  const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_fallocate_in *arg = op_in;
 	struct fuse_file_info fi;
 
@@ -2400,13 +2496,15 @@ static void _do_fallocate(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_fallocate(fuse_req_t req, const fuse_ino_t nodeid,
 			 const void *inarg)
 {
-	_do_fallocate(req, nodeid, inarg, NULL);
+	_do_fallocate(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
-				const void *op_in, const void *in_payload)
+				const void *op_in, const void *in_payload,
+				const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_copy_file_range_in *arg = op_in;
 	struct fuse_file_info fi_in, fi_out;
 
@@ -2427,7 +2525,7 @@ static void _do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
 static void do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
 			       const void *inarg)
 {
-	_do_copy_file_range(req, nodeid_in, inarg, NULL);
+	_do_copy_file_range(req, nodeid_in, inarg, NULL, 0);
 }
 
 /*
@@ -2435,9 +2533,11 @@ static void do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
  * linux kernel loff_t and is therefore signed.
  */
 static void _do_lseek(fuse_req_t req, const fuse_ino_t nodeid,
-		      const void *op_in, const void *in_payload)
+		      const void *op_in, const void *in_payload,
+		      const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_lseek_in *arg = op_in;
 	struct fuse_file_info fi;
 
@@ -2452,7 +2552,7 @@ static void _do_lseek(fuse_req_t req, const fuse_ino_t nodeid,
 
 static void do_lseek(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	_do_lseek(req, nodeid, inarg, NULL);
+	_do_lseek(req, nodeid, inarg, NULL, 0);
 }
 
 #ifdef HAVE_STATX
@@ -2577,9 +2677,10 @@ bool fuse_get_feature_flag(struct fuse_conn_info *conn,
  * multi-threading becomes relevant */
 static __attribute__((no_sanitize("thread"))) void
 _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
-	 const void *in_payload)
+	 const void *in_payload, const size_t payload_sz)
 {
 	(void)in_payload;
+	(void)payload_sz;
 	const struct fuse_init_in *arg = op_in;
 	struct fuse_init_out outarg;
 	struct fuse_session *se = req->se;
@@ -2918,12 +3019,14 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 static __attribute__((no_sanitize("thread"))) void
 do_init(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_init(req, nodeid, inarg, NULL);
+	_do_init(req, nodeid, inarg, NULL, 0);
 }
 
 static void _do_destroy(fuse_req_t req, const fuse_ino_t nodeid,
-			const void *op_in, const void *in_payload)
+			const void *op_in, const void *in_payload,
+			const size_t payload_sz)
 {
+	(void)payload_sz;
 	struct fuse_session *se = req->se;
 	char *mountpoint;
 
@@ -2944,7 +3047,7 @@ static void _do_destroy(fuse_req_t req, const fuse_ino_t nodeid,
 
 static void do_destroy(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
-	_do_destroy(req, nodeid, inarg, NULL);
+	_do_destroy(req, nodeid, inarg, NULL, 0);
 }
 
 static void list_del_nreq(struct fuse_notify_req *nreq)
@@ -2990,6 +3093,18 @@ static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 
 	if (nreq != head)
 		nreq->reply(nreq, req, nodeid, inarg, buf);
+}
+
+static void do_notify_reply_cqe(fuse_req_t req, fuse_ino_t nodeid,
+				const void *inarg, const void *in_payload,
+				const size_t payload_sz)
+{
+	struct fuse_buf buf = {
+		.size = payload_sz,
+		.mem = (void *)in_payload,
+	};
+
+	do_notify_reply(req, nodeid, inarg, &buf);
 }
 
 static int send_notify_iov(struct fuse_session *se, int notify_code,
@@ -3317,6 +3432,7 @@ bool fuse_req_is_uring(fuse_req_t req)
 	return req->is_uring;
 }
 
+// clang-format off
 static struct {
 	void (*func)(fuse_req_t req, const fuse_ino_t node, const void *arg);
 	const char *name;
@@ -3373,7 +3489,7 @@ static struct {
 
 static struct {
 	void (*func)(fuse_req_t req, const fuse_ino_t ino, const void *op_in,
-		     const void *op_payload);
+		     const void *op_payload, const size_t payload_sz);
 	const char *name;
 } fuse_ll_ops2[] __attribute__((unused)) = {
 	[FUSE_LOOKUP]		= { _do_lookup,		"LOOKUP" },
@@ -3390,7 +3506,7 @@ static struct {
 	[FUSE_LINK]		= { _do_link,		"LINK" },
 	[FUSE_OPEN]		= { _do_open,		"OPEN" },
 	[FUSE_READ]		= { _do_read,		"READ" },
-	[FUSE_WRITE]		= { _do_write,		"WRITE" },
+	[FUSE_WRITE]		= { write_cqe,		"WRITE" },
 	[FUSE_STATFS]		= { _do_statfs,		"STATFS" },
 	[FUSE_RELEASE]		= { _do_release,	"RELEASE" },
 	[FUSE_FSYNC]		= { _do_fsync,		"FSYNC" },
@@ -3416,7 +3532,7 @@ static struct {
 	[FUSE_POLL]		= { _do_poll,		"POLL" },
 	[FUSE_FALLOCATE]	= { _do_fallocate,	"FALLOCATE" },
 	[FUSE_DESTROY]		= { _do_destroy,	"DESTROY" },
-	[FUSE_NOTIFY_REPLY]	= { (void *)1,		"NOTIFY_REPLY" },
+	[FUSE_NOTIFY_REPLY]	= { do_notify_reply_cqe, "NOTIFY_REPLY" },
 	[FUSE_BATCH_FORGET]	= { _do_batch_forget,	"BATCH_FORGET" },
 	[FUSE_READDIRPLUS]	= { _do_readdirplus,	"READDIRPLUS" },
 	[FUSE_RENAME2]		= { _do_rename2,	"RENAME2" },
@@ -3425,6 +3541,7 @@ static struct {
 	[FUSE_STATX]		= { _do_statx,		"STATX" },
 	[CUSE_INIT]		= { _cuse_lowlevel_init, "CUSE_INIT" },
 };
+// clang-format on
 
 /*
  * For ABI compatibility we cannot allow higher values than CUSE_INIT.
@@ -3676,23 +3793,8 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 			(unsigned long long)in->nodeid, payload_len, in->pid);
 	}
 
-	if (in->opcode == FUSE_WRITE && se->op.write_buf) {
-		struct fuse_bufvec bufv = {
-			.buf[0] = { .size = payload_len,
-				    .flags = 0,
-				    .mem = op_payload },
-			.count = 1,
-		};
-		_do_write_buf(req, in->nodeid, op_in, &bufv);
-	} else if (in->opcode == FUSE_NOTIFY_REPLY) {
-		struct fuse_buf buf = { .size = payload_len,
-					.mem = op_payload };
-		do_notify_reply(req, in->nodeid, op_in, &buf);
-	} else {
-		fuse_ll_ops2[in->opcode].func(req, in->nodeid, op_in,
-					      op_payload);
-	}
-
+	fuse_ll_ops2[in->opcode].func(req, in->nodeid, op_in, op_payload,
+				      payload_len);
 	return;
 
 reply_err:
