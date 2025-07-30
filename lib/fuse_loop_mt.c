@@ -138,9 +138,9 @@ static void *fuse_do_work(void *data)
 		int isforget = 0;
 		int res;
 
-		pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+		// pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
 		res = fuse_session_receive_buf_internal(se, &w->fbuf, w->ch);
-		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+		// pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 		if (res == -EINTR)
 			continue;
 		if (res <= 0) {
@@ -401,7 +401,7 @@ int err;
 
 		pthread_mutex_lock(&se->mt_lock);
 		for (w = mt.main.next; w != &mt.main; w = w->next)
-			pthread_cancel(w->thread_id);
+			// pthread_cancel(w->thread_id);
 		pthread_mutex_unlock(&se->mt_lock);
 
 		while (mt.main.next != &mt.main)

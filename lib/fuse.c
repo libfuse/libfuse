@@ -4969,7 +4969,7 @@ void fuse_stop_cleanup_thread(struct fuse *f)
 {
 	if (lru_enabled(f)) {
 		pthread_mutex_lock(&f->lock);
-		pthread_cancel(f->prune_thread);
+		// pthread_cancel(f->prune_thread);
 		pthread_mutex_unlock(&f->lock);
 		pthread_join(f->prune_thread, NULL);
 	}
