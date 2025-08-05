@@ -40,6 +40,7 @@ struct fuse_req {
 	int interrupted;
 	unsigned int ioctl_64bit : 1;
 	unsigned int is_uring : 1;
+	unsigned int is_copy_file_range_64 : 1;
 	union {
 		struct {
 			uint64_t unique;

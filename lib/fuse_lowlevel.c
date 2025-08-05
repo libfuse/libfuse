@@ -589,7 +589,7 @@ int fuse_reply_open(fuse_req_t req, const struct fuse_file_info *f)
 	return send_reply_ok(req, &arg, sizeof(arg));
 }
 
-int fuse_reply_write(fuse_req_t req, size_t count)
+static int do_fuse_reply_write(fuse_req_t req, size_t count)
 {
 	struct fuse_write_out arg;
 
@@ -597,6 +597,28 @@ int fuse_reply_write(fuse_req_t req, size_t count)
 	arg.size = count;
 
 	return send_reply_ok(req, &arg, sizeof(arg));
+}
+
+static int do_fuse_reply_copy(fuse_req_t req, size_t count)
+{
+	struct fuse_copy_file_range_out arg;
+
+	memset(&arg, 0, sizeof(arg));
+	arg.bytes_copied = count;
+
+	return send_reply_ok(req, &arg, sizeof(arg));
+}
+
+int fuse_reply_write(fuse_req_t req, size_t count)
+{
+	/*
+	 * This function is also used by FUSE_COPY_FILE_RANGE and its 64-bit
+	 * variant.
+	 */
+	if (req->is_copy_file_range_64)
+		return do_fuse_reply_copy(req, count);
+	else
+		return do_fuse_reply_write(req, count);
 }
 
 int fuse_reply_buf(fuse_req_t req, const char *buf, size_t size)
@@ -2403,11 +2425,9 @@ static void do_fallocate(fuse_req_t req, const fuse_ino_t nodeid,
 	_do_fallocate(req, nodeid, inarg, NULL);
 }
 
-static void _do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
-				const void *op_in, const void *in_payload)
+static void copy_file_range_common(fuse_req_t req, const fuse_ino_t nodeid_in,
+				   const struct fuse_copy_file_range_in *arg)
 {
-	(void)in_payload;
-	const struct fuse_copy_file_range_in *arg = op_in;
 	struct fuse_file_info fi_in, fi_out;
 
 	memset(&fi_in, 0, sizeof(fi_in));
@@ -2424,10 +2444,44 @@ static void _do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
 		fuse_reply_err(req, ENOSYS);
 }
 
+static void _do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
+				const void *op_in, const void *in_payload)
+{
+	const struct fuse_copy_file_range_in *arg = op_in;
+	struct fuse_copy_file_range_in arg_tmp;
+
+	(void) in_payload;
+	/* fuse_write_out can only handle 32bit copy size */
+	if (arg->len > 0xfffff000) {
+		arg_tmp = *arg;
+		arg_tmp.len = 0xfffff000;
+		arg = &arg_tmp;
+	}
+	copy_file_range_common(req, nodeid_in, arg);
+}
+
 static void do_copy_file_range(fuse_req_t req, const fuse_ino_t nodeid_in,
 			       const void *inarg)
 {
 	_do_copy_file_range(req, nodeid_in, inarg, NULL);
+}
+
+static void _do_copy_file_range_64(fuse_req_t req, const fuse_ino_t nodeid_in,
+				   const void *op_in, const void *in_payload)
+{
+	(void) in_payload;
+	req->is_copy_file_range_64 = 1;
+	/* Limit size on 32bit userspace to avoid conversion overflow */
+	if (sizeof(size_t) == 4)
+		_do_copy_file_range(req, nodeid_in, op_in, NULL);
+	else
+		copy_file_range_common(req, nodeid_in, op_in);
+}
+
+static void do_copy_file_range_64(fuse_req_t req, const fuse_ino_t nodeid_in,
+			       const void *inarg)
+{
+	_do_copy_file_range_64(req, nodeid_in, inarg, NULL);
 }
 
 /*
@@ -3378,6 +3432,7 @@ static struct {
 	[FUSE_READDIRPLUS] = { do_readdirplus,	"READDIRPLUS"},
 	[FUSE_RENAME2]     = { do_rename2,      "RENAME2"    },
 	[FUSE_COPY_FILE_RANGE] = { do_copy_file_range, "COPY_FILE_RANGE" },
+	[FUSE_COPY_FILE_RANGE_64] = { do_copy_file_range_64, "COPY_FILE_RANGE_64" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
 	[FUSE_STATX]	   = { do_statx,       "STATX"	     },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
@@ -3433,6 +3488,7 @@ static struct {
 	[FUSE_READDIRPLUS]	= { _do_readdirplus,	"READDIRPLUS" },
 	[FUSE_RENAME2]		= { _do_rename2,	"RENAME2" },
 	[FUSE_COPY_FILE_RANGE]	= { _do_copy_file_range, "COPY_FILE_RANGE" },
+	[FUSE_COPY_FILE_RANGE_64]	= { _do_copy_file_range_64, "COPY_FILE_RANGE_64" },
 	[FUSE_LSEEK]		= { _do_lseek,		"LSEEK" },
 	[FUSE_STATX]		= { _do_statx,		"STATX" },
 	[CUSE_INIT]		= { _cuse_lowlevel_init, "CUSE_INIT" },
