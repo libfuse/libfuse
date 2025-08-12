@@ -18,7 +18,7 @@ jobs:
     name: Build under FreeBSD
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     - name: Build
       uses: vmactions/freebsd-vm@v1
       with:

@@ -33,7 +33,7 @@ jobs:
             gcc-multilib g++-multilib libc6-dev-i386 \
             libpcap0.8-dev:i386 libudev-dev:i386 pkg-config:i386 \
             liburing-dev libnuma-dev
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
