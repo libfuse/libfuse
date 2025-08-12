@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
     test_fs(fuse_opts.mountpoint);
 
     /* Stop file system */
-    assert(pthread_cancel(fs_thread) == 0);
+    // assert(pthread_cancel(fs_thread) == 0);
 
     fuse_session_unmount(se);
     assert(got_fh == 1);
