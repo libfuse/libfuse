@@ -1,3 +1,11 @@
+libfuse 3.17.4 (2025-08-19)
+===========================
+- Try to detect mount-utils by checking for /run/mount/utab
+  and don't try to update mtab if it does not exist
+- Fix a build warning when HAVE_BACKTRACE is undefined
+- fuse_loop_mt.c: fix close-on-exec flag on clone fd
+- Remove struct size assertions from fuse_common.h
+
 libfuse 3.17.3 (2025-07-16)
 ===========================
 * more conn->want / conn->want_ext conversion fixes
