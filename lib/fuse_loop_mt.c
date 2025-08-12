@@ -275,9 +275,15 @@ static int fuse_clone_chan_fd_default(struct fuse_session *se)
 			strerror(errno));
 		return -1;
 	}
-#ifndef O_CLOEXEC
-	fcntl(clonefd, F_SETFD, FD_CLOEXEC);
-#endif
+	if (!O_CLOEXEC) {
+		res = fcntl(clonefd, F_SETFD, FD_CLOEXEC);
+		if (res == -1) {
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to set CLOEXEC: %s\n",
+				strerror(errno));
+			close(clonefd);
+			return -1;
+		}
+	}
 
 	masterfd = se->fd;
 	res = ioctl(clonefd, FUSE_DEV_IOC_CLONE, &masterfd);
