@@ -219,7 +219,8 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 void fuse_free_req(fuse_req_t req);
 
 void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
-			 const void *req_header, const void *req_payload);
+			 const void *req_header, const void *req_payload,
+			 const size_t payload_sz);
 void cuse_lowlevel_init(fuse_req_t req, fuse_ino_t nodeide, const void *inarg);
 
 int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg);
