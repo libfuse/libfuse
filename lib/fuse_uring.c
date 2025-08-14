@@ -700,8 +700,6 @@ static void *fuse_uring_thread(void *arg)
 
 	err = fuse_uring_init_queue(queue);
 
-	if (err < 0)
-		ring_pool->failed_threads++;
 	pthread_mutex_lock(&ring_pool->thread_start_mutex);
 	if (err < 0)
 		ring_pool->failed_threads++;
@@ -766,6 +764,7 @@ static int fuse_uring_sanity_check(struct fuse_session *se)
 int fuse_uring_start(struct fuse_session *se)
 {
 	int err = 0;
+	unsigned int started_threads = 0, failed_threads = 0;
 	struct fuse_ring_pool *fuse_ring;
 
 	fuse_uring_sanity_check(se);
@@ -787,17 +786,22 @@ int fuse_uring_start(struct fuse_session *se)
 	if (err)
 		goto err;
 
-	while (fuse_ring->started_threads < fuse_ring->nr_queues) {
+	while (1) {
 		/* Wait for all threads to start */
-		if (fuse_ring->failed_threads != 0) {
+		pthread_mutex_lock(&fuse_ring->thread_start_mutex);
+		started_threads = fuse_ring->started_threads;
+		failed_threads = fuse_ring->failed_threads;
+		pthread_mutex_unlock(&fuse_ring->thread_start_mutex);
+
+		if (failed_threads != 0) {
 			err = -EADDRNOTAVAIL;
 			goto err;
 		}
-	}
 
-	if (fuse_ring->failed_threads != 0) {
-		err = -EADDRNOTAVAIL;
-		goto err;
+		if (started_threads == fuse_ring->nr_queues)
+			break;
+
+		usleep(1000);
 	}
 
 err:
