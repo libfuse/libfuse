@@ -705,9 +705,6 @@ static void *fuse_uring_thread(void *arg)
 	fuse_uring_set_thread_core(queue->qid);
 
 	err = fuse_uring_init_queue(queue);
-
-	if (err < 0)
-		ring_pool->failed_threads++;
 	pthread_mutex_lock(&ring_pool->thread_start_mutex);
 	if (err < 0)
 		ring_pool->failed_threads++;
