@@ -803,6 +803,11 @@ int fuse_uring_start(struct fuse_session *se)
 	pthread_mutex_unlock(&fuse_ring->thread_start_mutex);
 
 err:
+	if (err) {
+		/* Note all threads need to have been started */
+		fuse_session_destruct_uring(fuse_ring);
+		se->uring.pool = fuse_ring;
+	}
 	return err;
 }
 
