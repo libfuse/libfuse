@@ -384,6 +384,8 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 	}
 
 	free(fuse_ring->queues);
+	pthread_cond_destroy(&fuse_ring->thread_start_cond);
+	pthread_mutex_destroy(&fuse_ring->thread_start_mutex);
 	free(fuse_ring);
 }
 
@@ -490,6 +492,10 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->qid = qid;
 		queue->ring_pool = fuse_ring;
 	}
+
+	pthread_cond_init(&fuse_ring->thread_start_cond, NULL);
+	pthread_mutex_init(&fuse_ring->thread_start_mutex, NULL);
+	sem_init(&fuse_ring->init_sem, 0, 0);
 
 	return fuse_ring;
 
@@ -787,18 +793,17 @@ int fuse_uring_start(struct fuse_session *se)
 	if (err)
 		goto err;
 
-	while (fuse_ring->started_threads < fuse_ring->nr_queues) {
-		/* Wait for all threads to start */
-		if (fuse_ring->failed_threads != 0) {
-			err = -EADDRNOTAVAIL;
-			goto err;
-		}
-	}
+	/*
+	 * Wait for all threads to start or to fail
+	 */
+	pthread_mutex_lock(&fuse_ring->thread_start_mutex);
+	while (fuse_ring->started_threads < fuse_ring->nr_queues)
+		pthread_cond_wait(&fuse_ring->thread_start_cond,
+				  &fuse_ring->thread_start_mutex);
 
-	if (fuse_ring->failed_threads != 0) {
+	if (fuse_ring->failed_threads != 0)
 		err = -EADDRNOTAVAIL;
-		goto err;
-	}
+	pthread_mutex_unlock(&fuse_ring->thread_start_mutex);
 
 err:
 	return err;
