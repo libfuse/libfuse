@@ -59,7 +59,6 @@ include_default = '''
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <assert.h>     /* For static_assert */
 #include <pthread.h>    /* For pthread_setname_np */
 '''
 args_default = [ '-D_GNU_SOURCE' ]
@@ -82,11 +81,6 @@ endforeach
 
 # Special case checks that need custom code
 special_funcs = {
-    'static_assert': '''
-        #include <assert.h>
-        static_assert(1, "test");
-        int main(void) { return 0; }
-    ''',
     'pthread_setname_np': '''
         #include <pthread.h>
         int main(void) {
