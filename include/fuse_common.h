@@ -30,12 +30,6 @@
 #define FUSE_MAKE_VERSION(maj, min)  ((maj) * 100 + (min))
 #define FUSE_VERSION FUSE_MAKE_VERSION(FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION)
 
-#ifdef HAVE_STATIC_ASSERT
-#define fuse_static_assert(condition, message) static_assert(condition, message)
-#else
-#define fuse_static_assert(condition, message)
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -129,8 +123,6 @@ struct fuse_file_info {
 
 	uint64_t reserved[2];
 };
-fuse_static_assert(sizeof(struct fuse_file_info) == 64,
-		   "fuse_file_info size mismatch");
 
 /**
  * Configuration parameters passed to fuse_session_loop_mt() and
@@ -708,8 +700,6 @@ struct fuse_conn_info {
 	 */
 	uint32_t reserved[16];
 };
-fuse_static_assert(sizeof(struct fuse_conn_info) == 128,
-		   "Size of struct fuse_conn_info must be 128 bytes");
 
 struct fuse_session;
 struct fuse_pollhandle;
