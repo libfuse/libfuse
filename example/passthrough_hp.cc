@@ -254,19 +254,19 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 	fuse_reply_attr(req, &attr, fs.timeout);
 }
 
-static int with_fd_path(int fd, const std::function<int(const char*)>& f)
+static int with_fd_path(int fd, const std::function<int(const char *)> &f)
 {
 #ifdef __FreeBSD__
-    struct kinfo_file kf;
-    kf.kf_structsize = sizeof(kf);
-    int ret = fcntl(fd, F_KINFO, &kf);
-    if (ret == -1)
-        return ret;
-    return f (kf.kf_path);
+	struct kinfo_file kf;
+	kf.kf_structsize = sizeof(kf);
+	int ret = fcntl(fd, F_KINFO, &kf);
+	if (ret == -1)
+		return ret;
+	return f(kf.kf_path);
 #else // Linux
-    char procname[64];
-    sprintf(procname, "/proc/self/fd/%i", fd);
-    return f(procname);
+	char procname[64];
+	sprintf(procname, "/proc/self/fd/%i", fd);
+	return f(procname);
 #endif
 }
 static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
@@ -280,7 +280,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		if (fi) {
 			res = fchmod(fi->fh, attr->st_mode);
 		} else {
-			res = with_fd_path(ifd, [attr](const char* procname) {
+			res = with_fd_path(ifd, [attr](const char *procname) {
 				return chmod(procname, attr->st_mode);
 			});
 		}
@@ -304,7 +304,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		if (fi) {
 			res = ftruncate(fi->fh, attr->st_size);
 		} else {
-			res = with_fd_path(ifd, [attr](const char* procname) {
+			res = with_fd_path(ifd, [attr](const char *procname) {
 				return truncate(procname, attr->st_size);
 			});
 		}
@@ -333,7 +333,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			res = futimens(fi->fh, tv);
 		else {
 #ifdef HAVE_UTIMENSAT
-			res = with_fd_path(ifd, [&tv](const char* procname) {
+			res = with_fd_path(ifd, [&tv](const char *procname) {
 				return utimensat(AT_FDCWD, procname, tv, 0);
 			});
 #else
@@ -1089,7 +1089,7 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 
 	/* Unfortunately we cannot use inode.fd, because this was opened
        with O_PATH (so it doesn't allow read/write access). */
-	auto fd = with_fd_path(inode.fd, [fi](const char* buf) {
+	auto fd = with_fd_path(inode.fd, [fi](const char *buf) {
 		return open(buf, fi->flags & ~O_NOFOLLOW);
 	});
 	if (fd == -1) {
