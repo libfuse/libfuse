@@ -78,7 +78,7 @@ struct fuse_ring_pool {
 	/* size of a single queue */
 	size_t queue_mem_size;
 
-	unsigned int started_threads;
+	volatile unsigned int started_threads;
 	unsigned int failed_threads;
 
 	/* Avoid sending queue entries before FUSE_INIT reply*/
