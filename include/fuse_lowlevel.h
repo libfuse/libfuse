@@ -1375,7 +1375,7 @@ struct fuse_lowlevel_ops {
 	 * The actual problem arises when the kernel reads this pages to prepare
 	 * unaligned writes.
 	 */
-	void (*dlm_lock) (fuse_req_t req, fuse_ino_t ino, off_t offset, uint32_t length,
+	void (*dlm_lock) (fuse_req_t req, fuse_ino_t ino, uint64_t start, uint64_t end,
 			uint32_t type, struct fuse_file_info *fi);
 };
 
@@ -1636,7 +1636,7 @@ int fuse_reply_lock(fuse_req_t req, const struct flock *lock);
  * @param req request handle
  * @param locksize the locked size
  */
-int fuse_reply_dlm_lock(fuse_req_t req, uint32_t locksize);
+int fuse_reply_dlm_lock(fuse_req_t req, uint64_t start, uint64_t end);
 
 /**
  * Reply with block index
