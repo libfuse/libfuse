@@ -540,12 +540,13 @@ int fuse_reply_create(fuse_req_t req, const struct fuse_entry_param *e,
 			     entrysize + sizeof(struct fuse_open_out));
 }
 
-int fuse_reply_dlm_lock(fuse_req_t req, uint32_t locksize)
+int fuse_reply_dlm_lock(fuse_req_t req, uint64_t start, uint64_t end)
 {
 	struct fuse_dlm_lock_out arg;
 
 	memset(&arg, 0, sizeof(arg));
-	arg.locksize = locksize;
+	arg.start = start;
+	arg.end = end;
 
 	/* fuse_log(FUSE_LOG_DEBUG, "send dlm lock reply size:%d size:%d\n", locksize, sizeof(arg)); */
 	/* commented out for the moment until the loglevel gets fixed,
@@ -2195,7 +2196,7 @@ static void _do_dlm_lock(fuse_req_t req, const fuse_ino_t nodeid,
 	fi.fh = arg->fh;
 
 	if (req->se->op.dlm_lock) {
-		req->se->op.dlm_lock(req, nodeid, arg->offset, arg->size, arg->type, &fi);
+		req->se->op.dlm_lock(req, nodeid, arg->start, arg->end, arg->type, &fi);
 	} else
 		fuse_reply_err(req, ENOSYS);
 }
