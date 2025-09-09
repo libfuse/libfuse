@@ -4051,6 +4051,14 @@ fuse_session_new_versioned(struct fuse_args *args,
 	int err;
 	struct fuse_session *se;
 	struct mount_opts *mo;
+	struct fuse_lowlevel_ops null_ops = { 0 };
+
+	// Empty operations list may is necessary to create a no-op fuse session for mounting
+	if (op == NULL) {
+		fuse_log(FUSE_LOG_ERR, "fuse: warning: empty op list, falling back to default\n");
+		op = &null_ops;
+		op_size = sizeof(null_ops);
+	}
 
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
 		fuse_log(FUSE_LOG_ERR, "fuse: warning: library too old, some operations may not work\n");
