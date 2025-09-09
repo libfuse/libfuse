@@ -2117,6 +2117,8 @@ fuse_session_new_versioned(struct fuse_args *args,
  * If not all options are known, an error message is written to stderr
  * and the function returns NULL.
  *
+ * To create a no-op session just for mounting pass op as NULL.
+ *
  * Option parsing skips argv[0], which is assumed to contain the
  * program name. To prevent accidentally passing an option in
  * argv[0], this element must always be present (even if no options

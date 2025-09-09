@@ -4052,12 +4052,23 @@ fuse_session_new_versioned(struct fuse_args *args,
 	struct fuse_session *se;
 	struct mount_opts *mo;
 
+	if (op == NULL || op_size == 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: warning: empty op list passed to fuse_session_new()\n");
+		return NULL;
+	}
+
+	if (version == NULL) {
+		fuse_log(FUSE_LOG_ERR, "fuse: warning: version not passed to fuse_session_new()\n");
+		return NULL;
+	}
+
 	if (sizeof(struct fuse_lowlevel_ops) < op_size) {
 		fuse_log(FUSE_LOG_ERR, "fuse: warning: library too old, some operations may not work\n");
 		op_size = sizeof(struct fuse_lowlevel_ops);
 	}
 
-	if (args->argc == 0) {
+	if (args == NULL || args->argc == 0) {
 		fuse_log(FUSE_LOG_ERR, "fuse: empty argv passed to fuse_session_new().\n");
 		return NULL;
 	}
@@ -4169,8 +4180,21 @@ struct fuse_session *fuse_session_new_30(struct fuse_args *args,
 					  size_t op_size,
 					  void *userdata)
 {
+	struct fuse_lowlevel_ops null_ops = { 0 };
+
 	/* unknown version */
 	struct libfuse_version version = { 0 };
+
+	/*
+	 * This function is the ABI interface function from fuse_session_new in
+	 * compat.c. External libraries like "fuser" might call fuse_session_new()
+	 * with NULL ops and then pass that session to fuse_session_mount().
+	 * The actual FUSE operations are handled in their own library.
+	 */
+	if (op == NULL) {
+		op = &null_ops;
+		op_size = sizeof(null_ops);
+	}
 
 	return fuse_session_new_versioned(args, op, op_size, &version,
 					  userdata);
