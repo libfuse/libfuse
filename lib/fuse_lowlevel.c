@@ -4069,8 +4069,11 @@ fuse_session_new_versioned(struct fuse_args *args,
 	}
 	se->fd = -1;
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
-	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
+
+	/* We start with a small buffer and let it grow as needed */
+	se->bufsize = FUSE_DEFAULT_MAX_PAGES_PER_REQ * getpagesize() +
+		      FUSE_BUFFER_HEADER_SIZE;
 
 	/*
 	 * Allow overriding with env, mostly to avoid the need to modify

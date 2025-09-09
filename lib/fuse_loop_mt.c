@@ -171,7 +171,8 @@ static void *fuse_do_work(void *data)
 
 		if (!isforget)
 			mt->numavail--;
-		if (mt->numavail == 0 && mt->numworker < mt->max_threads)
+		if (mt->numavail == 0 && mt->numworker < mt->max_threads &&
+		    likely(se->got_init))
 			fuse_loop_start_thread(mt);
 		pthread_mutex_unlock(&se->mt_lock);
 
