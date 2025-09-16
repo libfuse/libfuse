@@ -23,7 +23,7 @@
  */
 
 
-#define FUSE_USE_VERSION 31
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 18)
 
 #define _GNU_SOURCE
 

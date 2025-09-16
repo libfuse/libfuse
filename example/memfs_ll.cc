@@ -6,7 +6,7 @@
   See the file GPL2.txt.
 */
 
-#define FUSE_USE_VERSION 317
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 18)
 
 #include <algorithm>
 #include <stdio.h>

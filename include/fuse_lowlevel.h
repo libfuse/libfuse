@@ -1327,7 +1327,6 @@ struct fuse_lowlevel_ops {
 	void (*tmpfile) (fuse_req_t req, fuse_ino_t parent,
 			mode_t mode, struct fuse_file_info *fi);
 
-#ifdef HAVE_STATX
 	/**
 	 * Get extended file attributes.
 	 *
@@ -1343,7 +1342,6 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*statx)(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 		      struct fuse_file_info *fi);
-#endif
 };
 
 /**
