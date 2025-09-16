@@ -854,7 +854,6 @@ struct fuse_operations {
 	 */
 	off_t (*lseek) (const char *, off_t off, int whence, struct fuse_file_info *);
 
-#ifdef HAVE_STATX
 	/**
 	 * Get extended file attributes.
 	 *
@@ -865,7 +864,6 @@ struct fuse_operations {
 	 */
 	int (*statx)(const char *path, int flags, int mask, struct statx *stxbuf,
 		     struct fuse_file_info *fi);
-#endif
 };
 
 /** Extra context that may be needed by some filesystems

@@ -122,8 +122,6 @@ private_cfg.set('HAVE_ICONV',
     cc.has_function('iconv', prefix: '#include <iconv.h>'))
 private_cfg.set('HAVE_BACKTRACE',
     cc.has_function('backtrace', prefix: '#include <execinfo.h>'))
-public_cfg.set('HAVE_STATX',
-        cc.has_function('statx',  prefix : '#define _GNU_SOURCE\n#include <sys/stat.h>'))
 private_cfg.set('HAVE_STATX',
         cc.has_function('statx',  prefix : '#define _GNU_SOURCE\n#include <sys/stat.h>'))
 
