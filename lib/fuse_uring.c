@@ -18,6 +18,7 @@
 #include <liburing.h>
 #include <sys/sysinfo.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
@@ -180,7 +181,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				    ring_ent->req_commit_id);
 
 	if (se->debug) {
-		fuse_log(FUSE_LOG_DEBUG, "    unique: %llu, result=%d\n",
+		fuse_log(FUSE_LOG_DEBUG, "    unique: %" PRIu64 ", result=%d\n",
 			 out->unique, ent_in_out->payload_sz);
 	}
 
@@ -453,7 +454,7 @@ static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
 	sq_ready = io_uring_sq_ready(&queue->ring);
 	if (sq_ready != ring_pool->queue_depth) {
 		fuse_log(FUSE_LOG_ERR,
-			 "SQE ready mismatch, expected %d got %d\n",
+			 "SQE ready mismatch, expected %zu got %u\n",
 			 ring_pool->queue_depth, sq_ready);
 		return -EINVAL;
 	}

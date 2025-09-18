@@ -23,6 +23,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -753,11 +754,15 @@ static int read_back(int fd, char *buf, size_t len)
 
 	res = read(fd, buf, len);
 	if (res == -1) {
-		fuse_log(FUSE_LOG_ERR, "fuse: internal error: failed to read back from pipe: %s\n", strerror(errno));
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: internal error: failed to read back from pipe: %s\n",
+			 strerror(errno));
 		return -EIO;
 	}
 	if (res != len) {
-		fuse_log(FUSE_LOG_ERR, "fuse: internal error: short read back from pipe: %i from %zi\n", res, len);
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: internal error: short read back from pipe: %i from %zd\n",
+			 res, len);
 		return -EIO;
 	}
 	return 0;
@@ -2550,8 +2555,8 @@ static bool want_flags_valid(uint64_t capable, uint64_t want)
 	uint64_t unknown_flags = want & (~capable);
 	if (unknown_flags != 0) {
 		fuse_log(FUSE_LOG_ERR,
-			 "fuse: unknown connection 'want' flags: 0x%08lx\n",
-			unknown_flags);
+			 "fuse: unknown connection 'want' flags: 0x%08llx\n",
+			(unsigned long long)unknown_flags);
 		return false;
 	}
 	return true;
@@ -2577,10 +2582,12 @@ int fuse_convert_to_conn_want_ext(struct fuse_conn_info *conn)
 	    fuse_lower_32_bits(conn->want_ext) != conn->want) {
 		if (conn->want_ext != se->conn_want_ext) {
 			fuse_log(FUSE_LOG_ERR,
-				"%s: Both conn->want_ext and conn->want are set.\n"
-				"want=%x, want_ext=%lx, se->want=%lx se->want_ext=%lx\n",
-				__func__, conn->want, conn->want_ext,
-				se->conn_want, se->conn_want_ext);
+				 "%s: Both conn->want_ext and conn->want are set.\n"
+				 "want=%x want_ext=%llx, se->want=%x se->want_ext=%llx\n",
+				 __func__, conn->want,
+				 (unsigned long long)conn->want_ext,
+				 se->conn_want,
+				 (unsigned long long)se->conn_want_ext);
 			return -EINVAL;
 		}
 
