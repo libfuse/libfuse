@@ -197,7 +197,7 @@ int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
 	struct fuse_ring_ent *ring_ent;
 
 	/* Not possible without io-uring interface */
-	if (!req->is_uring)
+	if (!req->flags.is_uring)
 		return -EINVAL;
 
 	ring_ent = container_of(req, struct fuse_ring_ent, req);
@@ -560,9 +560,13 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 		abort();
 	}
 
-	req->is_uring = true;
+	memset(&req->flags, 0, sizeof(req->flags));
+	memset(&req->u, 0, sizeof(req->u));
+	req->flags.is_uring = 1;
 	req->ref_cnt++;
 	req->ch = NULL; /* not needed for uring */
+	req->interrupted = 0;
+	list_init_req(req);
 
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
 				       ent->op_payload, ent_in_out->payload_sz);
@@ -696,8 +700,9 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 
 		req->se = se;
 		pthread_mutex_init(&req->lock, NULL);
-		req->is_uring = true;
-		req->ref_cnt = 1;
+		req->flags.is_uring = 1;
+		req->ref_cnt = 1; /* extra ref to avoid destruction */
+		list_init_req(req);
 	}
 
 	res = fuse_uring_prepare_fetch_sqes(queue);
