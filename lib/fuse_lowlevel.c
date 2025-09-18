@@ -145,7 +145,7 @@ static	size_t iov_length(const struct iovec *iov, size_t count)
 	return ret;
 }
 
-static void list_init_req(struct fuse_req *req)
+void list_init_req(struct fuse_req *req)
 {
 	req->next = req;
 	req->prev = req;
@@ -170,7 +170,7 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
 
 static void destroy_req(fuse_req_t req)
 {
-	if (req->is_uring) {
+	if (req->flags.is_uring) {
 		fuse_log(FUSE_LOG_ERR, "Refusing to destruct uring req\n");
 		return;
 	}
@@ -188,7 +188,7 @@ void fuse_free_req(fuse_req_t req)
 	 *      It actually might work already, though. But then would add
 	 *      a lock across ring queues.
 	 */
-	if (se->conn.no_interrupt || req->is_uring) {
+	if (se->conn.no_interrupt || req->flags.is_uring) {
 		ctr = --req->ref_cnt;
 		fuse_chan_put(req->ch);
 		req->ch = NULL;
@@ -218,7 +218,6 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 		req->ref_cnt = 1;
 		list_init_req(req);
 		pthread_mutex_init(&req->lock, NULL);
-		req->is_uring = false;
 	}
 
 	return req;
@@ -259,7 +258,7 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 {
 	struct fuse_out_header *out = iov[0].iov_base;
 	int err;
-	bool is_uring = req && req->is_uring ? true : false;
+	bool is_uring = req && req->flags.is_uring ? true : false;
 
 	if (!is_uring)
 		assert(se != NULL);
@@ -327,7 +326,7 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 static int send_reply(fuse_req_t req, int error, const void *arg,
 		      size_t argsize)
 {
-	if (req->is_uring)
+	if (req->flags.is_uring)
 		return send_reply_uring(req, error, arg, argsize);
 
 	struct iovec iov[2];
@@ -615,7 +614,7 @@ int fuse_reply_write(fuse_req_t req, size_t count)
 	 * This function is also used by FUSE_COPY_FILE_RANGE and its 64-bit
 	 * variant.
 	 */
-	if (req->is_copy_file_range_64)
+	if (req->flags.is_copy_file_range_64)
 		return do_fuse_reply_copy(req, count);
 	else
 		return do_fuse_reply_write(req, count);
@@ -1018,7 +1017,7 @@ int fuse_reply_data(fuse_req_t req, struct fuse_bufvec *bufv,
 	struct fuse_out_header out;
 	int res;
 
-	if (req->is_uring)
+	if (req->flags.is_uring)
 		return fuse_reply_data_uring(req, bufv, flags);
 
 	iov[0].iov_base = &out;
@@ -1136,7 +1135,7 @@ int fuse_reply_ioctl_retry(fuse_req_t req,
 		}
 	} else {
 		/* Can't handle non-compat 64bit ioctls on 32bit */
-		if (sizeof(void *) == 4 && req->ioctl_64bit) {
+		if (sizeof(void *) == 4 && req->flags.ioctl_64bit) {
 			res = fuse_reply_err(req, EINVAL);
 			goto out;
 		}
@@ -2344,7 +2343,7 @@ static void _do_ioctl(fuse_req_t req, const fuse_ino_t nodeid,
 
 	if (sizeof(void *) == 4 && req->se->conn.proto_minor >= 16 &&
 	    !(flags & FUSE_IOCTL_32BIT)) {
-		req->ioctl_64bit = 1;
+		req->flags.ioctl_64bit = 1;
 	}
 
 	if (req->se->op.ioctl)
@@ -2470,7 +2469,7 @@ static void _do_copy_file_range_64(fuse_req_t req, const fuse_ino_t nodeid_in,
 				   const void *op_in, const void *in_payload)
 {
 	(void) in_payload;
-	req->is_copy_file_range_64 = 1;
+	req->flags.is_copy_file_range_64 = 1;
 	/* Limit size on 32bit userspace to avoid conversion overflow */
 	if (sizeof(size_t) == 4)
 		_do_copy_file_range(req, nodeid_in, op_in, NULL);
@@ -3368,7 +3367,7 @@ int fuse_req_interrupted(fuse_req_t req)
 
 bool fuse_req_is_uring(fuse_req_t req)
 {
-	return req->is_uring;
+	return req->flags.is_uring;
 }
 
 #ifndef HAVE_URING

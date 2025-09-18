@@ -38,9 +38,11 @@ struct fuse_req {
 	struct fuse_ctx ctx;
 	struct fuse_chan *ch;
 	int interrupted;
-	unsigned int ioctl_64bit : 1;
-	unsigned int is_uring : 1;
-	unsigned int is_copy_file_range_64 : 1;
+	struct {
+		unsigned int ioctl_64bit : 1;
+		unsigned int is_uring : 1;
+		unsigned int is_copy_file_range_64 : 1;
+	} flags;
 	union {
 		struct {
 			uint64_t unique;
@@ -218,6 +220,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count);
 void fuse_free_req(fuse_req_t req);
+void list_init_req(struct fuse_req *req);
 
 void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
 			 const void *req_header, const void *req_payload);
