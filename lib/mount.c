@@ -361,7 +361,7 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 
 	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
 	if(res == -1) {
-		fuse_log(FUSE_LOG_ERR, "Setting up auto-unmountsocketpair() failed",
+		fuse_log(FUSE_LOG_ERR, "Setting up auto-unmount socketpair() failed: %s\n",
 			 strerror(errno));
 		return -1;
 	}

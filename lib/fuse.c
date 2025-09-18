@@ -2122,10 +2122,10 @@ int fuse_fs_utimens(struct fuse_fs *fs, const char *path,
 	if (fs->debug) {
 		char buf[10];
 
-		fuse_log(FUSE_LOG_DEBUG, "utimens[%s] %s %li.%09lu %li.%09lu\n",
-			file_info_string(fi, buf, sizeof(buf)),
-			path, tv[0].tv_sec, tv[0].tv_nsec,
-			tv[1].tv_sec, tv[1].tv_nsec);
+		fuse_log(FUSE_LOG_DEBUG, "utimens[%s] %s %jd.%09ld %jd.%09ld\n",
+			 file_info_string(fi, buf, sizeof(buf)),
+			 path, (intmax_t)tv[0].tv_sec, tv[0].tv_nsec,
+			 (intmax_t)tv[1].tv_sec, tv[1].tv_nsec);
 	}
 	return fs->op.utimens(path, tv, fi);
 }
