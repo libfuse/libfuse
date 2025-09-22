@@ -2799,7 +2799,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	se->conn.time_gran = 1;
 
-	se->got_init = 1;
 	if (se->op.init) {
 		// Apply the first 32 bits of capable_ext to capable
 		se->conn.capable = fuse_lower_32_bits(se->conn.capable_ext);
@@ -2970,6 +2969,13 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		}
 	}
 
+	/*
+	 * Has to be set before replying, as new kernel requests might
+	 * immediately arrive and got_init is used for op-code sanity.
+	 * Especially with external handlers, where we have no control
+	 * over the thread scheduling.
+	 */
+	se->got_init = 1;
 	send_reply_ok(req, &outarg, outargsize);
 	if (enable_io_uring)
 		fuse_uring_wake_ring_threads(se);
