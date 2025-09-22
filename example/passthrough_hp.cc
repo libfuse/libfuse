@@ -1354,6 +1354,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper) {
     sfs_oper.listxattr = sfs_listxattr;
     sfs_oper.removexattr = sfs_removexattr;
 #endif
+    sfs_oper.compound = nullptr;
 }
 
 static void print_usage(char *prog_name) {
@@ -1578,7 +1579,7 @@ int main(int argc, char *argv[]) {
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 
     fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
-	
+
     if (fuse_session_mount(se, argv[2]) != 0)
         goto err_out3;
 
@@ -1608,4 +1609,3 @@ err_out1:
 
     return ret ? 1 : 0;
 }
-

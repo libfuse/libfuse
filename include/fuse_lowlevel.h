@@ -23,6 +23,7 @@
 #endif
 
 #include "fuse_common.h"
+#include "fuse_kernel.h"
 
 #include <stddef.h>
 #include <utime.h>
@@ -1377,6 +1378,19 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*dlm_lock) (fuse_req_t req, fuse_ino_t ino, uint64_t start, uint64_t end,
 			uint32_t type, struct fuse_file_info *fi);
+
+	/**
+	 * Process a compound request containing multiple operations
+	 *
+	 * The filesystem implementation must parse the raw payload data to
+	 * handle the operations.
+	 *
+	 * @param req request handle
+	 * @param count number of operations in the compound request
+	 * @param flags flags for the compound request
+	 * @param arg raw payload data
+	 */
+	void (*compound) (fuse_req_t req, uint32_t count, uint32_t flags, const void* arg);
 };
 
 /**
@@ -1649,6 +1663,25 @@ int fuse_reply_dlm_lock(fuse_req_t req, uint64_t start, uint64_t end);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
+
+/**
+ * Reply with compound operation results
+ *
+ * Possible requests:
+ *   compound
+ *
+ * @param req request handle
+ * @param count number of results
+ * @param results array of compound results
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_compound(fuse_req_t req, uint32_t count,
+			const void *results, size_t results_size);
+int fuse_compound_prepare_result(fuse_req_t req, int error, const void *arg,
+			size_t argsize);
+void fuse_compound_set_error(fuse_req_t req, int error);
+void fuse_compound_start(fuse_req_t req);
+void fuse_compound_end(fuse_req_t req);
 
 /* ----------------------------------------------------------- *
  * Filling a buffer in readdir				       *
