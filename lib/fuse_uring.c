@@ -1523,8 +1523,9 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	/* dropped by the commit of the reply */
 	fuse_uring_queue_get(queue);
 
-	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
-				       ent->op_payload, ent_in_out->payload_sz);
+	fuse_session_process_uring_cqe(fuse_ring->se, queue->qid, req, in,
+				       &rrh->op_in, ent->op_payload,
+				       ent_in_out->payload_sz);
 }
 
 static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
