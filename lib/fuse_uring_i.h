@@ -22,7 +22,7 @@
 #define SESSION_DEF_URING_ENABLE (0)
 #define SESSION_DEF_URING_Q_DEPTH (8)
 
-void fuse_session_process_uring_cqe(struct fuse_session *se,
+void fuse_session_process_uring_cqe(struct fuse_session *se, int qid,
 				    struct fuse_req *req,
 				    struct fuse_in_header *in, void *in_header,
 				    void *in_payload, size_t payload_len);

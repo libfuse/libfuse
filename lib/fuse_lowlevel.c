@@ -3753,7 +3753,7 @@ clear_pipe:
 	goto out_free;
 }
 
-void fuse_session_process_uring_cqe(struct fuse_session *se,
+void fuse_session_process_uring_cqe(struct fuse_session *se, int qid,
 				    struct fuse_req *req,
 				    struct fuse_in_header *in, void *op_in,
 				    void *op_payload, size_t payload_len)
@@ -3777,8 +3777,8 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	if (se->debug) {
 		fuse_log(
 			FUSE_LOG_DEBUG,
-			"cqe unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
-			(unsigned long long)in->unique,
+			"cqe unique: %llu, qid=%d, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			(unsigned long long)in->unique, qid,
 			opname((enum fuse_opcode)in->opcode), in->opcode,
 			(unsigned long long)in->nodeid, payload_len, in->pid);
 	}
