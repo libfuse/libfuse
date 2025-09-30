@@ -145,9 +145,8 @@ static int fusermount_posix_spawn(posix_spawn_file_actions_t *action,
 	}
 
 	if (status != 0) {
-		fuse_log(FUSE_LOG_ERR,
-			 "On calling fusermount posix_spawn failed: %s\n",
-			 strerror(status));
+		fuse_log(FUSE_LOG_ERR, "Failed to call '%s': %s\n",
+			 FUSERMOUNT_PROG, strerror(status));
 		return -status;
 	}
 
