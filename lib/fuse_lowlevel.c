@@ -2704,6 +2704,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outarg.flags |= FUSE_MAX_PAGES;
 		outarg.max_pages = (se->conn.max_write - 1) / getpagesize() + 1;
 	}
+
 	outargflags = outarg.flags;
 	/* Always enable big writes, this is superseded
 	   by the max_write option */
@@ -2765,6 +2766,11 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	if (se->conn.want_ext & FUSE_CAP_EXPIRE_INODE_ENTRY)
 		outargflags |= FUSE_EXPIRE_INODE_ENTRY;
 
+	if (se->conn.align_page_order) {
+		outargflags |= FUSE_ALIGN_PG_ORDER;
+		outarg.align_page_order = se->conn.align_page_order;
+	}
+
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
 		outarg.flags2 = outargflags >> 32;
@@ -2805,6 +2811,9 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		if (se->conn.want_ext & FUSE_CAP_PASSTHROUGH)
 			fuse_log(FUSE_LOG_DEBUG, "   max_stack_depth=%u\n",
 				outarg.max_stack_depth);
+		if ((outargflags & FUSE_ALIGN_PG_ORDER) && outarg.align_page_order)
+			fuse_log(FUSE_LOG_DEBUG, "   align_page_mask=0x%08x\n",
+				1 << outarg.align_page_order);
 	}
 	if (arg->minor < 5)
 		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;

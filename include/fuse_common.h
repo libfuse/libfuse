@@ -720,9 +720,17 @@ struct fuse_conn_info {
 	uint64_t want_ext;
 
 	/**
+	 * page order (power of 2 exponent for number of pages) for
+	 * optimal io-size alignment
+	 */
+	uint8_t align_page_order;
+
+	uint8_t padding_uint8_to_64[7];
+
+	/**
 	 * For future use.
 	 */
-	uint32_t reserved[16];
+	uint32_t reserved[14];
 };
 fuse_static_assert(sizeof(struct fuse_conn_info) == 128,
 		   "Size of struct fuse_conn_info must be 128 bytes");

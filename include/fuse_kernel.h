@@ -486,6 +486,8 @@ struct fuse_file_lock {
 #define FUSE_INVAL_INODE_ENTRY  (1ULL << 60)
 #define FUSE_EXPIRE_INODE_ENTRY (1ULL << 61)
 
+#define FUSE_ALIGN_PG_ORDER	(1ULL << 50)
+
 /**
  * CUSE INIT request/reply flags
  *
@@ -915,7 +917,9 @@ struct fuse_init_out {
 	uint16_t	map_alignment;
 	uint32_t	flags2;
 	uint32_t	max_stack_depth;
-	uint32_t	unused[6];
+	uint8_t		align_page_order;
+	uint8_t		padding[3];
+	uint32_t	unused[5];
 };
 
 #define CUSE_INIT_INFO_MAX 4096
