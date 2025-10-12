@@ -453,7 +453,7 @@ struct fuse_lowlevel_ops {
 	 *
 	 * If this request is answered with an error code of ENOSYS, this is
 	 * treated as a permanent failure with error code EINVAL, i.e. all
-	 * future bmap requests will fail with EINVAL without being
+	 * future rename requests will fail with EINVAL without being
 	 * send to the filesystem process.
 	 *
 	 * *flags* may be `RENAME_EXCHANGE` or `RENAME_NOREPLACE`. If
