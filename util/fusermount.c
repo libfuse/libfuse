@@ -40,6 +40,12 @@
 #include <linux/close_range.h>
 #endif
 
+#if defined HAVE_LISTMOUNT
+#include <linux/mount.h>
+#include <syscall.h>
+#include <stdint.h>
+#endif
+
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 #define FUSE_KERN_DEVICE_ENV	"FUSE_KERN_DEVICE"
 
@@ -566,8 +572,47 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
 	return res;
 }
 
+
+#ifdef HAVE_LISTMOUNT
 static int count_fuse_fs(void)
 {
+	struct mnt_id_req req = {
+		.size = sizeof(struct mnt_id_req),
+		.mnt_id = LSMT_ROOT,
+	};
+	uint64_t mnt_ids[256];
+	unsigned char smbuf[1024];
+	int count = 0;
+
+	int n = syscall(SYS_listmount, &req, &mnt_ids, 256, 0);
+	if (n == -1) {
+		fprintf(stderr, "%s: failed to list mounts: %s\n", progname, strerror(errno));
+		return -1;
+	}
+
+	for (int i=0; i<n; i++) {
+		req.mnt_id = mnt_ids[i];
+		req.param = STATMOUNT_FS_TYPE;
+		int ret = syscall(SYS_statmount, &req, &smbuf, 1024, 0);
+		if (ret) {
+			if (errno == ENOENT) {
+				continue;
+			}
+			fprintf(stderr, "%s: failed to stat mount %lld: %s\n", progname, req.mnt_id, strerror(errno));
+			return -1;
+		}
+
+		struct statmount *sm = (struct statmount *)smbuf;
+		if (sm->mask & STATMOUNT_FS_TYPE && strcmp(&sm->str[sm->fs_type], "fuse") > 0) {
+			count ++;
+		}
+	}
+	return count;
+}
+#else
+static int count_fuse_fs(void)
+{
+
 	struct mntent *entp;
 	int count = 0;
 	const char *mtab = _PATH_MOUNTED;
@@ -585,7 +630,7 @@ static int count_fuse_fs(void)
 	endmntent(fp);
 	return count;
 }
-
+#endif
 
 #else /* IGNORE_MTAB */
 static int count_fuse_fs(void)
