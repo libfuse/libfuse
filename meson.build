@@ -99,6 +99,25 @@ special_funcs = {
             unsigned int flags = CLOSE_RANGE_UNSHARE;
             return close_range(3, ~0U, flags);
         }
+    ''',
+    'listmount': '''
+	#include <syscall.h>
+	#include <linux/mount.h>
+	#include <unistd.h>
+	#include <stdint.h>
+
+	int main(int argc, char *argv[]) {
+	  struct mnt_id_req req = {
+	    .size = sizeof(struct mnt_id_req),
+		  .mnt_id = LSMT_ROOT,
+	  };
+	  uint64_t mnt_ids[1];
+
+	  int n = syscall(SYS_listmount, &req, &mnt_ids, 1, 0);
+	  if (n == -1) {
+	    return -1;
+	  }
+	}
     '''
 }
 
