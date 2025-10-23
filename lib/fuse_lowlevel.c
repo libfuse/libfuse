@@ -2775,13 +2775,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outarg.align_page_order = se->conn.align_page_order;
 	}
 
-	if (inargflags & FUSE_INIT_EXT) {
-		outargflags |= FUSE_INIT_EXT;
-		outarg.flags2 = outargflags >> 32;
-	}
-
-	outarg.flags = outargflags;
-
 	if (inargflags & FUSE_URING_REDUCED_Q) {
 		outargflags |= FUSE_URING_REDUCED_Q;
 	}
@@ -2830,6 +2823,12 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
 
 
+
+	if (inargflags & FUSE_INIT_EXT) {
+		outargflags |= FUSE_INIT_EXT;
+		outarg.flags2 = outargflags >> 32;
+	}
+	outarg.flags = outargflags;
 
 	send_reply_ok(req, &outarg, outargsize);
 
