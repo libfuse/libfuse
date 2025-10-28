@@ -67,6 +67,8 @@ struct fuse_session_uring {
 	unsigned int q_depth;
 	struct fuse_ring_pool *pool;
 
+	unsigned int reduced_queues : 1;
+
 	/* external payload buffer allocator */
 	void *(*alloc_payload)(size_t size, void **key);
 	void (*free_payload_buf)(void *buf, size_t size, void *key);

@@ -2590,6 +2590,10 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 			se->conn.capable_ext |= FUSE_CAP_INVAL_INODE_ENTRY;
 		if (inargflags & FUSE_EXPIRE_INODE_ENTRY)
 			se->conn.capable_ext |= FUSE_CAP_EXPIRE_INODE_ENTRY;
+		if (inargflags & FUSE_URING_REDUCED_Q) {
+			se->conn.capable_ext |= FUSE_CAP_REDUCED_RING_QUEUES;
+			se->uring.reduced_queues = 1;
+		}
 
 	} else {
 		se->conn.max_readahead = 0;
@@ -2771,12 +2775,10 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outarg.align_page_order = se->conn.align_page_order;
 	}
 
-	if (inargflags & FUSE_INIT_EXT) {
-		outargflags |= FUSE_INIT_EXT;
-		outarg.flags2 = outargflags >> 32;
+	if (inargflags & FUSE_URING_REDUCED_Q) {
+		outargflags |= FUSE_URING_REDUCED_Q;
 	}
 
-	outarg.flags = outargflags;
 
 	outarg.max_readahead = se->conn.max_readahead;
 	outarg.max_write = se->conn.max_write;
@@ -2821,6 +2823,12 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outargsize = FUSE_COMPAT_22_INIT_OUT_SIZE;
 
 
+
+	if (inargflags & FUSE_INIT_EXT) {
+		outargflags |= FUSE_INIT_EXT;
+		outarg.flags2 = outargflags >> 32;
+	}
+	outarg.flags = outargflags;
 
 	send_reply_ok(req, &outarg, outargsize);
 

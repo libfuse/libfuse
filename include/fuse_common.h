@@ -516,10 +516,15 @@ struct fuse_loop_config_v1 {
  */
 #define FUSE_CAP_NO_EXPORT_SUPPORT (1 << 30)
 
-	/**
-	 * Indicates support for io-uring between fuse-server and fuse-client
-	 */
+/**
+ * Indicates support for io-uring between fuse-server and fuse-client
+ */
 #define FUSE_CAP_OVER_IO_URING (1ULL << 31)
+
+/**
+ * Indicates kernel io-uring supports reduced ring queues
+ */
+#define FUSE_CAP_REDUCED_RING_QUEUES (1ULL << 59)
 
 /**
  * invalidate inode aliases when doing inode invalidation
