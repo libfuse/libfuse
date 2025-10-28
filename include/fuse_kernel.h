@@ -486,7 +486,8 @@ struct fuse_file_lock {
 #define FUSE_INVAL_INODE_ENTRY  (1ULL << 60)
 #define FUSE_EXPIRE_INODE_ENTRY (1ULL << 61)
 
-#define FUSE_ALIGN_PG_ORDER	(1ULL << 50)
+#define FUSE_ALIGN_PG_ORDER (1ULL << 50)
+#define FUSE_URING_REDUCED_Q (1ULL << 59)
 
 /**
  * CUSE INIT request/reply flags

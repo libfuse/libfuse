@@ -2590,6 +2590,10 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 			se->conn.capable_ext |= FUSE_CAP_INVAL_INODE_ENTRY;
 		if (inargflags & FUSE_EXPIRE_INODE_ENTRY)
 			se->conn.capable_ext |= FUSE_CAP_EXPIRE_INODE_ENTRY;
+		if (inargflags & FUSE_URING_REDUCED_Q) {
+			se->conn.capable_ext |= FUSE_CAP_REDUCED_RING_QUEUES;
+			se->uring.reduced_queues = 1;
+		}
 
 	} else {
 		se->conn.max_readahead = 0;
@@ -2777,6 +2781,11 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 
 	outarg.flags = outargflags;
+
+	if (inargflags & FUSE_URING_REDUCED_Q) {
+		outargflags |= FUSE_URING_REDUCED_Q;
+	}
+
 
 	outarg.max_readahead = se->conn.max_readahead;
 	outarg.max_write = se->conn.max_write;
