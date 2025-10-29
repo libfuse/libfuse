@@ -1,0 +1,5 @@
+Under normal operation, a call to any fuse_reply_* function should not result
+in an error.
+
+Should the kernel abort the fuse connection, a fuse_reply_* call can return
+-ENOENT.

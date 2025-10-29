@@ -197,6 +197,11 @@ enum fuse_notify_entry_flags {
  * `fuse_session_new()`. In this case, methods will only be called if
  * the kernel's permission check has succeeded.
  *
+ * It is generally not really necessary to check the fuse_reply_* return
+ * values for errors, as any error in sending a reply indicates an
+ * unrecoverable problem with the kernel fuse connection, which will also
+ * terminate the session loop anyway.
+ *
  * This data structure is ABI sensitive, on adding new functions these need to
  * be appended at the end of the struct
  */
