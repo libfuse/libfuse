@@ -197,12 +197,6 @@ enum fuse_notify_entry_flags {
  * `fuse_session_new()`. In this case, methods will only be called if
  * the kernel's permission check has succeeded.
  *
- * The filesystem sometimes needs to handle a return value of -ENOENT
- * from the reply function, which means, that the request was
- * interrupted, and the reply discarded.  For example if
- * fuse_reply_open() return -ENOENT means, that the release method for
- * this file will not be called.
- *
  * This data structure is ABI sensitive, on adding new functions these need to
  * be appended at the end of the struct
  */
