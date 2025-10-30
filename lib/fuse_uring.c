@@ -370,6 +370,8 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 		return rc;
 	}
 
+	io_uring_register_ring_fd(ring);
+
 	return 0;
 }
 
@@ -398,8 +400,11 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			queue->eventfd = -1;
 		}
 
-		if (queue->ring.ring_fd != -1)
+
+		if (queue->ring.ring_fd != -1) {
+			io_uring_unregister_ring_fd(&queue->ring);
 			io_uring_queue_exit(&queue->ring);
+		}
 
 		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
