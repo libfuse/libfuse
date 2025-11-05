@@ -1,5 +1,5 @@
 List of libfuse operations with their in/out arguments, created with
-help of chatgpt. As of kernel 6.9 (protocol 7.40). The list
+help of chatgpt. As of kernel 6.18 (protocol 7.45). The list
 was only partly human verified - use with care.
 
 1. FUSE_LOOKUP (1)
@@ -125,7 +125,7 @@ was only partly human verified - use with care.
     - out_args[2]: Not used
 
 17. FUSE_STATFS (17)
-    - in_args[0]: Size of fuse_statfs_in (16 bytes)
+    - in_args[0]: Not used
     - in_args[1]: Not used
     - in_args[2]: Not used
     - out_args[0]: Size of fuse_statfs_out (typically 96 bytes)
@@ -368,7 +368,7 @@ was only partly human verified - use with care.
     - out_args[2]: Not used
 
 47. FUSE_COPY_FILE_RANGE (47)
-    - in_args[0]: Size of fuse_copy_file_range_in (48 bytes)
+    - in_args[0]: Size of fuse_copy_file_range_in (56 bytes)
     - in_args[1]: Not used
     - in_args[2]: Not used
     - out_args[0]: Size of fuse_write_out (24 bytes)
@@ -414,5 +414,13 @@ was only partly human verified - use with care.
     - in_args[1]: Not used
     - in_args[2]: Not used
     - out_args[0]: Size of fuse_statx_out (typically 256 bytes)
+    - out_args[1]: Not used
+    - out_args[2]: Not used
+
+53. FUSE_COPY_FILE_RANGE_64 (53)
+    - in_args[0]: Size of fuse_copy_file_range_in (56 bytes)
+    - in_args[1]: Not used
+    - in_args[2]: Not used
+    - out_args[0]: Size of fuse_copy_file_range_out (8 bytes)
     - out_args[1]: Not used
     - out_args[2]: Not used
