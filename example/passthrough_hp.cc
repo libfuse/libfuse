@@ -239,6 +239,10 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 
 	/* Try a large IO by default */
 	conn->max_write = 4 * 1024 * 1024;
+
+	if (!fs.foreground)
+		fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS,
+				       LOG_DAEMON);
 }
 
 static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
@@ -1574,6 +1578,90 @@ static void maximize_fd_limit()
 		warn("WARNING: setrlimit() failed with");
 }
 
+static void redirect_to_syslog(int fd, int priority)
+{
+	int pipefd[2];
+	if (pipe(pipefd) == -1) {
+		perror("pipe");
+		return;
+	}
+
+	pid_t pid = fork();
+	if (pid == -1) {
+		perror("fork");
+		return;
+	}
+
+	if (pid == 0) {
+		// Child: read from pipe and write to syslog
+		close(pipefd[1]);
+
+		char buffer[1024];
+		ssize_t n;
+		while ((n = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
+			buffer[n] = '\0';
+			syslog(priority, "%s", buffer);
+		}
+		close(pipefd[0]);
+		_exit(0);
+	} else {
+		// Parent: redirect fd to pipe write end
+		close(pipefd[0]);
+		dup2(pipefd[1], fd);
+		close(pipefd[1]);
+	}
+}
+
+/* allow to redirect to syslog, to get ASAN/UBSAN and other library output */
+static int sfs_daemonize(int foreground)
+{
+	if (!foreground) {
+		int waiter[2];
+		char completed;
+
+		if (pipe(waiter)) {
+			perror("sfs_daemonize: pipe");
+			return -1;
+		}
+
+		switch (fork()) {
+		case -1:
+			perror("sfs_daemonize: fork");
+			return -1;
+		case 0:
+			break;
+		default:
+			(void)read(waiter[0], &completed, sizeof(completed));
+			_exit(0);
+		}
+
+		if (setsid() == -1) {
+			perror("sfs_daemonize: setsid");
+			return -1;
+		}
+
+		(void)chdir("/");
+
+		// Redirect stdin to /dev/null
+		int nullfd = open("/dev/null", O_RDWR, 0);
+		if (nullfd != -1) {
+			(void)dup2(nullfd, 0);
+			if (nullfd > 2)
+				close(nullfd);
+		}
+
+		// Setup syslog and redirect stdout/stderr
+		openlog("passthrough-hp", LOG_PID | LOG_CONS, LOG_DAEMON);
+		redirect_to_syslog(1, LOG_INFO); // stdout
+		redirect_to_syslog(2, LOG_ERR); // stderr
+
+		(void)write(waiter[1], &completed, sizeof(completed));
+		close(waiter[0]);
+		close(waiter[1]);
+	}
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_loop_config *loop_config = NULL;
@@ -1638,11 +1726,7 @@ int main(int argc, char *argv[])
 	if (fuse_session_mount(se, argv[2]) != 0)
 		goto err_out3;
 
-	fuse_daemonize(fs.foreground);
-
-	if (!fs.foreground)
-		fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS,
-				       LOG_DAEMON);
+	sfs_daemonize(fs.foreground);
 
 	if (options.count("single"))
 		ret = fuse_session_loop(se);
