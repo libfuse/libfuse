@@ -50,6 +50,8 @@ def wait_for_mount(mount_process, mnt_dir,
         if test_fn(mnt_dir):
             return True
         if mount_process.poll() is not None:
+            if test_fn(mnt_dir):
+                return True
             pytest.fail('file system process terminated prematurely')
         time.sleep(0.1)
         elapsed += 0.1
