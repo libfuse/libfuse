@@ -513,6 +513,11 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_OVER_IO_URING (1UL << 31)
 
 /**
+ * invalidate inode aliases when doing inode invalidation
+ */
+#define FUSE_CAP_INVAL_INODE_ENTRY (1ULL << 32)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
