@@ -2659,7 +2659,7 @@ static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 			    const char *name)
 {
 	struct fuse *f = req_fuse_prepare(req);
-	struct fuse_entry_param e;
+	struct fuse_entry_param e = { .ino = 0 }; /* invalid ino */
 	char *path;
 	int err;
 	struct node *dot = NULL;
