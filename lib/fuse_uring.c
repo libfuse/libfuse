@@ -899,12 +899,6 @@ int fuse_uring_start(struct fuse_session *se)
 	}
 
 	se->uring.pool = fuse_ring;
-
-	/* Hold off threads from send fuse ring entries (SQEs) */
-	sem_init(&fuse_ring->init_sem, 0, 0);
-	pthread_cond_init(&fuse_ring->thread_start_cond, NULL);
-	pthread_mutex_init(&fuse_ring->thread_start_mutex, NULL);
-
 	err = fuse_uring_start_ring_threads(fuse_ring);
 	if (err)
 		goto err;
