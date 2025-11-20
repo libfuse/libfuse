@@ -29,6 +29,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 
 #include "fuse_mount_compat.h"
 
@@ -502,8 +503,8 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 #define O_CLOEXEC 0
 #endif
 
-static int fuse_kern_mount_prepare(const char *mnt,
-				   struct mount_opts *mo)
+int fuse_kern_mount_prepare(const char *mnt,
+			    struct mount_opts *mo)
 {
 	char tmp[128];
 	const char *devname = getenv(FUSE_KERN_DEVICE_ENV) ?: "/dev/fuse";
@@ -561,7 +562,7 @@ out_close:
  *
  * Returns: 0 on success, -1 on failure, -2 if fusermount should be used
  */
-static int fuse_kern_mount_finish(const char *mnt, struct mount_opts *mo,
+int fuse_kern_mount_finish(const char *mnt, struct mount_opts *mo,
 				  const char *mnt_opts)
 {
 	const char *devname = getenv(FUSE_KERN_DEVICE_ENV) ?: "/dev/fuse";
@@ -717,7 +718,7 @@ void destroy_mount_opts(struct mount_opts *mo)
 	free(mo);
 }
 
-static int fuse_kern_mount_get_base_mnt_opts(struct mount_opts *mo,
+int fuse_kern_mount_get_base_mnt_opts(struct mount_opts *mo,
 					     char **mnt_optsp)
 {
 	if (get_mnt_flag_opts(mnt_optsp, mo->flags) == -1)
