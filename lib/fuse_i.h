@@ -108,6 +108,10 @@ struct fuse_session {
 	/* true if reading requests from /dev/fuse are handled internally */
 	bool buf_reallocable;
 
+	/* synchronous FUSE_INIT support */
+	pthread_t init_thread;
+	int init_error;
+
 	/* io_uring */
 	struct fuse_session_uring uring;
 
@@ -215,7 +219,11 @@ void destroy_mount_opts(struct mount_opts *mo);
 void fuse_mount_version(void);
 unsigned get_max_read(struct mount_opts *o);
 void fuse_kern_unmount(const char *mountpoint, int fd);
+int fuse_kern_mount_get_base_mnt_opts(struct mount_opts *mo, char **mnt_optsp);
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
+int fuse_kern_mount_prepare(const char *mountpoint, struct mount_opts *mo);
+int fuse_kern_mount_finish(const char *mountpoint, struct mount_opts *mo,
+			   const char *mnt_opts);
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count);
