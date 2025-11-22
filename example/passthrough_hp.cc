@@ -130,7 +130,7 @@ struct Inode {
 	int generation{ 0 };
 	int backing_id{ 0 };
 	uint64_t nopen{ 0 };
-	uint64_t nlookup{ 0 };
+	uint64_t nlookup{ 0 }; // protected by fs mutex
 	std::mutex m;
 
 	// Delete copy constructor and assignments. We could implement
@@ -411,12 +411,10 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 	}
 
 	if (inode.fd > 0) { // found existing inode
-		fs_lock.unlock();
 		if (fs.debug)
 			cerr << "DEBUG: lookup(): inode " << e->attr.st_ino
 			     << " (userspace) already known; fd = " << inode.fd
 			     << endl;
-		lock_guard<mutex> g{ inode.m };
 
 		inode.nlookup++;
 		if (fs.debug)
@@ -424,6 +422,7 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 			     << "inode " << inode.src_ino << " count "
 			     << inode.nlookup << endl;
 
+		fs_lock.unlock();
 		close(newfd);
 	} else { // no existing inode
 		/* This is just here to make Helgrind happy. It violates the
@@ -549,6 +548,7 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	e.ino = reinterpret_cast<fuse_ino_t>(&inode);
 	{
 		lock_guard<mutex> g{ inode.m };
+		lock_guard<mutex> g_fs{ fs.mutex };
 		inode.nlookup++;
 		if (fs.debug)
 			cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
@@ -622,6 +622,7 @@ static void forget_one(fuse_ino_t ino, uint64_t n)
 {
 	Inode &inode = get_inode(ino);
 	unique_lock<mutex> l{ inode.m };
+	lock_guard<mutex> g_fs{ fs.mutex };
 
 	if (n > inode.nlookup) {
 		cerr << "INTERNAL ERROR: Negative lookup count for inode "
@@ -640,7 +641,6 @@ static void forget_one(fuse_ino_t ino, uint64_t n)
 			cerr << "DEBUG: forget: cleaning up inode "
 			     << inode.src_ino << endl;
 		{
-			lock_guard<mutex> g_fs{ fs.mutex };
 			l.unlock();
 			fs.inodes.erase({ inode.src_ino, inode.src_dev });
 		}
