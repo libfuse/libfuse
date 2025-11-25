@@ -620,6 +620,7 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void forget_one(fuse_ino_t ino, uint64_t n)
 {
 	Inode &inode = get_inode(ino);
+	unique_lock<mutex> l{ inode.m };
 
 	if (n > inode.nlookup) {
 		cerr << "INTERNAL ERROR: Negative lookup count for inode "
@@ -635,6 +636,7 @@ static void forget_one(fuse_ino_t ino, uint64_t n)
 
 	if (!inode.nlookup) {
 		lock_guard<mutex> g_fs{ fs.mutex };
+		l.unlock();
 		if (!inode.nlookup) {
 			cerr << "DEBUG: forget: cleaning up inode "
 				<< inode.src_ino << endl;
