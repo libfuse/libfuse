@@ -638,8 +638,9 @@ static void forget_one(fuse_ino_t ino, uint64_t n)
 		lock_guard<mutex> g_fs{ fs.mutex };
 		l.unlock();
 		if (!inode.nlookup) {
-			cerr << "DEBUG: forget: cleaning up inode "
-				<< inode.src_ino << endl;
+			if (fs.debug)
+				cerr << "DEBUG: forget: cleaning up inode "
+				     << inode.src_ino << endl;
 			fs.inodes.erase({ inode.src_ino, inode.src_dev });
 		}
 	} else if (fs.debug)
