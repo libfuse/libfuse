@@ -27,6 +27,11 @@ from util import (wait_for_mount, umount, cleanup, base_cmdline,
                   fuse_proto, fuse_caps, powerset, parse_kernel_version)
 from os.path import join as pjoin
 import logging
+from enum import Enum
+
+class InodeCheck(Enum):
+    EXACT = 1
+    NONZERO = 2
 
 pytestmark = fuse_test_marker()
 
@@ -138,7 +143,7 @@ def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
 
 @pytest.mark.parametrize("writeback", (False, True))
 @pytest.mark.parametrize("name", ('passthrough', 'passthrough_plus',
-                           'passthrough_fh', 'passthrough_ll'))
+                           'passthrough_fh', 'passthrough_ll', 'passthrough_zero_ino'))
 @pytest.mark.parametrize("debug", (False, True))
 def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
     # Avoid false positives from libfuse debug messages
@@ -153,10 +158,16 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
     mnt_dir = str(short_tmpdir.mkdir('mnt'))
     src_dir = str(short_tmpdir.mkdir('src'))
 
+    inode_check = InodeCheck.EXACT
     if name == 'passthrough_plus':
         cmdline = base_cmdline + \
                   [ pjoin(basename, 'example', 'passthrough'),
                     '--plus', '-f', mnt_dir ]
+    elif name == 'passthrough_zero_ino':
+        cmdline = base_cmdline + \
+                  [ pjoin(basename, 'example', 'passthrough'),
+                    '--plus', '--readdir-zero-inodes', '-f', mnt_dir ]
+        inode_check = InodeCheck.NONZERO
     elif name == 'passthrough_ll':
         cmdline = base_cmdline + \
                   [ pjoin(basename, 'example', name),
@@ -189,12 +200,12 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
         work_dir = mnt_dir + src_dir
 
         tst_statvfs(work_dir)
-        tst_readdir(src_dir, work_dir)
-        tst_readdir_big(src_dir, work_dir)
+        tst_readdir(src_dir, work_dir, inode_check)
+        tst_readdir_big(src_dir, work_dir, inode_check)
         tst_open_read(src_dir, work_dir)
         tst_open_write(src_dir, work_dir)
         tst_create(work_dir)
-        tst_passthrough(src_dir, work_dir)
+        tst_passthrough(src_dir, work_dir, inode_check)
         tst_append(src_dir, work_dir)
         tst_seek(src_dir, work_dir)
         tst_mkdir(work_dir)
@@ -207,7 +218,8 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
         # Underlying fs may not have full nanosecond resolution
         tst_utimens(work_dir, ns_tol=1000)
 
-        tst_link(work_dir)
+        if inode_check == InodeCheck.EXACT:
+            tst_link(work_dir)
         tst_truncate_path(work_dir)
         tst_truncate_fd(work_dir)
         tst_open_unlink(work_dir)
@@ -757,7 +769,17 @@ def tst_link(mnt_dir):
 
     os.unlink(name1)
 
-def tst_readdir(src_dir, mnt_dir):
+def tst_inodes_nonzero(lines):
+    inode_nums = [int(line.split()[0]) for line in lines]
+    assert all(i != 0 for i in inode_nums), inode_nums
+
+def tst_inode(inode_check, actual, expected):
+    if inode_check == InodeCheck.EXACT:
+        assert expected == actual
+    elif inode_check == InodeCheck.NONZERO:
+        assert actual != 0
+
+def tst_readdir(src_dir, mnt_dir, inode_check=InodeCheck.EXACT):
     newdir = name_generator()
 
     src_newdir = pjoin(src_dir, newdir)
@@ -778,16 +800,18 @@ def tst_readdir(src_dir, mnt_dir):
     assert listdir_is == listdir_should
 
     inodes_is = readdir_inode(mnt_newdir)
-    inodes_should = readdir_inode(src_newdir)
-    assert inodes_is == inodes_should
+    if inode_check == InodeCheck.EXACT:
+        inodes_should = readdir_inode(src_newdir)
+        assert inodes_is == inodes_should
+    elif inode_check == InodeCheck.NONZERO:
+        tst_inodes_nonzero(inodes_is)
 
     os.unlink(file_)
     os.unlink(subfile)
     os.rmdir(subdir)
     os.rmdir(src_newdir)
 
-def tst_readdir_big(src_dir, mnt_dir):
-
+def tst_readdir_big(src_dir, mnt_dir, inode_check=InodeCheck.EXACT):
     # Add enough entries so that readdir needs to be called
     # multiple times.
     fnames = []
@@ -803,13 +827,17 @@ def tst_readdir_big(src_dir, mnt_dir):
     assert listdir_is == listdir_should
 
     inodes_is = readdir_inode(mnt_dir)
-    inodes_should = readdir_inode(src_dir)
-    assert inodes_is == inodes_should
+    if inode_check == InodeCheck.EXACT:
+        inodes_should = readdir_inode(src_dir)
+        assert inodes_is == inodes_should
+    elif inode_check == InodeCheck.NONZERO:
+        tst_inodes_nonzero(inodes_is)
 
     for fname in fnames:
+        # A comment just to get a diff
         stat_src = os.stat(pjoin(src_dir, fname))
         stat_mnt = os.stat(pjoin(mnt_dir, fname))
-        assert stat_src.st_ino == stat_mnt.st_ino
+        tst_inode(inode_check, stat_mnt.st_ino, stat_src.st_ino)
         assert stat_src.st_mtime == stat_mnt.st_mtime
         assert stat_src.st_ctime == stat_mnt.st_ctime
         assert stat_src.st_size == stat_mnt.st_size
@@ -885,7 +913,7 @@ def tst_utimens(mnt_dir, ns_tol=0):
         assert abs(fstat.st_atime_ns - atime_ns) <= ns_tol
         assert abs(fstat.st_mtime_ns - mtime_ns) <= ns_tol
 
-def tst_passthrough(src_dir, mnt_dir):
+def tst_passthrough(src_dir, mnt_dir, inode_check=InodeCheck.EXACT):
     name = name_generator()
     src_name = pjoin(src_dir, name)
     mnt_name = pjoin(mnt_dir, name)
@@ -918,7 +946,7 @@ def tst_passthrough(src_dir, mnt_dir):
     src_stat = os.stat(src_name)
     mnt_stat = os.stat(mnt_name)
     assert src_stat.st_mode == mnt_stat.st_mode
-    assert src_stat.st_ino == mnt_stat.st_ino
+    tst_inode(inode_check, mnt_stat.st_ino, src_stat.st_ino)
     assert src_stat.st_size == mnt_stat.st_size
     assert src_stat.st_mtime == mnt_stat.st_mtime
 
@@ -937,7 +965,7 @@ def tst_passthrough(src_dir, mnt_dir):
     src_stat = os.stat(src_name)
     mnt_stat = os.stat(mnt_name)
     assert src_stat.st_mode == mnt_stat.st_mode
-    assert src_stat.st_ino == mnt_stat.st_ino
+    tst_inode(inode_check, mnt_stat.st_ino, src_stat.st_ino)
     assert src_stat.st_size == mnt_stat.st_size
     assert abs(src_stat.st_mtime - mnt_stat.st_mtime) < 0.01
 
