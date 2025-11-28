@@ -114,9 +114,16 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("async",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("sync",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("dirsync",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("atime",			KEY_KERN_FLAG),
 	FUSE_OPT_KEY("noatime",			KEY_KERN_FLAG),
+	FUSE_OPT_KEY("diratime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nodiratime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("strictatime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nostrictatime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("relatime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("norelatime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("lazytime",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("nolazytime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("symfollow",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nosymfollow",		KEY_KERN_FLAG),
 	FUSE_OPT_END
@@ -185,14 +192,20 @@ static const struct mount_flags mount_flags[] = {
 	{"noexec",  MS_NOEXEC,	    1},
 	{"async",   MS_SYNCHRONOUS, 0},
 	{"sync",    MS_SYNCHRONOUS, 1},
+	{"atime",   MS_NOATIME,	    0},
 	{"noatime", MS_NOATIME,	    1},
+	{"diratime",	    MS_NODIRATIME,	0},
 	{"nodiratime",	    MS_NODIRATIME,	1},
+	{"relatime",	    MS_RELATIME,	1},
 	{"norelatime",	    MS_RELATIME,	0},
+	{"strictatime",	    MS_STRICTATIME,	1},
 	{"nostrictatime",   MS_STRICTATIME,	0},
 	{"symfollow",	    MS_NOSYMFOLLOW,	0},
 	{"nosymfollow",	    MS_NOSYMFOLLOW,	1},
 #ifndef __NetBSD__
 	{"dirsync", MS_DIRSYNC,	    1},
+	{"lazytime",	    MS_LAZYTIME,	1},
+	{"nolazytime",	    MS_LAZYTIME,	0},
 #endif
 	{NULL,	    0,		    0}
 };
