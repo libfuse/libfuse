@@ -60,13 +60,16 @@ enum fuse_readdir_flags {
  */
 enum fuse_fill_dir_flags {
 	/**
-	 * "Plus" mode: all file attributes are valid
+	 * "Plus" mode: file attributes are valid
 	 *
 	 * The attributes are used by the kernel to prefill the inode cache
 	 * during a readdir.
 	 *
 	 * It is okay to set FUSE_FILL_DIR_PLUS if FUSE_READDIR_PLUS is not set
 	 * and vice versa.
+	 *
+	 * This does not make libfuse honor the 'st_ino' field. That is
+	 * controlled by the 'use_ino' option instead.
 	 */
 	FUSE_FILL_DIR_DEFAULTS = 0,
 	FUSE_FILL_DIR_PLUS = (1 << 1)
