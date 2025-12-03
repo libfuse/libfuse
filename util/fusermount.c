@@ -1219,6 +1219,7 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x73717368 /* SQUASHFS_MAGIC */,
 		0x01021994 /* TMPFS_MAGIC */,
 		0x24051905 /* UBIFS_SUPER_MAGIC */,
+		0x18031977 /* WEKAFS_SUPER_MAGIC */,
 #if __SIZEOF_LONG__ > 4
 		0x736675005346544e /* UFSD */,
 #endif
