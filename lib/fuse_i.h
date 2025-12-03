@@ -327,6 +327,9 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
 /* the pre-3.19 loop, for callers that need the caller's thread to serve */
 int fuse_session_loop_30(struct fuse_session *se);
 
+/* FUSE_USE_VERSION of the caller; 3.0 if missing or out of range */
+uint32_t fuse_get_api_version(const struct libfuse_version *version);
+
 /**
  * Internal verifier for the given config.
  *
