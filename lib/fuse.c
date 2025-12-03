@@ -4979,8 +4979,9 @@ void fuse_stop_cleanup_thread(struct fuse *f)
  * Not supposed to be called directly, but supposed to be called
  * through the fuse_new macro
  */
-struct fuse *_fuse_new_31(struct fuse_args *args,
+struct fuse *_fuse_new_318(struct fuse_args *args,
 			  const struct fuse_operations *op, size_t op_size,
+			  unsigned int user_apiabi_version,
 			  struct libfuse_version *version, void *user_data)
 {
 	struct fuse *f;
@@ -5064,12 +5065,13 @@ struct fuse *_fuse_new_31(struct fuse_args *args,
 #endif
 
 	/* not declared globally, to restrict usage of this function */
-	struct fuse_session *fuse_session_new_versioned(
+	struct fuse_session *fuse_session_new_versioned_318(
 		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
-		size_t op_size, struct libfuse_version *version,
-		void *userdata);
-	f->se = fuse_session_new_versioned(args, &llop, sizeof(llop), version,
-					   f);
+		size_t op_size, unsigned int user_apiabi_version,
+		struct libfuse_version *version, void *userdata);
+	f->se = fuse_session_new_versioned_318(args, &llop, sizeof(llop),
+					       user_apiabi_version, version,
+					       f);
 	if (f->se == NULL)
 		goto out_free_fs;
 
@@ -5121,11 +5123,21 @@ out:
 	return NULL;
 }
 
+/* ABI compat version */
+struct fuse *_fuse_new_31(struct fuse_args *args,
+			  const struct fuse_operations *op, size_t op_size,
+			  struct libfuse_version *version, void *user_data)
+{
+	unsigned int user_apiabi_version = 0; /* unknown version */
+	return _fuse_new_318(args, op, op_size, user_apiabi_version, version,
+			     user_data);
+}
+
 /* Emulates 3.0-style fuse_new(), which processes --help */
 FUSE_SYMVER("_fuse_new_30", "_fuse_new@FUSE_3.0")
 struct fuse *_fuse_new_30(struct fuse_args *args,
-			 const struct fuse_operations *op,
-			 size_t op_size,
+			  const struct fuse_operations *op, size_t op_size,
+			  unsigned int user_apiabi_version,
 			 struct libfuse_version *version,
 			 void *user_data)
 {
@@ -5145,17 +5157,29 @@ struct fuse *_fuse_new_30(struct fuse_args *args,
 		fuse_lib_help(args);
 		return NULL;
 	} else
-		return _fuse_new_31(args, op, op_size, version, user_data);
+		return _fuse_new_318(args, op, op_size, user_apiabi_version,
+				     version, user_data);
+}
+
+FUSE_SYMVER("_fuse_new_30", "_fuse_new@@FUSE_3.0")
+struct fuse *_fuse_new_30(struct fuse_args *args,
+			  const struct fuse_operations *op, size_t op_size,
+			  struct libfuse_version *version, void *user_data)
+{
+	unsigned int user_apiabi_version = 0; /* unknown version */
+	return _fuse_new_318(args, op, op_size, user_apiabi_version, version,
+			     user_data);
 }
 
 /* ABI compat version */
-struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *op,
-			 size_t op_size, void *user_data);
-FUSE_SYMVER("fuse_new_31", "fuse_new@FUSE_3.1")
-struct fuse *fuse_new_31(struct fuse_args *args,
+struct fuse *fuse_new_31(struct fuse_args * args,
 			 const struct fuse_operations *op,
-			 size_t op_size, void *user_data)
-{
+			 size_t op_size, void *user_data);
+	FUSE_SYMVER("fuse_new_31", "fuse_new@FUSE_3.1")
+	struct fuse *fuse_new_31(struct fuse_args * args,
+				 const struct fuse_operations *op,
+				 size_t op_size, void *user_data)
+	{
 		/* unknown version */
 	struct libfuse_version version = { 0 };
 

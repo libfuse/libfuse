@@ -2140,8 +2140,9 @@ fuse_session_new_fn(struct fuse_args *args, const struct fuse_lowlevel_ops *op,
 		.padding = 0
 	};
 
-	return fuse_session_new_versioned(args, op, op_size, &version,
-					  userdata);
+	return fuse_session_new_versioned_318(args, op, op_size,
+					      FUSE_USE_VERSION, &version,
+					      userdata);
 }
 #define fuse_session_new(args, op, op_size, userdata) \
 	fuse_session_new_fn(args, op, op_size, userdata)
