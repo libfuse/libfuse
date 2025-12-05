@@ -209,6 +209,8 @@ FUSE_3.18 {
 		fuse_req_get_payload;
 		fuse_uring_get_req_payload_mr;
 		fuse_reply_dlm_lock;
+		fuse_reply_compound;
+		fuse_set_compound_error;
 } FUSE_3.17;
 
 # Local Variables:

@@ -29,6 +29,25 @@
 struct mount_opts;
 struct fuse_ring_pool;
 
+struct fuse_req;
+struct fuse_compound_result;
+
+struct fuse_compound_ctx {
+	uint32_t flags;
+	int error;
+	struct fuse_in_header *req[FUSE_MAX_COMPOUND_OPS];
+	int result_size;
+	int allocated_size;
+	int result_count;
+	int input_count;
+	struct fuse_compound_result *out_buffer;
+
+	/* Synchronization for async compound operations */
+	pthread_mutex_t waitq_lock;
+	pthread_cond_t waitq;
+	int operation_running;
+};
+
 struct fuse_req {
 	struct fuse_session *se;
 	uint64_t unique;
@@ -38,6 +57,7 @@ struct fuse_req {
 	struct fuse_chan *ch;
 	int interrupted;
 	unsigned int ioctl_64bit : 1;
+	unsigned int is_compound : 1;
 	union {
 		struct {
 			uint64_t unique;
@@ -52,6 +72,7 @@ struct fuse_req {
 	struct fuse_req *prev;
 
 	bool is_uring;
+	struct fuse_compound_ctx compound;
 };
 
 struct fuse_notify_req {
