@@ -107,6 +107,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 					      userdata);
 }
 
+#if (!defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
 struct fuse *_fuse_new_31(struct fuse_args *args,
 				const struct fuse_operations *op,
 				size_t op_size,
@@ -126,3 +127,5 @@ struct fuse *_fuse_new_31(struct fuse_args *args,
 	return _fuse_new_318(args, op, op_size, user_apiabi_version, version,
 			     user_data);
 }
+#endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
+

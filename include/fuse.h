@@ -1010,10 +1010,15 @@ void fuse_lib_help(struct fuse_args *args);
 /* Do not call this directly, use fuse_new() instead */
 struct fuse *_fuse_new_30(struct fuse_args *args,
 			  const struct fuse_operations *op, size_t op_size,
+			  unsigned int user_apiabi_version,
 			  struct libfuse_version *version, void *user_data);
 struct fuse *_fuse_new_31(struct fuse_args *args,
 			  const struct fuse_operations *op, size_t op_size,
 			  struct libfuse_version *version, void *user_data);
+struct fuse *_fuse_new_318(struct fuse_args *args,
+			   const struct fuse_operations *op, size_t op_size,
+			   unsigned int user_apiabi_version,
+			   struct libfuse_version *version, void *user_data);
 
 /**
  * Create a new FUSE filesystem.
@@ -1054,7 +1059,8 @@ static inline struct fuse *fuse_new_fn(struct fuse_args *args,
 		.padding = 0
 	};
 
-	return _fuse_new_30(args, op, op_size, &version, user_data);
+	return _fuse_new_30(args, op, op_size, FUSE_USE_VERSION, &version,
+			    user_data);
 }
 #else /* FUSE_USE_VERSION */
 static inline struct fuse *fuse_new_fn(struct fuse_args *args,
@@ -1068,7 +1074,8 @@ static inline struct fuse *fuse_new_fn(struct fuse_args *args,
 		.padding = 0
 	};
 
-	return _fuse_new_31(args, op, op_size, &version, user_data);
+	return _fuse_new_318(args, op, op_size, FUSE_USE_VERSION, &version,
+			     user_data);
 }
 #endif
 #define fuse_new(args, op, size, data) fuse_new_fn(args, op, size, data)
