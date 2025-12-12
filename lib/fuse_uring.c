@@ -119,7 +119,7 @@ static void *fuse_uring_get_sqe_cmd(struct io_uring_sqe *sqe)
 
 static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
 					const unsigned int qid,
-					const unsigned int commit_id)
+					const uint64_t commit_id)
 {
 	req->qid = qid;
 	req->commit_id = commit_id;

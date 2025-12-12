@@ -2659,7 +2659,7 @@ static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 			    const char *name)
 {
 	struct fuse *f = req_fuse_prepare(req);
-	struct fuse_entry_param e;
+	struct fuse_entry_param e = { .ino = 0 }; /* invalid ino */
 	char *path;
 	int err;
 	struct node *dot = NULL;
@@ -3568,17 +3568,17 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 
 	if (statp && (flags & FUSE_FILL_DIR_PLUS)) {
 		e.attr = *statp;
-	} else {
-		e.attr.st_ino = FUSE_UNKNOWN_INO;
-		if (statp) {
-			e.attr.st_mode = statp->st_mode;
-			if (f->conf.use_ino)
-				e.attr.st_ino = statp->st_ino;
-		}
-		if (!f->conf.use_ino && f->conf.readdir_ino) {
-			e.attr.st_ino = (ino_t)
-				lookup_nodeid(f, dh->nodeid, name);
-		}
+	}
+
+	e.attr.st_ino = FUSE_UNKNOWN_INO;
+	if (statp) {
+		e.attr.st_mode = statp->st_mode;
+		if (f->conf.use_ino)
+			e.attr.st_ino = statp->st_ino;
+	}
+	if (!f->conf.use_ino && f->conf.readdir_ino) {
+		e.attr.st_ino = (ino_t)
+			lookup_nodeid(f, dh->nodeid, name);
 	}
 
 	if (off) {
@@ -4626,7 +4626,7 @@ static int fuse_session_loop_remember(struct fuse *f)
 		}
 	}
 
-	free(fbuf.mem);
+	fuse_buf_free(&fbuf);
 	return res < 0 ? -1 : 0;
 }
 
