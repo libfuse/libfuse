@@ -59,6 +59,9 @@ struct fuse_ring_queue {
 	size_t req_header_sz;
 	struct io_uring ring;
 
+	pthread_mutex_t ring_lock;
+	bool cqe_processing;
+
 	/* size depends on queue depth */
 	struct fuse_ring_ent ent[];
 };
@@ -156,12 +159,20 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
 				 struct fuse_ring_ent *ring_ent)
 {
+	bool locked = false;
 	struct fuse_session *se = ring_pool->se;
 	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
-	struct io_uring_sqe *sqe = io_uring_get_sqe(&queue->ring);
+	struct io_uring_sqe *sqe;
+
+	if (pthread_self() != queue->tid) {
+		pthread_mutex_lock(&queue->ring_lock);
+		locked = true;
+	}
+
+	sqe = io_uring_get_sqe(&queue->ring);
 
 	if (sqe == NULL) {
 		/* This is an impossible condition, unless there is a bug.
@@ -186,8 +197,11 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 			 out->unique, ent_in_out->payload_sz);
 	}
 
-	/* XXX: This needs to be a ring config option */
-	io_uring_submit(&queue->ring);
+	if (!queue->cqe_processing)
+		io_uring_submit(&queue->ring);
+
+	if (locked)
+		pthread_mutex_unlock(&queue->ring_lock);
 
 	return 0;
 }
@@ -408,6 +422,8 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			numa_free(ent->op_payload, ent->req_payload_sz);
 			numa_free(ent->req_header, queue->req_header_sz);
 		}
+
+		pthread_mutex_destroy(&queue->ring_lock);
 	}
 
 	free(fuse_ring->queues);
@@ -533,6 +549,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->qid = qid;
 		queue->ring_pool = fuse_ring;
 		queue->eventfd = -1;
+		pthread_mutex_init(&queue->ring_lock, NULL);
 	}
 
 	pthread_cond_init(&fuse_ring->thread_start_cond, NULL);
@@ -822,7 +839,11 @@ static void *fuse_uring_thread(void *arg)
 	while (!atomic_load_explicit(&se->mt_exited, memory_order_relaxed)) {
 		io_uring_submit_and_wait(&queue->ring, 1);
 
+		pthread_mutex_lock(&queue->ring_lock);
+		queue->cqe_processing = true;
 		err = fuse_uring_queue_handle_cqes(queue);
+		queue->cqe_processing = false;
+		pthread_mutex_unlock(&queue->ring_lock);
 		if (err < 0)
 			goto err;
 	}
