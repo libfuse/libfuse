@@ -532,6 +532,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->numa_node = numa_node_of_cpu(qid);
 		queue->qid = qid;
 		queue->ring_pool = fuse_ring;
+		queue->eventfd = -1;
 	}
 
 	pthread_cond_init(&fuse_ring->thread_start_cond, NULL);
