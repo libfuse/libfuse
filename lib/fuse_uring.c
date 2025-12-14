@@ -416,40 +416,54 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 	free(fuse_ring);
 }
 
-static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
+static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
+				   struct fuse_ring_ent *ent)
+{
+	struct io_uring_sqe *sqe;
+
+	sqe = io_uring_get_sqe(&queue->ring);
+	if (sqe == NULL) {
+		/*
+		 * All SQEs are idle here - no good reason this
+		 * could fail
+		 */
+		fuse_log(FUSE_LOG_ERR, "Failed to get all ring SQEs");
+		return -EIO;
+	}
+
+	ent->last_cmd = FUSE_IO_URING_CMD_REGISTER;
+	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd);
+
+	/* only needed for fetch */
+	ent->iov[0].iov_base = ent->req_header;
+	ent->iov[0].iov_len = queue->req_header_sz;
+
+	ent->iov[1].iov_base = ent->op_payload;
+	ent->iov[1].iov_len = ent->req_payload_sz;
+
+	sqe->addr = (uint64_t)(ent->iov);
+	sqe->len = 2;
+
+	/* this is a fetch, kernel does not read commit id */
+	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid, 0);
+
+	return 0;
+
+}
+
+static int fuse_uring_register_queue(struct fuse_ring_queue *queue)
 {
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	unsigned int sq_ready;
 	struct io_uring_sqe *sqe;
+	int res;
 
 	for (size_t idx = 0; idx < ring_pool->queue_depth; idx++) {
 		struct fuse_ring_ent *ent = &queue->ent[idx];
 
-		sqe = io_uring_get_sqe(&queue->ring);
-		if (sqe == NULL) {
-			/* All SQEs are idle here - no good reason this
-			 * could fail
-			 */
-
-			fuse_log(FUSE_LOG_ERR, "Failed to get all ring SQEs");
-			return -EIO;
-		}
-
-		fuse_uring_sqe_prepare(sqe, ent, FUSE_IO_URING_CMD_REGISTER);
-
-		/* only needed for fetch */
-		ent->iov[0].iov_base = ent->req_header;
-		ent->iov[0].iov_len = queue->req_header_sz;
-
-		ent->iov[1].iov_base = ent->op_payload;
-		ent->iov[1].iov_len = ent->req_payload_sz;
-
-		sqe->addr = (uint64_t)(ent->iov);
-		sqe->len = 2;
-
-		/* this is a fetch, kernel does not read commit id */
-		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
-					    queue->qid, 0);
+		res = fuse_uring_register_ent(queue, ent);
+		if (res != 0)
+			return res;
 	}
 
 	sq_ready = io_uring_sq_ready(&queue->ring);
@@ -757,7 +771,7 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		list_init_req(req);
 	}
 
-	res = fuse_uring_prepare_fetch_sqes(queue);
+	res = fuse_uring_register_queue(queue);
 	if (res != 0) {
 		fuse_log(
 			FUSE_LOG_ERR,
