@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -x
 #
 # Create tarball from Git tag, removing and adding
 # some files.
