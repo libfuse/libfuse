@@ -23,7 +23,6 @@
 #endif
 
 #include "fuse_common.h"
-#include "fuse_kernel.h"
 
 #include <stddef.h>
 #include <utime.h>
