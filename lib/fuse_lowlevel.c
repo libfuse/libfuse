@@ -35,6 +35,8 @@
 #include <sys/ioctl.h>
 #include <stdalign.h>
 
+static bool fuse_use_compounds = false;
+
 #ifdef USDT_ENABLED
 #include "usdt.h"
 #endif
@@ -1414,6 +1416,11 @@ static void _do_compound(fuse_req_t req, const fuse_ino_t nodeid,
 	(void)nodeid;
 	const struct fuse_compound_in *arg = op_in;
 	int executed_count = 0;
+
+	if (!fuse_use_compounds) {
+		fuse_reply_err(req, ENOSYS);
+		return;
+	}
 
 	/* Basic validation */
 	if (arg->count == 0 || arg->count > FUSE_MAX_COMPOUND_OPS) {
