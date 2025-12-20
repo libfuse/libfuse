@@ -1,0 +1,36 @@
+# Suppression file for abidiff false positives in libfuse
+# This file suppresses ABI changes that are actually compatible but flagged by abidiff
+
+[suppress_type]
+# Suppress the fuse_conn_info reserved array transformation
+# This change is ABI-compatible: uint32_t[16] -> uint16_t request_timeout + uint16_t[31]
+# Both use exactly 64 bytes (16*4 = 32*2 = 64 bytes)
+name = fuse_conn_info
+# Suppress changes to the reserved field that are size/offset related
+change_kind = size-or-offset-change
+has_data_member_inserted_at = offset_in_bits(512)
+
+[suppress_type]
+# Also suppress the general struct size change for fuse_conn_info
+# since the total size remains the same (128 bytes) by a static assertion
+# in the code
+name = fuse_conn_info
+change_kind = size-change
+
+[suppress_type]
+# Suppress ALL changes to fuse_operations struct
+# These are backward compatible due to the op_size mechanism in fuse_main()
+# Applications pass sizeof(struct fuse_operations) at compile time,
+# and the library uses memcpy(&fs->op, op, op_size) to safely copy only
+# the fields the application knows about. New fields remain NULL.
+name = fuse_operations
+has_data_member_inserted_at = end
+has_size_change = yes
+
+[suppress_type]
+# Suppress ALL changes to fuse_lowlevel_ops struct
+# These are backward compatible due to the op_size mechanism in fuse_session_new()
+# Same pattern as fuse_operations - op_size controls safe copying
+name = fuse_lowlevel_ops
+has_data_member_inserted_at = end
+has_size_change = yes
