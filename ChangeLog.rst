@@ -1,3 +1,9 @@
+libfuse 3.18.1 (2025-12-20)
+===========================
+* Fix a critical ABI issue compared to libfuse-3.17.3+
+* Note: This breaks ABI compatibility to libfuse-3.18.0
+  (given that 3.18.0 is out for 2 days only, probably the lesser evil)
+
 libfuse 3.18.0 (2025-12-18)
 ===========================
 
