@@ -43,6 +43,8 @@ struct fuse_ring_ent {
 	/* commit id of a fuse request */
 	uint64_t req_commit_id;
 
+	enum fuse_uring_cmd last_cmd;
+
 	/* header and payload */
 	struct iovec iov[2];
 };
@@ -56,6 +58,9 @@ struct fuse_ring_queue {
 	int eventfd;
 	size_t req_header_sz;
 	struct io_uring ring;
+
+	pthread_mutex_t ring_lock;
+	bool cqe_processing;
 
 	/* size depends on queue depth */
 	struct fuse_ring_ent ent[];
@@ -154,12 +159,20 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
 				 struct fuse_ring_ent *ring_ent)
 {
+	bool locked = false;
 	struct fuse_session *se = ring_pool->se;
 	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
-	struct io_uring_sqe *sqe = io_uring_get_sqe(&queue->ring);
+	struct io_uring_sqe *sqe;
+
+	if (pthread_self() != queue->tid) {
+		pthread_mutex_lock(&queue->ring_lock);
+		locked = true;
+	}
+
+	sqe = io_uring_get_sqe(&queue->ring);
 
 	if (sqe == NULL) {
 		/* This is an impossible condition, unless there is a bug.
@@ -174,9 +187,8 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		return -EIO;
 	}
 
-	fuse_uring_sqe_prepare(sqe, ring_ent,
-			       FUSE_IO_URING_CMD_COMMIT_AND_FETCH);
-
+	ring_ent->last_cmd = FUSE_IO_URING_CMD_COMMIT_AND_FETCH;
+	fuse_uring_sqe_prepare(sqe, ring_ent, ring_ent->last_cmd);
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid,
 				    ring_ent->req_commit_id);
 
@@ -185,8 +197,11 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 			 out->unique, ent_in_out->payload_sz);
 	}
 
-	/* XXX: This needs to be a ring config option */
-	io_uring_submit(&queue->ring);
+	if (!queue->cqe_processing)
+		io_uring_submit(&queue->ring);
+
+	if (locked)
+		pthread_mutex_unlock(&queue->ring_lock);
 
 	return 0;
 }
@@ -407,6 +422,8 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			numa_free(ent->op_payload, ent->req_payload_sz);
 			numa_free(ent->req_header, queue->req_header_sz);
 		}
+
+		pthread_mutex_destroy(&queue->ring_lock);
 	}
 
 	free(fuse_ring->queues);
@@ -415,40 +432,54 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 	free(fuse_ring);
 }
 
-static int fuse_uring_prepare_fetch_sqes(struct fuse_ring_queue *queue)
+static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
+				   struct fuse_ring_ent *ent)
+{
+	struct io_uring_sqe *sqe;
+
+	sqe = io_uring_get_sqe(&queue->ring);
+	if (sqe == NULL) {
+		/*
+		 * All SQEs are idle here - no good reason this
+		 * could fail
+		 */
+		fuse_log(FUSE_LOG_ERR, "Failed to get all ring SQEs");
+		return -EIO;
+	}
+
+	ent->last_cmd = FUSE_IO_URING_CMD_REGISTER;
+	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd);
+
+	/* only needed for fetch */
+	ent->iov[0].iov_base = ent->req_header;
+	ent->iov[0].iov_len = queue->req_header_sz;
+
+	ent->iov[1].iov_base = ent->op_payload;
+	ent->iov[1].iov_len = ent->req_payload_sz;
+
+	sqe->addr = (uint64_t)(ent->iov);
+	sqe->len = 2;
+
+	/* this is a fetch, kernel does not read commit id */
+	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid, 0);
+
+	return 0;
+
+}
+
+static int fuse_uring_register_queue(struct fuse_ring_queue *queue)
 {
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	unsigned int sq_ready;
 	struct io_uring_sqe *sqe;
+	int res;
 
 	for (size_t idx = 0; idx < ring_pool->queue_depth; idx++) {
 		struct fuse_ring_ent *ent = &queue->ent[idx];
 
-		sqe = io_uring_get_sqe(&queue->ring);
-		if (sqe == NULL) {
-			/* All SQEs are idle here - no good reason this
-			 * could fail
-			 */
-
-			fuse_log(FUSE_LOG_ERR, "Failed to get all ring SQEs");
-			return -EIO;
-		}
-
-		fuse_uring_sqe_prepare(sqe, ent, FUSE_IO_URING_CMD_REGISTER);
-
-		/* only needed for fetch */
-		ent->iov[0].iov_base = ent->req_header;
-		ent->iov[0].iov_len = queue->req_header_sz;
-
-		ent->iov[1].iov_base = ent->op_payload;
-		ent->iov[1].iov_len = ent->req_payload_sz;
-
-		sqe->addr = (uint64_t)(ent->iov);
-		sqe->len = 2;
-
-		/* this is a fetch, kernel does not read commit id */
-		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
-					    queue->qid, 0);
+		res = fuse_uring_register_ent(queue, ent);
+		if (res != 0)
+			return res;
 	}
 
 	sq_ready = io_uring_sq_ready(&queue->ring);
@@ -517,6 +548,8 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->numa_node = numa_node_of_cpu(qid);
 		queue->qid = qid;
 		queue->ring_pool = fuse_ring;
+		queue->eventfd = -1;
+		pthread_mutex_init(&queue->ring_lock, NULL);
 	}
 
 	pthread_cond_init(&fuse_ring->thread_start_cond, NULL);
@@ -530,6 +563,48 @@ err:
 		fuse_session_destruct_uring(fuse_ring);
 
 	return NULL;
+}
+
+static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
+				struct fuse_ring_ent *ent)
+{
+	struct io_uring_sqe *sqe;
+
+	sqe = io_uring_get_sqe(&queue->ring);
+	if (sqe == NULL) {
+		/* This is an impossible condition, unless there is a bug.
+		 * The kernel sent back an SQEs, which is assigned to a request.
+		 * There is no way to get out of SQEs, as the number of
+		 * SQEs matches the number tof requests.
+		 */
+
+		queue->ring_pool->se->error = -EIO;
+		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
+
+		return;
+	}
+
+	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd);
+
+	switch (ent->last_cmd) {
+	case FUSE_IO_URING_CMD_REGISTER:
+		sqe->addr = (uint64_t)(ent->iov);
+		sqe->len = 2;
+		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
+					    queue->qid, 0);
+		break;
+	case FUSE_IO_URING_CMD_COMMIT_AND_FETCH:
+		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
+					    queue->qid, ent->req_commit_id);
+		break;
+	default:
+		fuse_log(FUSE_LOG_ERR, "Unknown command type: %d\n",
+			 ent->last_cmd);
+		queue->ring_pool->se->error = -EINVAL;
+		break;
+	}
+
+	/* caller submits */
 }
 
 static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
@@ -579,6 +654,7 @@ static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 	size_t num_completed = 0;
 	struct io_uring_cqe *cqe;
 	unsigned int head;
+	struct fuse_ring_ent *ent;
 	int ret = 0;
 
 	io_uring_for_each_cqe(&queue->ring, head, cqe) {
@@ -587,19 +663,27 @@ static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 		num_completed++;
 
 		err = cqe->res;
-		if (err != 0) {
+		if (unlikely(err != 0)) {
 			if (err > 0 && ((uintptr_t)io_uring_cqe_get_data(cqe) ==
 					(unsigned int)queue->eventfd)) {
 				/* teardown from eventfd */
 				return -ENOTCONN;
 			}
 
-			// XXX: Needs rate limited logs, otherwise log spam
-			//fuse_log(FUSE_LOG_ERR, "cqe res: %d\n", cqe->res);
+
+			switch (err) {
+			case -EAGAIN:
+				fallthrough;
+			case -EINTR:
+				ent = io_uring_cqe_get_data(cqe);
+				fuse_uring_resubmit(queue, ent);
+				continue;
+			default:
+				break;
+			}
 
 			/* -ENOTCONN is ok on umount  */
-			if (err != -EINTR && err != -EAGAIN &&
-			    err != -ENOTCONN) {
+			if (err != -ENOTCONN) {
 				se->error = cqe->res;
 
 				/* return first error */
@@ -705,7 +789,7 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		list_init_req(req);
 	}
 
-	res = fuse_uring_prepare_fetch_sqes(queue);
+	res = fuse_uring_register_queue(queue);
 	if (res != 0) {
 		fuse_log(
 			FUSE_LOG_ERR,
@@ -755,7 +839,11 @@ static void *fuse_uring_thread(void *arg)
 	while (!atomic_load_explicit(&se->mt_exited, memory_order_relaxed)) {
 		io_uring_submit_and_wait(&queue->ring, 1);
 
+		pthread_mutex_lock(&queue->ring_lock);
+		queue->cqe_processing = true;
 		err = fuse_uring_queue_handle_cqes(queue);
+		queue->cqe_processing = false;
+		pthread_mutex_unlock(&queue->ring_lock);
 		if (err < 0)
 			goto err;
 	}

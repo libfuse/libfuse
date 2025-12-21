@@ -202,17 +202,21 @@ FUSE_3.17 {
 		fuse_log_close_syslog;
 } FUSE_3.12;
 
+FUSE_3.17.3 {
+	global:
+		fuse_set_feature_flag;
+		fuse_unset_feature_flag;
+		fuse_get_feature_flag;
+
+		# Not part of public API, for internal testing only
+		fuse_convert_to_conn_want_ext;
+} FUSE_3.17;
+
 FUSE_3.18 {
 	global:
 		fuse_req_is_uring;
 		fuse_req_get_payload;
-		fuse_set_feature_flag;
-		fuse_unset_feature_flag;
-		fuse_get_feature_flag;
 		fuse_lowlevel_notify_increment_epoch;
-
-		# Not part of public API, for internal test use only
-		fuse_convert_to_conn_want_ext;
 
 		fuse_reply_statx;
 		fuse_fs_statx;

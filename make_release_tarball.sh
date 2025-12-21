@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -x
 #
 # Create tarball from Git tag, removing and adding
 # some files.
@@ -30,6 +30,7 @@ cp -a doc/html "${TAG}/doc/"
 tar -czf "${TAG}.tar.gz" "${TAG}/"
 
 signify-openbsd -S -s signify/$MAJOR_REV.sec -m $TAG.tar.gz
+signify-openbsd -V -m ${TAG}.tar.gz -p signify/.$MAJOR_REV.pub
 
 
 echo "Contributors from ${PREV_TAG} to ${TAG}:"
