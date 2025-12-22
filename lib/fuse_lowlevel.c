@@ -35,7 +35,7 @@
 #include <sys/ioctl.h>
 #include <stdalign.h>
 
-static bool fuse_use_compounds = false;
+static bool fuse_use_compounds = true;
 
 #ifdef USDT_ENABLED
 #include "usdt.h"
@@ -1476,8 +1476,8 @@ out:
 
 static void do_compound(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	struct fuse_compound_in *arg = (struct fuse_compound_in *) inarg;
-	void *in_payload = PARAM(inarg);
+	const struct fuse_compound_in *arg = (const struct fuse_compound_in *) inarg;
+	const void *in_payload = PARAM(arg);
 
 	_do_compound(req, nodeid, arg, in_payload);
 }
