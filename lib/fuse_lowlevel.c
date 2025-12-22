@@ -35,7 +35,7 @@
 #include <sys/ioctl.h>
 #include <stdalign.h>
 
-static bool fuse_use_compounds = false;
+static bool fuse_use_compounds = true;
 
 #ifdef USDT_ENABLED
 #include "usdt.h"
@@ -1366,10 +1366,11 @@ int fuse_reply_compound(fuse_req_t req, uint32_t count,
 			ret = fuse_reply_err(req, req->compound.error);
 	}
 	free(req->compound.out_buffer);
+	req->compound.out_buffer = NULL;
 	return ret;
 }
 
-static void compound_ctx_init(fuse_req_t req,
+static int compound_ctx_init(fuse_req_t req,
 	const struct fuse_compound_in *arg, const void *payload)
 {
 	struct fuse_in_header *op_hdr = (struct fuse_in_header *)payload;
@@ -1390,6 +1391,12 @@ static void compound_ctx_init(fuse_req_t req,
 	/* Allocate the default memory size for now.
 	 * It will be checked later whether this is enough */
 	req->compound.out_buffer = malloc(req->compound.allocated_size);
+	if (!req->compound.out_buffer) {
+		pthread_mutex_destroy(&req->compound.waitq_lock);
+		pthread_cond_destroy(&req->compound.waitq);
+		return -ENOMEM;
+	}
+
 	/* leave space at the beginning for the out header */
 	req->compound.result_size = sizeof(struct fuse_compound_out);
 	req->compound.input_count = arg->count;
@@ -1399,10 +1406,18 @@ static void compound_ctx_init(fuse_req_t req,
 		req->compound.req[i] = op_hdr;
 		op_hdr = (struct fuse_in_header *)((char*) op_hdr + op_hdr->len);
 	}
+
+	return 0;
 }
 
 static void compound_ctx_cleanup(fuse_req_t req)
 {
+	/* Free output buffer if not already freed */
+	if (req->compound.out_buffer) {
+		free(req->compound.out_buffer);
+		req->compound.out_buffer = NULL;
+	}
+
 	/* Destroy synchronization primitives */
 	pthread_mutex_destroy(&req->compound.waitq_lock);
 	pthread_cond_destroy(&req->compound.waitq);
@@ -1410,12 +1425,36 @@ static void compound_ctx_cleanup(fuse_req_t req)
 
 static bool execute_compound(fuse_req_t compound_req, const int index);
 
+/*
+ * Execute compound operations sequentially
+ *
+ * Executes each operation in the compound request one by one.
+ * Sends the compound reply.
+ */
+void fuse_execute_compound_sequential(fuse_req_t req)
+{
+	int executed_count;
+	req->is_compound = true;
+	int count = req->compound.input_count;
+
+	for (executed_count = 0; executed_count < count; executed_count++) {
+		execute_compound(req, executed_count);
+	}
+
+	/*
+	 * Treat the compound request as normal again
+	 * so that the answer will actually be sent out
+	 */
+	req->is_compound = false;
+	fuse_reply_compound(req, executed_count, req->compound.out_buffer,
+			    req->compound.result_size);
+}
+
 static void _do_compound(fuse_req_t req, const fuse_ino_t nodeid,
-							const void *op_in, const void *in_payload)
+			 const void *op_in, const void *in_payload)
 {
 	(void)nodeid;
 	const struct fuse_compound_in *arg = op_in;
-	int executed_count = 0;
 
 	if (!fuse_use_compounds) {
 		fuse_reply_err(req, ENOSYS);
@@ -1431,53 +1470,24 @@ static void _do_compound(fuse_req_t req, const fuse_ino_t nodeid,
 	/* The compound implementation does not have to use the c_ctx
 	 * but if it does, it should be initialized.
 	 */
-	compound_ctx_init(req, arg, in_payload);
+	if (compound_ctx_init(req, arg, in_payload) != 0) {
+		fuse_reply_err(req, ENOMEM);
+		return;
+	}
 
 	if (req->se->op.compound) {
 		req->se->op.compound(req, arg->count, arg->flags, in_payload);
-		/* check for error ENOTSUP, which means the filesystem doesn't
-		 * support the given command combination.
-		 * On ENOTSUP we parse the payload here
-		 * and call the handlers ourselves.
-		 */
-		if (req->compound.error == 0 || req->compound.error != ENOTSUP) {
-			/* this is settled and handled */
-			goto out;
-		} else {
-			/* we continue with sequencial execution */
-			req->compound.error = 0;
-		}
+	} else {
+		fuse_reply_err(req, ENOSYS);
 	}
 
-	/* fall through to compound split,
-	 * the app compound handler is not there
-	 * or does not know this combination
-	 */
-
-	req->is_compound = true;
-
-	for (executed_count = 0; executed_count < arg->count; executed_count++) {
-		if (!execute_compound(req, executed_count)) {
-			/* stop execution on error */
-			req->is_compound = false;
-			fuse_reply_compound(req, executed_count,
-				req->compound.out_buffer, req->compound.result_size);
-				goto out;
-		}
-	}
-
-	/* treat the compound request as normal again
-	 * so that the answer will actually be sent out */
-	req->is_compound = false;
-	fuse_reply_compound(req, executed_count, req->compound.out_buffer, req->compound.result_size);
-out:
 	compound_ctx_cleanup(req);
 }
 
 static void do_compound(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 {
-	struct fuse_compound_in *arg = (struct fuse_compound_in *) inarg;
-	void *in_payload = PARAM(inarg);
+	const struct fuse_compound_in *arg = (const struct fuse_compound_in *) inarg;
+	const void *in_payload = PARAM(arg);
 
 	_do_compound(req, nodeid, arg, in_payload);
 }
