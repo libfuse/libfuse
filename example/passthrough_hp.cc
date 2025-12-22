@@ -1196,6 +1196,16 @@ static void sfs_flock(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi,
     fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
+static void sfs_compound(fuse_req_t req, uint32_t count, uint32_t flags,
+                         const void *arg) {
+    (void) count;
+    (void) flags;
+    (void) arg;
+
+    /* Trivial implementation: just execute operations sequentially */
+    fuse_execute_compound_sequential(req);
+}
+
 
 #ifdef HAVE_SETXATTR
 static void sfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
@@ -1354,7 +1364,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper) {
     sfs_oper.listxattr = sfs_listxattr;
     sfs_oper.removexattr = sfs_removexattr;
 #endif
-    sfs_oper.compound = nullptr;
+    sfs_oper.compound = sfs_compound;
 }
 
 static void print_usage(char *prog_name) {
