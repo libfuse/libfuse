@@ -1682,6 +1682,15 @@ void fuse_compound_set_error(fuse_req_t req, int error);
 void fuse_compound_start(fuse_req_t req);
 void fuse_compound_end(fuse_req_t req);
 
+/**
+ * Execute compound operations sequentially
+ *
+ * Executes each operation in the compound request one by one,
+ * sending the compound reply with all executed operations.
+ * @param req request handle
+ */
+void fuse_execute_compound_sequential(fuse_req_t req);
+
 /* ----------------------------------------------------------- *
  * Filling a buffer in readdir				       *
  * ----------------------------------------------------------- */
