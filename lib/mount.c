@@ -126,6 +126,7 @@ static const struct fuse_opt fuse_mount_opts[] = {
 	FUSE_OPT_KEY("nolazytime",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("symfollow",		KEY_KERN_FLAG),
 	FUSE_OPT_KEY("nosymfollow",		KEY_KERN_FLAG),
+	FUSE_OPT_KEY("remount",			KEY_KERN_FLAG),
 	FUSE_OPT_END
 };
 
@@ -204,6 +205,7 @@ static const struct mount_flags mount_flags[] = {
 	{"nosymfollow",	    MS_NOSYMFOLLOW,	1},
 #ifndef __NetBSD__
 	{"dirsync", MS_DIRSYNC,	    1},
+	{"remount", MS_REMOUNT,	    1},
 	{"lazytime",	    MS_LAZYTIME,	1},
 	{"nolazytime",	    MS_LAZYTIME,	0},
 #endif
