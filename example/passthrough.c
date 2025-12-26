@@ -48,12 +48,13 @@
 #include "passthrough_helpers.h"
 
 static int fill_dir_plus = 0;
+static int readdir_zero_ino;
 
 static void *xmp_init(struct fuse_conn_info *conn,
 		      struct fuse_config *cfg)
 {
 	(void) conn;
-	cfg->use_ino = 1;
+	cfg->use_ino = !readdir_zero_ino;
 
 	/* parallel_direct_writes feature depends on direct_io features.
 	   To make parallel_direct_writes valid, need either set cfg->direct_io
@@ -140,6 +141,8 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			st.st_ino = de->d_ino;
 			st.st_mode = de->d_type << 12;
 		}
+		if (readdir_zero_ino)
+			st.st_ino = 0;
 		if (filler(buf, de->d_name, &st, 0, fill_dir_plus))
 			break;
 	}
@@ -590,6 +593,9 @@ int main(int argc, char *argv[])
 	for (i=0, new_argc=0; (i<argc) && (new_argc<MAX_ARGS); i++) {
 		if (!strcmp(argv[i], "--plus")) {
 			fill_dir_plus = FUSE_FILL_DIR_PLUS;
+		} else if (!strcmp(argv[i], "--readdir-zero-inodes")) {
+			// Return zero inodes from readdir
+			readdir_zero_ino = 1;
 		} else {
 			new_argv[new_argc++] = argv[i];
 		}
