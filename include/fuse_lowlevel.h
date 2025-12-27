@@ -2317,6 +2317,38 @@ void fuse_session_unmount(struct fuse_session *se);
  */
 void fuse_session_destroy(struct fuse_session *se);
 
+/**
+ * Callback type for timeout thread.
+ *
+ * @param data user-provided context
+ */
+typedef void (*fuse_timeout_cb)(void *data);
+
+/**
+ * Start a timeout thread that polls on the session file descriptor to detect
+ * kernel (fuse-client) connection abort (POLLERR). If POLLERR is detected, it
+ * will call fuse_session_exit() to terminate the session and will also restart
+ * poll with the specified timeout. If the thread is not stopped within this
+ * timeout, the callback is invoked (or exit(1) if cb is NULL). This is useful
+ * to handle 'umount -f' and '/sys/fs/fuse/connections/NNN/abort'.
+ *
+ * @param se the session
+ * @param timeout_sec timeout in seconds for polling
+ * @param cb callback to invoke on timeout, or NULL to call exit(1)
+ * @param cb_data user-provided context for callback
+ * @return data pointer on success, NULL on failure
+ */
+void *fuse_session_start_teardown_watchdog(struct fuse_session *se,
+					   int timeout_sec, fuse_timeout_cb cb,
+					   void *cb_data);
+
+/**
+ * Stop the timeout thread.
+ *
+ * @param data pointer returned by fuse_start_timeout_thread()
+ */
+void fuse_session_stop_teardown_watchdog(void *data);
+
 /* ----------------------------------------------------------- *
  * Custom event loop support                                   *
  * ----------------------------------------------------------- */

@@ -134,6 +134,9 @@ struct Inode {
 	std::atomic<uint64_t> nlookup{ 0 };
 	std::mutex m;
 
+	/* max timeout after "umount -f" */
+	int stop_timeout_secs{ 60 };
+
 	// Delete copy constructor and assignments. We could implement
 	// move if we need it.
 	Inode() = default;
@@ -1576,6 +1579,7 @@ static void maximize_fd_limit()
 int main(int argc, char *argv[])
 {
 	struct fuse_loop_config *loop_config = NULL;
+	void *teardown_watchog = NULL;
 
 	// Parse command line options
 	auto options{ parse_options(argc, argv) };
@@ -1643,6 +1647,11 @@ int main(int argc, char *argv[])
 		fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS,
 				       LOG_DAEMON);
 
+	teardown_watchog = fuse_session_start_teardown_watchdog(
+		se, fs.root.stop_timeout_secs, NULL, NULL);
+	if (teardown_watchog == NULL)
+		goto err_out3;
+
 	if (options.count("single"))
 		ret = fuse_session_loop(se);
 	else
@@ -1661,6 +1670,8 @@ err_out1:
 
 	if (!fs.foreground)
 		fuse_log_close_syslog();
+
+	fuse_session_stop_teardown_watchdog(teardown_watchog);
 
 	return ret ? 1 : 0;
 }
