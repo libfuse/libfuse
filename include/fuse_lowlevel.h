@@ -513,7 +513,7 @@ struct fuse_lowlevel_ops {
 	 *  - When writeback caching is disabled, the filesystem is
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
-	 * 
+	 *
 	 *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
@@ -1307,11 +1307,11 @@ struct fuse_lowlevel_ops {
 
 	/**
 	 * Create a tempfile
-	 * 
+	 *
 	 * Tempfile means an anonymous file. It can be made into a normal file later
 	 * by using linkat or such.
-	 * 
-	 * If this is answered with an error ENOSYS this is treated by the kernel as 
+	 *
+	 * If this is answered with an error ENOSYS this is treated by the kernel as
 	 * a permanent failure and it will disable the feature and not ask again.
 	 *
 	 * Valid replies:
@@ -1817,23 +1817,23 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 /**
  * Notify to expire parent attributes and the dentry matching parent/name
- * 
+ *
  * Same restrictions apply as for fuse_lowlevel_notify_inval_entry()
- * 
+ *
  * Compared to invalidating an entry, expiring the entry results not in a
  * forceful removal of that entry from kernel cache but instead the next access
  * to it forces a lookup from the filesystem.
- * 
+ *
  * This makes a difference for overmounted dentries, where plain invalidation
- * would detach all submounts before dropping the dentry from the cache. 
+ * would detach all submounts before dropping the dentry from the cache.
  * If only expiry is set on the dentry, then any overmounts are left alone and
  * until ->d_revalidate() is called.
- * 
+ *
  * Note: ->d_revalidate() is not called for the case of following a submount,
  * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
- * 
+ *
  * Added in FUSE protocol version 7.38. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do nothing.
  *
