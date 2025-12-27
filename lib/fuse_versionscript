@@ -222,6 +222,12 @@ FUSE_3.18 {
 		fuse_fs_statx;
 } FUSE_3.17;
 
+FUSE_3.19 {
+	global:
+		fuse_session_start_teardown_watchdog;
+		fuse_session_stop_teardown_watchdog;
+} FUSE_3.18;
+
 # Local Variables:
 # indent-tabs-mode: t
 # End:

@@ -70,6 +70,8 @@ struct fuse_session_uring {
 	struct fuse_ring_pool *pool;
 };
 
+struct fuse_timeout_thread;
+
 struct fuse_session {
 	_Atomic(char *)mountpoint;
 	int fd;
@@ -110,6 +112,9 @@ struct fuse_session {
 
 	/* io_uring */
 	struct fuse_session_uring uring;
+
+	/* timeout thread */
+	_Atomic(struct fuse_timeout_thread *) timeout_thread;
 
 	/*
 	 * conn->want and conn_want_ext options set by libfuse , needed

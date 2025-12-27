@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <sys/eventfd.h>
 #include <stdalign.h>
 #include <string.h>
 #include <unistd.h>
@@ -37,6 +38,7 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <stdalign.h>
+#include <poll.h>
 
 #ifdef USDT_ENABLED
 #include "usdt.h"
@@ -55,6 +57,27 @@
 struct fuse_pollhandle {
 	uint64_t kh;
 	struct fuse_session *se;
+};
+
+struct fuse_timeout_thread {
+	pthread_t thread_id;
+	struct fuse_session *se;
+
+	/* hard exit timeout in seconds, after /dev/fuse connection loss  */
+	int timeout_sec;
+
+	/* copy of fuse_session->fd */
+	int fuse_session_fd;
+
+	/* eventfd for teardown signaling */
+	int eventfd;
+
+	pthread_mutex_t lock;
+	bool session_destructed;
+
+	/* callback on timeout, if NULL exit(1) is called */
+	fuse_timeout_cb timeout_cb;
+	void *cb_data;
 };
 
 static size_t pagesize;
@@ -3832,6 +3855,15 @@ void fuse_session_destroy(struct fuse_session *se)
 	if (se->io != NULL)
 		free(se->io);
 	destroy_mount_opts(se->mo);
+
+	if (se->timeout_thread) {
+		pthread_mutex_lock(&se->timeout_thread->lock);
+		se->timeout_thread->session_destructed = true;
+		se->timeout_thread->fuse_session_fd = -1;
+		se->timeout_thread->se = NULL;
+		pthread_mutex_unlock(&se->timeout_thread->lock);
+	}
+
 	free(se);
 }
 
@@ -4488,4 +4520,176 @@ int fuse_session_exited(struct fuse_session *se)
 		atomic_load_explicit(&se->mt_exited, memory_order_relaxed);
 
 	return exited ? 1 : 0;
+}
+
+static void fuse_tt_destruct(struct fuse_timeout_thread *tt)
+{
+	if (tt->eventfd != -1)
+		close(tt->eventfd);
+	pthread_mutex_destroy(&tt->lock);
+	free(tt);
+}
+
+static void fuse_tt_pollerr_handler(struct fuse_timeout_thread *tt)
+{
+	pthread_mutex_lock(&tt->lock);
+	if (!tt->session_destructed) {
+		/* fuse connection lost, signal session */
+		fuse_session_exit(tt->se);
+	}
+	tt->fuse_session_fd = -1;
+	pthread_mutex_unlock(&tt->lock);
+}
+
+/*
+ * Time out thread, polls on the session fd for POLLERR and exits the session.
+ * If not stopped after POLLERR is detected, the thread will exit the entire
+ * process after the specified timeout.
+ */
+static void *fuse_session_teardown_watchdog(void *arg)
+{
+	struct fuse_timeout_thread *tt = (struct fuse_timeout_thread *)arg;
+	struct pollfd pfds[3];
+	int res;
+	int poll_timeout = -1; /* infinity poll */
+	int nfds;
+	int session_fd_idx;
+	int eventfd_idx;
+
+restart:
+	session_fd_idx = -1;
+	nfds = 0;
+	if (tt->fuse_session_fd >= 0) {
+		/* Poll on session fd for POLLERR */
+		pfds[nfds].fd = tt->fuse_session_fd;
+		pfds[nfds].events = 0;
+		session_fd_idx = nfds;
+		nfds++;
+	}
+
+	/* Poll on eventfd for teardown signal */
+	pfds[nfds].fd = tt->eventfd;
+	pfds[nfds].events = POLLIN;
+	eventfd_idx = nfds;
+	nfds++;
+
+	while (true) {
+		res = poll(pfds, nfds, poll_timeout);
+
+		if (res == -1) {
+			if (errno == EINTR)
+				continue;
+			break;
+		} else if (res > 0) {
+			/* Check for POLLERR on session fd */
+			if (session_fd_idx >= 0 &&
+			    pfds[session_fd_idx].revents & POLLERR) {
+				fuse_tt_pollerr_handler(tt);
+
+				/* Timeout for hard exit */
+				poll_timeout = tt->timeout_sec * 1000;
+				goto restart;
+			}
+
+			/* Check for teardown signal on eventfd */
+			if (pfds[eventfd_idx].revents & POLLIN) {
+				/* Teardown requested, exit thread */
+				break;
+			}
+		}
+
+		/*
+		 * Timeout means the kernel connection was aborted and poll
+		 * timed out. I.e. the process didn't stop.
+		 */
+		if (tt->timeout_cb)
+			tt->timeout_cb(tt->cb_data);
+		else
+			exit(1);
+		break;
+	}
+
+	return NULL;
+}
+
+void *fuse_session_start_teardown_watchdog(struct fuse_session *se,
+					   int timeout_sec, fuse_timeout_cb cb,
+					   void *cb_data)
+{
+	struct fuse_timeout_thread *tt;
+	int res;
+
+	if (timeout_sec <= 0) {
+		fuse_log(FUSE_LOG_ERR, "fuse: invalid timeout value\n");
+		return NULL;
+	}
+
+	if (se->fd == -1) {
+		fuse_log(FUSE_LOG_ERR, "fuse: invalid session fd\n");
+		return NULL;
+	}
+
+	tt = malloc(sizeof(struct fuse_timeout_thread));
+	if (!tt) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to allocate timeout thread structure\n");
+		return NULL;
+	}
+
+	tt->se = se;
+	tt->fuse_session_fd = se->fd;
+	tt->timeout_sec = timeout_sec;
+	tt->timeout_cb = cb;
+	tt->cb_data = cb_data;
+	pthread_mutex_init(&tt->lock, NULL);
+	tt->session_destructed = false;
+	if (se->timeout_thread) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: timeout thread already running\n");
+		goto err;
+	}
+	se->timeout_thread = tt;
+
+	/* Create eventfd for teardown signaling */
+	tt->eventfd = eventfd(0, EFD_CLOEXEC);
+	if (tt->eventfd == -1) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to create eventfd: %s\n",
+			 strerror(errno));
+		goto err;
+	}
+
+	res = pthread_create(&tt->thread_id, NULL,
+			     fuse_session_teardown_watchdog, tt);
+	if (res != 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to create timeout thread: %s\n",
+			 strerror(res));
+		goto err;
+	}
+
+	return tt;
+
+err:
+	fuse_tt_destruct(tt);
+	return NULL;
+}
+
+void fuse_session_stop_teardown_watchdog(void *data)
+{
+	struct fuse_timeout_thread *tt;
+	uint64_t val = 1;
+
+	if (data == NULL)
+		return;
+	tt = (struct fuse_timeout_thread *)data;
+
+	/* Signal the eventfd to wake up the thread */
+	if (write(tt->eventfd, &val, sizeof(val)) == -1) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to signal eventfd: %s\n",
+			 strerror(errno));
+	}
+
+	/* Wait for thread to finish */
+	pthread_join(tt->thread_id, NULL);
+	fuse_tt_destruct(tt);
 }

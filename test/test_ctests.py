@@ -159,3 +159,13 @@ def test_signals(output_checker):
                    stderr=output_checker.fd, timeout=10, check=True)
     logger.debug("Signal handling test completed successfully")
 
+def test_teardown_watchdog(output_checker):
+    """Test timeout thread detecting connection abort"""
+    logger = logging.getLogger(__name__)
+    logger.debug("Testing teardown watchdog")
+    cmdline = [ pjoin(basename, 'test', 'test_teardown_watchdog') ]
+    logger.debug(f"Command line: {' '.join(cmdline)}")
+    subprocess.run(cmdline, stdout=output_checker.fd, \
+                   stderr=output_checker.fd, timeout=30, check=True)
+    logger.debug("Teardown watchdog test completed successfully")
+
