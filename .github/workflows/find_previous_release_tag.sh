@@ -10,17 +10,20 @@ set -e
 VERSION_PATTERN="version\s*:\s*['\"]"
 VERSION_EXTRACT="s/.*version\s*:\s*['\"]([^'\"]+)['\"].*/\1/"
 
-CURRENT_VERSION=$(grep -E "$VERSION_PATTERN" meson.build | \
+VERSION=$(grep -E "$VERSION_PATTERN" meson.build | \
+		  grep -v 'meson' | \
                   sed -E "$VERSION_EXTRACT")
-echo "Current version: $CURRENT_VERSION" >&2
+echo "Current version: $VERSION" >&2
 
 # Extract major.minor version (e.g., 3.18 from 3.18.0)
 # Pattern captures first two numbers separated by dot
 MAJOR_MINOR_PATTERN='s/^([0-9]+\.[0-9]+).*/\1/'
 
-CURRENT_MAJOR_MINOR=$(echo "$CURRENT_VERSION" | \
-                      sed -E "$MAJOR_MINOR_PATTERN")
-echo "Current major.minor: $CURRENT_MAJOR_MINOR" >&2
+MAJOR_MINOR=$(echo "$VERSION" | \
+              sed -E "$MAJOR_MINOR_PATTERN")
+echo "Current major.minor: $MAJOR_MINOR" >&2
+MAJOR="${MAJOR_MINOR%%.*}"
+MINOR="${MAJOR_MINOR#*.}"
 
 # Get all major.minor versions from tags, sort them, and find the one before
 # current
@@ -39,11 +42,30 @@ echo "$ALL_MAJOR_MINOR" >&2
 
 # Find the previous major.minor version
 PREV_MAJOR_MINOR=$(echo "$ALL_MAJOR_MINOR" | \
-                   grep -B1 "^${CURRENT_MAJOR_MINOR}$" | \
+                   grep -B1 "^${MAJOR_MINOR}$" | \
                    head -1)
+if [ -z "${PREV_MAJOR_MINOR}" ]; then
+    # Current major.minor not found in tags (untagged release branch)
+    # Try: previous minor with current major
+    PREV_MINOR=$((MINOR - 1))
+    if [ $PREV_MINOR -ge 0 ]; then
+        CANDIDATE="${MAJOR}.${PREV_MINOR}"
+        if echo "$ALL_MAJOR_MINOR" | grep -q "^${CANDIDATE}$"; then
+            PREV_MAJOR_MINOR="$CANDIDATE"
+        fi
+    fi
 
-if [ -z "$PREV_MAJOR_MINOR" ] || [ "$PREV_MAJOR_MINOR" = "$CURRENT_MAJOR_MINOR" ]; then
-    echo "Error: No previous major.minor version found before $CURRENT_MAJOR_MINOR" >&2
+    # If still not found, get highest minor from previous major
+    if [ -z "${PREV_MAJOR_MINOR}" ]; then
+        PREV_MAJOR=$((MAJOR - 1))
+        PREV_MAJOR_MINOR=$(echo "$ALL_MAJOR_MINOR" | \
+            grep "^${PREV_MAJOR}\." | \
+            tail -n1)
+    fi
+fi
+
+if [ -z "$PREV_MAJOR_MINOR" ] || [ "$PREV_MAJOR_MINOR" = "$MAJOR_MINOR" ]; then
+    echo "Error: No previous major.minor version found before $MAJOR_MINOR" >&2
     exit 1
 fi
 
