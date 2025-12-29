@@ -27,6 +27,7 @@ notifications:
 | RETRIEVE    | fuse_lowlevel_notify_retrieve    |
 | DELETE      | fuse_lowlevel_notify_delete      |
 | RESEND      | -                                |
+| PRUNE       | fuse_lowlevel_notify_prune       |
 |-------------+----------------------------------|
 
 One important restriction is that these asynchronous operations SHALL NOT be
