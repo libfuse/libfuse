@@ -3384,6 +3384,30 @@ int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 	return err;
 }
 
+int fuse_lowlevel_notify_prune(struct fuse_session *se,
+			       fuse_ino_t *nodeids, uint32_t count)
+{
+	struct fuse_notify_prune_out outarg;
+	struct iovec iov[3];
+
+	if (!se)
+		return -EINVAL;
+
+	if (se->conn.proto_minor < 45)
+		return -ENOSYS;
+
+	outarg.count = count;
+	outarg.padding = 0;
+	outarg.spare = 0;
+
+	iov[1].iov_base = &outarg;
+	iov[1].iov_len = sizeof(outarg);
+	iov[2].iov_base = (void *)nodeids;
+	iov[2].iov_len = sizeof(fuse_ino_t) * count;
+
+	return send_notify_iov(se, FUSE_NOTIFY_PRUNE, iov, 3);
+}
+
 void *fuse_req_userdata(fuse_req_t req)
 {
 	return req->se->userdata;

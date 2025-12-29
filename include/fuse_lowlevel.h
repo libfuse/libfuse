@@ -1954,6 +1954,26 @@ int fuse_lowlevel_notify_store(struct fuse_session *se, fuse_ino_t ino,
 int fuse_lowlevel_notify_retrieve(struct fuse_session *se, fuse_ino_t ino,
 				  size_t size, off_t offset, void *cookie);
 
+/**
+ * Notify to prune kernel's own dentry/inode caches
+ *
+ * Some fuse servers need to prune their caches, which can only be done if the
+ * kernel's own dentry/inode caches are pruned first to avoid dangling
+ * references.  Once dangling dentry/inode cache gets pruned, the inode gets
+ * evicted and thus FUSE_FORGET will be sent to fuse server.  On receiving
+ * FUSE_FORGET, fuse server can free their own inode cache with resources, e.g.
+ * corresponding file handle.
+ *
+ * The notification takes an array of node IDs to try and get rid of.  It is
+ * best-effort as inodes with active references are skipped.
+ *
+ * @param se the session object
+ * @param nodeids the array of node IDs to be pruned
+ * @param count the length of the nodeids array
+ * @return zero for success, -errno for failure
+ */
+int fuse_lowlevel_notify_prune(struct fuse_session *se,
+			       fuse_ino_t *nodeids, uint32_t count);
 
 /* ----------------------------------------------------------- *
  * Utility functions					       *
