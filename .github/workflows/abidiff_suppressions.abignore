@@ -35,6 +35,21 @@ name = fuse_lowlevel_ops
 has_data_member_inserted_at = end
 has_size_change = yes
 
+[suppress_type]
+# cuse_lowlevel_ops gained the op_size safe-copy (clop_size) in cuse_prep_data();
+# appended members are ABI-safe, same pattern as fuse_operations / fuse_lowlevel_ops.
+name = cuse_lowlevel_ops
+has_data_member_inserted_at = end
+has_size_change = yes
+
+[suppress_type]
+# ioctl 'cmd' widened int -> unsigned int at FUSE_USE_VERSION >= 319 (mirrors
+# fuse_lowlevel_ops.ioctl, widened at v35). Same size and calling convention, so
+# layout-preserving. libabigail cannot scope a type suppression to one
+# function-pointer member, so this stays bounded to size-preserving changes.
+name = cuse_lowlevel_ops
+has_size_change = no
+
 [suppress_function]
 # Suppress const qualification changes to fuse_get_session parameter
 # Adding const to pointer parameters is ABI-compatible (compile-time only)
