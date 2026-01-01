@@ -159,3 +159,13 @@ def test_signals(output_checker):
                    stderr=output_checker.fd, timeout=10, check=True)
     logger.debug("Signal handling test completed successfully")
 
+def test_timeout_thread(output_checker):
+    """Test timeout thread detecting connection abort"""
+    logger = logging.getLogger(__name__)
+    logger.debug("Testing timeout thread")
+    cmdline = [ pjoin(basename, 'test', 'test_timeout_thread') ]
+    logger.debug(f"Command line: {' '.join(cmdline)}")
+    subprocess.run(cmdline, stdout=output_checker.fd, \
+                   stderr=output_checker.fd, timeout=30, check=True)
+    logger.debug("Timeout thread test completed successfully")
+

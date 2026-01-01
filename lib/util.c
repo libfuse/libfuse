@@ -11,7 +11,7 @@
 #include <errno.h>
 
 #ifndef FUSE_USE_VERSION
-#define FUSE_USE_VERSION (FUSE_MAKE_VERSION(3, 18))
+#define FUSE_USE_VERSION (FUSE_MAKE_VERSION(3, 19))
 #endif
 
 #include "util.h"

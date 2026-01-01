@@ -12,8 +12,17 @@
 #ifndef CUSE_LOWLEVEL_H_
 #define CUSE_LOWLEVEL_H_
 
+/** @file
+ *
+ * Low level API
+ *
+ * IMPORTANT: you should define FUSE_USE_VERSION before including this
+ * header.  To use the newest API define it to 35 (recommended for any
+ * new application).
+ */
+
 #ifndef FUSE_USE_VERSION
-#define FUSE_USE_VERSION 29
+#define FUSE_USE_VERSION 319
 #endif
 
 #include "fuse_lowlevel.h"
@@ -58,9 +67,15 @@ struct cuse_lowlevel_ops {
 	void (*flush) (fuse_req_t req, struct fuse_file_info *fi);
 	void (*release) (fuse_req_t req, struct fuse_file_info *fi);
 	void (*fsync) (fuse_req_t req, int datasync, struct fuse_file_info *fi);
-	void (*ioctl) (fuse_req_t req, int cmd, void *arg,
-		       struct fuse_file_info *fi, unsigned int flags,
+#if FUSE_USE_VERSION < 319
+	void (*ioctl)(fuse_req_t req, int cmd,
+		       void *arg, struct fuse_file_info *fi, unsigned int flags,
 		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#else
+	void (*ioctl)(fuse_req_t req, unsigned int cmd,
+		       void *arg, struct fuse_file_info *fi, unsigned int flags,
+		       const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#endif
 	void (*poll) (fuse_req_t req, struct fuse_file_info *fi,
 		      struct fuse_pollhandle *ph);
 };

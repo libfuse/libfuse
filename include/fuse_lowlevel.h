@@ -513,7 +513,7 @@ struct fuse_lowlevel_ops {
 	 *  - When writeback caching is disabled, the filesystem is
 	 *    expected to properly handle the O_APPEND flag and ensure
 	 *    that each write is appending to the end of the file.
-	 * 
+	 *
 	 *  - When writeback caching is enabled, the kernel will
 	 *    handle O_APPEND. However, unless all changes to the file
 	 *    come through the kernel this will not work reliably. The
@@ -1307,11 +1307,11 @@ struct fuse_lowlevel_ops {
 
 	/**
 	 * Create a tempfile
-	 * 
+	 *
 	 * Tempfile means an anonymous file. It can be made into a normal file later
 	 * by using linkat or such.
-	 * 
-	 * If this is answered with an error ENOSYS this is treated by the kernel as 
+	 *
+	 * If this is answered with an error ENOSYS this is treated by the kernel as
 	 * a permanent failure and it will disable the feature and not ask again.
 	 *
 	 * Valid replies:
@@ -1817,23 +1817,23 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
 
 /**
  * Notify to expire parent attributes and the dentry matching parent/name
- * 
+ *
  * Same restrictions apply as for fuse_lowlevel_notify_inval_entry()
- * 
+ *
  * Compared to invalidating an entry, expiring the entry results not in a
  * forceful removal of that entry from kernel cache but instead the next access
  * to it forces a lookup from the filesystem.
- * 
+ *
  * This makes a difference for overmounted dentries, where plain invalidation
- * would detach all submounts before dropping the dentry from the cache. 
+ * would detach all submounts before dropping the dentry from the cache.
  * If only expiry is set on the dentry, then any overmounts are left alone and
  * until ->d_revalidate() is called.
- * 
+ *
  * Note: ->d_revalidate() is not called for the case of following a submount,
  * so invalidation will only be triggered for the non-overmounted case.
  * The dentry could also be mounted in a different mount instance, in which case
  * any submounts will still be detached.
- * 
+ *
  * Added in FUSE protocol version 7.38. If the kernel does not support
  * this (or a newer) version, the function will return -ENOSYS and do nothing.
  *
@@ -2316,6 +2316,37 @@ void fuse_session_unmount(struct fuse_session *se);
  * @param se the session
  */
 void fuse_session_destroy(struct fuse_session *se);
+
+/**
+ * Callback type for timeout thread.
+ *
+ * @param data user-provided context
+ */
+typedef void (*fuse_timeout_cb)(void *data);
+
+/**
+ * Start a timeout thread that polls on the session file descriptor to detect
+ * kernel (fuse-client) connection abort (POLLERR). If POLLERR is detected, it
+ * will call fuse_session_exit() to terminate the session and will also restart
+ * poll with the specified timeout. If the thread is not stopped within this
+ * timeout, the callback is invoked (or exit(1) if cb is NULL). This is useful
+ * to handle 'umount -f' and '/sys/fs/fuse/connections/NNN/abort'.
+ *
+ * @param se the session
+ * @param timeout_sec timeout in seconds for polling
+ * @param cb callback to invoke on timeout, or NULL to call exit(1)
+ * @param cb_data user-provided context for callback
+ * @return data pointer on success, NULL on failure
+ */
+void *fuse_start_timeout_thread(struct fuse_session *se, int timeout_sec,
+				fuse_timeout_cb cb, void *cb_data);
+
+/**
+ * Stop the timeout thread.
+ *
+ * @param data pointer returned by fuse_start_timeout_thread()
+ */
+void fuse_stop_timeout_thread(void *data);
 
 /* ----------------------------------------------------------- *
  * Custom event loop support                                   *
