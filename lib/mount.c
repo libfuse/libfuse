@@ -29,6 +29,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 
 #include "fuse_mount_compat.h"
 
@@ -502,13 +503,11 @@ static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
 #define O_CLOEXEC 0
 #endif
 
-static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
-			  const char *mnt_opts)
+int fuse_kern_mount_prepare(const char *mnt,
+			    struct mount_opts *mo)
 {
 	char tmp[128];
 	const char *devname = getenv(FUSE_KERN_DEVICE_ENV) ?: "/dev/fuse";
-	char *source = NULL;
-	char *type = NULL;
 	struct stat stbuf;
 	int fd;
 	int res;
@@ -520,32 +519,58 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 
 	res = stat(mnt, &stbuf);
 	if (res == -1) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to access mountpoint %s: %s\n",
-			mnt, strerror(errno));
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to access mountpoint %s: %s\n", mnt,
+			 strerror(errno));
 		return -1;
 	}
 
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
-			fuse_log(FUSE_LOG_ERR,
+			fuse_log(
+				FUSE_LOG_ERR,
 				"fuse: device %s not found. Kernel module not loaded?\n",
 				devname);
 		else
 			fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n",
-				devname, strerror(errno));
+				 devname, strerror(errno));
 		return -1;
 	}
 	if (!O_CLOEXEC)
 		fcntl(fd, F_SETFD, FD_CLOEXEC);
 
-	snprintf(tmp, sizeof(tmp),  "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
+	snprintf(tmp, sizeof(tmp), "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
 		 fd, stbuf.st_mode & S_IFMT, getuid(), getgid());
 
 	res = fuse_opt_add_opt(&mo->kernel_opts, tmp);
 	if (res == -1)
 		goto out_close;
 
+	return fd;
+
+out_close:
+	close(fd);
+	return -1;
+}
+
+/**
+ * Complete the mount operation with an already-opened fd
+ * @mnt: mountpoint
+ * @mo: mount options
+ * @mnt_opts: mount options to pass to the kernel
+ *
+ * Returns: 0 on success, -1 on failure, -2 if fusermount should be used
+ */
+int fuse_kern_mount_finish(const char *mnt, struct mount_opts *mo,
+				  const char *mnt_opts)
+{
+	const char *devname = getenv(FUSE_KERN_DEVICE_ENV) ?: "/dev/fuse";
+	char *source = NULL;
+	char *type = NULL;
+	int res;
+
+	res = -ENOMEM;
 	source = malloc((mo->fsname ? strlen(mo->fsname) : 0) +
 			(mo->subtype ? strlen(mo->subtype) : 0) +
 			strlen(devname) + 32);
@@ -589,10 +614,11 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			if (mo->blkdev && errno == ENODEV &&
 			    !fuse_mnt_check_fuseblk())
 				fuse_log(FUSE_LOG_ERR,
-					"fuse: 'fuseblk' support missing\n");
+					 "fuse: 'fuseblk' support missing\n");
 			else
-				fuse_log(FUSE_LOG_ERR, "fuse: mount failed: %s\n",
-					strerror(errno_save));
+				fuse_log(FUSE_LOG_ERR,
+					 "fuse: mount failed: %s\n",
+					 strerror(errno_save));
 		}
 
 		goto out_close;
@@ -615,15 +641,33 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	free(type);
 	free(source);
 
-	return fd;
+	return 0;
 
 out_umount:
 	umount2(mnt, 2); /* lazy umount */
 out_close:
 	free(type);
 	free(source);
-	close(fd);
 	return res;
+}
+
+static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
+				  const char *mnt_opts)
+{
+	int fd;
+	int res;
+
+	fd = fuse_kern_mount_prepare(mnt, mo);
+	if (fd == -1)
+		return -1;
+
+	res = fuse_kern_mount_finish(mnt, mo, mnt_opts);
+	if (res) {
+		close(fd);
+		return res;
+	}
+
+	return fd;
 }
 
 static int get_mnt_flag_opts(char **mnt_optsp, int flags)
@@ -674,6 +718,17 @@ void destroy_mount_opts(struct mount_opts *mo)
 	free(mo);
 }
 
+int fuse_kern_mount_get_base_mnt_opts(struct mount_opts *mo,
+					     char **mnt_optsp)
+{
+	if (get_mnt_flag_opts(mnt_optsp, mo->flags) == -1)
+		return -1;
+	if (mo->kernel_opts && fuse_opt_add_opt(mnt_optsp, mo->kernel_opts) == -1)
+		return -1;
+	if (mo->mtab_opts &&  fuse_opt_add_opt(mnt_optsp, mo->mtab_opts) == -1)
+		return -1;
+	return 0;
+}
 
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 {
@@ -681,11 +736,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 	char *mnt_opts = NULL;
 
 	res = -1;
-	if (get_mnt_flag_opts(&mnt_opts, mo->flags) == -1)
-		goto out;
-	if (mo->kernel_opts && fuse_opt_add_opt(&mnt_opts, mo->kernel_opts) == -1)
-		goto out;
-	if (mo->mtab_opts &&  fuse_opt_add_opt(&mnt_opts, mo->mtab_opts) == -1)
+	if (fuse_kern_mount_get_base_mnt_opts(mo, &mnt_opts) == -1)
 		goto out;
 
 	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
