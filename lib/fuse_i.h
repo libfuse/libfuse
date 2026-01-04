@@ -11,6 +11,7 @@
 
 #include "fuse.h"
 #include "fuse_lowlevel.h"
+#include "fuse_daemonize.h"
 #include "util.h"
 
 #include <pthread.h>
@@ -109,6 +110,9 @@ struct fuse_session {
 
 	/* true if reading requests from /dev/fuse are handled internally */
 	bool buf_reallocable;
+
+	/* synchronous FUSE_INIT support */
+	bool want_sync_init;
 
 	/* io_uring */
 	struct fuse_session_uring uring;

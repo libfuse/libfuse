@@ -19,6 +19,7 @@
 #include "mount_util.h"
 #include "util.h"
 #include "fuse_uring_i.h"
+#include "fuse_daemonize.h"
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -4748,4 +4749,11 @@ void fuse_session_stop_teardown_watchdog(void *data)
 	/* Wait for thread to finish */
 	pthread_join(tt->thread_id, NULL);
 	fuse_tt_destruct(tt);
+}
+
+void fuse_session_want_sync_init(struct fuse_session *se)
+{
+	if (se == NULL)
+		return;
+	se->want_sync_init = true;
 }

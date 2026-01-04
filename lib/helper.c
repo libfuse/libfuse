@@ -15,6 +15,7 @@
 #include "fuse_misc.h"
 #include "fuse_opt.h"
 #include "fuse_lowlevel.h"
+#include "fuse_daemonize.h"
 #include "mount_util.h"
 
 #include <stdio.h>
@@ -352,17 +353,19 @@ int fuse_main_real_versioned(int argc, char *argv[],
 		goto out1;
 	}
 
+	struct fuse_session *se = fuse_get_session(fuse);
 	if (fuse_mount(fuse,opts.mountpoint) != 0) {
 		res = 4;
 		goto out2;
 	}
 
-	if (fuse_daemonize(opts.foreground) != 0) {
-		res = 5;
-		goto out3;
+	if (!fuse_daemonize_active()) {
+		/* Avoid daemonizing if we are already daemonized by the newer API */
+		if (fuse_daemonize(opts.foreground) != 0) {
+			res = 5;
+			goto out3;
+		}
 	}
-
-	struct fuse_session *se = fuse_get_session(fuse);
 	if (fuse_set_signal_handlers(se) != 0) {
 		res = 6;
 		goto out3;

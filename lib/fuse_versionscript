@@ -227,6 +227,10 @@ FUSE_3.19 {
 		fuse_session_start_teardown_watchdog;
 		fuse_session_stop_teardown_watchdog;
 		fuse_lowlevel_notify_prune;
+		fuse_daemonize_start;
+		fuse_daemonize_signal;
+		fuse_daemonize_active;
+		fuse_session_want_sync_init;
 } FUSE_3.18;
 
 # Local Variables:
