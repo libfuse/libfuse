@@ -245,7 +245,17 @@
 #ifndef _LINUX_FUSE_H
 #define _LINUX_FUSE_H
 
-#ifdef __UINT64_TYPE__
+#if defined(__KERNEL__)
+#include <linux/types.h>
+typedef __u64	fuse_u64;
+typedef __s64	fuse_s64;
+typedef __u32	fuse_u32;
+typedef __s32	fuse_s32;
+typedef __u16	fuse_u16;
+typedef __s16	fuse_s16;
+typedef __u8	fuse_u8;
+typedef __s8	fuse_s8;
+#elif defined(__UINT64_TYPE__)
 typedef __UINT64_TYPE__	fuse_u64;
 typedef __INT64_TYPE__	fuse_s64;
 typedef __UINT32_TYPE__	fuse_u32;
