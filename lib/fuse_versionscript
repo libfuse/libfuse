@@ -226,6 +226,14 @@ FUSE_3.19 {
 	global:
 		fuse_session_start_teardown_watchdog;
 		fuse_session_stop_teardown_watchdog;
+
+		fuse_reply_compound;
+		fuse_execute_compound_sequential;
+
+		fuse_compound_start;
+		fuse_compound_end;
+		fuse_compound_prepare_result;
+		fuse_compound_set_error;
 } FUSE_3.18;
 
 # Local Variables:
