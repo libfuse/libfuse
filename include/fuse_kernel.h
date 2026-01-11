@@ -1251,34 +1251,52 @@ struct fuse_supp_groups {
 	uint32_t	nr_groups;
 	uint32_t	groups[];
 };
-#define FUSE_COMPOUND_SEPARABLE (1<<0)
-#define FUSE_COMPOUND_ATOMIC (1<<1)
 
 /*
- * Compound request header
+ * Sentinel value for fuse_compound_req_in.dep_index meaning the
+ * subrequest does not depend on any other subrequest.
+ */
+#define FUSE_COMPOUND_NO_DEP	0xff
+
+/*
+ * Compound request layout:
  *
- * This header is followed by the fuse requests
+ *	fuse_in_header (opcode FUSE_COMPOUND)
+ *	fuse_compound_in
+ *	  fuse_compound_req_in
+ *	  fuse_in_header
+ *	  payload
+ *	  ... (repeated per subrequest)
+ *
+ * The compound reply layout mirrors it:
+ *
+ *	fuse_out_header
+ *	fuse_compound_out
+ *	  fuse_out_header
+ *	  payload
+ *	  ... (repeated per subrequest)
+ *
+ * fuse_compound_in / fuse_compound_out currently only carry reserved
+ * fields; they exist so future extensions can attach compound-level
+ * metadata without another wire-format change.
  */
 struct fuse_compound_in {
-	uint32_t	flags;			/* Compound flags */
+	uint64_t	reserved[2];
+};
 
-	/* Total size of all results expected from the fuse server.
-	 * This is needed for preallocating the whole result for all
-	 * commands in the fuse server.
-	 */
-	uint32_t	result_size;
-	uint64_t	reserved;
+struct fuse_compound_out {
+	uint64_t	reserved[2];
 };
 
 /*
- * Compound response header
- *
- * This header is followed by complete fuse responses
+ * Per-subrequest header.  dep_index identifies an earlier subrequest in
+ * the same compound whose output should be threaded into this one's
+ * input (currently only the producing op's nodeid is propagated), or
+ * FUSE_COMPOUND_NO_DEP if the subrequest is independent.
  */
-struct fuse_compound_out {
-	uint32_t	flags;     /* Result flags */
-	uint32_t	padding;
-	uint64_t	reserved;
+struct fuse_compound_req_in {
+	uint8_t		dep_index;
+	uint8_t		reserved[3];
 };
 
 /**
