@@ -1251,8 +1251,6 @@ struct fuse_supp_groups {
 	uint32_t	nr_groups;
 	uint32_t	groups[];
 };
-#define FUSE_COMPOUND_SEPARABLE (1<<0)
-#define FUSE_COMPOUND_ATOMIC (1<<1)
 
 /*
  * Compound request header
@@ -1260,14 +1258,35 @@ struct fuse_supp_groups {
  * This header is followed by the fuse requests
  */
 struct fuse_compound_in {
-	uint32_t	flags;			/* Compound flags */
+	uint64_t	reserved[2];
+};
 
-	/* Total size of all results expected from the fuse server.
-	 * This is needed for preallocating the whole result for all
-	 * commands in the fuse server.
-	 */
-	uint32_t	result_size;
-	uint64_t	reserved;
+/*
+ * if the kernel has to use the legacy request path
+ * this operation will be omitted, to avoid any behavior changes
+ */
+#define FUSE_COMPOUND_SUB_IS_OPTIONAL (1 << 0)
+
+/*
+ * this signlas the subrequest produces data that will be used by a later
+ * subrequest
+ */
+#define FUSE_COMPOUND_SUB_IS_ENTRY (1 << 1)
+
+/*
+ * this signals the subrequest consumes data from an earlier request
+ */
+#define FUSE_COMPOUND_SUB_IS_DEP (1 << 2)
+
+/*
+ * Header for each subrequest in a compound request
+ */
+struct fuse_compound_req_in {
+	uint8_t		flags;
+	/* which other operation this one depends on */
+	uint8_t		sub_dep_index;
+	uint16_t	padding;
+	uint32_t	reserved;
 };
 
 /*
@@ -1276,9 +1295,7 @@ struct fuse_compound_in {
  * This header is followed by complete fuse responses
  */
 struct fuse_compound_out {
-	uint32_t	flags;     /* Result flags */
-	uint32_t	padding;
-	uint64_t	reserved;
+	uint64_t	reserved[2];
 };
 
 /**
