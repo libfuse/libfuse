@@ -1069,6 +1069,13 @@ static const struct fuse_lowlevel_ops memfs_oper = {
 	.statfs = memfs_statfs,
 	.create = memfs_create,
 	.forget_multi = memfs_forget_multi,
+	.flock = nullptr,
+	.fallocate = nullptr,
+	.readdirplus = nullptr,
+	.copy_file_range = nullptr,
+	.lseek = nullptr,
+	.tmpfile = nullptr,
+	.compound = nullptr
 };
 #pragma GCC diagnostic pop
 
