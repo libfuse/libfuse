@@ -1341,6 +1341,19 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*statx)(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 		      struct fuse_file_info *fi);
+
+	/**
+	 * Process a compound request containing multiple operations
+	 *
+	 * The filesystem implementation must parse the raw payload data to
+	 * handle the operations.
+	 *
+	 * @param req request handle
+	 * @param count number of operations in the compound request
+	 * @param flags compound request flags
+	 * @param arg raw payload data
+	 */
+	void (*compound)(fuse_req_t req, uint32_t count, uint32_t flags, const void *arg);
 };
 
 /**
@@ -1602,6 +1615,72 @@ int fuse_reply_lock(fuse_req_t req, const struct flock *lock);
  * @return zero for success, -errno for failure to send reply
  */
 int fuse_reply_bmap(fuse_req_t req, uint64_t idx);
+
+/**
+ * Reply with compound operation results
+ *
+ * Possible requests:
+ *   compound
+ *
+ * @param req request handle
+ * @param count number of results
+ * @param results array of compound results
+ * @return zero for success, -errno for failure to send reply
+ */
+int fuse_reply_compound(fuse_req_t req, uint32_t count,
+			const void *results, size_t results_size);
+int fuse_compound_prepare_result(fuse_req_t req, int error, const void *arg,
+			size_t argsize);
+void fuse_compound_set_error(fuse_req_t req, int error);
+void fuse_compound_start(fuse_req_t req);
+void fuse_compound_end(fuse_req_t req);
+
+/**
+ * Get the error code of a specific operation from a compound request
+ *
+ * This function retrieves the error code (or success status) of a
+ * previously executed operation within a compound request. It can be
+ * used to check if an operation succeeded before attempting to extract
+ * its result data.
+ *
+ * @param req request handle
+ * @param op_index index of the operation (0-based)
+ * @return 0 on success, negative error code on failure:
+ *         -EINVAL: invalid parameters or op_index out of range
+ *         -EIO: malformed compound buffer
+ *         or the error code from the operation if it failed
+ */
+int fuse_compound_get_error(fuse_req_t req, int op_index);
+
+/**
+ * Get the result of a specific operation from a compound request
+ *
+ * This function extracts the result data from a previously executed
+ * operation within a compound request. It can be used to access
+ * intermediate results (e.g., the inode created by MKNOD) to use
+ * in subsequent operations (e.g., OPEN).
+ *
+ * @param req request handle
+ * @param op_index index of the operation (0-based)
+ * @param result buffer to store the result data
+ * @param result_size size of the result buffer
+ * @return 0 on success, negative error code on failure:
+ *         -EINVAL: invalid parameters or op_index out of range
+ *         -EIO: malformed compound buffer
+ *         -EOVERFLOW: result buffer too small
+ *         or the error code from the operation if it failed
+ */
+int fuse_compound_get_result(fuse_req_t req, int op_index,
+			     void *result, size_t result_size);
+
+/**
+ * Execute compound operations sequentially
+ *
+ * Executes each operation in the compound request one by one,
+ * sending the compound reply with all executed operations.
+ * @param req request handle
+ */
+void fuse_execute_compound_sequential(fuse_req_t req);
 
 /* ----------------------------------------------------------- *
  * Filling a buffer in readdir				       *

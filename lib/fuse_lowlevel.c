@@ -347,9 +347,201 @@ static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 	return res;
 }
 
+/* Signal completion of a compound operation
+ * This is used for signaling the end of a request from
+ * within a compound and mandatory when commands run asynchronously
+ */
+static inline void fuse_compound_signal_completion(fuse_req_t req)
+{
+	pthread_mutex_lock(&req->compound.waitq_lock);
+	if (--req->compound.operation_running == 0)
+		pthread_cond_signal(&req->compound.waitq);
+	pthread_mutex_unlock(&req->compound.waitq_lock);
+}
+
+int fuse_compound_prepare_result(fuse_req_t req, int error, const void *arg,
+					size_t argsize)
+{
+	int res = 0;
+	void *result_dest;
+	struct fuse_out_header out_hdr = {0};
+
+	if (req->compound.result_count == req->compound.input_count) {
+		/* called one time too many */
+		res = -EINVAL;
+		goto out;
+	}
+
+	if (error) {
+		res = error;
+		/* Still need to write error header to output buffer */
+		out_hdr.error = error;
+		out_hdr.len = sizeof(out_hdr);
+
+		if (unlikely(req->compound.result_size + sizeof(out_hdr) >
+			     req->compound.allocated_size)) {
+			fuse_log(FUSE_LOG_ERR,
+				"compound: not enough memory for error header\n");
+			/* This is a fatal error for the whole compound */
+			req->compound.error = -ENOMEM;
+			goto out;
+		}
+
+		result_dest = (char *)req->compound.out_buffer + req->compound.result_size;
+		memcpy(result_dest, &out_hdr, sizeof(out_hdr));
+		req->compound.result_size += sizeof(out_hdr);
+		goto out;
+	}
+
+	if (unlikely(req->compound.result_size + argsize +
+		sizeof(struct fuse_out_header) > req->compound.allocated_size)) {
+		fuse_log(FUSE_LOG_ERR,
+			"compound: not enough memory for result (need %zu have %d)\n",
+			req->compound.result_size + argsize + sizeof(struct fuse_out_header),
+			req->compound.allocated_size);
+		req->compound.error = -ENOMEM;
+		res = -ENOMEM;
+		/* Write error header */
+		out_hdr.error = -ENOMEM;
+		out_hdr.len = sizeof(out_hdr);
+
+		result_dest = (char *)req->compound.out_buffer + req->compound.result_size;
+		memcpy(result_dest, &out_hdr, sizeof(out_hdr));
+		req->compound.result_size += sizeof(out_hdr);
+		goto out;
+	}
+
+	out_hdr.len = argsize + sizeof(out_hdr);
+
+	/* append to the out buffer
+	 * note that this is part of the reason why we can only do
+	 * ordered compounds here this is not to be used
+	 * concurrently
+	 */
+	result_dest = (char *) req->compound.out_buffer + req->compound.result_size;
+	memcpy(result_dest, &out_hdr, sizeof(out_hdr));
+	req->compound.result_size += sizeof(out_hdr);
+
+	if (argsize) {
+		result_dest = (char *) req->compound.out_buffer +
+			req->compound.result_size;
+		if ((char *) arg < (char *)req->compound.out_buffer +
+				req->compound.allocated_size &&
+		    (char *) arg + argsize > (char *)req->compound.out_buffer) {
+			if (req->se->debug)
+				fuse_log(FUSE_LOG_DEBUG,
+					"compound: detected result overlap, using memmove\n");
+			/* buffers overlap, move it to the right spot */
+			memmove(result_dest, arg, argsize);
+		} else {
+			memcpy(result_dest, arg, argsize);
+		}
+		req->compound.result_size += argsize;
+	}
+out:
+	req->compound.result_count++;
+	fuse_compound_signal_completion(req);
+	return res;
+}
+
+int fuse_compound_get_error(fuse_req_t req, int op_index)
+{
+	char *buffer;
+	int i;
+	struct fuse_out_header *op_hdr;
+
+	/* Validate parameters */
+	if (!req)
+		return -EINVAL;
+
+	if (op_index < 0 || op_index >= req->compound.result_count)
+		return -EINVAL;
+
+	/* Start at the beginning of the compound buffer */
+	buffer = (char *)req->compound.out_buffer;
+
+	/* Skip the compound header */
+	buffer += sizeof(struct fuse_compound_out);
+
+	/* Navigate to the requested operation's result */
+	for (i = 0; i < op_index; i++) {
+		op_hdr = (struct fuse_out_header *)buffer;
+
+		/* Validate header */
+		if (op_hdr->len < sizeof(struct fuse_out_header))
+			return -EIO;
+
+		/* Skip to next operation result */
+		buffer += op_hdr->len;
+	}
+
+	/* Now at the requested operation's result */
+	op_hdr = (struct fuse_out_header *)buffer;
+
+	/* Return the error code (0 if success) */
+	return op_hdr->error;
+}
+
+int fuse_compound_get_result(fuse_req_t req, int op_index,
+			     void *result, size_t result_size)
+{
+	char *buffer;
+	int i;
+	struct fuse_out_header *op_hdr;
+
+	/* Validate parameters */
+	if (!req || !result || result_size == 0)
+		return -EINVAL;
+
+	if (op_index < 0 || op_index >= req->compound.result_count)
+		return -EINVAL;
+
+	/* Start at the beginning of the compound buffer */
+	buffer = (char *)req->compound.out_buffer;
+
+	/* Skip the compound header */
+	buffer += sizeof(struct fuse_compound_out);
+
+	/* Navigate to the requested operation's result */
+	for (i = 0; i < op_index; i++) {
+		op_hdr = (struct fuse_out_header *)buffer;
+
+		/* Validate header */
+		if (op_hdr->len < sizeof(struct fuse_out_header))
+			return -EIO;
+
+		/* Skip to next operation result */
+		buffer += op_hdr->len;
+	}
+
+	/* Now at the requested operation's result */
+	op_hdr = (struct fuse_out_header *)buffer;
+
+	/* Check if operation had an error */
+	if (op_hdr->error)
+		return op_hdr->error;
+
+	/* Calculate the size of the result data (excluding header) */
+	size_t data_size = op_hdr->len - sizeof(struct fuse_out_header);
+
+	/* Check if the result buffer is large enough */
+	if (result_size < data_size)
+		return -EOVERFLOW;
+
+	/* Copy the result data */
+	buffer += sizeof(struct fuse_out_header);
+	memcpy(result, buffer, data_size);
+
+	return 0;
+}
+
 static int send_reply(fuse_req_t req, int error, const void *arg,
 		      size_t argsize)
 {
+	/* don't send a reply for compound request yet */
+	if (req->is_compound)
+		return fuse_compound_prepare_result(req, error, arg, argsize);
+
 	if (req->flags.is_uring)
 		return send_reply_uring(req, error, arg, argsize);
 
@@ -1291,6 +1483,223 @@ int fuse_reply_statx(fuse_req_t req, int flags, struct statx *statx,
 	return -ENOSYS;
 }
 #endif
+
+int fuse_reply_compound(fuse_req_t req, uint32_t count,
+			const void *results, size_t results_size)
+{
+	int ret;
+
+	/* note that we have left space for the header in the initialization */
+	struct fuse_compound_out *out_hdr =
+		(struct fuse_compound_out *)req->compound.out_buffer;
+
+	if (count == 0)
+		return fuse_reply_err(req, EINVAL);
+
+	if (req->compound.allocated_size < results_size)
+		return fuse_reply_err(req, ENOMEM);
+
+	if (req->compound.result_count < count)
+		req->compound.result_count = count;
+
+	out_hdr->flags = 0;
+
+	/* if one of the compound implementation gives us it's own buffer
+	 * we need to copy it into our own.
+	 */
+	if (results != NULL && results != req->compound.out_buffer) {
+		/* Check for overlap */
+		if ((char *) results < (char *)req->compound.out_buffer +
+				req->compound.allocated_size &&
+		    (char *) results + results_size > (char *)req->compound.out_buffer) {
+			if (req->se->debug)
+				fuse_log(FUSE_LOG_DEBUG,
+					"%s: detected overlap, using memmove\n", __func__);
+			memmove((char *)req->compound.out_buffer + sizeof(*out_hdr),
+				(char *)results, results_size);
+		} else {
+			memcpy((char *)req->compound.out_buffer + sizeof(*out_hdr), results,
+			       results_size);
+		}
+		req->compound.result_size += results_size;
+	}
+
+	if (req->flags.is_uring) {
+		ret = send_reply_uring(req, req->compound.error, req->compound.out_buffer,
+				req->compound.result_size);
+	} else {
+		if (req->compound.error == 0)
+			ret = send_reply_ok(req, req->compound.out_buffer,
+				req->compound.result_size);
+		else
+			ret = fuse_reply_err(req, req->compound.error);
+	}
+	free(req->compound.out_buffer);
+	req->compound.out_buffer = NULL;
+	return ret;
+}
+
+/* Calculate the number of operations in a compound request by parsing the payload */
+static int compound_count_ops(const void *payload, size_t payload_size)
+{
+	const struct fuse_in_header *op_hdr = (const struct fuse_in_header *)payload;
+	const char *end = (const char *)payload + payload_size;
+	int count = 0;
+
+	while ((const char *)op_hdr < end) {
+		/* Validate header */
+		if ((const char *)op_hdr + sizeof(struct fuse_in_header) > end)
+			return -1;  /* Invalid: header extends beyond payload */
+
+		if (op_hdr->len < sizeof(struct fuse_in_header))
+			return -1;  /* Invalid: operation length too small */
+
+		if ((const char *)op_hdr + op_hdr->len > end)
+			return -1;  /* Invalid: operation extends beyond payload */
+
+		count++;
+		op_hdr = (const struct fuse_in_header *)((const char *)op_hdr + op_hdr->len);
+	}
+
+	return count;
+}
+
+static int compound_ctx_init(fuse_req_t req,
+	const struct fuse_compound_in *arg, const void *payload, int count)
+{
+	struct fuse_in_header *op_hdr = (struct fuse_in_header *)payload;
+
+	/* Initialize compound context */
+	memset(&req->compound, 0, sizeof(req->compound));
+	req->compound.error = 0;
+	req->compound.flags = arg->flags;
+	req->compound.allocated_size = arg->result_size +
+			sizeof(struct fuse_compound_out) +
+			(count * sizeof(struct fuse_out_header));
+
+	/* Initialize synchronization primitives */
+	pthread_mutex_init(&req->compound.waitq_lock, NULL);
+	pthread_cond_init(&req->compound.waitq, NULL);
+	req->compound.operation_running = 0;
+
+	/* Allocate array for request headers */
+	req->compound.req = calloc(count, sizeof(struct fuse_in_header *));
+	if (!req->compound.req)
+		goto err_destroy_sync;
+
+	req->compound.out_buffer = malloc(req->compound.allocated_size);
+	if (!req->compound.out_buffer)
+		goto err_free_req;
+
+	/* leave space at the beginning for the out header */
+	req->compound.result_size = sizeof(struct fuse_compound_out);
+	req->compound.input_count = count;
+
+	/* assign the pointers to the compound commands headers */
+	for (int i = 0; i < count; i++) {
+		req->compound.req[i] = op_hdr;
+		op_hdr = (struct fuse_in_header *)((char *) op_hdr + op_hdr->len);
+	}
+
+	return 0;
+
+err_free_req:
+	free(req->compound.req);
+	req->compound.req = NULL;
+err_destroy_sync:
+	pthread_mutex_destroy(&req->compound.waitq_lock);
+	pthread_cond_destroy(&req->compound.waitq);
+	return -ENOMEM;
+}
+
+static void compound_ctx_cleanup(fuse_req_t req)
+{
+	/* Free output buffer if not already freed */
+	if (req->compound.out_buffer) {
+		free(req->compound.out_buffer);
+		req->compound.out_buffer = NULL;
+	}
+
+	/* Free request array */
+	if (req->compound.req) {
+		free(req->compound.req);
+		req->compound.req = NULL;
+	}
+
+	/* Destroy synchronization primitives */
+	pthread_mutex_destroy(&req->compound.waitq_lock);
+	pthread_cond_destroy(&req->compound.waitq);
+}
+
+static bool execute_compound(fuse_req_t compound_req, const int index);
+
+/*
+ * Execute compound operations sequentially
+ *
+ * Executes each operation in the compound request one by one.
+ * Sends the compound reply.
+ */
+void fuse_execute_compound_sequential(fuse_req_t req)
+{
+	int executed_count;
+	int count = req->compound.input_count;
+
+	if (req->compound.flags & FUSE_COMPOUND_ATOMIC || 
+			!(req->compound.flags & FUSE_COMPOUND_SEPARABLE)) {
+		fuse_reply_err(req, EOPNOTSUPP);
+		return;
+	}
+
+	req->is_compound = true;
+
+	for (executed_count = 0; executed_count < count; executed_count++)
+		execute_compound(req, executed_count);
+
+	/*
+	 * Treat the compound request as normal again
+	 * so that the result will actually be sent out
+	 */
+	req->is_compound = false;
+	fuse_reply_compound(req, executed_count, req->compound.out_buffer,
+			    req->compound.result_size);
+}
+
+static void do_compound(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
+{
+	(void)nodeid;
+	const struct fuse_compound_in *arg = (const struct fuse_compound_in *) inarg;
+	const void *in_payload = PARAM(arg);
+	size_t payload_size;
+	int count;
+
+	/* Calculate payload size: total request size minus headers */
+	payload_size = req->in_len - sizeof(struct fuse_in_header) - sizeof(struct fuse_compound_in);
+
+	/* Calculate number of operations by parsing the payload */
+	count = compound_count_ops(in_payload, payload_size);
+	if (count <= 0) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	/* The compound implementation does not have to use the c_ctx
+	 * but if it does, it should be initialized.
+	 */
+	if (compound_ctx_init(req, arg, in_payload, count) != 0) {
+		fuse_reply_err(req, ENOMEM);
+		return;
+	}
+
+	if (req->se->op.compound) {
+		req->se->op.compound(req, count, arg->flags, in_payload);
+	
+		if (req->compound.result_count == 0)
+			fuse_execute_compound_sequential(req);
+	} else
+		fuse_reply_err(req, ENOSYS);
+
+	compound_ctx_cleanup(req);
+}
 
 static void _do_lookup(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *op_in, const void *in_payload)
@@ -2572,6 +2981,21 @@ static void do_statx(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	_do_statx(req, nodeid, inarg, NULL);
 }
 
+void fuse_compound_set_error(fuse_req_t req, int error)
+{
+	req->compound.error = error;
+}
+
+void fuse_compound_start(fuse_req_t req)
+{
+	req->is_compound = true;
+}
+
+void fuse_compound_end(fuse_req_t req)
+{
+	req->is_compound = false;
+}
+
 static bool want_flags_valid(uint64_t capable, uint64_t want)
 {
 	uint64_t unknown_flags = want & (~capable);
@@ -3469,6 +3893,7 @@ static struct {
 	[FUSE_COPY_FILE_RANGE_64] = { do_copy_file_range_64, "COPY_FILE_RANGE_64" },
 	[FUSE_LSEEK]	   = { do_lseek,       "LSEEK"	     },
 	[FUSE_STATX]	   = { do_statx,       "STATX"	     },
+	[FUSE_COMPOUND]	   = { do_compound,    "COMPOUND"    },
 	[CUSE_INIT]	   = { cuse_lowlevel_init, "CUSE_INIT"   },
 };
 
@@ -3524,6 +3949,7 @@ static struct {
 	[FUSE_COPY_FILE_RANGE]	= { _do_copy_file_range, "COPY_FILE_RANGE" },
 	[FUSE_COPY_FILE_RANGE_64]	= { _do_copy_file_range_64, "COPY_FILE_RANGE_64" },
 	[FUSE_LSEEK]		= { _do_lseek,		"LSEEK" },
+	/* FUSE_COMPOUND uses do_compound from fuse_ll_ops, not _do_compound */
 	[FUSE_STATX]		= { _do_statx,		"STATX" },
 	[CUSE_INIT]		= { _cuse_lowlevel_init, "CUSE_INIT" },
 };
@@ -3535,6 +3961,39 @@ static struct {
  */
 #define FUSE_MAXOP (CUSE_INIT + 1)
 
+/* call the handlers and deal with the results
+ * return true is the execution was successful
+ */
+static bool execute_compound(fuse_req_t compound_req, const int index)
+{
+
+	/* Reset completion flag before executing operation */
+	pthread_mutex_lock(&compound_req->compound.waitq_lock);
+	compound_req->compound.operation_running++;
+	pthread_mutex_unlock(&compound_req->compound.waitq_lock);
+
+	if (compound_req->se->debug)
+		fuse_log(FUSE_LOG_DEBUG, "compound: executing %s\n",
+			fuse_ll_ops[compound_req->compound.req[index]->opcode].name);
+
+	fuse_ll_ops[compound_req->compound.req[index]->opcode].func(
+						compound_req,
+						compound_req->compound.req[index]->nodeid,
+						(char *)compound_req->compound.req[index]
+							+ sizeof(struct fuse_in_header));
+
+	/* use condition variable to wait for the result in case
+	 * the operation was processed asynchronously
+	 * and we wait for the reply function to be called
+	 */
+	pthread_mutex_lock(&compound_req->compound.waitq_lock);
+	while (compound_req->compound.operation_running)
+		pthread_cond_wait(&compound_req->compound.waitq,
+			&compound_req->compound.waitq_lock);
+	pthread_mutex_unlock(&compound_req->compound.waitq_lock);
+
+	return compound_req->compound.error == 0;
+}
 
 /**
  *
@@ -3564,6 +4023,7 @@ fuse_session_in2req(struct fuse_req *req, struct fuse_in_header *in)
 	req->ctx.uid = in->uid;
 	req->ctx.gid = in->gid;
 	req->ctx.pid = in->pid;
+	req->in_len = in->len;
 }
 
 /**
