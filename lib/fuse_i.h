@@ -97,6 +97,8 @@ struct fuse_session_uring {
 	void (*free_payload_buf)(void *buf, size_t size, void *key);
 };
 
+struct fuse_timeout_thread;
+
 struct fuse_session {
 	char *mountpoint;
 	volatile int exited;
@@ -132,6 +134,9 @@ struct fuse_session {
 
 	/* io_uring */
 	struct fuse_session_uring uring;
+
+	/* timeout thread */
+	_Atomic(struct fuse_timeout_thread *) timeout_thread;
 };
 
 struct fuse_chan {

@@ -144,3 +144,13 @@ def test_notify_file_size(tmpdir, notify, output_checker):
             logger.error(f"Failure in unmount: '{' '.join(cmdline)}'")
             cleanup(mount_process, mnt_dir)
         logger.debug("Unmount completed")
+def test_teardown_watchdog(output_checker):
+    """Test timeout thread detecting connection abort"""
+    logger = logging.getLogger(__name__)
+    logger.debug("Testing teardown watchdog")
+    cmdline = [ pjoin(basename, 'test', 'test_teardown_watchdog') ]
+    logger.debug(f"Command line: {' '.join(cmdline)}")
+    subprocess.run(cmdline, stdout=output_checker.fd, \
+                   stderr=output_checker.fd, timeout=30, check=True)
+    logger.debug("Teardown watchdog test completed successfully")
+
