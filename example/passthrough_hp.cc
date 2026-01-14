@@ -55,6 +55,7 @@
 #include <errno.h>
 #include <ftw.h>
 #include <fuse_lowlevel.h>
+#include <fuse_kernel.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>
@@ -172,6 +173,8 @@ struct Fs {
 	std::string fuse_mount_options;
 	bool direct_io;
 	bool passthrough;
+
+	fuse_lowlevel_ops* ops;
 };
 static Fs fs{};
 
@@ -1266,6 +1269,100 @@ static void sfs_flock(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
+/* Helper to parse compound payload */
+struct compound_operation {
+	uint32_t opcode;
+	uint64_t nodeid;
+	const void *payload;
+	size_t payload_size;
+};
+
+static int parse_compound_operations(const void *arg, uint32_t count,
+				     struct compound_operation *ops)
+{
+	const struct fuse_in_header *op_hdr = (const struct fuse_in_header *)arg;
+
+	for (uint32_t i = 0; i < count; i++) {
+		if (i >= FUSE_MAX_COMPOUND_OPS)
+			return -EINVAL;
+
+		ops[i].opcode = op_hdr->opcode;
+		ops[i].nodeid = op_hdr->nodeid;
+		ops[i].payload = (const char *)op_hdr + sizeof(struct fuse_in_header);
+		ops[i].payload_size = op_hdr->len - sizeof(struct fuse_in_header);
+
+		/* Move to next operation */
+		op_hdr = (const struct fuse_in_header *)((const char *)op_hdr + op_hdr->len);
+	}
+
+	return 0;
+}
+
+/* Atomic lookup+create implementation (demo - pseudo-atomicity) */
+static void sfs_atomic_lookup_create(fuse_req_t req,
+				     fuse_ino_t lookup_parent_ino,
+				     const char *lookup_name,
+				     fuse_ino_t create_parent_ino,
+				     const char *create_name,
+				     mode_t mode,
+				     uint32_t flags)
+{
+	if (fs.debug_fuse)
+		cout << "compound: LOOKUP+CREATE" << endl;
+
+	/* this will signal to the lowlevel ap code not to send the response yet */
+	fuse_compound_start(req);
+
+	/* this is of course no atomic implementation, but it's a demonstration
+	 * of how to use the compound API.
+	 */
+	fs.ops->lookup(req, lookup_parent_ino, lookup_name);
+
+	fuse_file_info fi;
+	memset(&fi, 0, sizeof(fi));
+	fi.flags = flags;
+	fs.ops->create(req, create_parent_ino, create_name, mode, &fi);
+
+	fuse_compound_end(req);
+	fuse_reply_compound(req, 2, nullptr, 0);
+}
+
+static void sfs_compound(fuse_req_t req, uint32_t count, uint32_t flags,
+			 const void *arg)
+{
+	struct compound_operation ops[FUSE_MAX_COMPOUND_OPS];
+
+	if (parse_compound_operations(arg, count, ops) < 0) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	if (count == 2 &&
+	    flags & FUSE_COMPOUND_ATOMIC &&
+	    ops[0].opcode == FUSE_LOOKUP &&
+	    ops[1].opcode == FUSE_CREATE) {
+
+		const char *lookup_name = (const char *)ops[0].payload;
+		const struct fuse_create_in *create_in =
+			(const struct fuse_create_in *)ops[1].payload;
+		const char *create_name =
+			(const char *)ops[1].payload + sizeof(struct fuse_create_in);
+
+		/* this is the call to the specialized handler */
+		sfs_atomic_lookup_create(req, ops[0].nodeid, lookup_name,
+					ops[1].nodeid, create_name,
+					create_in->mode, create_in->flags);
+		return;
+	}
+
+	/* Add more atomic patterns as needed ... */
+
+	/* if no specialized handling is available do it sequentially
+	 * This is just for convenence here to be able to do testing
+	 */
+	fuse_execute_compound_sequential(req);
+}
+
 #ifdef HAVE_SETXATTR
 static void sfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			 size_t size)
@@ -1424,6 +1521,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper)
 	sfs_oper.listxattr = sfs_listxattr;
 	sfs_oper.removexattr = sfs_removexattr;
 #endif
+    sfs_oper.compound = sfs_compound;
 }
 
 static void print_usage(char *prog_name)
@@ -1617,6 +1715,7 @@ int main(int argc, char *argv[])
 	ret = -1;
 	fuse_lowlevel_ops sfs_oper{};
 	assign_operations(sfs_oper);
+	fs.ops = &sfs_oper;
 	auto se = fuse_session_new(&args, &sfs_oper, sizeof(sfs_oper), &fs);
 	if (se == nullptr)
 		goto err_out1;
