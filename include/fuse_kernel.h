@@ -1044,7 +1044,7 @@ struct fuse_in_header {
 
 struct fuse_out_header {
 	uint32_t	len;
-	int32_t		error;
+	int32_t		error; /* negative errno or zero */
 	uint64_t	unique;
 };
 
