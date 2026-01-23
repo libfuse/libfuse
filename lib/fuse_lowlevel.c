@@ -4583,7 +4583,7 @@ restart:
 		} else if (res > 0) {
 			/* Check for POLLERR on session fd */
 			if (session_fd_idx >= 0 &&
-			    pfds[session_fd_idx].revents & POLLERR) {
+			    pfds[session_fd_idx].revents & (POLLERR | POLLNVAL)) {
 				fuse_tt_pollerr_handler(tt);
 
 				/* Timeout for hard exit */
@@ -4596,6 +4596,18 @@ restart:
 				/* Teardown requested, exit thread */
 				break;
 			}
+		}
+
+		if (unlikely(poll_timeout == -1)) {
+			fuse_log(
+				FUSE_LOG_ERR,
+				"FUSE teardown watchdog Unhandled poll result session fd: %d eventfd: %d.\n"
+				"Terminating the watchdog.\n",
+				session_fd_idx >= 0 ?
+					pfds[session_fd_idx].revents :
+					-1,
+				pfds[eventfd_idx].revents);
+			break;
 		}
 
 		/*
