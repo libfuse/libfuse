@@ -1,10 +1,10 @@
 To test FUSE with xfstests¹:
 
-1.  copy the `mount.fuse.passthrough` file into
-  `/sbin` and edit the `PASSTHROUGH_PATH`, `SCRATCH_SOURCE` and `TEST_SOURCE` variables as needed.
+1.  copy the `mount.fuse.passthrough` file into `/sbin`.
 
-2.  Make sure that the `SCRATCH_SOURCE` and `TEST_SOURCE` directories
-exist.
+2.  Edit the `local.config` file, change the `PASSTHROUGH_PATH`,
+  `SCRATCH_DEV`, `SCRATCH_MNT`, `TEST_DEV` and `TEST_DIR` variables as needed.
+  Make sure that the directories exist.
 
 3. Copy `local.config` into your xfstests directory
 
