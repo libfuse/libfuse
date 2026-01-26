@@ -159,12 +159,26 @@ static void fork_child(void)
 	fuse_loop_cfg_destroy(loop_config);
 
 	/*
-	 * Wait for timeout thread to invoke callback.
-	 * The timeout thread should call the callback after
-	 * the configured timeout (5 seconds).
+	 * Check callback did NOT fire immediately after unmount.
+	 * POLLERR is returned, but watchdog must wait for timeout.
 	 */
+	usleep(500 * 1000);
+	if (td.triggered) {
+		printf("Test FAILED: callback fired too early\n");
+		fuse_session_stop_teardown_watchdog(timeout_thread);
+		rmdir(mountpoint);
+		free(mountpoint);
+		fuse_opt_free_args(&args);
+		exit(1);
+	}
+
+	/* Wait for timeout callback with polling loop */
 	printf("Waiting for timeout callback...\n");
-	sleep(10);
+	for (int i = 0; i < 7 * 10; i++) {  /* 5s timeout + 2s margin */
+		if (td.triggered)
+			break;
+		usleep(100 * 1000);
+	}
 
 	fuse_session_stop_teardown_watchdog(timeout_thread);
 	rmdir(mountpoint);
@@ -196,36 +210,44 @@ out_free_args:
 	exit(1);
 }
 
-static void run_test_in_child(void)
+static int run_test_in_child(void (*test_func)(void), const char *test_name)
 {
 	pid_t child;
 	int status;
 
+	printf("Running test: %s\n", test_name);
+
 	child = fork();
 	if (child == -1) {
 		perror("fork");
-		exit(1);
+		return 1;
 	}
 
 	if (child == 0)
-		fork_child();
+		test_func();
 
 	if (waitpid(child, &status, 0) == -1) {
 		perror("waitpid");
-		exit(1);
+		return 1;
 	}
 
 	if (WIFEXITED(status))
-		exit(WEXITSTATUS(status));
+		return WEXITSTATUS(status);
 
 	fprintf(stderr, "Child terminated abnormally\n");
-	exit(1);
+	return 1;
 }
 
 int main(void)
 {
-	printf("Testing timeout thread feature\n");
-	run_test_in_child();
+	int ret;
+
+	printf("Testing teardown watchdog feature\n");
+
+	ret = run_test_in_child(fork_child, "unmount triggers callback");
+	if (ret != 0)
+		return ret;
+
+	printf("All tests PASSED\n");
 	return 0;
 }
-
