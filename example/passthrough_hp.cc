@@ -55,6 +55,7 @@
 #include <errno.h>
 #include <ftw.h>
 #include <fuse_lowlevel.h>
+#include <fuse_kernel.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>
@@ -172,6 +173,8 @@ struct Fs {
 	std::string fuse_mount_options;
 	bool direct_io;
 	bool passthrough;
+
+	fuse_lowlevel_ops* ops;
 };
 static Fs fs{};
 
@@ -1266,6 +1269,180 @@ static void sfs_flock(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi,
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
+/* Helper to parse compound payload */
+struct compound_operation {
+	uint32_t opcode;
+	uint64_t nodeid;
+	const void *payload;
+	size_t payload_size;
+};
+
+static int parse_compound_operations(const void *arg, uint32_t count,
+				     struct compound_operation *ops)
+{
+	const struct fuse_in_header *op_hdr = (const struct fuse_in_header *)arg;
+
+	for (uint32_t i = 0; i < count; i++) {
+		if (i >= FUSE_MAX_COMPOUND_OPS)
+			return -EINVAL;
+
+		ops[i].opcode = op_hdr->opcode;
+		ops[i].nodeid = op_hdr->nodeid;
+		ops[i].payload = (const char *)op_hdr + sizeof(struct fuse_in_header);
+		ops[i].payload_size = op_hdr->len - sizeof(struct fuse_in_header);
+
+		/* Move to next operation */
+		op_hdr = (const struct fuse_in_header *)((const char *)op_hdr + op_hdr->len);
+	}
+
+	return 0;
+}
+
+/* Helper function to decode open flags for debugging */
+static string decode_open_flags(uint32_t flags)
+{
+	string result;
+
+	/* Access mode */
+	int accmode = flags & O_ACCMODE;
+	if (accmode == O_RDONLY)
+		result += "O_RDONLY";
+	else if (accmode == O_WRONLY)
+		result += "O_WRONLY";
+	else if (accmode == O_RDWR)
+		result += "O_RDWR";
+
+	/* Other flags */
+	if (flags & O_CREAT) result += "|O_CREAT";
+	if (flags & O_EXCL) result += "|O_EXCL";
+	if (flags & O_TRUNC) result += "|O_TRUNC";
+	if (flags & O_APPEND) result += "|O_APPEND";
+	if (flags & O_NONBLOCK) result += "|O_NONBLOCK";
+	if (flags & O_SYNC) result += "|O_SYNC";
+	if (flags & O_DIRECT) result += "|O_DIRECT";
+	if (flags & O_DIRECTORY) result += "|O_DIRECTORY";
+	if (flags & O_NOFOLLOW) result += "|O_NOFOLLOW";
+	if (flags & O_CLOEXEC) result += "|O_CLOEXEC";
+#ifdef O_PATH
+	if (flags & O_PATH) result += "|O_PATH";
+#endif
+#ifdef O_TMPFILE
+	if ((flags & O_TMPFILE) == O_TMPFILE) result += "|O_TMPFILE";
+#endif
+
+	return result;
+}
+
+/* Atomic lookup+mknod+open implementation */
+static void sfs_atomic_lookup_mknod_open(fuse_req_t req,
+					 fuse_ino_t lookup_parent_ino,
+					 const char *lookup_name,
+					 fuse_ino_t mknod_parent_ino,
+					 const char *mknod_name,
+					 mode_t mode,
+					 dev_t rdev,
+					 uint32_t open_flags)
+{
+	if (fs.debug_fuse)
+		cout << "compound: LOOKUP+MKNOD+OPEN (atomic create)" << endl;
+
+	/* Start compound operation */
+	fuse_compound_start(req);
+
+	/* Execute LOOKUP - expect ENOENT for atomic create */
+	if (fs.debug_fuse)
+		cout << "  [1/3] LOOKUP parent=" << lookup_parent_ino
+		     << " name='" << lookup_name << "'" << endl;
+	fs.ops->lookup(req, lookup_parent_ino, lookup_name);
+
+	int err = fuse_compound_get_error(req, 0);
+	cout << "  LOOKUP finished: " << (err == 0 ? "success" : "error " + to_string(err)) << endl;
+
+	/* Execute MKNOD to create the file */
+	if (fs.debug_fuse)
+		cout << "  [2/3] MKNOD parent=" << mknod_parent_ino
+		     << " name='" << mknod_name << "' mode=0" << std::oct << mode << std::dec
+		     << " rdev=" << rdev << endl;
+	fs.ops->mknod(req, mknod_parent_ino, mknod_name, mode, rdev);
+
+	/* Extract the created inode from MKNOD result */
+	struct fuse_entry_out entry;
+	fuse_ino_t created_ino = mknod_parent_ino;  // Default fallback
+
+	/* First check if MKNOD succeeded */
+	err = fuse_compound_get_error(req, 1);
+	if (err == 0) {
+		/* MKNOD succeeded, extract the result */
+		int ret = fuse_compound_get_result(req, 1, &entry, sizeof(entry));
+		if (ret == 0) {
+			created_ino = entry.nodeid;
+			if (fs.debug_fuse)
+				cout << "  Extracted created inode: " << created_ino << endl;
+		} else if (fs.debug_fuse) {
+			cout << "  Warning: Could not extract MKNOD result (error " << ret
+			     << "), using parent inode" << endl;
+		}
+
+		/* Execute OPEN on the newly created file */
+		struct fuse_file_info fi;
+		memset(&fi, 0, sizeof(fi));
+		fi.flags = open_flags;
+
+		if (fs.debug_fuse) {
+			cout << "  [3/3] OPEN ino=" << created_ino
+				<< " flags=0x" << std::hex << open_flags << std::dec
+				<< " (" << decode_open_flags(open_flags) << ")" << endl;
+		}
+		fs.ops->open(req, created_ino, &fi);
+		if (fs.debug_fuse) {
+			int open_err = fuse_compound_get_error(req, 2);
+			cout << "  OPEN finished: " << (open_err == 0 ? "success" : "error " + to_string(open_err)) << endl;
+		}
+	} else if (fs.debug_fuse) {
+		cout << "  Warning: MKNOD failed with error " << err
+		     << ", using parent inode" << endl;
+	}
+
+	/* End compound and send reply */
+	if (fs.debug_fuse)
+		cout << "  Sending compound reply with 3 results" << endl;
+	fuse_compound_end(req);
+	fuse_reply_compound(req, 3, nullptr, 0);
+}
+
+static void sfs_compound(fuse_req_t req, uint32_t count, uint32_t flags,
+			 const void *arg)
+{
+	struct compound_operation ops[FUSE_MAX_COMPOUND_OPS];
+
+	if (parse_compound_operations(arg, count, ops) < 0) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+
+	if (count == 3 &&
+	    flags & FUSE_COMPOUND_ATOMIC &&
+	    ops[0].opcode == FUSE_LOOKUP &&
+	    ops[1].opcode == FUSE_MKNOD &&
+	    ops[2].opcode == FUSE_OPEN) {
+		/* Extract operation parameters */
+		const char *lookup_name = (const char *)ops[0].payload;
+		const struct fuse_mknod_in *mknod_in =
+			(const struct fuse_mknod_in *)ops[1].payload;
+		const char *mknod_name =
+			(const char *)ops[1].payload + sizeof(struct fuse_mknod_in);
+		const struct fuse_open_in *open_in =
+			(const struct fuse_open_in *)ops[2].payload;
+
+		sfs_atomic_lookup_mknod_open(req,
+					     ops[0].nodeid, lookup_name,
+					     ops[1].nodeid, mknod_name,
+					     mknod_in->mode, mknod_in->rdev,
+					     open_in->flags);
+		return;
+	}
+}
+
 #ifdef HAVE_SETXATTR
 static void sfs_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 			 size_t size)
@@ -1424,6 +1601,7 @@ static void assign_operations(fuse_lowlevel_ops &sfs_oper)
 	sfs_oper.listxattr = sfs_listxattr;
 	sfs_oper.removexattr = sfs_removexattr;
 #endif
+    sfs_oper.compound = sfs_compound;
 }
 
 static void print_usage(char *prog_name)
@@ -1617,6 +1795,7 @@ int main(int argc, char *argv[])
 	ret = -1;
 	fuse_lowlevel_ops sfs_oper{};
 	assign_operations(sfs_oper);
+	fs.ops = &sfs_oper;
 	auto se = fuse_session_new(&args, &sfs_oper, sizeof(sfs_oper), &fs);
 	if (se == nullptr)
 		goto err_out1;
