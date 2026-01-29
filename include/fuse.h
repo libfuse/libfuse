@@ -867,6 +867,24 @@ struct fuse_operations {
 	 */
 	int (*statx)(const char *path, int flags, int mask, struct statx *stxbuf,
 		     struct fuse_file_info *fi);
+
+	/**
+	 * Synchronize the filesystem.
+	 *
+	 * Causes all dirty file data and filesystem metadata to be written to
+	 * underlying persistent storage.
+	 *
+	 * Supported since Linux kernel 6.18, and only on fuseblk file servers.
+	 *
+	 * path contains a path to a file within the filesystem. On Linux, it
+	 * corresponds to the file descriptor given as an argument to the
+	 * syncfs(2) system call. However, as this is considered a
+	 * filesystem-level operation, the path can usually be safely ignored.
+	 *
+	 * On a successful return, expected to provide the same guarantees as
+	 * calling fsync(2) on every file on the filesystem.
+	 */
+	int (*syncfs)(const char *path);
 };
 
 /** Extra context that may be needed by some filesystems
@@ -1363,6 +1381,7 @@ off_t fuse_fs_lseek(struct fuse_fs *fs, const char *path, off_t off, int whence,
 		    struct fuse_file_info *fi);
 int fuse_fs_statx(struct fuse_fs *fs, const char *path, int flags, int mask,
 		  struct statx *stxbuf, struct fuse_file_info *fi);
+int fuse_fs_syncfs(struct fuse_fs *fs, const char *path);
 void fuse_fs_init(struct fuse_fs *fs, struct fuse_conn_info *conn,
 		struct fuse_config *cfg);
 void fuse_fs_destroy(struct fuse_fs *fs);
