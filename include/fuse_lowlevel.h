@@ -1341,6 +1341,22 @@ struct fuse_lowlevel_ops {
 	 */
 	void (*statx)(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 		      struct fuse_file_info *fi);
+
+	/**
+	 * Synchronize the filesystem.
+	 *
+	 * Causes all dirty file data and filesystem metadata to be written to
+	 * underlying persistent storage.
+	 *
+	 * Supported since Linux kernel 6.18, and only on fuseblk file servers.
+	 *
+	 * Valid replies:
+	 *   fuse_reply_err
+	 *
+	 * @param req request handle
+	 * @param ino the inode number
+	 */
+	void (*syncfs)(fuse_req_t req, fuse_ino_t ino);
 };
 
 /**
