@@ -2368,6 +2368,17 @@ int fuse_fs_statx(struct fuse_fs *fs, const char *path, int flags, int mask,
 }
 #endif
 
+int fuse_fs_syncfs(struct fuse_fs *fs, const char *path)
+{
+	fuse_get_context()->private_data = fs->user_data;
+	if (fs->op.syncfs) {
+		if (fs->debug)
+			fuse_log(FUSE_LOG_DEBUG, "syncfs[%s]\n", path);
+		return fs->op.syncfs(path);
+	} else
+		return -ENOSYS;
+}
+
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
 	struct node *node;
@@ -4466,6 +4477,26 @@ static void fuse_lib_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 }
 #endif
 
+static void fuse_lib_syncfs(fuse_req_t req, fuse_ino_t ino)
+{
+	struct fuse *f = req_fuse_prepare(req);
+	char *path = NULL;
+	int err = 0;
+
+	if (ino)
+		err = get_path(f, ino, &path);
+
+	if (!err) {
+		struct fuse_intr_data d;
+
+		fuse_prepare_interrupt(f, req, &d);
+		err = fuse_fs_syncfs(f->fs, path ? path : "/");
+		fuse_finish_interrupt(f, req, &d);
+		free_path(f, ino, path);
+	}
+	reply_err(req, err);
+}
+
 static int clean_delay(struct fuse *f)
 {
 	/*
@@ -4567,6 +4598,7 @@ static struct fuse_lowlevel_ops fuse_path_ops = {
 #ifdef HAVE_STATX
 	.statx = fuse_lib_statx,
 #endif
+	.syncfs = fuse_lib_syncfs,
 };
 
 int fuse_notify_poll(struct fuse_pollhandle *ph)
