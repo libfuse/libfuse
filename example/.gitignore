@@ -14,3 +14,4 @@
 /notify_inval_inode_fh
 /notify_store_retrieve
 /notify_inval_entry
+/notify_prune

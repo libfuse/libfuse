@@ -16,7 +16,8 @@ threaded_examples = [ 'notify_inval_inode',
                       'invalidate_path',
                       'notify_store_retrieve',
                       'notify_inval_entry',
-                      'poll' ]
+                      'poll',
+		      'notify_prune' ]
 
 foreach ex : examples
     executable(ex, ex + '.c',
