@@ -482,6 +482,36 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
     else:
         umount(mount_process, mnt_dir)
 
+@pytest.mark.skipif(fuse_proto < (7,45),
+                    reason='not supported by running kernel')
+@pytest.mark.parametrize("notify", (True, False))
+def test_notify_prune(tmpdir, notify, output_checker):
+    mnt_dir = str(tmpdir)
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'notify_prune'),
+                '-f', '--update-interval=1', mnt_dir ]
+    if not notify:
+        cmdline.append('--no-notify')
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
+        with open(fname, 'r') as fh:
+            content = fh.read()
+
+        safe_sleep(2)
+        with open(fname, 'r') as fh:
+            if notify:
+                assert content != fh.read()
+            else:
+                assert content == fh.read()
+    except:
+        cleanup(mount_process, mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
 @pytest.mark.parametrize("intended_user", ('root', 'non_root'))
 def test_dev_auto_unmount(short_tmpdir, output_checker, intended_user):
     """Check that root can mount with dev and auto_unmount
