@@ -638,13 +638,23 @@ static void forget_one(fuse_ino_t ino, uint64_t n)
 		     << endl;
 
 	if (!inode.nlookup) {
+		/* Need to erase the inode from the map. To avoid use-after-free,
+		 * we must hold BOTH inode.m and fs.mutex while erasing.
+		 * Lock order: inode.m first (already held), then fs.mutex */
 		lock_guard<mutex> g_fs{ fs.mutex };
-		l.unlock();
+		/* Double-check nlookup after acquiring fs.mutex in case another
+		 * thread incremented it (e.g., concurrent lookup) */
 		if (!inode.nlookup) {
 			if (fs.debug)
 				cerr << "DEBUG: forget: cleaning up inode "
 				     << inode.src_ino << endl;
-			fs.inodes.erase({ inode.src_ino, inode.src_dev });
+			/* Save the key before erasing, since inode reference
+			 * becomes invalid after erase() */
+			SrcId key = { inode.src_ino, inode.src_dev };
+			/* Unlock inode.m before erasing to avoid holding a lock
+			 * on an object being destroyed */
+			l.unlock();
+			fs.inodes.erase(key);
 		}
 	} else if (fs.debug)
 		cerr << "DEBUG: forget: inode " << inode.src_ino
