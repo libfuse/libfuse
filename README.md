@@ -43,7 +43,7 @@ Supported Platforms
 
 * Linux (fully)
 * BSD (mostly/best-effort)
-* For OS-X, please use [OSXFUSE](https://osxfuse.github.io/)
+* For macOS, please use [macFUSE](https://macfuse.github.io)
   
 
 Installation
