@@ -4393,10 +4393,185 @@ int fuse_session_custom_io_30(struct fuse_session *se,
 			offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 
+/* Worker thread for synchronous FUSE_INIT */
+static void *fuse_sync_init_worker(void *data)
+{
+	struct fuse_session *se = (struct fuse_session *)data;
+	struct fuse_buf fbuf = {
+		.mem = NULL,
+	};
+	int res;
+
+	/* Process exactly one request (FUSE_INIT) */
+again:
+	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+	res = fuse_session_receive_buf_internal(se, &fbuf, NULL);
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+	if (res == -EINTR)
+		goto again;
+	if (res <= 0) {
+		se->init_error = res < 0 ? res : -EINVAL;
+		return NULL;
+	}
+
+	fuse_session_process_buf_internal(se, &fbuf, NULL);
+	fuse_buf_free(&fbuf);
+
+	return NULL;
+}
+
+/* Start worker thread for synchronous FUSE_INIT */
+static int fuse_start_sync_init_worker(struct fuse_session *se)
+{
+	int err;
+
+	err = pthread_create(&se->init_thread, NULL, fuse_sync_init_worker, se);
+	if (err != 0) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to create init worker thread: %s\n",
+			 strerror(err));
+		return -1;
+	}
+
+	return 0;
+}
+
+/* Wait for synchronous FUSE_INIT to complete */
+static int fuse_wait_sync_init_completion(struct fuse_session *se)
+{
+	void *retval;
+	int err;
+
+	err = pthread_join(se->init_thread, &retval);
+	if (err != 0) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to join init worker thread: %s\n",
+			 strerror(err));
+		return -1;
+	}
+
+	if (se->init_error != 0) {
+		fuse_log(FUSE_LOG_ERR, "fuse: init worker failed: %d\n", se->init_error);
+		return -1;
+	}
+
+	if (fuse_session_exited(se)) {
+		fuse_log(FUSE_LOG_ERR, "FUSE_INIT failed: session exited\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+#if defined(__linux__)
+/* Only linux supports sync FUSE_INIT so far */
+static int fuse_session_mount_sync_init(struct fuse_session *se,
+					 const char *mountpoint,
+					 bool *async_retry)
+{
+	int fd = -1;
+	int res;
+	char *mnt_opts = NULL;
+
+	res = fuse_kern_mount_get_base_mnt_opts(se->mo, &mnt_opts);
+	if (res == -1) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to get base mount options\n");
+		*async_retry = false;
+		goto err;
+	}
+
+	/*
+	 * Try synchronous FUSE_INIT for privileged (direct) mounts.
+	 * This requires opening /dev/fuse before mount() so we can start
+	 * a worker thread to process FUSE_INIT during the mount syscall.
+	 */
+	fd = fuse_kern_mount_prepare(mountpoint, se->mo);
+	if (fd == -1) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to open /dev/fuse for sync init\n");
+		*async_retry = true;
+		goto err;
+	}
+
+	/* Try to enable synchronous FUSE_INIT */
+	res = ioctl(fd, FUSE_DEV_IOC_SYNC_INIT);
+	if (res) {
+		/* ENOTTY means kernel doesn't support sync init - not an error */
+		if (errno != ENOTTY) {
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to enable sync init: %s\n",
+				 strerror(errno));
+		} else if (se->debug) {
+			fuse_log(FUSE_LOG_DEBUG,
+				 "fuse: kernel doesn't support sync init, using async fallback\n");
+		}
+		*async_retry = true;
+		goto err;
+	}
+
+	if (se->debug)
+		fuse_log(FUSE_LOG_DEBUG,
+			 "fuse: synchronous FUSE_INIT enabled\n");
+	se->init_error = 0;
+
+	/* Start worker thread to handle FUSE_INIT during mount */
+	se->fd = fd;
+	if (fuse_start_sync_init_worker(se) < 0) {
+		fuse_log(
+			FUSE_LOG_ERR,
+			"fuse: failed to start sync init worker\n");
+
+		/* async FUSE_INIT is possible, but unlikely to succeed */
+		*async_retry = false;
+		goto err;
+	}
+
+	/* Perform the mount if we have a valid fd */
+	res = fuse_kern_mount_finish(mountpoint, se->mo, mnt_opts);
+	if (res < 0) {
+		/* Direct mount failed - clean up and try fusermount3 */
+		pthread_cancel(se->init_thread);
+		pthread_join(se->init_thread, NULL);
+		*async_retry = res == -2 ? true : false;
+		goto err;
+	}
+
+	/* Wait for synchronous FUSE_INIT to complete if mount succeeded */
+	if (fuse_wait_sync_init_completion(se) < 0) {
+		fuse_log(FUSE_LOG_ERR,
+				"fuse: sync init failed\n");
+		fuse_kern_unmount(mountpoint, fd);
+
+		/* FUSE_INIT was already processed, cannot be retried */
+		*async_retry = false;
+		goto err;
+	}
+
+	free(mnt_opts);
+	return fd;
+
+err:
+	if (fd >= 0)
+		close(fd);
+	free(mnt_opts);
+	se->fd = -1;
+	return -1;
+}
+#else
+static int fuse_session_mount_sync_init(struct fuse_session *se,
+					 const char *mountpoint,
+					 bool *async_retry)
+{
+	(void) se;
+	(void) mountpoint;
+
+	*async_retry = true;
+	return -1;
+}
+#endif
+
 int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 {
-	int fd;
+	int fd = -1;
 	char *mountpoint;
+	bool async_retry;
 
 	if (_mountpoint == NULL) {
 		fuse_log(FUSE_LOG_ERR, "Invalid null-ptr mountpoint!\n");
@@ -4435,21 +4610,28 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 			goto error_out;
 		}
 		se->fd = fd;
+		se->mountpoint = mountpoint;
 		return 0;
 	}
 
-	/* Open channel */
-	fd = fuse_kern_mount(mountpoint, se->mo);
-	if (fd == -1)
-		goto error_out;
-	se->fd = fd;
+	/* Try synchronous FUSE_INIT for privileged (direct) mounts */
+	fd = fuse_session_mount_sync_init(se, mountpoint, &async_retry);
+	if (fd == -1 && async_retry) {
+		/* Fall back to fuse_kern_mount() with async FUSE_INIT */
+		fd = fuse_kern_mount(mountpoint, se->mo);
+		if (fd == -1)
+			goto error_out;
+	}
 
+	se->fd = fd;
 	/* Save mountpoint */
 	se->mountpoint = mountpoint;
 
 	return 0;
 
 error_out:
+	if (fd >= 0)
+		close(fd);
 	free(mountpoint);
 	return -1;
 }
