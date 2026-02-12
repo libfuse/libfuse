@@ -2820,7 +2820,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		fuse_set_feature_flag(&se->conn, cap)
 
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
-	LL_SET_DEFAULT(1, FUSE_CAP_AUTO_INVAL_DATA);
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_DIO);
 	LL_SET_DEFAULT(1, FUSE_CAP_IOCTL_DIR);
 	LL_SET_DEFAULT(1, FUSE_CAP_ATOMIC_O_TRUNC);
