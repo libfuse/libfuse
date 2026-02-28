@@ -1019,6 +1019,7 @@ static int try_get_path(struct fuse *f, fuse_ino_t nodeid, const char *name,
 
 	if (wnodep) {
 		assert(need_lock);
+		assert(name != NULL);
 		wnode = lookup_node(f, nodeid, name);
 		if (wnode) {
 			if (wnode->treelock != 0) {
