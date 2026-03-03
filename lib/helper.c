@@ -26,6 +26,11 @@
 #include <errno.h>
 #include <sys/param.h>
 
+#ifdef HAVE_SERVICEMOUNT
+# include <linux/types.h>
+# include "fuse_service_priv.h"
+#endif
+
 #define FUSE_HELPER_OPT(t, p) \
 	{ t, offsetof(struct fuse_cmdline_opts, p), 1 }
 
@@ -174,6 +179,29 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
 	}
 }
 
+#ifdef HAVE_SERVICEMOUNT
+static int fuse_helper_opt_proc_service(void *data, const char *arg, int key,
+					struct fuse_args *outargs)
+{
+	(void) outargs;
+	struct fuse_cmdline_opts *opts = data;
+
+	switch (key) {
+	case FUSE_OPT_KEY_NONOPT:
+		if (!opts->mountpoint) {
+			return fuse_opt_add_opt(&opts->mountpoint, arg);
+		} else {
+			fuse_log(FUSE_LOG_ERR, "fuse: invalid argument `%s'\n", arg);
+			return -1;
+		}
+
+	default:
+		/* Pass through unknown options */
+		return 1;
+	}
+}
+#endif
+
 /* Under FreeBSD, there is no subtype option so this
    function actually sets the fsname */
 static int add_default_subtype(const char *progname, struct fuse_args *args)
@@ -227,6 +255,31 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 
 	return 0;
 }
+
+#ifdef HAVE_SERVICEMOUNT
+int fuse_parse_cmdline_service(struct fuse_args *args,
+			       struct fuse_cmdline_opts *opts)
+{
+	memset(opts, 0, sizeof(struct fuse_cmdline_opts));
+
+	opts->max_idle_threads = UINT_MAX; /* new default in fuse version 3.12 */
+	opts->max_threads = 10;
+
+	if (fuse_opt_parse(args, opts, fuse_helper_opts,
+			   fuse_helper_opt_proc_service) == -1)
+		return -1;
+
+	/* *Linux*: if neither -o subtype nor -o fsname are specified,
+	   set subtype to program's basename.
+	   *FreeBSD*: if fsname is not specified, set to program's
+	   basename. */
+	if (!opts->nodefault_subtype)
+		if (add_default_subtype(args->argv[0], args) == -1)
+			return -1;
+
+	return 0;
+}
+#endif
 
 /**
  * struct fuse_cmdline_opts got extended in libfuse-3.12

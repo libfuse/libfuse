@@ -222,6 +222,11 @@ unsigned get_max_read(struct mount_opts *o);
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
 
+char *fuse_mountopts_fstype(const struct mount_opts *mo);
+char *fuse_mountopts_source(const struct mount_opts *mo, const char *devname);
+char *fuse_mountopts_kernel_opts(const struct mount_opts *mo);
+unsigned int fuse_mountopts_flags(const struct mount_opts *mo);
+
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count);
 void fuse_free_req(fuse_req_t req);

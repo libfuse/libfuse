@@ -27,3 +27,9 @@ option('enable-usdt', type : 'boolean', value : false,
 
 option('enable-io-uring', type: 'boolean', value: true,
        description: 'Enable fuse-over-io-uring support')
+
+option('service-socket-dir', type : 'string', value : '',
+       description: 'Where to install fuse server sockets (if empty, /run/filesystems)')
+
+option('systemdsystemunitdir', type : 'string', value : '',
+       description: 'Where to install systemd unit files (if empty, query pkg-config(1))')

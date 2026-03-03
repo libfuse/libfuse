@@ -6,6 +6,15 @@ executable('fusermount3', ['fusermount.c', '../lib/mount_util.c', '../lib/util.c
            install_dir: get_option('bindir'),
            c_args: '-DFUSE_CONF="@0@"'.format(fuseconf_path))
 
+if private_cfg.get('HAVE_SERVICEMOUNT', false)
+  executable('fuservicemount3', ['mount_service.c', 'fuservicemount.c'],
+             include_directories: include_dirs,
+             link_with: [ libfuse ],
+             install: true,
+             install_dir: get_option('sbindir'),
+             c_args: '-DFUSE_USE_VERSION=317')
+endif
+
 executable('mount.fuse3', ['mount.fuse.c'],
            include_directories: include_dirs,
            link_with: [ libfuse ],

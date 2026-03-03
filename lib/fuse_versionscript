@@ -227,6 +227,21 @@ FUSE_3.19 {
 		fuse_session_start_teardown_watchdog;
 		fuse_session_stop_teardown_watchdog;
 		fuse_lowlevel_notify_prune;
+
+		fuse_service_accept;
+		fuse_service_append_args;
+		fuse_service_cmdline;
+		fuse_service_destroy;
+		fuse_service_exit;
+		fuse_service_finish_file_requests;
+		fuse_service_parse_cmdline_opts;
+		fuse_service_receive_file;
+		fuse_service_release;
+		fuse_service_request_file;
+		fuse_service_request_blockdev;
+		fuse_service_send_goodbye;
+		fuse_service_session_mount;
+		fuse_service_take_fusedev;
 } FUSE_3.18;
 
 # Local Variables:
