@@ -12,6 +12,13 @@ if not platform.endswith('bsd') and platform != 'dragonfly'
     examples += [ 'null' ]
 endif
 
+if platform.endswith('linux')
+    examples += [ 'service_ll' ]
+    configure_file(input: 'service_ll.socket.in',
+                   output: 'service_ll.socket',
+                   configuration: private_cfg)
+endif
+
 threaded_examples = [ 'notify_inval_inode',
                       'invalidate_path',
                       'notify_store_retrieve',

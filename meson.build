@@ -73,6 +73,7 @@ service_socket_dir = get_option('service-socket-dir')
 if service_socket_dir == ''
   service_socket_dir = '/run/filesystems'
 endif
+private_cfg.set('FUSE_SERVICE_SOCKET_DIR_RAW', service_socket_dir)
 private_cfg.set_quoted('FUSE_SERVICE_SOCKET_DIR', service_socket_dir)
 
 # Test for presence of some functions
