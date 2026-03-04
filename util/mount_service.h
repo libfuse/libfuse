@@ -37,4 +37,13 @@ int mount_service_main(int argc, char *argv[]);
  */
 const char *mount_service_subtype(const char *fstype);
 
+/**
+ * Discover if there is a fuse service socket for the given fuse filesystem type.
+ * The type must not contain a path separator.
+ *
+ * @param fstype the type of a fuse filesystem type (e.g. fuse.Y, fuseblk.Y, or Y)
+ * @return true if available, false if not
+ */
+bool mount_service_present(const char *fstype);
+
 #endif /* MOUNT_SERVICE_H_ */
