@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define max(x, y) ((x) > (y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
+
 #define ROUND_UP(val, round_to) (((val) + (round_to - 1)) & ~(round_to - 1))
 
 #define likely(x) __builtin_expect(!!(x), 1)
@@ -45,5 +48,37 @@ static inline uint64_t fuse_higher_32_bits(uint64_t nr)
 #else
 #define fallthrough do {} while (0)
 #endif
+
+static inline uint64_t round_up(uint64_t b, unsigned int align)
+{
+	unsigned int m;
+
+	if (align == 0)
+		return b;
+	m = b % align;
+	if (m)
+		b += align - m;
+	return b;
+}
+
+static inline uint64_t round_down(uint64_t b, unsigned int align)
+{
+	unsigned int m;
+
+	if (align == 0)
+		return b;
+	m = b % align;
+	return b - m;
+}
+
+static inline uint64_t howmany(uint64_t b, unsigned int align)
+{
+	unsigned int m;
+
+	if (align == 0)
+		return b;
+	m = (b % align) ? 1 : 0;
+	return (b / align) + m;
+}
 
 #endif /* FUSE_UTIL_H_ */
