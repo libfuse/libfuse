@@ -12,6 +12,15 @@ if not platform.endswith('bsd') and platform != 'dragonfly'
     examples += [ 'null' ]
 endif
 
+single_file_examples = [ ]
+
+if platform.endswith('linux')
+    single_file_examples += [ 'service_ll' ]
+    configure_file(input: 'service_ll.socket.in',
+                   output: 'service_ll.socket',
+                   configuration: private_cfg)
+endif
+
 threaded_examples = [ 'notify_inval_inode',
                       'invalidate_path',
                       'notify_store_retrieve',
@@ -25,6 +34,11 @@ foreach ex : examples
                install: false)
 endforeach
 
+foreach ex : single_file_examples
+    executable(ex, [ex + '.c', 'single_file.c'],
+               dependencies: [ libfuse_dep ],
+               install: false)
+endforeach
 
 foreach ex : threaded_examples
     executable(ex, ex + '.c',

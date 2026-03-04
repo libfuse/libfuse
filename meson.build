@@ -77,6 +77,7 @@ endif
 if service_socket_perms == ''
   service_socket_perms = '0220'
 endif
+private_cfg.set('FUSE_SERVICE_SOCKET_DIR_RAW', service_socket_dir)
 private_cfg.set_quoted('FUSE_SERVICE_SOCKET_DIR', service_socket_dir)
 private_cfg.set('FUSE_SERVICE_SOCKET_PERMS', service_socket_perms)
 
