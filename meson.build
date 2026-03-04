@@ -83,7 +83,8 @@ private_cfg.set('FUSE_SERVICE_SOCKET_PERMS', service_socket_perms)
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
-               'utimensat', 'copy_file_range', 'fallocate', 'fspacectl' ]
+               'utimensat', 'copy_file_range', 'fallocate', 'fspacectl',
+               'faccessat' ]
 foreach func : test_funcs
     private_cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))

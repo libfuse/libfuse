@@ -2066,3 +2066,46 @@ out:
 	mount_service_destroy(&mo);
 	return ret;
 }
+
+bool mount_service_present(const char *fstype)
+{
+	struct sockaddr_un name;
+	struct stat stbuf;
+	char path[PATH_MAX];
+	const char *subtype;
+	ssize_t written;
+	int ret;
+
+	subtype = mount_service_subtype(fstype);
+	if (!subtype)
+		return false;
+
+	/*
+	 * The full path to the socket must fit within the AF_UNIX socket path
+	 * buffer, which is much shorter than PATH_MAX.
+	 */
+	written = snprintf(path, sizeof(path), FUSE_SERVICE_SOCKET_DIR "/%s",
+			   subtype);
+	if (written >= sizeof(name.sun_path) || written >= sizeof(path))
+		return false;
+
+	ret = stat(path, &stbuf);
+	if (ret)
+		return false;
+
+	if (!S_ISSOCK(stbuf.st_mode))
+		return false;
+
+#ifdef HAVE_FACCESSAT
+	/*
+	 * Can we write to the service socket with the real uid?  This accounts
+	 * for setuid and ACLs on the socket.  Note that we connect() to the
+	 * socket having dropped setuid privileges.
+	 */
+	ret = faccessat(AT_FDCWD, path, W_OK, 0);
+#else
+	/* Can we write to the service socket with the real uid? */
+	ret = access(path, W_OK);
+#endif
+	return ret == 0;
+}

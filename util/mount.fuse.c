@@ -6,6 +6,9 @@
   See the file GPL2.txt.
 */
 
+/* For environ */
+#define _GNU_SOURCE
+
 #include "fuse_config.h"
 
 #include <stdio.h>
@@ -17,6 +20,9 @@
 #include <fcntl.h>
 #include <pwd.h>
 #include <sys/wait.h>
+#ifdef HAVE_SERVICEMOUNT
+#include <spawn.h>
+#endif
 
 #ifdef linux
 #include <sys/prctl.h>
@@ -49,6 +55,9 @@
 #endif
 
 #include "fuse.h"
+#ifdef HAVE_SERVICEMOUNT
+# include "mount_service.h"
+#endif
 
 static char *progname;
 
@@ -233,6 +242,105 @@ static void drop_and_lock_capabilities(void)
 }
 #endif
 
+#ifdef HAVE_SERVICEMOUNT
+#define FUSERVICEMOUNT_PROG	"fuservicemount3"
+
+static int mount_service_child(char **argv)
+{
+	const char *full_path = FUSERVICEMOUNT_DIR "/" FUSERVICEMOUNT_PROG;
+	pid_t child_pid;
+	int child_status;
+	int ret;
+
+	/*
+	 * First try the install path, then a system install, just like we do
+	 * for fusermount.  See man 7 environ for the global environ pointer.
+	 */
+	ret = posix_spawn(&child_pid, full_path, NULL, NULL,
+			  (char *const *)argv, environ);
+	if (ret)
+		ret = posix_spawnp(&child_pid, FUSERVICEMOUNT_PROG, NULL, NULL,
+				   (char * const *)argv, environ);
+	if (ret) {
+		fprintf(stderr, "%s: could not start %s helper: %s\n",
+			argv[0], FUSERVICEMOUNT_PROG, strerror(ret));
+		return MOUNT_SERVICE_FALLBACK_NEEDED;
+	}
+
+	ret = waitpid(child_pid, &child_status, 0);
+	if (ret < 0) {
+		fprintf(stderr, "%s: could not wait for %s helper: %s\n",
+			argv[0], FUSERVICEMOUNT_PROG, strerror(errno));
+		return MOUNT_SERVICE_FALLBACK_NEEDED;
+	}
+
+	if (WIFEXITED(child_status))
+		return WEXITSTATUS(child_status);
+
+	/* terminated due to signal or coredump */
+	return EXIT_FAILURE;
+}
+
+static int try_service_main(char *argv0, char *fstype, char *source,
+			    const char *mountpoint, char *options)
+{
+	char **argv;
+	char dash_o[] = "-o";
+	char dash_t[] = "-t";
+	char *mntpt;
+	int argc = 5; /* argv[0], -t type, mountpoint, and trailing NULL */
+	int i = 0;
+	int ret;
+
+	if (!mount_service_present(fstype))
+		return MOUNT_SERVICE_FALLBACK_NEEDED;
+
+	/* This can be an empty string if "mount.fuse3 null# /tmp/a" */
+	if (source && source[0] == 0)
+		source = NULL;
+
+	mntpt = strdup(mountpoint);
+	if (!mntpt) {
+		perror("mountpoint allocation");
+		return -1;
+	}
+
+	if (source)
+		argc++;
+	if (options)
+		argc += 2;
+
+	argv = calloc(argc, sizeof(char *));
+	if (!argv) {
+		perror("argv allocation");
+		free(mntpt);
+		return -1;
+	}
+
+	argv[i++] = argv0;
+	if (source)
+		argv[i++] = source;
+	argv[i++] = mntpt;
+	argv[i++] = dash_t;
+	argv[i++] = fstype;
+	if (options) {
+		argv[i++] = dash_o;
+		argv[i++] = options;
+	}
+	argv[i] = 0;
+
+	if (getuid() != 0) {
+		ret = mount_service_child(argv);
+	} else {
+		/* We're root, just do the mount directly. */
+		ret = mount_service_main(argc - 1, argv);
+	}
+	free(argv);
+	free(mntpt);
+	return ret;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	char *type = NULL;
@@ -280,9 +388,7 @@ int main(int argc, char *argv[])
 	mountpoint = argv[2];
 
 	for (i = 3; i < argc; i++) {
-		if (strcmp(argv[i], "-v") == 0) {
-			continue;
-		} else if (strcmp(argv[i], "-t") == 0) {
+		if (strcmp(argv[i], "-t") == 0) {
 			i++;
 
 			if (i == argc) {
@@ -303,6 +409,30 @@ int main(int argc, char *argv[])
 					progname);
 				exit(1);
 			}
+		}
+	}
+
+	if (!type) {
+		if (source) {
+			dup_source = xstrdup(source);
+			type = dup_source;
+			source = strchr(type, '#');
+			if (source)
+				*source++ = '\0';
+			if (!type[0]) {
+				fprintf(stderr, "%s: empty filesystem type\n",
+					progname);
+				exit(1);
+			}
+		} else {
+			fprintf(stderr, "%s: empty source\n", progname);
+			exit(1);
+		}
+	}
+
+	for (i = 3; i < argc; i++) {
+		if (strcmp(argv[i], "-v") == 0) {
+			continue;
 		} else	if (strcmp(argv[i], "-o") == 0) {
 			char *opts;
 			const char *opt;
@@ -366,24 +496,6 @@ int main(int argc, char *argv[])
 	if (suid)
 		options = add_option("suid", options);
 
-	if (!type) {
-		if (source) {
-			dup_source = xstrdup(source);
-			type = dup_source;
-			source = strchr(type, '#');
-			if (source)
-				*source++ = '\0';
-			if (!type[0]) {
-				fprintf(stderr, "%s: empty filesystem type\n",
-					progname);
-				exit(1);
-			}
-		} else {
-			fprintf(stderr, "%s: empty source\n", progname);
-			exit(1);
-		}
-	}
-
 	if (setuid_name && setuid_name[0]) {
 #ifdef linux
 		if (drop_privileges) {
@@ -429,6 +541,21 @@ int main(int argc, char *argv[])
 		drop_and_lock_capabilities();
 	}
 #endif
+
+#ifdef HAVE_SERVICEMOUNT
+	/*
+	 * Now that we know the desired filesystem type, see if we can find
+	 * a socket service implementing that, if we haven't selected any weird
+	 * options that would prevent that.
+	 */
+	if (!pass_fuse_fd && !(setuid_name && setuid_name[0])) {
+		int ret = try_service_main(argv[0], type, source, mountpoint,
+					   options);
+		if (ret != MOUNT_SERVICE_FALLBACK_NEEDED)
+			return ret;
+	}
+#endif
+
 	add_arg(&command, type);
 	if (source)
 		add_arg(&command, source);
