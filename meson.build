@@ -135,6 +135,21 @@ special_funcs = {
 	int main(int argc, char *argv[]) {
           return SD_LISTEN_FDS_START;
 	}
+    ''',
+    'new_mount_api': '''
+       #define _GNU_SOURCE
+       #include <sys/mount.h>
+       #include <linux/mount.h>
+       #include <unistd.h>
+       #include <fcntl.h>
+
+       int main(void) {
+           int fsfd = fsopen("fuse", FSOPEN_CLOEXEC);
+           int res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", "test", 0);
+           int mntfd = fsmount(fsfd, FSMOUNT_CLOEXEC, 0);
+           res = move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH | MOVE_MOUNT_T_EMPTY_PATH);
+           return 0;
+       }
     '''
 }
 
