@@ -98,6 +98,9 @@ Security implications
 
 The *fusermount3* program is installed setuid root. This is done to
 allow normal users to mount their own filesystem implementations.
+If built, the *fuservicemount3* program will also be installed setuid
+root so that normal users can access containerized filesystem
+implementations.
 
 To limit the harm that malicious users can do this way, *fusermount3*
 enforces the following limitations:
