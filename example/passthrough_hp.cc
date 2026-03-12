@@ -55,6 +55,7 @@
 #include <errno.h>
 #include <ftw.h>
 #include <fuse_lowlevel.h>
+#include <fuse_daemonize.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>
@@ -1580,6 +1581,7 @@ int main(int argc, char *argv[])
 {
 	struct fuse_loop_config *loop_config = NULL;
 	void *teardown_watchog = NULL;
+	unsigned int daemon_flags = 0;
 
 	// Parse command line options
 	auto options{ parse_options(argc, argv) };
@@ -1638,10 +1640,14 @@ int main(int argc, char *argv[])
 
 	fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 
-	if (fuse_session_mount(se, argv[2]) != 0)
+	/* Start daemonization before mount so parent can report mount failure */
+	if (fs.foreground)
+		daemon_flags |= FUSE_DAEMONIZE_NO_BACKGROUND;
+	if (fuse_daemonize_early_start(daemon_flags) != 0)
 		goto err_out3;
 
-	fuse_daemonize(fs.foreground);
+	if (fuse_session_mount(se, argv[2]) != 0)
+		goto err_out4;
 
 	if (!fs.foreground)
 		fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS,
@@ -1650,7 +1656,7 @@ int main(int argc, char *argv[])
 	teardown_watchog = fuse_session_start_teardown_watchdog(
 		se, fs.root.stop_timeout_secs, NULL, NULL);
 	if (teardown_watchog == NULL)
-		goto err_out3;
+		goto err_out4;
 
 	if (options.count("single"))
 		ret = fuse_session_loop(se);
@@ -1659,6 +1665,9 @@ int main(int argc, char *argv[])
 
 	fuse_session_unmount(se);
 
+err_out4:
+	if (fuse_daemonize_early_is_active())
+		fuse_daemonize_early_fail(ret);
 err_out3:
 	fuse_remove_signal_handlers(se);
 err_out2:

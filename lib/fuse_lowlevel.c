@@ -19,6 +19,7 @@
 #include "mount_util.h"
 #include "util.h"
 #include "fuse_uring_i.h"
+#include "fuse_daemonize_i.h"
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -3022,6 +3023,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	send_reply_ok(req, &outarg, outargsize);
 	if (enable_io_uring)
 		fuse_uring_wake_ring_threads(se);
+
+	fuse_daemonize_early_success();
 }
 
 static __attribute__((no_sanitize("thread"))) void
@@ -4453,6 +4456,8 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 out:
 	se->fd = fd;
 	se->mountpoint = mountpoint;
+
+	fuse_daemonize_early_set_mounted();
 
 	return 0;
 
