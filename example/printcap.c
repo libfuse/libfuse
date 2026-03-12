@@ -65,6 +65,7 @@ static const struct cap_info capabilities[] = {
 	{ FUSE_CAP_DIRECT_IO_ALLOW_MMAP,	"FUSE_CAP_DIRECT_IO_ALLOW_MMAP"},
 	{ FUSE_CAP_NO_EXPORT_SUPPORT,		"FUSE_CAP_NO_EXPORT_SUPPORT"},
 	{ FUSE_CAP_PASSTHROUGH,			"FUSE_CAP_PASSTHROUGH"},
+	{ FUSE_CAP_OVER_IO_URING,		"FUSE_CAP_OVER_IO_URING"},
 	// Add any new capabilities here
 	{ 0, NULL} // Sentinel to mark the end of the array
 };
