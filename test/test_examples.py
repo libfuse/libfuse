@@ -1056,5 +1056,74 @@ def tst_xattr(path):
     os.removexattr(path, b'hello_ll_removexattr_name')
 
 
+def test_printcap_has_all_fuse_caps():
+    """Verify that printcap.c includes all FUSE_CAP_* flags from fuse_common.h"""
+
+    # Find the source root directory
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    build_root = os.path.dirname(test_dir)
+    src_root = None
+
+    # Try to read meson-info.json to find source directory (for out-of-tree builds)
+    meson_info = pjoin(build_root, 'meson-info', 'meson-info.json')
+    if os.path.exists(meson_info):
+        import json
+        with open(meson_info, 'r') as f:
+            info = json.load(f)
+            src_root = info.get('directories', {}).get('source')
+
+    # If meson-info not found, walk up the directory tree
+    if not src_root or not os.path.exists(pjoin(src_root, 'include', 'fuse_common.h')):
+        src_root = test_dir
+        while src_root != '/':
+            if os.path.exists(pjoin(src_root, 'include', 'fuse_common.h')):
+                break
+            src_root = os.path.dirname(src_root)
+
+    # Verify we found the source root
+    if not os.path.exists(pjoin(src_root, 'include', 'fuse_common.h')):
+        pytest.skip(f"Could not find source root from {test_dir}")
+
+    # Parse fuse_common.h to extract all FUSE_CAP_* definitions
+    header_caps = set()
+    header_path = pjoin(src_root, 'include', 'fuse_common.h')
+    with open(header_path, 'r') as f:
+        for line in f:
+            match = re.match(r'#define\s+(FUSE_CAP_\w+)\s+', line)
+            if match:
+                header_caps.add(match.group(1))
+
+    # Parse printcap.c to extract all FUSE_CAP_* entries in the capabilities array
+    # Skip commented lines
+    printcap_caps = set()
+    printcap_path = pjoin(src_root, 'example', 'printcap.c')
+    with open(printcap_path, 'r') as f:
+        for line in f:
+            # Skip lines that are commented out
+            if re.match(r'^\s*//', line):
+                continue
+            match = re.search(r'\{\s*(FUSE_CAP_\w+),\s*"', line)
+            if match:
+                printcap_caps.add(match.group(1))
+
+    # Compare
+    missing_caps = header_caps - printcap_caps
+    extra_caps = printcap_caps - header_caps
+
+    # Build detailed error message
+    if missing_caps or extra_caps:
+        msg = []
+        msg.append(f"\nSource root: {src_root}")
+        msg.append(f"Header path: {header_path}")
+        msg.append(f"Printcap path: {printcap_path}")
+        msg.append(f"Found {len(header_caps)} caps in header: {sorted(header_caps)}")
+        msg.append(f"Found {len(printcap_caps)} caps in printcap: {sorted(printcap_caps)}")
+        if missing_caps:
+            msg.append(f"Missing in printcap.c: {sorted(missing_caps)}")
+        if extra_caps:
+            msg.append(f"Extra in printcap.c: {sorted(extra_caps)}")
+        assert False, "\n".join(msg)
+
+
 # avoid warning about unused import
 assert test_printcap
