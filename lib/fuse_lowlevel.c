@@ -5021,3 +5021,8 @@ void fuse_session_want_sync_init(struct fuse_session *se)
 		return;
 	se->want_sync_init = true;
 }
+
+void fuse_session_set_debug(struct fuse_session *se)
+{
+	se->debug = 1;
+}
