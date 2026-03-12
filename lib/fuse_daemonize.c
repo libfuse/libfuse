@@ -55,7 +55,7 @@ static struct fuse_daemonize daemonize = {
 /* Watcher thread: polls for parent death or stop signal */
 static void *parent_watcher_thread(void *arg)
 {
-	struct fuse_daemonize *di = arg;
+	const struct fuse_daemonize *di = arg;
 	struct pollfd pfd[2];
 
 	pfd[0].fd = di->death_pipe_rd;
@@ -237,7 +237,6 @@ static void close_if_valid(int *fd)
 static void fuse_daemonize_early_signal(int status)
 {
 	struct fuse_daemonize *dm = &daemonize;
-	int rc;
 
 	if (!dm->active)
 		errx(EINVAL, "%s: not active and cannot signal status", __func__);
@@ -253,7 +252,8 @@ static void fuse_daemonize_early_signal(int status)
 
 	/* Signal status to parent */
 	if (dm->signal_pipe_wr != -1) {
-		rc = write(dm->signal_pipe_wr, &status, sizeof(status));
+		int rc = write(dm->signal_pipe_wr, &status, sizeof(status));
+
 		if (rc != sizeof(status))
 			fprintf(stderr, "%s: write failed\n", __func__);
 	}
