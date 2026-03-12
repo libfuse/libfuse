@@ -31,5 +31,12 @@ void fuse_daemonize_early_set_mounted(void);
  */
 void fuse_daemonize_early_success(void);
 
+/*
+ * Check if daemonization is used.
+ *
+ * @return true if used, false otherwise
+ */
+bool fuse_daemonize_is_used(void);
+
 #endif /* FUSE_DAEMONIZE_I_H_ */
 

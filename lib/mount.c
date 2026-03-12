@@ -30,6 +30,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 
 #include "fuse_mount_compat.h"
 
@@ -522,8 +523,8 @@ int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
  * Returns: 0 on success, -1 on failure,
  *          FUSE_MOUNT_FALLBACK_NEEDED if fusermount should be used
  */
-static int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
-				  const char *mnt_opts)
+int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
+		       const char *mnt_opts)
 {
 	char *source = NULL;
 	char *type = NULL;

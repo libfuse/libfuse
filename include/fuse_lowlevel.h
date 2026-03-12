@@ -2431,6 +2431,18 @@ void fuse_session_process_buf(struct fuse_session *se,
 int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
 
 /**
+ * Request synchronous FUSE_INIT, i.e. FUSE_INIT is handled by the
+ * kernel before mount is returned.
+ *
+ * As FUSE_INIT also starts io-uring ring threads, fork() must not be
+ * called after this if io-uring is enabled. Also see
+ * fuse_session_daemonize_start().
+ *
+ * This must be called before fuse_session_mount() to have any effect.
+ */
+void fuse_session_want_sync_init(struct fuse_session *se);
+
+/**
  * Check if the request is submitted through fuse-io-uring
  */
 bool fuse_req_is_uring(fuse_req_t req);
