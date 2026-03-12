@@ -378,3 +378,9 @@ int fuse_daemonize(int foreground)
 
 	return 0;
 }
+
+bool fuse_daemonize_is_used(void)
+{
+	return daemonize.active;
+}
+
