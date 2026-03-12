@@ -236,6 +236,7 @@ FUSE_3.19 {
 		fuse_service_exit;
 		fuse_service_expect_mount_format;
 		fuse_service_finish_file_requests;
+		fuse_service_main_real_versioned;
 		fuse_service_parse_cmdline_opts;
 		fuse_service_receive_file;
 		fuse_service_release;
