@@ -1,6 +1,7 @@
-List of libfuse operations with their in/out arguments, created with
-help of chatgpt. As of kernel 6.18 (protocol 7.45). The list
-was only partly human verified - use with care.
+List of libfuse operations with their in/out arguments, initially
+created with help of AI, in the mean time most parts are human
+verified. Still use with care and always double check with Linux
+kernel source as reference.
 
 1. FUSE_LOOKUP (1)
    - in_args[0]: Variable (up to PATH_MAX for the file name)
