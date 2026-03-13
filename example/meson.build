@@ -10,6 +10,12 @@ if not platform.endswith('bsd') and platform != 'dragonfly'
     # support mounting files, This is enforced in vfs_domount_first()
     # with the v_type != VDIR check.
     examples += [ 'null' ]
+
+    if platform.endswith('linux')
+        configure_file(input: 'null.socket.in',
+                       output: 'null.socket',
+                       configuration: private_cfg)
+    endif
 endif
 
 single_file_examples = [ ]
