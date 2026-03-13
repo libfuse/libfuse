@@ -563,7 +563,7 @@ out_close:
  * @mo: mount options
  * @mnt_opts: mount options to pass to the kernel
  *
- * Returns: 0 on success, -1 on failure, -2 if fusermount should be used
+ * Returns: 0 on success, -1 on failure, FUSE_MOUNT_FALLBACK_NEEDED if fusermount should be used
  */
 static int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
 				  const char *mnt_opts)
@@ -611,7 +611,7 @@ static int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
 		 * case try falling back to fusermount3
 		 */
 		if (errno == EPERM) {
-			res = -2;
+			res = FUSE_MOUNT_FALLBACK_NEEDED;
 		} else {
 			int errno_save = errno;
 			if (mo->blkdev && errno == ENODEV &&
@@ -749,7 +749,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 			umount2(mountpoint, MNT_DETACH); /* lazy umount */
 			res = -1;
 		}
-	} else if (res == -2) {
+	} else if (res == FUSE_MOUNT_FALLBACK_NEEDED) {
 		if (mo->fusermount_opts &&
 		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)
 			goto out;
