@@ -38,6 +38,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <dirent.h>
 #include <errno.h>
 #include <sys/time.h>
@@ -94,11 +95,35 @@ static int xmp_getattr(const char *path, struct stat *stbuf,
 
 static int xmp_access(const char *path, int mask)
 {
-	int res;
+	struct fuse_context *ctx = fuse_get_context();
+	int res, saved_errno;
+	int switched = 0;
+
+	/*
+	 * When running as root, temporarily switch to the requesting
+	 * user's credentials so that access() checks permissions
+	 * correctly for multi-user mounts (allow_other).
+	 *
+	 * We use raw syscalls because glibc's setresuid/setresgid
+	 * wrappers synchronize across all threads, but the raw
+	 * syscalls are per-thread on Linux.
+	 */
+	if (getuid() == 0 && ctx->uid != 0) {
+		syscall(SYS_setresgid, ctx->gid, ctx->gid, 0);
+		syscall(SYS_setresuid, ctx->uid, ctx->uid, 0);
+		switched = 1;
+	}
 
 	res = access(path, mask);
+	saved_errno = errno;
+
+	if (switched) {
+		syscall(SYS_setresuid, 0, 0, 0);
+		syscall(SYS_setresgid, 0, 0, 0);
+	}
+
 	if (res == -1)
-		return -errno;
+		return -saved_errno;
 
 	return 0;
 }

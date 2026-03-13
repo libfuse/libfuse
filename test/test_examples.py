@@ -1056,5 +1056,246 @@ def tst_xattr(path):
     os.removexattr(path, b'hello_ll_removexattr_name')
 
 
+@pytest.mark.skipif(os.getuid() != 0,
+                    reason='needs to run as root')
+@pytest.mark.xfail(strict=False,
+                    reason="kernel fuse_permission() does not check directory "
+                           "traverse permission when default_permissions is OFF")
+def test_perm_cache_dir_traversal(short_tmpdir, output_checker):
+    """Demonstrate kernel fuse_permission() gap: directory traversal.
+
+    When default_permissions is OFF, the kernel's fuse_permission() returns 0
+    for directory traversal (MAY_EXEC on directories) without checking
+    permissions. Combined with the dentry cache (entry_timeout), chmod 000 on
+    a directory does not prevent reading files inside it through cached
+    dentries until the cache expires.
+    """
+
+    mnt_dir = str(short_tmpdir.mkdir('mnt'))
+    src_dir = str(short_tmpdir.mkdir('src'))
+
+    os.chmod(str(short_tmpdir), 0o755)
+    os.chmod(mnt_dir, 0o755)
+    os.chmod(src_dir, 0o755)
+
+    # Mount passthrough WITHOUT default_permissions, with long cache timeouts.
+    # This is the scenario where the kernel bug manifests.
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'passthrough'),
+                '-f', mnt_dir,
+                '-o', 'auto_cache,allow_other,'
+                      'entry_timeout=600,attr_timeout=600' ]
+
+    output_checker.register_output(r'error', count=0)
+
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        work_dir = mnt_dir + src_dir
+
+        # Create subdir (mode 755) with a file inside
+        subdir_src = pjoin(src_dir, 'subdir')
+        os.mkdir(subdir_src, 0o755)
+        testfile = pjoin(subdir_src, 'file')
+        with open(testfile, 'w') as fh:
+            fh.write('hello')
+        os.chmod(testfile, 0o644)
+
+        subdir_mnt = pjoin(work_dir, 'subdir')
+        testfile_mnt = pjoin(subdir_mnt, 'file')
+
+        # Access as nobody to populate the kernel's dentry/attr cache
+        result = subprocess.run(
+            ['runuser', '-u', 'nobody', '--', 'cat', testfile_mnt],
+            capture_output=True)
+        assert result.returncode == 0, \
+            f'Initial access failed: {result.stderr.decode()}'
+        assert result.stdout == b'hello'
+
+        # Remove all permissions on the directory via the FUSE mount
+        os.chmod(subdir_mnt, 0o000)
+
+        # Without default_permissions, the kernel's fuse_permission() returns 0
+        # for directory traversal. The cached dentry means no LOOKUP is sent,
+        # so the file remains accessible despite the directory being mode 000.
+        result = subprocess.run(
+            ['runuser', '-u', 'nobody', '--', 'cat', testfile_mnt],
+            capture_output=True)
+        assert result.returncode != 0, \
+            'Access should be denied after chmod 000 on parent directory, ' \
+            'but kernel fuse_permission() skips traverse check without ' \
+            'default_permissions'
+
+    except:
+        try:
+            os.chmod(pjoin(mnt_dir + src_dir, 'subdir'), 0o755)
+        except:
+            pass
+        cleanup(mount_process, mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+
+@pytest.mark.skipif(os.getuid() != 0,
+                    reason='needs to run as root')
+@pytest.mark.xfail(strict=False,
+                    reason="kernel fuse_permission() does not check file write "
+                           "permission for truncate when default_permissions is OFF")
+def test_perm_cache_file_truncate(short_tmpdir, output_checker):
+    """Demonstrate kernel fuse_permission() gap: file truncation.
+
+    When default_permissions is OFF, the kernel's fuse_permission() returns 0
+    for file write/truncate operations without checking permissions. Combined
+    with the inode attr cache (attr_timeout), chmod 000 on a file does not
+    prevent truncation through the cached inode until the cache expires.
+    """
+
+    mnt_dir = str(short_tmpdir.mkdir('mnt'))
+    src_dir = str(short_tmpdir.mkdir('src'))
+
+    os.chmod(str(short_tmpdir), 0o755)
+    os.chmod(mnt_dir, 0o755)
+    os.chmod(src_dir, 0o755)
+
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'passthrough'),
+                '-f', mnt_dir,
+                '-o', 'auto_cache,allow_other,'
+                      'entry_timeout=600,attr_timeout=600' ]
+
+    output_checker.register_output(r'error', count=0)
+
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        work_dir = mnt_dir + src_dir
+
+        # Create a world-writable file
+        truncfile_src = pjoin(src_dir, 'truncfile')
+        with open(truncfile_src, 'w') as fh:
+            fh.write('original data')
+        os.chmod(truncfile_src, 0o666)
+
+        truncfile_mnt = pjoin(work_dir, 'truncfile')
+
+        # Access as nobody to populate the kernel's attr cache
+        result = subprocess.run(
+            ['runuser', '-u', 'nobody', '--', 'cat', truncfile_mnt],
+            capture_output=True)
+        assert result.returncode == 0, \
+            f'Initial access failed: {result.stderr.decode()}'
+        assert result.stdout == b'original data'
+
+        # Remove all permissions on the file via the FUSE mount
+        os.chmod(truncfile_mnt, 0o000)
+
+        # Without default_permissions, the kernel's fuse_permission() returns 0
+        # for write operations. The cached inode attrs mean no permission
+        # recheck happens, so truncate succeeds despite mode 000.
+        result = subprocess.run(
+            ['runuser', '-u', 'nobody', '--', 'truncate', '--size=0',
+             truncfile_mnt],
+            capture_output=True)
+        assert result.returncode != 0, \
+            'Truncate should be denied after chmod 000, but kernel ' \
+            'fuse_permission() skips write permission check without ' \
+            'default_permissions'
+
+    except:
+        try:
+            os.chmod(pjoin(mnt_dir + src_dir, 'truncfile'), 0o666)
+        except:
+            pass
+        cleanup(mount_process, mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+
+@pytest.mark.skipif(os.getuid() != 0,
+                    reason='needs to run as root')
+@pytest.mark.xfail(strict=False,
+                    reason="kernel fuse_permission() does not check directory "
+                           "execute permission for traversal when "
+                           "default_permissions is OFF")
+def test_perm_cache_dir_read_after_noexec(short_tmpdir, output_checker):
+    """Demonstrate kernel fuse_permission() gap: directory noexec traversal.
+
+    When default_permissions is OFF, the kernel's fuse_permission() returns 0
+    for directory traversal. Removing the execute bit from a directory
+    (chmod 644) should prevent traversal while still allowing listing. But
+    with cached dentries, files inside remain accessible because the kernel
+    never re-checks directory execute permission.
+    """
+
+    mnt_dir = str(short_tmpdir.mkdir('mnt'))
+    src_dir = str(short_tmpdir.mkdir('src'))
+
+    os.chmod(str(short_tmpdir), 0o755)
+    os.chmod(mnt_dir, 0o755)
+    os.chmod(src_dir, 0o755)
+
+    cmdline = base_cmdline + \
+              [ pjoin(basename, 'example', 'passthrough'),
+                '-f', mnt_dir,
+                '-o', 'auto_cache,allow_other,'
+                      'entry_timeout=600,attr_timeout=600' ]
+
+    output_checker.register_output(r'error', count=0)
+
+    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
+                                     stderr=output_checker.fd)
+    try:
+        wait_for_mount(mount_process, mnt_dir)
+        work_dir = mnt_dir + src_dir
+
+        # Create directory (mode 755) with a readable file
+        noexec_dir_src = pjoin(src_dir, 'noexec_dir')
+        os.mkdir(noexec_dir_src, 0o755)
+        readable = pjoin(noexec_dir_src, 'readable')
+        with open(readable, 'w') as fh:
+            fh.write('readable content')
+        os.chmod(readable, 0o644)
+
+        noexec_dir_mnt = pjoin(work_dir, 'noexec_dir')
+        readable_mnt = pjoin(noexec_dir_mnt, 'readable')
+
+        # Access as nobody to populate the kernel's dentry/attr cache
+        result = subprocess.run(
+            ['runuser', '-u', 'nobody', '--', 'cat', readable_mnt],
+            capture_output=True)
+        assert result.returncode == 0, \
+            f'Initial access failed: {result.stderr.decode()}'
+        assert result.stdout == b'readable content'
+
+        # Remove execute bit from directory (644 = read+write, no traverse)
+        os.chmod(noexec_dir_mnt, 0o644)
+
+        # Without default_permissions, the kernel's fuse_permission() returns 0
+        # for directory traversal (MAY_EXEC on dirs). The cached dentry means
+        # no LOOKUP is sent, so the file remains accessible despite the
+        # directory lacking execute permission.
+        result = subprocess.run(
+            ['runuser', '-u', 'nobody', '--', 'cat', readable_mnt],
+            capture_output=True)
+        assert result.returncode != 0, \
+            'Access should be denied after removing directory execute bit, ' \
+            'but kernel fuse_permission() skips traverse check without ' \
+            'default_permissions'
+
+    except:
+        try:
+            os.chmod(pjoin(mnt_dir + src_dir, 'noexec_dir'), 0o755)
+        except:
+            pass
+        cleanup(mount_process, mnt_dir)
+        raise
+    else:
+        umount(mount_process, mnt_dir)
+
+
 # avoid warning about unused import
 assert test_printcap
