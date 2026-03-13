@@ -10,6 +10,12 @@ else
    libfuse_sources += [ 'mount_bsd.c' ]
 endif
 
+if private_cfg.get('HAVE_SERVICEMOUNT', false)
+  libfuse_sources += [ 'fuse_service.c' ]
+else
+  libfuse_sources += [ 'fuse_service_stub.c' ]
+endif
+
 deps = [ thread_dep ]
 if private_cfg.get('HAVE_ICONV')
    libfuse_sources += [ 'modules/iconv.c' ]
@@ -54,13 +60,19 @@ libfuse = library('fuse3',
                   link_args: ['-Wl,--version-script,' + meson.current_source_dir()
                               + '/fuse_versionscript' ])
 
+vars = []
+if private_cfg.get('HAVE_SERVICEMOUNT', false)
+  service_socket_dir = private_cfg.get_unquoted('FUSE_SERVICE_SOCKET_DIR', '')
+  vars += ['service_socket_dir=' + service_socket_dir]
+endif
 pkg = import('pkgconfig')
 pkg.generate(libraries: [ libfuse, '-lpthread' ],
              libraries_private: '-ldl',
              version: meson.project_version(),
              name: 'fuse3',
              description: 'Filesystem in Userspace',
-             subdirs: 'fuse3')
+             subdirs: 'fuse3',
+             variables: vars)
 
 libfuse_dep = declare_dependency(include_directories: include_dirs,
                                  link_with: libfuse, dependencies: deps)

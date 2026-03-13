@@ -69,6 +69,12 @@ args_default = [ '-D_GNU_SOURCE' ]
 #
 private_cfg = configuration_data()
 private_cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
+service_socket_dir = get_option('service-socket-dir')
+if service_socket_dir == ''
+  service_socket_dir = '/run/filesystems'
+endif
+private_cfg.set('FUSE_SERVICE_SOCKET_DIR_RAW', service_socket_dir)
+private_cfg.set_quoted('FUSE_SERVICE_SOCKET_DIR', service_socket_dir)
 
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
@@ -178,6 +184,37 @@ if get_option('enable-io-uring') and liburing.found() and libnuma.found()
               dependencies: [liburing])
       private_cfg.set('HAVE_URING', true)
    endif
+endif
+
+# Check for systemd support
+systemd_system_unit_dir = get_option('systemdsystemunitdir')
+if systemd_system_unit_dir == ''
+  systemd = dependency('systemd', required: false)
+  if systemd.found()
+     systemd_system_unit_dir = systemd.get_variable(pkgconfig: 'systemd_system_unit_dir')
+  endif
+endif
+
+if systemd_system_unit_dir == ''
+  warning('could not determine systemdsystemunitdir, systemd stuff will not be installed')
+else
+  private_cfg.set_quoted('SYSTEMD_SYSTEM_UNIT_DIR', systemd_system_unit_dir)
+  private_cfg.set('HAVE_SYSTEMD', true)
+endif
+
+# Check for libc SCM_RIGHTS support (aka Linux)
+code = '''
+#include <sys/socket.h>
+int main(void) {
+    int moo = SCM_RIGHTS;
+    return moo;
+}'''
+if cc.links(code, name: 'libc SCM_RIGHTS support')
+  private_cfg.set('HAVE_SCM_RIGHTS', true)
+endif
+
+if private_cfg.get('HAVE_SCM_RIGHTS', false) and private_cfg.get('HAVE_SYSTEMD', false)
+  private_cfg.set('HAVE_SERVICEMOUNT', true)
 endif
 
 #
