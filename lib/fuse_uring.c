@@ -919,8 +919,9 @@ int fuse_uring_start(struct fuse_session *se)
 err:
 	if (err) {
 		/* Note all threads need to have been started */
-		fuse_session_destruct_uring(fuse_ring);
-		se->uring.pool = fuse_ring;
+		if (fuse_ring)
+			fuse_session_destruct_uring(fuse_ring);
+		se->uring.pool = NULL;
 	}
 	return err;
 }
