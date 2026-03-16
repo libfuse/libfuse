@@ -20,6 +20,9 @@
 #include "util.h"
 #include "fuse_uring_i.h"
 #include "fuse_daemonize_i.h"
+#if defined(__linux__)
+#include "mount_i_linux.h"
+#endif
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -4404,6 +4407,63 @@ int fuse_session_custom_io_30(struct fuse_session *se,
 			offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 
+#if defined(HAVE_NEW_MOUNT_API)
+static int fuse_session_mount_new_api(struct fuse_session *se,
+				      const char *mountpoint)
+{
+	int fd = -1;
+	int res, err;
+	char *mnt_opts = NULL;
+	char *mnt_opts_with_fd = NULL;
+	char fd_opt[32];
+
+	res = fuse_kern_mount_get_base_mnt_opts(se->mo, &mnt_opts);
+	err = -EIO;
+	if (res == -1) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to get base mount options\n");
+		goto err;
+	}
+
+	fd = fuse_kern_mount_prepare(mountpoint, se->mo);
+	if (fd == -1) {
+		fuse_log(FUSE_LOG_ERR, "Mount preparation failed.\n");
+		err = -EIO;
+		goto err;
+	}
+
+	snprintf(fd_opt, sizeof(fd_opt), "fd=%i", fd);
+	if (fuse_opt_add_opt(&mnt_opts_with_fd, mnt_opts) == -1 ||
+	    fuse_opt_add_opt(&mnt_opts_with_fd, fd_opt) == -1) {
+		err = -ENOMEM;
+		goto err;
+	}
+
+	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mnt_opts_with_fd);
+err:
+	if (err) {
+		if (fd >= 0)
+			close(fd);
+		fd = -1;
+		se->fd = -1;
+		se->error = -errno;
+	}
+
+	free(mnt_opts);
+	free(mnt_opts_with_fd);
+	return fd;
+}
+#else
+static int fuse_session_mount_new_api(struct fuse_session *se,
+				      const char *mountpoint)
+{
+	(void)se;
+	(void)mountpoint;
+
+	return -1;
+}
+#endif
+
 int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 {
 	int fd;
@@ -4431,6 +4491,8 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 			close(fd);
 	} while (fd >= 0 && fd <= 2);
 
+	/* Open channel */
+
 	/*
 	 * To allow FUSE daemons to run without privileges, the caller may open
 	 * /dev/fuse before launching the file system and pass on the file
@@ -4448,9 +4510,15 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 		goto out;
 	}
 
-	/* Open channel */
+	/* new linux mount api */
+	fd = fuse_session_mount_new_api(se, mountpoint);
+	if (fd >= 0)
+		goto out;
+
+	/* fall back to old API */
+	se->error = 0; /* reset error of new api */
 	fd = fuse_kern_mount(mountpoint, se->mo);
-	if (fd == -1)
+	if (fd < 0)
 		goto error_out;
 
 out:

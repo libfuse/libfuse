@@ -29,4 +29,28 @@ struct mount_opts {
 	unsigned int max_read;
 };
 
+int fuse_kern_mount_prepare(const char *mnt, struct mount_opts *mo);
+
+int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_optsp);
+
+/**
+ * Mount using the new Linux mount API (fsopen/fsconfig/fsmount/move_mount)
+ * @mnt: mountpoint
+ * @flags: mount flags (MS_NOSUID, MS_NODEV, etc.)
+ * @blkdev: 1 for fuseblk, 0 for fuse
+ * @fsname: filesystem name (or NULL)
+ * @subtype: filesystem subtype (or NULL)
+ * @source_dev: device name for building source string
+ * @kernel_opts: kernel mount options string
+ * @mnt_opts: additional mount options to pass to the kernel
+ *
+ * Returns: 0 on success, -1 on failure with errno set
+ */
+int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
+		      const char *fsname, const char *subtype,
+		      const char *source_dev, const char *kernel_opts,
+		      const char *mnt_opts);
+
+int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
+			 const char *mnt_opts);
 #endif /* FUSE_MOUNT_I_LINUX_H_ */

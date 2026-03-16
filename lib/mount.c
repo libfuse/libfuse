@@ -442,8 +442,8 @@ static int fuse_mount_fusermount(const char *mountpoint, const struct mount_opts
 #define O_CLOEXEC 0
 #endif
 
-static int fuse_kern_mount_prepare(const char *mnt,
-				   struct mount_opts *mo)
+int fuse_kern_mount_prepare(const char *mnt,
+			    struct mount_opts *mo)
 {
 	char tmp[128];
 	const char *devname = fuse_mnt_get_devname();
@@ -492,6 +492,26 @@ out_close:
 	close(fd);
 	return -1;
 }
+
+#if defined(HAVE_NEW_MOUNT_API)
+/**
+ * Wrapper for fuse_kern_fsmount that accepts struct mount_opts
+ * @mnt: mountpoint
+ * @mo: mount options
+ * @mnt_opts: mount options to pass to the kernel
+ *
+ * Returns: 0 on success, -1 on failure with errno set
+ */
+int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
+			 const char *mnt_opts)
+{
+	const char *devname = fuse_mnt_get_devname();
+
+	return fuse_kern_fsmount(mnt, mo->flags, mo->blkdev, mo->fsname,
+				 mo->subtype, devname, mo->kernel_opts,
+				 mnt_opts);
+}
+#endif
 
 /**
  * Complete the mount operation with an already-opened fd
@@ -636,8 +656,7 @@ void destroy_mount_opts(struct mount_opts *mo)
 	free(mo);
 }
 
-static int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo,
-					     char **mnt_optsp)
+int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_optsp)
 {
 	if (get_mnt_flag_opts(mnt_optsp, mo->flags) == -1)
 		return -1;
