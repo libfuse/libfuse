@@ -53,7 +53,7 @@ jobs:
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@0d579ffd059c29b07949a3cce3983f0780820c98 # v3.29.5
+      uses: github/codeql-action/init@b1bff81932f5cdfc8695c7752dcee935dcd061c8 # v3.29.5
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
@@ -78,7 +78,7 @@ jobs:
         meson compile -C build
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@0d579ffd059c29b07949a3cce3983f0780820c98 # v3.29.5
+      uses: github/codeql-action/analyze@b1bff81932f5cdfc8695c7752dcee935dcd061c8 # v3.29.5
 
       with:
         category: "/language:${{matrix.language}}"
