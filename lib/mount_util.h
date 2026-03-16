@@ -7,6 +7,7 @@
 */
 
 #include <sys/types.h>
+#include "mount_common_i.h" // IWYU pragma: keep
 
 int fuse_mnt_add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts);
@@ -16,3 +17,8 @@ int fuse_mnt_umount(const char *progname, const char *abs_mnt,
 char *fuse_mnt_resolve_path(const char *progname, const char *orig);
 int fuse_mnt_check_fuseblk(void);
 int fuse_mnt_parse_fuse_fd(const char *mountpoint);
+
+/* Helper functions for mount operations */
+const char *fuse_mnt_get_devname(void);
+int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
+			       const char *type, const char *mnt_opts);

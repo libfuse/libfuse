@@ -377,3 +377,34 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 
 	return -1;
 }
+
+int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
+			       const char *type, const char *mnt_opts)
+{
+#ifndef IGNORE_MTAB
+	if (geteuid() == 0) {
+		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
+		int res;
+
+		if (!newmnt)
+			return -1;
+
+		res = fuse_mnt_add_mount("fuse", source, newmnt, type,
+					 mnt_opts);
+		free(newmnt);
+		return res;
+	}
+#endif
+	(void)mnt;
+	(void)source;
+	(void)type;
+	(void)mnt_opts;
+	return 0;
+}
+
+const char *fuse_mnt_get_devname(void)
+{
+	const char *devname = getenv(FUSE_KERN_DEVICE_ENV);
+
+	return devname ? devname : "/dev/fuse";
+}

@@ -19,14 +19,15 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 
+#ifndef MIN
 #define MIN(a, b) \
 ({									\
 	typeof(a) _a = (a);						\
 	typeof(b) _b = (b);						\
 	_a < _b ? _a : _b;						\
 })
+#endif
 
-struct mount_opts;
 struct fuse_ring_pool;
 
 struct fuse_req {
@@ -217,13 +218,8 @@ struct fuse_chan *fuse_chan_get(struct fuse_chan *ch);
  */
 void fuse_chan_put(struct fuse_chan *ch);
 
-/* Special return value for mount functions to indicate fallback to fusermount3 is needed */
-#define FUSE_MOUNT_FALLBACK_NEEDED (-2)
-
-struct mount_opts *parse_mount_opts(struct fuse_args *args);
-void destroy_mount_opts(struct mount_opts *mo);
+/* Mount-related functions */
 void fuse_mount_version(void);
-unsigned int get_max_read(const struct mount_opts *o);
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
 

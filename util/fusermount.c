@@ -47,9 +47,6 @@
 #endif
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
-#define FUSE_KERN_DEVICE_ENV	"FUSE_KERN_DEVICE"
-
-#define FUSE_DEV "/dev/fuse"
 
 static const char *progname;
 
@@ -1262,7 +1259,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 {
 	int res;
 	int fd;
-	const char *dev = getenv(FUSE_KERN_DEVICE_ENV) ?: FUSE_DEV;
+	const char *dev = fuse_mnt_get_devname();
 	struct stat stbuf;
 	char *source = NULL;
 	char *mnt_opts = NULL;
