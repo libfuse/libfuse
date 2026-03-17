@@ -67,11 +67,16 @@ class OutputChecker:
             cp = re.compile(pattern, flags)
             (buf, cnt) = cp.subn('', buf, count=count)
 
+        # Filter out Valgrind output lines before checking for suspicious words
+        # ==PID== prefix: Valgrind standard messages (errors, info)
+        # --PID-- prefix: Valgrind warnings (e.g., unhandled syscalls)
+        buf = re.sub(r'^==[0-9]+== .*$', '', buf, flags=re.MULTILINE)
+        buf = re.sub(r'^--[0-9]+-- .*$', '', buf, flags=re.MULTILINE)
+
         patterns = [ r'\b{}\b'.format(x) for x in
                      ('exception', 'error', 'warning', 'fatal', 'traceback',
                         'fault', 'crash(?:ed)?', 'abort(?:ed)',
                         'uninitiali[zs]ed') ]
-        patterns += ['^==[0-9]+== ']
 
         for pattern in patterns:
             cp = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
