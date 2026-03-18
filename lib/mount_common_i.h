@@ -24,8 +24,6 @@ struct mount_opts;
 struct mount_opts *parse_mount_opts(struct fuse_args *args);
 void destroy_mount_opts(struct mount_opts *mo);
 unsigned int get_max_read(const struct mount_opts *o);
-char *fuse_mnt_build_source(const struct mount_opts *mo);
-char *fuse_mnt_build_type(const struct mount_opts *mo);
 
 
 #endif /* FUSE_MOUNT_COMMON_I_H_ */

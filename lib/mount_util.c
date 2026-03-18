@@ -10,6 +10,9 @@
 
 #include "fuse_config.h"
 #include "mount_util.h"
+#ifdef __linux__
+#include "mount_i_linux.h"
+#endif
 
 #include <stdio.h>
 #include <unistd.h>
