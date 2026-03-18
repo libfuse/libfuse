@@ -53,4 +53,6 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 
 int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
 			 const char *mnt_opts);
+char *fuse_mnt_build_source(const struct mount_opts *mo);
+char *fuse_mnt_build_type(const struct mount_opts *mo);
 #endif /* FUSE_MOUNT_I_LINUX_H_ */

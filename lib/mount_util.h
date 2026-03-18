@@ -6,6 +6,9 @@
   See the file LGPL2.txt.
 */
 
+#ifndef FUSE_MOUNT_UTIL_H_
+#define FUSE_MOUNT_UTIL_H_
+
 #include <sys/types.h>
 #include "mount_common_i.h" // IWYU pragma: keep
 
@@ -32,3 +35,5 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint);
 const char *fuse_mnt_get_devname(void);
 int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 			       const char *type, const char *mnt_opts);
+
+#endif /* FUSE_MOUNT_UTIL_H_ */
