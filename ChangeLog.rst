@@ -1,3 +1,9 @@
+libfuse 3.18.2 (2026-03-18)
+===========================
+* Fix two io-uring issues that might be security critical
+  * fuse-io-uring: Fix UAF and NULL deref in startup error path
+  * fuse-io-uring: Fix NULL deref and memory leak in fuse_uring_init_queue
+
 libfuse 3.18.1 (2025-12-20)
 ===========================
 * Fix a critical ABI issue compared to libfuse-3.17.3+
