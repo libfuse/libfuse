@@ -11,6 +11,9 @@
 #include "fuse_config.h"
 #include "mount_util.h"
 #include "util.h"
+#if __linux__
+#include "mount_i_linux.h"
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -920,6 +923,7 @@ static void free_mount_params(struct mount_params *mp)
 	free(mp->source);
 	free(mp->type);
 	free(mp->mnt_opts);
+	memset(mp, 0, sizeof(*mp));
 }
 
 /*
@@ -1306,6 +1310,161 @@ static int open_fuse_device(const char *dev)
 	return fd;
 }
 
+/*
+ * Context for split mount operation (sync-init mode)
+ */
+struct mount_context {
+	int fd;
+	const char *dev;
+	struct stat stbuf;
+	char *source;
+	char *mnt_opts;
+	char *x_opts;
+	char *kern_mnt_opts; /* mnt_opts with removed x_opts */
+	const char *type;
+};
+
+/*
+ * Phase 1: Open device and prepare for mount (sync-init mode)
+ * Returns fd on success, -1 on failure
+ */
+static int mount_fuse_prepare(const char *mnt, const char *opts,
+			      struct mount_context *ctx)
+{
+	int res;
+	int mountpoint_fd = -1;
+	const char *real_mnt = mnt;
+
+	memset(ctx, 0, sizeof(*ctx));
+	ctx->dev = fuse_mnt_get_devname();
+
+	ctx->fd = open_fuse_device(ctx->dev);
+	if (ctx->fd == -1)
+		return -1;
+
+	drop_privs();
+	read_conf();
+
+	if (getuid() != 0 && mount_max != -1) {
+		int mount_count = count_fuse_fs();
+
+		if (mount_count >= mount_max) {
+			fprintf(stderr,
+				"%s: too many FUSE filesystems mounted; mount_max=N can be set in %s\n",
+				progname, FUSE_CONF);
+			goto fail_close_fd;
+		}
+	}
+
+	res = extract_x_options(opts, &ctx->kern_mnt_opts, &ctx->x_opts);
+	if (res)
+		goto fail_close_fd;
+
+	res = check_perm(&real_mnt, &ctx->stbuf, &mountpoint_fd);
+	restore_privs();
+
+	if (mountpoint_fd != -1)
+		close(mountpoint_fd);
+
+	if (res == -1)
+		goto fail_close_fd;
+
+	return ctx->fd;
+
+fail_close_fd:
+	close(ctx->fd);
+	free(ctx->x_opts);
+	free(ctx->kern_mnt_opts);
+	ctx->fd = -1;
+	return -1;
+}
+
+#ifdef HAVE_NEW_MOUNT_API
+/*
+ * Phase 2: Perform the actual mount using new mount API (sync-init mode)
+ * Returns 0 on success, -1 on failure
+ */
+static int mount_fuse_finish_fsmount(const char *mnt,
+				     struct mount_context *ctx,
+				     const char **type)
+{
+	int res;
+	struct mount_params mp = {
+		.fd = ctx->fd,
+		.rootmode = ctx->stbuf.st_mode & S_IFMT,
+		.dev = ctx->dev,
+	};
+	char *final_mnt_opts = NULL;
+
+	res = prepare_mount(ctx->kern_mnt_opts, &mp);
+	if (res == -1)
+		goto fail;
+
+	/*
+	 * Merge x-options if running as root, root is allowed to update
+	 * /etc/mtab or /run/mount/utab
+	 */
+	final_mnt_opts = mp.mnt_opts;
+	if (geteuid() == 0 && ctx->x_opts && strlen(ctx->x_opts) > 0) {
+		char *x_mnt_opts = NULL;
+		int ret;
+
+		if (strlen(mp.mnt_opts) > 0)
+			ret = asprintf(&x_mnt_opts, "%s,%s",
+				       mp.mnt_opts, ctx->x_opts);
+		else
+			ret = asprintf(&x_mnt_opts, "%s", ctx->x_opts);
+
+		if (ret < 0)
+			goto fail_free_params;
+
+		final_mnt_opts = x_mnt_opts;
+	}
+
+	/* Use new mount API */
+	res = fuse_kern_fsmount(mnt, mp.flags, mp.blkdev,
+				mp.fsname, mp.subtype, ctx->dev,
+				mp.optbuf, final_mnt_opts);
+	if (res == -1)
+		goto fail_free_merged;
+
+	/* Change to root directory */
+	res = chdir("/");
+	if (res == -1) {
+		fprintf(stderr, "%s: failed to chdir to '/'\n", progname);
+		goto fail_free_merged;
+	}
+
+	/* Store results in context */
+	ctx->source = mp.source;
+	ctx->type = mp.type;
+	ctx->mnt_opts = final_mnt_opts;
+	*type = mp.type;
+
+	res = 0;
+
+	/* Only free what is not assigned to ctx */
+	free(mp.fsname);
+	free(mp.subtype);
+	free(mp.optbuf);
+	if (final_mnt_opts != mp.mnt_opts)
+		free(mp.mnt_opts);
+
+out:
+	return res;
+
+fail_free_merged:
+	if (final_mnt_opts != mp.mnt_opts)
+		free(final_mnt_opts);
+fail_free_params:
+	free_mount_params(&mp);
+fail:
+	res = -1;
+	goto out;
+}
+#endif /* HAVE_NEW_MOUNT_API */
+
+
 static int mount_fuse(const char *mnt, const char *opts, const char **type)
 {
 	int res;
@@ -1401,6 +1560,61 @@ fail_close_fd:
 	goto out_free;
 }
 
+/* Forward declarations for helper functions */
+static int send_fd(int sock_fd, int fd);
+static int wait_for_signal(int sock_fd);
+
+#ifdef HAVE_NEW_MOUNT_API
+/*
+ * Perform sync-init mount using new mount API
+ * Returns 0 on success, -1 on failure
+ */
+static int mount_fuse_sync_init(const char *mnt, const char *opts,
+				int cfd, const char **type)
+{
+	struct mount_context ctx = { .fd = -1 };
+	int fd, res;
+	int32_t status, send_res;
+
+	/* Phase 1: Open device and prepare */
+	fd = mount_fuse_prepare(mnt, opts, &ctx);
+	if (fd == -1)
+		return -1;
+
+	/* Send fd to caller so it can start worker thread */
+	res = send_fd(cfd, fd);
+	if (res != 0)
+		goto out;
+
+	/* Wait for caller to signal that worker thread is ready */
+	res = wait_for_signal(cfd);
+	if (res != 0)
+		goto out;
+
+	/* Phase 2: Perform the actual mount using new API */
+	res = mount_fuse_finish_fsmount(mnt, &ctx, type);
+
+	/* Send mount result back to caller (4-byte error code) */
+	status = (res == 0) ? 0 : -(int32_t)errno;
+	do {
+		send_res = send(cfd, &status, sizeof(status), 0);
+	} while (send_res == -1 && errno == EINTR);
+	if (send_res != sizeof(status)) {
+		fprintf(stderr, "%s: failed to send mount status: %s\n",
+			progname, strerror(errno));
+	}
+
+out:
+	close(fd);
+	free(ctx.source);
+	free(ctx.mnt_opts);
+	free(ctx.x_opts);
+	free(ctx.kern_mnt_opts);
+
+	return res;
+}
+#endif /* HAVE_NEW_MOUNT_API */
+
 static int send_fd(int sock_fd, int fd)
 {
 	int retval;
@@ -1432,6 +1646,30 @@ static int send_fd(int sock_fd, int fd)
 	while ((retval = sendmsg(sock_fd, &msg, 0)) == -1 && errno == EINTR);
 	if (retval != 1) {
 		perror("sending file descriptor");
+		return -1;
+	}
+	return 0;
+}
+
+/*
+ * Wait for a signal byte from the caller.
+ * Returns 0 on success, -1 on error.
+ */
+static int wait_for_signal(int sock_fd)
+{
+	char buf[1];
+	int res;
+
+	do {
+		res = recv(sock_fd, buf, sizeof(buf), 0);
+	} while (res == -1 && errno == EINTR);
+	if (res != 1) {
+		if (res == 0)
+			fprintf(stderr, "%s: connection closed while waiting for signal\n",
+				progname);
+		else
+			fprintf(stderr, "%s: error receiving signal: %s\n",
+				progname, strerror(errno));
 		return -1;
 	}
 	return 0;
@@ -1628,6 +1866,7 @@ int main(int argc, char *argv[])
 	const char *opts = "";
 	const char *type = NULL;
 	int setup_auto_unmount_only = 0;
+	int sync_init_mode = 0;
 
 	static const struct option long_opts[] = {
 		{"unmount", no_argument, NULL, 'u'},
@@ -1640,6 +1879,7 @@ int main(int argc, char *argv[])
 		// They'ne meant for internal use by mount.c
 		{"auto-unmount", no_argument, NULL, 'U'},
 		{"comm-fd", required_argument, NULL, 'c'},
+		{"sync-init", no_argument, NULL, 'S'},
 		{0, 0, 0, 0}};
 
 	progname = strdup(argc > 0 ? argv[0] : "fusermount");
@@ -1673,6 +1913,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'c':
 			commfd = optarg;
+			break;
+		case 'S':
+			sync_init_mode = 1;
 			break;
 		case 'z':
 			lazy = 1;
@@ -1751,21 +1994,42 @@ int main(int argc, char *argv[])
 	if (setup_auto_unmount_only)
 		goto wait_for_auto_unmount;
 
-	fd = mount_fuse(mnt, opts, &type);
-	if (fd == -1)
-		goto err_out;
+	if (sync_init_mode) {
+#ifdef HAVE_NEW_MOUNT_API
+		res = mount_fuse_sync_init(mnt, opts, cfd, &type);
+		if (res == -1)
+			goto err_out;
 
-	res = send_fd(cfd, fd);
-	if (res != 0) {
-		umount2(mnt, MNT_DETACH); /* lazy umount */
+		if (!auto_unmount) {
+			free(mnt);
+			free((void *) type);
+			return 0;
+		}
+		/* Continue to auto_unmount handling below */
+#else
+		fprintf(stderr, "%s: sync-init mode requires new mount API support\n",
+			progname);
+		fprintf(stderr, "%s: kernel or headers too old (need fsopen/fsmount)\n",
+			progname);
 		goto err_out;
-	}
-	close(fd);
+#endif
+	} else {
+		fd = mount_fuse(mnt, opts, &type);
+		if (fd == -1)
+			goto err_out;
 
-	if (!auto_unmount) {
-		free(mnt);
-		free((void*) type);
-		return 0;
+		res = send_fd(cfd, fd);
+		if (res != 0) {
+			umount2(mnt, MNT_DETACH); /* lazy umount */
+			goto err_out;
+		}
+		close(fd);
+
+		if (!auto_unmount) {
+			free(mnt);
+			free((void *) type);
+			return 0;
+		}
 	}
 
 wait_for_auto_unmount:
