@@ -880,30 +880,132 @@ static int mount_notrunc(const char *source, const char *target,
 	return mount(source, target, filesystemtype, mountflags, data);
 }
 
+struct mount_params {
+	/* Input parameters */
+	int fd;                  /* /dev/fuse file descriptor */
+	mode_t rootmode;         /* Root mode from stat */
+	const char *dev;         /* Device path (/dev/fuse) */
 
-static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
-		    int fd, const char *opts, const char *dev, char **sourcep,
-		    char **mnt_optsp)
+	/* Parsed mount options */
+	unsigned long flags;     /* Mount flags (MS_NOSUID, etc.) */
+	char *optbuf;           /* Kernel mount options buffer */
+	char *fsname;           /* Filesystem name from options */
+	char *subtype;          /* Subtype from options */
+	int blkdev;             /* Block device flag */
+
+	/* Generated mount parameters */
+	char *source;           /* Mount source string */
+	char *type;             /* Filesystem type string */
+	char *mnt_opts;         /* Mount table options */
+
+	/* Pointer for optbuf manipulation */
+	char *optbuf_end;       /* Points to end of optbuf for sprintf */
+};
+
+static void free_mount_params(struct mount_params *mp)
+{
+	free(mp->optbuf);
+	free(mp->fsname);
+	free(mp->subtype);
+	free(mp->source);
+	free(mp->type);
+	free(mp->mnt_opts);
+}
+
+/*
+ * Check if option is deprecated large_read.
+ *
+ * Returns true if the option should be skipped (large_read on kernel > 2.4),
+ * false otherwise (all other options or large_read on old kernels).
+ */
+static bool check_large_read(const char *opt, unsigned int len)
+{
+	struct utsname utsname;
+	unsigned int kmaj, kmin;
+	int res;
+
+	if (!opt_eq(opt, len, "large_read"))
+		return false;
+
+	res = uname(&utsname);
+	if (res == 0 &&
+	    sscanf(utsname.release, "%u.%u", &kmaj, &kmin) == 2 &&
+	    (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
+		fprintf(stderr,
+			"%s: note: 'large_read' mount option is deprecated for %u.%u kernels\n",
+			progname, kmaj, kmin);
+		return true;
+	}
+	return false;
+}
+
+/*
+ * Check if user has permission to use allow_other or allow_root options.
+ *
+ * Returns -1 if permission denied, 0 if allowed or option is not
+ * allow_other/allow_root.
+ */
+static int check_allow_permission(const char *opt, unsigned int len)
+{
+	if (getuid() != 0 && !user_allow_other &&
+	    (opt_eq(opt, len, "allow_other") || opt_eq(opt, len, "allow_root"))) {
+		fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in %s\n",
+			progname, len, opt, FUSE_CONF);
+		return -1;
+	}
+	return 0;
+}
+
+/*
+ * Process generic mount option.
+ *
+ * Handles mount flags (ro, rw, suid, etc.), kernel options
+ * (default_permissions, allow_other, max_read, blksize), or exits on
+ * unknown options.
+ */
+static int process_generic_option(const char *opt, unsigned int len,
+				   unsigned long *flags, char **dest)
+{
+	int on;
+	int flag;
+
+	if (find_mount_flag(opt, len, &on, &flag)) {
+		if (on)
+			*flags |= flag;
+		else
+			*flags &= ~flag;
+		return 0;
+	}
+
+	if (opt_eq(opt, len, "default_permissions") ||
+	    opt_eq(opt, len, "allow_other") ||
+	    begins_with(opt, "max_read=") ||
+	    begins_with(opt, "blksize=")) {
+		memcpy(*dest, opt, len);
+		*dest += len;
+		**dest = ',';
+		(*dest)++;
+		return 0;
+	}
+
+	fprintf(stderr, "%s: unknown option '%.*s'\n", progname, len, opt);
+	exit(1);
+}
+
+static int prepare_mount(const char *opts, struct mount_params *mp)
 {
 	int res;
-	int flags = MS_NOSUID | MS_NODEV;
-	char *optbuf;
-	char *mnt_opts = NULL;
 	const char *s;
 	char *d;
-	char *fsname = NULL;
-	char *subtype = NULL;
-	char *source = NULL;
-	char *type = NULL;
-	int blkdev = 0;
 
-	optbuf = (char *) malloc(strlen(opts) + 128);
-	if (!optbuf) {
+	mp->flags = MS_NOSUID | MS_NODEV;
+	mp->optbuf = (char *) malloc(strlen(opts) + 128);
+	if (!mp->optbuf) {
 		fprintf(stderr, "%s: failed to allocate memory\n", progname);
 		return -1;
 	}
 
-	for (s = opts, d = optbuf; *s;) {
+	for (s = opts, d = mp->optbuf; *s;) {
 		unsigned len;
 		const char *fsname_str = "fsname=";
 		const char *subtype_str = "subtype=";
@@ -916,10 +1018,10 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 				break;
 		}
 		if (begins_with(s, fsname_str)) {
-			if (!get_string_opt(s, len, fsname_str, &fsname))
+			if (!get_string_opt(s, len, fsname_str, &mp->fsname))
 				goto err;
 		} else if (begins_with(s, subtype_str)) {
-			if (!get_string_opt(s, len, subtype_str, &subtype))
+			if (!get_string_opt(s, len, subtype_str, &mp->subtype))
 				goto err;
 		} else if (opt_eq(s, len, "blkdev")) {
 			if (getuid() != 0) {
@@ -928,7 +1030,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 					progname);
 				goto err;
 			}
-			blkdev = 1;
+			mp->blkdev = 1;
 		} else if (opt_eq(s, len, "auto_unmount")) {
 			auto_unmount = 1;
 		} else if (!opt_eq(s, len, "nonempty") &&
@@ -936,124 +1038,132 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 			   !begins_with(s, "rootmode=") &&
 			   !begins_with(s, "user_id=") &&
 			   !begins_with(s, "group_id=")) {
-			int on;
-			int flag;
-			int skip_option = 0;
-			if (opt_eq(s, len, "large_read")) {
-				struct utsname utsname;
-				unsigned kmaj, kmin;
-				res = uname(&utsname);
-				if (res == 0 &&
-				    sscanf(utsname.release, "%u.%u",
-					   &kmaj, &kmin) == 2 &&
-				    (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
-					fprintf(stderr,
-						"%s: note: 'large_read' mount option is deprecated for %u.%u kernels\n",
-						progname, kmaj, kmin);
-					skip_option = 1;
-				}
-			}
-			if (getuid() != 0 && !user_allow_other &&
-			    (opt_eq(s, len, "allow_other") ||
-			     opt_eq(s, len, "allow_root"))) {
-				fprintf(stderr, "%s: option %.*s only allowed if 'user_allow_other' is set in %s\n", progname, len, s, FUSE_CONF);
+			bool skip;
+
+			if (check_allow_permission(s, len) == -1)
 				goto err;
-			}
-			if (!skip_option) {
-				if (find_mount_flag(s, len, &on, &flag)) {
-					if (on)
-						flags |= flag;
-					else
-						flags  &= ~flag;
-				} else if (opt_eq(s, len, "default_permissions") ||
-					   opt_eq(s, len, "allow_other") ||
-					   begins_with(s, "max_read=") ||
-					   begins_with(s, "blksize=")) {
-					memcpy(d, s, len);
-					d += len;
-					*d++ = ',';
-				} else {
-					fprintf(stderr, "%s: unknown option '%.*s'\n", progname, len, s);
-					exit(1);
-				}
-			}
+
+			skip = check_large_read(s, len);
+
+			/*
+			 * Skip deprecated large_read to avoid passing it to
+			 * kernel which would reject it as unknown option.
+			 */
+			if (!skip)
+				process_generic_option(s, len, &mp->flags, &d);
 		}
 		s += len;
 		if (*s)
 			s++;
 	}
 	*d = '\0';
-	res = get_mnt_opts(flags, optbuf, &mnt_opts);
+	res = get_mnt_opts(mp->flags, mp->optbuf, &mp->mnt_opts);
 	if (res == -1)
 		goto err;
 
+	mp->optbuf_end = d;
+
 	sprintf(d, "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
-		fd, rootmode, getuid(), getgid());
+		mp->fd, mp->rootmode, getuid(), getgid());
 
-	source = malloc((fsname ? strlen(fsname) : 0) +
-			(subtype ? strlen(subtype) : 0) + strlen(dev) + 32);
+	mp->source = malloc((mp->fsname ? strlen(mp->fsname) : 0) +
+			(mp->subtype ? strlen(mp->subtype) : 0) + strlen(mp->dev) + 32);
 
-	type = malloc((subtype ? strlen(subtype) : 0) + 32);
-	if (!type || !source) {
+	mp->type = malloc((mp->subtype ? strlen(mp->subtype) : 0) + 32);
+	if (!mp->type || !mp->source) {
 		fprintf(stderr, "%s: failed to allocate memory\n", progname);
 		goto err;
 	}
 
-	if (subtype)
-		sprintf(type, "%s.%s", blkdev ? "fuseblk" : "fuse", subtype);
+	if (mp->subtype)
+		sprintf(mp->type, "%s.%s", mp->blkdev ? "fuseblk" : "fuse", mp->subtype);
 	else
-		strcpy(type, blkdev ? "fuseblk" : "fuse");
+		strcpy(mp->type, mp->blkdev ? "fuseblk" : "fuse");
 
-	if (fsname)
-		strcpy(source, fsname);
+	if (mp->fsname)
+		strcpy(mp->source, mp->fsname);
 	else
-		strcpy(source, subtype ? subtype : dev);
+		strcpy(mp->source, mp->subtype ? mp->subtype : mp->dev);
 
-	res = mount_notrunc(source, mnt, type, flags, optbuf);
-	if (res == -1 && errno == ENODEV && subtype) {
+	return 0;
+
+err:
+	free_mount_params(mp);
+	return -1;
+}
+
+/*
+ * Perform the actual mount operation using prepared parameters.
+ *
+ * Returns 0 on success, -1 on failure.
+ */
+static int perform_mount(const char *mnt, struct mount_params *mp)
+{
+	int res;
+
+	res = mount_notrunc(mp->source, mnt, mp->type, mp->flags, mp->optbuf);
+	if (res == -1 && errno == ENODEV && mp->subtype) {
 		/* Probably missing subtype support */
-		strcpy(type, blkdev ? "fuseblk" : "fuse");
-		if (fsname) {
-			if (!blkdev)
-				sprintf(source, "%s#%s", subtype, fsname);
+		strcpy(mp->type, mp->blkdev ? "fuseblk" : "fuse");
+		if (mp->fsname) {
+			if (!mp->blkdev)
+				sprintf(mp->source, "%s#%s", mp->subtype, mp->fsname);
 		} else {
-			strcpy(source, type);
+			strcpy(mp->source, mp->type);
 		}
 
-		res = mount_notrunc(source, mnt, type, flags, optbuf);
+		res = mount_notrunc(mp->source, mnt, mp->type, mp->flags, mp->optbuf);
 	}
 	if (res == -1 && errno == EINVAL) {
 		/* It could be an old version not supporting group_id */
-		sprintf(d, "fd=%i,rootmode=%o,user_id=%u",
-			fd, rootmode, getuid());
-		res = mount_notrunc(source, mnt, type, flags, optbuf);
+		sprintf(mp->optbuf_end, "fd=%i,rootmode=%o,user_id=%u",
+			mp->fd, mp->rootmode, getuid());
+		res = mount_notrunc(mp->source, mnt, mp->type, mp->flags, mp->optbuf);
 	}
 	if (res == -1) {
 		int errno_save = errno;
-		if (blkdev && errno == ENODEV && !fuse_mnt_check_fuseblk())
+		if (mp->blkdev && errno == ENODEV && !fuse_mnt_check_fuseblk())
 			fprintf(stderr, "%s: 'fuseblk' support missing\n",
 				progname);
 		else
 			fprintf(stderr, "%s: mount failed: %s\n", progname,
 				strerror(errno_save));
-		goto err;
+		return -1;
 	}
-	*sourcep = source;
-	*typep = type;
-	*mnt_optsp = mnt_opts;
-	free(fsname);
-	free(optbuf);
 
 	return 0;
+}
 
-err:
-	free(fsname);
-	free(subtype);
-	free(source);
-	free(type);
-	free(mnt_opts);
-	free(optbuf);
-	return -1;
+static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
+		    int fd, const char *opts, const char *dev, char **sourcep,
+		    char **mnt_optsp)
+{
+	struct mount_params mp = { .fd = fd }; /* implicit zero of other params */
+	int res;
+
+	mp.rootmode = rootmode;
+	mp.dev = dev;
+
+	res = prepare_mount(opts, &mp);
+	if (res == -1)
+		return -1;
+
+	res = perform_mount(mnt, &mp);
+	if (res == -1) {
+		free_mount_params(&mp);
+		return -1;
+	}
+
+	*sourcep = mp.source;
+	*typep = mp.type;
+	*mnt_optsp = mp.mnt_opts;
+
+	/* Free only the intermediate allocations, not the returned ones */
+	free(mp.fsname);
+	free(mp.subtype);
+	free(mp.optbuf);
+
+	return 0;
 }
 
 static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
