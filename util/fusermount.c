@@ -109,22 +109,31 @@ static struct mntent *GETMNTENT(FILE *stream)
 
 /*
  * Take a ',' separated option string and extract "x-" options
+ * @original: The original option string
+ * @regular_opts: The regular options
+ * @x_prefixed_opts: The "x-" options
  */
-static int extract_x_options(const char *original, char **non_x_opts,
-			     char **x_opts)
+static int extract_x_options(const char *original, char **regular_opts,
+			     char **x_prefixed_opts)
 {
 	size_t orig_len;
 	const char *opt, *opt_end;
 
 	orig_len = strlen(original) + 1;
 
-	*non_x_opts = calloc(1, orig_len);
-	*x_opts    = calloc(1, orig_len);
+	if (*regular_opts != NULL || *x_prefixed_opts != NULL) {
+		fprintf(stderr, "%s: regular_opts or x_prefixed_opts not NULL\n",
+			__func__);
+		return -EINVAL;
+	}
 
-	size_t non_x_opts_len = orig_len;
-	size_t x_opts_len = orig_len;
+	*regular_opts = calloc(1, orig_len);
+	*x_prefixed_opts    = calloc(1, orig_len);
 
-	if (*non_x_opts == NULL || *x_opts == NULL) {
+	size_t regular_opts_len = orig_len;
+	size_t x_prefixed_opts_len = orig_len;
+
+	if (*regular_opts == NULL || *x_prefixed_opts == NULL) {
 		fprintf(stderr, "%s: Failed to allocate %zuB.\n",
 			__func__, orig_len);
 		return -ENOMEM;
@@ -140,16 +149,16 @@ static int extract_x_options(const char *original, char **non_x_opts,
 		size_t opt_len = opt_end - opt;
 		size_t opt_len_left = orig_len - (opt - original);
 		size_t buf_len;
-		bool is_x_opts;
+		bool is_x_prefixed_opts;
 
 		if (strncmp(opt, "x-", MIN(2, opt_len_left)) == 0) {
-			buf_len = x_opts_len;
-			is_x_opts = true;
-			opt_buf = *x_opts;
+			buf_len = x_prefixed_opts_len;
+			is_x_prefixed_opts = true;
+			opt_buf = *x_prefixed_opts;
 		} else {
-			buf_len = non_x_opts_len;
-			is_x_opts = false;
-			opt_buf = *non_x_opts;
+			buf_len = regular_opts_len;
+			is_x_prefixed_opts = false;
+			opt_buf = *regular_opts;
 		}
 
 		if (buf_len < orig_len) {
@@ -160,7 +169,8 @@ static int extract_x_options(const char *original, char **non_x_opts,
 		/* omits ',' */
 		if ((ssize_t)(buf_len - opt_len) < 0) {
 			/* This would be a bug */
-			fprintf(stderr, "%s: no buf space left in copy, orig='%s'\n",
+			fprintf(stderr,
+				"%s: no buf space left in copy, orig='%s'\n",
 				__func__, original);
 			return -EIO;
 		}
@@ -168,10 +178,10 @@ static int extract_x_options(const char *original, char **non_x_opts,
 		strncat(opt_buf, opt, opt_end - opt);
 		buf_len -= opt_len;
 
-		if (is_x_opts)
-			x_opts_len = buf_len;
+		if (is_x_prefixed_opts)
+			x_prefixed_opts_len = buf_len;
 		else
-			non_x_opts_len = buf_len;
+			regular_opts_len = buf_len;
 	}
 
 	return 0;
@@ -1307,7 +1317,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	const char *real_mnt = mnt;
 	int mountpoint_fd = -1;
 	char *do_mount_opts = NULL;
-	char *x_opts = NULL;
+	char *x_prefixed_opts = NULL;
 
 	fd = open_fuse_device(dev);
 	if (fd == -1)
@@ -1325,7 +1335,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	}
 
 	// Extract any options starting with "x-"
-	res= extract_x_options(opts, &do_mount_opts, &x_opts);
+	res = extract_x_options(opts, &do_mount_opts, &x_prefixed_opts);
 	if (res)
 		goto fail_close_fd;
 
@@ -1348,14 +1358,14 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	}
 
 	if (geteuid() == 0) {
-		if (x_opts && strlen(x_opts) > 0) {
+		if (x_prefixed_opts && strlen(x_prefixed_opts) > 0) {
 			/*
 			 * Add back the options starting with "x-" to opts from
 			 * do_mount. +2 for ',' and '\0'
 			 */
 			size_t mnt_opts_len = strlen(mnt_opts);
 			size_t x_mnt_opts_len =  mnt_opts_len+
-						 strlen(x_opts) + 2;
+						 strlen(x_prefixed_opts) + 2;
 			char *x_mnt_opts = calloc(1, x_mnt_opts_len);
 
 			if (mnt_opts_len) {
@@ -1363,7 +1373,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 				strncat(x_mnt_opts, ",", 2);
 			}
 
-			strncat(x_mnt_opts, x_opts,
+			strncat(x_mnt_opts, x_prefixed_opts,
 				x_mnt_opts_len - mnt_opts_len - 2);
 
 			free(mnt_opts);
@@ -1380,7 +1390,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 out_free:
 	free(source);
 	free(mnt_opts);
-	free(x_opts);
+	free(x_prefixed_opts);
 	free(do_mount_opts);
 
 	return fd;
