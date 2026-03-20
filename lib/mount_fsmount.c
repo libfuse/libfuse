@@ -287,6 +287,16 @@ static int is_mount_attr_opt(const char *opt)
 	return 0;
 }
 
+/**
+ * Check if an option is a mount table option (not passed to fsconfig)
+ */
+static int is_mtab_only_opt(const char *opt)
+{
+	/* These options are for /run/mount/utab only, not for the kernel */
+	return strncmp(opt, "user=", 5) == 0 ||
+	       strcmp(opt, "rw") == 0;
+}
+
 /*
  * Parse kernel options string and apply via fsconfig
  * Options are comma-separated key=value pairs
@@ -314,6 +324,7 @@ static int apply_mount_opts(int fsfd, const char *opts)
 		 * not fsconfig().
 		 *
 		 * These string options (nosuid, nodev, etc.) are reconstructed
+		 * Skip mtab-only options - they're for /run/mount/utab, not kernel
 		 * from MS_* flags by get_mnt_flag_opts() in lib/mount.c and
 		 * get_mnt_opts() in util/fusermount.c. Both the library path
 		 * (via fuse_kern_mount_get_base_mnt_opts) and fusermount3 path
@@ -321,8 +332,10 @@ static int apply_mount_opts(int fsfd, const char *opts)
 		 * mnt_opts. They must be filtered here because they are mount
 		 * attributes (passed to fsmount via MOUNT_ATTR_*), not
 		 * filesystem parameters (which would be passed to fsconfig).
+		 *
+		 * Also skip mtab-only options - they're for /run/mount/utab, not kernel
 		 */
-		if (!is_mount_attr_opt(opt)) {
+		if (!is_mount_attr_opt(opt) && !is_mtab_only_opt(opt)) {
 			res = apply_opt_key_value(fsfd, opt);
 			if (res < 0) {
 				free(opts_copy);
