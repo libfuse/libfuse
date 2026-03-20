@@ -294,6 +294,10 @@ static int receive_fd(int fd)
 	}
 
 	cmsg = CMSG_FIRSTHDR(&msg);
+	if (!cmsg) {
+		fuse_log(FUSE_LOG_ERR, "error retrieving control message header\n");
+		return -1;
+	}
 	if (cmsg->cmsg_type != SCM_RIGHTS) {
 		fuse_log(FUSE_LOG_ERR, "got control message of unknown type %d\n",
 			cmsg->cmsg_type);
