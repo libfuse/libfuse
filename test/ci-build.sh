@@ -30,6 +30,20 @@ export LSAN_OPTIONS="suppressions=$(pwd)/lsan_suppress.txt"
 export ASAN_OPTIONS="detect_leaks=1"
 export CC
 
+log_env()
+{
+    echo "=== Environment ==="
+    echo "CC: ${CC}"
+    echo "CXX: ${CXX}"
+    echo "LSAN_OPTIONS: ${LSAN_OPTIONS}"
+    echo "ASAN_OPTIONS: ${ASAN_OPTIONS}"
+    echo "UBSAN_OPTIONS: ${UBSAN_OPTIONS}"
+    echo "FUSE_URING_ENABLE: ${FUSE_URING_ENABLE}"
+    echo "FUSE_URING_QUEUE_DEPTH: ${FUSE_URING_QUEUE_DEPTH}"
+    echo "Valgrind: ${TEST_WITH_VALGRIND}"
+    echo "==================="
+}
+
 non_sanitized_build()
 (
     echo "Standard build (without sanitizers)"
@@ -54,6 +68,7 @@ non_sanitized_build()
             build_opts=''
         fi
 
+        log_env
         meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
         ninja
         sudo env PATH=$PATH ninja install
@@ -79,6 +94,7 @@ sanitized_build()
 
     mkdir build-san; pushd build-san
 
+    log_env
     meson setup -Dprefix=${PREFIX_DIR} -D werror=true\
            "${SOURCE_DIR}" \
            || (cat meson-logs/meson-log.txt; false)
