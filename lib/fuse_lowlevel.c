@@ -20,6 +20,7 @@
 #include "util.h"
 #include "fuse_uring_i.h"
 #include "fuse_daemonize_i.h"
+#include "fuse_daemonize.h"
 #if defined(__linux__)
 #include "mount_i_linux.h"
 #endif
@@ -41,6 +42,7 @@
 #include <assert.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 #include <stdalign.h>
 #include <poll.h>
 
@@ -3023,6 +3025,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	 * over the thread scheduling.
 	 */
 	se->got_init = 1;
+	fuse_daemonize_set_got_init();
 	send_reply_ok(req, &outarg, outargsize);
 	if (enable_io_uring)
 		fuse_uring_wake_ring_threads(se);
@@ -4565,6 +4568,8 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 		se->init_wakeup_fd = -1;
 	}
 
+	se->init_thread = 0;
+
 	if (se->init_error != 0) {
 		fuse_log(FUSE_LOG_ERR, "fuse: init worker failed: %s\n",
 			 strerror(-se->init_error));
@@ -4579,10 +4584,64 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 	return 0;
 }
 
+/*
+ * Handle fallback to fusermount3 when privileged mount fails with EPERM.
+ * Returns: new fd on success, negative error code on failure
+ */
+static int new_api_fusermount(struct fuse_session *se,
+			      const char *mountpoint,
+			      const char *mnt_opts,
+			      int *sock_fd, pid_t *fusermount_pid)
+{
+	int fd, err;
+
+	if (se->debug)
+		fuse_log(FUSE_LOG_DEBUG,
+			 "fuse: privileged mount failed with EPERM, falling back to fusermount3\n");
+
+	/* Terminate worker thread with wrong fd */
+	if (session_wait_sync_init_completion(se) < 0)
+		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
+
+	/* Call fusermount3 with --sync-init */
+	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mnt_opts, sock_fd,
+					fusermount_pid);
+	if (fd < 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: fusermount3 sync-init failed\n");
+		return -ENOTSUP;
+	}
+
+	/* Start worker thread with correct fd from fusermount3 */
+	se->fd = fd;
+	err = session_start_sync_init(se, fd);
+	if (err) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to start sync init worker\n");
+		return err;
+	}
+
+	/* Send proceed signal and wait for mount result */
+	err = fuse_fusermount_proceed_mnt(*sock_fd);
+	if (err < 0)
+		return -EIO;
+
+	return fd;
+}
+
+/*
+ * Mount using the new Linux mount API (fsopen/fsconfig/fsmount/move_mount)
+ * Sync-init is only supported with the new API, as the mount might hang
+ * in case of daemon crash during FUSE_INIT. That also means once the sync init
+ * ioctl succeed fallback is not allowed anymore.
+ * Returns: fd on success, -1 on failure
+ */
 static int fuse_session_mount_new_api(struct fuse_session *se,
 				      const char *mountpoint)
 {
 	int fd = -1;
+	int sock_fd = -1;
+	pid_t fusermount_pid = -1;
 	int res, err;
 	char *mnt_opts = NULL;
 	char *mnt_opts_with_fd = NULL;
@@ -4599,34 +4658,55 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	fd = fuse_kern_mount_prepare(mountpoint, se->mo);
 	if (fd == -1) {
 		fuse_log(FUSE_LOG_ERR, "Mount preparation failed.\n");
-		err = -EIO;
 		goto err;
 	}
 
-	/*
-	 * Enable synchronous FUSE_INIT and start worker thread, sync init
-	 * failure is not an error
-	 */
 	se->fd = fd;
 	err = session_start_sync_init(se, fd);
 	if (err)
 		goto err;
 
 	snprintf(fd_opt, sizeof(fd_opt), "fd=%i", fd);
+	err = -ENOMEM;
 	if (fuse_opt_add_opt(&mnt_opts_with_fd, mnt_opts) == -1 ||
 	    fuse_opt_add_opt(&mnt_opts_with_fd, fd_opt) == -1) {
-		err = -ENOMEM;
 		goto err;
 	}
 
+	/* Try to mount directly */
 	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mnt_opts_with_fd);
+
+	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
+	if (err < 0 && errno == EPERM) {
+		close(fd);
+		se->fd = -1;
+		fd = new_api_fusermount(se, mountpoint, mnt_opts,
+					&sock_fd, &fusermount_pid);
+		if (fd < 0) {
+			err = fd;
+			goto err_with_sock;
+		}
+		err = 0;
+	} else if (err < 0) {
+		/* Mount failed with non-EPERM error, bail out */
+		goto err;
+	}
+
+err_with_sock:
+	if (sock_fd >= 0) {
+		close(sock_fd);
+		/* Reap fusermount3 child process to prevent zombie */
+		if (fusermount_pid > 0)
+			waitpid(fusermount_pid, NULL, 0);
+	}
 err:
 	if (err < 0) {
+		/* Close fd first to unblock worker thread */
 		if (fd >= 0)
 			close(fd);
 		fd = -1;
 		se->fd = -1;
-		se->error = -errno;
+		se->error = err;
 	}
 	/* Wait for synchronous FUSE_INIT to complete */
 	if (session_wait_sync_init_completion(se) < 0)
@@ -4694,16 +4774,16 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 		goto out;
 	}
 
-	/* new linux mount api */
+	/* new linux mount api (and sync init) */
 	fd = fuse_session_mount_new_api(se, mountpoint);
-	if (fd >= 0)
-		goto out;
 
-	/* fall back to old API */
-	se->error = 0; /* reset error of new api */
-	fd = fuse_kern_mount(mountpoint, se->mo);
-	if (fd < 0)
-		goto error_out;
+	/* fall back to old API, possible as long as another fd is used */
+	if (fd < 0) {
+		se->error = 0; /* reset error of new api */
+		fd = fuse_kern_mount(mountpoint, se->mo);
+		if (fd < 0)
+			goto error_out;
+	}
 
 out:
 	se->fd = fd;
@@ -5025,4 +5105,11 @@ void fuse_session_want_sync_init(struct fuse_session *se)
 void fuse_session_set_debug(struct fuse_session *se)
 {
 	se->debug = 1;
+}
+
+bool fuse_conn_is_sync_init(const struct fuse_conn_info *conn)
+{
+	const struct fuse_session *se = container_of(conn, struct fuse_session, conn);
+
+	return se->is_sync_init;
 }

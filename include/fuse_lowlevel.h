@@ -2443,6 +2443,14 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
 void fuse_session_want_sync_init(struct fuse_session *se);
 
 /**
+ * Check if the connection / session is using synchronous FUSE_INIT
+ *
+ * @param conn the connection
+ * @return true if using synchronous FUSE_INIT, false otherwise
+ */
+bool fuse_conn_is_sync_init(const struct fuse_conn_info *conn);
+
+/**
  * Enable debug output
  *
  * This allows to enable debug output without a command line parameter and

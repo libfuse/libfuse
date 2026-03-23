@@ -20,23 +20,15 @@
  */
 void fuse_daemonize_early_set_mounted(void);
 
-/**
- * Signal daemonization success to parent and cleanup.
- *
- * To be called from the child process after successful mount, when
- * sychronous FUSE_INIT is used (FUSE_INIT as part of the mount)
- * Automatically called for async FUSE_INIT.
- *
- * Not exposed to the ABI yet, as sync FUSE_INIT is not implemented yet.
- */
-void fuse_daemonize_early_success(void);
-
 /*
  * Check if daemonization is used.
  *
  * @return true if used, false otherwise
  */
 bool fuse_daemonize_is_used(void);
+
+/* Set on handling FUSE_INIT */
+void fuse_daemonize_set_got_init(void);
 
 #endif /* FUSE_DAEMONIZE_I_H_ */
 

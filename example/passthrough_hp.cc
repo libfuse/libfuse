@@ -1658,6 +1658,9 @@ int main(int argc, char *argv[])
 	if (teardown_watchog == NULL)
 		goto err_out4;
 
+	/* required here for sync init */
+	fuse_daemonize_early_success();
+
 	if (options.count("single"))
 		ret = fuse_session_loop(se);
 	else

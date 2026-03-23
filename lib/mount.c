@@ -37,6 +37,7 @@
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 #define FUSE_COMMFD2_ENV	"_FUSE_COMMFD2"
+#define ARG_FD_ENTRY_SIZE	30
 
 	enum { KEY_KERN_FLAG,
 	       KEY_KERN_OPT,
@@ -306,7 +307,7 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 		return -1;
 	}
 
-	char arg_fd_entry[30];
+	char arg_fd_entry[ARG_FD_ENTRY_SIZE];
 	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
 	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
 	/*
@@ -379,7 +380,7 @@ static int fuse_mount_fusermount(const char *mountpoint, const struct mount_opts
 		return -1;
 	}
 
-	char arg_fd_entry[30];
+	char arg_fd_entry[ARG_FD_ENTRY_SIZE];
 	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
 	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
 	/*
@@ -437,6 +438,127 @@ static int fuse_mount_fusermount(const char *mountpoint, const struct mount_opts
 		fcntl(fd, F_SETFD, FD_CLOEXEC);
 
 	return fd;
+}
+
+/*
+ * Mount using fusermount3 with --sync-init flag for bidirectional fd exchange
+ * Used by new mount API when privileged mount fails with EPERM
+ *
+ * Returns: fd of /dev/fuse opened by fusermount on success, -1 on failure
+ * On success, *sock_fd_out contains the socket fd for signaling fusermount3
+ */
+int mount_fusermount_obtain_fd(const char *mountpoint, struct mount_opts *mo,
+			       const char *opts, int *sock_fd_out,
+			       pid_t *pid_out)
+{
+	int fds[2];
+	pid_t pid;
+	int res;
+	char arg_fd_entry[ARG_FD_ENTRY_SIZE];
+	posix_spawn_file_actions_t action;
+	int fd, status;
+
+	(void)mo;
+
+	if (!mountpoint) {
+		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
+		return -1;
+	}
+
+	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
+	if (res == -1) {
+		fuse_log(FUSE_LOG_ERR, "Running %s: socketpair() failed: %s\n",
+			 FUSERMOUNT_PROG, strerror(errno));
+		return -1;
+	}
+
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
+	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[1]);
+	setenv(FUSE_COMMFD2_ENV, arg_fd_entry, 1);
+
+	char const *const argv[] = {
+		FUSERMOUNT_PROG,
+		"--sync-init",
+		"-o", opts ? opts : "",
+		"--",
+		mountpoint,
+		NULL,
+	};
+
+	posix_spawn_file_actions_init(&action);
+	posix_spawn_file_actions_addclose(&action, fds[1]);
+	status = fusermount_posix_spawn(&action, argv, &pid);
+	posix_spawn_file_actions_destroy(&action);
+
+	if (status != 0) {
+		close(fds[0]);
+		close(fds[1]);
+		return -1;
+	}
+
+	close(fds[0]);
+
+	fd = receive_fd(fds[1]);
+	if (fd < 0) {
+		close(fds[1]);
+		waitpid(pid, NULL, 0);
+		return -1;
+	}
+
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
+
+	/* Return socket fd for later signaling */
+	*sock_fd_out = fds[1];
+	*pid_out = pid;
+
+	return fd;
+}
+
+/*
+ * Send proceed signal to fusermount3 and wait for mount result
+ * Returns: 0 on success, -1 on failure
+ */
+int fuse_fusermount_proceed_mnt(int sock_fd)
+{
+	char buf = '\0';
+	ssize_t res;
+
+	/* Send proceed signal */
+	do {
+		res = send(sock_fd, &buf, 1, 0);
+	} while (res == -1 && errno == EINTR);
+
+	if (res != 1) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to send proceed signal: %s\n",
+			 strerror(errno));
+		return -1;
+	}
+
+	/* Wait for mount result from fusermount3 (4-byte error code) */
+	int32_t status;
+
+	do {
+		res = recv(sock_fd, &status, sizeof(status), 0);
+	} while (res == -1 && errno == EINTR);
+
+	if (res != sizeof(status)) {
+		if (res == 0)
+			fuse_log(FUSE_LOG_ERR, "fuse: fusermount3 closed connection\n");
+		else
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to receive mount status: %s\n",
+				 strerror(errno));
+		return -1;
+	}
+
+	if (status != 0) {
+		if (status != -EPERM)
+			fuse_log(FUSE_LOG_ERR, "fuse: fusermount3 mount failed: %s\n",
+				 strerror(-status));
+		return -1;
+	}
+
+	return 0;
 }
 
 #ifndef O_CLOEXEC

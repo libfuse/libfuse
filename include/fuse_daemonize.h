@@ -41,6 +41,27 @@ extern "C" {
 int fuse_daemonize_early_start(unsigned int flags);
 
 /**
+ * Signal daemonization success to parent and cleanup.
+ *
+ * To be called from the child process after a successful mount, when
+ * synchronous FUSE_INIT is used (FUSE_INIT as part of the mount).
+ *
+ * Automatically called for async FUSE_INIT.
+ *
+ */
+void fuse_daemonize_early_success(void);
+
+/**
+ *
+ * Note: For synchronous FUSE_INIT, this must be called after
+ *       fuse_session_mount() and before the first call to
+ *       fuse_session_loop*(). For asynchronous FUSE_INIT, this should
+ *       be called in the file system ->init() callback.
+ *
+ *       In order to simplify application code, this should be called from
+ *       the file system ->init() callback *and* after fuse_session_mount.
+ *       Libfuse knows internally if this is a sync or async FUSE_INIT
+ *       and will only signal the parent if the mount was completed.
  * Signal daemonization failure to parent and cleanup.
  *
  * To be called from the child process on any kind of error.
