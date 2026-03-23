@@ -41,7 +41,8 @@
 	bool watcher_started;
 	_Atomic bool active;
 	_Atomic bool daemonized;
-	_Atomic bool mounted;
+	_Atomic bool mounted;  /* fuse_session_mount() completed */
+	_Atomic bool got_init; /* got FUSE_INIT */
 };
 
 /* Global daemonization object pointer */
@@ -241,9 +242,9 @@ static void fuse_daemonize_early_signal(int status)
 	if (!dm->active)
 		errx(EINVAL, "%s: not active and cannot signal status", __func__);
 
-	/* Warn because there might be races */
-	if (status == FUSE_DAEMONIZE_SUCCESS && !dm->mounted)
-		fprintf(stderr, "fuse daemonize success without being mounted\n");
+	/* The file system is not mounted yet - don't signal parent */
+	if (status == FUSE_DAEMONIZE_SUCCESS && (!dm->mounted || !dm->got_init))
+		return;
 
 	dm->active = false;
 
@@ -301,6 +302,11 @@ bool fuse_daemonize_early_is_active(void)
 void fuse_daemonize_early_set_mounted(void)
 {
 	daemonize.mounted = true;
+}
+
+void fuse_daemonize_set_got_init(void)
+{
+	daemonize.got_init = true;
 }
 
 /*
