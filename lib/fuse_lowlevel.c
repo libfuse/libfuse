@@ -2561,9 +2561,9 @@ static void _do_statx(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *op_in, const void *in_payload)
 {
 	(void)in_payload;
-	(void)req;
 	(void)nodeid;
 	(void)op_in;
+	fuse_reply_err(req, ENOSYS);
 }
 #endif
 
