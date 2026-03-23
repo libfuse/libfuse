@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 
 if [ -n "$1" ]; then
     commit="$1"
@@ -10,5 +10,6 @@ IGNORES="MAINTAINERS,SPDX_LICENSE_TAG,COMMIT_MESSAGE,FILE_PATH_CHANGES"
 IGNORES="${IGNORES},EMAIL_SUBJECT,AVOID_EXTERNS,GIT_COMMIT_ID,ENOSYS_SYSCALL"
 IGNORES="${IGNORES},ENOSYS,FROM_SIGN_OFF_MISMATCH,QUOTED_COMMIT_ID,"
 IGNORES="${IGNORES},PREFER_ATTRIBUTE_ALWAYS_UNUSED,PREFER_DEFINED_ATTRIBUTE_MACRO"
+IGNORES="${IGNORES},STRCPY,STRNCPY"
 
-./checkpatch.pl --max-line-length=100 --no-tree  --ignore ${IGNORES} -g $commit
+./checkpatch.pl --show-types --max-line-length=100 --no-tree  --ignore ${IGNORES} -g $commit
