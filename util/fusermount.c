@@ -913,33 +913,6 @@ static void free_mount_params(struct mount_params *mp)
 }
 
 /*
- * Check if option is deprecated large_read.
- *
- * Returns true if the option should be skipped (large_read on kernel > 2.4),
- * false otherwise (all other options or large_read on old kernels).
- */
-static bool check_large_read(const char *opt, unsigned int len)
-{
-	struct utsname utsname;
-	unsigned int kmaj, kmin;
-	int res;
-
-	if (!opt_eq(opt, len, "large_read"))
-		return false;
-
-	res = uname(&utsname);
-	if (res == 0 &&
-	    sscanf(utsname.release, "%u.%u", &kmaj, &kmin) == 2 &&
-	    (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
-		fprintf(stderr,
-			"%s: note: 'large_read' mount option is deprecated for %u.%u kernels\n",
-			progname, kmaj, kmin);
-		return true;
-	}
-	return false;
-}
-
-/*
  * Check if user has permission to use allow_other or allow_root options.
  *
  * Returns -1 if permission denied, 0 if allowed or option is not
@@ -1038,19 +1011,11 @@ static int prepare_mount(const char *opts, struct mount_params *mp)
 			   !begins_with(s, "rootmode=") &&
 			   !begins_with(s, "user_id=") &&
 			   !begins_with(s, "group_id=")) {
-			bool skip;
 
 			if (check_allow_permission(s, len) == -1)
 				goto err;
 
-			skip = check_large_read(s, len);
-
-			/*
-			 * Skip deprecated large_read to avoid passing it to
-			 * kernel which would reject it as unknown option.
-			 */
-			if (!skip)
-				process_generic_option(s, len, &mp->flags, &d);
+			process_generic_option(s, len, &mp->flags, &d);
 		}
 		s += len;
 		if (*s)
