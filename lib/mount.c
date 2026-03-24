@@ -43,27 +43,20 @@
 #define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
 #define MS_NOATIME	MNT_NOATIME
 #define MS_NOSYMFOLLOW	MNT_NOSYMFOLLOW
-
-#define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
 #endif
 
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 #define FUSE_COMMFD2_ENV	"_FUSE_COMMFD2"
 
-#ifndef MS_DIRSYNC
-#define MS_DIRSYNC 128
-#endif
-
-enum {
-	KEY_KERN_FLAG,
-	KEY_KERN_OPT,
-	KEY_FUSERMOUNT_OPT,
-	KEY_SUBTYPE_OPT,
-	KEY_MTAB_OPT,
-	KEY_ALLOW_OTHER,
-	KEY_RO,
-};
+	enum { KEY_KERN_FLAG,
+	       KEY_KERN_OPT,
+	       KEY_FUSERMOUNT_OPT,
+	       KEY_SUBTYPE_OPT,
+	       KEY_MTAB_OPT,
+	       KEY_ALLOW_OTHER,
+	       KEY_RO,
+	};
 
 #define FUSE_MOUNT_OPT(t, p) { t, offsetof(struct mount_opts, p), 1 }
 
@@ -177,9 +170,7 @@ static const struct mount_flags mount_flags[] = {
 	{"nostrictatime",   MS_STRICTATIME,	0},
 	{"symfollow",	    MS_NOSYMFOLLOW,	0},
 	{"nosymfollow",	    MS_NOSYMFOLLOW,	1},
-#ifndef __NetBSD__
-	{"dirsync", MS_DIRSYNC,	    1},
-#endif
+	{"dirsync",	    MS_DIRSYNC,	    1},
 	{NULL,	    0,		    0}
 };
 
@@ -264,8 +255,6 @@ static int receive_fd(int fd)
 	msg.msg_namelen = 0;
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
-	/* old BSD implementations should use msg_accrights instead of
-	 * msg_control; the interface is different. */
 	msg.msg_control = ccmsg;
 	msg.msg_controllen = sizeof(ccmsg);
 
