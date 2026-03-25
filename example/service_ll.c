@@ -51,6 +51,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <pthread.h>
+#define USE_SINGLE_FILE_LL_API
 #include "single_file.h"
 
 struct service_ll {

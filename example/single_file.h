@@ -124,6 +124,7 @@ ssize_t single_file_pread(char *buf, size_t count, off_t pos);
 
 /* low-level fuse operation handlers */
 
+#ifdef USE_SINGLE_FILE_LL_API
 bool is_single_file_child(fuse_ino_t parent, const char *name);
 bool is_single_file_ino(fuse_ino_t ino);
 
@@ -149,5 +150,42 @@ void single_file_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 
 int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
 		      off_t off, size_t maxsize);
+#endif
+
+/* high-level fuse operation handlers */
+
+#ifdef USE_SINGLE_FILE_HL_API
+bool is_single_open_file_path(const struct fuse_file_info *fi, const char *name);
+
+int single_file_hl_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+			   off_t offset, struct fuse_file_info *fi,
+			   enum fuse_readdir_flags flags);
+
+int single_file_hl_statfs(const char *path, struct statvfs *buf);
+
+int single_file_hl_statx(const char *path, int statx_flags, int statx_mask,
+			 struct statx *stx, struct fuse_file_info *fi);
+
+int single_file_hl_getattr(const char *path, struct stat *stbuf,
+			   struct fuse_file_info *fi);
+int single_file_hl_chmod(const char *path, mode_t mode,
+			 struct fuse_file_info *fi);
+int single_file_hl_utimens(const char *path, const struct timespec ctv[2],
+			   struct fuse_file_info *fi);
+int single_file_hl_chown(const char *path, uid_t owner, gid_t group,
+			 struct fuse_file_info *fi);
+int single_file_hl_truncate(const char *path, off_t len,
+			    struct fuse_file_info *fi);
+
+int single_file_hl_opendir(const char *path, struct fuse_file_info *fi);
+int single_file_hl_open(const char *path, struct fuse_file_info *fi);
+
+int single_file_hl_fsync(const char *path, int datasync,
+			 struct fuse_file_info *fi);
+#endif
+
+#if !defined(USE_SINGLE_FILE_LL_API) && !defined(USE_SINGLE_FILE_HL_API)
+# warning USE_SINGLE_FILE_[HL]L_API not defined!
+#endif
 
 #endif /* FUSE_SINGLE_FILE_H_ */

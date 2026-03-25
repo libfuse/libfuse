@@ -23,7 +23,10 @@
 #define FUSE_USE_VERSION (FUSE_MAKE_VERSION(3, 19))
 
 #include "fuse_lowlevel.h"
+#include "fuse.h"
 #include "fuse_service.h"
+#define USE_SINGLE_FILE_LL_API
+#define USE_SINGLE_FILE_HL_API
 #include "single_file.h"
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
@@ -55,6 +58,23 @@ struct single_file single_file = {
 	.mode = S_IFREG | 0444,
 	.lock = PTHREAD_MUTEX_INITIALIZER,
 };
+
+static fuse_ino_t single_file_path_to_ino(const char *path)
+{
+	if (strcmp(path, "/") == 0)
+		return FUSE_ROOT_ID;
+	if (strcmp(path + 1, single_file_name) == 0)
+		return SINGLE_FILE_INO;
+	return 0;
+}
+
+static fuse_ino_t single_open_file_path_to_ino(const struct fuse_file_info *fi,
+					       const char *path)
+{
+	if (fi)
+		return fi->fh;
+	return single_file_path_to_ino(path);
+}
 
 static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
 		       fuse_ino_t ino)
@@ -91,6 +111,13 @@ bool is_single_file_ino(fuse_ino_t ino)
 	return ino == SINGLE_FILE_INO;
 }
 
+bool is_single_open_file_path(const struct fuse_file_info *fi, const char *name)
+{
+	if (fi)
+		return is_single_file_ino(fi->fh);
+	return name[0] == '/' && strcmp(name + 1, single_file_name) == 0;
+}
+
 void single_file_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			    off_t off, struct fuse_file_info *fi)
 {
@@ -115,6 +142,37 @@ void single_file_ll_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	dirbuf_add(req, &b, single_file_name, SINGLE_FILE_INO);
 	reply_buf_limited(req, b.p, b.size, off, size);
 	free(b.p);
+}
+
+int single_file_hl_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+			   off_t offset, struct fuse_file_info *fi,
+			   enum fuse_readdir_flags flags)
+{
+	struct stat stbuf;
+	fuse_ino_t ino = single_open_file_path_to_ino(fi, path);
+
+	memset(&stbuf, 0, sizeof(stbuf));
+
+	(void) offset;
+	(void) flags;
+
+	switch (ino) {
+	case FUSE_ROOT_ID:
+		break;
+	case SINGLE_FILE_INO:
+		return -ENOTDIR;
+	default:
+		return -ENOENT;
+	}
+
+	stbuf.st_ino = FUSE_ROOT_ID;
+	filler(buf, ".", &stbuf, 0, FUSE_FILL_DIR_DEFAULTS);
+	filler(buf, "..", &stbuf, 0, FUSE_FILL_DIR_DEFAULTS);
+
+	stbuf.st_ino = SINGLE_FILE_INO;
+	filler(buf, single_file_name, &stbuf, 0, FUSE_FILL_DIR_DEFAULTS);
+
+	return 0;
 }
 
 static bool sf_stat(fuse_ino_t ino, struct single_file_stat *llstat)
@@ -235,13 +293,56 @@ void single_file_ll_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 	else
 		fuse_reply_statx(req, 0, &stx, 0.0);
 }
+
+int single_file_hl_statx(const char *path, int statx_flags, int statx_mask,
+			 struct statx *stx, struct fuse_file_info *fi)
+{
+	(void)statx_flags;
+	fuse_ino_t ino = single_open_file_path_to_ino(fi, path);
+	bool filled;
+
+	if (!ino)
+		return -ENOENT;
+
+	pthread_mutex_lock(&single_file.lock);
+	filled = sf_statx(ino, statx_mask, stx);
+	pthread_mutex_unlock(&single_file.lock);
+
+	return filled ? 0 : -ENOENT;
+}
 #else
 void single_file_ll_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 			  struct fuse_file_info *fi)
 {
 	fuse_reply_err(req, ENOSYS);
 }
+
+int single_file_hl_statx(const char *path, int statx_flags, int statx_mask,
+			 struct statx *stx, struct fuse_file_info *fi)
+{
+	return -ENOSYS;
+}
 #endif /* STATX_BASIC_STATS */
+
+static void single_file_statfs(struct statvfs *buf)
+{
+	pthread_mutex_lock(&single_file.lock);
+	buf->f_bsize = single_file.blocksize;
+	buf->f_frsize = 0;
+
+	buf->f_blocks = single_file.blocks;
+	buf->f_bfree = 0;
+	buf->f_bavail = 0;
+	buf->f_files = 1;
+	buf->f_ffree = 0;
+	buf->f_favail = 0;
+	buf->f_fsid = 0x50C00L;
+	buf->f_flag = 0;
+	if (single_file.ro)
+		buf->f_flag |= ST_RDONLY;
+	buf->f_namemax = 255;
+	pthread_mutex_unlock(&single_file.lock);
+}
 
 void single_file_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 {
@@ -249,24 +350,16 @@ void single_file_ll_statfs(fuse_req_t req, fuse_ino_t ino)
 
 	(void)ino;
 
-	pthread_mutex_lock(&single_file.lock);
-	buf.f_bsize = single_file.blocksize;
-	buf.f_frsize = 0;
-
-	buf.f_blocks = single_file.blocks;
-	buf.f_bfree = 0;
-	buf.f_bavail = 0;
-	buf.f_files = 1;
-	buf.f_ffree = 0;
-	buf.f_favail = 0;
-	buf.f_fsid = 0x50C00L;
-	buf.f_flag = 0;
-	if (single_file.ro)
-		buf.f_flag |= ST_RDONLY;
-	buf.f_namemax = 255;
-	pthread_mutex_unlock(&single_file.lock);
-
+	single_file_statfs(&buf);
 	fuse_reply_statfs(req, &buf);
+}
+
+int single_file_hl_statfs(const char *path, struct statvfs *buf)
+{
+	(void)path;
+
+	single_file_statfs(buf);
+	return 0;
 }
 
 void single_file_ll_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -286,6 +379,28 @@ void single_file_ll_getattr(fuse_req_t req, fuse_ino_t ino,
 	else
 		fuse_reply_attr(req, &llstat.entry.attr,
 				llstat.entry.attr_timeout);
+}
+
+int single_file_hl_getattr(const char *path, struct stat *stbuf,
+			   struct fuse_file_info *fi)
+{
+	struct single_file_stat llstat;
+	fuse_ino_t ino = single_open_file_path_to_ino(fi, path);
+	bool filled;
+
+	if (!ino)
+		return -ENOENT;
+
+	memset(&llstat, 0, sizeof(llstat));
+	pthread_mutex_lock(&single_file.lock);
+	filled = sf_stat(ino, &llstat);
+	pthread_mutex_unlock(&single_file.lock);
+
+	if (!filled)
+		return -ENOENT;
+
+	memcpy(stbuf, &llstat.entry.attr, sizeof(*stbuf));
+	return 0;
 }
 
 static void get_now(struct timespec *now)
@@ -342,6 +457,81 @@ deny:
 	fuse_reply_err(req, EPERM);
 }
 
+int single_file_hl_chmod(const char *path, mode_t mode,
+			 struct fuse_file_info *fi)
+{
+	fuse_ino_t ino = single_open_file_path_to_ino(fi, path);
+
+	if (!ino)
+		return -ENOENT;
+	if (ino != SINGLE_FILE_INO)
+		return -EPERM;
+	if (single_file.ro)
+		return -EPERM;
+
+	pthread_mutex_lock(&single_file.lock);
+	single_file.mode = (single_file.mode & S_IFMT) | (mode & ~S_IFMT);
+	pthread_mutex_unlock(&single_file.lock);
+
+	return 0;
+}
+
+static void set_time(const struct timespec *ctv, struct timespec *tv)
+{
+	switch (ctv->tv_nsec) {
+	case UTIME_OMIT:
+		return;
+	case UTIME_NOW:
+		get_now(tv);
+		break;
+	default:
+		memcpy(tv, ctv, sizeof(*tv));
+		break;
+	}
+}
+
+int single_file_hl_utimens(const char *path, const struct timespec ctv[2],
+			   struct fuse_file_info *fi)
+{
+	fuse_ino_t ino = single_open_file_path_to_ino(fi, path);
+
+	if (!ino)
+		return -ENOENT;
+	if (ino != SINGLE_FILE_INO)
+		return -EPERM;
+	if (single_file.ro)
+		return -EPERM;
+
+	pthread_mutex_lock(&single_file.lock);
+	set_time(&ctv[0], &single_file.atime);
+	set_time(&ctv[1], &single_file.mtime);
+	get_now(&single_file.ctime);
+	pthread_mutex_unlock(&single_file.lock);
+
+	return 0;
+}
+
+int single_file_hl_chown(const char *path, uid_t owner, gid_t group,
+			 struct fuse_file_info *fi)
+{
+	(void)path;
+	(void)owner;
+	(void)group;
+	(void)fi;
+
+	return -EPERM;
+}
+
+int single_file_hl_truncate(const char *path, off_t len,
+			    struct fuse_file_info *fi)
+{
+	(void)path;
+	(void)len;
+	(void)fi;
+
+	return -EPERM;
+}
+
 void single_file_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	struct single_file_stat llstat;
@@ -373,6 +563,34 @@ void single_file_ll_open(fuse_req_t req, fuse_ino_t ino,
 		fuse_reply_open(req, fi);
 }
 
+int single_file_hl_opendir(const char *path, struct fuse_file_info *fi)
+{
+	fuse_ino_t ino = single_file_path_to_ino(path);
+
+	if (!ino)
+		return -ENOENT;
+	if (ino == SINGLE_FILE_INO)
+		return -ENOTDIR;
+
+	fi->fh = ino;
+	return 0;
+}
+
+int single_file_hl_open(const char *path, struct fuse_file_info *fi)
+{
+	fuse_ino_t ino = single_file_path_to_ino(path);
+
+	if (!ino)
+		return -ENOENT;
+	if (ino != SINGLE_FILE_INO)
+		return -EISDIR;
+	if (single_file.ro && (fi->flags & O_ACCMODE) != O_RDONLY)
+		return -EROFS;
+
+	fi->fh = ino;
+	return 0;
+}
+
 void single_file_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 			  struct fuse_file_info *fi)
 {
@@ -388,6 +606,26 @@ void single_file_ll_fsync(fuse_req_t req, fuse_ino_t ino, int datasync,
 	}
 
 	fuse_reply_err(req, ret);
+}
+
+int single_file_hl_fsync(const char *path, int datasync,
+			 struct fuse_file_info *fi)
+{
+	fuse_ino_t ino = single_open_file_path_to_ino(fi, path);
+
+	(void)datasync;
+
+	if (!ino)
+		return -ENOENT;
+
+	if (ino == SINGLE_FILE_INO) {
+		int ret = fsync(single_file.backing_fd);
+
+		if (ret)
+			return -errno;
+	}
+
+	return 0;
 }
 
 unsigned long long parse_num_blocks(const char *arg, int log_block_size)
