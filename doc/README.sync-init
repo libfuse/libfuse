@@ -1,0 +1,184 @@
+FUSE Synchronous vs Asynchronous FUSE_INIT
+============================================
+
+This document explains the difference between asynchronous and synchronous
+FUSE_INIT processing, and when each mode is used.
+
+
+Overview
+--------
+
+FUSE_INIT is the initial handshake between the kernel FUSE module and the
+userspace filesystem daemon. During this handshake, the kernel and daemon
+negotiate capabilities, protocol version, and various feature flags.
+
+Asynchronous FUSE_INIT (Traditional Behavior)
+----------------------------------------------
+
+In the traditional asynchronous mode:
+
+1. mount() syscall completes and returns to caller
+2. Filesystem appears mounted to the system
+3. FUSE daemon starts worker threads
+4. Worker threads process FUSE_INIT request
+5. Filesystem becomes fully operational
+
+Timeline:
+    mount() -----> returns
+                   |
+                   v
+            FUSE_INIT sent
+                   |
+                   v
+            daemon processes FUSE_INIT
+                   |
+                   v
+            filesystem ready
+
+Limitations:
+
+1. **No early requests**: The kernel cannot send requests (like getxattr)
+   during the mount() syscall. This breaks SELinux, which needs to query
+   extended attributes on the root inode immediately upon mounting.
+
+2. **Daemonization timing**: With the old fuse_daemonize() API, the daemon
+   must call it AFTER mount, because there's no way to report mount failures
+   to the parent process if daemonization happens first.
+
+3. **No custom root inode**: The root inode ID is hardcoded to FUSE_ROOT_ID (1)
+   because FUSE_INIT hasn't been processed yet when the mount completes.
+
+4. **Thread startup after mount**: io_uring threads and other worker threads
+   can only start after mount() returns, not before.
+
+
+Synchronous FUSE_INIT (New Behavior)
+-------------------------------------
+
+Kernel support: Linux kernel commit dfb84c330794 (v6.18+)
+libfuse support: libfuse 3.19+
+
+In synchronous mode:
+
+1. FUSE daemon opens /dev/fuse
+2. Daemon calls ioctl(fd, FUSE_DEV_IOC_SYNC_INIT)
+3. Daemon starts worker thread
+4. Daemon calls mount() syscall
+5. Kernel sends FUSE_INIT during mount() - mount() blocks
+6. Worker thread processes FUSE_INIT while mount() is blocked
+7. Worker thread may process additional requests (getxattr, etc.)
+8. mount() syscall completes and returns
+9. Filesystem is fully operational
+
+Timeline:
+    open /dev/fuse
+         |
+         v
+    ioctl(FUSE_DEV_IOC_SYNC_INIT)
+         |
+         v
+    start worker thread
+         |
+         v
+    mount() -----> blocks
+         |         |
+         |         v
+         |    FUSE_INIT sent
+         |         |
+         |         v
+         |    worker processes FUSE_INIT
+         |         |
+         |         v
+         |    (possible getxattr, etc.)
+         |         |
+         +-------> returns
+                   |
+                   v
+            filesystem ready
+
+Advantages:
+
+1. **SELinux support**: The kernel can send getxattr requests during mount()
+   to query security labels on the root inode.
+
+2. **Early daemonization**: The daemon can fork BEFORE mount using the new
+   fuse_daemonize_start()/signal() API, and report mount failures to the
+   parent process.
+
+3. **Custom root inode**: The daemon can specify a custom root inode ID
+   during FUSE_INIT, before mount() completes.
+
+4. **Thread startup before mount**: io_uring threads and worker threads
+   start before mount(), ensuring they're ready to handle requests.
+
+5. **Better error reporting**: Mount failures and initialization errors
+   can be properly reported to the parent process when using the new
+   daemonization API.
+
+
+When Synchronous FUSE_INIT is Used
+-----------------------------------
+
+libfuse automatically enables synchronous FUSE_INIT when:
+
+1. The application calls fuse_session_want_sync_init(), OR
+2. The new daemonization API is used (fuse_daemonize_start() was called)
+
+Synchronous FUSE_INIT requires:
+- Kernel support (commit dfb84c330794 or later)
+- Worker thread started before mount()
+- ioctl(FUSE_DEV_IOC_SYNC_INIT) succeeds
+
+If the kernel doesn't support synchronous FUSE_INIT, libfuse automatically
+falls back to asynchronous mode.
+
+
+Implementation Details
+----------------------
+
+The synchronous FUSE_INIT implementation uses a worker thread:
+
+- **session_sync_init_worker()**: Thread function that polls /dev/fuse
+  and processes FUSE_INIT and any subsequent requests until mount completes.
+
+- **session_start_sync_init()**: Creates the worker thread before mount().
+  Calls ioctl(FUSE_DEV_IOC_SYNC_INIT) to enable kernel support.
+
+- **session_wait_sync_init_completion()**: Waits for the worker thread
+  to complete after mount() returns. Checks for errors.
+
+The worker thread processes requests in a loop until se->terminate_mount_worker
+is set, which happens after mount() completes successfully.
+
+
+Compatibility
+-------------
+
+Synchronous FUSE_INIT is fully backward compatible:
+
+- Old kernels: ioctl returns ENOTTY, libfuse falls back to async mode
+- Old applications: Continue to work with async FUSE_INIT
+- New applications on old kernels: Graceful fallback to async mode
+- New applications on new kernels: Automatic sync mode when appropriate
+
+
+Example: Enabling Synchronous FUSE_INIT
+----------------------------------------
+
+Explicit request:
+    struct fuse_session *se = fuse_session_new(...);
+    fuse_session_want_sync_init(se);
+    fuse_session_mount(se, mountpoint);
+
+Automatic (with new daemonization API):
+    fuse_daemonize_start(0);  // Triggers sync init automatically
+    fuse_session_mount(se, mountpoint);
+
+
+See Also
+--------
+
+- doc/README.daemonize - New daemonization API documentation
+- doc/README.fusermount - Synchronous FUSE_INIT protocol with fusermount3
+- doc/README.mount - Mount implementation details
+

@@ -1,0 +1,86 @@
+FUSE Mount API Flowcharts
+=========================
+
+Old Mount API
+-------------
+
+fuse_kern_mount()
+  |
+  +-- fuse_mount_sys()
+  |     +-- Try direct mount → mount() syscall
+  |     +-- On EPERM: fuse_mount_fusermount()
+  |           +-- socketpair()
+  |           +-- spawn fusermount3 (no --sync-init)
+  |           +-- fusermount3: open /dev/fuse, mount(), send fd
+  |           +-- receive_fd() → return fd
+  |
+  +-- Worker threads started AFTER mount
+  └─> FUSE_INIT asynchronous (queued in kernel)
+
+
+New Mount API - Privileged Mount
+---------------------------------
+
+fuse_session_mount_new_api()
+  |
+  +-- fuse_kern_mount_prepare() → open /dev/fuse → fd
+  |
+  +-- session_start_sync_init(se, fd)
+  |     +-- ioctl(fd, FUSE_DEV_IOC_SYNC_INIT)
+  |     +-- pthread_create(worker) → ready to process FUSE_INIT
+  |
+  +-- fuse_kern_fsmount_mo()
+  |     +-- fsopen/fsconfig/fsmount (BLOCKS until FUSE_INIT completes)
+  |     +-- Worker processes FUSE_INIT during fsmount()
+  |     +-- move_mount()
+  |
+  +-- session_wait_sync_init_completion(se) → pthread_join
+  └─> return fd
+
+
+New Mount API - EPERM Fallback (fusermount3 with sync-init)
+------------------------------------------------------------
+
+fuse_session_mount_new_api()
+  |
+  +-- fuse_kern_mount_prepare() → open /dev/fuse → fd1
+  |
+  +-- session_start_sync_init(se, fd1)
+  |     +-- ioctl(fd1, FUSE_DEV_IOC_SYNC_INIT)
+  |     +-- pthread_create(worker) → ready with fd1
+  |
+  +-- fuse_kern_fsmount_mo() → EPERM
+  |
+  +-- *** FALLBACK TO FUSERMOUNT3 WITH SYNC-INIT ***
+  |
+  +-- session_wait_sync_init_completion(se)
+  |     +-- pthread_cancel/join → terminate worker with wrong fd1
+  |
+  +-- close(fd1)
+  |
+  +-- fuse_mount_fusermount_sync_init()  [NEW]
+  |     +-- socketpair()
+  |     +-- spawn fusermount3 --sync-init
+  |     +-- fusermount3: open /dev/fuse → fd2, send fd2
+  |     +-- receive_fd() → fd2
+  |     +-- fusermount3 waits for signal
+  |     └─> return fd2, sock
+  |
+  +-- session_start_sync_init(se, fd2)
+  |     +-- ioctl(fd2, FUSE_DEV_IOC_SYNC_INIT)
+  |     +-- pthread_create(worker) → ready with fd2
+  |
+  +-- send_proceed_signal(sock)  [NEW]
+  |     +-- send(sock, "\0", 1) → signal fusermount3
+  |
+  +-- fusermount3: mount() (BLOCKS)
+  |     +-- Kernel sends FUSE_INIT to fd2
+  |     +-- Worker processes FUSE_INIT
+  |     +-- mount() returns
+  |
+  +-- close(sock)
+  |
+  +-- session_wait_sync_init_completion(se) → pthread_join
+  |
+  └─> return fd2
+

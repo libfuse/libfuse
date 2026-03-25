@@ -1,0 +1,164 @@
+FUSE Daemonization API
+======================
+
+This document describes the FUSE daemonization APIs, including the legacy
+fuse_daemonize() function and the newfuse_daemonize_early_start()/signal() API
+introduced in libfuse 3.19.
+
+
+Overview
+--------
+
+FUSE filesystems often need to run as background daemons. Daemonization
+involves forking the process, creating a new session, and redirecting
+standard file descriptors. The challenge is properly reporting initialization
+failures to the parent process.
+
+
+Old API: fuse_daemonize()
+--------------------------
+
+Function signature:
+    int fuse_daemonize(int foreground);
+
+Location: lib/helper.c
+
+This is the legacy daemonization API, primarily used with the high-level
+fuse_main() interface.
+
+Behavior:
+- If foreground=0: forks the process, creates a new Unix session,
+  redirects stdio
+- If foreground=1: only changes directory to "/"
+- Parent waits for a single byte on a pipe before exiting
+- Child writes completion byte immediately after redirecting stdio
+- Always changes directory to "/"
+
+Limitations:
+1. No failure reporting: The parent receives notification immediately after
+   fork/setsid, before any meaningful initialization (like mounting the
+   filesystem or starting threads).
+
+2. Timing constraint: Must be called AFTER fuse_session_mount() in existing
+   examples, because there's no way to report mount failures to the parent.
+
+3. Thread initialization: Cannot report failures from complex initialization
+   steps like:
+   - Starting worker threads
+   - Network connection setup
+   - RDMA memory registration
+   - Resource allocation
+
+4. FUSE_SYNC_INIT incompatibility: With the FUSE_SYNC_INIT feature, FUSE_INIT
+   happens at mount time and may start io_uring threads. This requires
+   daemonization BEFORE mount, which the old API cannot handle properly.
+
+Example usage (old API):
+    fuse = fuse_new(...);
+    fuse_mount(fuse, mountpoint);
+    fuse_daemonize(opts.foreground);  // After mount, can't report mount failure
+    fuse_set_signal_handlers(se);
+    fuse_session_loop(se);
+
+
+New API: fuse_daemonize_early_start() /fuse_daemonize_early_success() /fuse_daemonize_early_fail()
+--------------------------------------------------------------------------------------------------
+
+Functions:
+    int fuse_daemonize_early_start(unsigned int flags);
+    void fuse_daemonize_early_success(void);
+    void fuse_daemonize_early_fail(void);
+    bool fuse_daemonize_early_active(void);
+
+Location: lib/fuse_daemonize.c, include/fuse_daemonize.h
+Available since: libfuse 3.19
+
+This new API solves the limitations of fuse_daemonize() by splitting
+daemonization into two phases:
+
+1.   fuse_daemonize_early_start()        - Fork and setup, but parent waits
+2.1. fuse_daemonize_early_fail()         - Signal failure to parent
+2.2  fuse_daemonize_early_success()      - Signal startup to success to the parent
+     See below for an important detail.
+
+
+fuse_daemonize_early_start()
+----------------------------
+
+Flags:
+- FUSE_DAEMONIZE_NO_CHDIR: Don't change directory to "/"
+- FUSE_DAEMONIZE_NO_BACKGROUND: Don't fork (foreground mode)
+
+Behavior:
+- Unless NO_BACKGROUND: forks the process
+- Parent waits for status signal from child
+- Child creates new session and continues
+- Unless NO_CHDIR: changes directory to "/"
+- Closes stdin immediately in child
+- Starts a watcher thread to detect parent death
+- Returns 0 in child on success, negative errno on error
+
+Parent death detection:
+- Uses a "death pipe" - parent keeps write end open
+- Child's watcher thread polls the read end
+- If parent dies, pipe gets POLLHUP and child exits
+- Prevents orphaned daemons if parent is killed
+
+Child death detection:
+- The parent will detect a pipe failure for the
+  read(signal_pipe[0], ...) and exit with an error.
+
+fuse_daemonize_early_fail(int err)
+----------------------------------
+
+Behavior:
+- Signals the parent about the provided error
+- Parent will exit with that error
+
+fuse_daemonize_early_success()
+-------------------------------
+- Signals the parent process with success
+- On success: redirects stdout/stderr to /dev/null
+- Stops the parent watcher thread
+- Cleans up pipes and internal state
+- Safe to call multiple times
+- Safe to call even if fuse_daemonize_early_start() failed
+- Needs to be called after successful mount
+
+Example usage (new API):
+-------------------------
+
+    // Start daemonization BEFORE mount
+    unsigned int daemon_flags = 0;
+    if (foreground)
+        daemon_flags |= FUSE_DAEMONIZE_NO_BACKGROUND;
+
+    if (fuse_daemonize_start(daemon_flags) != 0)
+        goto error;
+
+    // Complex initialization can fail and be reported
+    if (setup_threads() != 0)
+        goto error_signal;
+
+    if (setup_network() != 0)
+        goto error_signal;
+    // Mount can now fail and be reported to parent
+    if (fuse_session_mount(se, mountpoint) != 0)
+        goto error_signal;
+
+    // Signal success - parent exits with EXIT_SUCCESS
+    // This is typically done in the init() callback after FUSE_INIT
+   fuse_daemonize_early_signal(FUSE_DAEMONIZE_SUCCESS);
+
+    // Run main loop
+    fuse_session_loop(se);
+
+    return 0;
+
+error_signal:
+    // Signal failure - parent exits with EXIT_FAILURE
+   fuse_daemonize_early_signal(FUSE_DAEMONIZE_FAILURE);
+error:
+    return 1;
+
+
