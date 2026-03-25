@@ -34,8 +34,59 @@
 #include <sys/param.h>
 
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
-#define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
+#include <sys/mount.h>
+#ifdef __NetBSD__
+#include <perfuse.h>
 #endif
+
+#define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
+
+#define MS_RDONLY	MNT_RDONLY
+#define MS_NOSUID	MNT_NOSUID
+#ifdef MNT_NODEV
+#define MS_NODEV	MNT_NODEV
+#else
+#define MS_NODEV	0
+#endif
+#define MS_NOEXEC	MNT_NOEXEC
+#define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
+#define MS_NOATIME	MNT_NOATIME
+#define MS_NOSYMFOLLOW	0
+#define MS_DIRSYNC	0
+
+/* BSD doesn't have these, define as 0 */
+#ifndef MS_NODIRATIME
+#define MS_NODIRATIME 0
+#endif
+#ifndef MS_RELATIME
+#define MS_RELATIME 0
+#endif
+#ifndef MS_STRICTATIME
+#define MS_STRICTATIME 0
+#endif
+
+#endif /* BSD */
+
+const struct mount_flags mount_flags[] = {
+	{"rw",	    MS_RDONLY,	    0, 1},
+	{"ro",	    MS_RDONLY,	    1, 1},
+	{"suid",    MS_NOSUID,	    0, 0},
+	{"nosuid",  MS_NOSUID,	    1, 1},
+	{"dev",	    MS_NODEV,	    0, 1},
+	{"nodev",   MS_NODEV,	    1, 1},
+	{"exec",    MS_NOEXEC,	    0, 1},
+	{"noexec",  MS_NOEXEC,	    1, 1},
+	{"async",   MS_SYNCHRONOUS, 0, 1},
+	{"sync",    MS_SYNCHRONOUS, 1, 1},
+	{"noatime", MS_NOATIME,	    1, 1},
+	{"nodiratime",	    MS_NODIRATIME,	1, 1},
+	{"norelatime",	    MS_RELATIME,	0, 1},
+	{"nostrictatime",   MS_STRICTATIME,	0, 1},
+	{"symfollow",	    MS_NOSYMFOLLOW,	0, 1},
+	{"nosymfollow",	    MS_NOSYMFOLLOW,	1, 1},
+	{"dirsync",	    MS_DIRSYNC,		1, 1},
+	{NULL,	    0,		    0, 0}
+};
 
 #ifdef IGNORE_MTAB
 #define mtab_needs_update(mnt) 0

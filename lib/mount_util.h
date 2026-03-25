@@ -9,6 +9,15 @@
 #include <sys/types.h>
 #include "mount_common_i.h" // IWYU pragma: keep
 
+/* Mount flags mapping structure */
+struct mount_flags {
+	const char *opt;
+	unsigned long flag;
+	int on;
+	int safe; /* used by fusermount */
+};
+extern const struct mount_flags mount_flags[];
+
 int fuse_mnt_add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts);
 int fuse_mnt_remove_mount(const char *progname, const char *mnt);

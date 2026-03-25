@@ -11,6 +11,9 @@
 #ifndef FUSE_MOUNT_COMPAT_H_
 #define FUSE_MOUNT_COMPAT_H_
 
+#if !defined(__NetBSD__) && !defined(__FreeBSD__) && !defined(__DragonFly__) && \
+	!defined(__FreeBSD_kernel__)
+
 #include <sys/mount.h>
 
 /* Some libc don't define MS_*, so define them manually
@@ -45,5 +48,7 @@
 #ifndef UMOUNT_UNUSED
 #define UMOUNT_UNUSED	0x80000000	/* Flag guaranteed to be unused */
 #endif
+
+#endif /* BSD */
 
 #endif /* FUSE_MOUNT_COMPAT_H_ */

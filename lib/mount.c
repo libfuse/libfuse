@@ -33,18 +33,6 @@
 
 #include "fuse_mount_compat.h"
 
-#ifdef __NetBSD__
-#include <perfuse.h>
-
-#define MS_RDONLY	MNT_RDONLY
-#define MS_NOSUID	MNT_NOSUID
-#define MS_NODEV	MNT_NODEV
-#define MS_NOEXEC	MNT_NOEXEC
-#define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
-#define MS_NOATIME	MNT_NOATIME
-#define MS_NOSYMFOLLOW	MNT_NOSYMFOLLOW
-#endif
-
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 #define FUSE_COMMFD2_ENV	"_FUSE_COMMFD2"
@@ -146,33 +134,6 @@ void fuse_mount_version(void)
 		fuse_log(FUSE_LOG_ERR, "Running '%s --version' failed",
 			 FUSERMOUNT_PROG);
 }
-
-struct mount_flags {
-	const char *opt;
-	unsigned long flag;
-	int on;
-};
-
-static const struct mount_flags mount_flags[] = {
-	{"rw",	    MS_RDONLY,	    0},
-	{"ro",	    MS_RDONLY,	    1},
-	{"suid",    MS_NOSUID,	    0},
-	{"nosuid",  MS_NOSUID,	    1},
-	{"dev",	    MS_NODEV,	    0},
-	{"nodev",   MS_NODEV,	    1},
-	{"exec",    MS_NOEXEC,	    0},
-	{"noexec",  MS_NOEXEC,	    1},
-	{"async",   MS_SYNCHRONOUS, 0},
-	{"sync",    MS_SYNCHRONOUS, 1},
-	{"noatime", MS_NOATIME,	    1},
-	{"nodiratime",	    MS_NODIRATIME,	1},
-	{"norelatime",	    MS_RELATIME,	0},
-	{"nostrictatime",   MS_STRICTATIME,	0},
-	{"symfollow",	    MS_NOSYMFOLLOW,	0},
-	{"nosymfollow",	    MS_NOSYMFOLLOW,	1},
-	{"dirsync",	    MS_DIRSYNC,	    1},
-	{NULL,	    0,		    0}
-};
 
 unsigned int get_max_read(const struct mount_opts *o)
 {

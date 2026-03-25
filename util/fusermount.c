@@ -756,40 +756,6 @@ static int begins_with(const char *s, const char *beg)
 		return 0;
 }
 
-struct mount_flags {
-	const char *opt;
-	unsigned long flag;
-	int on;
-	int safe;
-};
-
-static struct mount_flags mount_flags[] = {
-	{"rw",	    MS_RDONLY,	    0, 1},
-	{"ro",	    MS_RDONLY,	    1, 1},
-	{"suid",    MS_NOSUID,	    0, 0},
-	{"nosuid",  MS_NOSUID,	    1, 1},
-	{"dev",	    MS_NODEV,	    0, 0},
-	{"nodev",   MS_NODEV,	    1, 1},
-	{"exec",    MS_NOEXEC,	    0, 1},
-	{"noexec",  MS_NOEXEC,	    1, 1},
-	{"async",   MS_SYNCHRONOUS, 0, 1},
-	{"sync",    MS_SYNCHRONOUS, 1, 1},
-	{"atime",   MS_NOATIME,	    0, 1},
-	{"noatime", MS_NOATIME,	    1, 1},
-	{"diratime",        MS_NODIRATIME,  0, 1},
-	{"nodiratime",      MS_NODIRATIME,  1, 1},
-	{"lazytime",        MS_LAZYTIME,    1, 1},
-	{"nolazytime",      MS_LAZYTIME,    0, 1},
-	{"relatime",        MS_RELATIME,    1, 1},
-	{"norelatime",      MS_RELATIME,    0, 1},
-	{"strictatime",     MS_STRICTATIME, 1, 1},
-	{"nostrictatime",   MS_STRICTATIME, 0, 1},
-	{"dirsync", MS_DIRSYNC,	    1, 1},
-	{"symfollow",       MS_NOSYMFOLLOW, 0, 1},
-	{"nosymfollow",     MS_NOSYMFOLLOW, 1, 1},
-	{NULL,	    0,		    0, 0}
-};
-
 static int find_mount_flag(const char *s, unsigned len, int *on, int *flag)
 {
 	int i;

@@ -10,7 +10,8 @@
 #ifndef FUSE_MOUNT_I_LINUX_H_
 #define FUSE_MOUNT_I_LINUX_H_
 
-/* Forward declaration for fuse_args */
+#include <sys/mount.h>
+
 struct fuse_args;
 
 /* Mount options structure */
@@ -27,6 +28,5 @@ struct mount_opts {
 	char *kernel_opts;
 	unsigned int max_read;
 };
-
 
 #endif /* FUSE_MOUNT_I_LINUX_H_ */
