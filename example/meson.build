@@ -19,6 +19,12 @@ if platform.endswith('linux')
     configure_file(input: 'service_ll.socket.in',
                    output: 'service_ll.socket',
                    configuration: private_cfg)
+
+    single_file_examples += [ 'service_hl' ]
+    configure_file(input: 'service_hl.socket.in',
+                   output: 'service_hl.socket',
+                   configuration: private_cfg)
+
 endif
 
 threaded_examples = [ 'notify_inval_inode',
