@@ -4465,8 +4465,8 @@ static void fuse_lib_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 		if (f->conf.auto_cache) {
 			struct stat stbuf;
 
-			stbuf.st_mtime = stxbuf.stx_mtime.tv_nsec;
-			ST_MTIM_NSEC(&stbuf) = stxbuf.stx_mtime.tv_nsec;
+			stbuf.st_mtime = stxbuf.stx_mtime.tv_sec;
+			ST_MTIM_NSEC_SET(&stbuf, stxbuf.stx_mtime.tv_nsec);
 			stbuf.st_size = stxbuf.stx_size;
 			update_stat(node, &stbuf);
 		}
