@@ -31,15 +31,15 @@
 #include <stdlib.h>
 #include <errno.h>
 
-#define FSEL_FILES	16
-
 int main(void)
 {
-	static const char hex_map[FSEL_FILES] = "0123456789ABCDEF";
-	int fds[FSEL_FILES];
-	int i, nfds, tries;
+	static const char hex_map[] = "0123456789ABCDEF";
+	const size_t fsel_files = sizeof(hex_map) - 1;
+	int fds[sizeof(hex_map) - 1];
+	size_t i, tries;
+	int nfds;
 
-	for (i = 0; i < FSEL_FILES; i++) {
+	for (i = 0; i < fsel_files; i++) {
 		char name[] = { hex_map[i], '\0' };
 		fds[i] = open(name, O_RDONLY);
 		if (fds[i] < 0) {
@@ -47,15 +47,15 @@ int main(void)
 			return 1;
 		}
 	}
-	nfds = fds[FSEL_FILES - 1] + 1;
+	nfds = fds[fsel_files - 1] + 1;
 
-	for(tries=0; tries < 16; tries++) {
+	for (tries = 0; tries < fsel_files; tries++) {
 		static char buf[4096];
 		fd_set rfds;
 		int rc;
 
 		FD_ZERO(&rfds);
-		for (i = 0; i < FSEL_FILES; i++)
+		for (i = 0; i < fsel_files; i++)
 			FD_SET(fds[i], &rfds);
 
 		rc = select(nfds, &rfds, NULL, NULL, NULL);
@@ -65,12 +65,12 @@ int main(void)
 			return 1;
 		}
 
-		for (i = 0; i < FSEL_FILES; i++) {
+		for (i = 0; i < fsel_files; i++) {
 			if (!FD_ISSET(fds[i], &rfds)) {
 				printf("_:   ");
 				continue;
 			}
-			printf("%X:", i);
+			printf("%zX:", i);
 			rc = read(fds[i], buf, sizeof(buf));
 			if (rc < 0) {
 				perror("read");
