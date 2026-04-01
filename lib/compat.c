@@ -27,6 +27,7 @@ struct fuse_session;
 struct fuse_custom_io;
 struct fuse_operations;
 struct fuse_lowlevel_ops;
+struct libfuse_version;
 
 /**
  * Compatibility ABI symbol for systems that do not support version symboling
@@ -84,3 +85,47 @@ struct fuse_session *fuse_session_new(struct fuse_args *args,
 {
 	return fuse_session_new_30(args, op, op_size, userdata);
 }
+
+struct fuse_session *fuse_session_new_versioned(struct fuse_args *args,
+					       const struct fuse_lowlevel_ops *op,
+					       size_t op_size,
+					       struct libfuse_version *version,
+					       void *userdata);
+struct fuse_session *
+fuse_session_new_versioned_318(struct fuse_args *args,
+			       const struct fuse_lowlevel_ops *op,
+			       size_t op_size, unsigned int user_apiabi_version,
+			       struct libfuse_version *version, void *userdata);
+struct fuse_session *
+fuse_session_new_versioned(struct fuse_args *args,
+			   const struct fuse_lowlevel_ops *op, size_t op_size,
+			   struct libfuse_version *version, void *userdata)
+{
+	unsigned int user_apiabi_version = 0; /* unknown version */
+	return fuse_session_new_versioned_318(args, op, op_size,
+					      user_apiabi_version, version,
+					      userdata);
+}
+
+#if (!defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
+struct fuse *_fuse_new_31(struct fuse_args *args,
+				const struct fuse_operations *op,
+				size_t op_size,
+				struct libfuse_version *version,
+				void *user_data);
+struct fuse *_fuse_new_318(struct fuse_args *args,
+			   const struct fuse_operations *op, size_t op_size,
+			   unsigned int user_apiabi_version,
+			   struct libfuse_version *version, void *user_data);
+struct fuse *_fuse_new_31(struct fuse_args *args,
+				const struct fuse_operations *op,
+				size_t op_size,
+				struct libfuse_version *version,
+				void *user_data)
+{
+	unsigned int user_apiabi_version = 0; /* unknown version */
+	return _fuse_new_318(args, op, op_size, user_apiabi_version, version,
+			     user_data);
+}
+#endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
+

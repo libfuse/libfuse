@@ -102,6 +102,12 @@ struct fuse_session {
 	 */
 	struct libfuse_version version;
 
+	/*
+	 * API ABI version of the application calling into libfuse, i.e.
+	 * the value of FUSE_USE_VERSION when compiling the application.
+	 */
+	unsigned int apiabi_version;
+
 	/* thread synchronization */
 	_Atomic bool mt_exited;
 	pthread_mutex_t mt_lock;

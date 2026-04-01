@@ -2822,7 +2822,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		fuse_set_feature_flag(&se->conn, cap)
 
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_READ);
-	LL_SET_DEFAULT(1, FUSE_CAP_AUTO_INVAL_DATA);
 	LL_SET_DEFAULT(1, FUSE_CAP_ASYNC_DIO);
 	LL_SET_DEFAULT(1, FUSE_CAP_IOCTL_DIR);
 	LL_SET_DEFAULT(1, FUSE_CAP_ATOMIC_O_TRUNC);
@@ -4191,9 +4190,11 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 }
 
 struct fuse_session *
-fuse_session_new_versioned(struct fuse_args *args,
-			   const struct fuse_lowlevel_ops *op, size_t op_size,
-			   struct libfuse_version *version, void *userdata)
+fuse_session_new_versioned_318(struct fuse_args *args,
+			       const struct fuse_lowlevel_ops *op,
+			       size_t op_size,
+			       unsigned int user_apiabi_version,
+			       struct libfuse_version *version, void *userdata)
 {
 	int err;
 	struct fuse_session *se;
@@ -4301,6 +4302,13 @@ fuse_session_new_versioned(struct fuse_args *args,
 	 * by checking the version numbers.
 	 */
 	se->version = *version;
+
+	/*
+	 * API ABI version of the application calling into libfuse,
+	 * 0 for unknown
+	 */
+	se->apiabi_version = user_apiabi_version;
+
 
 	return se;
 

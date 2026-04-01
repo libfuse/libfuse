@@ -191,7 +191,6 @@ FUSE_3.17 {
 	global:
 		fuse_main_real_versioned;
 		fuse_session_new_versioned;
-		_fuse_new_30;
 		_fuse_new_31;
 		fuse_passthrough_open;
 		fuse_passthrough_close;
@@ -220,6 +219,9 @@ FUSE_3.18 {
 
 		fuse_reply_statx;
 		fuse_fs_statx;
+		_fuse_new_30;
+		_fuse_new_318;
+		fuse_session_new_versioned_318;
 } FUSE_3.17;
 
 FUSE_3.19 {
