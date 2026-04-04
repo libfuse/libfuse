@@ -24,19 +24,13 @@ jobs:
           # - ubuntu-18.04
           - ubuntu-latest
     steps:
-      - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y clang doxygen gcc gcc-10 gcc-9 valgrind \
-            gcc-multilib g++-multilib libc6-dev-i386 \
-            libpcap0.8-dev:i386 libudev-dev:i386 pkg-config:i386 \
-            liburing-dev libnuma-dev
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - run: pip install -r requirements.txt
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          ./.github/workflows/install-ubuntu-dependencies.sh --full
       - run: test/ci-build.sh
 
