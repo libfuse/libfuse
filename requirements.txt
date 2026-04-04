@@ -5,3 +5,4 @@ meson
 ninja
 # Test packages:
 pytest
+codechecker
