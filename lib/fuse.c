@@ -2543,7 +2543,11 @@ static struct fuse_context_i *fuse_create_context(struct fuse *f)
 			fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate thread specific data\n");
 			abort();
 		}
-		pthread_setspecific(fuse_context_key, c);
+		if (pthread_setspecific(fuse_context_key, c) != 0) {
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to set thread specific data\n");
+			free(c);
+			abort();
+		}
 	} else {
 		memset(c, 0, sizeof(*c));
 	}
