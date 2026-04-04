@@ -269,16 +269,25 @@ int fuse_daemonize(int foreground)
 		switch(fork()) {
 		case -1:
 			perror("fuse_daemonize: fork");
+			close(waiter[0]);
+			close(waiter[1]);
 			return -1;
 		case 0:
+			/* child */
+			close(waiter[0]);
+			waiter[0] = -1;
 			break;
 		default:
+			/* parent */
 			(void) read(waiter[0], &completed, sizeof(completed));
+			close(waiter[0]);
+			close(waiter[1]);
 			_exit(0);
 		}
 
 		if (setsid() == -1) {
 			perror("fuse_daemonize: setsid");
+			close(waiter[1]);
 			return -1;
 		}
 
@@ -296,11 +305,12 @@ int fuse_daemonize(int foreground)
 		/* Propagate completion of daemon initialization */
 		completed = 1;
 		(void) write(waiter[1], &completed, sizeof(completed));
-		close(waiter[0]);
 		close(waiter[1]);
+		waiter[1] = -1;
 	} else {
-		(void) chdir("/");
+		(void)chdir("/");
 	}
+
 	return 0;
 }
 
