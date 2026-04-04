@@ -381,6 +381,8 @@ int err;
 	} else {
 		/* The caller does not care about parameters - use the default */
 		config = fuse_loop_cfg_create();
+		if (!config)
+			return -ENOMEM;
 		created_config = 1;
 	}
 
@@ -463,6 +465,8 @@ int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd)
 {
 	int err;
 	struct fuse_loop_config *config = fuse_loop_cfg_create();
+	if (!config)
+		return -ENOMEM;
 	if (clone_fd > 0)
 		 fuse_loop_cfg_set_clone_fd(config, clone_fd);
 	err = fuse_session_loop_mt_312(se, config);
