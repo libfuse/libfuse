@@ -4438,17 +4438,16 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 				fd);
 			goto error_out;
 		}
-		se->fd = fd;
-		return 0;
+		goto out;
 	}
 
 	/* Open channel */
 	fd = fuse_kern_mount(mountpoint, se->mo);
 	if (fd == -1)
 		goto error_out;
-	se->fd = fd;
 
-	/* Save mountpoint */
+out:
+	se->fd = fd;
 	se->mountpoint = mountpoint;
 
 	return 0;
