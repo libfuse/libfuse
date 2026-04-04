@@ -22,15 +22,14 @@ jobs:
           - ubuntu-latest
 
     steps:
-      - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install abigail-tools clang gcc liburing-dev libnuma-dev
-
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           path: current
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          ./current/.github/workflows/install-ubuntu-dependencies.sh --abicheck
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
