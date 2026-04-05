@@ -419,7 +419,7 @@ int fuse_main_real_30(int argc, char *argv[], const struct fuse_operations *op,
 					user_data);
 }
 
-void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
+void fuse_apply_conn_info_opts(const struct fuse_conn_info_opts *opts,
 			       struct fuse_conn_info *conn)
 {
 	if(opts->set_max_write)
