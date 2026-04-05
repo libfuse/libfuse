@@ -1126,7 +1126,7 @@ void fuse_unset_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
  * @param flag feature flag to be checked
  * @return true if the flag is set, false otherwise
  */
-bool fuse_get_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
+bool fuse_get_feature_flag(const struct fuse_conn_info *conn, uint64_t flag);
 
 /*
  * DO NOT USE: Not part of public API, for internal test use only.

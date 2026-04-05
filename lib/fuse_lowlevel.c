@@ -2667,7 +2667,7 @@ void fuse_unset_feature_flag(struct fuse_conn_info *conn,
 	se->conn_want &= ~flag;
 }
 
-bool fuse_get_feature_flag(struct fuse_conn_info *conn,
+bool fuse_get_feature_flag(const struct fuse_conn_info *conn,
 					     uint64_t flag)
 {
 	return (conn->capable_ext & flag) ? true : false;
