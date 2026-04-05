@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
 			}
 		} else	if (strcmp(argv[i], "-o") == 0) {
 			char *opts;
-			char *opt;
+			const char *opt;
 			i++;
 			if (i == argc)
 				break;
@@ -420,7 +420,7 @@ int main(int argc, char *argv[])
 	if (pass_fuse_fd)  {
 		fuse_fd = prepare_fuse_fd(mountpoint, type, options);
 		dev_fd_mountpoint = xrealloc(NULL, 20);
-		snprintf(dev_fd_mountpoint, 20, "/dev/fd/%u", fuse_fd);
+		snprintf(dev_fd_mountpoint, 20, "/dev/fd/%d", fuse_fd);
 		mountpoint = dev_fd_mountpoint;
 	}
 
