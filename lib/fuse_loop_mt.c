@@ -162,7 +162,7 @@ static void *fuse_do_work(void *data)
 		 * are not created on a burst of FORGET messages
 		 */
 		if (!(w->fbuf.flags & FUSE_BUF_IS_FD)) {
-			struct fuse_in_header *in = w->fbuf.mem;
+			const struct fuse_in_header *in = w->fbuf.mem;
 
 			if (in->opcode == FUSE_FORGET ||
 			    in->opcode == FUSE_BATCH_FORGET)
@@ -256,7 +256,7 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	return 0;
 }
 
-static int fuse_clone_chan_fd_default(struct fuse_session *se)
+static int fuse_clone_chan_fd_default(const struct fuse_session *se)
 {
 	int res;
 	int clonefd;
@@ -429,7 +429,6 @@ int err;
 
 	if (created_config) {
 		fuse_loop_cfg_destroy(config);
-		config = NULL;
 	}
 
 	return err;
