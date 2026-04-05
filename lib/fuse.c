@@ -3177,7 +3177,7 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_intr_data d;
-	struct fuse_entry_param e;
+	struct fuse_entry_param e = {0};
 	char *path;
 	int err;
 
