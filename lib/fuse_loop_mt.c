@@ -434,9 +434,9 @@ int err;
 	return err;
 }
 
-int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config_v1 *config_v1);
+int fuse_session_loop_mt_32(struct fuse_session *se, const struct fuse_loop_config_v1 *config_v1);
 FUSE_SYMVER("fuse_session_loop_mt_32", "fuse_session_loop_mt@FUSE_3.2")
-int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config_v1 *config_v1)
+int fuse_session_loop_mt_32(struct fuse_session *se, const struct fuse_loop_config_v1 *config_v1)
 {
 	int err;
 	struct fuse_loop_config *config = NULL;

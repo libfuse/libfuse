@@ -4696,9 +4696,9 @@ int fuse_loop_mt_312(struct fuse *f, struct fuse_loop_config *config)
 	return res;
 }
 
-int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config_v1 *config_v1);
+int fuse_loop_mt_32(struct fuse *f, const struct fuse_loop_config_v1 *config_v1);
 FUSE_SYMVER("fuse_loop_mt_32", "fuse_loop_mt@FUSE_3.2")
-int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config_v1 *config_v1)
+int fuse_loop_mt_32(struct fuse *f, const struct fuse_loop_config_v1 *config_v1)
 {
 	struct fuse_loop_config *config = fuse_loop_cfg_create();
 	if (config == NULL)
