@@ -34,3 +34,12 @@ has_size_change = yes
 name = fuse_lowlevel_ops
 has_data_member_inserted_at = end
 has_size_change = yes
+
+[suppress_function]
+# Suppress const qualification changes to fuse_get_session parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_get_session(struct fuse*)
+# to fuse_get_session(const struct fuse*), which is ABI compatible
+name = fuse_get_session
+parameter = '0 /^(const )?fuse\\*/
+change_kind = function-subtype-change
