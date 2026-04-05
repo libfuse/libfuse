@@ -40,26 +40,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build current
-        working-directory: current
+      - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
-          meson setup build --buildtype=debug
-          meson compile -C build
+          pip install -r current/requirements.txt
 
-      - name: Build previous
-        working-directory: previous
+      - name: Run ABI check
         run: |
-          echo "Commit-id before PR: $(git show HEAD)"
-          pip install -r requirements.txt
-          meson setup build --buildtype=debug
-          meson compile -C build
-
-      - name: Run abidiff
-        run: abidiff
-          --no-added-syms
-          --suppressions current/.github/workflows/abidiff_suppressions.abignore
-          --headers-dir1 previous/include/
-          --headers-dir2 current/include/
-          previous/build/lib/libfuse3.so
-          current/build/lib/libfuse3.so
+          current/.github/workflows/abicheck.sh --current-dir current --previous-dir previous
