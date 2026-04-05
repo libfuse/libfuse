@@ -880,6 +880,10 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 		if (llp->can_grow) {
 			res = fcntl(llp->pipe[0], F_SETPIPE_SZ, pipesize);
 			if (res == -1) {
+				/*
+				 * pipesize above is per-request; grow to max so later
+				 * (smaller) splice-write requests can still succeed.
+				 */
 				res = grow_pipe_to_max(llp->pipe[0]);
 				if (res > 0)
 					llp->size = res;
@@ -4006,20 +4010,12 @@ pipe_retry:
 	if (llp->size < bufsize) {
 		if (llp->can_grow) {
 			res = fcntl(llp->pipe[0], F_SETPIPE_SZ, bufsize);
-			if (res == -1) {
-				llp->can_grow = 0;
-				res = grow_pipe_to_max(llp->pipe[0]);
-				if (res > 0)
-					llp->size = res;
-				fuse_ll_clear_pipe(se);
-				goto fallback;
-			}
+			if (res == -1)
+				goto disable_splice_read;
 			llp->size = res;
 		}
-		if (llp->size < bufsize) {
-			fuse_ll_clear_pipe(se);
-			goto fallback;
-		}
+		if (llp->size < bufsize)
+			goto disable_splice_read;
 	}
 
 	if (se->io != NULL && se->io->splice_receive != NULL) {
@@ -4113,6 +4109,20 @@ pipe_retry:
 	buf->size = tmpbuf.size;
 
 	return res;
+
+disable_splice_read:
+	llp->can_grow = 0;
+	fuse_unset_feature_flag(&se->conn, FUSE_CAP_SPLICE_READ);
+
+	/* splice read will never work, write _might_ */
+	if (se->conn.want_ext & FUSE_CAP_SPLICE_WRITE) {
+		res = grow_pipe_to_max(llp->pipe[0]);
+		if (res > 0)
+			llp->size = res;
+	} else {
+		/* pipe will not be used */
+		fuse_ll_clear_pipe(se);
+	}
 
 fallback:
 #endif
