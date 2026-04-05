@@ -35,7 +35,7 @@ jobs:
           fi
           subject=$(git log -1 --format=%s $commit)
           echo "Checking commit: $commit - $subject"
-          if ! ./checkpatch.pl --max-line-length=100 --no-tree --ignore MAINTAINERS,SPDX_LICENSE_TAG,COMMIT_MESSAGE,FILE_PATH_CHANGES,EMAIL_SUBJECT,AVOID_EXTERNS,GIT_COMMIT_ID,ENOSYS_SYSCALL,ENOSYS,FROM_SIGN_OFF_MISMATCH,QUOTED_COMMIT_ID,PREFER_ATTRIBUTE_ALWAYS_UNUSED,PREFER_DEFINED_ATTRIBUTE_MACRO  -g $commit; then
+          if !  .github/workflows/run-checkpatch.sh $commit; then
             echo "checkpatch.pl found issues in commit $commit - $subject"
             exit 1
           fi
