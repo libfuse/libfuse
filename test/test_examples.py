@@ -40,9 +40,13 @@ TEST_FILE = __file__
 with open(TEST_FILE, 'rb') as fh:
     TEST_DATA = fh.read()
 
-def name_generator(__ctr=[0]):
-    __ctr[0] += 1
-    return 'testfile_%d' % __ctr[0]
+def name_generator(__ctr=None):
+    if __ctr is None:
+        __ctr = [0]
+    if not hasattr(name_generator, '_counter'):
+        name_generator._counter = [0]
+    name_generator._counter[0] += 1
+    return 'testfile_%d' % name_generator._counter[0]
 
 options = []
 if sys.platform == 'linux':
