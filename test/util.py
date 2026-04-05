@@ -205,7 +205,7 @@ os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'example'), os.environ['PATH'])
 
 try:
     (fuse_proto, fuse_caps) = get_printcap()
-except:
+except Exception:
     # Rely on test to raise error
     fuse_proto = (0,0)
     fuse_caps = set()
