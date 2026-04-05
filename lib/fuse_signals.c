@@ -76,7 +76,6 @@ static void exit_handler(int sig)
 				"assertion error: signal value <= 0\n");
 		dump_stack();
 		abort();
-		fuse_instance->error = sig;
 	}
 
 	fuse_instance->error = sig;
@@ -124,7 +123,7 @@ static int set_one_signal_handler(int sig, void (*handler)(int), int remove)
 	return 0;
 }
 
-static int _fuse_set_signal_handlers(int signals[], int nr_signals,
+static int _fuse_set_signal_handlers(const int signals[], int nr_signals,
 				     void (*handler)(int))
 {
 	for (int idx = 0; idx < nr_signals; idx++) {
@@ -188,14 +187,14 @@ int fuse_set_fail_signal_handlers(struct fuse_session *se)
 	return 0;
 }
 
-static void _fuse_remove_signal_handlers(int signals[], int nr_signals,
+static void _fuse_remove_signal_handlers(const int signals[], int nr_signals,
 					 void (*handler)(int))
 {
 	for (int idx = 0; idx < nr_signals; idx++)
 		set_one_signal_handler(signals[idx], handler, 1);
 }
 
-void fuse_remove_signal_handlers(struct fuse_session *se)
+void fuse_remove_signal_handlers(const struct fuse_session *se)
 {
 	size_t nr_signals;
 
