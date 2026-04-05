@@ -170,10 +170,10 @@ static int call_proc(struct fuse_opt_context *ctx, const char *arg, int key,
 
 static int match_template(const char *t, const char *arg, unsigned *sepp)
 {
-	int arglen = strlen(arg);
 	const char *sep = strchr(t, '=');
 	sep = sep ? sep : strchr(t, ' ');
 	if (sep && (!sep[1] || sep[1] == '%')) {
+		int arglen = strlen(arg);
 		int tlen = sep - t;
 		if (sep[0] == '=')
 			tlen ++;
@@ -253,7 +253,7 @@ static int process_opt_sep_arg(struct fuse_opt_context *ctx,
 {
 	int res;
 	char *newarg;
-	char *param;
+	const char *param;
 
 	if (next_arg(ctx, arg) == -1)
 		return -1;
