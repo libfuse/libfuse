@@ -97,14 +97,16 @@ static void __start_test(const char *fmt, ...)
 {
 	unsigned int n;
 	va_list ap;
-	n = sprintf(testname, "%3u [", testnum);
+	n = snprintf(testname, sizeof(testname), "%3u [", testnum);
 	va_start(ap, fmt);
-	n += vsprintf(testname + n, fmt, ap);
+	if (n < sizeof(testname))
+		n += vsnprintf(testname + n, sizeof(testname) - n, fmt, ap);
 	va_end(ap);
-	sprintf(testname + n, "]");
+	if (n < sizeof(testname))
+		snprintf(testname + n, sizeof(testname) - n, "]");
 	// Use dedicated testfile per test
-	sprintf(testfile, "%s/testfile.%u", basepath, testnum);
-	sprintf(testfile_r, "%s/testfile.%u", basepath_r, testnum);
+	snprintf(testfile, sizeof(testfile), "%s/testfile.%u", basepath, testnum);
+	snprintf(testfile_r, sizeof(testfile_r), "%s/testfile.%u", basepath_r, testnum);
 	if (testnum > MAX_TESTS) {
 		fprintf(stderr, "%s - too many tests\n", testname);
 		exit(1);
@@ -602,7 +604,7 @@ static int cleanup_dir(const char *path, const char **dir_files, int quiet)
 	for (i = 0; dir_files[i]; i++) {
 		int res;
 		char fpath[1280];
-		sprintf(fpath, "%s/%s", path, dir_files[i]);
+		snprintf(fpath, sizeof(fpath), "%s/%s", path, dir_files[i]);
 		res = unlink(fpath);
 		if (res == -1 && !quiet) {
 			PERROR("unlink");
@@ -635,7 +637,7 @@ static int create_dir(const char *path, const char **dir_files)
 
 	for (i = 0; dir_files[i]; i++) {
 		char fpath[1280];
-		sprintf(fpath, "%s/%s", path, dir_files[i]);
+		snprintf(fpath, sizeof(fpath), "%s/%s", path, dir_files[i]);
 		res = create_file(fpath, "", 0);
 		if (res == -1) {
 			cleanup_dir(path, dir_files, 1);
@@ -2133,25 +2135,31 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	assert(strlen(basepath) < 512);
-	assert(strlen(basepath_r) < 512);
 	if (basepath[0] != '/') {
 		fprintf(stderr, "testdir must be an absolute path\n");
 		return 1;
 	}
+	if (strlen(basepath) > 1000) {
+		fprintf(stderr, "testdir path is too long\n");
+		return 1;
+	}
+	if (strlen(basepath_r) > 1000) {
+		fprintf(stderr, "realdir path is too long\n");
+		return 1;
+	}
 
-	sprintf(testfile, "%s/testfile", basepath);
-	sprintf(testfile2, "%s/testfile2", basepath);
-	sprintf(testdir, "%s/testdir", basepath);
-	sprintf(testdir2, "%s/testdir2", basepath);
-	sprintf(subfile, "%s/subfile", testdir2);
-	sprintf(testsock, "%s/testsock", basepath);
+	snprintf(testfile, sizeof(testfile), "%s/testfile", basepath);
+	snprintf(testfile2, sizeof(testfile2), "%s/testfile2", basepath);
+	snprintf(testdir, sizeof(testdir), "%s/testdir", basepath);
+	snprintf(testdir2, sizeof(testdir2), "%s/testdir2", basepath);
+	snprintf(subfile, sizeof(subfile), "%s/subfile", testdir2);
+	snprintf(testsock, sizeof(testsock), "%s/testsock", basepath);
 
-	sprintf(testfile_r, "%s/testfile", basepath_r);
-	sprintf(testfile2_r, "%s/testfile2", basepath_r);
-	sprintf(testdir_r, "%s/testdir", basepath_r);
-	sprintf(testdir2_r, "%s/testdir2", basepath_r);
-	sprintf(subfile_r, "%s/subfile", testdir2_r);
+	snprintf(testfile_r, sizeof(testfile_r), "%s/testfile", basepath_r);
+	snprintf(testfile2_r, sizeof(testfile2_r), "%s/testfile2", basepath_r);
+	snprintf(testdir_r, sizeof(testdir_r), "%s/testdir", basepath_r);
+	snprintf(testdir2_r, sizeof(testdir2_r), "%s/testdir2", basepath_r);
+	snprintf(subfile_r, sizeof(subfile_r), "%s/subfile", testdir2_r);
 
 	is_root = (geteuid() == 0);
 
