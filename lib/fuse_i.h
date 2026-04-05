@@ -252,7 +252,7 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
  *
  * @return negative standard error code or 0 on success
  */
-int fuse_loop_cfg_verify(struct fuse_loop_config *config);
+int fuse_loop_cfg_verify(const struct fuse_loop_config *config);
 
 
 /*

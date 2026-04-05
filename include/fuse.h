@@ -1099,7 +1099,7 @@ static inline struct fuse *fuse_new_fn(struct fuse_args *args,
  *
  * @return 0 on success, -1 on failure.
  **/
-int fuse_mount(struct fuse *f, const char *mountpoint);
+int fuse_mount(const struct fuse *f, const char *mountpoint);
 
 /**
  * Unmount a FUSE file system.
@@ -1108,7 +1108,7 @@ int fuse_mount(struct fuse *f, const char *mountpoint);
  *
  * @param f the FUSE handle
  **/
-void fuse_unmount(struct fuse *f);
+void fuse_unmount(const struct fuse *f);
 
 /**
  * Destroy the FUSE handle.

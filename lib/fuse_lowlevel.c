@@ -1696,7 +1696,7 @@ static void do_create(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *inarg)
 {
 	const struct fuse_create_in *arg = (struct fuse_create_in *)inarg;
-	void *payload = PARAM(arg);
+	const void *payload = PARAM(arg);
 
 	if (req->se->conn.proto_minor < 12)
 		payload = (char *)inarg + sizeof(struct fuse_open_in);
@@ -2020,7 +2020,7 @@ static void _do_fsyncdir(fuse_req_t req, const fuse_ino_t nodeid,
 			 const void *op_in, const void *in_payload)
 {
 	(void)in_payload;
-	struct fuse_fsync_in *arg = (struct fuse_fsync_in *)op_in;
+	const struct fuse_fsync_in *arg = (const struct fuse_fsync_in *)op_in;
 	struct fuse_file_info fi;
 	int datasync = arg->fsync_flags & 1;
 
@@ -2082,7 +2082,7 @@ static void do_setxattr(fuse_req_t req, const fuse_ino_t nodeid,
 	struct fuse_session *se = req->se;
 	unsigned int xattr_ext = !!(se->conn.want & FUSE_CAP_SETXATTR_EXT);
 	const struct fuse_setxattr_in *arg = inarg;
-	char *payload = xattr_ext ? PARAM(arg) :
+	const char *payload = xattr_ext ? PARAM(arg) :
 				    (char *)arg + FUSE_COMPAT_SETXATTR_IN_SIZE;
 
 	_do_setxattr(req, nodeid, arg, payload);
@@ -2242,7 +2242,7 @@ static void do_setlkw(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	_do_setlkw(req, nodeid, inarg, NULL);
 }
 
-static int find_interrupted(struct fuse_session *se, struct fuse_req *req)
+static int find_interrupted(struct fuse_session *se, const struct fuse_req *req)
 {
 	struct fuse_req *curr;
 
@@ -2383,7 +2383,7 @@ static void _do_ioctl(fuse_req_t req, const fuse_ino_t nodeid,
 static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
 	const struct fuse_ioctl_in *arg = inarg;
-	void *in_buf = arg->in_size ? PARAM(arg) : NULL;
+	const void *in_buf = arg->in_size ? PARAM(arg) : NULL;
 
 	_do_ioctl(req, nodeid, arg, in_buf);
 }
@@ -3607,7 +3607,7 @@ fuse_req_opcode_sanity_ok(struct fuse_session *se, enum fuse_opcode in_op)
 }
 
 static inline void
-fuse_session_in2req(struct fuse_req *req, struct fuse_in_header *in)
+fuse_session_in2req(struct fuse_req *req, const struct fuse_in_header *in)
 {
 	req->unique = in->unique;
 	req->ctx.uid = in->uid;
@@ -3619,7 +3619,7 @@ fuse_session_in2req(struct fuse_req *req, struct fuse_in_header *in)
  * Implement -o allow_root
  */
 static inline int
-fuse_req_check_allow_root(struct fuse_session *se, enum fuse_opcode in_op,
+fuse_req_check_allow_root(const struct fuse_session *se, enum fuse_opcode in_op,
 			  uid_t in_uid)
 {
 	int err = EACCES;
@@ -4197,7 +4197,7 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 struct fuse_session *
 fuse_session_new_versioned(struct fuse_args *args,
 			   const struct fuse_lowlevel_ops *op, size_t op_size,
-			   struct libfuse_version *version, void *userdata)
+			   const struct libfuse_version *version, void *userdata)
 {
 	int err;
 	struct fuse_session *se;
@@ -4461,7 +4461,7 @@ error_out:
 	return -1;
 }
 
-int fuse_session_fd(struct fuse_session *se)
+int fuse_session_fd(const struct fuse_session *se)
 {
 	return se->fd;
 }

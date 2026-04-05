@@ -494,7 +494,7 @@ void fuse_loop_cfg_destroy(struct fuse_loop_config *config)
 	free(config);
 }
 
-int fuse_loop_cfg_verify(struct fuse_loop_config *config)
+int fuse_loop_cfg_verify(const struct fuse_loop_config *config)
 {
 	if (config->version_id != FUSE_LOOP_MT_V2_IDENTIFIER)
 		return -EINVAL;
@@ -503,7 +503,7 @@ int fuse_loop_cfg_verify(struct fuse_loop_config *config)
 }
 
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
-			   struct fuse_loop_config_v1 *v1_conf)
+			   const struct fuse_loop_config_v1 *v1_conf)
 {
 	fuse_loop_cfg_set_idle_threads(config, v1_conf->max_idle_threads);
 

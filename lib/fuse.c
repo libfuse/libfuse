@@ -4201,7 +4201,7 @@ static void fuse_lib_getlk(fuse_req_t req, fuse_ino_t ino,
 {
 	int err;
 	struct lock l;
-	struct lock *conflict;
+	const struct lock *conflict;
 	struct fuse *f = req_fuse(req);
 
 	flock_to_lock(lock, &l);
@@ -5105,7 +5105,7 @@ struct fuse *_fuse_new_31(struct fuse_args *args,
 	/* not declared globally, to restrict usage of this function */
 	struct fuse_session *fuse_session_new_versioned(
 		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
-		size_t op_size, struct libfuse_version *version,
+		size_t op_size, const struct libfuse_version *version,
 		void *userdata);
 	f->se = fuse_session_new_versioned(args, &llop, sizeof(llop), version,
 					   f);
@@ -5283,12 +5283,14 @@ void fuse_destroy(struct fuse *f)
 	fuse_delete_context_key();
 }
 
-int fuse_mount(struct fuse *f, const char *mountpoint) {
+int fuse_mount(const struct fuse *f, const char *mountpoint)
+{
 	return fuse_session_mount(fuse_get_session(f), mountpoint);
 }
 
 
-void fuse_unmount(struct fuse *f) {
+void fuse_unmount(const struct fuse *f)
+{
 	fuse_session_unmount(fuse_get_session(f));
 }
 
