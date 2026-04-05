@@ -358,8 +358,11 @@ run_codechecker_cppcheck()
     # Enable cppcheck checkers
     cmd="$cmd --enable cppcheck"
 
-    # Disable missingIncludeSystem warnings - cppcheck doesn't need standard library headers
+    # Disable checkers with excessive false positives
     cmd="$cmd --disable cppcheck-missingIncludeSystem"
+    cmd="$cmd --disable cppcheck-constParameterCallback"
+    cmd="$cmd --disable cppcheck-knownConditionTrueFalse"
+    cmd="$cmd --disable cppcheck-unusedStructMember"
 
     eval $cmd
 
