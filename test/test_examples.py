@@ -124,11 +124,13 @@ def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
             assert fh.read() == 'Hello World!\n'
         logger.debug("Verified contents of 'hello' file")
         with pytest.raises(IOError) as exc_info:
-            open(filename, 'r+')
+            with open(filename, 'r+'):
+                pass
         assert exc_info.value.errno == errno.EACCES
         logger.debug("Verified EACCES error when trying to open file for writing")
         with pytest.raises(IOError) as exc_info:
-            open(filename + 'does-not-exist', 'r+')
+            with open(filename + 'does-not-exist', 'r+'):
+                pass
         assert exc_info.value.errno == errno.ENOENT
         logger.debug("Verified ENOENT error for non-existent file")
         if name == 'hello_ll':
