@@ -1434,7 +1434,7 @@ typedef struct fuse_fs *(*fuse_module_factory_t)(struct fuse_args *args,
 	fuse_module_factory_t fuse_module_ ## name_ ## _factory = factory_
 
 /** Get session from fuse object */
-struct fuse_session *fuse_get_session(struct fuse *f);
+struct fuse_session *fuse_get_session(const struct fuse *f);
 
 /**
  * Open a FUSE file descriptor and set up the mount for the given
