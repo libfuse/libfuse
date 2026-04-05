@@ -197,7 +197,7 @@ static const struct mount_flags mount_flags[] = {
 	{NULL,	    0,		    0}
 };
 
-unsigned get_max_read(struct mount_opts *o)
+unsigned int get_max_read(const struct mount_opts *o)
 {
 	return o->max_read;
 }
@@ -423,7 +423,7 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 	// Note: fds[1] is leakend and doesn't get FD_CLOEXEC
 }
 
-static int fuse_mount_fusermount(const char *mountpoint, struct mount_opts *mo,
+static int fuse_mount_fusermount(const char *mountpoint, const struct mount_opts *mo,
 		const char *opts, int quiet)
 {
 	int fds[2];
