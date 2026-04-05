@@ -317,7 +317,7 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 
 	/* copy iov into the payload, idx=0 is the header section */
 	for (int idx = 1; idx < count; idx++) {
-		struct iovec *cur = &iov[idx];
+		const struct iovec *cur = &iov[idx];
 
 		if (len + cur->iov_len > max_buf) {
 			fuse_log(FUSE_LOG_ERR,
@@ -327,7 +327,7 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 			break;
 		}
 
-		memcpy(ring_ent->op_payload + len, cur->iov_base, cur->iov_len);
+		memcpy((char *)ring_ent->op_payload + len, cur->iov_base, cur->iov_len);
 		len += cur->iov_len;
 	}
 
@@ -472,10 +472,10 @@ static int fuse_uring_register_queue(struct fuse_ring_queue *queue)
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	unsigned int sq_ready;
 	struct io_uring_sqe *sqe;
-	int res;
 
 	for (size_t idx = 0; idx < ring_pool->queue_depth; idx++) {
 		struct fuse_ring_ent *ent = &queue->ent[idx];
+		int res;
 
 		res = fuse_uring_register_ent(queue, ent);
 		if (res != 0)
@@ -623,7 +623,7 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	struct fuse_uring_req_header *rrh = ent->req_header;
 
 	struct fuse_in_header *in = (struct fuse_in_header *)&rrh->in_out;
-	struct fuse_uring_ent_in_out *ent_in_out = &rrh->ring_ent_in_out;
+	const struct fuse_uring_ent_in_out *ent_in_out = &rrh->ring_ent_in_out;
 
 	ent->req_commit_id = ent_in_out->commit_id;
 	if (unlikely(ent->req_commit_id == 0)) {
@@ -872,7 +872,7 @@ static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 	return rc;
 }
 
-static int fuse_uring_sanity_check(struct fuse_session *se)
+static int fuse_uring_sanity_check(const struct fuse_session *se)
 {
 	if (se->uring.q_depth == 0) {
 		fuse_log(FUSE_LOG_ERR, "io-uring queue depth must be > 0\n");
