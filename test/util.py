@@ -42,6 +42,7 @@ def get_printcap():
 
 def test_printcap():
     get_printcap()
+    return None
 
 def wait_for_mount(mount_process, mnt_dir,
                    test_fn=os.path.ismount):
