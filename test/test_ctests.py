@@ -105,7 +105,7 @@ def test_notify1(tmpdir, name, notify, output_checker):
         try:
             umount(mount_process, mnt_dir)
             logger.debug("Umount disabled")
-        except:
+        except Exception:
             logger.error(f"Failure in unmount: '{' '.join(cmdline)}'")
             cleanup(mount_process, mnt_dir)
         logger.debug("Unmount completed")
@@ -148,7 +148,7 @@ def test_notify_file_size(tmpdir, notify, output_checker):
     else:
         try:
             umount(mount_process, mnt_dir)
-        except:
+        except Exception:
             logger.error(f"Failure in unmount: '{' '.join(cmdline)}'")
             cleanup(mount_process, mnt_dir)
         logger.debug("Unmount completed")
