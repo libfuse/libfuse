@@ -1025,34 +1025,43 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	sprintf(d, "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
 		fd, rootmode, getuid(), getgid());
 
-	source = malloc((fsname ? strlen(fsname) : 0) +
-			(subtype ? strlen(subtype) : 0) + strlen(dev) + 32);
+	size_t source_len = (fsname ? strlen(fsname) : 0) +
+			    (subtype ? strlen(subtype) : 0) + strlen(dev) + 32;
+	size_t type_len = (subtype ? strlen(subtype) : 0) + 32;
 
-	type = malloc((subtype ? strlen(subtype) : 0) + 32);
+	source = malloc(source_len);
+	type = malloc(type_len);
 	if (!type || !source) {
 		fprintf(stderr, "%s: failed to allocate memory\n", progname);
 		goto err;
 	}
 
 	if (subtype)
-		sprintf(type, "%s.%s", blkdev ? "fuseblk" : "fuse", subtype);
-	else
-		strcpy(type, blkdev ? "fuseblk" : "fuse");
+		snprintf(type, type_len, "%s.%s", blkdev ? "fuseblk" : "fuse", subtype);
+	else {
+		strncpy(type, blkdev ? "fuseblk" : "fuse", type_len - 1);
+		type[type_len - 1] = '\0';
+	}
 
-	if (fsname)
-		strcpy(source, fsname);
-	else
-		strcpy(source, subtype ? subtype : dev);
+	if (fsname) {
+		strncpy(source, fsname, source_len - 1);
+		source[source_len - 1] = '\0';
+	} else {
+		strncpy(source, subtype ? subtype : dev, source_len - 1);
+		source[source_len - 1] = '\0';
+	}
 
 	res = mount_notrunc(source, mnt, type, flags, optbuf);
 	if (res == -1 && errno == ENODEV && subtype) {
 		/* Probably missing subtype support */
-		strcpy(type, blkdev ? "fuseblk" : "fuse");
+		strncpy(type, blkdev ? "fuseblk" : "fuse", type_len - 1);
+		type[type_len - 1] = '\0';
 		if (fsname) {
 			if (!blkdev)
-				sprintf(source, "%s#%s", subtype, fsname);
+				snprintf(source, source_len, "%s#%s", subtype, fsname);
 		} else {
-			strcpy(source, type);
+			strncpy(source, type, source_len - 1);
+			source[source_len - 1] = '\0';
 		}
 
 		res = mount_notrunc(source, mnt, type, flags, optbuf);
