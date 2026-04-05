@@ -1749,7 +1749,8 @@ int fuse_reply_lseek(fuse_req_t req, off_t off);
  * @param attr_timeout	validity timeout (in seconds) for the attributes
  * @return zero for success, -errno for failure to send reply
  */
-int fuse_reply_statx(fuse_req_t req, int flags, struct statx *statx, double attr_timeout);
+int fuse_reply_statx(fuse_req_t req, int flags, const struct statx *statx,
+		     double attr_timeout);
 
 /* ----------------------------------------------------------- *
  * Notification						       *
