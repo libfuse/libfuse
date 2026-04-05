@@ -97,14 +97,14 @@ static void __start_test(const char *fmt, ...)
 {
 	unsigned int n;
 	va_list ap;
-	n = sprintf(testname, "%3i [", testnum);
+	n = sprintf(testname, "%3u [", testnum);
 	va_start(ap, fmt);
 	n += vsprintf(testname + n, fmt, ap);
 	va_end(ap);
 	sprintf(testname + n, "]");
 	// Use dedicated testfile per test
-	sprintf(testfile, "%s/testfile.%d", basepath, testnum);
-	sprintf(testfile_r, "%s/testfile.%d", basepath_r, testnum);
+	sprintf(testfile, "%s/testfile.%u", basepath, testnum);
+	sprintf(testfile_r, "%s/testfile.%u", basepath_r, testnum);
 	if (testnum > MAX_TESTS) {
 		fprintf(stderr, "%s - too many tests\n", testname);
 		exit(1);
@@ -153,7 +153,7 @@ static int check_testfile_size(const char *path, int len)
 	return check_size(path, len);
 }
 
-static int st_check_type(struct stat *st, mode_t type)
+static int st_check_type(const struct stat *st, mode_t type)
 {
 	if ((st->st_mode & S_IFMT) != type) {
 		ERROR("type 0%o instead of 0%o", st->st_mode & S_IFMT, type);
@@ -173,7 +173,7 @@ static int check_type(const char *path, mode_t type)
 	return st_check_type(&stbuf, type);
 }
 
-static int st_check_mode(struct stat *st, mode_t mode)
+static int st_check_mode(const struct stat *st, mode_t mode)
 {
 	if ((st->st_mode & ALLPERMS) != mode) {
 		ERROR("mode 0%o instead of 0%o", st->st_mode & ALLPERMS,
@@ -366,14 +366,13 @@ static int fcheck_data(int fd, const char *data, int offset,
 		       unsigned len)
 {
 	char buf[4096];
-	int res;
 	if (lseek(fd, offset, SEEK_SET) == (off_t) -1) {
 		PERROR("lseek");
 		return -1;
 	}
 	while (len) {
 		int rdlen = len < sizeof(buf) ? len : sizeof(buf);
-		res = read(fd, buf, rdlen);
+		int res = read(fd, buf, rdlen);
 		if (res == -1) {
 			PERROR("read");
 			return -1;
@@ -566,7 +565,6 @@ static int check_unlinked_testfile(int fd)
 // Check recorded testfiles after all tests completed
 static int check_unlinked_testfiles(void)
 {
-	int fd;
 	int res, err = 0;
 	int num = testnum;
 
@@ -575,7 +573,7 @@ static int check_unlinked_testfiles(void)
 
 	testnum = 0;
 	while (testnum < num) {
-		fd = next_test->fd;
+		int fd = next_test->fd;
 		start_test("check_unlinked_testfile");
 		if (fd == -1)
 			continue;
@@ -774,7 +772,7 @@ static int test_seekdir(void)
 	int i;
 	int res;
 	DIR *dp;
-	struct dirent *de = NULL;
+	const struct dirent *de = NULL;
 
 	start_test("seekdir");
 	res = create_dir(testdir, testdir_files);
@@ -908,8 +906,6 @@ static int test_copy_file_range(void)
 	}
 	res = check_nonexist(testfile2);
 	if (res == -1)
-		return -1;
-	if (err)
 		return -1;
 
 	success();
