@@ -23,7 +23,8 @@ void unescape(char *buf);
 static inline struct mntent *GETMNTENT(FILE *stream)
 {
 	struct mntent *entp = getmntent(stream);
-	if(entp != NULL) {
+
+	if (entp != NULL) {
 		unescape(entp->mnt_fsname);
 		unescape(entp->mnt_dir);
 		unescape(entp->mnt_type);

@@ -30,7 +30,7 @@
 #include <stdint.h>
 #endif
 
-int user_allow_other = 0;
+int user_allow_other;
 int mount_max = 1000;
 static uid_t oldfsuid;
 static gid_t oldfsgid;
@@ -43,25 +43,27 @@ void unescape(char *buf)
 {
 	char *src = buf;
 	char *dest = buf;
+
 	while (1) {
 		char *next_src = strchrnul(src, '\\');
 		int offset = next_src - src;
+
 		memmove(dest, src, offset);
 		src = next_src;
 		dest += offset;
 
-		if(*src == '\0') {
+		if (*src == '\0') {
 			*dest = *src;
 			return;
 		}
 		src++;
 
-		if('0' <= src[0] && src[0] < '2' &&
-		   '0' <= src[1] && src[1] < '8' &&
-		   '0' <= src[2] && src[2] < '8') {
+		if ('0' <= src[0] && src[0] < '2' &&
+		    '0' <= src[1] && src[1] < '8' &&
+		    '0' <= src[2] && src[2] < '8') {
 			*dest++ = (src[0] - '0') << 6
-			        | (src[1] - '0') << 3
-			        | (src[2] - '0') << 0;
+				| (src[1] - '0') << 3
+				| (src[2] - '0') << 0;
 			src += 3;
 		} else if (src[0] == '\\') {
 			*dest++ = '\\';
@@ -79,6 +81,7 @@ static int count_fuse_fs_mtab(const char *progname)
 	int count = 0;
 	const char *mtab = _PATH_MOUNTED;
 	FILE *fp = setmntent(mtab, "r");
+
 	if (fp == NULL) {
 		fprintf(stderr, "%s: failed to open %s: %s\n", progname, mtab,
 			strerror(errno));
@@ -87,7 +90,7 @@ static int count_fuse_fs_mtab(const char *progname)
 	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (strcmp(entp->mnt_type, "fuse") == 0 ||
 		    strncmp(entp->mnt_type, "fuse.", 5) == 0)
-			count ++;
+			count++;
 	}
 	endmntent(fp);
 	return count;
@@ -169,12 +172,15 @@ int count_fuse_fs(const char *progname)
 static void strip_line(char *line)
 {
 	char *s = strchr(line, '#');
+
 	if (s != NULL)
 		s[0] = '\0';
 	for (s = line + strlen(line) - 1;
-	     s >= line && isspace((unsigned char) *s); s--);
+	     s >= line && isspace((unsigned char) *s); s--) {
+	}
 	s[1] = '\0';
-	for (s = line; isspace((unsigned char) *s); s++);
+	for (s = line; isspace((unsigned char) *s); s++)
+		; /* empty */
 	if (s != line)
 		memmove(line, s, strlen(s)+1);
 }
@@ -182,11 +188,12 @@ static void strip_line(char *line)
 static void parse_line(const char *line, int linenum, const char *progname)
 {
 	int tmp;
+
 	if (strcmp(line, "user_allow_other") == 0)
 		user_allow_other = 1;
 	else if (sscanf(line, "mount_max = %i", &tmp) == 1)
 		mount_max = tmp;
-	else if(line[0])
+	else if (line[0])
 		fprintf(stderr,
 			"%s: unknown parameter in %s at line %i: '%s'\n",
 			progname, FUSE_CONF, linenum, line);
@@ -195,10 +202,12 @@ static void parse_line(const char *line, int linenum, const char *progname)
 void read_conf(const char *progname)
 {
 	FILE *fp = fopen(FUSE_CONF, "r");
+
 	if (fp != NULL) {
 		int linenum = 1;
 		char line[256];
 		int isnewline = 1;
+
 		while (fgets(line, sizeof(line), fp) != NULL) {
 			if (isnewline) {
 				if (line[strlen(line)-1] == '\n') {
@@ -207,16 +216,18 @@ void read_conf(const char *progname)
 				} else {
 					isnewline = 0;
 				}
-			} else if(line[strlen(line)-1] == '\n') {
-				fprintf(stderr, "%s: reading %s: line %i too long\n", progname, FUSE_CONF, linenum);
+			} else if (line[strlen(line)-1] == '\n') {
+				fprintf(stderr, "%s: reading %s: line %i too long\n",
+					progname, FUSE_CONF, linenum);
 
 				isnewline = 1;
 			}
 			if (isnewline)
-				linenum ++;
+				linenum++;
 		}
 		if (!isnewline) {
-			fprintf(stderr, "%s: reading %s: missing newline at end of file\n", progname, FUSE_CONF);
+			fprintf(stderr, "%s: reading %s: missing newline at end of file\n",
+				progname, FUSE_CONF);
 
 		}
 		if (ferror(fp)) {
@@ -289,6 +300,8 @@ int check_nonroot_dir_access(const char *progname, const char *origmnt,
 	return 0;
 }
 
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
 int check_nonroot_fstype(const char *progname, const struct statfs *fs_buf)
 {
 	size_t i;
@@ -298,13 +311,15 @@ int check_nonroot_fstype(const char *progname, const struct statfs *fs_buf)
 	 * able to just put anything we want there.
 	 * Luckily, without allow_other, we can't get other users to actually
 	 * use any fake information we try to put there anyway.
-	 * Use a whitelist to be safe. */
+	 * Use a whitelist to be safe.
+	 */
 
 	/* Define permitted filesystems for the mount target. This was
 	 * originally the same list as used by the ecryptfs mount helper
 	 * (https://bazaar.launchpad.net/~ecryptfs/ecryptfs/trunk/view/head:/src/utils/mount.ecryptfs_private.c#L225)
 	 * but got expanded as we found more filesystems that needed to be
-	 * overlaid. */
+	 * overlaid.
+	 */
 	typeof(fs_buf->f_type) f_type_whitelist[] = {
 		0x61756673 /* AUFS_SUPER_MAGIC */,
 		0x00000187 /* AUTOFS_SUPER_MAGIC */,
@@ -345,7 +360,7 @@ int check_nonroot_fstype(const char *progname, const struct statfs *fs_buf)
 		0x2FC12FC1 /* ZFS_SUPER_MAGIC */,
 		0x858458f6 /* RAMFS_MAGIC */,
 	};
-	for (i = 0; i < sizeof(f_type_whitelist)/sizeof(f_type_whitelist[0]); i++) {
+	for (i = 0; i < ARRAY_SIZE(f_type_whitelist); i++) {
 		if (f_type_whitelist[i] == fs_buf->f_type)
 			return 0;
 	}
