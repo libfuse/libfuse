@@ -73,7 +73,7 @@ nevertheless want to adjust them, you can do so with the
 *meson configure* command:
 
     $ meson configure # list options
-    $ meson configure -D disable-mtab=true # set an optionq
+    $ meson configure -D disable-mtab=true # set an option
 
     $ # ensure all meson options are applied to the final build system
     $ meson setup --reconfigure ../
