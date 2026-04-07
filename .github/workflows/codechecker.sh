@@ -12,6 +12,7 @@
 #   --github-workflow       Generate SARIF output for GitHub Code Scanning
 #   --no-ctu                Disable CTU analysis (faster, intra-file analysis only)
 #   --gcc                   Enable GCC static analyzer (requires GCC 13+, CodeChecker only)
+#   --cppcheck              Enable cppcheck analyzer (CodeChecker only)
 
 set -e
 
@@ -21,6 +22,7 @@ BUILD_DIR=""
 GITHUB_WORKFLOW=0
 ENABLE_CTU=1
 ENABLE_GCC=0
+ENABLE_CPPCHECK=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -49,6 +51,10 @@ while [[ $# -gt 0 ]]; do
             ENABLE_GCC=1
             shift
             ;;
+        --cppcheck)
+            ENABLE_CPPCHECK=1
+            shift
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -65,6 +71,8 @@ while [[ $# -gt 0 ]]; do
 "  --no-ctu                Disable CTU analysis (faster, intra-file analysis only)"
             echo \
 "  --gcc                   Enable GCC static analyzer (requires GCC 13+, CodeChecker only)"
+            echo \
+"  --cppcheck              Enable cppcheck analyzer (CodeChecker only)"
             exit 0
             ;;
         *)
@@ -78,6 +86,16 @@ done
 # Validate options
 if [ $ENABLE_GCC -eq 1 ] && [ $USE_CODECHECKER -eq 0 ]; then
     echo "[ERROR] --gcc option requires --codechecker"
+    exit 1
+fi
+
+if [ $ENABLE_CPPCHECK -eq 1 ] && [ $USE_CODECHECKER -eq 0 ]; then
+    echo "[ERROR] --cppcheck option requires --codechecker"
+    exit 1
+fi
+
+if [ $ENABLE_GCC -eq 1 ] && [ $ENABLE_CPPCHECK -eq 1 ]; then
+    echo "[ERROR] Cannot use both --gcc and --cppcheck at the same time"
     exit 1
 fi
 
@@ -311,6 +329,46 @@ run_codechecker_gcc()
     parse_codechecker_results "$codechecker"
 }
 
+# Run analysis with CodeChecker using cppcheck
+run_codechecker_cppcheck()
+{
+    echo_info "Running CodeChecker with cppcheck analyzer..."
+
+    # Check if cppcheck is available
+    if ! command -v cppcheck &> /dev/null; then
+        echo_error "cppcheck not found but --cppcheck was specified"
+        exit 1
+    fi
+
+    local cppcheck_version=$(cppcheck --version | awk '{print $2}')
+    echo_info "Found cppcheck version $cppcheck_version"
+
+    local codechecker=$(detect_codechecker)
+
+    # Work in build directory
+    cd "$BUILD_DIR"
+
+    rm -rf codechecker-reports codechecker-html
+    mkdir -p codechecker-reports
+
+    # Build CodeChecker analyze command for cppcheck
+    local cmd="$codechecker analyze compile_commands.json -o codechecker-reports"
+    cmd="$cmd --analyzers cppcheck"
+
+    # Enable cppcheck checkers
+    cmd="$cmd --enable cppcheck"
+
+    # Disable checkers with excessive false positives
+    cmd="$cmd --disable cppcheck-missingIncludeSystem"
+    cmd="$cmd --disable cppcheck-constParameterCallback"
+    cmd="$cmd --disable cppcheck-knownConditionTrueFalse"
+    cmd="$cmd --disable cppcheck-unusedStructMember"
+
+    eval $cmd
+
+    parse_codechecker_results "$codechecker"
+}
+
 echo_info "Static Analysis Configuration"
 
 # Display tool selection
@@ -331,6 +389,8 @@ fi
 if [ $USE_CODECHECKER -eq 1 ]; then
     if [ $ENABLE_GCC -eq 1 ]; then
         echo_info "Analyzer: GCC"
+    elif [ $ENABLE_CPPCHECK -eq 1 ]; then
+        echo_info "Analyzer: cppcheck"
     else
         echo_info "Analyzer: Clang"
     fi
@@ -341,6 +401,8 @@ setup_build_dir
 if [ $USE_CODECHECKER -eq 1 ]; then
     if [ $ENABLE_GCC -eq 1 ]; then
         run_codechecker_gcc
+    elif [ $ENABLE_CPPCHECK -eq 1 ]; then
+        run_codechecker_cppcheck
     else
         run_codechecker_clang
     fi

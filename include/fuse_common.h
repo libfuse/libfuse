@@ -772,7 +772,7 @@ struct fuse_conn_info_opts* fuse_parse_conn_info_opts(struct fuse_args *args);
  * time_gran. A field is only set (or unset) if the corresponding
  * option has been explicitly set.
  */
-void fuse_apply_conn_info_opts(struct fuse_conn_info_opts *opts,
+void fuse_apply_conn_info_opts(const struct fuse_conn_info_opts *opts,
 			  struct fuse_conn_info *conn);
 
 /**
@@ -1054,7 +1054,7 @@ int fuse_set_fail_signal_handlers(struct fuse_session *se);
  * See also:
  * fuse_set_signal_handlers()
  */
-void fuse_remove_signal_handlers(struct fuse_session *se);
+void fuse_remove_signal_handlers(const struct fuse_session *se);
 
 /**
  * Config operations.
@@ -1099,7 +1099,7 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
  * @param v1_conf older config1 type (below FUSE API 312)
  */
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
-			   struct fuse_loop_config_v1 *v1_conf);
+			   const struct fuse_loop_config_v1 *v1_conf);
 #endif
 
 /**
@@ -1126,7 +1126,7 @@ void fuse_unset_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
  * @param flag feature flag to be checked
  * @return true if the flag is set, false otherwise
  */
-bool fuse_get_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
+bool fuse_get_feature_flag(const struct fuse_conn_info *conn, uint64_t flag);
 
 /*
  * DO NOT USE: Not part of public API, for internal test use only.

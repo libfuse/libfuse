@@ -14,6 +14,7 @@ OPTIONS:
     --minimal       Install only minimal build dependencies
     --full          Install all dependencies including multilib and testing tools (default)
     --codechecker   Install dependencies for CodeChecker analysis
+    --cppcheck      Install cppcheck for static analysis
     --abicheck      Install dependencies for ABI compatibility checks
     --codeql        Install dependencies for CodeQL analysis
     -h, --help      Show this help message
@@ -22,6 +23,7 @@ EXAMPLES:
     $0                    # Install full dependencies
     $0 --minimal          # Install minimal build dependencies
     $0 --codechecker      # Install CodeChecker dependencies
+    $0 --cppcheck         # Install cppcheck
     $0 --abicheck         # Install ABI check dependencies
     $0 --codeql           # Install CodeQL dependencies
 
@@ -116,8 +118,15 @@ install_codeql() {
         libnuma-dev
 }
 
+install_cppcheck() {
+    echo "Installing cppcheck..."
+    sudo apt-get update
+    sudo apt-get install -y cppcheck
+}
+
 # Default to full installation
 MODE="full"
+INSTALL_CPPCHECK=0
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -132,6 +141,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --codechecker)
             MODE="codechecker"
+            shift
+            ;;
+        --cppcheck)
+            INSTALL_CPPCHECK=1
             shift
             ;;
         --abicheck)
@@ -171,6 +184,11 @@ case $MODE in
         install_codeql
         ;;
 esac
+
+# Install cppcheck if requested
+if [ $INSTALL_CPPCHECK -eq 1 ]; then
+    install_cppcheck
+fi
 
 echo ""
 echo "✓ Dependencies installed successfully!"

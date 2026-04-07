@@ -34,3 +34,90 @@ has_size_change = yes
 name = fuse_lowlevel_ops
 has_data_member_inserted_at = end
 has_size_change = yes
+
+[suppress_function]
+# Suppress const qualification changes to fuse_get_session parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_get_session(struct fuse*)
+# to fuse_get_session(const struct fuse*), which is ABI compatible
+name = fuse_get_session
+parameter = '0 /^(const )?fuse\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_mount parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_mount(struct fuse*, const char*)
+# to fuse_mount(const struct fuse*, const char*), which is ABI compatible
+name = fuse_mount
+parameter = '0 /^(const )?fuse\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_unmount parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_unmount(struct fuse*)
+# to fuse_unmount(const struct fuse*), which is ABI compatible
+name = fuse_unmount
+parameter = '0 /^(const )?fuse\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_remove_signal_handlers parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_remove_signal_handlers(struct fuse_session*)
+# to fuse_remove_signal_handlers(const struct fuse_session*), which is ABI compatible
+name = fuse_remove_signal_handlers
+parameter = '0 /^(const )?fuse_session\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_session_fd parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_session_fd(struct fuse_session*)
+# to fuse_session_fd(const struct fuse_session*), which is ABI compatible
+name = fuse_session_fd
+parameter = '0 /^(const )?fuse_session\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_get_feature_flag parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_get_feature_flag(struct fuse_conn_info*, ...)
+# to fuse_get_feature_flag(const struct fuse_conn_info*, ...), which is ABI compatible
+name = fuse_get_feature_flag
+parameter = '0 /^(const )?fuse_conn_info\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_apply_conn_info_opts parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_apply_conn_info_opts(struct fuse_conn_info_opts*, ...)
+# to fuse_apply_conn_info_opts(const struct fuse_conn_info_opts*, ...), which is ABI compatible
+name = fuse_apply_conn_info_opts
+parameter = '0 /^(const )?fuse_conn_info_opts\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_loop_cfg_convert parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_loop_cfg_convert(..., struct fuse_loop_config_v1*)
+# to fuse_loop_cfg_convert(..., const struct fuse_loop_config_v1*), which is ABI compatible
+name = fuse_loop_cfg_convert
+parameter = '1 /^(const )?fuse_loop_config_v1\\*/
+change_kind = function-subtype-change
+
+[suppress_function]
+# Suppress const qualification changes to fuse_session_new_versioned parameter
+# Adding const to pointer parameters is ABI-compatible (compile-time only)
+# The function signature changed from fuse_session_new_versioned(..., struct libfuse_version*, ...)
+# to fuse_session_new_versioned(..., const struct libfuse_version*, ...), which is ABI compatible
+name = fuse_session_new_versioned
+parameter = '3 /^(const )?libfuse_version\\*/
+change_kind = function-subtype-change
+
+[suppress_type]
+# Suppress struct fuse_session size change - unrelated to const changes
+# This is a pre-existing change in the branch
+name = fuse_session
+change_kind = size-change

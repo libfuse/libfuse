@@ -360,7 +360,7 @@ static int check_is_mount_child(void *p)
 	const char *procmounts = "/proc/mounts";
 	int found;
 	FILE *fp;
-	struct mntent *entp;
+	const struct mntent *entp;
 	int count;
 
 	res = mount("", "/", "", MS_PRIVATE | MS_REC, NULL);
@@ -574,7 +574,7 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
 
 static int count_fuse_fs_mtab(void)
 {
-	struct mntent *entp;
+	const struct mntent *entp;
 	int count = 0;
 	const char *mtab = _PATH_MOUNTED;
 	FILE *fp = setmntent(mtab, "r");
@@ -695,7 +695,7 @@ static void strip_line(char *line)
 		memmove(line, s, strlen(s)+1);
 }
 
-static void parse_line(char *line, int linenum)
+static void parse_line(const char *line, int linenum)
 {
 	int tmp;
 	if (strcmp(line, "user_allow_other") == 0)
@@ -834,7 +834,7 @@ static int add_option(char **optsp, const char *opt, unsigned expand)
 	return 0;
 }
 
-static int get_mnt_opts(int flags, char *opts, char **mnt_optsp)
+static int get_mnt_opts(int flags, const char *opts, char **mnt_optsp)
 {
 	int i;
 	int l;
@@ -984,7 +984,9 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 				    sscanf(utsname.release, "%u.%u",
 					   &kmaj, &kmin) == 2 &&
 				    (kmaj > 2 || (kmaj == 2 && kmin > 4))) {
-					fprintf(stderr, "%s: note: 'large_read' mount option is deprecated for %i.%i kernels\n", progname, kmaj, kmin);
+					fprintf(stderr,
+						"%s: note: 'large_read' mount option is deprecated for %u.%u kernels\n",
+						progname, kmaj, kmin);
 					skip_option = 1;
 				}
 			}

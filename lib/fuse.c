@@ -918,9 +918,9 @@ static int lookup_path_in_cache(struct fuse *f,
 
 	int err = 0;
 	char *save_ptr;
-	char *path_element = strtok_r(tmp, "/", &save_ptr);
+	const char *path_element = strtok_r(tmp, "/", &save_ptr);
 	while (path_element != NULL) {
-		struct node *node = lookup_node(f, ino, path_element);
+		const struct node *node = lookup_node(f, ino, path_element);
 		if (node == NULL) {
 			err = -ENOENT;
 			break;
@@ -970,7 +970,7 @@ static char *add_name(char **buf, unsigned *bufsize, char *s, const char *name)
 }
 
 static void unlock_path(struct fuse *f, fuse_ino_t nodeid, struct node *wnode,
-			struct node *end)
+			const struct node *end)
 {
 	struct node *node;
 
@@ -1596,15 +1596,15 @@ static inline void fuse_finish_interrupt(struct fuse *f, fuse_req_t req,
 		fuse_do_finish_interrupt(f, req, d);
 }
 
-static inline void fuse_prepare_interrupt(struct fuse *f, fuse_req_t req,
+static inline void fuse_prepare_interrupt(const struct fuse *f, fuse_req_t req,
 					  struct fuse_intr_data *d)
 {
 	if (f->conf.intr)
 		fuse_do_prepare_interrupt(req, d);
 }
 
-static const char* file_info_string(struct fuse_file_info *fi,
-			      char* buf, size_t len)
+static const char *file_info_string(const struct fuse_file_info *fi,
+				    char *buf, size_t len)
 {
 	if(fi == NULL)
 		return "NULL";
@@ -1620,10 +1620,10 @@ int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf,
 		return -ENOSYS;
 
 	if (fs->debug) {
-		char buf[10];
+		char fi_str[10];
 
 		fuse_log(FUSE_LOG_DEBUG, "getattr[%s] %s\n",
-			file_info_string(fi, buf, sizeof(buf)),
+			file_info_string(fi, fi_str, sizeof(fi_str)),
 			path);
 	}
 	return fs->op.getattr(path, buf, fi);
@@ -2387,7 +2387,7 @@ int fuse_fs_syncfs(struct fuse_fs *fs, const char *path)
 
 static int is_open(struct fuse *f, fuse_ino_t dir, const char *name)
 {
-	struct node *node;
+	const struct node *node;
 	int isopen = 0;
 	pthread_mutex_lock(&f->lock);
 	node = lookup_node(f, dir, name);
@@ -2401,13 +2401,13 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 			 char *newname, size_t bufsize)
 {
 	struct stat buf;
-	struct node *node;
-	struct node *newnode;
 	char *newpath;
 	int res;
 	int failctr = 10;
 
 	do {
+		const struct node *node;
+		const struct node *newnode;
 		pthread_mutex_lock(&f->lock);
 		node = lookup_node(f, dir, oldname);
 		if (node == NULL) {
@@ -2568,10 +2568,9 @@ static void fuse_freecontext(void *data)
 
 static int fuse_create_context_key(void)
 {
-	int err = 0;
 	pthread_mutex_lock(&fuse_context_lock);
 	if (!fuse_context_ref) {
-		err = pthread_key_create(&fuse_context_key, fuse_freecontext);
+		int err = pthread_key_create(&fuse_context_key, fuse_freecontext);
 		if (err) {
 			fuse_log(FUSE_LOG_ERR, "fuse: failed to create thread specific key: %s\n",
 				strerror(err));
@@ -2830,8 +2829,7 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	if (!err) {
 		struct fuse_intr_data d;
 		fuse_prepare_interrupt(f, req, &d);
-		err = 0;
-		if (!err && (valid & FUSE_SET_ATTR_MODE))
+		if (valid & FUSE_SET_ATTR_MODE)
 			err = fuse_fs_chmod(f->fs, path, attr->st_mode, fi);
 		if (!err && (valid & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID))) {
 			uid_t uid = (valid & FUSE_SET_ATTR_UID) ?
@@ -3179,7 +3177,7 @@ static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_intr_data d;
-	struct fuse_entry_param e;
+	struct fuse_entry_param e = {0};
 	char *path;
 	int err;
 
@@ -3466,7 +3464,7 @@ static int extend_contents(struct fuse_dh *dh, unsigned minsize)
 }
 
 static int fuse_add_direntry_to_dh(struct fuse_dh *dh, const char *name,
-				   struct stat *st, enum fuse_fill_dir_flags flags)
+				   const struct stat *st, enum fuse_fill_dir_flags flags)
 {
 	struct fuse_direntry *de;
 
@@ -3494,7 +3492,7 @@ static int fuse_add_direntry_to_dh(struct fuse_dh *dh, const char *name,
 static fuse_ino_t lookup_nodeid(struct fuse *f, fuse_ino_t parent,
 				const char *name)
 {
-	struct node *node;
+	const struct node *node;
 	fuse_ino_t res = FUSE_UNKNOWN_INO;
 
 	pthread_mutex_lock(&f->lock);
@@ -3580,7 +3578,6 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 		.ino = 0,
 	};
 	struct fuse *f = dh->fuse;
-	int res;
 
 	if ((flags & ~FUSE_FILL_DIR_PLUS) != 0) {
 		dh->error = -EIO;
@@ -3619,7 +3616,8 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 
 		if (statp && (flags & FUSE_FILL_DIR_PLUS)) {
 			if (!is_dot_or_dotdot(name)) {
-				res = do_lookup(f, dh->nodeid, name, &e);
+				int res = do_lookup(f, dh->nodeid, name, &e);
+
 				if (res) {
 					dh->error = res;
 					return 1;
@@ -3751,7 +3749,7 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 }
 
 static void fuse_readdir_common(fuse_req_t req, fuse_ino_t ino, size_t size,
-				off_t off, struct fuse_file_info *llfi,
+				off_t off, const struct fuse_file_info *llfi,
 				enum fuse_readdir_flags flags)
 {
 	struct fuse *f = req_fuse_prepare(req);
@@ -4101,7 +4099,7 @@ static void flock_to_lock(struct flock *flock, struct lock *lock)
 	lock->pid = flock->l_pid;
 }
 
-static void lock_to_flock(struct lock *lock, struct flock *flock)
+static void lock_to_flock(const struct lock *lock, struct flock *flock)
 {
 	flock->l_type = lock->type;
 	flock->l_start = lock->start;
@@ -4203,7 +4201,7 @@ static void fuse_lib_getlk(fuse_req_t req, fuse_ino_t ino,
 {
 	int err;
 	struct lock l;
-	struct lock *conflict;
+	const struct lock *conflict;
 	struct fuse *f = req_fuse(req);
 
 	flock_to_lock(lock, &l);
@@ -4529,7 +4527,6 @@ int fuse_clean_cache(struct fuse *f)
 {
 	struct node_lru *lnode;
 	struct list_head *curr, *next;
-	struct node *node;
 	struct timespec now;
 
 	pthread_mutex_lock(&f->lock);
@@ -4537,6 +4534,7 @@ int fuse_clean_cache(struct fuse *f)
 	curr_time(&now);
 
 	for (curr = f->lru_table.next; curr != &f->lru_table; curr = next) {
+		struct node *node;
 		double age;
 
 		next = curr->next;
@@ -4616,7 +4614,7 @@ int fuse_notify_poll(struct fuse_pollhandle *ph)
 	return fuse_lowlevel_notify_poll(ph);
 }
 
-struct fuse_session *fuse_get_session(struct fuse *f)
+struct fuse_session *fuse_get_session(const struct fuse *f)
 {
 	return f->se;
 }
@@ -4698,9 +4696,9 @@ int fuse_loop_mt_312(struct fuse *f, struct fuse_loop_config *config)
 	return res;
 }
 
-int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config_v1 *config_v1);
+int fuse_loop_mt_32(struct fuse *f, const struct fuse_loop_config_v1 *config_v1);
 FUSE_SYMVER("fuse_loop_mt_32", "fuse_loop_mt@FUSE_3.2")
-int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config_v1 *config_v1)
+int fuse_loop_mt_32(struct fuse *f, const struct fuse_loop_config_v1 *config_v1)
 {
 	struct fuse_loop_config *config = fuse_loop_cfg_create();
 	if (config == NULL)
@@ -4988,12 +4986,11 @@ static int node_table_init(struct node_table *t)
 static void *fuse_prune_nodes(void *fuse)
 {
 	struct fuse *f = fuse;
-	int sleep_time;
 
 	fuse_set_thread_name("fuse_prune_nodes");
 
 	while(1) {
-		sleep_time = fuse_clean_cache(f);
+		int sleep_time = fuse_clean_cache(f);
 		sleep(sleep_time);
 	}
 	return NULL;
@@ -5108,7 +5105,7 @@ struct fuse *_fuse_new_31(struct fuse_args *args,
 	/* not declared globally, to restrict usage of this function */
 	struct fuse_session *fuse_session_new_versioned(
 		struct fuse_args *args, const struct fuse_lowlevel_ops *op,
-		size_t op_size, struct libfuse_version *version,
+		size_t op_size, const struct libfuse_version *version,
 		void *userdata);
 	f->se = fuse_session_new_versioned(args, &llop, sizeof(llop), version,
 					   f);
@@ -5286,12 +5283,14 @@ void fuse_destroy(struct fuse *f)
 	fuse_delete_context_key();
 }
 
-int fuse_mount(struct fuse *f, const char *mountpoint) {
+int fuse_mount(const struct fuse *f, const char *mountpoint)
+{
 	return fuse_session_mount(fuse_get_session(f), mountpoint);
 }
 
 
-void fuse_unmount(struct fuse *f) {
+void fuse_unmount(const struct fuse *f)
+{
 	fuse_session_unmount(fuse_get_session(f));
 }
 

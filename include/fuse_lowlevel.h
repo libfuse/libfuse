@@ -1749,7 +1749,8 @@ int fuse_reply_lseek(fuse_req_t req, off_t off);
  * @param attr_timeout	validity timeout (in seconds) for the attributes
  * @return zero for success, -errno for failure to send reply
  */
-int fuse_reply_statx(fuse_req_t req, int flags, struct statx *statx, double attr_timeout);
+int fuse_reply_statx(fuse_req_t req, int flags, const struct statx *statx,
+		     double attr_timeout);
 
 /* ----------------------------------------------------------- *
  * Notification						       *
@@ -2133,7 +2134,7 @@ int fuse_parse_cmdline_312(struct fuse_args *args,
 struct fuse_session *
 fuse_session_new_versioned(struct fuse_args *args,
 			   const struct fuse_lowlevel_ops *op, size_t op_size,
-			   struct libfuse_version *version, void *userdata);
+			   const struct libfuse_version *version, void *userdata);
 
 /**
  * Create a low level session.
@@ -2403,7 +2404,7 @@ void fuse_session_stop_teardown_watchdog(void *data);
  * @param se the session
  * @return a file descriptor
  */
-int fuse_session_fd(struct fuse_session *se);
+int fuse_session_fd(const struct fuse_session *se);
 
 /**
  * Process a raw request supplied in a generic buffer
