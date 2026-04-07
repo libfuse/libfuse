@@ -4704,6 +4704,7 @@ void *fuse_session_start_teardown_watchdog(struct fuse_session *se,
 	tt->timeout_sec = timeout_sec;
 	tt->timeout_cb = cb;
 	tt->cb_data = cb_data;
+	tt->eventfd = -1;
 	pthread_mutex_init(&tt->lock, NULL);
 	tt->session_destructed = false;
 	if (se->timeout_thread) {
