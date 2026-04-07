@@ -4830,8 +4830,10 @@ static void print_module_help(const char *name,
 {
 	struct fuse_args a = FUSE_ARGS_INIT(0, NULL);
 	if (fuse_opt_add_arg(&a, "") == -1 ||
-	    fuse_opt_add_arg(&a, "-h") == -1)
+	    fuse_opt_add_arg(&a, "-h") == -1) {
+		fuse_opt_free_args(&a);
 		return;
+	}
 	printf("\nOptions for %s module:\n", name);
 	(*fac)(&a, NULL);
 	fuse_opt_free_args(&a);
