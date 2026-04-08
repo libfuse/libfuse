@@ -4,6 +4,54 @@
 
 set -e
 
+# Package lists - define once, reuse everywhere
+PACKAGES_CORE=(
+    gcc
+    meson
+    ninja-build
+    libudev-dev
+    liburing-dev
+    libnuma-dev
+    pkg-config
+    python3
+    python3-pip
+)
+
+PACKAGES_FULL=(
+    "${PACKAGES_CORE[@]}"
+    clang
+    doxygen
+    gcc-10
+    gcc-9
+    valgrind
+    gcc-multilib
+    g++-multilib
+    libc6-dev-i386
+    libpcap0.8-dev:i386
+    libudev-dev:i386
+    pkg-config:i386
+    python3-pytest
+)
+
+PACKAGES_CODECHECKER=(
+    "${PACKAGES_CORE[@]}"
+    jq
+)
+
+PACKAGES_ABICHECK=(
+    "${PACKAGES_CORE[@]}"
+    abigail-tools
+    clang
+)
+
+PACKAGES_CODEQL=(
+    "${PACKAGES_CORE[@]}"
+)
+
+PACKAGES_CPPCHECK=(
+    cppcheck
+)
+
 usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
@@ -31,17 +79,20 @@ EOF
     exit 0
 }
 
+install_packages() {
+    local packages=("$@")
+    if [ ${#packages[@]} -eq 0 ]; then
+        echo "No packages to install"
+        return 0
+    fi
+
+    sudo apt-get update
+    sudo apt-get install -y "${packages[@]}"
+}
+
 install_minimal() {
     echo "Installing minimal build dependencies..."
-    sudo apt-get update
-    sudo apt-get install -y \
-        gcc \
-        meson \
-        ninja-build \
-        python3 \
-        python3-pip \
-        libudev-dev \
-        pkg-config
+    install_packages "${PACKAGES_CORE[@]}"
 }
 
 install_full() {
@@ -51,26 +102,7 @@ install_full() {
     echo "Adding i386 architecture..."
     sudo dpkg --add-architecture i386
 
-    sudo apt-get update
-    sudo apt-get install -y \
-        clang \
-        doxygen \
-        gcc \
-        gcc-10 \
-        gcc-9 \
-        valgrind \
-        gcc-multilib \
-        g++-multilib \
-        libc6-dev-i386 \
-        libpcap0.8-dev:i386 \
-        libudev-dev:i386 \
-        pkg-config:i386 \
-        liburing-dev \
-        libnuma-dev \
-        meson \
-        ninja-build \
-        python3 \
-        python3-pip
+    install_packages "${PACKAGES_FULL[@]}"
 
     echo "Installing Python test dependencies..."
     pip install -r requirements.txt
@@ -78,15 +110,7 @@ install_full() {
 
 install_codechecker() {
     echo "Installing CodeChecker dependencies..."
-    sudo apt-get update
-    sudo apt-get install -y \
-        gcc \
-        meson \
-        ninja-build \
-        python3 \
-        python3-pip \
-        libudev-dev \
-        jq
+    install_packages "${PACKAGES_CODECHECKER[@]}"
 
     echo "Installing Python packages for CodeChecker..."
     pip install -r requirements.txt
@@ -94,34 +118,17 @@ install_codechecker() {
 
 install_abicheck() {
     echo "Installing ABI check dependencies..."
-    sudo apt-get update
-    sudo apt-get install -y \
-        abigail-tools \
-        clang \
-        gcc \
-        liburing-dev \
-        libnuma-dev \
-        meson \
-        ninja-build \
-        python3 \
-        python3-pip
+    install_packages "${PACKAGES_ABICHECK[@]}"
 }
 
 install_codeql() {
     echo "Installing CodeQL dependencies..."
-    sudo apt-get update
-    sudo apt-get install -y \
-        meson \
-        ninja-build \
-        python3-pytest \
-        liburing-dev \
-        libnuma-dev
+    install_packages "${PACKAGES_CODEQL[@]}"
 }
 
 install_cppcheck() {
     echo "Installing cppcheck..."
-    sudo apt-get update
-    sudo apt-get install -y cppcheck
+    install_packages "${PACKAGES_CPPCHECK[@]}"
 }
 
 # Default to full installation
