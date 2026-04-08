@@ -23,6 +23,7 @@ GITHUB_WORKFLOW=0
 ENABLE_CTU=1
 ENABLE_GCC=0
 ENABLE_CPPCHECK=0
+ENABLE_INFER=0
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -55,6 +56,10 @@ while [[ $# -gt 0 ]]; do
             ENABLE_CPPCHECK=1
             shift
             ;;
+        --infer)
+            ENABLE_INFER=1
+            shift
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -73,6 +78,8 @@ while [[ $# -gt 0 ]]; do
 "  --gcc                   Enable GCC static analyzer (requires GCC 13+, CodeChecker only)"
             echo \
 "  --cppcheck              Enable cppcheck analyzer (CodeChecker only)"
+            echo \
+"  --infer                 Enable Facebook Infer analyzer (CodeChecker only)"
             exit 0
             ;;
         *)
@@ -94,8 +101,13 @@ if [ $ENABLE_CPPCHECK -eq 1 ] && [ $USE_CODECHECKER -eq 0 ]; then
     exit 1
 fi
 
-if [ $ENABLE_GCC -eq 1 ] && [ $ENABLE_CPPCHECK -eq 1 ]; then
-    echo "[ERROR] Cannot use both --gcc and --cppcheck at the same time"
+if [ $ENABLE_INFER -eq 1 ] && [ $USE_CODECHECKER -eq 0 ]; then
+    echo "[ERROR] --infer option requires --codechecker"
+    exit 1
+fi
+
+if [ $(( ENABLE_GCC + ENABLE_CPPCHECK + ENABLE_INFER )) -gt 1 ]; then
+    echo "[ERROR] Cannot use more than one of --gcc, --cppcheck, --infer at the same time"
     exit 1
 fi
 
@@ -369,6 +381,40 @@ run_codechecker_cppcheck()
     parse_codechecker_results "$codechecker"
 }
 
+# Run analysis with CodeChecker using Facebook Infer
+run_codechecker_infer()
+{
+    echo_info "Running CodeChecker with Facebook Infer analyzer..."
+
+    # Check if infer is available
+    if ! command -v infer &> /dev/null; then
+        echo_error "infer not found but --infer was specified"
+        exit 1
+    fi
+
+    local infer_version=$(infer --version 2>&1 | head -1)
+    echo_info "Found $infer_version"
+
+    local codechecker=$(detect_codechecker)
+
+    # Work in build directory
+    cd "$BUILD_DIR"
+
+    rm -rf codechecker-reports codechecker-html
+    mkdir -p codechecker-reports
+
+    # Build CodeChecker analyze command for infer
+    local cmd="$codechecker analyze compile_commands.json -o codechecker-reports"
+    cmd="$cmd --analyzers infer"
+
+    # Disable checkers with excessive false positives
+    cmd="$cmd --disable infer-dead-store"
+
+    eval $cmd
+
+    parse_codechecker_results "$codechecker"
+}
+
 echo_info "Static Analysis Configuration"
 
 # Display tool selection
@@ -391,6 +437,8 @@ if [ $USE_CODECHECKER -eq 1 ]; then
         echo_info "Analyzer: GCC"
     elif [ $ENABLE_CPPCHECK -eq 1 ]; then
         echo_info "Analyzer: cppcheck"
+    elif [ $ENABLE_INFER -eq 1 ]; then
+        echo_info "Analyzer: Infer"
     else
         echo_info "Analyzer: Clang"
     fi
@@ -403,6 +451,8 @@ if [ $USE_CODECHECKER -eq 1 ]; then
         run_codechecker_gcc
     elif [ $ENABLE_CPPCHECK -eq 1 ]; then
         run_codechecker_cppcheck
+    elif [ $ENABLE_INFER -eq 1 ]; then
+        run_codechecker_infer
     else
         run_codechecker_clang
     fi
