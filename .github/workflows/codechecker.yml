@@ -47,6 +47,45 @@ jobs:
         path: builddir/codechecker-reports/**
         if-no-files-found: ignore
 
+  infer-codechecker:
+    name: Infer Analysis with CodeChecker
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+    - name: Install dependencies
+      run: |
+        ./.github/workflows/install-ubuntu-dependencies.sh --codechecker --infer
+
+    - name: Setup build
+      run: |
+        meson setup builddir -Dexamples=false
+        ninja -C builddir -t compdb > compile_commands.json
+
+    - name: Run Infer Analysis with CodeChecker
+      run: |
+        ./.github/workflows/codechecker.sh --infer --codechecker --github-workflow --build-dir builddir
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: always()
+      uses: github/codeql-action/upload-sarif@34950e1b113b30df4edee1a6d3a605242df0c40b # v4.35.1
+      with:
+        sarif_file: builddir/results.sarif
+        category: codechecker-infer
+
+    - name: Upload CodeChecker reports
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: codechecker-infer-reports
+        path: builddir/codechecker-reports/**
+        if-no-files-found: ignore
+
   cppcheck-codechecker:
     name: cppcheck Analysis with CodeChecker
     runs-on: ubuntu-latest

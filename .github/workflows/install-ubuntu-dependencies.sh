@@ -65,6 +65,7 @@ OPTIONS:
     --cppcheck      Install cppcheck for static analysis
     --abicheck      Install dependencies for ABI compatibility checks
     --codeql        Install dependencies for CodeQL analysis
+    --infer         Install Facebook Infer static analyzer
     -h, --help      Show this help message
 
 EXAMPLES:
@@ -74,6 +75,7 @@ EXAMPLES:
     $0 --cppcheck         # Install cppcheck
     $0 --abicheck         # Install ABI check dependencies
     $0 --codeql           # Install CodeQL dependencies
+    $0 --infer            # Install Infer static analyzer
 
 EOF
     exit 0
@@ -131,9 +133,22 @@ install_cppcheck() {
     install_packages "${PACKAGES_CPPCHECK[@]}"
 }
 
+install_infer() {
+    echo "Installing Facebook Infer..."
+    INFER_VERSION="1.2.0"
+    INFER_TAR="infer-linux-x86_64-v${INFER_VERSION}.tar.xz"
+    curl -sSL \
+        "https://github.com/facebook/infer/releases/download/v${INFER_VERSION}/${INFER_TAR}" \
+        -o /tmp/infer.tar.xz
+    sudo tar -xJf /tmp/infer.tar.xz -C /opt
+    sudo ln -sf "/opt/infer-linux-x86_64-v${INFER_VERSION}/bin/infer" /usr/local/bin/infer
+    rm /tmp/infer.tar.xz
+}
+
 # Default to full installation
 MODE="full"
 INSTALL_CPPCHECK=0
+INSTALL_INFER=0
 
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -160,6 +175,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --codeql)
             MODE="codeql"
+            shift
+            ;;
+        --infer)
+            INSTALL_INFER=1
             shift
             ;;
         -h|--help)
@@ -192,9 +211,12 @@ case $MODE in
         ;;
 esac
 
-# Install cppcheck if requested
+# Install optional tools if requested
 if [ $INSTALL_CPPCHECK -eq 1 ]; then
     install_cppcheck
+fi
+if [ $INSTALL_INFER -eq 1 ]; then
+    install_infer
 fi
 
 echo ""
