@@ -36,7 +36,6 @@ jobs:
         id: prev_release
         run: |
           cd current
-          chmod +x .github/workflows/find_previous_release_tag.sh
           PREV_TAG=$(.github/workflows/find_previous_release_tag.sh)
           echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
 
@@ -45,31 +44,15 @@ jobs:
           path: previous
           ref: ${{ steps.prev_release.outputs.prev_tag }}
 
-      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.12'
 
-      - name: Build current
-        working-directory: current
+      - name: Install Python dependencies
         run: |
-          pip install -r requirements.txt
-          meson setup build --buildtype=debug
-          meson compile -C build
+          pip install -r current/requirements.txt
 
-      - name: Build previous
-        working-directory: previous
+      - name: Run ABI check
         run: |
           echo "Previous release tag: ${{ steps.prev_release.outputs.prev_tag }}"
-          echo "Commit-id of previous release: $(git show HEAD)"
-          pip install -r requirements.txt
-          meson setup build --buildtype=debug
-          meson compile -C build
-
-      - name: Run abidiff
-        run: abidiff
-          --no-added-syms
-          --suppressions current/.github/workflows/abidiff_suppressions.abignore
-          --headers-dir1 previous/include/
-          --headers-dir2 current/include/
-          previous/build/lib/libfuse3.so
-          current/build/lib/libfuse3.so
+          current/.github/workflows/abicheck.sh --current-dir current --previous-dir previous

@@ -218,7 +218,7 @@ void fuse_chan_put(struct fuse_chan *ch);
 struct mount_opts *parse_mount_opts(struct fuse_args *args);
 void destroy_mount_opts(struct mount_opts *mo);
 void fuse_mount_version(void);
-unsigned get_max_read(struct mount_opts *o);
+unsigned int get_max_read(const struct mount_opts *o);
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
 
@@ -252,7 +252,7 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
  *
  * @return negative standard error code or 0 on success
  */
-int fuse_loop_cfg_verify(struct fuse_loop_config *config);
+int fuse_loop_cfg_verify(const struct fuse_loop_config *config);
 
 
 /*

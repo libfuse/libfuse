@@ -11,7 +11,7 @@
 
 static void print_conn_info(const char *prefix, struct fuse_conn_info *conn)
 {
-	struct fuse_session *se = container_of(conn, struct fuse_session, conn);
+	const struct fuse_session *se = container_of(conn, struct fuse_session, conn);
 
 	printf("%s: want=0x%" PRIx32 " want_ext=0x%" PRIx64
 		" want_default=0x%" PRIx32 " want_ext_default=0x%" PRIx64 "\n",

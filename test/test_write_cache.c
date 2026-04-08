@@ -155,7 +155,7 @@ static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 	write_cnt++;
 
 	if (size != expected && !options.writeback)
-		fprintf(stderr, "ERROR: Expected %zd bytes, got %zd\n!",
+		fprintf(stderr, "ERROR: Expected %zu bytes, got %zu\n!",
 			expected, size);
 	else
 		got_write = 1;
@@ -215,19 +215,20 @@ static void *run_fs(void *data)
 	return NULL;
 }
 
-static void test_fs(char *mountpoint)
+static void test_fs(const char *mountpoint)
 {
 	char fname[PATH_MAX];
 	char *buf;
 	const size_t iosize = options.data_size;
 	const size_t dsize = options.data_size * WRITE_SYSCALLS;
-	int fd, rofd;
+	int fd;
 	pthread_t rofd_thread;
 	off_t off = 0;
 
 	buf = malloc(dsize);
 	assert(buf != NULL);
-	assert((fd = open("/dev/urandom", O_RDONLY)) != -1);
+	fd = open("/dev/urandom", O_RDONLY);
+	assert(fd != -1);
 	assert(read(fd, buf, dsize) == dsize);
 	close(fd);
 
@@ -240,7 +241,7 @@ static void test_fs(char *mountpoint)
 
 	if (options.delay_ms) {
 		/* Verify that close(rofd) does not block waiting for pending writes */
-		rofd = open(fname, O_RDONLY);
+		int rofd = open(fname, O_RDONLY);
 		assert(pthread_create(&rofd_thread, NULL, close_rofd,
 				      (void *)(long)rofd) == 0);
 		/* Give close_rofd time to start */

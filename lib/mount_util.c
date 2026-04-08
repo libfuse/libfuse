@@ -204,10 +204,8 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 int fuse_mnt_umount(const char *progname, const char *abs_mnt,
 		    const char *rel_mnt, int lazy)
 {
-	int res;
-
 	if (!mtab_needs_update(abs_mnt)) {
-		res = umount2(rel_mnt, lazy ? 2 : 0);
+		int res = umount2(rel_mnt, lazy ? 2 : 0);
 		if (res == -1)
 			fprintf(stderr, "%s: failed to unmount %s: %s\n",
 				progname, abs_mnt, strerror(errno));
@@ -280,7 +278,7 @@ char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 	char *copy;
 	char *dst;
 	char *end;
-	char *lastcomp;
+	const char *lastcomp;
 	const char *toresolv;
 
 	if (!orig[0]) {
@@ -360,7 +358,7 @@ int fuse_mnt_check_fuseblk(void)
 
 int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 {
-	int fd = -1;
+	unsigned int fd;
 	int len = 0;
 
 	if (mountpoint == NULL) {
@@ -370,7 +368,11 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 
 	if (sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len) == 1 &&
 	    len == strlen(mountpoint)) {
-		return fd;
+		if (fd > INT_MAX) {
+			fprintf(stderr, "%s: fd=%u > INT_MAX\n", __func__, fd);
+			return -1;
+		}
+		return (int)fd;
 	}
 
 	return -1;

@@ -162,7 +162,7 @@ static void *fuse_do_work(void *data)
 		 * are not created on a burst of FORGET messages
 		 */
 		if (!(w->fbuf.flags & FUSE_BUF_IS_FD)) {
-			struct fuse_in_header *in = w->fbuf.mem;
+			const struct fuse_in_header *in = w->fbuf.mem;
 
 			if (in->opcode == FUSE_FORGET ||
 			    in->opcode == FUSE_BATCH_FORGET)
@@ -256,7 +256,7 @@ int fuse_start_thread(pthread_t *thread_id, void *(*func)(void *), void *arg)
 	return 0;
 }
 
-static int fuse_clone_chan_fd_default(struct fuse_session *se)
+static int fuse_clone_chan_fd_default(const struct fuse_session *se)
 {
 	int res;
 	int clonefd;
@@ -429,15 +429,14 @@ int err;
 
 	if (created_config) {
 		fuse_loop_cfg_destroy(config);
-		config = NULL;
 	}
 
 	return err;
 }
 
-int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config_v1 *config_v1);
+int fuse_session_loop_mt_32(struct fuse_session *se, const struct fuse_loop_config_v1 *config_v1);
 FUSE_SYMVER("fuse_session_loop_mt_32", "fuse_session_loop_mt@FUSE_3.2")
-int fuse_session_loop_mt_32(struct fuse_session *se, struct fuse_loop_config_v1 *config_v1)
+int fuse_session_loop_mt_32(struct fuse_session *se, const struct fuse_loop_config_v1 *config_v1)
 {
 	int err;
 	struct fuse_loop_config *config = NULL;
@@ -495,7 +494,7 @@ void fuse_loop_cfg_destroy(struct fuse_loop_config *config)
 	free(config);
 }
 
-int fuse_loop_cfg_verify(struct fuse_loop_config *config)
+int fuse_loop_cfg_verify(const struct fuse_loop_config *config)
 {
 	if (config->version_id != FUSE_LOOP_MT_V2_IDENTIFIER)
 		return -EINVAL;
@@ -504,7 +503,7 @@ int fuse_loop_cfg_verify(struct fuse_loop_config *config)
 }
 
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
-			   struct fuse_loop_config_v1 *v1_conf)
+			   const struct fuse_loop_config_v1 *v1_conf)
 {
 	fuse_loop_cfg_set_idle_threads(config, v1_conf->max_idle_threads);
 

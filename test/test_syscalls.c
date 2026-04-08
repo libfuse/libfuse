@@ -97,14 +97,16 @@ static void __start_test(const char *fmt, ...)
 {
 	unsigned int n;
 	va_list ap;
-	n = sprintf(testname, "%3i [", testnum);
+	n = snprintf(testname, sizeof(testname), "%3u [", testnum);
 	va_start(ap, fmt);
-	n += vsprintf(testname + n, fmt, ap);
+	if (n < sizeof(testname))
+		n += vsnprintf(testname + n, sizeof(testname) - n, fmt, ap);
 	va_end(ap);
-	sprintf(testname + n, "]");
+	if (n < sizeof(testname))
+		snprintf(testname + n, sizeof(testname) - n, "]");
 	// Use dedicated testfile per test
-	sprintf(testfile, "%s/testfile.%d", basepath, testnum);
-	sprintf(testfile_r, "%s/testfile.%d", basepath_r, testnum);
+	snprintf(testfile, sizeof(testfile), "%s/testfile.%u", basepath, testnum);
+	snprintf(testfile_r, sizeof(testfile_r), "%s/testfile.%u", basepath_r, testnum);
 	if (testnum > MAX_TESTS) {
 		fprintf(stderr, "%s - too many tests\n", testname);
 		exit(1);
@@ -153,7 +155,7 @@ static int check_testfile_size(const char *path, int len)
 	return check_size(path, len);
 }
 
-static int st_check_type(struct stat *st, mode_t type)
+static int st_check_type(const struct stat *st, mode_t type)
 {
 	if ((st->st_mode & S_IFMT) != type) {
 		ERROR("type 0%o instead of 0%o", st->st_mode & S_IFMT, type);
@@ -173,7 +175,7 @@ static int check_type(const char *path, mode_t type)
 	return st_check_type(&stbuf, type);
 }
 
-static int st_check_mode(struct stat *st, mode_t mode)
+static int st_check_mode(const struct stat *st, mode_t mode)
 {
 	if ((st->st_mode & ALLPERMS) != mode) {
 		ERROR("mode 0%o instead of 0%o", st->st_mode & ALLPERMS,
@@ -366,14 +368,13 @@ static int fcheck_data(int fd, const char *data, int offset,
 		       unsigned len)
 {
 	char buf[4096];
-	int res;
 	if (lseek(fd, offset, SEEK_SET) == (off_t) -1) {
 		PERROR("lseek");
 		return -1;
 	}
 	while (len) {
 		int rdlen = len < sizeof(buf) ? len : sizeof(buf);
-		res = read(fd, buf, rdlen);
+		int res = read(fd, buf, rdlen);
 		if (res == -1) {
 			PERROR("read");
 			return -1;
@@ -566,7 +567,6 @@ static int check_unlinked_testfile(int fd)
 // Check recorded testfiles after all tests completed
 static int check_unlinked_testfiles(void)
 {
-	int fd;
 	int res, err = 0;
 	int num = testnum;
 
@@ -575,7 +575,7 @@ static int check_unlinked_testfiles(void)
 
 	testnum = 0;
 	while (testnum < num) {
-		fd = next_test->fd;
+		int fd = next_test->fd;
 		start_test("check_unlinked_testfile");
 		if (fd == -1)
 			continue;
@@ -604,7 +604,7 @@ static int cleanup_dir(const char *path, const char **dir_files, int quiet)
 	for (i = 0; dir_files[i]; i++) {
 		int res;
 		char fpath[1280];
-		sprintf(fpath, "%s/%s", path, dir_files[i]);
+		snprintf(fpath, sizeof(fpath), "%s/%s", path, dir_files[i]);
 		res = unlink(fpath);
 		if (res == -1 && !quiet) {
 			PERROR("unlink");
@@ -637,7 +637,7 @@ static int create_dir(const char *path, const char **dir_files)
 
 	for (i = 0; dir_files[i]; i++) {
 		char fpath[1280];
-		sprintf(fpath, "%s/%s", path, dir_files[i]);
+		snprintf(fpath, sizeof(fpath), "%s/%s", path, dir_files[i]);
 		res = create_file(fpath, "", 0);
 		if (res == -1) {
 			cleanup_dir(path, dir_files, 1);
@@ -774,7 +774,7 @@ static int test_seekdir(void)
 	int i;
 	int res;
 	DIR *dp;
-	struct dirent *de = NULL;
+	const struct dirent *de = NULL;
 
 	start_test("seekdir");
 	res = create_dir(testdir, testdir_files);
@@ -908,8 +908,6 @@ static int test_copy_file_range(void)
 	}
 	res = check_nonexist(testfile2);
 	if (res == -1)
-		return -1;
-	if (err)
 		return -1;
 
 	success();
@@ -2137,25 +2135,31 @@ int main(int argc, char *argv[])
 			}
 		}
 	}
-	assert(strlen(basepath) < 512);
-	assert(strlen(basepath_r) < 512);
 	if (basepath[0] != '/') {
 		fprintf(stderr, "testdir must be an absolute path\n");
 		return 1;
 	}
+	if (strlen(basepath) > 1000) {
+		fprintf(stderr, "testdir path is too long\n");
+		return 1;
+	}
+	if (strlen(basepath_r) > 1000) {
+		fprintf(stderr, "realdir path is too long\n");
+		return 1;
+	}
 
-	sprintf(testfile, "%s/testfile", basepath);
-	sprintf(testfile2, "%s/testfile2", basepath);
-	sprintf(testdir, "%s/testdir", basepath);
-	sprintf(testdir2, "%s/testdir2", basepath);
-	sprintf(subfile, "%s/subfile", testdir2);
-	sprintf(testsock, "%s/testsock", basepath);
+	snprintf(testfile, sizeof(testfile), "%s/testfile", basepath);
+	snprintf(testfile2, sizeof(testfile2), "%s/testfile2", basepath);
+	snprintf(testdir, sizeof(testdir), "%s/testdir", basepath);
+	snprintf(testdir2, sizeof(testdir2), "%s/testdir2", basepath);
+	snprintf(subfile, sizeof(subfile), "%s/subfile", testdir2);
+	snprintf(testsock, sizeof(testsock), "%s/testsock", basepath);
 
-	sprintf(testfile_r, "%s/testfile", basepath_r);
-	sprintf(testfile2_r, "%s/testfile2", basepath_r);
-	sprintf(testdir_r, "%s/testdir", basepath_r);
-	sprintf(testdir2_r, "%s/testdir2", basepath_r);
-	sprintf(subfile_r, "%s/subfile", testdir2_r);
+	snprintf(testfile_r, sizeof(testfile_r), "%s/testfile", basepath_r);
+	snprintf(testfile2_r, sizeof(testfile2_r), "%s/testfile2", basepath_r);
+	snprintf(testdir_r, sizeof(testdir_r), "%s/testdir", basepath_r);
+	snprintf(testdir2_r, sizeof(testdir2_r), "%s/testdir2", basepath_r);
+	snprintf(subfile_r, sizeof(subfile_r), "%s/subfile", testdir2_r);
 
 	is_root = (geteuid() == 0);
 
