@@ -17,9 +17,6 @@ struct mount_opts;
 /* Special return value for mount functions to indicate fallback to fusermount3 is needed */
 #define FUSE_MOUNT_FALLBACK_NEEDED (-2)
 
-/* Environment variable for FUSE kernel device */
-#define FUSE_KERN_DEVICE_ENV "FUSE_KERN_DEVICE"
-
 /* Mount options management functions */
 struct mount_opts *parse_mount_opts(struct fuse_args *args);
 void destroy_mount_opts(struct mount_opts *mo);

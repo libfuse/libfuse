@@ -587,6 +587,7 @@ int fuse_kern_mount_prepare(const char *mnt,
 		return -1;
 	}
 
+	/* codeql[cpp/path-injection] devname is verified */
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
@@ -628,6 +629,7 @@ out_close:
 int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
 			 const char *mnt_opts)
 {
+	/* codeql[cpp/path-injection] verification is in the function */
 	const char *devname = fuse_mnt_get_devname();
 
 	return fuse_kern_fsmount(mnt, mo->flags, mo->blkdev, mo->fsname,
@@ -652,7 +654,6 @@ int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
 	char *type = NULL;
 	int res;
 	const char *devname = fuse_mnt_get_devname();
-
 	res = -ENOMEM;
 	source = fuse_mnt_build_source(mo->fsname, mo->subtype, devname);
 	type = fuse_mnt_build_type(mo->blkdev, mo->subtype);

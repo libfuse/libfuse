@@ -36,6 +36,10 @@
 
 #include <sys/param.h>
 
+/* Environment variable for FUSE kernel device */
+#define FUSE_KERN_DEVICE_ENV "FUSE_KERN_DEVICE"
+#define FUSE_DEF_KERN_DEVICE "/dev/fuse"
+
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
 #include <sys/mount.h>
 #ifdef __NetBSD__
@@ -460,8 +464,35 @@ int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 const char *fuse_mnt_get_devname(void)
 {
 	const char *devname = getenv(FUSE_KERN_DEVICE_ENV);
+	struct stat stbuf;
 
-	return devname ? devname : "/dev/fuse";
+	if (!devname)
+		return FUSE_DEF_KERN_DEVICE;
+
+	/* Validation 1: Must start with /dev/ */
+	if (strncmp(devname, "/dev/", 5) != 0) {
+		fprintf(stderr,
+			"fuse: invalid device name from %s: %s (must start with /dev/)\n",
+			FUSE_KERN_DEVICE_ENV, devname);
+		return "/dev/fuse";
+	}
+
+	/* Validation 2: Must be a character device */
+	if (stat(devname, &stbuf) == 0) {
+		if (!S_ISCHR(stbuf.st_mode)) {
+			fprintf(stderr,
+				"fuse: invalid device from %s: %s (not a character device)\n",
+				FUSE_KERN_DEVICE_ENV, devname);
+			return "/dev/fuse";
+		}
+		/* Valid character device */
+		return devname;
+	}
+	/*
+	 * stat() failed - device might not exist yet, but path is valid.
+	 * Let it through and fail later in open() with a better error message.
+	 */
+	return devname;
 }
 
 char *fuse_mnt_build_source(const char *fsname, const char *subtype,
