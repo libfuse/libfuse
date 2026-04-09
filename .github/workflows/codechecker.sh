@@ -370,6 +370,11 @@ run_codechecker_cppcheck()
     # Enable cppcheck checkers
     cmd="$cmd --enable cppcheck"
 
+    # Create a temporary file with cppcheck verbatim arguments
+    local cppcheck_args_file="$(mktemp)"
+    echo "--inline-suppr" > "$cppcheck_args_file"
+    cmd="$cmd --analyzer-config cppcheck:cc-verbatim-args-file=$cppcheck_args_file"
+
     # Disable checkers with excessive false positives
     cmd="$cmd --disable cppcheck-missingIncludeSystem"
     cmd="$cmd --disable cppcheck-constParameterCallback"
@@ -377,6 +382,8 @@ run_codechecker_cppcheck()
     cmd="$cmd --disable cppcheck-unusedStructMember"
 
     eval $cmd
+
+    rm -f cppcheck_args_file
 
     parse_codechecker_results "$codechecker"
 }
