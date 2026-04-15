@@ -3917,6 +3917,7 @@ void fuse_session_destroy(struct fuse_session *se)
 		pthread_mutex_unlock(&se->timeout_thread->lock);
 	}
 
+	free(atomic_exchange(&se->mountpoint, NULL));
 	free(se);
 }
 
