@@ -1319,6 +1319,11 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 			size_t x_mnt_opts_len =  mnt_opts_len+
 						 strlen(x_opts) + 2;
 			char *x_mnt_opts = calloc(1, x_mnt_opts_len);
+			if (!x_mnt_opts) {
+				fprintf(stderr, "%s: failed to allocate memory\n",
+					progname);
+				goto fail_close_fd;
+			}
 
 			if (mnt_opts_len) {
 				strcpy(x_mnt_opts, mnt_opts);
