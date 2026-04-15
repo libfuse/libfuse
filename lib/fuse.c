@@ -4702,7 +4702,7 @@ int fuse_loop_mt_32(struct fuse *f, const struct fuse_loop_config_v1 *config_v1)
 {
 	struct fuse_loop_config *config = fuse_loop_cfg_create();
 	if (config == NULL)
-		return ENOMEM;
+		return -ENOMEM;
 
 	fuse_loop_cfg_convert(config, config_v1);
 
@@ -4721,7 +4721,7 @@ int fuse_loop_mt_31(struct fuse *f, int clone_fd)
 	struct fuse_loop_config *config = fuse_loop_cfg_create();
 
 	if (config == NULL)
-		return ENOMEM;
+		return -ENOMEM;
 
 	fuse_loop_cfg_set_clone_fd(config, clone_fd);
 
