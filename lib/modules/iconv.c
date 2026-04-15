@@ -722,7 +722,7 @@ static struct fuse_fs *iconv_new(struct fuse_args *args,
 		goto out_free;
 	}
 	ic->fromfs = iconv_open(to, from);
-	if (ic->tofs == (iconv_t) -1) {
+	if (ic->fromfs == (iconv_t) -1) {
 		fuse_log(FUSE_LOG_ERR, "fuse-iconv: cannot convert from %s to %s\n",
 			from, to);
 		goto out_iconv_close_to;
