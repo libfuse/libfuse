@@ -1079,6 +1079,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	*typep = type;
 	*mnt_optsp = mnt_opts;
 	free(fsname);
+	free(subtype);
 	free(optbuf);
 
 	return 0;
