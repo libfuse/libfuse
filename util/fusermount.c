@@ -600,7 +600,7 @@ static int get_mtab_opts(int flags, const char *opts, char **mtab_optsp)
 		return -1;
 	/* remove comma from end of opts*/
 	l = strlen(*mtab_optsp);
-	if ((*mtab_optsp)[l-1] == ',')
+	if (l > 0 && (*mtab_optsp)[l-1] == ',')
 		(*mtab_optsp)[l-1] = '\0';
 	if (getuid() != 0) {
 		const char *user = get_user_name();
