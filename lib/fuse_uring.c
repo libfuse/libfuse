@@ -932,6 +932,7 @@ int fuse_uring_stop(struct fuse_session *se)
 		return 0;
 
 	fuse_session_destruct_uring(ring);
+	se->uring.pool = NULL;
 
 	return 0;
 }
