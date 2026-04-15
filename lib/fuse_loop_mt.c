@@ -445,7 +445,7 @@ int fuse_session_loop_mt_32(struct fuse_session *se, const struct fuse_loop_conf
 		/* convert the given v1 config */
 		config = fuse_loop_cfg_create();
 		if (config == NULL)
-			return ENOMEM;
+			return -ENOMEM;
 
 		fuse_loop_cfg_convert(config, config_v1);
 	}
