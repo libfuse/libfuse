@@ -4488,7 +4488,7 @@ int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 	unsigned long pid = req->ctx.pid;
 	char *s;
 
-	sprintf(path, "/proc/%lu/task/%lu/status", pid, pid);
+	snprintf(path, sizeof(path), "/proc/%lu/task/%lu/status", pid, pid);
 
 retry:
 	buf = malloc(bufsize);
