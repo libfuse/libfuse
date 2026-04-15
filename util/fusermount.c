@@ -852,7 +852,7 @@ static int get_mnt_opts(int flags, const char *opts, char **mnt_optsp)
 		return -1;
 	/* remove comma from end of opts*/
 	l = strlen(*mnt_optsp);
-	if ((*mnt_optsp)[l-1] == ',')
+	if (l > 0 && (*mnt_optsp)[l-1] == ',')
 		(*mnt_optsp)[l-1] = '\0';
 	if (getuid() != 0) {
 		const char *user = get_user_name();
