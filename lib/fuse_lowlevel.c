@@ -1317,6 +1317,16 @@ static void _do_forget(fuse_req_t req, const fuse_ino_t nodeid,
 
 	struct fuse_forget_in *arg = (struct fuse_forget_in *)op_in;
 
+	/*
+	 * TEST ONLY: kernel sends FORGET on io-uring when REGISTER carries
+	 * FUSE_IO_URING_REGISTER_FORGET_COMMIT. Complete the ring slot with
+	 * an empty reply without invoking op.forget (no real inode teardown).
+	 */
+	if (req->flags.is_uring) {
+		fuse_reply_err(req, 0);
+		return;
+	}
+
 	if (req->se->op.forget)
 		req->se->op.forget(req, nodeid, arg->nlookup);
 	else
@@ -1337,6 +1347,14 @@ static void _do_batch_forget(fuse_req_t req, const fuse_ino_t nodeid,
 
 	const struct fuse_batch_forget_in *arg = op_in;
 	const struct fuse_forget_one *forgets = in_payload;
+
+	/*
+	 * TEST ONLY: same as _do_forget for io-uring delivered BATCH_FORGET.
+	 */
+	if (req->flags.is_uring) {
+		fuse_reply_err(req, 0);
+		return;
+	}
 
 	if (req->se->op.forget_multi) {
 		req->se->op.forget_multi(req, arg->count,
