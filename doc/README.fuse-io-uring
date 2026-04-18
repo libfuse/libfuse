@@ -1,5 +1,5 @@
 fuse-over-io-uring uses io-uring for transport of kernel/userspace
-messages. See also https://docs.kernel.org/filesystems/fuse-io-uring.html
+messages. See also https://docs.kernel.org/filesystems/fuse/fuse-io-uring.html
 
 In order to enable it, the kernel module needs to have it enabled:
 echo 1 > /sys/module/fuse/parameters/enable_uring
