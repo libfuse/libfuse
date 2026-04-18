@@ -40,9 +40,13 @@ TEST_FILE = __file__
 with open(TEST_FILE, 'rb') as fh:
     TEST_DATA = fh.read()
 
-def name_generator(__ctr=[0]):
-    __ctr[0] += 1
-    return 'testfile_%d' % __ctr[0]
+def name_generator(__ctr=None):
+    if __ctr is None:
+        __ctr = [0]
+    if not hasattr(name_generator, '_counter'):
+        name_generator._counter = [0]
+    name_generator._counter[0] += 1
+    return 'testfile_%d' % name_generator._counter[0]
 
 options = []
 if sys.platform == 'linux':
@@ -120,11 +124,13 @@ def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
             assert fh.read() == 'Hello World!\n'
         logger.debug("Verified contents of 'hello' file")
         with pytest.raises(IOError) as exc_info:
-            open(filename, 'r+')
+            with open(filename, 'r+'):
+                pass
         assert exc_info.value.errno == errno.EACCES
         logger.debug("Verified EACCES error when trying to open file for writing")
         with pytest.raises(IOError) as exc_info:
-            open(filename + 'does-not-exist', 'r+')
+            with open(filename + 'does-not-exist', 'r+'):
+                pass
         assert exc_info.value.errno == errno.ENOENT
         logger.debug("Verified ENOENT error for non-existent file")
         if name == 'hello_ll':
@@ -330,10 +336,12 @@ def test_ioctl(tmpdir, output_checker):
         cmdline = base_cmdline + \
                   [ pjoin(basename, 'example', 'ioctl_client'),
                     testfile ]
-        assert subprocess.check_output(cmdline) == b'0\n'
+        output = subprocess.check_output(cmdline)
+        assert output == b'0\n'
         with open(testfile, 'wb') as fh:
             fh.write(b'foobar')
-        assert subprocess.check_output(cmdline) == b'6\n'
+        output = subprocess.check_output(cmdline)
+        assert output == b'6\n'
         subprocess.check_call(cmdline + [ '3' ])
         with open(testfile, 'rb') as fh:
             assert fh.read()== b'foo'
@@ -367,7 +375,8 @@ def test_ioctl_ll(tmpdir, output_checker):
 
         # Test restricted ioctls: get_size (should be 0 initially)
         cmdline = base_cmdline + [client, 'get_size', testfile]
-        assert subprocess.check_output(cmdline) == b'0\n'
+        output = subprocess.check_output(cmdline)
+        assert output == b'0\n'
 
         # Write some data via regular file I/O
         with open(testfile, 'wb') as fh:
@@ -375,7 +384,8 @@ def test_ioctl_ll(tmpdir, output_checker):
 
         # Test restricted ioctls: get_size (should be 6 now)
         cmdline = base_cmdline + [client, 'get_size', testfile]
-        assert subprocess.check_output(cmdline) == b'6\n'
+        output = subprocess.check_output(cmdline)
+        assert output == b'6\n'
 
         # Test restricted ioctls: set_size
         cmdline = base_cmdline + [client, 'set_size', testfile, '3']
@@ -574,16 +584,19 @@ def test_cuse(output_checker):
     try:
         wait_for_mount(mount_process, devpath,
                        test_fn=os.path.exists)
-        assert subprocess.check_output(cmdline + ['s']) == b'0\n'
+        output = subprocess.check_output(cmdline + ['s'])
+        assert output == b'0\n'
         data = b'some test data'
         off = 5
         proc = subprocess.Popen(cmdline + [ 'w', str(len(data)), str(off) ],
                                 stdin=subprocess.PIPE)
         proc.stdin.write(data)
         proc.stdin.close()
-        assert proc.wait(timeout=10) == 0
+        ret = proc.wait(timeout=10)
+        assert ret == 0
         size = str(off + len(data)).encode() + b'\n'
-        assert subprocess.check_output(cmdline + ['s']) == size
+        output = subprocess.check_output(cmdline + ['s'])
+        assert output == size
         out = subprocess.check_output(
             cmdline + [ 'r', str(off + len(data) + 2), '0' ])
         assert out == (b'\0' * off) + data

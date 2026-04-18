@@ -42,6 +42,7 @@ def get_printcap():
 
 def test_printcap():
     get_printcap()
+    return None
 
 def wait_for_mount(mount_process, mnt_dir,
                    test_fn=os.path.ismount):
@@ -204,7 +205,7 @@ os.environ['PATH'] = '%s:%s' % (pjoin(basename, 'example'), os.environ['PATH'])
 
 try:
     (fuse_proto, fuse_caps) = get_printcap()
-except:
+except Exception:
     # Rely on test to raise error
     fuse_proto = (0,0)
     fuse_caps = set()

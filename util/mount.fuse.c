@@ -104,13 +104,15 @@ static void add_arg(char **cmdp, const char *opt)
 static char *add_option(const char *opt, char *options)
 {
 	int oldlen = options ? strlen(options) : 0;
+	size_t newsize = oldlen + 1 + strlen(opt) + 1;
 
-	options = xrealloc(options, oldlen + 1 + strlen(opt) + 1);
-	if (!oldlen)
-		strcpy(options, opt);
-	else {
-		strcat(options, ",");
-		strcat(options, opt);
+	options = xrealloc(options, newsize);
+	if (!oldlen) {
+		strncpy(options, opt, newsize - 1);
+		options[newsize - 1] = '\0';
+	} else {
+		strncat(options, ",", newsize - strlen(options) - 1);
+		strncat(options, opt, newsize - strlen(options) - 1);
 	}
 	return options;
 }
