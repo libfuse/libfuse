@@ -68,24 +68,25 @@
 #endif /* BSD */
 
 const struct mount_flags mount_flags[] = {
-	{"rw",	    MS_RDONLY,	    0, 1},
-	{"ro",	    MS_RDONLY,	    1, 1},
-	{"suid",    MS_NOSUID,	    0, 0},
-	{"nosuid",  MS_NOSUID,	    1, 1},
-	{"dev",	    MS_NODEV,	    0, 1},
-	{"nodev",   MS_NODEV,	    1, 1},
-	{"exec",    MS_NOEXEC,	    0, 1},
-	{"noexec",  MS_NOEXEC,	    1, 1},
-	{"async",   MS_SYNCHRONOUS, 0, 1},
-	{"sync",    MS_SYNCHRONOUS, 1, 1},
-	{"noatime", MS_NOATIME,	    1, 1},
-	{"nodiratime",	    MS_NODIRATIME,	1, 1},
-	{"norelatime",	    MS_RELATIME,	0, 1},
-	{"nostrictatime",   MS_STRICTATIME,	0, 1},
-	{"symfollow",	    MS_NOSYMFOLLOW,	0, 1},
-	{"nosymfollow",	    MS_NOSYMFOLLOW,	1, 1},
-	{"dirsync",	    MS_DIRSYNC,		1, 1},
-	{NULL,	    0,		    0, 0}
+	/*   opt              flag        on  safe  fsconfig/fsmount */
+	{"rw",           MS_RDONLY,        0,  1,    0},  /* fsconfig */
+	{"ro",           MS_RDONLY,        1,  1,    0},  /* fsconfig */
+	{"suid",         MS_NOSUID,        0,  0,    1},  /* fsmount  */
+	{"nosuid",       MS_NOSUID,        1,  1,    1},  /* fsmount  */
+	{"dev",          MS_NODEV,         0,  1,    1},  /* fsmount  */
+	{"nodev",        MS_NODEV,         1,  1,    1},  /* fsmount  */
+	{"exec",         MS_NOEXEC,        0,  1,    1},  /* fsmount  */
+	{"noexec",       MS_NOEXEC,        1,  1,    1},  /* fsmount  */
+	{"async",        MS_SYNCHRONOUS,   0,  1,    0},  /* fsconfig */
+	{"sync",         MS_SYNCHRONOUS,   1,  1,    0},  /* fsconfig */
+	{"noatime",      MS_NOATIME,       1,  1,    1},  /* fsmount  */
+	{"nodiratime",   MS_NODIRATIME,    1,  1,    1},  /* fsmount  */
+	{"norelatime",   MS_RELATIME,      0,  1,    1},  /* fsmount  */
+	{"nostrictatime", MS_STRICTATIME,  0,  1,    1},  /* fsmount  */
+	{"symfollow",    MS_NOSYMFOLLOW,   0,  1,    1},  /* fsmount  */
+	{"nosymfollow",  MS_NOSYMFOLLOW,   1,  1,    1},  /* fsmount  */
+	{"dirsync",      MS_DIRSYNC,       1,  1,    0},  /* fsconfig */
+	{NULL,           0,                0,  0,    0}
 };
 
 #ifdef IGNORE_MTAB

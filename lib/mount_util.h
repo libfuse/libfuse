@@ -15,6 +15,7 @@ struct mount_flags {
 	unsigned long flag;
 	int on;
 	int safe; /* used by fusermount */
+	int is_mount_attr; /* 1 = mount attribute (fsmount), 0 = filesystem parameter (fsconfig) */
 };
 extern const struct mount_flags mount_flags[];
 
