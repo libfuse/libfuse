@@ -14,5 +14,8 @@ struct mount_opts;
 
 char *fuse_mnt_build_source(const struct mount_opts *mo);
 char *fuse_mnt_build_type(const struct mount_opts *mo);
+char *fuse_mnt_kernel_opts(const struct mount_opts *mo);
+unsigned int fuse_mnt_flags(const struct mount_opts *mo);
+
 
 #endif /* FUSE_MOUNT_COMMON_I_H_ */
