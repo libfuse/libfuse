@@ -847,3 +847,15 @@ out:
 	free(mnt_opts);
 	return res;
 }
+
+char *fuse_mnt_kernel_opts(const struct mount_opts *mo)
+{
+	if (mo->kernel_opts)
+		return strdup(mo->kernel_opts);
+	return NULL;
+}
+
+unsigned int fuse_mnt_flags(const struct mount_opts *mo)
+{
+	return mo->flags;
+}
