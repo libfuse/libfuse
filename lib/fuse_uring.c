@@ -390,28 +390,73 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 
 static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 {
+	/*
+	 * Do NOT use pthread_cancel() — it can kill a thread while it
+	 * holds queue->ring_lock inside a filesystem callback, leaving
+	 * the mutex permanently locked and deadlocking any application
+	 * thread that tries to reply via fuse_uring_commit_sqe().
+	 *
+	 * Instead, wake all sleepers, join threads (stopping new
+	 * dispatches), then wait for deferred replies before freeing.
+	 */
+
+	/* Wake all sleepers: sem_wait (init path) and io_uring (main loop) */
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
 
-		if (queue->tid != 0) {
+		sem_post(&fuse_ring->init_sem);
+
+		if (queue->tid != 0 && queue->eventfd >= 0) {
 			uint64_t value = 1ULL;
 			int rc;
 
 			rc = write(queue->eventfd, &value, sizeof(value));
 			if (rc != sizeof(value))
-				fprintf(stderr,
-					"Wrote to eventfd=%d err=%s: rc=%d\n",
-					queue->eventfd, strerror(errno), rc);
-			pthread_cancel(queue->tid);
+				fuse_log(FUSE_LOG_ERR,
+					 "eventfd=%d write err=%s: rc=%d\n",
+					 queue->eventfd, strerror(errno), rc);
+		}
+	}
+
+	/* Join all threads — no new dispatches after this */
+	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
+
+		if (queue->tid != 0) {
 			pthread_join(queue->tid, NULL);
 			queue->tid = 0;
 		}
+	}
 
-		if (queue->eventfd >= 0) {
-			close(queue->eventfd);
-			queue->eventfd = -1;
+	/*
+	 * Check for deferred replies still in progress. A live ref_cnt
+	 * means a filesystem callback still holds the request and may
+	 * call send_reply_uring → fuse_uring_commit_sqe, which touches
+	 * ring_pool, queue->ring_lock, and queue->ring. We cannot free
+	 * or destroy any of those — just let the OS reclaim at exit.
+	 */
+	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
+
+		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
+			if (atomic_load(&queue->ent[idx].req.ref_cnt) > 1) {
+				fuse_log(FUSE_LOG_ERR,
+					"Leaked ring: refs held at shutdown\n");
+				return;
+			}
 		}
+	}
+
+	/* No live refs — safe to free everything */
+	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
+
+		if (queue->eventfd >= 0)
+			close(queue->eventfd);
 
 		if (queue->ring.ring_fd != -1)
 			io_uring_queue_exit(&queue->ring);
