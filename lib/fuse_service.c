@@ -964,6 +964,7 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
 	char *fstype = fuse_mnt_build_type(se->mo);
 	char *source = fuse_mnt_build_source(se->mo);
 	char *mntopts = fuse_mnt_kernel_opts(se->mo);
+	char *mtabopts = fuse_mnt_mtab_opts(se->mo);
 	char path[32];
 	int ret;
 	int error = 0;
@@ -1034,6 +1035,19 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
 		}
 	}
 
+	if (mtabopts) {
+		ret = send_string(sf, FUSE_SERVICE_MTABOPTS_CMD, mtabopts,
+				  &error);
+		if (ret)
+			goto out_strings;
+		if (error) {
+			fuse_log(FUSE_LOG_ERR, "fuse: service fs mtab options: %s\n",
+				 strerror(error));
+			ret = -error;
+			goto out_strings;
+		}
+	}
+
 	ret = send_mount(sf, fuse_mnt_flags(se->mo), &error);
 	if (ret)
 		goto out_strings;
@@ -1054,6 +1068,7 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
 	(void)chdir("/");
 
 out_strings:
+	free(mtabopts);
 	free(mntopts);
 	free(source);
 	free(fstype);

@@ -39,6 +39,7 @@ struct fuse_service_memfd_argv {
 #define FUSE_SERVICE_MOUNT_CMD		0x444f4954	/* DOIT */
 #define FUSE_SERVICE_UNMOUNT_CMD	0x554d4e54	/* UMNT */
 #define FUSE_SERVICE_BYE_CMD		0x42594545	/* BYEE */
+#define FUSE_SERVICE_MTABOPTS_CMD	0x4d544142	/* MTAB */
 
 /* mount.service sends replies to the fuse server */
 #define FUSE_SERVICE_OPEN_REPLY		0x46494c45	/* FILE */

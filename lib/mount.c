@@ -758,6 +758,13 @@ char *fuse_mnt_kernel_opts(const struct mount_opts *mo)
 	return NULL;
 }
 
+char *fuse_mnt_mtab_opts(const struct mount_opts *mo)
+{
+	if (mo->mtab_opts)
+		return strdup(mo->mtab_opts);
+	return NULL;
+}
+
 unsigned int fuse_mnt_flags(const struct mount_opts *mo)
 {
 	return mo->flags;
