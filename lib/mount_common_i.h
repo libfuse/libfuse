@@ -23,6 +23,7 @@ void destroy_mount_opts(struct mount_opts *mo);
 
 unsigned int get_max_read(const struct mount_opts *o);
 char *fuse_mnt_kernel_opts(const struct mount_opts *mo);
+char *fuse_mnt_mtab_opts(const struct mount_opts *mo);
 unsigned int fuse_mnt_flags(const struct mount_opts *mo);
 
 

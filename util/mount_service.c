@@ -61,6 +61,9 @@ struct mount_service {
 	/* mount options */
 	char *mntopts;
 
+	/* mtab options */
+	char *mtabopts;
+
 	/* socket fd */
 	int sockfd;
 
@@ -85,6 +88,13 @@ struct mount_service {
 	/* is this a fuseblk mount? */
 	bool fuseblk;
 };
+
+static char IGNORE_MTAB;
+
+static inline bool have_real_mtabopts(const struct mount_service *mo)
+{
+	return mo->mtabopts && mo->mtabopts != &IGNORE_MTAB;
+}
 
 static ssize_t __send_fd(struct mount_service *mo,
 			 struct fuse_service_requested_file *req,
@@ -1018,6 +1028,55 @@ static int mount_service_handle_mntopts_cmd(struct mount_service *mo,
 	return mount_service_send_reply(mo, 0);
 }
 
+static int mount_service_handle_mtabopts_cmd(struct mount_service *mo,
+					     const struct fuse_service_packet *p,
+					     size_t psz)
+{
+	struct fuse_service_string_command *oc =
+			container_of(p, struct fuse_service_string_command, p);
+	char *tokstr = oc->value;
+	char *tok, *savetok;
+
+	if (psz < sizeof_fuse_service_string_command(1)) {
+		fprintf(stderr, "%s: mtab options command too small\n",
+			mo->msgtag);
+		return mount_service_send_reply(mo, EINVAL);
+	}
+
+	if (!check_null_endbyte(p, psz)) {
+		fprintf(stderr, "%s: mtab options command must be null terminated\n",
+			mo->msgtag);
+		return mount_service_send_reply(mo, EINVAL);
+	}
+
+	if (mo->mtabopts) {
+		fprintf(stderr, "%s: mtab options respecified!\n",
+			mo->msgtag);
+		return mount_service_send_reply(mo, EINVAL);
+	}
+
+	mo->mtabopts = strdup(oc->value);
+	if (!mo->mtabopts) {
+		int error = errno;
+
+		fprintf(stderr, "%s: alloc mtab options string: %s\n",
+			mo->msgtag, strerror(error));
+		return mount_service_send_reply(mo, error);
+	}
+
+	/* strtok_r mutates tokstr aka oc->value */
+	while ((tok = strtok_r(tokstr, ",", &savetok)) != NULL) {
+		if (!strcmp(tok, "-n")) {
+			free(mo->mtabopts);
+			mo->mtabopts = &IGNORE_MTAB;
+		}
+
+		tokstr = NULL;
+	}
+
+	return mount_service_send_reply(mo, 0);
+}
+
 static int attach_to_mountpoint(struct mount_service *mo, mode_t expected_fmt,
 				char *mntpt)
 {
@@ -1293,6 +1352,14 @@ static int mount_service_regular_mount(struct mount_service *mo,
 		goto out_fstype;
 	}
 
+	/*
+	 * The mount succeeded, so we send a positive reply even if the mtab
+	 * update fails.
+	 */
+	if (have_real_mtabopts(mo))
+		fuse_mnt_add_mount(mo->msgtag, mo->source, mo->resv_mountpoint,
+				   fstype, mo->mtabopts);
+
 	mo->mounted = true;
 	ret = mount_service_send_reply(mo, 0);
 out_fstype:
@@ -1485,6 +1552,22 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 		goto fail_mount;
 	}
 
+	/*
+	 * The mount succeeded, so we send a positive reply even if the mtab
+	 * update fails.
+	 */
+	if (have_real_mtabopts(mo)) {
+		char *fstype = NULL;
+
+		asprintf(&fstype, "%s.%s", fsname(mo), mo->subtype);
+		if (fstype) {
+			fuse_mnt_add_mount(mo->msgtag, mo->source,
+					   mo->resv_mountpoint, fstype,
+					   mo->mtabopts);
+			free(fstype);
+		}
+	}
+
 	mo->mounted = true;
 	return mount_service_send_reply(mo, 0);
 
@@ -1592,6 +1675,13 @@ static int mount_service_handle_unmount_cmd(struct mount_service *mo,
 		return mount_service_send_reply(mo, error);
 	}
 
+	/*
+	 * The unmount succeeded, so we send a positive reply even if the mtab
+	 * update fails.
+	 */
+	if (have_real_mtabopts(mo))
+		fuse_mnt_remove_mount(mo->msgtag, mo->resv_mountpoint);
+
 	mo->mounted = false;
 	return mount_service_send_reply(mo, 0);
 }
@@ -1631,6 +1721,8 @@ static void mount_service_destroy(struct mount_service *mo)
 	free(mo->mountpoint);
 	free(mo->real_mountpoint);
 	free(mo->resv_mountpoint);
+	if (have_real_mtabopts(mo))
+		free(mo->mtabopts);
 	free(mo->mntopts);
 	free(mo->subtype);
 
@@ -1719,6 +1811,9 @@ int mount_service_main(int argc, char *argv[])
 		case FUSE_SERVICE_MNTPT_CMD:
 			ret = mount_service_handle_mountpoint_cmd(&mo, p, sz,
 								  argc, argv);
+			break;
+		case FUSE_SERVICE_MTABOPTS_CMD:
+			ret = mount_service_handle_mtabopts_cmd(&mo, p, sz);
 			break;
 		case FUSE_SERVICE_MOUNT_CMD:
 			ret = mount_service_handle_mount_cmd(&mo, p, sz);
