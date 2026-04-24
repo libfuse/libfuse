@@ -1691,7 +1691,12 @@ int main(int argc, char *argv[])
 
 	{
 		struct stat statbuf;
-		fstat(cfd, &statbuf);
+		if (fstat(cfd, &statbuf) == -1) {
+			fprintf(stderr,
+				"%s: fstat of comm fd %li failed: %s\n",
+				progname, cfd, strerror(errno));
+			goto err_out;
+		}
 		if(!S_ISSOCK(statbuf.st_mode)) {
 			fprintf(stderr,
 				"%s: file descriptor %li is not a socket, can't send fuse fd\n",

@@ -51,6 +51,10 @@
 #define F_SETPIPE_SZ	(F_LINUX_SPECIFIC_BASE + 7)
 #endif
 
+#ifndef O_CLOEXEC
+#define O_CLOEXEC 0
+#endif
+
 #define PARAM(inarg) (((char *)(inarg)) + sizeof(*(inarg)))
 #define OFFSET_MAX 0x7fffffffffffffffLL
 
@@ -796,7 +800,7 @@ static int grow_pipe_to_max(int pipefd)
 	long maxfd;
 	char buf[32];
 
-	maxfd = open("/proc/sys/fs/pipe-max-size", O_RDONLY);
+	maxfd = open("/proc/sys/fs/pipe-max-size", O_RDONLY | O_CLOEXEC);
 	if (maxfd < 0)
 		return -errno;
 
@@ -3913,6 +3917,7 @@ void fuse_session_destroy(struct fuse_session *se)
 		pthread_mutex_unlock(&se->timeout_thread->lock);
 	}
 
+	free(atomic_exchange(&se->mountpoint, NULL));
 	free(se);
 }
 
@@ -4488,7 +4493,7 @@ int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 	unsigned long pid = req->ctx.pid;
 	char *s;
 
-	sprintf(path, "/proc/%lu/task/%lu/status", pid, pid);
+	snprintf(path, sizeof(path), "/proc/%lu/task/%lu/status", pid, pid);
 
 retry:
 	buf = malloc(bufsize);
