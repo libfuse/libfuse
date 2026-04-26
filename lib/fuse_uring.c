@@ -461,7 +461,10 @@ static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
 	sqe->len = 2;
 
 	/* this is a fetch, kernel does not read commit id */
-	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid, 0);
+	struct fuse_uring_cmd_req *cmd = fuse_uring_get_sqe_cmd(sqe);
+
+	fuse_uring_sqe_set_req_data(cmd, queue->qid, 0);
+	cmd->flags |= FUSE_IO_URING_REGISTER_FORGET_COMMIT;
 
 	return 0;
 

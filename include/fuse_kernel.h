@@ -240,6 +240,9 @@
  *  - add FUSE_COPY_FILE_RANGE_64
  *  - add struct fuse_copy_file_range_out
  *  - add FUSE_NOTIFY_PRUNE
+ *
+ *  7.46
+ *  - add FUSE_IO_URING_REGISTER_FORGET_COMMIT (fuse_uring_cmd_req.flags)
  */
 
 #ifndef _LINUX_FUSE_H
@@ -275,7 +278,7 @@
 #define FUSE_KERNEL_VERSION 7
 
 /** Minor version number of this interface */
-#define FUSE_KERNEL_MINOR_VERSION 45
+#define FUSE_KERNEL_MINOR_VERSION 46
 
 /** The node ID of the root inode */
 #define FUSE_ROOT_ID 1
@@ -1306,5 +1309,8 @@ struct fuse_uring_cmd_req {
 	uint16_t qid;
 	uint8_t padding[6];
 };
+
+/* fuse_uring_cmd_req.flags for FUSE_IO_URING_CMD_REGISTER */
+#define FUSE_IO_URING_REGISTER_FORGET_COMMIT (1ULL << 0)
 
 #endif /* _LINUX_FUSE_H */
