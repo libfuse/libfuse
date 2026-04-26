@@ -15,6 +15,8 @@ PACKAGES_CORE=(
     pkg-config
     python3
     python3-pip
+    libsystemd-dev
+    systemd-dev
 )
 
 PACKAGES_FULL=(
@@ -31,6 +33,8 @@ PACKAGES_FULL=(
     libudev-dev:i386
     pkg-config:i386
     python3-pytest
+    libsystemd-dev
+    systemd-dev
 )
 
 PACKAGES_CODECHECKER=(

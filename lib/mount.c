@@ -31,6 +31,7 @@
 #include <sys/wait.h>
 
 #include "fuse_mount_compat.h"
+#include "mount_common_i.h"
 
 #ifdef __NetBSD__
 #include <perfuse.h>
@@ -49,7 +50,6 @@
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 #define FUSE_COMMFD2_ENV	"_FUSE_COMMFD2"
-#define FUSE_KERN_DEVICE_ENV	"FUSE_KERN_DEVICE"
 
 #ifndef MS_DIRSYNC
 #define MS_DIRSYNC 128
@@ -510,7 +510,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 			  const char *mnt_opts)
 {
 	char tmp[128];
-	const char *devname = getenv(FUSE_KERN_DEVICE_ENV) ?: "/dev/fuse";
+	const char *devname = fuse_mnt_get_devname();
 	char *source = NULL;
 	char *type = NULL;
 	struct stat stbuf;
@@ -550,23 +550,12 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	if (res == -1)
 		goto out_close;
 
-	source = malloc((mo->fsname ? strlen(mo->fsname) : 0) +
-			(mo->subtype ? strlen(mo->subtype) : 0) +
-			strlen(devname) + 32);
-
-	type = malloc((mo->subtype ? strlen(mo->subtype) : 0) + 32);
+	source = fuse_mnt_build_source(mo);
+	type = fuse_mnt_build_type(mo);
 	if (!type || !source) {
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate memory\n");
 		goto out_close;
 	}
-
-	strcpy(type, mo->blkdev ? "fuseblk" : "fuse");
-	if (mo->subtype) {
-		strcat(type, ".");
-		strcat(type, mo->subtype);
-	}
-	strcpy(source,
-	       mo->fsname ? mo->fsname : (mo->subtype ? mo->subtype : devname));
 
 	res = mount(source, mnt, type, mo->flags, mo->kernel_opts);
 	if (res == -1 && errno == ENODEV && mo->subtype) {
@@ -726,4 +715,57 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 out:
 	free(mnt_opts);
 	return res;
+}
+
+char *fuse_mnt_build_source(const struct mount_opts *mo)
+{
+	const char *devname = fuse_mnt_get_devname();
+	char *source;
+
+	source = malloc((mo->fsname ? strlen(mo->fsname) : 0) +
+			(mo->subtype ? strlen(mo->subtype) : 0) +
+			strlen(devname) + 32);
+	if (!source)
+		return NULL;
+
+	strcpy(source,
+	       mo->fsname ? mo->fsname : (mo->subtype ? mo->subtype : devname));
+
+	return source;
+}
+
+char *fuse_mnt_build_type(const struct mount_opts *mo)
+{
+	char *type;
+
+	type = malloc((mo->subtype ? strlen(mo->subtype) : 0) + 32);
+	if (!type)
+		return NULL;
+
+	strcpy(type, mo->blkdev ? "fuseblk" : "fuse");
+	if (mo->subtype) {
+		strcat(type, ".");
+		strcat(type, mo->subtype);
+	}
+
+	return type;
+}
+
+char *fuse_mnt_kernel_opts(const struct mount_opts *mo)
+{
+	if (mo->kernel_opts)
+		return strdup(mo->kernel_opts);
+	return NULL;
+}
+
+char *fuse_mnt_mtab_opts(const struct mount_opts *mo)
+{
+	if (mo->mtab_opts)
+		return strdup(mo->mtab_opts);
+	return NULL;
+}
+
+unsigned int fuse_mnt_flags(const struct mount_opts *mo)
+{
+	return mo->flags;
 }

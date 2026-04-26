@@ -17,21 +17,32 @@
  *
  *     gcc -Wall null.c `pkg-config fuse3 --cflags --libs` -o null
  *
+ * Change the ExecStart line in nullfile@.service:
+ *
+ *     ExecStart=/path/to/null
+ *
+ * to point to the actual path of the null binary.
+ *
+ * Finally, install the null@.service and null.socket files to the
+ * systemd service directory, usually /run/systemd/system.
+ *
  * ## Source code ##
  * \include passthrough_fh.c
  */
 
-
-#define FUSE_USE_VERSION 31
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #include <fuse.h>
 #include <fuse_lowlevel.h>
+#include <fuse_service.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
+
+static mode_t mode = 0644;
 
 static int null_getattr(const char *path, struct stat *stbuf,
 			struct fuse_file_info *fi)
@@ -41,7 +52,7 @@ static int null_getattr(const char *path, struct stat *stbuf,
 	if(strcmp(path, "/") != 0)
 		return -ENOENT;
 
-	stbuf->st_mode = S_IFREG | 0644;
+	stbuf->st_mode = S_IFREG | mode;
 	stbuf->st_nlink = 1;
 	stbuf->st_uid = getuid();
 	stbuf->st_gid = getgid();
@@ -112,11 +123,45 @@ static const struct fuse_operations null_oper = {
 	.write		= null_write,
 };
 
+static int null_service(struct fuse_service *service, struct fuse_args *args)
+{
+	int ret = 1;
+
+	if (fuse_service_append_args(service, args))
+		goto err_service;
+
+	if (fuse_service_finish_file_requests(service))
+		goto err_service;
+
+	fuse_service_expect_mount_format(service, S_IFREG);
+
+	/*
+	 * In non-service mode, we set up the file to be owned and writable
+	 * by the same user that starts the fuse server.  When running in a
+	 * container as a dynamic user, we just grant world write access.
+	 */
+	mode = 0666;
+	ret = fuse_service_main(service, args, &null_oper, NULL);
+
+err_service:
+	fuse_service_send_goodbye(service, ret);
+	fuse_service_destroy(&service);
+	fuse_opt_free_args(args);
+	return fuse_service_exit(ret);
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_cmdline_opts opts;
 	struct stat stbuf;
+	struct fuse_service *service = NULL;
+
+	if (fuse_service_accept(&service) != 0)
+		return 1;
+
+	if (fuse_service_accepted(service))
+		return null_service(service, &args);
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;

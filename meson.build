@@ -69,11 +69,23 @@ args_default = [ '-D_GNU_SOURCE' ]
 #
 private_cfg = configuration_data()
 private_cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
+service_socket_dir = get_option('service-socket-dir')
+service_socket_perms = get_option('service-socket-perms')
+if service_socket_dir == ''
+  service_socket_dir = '/run/filesystems'
+endif
+if service_socket_perms == ''
+  service_socket_perms = '0220'
+endif
+private_cfg.set('FUSE_SERVICE_SOCKET_DIR_RAW', service_socket_dir)
+private_cfg.set_quoted('FUSE_SERVICE_SOCKET_DIR', service_socket_dir)
+private_cfg.set('FUSE_SERVICE_SOCKET_PERMS', service_socket_perms)
 
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
-               'utimensat', 'copy_file_range', 'fallocate', 'fspacectl' ]
+               'utimensat', 'copy_file_range', 'fallocate', 'fspacectl',
+               'faccessat' ]
 foreach func : test_funcs
     private_cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))
@@ -118,6 +130,28 @@ special_funcs = {
 	    return -1;
 	  }
 	}
+    ''',
+    'systemd_headers': '''
+	#include <systemd/sd-daemon.h>
+
+	int main(int argc, char *argv[]) {
+          return SD_LISTEN_FDS_START;
+	}
+    ''',
+    'new_mount_api': '''
+       #define _GNU_SOURCE
+       #include <sys/mount.h>
+       #include <linux/mount.h>
+       #include <unistd.h>
+       #include <fcntl.h>
+
+       int main(void) {
+           int fsfd = fsopen("fuse", FSOPEN_CLOEXEC);
+           int res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", "test", 0);
+           int mntfd = fsmount(fsfd, FSMOUNT_CLOEXEC, 0);
+           res = move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH | MOVE_MOUNT_T_EMPTY_PATH);
+           return 0;
+       }
     '''
 }
 
@@ -178,6 +212,23 @@ if get_option('enable-io-uring') and liburing.found() and libnuma.found()
               dependencies: [liburing])
       private_cfg.set('HAVE_URING', true)
    endif
+endif
+
+# Check for systemd support
+systemd_system_unit_dir = get_option('systemd-system-unit-dir')
+if systemd_system_unit_dir == ''
+  systemd = dependency('systemd', required: false)
+  if systemd.found()
+     systemd_system_unit_dir = systemd.get_variable(pkgconfig: 'systemd_system_unit_dir')
+  endif
+endif
+
+if systemd_system_unit_dir == '' or private_cfg.get('HAVE_SYSTEMD_HEADERS', false) == false
+  warning('systemd service support will not be built')
+else
+  private_cfg.set_quoted('SYSTEMD_SYSTEM_UNIT_DIR', systemd_system_unit_dir)
+  private_cfg.set('HAVE_SYSTEMD', true)
+  private_cfg.set('HAVE_SERVICEMOUNT', true)
 endif
 
 #
