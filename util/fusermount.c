@@ -700,8 +700,14 @@ static void parse_line(const char *line, int linenum)
 	int tmp;
 	if (strcmp(line, "user_allow_other") == 0)
 		user_allow_other = 1;
-	else if (sscanf(line, "mount_max = %i", &tmp) == 1)
-		mount_max = tmp;
+	else if (sscanf(line, "mount_max = %i", &tmp) == 1) {
+		if (tmp < -1)
+			fprintf(stderr,
+				"%s: invalid mount_max = %i in %s at line %i\n",
+				progname, tmp, FUSE_CONF, linenum);
+		else
+			mount_max = tmp;
+	}
 	else if(line[0])
 		fprintf(stderr,
 			"%s: unknown parameter in %s at line %i: '%s'\n",
@@ -852,7 +858,7 @@ static int get_mnt_opts(int flags, const char *opts, char **mnt_optsp)
 		return -1;
 	/* remove comma from end of opts*/
 	l = strlen(*mnt_optsp);
-	if ((*mnt_optsp)[l-1] == ',')
+	if (l > 0 && (*mnt_optsp)[l-1] == ',')
 		(*mnt_optsp)[l-1] = '\0';
 	if (getuid() != 0) {
 		const char *user = get_user_name();
@@ -1079,6 +1085,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	*typep = type;
 	*mnt_optsp = mnt_opts;
 	free(fsname);
+	free(subtype);
 	free(optbuf);
 
 	return 0;
@@ -1319,6 +1326,11 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 			size_t x_mnt_opts_len =  mnt_opts_len+
 						 strlen(x_opts) + 2;
 			char *x_mnt_opts = calloc(1, x_mnt_opts_len);
+			if (!x_mnt_opts) {
+				fprintf(stderr, "%s: failed to allocate memory\n",
+					progname);
+				goto fail_close_fd;
+			}
 
 			if (mnt_opts_len) {
 				strcpy(x_mnt_opts, mnt_opts);
