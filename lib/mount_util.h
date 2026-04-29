@@ -36,4 +36,9 @@ const char *fuse_mnt_get_devname(void);
 int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 			       const char *type, const char *mnt_opts);
 
+/* Build source and type strings for mounting */
+char *fuse_mnt_build_source(const char *fsname, const char *subtype,
+			     const char *devname);
+char *fuse_mnt_build_type(int blkdev, const char *subtype);
+
 #endif /* FUSE_MOUNT_UTIL_H_ */
