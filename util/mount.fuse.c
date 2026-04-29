@@ -131,7 +131,7 @@ static int prepare_fuse_fd(const char *mountpoint, const char* subtype,
 	}
 
 	flags = fcntl(fuse_fd, F_GETFD);
-	if (flags == -1 || fcntl(fuse_fd, F_SETFD, flags & ~FD_CLOEXEC) == 1) {
+	if (flags == -1 || fcntl(fuse_fd, F_SETFD, flags & ~FD_CLOEXEC) == -1) {
 		fprintf(stderr, "%s: Failed to clear CLOEXEC: %s\n",
 			progname, strerror(errno));
 		exit(1);
