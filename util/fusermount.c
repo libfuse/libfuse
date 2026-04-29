@@ -1045,24 +1045,12 @@ static int prepare_mount(const char *opts, struct mount_params *mp)
 	sprintf(d, "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
 		mp->fd, mp->rootmode, getuid(), getgid());
 
-	mp->source = malloc((mp->fsname ? strlen(mp->fsname) : 0) +
-			(mp->subtype ? strlen(mp->subtype) : 0) + strlen(mp->dev) + 32);
-
-	mp->type = malloc((mp->subtype ? strlen(mp->subtype) : 0) + 32);
+	mp->source = fuse_mnt_build_source(mp->fsname, mp->subtype, mp->dev);
+	mp->type = fuse_mnt_build_type(mp->blkdev, mp->subtype);
 	if (!mp->type || !mp->source) {
 		fprintf(stderr, "%s: failed to allocate memory\n", progname);
 		goto err;
 	}
-
-	if (mp->subtype)
-		sprintf(mp->type, "%s.%s", mp->blkdev ? "fuseblk" : "fuse", mp->subtype);
-	else
-		strcpy(mp->type, mp->blkdev ? "fuseblk" : "fuse");
-
-	if (mp->fsname)
-		strcpy(mp->source, mp->fsname);
-	else
-		strcpy(mp->source, mp->subtype ? mp->subtype : mp->dev);
 
 	return 0;
 

@@ -463,3 +463,34 @@ const char *fuse_mnt_get_devname(void)
 
 	return devname ? devname : "/dev/fuse";
 }
+
+char *fuse_mnt_build_source(const char *fsname, const char *subtype,
+			     const char *devname)
+{
+	char *source;
+	int ret;
+
+	ret = asprintf(&source, "%s",
+		       fsname ? fsname : (subtype ? subtype : devname));
+	if (ret == -1)
+		return NULL;
+
+	return source;
+}
+
+char *fuse_mnt_build_type(int blkdev, const char *subtype)
+{
+	char *type;
+	int ret;
+
+	if (subtype)
+		ret = asprintf(&type, "%s.%s", blkdev ? "fuseblk" : "fuse",
+			       subtype);
+	else
+		ret = asprintf(&type, "%s", blkdev ? "fuseblk" : "fuse");
+
+	if (ret == -1)
+		return NULL;
+
+	return type;
+}

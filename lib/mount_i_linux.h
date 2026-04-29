@@ -53,8 +53,6 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 
 int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
 			 const char *mnt_opts);
-char *fuse_mnt_build_source(const struct mount_opts *mo);
-char *fuse_mnt_build_type(const struct mount_opts *mo);
 int mount_fusermount_obtain_fd(const char *mountpoint,
 			       struct mount_opts *mo,
 			       const char *opts, int *sock_fd_out,

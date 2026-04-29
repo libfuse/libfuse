@@ -355,15 +355,21 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		      const char *source_dev, const char *kernel_opts,
 		      const char *mnt_opts)
 {
-	const char *type;
+	char *type = NULL;
 	char *source = NULL;
 	int fsfd = -1;
 	int mntfd = -1;
 	int err, res;
 	unsigned long mount_attrs;
 
-	/* Determine filesystem type */
-	type = blkdev ? "fuseblk" : "fuse";
+	/* Build type and source strings */
+	type = fuse_mnt_build_type(blkdev, subtype);
+	source = fuse_mnt_build_source(fsname, subtype, source_dev);
+	err = -ENOMEM;
+	if (!type || !source) {
+		fprintf(stderr, "fuse: failed to allocate memory\n");
+		goto out_free;
+	}
 
 	/* Try to open filesystem context */
 	fsfd = fsopen(type, FSOPEN_CLOEXEC);
@@ -371,20 +377,8 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		if (errno != EPERM)
 			fprintf(stderr, "fuse: fsopen(%s) failed: %s\n", type,
 				strerror(errno));
-		return -1;
+		goto out_free;
 	}
-
-	/* Build source string */
-	source = malloc((fsname ? strlen(fsname) : 0) +
-			(subtype ? strlen(subtype) : 0) +
-			strlen(source_dev) + 32);
-	err = -ENOMEM;
-	if (!source) {
-		fprintf(stderr, "fuse: failed to allocate memory\n");
-		goto out_close_fsfd;
-	}
-
-	strcpy(source, fsname ? fsname : (subtype ? subtype : source_dev));
 
 	/* Configure source */
 	res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", source, 0);
@@ -468,6 +462,7 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 
 	close(mntfd);
 	free(source);
+	free(type);
 	return 0;
 
 out_umount:
@@ -487,7 +482,7 @@ out_close_mntfd:
 		close(mntfd);
 out_free:
 	free(source);
-out_close_fsfd:
+	free(type);
 	if (fsfd != -1)
 		close(fsfd);
 	errno = -err;
