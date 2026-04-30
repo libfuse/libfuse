@@ -505,6 +505,14 @@ int fuse_loop_cfg_verify(const struct fuse_loop_config *config)
 void fuse_loop_cfg_convert(struct fuse_loop_config *config,
 			   const struct fuse_loop_config_v1 *v1_conf)
 {
+	/*
+	 * In the v1 API, max_idle_threads was the effective pool cap —
+	 * threads beyond max_idle_threads were destroyed after each request.
+	 * Set max_threads to the same value to preserve that behaviour.
+	 * Set max_threads first so the subsequent set_idle_threads call
+	 * does not trigger the max_idle > max_threads warning.
+	 */
+	fuse_loop_cfg_set_max_threads(config, v1_conf->max_idle_threads);
 	fuse_loop_cfg_set_idle_threads(config, v1_conf->max_idle_threads);
 
 	fuse_loop_cfg_set_clone_fd(config, v1_conf->clone_fd);
@@ -521,12 +529,31 @@ void fuse_loop_cfg_set_idle_threads(struct fuse_loop_config *config,
 				 FUSE_LOOP_MT_MAX_THREADS);
 		return;
 	}
+	/*
+	 * Warn if max_idle_threads > max_threads —
+	 * idle thread reaping would never trigger since the pool can never
+	 * exceed max_threads.
+	 */
+	if (value > 0 && value > config->max_threads)
+		fuse_log(FUSE_LOG_WARNING,
+			 "fuse: max_idle_threads %u is greater than max_threads %u\n",
+			 value, config->max_threads);
 	config->max_idle_threads = value;
 }
 
 void fuse_loop_cfg_set_max_threads(struct fuse_loop_config *config,
 				   unsigned int value)
 {
+	/*
+	 * Warn if max_threads < max_idle_threads —
+	 * idle thread reaping would never trigger since the pool can never
+	 * exceed max_threads.
+	 */
+	if (config->max_idle_threads > 0 &&
+	    value < (unsigned int)config->max_idle_threads)
+		fuse_log(FUSE_LOG_WARNING,
+			 "fuse: max_threads %u is less than max_idle_threads %d\n",
+			 value, config->max_idle_threads);
 	config->max_threads = value;
 }
 

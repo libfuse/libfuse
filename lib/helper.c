@@ -389,8 +389,8 @@ int fuse_main_real_versioned(int argc, char *argv[],
 
 		fuse_loop_cfg_set_clone_fd(loop_config, opts.clone_fd);
 
-		fuse_loop_cfg_set_idle_threads(loop_config, opts.max_idle_threads);
 		fuse_loop_cfg_set_max_threads(loop_config, opts.max_threads);
+		fuse_loop_cfg_set_idle_threads(loop_config, opts.max_idle_threads);
 		res = fuse_loop_mt(fuse, loop_config);
 	}
 	if (res)

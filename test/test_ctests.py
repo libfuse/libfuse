@@ -24,6 +24,10 @@ def test_abi():
     cmdline = [ pjoin(basename, 'test', 'test_abi') ]
     subprocess.check_call(cmdline)
 
+def test_loop_config():
+    """Unit test for fuse_loop_cfg setter interaction — no FUSE mount needed."""
+    subprocess.check_call([ pjoin(basename, 'test', 'test_loop_config') ])
+
 @pytest.mark.skipif('FUSE_CAP_WRITEBACK_CACHE' not in fuse_caps,
                     reason='not supported by running kernel')
 @pytest.mark.parametrize("writeback", (False, True))
