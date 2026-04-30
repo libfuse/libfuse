@@ -15,6 +15,7 @@
 #include "fuse_misc.h"
 #include "fuse_opt.h"
 #include "fuse_lowlevel.h"
+#include "fuse_daemonize.h"
 #include "mount_util.h"
 
 #include <stdio.h>
@@ -250,70 +251,6 @@ int fuse_parse_cmdline_30(struct fuse_args *args,
 	return rc;
 }
 
-int fuse_daemonize(int foreground)
-{
-	if (!foreground) {
-		int nullfd;
-		int waiter[2];
-		char completed;
-
-		if (pipe(waiter)) {
-			perror("fuse_daemonize: pipe");
-			return -1;
-		}
-
-		/*
-		 * demonize current process by forking it and killing the
-		 * parent.  This makes current process as a child of 'init'.
-		 */
-		switch(fork()) {
-		case -1:
-			perror("fuse_daemonize: fork");
-			close(waiter[0]);
-			close(waiter[1]);
-			return -1;
-		case 0:
-			/* child */
-			close(waiter[0]);
-			waiter[0] = -1;
-			break;
-		default:
-			/* parent */
-			(void) read(waiter[0], &completed, sizeof(completed));
-			close(waiter[0]);
-			close(waiter[1]);
-			_exit(0);
-		}
-
-		if (setsid() == -1) {
-			perror("fuse_daemonize: setsid");
-			close(waiter[1]);
-			return -1;
-		}
-
-		(void) chdir("/");
-
-		nullfd = open("/dev/null", O_RDWR, 0);
-		if (nullfd != -1) {
-			(void) dup2(nullfd, 0);
-			(void) dup2(nullfd, 1);
-			(void) dup2(nullfd, 2);
-			if (nullfd > 2)
-				close(nullfd);
-		}
-
-		/* Propagate completion of daemon initialization */
-		completed = 1;
-		(void) write(waiter[1], &completed, sizeof(completed));
-		close(waiter[1]);
-		waiter[1] = -1;
-	} else {
-		(void)chdir("/");
-	}
-
-	return 0;
-}
-
 int fuse_main_real_versioned(int argc, char *argv[],
 			     const struct fuse_operations *op, size_t op_size,
 			     struct libfuse_version *version, void *user_data)
@@ -362,17 +299,23 @@ int fuse_main_real_versioned(int argc, char *argv[],
 		goto out1;
 	}
 
+	struct fuse_session *se = fuse_get_session(fuse);
 	if (fuse_mount(fuse,opts.mountpoint) != 0) {
 		res = 4;
 		goto out2;
 	}
 
-	if (fuse_daemonize(opts.foreground) != 0) {
-		res = 5;
-		goto out3;
+	/*
+	 * fuse_daemonize() already checks and fails then, but we need to
+	 * handle it gracefully here, as this is done libfuse internal
+	 * and caller didn't ask to daemonize with old API.
+	 */
+	if (!fuse_daemonize_early_is_active()) {
+		if (fuse_daemonize(opts.foreground) != 0) {
+			res = 5;
+			goto out3;
+		}
 	}
-
-	struct fuse_session *se = fuse_get_session(fuse);
 	if (fuse_set_signal_handlers(se) != 0) {
 		res = 6;
 		goto out3;

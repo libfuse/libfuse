@@ -10,6 +10,9 @@
 
 #include "fuse_config.h"
 #include "mount_util.h"
+#ifdef __linux__
+#include "mount_i_linux.h"
+#endif
 
 #include <stdio.h>
 #include <unistd.h>
@@ -33,9 +36,65 @@
 
 #include <sys/param.h>
 
+/* Environment variable for FUSE kernel device */
+#define FUSE_KERN_DEVICE_ENV "FUSE_KERN_DEVICE"
+#define FUSE_DEF_KERN_DEVICE "/dev/fuse"
+
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
-#define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
+#include <sys/mount.h>
+#ifdef __NetBSD__
+#include <perfuse.h>
 #endif
+
+#define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
+
+#define MS_RDONLY	MNT_RDONLY
+#define MS_NOSUID	MNT_NOSUID
+#ifdef MNT_NODEV
+#define MS_NODEV	MNT_NODEV
+#else
+#define MS_NODEV	0
+#endif
+#define MS_NOEXEC	MNT_NOEXEC
+#define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
+#define MS_NOATIME	MNT_NOATIME
+#define MS_NOSYMFOLLOW	0
+#define MS_DIRSYNC	0
+
+/* BSD doesn't have these, define as 0 */
+#ifndef MS_NODIRATIME
+#define MS_NODIRATIME 0
+#endif
+#ifndef MS_RELATIME
+#define MS_RELATIME 0
+#endif
+#ifndef MS_STRICTATIME
+#define MS_STRICTATIME 0
+#endif
+
+#endif /* BSD */
+
+const struct mount_flags mount_flags[] = {
+	/*   opt              flag        on  safe  fsconfig/fsmount */
+	{"rw",           MS_RDONLY,        0,  1,    0},  /* fsconfig */
+	{"ro",           MS_RDONLY,        1,  1,    0},  /* fsconfig */
+	{"suid",         MS_NOSUID,        0,  0,    1},  /* fsmount  */
+	{"nosuid",       MS_NOSUID,        1,  1,    1},  /* fsmount  */
+	{"dev",          MS_NODEV,         0,  1,    1},  /* fsmount  */
+	{"nodev",        MS_NODEV,         1,  1,    1},  /* fsmount  */
+	{"exec",         MS_NOEXEC,        0,  1,    1},  /* fsmount  */
+	{"noexec",       MS_NOEXEC,        1,  1,    1},  /* fsmount  */
+	{"async",        MS_SYNCHRONOUS,   0,  1,    0},  /* fsconfig */
+	{"sync",         MS_SYNCHRONOUS,   1,  1,    0},  /* fsconfig */
+	{"noatime",      MS_NOATIME,       1,  1,    1},  /* fsmount  */
+	{"nodiratime",   MS_NODIRATIME,    1,  1,    1},  /* fsmount  */
+	{"norelatime",   MS_RELATIME,      0,  1,    1},  /* fsmount  */
+	{"nostrictatime", MS_STRICTATIME,  0,  1,    1},  /* fsmount  */
+	{"symfollow",    MS_NOSYMFOLLOW,   0,  1,    1},  /* fsmount  */
+	{"nosymfollow",  MS_NOSYMFOLLOW,   1,  1,    1},  /* fsmount  */
+	{"dirsync",      MS_DIRSYNC,       1,  1,    0},  /* fsconfig */
+	{NULL,           0,                0,  0,    0}
+};
 
 #ifdef IGNORE_MTAB
 #define mtab_needs_update(mnt) 0
@@ -376,4 +435,93 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 	}
 
 	return -1;
+}
+
+int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
+			       const char *type, const char *mnt_opts)
+{
+#ifndef IGNORE_MTAB
+	if (geteuid() == 0) {
+		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
+		int res;
+
+		if (!newmnt)
+			return -1;
+
+		res = fuse_mnt_add_mount("fuse", source, newmnt, type,
+					 mnt_opts);
+		free(newmnt);
+		return res;
+	}
+#endif
+	(void)mnt;
+	(void)source;
+	(void)type;
+	(void)mnt_opts;
+	return 0;
+}
+
+const char *fuse_mnt_get_devname(void)
+{
+	const char *devname = getenv(FUSE_KERN_DEVICE_ENV);
+	struct stat stbuf;
+
+	if (!devname)
+		return FUSE_DEF_KERN_DEVICE;
+
+	/* Validation 1: Must start with /dev/ */
+	if (strncmp(devname, "/dev/", 5) != 0) {
+		fprintf(stderr,
+			"fuse: invalid device name from %s: %s (must start with /dev/)\n",
+			FUSE_KERN_DEVICE_ENV, devname);
+		return "/dev/fuse";
+	}
+
+	/* Validation 2: Must be a character device */
+	if (stat(devname, &stbuf) == 0) {
+		if (!S_ISCHR(stbuf.st_mode)) {
+			fprintf(stderr,
+				"fuse: invalid device from %s: %s (not a character device)\n",
+				FUSE_KERN_DEVICE_ENV, devname);
+			return "/dev/fuse";
+		}
+		/* Valid character device */
+		return devname;
+	}
+	/*
+	 * stat() failed - device might not exist yet, but path is valid.
+	 * Let it through and fail later in open() with a better error message.
+	 */
+	return devname;
+}
+
+char *fuse_mnt_build_source(const char *fsname, const char *subtype,
+			     const char *devname)
+{
+	char *source;
+	int ret;
+
+	ret = asprintf(&source, "%s",
+		       fsname ? fsname : (subtype ? subtype : devname));
+	if (ret == -1)
+		return NULL;
+
+	return source;
+}
+
+char *fuse_mnt_build_type(int blkdev, const char *subtype)
+{
+	char *type;
+	int ret;
+
+	if (subtype)
+		ret = asprintf(&type, "%s.%s", blkdev ? "fuseblk" : "fuse",
+			       subtype);
+	else
+		ret = asprintf(&type, "%s", blkdev ? "fuseblk" : "fuse");
+
+	if (ret == -1)
+		return NULL;
+
+	return type;
 }

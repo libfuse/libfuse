@@ -16,6 +16,7 @@
 #include "fuse_misc.h"
 #include "fuse_opt.h"
 #include "mount_util.h"
+#include "mount_i_linux.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,55 +30,23 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 
 #include "fuse_mount_compat.h"
-
-#ifdef __NetBSD__
-#include <perfuse.h>
-
-#define MS_RDONLY	MNT_RDONLY
-#define MS_NOSUID	MNT_NOSUID
-#define MS_NODEV	MNT_NODEV
-#define MS_NOEXEC	MNT_NOEXEC
-#define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
-#define MS_NOATIME	MNT_NOATIME
-#define MS_NOSYMFOLLOW	MNT_NOSYMFOLLOW
-
-#define umount2(mnt, flags) unmount(mnt, (flags == 2) ? MNT_FORCE : 0)
-#endif
 
 #define FUSERMOUNT_PROG		"fusermount3"
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
 #define FUSE_COMMFD2_ENV	"_FUSE_COMMFD2"
-#define FUSE_KERN_DEVICE_ENV	"FUSE_KERN_DEVICE"
+#define ARG_FD_ENTRY_SIZE	30
 
-#ifndef MS_DIRSYNC
-#define MS_DIRSYNC 128
-#endif
-
-enum {
-	KEY_KERN_FLAG,
-	KEY_KERN_OPT,
-	KEY_FUSERMOUNT_OPT,
-	KEY_SUBTYPE_OPT,
-	KEY_MTAB_OPT,
-	KEY_ALLOW_OTHER,
-	KEY_RO,
-};
-
-struct mount_opts {
-	int allow_other;
-	int flags;
-	int auto_unmount;
-	int blkdev;
-	char *fsname;
-	char *subtype;
-	char *subtype_opt;
-	char *mtab_opts;
-	char *fusermount_opts;
-	char *kernel_opts;
-	unsigned max_read;
-};
+	enum { KEY_KERN_FLAG,
+	       KEY_KERN_OPT,
+	       KEY_FUSERMOUNT_OPT,
+	       KEY_SUBTYPE_OPT,
+	       KEY_MTAB_OPT,
+	       KEY_ALLOW_OTHER,
+	       KEY_RO,
+	};
 
 #define FUSE_MOUNT_OPT(t, p) { t, offsetof(struct mount_opts, p), 1 }
 
@@ -168,35 +137,6 @@ void fuse_mount_version(void)
 			 FUSERMOUNT_PROG);
 }
 
-struct mount_flags {
-	const char *opt;
-	unsigned long flag;
-	int on;
-};
-
-static const struct mount_flags mount_flags[] = {
-	{"rw",	    MS_RDONLY,	    0},
-	{"ro",	    MS_RDONLY,	    1},
-	{"suid",    MS_NOSUID,	    0},
-	{"nosuid",  MS_NOSUID,	    1},
-	{"dev",	    MS_NODEV,	    0},
-	{"nodev",   MS_NODEV,	    1},
-	{"exec",    MS_NOEXEC,	    0},
-	{"noexec",  MS_NOEXEC,	    1},
-	{"async",   MS_SYNCHRONOUS, 0},
-	{"sync",    MS_SYNCHRONOUS, 1},
-	{"noatime", MS_NOATIME,	    1},
-	{"nodiratime",	    MS_NODIRATIME,	1},
-	{"norelatime",	    MS_RELATIME,	0},
-	{"nostrictatime",   MS_STRICTATIME,	0},
-	{"symfollow",	    MS_NOSYMFOLLOW,	0},
-	{"nosymfollow",	    MS_NOSYMFOLLOW,	1},
-#ifndef __NetBSD__
-	{"dirsync", MS_DIRSYNC,	    1},
-#endif
-	{NULL,	    0,		    0}
-};
-
 unsigned int get_max_read(const struct mount_opts *o)
 {
 	return o->max_read;
@@ -278,8 +218,6 @@ static int receive_fd(int fd)
 	msg.msg_namelen = 0;
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
-	/* old BSD implementations should use msg_accrights instead of
-	 * msg_control; the interface is different. */
 	msg.msg_control = ccmsg;
 	msg.msg_controllen = sizeof(ccmsg);
 
@@ -369,7 +307,7 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 		return -1;
 	}
 
-	char arg_fd_entry[30];
+	char arg_fd_entry[ARG_FD_ENTRY_SIZE];
 	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
 	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
 	/*
@@ -442,7 +380,7 @@ static int fuse_mount_fusermount(const char *mountpoint, const struct mount_opts
 		return -1;
 	}
 
-	char arg_fd_entry[30];
+	char arg_fd_entry[ARG_FD_ENTRY_SIZE];
 	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
 	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
 	/*
@@ -502,17 +440,136 @@ static int fuse_mount_fusermount(const char *mountpoint, const struct mount_opts
 	return fd;
 }
 
+/*
+ * Mount using fusermount3 with --sync-init flag for bidirectional fd exchange
+ * Used by new mount API when privileged mount fails with EPERM
+ *
+ * Returns: fd of /dev/fuse opened by fusermount on success, -1 on failure
+ * On success, *sock_fd_out contains the socket fd for signaling fusermount3
+ */
+int mount_fusermount_obtain_fd(const char *mountpoint, struct mount_opts *mo,
+			       const char *opts, int *sock_fd_out,
+			       pid_t *pid_out)
+{
+	int fds[2];
+	pid_t pid;
+	int res;
+	char arg_fd_entry[ARG_FD_ENTRY_SIZE];
+	posix_spawn_file_actions_t action;
+	int fd, status;
+
+	(void)mo;
+
+	if (!mountpoint) {
+		fuse_log(FUSE_LOG_ERR, "fuse: missing mountpoint parameter\n");
+		return -1;
+	}
+
+	res = socketpair(PF_UNIX, SOCK_STREAM, 0, fds);
+	if (res == -1) {
+		fuse_log(FUSE_LOG_ERR, "Running %s: socketpair() failed: %s\n",
+			 FUSERMOUNT_PROG, strerror(errno));
+		return -1;
+	}
+
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[0]);
+	setenv(FUSE_COMMFD_ENV, arg_fd_entry, 1);
+	snprintf(arg_fd_entry, sizeof(arg_fd_entry), "%i", fds[1]);
+	setenv(FUSE_COMMFD2_ENV, arg_fd_entry, 1);
+
+	char const *const argv[] = {
+		FUSERMOUNT_PROG,
+		"--sync-init",
+		"-o", opts ? opts : "",
+		"--",
+		mountpoint,
+		NULL,
+	};
+
+	posix_spawn_file_actions_init(&action);
+	posix_spawn_file_actions_addclose(&action, fds[1]);
+	status = fusermount_posix_spawn(&action, argv, &pid);
+	posix_spawn_file_actions_destroy(&action);
+
+	if (status != 0) {
+		close(fds[0]);
+		close(fds[1]);
+		return -1;
+	}
+
+	close(fds[0]);
+
+	fd = receive_fd(fds[1]);
+	if (fd < 0) {
+		close(fds[1]);
+		waitpid(pid, NULL, 0);
+		return -1;
+	}
+
+	fcntl(fd, F_SETFD, FD_CLOEXEC);
+
+	/* Return socket fd for later signaling */
+	*sock_fd_out = fds[1];
+	*pid_out = pid;
+
+	return fd;
+}
+
+/*
+ * Send proceed signal to fusermount3 and wait for mount result
+ * Returns: 0 on success, -1 on failure
+ */
+int fuse_fusermount_proceed_mnt(int sock_fd)
+{
+	char buf = '\0';
+	ssize_t res;
+
+	/* Send proceed signal */
+	do {
+		res = send(sock_fd, &buf, 1, 0);
+	} while (res == -1 && errno == EINTR);
+
+	if (res != 1) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to send proceed signal: %s\n",
+			 strerror(errno));
+		return -1;
+	}
+
+	/* Wait for mount result from fusermount3 (4-byte error code) */
+	int32_t status;
+
+	do {
+		res = recv(sock_fd, &status, sizeof(status), 0);
+	} while (res == -1 && errno == EINTR);
+
+	if (res != sizeof(status)) {
+		if (res == 0)
+			fuse_log(FUSE_LOG_ERR, "fuse: fusermount3 closed connection\n");
+		else
+			fuse_log(FUSE_LOG_ERR, "fuse: failed to receive mount status: %s\n",
+				 strerror(errno));
+		return -1;
+	}
+
+	if (status != 0) {
+		if (status != -EPERM)
+			fuse_log(FUSE_LOG_ERR, "fuse: fusermount3 mount failed: %s\n",
+				 strerror(-status));
+		return -1;
+	}
+
+	return 0;
+}
+
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
 
-static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
-			  const char *mnt_opts)
+int fuse_kern_mount_prepare(const char *mnt,
+			    struct mount_opts *mo)
 {
 	char tmp[128];
-	const char *devname = getenv(FUSE_KERN_DEVICE_ENV) ?: "/dev/fuse";
-	char *source = NULL;
-	char *type = NULL;
+	const char *devname = fuse_mnt_get_devname();
 	struct stat stbuf;
 	int fd;
 	int res;
@@ -524,61 +581,109 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 
 	res = stat(mnt, &stbuf);
 	if (res == -1) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to access mountpoint %s: %s\n",
-			mnt, strerror(errno));
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to access mountpoint %s: %s\n", mnt,
+			 strerror(errno));
 		return -1;
 	}
 
+	/* codeql[cpp/path-injection] devname is verified */
 	fd = open(devname, O_RDWR | O_CLOEXEC);
 	if (fd == -1) {
 		if (errno == ENODEV || errno == ENOENT)
-			fuse_log(FUSE_LOG_ERR,
+			fuse_log(
+				FUSE_LOG_ERR,
 				"fuse: device %s not found. Kernel module not loaded?\n",
 				devname);
 		else
 			fuse_log(FUSE_LOG_ERR, "fuse: failed to open %s: %s\n",
-				devname, strerror(errno));
+				 devname, strerror(errno));
 		return -1;
 	}
 	if (!O_CLOEXEC)
 		fcntl(fd, F_SETFD, FD_CLOEXEC);
 
-	snprintf(tmp, sizeof(tmp),  "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
+	snprintf(tmp, sizeof(tmp), "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
 		 fd, stbuf.st_mode & S_IFMT, getuid(), getgid());
 
 	res = fuse_opt_add_opt(&mo->kernel_opts, tmp);
 	if (res == -1)
 		goto out_close;
 
-	source = malloc((mo->fsname ? strlen(mo->fsname) : 0) +
-			(mo->subtype ? strlen(mo->subtype) : 0) +
-			strlen(devname) + 32);
+	return fd;
 
-	type = malloc((mo->subtype ? strlen(mo->subtype) : 0) + 32);
+out_close:
+	close(fd);
+	return -1;
+}
+
+#if defined(HAVE_NEW_MOUNT_API)
+/**
+ * Wrapper for fuse_kern_fsmount that accepts struct mount_opts
+ * @mnt: mountpoint
+ * @mo: mount options
+ * @mnt_opts: mount options to pass to the kernel
+ *
+ * Returns: 0 on success, -1 on failure with errno set
+ */
+int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
+			 const char *mnt_opts)
+{
+	/* codeql[cpp/path-injection] verification is in the function */
+	const char *devname = fuse_mnt_get_devname();
+
+	return fuse_kern_fsmount(mnt, mo->flags, mo->blkdev, mo->fsname,
+				 mo->subtype, devname, mo->kernel_opts,
+				 mnt_opts);
+}
+#endif
+
+/**
+ * Complete the mount operation with an already-opened fd
+ * @mnt: mountpoint
+ * @mo: mount options
+ * @mnt_opts: mount options to pass to the kernel
+ *
+ * Returns: 0 on success, -1 on failure,
+ *          FUSE_MOUNT_FALLBACK_NEEDED if fusermount should be used
+ */
+int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
+		       const char *mnt_opts)
+{
+	char *source = NULL;
+	char *type = NULL;
+	int res;
+	const char *devname = fuse_mnt_get_devname();
+	res = -ENOMEM;
+	source = fuse_mnt_build_source(mo->fsname, mo->subtype, devname);
+	type = fuse_mnt_build_type(mo->blkdev, mo->subtype);
 	if (!type || !source) {
-		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate memory\n");
+		fuse_log(FUSE_LOG_ERR, "%s: failed to allocate memory\n",
+			 __func__);
 		goto out_close;
 	}
-
-	strcpy(type, mo->blkdev ? "fuseblk" : "fuse");
-	if (mo->subtype) {
-		strcat(type, ".");
-		strcat(type, mo->subtype);
-	}
-	strcpy(source,
-	       mo->fsname ? mo->fsname : (mo->subtype ? mo->subtype : devname));
 
 	res = mount(source, mnt, type, mo->flags, mo->kernel_opts);
 	if (res == -1 && errno == ENODEV && mo->subtype) {
 		/* Probably missing subtype support */
-		strcpy(type, mo->blkdev ? "fuseblk" : "fuse");
-		if (mo->fsname) {
-			if (!mo->blkdev)
-				sprintf(source, "%s#%s", mo->subtype,
-					mo->fsname);
-		} else {
-			strcpy(source, type);
+
+		/*
+		 * The allocated space by fuse_mnt_build_{source,type}
+		 * might be too small.
+		 */
+		free(source);
+		free(type);
+
+		type = fuse_mnt_build_type(mo->blkdev, NULL);
+		source = fuse_mnt_build_source(mo->fsname, NULL, devname);
+
+		if (!type || !source) {
+			fuse_log(FUSE_LOG_ERR,
+				 "%s: failed to allocate memory\n",
+				 __func__);
+			goto out_close;
 		}
+
 		res = mount(source, mnt, type, mo->flags, mo->kernel_opts);
 	}
 	if (res == -1) {
@@ -587,47 +692,56 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 		 * case try falling back to fusermount3
 		 */
 		if (errno == EPERM) {
-			res = -2;
+			res = FUSE_MOUNT_FALLBACK_NEEDED;
 		} else {
 			int errno_save = errno;
 			if (mo->blkdev && errno == ENODEV &&
 			    !fuse_mnt_check_fuseblk())
 				fuse_log(FUSE_LOG_ERR,
-					"fuse: 'fuseblk' support missing\n");
+					 "fuse: 'fuseblk' support missing\n");
 			else
-				fuse_log(FUSE_LOG_ERR, "fuse: mount failed: %s\n",
-					strerror(errno_save));
+				fuse_log(FUSE_LOG_ERR,
+					 "fuse: mount failed: %s\n",
+					 strerror(errno_save));
 		}
 
 		goto out_close;
 	}
 
-#ifndef IGNORE_MTAB
-	if (geteuid() == 0) {
-		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
-		res = -1;
-		if (!newmnt)
-			goto out_umount;
+	res = fuse_mnt_add_mount_helper(mnt, source, type, mnt_opts);
+	if (res == -1)
+		goto out_umount;
 
-		res = fuse_mnt_add_mount("fuse", source, newmnt, type,
-					 mnt_opts);
-		free(newmnt);
-		if (res == -1)
-			goto out_umount;
-	}
-#endif /* IGNORE_MTAB */
 	free(type);
 	free(source);
 
-	return fd;
+	return 0;
 
 out_umount:
 	umount2(mnt, 2); /* lazy umount */
 out_close:
 	free(type);
 	free(source);
-	close(fd);
 	return res;
+}
+
+static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
+				  const char *mnt_opts)
+{
+	int fd;
+	int res;
+
+	fd = fuse_kern_mount_prepare(mnt, mo);
+	if (fd == -1)
+		return -1;
+
+	res = fuse_kern_do_mount(mnt, mo, mnt_opts);
+	if (res) {
+		close(fd);
+		return res;
+	}
+
+	return fd;
 }
 
 static int get_mnt_flag_opts(char **mnt_optsp, int flags)
@@ -678,6 +792,16 @@ void destroy_mount_opts(struct mount_opts *mo)
 	free(mo);
 }
 
+int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_optsp)
+{
+	if (get_mnt_flag_opts(mnt_optsp, mo->flags) == -1)
+		return -1;
+	if (mo->kernel_opts && fuse_opt_add_opt(mnt_optsp, mo->kernel_opts) == -1)
+		return -1;
+	if (mo->mtab_opts &&  fuse_opt_add_opt(mnt_optsp, mo->mtab_opts) == -1)
+		return -1;
+	return 0;
+}
 
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 {
@@ -685,11 +809,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 	char *mnt_opts = NULL;
 
 	res = -1;
-	if (get_mnt_flag_opts(&mnt_opts, mo->flags) == -1)
-		goto out;
-	if (mo->kernel_opts && fuse_opt_add_opt(&mnt_opts, mo->kernel_opts) == -1)
-		goto out;
-	if (mo->mtab_opts &&  fuse_opt_add_opt(&mnt_opts, mo->mtab_opts) == -1)
+	if (fuse_kern_mount_get_base_mnt_opts(mo, &mnt_opts) == -1)
 		goto out;
 
 	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
@@ -699,7 +819,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 			umount2(mountpoint, MNT_DETACH); /* lazy umount */
 			res = -1;
 		}
-	} else if (res == -2) {
+	} else if (res == FUSE_MOUNT_FALLBACK_NEEDED) {
 		if (mo->fusermount_opts &&
 		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)
 			goto out;

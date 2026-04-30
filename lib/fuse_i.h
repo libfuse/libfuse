@@ -17,17 +17,17 @@
 #include <semaphore.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <errno.h>
 #include <stdatomic.h>
 
+#ifndef MIN
 #define MIN(a, b) \
 ({									\
 	typeof(a) _a = (a);						\
 	typeof(b) _b = (b);						\
 	_a < _b ? _a : _b;						\
 })
+#endif
 
-struct mount_opts;
 struct fuse_ring_pool;
 
 struct fuse_req {
@@ -109,6 +109,13 @@ struct fuse_session {
 
 	/* true if reading requests from /dev/fuse are handled internally */
 	bool buf_reallocable;
+
+	/* synchronous FUSE_INIT support */
+	bool want_sync_init;
+	bool is_sync_init; /* sync FUSE_INIT mount succeeded*/
+	pthread_t init_thread;
+	int init_error;
+	int init_wakeup_fd;
 
 	/* io_uring */
 	struct fuse_session_uring uring;
@@ -215,12 +222,13 @@ struct fuse_chan *fuse_chan_get(struct fuse_chan *ch);
  */
 void fuse_chan_put(struct fuse_chan *ch);
 
-struct mount_opts *parse_mount_opts(struct fuse_args *args);
-void destroy_mount_opts(struct mount_opts *mo);
+/* Mount-related functions */
 void fuse_mount_version(void);
-unsigned int get_max_read(const struct mount_opts *o);
 void fuse_kern_unmount(const char *mountpoint, int fd);
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo);
+int fuse_kern_mount_prepare(const char *mountpoint, struct mount_opts *mo);
+int fuse_kern_do_mount(const char *mountpoint, struct mount_opts *mo,
+		       const char *mnt_opts);
 
 int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 			       int count);
@@ -253,6 +261,14 @@ int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *c
  * @return negative standard error code or 0 on success
  */
 int fuse_loop_cfg_verify(const struct fuse_loop_config *config);
+
+/**
+ * Check if daemonization is set.
+ *
+ * @return true if set, false otherwise
+ */
+bool fuse_daemonize_set(void);
+
 
 
 /*

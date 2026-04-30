@@ -19,6 +19,11 @@
 #include "mount_util.h"
 #include "util.h"
 #include "fuse_uring_i.h"
+#include "fuse_daemonize_i.h"
+#include "fuse_daemonize.h"
+#if defined(__linux__)
+#include "mount_i_linux.h"
+#endif
 
 #include <pthread.h>
 #include <stdatomic.h>
@@ -37,6 +42,7 @@
 #include <assert.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 #include <stdalign.h>
 #include <poll.h>
 
@@ -3019,9 +3025,18 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	 * over the thread scheduling.
 	 */
 	se->got_init = 1;
+	fuse_daemonize_set_got_init();
 	send_reply_ok(req, &outarg, outargsize);
 	if (enable_io_uring)
 		fuse_uring_wake_ring_threads(se);
+
+	/*
+	 * With sync init the daemon needs to signal success after the mount
+	 * itself. Otherwise parent process might exit with success, but the
+	 *  mount point might not there yet.
+	 */
+	if (!se->is_sync_init)
+		fuse_daemonize_early_success();
 }
 
 static __attribute__((no_sanitize("thread"))) void
@@ -4230,6 +4245,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 		goto out1;
 	}
 	se->fd = -1;
+	se->init_wakeup_fd = -1;
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
@@ -4401,6 +4417,317 @@ int fuse_session_custom_io_30(struct fuse_session *se,
 			offsetof(struct fuse_custom_io, clone_fd), fd);
 }
 
+#if defined(HAVE_NEW_MOUNT_API)
+
+/* Worker thread for synchronous FUSE_INIT */
+static void *session_sync_init_worker(void *data)
+{
+	struct fuse_session *se = (struct fuse_session *)data;
+	struct fuse_buf fbuf = {
+		.mem = NULL,
+	};
+	struct pollfd pfds[2];
+
+	pfds[0].fd = se->fd;
+	pfds[0].events = POLLIN;
+	pfds[0].revents = 0;
+	pfds[1].fd = se->init_wakeup_fd;
+	pfds[1].events = POLLIN;
+	pfds[1].revents = 0;
+
+	/*
+	 * Process requests until mount completes. With SELinux there may be
+	 * additional requests (like getattr) after FUSE_INIT before mount
+	 * returns.
+	 */
+	while (true) {
+		int res = poll(pfds, 2, -1);
+
+		if (res == -1) {
+			if (errno == EINTR)
+				continue;
+			se->init_error = -errno;
+			break;
+		}
+
+		if (pfds[1].revents & POLLIN)
+			break;
+
+		if (pfds[0].revents & POLLIN) {
+			res = fuse_session_receive_buf_internal(se, &fbuf, NULL);
+			if (res == -EINTR)
+				continue;
+			if (res <= 0) {
+				se->init_error = res < 0 ? res : -EINVAL;
+				break;
+			}
+
+			fuse_session_process_buf_internal(se, &fbuf, NULL);
+		}
+	}
+
+	fuse_buf_free(&fbuf);
+	return NULL;
+}
+
+/* Enable synchronous FUSE_INIT and start worker thread */
+static int session_start_sync_init(struct fuse_session *se, int fd)
+{
+	int err, res;
+
+	if (!se->want_sync_init &&
+		(se->uring.enable && !fuse_daemonize_is_used())) {
+		if (se->debug)
+			fuse_log(FUSE_LOG_DEBUG,
+					"fuse: sync init not enabled\n");
+		return 0;
+	}
+
+	/* Try to enable synchronous FUSE_INIT */
+	res = ioctl(fd, FUSE_DEV_IOC_SYNC_INIT);
+	if (res) {
+		err = -errno;
+		if (err != ENOTTY) {
+			fuse_log(
+				FUSE_LOG_ERR,
+				"fuse: failed to enable sync init: %s\n",
+				strerror(errno));
+		} else {
+			/*
+			 * ENOTTY means kernel doesn't support sync init,not an
+			 * error
+			 */
+			if (se->debug)
+				fuse_log(
+					FUSE_LOG_DEBUG,
+					"fuse: kernel doesn't support sync init\n");
+			err = 0;
+		}
+		return err;
+	}
+
+	if (se->debug)
+		fuse_log(FUSE_LOG_DEBUG,
+				"fuse: synchronous FUSE_INIT enabled\n");
+
+	se->init_error = 0;
+
+	se->init_wakeup_fd = eventfd(0, EFD_CLOEXEC);
+	if (se->init_wakeup_fd == -1) {
+		fuse_log(
+			FUSE_LOG_ERR,
+			"fuse: failed to create eventfd for init worker: %s\n",
+			strerror(errno));
+		return -EIO;
+	}
+
+	err = pthread_create(&se->init_thread, NULL,
+				session_sync_init_worker, se);
+	if (err != 0) {
+		fuse_log(
+			FUSE_LOG_ERR,
+			"fuse: failed to create init worker thread: %s\n",
+			strerror(err));
+		close(se->init_wakeup_fd);
+		se->init_wakeup_fd = -1;
+		return -EIO;
+	}
+
+	return 0;
+}
+
+/* Wait for synchronous FUSE_INIT to complete */
+static int session_wait_sync_init_completion(struct fuse_session *se)
+{
+	void *retval;
+	int err;
+	uint64_t val = 1;
+
+	if (se->init_wakeup_fd == -1)
+		return 0;
+
+	if (se->init_wakeup_fd != -1) {
+		ssize_t res = write(se->init_wakeup_fd, &val, sizeof(val));
+
+		if (res != sizeof(val)) {
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: failed to signal init worker: %s\n",
+				 strerror(errno));
+		}
+	}
+
+	err = pthread_join(se->init_thread, &retval);
+	if (err != 0) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to join init worker thread: %s\n",
+			 strerror(err));
+		return -1;
+	}
+
+	if (se->init_wakeup_fd != -1) {
+		close(se->init_wakeup_fd);
+		se->init_wakeup_fd = -1;
+	}
+
+	se->init_thread = 0;
+
+	if (se->init_error != 0) {
+		fuse_log(FUSE_LOG_ERR, "fuse: init worker failed: %s\n",
+			 strerror(-se->init_error));
+		return -1;
+	}
+
+	if (fuse_session_exited(se)) {
+		fuse_log(FUSE_LOG_ERR, "FUSE_INIT failed: session exited\n");
+		return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * Handle fallback to fusermount3 when privileged mount fails with EPERM.
+ * Returns: new fd on success, negative error code on failure
+ */
+static int new_api_fusermount(struct fuse_session *se,
+			      const char *mountpoint,
+			      const char *mnt_opts,
+			      int *sock_fd, pid_t *fusermount_pid)
+{
+	int fd, err;
+
+	if (se->debug)
+		fuse_log(FUSE_LOG_DEBUG,
+			 "fuse: privileged mount failed with EPERM, falling back to fusermount3\n");
+
+	/* Terminate worker thread with wrong fd */
+	if (session_wait_sync_init_completion(se) < 0)
+		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
+
+	/* Call fusermount3 with --sync-init */
+	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mnt_opts, sock_fd,
+					fusermount_pid);
+	if (fd < 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: fusermount3 sync-init failed\n");
+		return -ENOTSUP;
+	}
+
+	/* Start worker thread with correct fd from fusermount3 */
+	se->fd = fd;
+	err = session_start_sync_init(se, fd);
+	if (err) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to start sync init worker\n");
+		return err;
+	}
+
+	/* Send proceed signal and wait for mount result */
+	err = fuse_fusermount_proceed_mnt(*sock_fd);
+	if (err < 0)
+		return -EIO;
+
+	return fd;
+}
+
+/*
+ * Mount using the new Linux mount API (fsopen/fsconfig/fsmount/move_mount)
+ * Sync-init is only supported with the new API, as the mount might hang
+ * in case of daemon crash during FUSE_INIT. That also means once the sync init
+ * ioctl succeed fallback is not allowed anymore.
+ * Returns: fd on success, -1 on failure
+ */
+static int fuse_session_mount_new_api(struct fuse_session *se,
+				      const char *mountpoint)
+{
+	int fd = -1;
+	int sock_fd = -1;
+	pid_t fusermount_pid = -1;
+	int res, err;
+	char *mnt_opts = NULL;
+	char *mnt_opts_with_fd = NULL;
+	char fd_opt[32];
+
+	res = fuse_kern_mount_get_base_mnt_opts(se->mo, &mnt_opts);
+	err = -EIO;
+	if (res == -1) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to get base mount options\n");
+		goto err;
+	}
+
+	fd = fuse_kern_mount_prepare(mountpoint, se->mo);
+	if (fd == -1) {
+		fuse_log(FUSE_LOG_ERR, "Mount preparation failed.\n");
+		goto err;
+	}
+
+	se->fd = fd;
+	err = session_start_sync_init(se, fd);
+	if (err)
+		goto err;
+
+	snprintf(fd_opt, sizeof(fd_opt), "fd=%i", fd);
+	err = -ENOMEM;
+	if (fuse_opt_add_opt(&mnt_opts_with_fd, mnt_opts) == -1 ||
+	    fuse_opt_add_opt(&mnt_opts_with_fd, fd_opt) == -1) {
+		goto err;
+	}
+
+	/* Try to mount directly */
+	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mnt_opts_with_fd);
+
+	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
+	if (err < 0 && errno == EPERM) {
+		close(fd);
+		se->fd = -1;
+		fd = new_api_fusermount(se, mountpoint, mnt_opts,
+					&sock_fd, &fusermount_pid);
+		if (fd < 0) {
+			err = fd;
+			goto err_with_sock;
+		}
+		err = 0;
+	} else if (err < 0) {
+		/* Mount failed with non-EPERM error, bail out */
+		goto err;
+	}
+
+err_with_sock:
+	if (sock_fd >= 0) {
+		close(sock_fd);
+		/* Reap fusermount3 child process to prevent zombie */
+		if (fusermount_pid > 0)
+			waitpid(fusermount_pid, NULL, 0);
+	}
+err:
+	if (err < 0) {
+		/* Close fd first to unblock worker thread */
+		if (fd >= 0)
+			close(fd);
+		fd = -1;
+		se->fd = -1;
+		se->error = err;
+	}
+	/* Wait for synchronous FUSE_INIT to complete */
+	if (session_wait_sync_init_completion(se) < 0)
+		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
+
+	se->is_sync_init = true;
+	free(mnt_opts);
+	free(mnt_opts_with_fd);
+	return fd;
+}
+#else
+static int fuse_session_mount_new_api(struct fuse_session *se,
+				      const char *mountpoint)
+{
+	(void)se;
+	(void)mountpoint;
+
+	return -1;
+}
+#endif
+
 int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 {
 	int fd;
@@ -4428,6 +4755,8 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 			close(fd);
 	} while (fd >= 0 && fd <= 2);
 
+	/* Open channel */
+
 	/*
 	 * To allow FUSE daemons to run without privileges, the caller may open
 	 * /dev/fuse before launching the file system and pass on the file
@@ -4445,14 +4774,22 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 		goto out;
 	}
 
-	/* Open channel */
-	fd = fuse_kern_mount(mountpoint, se->mo);
-	if (fd == -1)
-		goto error_out;
+	/* new linux mount api (and sync init) */
+	fd = fuse_session_mount_new_api(se, mountpoint);
+
+	/* fall back to old API, possible as long as another fd is used */
+	if (fd < 0) {
+		se->error = 0; /* reset error of new api */
+		fd = fuse_kern_mount(mountpoint, se->mo);
+		if (fd < 0)
+			goto error_out;
+	}
 
 out:
 	se->fd = fd;
 	se->mountpoint = mountpoint;
+
+	fuse_daemonize_early_set_mounted();
 
 	return 0;
 
@@ -4756,4 +5093,23 @@ void fuse_session_stop_teardown_watchdog(void *data)
 	/* Wait for thread to finish */
 	pthread_join(tt->thread_id, NULL);
 	fuse_tt_destruct(tt);
+}
+
+void fuse_session_want_sync_init(struct fuse_session *se)
+{
+	if (se == NULL)
+		return;
+	se->want_sync_init = true;
+}
+
+void fuse_session_set_debug(struct fuse_session *se)
+{
+	se->debug = 1;
+}
+
+bool fuse_conn_is_sync_init(const struct fuse_conn_info *conn)
+{
+	const struct fuse_session *se = container_of(conn, struct fuse_session, conn);
+
+	return se->is_sync_init;
 }
