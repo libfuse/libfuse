@@ -35,35 +35,6 @@
 #define MOUNT_ATTR_NOSYMFOLLOW  0x00200000
 #endif
 
-struct ms_to_str_map {
-	unsigned long ms_flag;
-	const char *string;
-};
-
-static const struct ms_to_str_map flag_to_str_map[] = {
-	{ MS_SYNCHRONOUS, "sync" },
-	{ MS_DIRSYNC, "dirsync" },
-	{ MS_LAZYTIME, "lazytime" },
-	{ 0, 0 },
-};
-
-struct ms_to_mount_attr_map {
-	unsigned long ms_flag;
-	unsigned long mount_attr;
-};
-
-static const struct ms_to_mount_attr_map ms_to_attr_map[] = {
-	{ MS_NOSUID, MOUNT_ATTR_NOSUID },
-	{ MS_NODEV, MOUNT_ATTR_NODEV },
-	{ MS_NOEXEC, MOUNT_ATTR_NOEXEC },
-	{ MS_NOATIME, MOUNT_ATTR_NOATIME },
-	{ MS_RELATIME, MOUNT_ATTR_RELATIME },
-	{ MS_STRICTATIME, MOUNT_ATTR_STRICTATIME },
-	{ MS_NODIRATIME, MOUNT_ATTR_NODIRATIME },
-	{ MS_NOSYMFOLLOW, MOUNT_ATTR_NOSYMFOLLOW },
-	{ 0, 0 },
-};
-
 /*
  * Convert MS_* mount flags to MOUNT_ATTR_* mount attributes.
  * These flags are passed to fsmount(), not fsconfig().
@@ -75,14 +46,18 @@ static const struct ms_to_mount_attr_map ms_to_attr_map[] = {
 static int ms_flags_to_mount_attrs(unsigned long flags,
 				   unsigned long *attrs)
 {
-	const struct ms_to_mount_attr_map *map;
+	int i;
 
 	*attrs = 0;
 
-	for (map = ms_to_attr_map; map->ms_flag; map++) {
-		if (flags & map->ms_flag) {
-			*attrs |= map->mount_attr;
-			flags &= ~map->ms_flag;
+	for (i = 0; mount_flags[i].opt != NULL && flags != 0; i++) {
+		/* Only process mount attributes (mount_attr != 0) with on==1 */
+		if (!mount_flags[i].mount_attr || !mount_flags[i].on)
+			continue;
+
+		if (flags & mount_flags[i].flag) {
+			*attrs |= mount_flags[i].mount_attr;
+			flags &= ~mount_flags[i].flag;
 		}
 	}
 
@@ -141,24 +116,28 @@ static void log_fsconfig_kmsg(int fd)
  */
 static int set_ms_flags(int fsfd, unsigned long *ms_flags)
 {
-	const struct ms_to_str_map *fme; /* flag map entry */
 	int ret, flags = *ms_flags;
+	int i;
 
-	for (fme = flag_to_str_map; flags != 0 && fme->ms_flag != 0; fme++) {
-		if (!(flags & fme->ms_flag))
+	for (i = 0; mount_flags[i].opt != NULL && flags != 0; i++) {
+		/* Only process fsconfig flags (mount_attr == 0) with on==1 */
+		if (mount_flags[i].mount_attr || !mount_flags[i].on)
 			continue;
 
-		ret = fsconfig(fsfd, FSCONFIG_SET_FLAG, fme->string, NULL, 0);
+		if (!(flags & mount_flags[i].flag))
+			continue;
+
+		ret = fsconfig(fsfd, FSCONFIG_SET_FLAG, mount_flags[i].opt, NULL, 0);
 		if (ret) {
 			int save_errno = errno;
 
 			fprintf(stderr, "fuse: set fsconfig %s option failed: %s\n",
-				fme->string, strerror(save_errno));
+				mount_flags[i].opt, strerror(save_errno));
 			log_fsconfig_kmsg(fsfd);
 
 			return -save_errno;
 		}
-		flags &= ~fme->ms_flag;
+		flags &= ~mount_flags[i].flag;
 	}
 
 	*ms_flags = flags;
@@ -280,7 +259,7 @@ static int is_mount_attr_opt(const char *opt)
 
 	for (i = 0; mount_flags[i].opt != NULL; i++) {
 		if (strcmp(mount_flags[i].opt, opt) == 0)
-			return mount_flags[i].is_mount_attr;
+			return mount_flags[i].mount_attr != 0;
 	}
 
 	/* Unknown option, assume it's not a mount attribute */

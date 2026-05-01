@@ -74,26 +74,60 @@
 
 #endif /* BSD */
 
+/*
+ * MOUNT_ATTR_* constants from linux/mount.h for the new mount API.
+ * If not available from system headers (older kernels), define to 0
+ * so the mount_attr field will indicate these are fsconfig flags.
+ * The new mount API (fsmount) won't be available on such systems anyway.
+ */
+#ifndef MOUNT_ATTR_RDONLY
+#define MOUNT_ATTR_RDONLY	0
+#endif
+#ifndef MOUNT_ATTR_NOSUID
+#define MOUNT_ATTR_NOSUID	0
+#endif
+#ifndef MOUNT_ATTR_NODEV
+#define MOUNT_ATTR_NODEV	0
+#endif
+#ifndef MOUNT_ATTR_NOEXEC
+#define MOUNT_ATTR_NOEXEC	0
+#endif
+#ifndef MOUNT_ATTR_NOATIME
+#define MOUNT_ATTR_NOATIME	0
+#endif
+#ifndef MOUNT_ATTR_RELATIME
+#define MOUNT_ATTR_RELATIME	0
+#endif
+#ifndef MOUNT_ATTR_STRICTATIME
+#define MOUNT_ATTR_STRICTATIME	0
+#endif
+#ifndef MOUNT_ATTR_NODIRATIME
+#define MOUNT_ATTR_NODIRATIME	0
+#endif
+#ifndef MOUNT_ATTR_NOSYMFOLLOW
+#define MOUNT_ATTR_NOSYMFOLLOW	0
+#endif
+
 const struct mount_flags mount_flags[] = {
-	/*   opt              flag        on  safe  fsconfig/fsmount */
-	{"rw",           MS_RDONLY,        0,  1,    0},  /* fsconfig */
-	{"ro",           MS_RDONLY,        1,  1,    0},  /* fsconfig */
-	{"suid",         MS_NOSUID,        0,  0,    1},  /* fsmount  */
-	{"nosuid",       MS_NOSUID,        1,  1,    1},  /* fsmount  */
-	{"dev",          MS_NODEV,         0,  1,    1},  /* fsmount  */
-	{"nodev",        MS_NODEV,         1,  1,    1},  /* fsmount  */
-	{"exec",         MS_NOEXEC,        0,  1,    1},  /* fsmount  */
-	{"noexec",       MS_NOEXEC,        1,  1,    1},  /* fsmount  */
-	{"async",        MS_SYNCHRONOUS,   0,  1,    0},  /* fsconfig */
-	{"sync",         MS_SYNCHRONOUS,   1,  1,    0},  /* fsconfig */
-	{"noatime",      MS_NOATIME,       1,  1,    1},  /* fsmount  */
-	{"nodiratime",   MS_NODIRATIME,    1,  1,    1},  /* fsmount  */
-	{"norelatime",   MS_RELATIME,      0,  1,    1},  /* fsmount  */
-	{"nostrictatime", MS_STRICTATIME,  0,  1,    1},  /* fsmount  */
-	{"symfollow",    MS_NOSYMFOLLOW,   0,  1,    1},  /* fsmount  */
-	{"nosymfollow",  MS_NOSYMFOLLOW,   1,  1,    1},  /* fsmount  */
-	{"dirsync",      MS_DIRSYNC,       1,  1,    0},  /* fsconfig */
-	{NULL,           0,                0,  0,    0}
+/* opt            flag             on  safe  mount_attr */
+{"rw",           MS_RDONLY,        0,  1,    0},                      /* fsconfig */
+{"ro",           MS_RDONLY,        1,  1,    0},                      /* fsconfig */
+{"suid",         MS_NOSUID,        0,  0,    MOUNT_ATTR_NOSUID},     /* fsmount  */
+{"nosuid",       MS_NOSUID,        1,  1,    MOUNT_ATTR_NOSUID},     /* fsmount  */
+{"dev",          MS_NODEV,         0,  1,    MOUNT_ATTR_NODEV},      /* fsmount  */
+{"nodev",        MS_NODEV,         1,  1,    MOUNT_ATTR_NODEV},      /* fsmount  */
+{"exec",         MS_NOEXEC,        0,  1,    MOUNT_ATTR_NOEXEC},     /* fsmount  */
+{"noexec",       MS_NOEXEC,        1,  1,    MOUNT_ATTR_NOEXEC},     /* fsmount  */
+{"async",        MS_SYNCHRONOUS,   0,  1,    0},                      /* fsconfig */
+{"sync",         MS_SYNCHRONOUS,   1,  1,    0},                      /* fsconfig */
+{"noatime",      MS_NOATIME,       1,  1,    MOUNT_ATTR_NOATIME},    /* fsmount  */
+{"nodiratime",   MS_NODIRATIME,    1,  1,    MOUNT_ATTR_NODIRATIME}, /* fsmount  */
+{"norelatime",   MS_RELATIME,      0,  1,    MOUNT_ATTR_RELATIME},   /* fsmount  */
+{"nostrictatime", MS_STRICTATIME,  0,  1,    MOUNT_ATTR_STRICTATIME},/* fsmount  */
+{"symfollow",    MS_NOSYMFOLLOW,   0,  1,    MOUNT_ATTR_NOSYMFOLLOW},/* fsmount  */
+{"nosymfollow",  MS_NOSYMFOLLOW,   1,  1,    MOUNT_ATTR_NOSYMFOLLOW},/* fsmount  */
+{"dirsync",      MS_DIRSYNC,       1,  1,    0},                      /* fsconfig */
+{NULL,           0,                0,  0,    0}
 };
 
 #ifdef IGNORE_MTAB
