@@ -1,0 +1,12 @@
+Auto-Umount
+The mechanism currently implemented has several flaws:
+- It interacts badly with mount --move and mount --bind operations
+  on the fuse mount-point (and possibly on parent mount-points), and
+- It currently requires that the allow_root option be specified if
+  the filesystem is mounted by a non-root user which in turn may require
+  user_allow_other in /etc/fuse.conf.
+
+A new mechanism is being worked on which will address these shortcomings.
+
+See https://github.com/libfuse/libfuse/issues/1491 for some further information
+on the subject.
