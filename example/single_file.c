@@ -466,8 +466,6 @@ void single_file_ll_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			single_file.mtime = attr->st_mtim;
 	}
 	if (to_set & FUSE_SET_ATTR_CTIME)
-		single_file.ctime = attr->st_mtim;
-	else
 		single_file.ctime = now;
 	pthread_mutex_unlock(&single_file.lock);
 
@@ -491,6 +489,7 @@ int single_file_hl_chmod(const char *path, mode_t mode,
 
 	pthread_mutex_lock(&single_file.lock);
 	single_file.mode = (single_file.mode & S_IFMT) | (mode & ~S_IFMT);
+	get_now(&single_file.ctime);
 	pthread_mutex_unlock(&single_file.lock);
 
 	return 0;
@@ -844,6 +843,7 @@ ssize_t single_file_pwrite(const char *buf, size_t count, off_t pos)
 		get_now(&now);
 
 		pthread_mutex_lock(&single_file.lock);
+		single_file.mtime = now;
 		single_file.ctime = now;
 		pthread_mutex_unlock(&single_file.lock);
 
@@ -973,6 +973,7 @@ int single_file_configure_simple(const char *filename)
 	get_now(&startup_time);
 	single_file.atime = startup_time;
 	single_file.mtime = startup_time;
+	single_file.ctime = startup_time;
 
 	if (!single_file.ro)
 		single_file.mode |= 0220;
