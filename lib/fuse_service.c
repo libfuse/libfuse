@@ -64,17 +64,28 @@ static int __recv_fd(struct fuse_service *sf,
 	union {
 		struct cmsghdr cmsghdr;
 		char control[CMSG_SPACE(sizeof(int))];
-	} cmsgu;
+	} cmsgu = { };
 	struct msghdr msg = {
 		.msg_iov = &iov,
 		.msg_iovlen = 1,
 		.msg_control = cmsgu.control,
-		.msg_controllen = sizeof(cmsgu.control),
+
+		/*
+		 * Do not include padding at the end of the control buffer,
+		 * because we don't want to receive fds that we weren't
+		 * expecting.
+		 */
+		.msg_controllen = CMSG_LEN(sizeof(int)),
 	};
 	struct cmsghdr *cmsg;
 	ssize_t size;
 
-	memset(&cmsgu, 0, sizeof(cmsgu));
+	/*
+	 * Set the initial fd value to -1 to signal an invalid fd in case the
+	 * kernel doesn't write to the cmsg buffer and doesn't return an error.
+	 * It shouldn't do that, but we absolutely don't want a zero here.
+	 */
+	memset(cmsgu.control, -1, sizeof(cmsgu.control));
 
 	size = recvmsg(sf->sockfd, &msg, MSG_TRUNC | MSG_CMSG_CLOEXEC);
 	if (size < 0) {
@@ -88,6 +99,13 @@ static int __recv_fd(struct fuse_service *sf,
 	    size < offsetof(struct fuse_service_requested_file, path)) {
 		fuse_log(FUSE_LOG_ERR, "fuse: wrong service file reply size %zd, expected %zd\n",
 			 size, bufsize);
+		return -EBADMSG;
+	}
+
+	if (msg.msg_flags & MSG_CTRUNC) {
+		/* SMACK does this */
+		fuse_log(FUSE_LOG_ERR,
+"fuse: service file reply control data truncated; did an LSM deny SCM_RIGHTS?\n");
 		return -EBADMSG;
 	}
 
@@ -147,7 +165,7 @@ int fuse_service_receive_file(struct fuse_service *sf, const char *path,
 {
 	struct fuse_service_requested_file *req;
 	const size_t req_sz = sizeof_fuse_service_requested_file(strlen(path));
-	int fd = -ENOENT;
+	int fd = -1;
 	int ret;
 
 	*fdp = -ENOENT;
@@ -182,9 +200,12 @@ int fuse_service_receive_file(struct fuse_service *sf, const char *path,
 		goto out_close;
 	}
 
-	if (fd == -ENOENT)
-		fuse_log(FUSE_LOG_ERR, "fuse: did not receive `%s' but no error?\n",
+	if (fd < 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: did not receive valid fd for `%s' but no error?\n",
 			 path);
+		goto out_req;
+	}
 
 	*fdp = fd;
 	goto out_req;
