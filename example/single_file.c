@@ -4,6 +4,10 @@
  *
  * This program can be distributed under the terms of the GNU GPLv2.
  * See the file GPL2.txt.
+ *
+ * This file is shared library code for example fuse servers that want to
+ * expose a single regular file that wraps another file in a manner that goes
+ * beyond simple passthrough.  It is not itself a fuse server.
  */
 #define _GNU_SOURCE
 #include <pthread.h>

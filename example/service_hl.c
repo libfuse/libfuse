@@ -8,7 +8,15 @@
 
 /** @file
  *
- * minimal example filesystem using high-level API and systemd service api
+ * Minimal example filesystem using high-level API and systemd service API.
+ *
+ * - Shows how to build a high level FUSE filesystem server that can be managed
+ *   by systemd
+ * - Enables on-demand filesystem mounting via socket activation
+ * - Demonstrates requesting resources from the mount-caller's environment
+ * - Allows running FUSE servers with minimal privileges; isolated mount,
+ *   network, and pid namespaces; and a separate uid/gid (unlike traditional
+ *   FUSE which needs mount permissions and runs in the caller's environment)
  *
  * Compile with:
  *
@@ -25,7 +33,15 @@
  * to point to the actual path of the service_hl binary.
  *
  * Finally, install the service_hl@.service and service_hl.socket files to the
- * systemd service directory, usually /run/systemd/system.
+ * systemd service directory, usually /run/systemd/system.  Run these commands
+ * to activate:
+ *
+ *     systemctl daemon-reload
+ *     systemctl start service_hl.socket
+ *
+ * Then mount with:
+ *
+ *     mount -t fuse.service_hl /dev/sda /mnt
  *
  * ## Source code ##
  * \include service_hl.c
