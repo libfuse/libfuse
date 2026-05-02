@@ -286,8 +286,17 @@ void single_file_ll_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 	struct statx stx = { };
 	bool filled;
 
-	(void)flags;
 	(void)fi;
+
+	if ((flags & AT_STATX_FORCE_SYNC) && is_single_file_ino(ino) &&
+	    single_file.backing_fd >= 0) {
+		int ret = fsync(single_file.backing_fd);
+
+		if (ret) {
+			fuse_reply_err(req, errno);
+			return;
+		}
+	}
 
 	pthread_mutex_lock(&single_file.lock);
 	filled = sf_statx(ino, mask, &stx);
@@ -301,12 +310,19 @@ void single_file_ll_statx(fuse_req_t req, fuse_ino_t ino, int flags, int mask,
 int single_file_hl_statx(const char *path, int statx_flags, int statx_mask,
 			 struct statx *stx, struct fuse_file_info *fi)
 {
-	(void)statx_flags;
 	fuse_ino_t ino = single_open_file_path_to_ino(fi, path);
 	bool filled;
 
 	if (!ino)
 		return -ENOENT;
+
+	if ((statx_flags & AT_STATX_FORCE_SYNC) && is_single_file_ino(ino) &&
+	    single_file.backing_fd >= 0) {
+		int ret = fsync(single_file.backing_fd);
+
+		if (ret)
+			return -errno;
+	}
 
 	pthread_mutex_lock(&single_file.lock);
 	filled = sf_statx(ino, statx_mask, stx);
