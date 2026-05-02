@@ -224,7 +224,13 @@ if systemd_system_unit_dir == ''
 endif
 
 if systemd_system_unit_dir == '' or private_cfg.get('HAVE_SYSTEMD_HEADERS', false) == false
-  warning('systemd service support will not be built')
+  if systemd_system_unit_dir == ''
+    warning('systemd service support will not be built: systemd unit directory not found')
+  elif private_cfg.get('HAVE_SYSTEMD_HEADERS', false) == false
+    warning('systemd service support will not be built: systemd headers (libsystemd-dev) not found')
+  else
+    warning('systemd service support will not be built')
+  endif
 else
   private_cfg.set_quoted('SYSTEMD_SYSTEM_UNIT_DIR', systemd_system_unit_dir)
   private_cfg.set('HAVE_SYSTEMD', true)
@@ -381,3 +387,19 @@ foreach n : subdirs
     subdir(n)
 endforeach
 
+#
+# Configuration summary
+#
+summary({
+  'Examples': get_option('examples'),
+  'Tests': get_option('tests'),
+  'Utils': get_option('utils'),
+}, section: 'Build Options')
+
+summary({
+  'io_uring support': private_cfg.get('HAVE_URING', false),
+  'USDT tracing': private_cfg.get('USDT_ENABLED', false),
+  'systemd service support': private_cfg.get('HAVE_SYSTEMD', false),
+  'systemd headers': private_cfg.get('HAVE_SYSTEMD_HEADERS', false),
+  'systemd unit directory': systemd_system_unit_dir != '' ? systemd_system_unit_dir : '(not found)',
+}, section: 'Features')
