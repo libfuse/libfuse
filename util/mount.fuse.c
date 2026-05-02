@@ -267,7 +267,9 @@ static int mount_service_child(char **argv)
 		return MOUNT_SERVICE_FALLBACK_NEEDED;
 	}
 
-	ret = waitpid(child_pid, &child_status, 0);
+	do {
+		ret = waitpid(child_pid, &child_status, 0);
+	} while (ret < 0 && errno == EINTR);
 	if (ret < 0) {
 		fprintf(stderr, "%s: could not wait for %s helper: %s\n",
 			argv[0], FUSERVICEMOUNT_PROG, strerror(errno));
