@@ -20,21 +20,22 @@
 #include "fuse_i.h"
 #include "fuse_service.h"
 
-int fuse_service_receive_file(struct fuse_service *sf, const char *path,
+int fuse_service_receive_file(const struct fuse_service *sf, const char *path,
 			      int *fdp)
 {
 	*fdp = -1;
 	return -EOPNOTSUPP;
 }
 
-int fuse_service_request_file(struct fuse_service *sf, const char *path,
+int fuse_service_request_file(const struct fuse_service *sf, const char *path,
 			      int open_flags, mode_t create_mode,
 			      unsigned int request_flags)
 {
 	return -EOPNOTSUPP;
 }
 
-int fuse_service_request_blockdev(struct fuse_service *sf, const char *path,
+int fuse_service_request_blockdev(const struct fuse_service *sf,
+				  const char *path,
 				  int open_flags, mode_t create_mode,
 				  unsigned int request_flags,
 				  unsigned int block_size)
@@ -70,7 +71,7 @@ char *fuse_service_cmdline(int argc, const char * const *argv,
 	return NULL;
 }
 
-int fuse_service_finish_file_requests(struct fuse_service *sf)
+int fuse_service_finish_file_requests(const struct fuse_service *sf)
 {
 	return -EOPNOTSUPP;
 }
@@ -87,7 +88,7 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
 	return -EOPNOTSUPP;
 }
 
-int fuse_service_session_unmount(struct fuse_service *sf)
+int fuse_service_session_unmount(const struct fuse_service *sf)
 {
 	return -EOPNOTSUPP;
 }

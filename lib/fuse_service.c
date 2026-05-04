@@ -162,7 +162,7 @@ static ssize_t __recv_packet(const struct fuse_service *sf, void *ptr,
 	return recvmsg(sf->sockfd, &msg, MSG_TRUNC);
 }
 
-int fuse_service_receive_file(struct fuse_service *sf, const char *path,
+int fuse_service_receive_file(const struct fuse_service *sf, const char *path,
 			      int *fdp)
 {
 	struct fuse_service_requested_file *req;
@@ -278,7 +278,7 @@ out_free:
 	return ret;
 }
 
-int fuse_service_request_file(struct fuse_service *sf, const char *path,
+int fuse_service_request_file(const struct fuse_service *sf, const char *path,
 			      int open_flags, mode_t create_mode,
 			      unsigned int request_flags)
 {
@@ -286,7 +286,8 @@ int fuse_service_request_file(struct fuse_service *sf, const char *path,
 					 create_mode, request_flags, 0);
 }
 
-int fuse_service_request_blockdev(struct fuse_service *sf, const char *path,
+int fuse_service_request_blockdev(const struct fuse_service *sf,
+				  const char *path,
 				  int open_flags, mode_t create_mode,
 				  unsigned int request_flags,
 				  unsigned int block_size)
@@ -752,7 +753,7 @@ out_new_args:
 }
 
 #ifdef SO_PASSRIGHTS
-int fuse_service_finish_file_requests(struct fuse_service *sf)
+int fuse_service_finish_file_requests(const struct fuse_service *sf)
 {
 	int zero = 0;
 	int ret;
@@ -777,7 +778,7 @@ int fuse_service_finish_file_requests(struct fuse_service *sf)
 	return 0;
 }
 #else
-int fuse_service_finish_file_requests(struct fuse_service *sf)
+int fuse_service_finish_file_requests(const struct fuse_service *sf)
 {
 	(void)sf;
 	return 0;
@@ -1102,7 +1103,7 @@ out_strings:
 	return ret;
 }
 
-int fuse_service_session_unmount(struct fuse_service *sf)
+int fuse_service_session_unmount(const struct fuse_service *sf)
 {
 	struct fuse_service_simple_reply reply = { };
 	struct fuse_service_unmount_command c = {

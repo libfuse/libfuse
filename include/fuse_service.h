@@ -139,7 +139,7 @@ int fuse_service_parse_cmdline_opts(struct fuse_args *args,
  * @param request_flags set of FUSE_SERVICE_REQUEST_* flags
  * @return 0 on success, or negative errno on failure
  */
-int fuse_service_request_file(struct fuse_service *sf, const char *path,
+int fuse_service_request_file(const struct fuse_service *sf, const char *path,
 			      int open_flags, mode_t create_mode,
 			      unsigned int request_flags);
 
@@ -155,7 +155,8 @@ int fuse_service_request_file(struct fuse_service *sf, const char *path,
  * @param block_size set the block device block size to this value
  * @return 0 on success, or negative errno on failure
  */
-int fuse_service_request_blockdev(struct fuse_service *sf, const char *path,
+int fuse_service_request_blockdev(const struct fuse_service *sf,
+				  const char *path,
 				  int open_flags, mode_t create_mode,
 				  unsigned int request_flags,
 				  unsigned int block_size);
@@ -169,7 +170,7 @@ int fuse_service_request_blockdev(struct fuse_service *sf, const char *path,
  *      descriptor value on success, or negative errno on failure
  * @return 0 on success, or negative errno on socket communication failure
  */
-int fuse_service_receive_file(struct fuse_service *sf,
+int fuse_service_receive_file(const struct fuse_service *sf,
 			      const char *path, int *fdp);
 
 /**
@@ -178,7 +179,7 @@ int fuse_service_receive_file(struct fuse_service *sf,
  * @param sf service context
  * @return 0 on success, or negative errno on failure
  */
-int fuse_service_finish_file_requests(struct fuse_service *sf);
+int fuse_service_finish_file_requests(const struct fuse_service *sf);
 
 /**
  * Require that the filesystem mount point have the expected file format
@@ -215,7 +216,7 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
  * @param sf service context
  * @return 0 on success, or negative errno on failure
  */
-int fuse_service_session_unmount(struct fuse_service *sf);
+int fuse_service_session_unmount(const struct fuse_service *sf);
 
 /**
  * Bid farewell to the mount.service helper.  It is still necessary to call
