@@ -821,7 +821,8 @@ static void try_fsopen(struct mount_service *mo)
 	/*
 	 * As of Linux 7.0 you can pass subtypes to fsopen, but the manpage for
 	 * fsopen only says that you can pass any value of the second column of
-	 * /proc/filesystems into fsopen.
+	 * /proc/filesystems into fsopen.  You must still call fsconfig() for
+	 * the subtype separately, however.
 	 */
 	mo->fsopenfd = fsopen(fsname(mo), FSOPEN_CLOEXEC);
 }

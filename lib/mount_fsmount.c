@@ -359,6 +359,19 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		goto out_free;
 	}
 
+	/* Configure subtype */
+	if (subtype) {
+		res = fsconfig(fsfd, FSCONFIG_SET_STRING, "subtype",
+			       subtype, 0);
+		if (res) {
+			err = -errno;
+			log_fsconfig_kmsg(fsfd);
+			fprintf(stderr, "fuse: fsconfig subtype failed: %s\n",
+				strerror(-err));
+			goto out_free;
+		}
+	}
+
 	/* Configure source */
 	res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", source, 0);
 	if (res == -1) {
