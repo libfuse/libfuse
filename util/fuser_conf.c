@@ -103,16 +103,15 @@ static int count_fuse_fs_ls_mnt(const char *progname)
 	#define MNT_ID_LEN 128
 
 	int fuse_count = 0;
-	int n_mounts = 0;
-	int ret = 0;
 	uint64_t mnt_ids[MNT_ID_LEN];
 	unsigned char smbuf[SMBUF_SIZE];
 	struct mnt_id_req req = {
 		.size = sizeof(struct mnt_id_req),
 	};
-	struct statmount *sm;
 
 	for (;;) {
+		int n_mounts;
+
 		req.mnt_id = LSMT_ROOT;
 
 		n_mounts = syscall(SYS_listmount, &req, &mnt_ids, MNT_ID_LEN, 0);
@@ -125,6 +124,8 @@ static int count_fuse_fs_ls_mnt(const char *progname)
 		}
 
 		for (int i = 0; i < n_mounts; i++) {
+			int ret;
+
 			req.mnt_id = mnt_ids[i];
 			req.param = STATMOUNT_FS_TYPE;
 			ret = syscall(SYS_statmount, &req, &smbuf, SMBUF_SIZE, 0);
@@ -137,7 +138,7 @@ static int count_fuse_fs_ls_mnt(const char *progname)
 				return -1;
 			}
 
-			sm = (struct statmount *)smbuf;
+			const struct statmount *sm = (struct statmount *)smbuf;
 			if (sm->mask & STATMOUNT_FS_TYPE &&
 			    strcmp(&sm->str[sm->fs_type], "fuse") == 0)
 				fuse_count++;
