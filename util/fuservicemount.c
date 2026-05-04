@@ -29,7 +29,7 @@ static int check_service(const char *fstype)
 
 int main(int argc, char *argv[])
 {
-	char *fstype = NULL;
+	const char *fstype = NULL;
 	bool check = false;
 	int i;
 

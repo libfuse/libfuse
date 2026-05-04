@@ -97,7 +97,7 @@ static inline bool have_real_mtabopts(const struct mount_service *mo)
 	return mo->mtabopts && mo->mtabopts != &IGNORE_MTAB;
 }
 
-static ssize_t __send_fd(struct mount_service *mo,
+static ssize_t __send_fd(const struct mount_service *mo,
 			 struct fuse_service_requested_file *req,
 			 size_t req_sz, int fd)
 {
@@ -132,7 +132,8 @@ static ssize_t __send_fd(struct mount_service *mo,
 	return sendmsg(mo->sockfd, &msg, MSG_EOR | MSG_NOSIGNAL);
 }
 
-static ssize_t __send_packet(struct mount_service *mo, void *ptr, size_t len)
+static ssize_t __send_packet(const struct mount_service *mo, void *ptr,
+			     size_t len)
 {
 	struct iovec iov = {
 		.iov_base = ptr,
@@ -146,7 +147,7 @@ static ssize_t __send_packet(struct mount_service *mo, void *ptr, size_t len)
 	return sendmsg(mo->sockfd, &msg, MSG_EOR | MSG_NOSIGNAL);
 }
 
-static ssize_t __recv_packet_size(struct mount_service *mo)
+static ssize_t __recv_packet_size(const struct mount_service *mo)
 {
 	struct iovec iov = { };
 	struct msghdr msg = {
@@ -156,7 +157,8 @@ static ssize_t __recv_packet_size(struct mount_service *mo)
 	return recvmsg(mo->sockfd, &msg, MSG_PEEK | MSG_TRUNC);
 }
 
-static ssize_t __recv_packet(struct mount_service *mo, void *ptr, size_t len)
+static ssize_t __recv_packet(const struct mount_service *mo, void *ptr,
+			     size_t len)
 {
 	struct iovec iov = {
 		.iov_base = ptr,
@@ -198,7 +200,7 @@ const char *mount_service_subtype(const char *fstype)
 
 static int mount_service_init(struct mount_service *mo, int argc, char *argv[])
 {
-	char *fstype = NULL;
+	const char *fstype = NULL;
 	const char *subtype;
 	int i;
 
@@ -237,7 +239,7 @@ static int mount_service_init(struct mount_service *mo, int argc, char *argv[])
 }
 
 #ifdef SO_PASSRIGHTS
-static int try_drop_passrights(struct mount_service *mo, int sockfd)
+static int try_drop_passrights(const struct mount_service *mo, int sockfd)
 {
 	int zero = 0;
 	int ret;
@@ -260,7 +262,7 @@ static int try_drop_passrights(struct mount_service *mo, int sockfd)
 # define try_drop_passrights(...)	(0)
 #endif
 
-static int check_sendbuf_size(struct mount_service *mo, int sockfd)
+static int check_sendbuf_size(const struct mount_service *mo, int sockfd)
 {
 	const size_t min_size = sizeof_fuse_service_open_command(PATH_MAX);
 	int sendbuf_size = -1;
@@ -344,7 +346,7 @@ out:
 	return -1;
 }
 
-static int mount_service_send_hello(struct mount_service *mo)
+static int mount_service_send_hello(const struct mount_service *mo)
 {
 	struct fuse_service_hello hello = {
 		.p.magic = htonl(FUSE_SERVICE_HELLO_CMD),
@@ -398,7 +400,7 @@ static int mount_service_send_hello(struct mount_service *mo)
 	return 0;
 }
 
-static int mount_service_capture_arg(struct mount_service *mo,
+static int mount_service_capture_arg(const struct mount_service *mo,
 				     struct fuse_service_memfd_argv *args,
 				     const char *string, off_t *array_pos,
 				     off_t *string_pos)
@@ -510,7 +512,7 @@ static int mount_service_capture_args(struct mount_service *mo, int argc,
 	return 0;
 }
 
-static int mount_service_send_file(struct mount_service *mo,
+static int mount_service_send_file(const struct mount_service *mo,
 				   const char *path, int fd)
 {
 	struct fuse_service_requested_file *req;
@@ -548,8 +550,8 @@ out_req:
 	return ret;
 }
 
-static int mount_service_send_file_error(struct mount_service *mo, int error,
-					 const char *path)
+static int mount_service_send_file_error(const struct mount_service *mo,
+					 int error, const char *path)
 {
 	struct fuse_service_requested_file *req;
 	const size_t req_sz =
@@ -619,7 +621,7 @@ out_fusedevfd:
 	return ret;
 }
 
-static int mount_service_receive_command(struct mount_service *mo,
+static int mount_service_receive_command(const struct mount_service *mo,
 					 struct fuse_service_packet **commandp,
 					 size_t *commandsz)
 {
@@ -676,7 +678,7 @@ static int mount_service_receive_command(struct mount_service *mo,
 	return 0;
 }
 
-static int mount_service_send_reply(struct mount_service *mo, int error)
+static int mount_service_send_reply(const struct mount_service *mo, int error)
 {
 	struct fuse_service_simple_reply reply = {
 		.p.magic = htonl(FUSE_SERVICE_SIMPLE_REPLY),
@@ -694,8 +696,8 @@ static int mount_service_send_reply(struct mount_service *mo, int error)
 	return 0;
 }
 
-static int prepare_bdev(struct mount_service *mo,
-			struct fuse_service_open_command *oc, int fd)
+static int prepare_bdev(const struct mount_service *mo,
+			const struct fuse_service_open_command *oc, int fd)
 {
 	struct stat stbuf;
 	int ret;
@@ -734,11 +736,11 @@ static int prepare_bdev(struct mount_service *mo,
 	return 0;
 }
 
-static int mount_service_open_path(struct mount_service *mo,
+static int mount_service_open_path(const struct mount_service *mo,
 				   mode_t expected_fmt,
 				   struct fuse_service_packet *p, size_t psz)
 {
-	struct fuse_service_open_command *oc =
+	const struct fuse_service_open_command *oc =
 			container_of(p, struct fuse_service_open_command, p);
 	uint32_t request_flags;
 	int open_flags;
@@ -796,14 +798,14 @@ static int mount_service_open_path(struct mount_service *mo,
 	return ret;
 }
 
-static int mount_service_handle_open_cmd(struct mount_service *mo,
+static int mount_service_handle_open_cmd(const struct mount_service *mo,
 					 struct fuse_service_packet *p,
 					 size_t psz)
 {
 	return mount_service_open_path(mo, 0, p, psz);
 }
 
-static int mount_service_handle_open_bdev_cmd(struct mount_service *mo,
+static int mount_service_handle_open_bdev_cmd(const struct mount_service *mo,
 					      struct fuse_service_packet *p,
 					      size_t psz)
 {
@@ -834,7 +836,7 @@ static int mount_service_handle_fsopen_cmd(struct mount_service *mo,
 					   const struct fuse_service_packet *p,
 					   size_t psz)
 {
-	struct fuse_service_fsopen_command *oc =
+	const struct fuse_service_fsopen_command *oc =
 			container_of(p, struct fuse_service_fsopen_command, p);
 	uint32_t fsopen_flags;
 
@@ -1059,7 +1061,8 @@ static int mount_service_handle_mtabopts_cmd(struct mount_service *mo,
 	struct fuse_service_string_command *oc =
 			container_of(p, struct fuse_service_string_command, p);
 	char *tokstr = oc->value;
-	char *tok, *savetok;
+	const char *tok;
+	char *savetok;
 
 	if (psz < sizeof_fuse_service_string_command(1)) {
 		fprintf(stderr, "%s: mtab options command too small\n",
@@ -1284,9 +1287,10 @@ out_error:
 
 static int mount_service_handle_mountpoint_cmd(struct mount_service *mo,
 					       const struct fuse_service_packet *p,
-					       size_t psz, int argc, char *argv[])
+					       size_t psz, int argc,
+					       const char * const argv[])
 {
-	struct fuse_service_mountpoint_command *oc =
+	const struct fuse_service_mountpoint_command *oc =
 			container_of(p, struct fuse_service_mountpoint_command, p);
 	char *mntpt;
 	mode_t expected_fmt;
@@ -1373,8 +1377,8 @@ static inline int format_libfuse_mntopts(char *buf, size_t bufsz,
 }
 
 static int mount_service_regular_mount(struct mount_service *mo,
-				       struct fuse_service_mount_command *oc,
-				       struct stat *stbuf)
+				       const struct fuse_service_mount_command *oc,
+				       const struct stat *stbuf)
 {
 	char *fstype = NULL;
 	char *realmopts;
@@ -1534,8 +1538,8 @@ static int set_ms_flags(struct mount_service *mo, unsigned long ms_flags)
 }
 
 static int mount_service_fsopen_mount(struct mount_service *mo,
-				      struct fuse_service_mount_command *oc,
-				      struct stat *stbuf)
+				      const struct fuse_service_mount_command *oc,
+				      const struct stat *stbuf)
 {
 	char tmp[64];
 	unsigned long ms_flags;
@@ -1729,7 +1733,7 @@ out_fd:
 	return ret;
 }
 
-static void adjust_nonroot_mount_flags(struct mount_service *mo,
+static void adjust_nonroot_mount_flags(const struct mount_service *mo,
 				       struct fuse_service_mount_command *oc)
 {
 	const struct mount_flags *mf;
@@ -1905,11 +1909,11 @@ static int mount_service_handle_unmount_cmd(struct mount_service *mo,
 	return mount_service_send_reply(mo, 0);
 }
 
-static int mount_service_handle_bye_cmd(struct mount_service *mo,
+static int mount_service_handle_bye_cmd(const struct mount_service *mo,
 					struct fuse_service_packet *p,
 					size_t psz)
 {
-	struct fuse_service_bye_command *bc =
+	const struct fuse_service_bye_command *bc =
 			container_of(p, struct fuse_service_bye_command, p);
 	int ret;
 
@@ -2033,7 +2037,7 @@ int mount_service_main(int argc, char *argv[])
 			break;
 		case FUSE_SERVICE_MNTPT_CMD:
 			ret = mount_service_handle_mountpoint_cmd(&mo, p, sz,
-								  argc, argv);
+					argc, (const char * const *)argv);
 			break;
 		case FUSE_SERVICE_MTABOPTS_CMD:
 			ret = mount_service_handle_mtabopts_cmd(&mo, p, sz);
