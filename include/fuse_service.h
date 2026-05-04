@@ -48,7 +48,7 @@ int fuse_service_accept(struct fuse_service **sfp);
  * @param sf service context
  * @return true if it has, false if not
  */
-static inline bool fuse_service_accepted(struct fuse_service *sf)
+static inline bool fuse_service_accepted(const struct fuse_service *sf)
 {
 	return sf != NULL;
 }
@@ -59,7 +59,7 @@ static inline bool fuse_service_accepted(struct fuse_service *sf)
  * @param sf service context
  * @return true if it has, false if not
  */
-bool fuse_service_can_allow_other(struct fuse_service *sf);
+bool fuse_service_can_allow_other(const struct fuse_service *sf);
 
 /**
  * Release all resources associated with the service context.
@@ -97,7 +97,8 @@ int fuse_service_append_args(struct fuse_service *sf, struct fuse_args *args);
  * @param args fuse args structure
  * @return effective command line string, or NULL
  */
-char *fuse_service_cmdline(int argc, char *argv[], struct fuse_args *args);
+char *fuse_service_cmdline(int argc, const char * const *argv,
+			   struct fuse_args *args);
 
 struct fuse_cmdline_opts;
 

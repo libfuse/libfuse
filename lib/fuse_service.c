@@ -53,7 +53,7 @@ struct fuse_service {
 	bool allow_other;
 };
 
-static int __recv_fd(struct fuse_service *sf,
+static int __recv_fd(const struct fuse_service *sf,
 		     struct fuse_service_requested_file *buf,
 		     ssize_t bufsize, int *fdp)
 {
@@ -132,7 +132,8 @@ static int __recv_fd(struct fuse_service *sf,
 	return 0;
 }
 
-static ssize_t __send_packet(struct fuse_service *sf, void *ptr, size_t len)
+static ssize_t __send_packet(const struct fuse_service *sf, void *ptr,
+			     size_t len)
 {
 	struct iovec iov = {
 		.iov_base = ptr,
@@ -146,7 +147,8 @@ static ssize_t __send_packet(struct fuse_service *sf, void *ptr, size_t len)
 	return sendmsg(sf->sockfd, &msg, MSG_EOR | MSG_NOSIGNAL);
 }
 
-static ssize_t __recv_packet(struct fuse_service *sf, void *ptr, size_t len)
+static ssize_t __recv_packet(const struct fuse_service *sf, void *ptr,
+			     size_t len)
 {
 	struct iovec iov = {
 		.iov_base = ptr,
@@ -219,7 +221,8 @@ out_req:
 
 #define FUSE_SERVICE_REQUEST_FILE_FLAGS	(FUSE_SERVICE_REQUEST_FILE_QUIET)
 
-static int fuse_service_request_path(struct fuse_service *sf, const char *path,
+static int fuse_service_request_path(const struct fuse_service *sf,
+				     const char *path,
 				     mode_t expected_fmt, int open_flags,
 				     mode_t create_mode,
 				     unsigned int request_flags,
@@ -322,8 +325,8 @@ int fuse_service_send_goodbye(struct fuse_service *sf, int exitcode)
 
 static int count_listen_fds(void)
 {
-	char *listen_fds;
-	char *listen_pid;
+	const char *listen_fds;
+	const char *listen_pid;
 	char *p;
 	long l;
 
@@ -589,7 +592,7 @@ out_sf:
 	return ret;
 }
 
-bool fuse_service_can_allow_other(struct fuse_service *sf)
+bool fuse_service_can_allow_other(const struct fuse_service *sf)
 {
 	return sf->allow_other;
 }
@@ -781,7 +784,7 @@ int fuse_service_finish_file_requests(struct fuse_service *sf)
 }
 #endif
 
-static int send_fsopen(struct fuse_service *sf, const char *fstype,
+static int send_fsopen(const struct fuse_service *sf, const char *fstype,
 		       int *errorp)
 {
 	struct fuse_service_simple_reply reply = { };
@@ -825,7 +828,7 @@ static int send_fsopen(struct fuse_service *sf, const char *fstype,
 	return 0;
 }
 
-static int send_string(struct fuse_service *sf, uint32_t command,
+static int send_string(const struct fuse_service *sf, uint32_t command,
 		       const char *value, int *errorp)
 {
 	struct fuse_service_simple_reply reply = { };
@@ -877,7 +880,7 @@ static int send_string(struct fuse_service *sf, uint32_t command,
 	return 0;
 }
 
-static int send_mountpoint(struct fuse_service *sf, mode_t expected_fmt,
+static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
 			   const char *value, int *errorp)
 {
 	struct fuse_service_simple_reply reply = { };
@@ -932,7 +935,7 @@ static int send_mountpoint(struct fuse_service *sf, mode_t expected_fmt,
 	return 0;
 }
 
-static int send_mount(struct fuse_service *sf, unsigned int ms_flags,
+static int send_mount(const struct fuse_service *sf, unsigned int ms_flags,
 		      int *errorp)
 {
 	struct fuse_service_simple_reply reply = { };
@@ -1175,12 +1178,13 @@ void fuse_service_destroy(struct fuse_service **sfp)
 	*sfp = NULL;
 }
 
-char *fuse_service_cmdline(int argc, char *argv[], struct fuse_args *args)
+char *fuse_service_cmdline(int argc, const char * const *argv,
+			   struct fuse_args *args)
 {
 	char *p, *dst;
 	size_t len = 1;
 	ssize_t ret;
-	char *argv0;
+	const char *argv0;
 	unsigned int i;
 
 	/* Try to preserve argv[0] */
