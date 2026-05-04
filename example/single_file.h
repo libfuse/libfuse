@@ -114,7 +114,7 @@ int single_file_opt_proc(void *data, const char *arg, int key,
 unsigned long long parse_num_blocks(const char *arg, int log_block_size);
 
 struct fuse_service;
-int single_file_service_open(struct fuse_service *sf, const char *path);
+int single_file_service_open(const struct fuse_service *sf, const char *path);
 
 void single_file_check_read(off_t pos, size_t *count);
 int single_file_check_write(off_t pos, size_t *count);

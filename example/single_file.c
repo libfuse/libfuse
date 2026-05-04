@@ -756,7 +756,7 @@ int single_file_opt_proc(void *data, const char *arg, int key,
 	return 1;
 }
 
-int single_file_service_open(struct fuse_service *sf, const char *path)
+int single_file_service_open(const struct fuse_service *sf, const char *path)
 {
 	int open_flags = single_file.ro ? O_RDONLY : O_RDWR;
 	int fd;
