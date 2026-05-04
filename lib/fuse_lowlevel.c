@@ -4475,9 +4475,9 @@ static int session_start_sync_init(struct fuse_session *se, int fd)
 {
 	int err, res;
 
-	if (!se->want_sync_init &&
-		(se->uring.enable && !fuse_daemonize_is_used())) {
-		if (se->debug)
+	if (!se->want_sync_init) {
+		/* SYNC_INIT is required for io_uring(?) */
+		if ((se->uring.enable && !fuse_daemonize_is_used()) || se->debug)
 			fuse_log(FUSE_LOG_DEBUG,
 					"fuse: sync init not enabled\n");
 		return 0;
