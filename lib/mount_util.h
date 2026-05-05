@@ -18,7 +18,8 @@ struct mount_flags {
 	unsigned long flag;
 	int on;
 	int safe; /* used by fusermount */
-	unsigned long mount_attr; /* MOUNT_ATTR_* value for fsmount (0 = fsconfig flag) */
+	int is_fsconfig; /* apply via fsconfig SET_FLAG (superblock-level) */
+	unsigned long mount_attr; /* MOUNT_ATTR_* for fsmount (0 = none) */
 };
 extern const struct mount_flags mount_flags[];
 
