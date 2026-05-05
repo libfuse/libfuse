@@ -39,6 +39,7 @@
  * Convert MS_* mount flags to MOUNT_ATTR_* mount attributes.
  * These flags are passed to fsmount(), not fsconfig().
  * Mount attributes control mount-point level behavior.
+ * To called after set_ms_flags() which consumes the fsconfig flags.
  *
  * @attrs MOUNT_ATTR flags, built from MS_ flags
  * @return remaining flags
@@ -108,8 +109,12 @@ static void log_fsconfig_kmsg(int fd)
 
 /*
  * Apply VFS superblock (fsconfig) flags to the filesystem context.
- * Only handles flags that are filesystem parameters (ro, sync, dirsync).
- * Mount attributes (nosuid, nodev, etc.) are handled separately via fsmount().
+ * Handles the fsconfig leg of every entry whose is_fsconfig is set
+ * (ro, rw, sync, async, dirsync). Mount attributes (nosuid, nodev, etc.)
+ * are handled separately via fsmount().
+ *
+ * Entries that have *both* legs (ro/rw) leave the MS_ bit in *ms_flags
+ * so that ms_flags_to_mount_attrs() can also pick them up.
  *
  * @ms_flags flags to set, outvalue are the remaining flags
  * @return 0 on success, negative error code on failure
@@ -120,8 +125,7 @@ static int set_ms_flags(int fsfd, unsigned long *ms_flags)
 	int i;
 
 	for (i = 0; mount_flags[i].opt != NULL && flags != 0; i++) {
-		/* Only process fsconfig flags (mount_attr == 0) with on==1 */
-		if (mount_flags[i].mount_attr || !mount_flags[i].on)
+		if (!mount_flags[i].is_fsconfig || !mount_flags[i].on)
 			continue;
 
 		if (!(flags & mount_flags[i].flag))
@@ -137,7 +141,14 @@ static int set_ms_flags(int fsfd, unsigned long *ms_flags)
 
 			return -save_errno;
 		}
-		flags &= ~mount_flags[i].flag;
+
+		/*
+		 * Only consume the bit if no fsmount mount-attr leg is
+		 * also pending for this option. Otherwise leave it for
+		 * ms_flags_to_mount_attrs() to apply via fsmount().
+		 */
+		if (!mount_flags[i].mount_attr)
+			flags &= ~mount_flags[i].flag;
 	}
 
 	*ms_flags = flags;
