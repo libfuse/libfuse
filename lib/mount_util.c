@@ -110,8 +110,8 @@
 
 const struct mount_flags mount_flags[] = {
 /* opt            flag             on  safe  mount_attr */
-{"rw",           MS_RDONLY,        0,  1,    0},                      /* fsconfig */
-{"ro",           MS_RDONLY,        1,  1,    0},                      /* fsconfig */
+{"rw",           MS_RDONLY,        0,  1,    MOUNT_ATTR_RDONLY},     /* fsconfig */
+{"ro",           MS_RDONLY,        1,  1,    MOUNT_ATTR_RDONLY},     /* fsconfig */
 {"suid",         MS_NOSUID,        0,  0,    MOUNT_ATTR_NOSUID},     /* fsmount  */
 {"nosuid",       MS_NOSUID,        1,  1,    MOUNT_ATTR_NOSUID},     /* fsmount  */
 {"dev",          MS_NODEV,         0,  1,    MOUNT_ATTR_NODEV},      /* fsmount  */
