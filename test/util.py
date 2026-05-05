@@ -125,6 +125,51 @@ def umount(mount_process, mnt_dir):
     pytest.fail('mount process did not terminate')
 
 
+def parse_mountinfo(mnt_dir):
+    '''Return the /proc/self/mountinfo entry for *mnt_dir*, or None.
+
+    Parses the line for the mountpoint and returns a dict with keys:
+      'mountpoint'    - the mount point path (str)
+      'fstype'        - filesystem type as the kernel sees it,
+                        e.g. 'fuse' or 'fuse.<subtype>' (str)
+      'source'        - mount source field, e.g. 'hello' or
+                        '<subtype>#<fsname>' fallback form (str)
+      'mount_options' - per-mount options/attrs (set of str), e.g.
+                        {'rw','nosuid','nodev','noatime','relatime'}
+      'super_options' - superblock options from the filesystem (set of
+                        str), e.g. {'rw','user_id=1000','group_id=1000',
+                        'default_permissions','allow_other','max_read=...'}
+
+    These fields are exactly what /proc/self/mountinfo exposes (see
+    `man 5 proc.5_mountinfo`); they capture the post-mount state that
+    differs between the legacy mount(2) path and the new fsopen/fsconfig/
+    fsmount path. Asserting on this dict catches bugs where one path
+    drops a parameter the other passes (e.g. `subtype` showing up in
+    `fstype`, `user=` ending up only in /run/mount/utab, ...).
+    '''
+    target = os.path.realpath(mnt_dir)
+    with open('/proc/self/mountinfo') as fh:
+        for line in fh:
+            parts = line.rstrip('\n').split(' ')
+            try:
+                sep = parts.index('-')
+            except ValueError:
+                continue
+            if len(parts) < sep + 4 or sep < 6:
+                continue
+            mountpoint = parts[4].replace('\\040', ' ')
+            if mountpoint != target:
+                continue
+            return {
+                'mountpoint':    mountpoint,
+                'fstype':        parts[sep + 1],
+                'source':        parts[sep + 2].replace('\\040', ' '),
+                'mount_options': set(parts[5].split(',')),
+                'super_options': set(parts[sep + 3].split(',')),
+            }
+    return None
+
+
 def safe_sleep(secs):
     '''Like time.sleep(), but sleep for at least *secs*
 
