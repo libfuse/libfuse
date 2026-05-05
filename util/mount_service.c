@@ -1457,73 +1457,48 @@ struct ms_to_mount_map {
 	unsigned int mount_attr_flag;
 };
 
-static const struct ms_to_mount_map attrs[] = {
-	{ MS_RDONLY,		MOUNT_ATTR_RDONLY },
-	{ MS_NOSUID,		MOUNT_ATTR_NOSUID },
-	{ MS_NODEV,		MOUNT_ATTR_NODEV },
-	{ MS_NOEXEC,		MOUNT_ATTR_NOEXEC },
-	{ MS_RELATIME,		MOUNT_ATTR_RELATIME },
-	{ MS_NOATIME,		MOUNT_ATTR_NOATIME },
-	{ MS_STRICTATIME,	MOUNT_ATTR_STRICTATIME },
-	{ MS_NODIRATIME,	MOUNT_ATTR_NODIRATIME },
-#ifdef MOUNT_ATTR_NOSYMFOLLOW
-	{ MS_NOSYMFOLLOW,	MOUNT_ATTR_NOSYMFOLLOW },
-#endif
-	{ 0, 0 },
-};
-
 static void get_mount_attr_flags(const struct fuse_service_mount_command *oc,
 				 unsigned int *attr_flags,
 				 unsigned long *leftover_ms_flags)
 {
-	const struct ms_to_mount_map *i;
+	const struct mount_flags *i;
 	unsigned int ms_flags = ntohl(oc->ms_flags);
 	unsigned int mount_attr_flags = 0;
 
-	for (i = attrs; i->ms_flag != 0; i++) {
-		if (ms_flags & i->ms_flag)
-			mount_attr_flags |= i->mount_attr_flag;
-		ms_flags &= ~i->ms_flag;
+	for (i = mount_flags; i->opt != NULL; i++) {
+		if (!i->on || !(ms_flags & i->flag))
+			continue;
+
+		mount_attr_flags |= i->mount_attr;
+		ms_flags &= ~i->flag;
 	}
 
 	*leftover_ms_flags = ms_flags;
 	*attr_flags = mount_attr_flags;
 }
 
-struct ms_to_str_map {
-	unsigned long ms_flag;
-	const char *string;
-};
-
-static const struct ms_to_str_map strflags[] = {
-	{ MS_SYNCHRONOUS,	"sync" },
-	{ MS_DIRSYNC,		"dirsync" },
-	{ MS_LAZYTIME,		"lazytime" },
-	{ 0, 0 },
-};
-
 static int set_ms_flags(struct mount_service *mo, unsigned long ms_flags)
 {
-	const struct ms_to_str_map *i;
+	const struct mount_flags *i;
 	int ret;
 
-	for (i = strflags; i->ms_flag != 0; i++) {
-		if (!(ms_flags & i->ms_flag))
+	for (i = mount_flags; i->opt != NULL; i++) {
+		if (!i->on || !(ms_flags & i->flag))
 			continue;
 
-		ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_FLAG, i->string,
+		ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_FLAG, i->opt,
 			       NULL, 0);
 		if (ret) {
 			int error = errno;
 
 			fprintf(stderr, "%s: set %s option: %s\n",
-				mo->msgtag, i->string, strerror(error));
+				mo->msgtag, i->opt, strerror(error));
 			emit_fsconfig_messages(mo);
 
 			errno = error;
 			return -1;
 		}
-		ms_flags &= ~i->ms_flag;
+		ms_flags &= ~i->flag;
 	}
 
 	/*
