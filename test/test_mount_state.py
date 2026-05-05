@@ -105,12 +105,66 @@ def test_mountinfo_subtype_fsname(tmpdir, output_checker, name):
         'unexpected source: %r' % info['source']
 
 
-@pytest.mark.parametrize('name', ('hello', 'hello_ll'))
-def test_mountinfo_unprivileged_attrs(tmpdir, output_checker, name):
-    if os.getuid() == 0:
-        pytest.skip('only meaningful for unprivileged mounts via fusermount3')
-    with hello_mount(tmpdir, output_checker, name) as mnt:
-        info = parse_mountinfo(mnt)
+# (label, options, must-be-in mount_options, must-NOT-be-in mount_options)
+#
+# Library defaults are MS_NOSUID|MS_NODEV (lib/mount.c,
+# util/fusermount.c), so a no-options mount is expected to land
+# with both attrs set. The negation forms (suid/dev) clear the default
+# flags via lib/mount.c:set_mount_flag(), which on the new mount API
+# path means MOUNT_ATTR_NOSUID/MOUNT_ATTR_NODEV are not set in the
+# fsmount() call. Asserting their absence catches a routing bug where
+# the negation wasn't honored.
+ATTR_CASES = [
+    ('default',  (),          ('rw', 'nosuid', 'nodev'), ('ro',)),
+    ('ro',       ('ro',),     ('ro',),                   ('rw',)),
+    ('nosuid',   ('nosuid',), ('nosuid',),               ()),
+    ('nodev',    ('nodev',),  ('nodev',),                ()),
+]
+
+# suid/dev are root-only: the kernel rejects MS_NOSUID/MS_NODEV being
+# cleared for unprivileged mounts, and fusermount3 hard-codes them on
+# anyway (util/fusermount.c:988).
+ATTR_CASES_ROOT = [
+    ('suid',     ('suid',),   (),                        ('nosuid',)),
+    ('dev',      ('dev',),    (),                        ('nodev',)),
+]
+
+
+def _check_attrs(info, must_have, must_not_have):
     assert info is not None
-    assert 'nosuid' in info['mount_options']
-    assert 'nodev'  in info['mount_options']
+    for opt in must_have:
+        assert opt in info['mount_options'], \
+            '%r missing from mount_options=%r' % (opt, info['mount_options'])
+    for opt in must_not_have:
+        assert opt not in info['mount_options'], \
+            'unexpected %r in mount_options=%r' % (opt, info['mount_options'])
+
+
+@pytest.mark.parametrize('name', ('hello', 'hello_ll'))
+@pytest.mark.parametrize('label,opts,must_have,must_not_have', ATTR_CASES,
+                         ids=[c[0] for c in ATTR_CASES])
+def test_mountinfo_attrs(tmpdir, output_checker, name,
+                         label, opts, must_have, must_not_have):
+    with hello_mount(tmpdir, output_checker, name, opts) as mnt:
+        info = parse_mountinfo(mnt)
+    _check_attrs(info, must_have, must_not_have)
+    # ro/rw also surface in super_options; if we asked for ro the
+    # superblock must agree. Catches a path that sets MOUNT_ATTR_RDONLY
+    # but forgets the FSCONFIG-side MS_RDONLY (or vice versa).
+    if 'ro' in must_have:
+        assert 'ro' in info['super_options'], \
+            'ro on mount but rw on superblock: super_options=%r' % \
+                info['super_options']
+
+
+@pytest.mark.parametrize('name', ('hello', 'hello_ll'))
+@pytest.mark.parametrize('label,opts,must_have,must_not_have',
+                         ATTR_CASES_ROOT,
+                         ids=[c[0] for c in ATTR_CASES_ROOT])
+def test_mountinfo_attrs_root(tmpdir, output_checker, name,
+                              label, opts, must_have, must_not_have):
+    if os.getuid() != 0:
+        pytest.skip('clearing nosuid/nodev requires root')
+    with hello_mount(tmpdir, output_checker, name, opts) as mnt:
+        info = parse_mountinfo(mnt)
+    _check_attrs(info, must_have, must_not_have)
