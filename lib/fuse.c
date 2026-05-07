@@ -2685,11 +2685,12 @@ static void fuse_lib_lookup(fuse_req_t req, fuse_ino_t parent,
 	struct node *dot = NULL;
 
 	if (name[0] == '.') {
-		int len = strlen(name);
+		bool isdot = (name[1] == '\0');
+		bool isdotdot = ((name[1] == '.') && (name[2] == '\0'));
 
-		if (len == 1 || (name[1] == '.' && len == 2)) {
+		if (isdot || isdotdot) {
 			pthread_mutex_lock(&f->lock);
-			if (len == 1) {
+			if (isdot) {
 				if (f->conf.debug)
 					fuse_log(FUSE_LOG_DEBUG, "LOOKUP-DOT\n");
 				dot = get_node_nocheck(f, parent);
