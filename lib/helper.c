@@ -260,6 +260,7 @@ int fuse_main_real_versioned(int argc, char *argv[],
 	struct fuse_cmdline_opts opts;
 	int res;
 	struct fuse_loop_config *loop_config = NULL;
+	bool self_daemonize = false;
 
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
@@ -289,6 +290,21 @@ int fuse_main_real_versioned(int argc, char *argv[],
 		goto out1;
 	}
 
+	/* The application might have already started daemonization itself */
+	if (!fuse_daemonize_early_is_active()) {
+		int daemonize_early_flags = 0;
+
+		if (opts.foreground)
+			daemonize_early_flags |= FUSE_DAEMONIZE_NO_BACKGROUND;
+
+		res = fuse_daemonize_early_start(daemonize_early_flags);
+		if (res != 0) {
+			fuse_log(FUSE_LOG_ERR, "fuse: daemonize_early_start failed\n");
+			goto out1;
+		}
+		self_daemonize = true;
+	}
+
 	struct fuse *_fuse_new_31(struct fuse_args *args,
 			       const struct fuse_operations *op, size_t op_size,
 			       struct libfuse_version *version,
@@ -305,21 +321,13 @@ int fuse_main_real_versioned(int argc, char *argv[],
 		goto out2;
 	}
 
-	/*
-	 * fuse_daemonize() already checks and fails then, but we need to
-	 * handle it gracefully here, as this is done libfuse internal
-	 * and caller didn't ask to daemonize with old API.
-	 */
-	if (!fuse_daemonize_early_is_active()) {
-		if (fuse_daemonize(opts.foreground) != 0) {
-			res = 5;
-			goto out3;
-		}
-	}
 	if (fuse_set_signal_handlers(se) != 0) {
 		res = 6;
 		goto out3;
 	}
+
+	if (self_daemonize)
+		fuse_daemonize_early_success();
 
 	if (opts.singlethread)
 		res = fuse_loop(fuse);
