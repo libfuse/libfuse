@@ -30,8 +30,8 @@
 #define FUSE_DAEMONIZE_SUCCESS 0
 #define FUSE_DAEMONIZE_FAILURE 1
 
-	/* Private/internal data  */
-	struct fuse_daemonize {
+/* Private/internal data  */
+struct fuse_daemonize {
 	unsigned int flags;
 	int signal_pipe_wr;	/* write end for signaling parent */
 	int death_pipe_rd;	/* read end, POLLHUP when parent dies */
@@ -39,8 +39,8 @@
 	int stop_pipe_wr;	/* write end for stop signal */
 	pthread_t watcher;
 	bool watcher_started;
-	_Atomic bool active;
-	_Atomic bool daemonized;
+	_Atomic bool active;     /* daemonization in progress */
+	_Atomic bool daemonized; /* daemonized successfully */
 	_Atomic bool mounted;  /* fuse_session_mount() completed */
 	_Atomic bool got_init; /* got FUSE_INIT */
 };
@@ -211,18 +211,22 @@ int fuse_daemonize_early_start(unsigned int flags)
 	struct fuse_daemonize *dm = &daemonize;
 	int err = 0;
 
+	if (dm->active)
+		return 0; /* already called, no need for another fork */
+
 	dm->flags = flags;
 	dm->signal_pipe_wr = -1;
 	dm->death_pipe_rd = -1;
 	dm->stop_pipe_rd = -1;
 	dm->stop_pipe_wr = -1;
-	dm->active = true;
 
 	if (!(flags & FUSE_DAEMONIZE_NO_CHDIR))
 		(void)chdir("/");
 
-	if (!(flags & FUSE_DAEMONIZE_NO_BACKGROUND))
+	if (!(flags & FUSE_DAEMONIZE_NO_BACKGROUND)) {
+		dm->active = true;
 		err = do_daemonize(dm);
+	}
 
 	return err;
 }
