@@ -384,7 +384,7 @@ int main(int argc, char *argv[])
 	}
 
 	source = argv[1];
-	if (!source[0])
+	if (source && !source[0])
 		source = NULL;
 
 	mountpoint = argv[2];
