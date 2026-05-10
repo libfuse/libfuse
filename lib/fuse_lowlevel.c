@@ -4603,7 +4603,7 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
  */
 static int new_api_fusermount(struct fuse_session *se,
 			      const char *mountpoint,
-			      const char *mnt_opts,
+			      const char *mtab_opts,
 			      int *sock_fd, pid_t *fusermount_pid,
 			      bool *is_sync_init)
 {
@@ -4618,7 +4618,7 @@ static int new_api_fusermount(struct fuse_session *se,
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
 
 	/* Call fusermount3 with --sync-init */
-	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mnt_opts, sock_fd,
+	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mtab_opts, sock_fd,
 					fusermount_pid);
 	if (fd < 0) {
 		fuse_log(FUSE_LOG_ERR,
@@ -4657,12 +4657,12 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	int sock_fd = -1;
 	pid_t fusermount_pid = -1;
 	int res, err;
-	char *mnt_opts = NULL;
-	char *mnt_opts_with_fd = NULL;
+	char *mtab_opts = NULL;
+	char *mtab_opts_with_fd = NULL;
 	char fd_opt[32];
 	bool is_sync_init = false;
 
-	res = fuse_kern_mount_get_base_mnt_opts(se->mo, &mnt_opts);
+	res = fuse_kern_mount_get_base_mtab_opts(se->mo, &mtab_opts);
 	err = -EIO;
 	if (res == -1) {
 		fuse_log(FUSE_LOG_ERR,
@@ -4683,19 +4683,19 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 
 	snprintf(fd_opt, sizeof(fd_opt), "fd=%i", fd);
 	err = -ENOMEM;
-	if (fuse_opt_add_opt(&mnt_opts_with_fd, mnt_opts) == -1 ||
-	    fuse_opt_add_opt(&mnt_opts_with_fd, fd_opt) == -1) {
+	if (fuse_opt_add_opt(&mtab_opts_with_fd, mtab_opts) == -1 ||
+	    fuse_opt_add_opt(&mtab_opts_with_fd, fd_opt) == -1) {
 		goto err;
 	}
 
 	/* Try to mount directly */
-	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mnt_opts_with_fd);
+	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd);
 
 	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
 	if (err < 0 && errno == EPERM) {
 		close(fd);
 		se->fd = -1;
-		fd = new_api_fusermount(se, mountpoint, mnt_opts,
+		fd = new_api_fusermount(se, mountpoint, mtab_opts,
 					&sock_fd, &fusermount_pid,
 					&is_sync_init);
 		if (fd < 0) {
@@ -4730,8 +4730,8 @@ err:
 	if (session_wait_sync_init_completion(se) < 0)
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
 
-	free(mnt_opts);
-	free(mnt_opts_with_fd);
+	free(mtab_opts);
+	free(mtab_opts_with_fd);
 	return fd;
 }
 #else
