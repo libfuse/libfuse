@@ -1,0 +1,362 @@
+Synchronous FUSE_INIT Protocol
+================================
+
+Overview
+--------
+
+The sync-init feature enables the FUSE library to start worker threads and
+perform initialization ioctl calls BEFORE the actual mount() syscall happens.
+This is required for the kernel's synchronous FUSE_INIT feature, where the
+mount() syscall blocks until the FUSE daemon processes the INIT request.
+
+Without this feature, there would be a deadlock:
+- mount() blocks waiting for INIT response
+- Worker threads can't start because mount() hasn't returned
+- INIT request can't be processed because worker threads aren't running
+
+
+Protocol Flow
+-------------
+
+Traditional mount flow:
+  1. Library calls fusermount3
+  2. fusermount3 opens /dev/fuse
+  3. fusermount3 performs mount() syscall
+  4. fusermount3 sends fd to library
+  5. Library starts worker threads
+  6. Worker threads process FUSE requests
+
+Sync-init mount flow:
+  1. Library calls fusermount3 with --sync-init flag
+  2. fusermount3 opens /dev/fuse
+  3. fusermount3 sends fd to library
+  4. Library receives fd
+  5. Library performs FUSE_DEV_IOC_SYNC_INIT ioctl
+  6. Library starts worker threads
+  7. Library sends "proceed" signal to fusermount3
+  8. fusermount3 performs mount() syscall (blocks until INIT completes)
+  9. Worker threads process INIT request
+  10. mount() syscall completes
+  11. fusermount3 exits
+
+
+Implementation Details
+----------------------
+
+Bidirectional Communication:
+  - Uses the existing unix socket (_FUSE_COMMFD environment variable)
+  - Simple 1-byte protocol for signaling
+  - Library signals fusermount3 when ready to proceed with mount
+
+fusermount3 Changes:
+  - New --sync-init command-line option
+  - Split mount operation into two phases:
+    * mount_fuse_prepare(): Opens device, prepares parameters
+    * mount_fuse_finish_fsmount(): Performs actual mount() syscall
+  - wait_for_signal(): Waits for library to signal readiness
+  - struct mount_context: Preserves state between phases
+
+Library Changes:
+  - fuse_session_mount_new_api(): Uses new protocol when available
+  - Sends "proceed" signal after worker thread is ready
+  - Handles both old and new mount protocols for compatibility
+
+
+Backward Compatibility
+----------------------
+
+The implementation maintains full backward compatibility:
+  - Old library + new fusermount3: Works (uses traditional flow)
+  - New library + old fusermount3: Falls back to traditional flow
+  - New library + new fusermount3: Uses sync-init flow when appropriate
+
+
+Error Handling
+--------------
+
+If any step fails during the sync-init flow:
+  - fusermount3 closes the fd and exits with error
+  - Library detects failure and cleans up
+  - No mount is left in inconsistent state
+
+Connection closure:
+  - If library closes socket before signaling, fusermount3 detects and exits
+  - If fusermount3 crashes, library detects closed socket
+
+
+Security Considerations
+-----------------------
+
+The sync-init protocol does not introduce new security concerns:
+  - Uses the same privilege separation as traditional mount
+  - Socket communication is already established and trusted
+  - No new privileged operations are added
+  - File descriptor passing uses existing SCM_RIGHTS mechanism
+
+
+Performance Impact
+------------------
+
+Minimal performance impact:
+  - One additional recv() call in fusermount3
+  - One additional send() call in library
+  - Total overhead: ~2 context switches
+  - Only affects mount time, not runtime performance
+
+
+Future Enhancements
+-------------------
+
+Potential improvements:
+  - Extended protocol for more complex initialization sequences
+  - Support for multiple worker threads coordination
+  - Enhanced error reporting through the socket
+  - Timeout mechanisms for detecting hung initialization
+
+
+ASCII Workflow Diagrams
+========================
+
+1. Traditional Mount Flow (without --sync-init, async INIT)
+------------------------------------------------------------
+
+Library                   fusermount3              Kernel
+   |                           |                      |
+   |--- spawn fusermount3 ---->|                      |
+   |                           |                      |
+   |                      [open /dev/fuse]            |
+   |                           |------- open -------->|
+   |                           |<------ fd ---------- |
+   |                           |                      |
+   |                      [mount() syscall]           |
+   |                           |------ mount -------->|
+   |                           |<----- success ------ | [mount returns immediately]
+   |                           |                      | [INIT queued in kernel]
+   |                      [send_fd(fd)]               |
+   |<------- fd --------------|                      |
+   |                           |                      |
+   |                      [fusermount3 exits]         |
+   |                                                  |
+   |  [start worker thread]                          |
+   |  [worker reads /dev/fuse]                       |
+   |---------------------------------------- read -->|
+   |<--------------------------------------- INIT ---| [dequeued from kernel]
+   |                                                  |
+   | OK: INIT was queued, worker reads it later      |
+   |     Works fine for async INIT                   |
+
+
+1b. Problem: Synchronous INIT without --sync-init
+--------------------------------------------------
+
+Library                   fusermount3              Kernel
+   |                           |                      |
+   |--- spawn fusermount3 ---->|                      |
+   |                           |                      |
+   |                      [open /dev/fuse]            |
+   |                           |------- open -------->|
+   |                           |<------ fd ---------- |
+   |                           |                      |
+   |                      [mount() syscall]           |
+   |                           |------ mount -------->|
+   |                           |                      | [mount BLOCKS waiting for INIT]
+   |                           | (BLOCKED)            | [needs worker to process INIT]
+   |                           |                      |
+   |  [waiting for fd...]      |                      |
+   |                           |                      |
+   |                           |                      |
+   | DEADLOCK: mount() waits for INIT response       |
+   |           but worker thread not started yet     |
+   |           because we're waiting for fd          |
+
+
+2. Sync-Init Mount Flow (with --sync-init)
+-------------------------------------------
+
+Library                   fusermount3              Kernel
+   |                           |                      |
+   |--- spawn fusermount3 ---->|                      |
+   |    with --sync-init       |                      |
+   |                           |                      |
+   |                      [open /dev/fuse]            |
+   |                           |------- open -------->|
+   |                           |<------ fd ---------- |
+   |                           |                      |
+   |                      [send_fd(fd)]               |
+   |<------- fd --------------|                      |
+   |                           |                      |
+   |                      [wait_for_signal()]         |
+   |                           | (BLOCKED)            |
+   |                           |                      |
+   |  [ioctl SYNC_INIT]        |                      |
+   |---------------------------------------- ioctl -->|
+   |                                                  |
+   |  [start worker thread]                          |
+   |  [worker ready]                                 |
+   |                           |                      |
+   |--- "proceed" signal ----->|                      |
+   |                      [signal received]           |
+   |                           |                      |
+   |                      [mount() syscall]           |
+   |                           |------ mount -------->|
+   |                           |                      | [mount blocks]
+   |                           |                      | [sends INIT]
+   |<------------------------------------------------ |
+   |                           |                      |
+   | [worker processes INIT]   |                      |
+   |------------------------------------------------->|
+   |                           |                      | [mount unblocks]
+   |                           |<----- success ------ |
+   |                           |                      |
+   |                      [fusermount3 exits]         |
+   |                                                  |
+   | SUCCESS: Worker ready before mount()            |
+   |          INIT processed synchronously           |
+
+
+3. Error Scenario: Library Crashes Before Signaling
+----------------------------------------------------
+
+Library                   fusermount3              Kernel
+   |                           |                      |
+   |--- spawn fusermount3 ---->|                      |
+   |    with --sync-init       |                      |
+   |                           |                      |
+   |                      [open /dev/fuse]            |
+   |                           |------- open -------->|
+   |                           |<------ fd ---------- |
+   |                           |                      |
+   |                      [send_fd(fd)]               |
+   |<------- fd --------------|                      |
+   |                           |                      |
+   |                      [wait_for_signal()]         |
+   |                           | (BLOCKED)            |
+   |                           |                      |
+   X  [library crashes]        |                      |
+   |                           |                      |
+   |                      [recv() returns 0]          |
+   |                      [socket closed]             |
+   |                           |                      |
+   |                      [cleanup and exit]          |
+   |                           X                      |
+   |                                                  |
+   | RESULT: Clean failure, no mount performed       |
+
+
+4. Detailed Function Call Flow
+-------------------------------
+
+Library (lib/fuse_lowlevel.c):
+fuse_session_mount_new_api()
+   |
+   +-- fuse_kern_mount_prepare()  [lib/mount.c]
+   |      |
+   |      +-- fuse_mount_fusermount()  [lib/mount_util.c]
+   |             |
+   |             +-- socketpair()  [create comm socket]
+   |             |
+   |             +-- fork()
+   |             |
+   |             +-- [child] execl("fusermount3", "--sync-init", ...)
+   |             |
+   |             +-- [parent] receive_fd()  <--- BLOCKS until fd arrives
+   |                    |
+   |                    +-- recvmsg(SCM_RIGHTS)
+   |                    |
+   |                    +-- return fd
+   |
+   +-- session_start_sync_init()  [lib/fuse_lowlevel.c]
+   |      |
+   |      +-- ioctl(fd, FUSE_DEV_IOC_SYNC_INIT)
+   |      |
+   |      +-- pthread_create(worker_thread)
+   |      |
+   |      +-- return
+   |
+   +-- fuse_fusermount_proceed_mnt(socket)  [lib/mount.c] <--- NEW: Bidirectional handshake
+          |
+          +-- send(socket, "proceed", 1)  <--- Signal fusermount3 to proceed
+          |
+          +-- recv(socket, &status, 1)  <--- BLOCKS until mount result arrives
+          |      |
+          |      +-- [fusermount3 performs mount and sends status byte]
+          |
+          +-- if (status != 0) return -1  <--- Mount failed
+          |
+          +-- return 0  <--- Mount succeeded
+
+
+Utility (util/fusermount.c):
+fusermount3 main() with --sync-init
+   |
+   +-- mount_fuse_sync_init()  [util/fusermount.c]
+          |
+          +-- mount_fuse_prepare()  [util/fusermount.c]
+          |      |
+          |      +-- open("/dev/fuse")
+          |      |
+          |      +-- check_perm()  [util/fusermount.c]
+          |      |
+          |      +-- return fd
+          |
+          +-- send_fd(socket, fd)  [util/fusermount.c]
+          |      |
+          |      +-- sendmsg(SCM_RIGHTS)
+          |
+          +-- wait_for_signal(socket)  [util/fusermount.c] <--- BLOCKS until library signals
+          |      |
+          |      +-- recv(socket, buf, 1)
+          |      |
+          |      +-- return 0
+          |
+          +-- mount_fuse_finish_fsmount()  [util/fusermount.c]
+          |      |
+          |      +-- fuse_kern_fsmount()  [lib/mount_fsmount.c]
+          |      |      |
+          |      |      +-- fsopen("fuse", FSOPEN_CLOEXEC)
+          |      |      |      |
+          |      |      |      +-- [kernel creates filesystem context]
+          |      |      |
+          |      |      +-- fsconfig(fsfd, SET_STRING, "source", ...)
+          |      |      +-- fsconfig(fsfd, SET_STRING, "fd", fd_value, ...)
+          |      |      +-- fsconfig(fsfd, ...) [apply mount options]
+          |      |      +-- fsconfig(fsfd, CMD_CREATE, ...)
+          |      |      |
+          |      |      +-- fsmount(fsfd, FSMOUNT_CLOEXEC, mount_attrs)
+          |      |      |      |
+          |      |      |      +-- [kernel sends FUSE_INIT here]
+          |      |      |      |
+          |      |      |      +-- [worker thread processes INIT]
+          |      |      |      |
+          |      |      |      +-- [fsmount returns mntfd]
+          |      |      |
+          |      |      +-- move_mount(mntfd, "", AT_FDCWD, target, ...)
+          |      |      |      |
+          |      |      |      +-- [attach mount to target directory]
+          |      |      |      |
+          |      |      |      +-- [no blocking - INIT already processed]
+          |      |      |
+          |      |      +-- add_mount()  [lib/mount_fsmount.c - update /etc/mtab]
+          |      |      |
+          |      |      +-- return 0 on success, -1 on failure
+          |      |
+          |      +-- if mount failed: return -1
+          |      +-- if mount succeeded: continue
+          |
+          +-- send_status_byte(socket)  [util/fusermount.c] <--- NEW: Send result to library
+          |      |
+          |      +-- status = (mount_result == 0) ? 0 : 1
+          |      +-- send(socket, &status, 1)
+          |      |
+          |      +-- return
+          |
+          +-- return 0
+
+
+Note: The new mount API (fsopen/fsconfig/fsmount/move_mount) is REQUIRED
+      for sync-init because fsmount() triggers FUSE_INIT before the mount
+      is attached. This allows the worker thread to process INIT before
+      move_mount() completes, preventing deadlock.
+      And also so we don't expose the directory tree to the mountns until we
+      know that FUSE_INIT didn't crash the server.
+

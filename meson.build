@@ -30,7 +30,7 @@ if platform == 'darwin'
         'https://www.fuse-t.org/ instead')
 elif platform == 'cygwin' or platform == 'windows'
   error('libfuse does not support Windows.\n' +
-        'Take a look at http://www.secfs.net/winfsp/ instead')       
+        'Take a look at http://www.secfs.net/winfsp/ instead')
 endif
 
 cc = meson.get_compiler('c')
@@ -117,6 +117,21 @@ special_funcs = {
 	  if (n == -1) {
 	    return -1;
 	  }
+	}
+    ''',
+    'new_mount_api': '''
+	#define _GNU_SOURCE
+	#include <sys/mount.h>
+	#include <linux/mount.h>
+	#include <unistd.h>
+	#include <fcntl.h>
+
+	int main(void) {
+	    int fsfd = fsopen("fuse", FSOPEN_CLOEXEC);
+	    int res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", "test", 0);
+	    int mntfd = fsmount(fsfd, FSMOUNT_CLOEXEC, 0);
+	    res = move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH);
+	    return 0;
 	}
     '''
 }
@@ -308,7 +323,7 @@ configure_file(output: 'libfuse_config.h',
 include_dirs = include_directories('include', 'lib', '.')
 
 # Common dependencies
-thread_dep = dependency('threads') 
+thread_dep = dependency('threads')
 
 #
 # Read build files from sub-directories

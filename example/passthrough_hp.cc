@@ -55,6 +55,7 @@
 #include <errno.h>
 #include <ftw.h>
 #include <fuse_lowlevel.h>
+#include <fuse_daemonize.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/file.h>
@@ -159,7 +160,8 @@ struct Fs {
 	Inode root;
 	double timeout;
 	bool debug;
-	bool debug_fuse;
+	bool debug_fuse; // foreground fuse debug
+	bool bg_debug_fuse; // background fuse debug
 	bool foreground;
 	std::string source;
 	size_t blocksize;
@@ -1476,21 +1478,22 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 {
 	cxxopts::Options opt_parser(argv[0]);
 	std::vector<std::string> mount_options;
-	opt_parser.add_options()("debug", "Enable filesystem debug messages")(
-		"debug-fuse", "Enable libfuse debug messages")(
-		"foreground", "Run in foreground")("help", "Print help")(
-		"nocache", "Disable attribute all caching")(
-		"nosplice", "Do not use splice(2) to transfer data")(
-		"nopassthrough", "Do not use pass-through mode for read/write")(
-		"single", "Run single-threaded")(
-		"o",
-		"Mount options (see mount.fuse(5) - only use if you know what "
-		"you are doing)",
-		cxxopts::value(mount_options))(
-		"num-threads", "Number of libfuse worker threads",
-		cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))(
-		"clone-fd", "use separate fuse device fd for each thread")(
-		"direct-io", "enable fuse kernel internal direct-io");
+	opt_parser.add_options()
+		("debug", "Enable filesystem debug messages")
+		("debug-fuse", "Enable libfuse debug messages")
+		("bg-debug-fuse", "Enable libfuse debug messages in background")
+		("foreground", "Run in foreground")("help", "Print help")
+		("nocache", "Disable attribute all caching")
+		("nosplice", "Do not use splice(2) to transfer data")
+		("nopassthrough", "Do not use pass-through mode for read/write")
+		("single", "Run single-threaded")
+		("o", "Mount options (see mount.fuse(5) - only use if you know what "
+		      "you are doing)",
+		cxxopts::value(mount_options))
+		("num-threads", "Number of libfuse worker threads",
+		cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
+		("clone-fd", "use separate fuse device fd for each thread")
+		("direct-io", "enable fuse kernel internal direct-io");
 
 	// FIXME: Find a better way to limit the try clause to just
 	// opt_parser.parse() (cf. https://github.com/jarro2783/cxxopts/issues/146)
@@ -1516,6 +1519,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 
 	fs.debug = options.count("debug") != 0;
 	fs.debug_fuse = options.count("debug-fuse") != 0;
+	fs.bg_debug_fuse = options.count("bg-debug-fuse") != 0;
 
 	fs.foreground = options.count("foreground") != 0;
 	if (fs.debug || fs.debug_fuse)
@@ -1580,6 +1584,7 @@ int main(int argc, char *argv[])
 {
 	struct fuse_loop_config *loop_config = NULL;
 	void *teardown_watchog = NULL;
+	unsigned int daemon_flags = 0;
 
 	// Parse command line options
 	auto options{ parse_options(argc, argv) };
@@ -1638,10 +1643,20 @@ int main(int argc, char *argv[])
 
 	fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
 
-	if (fuse_session_mount(se, argv[2]) != 0)
+	if (!fs.foreground)
+		fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS,
+				       LOG_DAEMON);
+	if (fs.bg_debug_fuse)
+		fuse_session_set_debug(se);
+
+	/* Start daemonization before mount so parent can report mount failure */
+	if (fs.foreground)
+		daemon_flags |= FUSE_DAEMONIZE_NO_BACKGROUND;
+	if (fuse_daemonize_early_start(daemon_flags) != 0)
 		goto err_out3;
 
-	fuse_daemonize(fs.foreground);
+	if (fuse_session_mount(se, argv[2]) != 0)
+		goto err_out4;
 
 	if (!fs.foreground)
 		fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS,
@@ -1650,7 +1665,10 @@ int main(int argc, char *argv[])
 	teardown_watchog = fuse_session_start_teardown_watchdog(
 		se, fs.root.stop_timeout_secs, NULL, NULL);
 	if (teardown_watchog == NULL)
-		goto err_out3;
+		goto err_out4;
+
+	/* required here for sync init */
+	fuse_daemonize_early_success();
 
 	if (options.count("single"))
 		ret = fuse_session_loop(se);
@@ -1659,6 +1677,9 @@ int main(int argc, char *argv[])
 
 	fuse_session_unmount(se);
 
+err_out4:
+	if (fuse_daemonize_early_is_active())
+		fuse_daemonize_early_fail(ret);
 err_out3:
 	fuse_remove_signal_handlers(se);
 err_out2:

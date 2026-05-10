@@ -10,11 +10,13 @@
 
 #include "fuse_config.h"
 #include "fuse_i.h"
+#include "mount_common_i.h"
 #include "fuse_misc.h"
 #include "fuse_opt.h"
 #include "util.h"
 
 #include <sys/param.h>
+#include <sys/mount.h>
 #include "fuse_mount_compat.h"
 
 #include <sys/wait.h>

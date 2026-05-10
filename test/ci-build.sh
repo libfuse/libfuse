@@ -2,7 +2,7 @@
 
 set -e
 
-TEST_CMD="pytest -vv --tb=short --maxfail=1 --log-level=INFO --log-cli-level=INFO test/"
+TEST_CMD="meson test -C . --print-errorlogs"
 SAN="-Db_sanitize=address,undefined"
 
 # not default
@@ -30,6 +30,20 @@ export LSAN_OPTIONS="suppressions=$(pwd)/lsan_suppress.txt"
 export ASAN_OPTIONS="detect_leaks=1"
 export CC
 
+log_env()
+{
+    echo "=== Environment ==="
+    echo "CC: ${CC}"
+    echo "CXX: ${CXX}"
+    echo "LSAN_OPTIONS: ${LSAN_OPTIONS}"
+    echo "ASAN_OPTIONS: ${ASAN_OPTIONS}"
+    echo "UBSAN_OPTIONS: ${UBSAN_OPTIONS}"
+    echo "FUSE_URING_ENABLE: ${FUSE_URING_ENABLE}"
+    echo "FUSE_URING_QUEUE_DEPTH: ${FUSE_URING_QUEUE_DEPTH}"
+    echo "Valgrind: ${TEST_WITH_VALGRIND}"
+    echo "==================="
+}
+
 non_sanitized_build()
 (
     echo "Standard build (without sanitizers)"
@@ -54,6 +68,7 @@ non_sanitized_build()
             build_opts=''
         fi
 
+        log_env
         meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
         ninja
         sudo env PATH=$PATH ninja install
@@ -79,6 +94,7 @@ sanitized_build()
 
     mkdir build-san; pushd build-san
 
+    log_env
     meson setup -Dprefix=${PREFIX_DIR} -D werror=true\
            "${SOURCE_DIR}" \
            || (cat meson-logs/meson-log.txt; false)
@@ -106,8 +122,11 @@ sanitized_build()
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
 
-    # Test as root and regular user
-    sudo env PATH=$PATH ${TEST_CMD}
+    # Test as root and regular user. Give the root run a distinct
+    # meson log basename so its meson-logs/testlog.* files don't end
+    # up owned by root and block the subsequent user run from writing
+    # them.
+    sudo env PATH=$PATH ${TEST_CMD} --logbase=testlog-root
     # Cleanup temporary files (since they are now owned by root)
     sudo rm -rf test/.pytest_cache/ test/__pycache__
 

@@ -10,6 +10,9 @@
 
 #include "fuse_config.h"
 #include "mount_util.h"
+#ifdef __linux__
+#include "mount_i_linux.h"
+#endif
 
 #include <stdio.h>
 #include <unistd.h>
@@ -33,9 +36,105 @@
 
 #include <sys/param.h>
 
+/* Environment variable for FUSE kernel device */
+#define FUSE_KERN_DEVICE_ENV "FUSE_KERN_DEVICE"
+#define FUSE_DEF_KERN_DEVICE "/dev/fuse"
+
 #if defined(__NetBSD__) || defined(__FreeBSD__) || defined(__DragonFly__) || defined(__FreeBSD_kernel__)
-#define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
+#include <sys/mount.h>
+#ifdef __NetBSD__
+#include <perfuse.h>
 #endif
+
+#define umount2(mnt, flags) unmount(mnt, ((flags) == 2) ? MNT_FORCE : 0)
+
+#define MS_RDONLY	MNT_RDONLY
+#define MS_NOSUID	MNT_NOSUID
+#ifdef MNT_NODEV
+#define MS_NODEV	MNT_NODEV
+#else
+#define MS_NODEV	0
+#endif
+#define MS_NOEXEC	MNT_NOEXEC
+#define MS_SYNCHRONOUS	MNT_SYNCHRONOUS
+#define MS_NOATIME	MNT_NOATIME
+#define MS_NOSYMFOLLOW	0
+#define MS_DIRSYNC	0
+
+/* BSD doesn't have these, define as 0 */
+#ifndef MS_NODIRATIME
+#define MS_NODIRATIME 0
+#endif
+#ifndef MS_RELATIME
+#define MS_RELATIME 0
+#endif
+#ifndef MS_STRICTATIME
+#define MS_STRICTATIME 0
+#endif
+
+#endif /* BSD */
+
+/*
+ * MOUNT_ATTR_* constants from linux/mount.h for the new mount API.
+ * If not available from system headers (older kernels), define to 0
+ * so the mount_attr field will indicate these are fsconfig flags.
+ * The new mount API (fsmount) won't be available on such systems anyway.
+ */
+#ifndef MOUNT_ATTR_RDONLY
+#define MOUNT_ATTR_RDONLY	0
+#endif
+#ifndef MOUNT_ATTR_NOSUID
+#define MOUNT_ATTR_NOSUID	0
+#endif
+#ifndef MOUNT_ATTR_NODEV
+#define MOUNT_ATTR_NODEV	0
+#endif
+#ifndef MOUNT_ATTR_NOEXEC
+#define MOUNT_ATTR_NOEXEC	0
+#endif
+#ifndef MOUNT_ATTR_NOATIME
+#define MOUNT_ATTR_NOATIME	0
+#endif
+#ifndef MOUNT_ATTR_RELATIME
+#define MOUNT_ATTR_RELATIME	0
+#endif
+#ifndef MOUNT_ATTR_STRICTATIME
+#define MOUNT_ATTR_STRICTATIME	0
+#endif
+#ifndef MOUNT_ATTR_NODIRATIME
+#define MOUNT_ATTR_NODIRATIME	0
+#endif
+#ifndef MOUNT_ATTR_NOSYMFOLLOW
+#define MOUNT_ATTR_NOSYMFOLLOW	0
+#endif
+
+/*
+ * is_fsconfig and mount_attr are independent: ro/rw need both legs
+ * (SB_RDONLY on the superblock via fsconfig SET_FLAG, plus
+ * MOUNT_ATTR_RDONLY on the vfsmount via fsmount). Everything else is
+ * exclusively one or the other.
+ */
+const struct mount_flags mount_flags[] = {
+/* opt            flag             on  safe  fsconfig  mount_attr */
+{"rw",           MS_RDONLY,        0,  1,    1,        MOUNT_ATTR_RDONLY},
+{"ro",           MS_RDONLY,        1,  1,    1,        MOUNT_ATTR_RDONLY},
+{"suid",         MS_NOSUID,        0,  0,    0,        MOUNT_ATTR_NOSUID},
+{"nosuid",       MS_NOSUID,        1,  1,    0,        MOUNT_ATTR_NOSUID},
+{"dev",          MS_NODEV,         0,  1,    0,        MOUNT_ATTR_NODEV},
+{"nodev",        MS_NODEV,         1,  1,    0,        MOUNT_ATTR_NODEV},
+{"exec",         MS_NOEXEC,        0,  1,    0,        MOUNT_ATTR_NOEXEC},
+{"noexec",       MS_NOEXEC,        1,  1,    0,        MOUNT_ATTR_NOEXEC},
+{"async",        MS_SYNCHRONOUS,   0,  1,    1,        0},
+{"sync",         MS_SYNCHRONOUS,   1,  1,    1,        0},
+{"noatime",      MS_NOATIME,       1,  1,    0,        MOUNT_ATTR_NOATIME},
+{"nodiratime",   MS_NODIRATIME,    1,  1,    0,        MOUNT_ATTR_NODIRATIME},
+{"norelatime",   MS_RELATIME,      0,  1,    0,        MOUNT_ATTR_RELATIME},
+{"nostrictatime", MS_STRICTATIME,  0,  1,    0,        MOUNT_ATTR_STRICTATIME},
+{"symfollow",    MS_NOSYMFOLLOW,   0,  1,    0,        MOUNT_ATTR_NOSYMFOLLOW},
+{"nosymfollow",  MS_NOSYMFOLLOW,   1,  1,    0,        MOUNT_ATTR_NOSYMFOLLOW},
+{"dirsync",      MS_DIRSYNC,       1,  1,    1,        0},
+{NULL,           0,                0,  0,    0,        0}
+};
 
 #ifdef IGNORE_MTAB
 #define mtab_needs_update(mnt) 0
@@ -376,4 +475,93 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 	}
 
 	return -1;
+}
+
+int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
+			       const char *type, const char *mtab_opts)
+{
+#ifndef IGNORE_MTAB
+	if (geteuid() == 0) {
+		char *newmnt = fuse_mnt_resolve_path("fuse", mnt);
+		int res;
+
+		if (!newmnt)
+			return -1;
+
+		res = fuse_mnt_add_mount("fuse", source, newmnt, type,
+					 mtab_opts);
+		free(newmnt);
+		return res;
+	}
+#endif
+	(void)mnt;
+	(void)source;
+	(void)type;
+	(void)mtab_opts;
+	return 0;
+}
+
+const char *fuse_mnt_get_devname(void)
+{
+	const char *devname = getenv(FUSE_KERN_DEVICE_ENV);
+	struct stat stbuf;
+
+	if (!devname)
+		return FUSE_DEF_KERN_DEVICE;
+
+	/* Validation 1: Must start with /dev/ */
+	if (strncmp(devname, "/dev/", 5) != 0) {
+		fprintf(stderr,
+			"fuse: invalid device name from %s: %s (must start with /dev/)\n",
+			FUSE_KERN_DEVICE_ENV, devname);
+		return "/dev/fuse";
+	}
+
+	/* Validation 2: Must be a character device */
+	if (stat(devname, &stbuf) == 0) {
+		if (!S_ISCHR(stbuf.st_mode)) {
+			fprintf(stderr,
+				"fuse: invalid device from %s: %s (not a character device)\n",
+				FUSE_KERN_DEVICE_ENV, devname);
+			return "/dev/fuse";
+		}
+		/* Valid character device */
+		return devname;
+	}
+	/*
+	 * stat() failed - device might not exist yet, but path is valid.
+	 * Let it through and fail later in open() with a better error message.
+	 */
+	return devname;
+}
+
+char *fuse_mnt_build_source(const char *fsname, const char *subtype,
+			     const char *devname)
+{
+	char *source;
+	int ret;
+
+	ret = asprintf(&source, "%s",
+		       fsname ? fsname : (subtype ? subtype : devname));
+	if (ret == -1)
+		return NULL;
+
+	return source;
+}
+
+char *fuse_mnt_build_type(int blkdev, const char *subtype)
+{
+	char *type;
+	int ret;
+
+	if (subtype)
+		ret = asprintf(&type, "%s.%s", blkdev ? "fuseblk" : "fuse",
+			       subtype);
+	else
+		ret = asprintf(&type, "%s", blkdev ? "fuseblk" : "fuse");
+
+	if (ret == -1)
+		return NULL;
+
+	return type;
 }
