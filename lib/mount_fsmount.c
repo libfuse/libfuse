@@ -314,12 +314,11 @@ static int apply_mount_opts(int fsfd, const char *opts)
 		 * not fsconfig().
 		 *
 		 * These string options (nosuid, nodev, etc.) are reconstructed
-		 * Skip mtab-only options - they're for /run/mount/utab, not kernel
 		 * from MS_* flags by get_mnt_flag_opts() in lib/mount.c and
 		 * get_mnt_opts() in util/fusermount.c. Both the library path
 		 * (via fuse_kern_mount_get_base_mnt_opts) and fusermount3 path
 		 * rebuild these strings from the flags bitmask and pass them in
-		 * mnt_opts. They must be filtered here because they are mount
+		 * mtab_opts. They must be filtered here because they are mount
 		 * attributes (passed to fsmount via MOUNT_ATTR_*), not
 		 * filesystem parameters (which would be passed to fsconfig).
 		 *
@@ -343,7 +342,7 @@ static int apply_mount_opts(int fsfd, const char *opts)
 int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		      const char *fsname, const char *subtype,
 		      const char *source_dev, const char *kernel_opts,
-		      const char *mnt_opts)
+		      const char *mtab_opts)
 {
 	char *type = NULL;
 	char *source = NULL;
@@ -408,13 +407,13 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		goto out_free;
 	}
 
-	/* Apply additional mount options */
-	err = apply_mount_opts(fsfd, mnt_opts);
+	/* Apply mtab options (overlap with kernel_opts is filtered and tolerated) */
+	err = apply_mount_opts(fsfd, mtab_opts);
 	if (err < 0) {
 		log_fsconfig_kmsg(fsfd);
 		fprintf(stderr,
-			"fuse: failed to apply additional mount options '%s'\n",
-			mnt_opts);
+			"fuse: failed to apply mtab options '%s'\n",
+			mtab_opts);
 		goto out_free;
 	}
 
@@ -459,7 +458,7 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		goto out_close_mntfd;
 	}
 
-	err = fuse_mnt_add_mount_helper(mnt, source, type, mnt_opts);
+	err = fuse_mnt_add_mount_helper(mnt, source, type, mtab_opts);
 	if (err == -1)
 		goto out_umount;
 

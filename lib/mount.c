@@ -622,19 +622,20 @@ out_close:
  * Wrapper for fuse_kern_fsmount that accepts struct mount_opts
  * @mnt: mountpoint
  * @mo: mount options
- * @mnt_opts: mount options to pass to the kernel
+ * @mtab_opts: options recorded in /etc/mtab via fuse_mnt_add_mount_helper();
+ *             see fuse_kern_fsmount() for details
  *
  * Returns: 0 on success, -1 on failure with errno set
  */
 int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
-			 const char *mnt_opts)
+			 const char *mtab_opts)
 {
 	/* codeql[cpp/path-injection] verification is in the function */
 	const char *devname = fuse_mnt_get_devname();
 
 	return fuse_kern_fsmount(mnt, mo->flags, mo->blkdev, mo->fsname,
 				 mo->subtype, devname, mo->kernel_opts,
-				 mnt_opts);
+				 mtab_opts);
 }
 #endif
 
