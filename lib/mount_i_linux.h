@@ -31,7 +31,8 @@ struct mount_opts {
 
 int fuse_kern_mount_prepare(const char *mnt, struct mount_opts *mo);
 
-int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_optsp);
+int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
+				       char **mtab_optsp);
 
 /**
  * Mount using the new Linux mount API (fsopen/fsconfig/fsmount/move_mount)

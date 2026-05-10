@@ -643,13 +643,16 @@ int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
  * Complete the mount operation with an already-opened fd
  * @mnt: mountpoint
  * @mo: mount options
- * @mnt_opts: mount options to pass to the kernel
+ * @mtab_opts: mtab/utab record string written via fuse_mnt_add_mount_helper().
+ *             Built by fuse_kern_mount_get_base_mtab_opts(); intentionally
+ *             overlaps with mo->kernel_opts so /etc/mtab reflects the options
+ *             the kernel saw.
  *
  * Returns: 0 on success, -1 on failure,
  *          FUSE_MOUNT_FALLBACK_NEEDED if fusermount should be used
  */
 int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
-		       const char *mnt_opts)
+		       const char *mtab_opts)
 {
 	char *source = NULL;
 	char *type = NULL;
@@ -709,7 +712,7 @@ int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
 		goto out_close;
 	}
 
-	res = fuse_mnt_add_mount_helper(mnt, source, type, mnt_opts);
+	res = fuse_mnt_add_mount_helper(mnt, source, type, mtab_opts);
 	if (res == -1)
 		goto out_umount;
 
@@ -727,7 +730,7 @@ out_close:
 }
 
 static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
-				  const char *mnt_opts)
+				  const char *mtab_opts)
 {
 	int fd;
 	int res;
@@ -736,7 +739,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	if (fd == -1)
 		return -1;
 
-	res = fuse_kern_do_mount(mnt, mo, mnt_opts);
+	res = fuse_kern_do_mount(mnt, mo, mtab_opts);
 	if (res) {
 		close(fd);
 		return res;
@@ -745,16 +748,20 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	return fd;
 }
 
-static int get_mnt_flag_opts(char **mnt_optsp, int flags)
+/*
+ * Append the flag-mirror prefix (rw/nosuid/nodev/...) of the mtab record
+ * to @mtab_optsp, derived from the MS_* bitmask in @flags.
+ */
+static int get_mtab_flag_opts(char **mtab_optsp, int flags)
 {
 	int i;
 
-	if (!(flags & MS_RDONLY) && fuse_opt_add_opt(mnt_optsp, "rw") == -1)
+	if (!(flags & MS_RDONLY) && fuse_opt_add_opt(mtab_optsp, "rw") == -1)
 		return -1;
 
 	for (i = 0; mount_flags[i].opt != NULL; i++) {
 		if (mount_flags[i].on && (flags & mount_flags[i].flag) &&
-		    fuse_opt_add_opt(mnt_optsp, mount_flags[i].opt) == -1)
+		    fuse_opt_add_opt(mtab_optsp, mount_flags[i].opt) == -1)
 			return -1;
 	}
 	return 0;
@@ -793,13 +800,21 @@ void destroy_mount_opts(struct mount_opts *mo)
 	free(mo);
 }
 
-int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_optsp)
+/*
+ * Build the mtab/utab record string for this mount: flag-mirrors of MS_*
+ * (rw/nosuid/nodev/...) + the kernel-bound -o options + the mtab-only
+ * annotations. The result is what fuse_mnt_add_mount_helper() writes into
+ * /etc/mtab (or /run/mount/utab). The overlap with @mo->kernel_opts is
+ * intentional so the mtab line reflects what the kernel saw.
+ */
+int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
+				       char **mtab_optsp)
 {
-	if (get_mnt_flag_opts(mnt_optsp, mo->flags) == -1)
+	if (get_mtab_flag_opts(mtab_optsp, mo->flags) == -1)
 		return -1;
-	if (mo->kernel_opts && fuse_opt_add_opt(mnt_optsp, mo->kernel_opts) == -1)
+	if (mo->kernel_opts && fuse_opt_add_opt(mtab_optsp, mo->kernel_opts) == -1)
 		return -1;
-	if (mo->mtab_opts &&  fuse_opt_add_opt(mnt_optsp, mo->mtab_opts) == -1)
+	if (mo->mtab_opts &&  fuse_opt_add_opt(mtab_optsp, mo->mtab_opts) == -1)
 		return -1;
 	return 0;
 }
@@ -807,13 +822,13 @@ int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_op
 int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 {
 	int res = -1;
-	char *mnt_opts = NULL;
+	char *mtab_opts = NULL;
 
 	res = -1;
-	if (fuse_kern_mount_get_base_mnt_opts(mo, &mnt_opts) == -1)
+	if (fuse_kern_mount_get_base_mtab_opts(mo, &mtab_opts) == -1)
 		goto out;
 
-	res = fuse_mount_sys(mountpoint, mo, mnt_opts);
+	res = fuse_mount_sys(mountpoint, mo, mtab_opts);
 	if (res >= 0 && mo->auto_unmount) {
 		if(0 > setup_auto_unmount(mountpoint, 0)) {
 			// Something went wrong, let's umount like in fuse_mount_sys.
@@ -822,14 +837,14 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 		}
 	} else if (res == FUSE_MOUNT_FALLBACK_NEEDED) {
 		if (mo->fusermount_opts &&
-		    fuse_opt_add_opt(&mnt_opts, mo->fusermount_opts) == -1)
+		    fuse_opt_add_opt(&mtab_opts, mo->fusermount_opts) == -1)
 			goto out;
 
 		if (mo->subtype) {
 			char *tmp_opts = NULL;
 
 			res = -1;
-			if (fuse_opt_add_opt(&tmp_opts, mnt_opts) == -1 ||
+			if (fuse_opt_add_opt(&tmp_opts, mtab_opts) == -1 ||
 			    fuse_opt_add_opt(&tmp_opts, mo->subtype_opt) == -1) {
 				free(tmp_opts);
 				goto out;
@@ -839,12 +854,12 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 			free(tmp_opts);
 			if (res == -1)
 				res = fuse_mount_fusermount(mountpoint, mo,
-							    mnt_opts, 0);
+							    mtab_opts, 0);
 		} else {
-			res = fuse_mount_fusermount(mountpoint, mo, mnt_opts, 0);
+			res = fuse_mount_fusermount(mountpoint, mo, mtab_opts, 0);
 		}
 	}
 out:
-	free(mnt_opts);
+	free(mtab_opts);
 	return res;
 }

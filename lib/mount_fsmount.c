@@ -314,9 +314,9 @@ static int apply_mount_opts(int fsfd, const char *opts)
 		 * not fsconfig().
 		 *
 		 * These string options (nosuid, nodev, etc.) are reconstructed
-		 * from MS_* flags by get_mnt_flag_opts() in lib/mount.c and
-		 * get_mnt_opts() in util/fusermount.c. Both the library path
-		 * (via fuse_kern_mount_get_base_mnt_opts) and fusermount3 path
+		 * from MS_* flags by get_mtab_flag_opts() in lib/mount.c and
+		 * get_mtab_opts() in util/fusermount.c. Both the library path
+		 * (via fuse_kern_mount_get_base_mtab_opts) and fusermount3 path
 		 * rebuild these strings from the flags bitmask and pass them in
 		 * mtab_opts. They must be filtered here because they are mount
 		 * attributes (passed to fsmount via MOUNT_ATTR_*), not

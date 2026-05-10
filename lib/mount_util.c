@@ -478,7 +478,7 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 }
 
 int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
-			       const char *type, const char *mnt_opts)
+			       const char *type, const char *mtab_opts)
 {
 #ifndef IGNORE_MTAB
 	if (geteuid() == 0) {
@@ -489,7 +489,7 @@ int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 			return -1;
 
 		res = fuse_mnt_add_mount("fuse", source, newmnt, type,
-					 mnt_opts);
+					 mtab_opts);
 		free(newmnt);
 		return res;
 	}
@@ -497,7 +497,7 @@ int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 	(void)mnt;
 	(void)source;
 	(void)type;
-	(void)mnt_opts;
+	(void)mtab_opts;
 	return 0;
 }
 
