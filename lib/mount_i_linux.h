@@ -31,7 +31,8 @@ struct mount_opts {
 
 int fuse_kern_mount_prepare(const char *mnt, struct mount_opts *mo);
 
-int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_optsp);
+int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
+				       char **mtab_optsp);
 
 /**
  * Mount using the new Linux mount API (fsopen/fsconfig/fsmount/move_mount)
@@ -41,18 +42,22 @@ int fuse_kern_mount_get_base_mnt_opts(const struct mount_opts *mo, char **mnt_op
  * @fsname: filesystem name (or NULL)
  * @subtype: filesystem subtype (or NULL)
  * @source_dev: device name for building source string
- * @kernel_opts: kernel mount options string
- * @mnt_opts: additional mount options to pass to the kernel
+ * @kernel_opts: kernel mount options applied via fsconfig()
+ * @mtab_opts:  options recorded in /etc/mtab (or /run/mount/utab) via
+ *              fuse_mnt_add_mount_helper(). May overlap with @kernel_opts
+ *              because /etc/mtab is expected to display kernel-visible
+ *              options; the overlap is filtered before fsconfig where
+ *              needed and is idempotent at the kernel.
  *
  * Returns: 0 on success, -1 on failure with errno set
  */
 int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		      const char *fsname, const char *subtype,
 		      const char *source_dev, const char *kernel_opts,
-		      const char *mnt_opts);
+		      const char *mtab_opts);
 
 int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
-			 const char *mnt_opts);
+			 const char *mtab_opts);
 int mount_fusermount_obtain_fd(const char *mountpoint,
 			       struct mount_opts *mo,
 			       const char *opts, int *sock_fd_out,

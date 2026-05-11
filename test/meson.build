@@ -35,19 +35,35 @@ td += executable('test_loop_config', 'test_loop_config.c',
                  install: false)
 
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
-                 'util.py', 'test_ctests.py', 'test_custom_io.py' ]
+                 'util.py', 'test_ctests.py', 'test_custom_io.py',
+                 'test_mount_state.py' ]
 td += custom_target('test_scripts', input: test_scripts,
                       output: test_scripts, build_by_default: true,
                       command: ['cp', '-fPp',
                                 '@INPUT@', meson.current_build_dir() ])
-
-# Provide something helpful when running 'ninja test'
 
 if meson.is_subproject()
 	test('libfuse is a subproject, skipping tests', executable('wrong_command',
                       'wrong_command.c', install: false,
                        c_args: [ '-DMESON_IS_SUBPROJECT' ]))
 else
-	test('wrong_command', executable('wrong_command', 'wrong_command.c',
-                      install: false))
+	# Run the pytest suite via 'meson test'. The same definition works
+	# both as a regular user and under sudo: invoke 'meson test -C build'
+	# for the unprivileged subset, or 'sudo -E meson test -C build' to
+	# also exercise the tests that require root (they pick the uid up at
+	# runtime via os.geteuid()).
+	pytest = find_program('pytest', required: false)
+	if pytest.found()
+		test('pytest', pytest,
+		     args: ['-vv', '--tb=short', '--maxfail=1',
+		            '--log-level=INFO', '--log-cli-level=INFO',
+		            meson.current_build_dir()],
+		     depends: td,
+		     workdir: meson.project_build_root(),
+		     timeout: 600,
+		     is_parallel: false)
+	else
+		test('pytest not found', executable('wrong_command',
+                              'wrong_command.c', install: false))
+	endif
 endif

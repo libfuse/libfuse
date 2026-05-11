@@ -4470,14 +4470,25 @@ static void *session_sync_init_worker(void *data)
 	return NULL;
 }
 
-/* Enable synchronous FUSE_INIT and start worker thread */
-static int session_start_sync_init(struct fuse_session *se, int fd)
+/*
+ * Enable synchronous FUSE_INIT and start worker thread
+ *
+ * @param is_sync_init set to true on return if sync init is enabled
+ * Returns 0 on success or kernel does not support it, -errno on unexpected failure
+ */
+static int session_start_sync_init(struct fuse_session *se, int fd,
+				   bool *is_sync_init)
 {
 	int err, res;
 
-	if (!se->want_sync_init) {
-		/* SYNC_INIT is required for io_uring(?) */
-		if ((se->uring.enable && !fuse_daemonize_is_used()) || se->debug)
+	*is_sync_init = false;
+
+	/*
+	 * Older fuse servers do not set want_sync_init or start the new
+	 * daemonize code, so they get async init.
+	 */
+	if (!fuse_daemonize_is_used() || !se->want_sync_init) {
+		if (se->debug)
 			fuse_log(FUSE_LOG_DEBUG,
 					"fuse: sync init not enabled\n");
 		return 0;
@@ -4532,6 +4543,8 @@ static int session_start_sync_init(struct fuse_session *se, int fd)
 		se->init_wakeup_fd = -1;
 		return -EIO;
 	}
+
+	*is_sync_init = true;
 
 	return 0;
 }
@@ -4590,8 +4603,9 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
  */
 static int new_api_fusermount(struct fuse_session *se,
 			      const char *mountpoint,
-			      const char *mnt_opts,
-			      int *sock_fd, pid_t *fusermount_pid)
+			      const char *mtab_opts,
+			      int *sock_fd, pid_t *fusermount_pid,
+			      bool *is_sync_init)
 {
 	int fd, err;
 
@@ -4604,7 +4618,7 @@ static int new_api_fusermount(struct fuse_session *se,
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
 
 	/* Call fusermount3 with --sync-init */
-	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mnt_opts, sock_fd,
+	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mtab_opts, sock_fd,
 					fusermount_pid);
 	if (fd < 0) {
 		fuse_log(FUSE_LOG_ERR,
@@ -4614,7 +4628,7 @@ static int new_api_fusermount(struct fuse_session *se,
 
 	/* Start worker thread with correct fd from fusermount3 */
 	se->fd = fd;
-	err = session_start_sync_init(se, fd);
+	err = session_start_sync_init(se, fd, is_sync_init);
 	if (err) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: failed to start sync init worker\n");
@@ -4643,11 +4657,12 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	int sock_fd = -1;
 	pid_t fusermount_pid = -1;
 	int res, err;
-	char *mnt_opts = NULL;
-	char *mnt_opts_with_fd = NULL;
+	char *mtab_opts = NULL;
+	char *mtab_opts_with_fd = NULL;
 	char fd_opt[32];
+	bool is_sync_init = false;
 
-	res = fuse_kern_mount_get_base_mnt_opts(se->mo, &mnt_opts);
+	res = fuse_kern_mount_get_base_mtab_opts(se->mo, &mtab_opts);
 	err = -EIO;
 	if (res == -1) {
 		fuse_log(FUSE_LOG_ERR,
@@ -4662,26 +4677,27 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	}
 
 	se->fd = fd;
-	err = session_start_sync_init(se, fd);
+	err = session_start_sync_init(se, fd, &is_sync_init);
 	if (err)
 		goto err;
 
 	snprintf(fd_opt, sizeof(fd_opt), "fd=%i", fd);
 	err = -ENOMEM;
-	if (fuse_opt_add_opt(&mnt_opts_with_fd, mnt_opts) == -1 ||
-	    fuse_opt_add_opt(&mnt_opts_with_fd, fd_opt) == -1) {
+	if (fuse_opt_add_opt(&mtab_opts_with_fd, mtab_opts) == -1 ||
+	    fuse_opt_add_opt(&mtab_opts_with_fd, fd_opt) == -1) {
 		goto err;
 	}
 
 	/* Try to mount directly */
-	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mnt_opts_with_fd);
+	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd);
 
 	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
 	if (err < 0 && errno == EPERM) {
 		close(fd);
 		se->fd = -1;
-		fd = new_api_fusermount(se, mountpoint, mnt_opts,
-					&sock_fd, &fusermount_pid);
+		fd = new_api_fusermount(se, mountpoint, mtab_opts,
+					&sock_fd, &fusermount_pid,
+					&is_sync_init);
 		if (fd < 0) {
 			err = fd;
 			goto err_with_sock;
@@ -4708,13 +4724,14 @@ err:
 		se->fd = -1;
 		se->error = err;
 	}
+	se->is_sync_init = is_sync_init;
+
 	/* Wait for synchronous FUSE_INIT to complete */
 	if (session_wait_sync_init_completion(se) < 0)
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
 
-	se->is_sync_init = true;
-	free(mnt_opts);
-	free(mnt_opts_with_fd);
+	free(mtab_opts);
+	free(mtab_opts_with_fd);
 	return fd;
 }
 #else
@@ -4788,7 +4805,6 @@ int fuse_session_mount(struct fuse_session *se, const char *_mountpoint)
 out:
 	se->fd = fd;
 	se->mountpoint = mountpoint;
-
 	fuse_daemonize_early_set_mounted();
 
 	return 0;

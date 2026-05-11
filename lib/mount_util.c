@@ -108,26 +108,32 @@
 #define MOUNT_ATTR_NOSYMFOLLOW	0
 #endif
 
+/*
+ * is_fsconfig and mount_attr are independent: ro/rw need both legs
+ * (SB_RDONLY on the superblock via fsconfig SET_FLAG, plus
+ * MOUNT_ATTR_RDONLY on the vfsmount via fsmount). Everything else is
+ * exclusively one or the other.
+ */
 const struct mount_flags mount_flags[] = {
-/* opt            flag             on  safe  mount_attr */
-{"rw",           MS_RDONLY,        0,  1,    MOUNT_ATTR_RDONLY},     /* fsconfig */
-{"ro",           MS_RDONLY,        1,  1,    MOUNT_ATTR_RDONLY},     /* fsconfig */
-{"suid",         MS_NOSUID,        0,  0,    MOUNT_ATTR_NOSUID},     /* fsmount  */
-{"nosuid",       MS_NOSUID,        1,  1,    MOUNT_ATTR_NOSUID},     /* fsmount  */
-{"dev",          MS_NODEV,         0,  1,    MOUNT_ATTR_NODEV},      /* fsmount  */
-{"nodev",        MS_NODEV,         1,  1,    MOUNT_ATTR_NODEV},      /* fsmount  */
-{"exec",         MS_NOEXEC,        0,  1,    MOUNT_ATTR_NOEXEC},     /* fsmount  */
-{"noexec",       MS_NOEXEC,        1,  1,    MOUNT_ATTR_NOEXEC},     /* fsmount  */
-{"async",        MS_SYNCHRONOUS,   0,  1,    0},                      /* fsconfig */
-{"sync",         MS_SYNCHRONOUS,   1,  1,    0},                      /* fsconfig */
-{"noatime",      MS_NOATIME,       1,  1,    MOUNT_ATTR_NOATIME},    /* fsmount  */
-{"nodiratime",   MS_NODIRATIME,    1,  1,    MOUNT_ATTR_NODIRATIME}, /* fsmount  */
-{"norelatime",   MS_RELATIME,      0,  1,    MOUNT_ATTR_RELATIME},   /* fsmount  */
-{"nostrictatime", MS_STRICTATIME,  0,  1,    MOUNT_ATTR_STRICTATIME},/* fsmount  */
-{"symfollow",    MS_NOSYMFOLLOW,   0,  1,    MOUNT_ATTR_NOSYMFOLLOW},/* fsmount  */
-{"nosymfollow",  MS_NOSYMFOLLOW,   1,  1,    MOUNT_ATTR_NOSYMFOLLOW},/* fsmount  */
-{"dirsync",      MS_DIRSYNC,       1,  1,    0},                      /* fsconfig */
-{NULL,           0,                0,  0,    0}
+/* opt            flag             on  safe  fsconfig  mount_attr */
+{"rw",           MS_RDONLY,        0,  1,    1,        MOUNT_ATTR_RDONLY},
+{"ro",           MS_RDONLY,        1,  1,    1,        MOUNT_ATTR_RDONLY},
+{"suid",         MS_NOSUID,        0,  0,    0,        MOUNT_ATTR_NOSUID},
+{"nosuid",       MS_NOSUID,        1,  1,    0,        MOUNT_ATTR_NOSUID},
+{"dev",          MS_NODEV,         0,  1,    0,        MOUNT_ATTR_NODEV},
+{"nodev",        MS_NODEV,         1,  1,    0,        MOUNT_ATTR_NODEV},
+{"exec",         MS_NOEXEC,        0,  1,    0,        MOUNT_ATTR_NOEXEC},
+{"noexec",       MS_NOEXEC,        1,  1,    0,        MOUNT_ATTR_NOEXEC},
+{"async",        MS_SYNCHRONOUS,   0,  1,    1,        0},
+{"sync",         MS_SYNCHRONOUS,   1,  1,    1,        0},
+{"noatime",      MS_NOATIME,       1,  1,    0,        MOUNT_ATTR_NOATIME},
+{"nodiratime",   MS_NODIRATIME,    1,  1,    0,        MOUNT_ATTR_NODIRATIME},
+{"norelatime",   MS_RELATIME,      0,  1,    0,        MOUNT_ATTR_RELATIME},
+{"nostrictatime", MS_STRICTATIME,  0,  1,    0,        MOUNT_ATTR_STRICTATIME},
+{"symfollow",    MS_NOSYMFOLLOW,   0,  1,    0,        MOUNT_ATTR_NOSYMFOLLOW},
+{"nosymfollow",  MS_NOSYMFOLLOW,   1,  1,    0,        MOUNT_ATTR_NOSYMFOLLOW},
+{"dirsync",      MS_DIRSYNC,       1,  1,    1,        0},
+{NULL,           0,                0,  0,    0,        0}
 };
 
 #ifdef IGNORE_MTAB
@@ -472,7 +478,7 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 }
 
 int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
-			       const char *type, const char *mnt_opts)
+			       const char *type, const char *mtab_opts)
 {
 #ifndef IGNORE_MTAB
 	if (geteuid() == 0) {
@@ -483,7 +489,7 @@ int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 			return -1;
 
 		res = fuse_mnt_add_mount("fuse", source, newmnt, type,
-					 mnt_opts);
+					 mtab_opts);
 		free(newmnt);
 		return res;
 	}
@@ -491,7 +497,7 @@ int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 	(void)mnt;
 	(void)source;
 	(void)type;
-	(void)mnt_opts;
+	(void)mtab_opts;
 	return 0;
 }
 

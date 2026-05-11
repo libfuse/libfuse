@@ -39,6 +39,7 @@
  * Convert MS_* mount flags to MOUNT_ATTR_* mount attributes.
  * These flags are passed to fsmount(), not fsconfig().
  * Mount attributes control mount-point level behavior.
+ * To called after set_ms_flags() which consumes the fsconfig flags.
  *
  * @attrs MOUNT_ATTR flags, built from MS_ flags
  * @return remaining flags
@@ -108,8 +109,12 @@ static void log_fsconfig_kmsg(int fd)
 
 /*
  * Apply VFS superblock (fsconfig) flags to the filesystem context.
- * Only handles flags that are filesystem parameters (ro, sync, dirsync).
- * Mount attributes (nosuid, nodev, etc.) are handled separately via fsmount().
+ * Handles the fsconfig leg of every entry whose is_fsconfig is set
+ * (ro, rw, sync, async, dirsync). Mount attributes (nosuid, nodev, etc.)
+ * are handled separately via fsmount().
+ *
+ * Entries that have *both* legs (ro/rw) leave the MS_ bit in *ms_flags
+ * so that ms_flags_to_mount_attrs() can also pick them up.
  *
  * @ms_flags flags to set, outvalue are the remaining flags
  * @return 0 on success, negative error code on failure
@@ -120,8 +125,7 @@ static int set_ms_flags(int fsfd, unsigned long *ms_flags)
 	int i;
 
 	for (i = 0; mount_flags[i].opt != NULL && flags != 0; i++) {
-		/* Only process fsconfig flags (mount_attr == 0) with on==1 */
-		if (mount_flags[i].mount_attr || !mount_flags[i].on)
+		if (!mount_flags[i].is_fsconfig || !mount_flags[i].on)
 			continue;
 
 		if (!(flags & mount_flags[i].flag))
@@ -137,7 +141,14 @@ static int set_ms_flags(int fsfd, unsigned long *ms_flags)
 
 			return -save_errno;
 		}
-		flags &= ~mount_flags[i].flag;
+
+		/*
+		 * Only consume the bit if no fsmount mount-attr leg is
+		 * also pending for this option. Otherwise leave it for
+		 * ms_flags_to_mount_attrs() to apply via fsmount().
+		 */
+		if (!mount_flags[i].mount_attr)
+			flags &= ~mount_flags[i].flag;
 	}
 
 	*ms_flags = flags;
@@ -303,12 +314,11 @@ static int apply_mount_opts(int fsfd, const char *opts)
 		 * not fsconfig().
 		 *
 		 * These string options (nosuid, nodev, etc.) are reconstructed
-		 * Skip mtab-only options - they're for /run/mount/utab, not kernel
-		 * from MS_* flags by get_mnt_flag_opts() in lib/mount.c and
-		 * get_mnt_opts() in util/fusermount.c. Both the library path
-		 * (via fuse_kern_mount_get_base_mnt_opts) and fusermount3 path
+		 * from MS_* flags by get_mtab_flag_opts() in lib/mount.c and
+		 * get_mtab_opts() in util/fusermount.c. Both the library path
+		 * (via fuse_kern_mount_get_base_mtab_opts) and fusermount3 path
 		 * rebuild these strings from the flags bitmask and pass them in
-		 * mnt_opts. They must be filtered here because they are mount
+		 * mtab_opts. They must be filtered here because they are mount
 		 * attributes (passed to fsmount via MOUNT_ATTR_*), not
 		 * filesystem parameters (which would be passed to fsconfig).
 		 *
@@ -332,7 +342,7 @@ static int apply_mount_opts(int fsfd, const char *opts)
 int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		      const char *fsname, const char *subtype,
 		      const char *source_dev, const char *kernel_opts,
-		      const char *mnt_opts)
+		      const char *mtab_opts)
 {
 	char *type = NULL;
 	char *source = NULL;
@@ -397,13 +407,13 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		goto out_free;
 	}
 
-	/* Apply additional mount options */
-	err = apply_mount_opts(fsfd, mnt_opts);
+	/* Apply mtab options (overlap with kernel_opts is filtered and tolerated) */
+	err = apply_mount_opts(fsfd, mtab_opts);
 	if (err < 0) {
 		log_fsconfig_kmsg(fsfd);
 		fprintf(stderr,
-			"fuse: failed to apply additional mount options '%s'\n",
-			mnt_opts);
+			"fuse: failed to apply mtab options '%s'\n",
+			mtab_opts);
 		goto out_free;
 	}
 
@@ -448,7 +458,7 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		goto out_close_mntfd;
 	}
 
-	err = fuse_mnt_add_mount_helper(mnt, source, type, mnt_opts);
+	err = fuse_mnt_add_mount_helper(mnt, source, type, mtab_opts);
 	if (err == -1)
 		goto out_umount;
 

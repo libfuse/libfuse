@@ -575,34 +575,41 @@ static int add_option(char **optsp, const char *opt, unsigned expand)
 	return 0;
 }
 
-static int get_mnt_opts(int flags, const char *opts, char **mnt_optsp)
+/*
+ * Build the mtab/utab record string for this mount: flag-mirrors of MS_*
+ * (rw/nosuid/nodev/...) + the kernel-bound -o options + "user=<n>" when
+ * mounted by a non-root user. The result is what add_mount() writes into
+ * /etc/mtab (or /run/mount/utab). The overlap with @opts is intentional so
+ * the mtab line reflects what the kernel saw.
+ */
+static int get_mtab_opts(int flags, const char *opts, char **mtab_optsp)
 {
 	int i;
 	int l;
 
-	if (!(flags & MS_RDONLY) && add_option(mnt_optsp, "rw", 0) == -1)
+	if (!(flags & MS_RDONLY) && add_option(mtab_optsp, "rw", 0) == -1)
 		return -1;
 
 	for (i = 0; mount_flags[i].opt != NULL; i++) {
 		if (mount_flags[i].on && (flags & mount_flags[i].flag) &&
-		    add_option(mnt_optsp, mount_flags[i].opt, 0) == -1)
+		    add_option(mtab_optsp, mount_flags[i].opt, 0) == -1)
 			return -1;
 	}
 
-	if (add_option(mnt_optsp, opts, 0) == -1)
+	if (add_option(mtab_optsp, opts, 0) == -1)
 		return -1;
 	/* remove comma from end of opts*/
-	l = strlen(*mnt_optsp);
-	if ((*mnt_optsp)[l-1] == ',')
-		(*mnt_optsp)[l-1] = '\0';
+	l = strlen(*mtab_optsp);
+	if ((*mtab_optsp)[l-1] == ',')
+		(*mtab_optsp)[l-1] = '\0';
 	if (getuid() != 0) {
 		const char *user = get_user_name();
 		if (user == NULL)
 			return -1;
 
-		if (add_option(mnt_optsp, "user=", strlen(user)) == -1)
+		if (add_option(mtab_optsp, "user=", strlen(user)) == -1)
 			return -1;
-		strcat(*mnt_optsp, user);
+		strcat(*mtab_optsp, user);
 	}
 	return 0;
 }
@@ -674,7 +681,11 @@ struct mount_params {
 	/* Generated mount parameters */
 	char *source;           /* Mount source string */
 	char *type;             /* Filesystem type string */
-	char *mnt_opts;         /* Mount table options */
+
+	/* mtab/utab record content: MS_* flag mirrors + kernel-bound -o opts
+	 * + user=<n> (non-root)
+	 */
+	char *mtab_opts;
 
 	/* Pointer for optbuf manipulation */
 	char *optbuf_end;       /* Points to end of optbuf for sprintf */
@@ -687,7 +698,7 @@ static void free_mount_params(struct mount_params *mp)
 	free(mp->subtype);
 	free(mp->source);
 	free(mp->type);
-	free(mp->mnt_opts);
+	free(mp->mtab_opts);
 	memset(mp, 0, sizeof(*mp));
 }
 
@@ -801,7 +812,7 @@ static int prepare_mount(const char *opts, struct mount_params *mp)
 			s++;
 	}
 	*d = '\0';
-	res = get_mnt_opts(mp->flags, mp->optbuf, &mp->mnt_opts);
+	res = get_mtab_opts(mp->flags, mp->optbuf, &mp->mtab_opts);
 	if (res == -1)
 		goto err;
 
@@ -868,7 +879,7 @@ static int perform_mount(const char *mnt, struct mount_params *mp)
 
 static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 		    int fd, const char *opts, const char *dev, char **sourcep,
-		    char **mnt_optsp)
+		    char **mtab_optsp)
 {
 	struct mount_params mp = { .fd = fd }; /* implicit zero of other params */
 	int res;
@@ -888,7 +899,7 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 
 	*sourcep = mp.source;
 	*typep = mp.type;
-	*mnt_optsp = mp.mnt_opts;
+	*mtab_optsp = mp.mtab_opts;
 
 	/* Free only the intermediate allocations, not the returned ones */
 	free(mp.fsname);
@@ -1005,9 +1016,9 @@ struct mount_context {
 	const char *dev;
 	struct stat stbuf;
 	char *source;
-	char *mnt_opts;
+	char *mtab_opts;     /* mtab/utab record string for add_mount() */
 	char *x_opts;
-	char *kern_mnt_opts; /* mnt_opts with removed x_opts */
+	char *kern_mnt_opts; /* user-provided -o opts with x-* removed */
 };
 
 /*
@@ -1081,7 +1092,7 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 		.rootmode = ctx->stbuf.st_mode & S_IFMT,
 		.dev = ctx->dev,
 	};
-	char *final_mnt_opts = NULL;
+	char *final_mtab_opts = NULL;
 
 	res = prepare_mount(ctx->kern_mnt_opts, &mp);
 	if (res == -1)
@@ -1091,27 +1102,27 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 	 * Merge x-options if running as root, root is allowed to update
 	 * /etc/mtab or /run/mount/utab
 	 */
-	final_mnt_opts = mp.mnt_opts;
+	final_mtab_opts = mp.mtab_opts;
 	if (geteuid() == 0 && ctx->x_opts && strlen(ctx->x_opts) > 0) {
-		char *x_mnt_opts = NULL;
+		char *x_mtab_opts = NULL;
 		int ret;
 
-		if (strlen(mp.mnt_opts) > 0)
-			ret = asprintf(&x_mnt_opts, "%s,%s",
-				       mp.mnt_opts, ctx->x_opts);
+		if (strlen(mp.mtab_opts) > 0)
+			ret = asprintf(&x_mtab_opts, "%s,%s",
+				       mp.mtab_opts, ctx->x_opts);
 		else
-			ret = asprintf(&x_mnt_opts, "%s", ctx->x_opts);
+			ret = asprintf(&x_mtab_opts, "%s", ctx->x_opts);
 
 		if (ret < 0)
 			goto fail_free_params;
 
-		final_mnt_opts = x_mnt_opts;
+		final_mtab_opts = x_mtab_opts;
 	}
 
 	/* Use new mount API */
 	res = fuse_kern_fsmount(mnt, mp.flags, mp.blkdev,
 				mp.fsname, mp.subtype, ctx->dev,
-				mp.optbuf, final_mnt_opts);
+				mp.optbuf, final_mtab_opts);
 	if (res == -1)
 		goto fail_free_merged;
 
@@ -1124,7 +1135,7 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 
 	/* Store results in context */
 	ctx->source = mp.source;
-	ctx->mnt_opts = final_mnt_opts;
+	ctx->mtab_opts = final_mtab_opts;
 	*type = mp.type;
 
 	res = 0;
@@ -1133,15 +1144,15 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 	free(mp.fsname);
 	free(mp.subtype);
 	free(mp.optbuf);
-	if (final_mnt_opts != mp.mnt_opts)
-		free(mp.mnt_opts);
+	if (final_mtab_opts != mp.mtab_opts)
+		free(mp.mtab_opts);
 
 out:
 	return res;
 
 fail_free_merged:
-	if (final_mnt_opts != mp.mnt_opts)
-		free(final_mnt_opts);
+	if (final_mtab_opts != mp.mtab_opts)
+		free(final_mtab_opts);
 fail_free_params:
 	free_mount_params(&mp);
 fail:
@@ -1158,7 +1169,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	const char *dev = fuse_mnt_get_devname();
 	struct stat stbuf;
 	char *source = NULL;
-	char *mnt_opts = NULL;
+	char *mtab_opts = NULL;
 	const char *real_mnt = mnt;
 	int mountpoint_fd = -1;
 	char *do_mount_opts = NULL;
@@ -1183,7 +1194,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 	restore_privs();
 	if (res != -1)
 		res = do_mount(real_mnt, type, stbuf.st_mode & S_IFMT,
-			       fd, do_mount_opts, dev, &source, &mnt_opts);
+			       fd, do_mount_opts, dev, &source, &mtab_opts);
 
 	if (mountpoint_fd != -1)
 		close(mountpoint_fd);
@@ -1203,24 +1214,24 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 			 * Add back the options starting with "x-" to opts from
 			 * do_mount. +2 for ',' and '\0'
 			 */
-			size_t mnt_opts_len = strlen(mnt_opts);
-			size_t x_mnt_opts_len =  mnt_opts_len+
+			size_t mtab_opts_len = strlen(mtab_opts);
+			size_t x_mtab_opts_len = mtab_opts_len +
 						 strlen(x_prefixed_opts) + 2;
-			char *x_mnt_opts = calloc(1, x_mnt_opts_len);
+			char *x_mtab_opts = calloc(1, x_mtab_opts_len);
 
-			if (mnt_opts_len) {
-				strcpy(x_mnt_opts, mnt_opts);
-				strncat(x_mnt_opts, ",", 2);
+			if (mtab_opts_len) {
+				strcpy(x_mtab_opts, mtab_opts);
+				strncat(x_mtab_opts, ",", 2);
 			}
 
-			strncat(x_mnt_opts, x_prefixed_opts,
-				x_mnt_opts_len - mnt_opts_len - 2);
+			strncat(x_mtab_opts, x_prefixed_opts,
+				x_mtab_opts_len - mtab_opts_len - 2);
 
-			free(mnt_opts);
-			mnt_opts = x_mnt_opts;
+			free(mtab_opts);
+			mtab_opts = x_mtab_opts;
 		}
 
-		res = add_mount(source, mnt, *type, mnt_opts);
+		res = add_mount(source, mnt, *type, mtab_opts);
 		if (res == -1) {
 			/* Can't clean up mount in a non-racy way */
 			goto fail_close_fd;
@@ -1229,7 +1240,7 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 
 out_free:
 	free(source);
-	free(mnt_opts);
+	free(mtab_opts);
 	free(x_prefixed_opts);
 	free(do_mount_opts);
 
@@ -1288,7 +1299,7 @@ static int mount_fuse_sync_init(const char *mnt, const char *opts,
 out:
 	close(fd);
 	free(ctx.source);
-	free(ctx.mnt_opts);
+	free(ctx.mtab_opts);
 	free(ctx.x_opts);
 	free(ctx.kern_mnt_opts);
 

@@ -2,7 +2,7 @@
 
 set -e
 
-TEST_CMD="pytest -vv --tb=short --maxfail=1 --log-level=INFO --log-cli-level=INFO test/"
+TEST_CMD="meson test -C . --print-errorlogs"
 SAN="-Db_sanitize=address,undefined"
 
 # not default
@@ -136,8 +136,12 @@ sanitized_build()
         sudo chmod 4755 util/fuservicemount3
     fi
 
-    # Test as root and regular user
-    sudo env PATH=$PATH ${TEST_CMD}
+    # Test as root and regular user. Give the root run a distinct
+    # meson log basename so its meson-logs/testlog.* files don't end
+    # up owned by root and block the subsequent user run from writing
+    # them.
+    sudo env PATH=$PATH ${TEST_CMD} --logbase=testlog-root
+
     # Cleanup temporary files (since they are now owned by root)
     sudo rm -rf test/.pytest_cache/ test/__pycache__
 
