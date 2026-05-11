@@ -41,28 +41,28 @@
  * Mount attributes control mount-point level behavior.
  * To called after set_ms_flags() which consumes the fsconfig flags.
  *
- * @attrs MOUNT_ATTR flags, built from MS_ flags
- * @return remaining flags
+ * @mount_attrs MOUNT_ATTR flags, built from MS_ flags
+ * @return remaining MS_* flags
  */
-static int ms_flags_to_mount_attrs(unsigned long flags,
-				   unsigned long *attrs)
+static unsigned long ms_flags_to_mount_attrs(unsigned long ms_flags,
+					     unsigned int *mount_attrs)
 {
 	int i;
 
-	*attrs = 0;
+	*mount_attrs = 0;
 
-	for (i = 0; mount_flags[i].opt != NULL && flags != 0; i++) {
+	for (i = 0; mount_flags[i].opt != NULL && ms_flags != 0; i++) {
 		/* Only process mount attributes (mount_attr != 0) with on==1 */
 		if (!mount_flags[i].mount_attr || !mount_flags[i].on)
 			continue;
 
-		if (flags & mount_flags[i].flag) {
-			*attrs |= mount_flags[i].mount_attr;
-			flags &= ~mount_flags[i].flag;
+		if (ms_flags & mount_flags[i].flag) {
+			*mount_attrs |= mount_flags[i].mount_attr;
+			ms_flags &= ~mount_flags[i].flag;
 		}
 	}
 
-	return flags;
+	return ms_flags;
 }
 
 /*
@@ -349,7 +349,7 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	int fsfd = -1;
 	int mntfd = -1;
 	int err, res;
-	unsigned long mount_attrs;
+	unsigned int mount_attrs;
 
 	/* Build type and source strings */
 	type = fuse_mnt_build_type(blkdev, subtype);
