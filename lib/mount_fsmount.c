@@ -35,17 +35,8 @@
 #define MOUNT_ATTR_NOSYMFOLLOW  0x00200000
 #endif
 
-/*
- * Convert MS_* mount flags to MOUNT_ATTR_* mount attributes.
- * These flags are passed to fsmount(), not fsconfig().
- * Mount attributes control mount-point level behavior.
- * To called after set_ms_flags() which consumes the fsconfig flags.
- *
- * @mount_attrs MOUNT_ATTR flags, built from MS_ flags
- * @return remaining MS_* flags
- */
-static unsigned long ms_flags_to_mount_attrs(unsigned long ms_flags,
-					     unsigned int *mount_attrs)
+unsigned long ms_flags_to_mount_attrs(unsigned long ms_flags,
+				      unsigned int *mount_attrs)
 {
 	int i;
 
@@ -65,12 +56,7 @@ static unsigned long ms_flags_to_mount_attrs(unsigned long ms_flags,
 	return ms_flags;
 }
 
-/*
- * Read and print kernel error messages from fsopen fd.
- * The kernel can provide detailed error/warning/info messages via the
- * filesystem context fd that are more informative than strerror(errno).
- */
-static void log_fsconfig_kmsg(int fd)
+void log_fsconfig_kmsg(int fd)
 {
 	char buf[4096];
 	int err, sz = 0;
@@ -107,19 +93,7 @@ static void log_fsconfig_kmsg(int fd)
 	errno = err;
 }
 
-/*
- * Apply VFS superblock (fsconfig) flags to the filesystem context.
- * Handles the fsconfig leg of every entry whose is_fsconfig is set
- * (ro, rw, sync, async, dirsync). Mount attributes (nosuid, nodev, etc.)
- * are handled separately via fsmount().
- *
- * Entries that have *both* legs (ro/rw) leave the MS_ bit in *ms_flags
- * so that ms_flags_to_mount_attrs() can also pick them up.
- *
- * @ms_flags flags to set, outvalue are the remaining flags
- * @return 0 on success, negative error code on failure
- */
-static int set_ms_flags(int fsfd, unsigned long *ms_flags)
+int set_fsconfig_ms_flags(int fsfd, unsigned long *ms_flags)
 {
 	int ret, flags = *ms_flags;
 	int i;
@@ -155,16 +129,7 @@ static int set_ms_flags(int fsfd, unsigned long *ms_flags)
 	return 0;
 }
 
-/*
- * Apply the "fd" parameter via fsconfig
- *
- * Special handler for the "fd" mount option. Note that despite the name,
- * the fd parameter is passed as a u32 string value, not as a file descriptor
- * to pass to the kernel. Uses FSCONFIG_SET_STRING rather than FSCONFIG_SET_FD.
- *
- * Returns 0 on success, negative error code on failure.
- */
-static int apply_opt_fd(int fsfd, const char *value)
+int apply_fsconfig_opt_fd(int fsfd, const char *value)
 {
 	int res;
 
@@ -181,15 +146,7 @@ static int apply_opt_fd(int fsfd, const char *value)
 	return 0;
 }
 
-/*
- * Apply a key=value string option via fsconfig
- *
- * Applies a mount option that consists of a key-value pair (e.g., "rootmode=40000").
- * Uses FSCONFIG_SET_STRING to pass the key and value to the filesystem configuration.
- *
- * Returns 0 on success, negative error code on failure.
- */
-static int apply_opt_string(int fsfd, const char *key, const char *value)
+int apply_fsconfig_opt_string(int fsfd, const char *key, const char *value)
 {
 	int res, save_errno;
 
@@ -210,6 +167,8 @@ static int apply_opt_string(int fsfd, const char *key, const char *value)
  * Applies a mount option that is a simple flag without a value (e.g., "rw").
  * Uses FSCONFIG_SET_FLAG to set the flag in the filesystem configuration.
  *
+ * @fsfd fsopen fd
+ * @opt name of filesystem mount flag option
  * Returns 0 on success, negative error code on failure.
  */
 static int apply_opt_flag(int fsfd, const char *opt)
@@ -227,7 +186,6 @@ static int apply_opt_flag(int fsfd, const char *opt)
 	return 0;
 }
 
-
 /*
  * Parse and apply a single mount option via fsconfig
  *
@@ -238,6 +196,8 @@ static int apply_opt_flag(int fsfd, const char *opt)
  * Special handling for the "fd" parameter which is treated as a string
  * value rather than a file descriptor to pass.
  *
+ * @fsfd fsopen fd
+ * @opt filesystem mount option, may be modified
  * Returns 0 on success, negative error code on failure.
  */
 static int apply_opt_key_value(int fsfd, char *opt)
@@ -255,9 +215,9 @@ static int apply_opt_key_value(int fsfd, char *opt)
 	value = eq + 1;
 
 	if (strcmp(key, "fd") == 0)
-		return apply_opt_fd(fsfd, value);
+		return apply_fsconfig_opt_fd(fsfd, value);
 
-	return apply_opt_string(fsfd, key, value);
+	return apply_fsconfig_opt_string(fsfd, key, value);
 }
 
 /*
@@ -287,11 +247,7 @@ static int is_mtab_only_opt(const char *opt)
 	       strcmp(opt, "rw") == 0;
 }
 
-/*
- * Parse kernel options string and apply via fsconfig
- * Options are comma-separated key=value pairs
- */
-static int apply_mount_opts(int fsfd, const char *opts)
+int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 {
 	char *opts_copy;
 	char *opt;
@@ -393,12 +349,12 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	}
 
 	/* Apply VFS superblock (fsconfig) flags (ro, sync, dirsync) */
-	res = set_ms_flags(fsfd, &flags);
+	res = set_fsconfig_ms_flags(fsfd, &flags);
 	if (res != 0)
 		goto out_free;
 
 	/* Apply kernel options */
-	err = apply_mount_opts(fsfd, kernel_opts);
+	err = apply_fsconfig_mount_opts(fsfd, kernel_opts);
 	if (err < 0) {
 		log_fsconfig_kmsg(fsfd);
 		fprintf(stderr,
@@ -408,7 +364,7 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	}
 
 	/* Apply mtab options (overlap with kernel_opts is filtered and tolerated) */
-	err = apply_mount_opts(fsfd, mtab_opts);
+	err = apply_fsconfig_mount_opts(fsfd, mtab_opts);
 	if (err < 0) {
 		log_fsconfig_kmsg(fsfd);
 		fprintf(stderr,

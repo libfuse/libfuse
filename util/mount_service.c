@@ -39,6 +39,9 @@
 #include "fuse_service_priv.h"
 #include "mount_service.h"
 #include "fuser_conf.h"
+#ifdef HAVE_NEW_MOUNT_API
+#include "mount_i_linux.h"
+#endif
 
 struct mount_service {
 	/* prefix for printing error messages */
@@ -875,40 +878,6 @@ static int mount_service_handle_fsopen_cmd(struct mount_service *mo,
 	return mount_service_send_reply(mo, 0);
 }
 
-#ifdef HAVE_NEW_MOUNT_API
-/* callers must preserve errno */
-static void emit_fsconfig_messages(const struct mount_service *mo)
-{
-	uint8_t buf[BUFSIZ];
-	ssize_t sz;
-
-	while ((sz = read(mo->fsopenfd, buf, sizeof(buf) - 1)) >= 1) {
-		if (buf[sz - 1] == '\n')
-			buf[--sz] = '\0';
-		else
-			buf[sz] = '\0';
-
-		if (!*buf)
-			continue;
-
-		switch (buf[0]) {
-		case 'e':
-			fprintf(stderr, "Error: %s\n", buf + 2);
-			break;
-		case 'w':
-			fprintf(stderr, "Warning: %s\n", buf + 2);
-			break;
-		case 'i':
-			fprintf(stderr, "Info: %s\n", buf + 2);
-			break;
-		default:
-			fprintf(stderr, " %s\n", buf);
-			break;
-		}
-	}
-}
-#endif
-
 static int mount_service_handle_source_cmd(struct mount_service *mo,
 					   const struct fuse_service_packet *p,
 					   size_t psz)
@@ -946,16 +915,11 @@ static int mount_service_handle_source_cmd(struct mount_service *mo,
 
 #ifdef HAVE_NEW_MOUNT_API
 	if (mo->fsopenfd >= 0) {
-		int ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_STRING, "source",
-			       oc->value, 0);
-		if (ret) {
-			int error = errno;
-
-			fprintf(stderr, "%s: fsconfig source: %s\n",
-				mo->msgtag, strerror(error));
-			emit_fsconfig_messages(mo);
+		int ret = apply_fsconfig_opt_string(mo->fsopenfd, "source",
+						    oc->value);
+		if (ret < 0) {
 			free(source);
-			return mount_service_send_reply(mo, error);
+			return mount_service_send_reply(mo, -ret);
 		}
 	}
 #endif
@@ -1002,53 +966,30 @@ static int mount_service_handle_mntopts_cmd(struct mount_service *mo,
 	}
 
 	/* strtok_r mutates tokstr aka oc->value */
-	while ((tok = strtok_r(tokstr, ",", &savetok)) != NULL) {
-		char *equals = strchr(tok, '=');
-		char oldchar = 0;
+	if (getuid() != 0 && !user_allow_other) {
+		while ((tok = strtok_r(tokstr, ",", &savetok)) != NULL) {
+			if (!strcmp(tok, "allow_other") ||
+			    !strcmp(tok, "allow_root")) {
+				fprintf(stderr,
+	"%s: option %s only allowed if 'user_allow_other' is set in %s\n",
+					mo->msgtag, tok, FUSE_CONF);
+				return mount_service_send_reply(mo, EPERM);
+			}
 
-		if (equals) {
-			oldchar = *equals;
-			*equals = 0;
+			tokstr = NULL;
 		}
-
-		if (getuid() != 0 && !user_allow_other &&
-		    (!strcmp(tok, "allow_other") ||
-		     !strcmp(tok, "allow_root"))) {
-			fprintf(stderr,
-"%s: option %s only allowed if 'user_allow_other' is set in %s\n",
-				mo->msgtag, tok, FUSE_CONF);
-			return mount_service_send_reply(mo, EPERM);
-		}
+	}
 
 #ifdef HAVE_NEW_MOUNT_API
-		if (mo->fsopenfd >= 0) {
-			int ret;
+	if (mo->fsopenfd >= 0) {
+		int ret = apply_fsconfig_mount_opts(mo->fsopenfd, oc->value);
 
-			if (equals)
-				ret = fsconfig(mo->fsopenfd,
-					       FSCONFIG_SET_STRING, tok,
-					       equals + 1, 0);
-			else
-				ret = fsconfig(mo->fsopenfd,
-					       FSCONFIG_SET_FLAG, tok,
-					       NULL, 0);
-			if (ret) {
-				int error = errno;
-
-				fprintf(stderr, "%s: set mount option: %s\n",
-					mo->msgtag, strerror(error));
-				emit_fsconfig_messages(mo);
-				free(mntopts);
-				return mount_service_send_reply(mo, error);
-			}
+		if (ret < 0) {
+			free(mntopts);
+			return mount_service_send_reply(mo, -ret);
 		}
-#endif
-
-		if (equals)
-			*equals = oldchar;
-
-		tokstr = NULL;
 	}
+#endif
 
 	mo->mntopts = mntopts;
 	return mount_service_send_reply(mo, 0);
@@ -1452,66 +1393,6 @@ out_realmopts:
 }
 
 #ifdef HAVE_NEW_MOUNT_API
-struct ms_to_mount_map {
-	unsigned long ms_flag;
-	unsigned int mount_attr_flag;
-};
-
-static void get_mount_attr_flags(const struct fuse_service_mount_command *oc,
-				 unsigned int *attr_flags,
-				 unsigned long *leftover_ms_flags)
-{
-	const struct mount_flags *i;
-	unsigned int ms_flags = ntohl(oc->ms_flags);
-	unsigned int mount_attr_flags = 0;
-
-	for (i = mount_flags; i->opt != NULL; i++) {
-		if (!i->on || !(ms_flags & i->flag))
-			continue;
-
-		mount_attr_flags |= i->mount_attr;
-		ms_flags &= ~i->flag;
-	}
-
-	*leftover_ms_flags = ms_flags;
-	*attr_flags = mount_attr_flags;
-}
-
-static int set_ms_flags(struct mount_service *mo, unsigned long ms_flags)
-{
-	const struct mount_flags *i;
-	int ret;
-
-	for (i = mount_flags; i->opt != NULL; i++) {
-		if (!i->on || !(ms_flags & i->flag))
-			continue;
-
-		ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_FLAG, i->opt,
-			       NULL, 0);
-		if (ret) {
-			int error = errno;
-
-			fprintf(stderr, "%s: set %s option: %s\n",
-				mo->msgtag, i->opt, strerror(error));
-			emit_fsconfig_messages(mo);
-
-			errno = error;
-			return -1;
-		}
-		ms_flags &= ~i->flag;
-	}
-
-	/*
-	 * We can't translate all the supplied MS_ flags into MOUNT_ATTR_ flags
-	 * or string flags!  Return a magic code so the caller will fall back
-	 * to regular mount(2).
-	 */
-	if (ms_flags)
-		return FUSE_MOUNT_FALLBACK_NEEDED;
-
-	return 0;
-}
-
 static int mount_service_fsopen_mount(struct mount_service *mo,
 				      const struct fuse_service_mount_command *oc,
 				      const struct stat *stbuf)
@@ -1523,63 +1404,57 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 	int error;
 	int ret;
 
-	get_mount_attr_flags(oc, &attr_flags, &ms_flags);
+	ms_flags = ms_flags_to_mount_attrs(ntohl(oc->ms_flags), &attr_flags);
 
-	ret = set_ms_flags(mo, ms_flags);
-	if (ret == FUSE_MOUNT_FALLBACK_NEEDED)
-		return ret;
+	ret = set_fsconfig_ms_flags(mo->fsopenfd, &ms_flags);
 	if (ret) {
 		error = errno;
 		goto fail_mount;
 	}
 
-	ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_STRING, "subtype",
-		       mo->subtype, 0);
-	if (ret) {
-		error = errno;
+	/*
+	 * We can't translate all the supplied MS_ flags into MOUNT_ATTR_ flags
+	 * or string flags!  Return a magic code so the caller will fall back
+	 * to regular mount(2).
+	 */
+	if (ms_flags)
+		return FUSE_MOUNT_FALLBACK_NEEDED;
 
+	ret = apply_fsconfig_opt_string(mo->fsopenfd, "subtype", mo->subtype);
+	if (ret < 0) {
 		/* The subtype option was merged after fsopen */
-		if (error == EINVAL)
+		if (ret == -EINVAL)
 			return FUSE_MOUNT_FALLBACK_NEEDED;
 
-		fprintf(stderr, "%s: set subtype option: %s\n",
-			mo->msgtag, strerror(error));
+		error = -ret;
 		goto fail_fsconfig;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%i", mo->fusedevfd);
-	ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_STRING, "fd", tmp, 0);
-	if (ret) {
-		error = errno;
-		fprintf(stderr, "%s: set fd option: %s\n",
-			mo->msgtag, strerror(error));
+	ret = apply_fsconfig_opt_fd(mo->fsopenfd, tmp);
+	if (ret < 0) {
+		error = -ret;
 		goto fail_fsconfig;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%o", stbuf->st_mode & S_IFMT);
-	ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_STRING, "rootmode", tmp, 0);
-	if (ret) {
-		error = errno;
-		fprintf(stderr, "%s: set rootmode option: %s\n",
-			mo->msgtag, strerror(error));
+	ret = apply_fsconfig_opt_string(mo->fsopenfd, "rootmode", tmp);
+	if (ret < 0) {
+		error = -ret;
 		goto fail_fsconfig;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%u", getuid());
-	ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_STRING, "user_id", tmp, 0);
-	if (ret) {
-		error = errno;
-		fprintf(stderr, "%s: set user_id option: %s\n",
-			mo->msgtag, strerror(error));
+	ret = apply_fsconfig_opt_string(mo->fsopenfd, "user_id", tmp);
+	if (ret < 0) {
+		error = -ret;
 		goto fail_fsconfig;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%u", getgid());
-	ret = fsconfig(mo->fsopenfd, FSCONFIG_SET_STRING, "group_id", tmp, 0);
-	if (ret) {
-		error = errno;
-		fprintf(stderr, "%s: set group_id option: %s\n",
-			mo->msgtag, strerror(error));
+	ret = apply_fsconfig_opt_string(mo->fsopenfd, "group_id", tmp);
+	if (ret < 0) {
+		error = -ret;
 		goto fail_fsconfig;
 	}
 
@@ -1629,7 +1504,7 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 	return mount_service_send_reply(mo, 0);
 
 fail_fsconfig:
-	emit_fsconfig_messages(mo);
+	log_fsconfig_kmsg(mo->fsopenfd);
 fail_mount:
 	return mount_service_send_reply(mo, error);
 }

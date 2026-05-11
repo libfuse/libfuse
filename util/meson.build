@@ -11,6 +11,9 @@ mount_service_sources = []
 mount_service_cflags = []
 if private_cfg.get('HAVE_SERVICEMOUNT', false)
   mount_service_sources += ['mount_service.c', '../lib/mount_util.c', 'fuser_conf.c']
+  if private_cfg.get('HAVE_NEW_MOUNT_API', false)
+    mount_service_sources += [ '../lib/mount_fsmount.c' ]
+  endif
   mount_service_cflags += ['-DFUSE_CONF="@0@"'.format(fuseconf_path)]
   fuservicemount_path = join_paths(get_option('prefix'), get_option('sbindir'))
   mount_service_cflags += ['-DFUSERVICEMOUNT_DIR="@0@"'.format(fuservicemount_path)]
