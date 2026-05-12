@@ -2271,8 +2271,12 @@ int fuse_fs_poll(struct fuse_fs *fs, const char *path,
 	int res;
 
 	fuse_get_context()->private_data = fs->user_data;
-	if (!fs->op.poll)
+
+	if (!fs->op.poll) {
+		fuse_pollhandle_destroy(ph);
 		return -ENOSYS;
+	}
+
 	if (fs->debug)
 		fuse_log(FUSE_LOG_DEBUG, "poll[%llu] ph: %p, events 0x%x\n",
 			(unsigned long long) fi->fh, ph,
@@ -4348,6 +4352,8 @@ static void fuse_lib_poll(fuse_req_t req, fuse_ino_t ino,
 		err = fuse_fs_poll(f->fs, path, fi, ph, &revents);
 		fuse_finish_interrupt(f, req, &d);
 		free_path(f, ino, path);
+	} else {
+		fuse_pollhandle_destroy(ph);
 	}
 	if (!err)
 		fuse_reply_poll(req, revents);
