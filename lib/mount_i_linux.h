@@ -11,6 +11,7 @@
 #define FUSE_MOUNT_I_LINUX_H_
 
 #include <sys/mount.h>
+#include <linux/mount.h>
 
 struct fuse_args;
 
