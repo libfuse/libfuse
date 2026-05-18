@@ -407,16 +407,6 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		goto out_free;
 	}
 
-	/* Apply mtab options (overlap with kernel_opts is filtered and tolerated) */
-	err = apply_mount_opts(fsfd, mtab_opts);
-	if (err < 0) {
-		log_fsconfig_kmsg(fsfd);
-		fprintf(stderr,
-			"fuse: failed to apply mtab options '%s'\n",
-			mtab_opts);
-		goto out_free;
-	}
-
 	/* Create the filesystem instance */
 	res = fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
 	if (res == -1) {
