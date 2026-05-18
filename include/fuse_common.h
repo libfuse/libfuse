@@ -508,6 +508,18 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_NO_EXPORT_SUPPORT (1UL << 30)
 
 /**
+ * Indicates support for sending security context to file creation operations
+ * (FUSE_CREATE, FUSE_MKNOD, FUSE_MKDIR, FUSE_SYMLINK)
+ *
+ * When this feature is enabled, the kernel will send security context
+ * information in the extension area of create requests, allowing the
+ * filesystem to set SELinux/LSM labels atomically during file creation.
+ *
+ * This feature is enabled by default when supported by the kernel.
+ */
+#define FUSE_CAP_SECURITY_CTX (1ULL << 33)
+
+/**
  * Indicates support for io-uring between fuse-server and fuse-client
  */
 #define FUSE_CAP_OVER_IO_URING (1UL << 31)

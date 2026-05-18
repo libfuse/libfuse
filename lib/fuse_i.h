@@ -54,6 +54,12 @@ struct fuse_req {
 	} u;
 	struct fuse_req *next;
 	struct fuse_req *prev;
+
+	void *secctx;
+	size_t secctx_len;
+	uint32_t secctx_count;      /* Number of security contexts (nr_secctx) */
+	uint32_t secctx_iter_index; /* Current iterator position */
+	const char *secctx_iter_ptr; /* Current iterator pointer */
 };
 
 struct fuse_notify_req {
