@@ -421,9 +421,8 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	flags = ms_flags_to_mount_attrs(flags, &mount_attrs);
 	if (flags != 0) {
 		/* unsupported flags found, either fsconfig or mount attr flags  */
-		//fuse_log(FUSE_LOG_ERR, "Unsupported mount flags found: %d", flags);
-		errno = -ENOTSUP;
-		return -1;
+		errno = ENOTSUP;
+		goto out_free;
 	}
 
 	/* Create mount object with mount attributes */
