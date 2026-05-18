@@ -198,6 +198,16 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
 	next->prev = req;
 }
 
+/*
+ * Convert extension length units to bytes.
+ * Extension lengths in fuse_in_header.total_extlen are specified in units
+ * of 8 bytes (sizeof(uint64_t)).
+ * TODO: Propose adding this to include/uapi/linux/fuse.h in the kernel.
+ */
+#ifndef FUSE_EXT_SIZE
+#define FUSE_EXT_SIZE(units) ((size_t)(units) * sizeof(uint64_t))
+#endif
+
 static void destroy_req(fuse_req_t req)
 {
 	if (req->flags.is_uring) {
@@ -213,6 +223,9 @@ void fuse_free_req(fuse_req_t req)
 {
 	int ctr;
 	struct fuse_session *se = req->se;
+
+	free(req->secctx);
+	req->secctx = NULL;
 
 	/* XXX: for now no support for interrupts with io-uring
 	 *      It actually might work already, though. But then would add
@@ -2798,7 +2811,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 			se->conn.capable_ext |= FUSE_CAP_OVER_IO_URING;
 		if (inargflags & FUSE_ALLOW_IDMAP)
 			se->conn.capable_ext |= FUSE_CAP_ALLOW_IDMAP;
-
+		if (inargflags & FUSE_SECURITY_CTX)
+			se->conn.capable_ext |= FUSE_CAP_SECURITY_CTX;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -2956,6 +2970,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outargflags |= FUSE_OVER_IO_URING;
 		enable_io_uring = true;
 	}
+	if (se->conn.want_ext & FUSE_CAP_SECURITY_CTX)
+		outargflags |= FUSE_SECURITY_CTX;
 	if (se->conn.want_ext & FUSE_CAP_ALLOW_IDMAP)
 		outargflags |= FUSE_ALLOW_IDMAP;
 
@@ -3442,6 +3458,83 @@ const struct fuse_ctx *fuse_req_ctx(fuse_req_t req)
 	return &req->ctx;
 }
 
+uint32_t fuse_req_secctx_count(fuse_req_t req)
+{
+	return req->secctx_count;
+}
+
+void fuse_req_secctx_reset(fuse_req_t req)
+{
+	req->secctx_iter_index = 0;
+	if (req->secctx && req->secctx_count > 0) {
+		req->secctx_iter_ptr = (const char *)req->secctx +
+			sizeof(struct fuse_secctx_header);
+	} else {
+		req->secctx_iter_ptr = NULL;
+	}
+}
+
+/**
+ * Iterate to the next security context in the request extension.
+ *
+ * Call this function repeatedly to iterate through all security contexts.
+ * Returns 0 on success, -ENOENT when no more contexts are available.
+ *
+ * IMPORTANT: After finishing iteration, the caller MUST call fuse_req_secctx_reset()
+ * to reset the iterator to the beginning before iterating again. The iterator maintains
+ * state and will not automatically reset.
+ */
+int fuse_req_secctx_next(fuse_req_t req, const char **name,
+			 const char **value, uint32_t *value_len)
+{
+	const char *buf_start = (const char *)req->secctx;
+	const char *buf_end = buf_start + req->secctx_len;
+
+	/* Check if we have more contexts to iterate */
+	if (req->secctx_iter_index >= req->secctx_count || !req->secctx_iter_ptr)
+		return -ENOENT;
+
+	/* Validate that fuse_secctx header fits in buffer */
+	if (req->secctx_iter_ptr + sizeof(struct fuse_secctx) > buf_end) {
+		fuse_log(FUSE_LOG_ERR, "fuse_secctx extends past buffer\n");
+		return -EIO;
+	}
+
+	/* Parse current security context */
+	const struct fuse_secctx *fctx = (const struct fuse_secctx *)req->secctx_iter_ptr;
+
+	/* empty security context is invalid */
+	if (fctx->size == 0) {
+		fuse_log(FUSE_LOG_ERR, "secctx has zero size\n");
+		return -EIO;
+	}
+
+	const char *ctx_name = (const char *)(fctx + 1);
+	const size_t max_strlen = buf_end - ctx_name - 1;
+	const size_t name_size = strnlen(ctx_name, max_strlen) + 1;
+	const char *ctx_value = ctx_name + name_size;
+
+	/* Validate that value fits in buffer */
+	if (ctx_value + fctx->size > buf_end) {
+		fuse_log(FUSE_LOG_ERR, "secctx value extends past buffer\n");
+		return -EIO;
+	}
+
+	/* Return the parsed data */
+	if (name)
+		*name = ctx_name;
+	if (value)
+		*value = ctx_value;
+	if (value_len)
+		*value_len = fctx->size;
+
+	/* Advance iterator to next context (8-byte aligned) */
+	req->secctx_iter_ptr += FUSE_REC_ALIGN(sizeof(*fctx) + name_size + fctx->size);
+	req->secctx_iter_index++;
+
+	return 0;
+}
+
 void fuse_req_interrupt_func(fuse_req_t req, fuse_interrupt_func_t func,
 			     void *data)
 {
@@ -3625,6 +3718,119 @@ fuse_req_opcode_sanity_ok(struct fuse_session *se, enum fuse_opcode in_op)
 	return 0;
 }
 
+/**
+ * Parse FUSE extensions from a buffer, and just extract security context for now.
+ *
+ * @param req The FUSE request to populate with security context
+ * @param total_extlen Extension length in 8-byte units from the FUSE input header
+ * @param ext_buffer The buffer containing the extensions (for io_uring: op_payload,
+ *                   for non-io_uring: in header buffer)
+ * @param buffer_len The length of ext_buffer (for io_uring: payload_len,
+ *                   for non-io_uring: in->len)
+ */
+static void
+fuse_req_parse_extensions(struct fuse_req *req, uint32_t total_extlen,
+			  const void *ext_buffer, size_t buffer_len)
+{
+
+	/* Initialize security context fields */
+	req->secctx = NULL;
+	req->secctx_len = 0;
+	req->secctx_count = 0;
+	req->secctx_iter_index = 0;
+	req->secctx_iter_ptr = NULL;
+
+	if (total_extlen == 0)
+		return;
+
+	/*
+	 * Extensions are located at the END of the buffer after the operation-specific
+	 * header and payload. Extension data may include:
+	 * - Security context (FUSE_SECCTX, type 0-31)
+	 * - Supplementary groups (FUSE_EXT_GROUPS, type 32+)
+	 *
+	 * This parsing logic is identical for both io_uring and non-io_uring paths:
+	 * - Non-io_uring: ext_buffer points to the 'in' header buffer, extensions at end
+	 * - io_uring: ext_buffer points to the separate payload buffer, extensions at end
+	 * In both cases, we calculate the extension start position by subtracting the
+	 * extension size from the buffer length, since extensions are always at the END
+	 * of whatever buffer contains them.
+	 *
+	 * Multiple extensions may be present. We need to iterate through
+	 * them to find the security context extension.
+	 *
+	 * The extension header is polymorphic:
+	 * - struct { size, nr_secctx } if nr_secctx <= 31 (security context)
+	 * - struct { size, type } if type >= 32 (other extensions)
+	 *
+	 * total_extlen is in 8-byte units and gives the extension size.
+	 *
+	 * We must copy the security context because the source buffer
+	 * will be freed after the operation handler returns.
+	 */
+	size_t ext_bytes = FUSE_EXT_SIZE(total_extlen);
+
+	if (ext_bytes > buffer_len) {
+		fuse_log(FUSE_LOG_ERR,
+			"Extension size (%zu) exceeds buffer length (%zu)\n",
+			ext_bytes, buffer_len);
+		return;
+	}
+
+	/* Extensions are at the END of the buffer */
+	const char *buf_base = (const char *)ext_buffer;
+	const char *ext_start = buf_base + (buffer_len - ext_bytes);
+	const char *ext_end = ext_start + ext_bytes;
+	const char *ext_curr = ext_start;
+
+	/*
+	 * Iterate through all extensions to find security context.
+	 * Use memcpy to avoid unaligned access - extensions may not be
+	 * aligned within the buffer.
+	 */
+	while (ext_curr + sizeof(struct fuse_ext_header) <= ext_end) {
+		struct fuse_ext_header ext_hdr;
+		uint32_t second_field;
+
+		/* Use memcpy to safely read from potentially unaligned address */
+		memcpy(&ext_hdr, ext_curr, sizeof(ext_hdr));
+
+		/* Validate extension size */
+		if (ext_hdr.size < sizeof(ext_hdr) ||
+		    ext_curr + ext_hdr.size > ext_end) {
+			fuse_log(FUSE_LOG_ERR,
+				"Extension invalid: size=%u, remaining=%zu\n",
+				ext_hdr.size, (size_t)(ext_end - ext_curr));
+			break; /* Invalid extension, stop parsing */
+		}
+
+		second_field = ext_hdr.type;
+
+		/*
+		 * Distinguish based on second field value:
+		 * - 0-31: fuse_secctx_header (nr_secctx field)
+		 * - 32+:  fuse_ext_header (type field)
+		 */
+		if (second_field <= FUSE_MAX_NR_SECCTX && second_field > 0) {
+			/* Found security context extension */
+			req->secctx = malloc(ext_hdr.size);
+			if (req->secctx) {
+				memcpy(req->secctx, ext_curr, ext_hdr.size);
+				req->secctx_len = ext_hdr.size;
+				req->secctx_count = second_field; /* nr_secctx */
+				/* Initialize iterator */
+				fuse_req_secctx_reset(req);
+			}
+			break; /* Found and copied security context */
+		}
+		/*
+		 * Currently we don't handle the extensions other than secctx,
+		 * so skip to next extension (8-byte aligned)
+		 */
+		ext_curr += FUSE_REC_ALIGN(ext_hdr.size);
+	}
+}
+
 static inline void
 fuse_session_in2req(struct fuse_req *req, const struct fuse_in_header *in)
 {
@@ -3633,6 +3839,8 @@ fuse_session_in2req(struct fuse_req *req, const struct fuse_in_header *in)
 	req->ctx.gid = in->gid;
 	req->ctx.pid = in->pid;
 }
+
+
 
 /**
  * Implement -o allow_root
@@ -3745,7 +3953,16 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	}
 
 	fuse_session_in2req(req, in);
+	if (in->total_extlen)
+		fuse_req_parse_extensions(req, in->total_extlen, in, in->len);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
+
+	if (se->debug && req->secctx_len > 0) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"  secctx: %zu bytes (%u contexts)\n",
+			req->secctx_len,
+			req->secctx_count);
+	}
 
 	err = fuse_req_opcode_sanity_ok(se, in->opcode);
 	if (err)
@@ -3823,7 +4040,17 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 {
 	int err;
 
+	/* For io_uring, extensions are in the payload buffer, not appended to 'in' header. */
 	fuse_session_in2req(req, in);
+	if (in->total_extlen)
+		fuse_req_parse_extensions(req, in->total_extlen, op_payload, payload_len);
+
+	if (se->debug && req->secctx_len > 0) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"  uring secctx: %zu bytes (%u contexts)\n",
+			req->secctx_len,
+			req->secctx_count);
+	}
 
 	err = fuse_req_opcode_sanity_ok(se, in->opcode);
 	if (err)

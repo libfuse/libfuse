@@ -25,6 +25,7 @@
 #include "fuse_common.h"
 
 #include <stddef.h>
+#include <stdint.h>
 #include <utime.h>
 #include <fcntl.h>
 #include <sys/types.h>
@@ -1998,6 +1999,55 @@ void *fuse_req_userdata(fuse_req_t req);
  * @return the context structure
  */
 const struct fuse_ctx *fuse_req_ctx(fuse_req_t req);
+
+/**
+ * Get the number of security contexts in the request
+ *
+ * Returns the number of security contexts sent by the kernel for file
+ * creation operations when FUSE_CAP_SECURITY_CTX is enabled.
+ *
+ * With LSM stacking, multiple security modules (SELinux, AppArmor, Smack)
+ * can each contribute a context, so this can return > 1.
+ *
+ * @param req request handle
+ * @return number of security contexts (0 if none)
+ */
+uint32_t fuse_req_secctx_count(fuse_req_t req);
+
+/**
+ * Reset security context iterator to the beginning
+ *
+ * Call this to restart iteration from the first security context.
+ *
+ * @param req request handle
+ */
+void fuse_req_secctx_reset(fuse_req_t req);
+
+/**
+ * Get next security context from the request
+ *
+ * This iterates through security contexts one at a time. Each call returns
+ * the next context until all contexts have been returned.
+ *
+ * The name and value pointers remain valid for the lifetime of the request.
+ *
+ * Example:
+ *   fuse_req_secctx_reset(req);
+ *   const char *name, *value;
+ *   uint32_t value_len;
+ *   while (fuse_req_secctx_next(req, &name, &value, &value_len) == 0) {
+ *       // Process security context
+ *       setxattr(path, name, value, value_len, 0);
+ *   }
+ *
+ * @param req request handle
+ * @param name output pointer for context name (e.g., "security.selinux")
+ * @param value output pointer for context value
+ * @param value_len output pointer for context value length
+ * @return 0 on success, -ENOENT if no more contexts
+ */
+int fuse_req_secctx_next(fuse_req_t req, const char **name,
+			 const char **value, uint32_t *value_len);
 
 /**
  * Get the current supplementary group IDs for the specified request

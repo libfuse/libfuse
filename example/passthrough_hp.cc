@@ -174,6 +174,7 @@ struct Fs {
 	std::string fuse_mount_options;
 	bool direct_io;
 	bool passthrough;
+	bool selinux;
 };
 static Fs fs{};
 
@@ -212,6 +213,10 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 		fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
 
 	fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
+
+	/* Enable security context extension for SELinux support */
+	if (fs.selinux)
+		fuse_set_feature_flag(conn, FUSE_CAP_SECURITY_CTX);
 
 	if (fs.nosplice) {
 		// FUSE_CAP_SPLICE_READ is enabled in libfuse3 by default,
@@ -476,12 +481,104 @@ static void sfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 	}
 }
 
+#ifdef HAVE_SETXATTR
+/**
+ * Stage the requester's SELinux label so the next create is born with it.
+ *
+ * The kernel computes the label a newly created inode should have in the
+ * requesting task's context and sends it in the FUSE security context
+ * extension. passthrough_hp must act on it: a bare mknodat/openat on the
+ * backing filesystem would label the inode from the daemon's own context, not
+ * the requester's. Writing the label to the per-thread fscreate attribute makes
+ * the following create syscall produce a correctly-labelled backing inode
+ * atomically. The override is per worker thread and must be cleared afterwards
+ * with sfs_clear_selinux_fscreate() so later creates are unaffected.
+ *
+ * Demonstrates the security context extension API: fuse_req_secctx_count(),
+ * fuse_req_secctx_reset(), fuse_req_secctx_next().
+ *
+ * @param req FUSE request carrying the security context extension
+ * @return true if a label was staged and must be cleared afterwards
+ */
+static bool sfs_set_selinux_fscreate(fuse_req_t req)
+{
+	if (fuse_req_secctx_count(req) == 0)
+		return false;
+
+	const char *ctx_name;
+	const char *ctx_value;
+	uint32_t ctx_len;
+	bool staged = false;
+
+	while (fuse_req_secctx_next(req, &ctx_name, &ctx_value, &ctx_len) == 0) {
+		if (strcmp(ctx_name, "security.selinux") != 0)
+			continue;
+
+		int fd = open("/proc/thread-self/attr/fscreate",
+			      O_WRONLY | O_CLOEXEC);
+		if (fd == -1) {
+			fuse_log(FUSE_LOG_DEBUG,
+				 "sfs_set_selinux_fscreate: open failed: %s\n",
+				 strerror(errno));
+			break;
+		}
+		/* The label value already includes its trailing NUL. */
+		if (write(fd, ctx_value, ctx_len) == -1)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "sfs_set_selinux_fscreate: write failed: %s\n",
+				 strerror(errno));
+		else {
+			staged = true;
+			/*
+			 * Debug log to verify the label was staged correctly.
+			 * This is important because the underlying filesystem will apply
+			 * a default label anyway, so without this log it's hard to tell
+			 * if our SELinux context handling is actually working.
+			 */
+			fuse_log(FUSE_LOG_DEBUG,
+				 "sfs_set_selinux_fscreate: staged label: %s\n",
+				 ctx_value);
+		}
+		close(fd);
+		break;
+	}
+	fuse_req_secctx_reset(req);
+	return staged;
+}
+
+/* Reset the per-thread fscreate label staged by sfs_set_selinux_fscreate(). */
+static void sfs_clear_selinux_fscreate(void)
+{
+	int fd = open("/proc/thread-self/attr/fscreate", O_WRONLY | O_CLOEXEC);
+	if (fd == -1)
+		return;
+	/* A zero-length write clears the override. */
+	if (write(fd, "", 0) == -1)
+		fuse_log(FUSE_LOG_DEBUG,
+			 "sfs_clear_selinux_fscreate: write failed: %s\n",
+			 strerror(errno));
+	close(fd);
+}
+#else
+static bool sfs_set_selinux_fscreate(fuse_req_t req)
+{
+	(void)req;
+	return false;
+}
+
+static void sfs_clear_selinux_fscreate(void)
+{
+}
+#endif
+
 static void mknod_symlink(fuse_req_t req, fuse_ino_t parent, const char *name,
 			  mode_t mode, dev_t rdev, const char *link)
 {
 	int res;
 	Inode &inode_p = get_inode(parent);
 	auto saverr = ENOMEM;
+
+	bool labeled = sfs_set_selinux_fscreate(req);
 
 	if (S_ISDIR(mode))
 		res = mkdirat(inode_p.fd, name, mode);
@@ -490,6 +587,11 @@ static void mknod_symlink(fuse_req_t req, fuse_ino_t parent, const char *name,
 	else
 		res = mknodat(inode_p.fd, name, mode, rdev);
 	saverr = errno;
+
+	/* Reset the staged label so later creates on this thread are unaffected. */
+	if (labeled)
+		sfs_clear_selinux_fscreate();
+
 	if (res == -1)
 		goto out;
 
@@ -940,10 +1042,18 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 {
 	Inode &inode_p = get_inode(parent);
 
+	bool labeled = sfs_set_selinux_fscreate(req);
+
 	auto fd = openat(inode_p.fd, name, (fi->flags | O_CREAT) & ~O_NOFOLLOW,
 			 mode);
+	auto create_errno = errno;
+
+	/* Reset the staged label so later creates on this thread are unaffected. */
+	if (labeled)
+		sfs_clear_selinux_fscreate();
+
 	if (fd == -1) {
-		auto err = errno;
+		auto err = create_errno;
 		if (err == ENFILE || err == EMFILE)
 			cerr << "ERROR: Reached maximum number of file descriptors."
 			     << endl;
@@ -1024,10 +1134,18 @@ static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 {
 	Inode &parent_inode = get_inode(parent);
 
+	bool labeled = sfs_set_selinux_fscreate(req);
+
 	auto fd = openat(parent_inode.fd, ".",
 			 (fi->flags | O_TMPFILE) & ~O_NOFOLLOW, mode);
+	auto create_errno = errno;
+
+	/* Reset the staged label so later creates on this thread are unaffected. */
+	if (labeled)
+		sfs_clear_selinux_fscreate();
+
 	if (fd == -1) {
-		auto err = errno;
+		auto err = create_errno;
 		if (err == ENFILE || err == EMFILE)
 			cerr << "ERROR: Reached maximum number of file descriptors."
 			     << endl;
@@ -1486,6 +1604,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 		("nocache", "Disable attribute all caching")
 		("nosplice", "Do not use splice(2) to transfer data")
 		("nopassthrough", "Do not use pass-through mode for read/write")
+		("selinux", "Enable SELinux context from FUSE request extension for create/mkdir/mknod/symlink")
 		("single", "Run single-threaded")
 		("o", "Mount options (see mount.fuse(5) - only use if you know what "
 		      "you are doing)",
@@ -1527,6 +1646,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 
 	fs.nosplice = options.count("nosplice") != 0;
 	fs.passthrough = options.count("nopassthrough") == 0;
+	fs.selinux = options.count("selinux") != 0;
 	fs.num_threads = options["num-threads"].as<int>();
 	fs.clone_fd = options.count("clone-fd");
 	fs.direct_io = options.count("direct-io");
