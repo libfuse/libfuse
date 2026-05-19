@@ -882,7 +882,7 @@ static int mount_service_handle_source_cmd(struct mount_service *mo,
 					   const struct fuse_service_packet *p,
 					   size_t psz)
 {
-	struct fuse_service_string_command *oc =
+	const struct fuse_service_string_command *oc =
 			container_of(p, struct fuse_service_string_command, p);
 	char *source;
 
@@ -935,7 +935,8 @@ static int mount_service_handle_mntopts_cmd(struct mount_service *mo,
 	struct fuse_service_string_command *oc =
 			container_of(p, struct fuse_service_string_command, p);
 	char *tokstr = oc->value;
-	char *tok, *savetok;
+	const char *tok;
+	char *savetok;
 	char *mntopts;
 
 	if (psz < sizeof_fuse_service_string_command(1)) {
