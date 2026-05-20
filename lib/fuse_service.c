@@ -388,7 +388,7 @@ static int check_sendbuf_size(int sockfd)
 static int find_socket_fd(int nr_fds)
 {
 	struct stat stbuf;
-	struct sockaddr_un urk;
+	struct sockaddr_un urk = { };
 	socklen_t urklen = sizeof(urk);
 	int ret;
 
