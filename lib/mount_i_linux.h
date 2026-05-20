@@ -81,7 +81,7 @@ unsigned long ms_flags_to_mount_attrs(unsigned long ms_flags,
  * Read and print kernel error messages from fsopen fd.
  * The kernel can provide detailed error/warning/info messages via the
  * filesystem context fd that are more informative than strerror(errno).
- * 
+ *
  * @fd fsopen fd
  */
 void log_fsconfig_kmsg(int fd);
