@@ -286,12 +286,7 @@ static int mount_service_child(char **argv)
 static int try_service_main(char *argv0, char *fstype, char *source,
 			    const char *mountpoint, char *options)
 {
-	char **argv;
-	char dash_o[] = "-o";
-	char dash_t[] = "-t";
-	char *mntpt;
-	int argc = 5; /* argv[0], -t type, mountpoint, and trailing NULL */
-	int i = 0;
+	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 	int ret;
 
 	if (!mount_service_present(fstype))
@@ -301,44 +296,46 @@ static int try_service_main(char *argv0, char *fstype, char *source,
 	if (source && source[0] == 0)
 		source = NULL;
 
-	mntpt = strdup(mountpoint);
-	if (!mntpt) {
-		perror("mountpoint allocation");
-		return -1;
+	ret = fuse_opt_add_arg(&args, argv0);
+	if (ret)
+		goto out;
+
+	if (source) {
+		ret = fuse_opt_add_arg(&args, source);
+		if (ret)
+			goto out;
 	}
 
-	if (source)
-		argc++;
-	if (options)
-		argc += 2;
+	ret = fuse_opt_add_arg(&args, mountpoint);
+	if (ret)
+		goto out;
 
-	argv = calloc(argc, sizeof(char *));
-	if (!argv) {
-		perror("argv allocation");
-		free(mntpt);
-		return -1;
-	}
+	ret = fuse_opt_add_arg(&args, "-t");
+	if (ret)
+		goto out;
 
-	argv[i++] = argv0;
-	if (source)
-		argv[i++] = source;
-	argv[i++] = mntpt;
-	argv[i++] = dash_t;
-	argv[i++] = fstype;
+	ret = fuse_opt_add_arg(&args, fstype);
+	if (ret)
+		goto out;
+
 	if (options) {
-		argv[i++] = dash_o;
-		argv[i++] = options;
-	}
-	argv[i] = 0;
+		ret = fuse_opt_add_arg(&args, "-o");
+		if (ret)
+			goto out;
 
-	if (getuid() != 0) {
-		ret = mount_service_child(argv);
-	} else {
-		/* We're root, just do the mount directly. */
-		ret = mount_service_main(argc - 1, argv);
+		ret = fuse_opt_add_arg(&args, options);
+		if (ret)
+			goto out;
 	}
-	free(argv);
-	free(mntpt);
+
+	/* If we're root, just do the mount directly. */
+	if (getuid() != 0)
+		ret = mount_service_child(args.argv);
+	else
+		ret = mount_service_main(args.argc, args.argv);
+
+out:
+	fuse_opt_free_args(&args);
 	return ret;
 }
 #endif
