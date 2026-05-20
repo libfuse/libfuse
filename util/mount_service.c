@@ -974,6 +974,7 @@ static int mount_service_handle_mntopts_cmd(struct mount_service *mo,
 				fprintf(stderr,
 	"%s: option %s only allowed if 'user_allow_other' is set in %s\n",
 					mo->msgtag, tok, FUSE_CONF);
+				free(mntopts);
 				return mount_service_send_reply(mo, EPERM);
 			}
 
@@ -1036,7 +1037,8 @@ static int mount_service_handle_mtabopts_cmd(struct mount_service *mo,
 	/* strtok_r mutates tokstr aka oc->value */
 	while ((tok = strtok_r(tokstr, ",", &savetok)) != NULL) {
 		if (!strcmp(tok, "-n")) {
-			free(mo->mtabopts);
+			if (mo->mtabopts != &IGNORE_MTAB)
+				free(mo->mtabopts);
 			mo->mtabopts = &IGNORE_MTAB;
 		}
 
