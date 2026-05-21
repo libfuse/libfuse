@@ -283,8 +283,9 @@ static int mount_service_child(char **argv)
 	return EXIT_FAILURE;
 }
 
-static int try_service_main(char *argv0, char *fstype, char *source,
-			    const char *mountpoint, char *options)
+static int try_service_main(const char *argv0, const char *fstype,
+			    const char *source, const char *mountpoint,
+			    const char *options)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 	int ret;
