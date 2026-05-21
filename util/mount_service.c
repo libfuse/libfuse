@@ -527,8 +527,8 @@ static int mount_service_send_file(const struct mount_service *mo,
 				   const char *path, int fd)
 {
 	struct fuse_service_requested_file *req;
-	const size_t req_sz =
-			sizeof_fuse_service_requested_file(strlen(path));
+	const size_t path_len = strlen(path);
+	const size_t req_sz = sizeof_fuse_service_requested_file(path_len);
 	ssize_t written;
 	int ret = 0;
 
@@ -540,7 +540,7 @@ static int mount_service_send_file(const struct mount_service *mo,
 	}
 	req->p.magic = htonl(FUSE_SERVICE_OPEN_REPLY);
 	req->error = 0;
-	strcpy(req->path, path);
+	memcpy(req->path, path, path_len + 1);
 
 	written = __send_fd(mo, req, req_sz, fd);
 	if (written < 0) {
@@ -565,8 +565,8 @@ static int mount_service_send_file_error(const struct mount_service *mo,
 					 int error, const char *path)
 {
 	struct fuse_service_requested_file *req;
-	const size_t req_sz =
-			sizeof_fuse_service_requested_file(strlen(path));
+	const size_t path_len = strlen(path);
+	const size_t req_sz = sizeof_fuse_service_requested_file(path_len);
 	ssize_t written;
 	int ret = 0;
 
@@ -578,7 +578,7 @@ static int mount_service_send_file_error(const struct mount_service *mo,
 	}
 	req->p.magic = htonl(FUSE_SERVICE_OPEN_REPLY);
 	req->error = htonl(error);
-	strcpy(req->path, path);
+	memcpy(req->path, path, path_len + 1);
 
 	written = __send_packet(mo, req, req_sz);
 	if (written < 0) {

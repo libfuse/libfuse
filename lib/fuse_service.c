@@ -229,7 +229,8 @@ static int fuse_service_request_path(const struct fuse_service *sf,
 				     unsigned int block_size)
 {
 	struct fuse_service_open_command *cmd;
-	const size_t cmdsz = sizeof_fuse_service_open_command(strlen(path));
+	const size_t pathlen = strlen(path);
+	const size_t cmdsz = sizeof_fuse_service_open_command(pathlen);
 	ssize_t size;
 	unsigned int rqflags = 0;
 	int ret;
@@ -260,7 +261,7 @@ static int fuse_service_request_path(const struct fuse_service *sf,
 	cmd->open_flags = htonl(open_flags);
 	cmd->create_mode = htonl(create_mode);
 	cmd->request_flags = htonl(rqflags);
-	strcpy(cmd->path, path);
+	memcpy(cmd->path, path, pathlen + 1);
 
 	size = __send_packet(sf, cmd, cmdsz);
 	if (size < 0) {
@@ -834,7 +835,8 @@ static int send_string(const struct fuse_service *sf, uint32_t command,
 {
 	struct fuse_service_simple_reply reply = { };
 	struct fuse_service_string_command *cmd;
-	const size_t cmdsz = sizeof_fuse_service_string_command(strlen(value));
+	const size_t valuelen = strlen(value);
+	const size_t cmdsz = sizeof_fuse_service_string_command(valuelen);
 	ssize_t size;
 
 	cmd = calloc(1, cmdsz);
@@ -846,7 +848,7 @@ static int send_string(const struct fuse_service *sf, uint32_t command,
 		return -error;
 	}
 	cmd->p.magic = htonl(command);
-	strcpy(cmd->value, value);
+	memcpy(cmd->value, value, valuelen + 1);
 
 	size = __send_packet(sf, cmd, cmdsz);
 	if (size < 0) {
@@ -886,8 +888,8 @@ static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
 {
 	struct fuse_service_simple_reply reply = { };
 	struct fuse_service_mountpoint_command *cmd;
-	const size_t cmdsz =
-			sizeof_fuse_service_mountpoint_command(strlen(value));
+	const size_t valuelen = strlen(value);
+	const size_t cmdsz = sizeof_fuse_service_mountpoint_command(valuelen);
 	ssize_t size;
 
 	cmd = calloc(1, cmdsz);
@@ -900,7 +902,7 @@ static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
 	}
 	cmd->p.magic = htonl(FUSE_SERVICE_MNTPT_CMD);
 	cmd->expected_fmt = htons(expected_fmt);
-	strcpy(cmd->value, value);
+	memcpy(cmd->value, value, valuelen + 1);
 
 	size = __send_packet(sf, cmd, cmdsz);
 	if (size < 0) {
