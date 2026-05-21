@@ -66,7 +66,7 @@ struct mount_service {
 	char *mntopts;
 
 	/* mtab options */
-	char *mtabopts;
+	const char *mtabopts;
 
 	/* socket fd */
 	int sockfd;
@@ -93,11 +93,19 @@ struct mount_service {
 	bool fuseblk;
 };
 
-static char IGNORE_MTAB;
+static const char ignore_mtab;
 
 static inline bool have_real_mtabopts(const struct mount_service *mo)
 {
-	return mo->mtabopts && mo->mtabopts != &IGNORE_MTAB;
+	return mo->mtabopts && mo->mtabopts != &ignore_mtab;
+}
+
+static inline void free_mtabopts(struct mount_service *mo)
+{
+	if (have_real_mtabopts(mo)) {
+		free((void *)mo->mtabopts);
+		mo->mtabopts = NULL;
+	}
 }
 
 static ssize_t __send_fd(const struct mount_service *mo,
@@ -1037,9 +1045,8 @@ static int mount_service_handle_mtabopts_cmd(struct mount_service *mo,
 	/* strtok_r mutates tokstr aka oc->value */
 	while ((tok = strtok_r(tokstr, ",", &savetok)) != NULL) {
 		if (!strcmp(tok, "-n")) {
-			if (mo->mtabopts != &IGNORE_MTAB)
-				free(mo->mtabopts);
-			mo->mtabopts = &IGNORE_MTAB;
+			free_mtabopts(mo);
+			mo->mtabopts = &ignore_mtab;
 		}
 
 		tokstr = NULL;
@@ -1797,8 +1804,7 @@ static void mount_service_destroy(struct mount_service *mo)
 	free(mo->mountpoint);
 	free(mo->real_mountpoint);
 	free(mo->resv_mountpoint);
-	if (have_real_mtabopts(mo))
-		free(mo->mtabopts);
+	free_mtabopts(mo);
 	free(mo->mntopts);
 	free(mo->subtype);
 
