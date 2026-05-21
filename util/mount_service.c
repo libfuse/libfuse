@@ -1833,6 +1833,15 @@ int mount_service_main(int argc, char *argv[])
 		mo.msgtag = argv[0];
 	else
 		mo.msgtag = "mount.service";
+	if (argc > 0) {
+		/* Yes, we can be called with a null argv[0] */
+		if (!argv[0])
+			argv[0] = strdup("mount.service");
+		if (!argv[0]) {
+			fprintf(stderr, "Could not synthesize argv[0]!\n");
+			return EXIT_FAILURE;
+		}
+	}
 
 	drop_privs();
 	read_conf(mo.msgtag);
