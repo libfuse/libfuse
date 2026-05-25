@@ -913,10 +913,6 @@ struct mount_params {
 	char *subtype;          /* Subtype from options */
 	int blkdev;             /* Block device flag */
 
-	/* Generated mount parameters */
-	char *source;           /* Mount source string */
-	char *type;             /* Filesystem type string */
-
 	/* mtab/utab record content: MS_* flag mirrors + kernel-bound -o opts
 	 * + user=<n> (non-root)
 	 */
@@ -931,8 +927,6 @@ static void free_mount_params(struct mount_params *mp)
 	free(mp->optbuf);
 	free(mp->fsname);
 	free(mp->subtype);
-	free(mp->source);
-	free(mp->type);
 	free(mp->mtab_opts);
 	memset(mp, 0, sizeof(*mp));
 }
@@ -1056,13 +1050,6 @@ static int prepare_mount(const char *opts, struct mount_params *mp)
 	sprintf(d, "fd=%i,rootmode=%o,user_id=%u,group_id=%u",
 		mp->fd, mp->rootmode, getuid(), getgid());
 
-	mp->source = fuse_mnt_build_source(mp->fsname, mp->subtype, mp->dev);
-	mp->type = fuse_mnt_build_type(mp->blkdev, mp->subtype);
-	if (!mp->type || !mp->source) {
-		fprintf(stderr, "%s: failed to allocate memory\n", progname);
-		goto err;
-	}
-
 	return 0;
 
 err:
@@ -1072,31 +1059,54 @@ err:
 
 /*
  * Perform the actual mount operation using prepared parameters.
+ * Builds source and type strings and returns them via output parameters.
  *
  * Returns 0 on success, -1 on failure.
  */
-static int perform_mount(const char *mnt, struct mount_params *mp)
+static int perform_mount(const char *mnt, struct mount_params *mp,
+			 char **source_out, char **type_out)
 {
 	int res;
+	char *source = NULL;
+	char *type = NULL;
 
-	res = mount_notrunc(mp->source, mnt, mp->type, mp->flags, mp->optbuf);
+	source = fuse_mnt_build_source(mp->fsname, mp->subtype, mp->dev, 0);
+	type = fuse_mnt_build_type(mp->blkdev, mp->subtype);
+	if (!type || !source) {
+		fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		free(source);
+		free(type);
+		return -1;
+	}
+
+	res = mount_notrunc(source, mnt, type, mp->flags, mp->optbuf);
 	if (res == -1 && errno == ENODEV && mp->subtype) {
 		/* Probably missing subtype support */
-		strcpy(mp->type, mp->blkdev ? "fuseblk" : "fuse");
-		if (mp->fsname) {
-			if (!mp->blkdev)
-				sprintf(mp->source, "%s#%s", mp->subtype, mp->fsname);
+		free(source);
+		free(type);
+
+		type = fuse_mnt_build_type(mp->blkdev, NULL);
+		if (mp->fsname && !mp->blkdev) {
+			source = fuse_mnt_build_source(mp->fsname, mp->subtype,
+						       mp->dev, 1);
 		} else {
-			strcpy(mp->source, mp->type);
+			source = strdup(type);
 		}
 
-		res = mount_notrunc(mp->source, mnt, mp->type, mp->flags, mp->optbuf);
+		if (!type || !source) {
+			fprintf(stderr, "%s: failed to allocate memory\n", progname);
+			free(source);
+			free(type);
+			return -1;
+		}
+
+		res = mount_notrunc(source, mnt, type, mp->flags, mp->optbuf);
 	}
 	if (res == -1 && errno == EINVAL) {
 		/* It could be an old version not supporting group_id */
 		sprintf(mp->optbuf_end, "fd=%i,rootmode=%o,user_id=%u",
 			mp->fd, mp->rootmode, getuid());
-		res = mount_notrunc(mp->source, mnt, mp->type, mp->flags, mp->optbuf);
+		res = mount_notrunc(source, mnt, type, mp->flags, mp->optbuf);
 	}
 	if (res == -1) {
 		int errno_save = errno;
@@ -1106,9 +1116,13 @@ static int perform_mount(const char *mnt, struct mount_params *mp)
 		else
 			fprintf(stderr, "%s: mount failed: %s\n", progname,
 				strerror(errno_save));
+		free(source);
+		free(type);
 		return -1;
 	}
 
+	*source_out = source;
+	*type_out = type;
 	return 0;
 }
 
@@ -1118,6 +1132,8 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 {
 	struct mount_params mp = { .fd = fd }; /* implicit zero of other params */
 	int res;
+	char *source = NULL;
+	char *type = NULL;
 
 	mp.rootmode = rootmode;
 	mp.dev = dev;
@@ -1126,14 +1142,14 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	if (res == -1)
 		return -1;
 
-	res = perform_mount(mnt, &mp);
+	res = perform_mount(mnt, &mp, &source, &type);
 	if (res == -1) {
 		free_mount_params(&mp);
 		return -1;
 	}
 
-	*sourcep = mp.source;
-	*typep = mp.type;
+	*sourcep = source;
+	*typep = type;
 	*mtab_optsp = mp.mtab_opts;
 
 	/* Free only the intermediate allocations, not the returned ones */
@@ -1436,10 +1452,16 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 		goto fail_free_merged;
 	}
 
-	/* Store results in context */
-	ctx->source = mp.source;
+	/* Build source and type for mtab after successful mount */
+	ctx->source = fuse_mnt_build_source(mp.fsname, mp.subtype, ctx->dev, 0);
+	*type = fuse_mnt_build_type(mp.blkdev, mp.subtype);
+	if (!*type || !ctx->source) {
+		fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		goto fail_free_merged;
+	}
+
+	/* Store mtab_opts in context */
 	ctx->mtab_opts = final_mtab_opts;
-	*type = mp.type;
 
 	res = 0;
 
