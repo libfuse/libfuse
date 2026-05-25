@@ -674,9 +674,14 @@ int fuse_kern_do_mount(const char *mnt, struct mount_opts *mo,
 		free(type);
 
 		type = fuse_mnt_build_type(mo->blkdev, NULL);
-		if (mo->fsname && !mo->blkdev) {
-			source = fuse_mnt_build_source(mo->fsname, mo->subtype,
-						       devname, 1);
+		if (mo->fsname) {
+			if (!mo->blkdev) {
+				source = fuse_mnt_build_source(mo->fsname, mo->subtype,
+							       devname, 1);
+			} else {
+				source = fuse_mnt_build_source(mo->fsname, NULL,
+							       devname, 0);
+			}
 		} else {
 			source = strdup(type);
 		}

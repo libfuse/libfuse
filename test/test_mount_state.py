@@ -168,3 +168,75 @@ def test_mountinfo_attrs_root(tmpdir, output_checker, name,
     with hello_mount(tmpdir, output_checker, name, opts) as mnt:
         info = parse_mountinfo(mnt)
     _check_attrs(info, must_have, must_not_have)
+
+
+@pytest.mark.parametrize('name', ('hello', 'hello_ll'))
+def test_mountinfo_blkdev_with_fsname(tmpdir, output_checker, name):
+    """
+    Test block device mount with fsname and subtype.
+
+    This test validates the ENODEV fallback logic for block devices with fsname.
+    When mounting with blkdev=1, fsname=<device>, and subtype=mysub, the mount
+    source should be the device name (fsname), not the filesystem type string.
+
+    The ENODEV fallback has three cases:
+    1. fsname + non-blkdev -> "subtype#fsname" (legacy format for regular FUSE)
+    2. fsname + blkdev     -> fsname only (THIS TEST - for block devices)
+    3. no fsname           -> type string
+
+    This test catches a regression where the logic was incorrectly simplified
+    from nested conditionals to a single combined condition (fsname && !blkdev),
+    causing case 2 to fall through to case 3 and use 'fuseblk' instead of the
+    device name.
+
+    Requires root to create loop devices; skipped otherwise.
+    """
+    if os.getuid() != 0:
+        pytest.skip('blkdev option requires root')
+
+    import tempfile
+
+    # Create a file to use as a loop device
+    with tempfile.NamedTemporaryFile(mode='wb', delete=False,
+                                     dir=str(tmpdir)) as f:
+        loop_file = f.name
+        # Create a 1MB file
+        f.write(b'\0' * (1024 * 1024))
+
+    try:
+        # Create loop device from file
+        result = subprocess.run(['losetup', '-f', '--show', loop_file],
+                               capture_output=True, text=True, check=True)
+        loop_dev = result.stdout.strip()
+
+        try:
+            # Mount with blkdev, fsname, and subtype
+            # The fsname should be the loop device
+            with hello_mount(tmpdir.mkdir('mnt'), output_checker, name,
+                           ('blkdev', f'fsname={loop_dev}', 'subtype=mysub')) as mnt:
+                info = parse_mountinfo(mnt)
+
+            assert info is not None, 'mountpoint not found in /proc/self/mountinfo'
+
+            # For block devices, fstype should be 'fuseblk' or 'fuseblk.mysub'
+            # depending on whether the kernel supports the subtype
+            assert info['fstype'] in ('fuseblk', 'fuseblk.mysub'), \
+                f"unexpected fstype for blkdev: {info['fstype']}"
+
+            # CRITICAL: Source should be the loop device name (fsname), NOT 'fuseblk'
+            # This is what the fix ensures - before the fix, it would be 'fuseblk'
+            # because the incorrect condition treated (fsname && blkdev) as (no fsname)
+            assert info['source'] == loop_dev, \
+                f"blkdev source should be fsname ({loop_dev}), got {info['source']}"
+
+        finally:
+            # Detach loop device
+            subprocess.run(['losetup', '-d', loop_dev], check=False)
+
+    finally:
+        # Clean up file
+        try:
+            os.unlink(loop_file)
+        except OSError:
+            # Ignore cleanup errors - file may already be deleted or inaccessible
+            pass
