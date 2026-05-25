@@ -4325,6 +4325,8 @@ fuse_session_new_versioned(struct fuse_args *args,
 
 	se->mo = mo;
 
+	se->want_sync_init = FUSE_SYNC_INIT_AUTO;
+
 	/* Fuse server application should pass the version it was compiled
 	 * against and pass it. If a libfuse version accidentally introduces an
 	 * ABI incompatibility, it might be possible to 'fix' that at run time,
@@ -4497,7 +4499,9 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 	 * Older fuse servers do not set want_sync_init or start the new
 	 * daemonize code, so they get async init.
 	 */
-	if (!fuse_daemonize_early_is_used() || !se->want_sync_init) {
+	if (se->want_sync_init == FUSE_SYNC_INIT_DISABLED ||
+	    (se->want_sync_init == FUSE_SYNC_INIT_AUTO &&
+	     !fuse_daemonize_early_is_used())) {
 		if (se->debug)
 			fuse_log(FUSE_LOG_DEBUG,
 					"fuse: sync init not enabled\n");
@@ -5121,11 +5125,13 @@ void fuse_session_stop_teardown_watchdog(void *data)
 	fuse_tt_destruct(tt);
 }
 
-void fuse_session_want_sync_init(struct fuse_session *se)
+void fuse_session_set_sync_init(struct fuse_session *se, bool enable)
 {
 	if (se == NULL)
 		return;
-	se->want_sync_init = true;
+
+	se->want_sync_init = enable ? FUSE_SYNC_INIT_ENABLED :
+				      FUSE_SYNC_INIT_DISABLED;
 }
 
 void fuse_session_set_debug(struct fuse_session *se)

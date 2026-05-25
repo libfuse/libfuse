@@ -2438,9 +2438,13 @@ int fuse_session_receive_buf(struct fuse_session *se, struct fuse_buf *buf);
  * called after this if io-uring is enabled. Also see
  * fuse_session_daemonize_start().
  *
+ * @param se the session
+ * @param enable disable auto-detection based on fuse_daemonize_early_start,
+ *               true to forcefully enable, false to forcefully disable
+ *
  * This must be called before fuse_session_mount() to have any effect.
  */
-void fuse_session_want_sync_init(struct fuse_session *se);
+void fuse_session_set_sync_init(struct fuse_session *se, bool enable);
 
 /**
  * Check if the connection / session is using synchronous FUSE_INIT
