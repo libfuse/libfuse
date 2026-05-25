@@ -4497,7 +4497,7 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 	 * Older fuse servers do not set want_sync_init or start the new
 	 * daemonize code, so they get async init.
 	 */
-	if (!fuse_daemonize_is_used() || !se->want_sync_init) {
+	if (!fuse_daemonize_early_is_used() || !se->want_sync_init) {
 		if (se->debug)
 			fuse_log(FUSE_LOG_DEBUG,
 					"fuse: sync init not enabled\n");

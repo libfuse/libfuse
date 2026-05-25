@@ -20,12 +20,10 @@
  */
 void fuse_daemonize_early_set_mounted(void);
 
-/*
- * Check if daemonization is used.
- *
- * @return true if used, false otherwise
+/**
+ * Check if fuse_daemonize_early_start() was used
  */
-bool fuse_daemonize_is_used(void);
+bool fuse_daemonize_early_is_used(void);
 
 /* Set on handling FUSE_INIT */
 void fuse_daemonize_set_got_init(void);
