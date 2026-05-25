@@ -1548,6 +1548,12 @@ static int mount_fuse(const char *mnt, const char *opts, const char **type)
 			size_t x_mtab_opts_len = mtab_opts_len +
 						 strlen(x_prefixed_opts) + 2;
 			char *x_mtab_opts = calloc(1, x_mtab_opts_len);
+			if (x_mtab_opts == NULL) {
+				fprintf(stderr,
+					"%s: failed to allocate memory for mtab_opts\n",
+					progname);
+				goto fail_close_fd;
+			}
 
 			if (mtab_opts_len) {
 				strcpy(x_mtab_opts, mtab_opts);
