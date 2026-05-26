@@ -1,0 +1,32 @@
+.TH fuservicemount3 "8"
+.SH NAME
+fuservicemount3 \- mount a FUSE filesystem that runs as a system socket service
+.SH SYNOPSIS
+.B fuservicemount3
+.B source
+.B mountpoint
+.BI -t " fstype"
+[
+.BI -o " options"
+]
+
+.B fuservicemount3
+.BI -t " fstype"
+.B --check
+
+.SH DESCRIPTION
+Mount a filesystem using a FUSE server that runs as a socket service.
+These servers can be contained using the platform's service management
+framework.
+
+The second form checks if there is a FUSE service available for the given
+filesystem type.
+.SH "AUTHORS"
+.LP
+The author of the fuse socket service code is Darrick J. Wong <djwong@kernel.org>.
+Debian GNU/Linux distribution.
+.SH SEE ALSO
+.BR fusermount3 (1)
+.BR fusermount (1)
+.BR mount (8)
+.BR fuse (4)

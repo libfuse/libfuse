@@ -10,6 +10,27 @@ if not platform.endswith('bsd') and platform != 'dragonfly'
     # support mounting files, This is enforced in vfs_domount_first()
     # with the v_type != VDIR check.
     examples += [ 'null' ]
+
+    if platform.endswith('linux')
+        configure_file(input: 'null.socket.in',
+                       output: 'null.socket',
+                       configuration: private_cfg)
+    endif
+endif
+
+single_file_examples = [ ]
+
+if platform.endswith('linux')
+    single_file_examples += [ 'service_ll' ]
+    configure_file(input: 'service_ll.socket.in',
+                   output: 'service_ll.socket',
+                   configuration: private_cfg)
+
+    single_file_examples += [ 'service_hl' ]
+    configure_file(input: 'service_hl.socket.in',
+                   output: 'service_hl.socket',
+                   configuration: private_cfg)
+
 endif
 
 threaded_examples = [ 'notify_inval_inode',
@@ -25,6 +46,11 @@ foreach ex : examples
                install: false)
 endforeach
 
+foreach ex : single_file_examples
+    executable(ex, [ex + '.c', 'single_file.c'],
+               dependencies: [ libfuse_dep ],
+               install: false)
+endforeach
 
 foreach ex : threaded_examples
     executable(ex, ex + '.c',

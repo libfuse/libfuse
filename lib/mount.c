@@ -868,3 +868,22 @@ out:
 	free(mtab_opts);
 	return res;
 }
+
+char *fuse_mnt_kernel_opts(const struct mount_opts *mo)
+{
+	if (mo->kernel_opts)
+		return strdup(mo->kernel_opts);
+	return NULL;
+}
+
+char *fuse_mnt_mtab_opts(const struct mount_opts *mo)
+{
+	if (mo->mtab_opts)
+		return strdup(mo->mtab_opts);
+	return NULL;
+}
+
+unsigned int fuse_mnt_flags(const struct mount_opts *mo)
+{
+	return mo->flags;
+}

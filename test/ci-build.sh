@@ -75,10 +75,17 @@ non_sanitized_build()
 
         # libfuse will first try the install path and then system defaults
         sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+        test -x "${PREFIX_DIR}/sbin/fuservicemount3" && \
+                sudo chmod 4755 ${PREFIX_DIR}/sbin/fuservicemount3
 
         # also needed for some of the tests
         sudo chown root:root util/fusermount3
         sudo chmod 4755 util/fusermount3
+
+        if [ -x util/fuservicemount3 ]; then
+                sudo chown root:root util/fuservicemount3
+                sudo chmod 4755 util/fuservicemount3
+        fi
 
         ${TEST_CMD}
         popd
@@ -117,16 +124,24 @@ sanitized_build()
     ninja
     sudo env PATH=$PATH ninja install
     sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
+    test -x "${PREFIX_DIR}/sbin/fuservicemount3" && \
+        sudo chmod 4755 ${PREFIX_DIR}/sbin/fuservicemount3
 
     # also needed for some of the tests
     sudo chown root:root util/fusermount3
     sudo chmod 4755 util/fusermount3
+
+    if [ -x util/fuservicemount3 ]; then
+        sudo chown root:root util/fuservicemount3
+        sudo chmod 4755 util/fuservicemount3
+    fi
 
     # Test as root and regular user. Give the root run a distinct
     # meson log basename so its meson-logs/testlog.* files don't end
     # up owned by root and block the subsequent user run from writing
     # them.
     sudo env PATH=$PATH ${TEST_CMD} --logbase=testlog-root
+
     # Cleanup temporary files (since they are now owned by root)
     sudo rm -rf test/.pytest_cache/ test/__pycache__
 

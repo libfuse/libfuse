@@ -1008,6 +1008,40 @@ static inline int fuse_main_fn(int argc, char *argv[],
 #define fuse_main(argc, argv, op, user_data) \
 	fuse_main_fn(argc, argv, op, user_data)
 
+#if FUSE_MAKE_VERSION(3, 19) <= FUSE_USE_VERSION
+struct fuse_service;
+int fuse_service_main_real_versioned(struct fuse_service *service,
+				     struct fuse_args *args,
+				     const struct fuse_operations *op,
+				     size_t op_size,
+				     struct libfuse_version *version,
+				     void *user_data);
+
+/**
+ * Same as fuse_service_main_fn, but takes its information from the mount
+ * service context and an fuse_args that has already had fuse_service_append_args
+ * applied to it.
+ */
+static inline int fuse_service_main_fn(struct fuse_service *service,
+				       struct fuse_args *args,
+				       const struct fuse_operations *op,
+				       void *user_data)
+{
+	struct libfuse_version version = {
+		.major  = FUSE_MAJOR_VERSION,
+		.minor  = FUSE_MINOR_VERSION,
+		.hotfix = FUSE_HOTFIX_VERSION,
+		.padding = FUSE_USE_VERSION,
+	};
+
+	return fuse_service_main_real_versioned(service, args, op,
+						sizeof(*(op)), &version,
+						user_data);
+}
+#define fuse_service_main(s, args, op, user_data) \
+	fuse_service_main_fn(s, args, op, user_data)
+#endif /* FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 19) */
+
 /* ----------------------------------------------------------- *
  * More detailed API					       *
  * ----------------------------------------------------------- */

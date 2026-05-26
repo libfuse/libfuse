@@ -69,11 +69,23 @@ args_default = [ '-D_GNU_SOURCE' ]
 #
 private_cfg = configuration_data()
 private_cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
+service_socket_dir = get_option('service-socket-dir')
+service_socket_perms = get_option('service-socket-perms')
+if service_socket_dir == ''
+  service_socket_dir = '/run/filesystems'
+endif
+if service_socket_perms == ''
+  service_socket_perms = '0220'
+endif
+private_cfg.set('FUSE_SERVICE_SOCKET_DIR_RAW', service_socket_dir)
+private_cfg.set_quoted('FUSE_SERVICE_SOCKET_DIR', service_socket_dir)
+private_cfg.set('FUSE_SERVICE_SOCKET_PERMS', service_socket_perms)
 
 # Test for presence of some functions
 test_funcs = [ 'fork', 'fstatat', 'openat', 'readlinkat', 'pipe2',
                'splice', 'vmsplice', 'posix_fallocate', 'fdatasync',
-               'utimensat', 'copy_file_range', 'fallocate', 'fspacectl' ]
+               'utimensat', 'copy_file_range', 'fallocate', 'fspacectl',
+               'faccessat' ]
 foreach func : test_funcs
     private_cfg.set('HAVE_' + func.to_upper(),
         cc.has_function(func, prefix: include_default, args: args_default))
@@ -133,7 +145,14 @@ special_funcs = {
 	    res = move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH);
 	    return 0;
 	}
-    '''
+    ''',
+    'systemd_headers': '''
+	#include <systemd/sd-daemon.h>
+
+	int main(int argc, char *argv[]) {
+          return SD_LISTEN_FDS_START;
+	}
+    ''',
 }
 
 foreach name, code : special_funcs
@@ -193,6 +212,29 @@ if get_option('enable-io-uring') and liburing.found() and libnuma.found()
               dependencies: [liburing])
       private_cfg.set('HAVE_URING', true)
    endif
+endif
+
+# Check for systemd support
+systemd_system_unit_dir = get_option('systemd-system-unit-dir')
+if systemd_system_unit_dir == ''
+  systemd = dependency('systemd', required: false)
+  if systemd.found()
+     systemd_system_unit_dir = systemd.get_variable(pkgconfig: 'systemd_system_unit_dir')
+  endif
+endif
+
+if systemd_system_unit_dir == '' or private_cfg.get('HAVE_SYSTEMD_HEADERS', false) == false
+  if systemd_system_unit_dir == ''
+    warning('systemd service support will not be built: systemd unit directory not found')
+  elif private_cfg.get('HAVE_SYSTEMD_HEADERS', false) == false
+    warning('systemd service support will not be built: systemd headers (libsystemd-dev) not found')
+  else
+    warning('systemd service support will not be built')
+  endif
+else
+  private_cfg.set_quoted('SYSTEMD_SYSTEM_UNIT_DIR', systemd_system_unit_dir)
+  private_cfg.set('HAVE_SYSTEMD', true)
+  private_cfg.set('HAVE_SERVICEMOUNT', true)
 endif
 
 #
@@ -345,3 +387,19 @@ foreach n : subdirs
     subdir(n)
 endforeach
 
+#
+# Configuration summary
+#
+summary({
+  'Examples': get_option('examples'),
+  'Tests': get_option('tests'),
+  'Utils': get_option('utils'),
+}, section: 'Build Options')
+
+summary({
+  'io_uring support': private_cfg.get('HAVE_URING', false),
+  'USDT tracing': private_cfg.get('USDT_ENABLED', false),
+  'systemd service support': private_cfg.get('HAVE_SYSTEMD', false),
+  'systemd headers': private_cfg.get('HAVE_SYSTEMD_HEADERS', false),
+  'systemd unit directory': systemd_system_unit_dir != '' ? systemd_system_unit_dir : '(not found)',
+}, section: 'Features')
