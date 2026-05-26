@@ -536,7 +536,7 @@ const char *fuse_mnt_get_devname(void)
 }
 
 char *fuse_mnt_build_source(const char *fsname, const char *subtype,
-			     const char *devname, int use_subtype_prefix)
+			     const char *devname, bool use_subtype_prefix)
 {
 	char *source;
 	int ret;
