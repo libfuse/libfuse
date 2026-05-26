@@ -186,8 +186,7 @@ static int fuse_helper_opt_proc(void *data, const char *arg, int key,
    function actually sets the fsname */
 static int add_default_subtype(const char *progname, struct fuse_args *args)
 {
-	int res;
-	char *subtype_opt;
+	char subtype_opt[PATH_MAX];
 
 	const char *basename = strrchr(progname, '/');
 	if (basename == NULL)
@@ -195,19 +194,12 @@ static int add_default_subtype(const char *progname, struct fuse_args *args)
 	else if (basename[1] != '\0')
 		basename++;
 
-	subtype_opt = (char *) malloc(strlen(basename) + 64);
-	if (subtype_opt == NULL) {
-		fuse_log(FUSE_LOG_ERR, "fuse: memory allocation failed\n");
-		return -1;
-	}
 #ifdef __FreeBSD__
-	sprintf(subtype_opt, "-ofsname=%s", basename);
+	snprintf(subtype_opt, sizeof(subtype_opt), "-ofsname=%s", basename);
 #else
-	sprintf(subtype_opt, "-osubtype=%s", basename);
+	snprintf(subtype_opt, sizeof(subtype_opt), "-osubtype=%s", basename);
 #endif
-	res = fuse_opt_add_arg(args, subtype_opt);
-	free(subtype_opt);
-	return res;
+	return fuse_opt_add_arg(args, subtype_opt);
 }
 
 int fuse_parse_cmdline_312(struct fuse_args *args,
