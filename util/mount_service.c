@@ -493,10 +493,11 @@ static int mount_service_capture_args(struct mount_service *mo, int argc,
 	if (ret)
 		return ret;
 
-	for (i = 1; i < argc; i++) {
+	i = 1;
+	while (i < argc) {
 		/* skip the -t(ype) argument */
 		if (!strcmp(argv[i], "-t") && i + 1 < argc) {
-			i++;
+			i += 2;
 			continue;
 		}
 
@@ -504,6 +505,7 @@ static int mount_service_capture_args(struct mount_service *mo, int argc,
 						&array_pos, &string_pos);
 		if (ret)
 			return ret;
+		i++;
 	}
 
 	/* Now write the header */

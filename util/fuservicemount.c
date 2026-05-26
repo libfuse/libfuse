@@ -39,20 +39,22 @@ int main(int argc, char *argv[])
 	 * This doesn't tell us if the listening socket is actually connected
 	 * to anything.
 	 */
-	for (i = 1; i < argc; i++) {
+	i = 1;
+	while (i < argc) {
 		if (!strcmp(argv[i], "--check")) {
 			if (check) {
 				check = false;
 				break;
 			}
 			check = true;
+			i++;
 		} else if (!strcmp(argv[i], "-t") && i + 1 < argc) {
 			if (fstype) {
 				check = false;
 				break;
 			}
 			fstype = argv[i + 1];
-			i++;
+			i += 2;
 		} else {
 			check = false;
 			break;
