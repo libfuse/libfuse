@@ -1088,7 +1088,8 @@ static int perform_mount(const char *mnt, struct mount_params *mp,
 		type = fuse_mnt_build_type(mp->blkdev, NULL);
 		if (mp->fsname) {
 			if (!mp->blkdev) {
-				source = fuse_mnt_build_source(mp->fsname, mp->subtype,
+				source = fuse_mnt_build_source(mp->fsname,
+							       mp->subtype,
 							       mp->dev, 1);
 			} else {
 				source = fuse_mnt_build_source(mp->fsname, NULL,
