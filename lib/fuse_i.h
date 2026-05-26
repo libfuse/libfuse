@@ -72,6 +72,12 @@ struct fuse_session_uring {
 
 struct fuse_timeout_thread;
 
+enum fuse_sync_init {
+	FUSE_SYNC_INIT_AUTO = 0, /* auto detection using fuse_daemonize_early_start */
+	FUSE_SYNC_INIT_DISABLED, /* sync init forcefully disabled */
+	FUSE_SYNC_INIT_ENABLED   /* sync_init forcefully enabled */
+};
+
 struct fuse_session {
 	_Atomic(char *)mountpoint;
 	int fd;
@@ -111,7 +117,7 @@ struct fuse_session {
 	bool buf_reallocable;
 
 	/* synchronous FUSE_INIT support */
-	bool want_sync_init;
+	enum fuse_sync_init want_sync_init;
 	bool is_sync_init; /* sync FUSE_INIT mount succeeded*/
 	pthread_t init_thread;
 	int init_error;

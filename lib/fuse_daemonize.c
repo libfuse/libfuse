@@ -287,7 +287,7 @@ void fuse_daemonize_early_success(void)
 	 * Needs to be gracefully handled as automatically called libfuse
 	 * internal from FUSE_INIT handler
 	 */
-	if (!fuse_daemonize_early_is_active())
+	if (!fuse_daemonize_early_is_used())
 		return;
 
 	fuse_daemonize_early_signal(FUSE_DAEMONIZE_SUCCESS);
@@ -298,9 +298,14 @@ void fuse_daemonize_early_fail(int err)
 	fuse_daemonize_early_signal(err);
 }
 
-bool fuse_daemonize_early_is_active(void)
+bool fuse_daemonize_early_is_used(void)
 {
 	return daemonize.daemonized || daemonize.active;
+}
+
+bool fuse_daemonize_early_is_active(void)
+{
+	return daemonize.active;
 }
 
 void fuse_daemonize_early_set_mounted(void)
@@ -322,7 +327,7 @@ int fuse_daemonize(int foreground);
 int fuse_daemonize(int foreground)
 {
 	/* Check if the NEW API is used */
-	if (fuse_daemonize_early_is_active()) {
+	if (fuse_daemonize_early_is_used()) {
 		perror("Newer API fuse_daemonize_start() already used\n");
 		return -1;
 	}
@@ -389,8 +394,4 @@ int fuse_daemonize(int foreground)
 	return 0;
 }
 
-bool fuse_daemonize_is_used(void)
-{
-	return daemonize.active;
-}
 

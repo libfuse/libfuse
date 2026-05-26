@@ -232,6 +232,7 @@ FUSE_3.19 {
 		fuse_daemonize_early_fail;
 		fuse_daemonize_early_is_active;
 		fuse_session_set_debug;
+		fuse_session_set_sync_init;
 		fuse_service_accept;
 		fuse_service_append_args;
 		fuse_service_can_allow_other;

@@ -10,6 +10,7 @@
 #define FUSE_MOUNT_UTIL_H_
 
 #include <sys/types.h>
+#include <stdbool.h>
 #include "mount_common_i.h" // IWYU pragma: keep
 
 /* Mount flags mapping structure */
@@ -37,9 +38,20 @@ const char *fuse_mnt_get_devname(void);
 int fuse_mnt_add_mount_helper(const char *mnt, const char *source,
 			       const char *type, const char *mtab_opts);
 
-/* Build source and type strings for mounting */
+/*
+ * Build the mount source string for FUSE filesystems
+ * @fsname: Filesystem name (e.g., "user@host:/path")
+ * @subtype: Filesystem subtype (e.g., "sshfs")
+ * @devname: Device name (typically "/dev/fuse")
+ * @use_subtype_prefix: Set to 1 when falling back from a failed mount attempt
+ *                      with fuse.subtype (ENODEV error), to retry with the
+ *                      legacy "subtype#fsname" format. Set to 0 for the initial
+ *                      mount attempt on modern kernels.
+ *
+ * Returns: Allocated source string, or NULL on error
+ */
 char *fuse_mnt_build_source(const char *fsname, const char *subtype,
-			     const char *devname);
+			     const char *devname, bool use_subtype_prefix);
 char *fuse_mnt_build_type(int blkdev, const char *subtype);
 
 #endif /* FUSE_MOUNT_UTIL_H_ */

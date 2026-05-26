@@ -536,13 +536,25 @@ const char *fuse_mnt_get_devname(void)
 }
 
 char *fuse_mnt_build_source(const char *fsname, const char *subtype,
-			     const char *devname)
+			     const char *devname, bool use_subtype_prefix)
 {
 	char *source;
 	int ret;
 
-	ret = asprintf(&source, "%s",
-		       fsname ? fsname : (subtype ? subtype : devname));
+	if (use_subtype_prefix && fsname && subtype) {
+		ret = asprintf(&source, "%s#%s", subtype, fsname);
+	} else {
+		const char *src_str;
+
+		if (fsname)
+			src_str = fsname;
+		else if (subtype)
+			src_str = subtype;
+		else
+			src_str = devname;
+		ret = asprintf(&source, "%s", src_str);
+	}
+
 	if (ret == -1)
 		return NULL;
 

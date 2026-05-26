@@ -992,7 +992,7 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
 {
 	char *fstype = fuse_mnt_build_type(se->mo->blkdev, se->mo->subtype);
 	char *source = fuse_mnt_build_source(se->mo->fsname, se->mo->subtype,
-					   fuse_mnt_get_devname());
+					   fuse_mnt_get_devname(), false);
 	char *mntopts = fuse_mnt_kernel_opts(se->mo);
 	char *mtabopts = fuse_mnt_mtab_opts(se->mo);
 	char path[32];

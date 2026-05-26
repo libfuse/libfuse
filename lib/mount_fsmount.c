@@ -309,7 +309,7 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 
 	/* Build type and source strings */
 	type = fuse_mnt_build_type(blkdev, subtype);
-	source = fuse_mnt_build_source(fsname, subtype, source_dev);
+	source = fuse_mnt_build_source(fsname, subtype, source_dev, 0);
 	err = -ENOMEM;
 	if (!type || !source) {
 		fprintf(stderr, "fuse: failed to allocate memory\n");
@@ -363,16 +363,6 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 		goto out_free;
 	}
 
-	/* Apply mtab options (overlap with kernel_opts is filtered and tolerated) */
-	err = apply_fsconfig_mount_opts(fsfd, mtab_opts);
-	if (err < 0) {
-		log_fsconfig_kmsg(fsfd);
-		fprintf(stderr,
-			"fuse: failed to apply mtab options '%s'\n",
-			mtab_opts);
-		goto out_free;
-	}
-
 	/* Create the filesystem instance */
 	res = fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
 	if (res == -1) {
@@ -387,9 +377,8 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	flags = ms_flags_to_mount_attrs(flags, &mount_attrs);
 	if (flags != 0) {
 		/* unsupported flags found, either fsconfig or mount attr flags  */
-		//fuse_log(FUSE_LOG_ERR, "Unsupported mount flags found: %d", flags);
-		errno = -ENOTSUP;
-		return -1;
+		errno = ENOTSUP;
+		goto out_free;
 	}
 
 	/* Create mount object with mount attributes */

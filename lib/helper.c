@@ -16,6 +16,7 @@
 #include "fuse_opt.h"
 #include "fuse_lowlevel.h"
 #include "fuse_daemonize.h"
+#include "fuse_daemonize_i.h"
 #include "fuse_service.h"
 #include "mount_util.h"
 
@@ -447,7 +448,7 @@ int fuse_main_real_versioned(int argc, char *argv[],
 	}
 
 	/* The application might have already started daemonization itself */
-	if (!fuse_daemonize_early_is_active()) {
+	if (!fuse_daemonize_early_is_used()) {
 		int daemonize_early_flags = 0;
 
 		if (opts.foreground)
