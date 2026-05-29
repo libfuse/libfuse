@@ -518,6 +518,17 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_ALLOW_IDMAP (1ULL << 32)
 
 /**
+ * Indicates that the kernel supports creating submounts
+ *
+ * When this feature is enabled. If `fuse_lookup()` returns a directory
+ * and `FUSE_LL_ATTR_SUBMOUNT` is set in `fuse_entry_param::attr_flags`,
+ * fuse kernel module will create a virtual submount with distinct std_dev.
+ *
+ * This feature is disabled by default.
+ */
+#define FUSE_CAP_SUBMOUNTS (1UL << 33)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
