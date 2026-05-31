@@ -1,0 +1,185 @@
+FUSE Extensions
+================
+
+Overview
+--------
+
+FUSE extensions are a mechanism for passing additional metadata alongside regular
+FUSE requests. Extensions are placed at the end of the request payload and can
+contain various types of supplementary information such as security contexts or
+supplementary group IDs.
+
+Wire Protocol
+-------------
+
+Extensions are appended to the end of FUSE request messages. Their presence and
+total size is indicated by the `total_extlen` field in the fuse_in_header.
+
+struct fuse_in_header {
+    uint32_t len;
+    uint32_t opcode;
+    uint64_t unique;
+    uint64_t nodeid;
+    uint32_t uid;
+    uint32_t gid;
+    uint32_t pid;
+    uint16_t total_extlen;  /* Total size of all extensions in 8-byte units */
+    uint16_t padding;
+};
+
+The total_extlen field:
+- Measured in 8-byte units (not bytes)
+- Allows encoding up to 512 KB of extensions in a 16-bit field
+- Convert to bytes: total_bytes = total_extlen * 8
+- All extensions combined are always 8-byte aligned (FUSE_REC_ALIGN)
+
+Extension Location
+------------------
+
+Extensions are located at the END of the request buffer:
+
+Non-io_uring:
+  [fuse_in_header][operation header][operation payload][extensions]
+                                                        ^
+                                                        ext_start = buffer_end - (total_extlen * 8)
+
+io_uring:
+  Headers: [fuse_in_header][operation header]
+  Payload: [operation payload][extensions]
+                               ^
+                               ext_start = payload_end - (total_extlen * 8)
+
+Extension Header Format
+-----------------------
+
+Extensions use a polymorphic header design where the same 8-byte structure
+is interpreted differently based on the second field's value:
+
+For security contexts (nr_secctx = 1..31):
+    struct fuse_secctx_header {
+        uint32_t size;       /* Total size of this extension in bytes */
+        uint32_t nr_secctx;  /* Number of security contexts (1-31) */
+    };
+
+For other extensions (type >= 32):
+    struct fuse_ext_header {
+        uint32_t size;       /* Total size of this extension in bytes */
+        uint32_t type;       /* Extension type ID (32+) */
+    };
+
+The second field determines interpretation:
+- Value 0:     Invalid / reserved
+- Value 1-31:  Security context header (nr_secctx)
+- Value 32+:   Other extension type (type ID)
+
+Extension Types
+---------------
+
+Defined in enum fuse_ext_type:
+
+FUSE_MAX_NR_SECCTX = 31
+    Maximum number of security contexts in a single extension.
+    Values 0-31 are reserved for fuse_secctx_header.
+
+FUSE_EXT_GROUPS = 32
+    Supplementary groups extension (fuse_supp_groups).
+
+Multiple Extensions
+-------------------
+
+A single request can contain multiple extensions. They are concatenated
+sequentially, each 8-byte aligned:
+
+[fuse_secctx_header + secctx data][padding][fuse_ext_header + groups data][padding]
+
+To iterate:
+1. Start at ext_start = buffer_end - (total_extlen * 8)
+2. Read header (8 bytes)
+3. Process extension based on second field value
+4. Advance: next_ext = current_ext + FUSE_REC_ALIGN(header.size)
+5. Repeat until reaching ext_end
+
+Security Context Extension
+--------------------------
+
+Wire format for security context (type 0-31):
+
+Offset 0-7:   fuse_secctx_header { size, nr_secctx }
+Offset 8:     First fuse_secctx structure (8 bytes)
+              {
+                  uint32_t size;     /* Size of context VALUE only */
+                  uint32_t padding;  /* Always 0 */
+              }
+Offset 16:    Context name (null-terminated string)
+              Example: "security.selinux\0"
+Offset N:     Context value (size bytes)
+              Example: "unconfined_u:object_r:user_home_t:s0"
+[Padding to 8-byte boundary]
+[Additional contexts if nr_secctx > 1]
+
+Example (72 bytes total):
+  Offset  0-7:  { size=72, nr_secctx=1 }
+  Offset  8-15: { size=38, padding=0 }
+  Offset 16-32: "security.selinux\0" (17 bytes)
+  Offset 33-70: "unconfined_u:object_r:user_home_t:s0" (38 bytes)
+  Offset    71: 0x00 (padding)
+
+Kernel Guarantees
+-----------------
+
+The kernel guarantees:
+1. Extension data is always at the end of the buffer
+2. total_extlen accurately represents the extension size
+3. All extensions are 8-byte aligned (FUSE_REC_ALIGN)
+4. Security context name strings are null-terminated (via strscpy)
+5. Extension headers are well-formed
+
+Userspace Requirements
+----------------------
+
+Userspace filesystem daemons must:
+1. Check total_extlen in fuse_in_header
+2. Calculate extension location: buffer_end - (total_extlen * 8)
+3. Iterate through extensions checking the second header field
+4. For security contexts (1-31): interpret as fuse_secctx_header
+5. For other types (32+): interpret as fuse_ext_header
+6. Validate all size fields to prevent buffer overruns
+7. Use FUSE_REC_ALIGN when advancing to next extension
+
+Capability Negotiation
+----------------------
+
+Extensions are only sent when negotiated during FUSE_INIT:
+
+For security contexts:
+  Kernel flag:  FUSE_SECURITY_CTX (1ULL << 32)
+  Libfuse flag: FUSE_CAP_SECURITY_CTX
+
+The kernel only sends security context extensions for operations where
+security labels can be atomically set during creation:
+- FUSE_CREATE
+- FUSE_MKNOD
+- FUSE_MKDIR
+- FUSE_SYMLINK
+
+Alignment Considerations
+------------------------
+
+While extensions are 8-byte aligned relative to each other, their absolute
+position in the buffer may not be 8-byte aligned because they follow
+variable-length operation data (e.g., filenames).
+
+Example:
+  [header:40][create_in:16][filename:9][extension:72]
+                                       ^
+                                       Offset 65 - NOT 8-byte aligned!
+
+Therefore, userspace must use memcpy() when reading extension headers to
+avoid unaligned access issues on architectures that don't support it.
+
+References
+----------
+
+- include/fuse_kernel.h: Extension structure definitions
+- Linux kernel: fs/fuse/dir.c: get_security_context()
+- Linux kernel: fs/fuse/dev.c: fuse_args_to_req()
