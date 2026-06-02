@@ -95,7 +95,8 @@ void log_fsconfig_kmsg(int fd)
 
 int set_fsconfig_ms_flags(int fsfd, unsigned long *ms_flags)
 {
-	int ret, flags = *ms_flags;
+	unsigned long flags = *ms_flags;
+	int ret;
 	int i;
 
 	for (i = 0; mount_flags[i].opt != NULL && flags != 0; i++) {
