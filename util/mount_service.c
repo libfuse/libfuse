@@ -710,23 +710,27 @@ static int mount_service_send_reply(const struct mount_service *mo, int error)
 }
 
 static int prepare_bdev(const struct mount_service *mo,
-			const struct fuse_service_open_command *oc, int fd)
+			const struct fuse_service_open_command *oc, int fd,
+			unsigned int request_flags)
 {
 	struct stat stbuf;
+	const bool quiet = (request_flags & FUSE_SERVICE_OPEN_QUIET);
 	int ret;
 
 	ret = fstat(fd, &stbuf);
 	if (ret) {
 		int error = errno;
 
-		fprintf(stderr, "%s: %s: %s\n",
-			mo->msgtag, oc->path, strerror(error));
+		if (!quiet)
+			fprintf(stderr, "%s: %s: %s\n",
+				mo->msgtag, oc->path, strerror(error));
 		return -error;
 	}
 
 	if (!S_ISBLK(stbuf.st_mode)) {
-		fprintf(stderr, "%s: %s: %s\n",
-			mo->msgtag, oc->path, strerror(ENOTBLK));
+		if (!quiet)
+			fprintf(stderr, "%s: %s: %s\n",
+				mo->msgtag, oc->path, strerror(ENOTBLK));
 		return -ENOTBLK;
 	}
 
@@ -739,8 +743,9 @@ static int prepare_bdev(const struct mount_service *mo,
 			int error = errno;
 
 			restore_privs();
-			fprintf(stderr, "%s: %s: %s\n",
-				mo->msgtag, oc->path, strerror(error));
+			if (!quiet)
+				fprintf(stderr, "%s: %s: %s\n",
+					mo->msgtag, oc->path, strerror(error));
 			return -error;
 		}
 		restore_privs();
@@ -798,7 +803,7 @@ static int mount_service_open_path(const struct mount_service *mo,
 	restore_privs();
 
 	if (S_ISBLK(expected_fmt)) {
-		ret = prepare_bdev(mo, oc, fd);
+		ret = prepare_bdev(mo, oc, fd, request_flags);
 		if (ret < 0) {
 			close(fd);
 			return mount_service_send_file_error(mo, -ret,
