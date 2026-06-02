@@ -994,7 +994,7 @@ static int mount_service_handle_mntopts_cmd(struct mount_service *mo,
 
 #ifdef HAVE_NEW_MOUNT_API
 	if (mo->fsopenfd >= 0) {
-		int ret = apply_fsconfig_mount_opts(mo->fsopenfd, oc->value);
+		int ret = apply_fsconfig_mount_opts(mo->fsopenfd, mntopts);
 
 		if (ret < 0) {
 			free(mntopts);
