@@ -54,8 +54,10 @@ struct fuse_service_packet {
 #define FUSE_SERVICE_MAX_PROTO	(1)
 
 #define FUSE_SERVICE_FLAG_ALLOW_OTHER	(1U << 0)
+#define FUSE_SERVICE_FLAG_FUSEBLK	(1U << 1)
 
-#define FUSE_SERVICE_FLAGS		(FUSE_SERVICE_FLAG_ALLOW_OTHER)
+#define FUSE_SERVICE_FLAGS		(FUSE_SERVICE_FLAG_ALLOW_OTHER | \
+					 FUSE_SERVICE_FLAG_FUSEBLK)
 
 struct fuse_service_hello {
 	struct fuse_service_packet p;

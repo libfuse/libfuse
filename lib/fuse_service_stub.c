@@ -59,6 +59,11 @@ bool fuse_service_can_allow_other(const struct fuse_service *sf)
 	return false;
 }
 
+bool fuse_service_can_fuseblk(const struct fuse_service *sf)
+{
+	return false;
+}
+
 int fuse_service_append_args(struct fuse_service *sf,
 			     struct fuse_args *existing_args)
 {

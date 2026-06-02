@@ -236,6 +236,7 @@ FUSE_3.19 {
 		fuse_service_accept;
 		fuse_service_append_args;
 		fuse_service_can_allow_other;
+		fuse_service_can_fuseblk;
 		fuse_service_cmdline;
 		fuse_service_destroy;
 		fuse_service_exit;

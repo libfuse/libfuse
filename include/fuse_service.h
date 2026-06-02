@@ -62,6 +62,14 @@ static inline bool fuse_service_accepted(const struct fuse_service *sf)
 bool fuse_service_can_allow_other(const struct fuse_service *sf);
 
 /**
+ * Will the mount service helper accept a fuseblk mount?
+ *
+ * @param sf service context
+ * @return true if it will, false if not
+ */
+bool fuse_service_can_fuseblk(const struct fuse_service *sf);
+
+/**
  * Release all resources associated with the service context.
  *
  * @param sfp service context

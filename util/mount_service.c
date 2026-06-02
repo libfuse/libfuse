@@ -367,7 +367,10 @@ static int mount_service_send_hello(const struct mount_service *mo)
 	struct fuse_service_hello_reply reply = { };
 	ssize_t size;
 
-	if (getuid() == 0 || user_allow_other)
+	if (getuid() == 0)
+		hello.flags |= htonl(FUSE_SERVICE_FLAG_FUSEBLK |
+				     FUSE_SERVICE_FLAG_ALLOW_OTHER);
+	else if (user_allow_other)
 		hello.flags |= htonl(FUSE_SERVICE_FLAG_ALLOW_OTHER);
 
 	size = __send_packet(mo, &hello, sizeof(hello));
