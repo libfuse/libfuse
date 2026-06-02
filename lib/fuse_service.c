@@ -51,6 +51,9 @@ struct fuse_service {
 
 	/* can we use allow_other? */
 	bool allow_other;
+
+	/* can we use fuseblk? */
+	bool can_fuseblk;
 };
 
 static int __recv_fd(const struct fuse_service *sf,
@@ -505,6 +508,8 @@ static int negotiate_hello(struct fuse_service *sf)
 
 	if (flags & FUSE_SERVICE_FLAG_ALLOW_OTHER)
 		sf->allow_other = true;
+	if (flags & FUSE_SERVICE_FLAG_FUSEBLK)
+		sf->can_fuseblk = true;
 
 	size = __send_packet(sf, &reply, sizeof(reply));
 	if (size < 0) {
@@ -610,6 +615,11 @@ out_sf:
 bool fuse_service_can_allow_other(const struct fuse_service *sf)
 {
 	return sf->allow_other;
+}
+
+bool fuse_service_can_fuseblk(const struct fuse_service *sf)
+{
+	return sf->can_fuseblk;
 }
 
 int fuse_service_append_args(struct fuse_service *sf,
