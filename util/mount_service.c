@@ -1410,13 +1410,11 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 				      const struct stat *stbuf)
 {
 	char tmp[64];
-	unsigned long ms_flags;
+	unsigned long ms_flags = ntohl(oc->ms_flags);
 	unsigned int attr_flags;
 	int mfd;
 	int error;
 	int ret;
-
-	ms_flags = ms_flags_to_mount_attrs(ntohl(oc->ms_flags), &attr_flags);
 
 	ret = set_fsconfig_ms_flags(mo->fsopenfd, &ms_flags);
 	if (ret) {
@@ -1429,6 +1427,7 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 	 * or string flags!  Return a magic code so the caller will fall back
 	 * to regular mount(2).
 	 */
+	ms_flags = ms_flags_to_mount_attrs(ms_flags, &attr_flags);
 	if (ms_flags)
 		return FUSE_MOUNT_FALLBACK_NEEDED;
 
