@@ -35,6 +35,7 @@
 #define MOUNT_ATTR_NOSYMFOLLOW  0x00200000
 #endif
 
+/* Must be called after set_fsconfig_ms_flags */
 unsigned long ms_flags_to_mount_attrs(unsigned long ms_flags,
 				      unsigned int *mount_attrs)
 {
@@ -93,6 +94,7 @@ void log_fsconfig_kmsg(int fd)
 	errno = err;
 }
 
+/* Must be called before ms_flags_to_mount_attrs */
 int set_fsconfig_ms_flags(int fsfd, unsigned long *ms_flags)
 {
 	unsigned long flags = *ms_flags;
