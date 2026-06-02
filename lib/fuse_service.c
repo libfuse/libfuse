@@ -449,6 +449,7 @@ static int negotiate_hello(struct fuse_service *sf)
 		.p.magic = htonl(FUSE_SERVICE_HELLO_REPLY),
 		.version = htons(FUSE_SERVICE_PROTO),
 	};
+	uint16_t minver, maxver;
 	uint32_t flags;
 	ssize_t size;
 
@@ -471,15 +472,27 @@ static int negotiate_hello(struct fuse_service *sf)
 		return -EBADMSG;
 	}
 
-	if (ntohs(hello.min_version) < FUSE_SERVICE_MIN_PROTO) {
-		fuse_log(FUSE_LOG_ERR, "fuse: unsupported min service protocol version %u\n",
-			ntohs(hello.min_version));
+	minver = ntohs(hello.min_version);
+	maxver = ntohs(hello.max_version);
+
+	if (minver > maxver) {
+		fuse_log(FUSE_LOG_ERR,
+"fuse: min service protocol version %u must be less than max %u\n",
+			 minver, maxver);
 		return -EOPNOTSUPP;
 	}
 
-	if (ntohs(hello.max_version) > FUSE_SERVICE_MAX_PROTO) {
-		fuse_log(FUSE_LOG_ERR, "fuse: unsupported max service protocol version %u\n",
-			ntohs(hello.min_version));
+	if (maxver < FUSE_SERVICE_MIN_PROTO) {
+		fuse_log(FUSE_LOG_ERR,
+"fuse: max service protocol version %u too old to support version %u\n",
+			 maxver, FUSE_SERVICE_MIN_PROTO);
+		return -EOPNOTSUPP;
+	}
+
+	if (minver > FUSE_SERVICE_MAX_PROTO) {
+		fuse_log(FUSE_LOG_ERR,
+"fuse: min service protocol version %u too new to support version %u\n",
+			 minver, FUSE_SERVICE_MAX_PROTO);
 		return -EOPNOTSUPP;
 	}
 
