@@ -190,7 +190,7 @@ struct fuse_loop_config
 	/**
 	 * The maximum number of available worker threads before they
 	 * start to get deleted when they become idle. If not
-	 * specified, the default is 10.
+	 * specified, the default is -1.
 	 *
 	 * Adjusting this has performance implications; a very small number
 	 * of threads in the pool will cause a lot of thread creation and
