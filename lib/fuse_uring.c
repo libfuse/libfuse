@@ -53,7 +53,6 @@ struct fuse_ring_queue {
 	/* back pointer */
 	struct fuse_ring_pool *ring_pool;
 	int qid;
-	int numa_node;
 	pthread_t tid;
 	int eventfd;
 	size_t req_header_sz;
@@ -545,7 +544,6 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 			fuse_uring_get_queue(fuse_ring, qid);
 
 		queue->ring.ring_fd = -1;
-		queue->numa_node = numa_node_of_cpu(qid);
 		queue->qid = qid;
 		queue->ring_pool = fuse_ring;
 		queue->eventfd = -1;
