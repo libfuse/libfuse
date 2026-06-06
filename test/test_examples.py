@@ -83,8 +83,10 @@ class raii_tmpdir:
         return py.path.local(str(self.d)).mkdir(path)
 
 @pytest.fixture
-def short_tmpdir():
-    return raii_tmpdir()
+def short_tmpdir(tmpdir):
+    if sys.platform.startswith('freebsd'):
+        return raii_tmpdir()
+    return tmpdir
 
 def readdir_inode(dir):
     cmd = base_cmdline + [ pjoin(basename, 'test', 'readdir_inode'), dir ]
