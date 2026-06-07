@@ -73,8 +73,8 @@ def invoke_mount_fuse_drop_privileges(mnt_dir, name, options):
     return invoke_mount_fuse(mnt_dir, name, options + ('drop_privileges',))
 
 class raii_tmpdir:
-    def __init__(self):
-        self.d = tempfile.mkdtemp()
+    def __init__(self, dir=None):
+        self.d = tempfile.mkdtemp(dir=dir)
 
     def __str__(self):
         return str(self.d)
@@ -83,7 +83,14 @@ class raii_tmpdir:
         return py.path.local(str(self.d)).mkdir(path)
 
 @pytest.fixture
-def short_tmpdir():
+def short_tmpdir(request, tmp_path_factory):
+    # If the user passed --basetemp, create our short temp dir UNDER that
+    # (writable) location so the override actually takes effect. getbasetemp()
+    # is what pytest's own tmpdir resolves --basetemp to, and it guarantees the
+    # directory exists. Without --basetemp we fall back to /tmp to keep the path
+    # short enough for AF_UNIX sun_path (104 bytes on FreeBSD/macOS, 108 on Linux).
+    if request.config.option.basetemp:
+        return raii_tmpdir(dir=str(tmp_path_factory.getbasetemp()))
     return raii_tmpdir()
 
 def readdir_inode(dir):
