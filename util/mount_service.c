@@ -42,6 +42,7 @@
 #ifdef HAVE_NEW_MOUNT_API
 #include "mount_i_linux.h"
 #endif
+#include "fuse_mount_compat.h"
 
 struct mount_service {
 	/* prefix for printing error messages */
@@ -1722,62 +1723,6 @@ static int mount_service_handle_mount_cmd(struct mount_service *mo,
 	return mount_service_regular_mount(mo, oc, &stbuf);
 }
 
-static int mount_service_handle_unmount_cmd(struct mount_service *mo,
-					    struct fuse_service_packet *p,
-					    size_t psz)
-{
-	int ret;
-
-	(void)p;
-
-	if (psz != sizeof(struct fuse_service_unmount_command)) {
-		fprintf(stderr, "%s: unmount command wrong size %zu, expected %zu\n",
-			mo->msgtag, psz, sizeof(struct fuse_service_unmount_command));
-		return mount_service_send_reply(mo, EINVAL);
-	}
-
-	if (!mo->mounted) {
-		fprintf(stderr, "%s: will not umount before successful mount!\n",
-			mo->msgtag);
-		return mount_service_send_reply(mo, EINVAL);
-	}
-
-	ret = chdir("/");
-	if (ret) {
-		int error = errno;
-
-		fprintf(stderr, "%s: fuse server failed chdir: %s\n",
-			mo->msgtag, strerror(error));
-		return mount_service_send_reply(mo, error);
-	}
-
-	close(mo->mountfd);
-	mo->mountfd = -1;
-
-	/*
-	 * Try to unmount the resolved mountpoint, and hope that we're not the
-	 * victim of a race.
-	 */
-	ret = umount2(mo->resv_mountpoint, MNT_DETACH);
-	if (ret) {
-		int error = errno;
-
-		fprintf(stderr, "%s: fuse server failed unmount: %s\n",
-			mo->msgtag, strerror(error));
-		return mount_service_send_reply(mo, error);
-	}
-
-	/*
-	 * The unmount succeeded, so we send a positive reply even if the mtab
-	 * update fails.
-	 */
-	if (have_real_mtabopts(mo))
-		fuse_mnt_remove_mount(mo->msgtag, mo->resv_mountpoint);
-
-	mo->mounted = false;
-	return mount_service_send_reply(mo, 0);
-}
-
 static int mount_service_handle_bye_cmd(const struct mount_service *mo,
 					struct fuse_service_packet *p,
 					size_t psz)
@@ -1920,9 +1865,6 @@ int mount_service_main(int argc, char *argv[])
 			break;
 		case FUSE_SERVICE_MOUNT_CMD:
 			ret = mount_service_handle_mount_cmd(&mo, p, sz);
-			break;
-		case FUSE_SERVICE_UNMOUNT_CMD:
-			ret = mount_service_handle_unmount_cmd(&mo, p, sz);
 			break;
 		case FUSE_SERVICE_BYE_CMD:
 			ret = mount_service_handle_bye_cmd(&mo, p, sz);

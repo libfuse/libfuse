@@ -93,11 +93,6 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
 	return -EOPNOTSUPP;
 }
 
-int fuse_service_session_unmount(const struct fuse_service *sf)
-{
-	return -EOPNOTSUPP;
-}
-
 void fuse_service_release(struct fuse_service *sf)
 {
 }

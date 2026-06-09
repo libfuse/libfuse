@@ -250,7 +250,6 @@ FUSE_3.19 {
 		fuse_service_request_blockdev;
 		fuse_service_send_goodbye;
 		fuse_service_session_mount;
-		fuse_service_session_unmount;
 		fuse_req_secctx_count;
 		fuse_req_secctx_reset;
 		fuse_req_secctx_next;
