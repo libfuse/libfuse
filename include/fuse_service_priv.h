@@ -37,7 +37,6 @@ struct fuse_service_memfd_argv {
 #define FUSE_SERVICE_MNTOPTS_CMD	0x4f505453	/* OPTS */
 #define FUSE_SERVICE_MNTPT_CMD		0x4d4e5450	/* MNTP */
 #define FUSE_SERVICE_MOUNT_CMD		0x444f4954	/* DOIT */
-#define FUSE_SERVICE_UNMOUNT_CMD	0x554d4e54	/* UMNT */
 #define FUSE_SERVICE_BYE_CMD		0x42594545	/* BYEE */
 #define FUSE_SERVICE_MTABOPTS_CMD	0x4d544142	/* MTAB */
 
@@ -148,10 +147,6 @@ struct fuse_service_bye_command {
 struct fuse_service_mount_command {
 	struct fuse_service_packet p;
 	uint32_t ms_flags;
-};
-
-struct fuse_service_unmount_command {
-	struct fuse_service_packet p;
 };
 
 int fuse_parse_cmdline_service(struct fuse_args *args,

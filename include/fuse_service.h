@@ -219,14 +219,6 @@ int fuse_service_session_mount(struct fuse_service *sf, struct fuse_session *se,
 			       struct fuse_cmdline_opts *opts);
 
 /**
- * Ask the mount helper to unmount th e filesystem.
- *
- * @param sf service context
- * @return 0 on success, or negative errno on failure
- */
-int fuse_service_session_unmount(const struct fuse_service *sf);
-
-/**
  * Bid farewell to the mount.service helper.  It is still necessary to call
  * fuse_service_destroy after this.
  *

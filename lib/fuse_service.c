@@ -1128,57 +1128,6 @@ out_strings:
 	return ret;
 }
 
-int fuse_service_session_unmount(const struct fuse_service *sf)
-{
-	struct fuse_service_simple_reply reply = { };
-	struct fuse_service_unmount_command c = {
-		.p.magic = htonl(FUSE_SERVICE_UNMOUNT_CMD),
-	};
-	ssize_t size;
-
-	/* already gone? */
-	if (sf->sockfd < 0)
-		return 0;
-
-	size = __send_packet(sf, &c, sizeof(c));
-	if (size < 0) {
-		int error = errno;
-
-		fuse_log(FUSE_LOG_ERR, "fuse: send service unmount: %s\n",
-			 strerror(error));
-		return -error;
-	}
-
-	size = __recv_packet(sf, &reply, sizeof(reply));
-	if (size < 0) {
-		int error = errno;
-
-		fuse_log(FUSE_LOG_ERR, "fuse: service unmount reply: %s\n",
-			 strerror(error));
-		return -error;
-	}
-	if (size != sizeof(reply)) {
-		fuse_log(FUSE_LOG_ERR, "fuse: wrong service unmount reply size %zd, expected %zd\n",
-			size, sizeof(reply));
-		return -EBADMSG;
-	}
-
-	if (ntohl(reply.p.magic) != FUSE_SERVICE_SIMPLE_REPLY) {
-		fuse_log(FUSE_LOG_ERR, "fuse: service unmount reply contains wrong magic!\n");
-		return -EBADMSG;
-	}
-
-	if (reply.error) {
-		int error = ntohl(reply.error);
-
-		fuse_log(FUSE_LOG_ERR, "fuse: service unmount: %s\n",
-			 strerror(error));
-		return -error;
-	}
-
-	return 0;
-}
-
 void fuse_service_release(struct fuse_service *sf)
 {
 	if (sf->owns_fusedevfd)
