@@ -932,11 +932,12 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 
 /*
  * Pin @open_path (the validated mountpoint -- "." after chdir, or the path
- * itself for root) as an O_PATH fd and fstat() it into @stbuf. Verify the
- * pinned inode still has @stbuf's pre-pin owner: done on the held fd this is
- * immune to a symlink swap of @open_path between validation and the mount, so
- * a path redirected to a differently-owned inode is rejected. @name is the
- * user-facing path for diagnostics. Returns the fd, or -1 on failure.
+ * itself for root) as an O_PATH fd and fstat() it into @stbuf. Re-apply the
+ * sticky-directory ownership rule on the pinned inode: done on the held fd
+ * this is immune to a symlink swap of @open_path between validation and the
+ * mount. A writable non-sticky directory of another user stays a valid
+ * mountpoint. @name is the user-facing path for diagnostics.
+ * Returns the fd, or -1 on failure.
  */
 static int pin_mountpoint(const char *open_path, const char *name,
 			  uid_t want_uid, struct stat *stbuf)
@@ -954,9 +955,10 @@ static int pin_mountpoint(const char *open_path, const char *name,
 		close(fd);
 		return -1;
 	}
-	if (want_uid != (uid_t)-1 && stbuf->st_uid != want_uid) {
+	if (want_uid != (uid_t)-1 && (stbuf->st_mode & S_ISVTX) &&
+	    stbuf->st_uid != want_uid) {
 		fprintf(stderr,
-			"%s: mountpoint %s changed owner between check and mount\n",
+			"%s: mountpoint %s not owned by user\n",
 			progname, name);
 		close(fd);
 		return -1;
