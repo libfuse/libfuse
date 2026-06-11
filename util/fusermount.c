@@ -19,7 +19,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <errno.h>
@@ -931,6 +930,40 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 	return 0;
 }
 
+/*
+ * Pin @open_path (the validated mountpoint -- "." after chdir, or the path
+ * itself for root) as an O_PATH fd and fstat() it into @stbuf. Verify the
+ * pinned inode still has @stbuf's pre-pin owner: done on the held fd this is
+ * immune to a symlink swap of @open_path between validation and the mount, so
+ * a path redirected to a differently-owned inode is rejected. @name is the
+ * user-facing path for diagnostics. Returns the fd, or -1 on failure.
+ */
+static int pin_mountpoint(const char *open_path, const char *name,
+			  uid_t want_uid, struct stat *stbuf)
+{
+	int fd = open(open_path, O_PATH | O_CLOEXEC);
+
+	if (fd == -1) {
+		fprintf(stderr, "%s: failed to pin mountpoint %s: %s\n",
+			progname, name, strerror(errno));
+		return -1;
+	}
+	if (fstat(fd, stbuf) == -1) {
+		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
+			progname, name, strerror(errno));
+		close(fd);
+		return -1;
+	}
+	if (want_uid != (uid_t)-1 && stbuf->st_uid != want_uid) {
+		fprintf(stderr,
+			"%s: mountpoint %s changed owner between check and mount\n",
+			progname, name);
+		close(fd);
+		return -1;
+	}
+	return fd;
+}
+
 static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 {
 	int res;
@@ -945,9 +978,18 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		return -1;
 	}
 
-	/* No permission checking is done for root */
-	if (getuid() == 0)
+	/*
+	 * Root skips the permission checks, but still pin the mountpoint inode:
+	 * external tools may invoke this suid helper as root, and the pinned fd
+	 * makes move_mount() target exactly the validated inode regardless of a
+	 * later symlink swap.
+	 */
+	if (getuid() == 0) {
+		*mountpoint_fd = pin_mountpoint(mnt, mnt, (uid_t)-1, stbuf);
+		if (*mountpoint_fd == -1)
+			return -1;
 		return 0;
+	}
 
 	if (S_ISDIR(stbuf->st_mode)) {
 		res = chdir(mnt);
@@ -969,6 +1011,13 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		res = check_nonroot_dir_access(progname, origmnt, mnt, stbuf);
 		if (res)
 			return res;
+
+		/* Reached only for non-root; root returned above. CWD is the
+		 * just-validated directory after chdir.
+		 */
+		*mountpoint_fd = pin_mountpoint(".", origmnt, getuid(), stbuf);
+		if (*mountpoint_fd == -1)
+			return -1;
 	} else if (S_ISREG(stbuf->st_mode)) {
 		static char procfile[256];
 		*mountpoint_fd = open(mnt, O_WRONLY);
@@ -1041,6 +1090,10 @@ struct mount_context {
 	char *mtab_opts;     /* mtab/utab record string for add_mount() */
 	char *x_opts;
 	char *kern_mnt_opts; /* user-provided -o opts with x-* removed */
+	/* Pinned mountpoint inode, resolved once during check_perm(); the
+	 * move_mount() target. Immune to symlink swaps. -1 if unset.
+	 */
+	int mnt_fd;
 };
 
 /*
@@ -1055,6 +1108,7 @@ static int mount_fuse_prepare(const char *mnt, const char *opts,
 	const char *real_mnt = mnt;
 
 	memset(ctx, 0, sizeof(*ctx));
+	ctx->mnt_fd = -1;
 
 	ctx->dev = fuse_mnt_get_devname();
 
@@ -1083,11 +1137,19 @@ static int mount_fuse_prepare(const char *mnt, const char *opts,
 	res = check_perm(&real_mnt, &ctx->stbuf, &mountpoint_fd);
 	restore_privs();
 
-	if (mountpoint_fd != -1)
-		close(mountpoint_fd);
-
-	if (res == -1)
+	if (res == -1) {
+		if (mountpoint_fd != -1)
+			close(mountpoint_fd);
 		goto fail_close_fd;
+	}
+
+	/*
+	 * check_perm() pinned the validated inode (directory or regular file,
+	 * root or not) as mountpoint_fd, so the mount targets exactly that inode
+	 * regardless of later symlink swaps of the path. The fd stays open until
+	 * after the mount.
+	 */
+	ctx->mnt_fd = mountpoint_fd;
 
 	return ctx->fd;
 
@@ -1141,10 +1203,10 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 		final_mtab_opts = x_mtab_opts;
 	}
 
-	/* Use new mount API */
-	res = fuse_kern_fsmount(mnt, mp.flags, mp.blkdev,
-				mp.fsname, mp.subtype, ctx->dev,
-				mp.optbuf, final_mtab_opts);
+	/* Use new mount API; mount onto the pinned fd, not the path string */
+	res = fuse_kern_fsmount(mnt, ctx->mnt_fd, mp.flags, mp.blkdev,
+				mp.fsname, mp.subtype, ctx->dev, mp.optbuf,
+				final_mtab_opts);
 	if (res == -1)
 		goto fail_free_merged;
 
@@ -1332,6 +1394,8 @@ static int mount_fuse_sync_init(const char *mnt, const char *opts,
 
 out:
 	close(fd);
+	if (ctx.mnt_fd != -1)
+		close(ctx.mnt_fd);
 	free(ctx.source);
 	free(ctx.mtab_opts);
 	free(ctx.x_opts);
