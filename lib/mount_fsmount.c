@@ -294,16 +294,15 @@ int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 	return 0;
 }
 
-
-int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
-		      const char *fsname, const char *subtype,
+int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
+		      int blkdev, const char *fsname, const char *subtype,
 		      const char *source_dev, const char *kernel_opts,
 		      const char *mtab_opts)
 {
 	char *type = NULL;
 	char *source = NULL;
 	int fsfd = -1;
-	int mntfd = -1;
+	int mountfd = -1;
 	int err, res;
 	unsigned int mount_attrs;
 
@@ -382,8 +381,8 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	}
 
 	/* Create mount object with mount attributes */
-	mntfd = fsmount(fsfd, FSMOUNT_CLOEXEC, mount_attrs);
-	if (mntfd == -1) {
+	mountfd = fsmount(fsfd, FSMOUNT_CLOEXEC, mount_attrs);
+	if (mountfd == -1) {
 		err = -errno;
 		log_fsconfig_kmsg(fsfd);
 		fprintf(stderr, "fuse: fsmount failed: %s\n",
@@ -394,9 +393,14 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	close(fsfd);
 	fsfd = -1;
 
-	/* Attach to mount point */
-	if (move_mount(mntfd, "", AT_FDCWD, mnt, MOVE_MOUNT_F_EMPTY_PATH) ==
-	    -1) {
+	if (dest_mnt_fd >= 0)
+		res = move_mount(mountfd, "", dest_mnt_fd, "",
+				 MOVE_MOUNT_F_EMPTY_PATH |
+					 MOVE_MOUNT_T_EMPTY_PATH);
+	else
+		res = move_mount(mountfd, "", AT_FDCWD, mnt,
+				 MOVE_MOUNT_F_EMPTY_PATH);
+	if (res == -1) {
 		err = -errno;
 		fprintf(stderr, "fuse: move_mount failed: %s\n",
 			strerror(errno));
@@ -407,7 +411,7 @@ int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
 	if (err == -1)
 		goto out_umount;
 
-	close(mntfd);
+	close(mountfd);
 	free(source);
 	free(type);
 	return 0;
@@ -417,7 +421,7 @@ out_umount:
 		/* race free umount */
 		char fd_path[64];
 
-		snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", mntfd);
+		snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", mountfd);
 		if (umount2(fd_path, MNT_DETACH) == -1 && errno != EINVAL) {
 			fprintf(stderr,
 				"fuse: cleanup umount failed: %s\n",
@@ -425,8 +429,8 @@ out_umount:
 		}
 	}
 out_close_mntfd:
-	if (mntfd != -1)
-		close(mntfd);
+	if (mountfd != -1)
+		close(mountfd);
 out_free:
 	free(source);
 	free(type);

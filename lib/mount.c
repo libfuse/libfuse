@@ -633,7 +633,8 @@ int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
 	/* codeql[cpp/path-injection] verification is in the function */
 	const char *devname = fuse_mnt_get_devname();
 
-	return fuse_kern_fsmount(mnt, mo->flags, mo->blkdev, mo->fsname,
+	/* in-process direct mount: no suid boundary, resolve by path (mnt_fd -1) */
+	return fuse_kern_fsmount(mnt, -1, mo->flags, mo->blkdev, mo->fsname,
 				 mo->subtype, devname, mo->kernel_opts,
 				 mtab_opts);
 }

@@ -37,7 +37,11 @@ int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
 
 /**
  * Mount using the new Linux mount API (fsopen/fsconfig/fsmount/move_mount)
- * @mnt: mountpoint
+ * @mnt: mountpoint, used for the /etc/mtab record (and as the move_mount
+ *       target when @mnt_fd is -1)
+ * @dest_mnt_fd: pre-resolved mountpoint fd to mount
+ *          or -1 to resolve @mnt by path. A pinned fd closes the suid
+ *          fusermount sync-init TOCTOU; in-process direct-mount callers pass -1.
  * @flags: mount flags (MS_NOSUID, MS_NODEV, etc.)
  * @blkdev: 1 for fuseblk, 0 for fuse
  * @fsname: filesystem name (or NULL)
@@ -52,8 +56,8 @@ int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
  *
  * Returns: 0 on success, -1 on failure with errno set
  */
-int fuse_kern_fsmount(const char *mnt, unsigned long flags, int blkdev,
-		      const char *fsname, const char *subtype,
+int fuse_kern_fsmount(const char *mnt, int mnt_fd, unsigned long flags,
+		      int blkdev, const char *fsname, const char *subtype,
 		      const char *source_dev, const char *kernel_opts,
 		      const char *mtab_opts);
 
