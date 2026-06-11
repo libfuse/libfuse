@@ -16,6 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdint.h>
 #include <fcntl.h>
 #include <pwd.h>
@@ -241,6 +242,60 @@ static void drop_and_lock_capabilities(void)
 			progname, strerror(errno));
 		exit(1);
 	}
+}
+
+/*
+ * Mirror the PATH lookup /bin/sh is about to do. Returns 0 if the binary is
+ * reachable and executable, otherwise a negative errno explaining why
+ * (-EACCES = permission denied, -ENOENT = not found). Must run after
+ * drop_and_lock_capabilities(): with no capabilities left and
+ * SECBIT_NO_SETUID_FIXUP set, access(X_OK) is a plain DAC check matching
+ * the upcoming execve, so this is deny-only -- it cannot grant access the
+ * exec would be refused, only report it earlier with a better message.
+ */
+/* access(X_OK), with errno mapped to a negative errno (-ENOENT = "not found"). */
+static int access_executable(const char *path)
+{
+	if (access(path, X_OK) == 0)
+		return 0;
+	return errno == EACCES ? -EACCES : -ENOENT;
+}
+
+static int check_binary_access(const char *name)
+{
+	const char *path_env, *seg;
+	char test_path[PATH_MAX];
+	int err = -ENOENT;
+
+	/* A name containing '/' is run verbatim by the shell, no PATH search. */
+	if (strchr(name, '/'))
+		return access_executable(name);
+
+	path_env = getenv("PATH");
+	if (!path_env)
+		return -ENOENT;
+
+	/* Walk PATH segment by segment without copying it (no strtok). */
+	for (seg = path_env; *seg; ) {
+		size_t dir_len = strcspn(seg, ":");
+
+		/* skip empty and oversized entries */
+		if (dir_len &&
+		    snprintf(test_path, sizeof(test_path), "%.*s/%s",
+			     (int)dir_len, seg, name) < (int)sizeof(test_path)) {
+			int ret = access_executable(test_path);
+			if (ret == 0)
+				return 0;
+			if (ret == -EACCES)
+				err = -EACCES;
+		}
+
+		seg += dir_len;
+		if (*seg == ':')
+			seg++;
+	}
+
+	return err;
 }
 #endif
 
@@ -540,7 +595,16 @@ int main(int argc, char *argv[])
 
 #ifdef linux
 	if (drop_privileges) {
+		int err;
+
 		drop_and_lock_capabilities();
+		err = check_binary_access(type);
+		if (err) {
+			fprintf(stderr, "%s: cannot execute '%s' after dropping privileges (%s)\n",
+				progname, type,
+				err == -EACCES ? "permission denied" : "not found");
+			exit(1);
+		}
 	}
 #endif
 

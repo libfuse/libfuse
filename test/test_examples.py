@@ -74,6 +74,30 @@ def invoke_mount_fuse_drop_privileges(mnt_dir, name, options):
     if os.getuid() != 0:
         pytest.skip('drop_privileges requires root, skipping.')
 
+    # mount.fuse3 execs the fs binary only after dropping all
+    # capabilities; the process keeps uid/gid 0 but loses
+    # CAP_DAC_OVERRIDE, so the binary and every directory on the way to
+    # it must be executable for it by plain permission bits (a user-owned
+    # mode-0700 home directory is not).
+    def executable_without_caps(st):
+        if st.st_uid == 0:
+            return st.st_mode & stat.S_IXUSR
+        if st.st_gid == 0:
+            return st.st_mode & stat.S_IXGRP
+        return st.st_mode & stat.S_IXOTH
+
+    if name.startswith('test/'):
+        path = os.path.realpath(pjoin(basename, name))
+    else:
+        path = os.path.realpath(pjoin(basename, 'example', name))
+    while True:
+        if not executable_without_caps(os.stat(path)):
+            pytest.skip(f'{path} not reachable by the '
+                        'capability-less file system process')
+        if path == '/':
+            break
+        path = os.path.dirname(path)
+
     return invoke_mount_fuse(mnt_dir, name, options + ('drop_privileges',))
 
 class raii_tmpdir:
