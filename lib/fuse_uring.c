@@ -760,7 +760,7 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		return res;
 	}
 
-	queue->req_header_sz = ROUND_UP(sizeof(struct fuse_ring_ent),
+	queue->req_header_sz = ROUND_UP(sizeof(struct fuse_uring_req_header),
 				       page_sz);
 
 	for (size_t idx = 0; idx < ring->queue_depth; idx++) {
