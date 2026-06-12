@@ -64,9 +64,7 @@ void log_fsconfig_kmsg(int fd)
 
 	err = errno;
 
-	while ((sz = read(fd, buf, sizeof(buf) - 1)) != -1) {
-		if (sz <= 0)
-			continue;
+	while ((sz = read(fd, buf, sizeof(buf) - 1)) > 0) {
 		if (buf[sz - 1] == '\n')
 			buf[--sz] = '\0';
 		else
