@@ -4757,24 +4757,23 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 	/* Try to enable synchronous FUSE_INIT */
 	res = ioctl(fd, FUSE_DEV_IOC_SYNC_INIT);
 	if (res) {
-		err = -errno;
+		err = errno;
 		if (err != ENOTTY) {
 			fuse_log(
 				FUSE_LOG_ERR,
 				"fuse: failed to enable sync init: %s\n",
 				strerror(errno));
-		} else {
-			/*
-			 * ENOTTY means kernel doesn't support sync init,not an
-			 * error
-			 */
-			if (se->debug)
-				fuse_log(
-					FUSE_LOG_DEBUG,
-					"fuse: kernel doesn't support sync init\n");
-			err = 0;
+			return -err;
 		}
-		return err;
+		/*
+		 * ENOTTY means kernel doesn't support sync init,
+		 * not an error
+		 */
+		if (se->debug)
+			fuse_log(
+				FUSE_LOG_DEBUG,
+				"fuse: kernel doesn't support sync init\n");
+		return 0;
 	}
 
 	if (se->debug)
