@@ -4891,13 +4891,18 @@ static int new_api_fusermount(struct fuse_session *se,
 	if (err) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: failed to start sync init worker\n");
+		close(fd);
+		se->fd = -1;
 		return err;
 	}
 
 	/* Send proceed signal and wait for mount result */
 	err = fuse_fusermount_proceed_mnt(*sock_fd);
-	if (err < 0)
+	if (err < 0) {
+		close(fd);
+		se->fd = -1;
 		return -EIO;
+	}
 
 	return fd;
 }
