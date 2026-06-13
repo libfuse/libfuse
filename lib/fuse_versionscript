@@ -253,6 +253,10 @@ FUSE_3.19 {
 		fuse_req_secctx_count;
 		fuse_req_secctx_reset;
 		fuse_req_secctx_next;
+
+		cuse_lowlevel_new_319;
+		cuse_lowlevel_setup_319;
+		cuse_lowlevel_main_319;
 } FUSE_3.18;
 
 # Local Variables:
