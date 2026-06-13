@@ -295,9 +295,8 @@ static int add_mount(const char *progname, const char *fsname,
 	if (res == -1)
 		fprintf(stderr, "%s: waitpid of %d: %s\n", progname,
 			pid, strerror(errno));
-
-	if (status != 0)
-		res = -1;
+	else
+		res = (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 
 out_restore:
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
@@ -350,10 +349,8 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 	res = waitpid(pid, &status, 0);
 	if (res == -1)
 		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
-
-	if (status != 0) {
-		res = -1;
-	}
+	else
+		res = (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 
  out_restore:
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
@@ -407,9 +404,8 @@ static int remove_mount(const char *progname, const char *mnt)
 	res = waitpid(pid, &status, 0);
 	if (res == -1)
 		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
-
-	if (status != 0)
-		res = -1;
+	else
+		res = (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 
  out_restore:
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
