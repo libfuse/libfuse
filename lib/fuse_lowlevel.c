@@ -227,6 +227,7 @@ void fuse_free_req(fuse_req_t req)
 {
 	int ctr;
 	struct fuse_session *se = req->se;
+	bool is_uring = req->flags.is_uring;
 
 	free(req->secctx);
 	req->secctx = NULL;
@@ -235,7 +236,7 @@ void fuse_free_req(fuse_req_t req)
 	 *      It actually might work already, though. But then would add
 	 *      a lock across ring queues.
 	 */
-	if (se->conn.no_interrupt || req->flags.is_uring) {
+	if (se->conn.no_interrupt || is_uring) {
 		ctr = --req->ref_cnt;
 		fuse_chan_put(req->ch);
 		req->ch = NULL;
@@ -251,6 +252,14 @@ void fuse_free_req(fuse_req_t req)
 	}
 	if (!ctr)
 		destroy_req(req);
+
+	/*
+	 * Account the uring request as drained. Must be the last access to
+	 * req/ring state here: once the in-flight count reaches 0 the teardown
+	 * path may free the ring entry (and the session) backing this request.
+	 */
+	if (is_uring)
+		fuse_uring_req_released(se);
 }
 
 static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
@@ -2971,6 +2980,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
 	if (se->uring.enable && se->conn.want_ext & FUSE_CAP_OVER_IO_URING) {
+		/* io_uring requests currently bypass the interrupt list. */
+		se->conn.no_interrupt = 1;
 		outargflags |= FUSE_OVER_IO_URING;
 		enable_io_uring = true;
 	}
@@ -3030,7 +3041,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		if (ring_rc != 0) {
 			fuse_log(FUSE_LOG_INFO,
 				 "fuse: failed to start io-uring: %s\n",
-				 strerror(ring_rc));
+				 strerror(-ring_rc));
 			outargflags &= ~FUSE_OVER_IO_URING;
 			enable_io_uring = false;
 		}
@@ -4067,6 +4078,12 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	err = ENOSYS;
 	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
 		goto reply_err;
+	if (in->opcode == FUSE_INTERRUPT) {
+		if (se->debug)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "FUSE_INTERRUPT: reply to kernel to disable interrupt\n");
+		goto reply_err;
+	}
 
 	if (se->debug) {
 		fuse_log(
@@ -4136,6 +4153,18 @@ void fuse_lowlevel_help(void)
 void fuse_session_destroy(struct fuse_session *se)
 {
 	struct fuse_ll_pipe *llp;
+
+	if (se->uring.pool != NULL) {
+		int err = fuse_uring_stop(se);
+
+		if (err != 0 && se->uring.pool != NULL) {
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: leaking session after incomplete "
+				 "io_uring teardown: %s\n",
+				 strerror(-err));
+			return;
+		}
+	}
 
 	if (se->got_init && !se->got_destroy) {
 		if (se->op.destroy)

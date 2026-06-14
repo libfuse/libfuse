@@ -28,9 +28,19 @@
 #include <linux/sched.h>
 #include <poll.h>
 #include <sys/eventfd.h>
+#include <time.h>
+#include <errno.h>
 
 /* Size of command data area in SQE when IORING_SETUP_SQE128 is used */
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
+
+/*
+ * Teardown drain bound. We wait, event-driven, for outstanding deferred
+ * replies to complete before freeing ring memory. The wait is bounded so a
+ * wedged filesystem callback can never hang teardown forever; if the deadline
+ * is hit we leak the ring as a last resort (the OS reclaims it at exit).
+ */
+#define FUSE_URING_DRAIN_TIMEOUT_SEC 30
 
 struct fuse_ring_ent {
 	struct fuse_ring_queue *ring_queue; /* back pointer */
@@ -47,6 +57,8 @@ struct fuse_ring_ent {
 
 	/* header and payload */
 	struct iovec iov[2];
+
+	bool req_lock_initialized;
 };
 
 struct fuse_ring_queue {
@@ -57,8 +69,10 @@ struct fuse_ring_queue {
 	int eventfd;
 	size_t req_header_sz;
 	struct io_uring ring;
+	bool exited;
 
 	pthread_mutex_t ring_lock;
+	bool ring_lock_initialized;
 	bool cqe_processing;
 
 	/* size depends on queue depth */
@@ -86,11 +100,35 @@ struct fuse_ring_pool {
 	unsigned int started_threads;
 	unsigned int failed_threads;
 
+	/*
+	 * Count of requests dispatched to the filesystem and not yet
+	 * released via fuse_free_req(). Lets teardown wait for deferred
+	 * replies to drain instead of polling per-entry ref_cnt.
+	 */
+	_Atomic uint64_t inflight;
+
+	/*
+	 * Set by teardown. While set, the request-release path takes
+	 * drain_mutex and signals drain_cond when inflight reaches 0, so
+	 * fuse_session_destruct_uring() can block until all outstanding
+	 * replies are done touching the ring (and ring_pool->se) before
+	 * freeing anything.
+	 */
+	_Atomic bool draining;
+	_Atomic bool teardown_incomplete;
+	pthread_mutex_t drain_mutex;
+	bool drain_mutex_initialized;
+	pthread_cond_t drain_cond;
+	bool drain_cond_initialized;
+
 	/* Avoid sending queue entries before FUSE_INIT reply*/
 	sem_t init_sem;
+	bool init_sem_initialized;
 
 	pthread_cond_t thread_start_cond;
+	bool thread_start_cond_initialized;
 	pthread_mutex_t thread_start_mutex;
+	bool thread_start_mutex_initialized;
 
 	/* pointer to the first queue */
 	struct fuse_ring_queue *queues;
@@ -183,6 +221,9 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		se->error = -EIO;
 		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
 
+		if (locked)
+			pthread_mutex_unlock(&queue->ring_lock);
+
 		return -EIO;
 	}
 
@@ -203,6 +244,41 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		pthread_mutex_unlock(&queue->ring_lock);
 
 	return 0;
+}
+
+/*
+ * Account a uring request as no longer in flight. Called from fuse_free_req()
+ * once a request's dispatch reference is dropped, i.e. after the reply path
+ * (send_reply_uring / fuse_reply_data_uring / fuse_send_msg_uring) has already
+ * submitted the commit SQE and made its last access to ring memory and
+ * ring_pool->se.
+ *
+ * Looking up the pool through se (rather than the request) deliberately avoids
+ * touching ring memory here: the request's ring entry is freed by
+ * fuse_session_destruct_uring() right after inflight reaches 0.
+ *
+ * Fast path (no teardown in progress) is a single atomic decrement. During
+ * teardown we take drain_mutex so the decrement that empties the ring and the
+ * cond signal are serialized with the waiter in fuse_session_destruct_uring();
+ * that mutex hand-off guarantees the waiter only frees the pool after this
+ * function has fully returned.
+ */
+void fuse_uring_req_released(struct fuse_session *se)
+{
+	struct fuse_ring_pool *ring = se->uring.pool;
+
+	if (ring == NULL)
+		return;
+
+	if (!atomic_load(&ring->draining)) {
+		atomic_fetch_sub(&ring->inflight, 1);
+		return;
+	}
+
+	pthread_mutex_lock(&ring->drain_mutex);
+	if (atomic_fetch_sub(&ring->inflight, 1) == 1)
+		pthread_cond_signal(&ring->drain_cond);
+	pthread_mutex_unlock(&ring->drain_mutex);
 }
 
 int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
@@ -387,69 +463,323 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 	return 0;
 }
 
-static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
+/*
+ * Wake one ring thread out of io_uring_submit_and_wait() via its eventfd.
+ *
+ * eventfd writes are all-or-nothing (8 bytes), so the only realistic failure
+ * is EINTR; retry that. If the write ultimately fails the thread may stay
+ * blocked, which the bounded thread-exit wait in the join loop guards against.
+ * Returns 0 on success, -1 if the thread could not be woken.
+ */
+static int fuse_uring_wake_thread(struct fuse_ring_queue *queue)
 {
+	uint64_t value = 1ULL;
+
+	if (queue->tid == 0 || queue->eventfd < 0)
+		return 0;
+
+	for (;;) {
+		ssize_t rc = write(queue->eventfd, &value, sizeof(value));
+
+		if (rc == sizeof(value))
+			return 0;
+		if (rc < 0 && errno == EINTR)
+			continue;
+
+		fuse_log(FUSE_LOG_ERR,
+			 "eventfd=%d wake failed err=%s: rc=%zd\n",
+			 queue->eventfd, strerror(errno), (ssize_t)rc);
+		return -1;
+	}
+}
+
+static int fuse_uring_cond_init_monotonic(pthread_cond_t *cond)
+{
+	pthread_condattr_t attr;
+	int rc;
+
+	rc = pthread_condattr_init(&attr);
+	if (rc != 0)
+		return -rc;
+
+	rc = pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+	if (rc == 0)
+		rc = pthread_cond_init(cond, &attr);
+
+	pthread_condattr_destroy(&attr);
+
+	return rc == 0 ? 0 : -rc;
+}
+
+static int fuse_uring_sync_init(struct fuse_ring_pool *fuse_ring)
+{
+	int rc;
+
+	rc = pthread_mutex_init(&fuse_ring->drain_mutex, NULL);
+	if (rc != 0)
+		return -rc;
+	fuse_ring->drain_mutex_initialized = true;
+
+	rc = pthread_mutex_init(&fuse_ring->thread_start_mutex, NULL);
+	if (rc != 0)
+		return -rc;
+	fuse_ring->thread_start_mutex_initialized = true;
+
+	rc = fuse_uring_cond_init_monotonic(&fuse_ring->drain_cond);
+	if (rc != 0)
+		return rc;
+	fuse_ring->drain_cond_initialized = true;
+
+	rc = fuse_uring_cond_init_monotonic(&fuse_ring->thread_start_cond);
+	if (rc != 0)
+		return rc;
+	fuse_ring->thread_start_cond_initialized = true;
+
+	if (sem_init(&fuse_ring->init_sem, 0, 0) != 0)
+		return -errno;
+	fuse_ring->init_sem_initialized = true;
+
+	return 0;
+}
+
+static int fuse_uring_get_deadline(struct timespec *deadline, time_t seconds)
+{
+	if (clock_gettime(CLOCK_MONOTONIC, deadline) != 0)
+		return -errno;
+
+	deadline->tv_sec += seconds;
+	return 0;
+}
+
+static bool fuse_uring_timespec_reached(const struct timespec *now,
+					const struct timespec *deadline)
+{
+	return now->tv_sec > deadline->tv_sec ||
+	       (now->tv_sec == deadline->tv_sec &&
+		now->tv_nsec >= deadline->tv_nsec);
+}
+
+static int fuse_uring_wait_thread_exit(struct fuse_ring_pool *fuse_ring,
+				       const struct fuse_ring_queue *queue,
+				       const struct timespec *deadline)
+{
+	int err = 0;
+
+	pthread_mutex_lock(&fuse_ring->thread_start_mutex);
+	while (!queue->exited) {
+		int rc;
+
+		rc = pthread_cond_timedwait(&fuse_ring->thread_start_cond,
+					    &fuse_ring->thread_start_mutex,
+					    deadline);
+		if (rc == ETIMEDOUT && !queue->exited) {
+			err = -ETIMEDOUT;
+			break;
+		}
+		if (rc != 0) {
+			err = -rc;
+			break;
+		}
+	}
+	pthread_mutex_unlock(&fuse_ring->thread_start_mutex);
+
+	return err;
+}
+
+static void fuse_uring_mark_thread_exited(struct fuse_ring_queue *queue)
+{
+	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
+
+	pthread_mutex_lock(&fuse_ring->thread_start_mutex);
+	queue->exited = true;
+	pthread_cond_broadcast(&fuse_ring->thread_start_cond);
+	pthread_mutex_unlock(&fuse_ring->thread_start_mutex);
+}
+
+/*
+ * Wait, event-driven, for all outstanding deferred replies to finish before
+ * the caller frees ring memory. Returns 0 if fully drained, or a negative
+ * errno if the bounded deadline expired with replies still in flight (caller
+ * must then leak the ring rather than free memory still referenced by a live
+ * reply).
+ *
+ * draining is published before the threads are joined; combined with the
+ * drain_mutex hand-off in fuse_uring_req_released() this ensures the releasing
+ * thread has fully returned before we observe inflight == 0 and free.
+ */
+static int fuse_uring_drain_wait(struct fuse_ring_pool *fuse_ring,
+				 const struct timespec *deadline)
+{
+	int err = 0;
+
+	pthread_mutex_lock(&fuse_ring->drain_mutex);
+	while (atomic_load(&fuse_ring->inflight) > 0) {
+		struct timespec slice;
+		int rc;
+
+		/*
+		 * A short slice bounds the (tiny) window where a reply that
+		 * observed draining == false before we set it releases without
+		 * signalling; we re-check inflight each slice. A real signal
+		 * wakes us immediately.
+		 */
+		err = fuse_uring_get_deadline(&slice, 0);
+		if (err != 0)
+			break;
+
+		slice.tv_nsec += 100 * 1000 * 1000; /* 100ms */
+		if (slice.tv_nsec >= 1000 * 1000 * 1000) {
+			slice.tv_nsec -= 1000 * 1000 * 1000;
+			slice.tv_sec += 1;
+		}
+		if (slice.tv_sec > deadline->tv_sec ||
+		    (slice.tv_sec == deadline->tv_sec &&
+		     slice.tv_nsec > deadline->tv_nsec))
+			slice = *deadline;
+
+		rc = pthread_cond_timedwait(&fuse_ring->drain_cond,
+					    &fuse_ring->drain_mutex, &slice);
+		if (atomic_load(&fuse_ring->inflight) == 0)
+			break;
+		if (rc == ETIMEDOUT) {
+			struct timespec now;
+
+			err = fuse_uring_get_deadline(&now, 0);
+			if (err != 0)
+				break;
+			if (fuse_uring_timespec_reached(&now, deadline)) {
+				err = -ETIMEDOUT;
+				break;
+			}
+		} else if (rc != 0) {
+			err = -rc;
+			break;
+		}
+	}
+	if (err == 0 && atomic_load(&fuse_ring->inflight) > 0)
+		err = -ETIMEDOUT;
+	pthread_mutex_unlock(&fuse_ring->drain_mutex);
+
+	return err;
+}
+
+/*
+ * Tear down the ring. Returns 0 if all resources were freed, or a negative
+ * errno if the ring had to be leaked because outstanding replies (or a ring
+ * thread that did not exit) could still reference it.
+ */
+static int fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
+{
+	struct fuse_session *se = fuse_ring->se;
+	struct timespec deadline;
+	int err = 0;
+
+	if (atomic_load(&fuse_ring->teardown_incomplete))
+		return -ETIMEDOUT;
+
+	err = fuse_uring_get_deadline(&deadline, FUSE_URING_DRAIN_TIMEOUT_SEC);
+	if (err != 0)
+		return err;
+
 	/*
-	 * Do NOT use pthread_cancel() — it can kill a thread while it
+	 * Do NOT use pthread_cancel() - it can kill a thread while it
 	 * holds queue->ring_lock inside a filesystem callback, leaving
 	 * the mutex permanently locked and deadlocking any application
 	 * thread that tries to reply via fuse_uring_commit_sqe().
 	 *
-	 * Instead, wake all sleepers, join threads (stopping new
-	 * dispatches), then wait for deferred replies before freeing.
+	 * Instead: signal teardown, wake all sleepers, join threads
+	 * (stopping new dispatches), drain deferred replies, then free.
 	 */
+
+	/*
+	 * Publish teardown before waking threads so the ring threads see
+	 * the exit flag once their eventfd CQE breaks submit_and_wait, and
+	 * so the reply-release path takes the drain_mutex synchronisation.
+	 * fuse_create_ring()'s error path may call us with se == NULL.
+	 */
+	atomic_store(&fuse_ring->draining, true);
+	if (se != NULL)
+		atomic_store_explicit(&se->mt_exited, true,
+				      memory_order_relaxed);
 
 	/* Wake all sleepers: sem_wait (init path) and io_uring (main loop) */
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
 
-		sem_post(&fuse_ring->init_sem);
-
-		if (queue->tid != 0 && queue->eventfd >= 0) {
-			uint64_t value = 1ULL;
-			int rc;
-
-			rc = write(queue->eventfd, &value, sizeof(value));
-			if (rc != sizeof(value))
-				fuse_log(FUSE_LOG_ERR,
-					 "eventfd=%d write err=%s: rc=%d\n",
-					 queue->eventfd, strerror(errno), rc);
-		}
-	}
-
-	/* Join all threads — no new dispatches after this */
-	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
-		struct fuse_ring_queue *queue =
-			fuse_uring_get_queue(fuse_ring, qid);
-
-		if (queue->tid != 0) {
-			pthread_join(queue->tid, NULL);
-			queue->tid = 0;
-		}
+		if (fuse_ring->init_sem_initialized)
+			sem_post(&fuse_ring->init_sem);
+		fuse_uring_wake_thread(queue);
 	}
 
 	/*
-	 * Check for deferred replies still in progress. A live ref_cnt
-	 * means a filesystem callback still holds the request and may
-	 * call send_reply_uring → fuse_uring_commit_sqe, which touches
-	 * ring_pool, queue->ring_lock, and queue->ring. We cannot free
-	 * or destroy any of those — just let the OS reclaim at exit.
+	 * Join all threads - no new dispatches after this. Bound the join
+	 * so a thread that could not be woken (eventfd write failure) cannot
+	 * hang teardown forever; an un-joinable thread is detached and left
+	 * to the OS at exit instead.
 	 */
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
+		int rc;
 
-		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
-			if (atomic_load(&queue->ent[idx].req.ref_cnt) > 1) {
-				fuse_log(FUSE_LOG_ERR,
-					"Leaked ring: refs held at shutdown\n");
-				return;
-			}
+		if (queue->tid == 0)
+			continue;
+
+		rc = fuse_uring_wait_thread_exit(fuse_ring, queue, &deadline);
+		if (rc != 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "qid=%zu ring thread did not exit; "
+				 "detaching and leaking ring: %s\n",
+				 qid, strerror(-rc));
+			pthread_detach(queue->tid);
+			err = rc;
+			continue;
 		}
+
+		rc = pthread_join(queue->tid, NULL);
+		if (rc != 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "qid=%zu ring thread join failed; "
+				 "leaking ring: %s\n",
+				 qid, strerror(rc));
+			err = -rc;
+			continue;
+		}
+		queue->tid = 0;
 	}
 
-	/* No live refs — safe to free everything */
+	if (err != 0) {
+		atomic_store(&fuse_ring->teardown_incomplete, true);
+		return err;
+	}
+
+	/*
+	 * Wait for deferred replies still in progress. A live reply may call
+	 * send_reply_uring -> fuse_uring_commit_sqe, dereferencing ring_pool,
+	 * ring_pool->se, queue->ring_lock and queue->ring. Block until they
+	 * are all done; if they never finish within the deadline we leak the
+	 * ring (the OS reclaims it at process exit) rather than free memory a
+	 * live reply still references.
+	 */
+	if (fuse_ring->drain_mutex_initialized &&
+	    fuse_ring->drain_cond_initialized) {
+		err = fuse_uring_drain_wait(fuse_ring, &deadline);
+		if (err != 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Leaked ring: %" PRIu64
+				 " replies still in flight at shutdown: %s\n",
+				 atomic_load(&fuse_ring->inflight),
+				 strerror(-err));
+			atomic_store(&fuse_ring->teardown_incomplete, true);
+			return err;
+		}
+	} else if (atomic_load(&fuse_ring->inflight) > 0) {
+		atomic_store(&fuse_ring->teardown_incomplete, true);
+		return -EIO;
+	}
+
+	/* No live refs - safe to free everything */
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
@@ -463,17 +793,32 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
 
-			numa_free(ent->op_payload, ent->req_payload_sz);
-			numa_free(ent->req_header, queue->req_header_sz);
+			if (ent->op_payload != NULL)
+				numa_free(ent->op_payload, ent->req_payload_sz);
+			if (ent->req_header != NULL)
+				numa_free(ent->req_header, queue->req_header_sz);
+			if (ent->req_lock_initialized)
+				pthread_mutex_destroy(&ent->req.lock);
 		}
 
-		pthread_mutex_destroy(&queue->ring_lock);
+		if (queue->ring_lock_initialized)
+			pthread_mutex_destroy(&queue->ring_lock);
 	}
 
 	free(fuse_ring->queues);
-	pthread_cond_destroy(&fuse_ring->thread_start_cond);
-	pthread_mutex_destroy(&fuse_ring->thread_start_mutex);
+	if (fuse_ring->init_sem_initialized)
+		sem_destroy(&fuse_ring->init_sem);
+	if (fuse_ring->thread_start_cond_initialized)
+		pthread_cond_destroy(&fuse_ring->thread_start_cond);
+	if (fuse_ring->thread_start_mutex_initialized)
+		pthread_mutex_destroy(&fuse_ring->thread_start_mutex);
+	if (fuse_ring->drain_cond_initialized)
+		pthread_cond_destroy(&fuse_ring->drain_cond);
+	if (fuse_ring->drain_mutex_initialized)
+		pthread_mutex_destroy(&fuse_ring->drain_mutex);
 	free(fuse_ring);
+
+	return 0;
 }
 
 static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
@@ -555,6 +900,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	const size_t nr_queues = get_nprocs_conf();
 	size_t payload_sz = se->bufsize - FUSE_BUFFER_HEADER_SIZE;
 	size_t queue_sz;
+	int err;
 
 	if (se->debug)
 		fuse_log(FUSE_LOG_DEBUG, "starting io-uring q-depth=%d\n",
@@ -566,6 +912,14 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		goto err;
 	}
 
+	err = fuse_uring_sync_init(fuse_ring);
+	if (err != 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "Initializing uring teardown synchronization failed: %s\n",
+			 strerror(-err));
+		goto err;
+	}
+
 	queue_sz = fuse_ring_queue_size(se->uring.q_depth);
 	fuse_ring->queues = calloc(1, queue_sz * nr_queues);
 	if (fuse_ring->queues == NULL) {
@@ -573,17 +927,12 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		goto err;
 	}
 
-	fuse_ring->se = se;
 	fuse_ring->nr_queues = nr_queues;
 	fuse_ring->queue_depth = se->uring.q_depth;
 	fuse_ring->max_req_payload_sz = payload_sz;
 	fuse_ring->queue_mem_size = queue_sz;
 
-	/*
-	 * very basic queue initialization, that cannot fail and will
-	 * allow easy cleanup if something (like mmap) fails in the middle
-	 * below
-	 */
+	/* Set cleanup-safe sentinels for every queue before fallible init. */
 	for (size_t qid = 0; qid < nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
@@ -592,13 +941,23 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->qid = qid;
 		queue->ring_pool = fuse_ring;
 		queue->eventfd = -1;
-		pthread_mutex_init(&queue->ring_lock, NULL);
 	}
 
-	pthread_cond_init(&fuse_ring->thread_start_cond, NULL);
-	pthread_mutex_init(&fuse_ring->thread_start_mutex, NULL);
-	sem_init(&fuse_ring->init_sem, 0, 0);
+	for (size_t qid = 0; qid < nr_queues; qid++) {
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
 
+		err = pthread_mutex_init(&queue->ring_lock, NULL);
+		if (err != 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Initializing qid=%zu ring lock failed: %s\n",
+				 qid, strerror(err));
+			goto err;
+		}
+		queue->ring_lock_initialized = true;
+	}
+
+	fuse_ring->se = se;
 	return fuse_ring;
 
 err:
@@ -682,6 +1041,7 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	memset(&req->u, 0, sizeof(req->u));
 	req->flags.is_uring = 1;
 	req->ref_cnt++;
+	atomic_fetch_add(&fuse_ring->inflight, 1);
 	req->ch = NULL; /* not needed for uring */
 	req->interrupted = 0;
 	list_init_req(req);
@@ -830,7 +1190,10 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 			return -ENOMEM;
 
 		req->se = se;
-		pthread_mutex_init(&req->lock, NULL);
+		res = pthread_mutex_init(&req->lock, NULL);
+		if (res != 0)
+			return -res;
+		ring_ent->req_lock_initialized = true;
 		req->flags.is_uring = 1;
 		req->ref_cnt = 1; /* extra ref to avoid destruction */
 		list_init_req(req);
@@ -881,22 +1244,32 @@ static void *fuse_uring_thread(void *arg)
 
 	/* Not using fuse_session_exited(se), as that cannot be inlined */
 	while (!atomic_load_explicit(&se->mt_exited, memory_order_relaxed)) {
+		int submit_err = 0;
+
 		io_uring_submit_and_wait(&queue->ring, 1);
 
 		pthread_mutex_lock(&queue->ring_lock);
 		queue->cqe_processing = true;
 		err = fuse_uring_queue_handle_cqes(queue);
 		queue->cqe_processing = false;
+		if (io_uring_sq_ready(&queue->ring) > 0)
+			submit_err = io_uring_submit(&queue->ring);
 		pthread_mutex_unlock(&queue->ring_lock);
+		if (submit_err < 0) {
+			err = submit_err;
+			goto err;
+		}
 		if (err < 0)
 			goto err;
 	}
 
-	return NULL;
+	goto out;
 
 err:
 	fuse_session_exit(se);
 err_non_fatal:
+out:
+	fuse_uring_mark_thread_exited(queue);
 	return NULL;
 }
 
@@ -909,10 +1282,10 @@ static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 
 		rc = pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
 		if (rc != 0)
-			break;
+			return -rc;
 	}
 
-	return rc;
+	return 0;
 }
 
 static int fuse_uring_sanity_check(const struct fuse_session *se)
@@ -932,9 +1305,13 @@ static int fuse_uring_sanity_check(const struct fuse_session *se)
 int fuse_uring_start(struct fuse_session *se)
 {
 	int err = 0;
-	struct fuse_ring_pool *fuse_ring;
+	struct fuse_ring_pool *fuse_ring = NULL;
+	bool was_exited = atomic_load_explicit(&se->mt_exited,
+					       memory_order_relaxed);
 
-	fuse_uring_sanity_check(se);
+	err = fuse_uring_sanity_check(se);
+	if (err != 0)
+		goto err;
 
 	fuse_ring = fuse_create_ring(se);
 	if (fuse_ring == NULL) {
@@ -961,10 +1338,16 @@ int fuse_uring_start(struct fuse_session *se)
 
 err:
 	if (err) {
+		int destruct_err = 0;
+
 		/* Note all threads need to have been started */
 		if (fuse_ring)
-			fuse_session_destruct_uring(fuse_ring);
-		se->uring.pool = NULL;
+			destruct_err = fuse_session_destruct_uring(fuse_ring);
+		if (destruct_err == 0) {
+			se->uring.pool = NULL;
+			atomic_store_explicit(&se->mt_exited, was_exited,
+					      memory_order_relaxed);
+		}
 	}
 	return err;
 }
@@ -972,14 +1355,21 @@ err:
 int fuse_uring_stop(struct fuse_session *se)
 {
 	struct fuse_ring_pool *ring = se->uring.pool;
+	int err;
 
 	if (ring == NULL)
 		return 0;
 
-	fuse_session_destruct_uring(ring);
-	se->uring.pool = NULL;
+	/*
+	 * Only clear the session's pool pointer if the ring was actually
+	 * freed. If it had to be leaked (outstanding replies), keep the
+	 * pointer valid so any late reply path still has a live ring.
+	 */
+	err = fuse_session_destruct_uring(ring);
+	if (err == 0)
+		se->uring.pool = NULL;
 
-	return 0;
+	return err;
 }
 
 void fuse_uring_wake_ring_threads(struct fuse_session *se)

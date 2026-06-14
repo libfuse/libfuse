@@ -19,6 +19,7 @@
 #include "fuse_opt.h"
 #include "fuse_misc.h"
 #include "fuse_kernel.h"
+#include "fuse_uring_i.h"
 #include "util.h"
 
 #include <stdint.h>
@@ -5247,6 +5248,18 @@ void fuse_destroy(struct fuse *f)
 
 	if (f->conf.intr && f->intr_installed)
 		fuse_restore_intr_signal(f->conf.intr_signal);
+
+	if (f->se->uring.pool != NULL) {
+		int err = fuse_uring_stop(f->se);
+
+		if (err != 0 && f->se->uring.pool != NULL) {
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: leaking fuse object after incomplete "
+				 "io_uring teardown: %s\n",
+				 strerror(-err));
+			return;
+		}
+	}
 
 	if (f->fs) {
 		fuse_create_context(f);

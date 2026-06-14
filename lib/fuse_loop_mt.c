@@ -418,8 +418,12 @@ int err;
 
 		err = mt.error;
 
-		if (se->uring.pool)
-			fuse_uring_stop(se);
+		if (se->uring.pool) {
+			int uring_err = fuse_uring_stop(se);
+
+			if (err == 0 && uring_err != 0)
+				err = uring_err;
+		}
 	}
 
 	if(se->error != 0)
@@ -561,4 +565,3 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 {
 	config->clone_fd = value;
 }
-

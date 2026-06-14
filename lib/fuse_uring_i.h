@@ -34,6 +34,7 @@ struct fuse_in_header;
 int fuse_uring_start(struct fuse_session *se);
 void fuse_uring_wake_ring_threads(struct fuse_session *se);
 int fuse_uring_stop(struct fuse_session *se);
+void fuse_uring_req_released(struct fuse_session *se);
 int send_reply_uring(fuse_req_t req, int error, const void *arg,
 		     size_t argsize);
 
@@ -56,6 +57,11 @@ fuse_uring_wake_ring_threads(struct fuse_session *se FUSE_VAR_UNUSED)
 static inline int fuse_uring_stop(struct fuse_session *se FUSE_VAR_UNUSED)
 {
 	return -ENOTSUP;
+}
+
+static inline void
+fuse_uring_req_released(struct fuse_session *se FUSE_VAR_UNUSED)
+{
 }
 
 static inline int send_reply_uring(fuse_req_t req FUSE_VAR_UNUSED,

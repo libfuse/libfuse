@@ -42,7 +42,11 @@ int fuse_session_loop(struct fuse_session *se)
 	if(se->error != 0)
 		res = se->error;
 
-	if (se->uring.pool)
-		fuse_uring_stop(se);
+	if (se->uring.pool) {
+		int uring_err = fuse_uring_stop(se);
+
+		if (res == 0 && uring_err != 0)
+			res = uring_err;
+	}
 	return res;
 }
