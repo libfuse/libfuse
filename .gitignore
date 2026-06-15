@@ -40,4 +40,5 @@ TAGS
 /GSYMS
 /GTAGS
 /test/test_setattr
+/test/test_deferred_reply_teardown
 /build/
