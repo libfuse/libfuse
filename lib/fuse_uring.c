@@ -159,6 +159,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_ent *ring_ent)
 {
 	bool locked = false;
+	int ret = 0;
 	struct fuse_session *se = ring_pool->se;
 	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
@@ -183,7 +184,8 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		se->error = -EIO;
 		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
 
-		return -EIO;
+		ret = -EIO;
+		goto out;
 	}
 
 	ring_ent->last_cmd = FUSE_IO_URING_CMD_COMMIT_AND_FETCH;
@@ -199,10 +201,11 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	if (!queue->cqe_processing)
 		io_uring_submit(&queue->ring);
 
+out:
 	if (locked)
 		pthread_mutex_unlock(&queue->ring_lock);
 
-	return 0;
+	return ret;
 }
 
 int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
