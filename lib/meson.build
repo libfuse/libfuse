@@ -32,7 +32,6 @@ endif
 if private_cfg.get('HAVE_URING', false)
   libfuse_sources += [ 'fuse_uring.c' ]
   deps += [ dependency('liburing') ]
-  deps += [ dependency('numa') ]
 endif
 
 

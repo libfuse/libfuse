@@ -34,5 +34,4 @@ Requirements:
 
 Build Dependencies:
 - liburing (for io_uring support)
-- libnuma (required alongside liburing)
 - meson build system with option: -Denable-io-uring=true

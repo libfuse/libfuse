@@ -11,7 +11,6 @@ PACKAGES_CORE=(
     ninja-build
     libudev-dev
     liburing-dev
-    libnuma-dev
     pkg-config
     python3
     python3-pip
