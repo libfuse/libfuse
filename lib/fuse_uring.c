@@ -22,7 +22,9 @@
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
-#include <numa.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include <linux/mempolicy.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <linux/sched.h>
@@ -418,8 +420,8 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
 
-			numa_free(ent->op_payload, ent->req_payload_sz);
-			numa_free(ent->req_header, queue->req_header_sz);
+			munmap(ent->op_payload, ent->req_payload_sz);
+			munmap(ent->req_header, queue->req_header_sz);
 		}
 
 		pthread_mutex_destroy(&queue->ring_lock);
@@ -732,6 +734,18 @@ static void fuse_uring_set_thread_core(int qid)
 	}
 }
 
+static void *alloc_local(size_t size)
+{
+	void *p = mmap(NULL, size, PROT_READ | PROT_WRITE,
+		       MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (p == MAP_FAILED)
+		return NULL;
+	syscall(SYS_mbind, p, size, MPOL_LOCAL, NULL, 0, 0);
+	if (madvise(p, size, MADV_POPULATE_WRITE) < 0)
+		return NULL;
+	return p;
+}
+
 /*
  * @return negative error code or io-uring file descriptor
  */
@@ -773,14 +787,13 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		 * Also allocate the header to have it page aligned, which
 		 * is a requirement for page pinning
 		 */
-		ring_ent->req_header =
-			numa_alloc_local(queue->req_header_sz);
+		ring_ent->req_header = alloc_local(queue->req_header_sz);
 		if (!ring_ent->req_header)
 			return -ENOMEM;
+
 		ring_ent->req_payload_sz = ring->max_req_payload_sz;
 
-		ring_ent->op_payload =
-			numa_alloc_local(ring_ent->req_payload_sz);
+		ring_ent->op_payload = alloc_local(ring_ent->req_payload_sz);
 		if (!ring_ent->op_payload)
 			return -ENOMEM;
 
