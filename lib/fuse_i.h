@@ -75,6 +75,7 @@ struct fuse_session_uring {
 	bool enabled;
 	unsigned int q_depth;
 	struct fuse_ring_pool *pool;
+	void (*fsu_test_teardown_waiting)(void);
 };
 
 struct fuse_timeout_thread;
@@ -89,9 +90,9 @@ struct fuse_session {
 	_Atomic(char *)mountpoint;
 
 	/*
-	 * Held by the caller of fuse_session_new() and by every request in
-	 * flight. The session is torn down by whoever drops the last one,
-	 * which need not be the caller.
+	 * Held by the caller of fuse_session_new(), by every request in
+	 * flight and by the io-uring pool. The session is torn down by
+	 * whoever drops the last one, which need not be the caller.
 	 */
 	_Atomic int ref_cnt;
 
