@@ -70,11 +70,14 @@ struct fuse_notify_req {
 	struct fuse_notify_req *prev;
 };
 
+typedef void (*fuse_teardown_waiting_fn)(void);
+
 struct fuse_session_uring {
 	/* the wish until FUSE_INIT is negotiated, the result afterwards */
 	bool enabled;
 	unsigned int q_depth;
 	struct fuse_ring_pool *pool;
+	_Atomic fuse_teardown_waiting_fn fsu_test_teardown_waiting;
 };
 
 struct fuse_timeout_thread;
@@ -89,9 +92,9 @@ struct fuse_session {
 	_Atomic(char *)mountpoint;
 
 	/*
-	 * Held by the caller of fuse_session_new() and by every request in
-	 * flight. The session is torn down by whoever drops the last one,
-	 * which need not be the caller.
+	 * Held by the caller of fuse_session_new(), by every request in
+	 * flight and by the io-uring pool. The session is torn down by
+	 * whoever drops the last one, which need not be the caller.
 	 */
 	_Atomic int ref_cnt;
 
