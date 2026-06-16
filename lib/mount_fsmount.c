@@ -263,11 +263,44 @@ static int is_mtab_only_opt(const char *opt)
 	       strcmp(opt, "rw") == 0;
 }
 
+/*
+ * Example: parsing  rw,fd=7,context="u:r:t,s0"
+ *
+ *   call 3 -> "context=\"u:r:t,s0\""   (comma inside quotes kept, not split)
+ *   call 4 -> NULL
+ */
+static char *next_mount_opt(char **cursor)
+{
+	char *opt_start;
+	char *scan;
+	int in_quote = 0;
+
+	if (!*cursor || !**cursor)
+		return NULL;
+
+	opt_start = *cursor;
+	for (scan = opt_start; *scan; scan++) {
+		if (*scan == '"')
+			in_quote = !in_quote;
+		else if (*scan == ',' && !in_quote)
+			break;
+	}
+
+	if (*scan == ',') {
+		*scan = '\0';
+		*cursor = scan + 1;
+	} else {
+		*cursor = scan;
+	}
+
+	return opt_start;
+}
+
 int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 {
 	char *opts_copy;
+	char *pos;
 	char *opt;
-	char *saveptr;
 	int res;
 
 	if (!opts || !*opts)
@@ -279,8 +312,10 @@ int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 		return -ENOMEM;
 	}
 
-	opt = strtok_r(opts_copy, ",", &saveptr);
-	while (opt) {
+	pos = opts_copy;
+	while ((opt = next_mount_opt(&pos)) != NULL) {
+		if (!*opt)
+			continue;
 		/*
 		 * Skip mount attributes, they're handled by fsmount()
 		 * not fsconfig().
@@ -303,7 +338,6 @@ int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 				return res;
 			}
 		}
-		opt = strtok_r(NULL, ",", &saveptr);
 	}
 
 	free(opts_copy);
