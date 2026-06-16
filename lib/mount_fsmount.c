@@ -207,7 +207,8 @@ static int apply_opt_key_value(int fsfd, char *opt)
 {
 	char *eq;
 	const char *key;
-	const char *value;
+	char *value;
+	size_t len;
 
 	eq = strchr(opt, '=');
 	if (!eq)
@@ -216,6 +217,18 @@ static int apply_opt_key_value(int fsfd, char *opt)
 	*eq = '\0';
 	key = opt;
 	value = eq + 1;
+
+	/*
+	 * Strip enclosing double quotes from the value, e.g.
+	 * context="system_u:object_r:root_t:s0". The old mount(2) path relied
+	 * on the kernel (selinux_sb_eat_lsm_opts) to strip these, but
+	 * fsconfig() passes the value through as-is.
+	 */
+	len = strlen(value);
+	if (len >= 2 && value[0] == '"' && value[len - 1] == '"') {
+		value[len - 1] = '\0';
+		value++;
+	}
 
 	if (strcmp(key, "fd") == 0)
 		return apply_fsconfig_opt_fd(fsfd, value);
