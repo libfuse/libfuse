@@ -26,7 +26,9 @@
 #include <atomic>
 #include <string_view>
 #include <cstdint>
+#include <random>
 #include <fuse_lowlevel.h>
+#include <fuse_opt.h>
 #ifdef HAVE_LINUX_LIMITS_H
 #include <linux/limits.h>
 #endif
@@ -35,6 +37,40 @@
 #define MEMFS_ENTRY_TIMEOUT 0.0
 
 #define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
+
+// Benchmark mode: bypass the content store so the FUSE interface itself is
+// measured, not memfs's std::vector management. Writes still read the incoming
+// buffer; reads still return data (served from a random scratch buffer).
+struct memfs_config {
+	int null_io;
+};
+static struct memfs_config memfs_cfg;
+
+#define MEMFS_OPT(t, p) { t, offsetof(struct memfs_config, p), 1 }
+static const struct fuse_opt memfs_opt_spec[] = {
+	MEMFS_OPT("null_io", null_io),
+	FUSE_OPT_END
+};
+
+// Random bytes filled once at startup; null_io reads copy/tile from here so the
+// per-read cost stays close to a memcpy rather than a per-byte RNG.
+static constexpr size_t NULL_IO_BUF_SIZE = 1u << 20;
+static std::vector<char> null_io_buf;
+
+// null_io writes fold the incoming buffer into this volatile sink so the
+// compiler cannot elide the reads that simulate the data transfer.
+static volatile unsigned char null_io_write_sink;
+
+static void null_io_fill(char *dst, size_t size)
+{
+	size_t copied = 0;
+	while (copied < size) {
+		size_t chunk = std::min(size - copied, null_io_buf.size());
+		std::copy(null_io_buf.begin(), null_io_buf.begin() + chunk,
+			  dst + copied);
+		copied += chunk;
+	}
+}
 
 class Inodes;
 class Inode;
@@ -612,6 +648,16 @@ static void memfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 		return;
 	}
 
+	if (memfs_cfg.null_io) {
+		// touch every byte so the data transfer is real, then discard
+		unsigned char acc = 0;
+		for (size_t i = 0; i < size; i++)
+			acc ^= (unsigned char)buf[i];
+		null_io_write_sink = acc;
+		fuse_reply_write(req, size);
+		return;
+	}
+
 	inode->write_content(buf, size, offset);
 	fuse_reply_write(req, size);
 }
@@ -622,6 +668,14 @@ static void memfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 	auto inode = Inodes.find(ino);
 	if (!inode || inode->is_dir()) {
 		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
+	if (memfs_cfg.null_io) {
+		// serve random data without consulting the content store
+		std::vector<char> content(size);
+		null_io_fill(content.data(), content.size());
+		fuse_reply_buf(req, content.data(), content.size());
 		return;
 	}
 
@@ -1114,6 +1168,9 @@ int main(int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 
+	if (fuse_opt_parse(&args, &memfs_cfg, memfs_opt_spec, NULL) != 0)
+		return 1;
+
 	if (fuse_parse_cmdline(&args, &opts) != 0)
 		return 1;
 
@@ -1121,6 +1178,8 @@ int main(int argc, char *argv[])
 		printf("usage: %s [options] <mountpoint>\n\n", argv[0]);
 		printf("File-system specific options:\n"
 		       "    -o opt,[opt...]        mount options\n"
+		       "    -o null_io             bypass the content store for\n"
+		       "                           read/write benchmarking\n"
 		       "    -h   --help            print help\n"
 		       "\n");
 		fuse_cmdline_help();
@@ -1139,6 +1198,13 @@ int main(int argc, char *argv[])
 		printf("       %s --help\n", argv[0]);
 		ret = 1;
 		goto err_out1;
+	}
+
+	if (memfs_cfg.null_io) {
+		null_io_buf.resize(NULL_IO_BUF_SIZE);
+		std::mt19937 rng(0);
+		for (auto &byte : null_io_buf)
+			byte = static_cast<char>(rng());
 	}
 
 	se = fuse_session_new(&args, &memfs_oper, sizeof(memfs_oper), NULL);
