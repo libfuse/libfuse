@@ -569,7 +569,13 @@ static void memfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	//	  << (void *)new_dentry << ", name: '" << name
 	//	  << "', inode address: " << (void *)new_inode << std::endl;
 
-	parentInode->add_child(name, new_dentry);
+	int error = parentInode->add_child(name, new_dentry);
+	if (error != 0) {
+		delete new_dentry;
+		Inodes.erase(new_inode);
+		fuse_reply_err(req, error);
+		return;
+	}
 
 	struct fuse_entry_param e;
 	memset(&e, 0, sizeof(e));
@@ -825,7 +831,7 @@ out:
 
 out_cleanup:
 	delete new_dentry;
-	Inodes.erase_locked(new_inode);
+	Inodes.erase(new_inode);
 	goto out;
 }
 
