@@ -958,15 +958,15 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	existing_dentry = newparentInode->find_child_locked(newname);
 	if (existing_dentry) {
-		if (existing_dentry->is_dir()) {
-			if (!existing_dentry->get_inode()->is_empty()) {
-				error = ENOTEMPTY;
-				goto out_unlock;
-			}
-			newparentInode->dec_nlink();
+		Inode *existing_inode = existing_dentry->get_inode();
+		if (existing_inode->is_dir() && !existing_inode->is_empty()) {
+			error = ENOTEMPTY;
+			goto out_unlock;
 		}
+		// remove_child() frees the dentry and already decrements
+		// newparent's nlink for a dir child; resolve the inode first.
 		newparentInode->remove_child(newname);
-		existing_dentry->get_inode()->dec_nlink();
+		existing_inode->dec_nlink();
 	}
 
 	child_dentry_copy = new Dentry(newname, child_dentry->inode);
