@@ -43,12 +43,14 @@
 // buffer; reads still return data (served from a random scratch buffer).
 struct memfs_config {
 	int null_io;
+	int fuse_dio;
 };
 static struct memfs_config memfs_cfg;
 
 #define MEMFS_OPT(t, p) { t, offsetof(struct memfs_config, p), 1 }
 static const struct fuse_opt memfs_opt_spec[] = {
 	MEMFS_OPT("null_io", null_io),
+	MEMFS_OPT("fuse_dio", fuse_dio),
 	FUSE_OPT_END
 };
 
@@ -630,6 +632,11 @@ static void memfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	new_inode->get_attr(&e.attr);
 
 	fi->fh = e.ino;
+	if (memfs_cfg.fuse_dio) {
+		// parallel_direct_writes only takes effect alongside direct_io
+		fi->direct_io = 1;
+		fi->parallel_direct_writes = 1;
+	}
 	fuse_reply_create(req, &e, fi);
 }
 
@@ -707,6 +714,11 @@ static void memfs_open(fuse_req_t req, fuse_ino_t ino,
 
 	// Use the inode number as the file handle
 	fi->fh = ino;
+	if (memfs_cfg.fuse_dio) {
+		// parallel_direct_writes only takes effect alongside direct_io
+		fi->direct_io = 1;
+		fi->parallel_direct_writes = 1;
+	}
 	fuse_reply_open(req, fi);
 }
 
@@ -1180,6 +1192,8 @@ int main(int argc, char *argv[])
 		       "    -o opt,[opt...]        mount options\n"
 		       "    -o null_io             bypass the content store for\n"
 		       "                           read/write benchmarking\n"
+		       "    -o fuse_dio            enable direct I/O and parallel\n"
+		       "                           direct writes\n"
 		       "    -h   --help            print help\n"
 		       "\n");
 		fuse_cmdline_help();
