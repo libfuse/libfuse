@@ -317,7 +317,6 @@ class Inodes {
 	std::unordered_map<uint64_t, std::unique_ptr<Inode> > inodes;
 	mutable std::shared_mutex inodes_mutex;
 	std::atomic<uint64_t> next_ino{ FUSE_ROOT_ID + 1 };
-	std::mutex mutex;
 
     public:
 	Inodes()
@@ -386,9 +385,9 @@ class Inodes {
 		return it->second.get();
 	}
 
-	size_t size()
+	size_t size() const
 	{
-		std::lock_guard<std::mutex> lock(mutex);
+		std::shared_lock<std::shared_mutex> lock(inodes_mutex);
 		return inodes.size();
 	}
 };
