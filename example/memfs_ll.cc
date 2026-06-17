@@ -109,6 +109,7 @@ class Inode {
 	std::atomic<nlink_t> nlink;
 	uid_t uid;
 	gid_t gid;
+	dev_t rdev;
 
 	friend class Inodes;
 
@@ -125,6 +126,7 @@ class Inode {
 		, nlink(dir ? 2 : 1)
 		, uid(0)
 		, gid(0)
+		, rdev(0)
 	{
 	}
 
@@ -225,6 +227,12 @@ class Inode {
 		mode = new_mode;
 	}
 
+	void set_rdev(dev_t new_rdev)
+	{
+		std::lock_guard<std::mutex> lock(attr_mutex);
+		rdev = new_rdev;
+	}
+
 	void set_atime(const struct timespec &_atime)
 	{
 		std::lock_guard<std::mutex> lock(attr_mutex);
@@ -258,6 +266,7 @@ class Inode {
 		stbuf->st_nlink = nlink;
 		stbuf->st_uid = uid;
 		stbuf->st_gid = gid;
+		stbuf->st_rdev = rdev;
 		stbuf->st_size = content.size();
 		stbuf->st_blocks = DIV_ROUND_UP(content.size(), 512);
 		stbuf->st_atime = atime;
@@ -883,6 +892,47 @@ static void memfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	fuse_reply_attr(req, &st, MEMFS_ATTR_TIMEOUT);
 }
 
+static void memfs_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
+			mode_t mode, dev_t rdev)
+{
+	auto parentInode = Inodes.find(parent);
+	if (!parentInode || !parentInode->is_dir()) {
+		fuse_reply_err(req, ENOENT);
+		return;
+	}
+
+	if (parentInode->find_child(name)) {
+		fuse_reply_err(req, EEXIST);
+		return;
+	}
+
+	// mode already carries the type bits (S_IFREG/S_IFIFO/S_IFCHR/...)
+	auto new_inode = Inodes.create(name, false, mode);
+	if (!new_inode) {
+		fuse_reply_err(req, EIO);
+		return;
+	}
+	new_inode->set_rdev(rdev);
+
+	Dentry *new_dentry = new Dentry(name, new_inode);
+	int error = parentInode->add_child(name, new_dentry);
+	if (error != 0) {
+		delete new_dentry;
+		Inodes.erase(new_inode.get());
+		fuse_reply_err(req, error);
+		return;
+	}
+
+	struct fuse_entry_param e;
+	memset(&e, 0, sizeof(e));
+	e.ino = new_inode->get_ino();
+	e.attr_timeout = MEMFS_ATTR_TIMEOUT;
+	e.entry_timeout = MEMFS_ENTRY_TIMEOUT;
+	new_inode->get_attr(&e.attr);
+
+	fuse_reply_entry(req, &e);
+}
+
 static void memfs_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 			mode_t mode)
 {
@@ -1169,6 +1219,7 @@ static const struct fuse_lowlevel_ops memfs_oper = {
 	.forget = memfs_forget,
 	.getattr = memfs_getattr,
 	.setattr = memfs_setattr,
+	.mknod = memfs_mknod,
 	.mkdir = memfs_mkdir,
 	.unlink = memfs_unlink,
 	.rmdir = memfs_rmdir,
