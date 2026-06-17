@@ -920,6 +920,8 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	Dentry *child_dentry = nullptr;
 	Dentry *child_dentry_copy = nullptr;
 	Dentry *existing_dentry = nullptr;
+	Inode *inode_a = nullptr;
+	Inode *inode_b = nullptr;
 
 #if defined(RENAME_EXCHANGE) && defined(RENAME_NOREPLACE)
 	if (flags & (RENAME_EXCHANGE | RENAME_NOREPLACE)) {
@@ -940,10 +942,13 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		goto out_unlock_global;
 	}
 
-	parentInode->lock();
-	if (parent != newparent) {
-		newparentInode->lock();
-	}
+	inode_a = parentInode.get();
+	inode_b = (parent != newparent) ? newparentInode.get() : nullptr;
+	if (inode_b && inode_a->get_ino() > inode_b->get_ino())
+		std::swap(inode_a, inode_b); // always lock lower ino first
+	inode_a->lock();
+	if (inode_b)
+		inode_b->lock();
 
 	child_dentry = parentInode->find_child_locked(name);
 	if (child_dentry == nullptr) {
@@ -969,10 +974,9 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 	newparentInode->add_child_locked(newname, child_dentry_copy);
 
 out_unlock:
-	parentInode->unlock();
-	if (parent != newparent) {
-		newparentInode->unlock();
-	}
+	if (inode_b)
+		inode_b->unlock();
+	inode_a->unlock();
 
 out_unlock_global:
 	Inodes.unlock();
