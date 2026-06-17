@@ -43,11 +43,11 @@ class Dentry;
 static void memfs_panic(std::string_view message);
 
 struct DirHandle {
-	std::vector<std::pair<std::string, const Dentry *> > entries;
+	std::vector<std::pair<std::string, std::shared_ptr<Inode> > > entries;
 	size_t offset;
 
-	DirHandle(const std::vector<std::pair<std::string, const Dentry *> >
-			  &entries)
+	DirHandle(const std::vector<
+		  std::pair<std::string, std::shared_ptr<Inode> > > &entries)
 		: entries(entries)
 		, offset(0)
 	{
@@ -248,13 +248,18 @@ class Inode {
 		return old_value - 1;
 	}
 
+	nlink_t get_nlink() const
+	{
+		return nlink.load(std::memory_order_relaxed);
+	}
+
 	/**
 	  * Methods that need Dentry knowledge
 	  */
 	int add_child_locked(const std::string &name, Dentry *child_dentry);
 	int add_child(const std::string &name, Dentry *child_dentry);
 	int remove_child(const std::string &name);
-	std::vector<std::pair<std::string, const Dentry *> >
+	std::vector<std::pair<std::string, std::shared_ptr<Inode> > >
 	get_children() const;
 	Dentry *find_child_locked(const std::string &name) const;
 	Dentry *find_child(const std::string &name) const;
@@ -263,11 +268,11 @@ class Inode {
 class Dentry {
     public:
 	std::string name;
-	Inode *inode;
+	std::shared_ptr<Inode> inode;
 
-	Dentry(const std::string &n, Inode *i)
+	Dentry(const std::string &n, std::shared_ptr<Inode> i)
 		: name(n)
-		, inode(i)
+		, inode(std::move(i))
 	{
 	}
 
@@ -303,7 +308,7 @@ class Dentry {
 
 	Inode *get_inode() const
 	{
-		return inode;
+		return inode.get();
 	}
 
 	void inc_lookup()
@@ -314,14 +319,14 @@ class Dentry {
 
 class Inodes {
     private:
-	std::unordered_map<uint64_t, std::unique_ptr<Inode> > inodes;
+	std::unordered_map<uint64_t, std::shared_ptr<Inode> > inodes;
 	mutable std::shared_mutex inodes_mutex;
 	std::atomic<uint64_t> next_ino{ FUSE_ROOT_ID + 1 };
 
     public:
 	Inodes()
 	{
-		auto root = std::make_unique<Inode>(FUSE_ROOT_ID, "/", true);
+		auto root = std::make_shared<Inode>(FUSE_ROOT_ID, "/", true);
 		root->mode = S_IFDIR | 0755;
 		root->nlink = 2; // . and ..
 		inodes[FUSE_ROOT_ID] = std::move(root);
@@ -352,27 +357,28 @@ class Inodes {
 		erase_locked(inode);
 	}
 
-	Inode *find_locked(fuse_ino_t ino)
+	std::shared_ptr<Inode> find_locked(fuse_ino_t ino)
 	{
 		auto it = inodes.find(ino);
 		if (it == inodes.end()) {
 			return nullptr;
 		}
-		return it->second.get();
+		return it->second;
 	}
 
-	Inode *find(fuse_ino_t ino)
+	std::shared_ptr<Inode> find(fuse_ino_t ino)
 	{
 		std::shared_lock lock(inodes_mutex);
 		return find_locked(ino);
 	}
 
-	Inode *create(const std::string &name, bool is_dir, mode_t mode)
+	std::shared_ptr<Inode> create(const std::string &name, bool is_dir,
+				      mode_t mode)
 	{
 		std::unique_lock<std::shared_mutex> lock(inodes_mutex);
 
 		uint64_t ino = next_ino.fetch_add(1, std::memory_order_relaxed);
-		auto new_inode = std::make_unique<Inode>(ino, name, is_dir);
+		auto new_inode = std::make_shared<Inode>(ino, name, is_dir);
 		new_inode->set_mode(mode);
 
 		auto [it, inserted] = inodes.emplace(ino, std::move(new_inode));
@@ -382,7 +388,7 @@ class Inodes {
 			return nullptr;
 		}
 
-		return it->second.get();
+		return it->second;
 	}
 
 	size_t size() const
@@ -466,20 +472,19 @@ Dentry *Inode::find_child(const std::string &name) const
 	return find_child_locked(name);
 }
 
-std::vector<std::pair<std::string, const Dentry *> > Inode::get_children() const
+std::vector<std::pair<std::string, std::shared_ptr<Inode> > >
+Inode::get_children() const
 {
 	std::lock_guard<std::mutex> lock(mutex);
 	if (!is_dir_) {
 		return {}; // Return an empty vector if this is not a directory
 	}
 
-	std::vector<std::pair<std::string, const Dentry *> > children;
+	std::vector<std::pair<std::string, std::shared_ptr<Inode> > > children;
 	children.reserve(dentries.size());
 
-	for (size_t i = 0; i < dentries.size(); ++i) {
-		const Dentry *dentry = dentries[i];
-		std::string name = dentry->get_name();
-		children.emplace_back(name, dentry);
+	for (const Dentry *dentry : dentries) {
+		children.emplace_back(dentry->name, dentry->inode);
 	}
 
 	return children;
@@ -488,7 +493,7 @@ static Inodes Inodes;
 
 static void memfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	auto *parentInode = Inodes.find(parent);
+	auto parentInode = Inodes.find(parent);
 
 	if (!parentInode) {
 		fuse_reply_err(req, ENOENT);
@@ -500,22 +505,26 @@ static void memfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 		return;
 	}
 
-	Dentry *child = parentInode->find_child(name);
+	parentInode->lock();
+	Dentry *child = parentInode->find_child_locked(name);
 	if (!child) {
+		parentInode->unlock();
 		fuse_reply_err(req, ENOENT);
 		return;
 	}
+	std::shared_ptr<Inode> child_inode = child->inode;
+	parentInode->unlock();
 
 	struct fuse_entry_param e;
 	memset(&e, 0, sizeof(e));
-	e.ino = child->get_ino();
+	e.ino = child_inode->get_ino();
 	e.attr_timeout = MEMFS_ATTR_TIMEOUT;
 	e.entry_timeout = MEMFS_ENTRY_TIMEOUT;
-	e.attr.st_ino = child->get_ino();
-	e.attr.st_mode = child->get_mode();
-	e.attr.st_nlink = child->is_dir() ? 2 : 1;
+	e.attr.st_ino = child_inode->get_ino();
+	e.attr.st_mode = child_inode->get_mode();
+	e.attr.st_nlink = child_inode->is_dir() ? 2 : 1;
 
-	child->inc_lookup();
+	child_inode->inc_lookup();
 
 	fuse_reply_entry(req, &e);
 }
@@ -529,7 +538,7 @@ static void memfs_getattr(fuse_req_t req, fuse_ino_t ino,
 		return;
 	}
 
-	auto *inode_data = Inodes.find(actual_ino);
+	auto inode_data = Inodes.find(actual_ino);
 	if (!inode_data) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -545,7 +554,7 @@ static void memfs_getattr(fuse_req_t req, fuse_ino_t ino,
 static void memfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 			 mode_t mode, struct fuse_file_info *fi)
 {
-	auto *parentInode = Inodes.find(parent);
+	auto parentInode = Inodes.find(parent);
 	if (!parentInode || !parentInode->is_dir()) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -556,7 +565,7 @@ static void memfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		return;
 	}
 
-	Inode *new_inode = Inodes.create(name, false, mode);
+	auto new_inode = Inodes.create(name, false, mode);
 	if (!new_inode) {
 		fuse_reply_err(req, EIO);
 		return;
@@ -572,7 +581,7 @@ static void memfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	int error = parentInode->add_child(name, new_dentry);
 	if (error != 0) {
 		delete new_dentry;
-		Inodes.erase(new_inode);
+		Inodes.erase(new_inode.get());
 		fuse_reply_err(req, error);
 		return;
 	}
@@ -592,7 +601,7 @@ static void memfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 			size_t size, off_t offset,
 			[[maybe_unused]] struct fuse_file_info *fi)
 {
-	Inode *inode = Inodes.find(ino);
+	auto inode = Inodes.find(ino);
 	if (!inode) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -610,7 +619,7 @@ static void memfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 static void memfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 		       off_t offset, [[maybe_unused]] struct fuse_file_info *fi)
 {
-	Inode *inode = Inodes.find(ino);
+	auto inode = Inodes.find(ino);
 	if (!inode || inode->is_dir()) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -636,7 +645,7 @@ static void memfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 static void memfs_open(fuse_req_t req, fuse_ino_t ino,
 		       struct fuse_file_info *fi)
 {
-	auto *inode_data = Inodes.find(ino);
+	auto inode_data = Inodes.find(ino);
 	if (!inode_data || inode_data->is_dir()) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -650,7 +659,7 @@ static void memfs_open(fuse_req_t req, fuse_ino_t ino,
 static void memfs_opendir(fuse_req_t req, fuse_ino_t ino,
 			  struct fuse_file_info *fi)
 {
-	auto *inode = Inodes.find(ino);
+	auto inode = Inodes.find(ino);
 	if (!inode || !inode->is_dir()) {
 		fuse_reply_err(req, ENOTDIR);
 		return;
@@ -681,12 +690,12 @@ static void memfs_readdir(fuse_req_t req, [[maybe_unused]] fuse_ino_t ino,
 	     i < static_cast<off_t>(dir_handle->entries.size()); ++i) {
 		const auto &entry = dir_handle->entries[i];
 		const std::string &name = entry.first;
-		const Dentry *dentry = entry.second;
+		const std::shared_ptr<Inode> &inode = entry.second;
 
 		struct stat stbuf;
 		memset(&stbuf, 0, sizeof(stbuf));
-		stbuf.st_ino = dentry->get_inode()->get_ino();
-		dentry->get_inode()->get_attr(&stbuf);
+		stbuf.st_ino = inode->get_ino();
+		inode->get_attr(&stbuf);
 
 		size_t entry_size = fuse_add_direntry(req, nullptr, 0,
 						      name.c_str(), nullptr, 0);
@@ -729,12 +738,12 @@ static void memfs_panic(std::string_view message)
 static void memfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
 	Inodes.lock();
-	Inode *inode = Inodes.find_locked(ino);
+	auto inode = Inodes.find_locked(ino);
 	uint64_t res;
 	if (inode) {
 		res = inode->dec_lookup(nlookup);
-		if (res == 0)
-			Inodes.erase_locked(inode);
+		if (res == 0 && inode->get_nlink() == 0)
+			Inodes.erase_locked(inode.get());
 	}
 	Inodes.unlock();
 	fuse_reply_none(req);
@@ -743,14 +752,14 @@ static void memfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 static void memfs_forget_multi(fuse_req_t req, size_t count,
 			       struct fuse_forget_data *forgets)
 {
+	Inodes.lock();
 	for (size_t i = 0; i < count; i++) {
-		fuse_ino_t ino = forgets[i].ino;
-		uint64_t nlookup = forgets[i].nlookup;
-		auto *inode_data = Inodes.find(ino);
-		if (inode_data) {
-			inode_data->dec_lookup(nlookup);
-		}
+		auto inode = Inodes.find_locked(forgets[i].ino);
+		if (inode && inode->dec_lookup(forgets[i].nlookup) == 0 &&
+		    inode->get_nlink() == 0)
+			Inodes.erase_locked(inode.get());
 	}
+	Inodes.unlock();
 	fuse_reply_none(req);
 }
 
@@ -763,7 +772,7 @@ static void memfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		return;
 	}
 
-	auto *inode_data = Inodes.find(actual_ino);
+	auto inode_data = Inodes.find(actual_ino);
 	if (!inode_data) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -792,8 +801,8 @@ static void memfs_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 			mode_t mode)
 {
 	int error = 0;
-	Inode *parentInode = nullptr;
-	Inode *new_inode = nullptr;
+	std::shared_ptr<Inode> parentInode = nullptr;
+	std::shared_ptr<Inode> new_inode = nullptr;
 	Dentry *new_dentry = nullptr;
 	struct fuse_entry_param e;
 
@@ -831,13 +840,13 @@ out:
 
 out_cleanup:
 	delete new_dentry;
-	Inodes.erase(new_inode);
+	Inodes.erase(new_inode.get());
 	goto out;
 }
 
 static void memfs_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	auto *parentInode = Inodes.find(parent);
+	auto parentInode = Inodes.find(parent);
 	if (!parentInode || !parentInode->is_dir()) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -871,7 +880,7 @@ static void memfs_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 static void memfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-	auto *parentInode = Inodes.find(parent);
+	auto parentInode = Inodes.find(parent);
 	if (!parentInode || !parentInode->is_dir()) {
 		fuse_reply_err(req, ENOENT);
 		return;
@@ -906,8 +915,8 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 			 unsigned int flags)
 {
 	int error = 0;
-	Inode *parentInode = nullptr;
-	Inode *newparentInode = nullptr;
+	std::shared_ptr<Inode> parentInode = nullptr;
+	std::shared_ptr<Inode> newparentInode = nullptr;
 	Dentry *child_dentry = nullptr;
 	Dentry *child_dentry_copy = nullptr;
 	Dentry *existing_dentry = nullptr;
@@ -955,7 +964,7 @@ static void memfs_rename(fuse_req_t req, fuse_ino_t parent, const char *name,
 		existing_dentry->get_inode()->dec_nlink();
 	}
 
-	child_dentry_copy = new Dentry(newname, child_dentry->get_inode());
+	child_dentry_copy = new Dentry(newname, child_dentry->inode);
 	parentInode->remove_child(name);
 	newparentInode->add_child_locked(newname, child_dentry_copy);
 
@@ -974,8 +983,8 @@ static void memfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 		       const char *newname)
 {
 	int error = 0;
-	Inode *src_inode = nullptr;
-	Inode *parent_inode = nullptr;
+	std::shared_ptr<Inode> src_inode = nullptr;
+	std::shared_ptr<Inode> parent_inode = nullptr;
 	struct fuse_entry_param e;
 	Dentry *new_dentry = nullptr;
 
