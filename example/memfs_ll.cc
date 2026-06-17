@@ -138,10 +138,12 @@ class Inode {
 	}
 	time_t get_mtime() const
 	{
+		std::lock_guard<std::mutex> lock(mutex);
 		return mtime;
 	}
 	mode_t get_mode() const
 	{
+		std::lock_guard<std::mutex> lock(attr_mutex);
 		return mode;
 	}
 
@@ -193,13 +195,13 @@ class Inode {
 
 	void set_mtime(const struct timespec &_mtime)
 	{
-		std::lock_guard<std::mutex> lock(attr_mutex);
+		std::lock_guard<std::mutex> lock(mutex);
 		mtime = _mtime.tv_sec;
 	}
 
 	void truncate(off_t size)
 	{
-		std::lock_guard<std::mutex> attr_lock(attr_mutex);
+		std::lock_guard<std::mutex> attr_lock(mutex);
 		if (size < content.size()) {
 			content.resize(size);
 		} else if (size > content.size()) {
@@ -210,7 +212,9 @@ class Inode {
 
 	void get_attr(struct stat *stbuf) const
 	{
-		std::lock_guard<std::mutex> lock(attr_mutex);
+		// consistent cross-domain snapshot: content lock then attr lock
+		std::lock_guard<std::mutex> lock(mutex);
+		std::lock_guard<std::mutex> attr_lock(attr_mutex);
 		stbuf->st_ino = ino;
 		stbuf->st_mode = mode;
 		stbuf->st_nlink = nlink;
@@ -225,6 +229,7 @@ class Inode {
 
 	bool is_empty() const
 	{
+		std::lock_guard<std::mutex> lock(mutex);
 		return dentries.empty();
 	}
 
@@ -464,6 +469,7 @@ Dentry *Inode::find_child(const std::string &name) const
 
 std::vector<std::pair<std::string, const Dentry *> > Inode::get_children() const
 {
+	std::lock_guard<std::mutex> lock(mutex);
 	if (!is_dir_) {
 		return {}; // Return an empty vector if this is not a directory
 	}
@@ -758,8 +764,6 @@ static void memfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		return;
 	}
 
-	inode_data->lock();
-
 	if (to_set & FUSE_SET_ATTR_MODE)
 		inode_data->set_mode(attr->st_mode);
 	if (to_set & FUSE_SET_ATTR_UID)
@@ -775,7 +779,6 @@ static void memfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 
 	struct stat st;
 	inode_data->get_attr(&st);
-	inode_data->unlock();
 
 	fuse_reply_attr(req, &st, MEMFS_ATTR_TIMEOUT);
 }
