@@ -665,6 +665,19 @@ static void memfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 		return;
 	}
 
+	// A negative offset, or an end position past the content vector's index
+	// type, would convert to a huge value in write_content and abort the
+	// resize. PTRDIFF_MAX is the std::vector size/index ceiling on both 32-
+	// and 64-bit builds.
+	if (offset < 0) {
+		fuse_reply_err(req, EINVAL);
+		return;
+	}
+	if ((uint64_t)offset > (uint64_t)PTRDIFF_MAX - size) {
+		fuse_reply_err(req, EFBIG);
+		return;
+	}
+
 	inode->write_content(buf, size, offset);
 	fuse_reply_write(req, size);
 }
@@ -683,6 +696,13 @@ static void memfs_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 		std::vector<char> content(size);
 		null_io_fill(content.data(), content.size());
 		fuse_reply_buf(req, content.data(), content.size());
+		return;
+	}
+
+	// A negative offset would slip past the offset >= content_size() guard
+	// on a 32-bit build (signed compare) and index before the buffer.
+	if (offset < 0) {
+		fuse_reply_err(req, EINVAL);
 		return;
 	}
 
