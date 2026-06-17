@@ -1024,6 +1024,9 @@ static void memfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 		goto out_unlock_parent;
 	}
 
+	// the reply below hands the kernel a new lookup reference
+	src_inode->inc_lookup();
+
 	memset(&e, 0, sizeof(e));
 	e.ino = ino;
 	e.attr_timeout = MEMFS_ATTR_TIMEOUT;
