@@ -977,17 +977,17 @@ static void memfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 	Inode *src_inode = nullptr;
 	Inode *parent_inode = nullptr;
 	struct fuse_entry_param e;
-	std::unique_ptr<Dentry> new_dentry;
+	Dentry *new_dentry = nullptr;
 
 	Inodes.lock();
 
-	src_inode = Inodes.find(ino);
+	src_inode = Inodes.find_locked(ino);
 	if (!src_inode) {
 		error = ENOENT;
 		goto out_unlock_global;
 	}
 
-	parent_inode = Inodes.find(newparent);
+	parent_inode = Inodes.find_locked(newparent);
 	if (!parent_inode || !parent_inode->is_dir()) {
 		error = ENOENT;
 		goto out_unlock_global;
@@ -1003,8 +1003,13 @@ static void memfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 
 	src_inode->inc_nlink();
 
-	new_dentry = std::make_unique<Dentry>(newname, src_inode);
-	parent_inode->add_child(newname, new_dentry.get());
+	new_dentry = new Dentry(newname, src_inode);
+	error = parent_inode->add_child_locked(newname, new_dentry);
+	if (error != 0) {
+		delete new_dentry;
+		src_inode->dec_nlink();
+		goto out_unlock_parent;
+	}
 
 	memset(&e, 0, sizeof(e));
 	e.ino = ino;
