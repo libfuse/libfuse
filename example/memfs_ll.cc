@@ -33,8 +33,10 @@
 #include <linux/limits.h>
 #endif
 
-#define MEMFS_ATTR_TIMEOUT 0.0
-#define MEMFS_ENTRY_TIMEOUT 0.0
+#define MEMFS_DEFAULT_TIMEOUT 0.0
+#define MEMFS_NO_TIMEOUT (24 * 60 * 60)
+#define MEMFS_ATTR_TIMEOUT  (memfs_cfg.no_timeout ? MEMFS_NO_TIMEOUT : MEMFS_DEFAULT_TIMEOUT)
+#define MEMFS_ENTRY_TIMEOUT (memfs_cfg.no_timeout ? MEMFS_NO_TIMEOUT : MEMFS_DEFAULT_TIMEOUT)
 
 #define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 
@@ -44,6 +46,8 @@
 struct memfs_config {
 	int null_io;
 	int fuse_dio;
+	int writeback_cache;
+	int no_timeout;
 };
 static struct memfs_config memfs_cfg;
 
@@ -51,6 +55,8 @@ static struct memfs_config memfs_cfg;
 static const struct fuse_opt memfs_opt_spec[] = {
 	MEMFS_OPT("null_io", null_io),
 	MEMFS_OPT("fuse_dio", fuse_dio),
+	MEMFS_OPT("writeback_cache", writeback_cache),
+	MEMFS_OPT("no_timeout", no_timeout),
 	FUSE_OPT_END
 };
 
@@ -824,6 +830,13 @@ static void memfs_releasedir(fuse_req_t req, [[maybe_unused]] fuse_ino_t ino,
 	fuse_reply_err(req, 0);
 }
 
+static void memfs_init(void *userdata, struct fuse_conn_info *conn)
+{
+	(void)userdata;
+	if (memfs_cfg.writeback_cache)
+		fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
+}
+
 static void memfs_panic(std::string_view message)
 {
 	std::cerr << "MEMFS PANIC: " << message << std::endl;
@@ -1215,6 +1228,7 @@ static void memfs_statfs(fuse_req_t req, [[maybe_unused]] fuse_ino_t ino)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-field-initializers"
 static const struct fuse_lowlevel_ops memfs_oper = {
+	.init = memfs_init,
 	.lookup = memfs_lookup,
 	.forget = memfs_forget,
 	.getattr = memfs_getattr,
@@ -1265,6 +1279,9 @@ int main(int argc, char *argv[])
 		       "                           read/write benchmarking\n"
 		       "    -o fuse_dio            enable direct I/O and parallel\n"
 		       "                           direct writes\n"
+		       "    -o writeback_cache     enable the kernel writeback cache\n"
+		       "    -o no_timeout          cache attrs and dentries\n"
+		       "                           indefinitely (default timeout is 0)\n"
 		       "    -h   --help            print help\n"
 		       "\n");
 		fuse_cmdline_help();
