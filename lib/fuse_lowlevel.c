@@ -4065,7 +4065,7 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 		goto reply_err;
 
 	err = ENOSYS;
-	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
+	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops2[in->opcode].func)
 		goto reply_err;
 
 	if (se->debug) {
