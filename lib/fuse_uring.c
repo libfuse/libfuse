@@ -61,7 +61,9 @@ struct fuse_ring_queue {
 	struct io_uring ring;
 
 	pthread_mutex_t ring_lock;
-	bool cqe_processing;
+
+	/* batched inline replies across cqe handling; flushed by the loop */
+	_Atomic bool cqe_processing;
 
 	/* size depends on queue depth */
 	struct fuse_ring_ent ent[];
@@ -160,7 +162,6 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
 				 struct fuse_ring_ent *ring_ent)
 {
-	bool locked = false;
 	struct fuse_session *se = ring_pool->se;
 	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
@@ -168,10 +169,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 	struct io_uring_sqe *sqe;
 
-	if (pthread_self() != queue->tid) {
-		pthread_mutex_lock(&queue->ring_lock);
-		locked = true;
-	}
+	pthread_mutex_lock(&queue->ring_lock);
 
 	sqe = io_uring_get_sqe(&queue->ring);
 
@@ -182,6 +180,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		 * SQEs matches the number tof requests.
 		 */
 
+		pthread_mutex_unlock(&queue->ring_lock);
 		se->error = -EIO;
 		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
 
@@ -198,11 +197,14 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 			 out->unique, ent_in_out->payload_sz);
 	}
 
+	/*
+	 * only submit when the main thread processing is not running. I.e.
+	 * No submission per request, but aggregated submission, if possible
+	 */
 	if (!queue->cqe_processing)
 		io_uring_submit(&queue->ring);
 
-	if (locked)
-		pthread_mutex_unlock(&queue->ring_lock);
+	pthread_mutex_unlock(&queue->ring_lock);
 
 	return 0;
 }
@@ -575,6 +577,8 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 {
 	struct io_uring_sqe *sqe;
 
+	pthread_mutex_lock(&queue->ring_lock);
+
 	sqe = io_uring_get_sqe(&queue->ring);
 	if (sqe == NULL) {
 		/* This is an impossible condition, unless there is a bug.
@@ -583,6 +587,7 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 		 * SQEs matches the number tof requests.
 		 */
 
+		pthread_mutex_unlock(&queue->ring_lock);
 		queue->ring_pool->se->error = -EIO;
 		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
 
@@ -609,7 +614,8 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 		break;
 	}
 
-	/* caller submits */
+	io_uring_submit(&queue->ring);
+	pthread_mutex_unlock(&queue->ring_lock);
 }
 
 static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
@@ -852,17 +858,35 @@ static void *fuse_uring_thread(void *arg)
 
 	sem_wait(&ring_pool->init_sem);
 
+	/*
+	 * Submit the registration SQEs once. Safe without ring_lock: no
+	 * request can reach this queue until the kernel sees these, so there
+	 * is no concurrent submitter yet.
+	 */
+	io_uring_submit(&queue->ring);
+
 	/* Not using fuse_session_exited(se), as that cannot be inlined */
 	while (!atomic_load_explicit(&se->mt_exited, memory_order_relaxed)) {
-		io_uring_submit_and_wait(&queue->ring, 1);
+		struct io_uring_cqe *cqe;
 
-		pthread_mutex_lock(&queue->ring_lock);
+		/*
+		 * Wait only, not submit_and_wait: the serving loop must not
+		 * flush the SQ unlocked. All SQ flushing happens under ring_lock
+		 * - in commit_sqe()/resubmit() and the batched submit below. The
+		 * returned cqe is ignored; handle_cqes() re-scans the CQ.
+		 */
+		io_uring_wait_cqe(&queue->ring, &cqe);
+
 		queue->cqe_processing = true;
+
 		err = fuse_uring_queue_handle_cqes(queue);
-		queue->cqe_processing = false;
-		pthread_mutex_unlock(&queue->ring_lock);
 		if (err < 0)
 			goto err;
+
+		pthread_mutex_lock(&queue->ring_lock);
+		queue->cqe_processing = false;
+		io_uring_submit(&queue->ring);
+		pthread_mutex_unlock(&queue->ring_lock);
 	}
 
 	return NULL;
