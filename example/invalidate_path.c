@@ -72,7 +72,8 @@ static const struct fuse_opt option_spec[] = {
 
 static void *xmp_init(struct fuse_conn_info *conn, struct fuse_config *cfg)
 {
-	(void) conn;
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
+
 	cfg->entry_timeout = NO_TIMEOUT;
 	cfg->attr_timeout = NO_TIMEOUT;
 	cfg->negative_timeout = 0;

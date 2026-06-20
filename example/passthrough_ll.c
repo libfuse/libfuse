@@ -167,6 +167,9 @@ static void lo_init(void *userdata,
 	struct lo_data *lo = (struct lo_data *)userdata;
 	bool has_flag;
 
+	/* Always replies inline on the io-uring worker thread */
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
+
 	if (lo->writeback) {
 		has_flag = fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
 		if (lo->debug && has_flag)

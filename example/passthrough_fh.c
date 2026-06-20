@@ -52,7 +52,9 @@
 static void *xmp_init(struct fuse_conn_info *conn,
 		      struct fuse_config *cfg)
 {
-	(void) conn;
+	/* Always replies inline on the io-uring worker thread */
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
+
 	cfg->use_ino = 1;
 	cfg->nullpath_ok = 1;
 
