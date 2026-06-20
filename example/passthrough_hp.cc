@@ -205,6 +205,9 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 {
 	(void)userdata;
 
+	/* Always replies inline on the io-uring worker thread */
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
+
 	if (!fuse_set_feature_flag(conn, FUSE_CAP_PASSTHROUGH))
 		fs.passthrough = false;
 

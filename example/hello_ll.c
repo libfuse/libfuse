@@ -61,6 +61,9 @@ static void hello_ll_init(void *userdata, struct fuse_conn_info *conn)
 {
 	(void)userdata;
 
+	/* Always replies inline on the io-uring worker thread */
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
+
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 	conn->no_interrupt = 1;
 

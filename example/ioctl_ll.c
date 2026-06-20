@@ -109,7 +109,9 @@ static int fioc_stat(fuse_ino_t ino, struct stat *stbuf)
 static void fioc_ll_init(void *userdata, struct fuse_conn_info *conn)
 {
 	(void)userdata;
-	(void)conn;
+
+	/* Always replies inline on the io-uring worker thread */
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
 }
 
 static void fioc_ll_getattr(fuse_req_t req, fuse_ino_t ino,
