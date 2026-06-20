@@ -353,7 +353,8 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 }
 
 static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
-				     size_t depth, int fd, int evfd)
+				     size_t depth, int fd, int evfd,
+				     bool single_issuer)
 {
 	int rc;
 	struct io_uring_params params = {0};
@@ -400,6 +401,19 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 			 "Failed to register files for ring idx %zu: %s",
 			 qid, strerror(errno));
 		return rc;
+	}
+
+	if (single_issuer) {
+		/*
+		 * Only fuse_uring_thread() issues io_uring_enter() on this
+		 * ring, so the registered ring-fd index is valid. Non-fatal -
+		 * older kernels just keep using the normal ring fd.
+		 */
+		rc = io_uring_register_ring_fd(ring);
+		if (rc < 0)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "qid=%zu register_ring_fd failed: %s\n",
+				 qid, strerror(-rc));
 	}
 
 	return 0;
@@ -793,7 +807,7 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 
 	res = fuse_queue_setup_io_uring(&queue->ring, queue->qid,
 					ring->queue_depth, se->fd,
-					queue->eventfd);
+					queue->eventfd, ring->single_issuer);
 	if (res != 0) {
 		fuse_log(FUSE_LOG_ERR, "qid=%d io_uring init failed\n",
 			 queue->qid);
