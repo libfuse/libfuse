@@ -2700,6 +2700,17 @@ bool fuse_get_feature_flag(const struct fuse_conn_info *conn,
 	return (conn->capable_ext & flag) ? true : false;
 }
 
+bool fuse_set_conn_flag(struct fuse_conn_info *conn, uint64_t flag)
+{
+	switch (flag) {
+	case FUSE_CONN_FLAG_SINGLE_ISSUER:
+		conn->io_uring_single_issuer = 1;
+		return true;
+	default:
+		return false;
+	}
+}
+
 /* Prevent bogus data races (bogus since "init" is called before
  * multi-threading becomes relevant */
 static __attribute__((no_sanitize("thread"))) void

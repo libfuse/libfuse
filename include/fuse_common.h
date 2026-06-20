@@ -698,8 +698,19 @@ struct fuse_conn_info {
 	 */
 	uint32_t no_interrupt : 1;
 
+	/**
+	 * Only meaningful with io-uring (FUSE_CAP_OVER_IO_URING).
+
+	 * The filesystem promises that every reply to an io-uring request is
+	 * sent from the same thread that received the request (the per-queue
+	 * io-uring worker), i.e. replies are never deferred to another thread.
+	 * The flag is used for io-uring optimizations.
+	 *
+	 */
+	uint32_t io_uring_single_issuer : 1;
+
 	/* reserved bits for future use */
-	uint32_t padding : 31;
+	uint32_t padding : 30;
 
 	/**
 	 * Extended capability flags that the kernel supports (read-only)
@@ -1139,6 +1150,22 @@ void fuse_unset_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
  * @return true if the flag is set, false otherwise
  */
 bool fuse_get_feature_flag(const struct fuse_conn_info *conn, uint64_t flag);
+
+/* The file system replies to requests from the same thread that received them,
+ * allowing io-uring optimizations
+ */
+#define FUSE_CONN_FLAG_SINGLE_ISSUER (1u << 0)
+
+/**
+ * Set a libfuse connection flag (a FUSE_CONN_FLAG_* value). Unlike
+ * fuse_set_feature_flag(), these are libfuse-side hints, not negotiated
+ * with the kernel.
+ *
+ * @param conn connection information
+ * @param flag a single FUSE_CONN_FLAG_* value
+ * @return true if the flag is known to this libfuse and was set, false otherwise
+ */
+bool fuse_set_conn_flag(struct fuse_conn_info *conn, uint64_t flag);
 
 /*
  * DO NOT USE: Not part of public API, for internal test use only.
