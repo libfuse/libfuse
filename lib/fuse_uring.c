@@ -75,6 +75,9 @@ struct fuse_ring_queue {
 struct fuse_ring_pool {
 	struct fuse_session *se;
 
+	/* mirror of se->conn.io_uring_single_issuer, fixed at ring creation */
+	bool single_issuer;
+
 	/* number of queues */
 	size_t nr_queues;
 
@@ -162,6 +165,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
 				 struct fuse_ring_ent *ring_ent)
 {
+	const bool locked = !ring_pool->single_issuer;
 	struct fuse_session *se = ring_pool->se;
 	struct fuse_uring_req_header *rrh = ring_ent->req_header;
 	struct fuse_out_header *out = (struct fuse_out_header *)&rrh->in_out;
@@ -169,7 +173,14 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 	struct io_uring_sqe *sqe;
 
-	pthread_mutex_lock(&queue->ring_lock);
+	/*
+	 * Multi-issuer: serialise every submission-side SQ access under
+	 * ring_lock. Single-issuer: only the uring thread submits, so skip the
+	 * lock and batch inline replies (cqe_processing), flushed by the next
+	 * submit_and_wait().
+	 */
+	if (locked)
+		pthread_mutex_lock(&queue->ring_lock);
 
 	sqe = io_uring_get_sqe(&queue->ring);
 
@@ -180,7 +191,8 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		 * SQEs matches the number tof requests.
 		 */
 
-		pthread_mutex_unlock(&queue->ring_lock);
+		if (locked)
+			pthread_mutex_unlock(&queue->ring_lock);
 		se->error = -EIO;
 		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
 
@@ -197,14 +209,11 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 			 out->unique, ent_in_out->payload_sz);
 	}
 
-	/*
-	 * only submit when the main thread processing is not running. I.e.
-	 * No submission per request, but aggregated submission, if possible
-	 */
-	if (!queue->cqe_processing)
+	if (!atomic_load_explicit(&queue->cqe_processing, memory_order_relaxed))
 		io_uring_submit(&queue->ring);
 
-	pthread_mutex_unlock(&queue->ring_lock);
+	if (locked)
+		pthread_mutex_unlock(&queue->ring_lock);
 
 	return 0;
 }
@@ -537,6 +546,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	fuse_ring->queue_depth = se->uring.q_depth;
 	fuse_ring->max_req_payload_sz = payload_sz;
 	fuse_ring->queue_mem_size = queue_sz;
+	fuse_ring->single_issuer = se->conn.io_uring_single_issuer;
 
 	/*
 	 * very basic queue initialization, that cannot fail and will
@@ -570,9 +580,11 @@ err:
 static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 				struct fuse_ring_ent *ent)
 {
+	const bool locked = !queue->ring_pool->single_issuer;
 	struct io_uring_sqe *sqe;
 
-	pthread_mutex_lock(&queue->ring_lock);
+	if (locked)
+		pthread_mutex_lock(&queue->ring_lock);
 
 	sqe = io_uring_get_sqe(&queue->ring);
 	if (sqe == NULL) {
@@ -582,7 +594,8 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 		 * SQEs matches the number tof requests.
 		 */
 
-		pthread_mutex_unlock(&queue->ring_lock);
+		if (locked)
+			pthread_mutex_unlock(&queue->ring_lock);
 		queue->ring_pool->se->error = -EIO;
 		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
 
@@ -609,8 +622,10 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 		break;
 	}
 
-	io_uring_submit(&queue->ring);
-	pthread_mutex_unlock(&queue->ring_lock);
+	if (!atomic_load_explicit(&queue->cqe_processing, memory_order_relaxed))
+		io_uring_submit(&queue->ring);
+	if (locked)
+		pthread_mutex_unlock(&queue->ring_lock);
 }
 
 static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
@@ -828,6 +843,7 @@ static void *fuse_uring_thread(void *arg)
 	struct fuse_ring_queue *queue = arg;
 	struct fuse_ring_pool *ring_pool = queue->ring_pool;
 	struct fuse_session *se = ring_pool->se;
+	const bool single_issuer = ring_pool->single_issuer;
 	int err;
 	char thread_name[16] = { 0 };
 
@@ -854,34 +870,57 @@ static void *fuse_uring_thread(void *arg)
 	sem_wait(&ring_pool->init_sem);
 
 	/*
-	 * Submit the registration SQEs once. Safe without ring_lock: no
-	 * request can reach this queue until the kernel sees these, so there
-	 * is no concurrent submitter yet.
+	 * Multi-issuer flushes the registration SQEs here - safe without
+	 * ring_lock, no request can reach this queue yet. Single-issuer's
+	 * first submit_and_wait() below flushes them instead.
 	 */
-	io_uring_submit(&queue->ring);
+	if (!single_issuer)
+		io_uring_submit(&queue->ring);
 
 	/* Not using fuse_session_exited(se), as that cannot be inlined */
 	while (!atomic_load_explicit(&se->mt_exited, memory_order_relaxed)) {
-		struct io_uring_cqe *cqe;
+		/*
+		 * Single-issuer: one combined submit_and_wait() flushes the
+		 * previous iteration's batched replies and waits. Multi-issuer:
+		 * split it - wait only here (no ring_lock) so off-thread
+		 * repliers keep submitting; the batched inline replies are
+		 * flushed below. The returned cqe is ignored; handle_cqes()
+		 * re-scans and advances the CQ.
+		 */
+		if (single_issuer) {
+			io_uring_submit_and_wait(&queue->ring, 1);
+		} else {
+			struct io_uring_cqe *cqe;
+
+			io_uring_wait_cqe(&queue->ring, &cqe);
+		}
 
 		/*
-		 * Wait only, not submit_and_wait: the serving loop must not
-		 * flush the SQ unlocked. All SQ flushing happens under ring_lock
-		 * - in commit_sqe()/resubmit() and the batched submit below. The
-		 * returned cqe is ignored; handle_cqes() re-scans the CQ.
+		 * Batch inline replies (commit_sqe()/resubmit()) across cqe
+		 * handling. Lock-free: the flag only gates who submits, while
+		 * the SQ stays serialised by ring_lock, so a reply that batched
+		 * here is always flushed by the submit below before the next
+		 * wait - it is never stranded.
 		 */
-		io_uring_wait_cqe(&queue->ring, &cqe);
-
-		queue->cqe_processing = true;
+		atomic_store_explicit(&queue->cqe_processing, true,
+				      memory_order_relaxed);
 
 		err = fuse_uring_queue_handle_cqes(queue);
 		if (err < 0)
 			goto err;
 
-		pthread_mutex_lock(&queue->ring_lock);
-		queue->cqe_processing = false;
-		io_uring_submit(&queue->ring);
-		pthread_mutex_unlock(&queue->ring_lock);
+		atomic_store_explicit(&queue->cqe_processing, false,
+				      memory_order_relaxed);
+
+		/*
+		 * Multi-issuer does not use io_uring_submit_and_wait(),
+		 * but io_uring_wait_cqe() and locked io_uring_submit().
+		 */
+		if (!single_issuer) {
+			pthread_mutex_lock(&queue->ring_lock);
+			io_uring_submit(&queue->ring);
+			pthread_mutex_unlock(&queue->ring_lock);
+		}
 	}
 
 	return NULL;

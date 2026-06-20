@@ -224,6 +224,7 @@ FUSE_3.18 {
 
 FUSE_3.19 {
 	global:
+		fuse_set_conn_flag;
 		fuse_session_start_teardown_watchdog;
 		fuse_session_stop_teardown_watchdog;
 		fuse_lowlevel_notify_prune;
