@@ -28,6 +28,19 @@ separate set of API functions.
 The high-level API that is primarily specified in fuse.h. The
 low-level API that is primarily documented in fuse_lowlevel.h.
 
+## Running a filesystem as a systemd service ##
+
+A FUSE server can also be run as a sandboxed, socket-activated systemd
+service rather than as a child of the mounting process. In this model the
+server runs under its own unprivileged identity and in private namespaces,
+while a small setuid helper (fuservicemount3) performs the mount on its
+behalf. Servers use the service API in fuse_service.h; the service_hl.c and
+service_ll.c examples show the high- and low-level variants.
+
+The README.service-mount and README.service-mount-dev files in the source
+*doc* directory document this feature for administrators and filesystem
+authors respectively.
+
 ## Examples ##
 
 FUSE comes with several examples in the <a

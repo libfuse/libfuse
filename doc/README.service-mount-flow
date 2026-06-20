@@ -1,0 +1,201 @@
+How a service mount is set up
+=============================
+
+How a fuse server, the libfuse service code, and the fuservicemount3 mount
+helper set up a mount together: who talks to whom, over which transport, and
+where each side checks what the other sent. README.service-mount-dev
+describes the protocol and the API; this file follows the code.
+
+
+Participants
+------------
+
+  - fuservicemount3          util/mount_service.c   separate process, setuid
+                                                    root, spawned by
+                                                    mount.fuse3 or run by hand
+  - libfuse service code     lib/fuse_service.c     linked into the fuse server
+  - fuse server              example/service_ll.c   same process as the library
+
+The flow graph below puts the process boundary between its first two
+columns. lib/fuse_service.c is compiled into the fuse server, so placing
+fuservicemount3 between the other two would draw two boundaries where there
+is one.
+
+Transports:
+
+  - AF_UNIX SOCK_SEQPACKET between fuservicemount3 and lib/fuse_service.c.
+    fuservicemount3 calls connect(); the fuse server receives the already
+    connected socket as SD_LISTEN_FDS_START via systemd socket activation
+    (Accept=yes), so fuse_service_accept() never calls accept(2).
+  - SCM_RIGHTS on that socket for the argv memfd, /dev/fuse, and each file
+    the server asks for with "OPEN" or "BDEV".
+
+
+Overview
+--------
+
+fuservicemount3 runs as root and does everything that needs privilege. The
+fuse server runs sandboxed and only asks. "Entry points" and "Flow" below show
+the steps and the main checks.
+
+legend: ---> request, data or file descriptor;  <--- reply or request back
+
+ user: mount -t fuse.<subtype> <image> <mountpoint>
+   |
+   v
+ mount.fuse3 -> fuservicemount3                     fuse server
+ (setuid root, trusted)                             (systemd service, sandboxed)
+ -----------------------------------------------    -----------------------------
+ connect /run/fuse/<subtype>         ----------->   systemd starts the server
+ hello, argv memfd, /dev/fuse        ----------->   fuse_service_accept()
+                                                    parse the arguments
+ path named on the command line      <-----------   OPEN <image>
+ or listed in fuse.conf?
+   yes: open as the user, send fd    ----------->   keep the fd as backing store
+   no:  EPERM                                       fuse_service_finish_file_requests()
+ mount point on the command line?    <-----------   MNTP <mountpoint>
+   open it as the user and pin it
+ mount the fuse filesystem           <-----------   DOIT
+ exit                                <-----------   BYEE
+   |                                                serve FUSE requests from the
+   v                                                kernel until umount
+ mount(8) returns
+
+
+Entry points
+------------
+
+Two binaries link the same mount_service.c (util/meson.build) and both funnel
+into mount_service_main(). mount(8) only ever execs mount.fuse3;
+fuservicemount3 is reached by direct invocation or because mount.fuse3
+spawned it, which is also the only place a second process appears. The last
+step below, mount_service_connect(), is where the socket to the fuse server
+is created and connected.
+
+ mount(8)  -t fuse.<subtype>  <source> <mountpoint> [-o opts]
+   |  execs /sbin/mount.fuse3            user, directly:
+   |                                     fuservicemount3 <source> <mountpoint> -t fuse.<subtype>
+   v                                       v
+ /sbin/mount.fuse3                       /sbin/fuservicemount3
+ util/mount.fuse.c   main()              util/fuservicemount.c  main()
+   |  strips "fuse." / "fuseblk."          |  also spawned by mount.fuse3
+   |  no setuid=, no drop_privileges       |  when not root, see below
+   |    -> try_service_main()              |
+   v                                       |  exactly "-t FSTYPE --check"?
+ try_service_main()                        |    exit 0/1, mounts nothing
+   no socket, no write access, or          |
+   name too long -> FALLBACK_NEEDED        |
+   +- getuid() != 0                        |
+   |    spawn fuservicemount3           ---+  a SECOND process starts here;
+   |      fails -> FALLBACK_NEEDED         |  the parent waitpid()s
+   |                                       |  and returns its exit status
+   +- getuid() == 0                        |
+        mount_service_main()               +-> mount_service_main()
+             |                                 |
+             +----------------+----------------+
+                              v
+             mount_service_main()          util/mount_service.c
+               read fuse.conf as the user
+               mount_service_init()
+                 subtype from the fstype, reject a '/' in it
+                 open the working directory as the user
+               mount_service_connect()
+                 connect to /run/fuse/<subtype> as the user
+                 path longer than sun_path -> exit failure
+                 send buffer too small, no socket, or no
+                 listener -> MOUNT_SERVICE_FALLBACK_NEEDED
+                             |
+                             v
+      a systemd .socket unit with Accept=yes is listening on
+      /run/fuse/<subtype>; it accepts the connection and spawns the
+      fuse server, handing it the connected fd as SD_LISTEN_FDS_START.
+      example/ carries units for the examples (null, service_ll, service_hl:
+      *.socket.in configured into *.socket, plus *@.service), none of which
+      meson installs. The socket directory comes from the meson option
+      service-socket-dir, built into FUSE_SERVICE_SOCKET_DIR (fuse_config.h).
+                             |
+                             v
+              continues in the three-column graph below
+
+MOUNT_SERVICE_FALLBACK_NEEDED on the mount.fuse3 path makes main() in
+mount.fuse3 run the filesystem server program itself, as it did before
+service mounts: /bin/sh -c "<subtype> [<source>] <mountpoint> [-o <options>]".
+
+
+Flow
+----
+
+The horizontal rule across the middle is the phase boundary. Above it the
+server is blocked inside its single fuse_service_accept() call and
+fuservicemount3 does the pushing (hello, argv memfd, /dev/fuse). Below it
+that call has returned, the server drives every step, and each socket message
+travels the other way: the server sends a command, fuservicemount3 replies.
+
+The server sends its "OPEN" and "BDEV" requests before
+fuse_service_finish_file_requests(), and the mount commands from
+fuse_service_session_mount() after it.
+
+ fuservicemount3 (separate process)       #  lib/fuse_service.c                        |  fuse server
+ util/mount_service.c                     #  (linked into the server)                  |  example/service_ll.c
+ setuid root, or mount.fuse3 as root      #                                            |
+==========================================+============================================+========================
+                                          #              one process                   |
+ mount_service_connect() done             #   systemd started the fuse server          |
+   (see "Entry points" above)             #   with the connected fd                    |
+                                          #                                            |
+                                          #                                            |  main()
+                                          #  fuse_service_accept()  <------------------+--  fuse_service_accept()
+                                          #    check the socket fd from systemd        |
+                                          #                                            |
+ mount_service_send_hello() --------------+-> negotiate_hello()                        |
+   "SAFT": versions and flags             #     bad magic, version or flags -> error   |
+   "LAST" hello reply  <------------------+-- reply with the chosen version            |
+                                          #                                            |
+ mount_service_capture_args()             #                                            |
+   copy argv into a memfd                 #                                            |
+   memfd larger than                      #                                            |
+   FUSE_SERVICE_MAX_ARGV_SIZE             #                                            |
+     -> exit failure                      #                                            |
+ mount_service_send_required_files()      #                                            |
+   "FILE" + argv memfd -------------------+-> fuse_service_receive_file(ARGV)          |
+   "FILE" + /dev/fuse --------------------+-> fuse_service_receive_file(FUSEDEV)       |
+-- fuse_service_accept() returns ---------+-- traffic direction reverses --------------+-- server drives below --
+ main loop: while (running)               #                                            |
+   mount_service_receive_command()        #  fuse_service_append_args()  <-------------+--  fuse_service_append_args()
+     command larger than                  #    read the arguments from the memfd       |
+     FUSE_SERVICE_MAX_CMD_SIZE            #    memfd larger than                       |
+       -> exit failure                    #      FUSE_SERVICE_MAX_ARGV_SIZE,           |
+                                          #    argc 0 or more than the memfd holds,    |
+                                          #    argument longer than the memfd          |
+                                          #      -> -EBADMSG                           |  fuse_opt_parse()
+                                          #  fuse_service_parse_cmdline_opts()  <------+--  fuse_service_parse_cmdline_opts()
+                                          #                                            |
+   "OPEN" / "BDEV"  <---------------------+-- fuse_service_request_file()  <-----------+--  single_file_service_open()
+     not on the command line and not      #   or fuse_service_request_blockdev()       |
+     listed in fuse.conf -> EPERM         #                                            |
+     open it as the user                  #                                            |
+     "FILE" + fd, or -errno --------------+-> fuse_service_receive_file(path)          |
+                                          #                                            |
+                                          #  fuse_service_finish_file_requests()  <----+--  fuse_service_finish_file_requests()
+                                          #    no more fds accepted                    |  fuse_session_new()
+                                          #                                            |
+                                          #  fuse_service_session_mount()  <-----------+--  fuse_service_session_mount()
+   "TYPE"  <------------------------------+-- one command per mount parameter          |
+     fuseblk, not root -> EPERM           #                                            |
+   "NAME"  <------------------------------+--                                          |
+   "MNTP"  <------------------------------+--                                          |
+     not on the command line -> EINVAL    #                                            |
+     open it as the user and pin it       #                                            |
+   "OPTS"  <------------------------------+--                                          |
+     allow_other/allow_root, not root,    #                                            |
+     no user_allow_other -> EPERM         #                                            |
+   "MTAB"  <------------------------------+--                                          |
+   "DOIT"  <------------------------------+--                                          |
+     not root: limit mounts, reject       #                                            |
+     unsafe flags, check mount point      #                                            |
+     mount the fuse filesystem            #                                            |
+   "REPL" after each command -------------+-> error -> -errno to the caller            |
+                                          #                                            |
+   "BYEE"  <------------------------------+-- fuse_service_send_goodbye()  <-----------+--  fuse_service_send_goodbye(0)
+ exit                                     #                                            |  fuse_session_loop[_mt]()
+                                          #                                            |    serves until umount
