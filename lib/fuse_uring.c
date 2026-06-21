@@ -60,6 +60,9 @@ struct fuse_ring_ent {
 
 	/* header and payload */
 	struct iovec iov[2];
+
+	/* app-owned mode: io_uring user_data of the SQEs of this entry */
+	struct fuse_uring_completion comp;
 };
 
 struct fuse_ring_queue {
@@ -80,6 +83,9 @@ struct fuse_ring_queue {
 	 */
 	void *payload_mem;
 	size_t payload_mem_sz;
+
+	/* opaque MR of payload_mem from the app payload hook, or NULL */
+	void *payload_mr;
 
 	/*
 	 * Index of payload_mem in this ring's registered buffer table, or -1
@@ -106,6 +112,9 @@ struct fuse_ring_queue {
 
 	/* one for the pool, one per entry handed to the application */
 	_Atomic int ref_cnt;
+
+	/* app-owned (reactor) mode: selects the commit tail */
+	bool app_owned;
 
 	/* size depends on queue depth */
 	struct fuse_ring_ent ent[];
@@ -353,12 +362,27 @@ int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
 	*payload = ring_ent->op_payload;
 	*payload_sz = ring_ent->req_payload_sz;
 
-	/*
-	 * For now unused, but will be used later when the application can
-	 * allocate the buffers itself and register them for rdma.
-	 */
+	/* opaque MR from the app payload hook (NULL with the default allocator) */
 	if (mr)
-		*mr = NULL;
+		*mr = ring_ent->ring_queue->payload_mr;
+
+	return 0;
+}
+
+int fuse_uring_set_app_ops(struct fuse_session *se,
+			   const struct fuse_uring_app_ops *ops,
+			   size_t op_size, void *userdata)
+{
+	if (ops == NULL)
+		return -EINVAL;
+
+	/* Copy at most what this libfuse knows about (ABI growth via op_size) */
+	if (op_size > sizeof(se->uring.app_ops))
+		op_size = sizeof(se->uring.app_ops);
+
+	memset(&se->uring.app_ops, 0, sizeof(se->uring.app_ops));
+	memcpy(&se->uring.app_ops, ops, op_size);
+	se->uring.app_ops_userdata = userdata;
 
 	return 0;
 }
@@ -589,6 +613,7 @@ static void fuse_uring_pool_put(struct fuse_ring_pool *fuse_ring)
 static void fuse_uring_queue_destroy(struct fuse_ring_queue *queue)
 {
 	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
+	struct fuse_session_uring *uring = &fuse_ring->se->uring;
 
 	if (queue->eventfd >= 0) {
 		close(queue->eventfd);
@@ -605,8 +630,16 @@ static void fuse_uring_queue_destroy(struct fuse_ring_queue *queue)
 	}
 
 	/* op_payload of every entry points into this */
-	if (queue->payload_mem != NULL)
-		munmap(queue->payload_mem, queue->payload_mem_sz);
+	if (queue->payload_mem != NULL) {
+		if (uring->app_ops.free_payload_mem)
+			uring->app_ops.free_payload_mem(uring->app_ops_userdata,
+							queue->qid,
+							queue->payload_mem,
+							queue->payload_mem_sz,
+							queue->payload_mr);
+		else
+			munmap(queue->payload_mem, queue->payload_mem_sz);
+	}
 
 	pthread_mutex_destroy(&queue->ring_lock);
 	fuse_uring_pool_put(fuse_ring);
@@ -1286,38 +1319,25 @@ static void *alloc_local(size_t size)
 }
 
 /*
- * @return negative error code or io-uring file descriptor
+ * Give the queue its header and payload buffers and prepare its entries for
+ * registration. Shared by the libfuse-owned and the app-owned driver.
  */
-static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
+static int fuse_uring_queue_alloc_buffers(struct fuse_ring_queue *queue)
 {
 	struct fuse_ring_pool *ring = queue->ring_pool;
 	struct fuse_session *se = ring->se;
-	int res;
 	size_t page_sz = sysconf(_SC_PAGESIZE);
-
-	queue->eventfd = eventfd(0, EFD_CLOEXEC);
-	if (queue->eventfd < 0) {
-		res = -errno;
-		fuse_log(FUSE_LOG_ERR,
-			 "Failed to create eventfd for qid %d: %s\n",
-			 queue->qid, strerror(errno));
-		return res;
-	}
-
-	res = fuse_queue_setup_io_uring(&queue->ring, queue->qid,
-					ring->queue_depth, se->fd,
-					queue->eventfd, ring->single_issuer);
-	if (res != 0) {
-		fuse_log(FUSE_LOG_ERR, "qid=%d io_uring init failed\n",
-			 queue->qid);
-		return res;
-	}
 
 	queue->req_header_sz = ROUND_UP(sizeof(struct fuse_uring_req_header),
 				       page_sz);
 
 	queue->payload_mem_sz = ring->queue_depth * ring->payload_chunk_sz;
-	queue->payload_mem = alloc_local(queue->payload_mem_sz);
+	if (se->uring.app_ops.alloc_payload_mem)
+		queue->payload_mem = se->uring.app_ops.alloc_payload_mem(
+			se->uring.app_ops_userdata, queue->qid,
+			queue->payload_mem_sz, &queue->payload_mr);
+	else
+		queue->payload_mem = alloc_local(queue->payload_mem_sz);
 	if (!queue->payload_mem)
 		return -ENOMEM;
 
@@ -1345,10 +1365,51 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		req->flags.is_uring = 1;
 		req->ref_cnt = 1; /* extra ref to avoid destruction */
 		list_init_req(req);
+
+		/*
+		 * Completion handle used by the app-owned driver; the CQE
+		 * callback is wired by the app-owned lifecycle code.
+		 */
+		ring_ent->comp.cqe_cb = NULL;
+		ring_ent->last_cmd = FUSE_IO_URING_CMD_REGISTER;
 	}
 
 	if (!queue->use_bufpool)
 		fuse_uring_bind_ent_payloads(queue);
+
+	return 0;
+}
+
+/*
+ * @return negative error code or io-uring file descriptor
+ */
+static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
+{
+	struct fuse_ring_pool *ring = queue->ring_pool;
+	struct fuse_session *se = ring->se;
+	int res;
+
+	queue->eventfd = eventfd(0, EFD_CLOEXEC);
+	if (queue->eventfd < 0) {
+		res = -errno;
+		fuse_log(FUSE_LOG_ERR,
+			 "Failed to create eventfd for qid %d: %s\n",
+			 queue->qid, strerror(errno));
+		return res;
+	}
+
+	res = fuse_queue_setup_io_uring(&queue->ring, queue->qid,
+					ring->queue_depth, se->fd,
+					queue->eventfd, ring->single_issuer);
+	if (res != 0) {
+		fuse_log(FUSE_LOG_ERR, "qid=%d io_uring init failed\n",
+			 queue->qid);
+		return res;
+	}
+
+	res = fuse_uring_queue_alloc_buffers(queue);
+	if (res != 0)
+		return res;
 
 	return queue->ring.ring_fd;
 }

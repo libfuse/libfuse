@@ -11,6 +11,7 @@
 
 #include "fuse.h"
 #include "fuse_lowlevel.h"
+#include "fuse_uring.h"
 #include "util.h"
 
 #include <pthread.h>
@@ -84,6 +85,10 @@ typedef void (*fuse_teardown_waiting_fn)(void);
 struct fuse_session_uring {
 	/* the wish until FUSE_INIT is negotiated, the result afterwards */
 	bool enabled;
+
+	/* application owns the ring (reactor mode) instead of libfuse */
+	bool app_owned;
+
 	unsigned int q_depth;
 
 	/*
@@ -95,6 +100,10 @@ struct fuse_session_uring {
 
 	struct fuse_ring_pool *pool;
 	_Atomic fuse_teardown_waiting_fn fsu_test_teardown_waiting;
+
+	/* optional app payload-allocation hooks (zeroed = libfuse default) */
+	struct fuse_uring_app_ops app_ops;
+	void *app_ops_userdata;
 };
 
 struct fuse_timeout_thread;
