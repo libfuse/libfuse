@@ -3420,6 +3420,17 @@ int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
 	(void)mr;
 	return -ENOTSUP;
 }
+
+int fuse_uring_set_app_ops(struct fuse_session *se,
+			   const struct fuse_uring_app_ops *ops,
+			   size_t op_size, void *userdata)
+{
+	(void)se;
+	(void)ops;
+	(void)op_size;
+	(void)userdata;
+	return -ENOTSUP;
+}
 #endif
 
 static struct {

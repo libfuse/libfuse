@@ -39,6 +39,10 @@ struct fuse_ring_ent {
 
 	struct fuse_uring_req_header *req_header;
 	void *op_payload;
+
+	/* opaque MR for op_payload from the app payload hook, or NULL */
+	void *op_payload_mr;
+
 	size_t req_payload_sz;
 
 	/* commit id of a fuse request */
@@ -48,6 +52,12 @@ struct fuse_ring_ent {
 
 	/* header and payload */
 	struct iovec iov[2];
+
+	/* app-owned mode: completion handed to the app by fuse_uring_prep_sqe */
+	struct fuse_uring_completion comp;
+
+	/* app-owned mode: singly-linked FIFO of entries awaiting an SQE */
+	struct fuse_ring_ent *pend_next;
 };
 
 struct fuse_ring_queue {
@@ -62,6 +72,20 @@ struct fuse_ring_queue {
 
 	pthread_mutex_t ring_lock;
 	bool cqe_processing;
+
+	/* app-owned (reactor) mode: selects the commit tail */
+	bool app_owned;
+
+	/* entries awaiting an SQE (REGISTER or COMMIT_AND_FETCH) */
+	struct fuse_ring_ent *pend_head;
+	struct fuse_ring_ent *pend_tail;
+
+	/*
+	 * Per-buffer address + MR arrays from the app payload hook, kept so
+	 * free_payloads() can reverse the batch; NULL with the default allocator.
+	 */
+	void **payload_bufs;
+	void **payload_mrs;
 
 	/* size depends on queue depth */
 	struct fuse_ring_ent ent[];
@@ -442,12 +466,27 @@ int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
 	*payload = ring_ent->op_payload;
 	*payload_sz = ring_ent->req_payload_sz;
 
-	/*
-	 * For now unused, but will be used later when the application can
-	 * allocate the buffers itself and register them for rdma.
-	 */
+	/* opaque MR from the app payload hook (NULL with the default allocator) */
 	if (mr)
-		*mr = NULL;
+		*mr = ring_ent->op_payload_mr;
+
+	return 0;
+}
+
+int fuse_uring_set_app_ops(struct fuse_session *se,
+			   const struct fuse_uring_app_ops *ops,
+			   size_t op_size, void *userdata)
+{
+	if (ops == NULL)
+		return -EINVAL;
+
+	/* Copy at most what this libfuse knows about (ABI growth via op_size) */
+	if (op_size > sizeof(se->uring.app_ops))
+		op_size = sizeof(se->uring.app_ops);
+
+	memset(&se->uring.app_ops, 0, sizeof(se->uring.app_ops));
+	memcpy(&se->uring.app_ops, ops, op_size);
+	se->uring.app_ops_userdata = userdata;
 
 	return 0;
 }
@@ -610,6 +649,169 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 	return 0;
 }
 
+/*
+ * NUMA-allocate @size bytes on @node, falling back to the local node when
+ * @node is unknown (numa_node_of_cpu() can return -1). Unlike numa_alloc_local
+ * the placement does not depend on the calling thread, which lets the app-owned
+ * driver allocate every queue's buffers centrally (see fuse_uring_app_start()).
+ */
+static void *fuse_uring_numa_alloc(int node, size_t size)
+{
+	if (node < 0)
+		return numa_alloc_local(size);
+
+	return numa_alloc_onnode(size, node);
+}
+
+/*
+ * Allocate the queue's op-payload buffers in one batch and point each entry's
+ * op_payload at its slot. With the app hook, alloc_payloads fills bufs[]/mrs[]
+ * (one MR for the whole slab, or per-buffer), and the arrays are kept for
+ * free_payloads(). Without it, one numa_alloc_onnode slab is sliced at a
+ * page-aligned stride, with no MR. Buffers land on the queue's NUMA node.
+ */
+static int fuse_uring_queue_alloc_payloads(struct fuse_ring_queue *queue)
+{
+	struct fuse_ring_pool *ring = queue->ring_pool;
+	struct fuse_session *se = ring->se;
+	unsigned int count = ring->queue_depth;
+	size_t size = ring->max_req_payload_sz;
+	size_t page_sz = sysconf(_SC_PAGESIZE);
+	size_t stride = ROUND_UP(size, page_sz);
+
+	if (se->uring.app_ops.alloc_payloads) {
+		void **bufs = calloc(count, sizeof(*bufs));
+		void **mrs = calloc(count, sizeof(*mrs));
+		int res;
+
+		if (bufs == NULL || mrs == NULL) {
+			free(bufs);
+			free(mrs);
+			return -ENOMEM;
+		}
+
+		res = se->uring.app_ops.alloc_payloads(
+			se->uring.app_ops_userdata, count, size, page_sz,
+			queue->numa_node, bufs, mrs);
+		if (res != 0) {
+			free(bufs);
+			free(mrs);
+			return res;
+		}
+
+		queue->payload_bufs = bufs;
+		queue->payload_mrs = mrs;
+		for (unsigned int idx = 0; idx < count; idx++) {
+			queue->ent[idx].op_payload = bufs[idx];
+			queue->ent[idx].op_payload_mr = mrs[idx];
+			queue->ent[idx].req_payload_sz = size;
+		}
+	} else {
+		char *slab = fuse_uring_numa_alloc(queue->numa_node,
+						   count * stride);
+		if (slab == NULL)
+			return -ENOMEM;
+
+		for (unsigned int idx = 0; idx < count; idx++) {
+			queue->ent[idx].op_payload = slab + idx * stride;
+			queue->ent[idx].op_payload_mr = NULL;
+			queue->ent[idx].req_payload_sz = size;
+		}
+	}
+
+	return 0;
+}
+
+/* Free the queue's op-payload buffers allocated by the function above. */
+static void fuse_uring_queue_free_payloads(struct fuse_ring_queue *queue)
+{
+	struct fuse_ring_pool *ring = queue->ring_pool;
+	struct fuse_session *se = ring->se;
+	unsigned int count = ring->queue_depth;
+	size_t size = ring->max_req_payload_sz;
+	size_t page_sz = sysconf(_SC_PAGESIZE);
+	size_t stride = ROUND_UP(size, page_sz);
+
+	if (queue->ent[0].op_payload == NULL)
+		return; /* never allocated (e.g. partially-built queue) */
+
+	if (queue->payload_bufs != NULL) {
+		/*
+		 * Allocated by the app hook: let it free (only if it gave a free
+		 * hook - never numa_free() app/RDMA memory), then drop the arrays.
+		 */
+		if (se->uring.app_ops.free_payloads)
+			se->uring.app_ops.free_payloads(
+				se->uring.app_ops_userdata, count,
+				queue->payload_bufs, queue->payload_mrs);
+		free(queue->payload_bufs);
+		free(queue->payload_mrs);
+		queue->payload_bufs = NULL;
+		queue->payload_mrs = NULL;
+	} else {
+		numa_free(queue->ent[0].op_payload, count * stride);
+	}
+
+	for (unsigned int idx = 0; idx < count; idx++) {
+		queue->ent[idx].op_payload = NULL;
+		queue->ent[idx].op_payload_mr = NULL;
+	}
+}
+
+/*
+ * Allocate the per-entry header buffer and initialise the embedded fuse_req and
+ * the completion handle. The op payload is allocated per-queue in a batch by
+ * fuse_uring_queue_alloc_payloads(). Shared by the libfuse-owned and app-owned
+ * drivers; the header lands on the queue's NUMA node regardless of the caller.
+ */
+static int fuse_uring_ent_alloc_buffers(struct fuse_ring_queue *queue,
+					struct fuse_ring_ent *ring_ent)
+{
+	struct fuse_ring_pool *ring = queue->ring_pool;
+	struct fuse_session *se = ring->se;
+	struct fuse_req *req = &ring_ent->req;
+
+	ring_ent->ring_queue = queue;
+
+	/*
+	 * Also allocate the header to have it page aligned, which is a
+	 * requirement for page pinning
+	 */
+	ring_ent->req_header =
+		fuse_uring_numa_alloc(queue->numa_node, queue->req_header_sz);
+	if (!ring_ent->req_header)
+		return -ENOMEM;
+
+	req->se = se;
+	pthread_mutex_init(&req->lock, NULL);
+	req->flags.is_uring = 1;
+	req->ref_cnt = 1; /* extra ref to avoid destruction */
+	list_init_req(req);
+
+	/*
+	 * Completion handle used by the app-owned driver; the CQE callback is
+	 * wired by the app-owned lifecycle code. Harmless for libfuse-owned.
+	 */
+	ring_ent->comp.cqe_cb = NULL;
+	ring_ent->comp.fuse_user_data = ring_ent;
+	ring_ent->comp.app_data = NULL;
+	ring_ent->last_cmd = FUSE_IO_URING_CMD_REGISTER;
+
+	return 0;
+}
+
+/*
+ * Free the per-entry header buffer. Tolerates NULL so it can clean up a
+ * partially-allocated entry; the op payload is freed per-queue by
+ * fuse_uring_queue_free_payloads().
+ */
+static void fuse_uring_ent_free_buffers(struct fuse_ring_queue *queue,
+					struct fuse_ring_ent *ring_ent)
+{
+	if (ring_ent->req_header)
+		numa_free(ring_ent->req_header, queue->req_header_sz);
+}
+
 static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 {
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
@@ -638,11 +840,11 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 		if (queue->ring.ring_fd != -1)
 			io_uring_queue_exit(&queue->ring);
 
+		fuse_uring_queue_free_payloads(queue);
 		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
 
-			numa_free(ent->op_payload, ent->req_payload_sz);
-			numa_free(ent->req_header, queue->req_header_sz);
+			fuse_uring_ent_free_buffers(queue, ent);
 		}
 
 		pthread_mutex_destroy(&queue->ring_lock);
@@ -1127,28 +1329,16 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 	queue->req_header_sz = ROUND_UP(sizeof(struct fuse_ring_ent),
 				       page_sz);
 
+	res = fuse_uring_queue_alloc_payloads(queue);
+	if (res != 0)
+		return res;
+
 	for (size_t idx = 0; idx < ring->queue_depth; idx++) {
 		struct fuse_ring_ent *ring_ent = &queue->ent[idx];
-		struct fuse_req *req = &ring_ent->req;
 
-		ring_ent->ring_queue = queue;
-
-		/*
-		 * Also allocate the header to have it page aligned, which
-		 * is a requirement for page pinning
-		 */
-		ring_ent->req_header =
-			numa_alloc_local(queue->req_header_sz);
-		ring_ent->req_payload_sz = ring->max_req_payload_sz;
-
-		ring_ent->op_payload =
-			numa_alloc_local(ring_ent->req_payload_sz);
-
-		req->se = se;
-		pthread_mutex_init(&req->lock, NULL);
-		req->flags.is_uring = 1;
-		req->ref_cnt = 1; /* extra ref to avoid destruction */
-		list_init_req(req);
+		res = fuse_uring_ent_alloc_buffers(queue, ring_ent);
+		if (res != 0)
+			return res;
 	}
 
 	res = fuse_uring_register_queue(queue);

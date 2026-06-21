@@ -11,6 +11,7 @@
 
 #include "fuse.h"
 #include "fuse_lowlevel.h"
+#include "fuse_uring.h"
 #include "util.h"
 
 #include <pthread.h>
@@ -71,6 +72,10 @@ struct fuse_session_uring {
 	uint32_t reserved : 31;
 
 	bool enable;
+
+	/* application owns the ring (reactor mode) instead of libfuse */
+	bool app_owned;
+
 	unsigned int q_depth;
 
 	/* number of queues, default is 1 per core */
@@ -80,6 +85,10 @@ struct fuse_session_uring {
 	char *q_mask;
 
 	struct fuse_ring_pool *pool;
+
+	/* optional app payload-allocation hooks (zeroed = libfuse default) */
+	struct fuse_uring_app_ops app_ops;
+	void *app_ops_userdata;
 };
 
 struct fuse_timeout_thread;
