@@ -89,6 +89,9 @@ struct fuse_session_uring {
 	/* application owns the ring (reactor mode) instead of libfuse */
 	bool app_owned;
 
+	/* app-owned mode: fixed-file index of the FUSE fd on the app's ring */
+	unsigned int fuse_fd_index;
+
 	unsigned int q_depth;
 
 	/*

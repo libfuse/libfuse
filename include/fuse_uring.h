@@ -24,6 +24,7 @@ extern "C" {
  * header; it is reachable from fuse_lowlevel.h, which every low-level
  * filesystem includes.
  */
+struct io_uring_sqe;
 struct io_uring_cqe;
 struct fuse_session;
 
@@ -43,11 +44,12 @@ struct fuse_uring_completion {
 /**
  * Application-provided hooks for the io-uring drivers.
  *
- * Currently just the op-payload allocator, used when the payload buffer has
- * to be application-allocated and registered (e.g. an RDMA MR). Only the op
- * payload is application-allocatable; the request header is kernel-facing
- * and stays libfuse-allocated. The op_size argument to
- * fuse_uring_set_app_ops() lets this struct grow without breaking ABI.
+ * The op-payload allocator, used when the payload buffer has to be
+ * application-allocated and registered (e.g. an RDMA MR), and the SQE source
+ * of the app-owned mode. Only the op payload is application-allocatable; the
+ * request header is kernel-facing and stays libfuse-allocated. The op_size
+ * argument to fuse_uring_set_app_ops() lets this struct grow without breaking
+ * ABI.
  */
 struct fuse_uring_app_ops {
 	/*
@@ -61,6 +63,13 @@ struct fuse_uring_app_ops {
 	/* Free memory from alloc_payload_mem(); required with alloc_payload_mem */
 	void (*free_payload_mem)(void *userdata, int qid, void *mem,
 				 size_t size, void *mr);
+
+	/*
+	 * Return a free SQE on the app-owned ring, never NULL. On a full SQ the
+	 * app submits to make room. libfuse never submits. Required in
+	 * app-owned mode, called on the reactor thread only.
+	 */
+	struct io_uring_sqe *(*get_sqe)(void *userdata);
 
 	/* future hooks appended here; presence gated by op_size */
 };

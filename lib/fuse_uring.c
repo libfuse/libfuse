@@ -215,8 +215,8 @@ static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
 }
 
 static void
-fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
-		       __u32 cmd_op)
+fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, void *user_data,
+		       __u32 cmd_op, unsigned int fuse_fd_index)
 {
 	/* These fields should be written once, never change */
 	sqe->opcode = IORING_OP_URING_CMD;
@@ -226,14 +226,14 @@ fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
 	 * given to io_uring_register_files()
 	 */
 	sqe->flags = IOSQE_FIXED_FILE;
-	sqe->fd = 0;
+	sqe->fd = fuse_fd_index;
 
 	sqe->uring_cmd_flags = 0;
 	sqe->buf_index = 0;
 	sqe->ioprio = 0;
 	sqe->off = 0;
 
-	io_uring_sqe_set_data(sqe, req);
+	io_uring_sqe_set_data(sqe, user_data);
 
 	sqe->cmd_op = cmd_op;
 	sqe->__pad1 = 0;
@@ -280,7 +280,33 @@ static int fuse_uring_submit(struct fuse_ring_queue *queue, unsigned int wait_nr
 	return 0;
 }
 
+static void fuse_uring_queue_get(struct fuse_ring_queue *queue);
 static void fuse_uring_queue_put(struct fuse_ring_queue *queue);
+
+/* Put the next command of @ent on the app-owned ring, for the app to submit */
+static void fuse_uring_app_sqe_fill(struct fuse_ring_queue *queue,
+				    struct fuse_ring_ent *ent)
+{
+	struct fuse_session_uring *uring = &queue->ring_pool->se->uring;
+	struct io_uring_sqe *sqe;
+
+	sqe = uring->app_ops.get_sqe(uring->app_ops_userdata);
+
+	/* get_sqe() is documented to never return NULL */
+	if (sqe == NULL) {
+		fuse_log(FUSE_LOG_ERR, "qid=%d app get_sqe() returned NULL\n",
+			 queue->qid);
+		abort();
+	}
+
+	fuse_uring_sqe_prepare(sqe, &ent->comp, ent->last_cmd,
+			       uring->fuse_fd_index);
+	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid,
+				    ent->req_commit_id);
+
+	/* held until the CQE, or until the reply of the request it brings */
+	fuse_uring_queue_get(queue);
+}
 
 static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
@@ -295,6 +321,19 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 	struct io_uring_sqe *sqe;
 	int res = 0;
+
+	if (queue->app_owned) {
+		/*
+		 * App-owned ring: the SQE comes from the app's get_sqe() and
+		 * the app submits it. No lock, the reactor thread replies.
+		 */
+		ring_ent->last_cmd = FUSE_IO_URING_CMD_COMMIT_AND_FETCH;
+		fuse_uring_app_sqe_fill(queue, ring_ent);
+
+		/* the request's queue reference; the queue may be gone after this */
+		fuse_uring_queue_put(queue);
+		return 0;
+	}
 
 	/*
 	 * Multi-issuer: serialise every submission-side SQ access under
@@ -321,7 +360,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	}
 
 	ring_ent->last_cmd = FUSE_IO_URING_CMD_COMMIT_AND_FETCH;
-	fuse_uring_sqe_prepare(sqe, ring_ent, ring_ent->last_cmd);
+	fuse_uring_sqe_prepare(sqe, ring_ent, ring_ent->last_cmd, 0);
 	fuse_uring_sqe_set_bufpool(sqe, queue);
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid,
 				    ring_ent->req_commit_id);
@@ -763,7 +802,7 @@ fuse_uring_setup_sqe(struct fuse_ring_queue *queue, __u32 cmd_op,
 		return NULL;
 	}
 
-	fuse_uring_sqe_prepare(sqe, NULL, cmd_op);
+	fuse_uring_sqe_prepare(sqe, NULL, cmd_op, 0);
 	sqe->addr = 0;
 	sqe->len = 0;
 
@@ -880,7 +919,7 @@ static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
 	}
 
 	ent->last_cmd = FUSE_IO_URING_CMD_REGISTER;
-	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd);
+	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd, 0);
 	fuse_uring_sqe_set_bufpool(sqe, queue);
 
 	/* only needed for fetch */
@@ -1079,7 +1118,7 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 		return;
 	}
 
-	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd);
+	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd, 0);
 	fuse_uring_sqe_set_bufpool(sqe, queue);
 
 	switch (ent->last_cmd) {
