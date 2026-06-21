@@ -264,6 +264,11 @@ FUSE_3.19 {
 		fuse_loop_319;
 
 		fuse_uring_set_app_ops;
+		fuse_uring_set_app_owned;
+		fuse_uring_queue_count;
+		fuse_uring_queue_depth;
+		fuse_uring_max_payload;
+		fuse_uring_app_wait_submit;
 } FUSE_3.18;
 
 # Local Variables:

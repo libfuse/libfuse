@@ -37,6 +37,7 @@ struct fuse_session;
  * comp->cqe_cb(comp, cqe) with comp = io_uring_cqe_get_data(cqe).
  */
 struct fuse_uring_completion {
+	/* called on the reactor thread only */
 	void (*cqe_cb)(struct fuse_uring_completion *comp,
 		       const struct io_uring_cqe *cqe);
 };
@@ -77,10 +78,9 @@ struct fuse_uring_app_ops {
 /**
  * Install application hooks for the io-uring drivers.
  *
- * Call before the first fuse_uring_attach_ring() (app-owned mode) or before
- * FUSE_INIT for the libfuse-owned mode. Applies to both drivers. The payload
- * MR is delivered to op handlers through
- * fuse_req_get_payload(req, &payload, &sz, &mr).
+ * Call before FUSE_INIT (e.g. before fuse_session_mount()); applies to both
+ * the app-owned and the libfuse-owned driver. The payload MR is delivered to
+ * op handlers through fuse_req_get_payload(req, &payload, &sz, &mr).
  *
  * @param se the session
  * @param ops the hooks to install (copied)
@@ -91,6 +91,59 @@ struct fuse_uring_app_ops {
 int fuse_uring_set_app_ops(struct fuse_session *se,
 			   const struct fuse_uring_app_ops *ops,
 			   size_t op_size, void *userdata);
+
+/**
+ * Enable the app-owned ("reactor") io-uring mode on @se. Must be called
+ * before FUSE_INIT (e.g. before fuse_session_mount()). When @q_depth is
+ * non-zero it also sets the per-queue depth; otherwise the session default
+ * (or the io_uring_q_depth option) is kept. @fuse_fd_index is the fixed-file
+ * index at which the app registers fuse_session_fd(se) on its ring; libfuse
+ * puts it on every SQE it fills. The get_sqe hook of fuse_uring_set_app_ops()
+ * is required.
+ *
+ * @return 0 on success, negative errno on failure
+ */
+int fuse_uring_set_app_owned(struct fuse_session *se, unsigned int q_depth,
+			     unsigned int fuse_fd_index);
+
+/* --- read-only accessors (valid once the session is mounted) --- */
+
+/**
+ * Number of qids the app must cover; the valid qid range is [0, count). On
+ * the current kernel this is the number of configured CPUs.
+ */
+unsigned int fuse_uring_queue_count(struct fuse_session *se);
+
+/** Entries per queue (mirrors the negotiated queue depth). */
+unsigned int fuse_uring_queue_depth(struct fuse_session *se);
+
+/** Maximum number of bytes one op-payload buffer holds. */
+size_t fuse_uring_max_payload(struct fuse_session *se);
+
+/*
+ * --- reactor lifecycle ---
+ *
+ * One thread, the reactor, calls the functions below and cqe_cb, and sends
+ * every reply to a ring request. libfuse calls get_sqe on that thread without
+ * a lock, so a reply from a second thread corrupts the app's SQ.
+ */
+
+/**
+ * Block the calling reactor thread until libfuse has allocated the queues
+ * and sent the FUSE_INIT reply (registration is only valid afterwards), then
+ * fill one REGISTER SQE per entry of every queue through get_sqe. The app's
+ * ring must exist before this call.
+ *
+ * @return 0 when io-uring is up and the reactor may submit the REGISTER SQEs;
+ * a negative errno (e.g. -ENODEV) when io-uring did not come up, no SQE was
+ * filled and the reactor must not touch the ring.
+ *
+ * The reactor must reap every FUSE CQE, including the -ENOTCONN ones at
+ * umount, before it exits its ring. A skipped CQE leaks the queues and session.
+ * Join the reactor thread before fuse_session_destroy(), which frees the queues
+ * the reactor reads.
+ */
+int fuse_uring_app_wait_submit(struct fuse_session *se);
 
 #ifdef __cplusplus
 }
