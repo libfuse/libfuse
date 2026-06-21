@@ -401,6 +401,18 @@ fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
 	sqe->__pad1 = 0;
 }
 
+/* Append an entry to the per-queue FIFO of entries awaiting an SQE */
+static void fuse_uring_pend_append(struct fuse_ring_queue *queue,
+				   struct fuse_ring_ent *ent)
+{
+	ent->pend_next = NULL;
+	if (queue->pend_tail)
+		queue->pend_tail->pend_next = ent;
+	else
+		queue->pend_head = ent;
+	queue->pend_tail = ent;
+}
+
 static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
 				 struct fuse_ring_ent *ring_ent)
@@ -412,6 +424,18 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 	struct io_uring_sqe *sqe;
+
+	if (queue->app_owned) {
+		/*
+		 * App-owned ring: do not touch the ring here. The reply is
+		 * logically committed by appending the entry to the pending
+		 * FIFO; the reactor turns it into a COMMIT_AND_FETCH SQE on
+		 * its own schedule (no get_sqe, no submit, no lock).
+		 */
+		ring_ent->last_cmd = FUSE_IO_URING_CMD_COMMIT_AND_FETCH;
+		fuse_uring_pend_append(queue, ring_ent);
+		return 0;
+	}
 
 	if (pthread_self() != queue->tid) {
 		pthread_mutex_lock(&queue->ring_lock);
