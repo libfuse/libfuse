@@ -89,6 +89,16 @@ struct fuse_session_uring {
 	/* optional app payload-allocation hooks (zeroed = libfuse default) */
 	struct fuse_uring_app_ops app_ops;
 	void *app_ops_userdata;
+
+	/*
+	 * Gate holding the app-owned reactor(s) until the FUSE_INIT reply has
+	 * been sent (registration is only valid afterwards): app_submit_ready
+	 * releases them, app_submit_active tells them whether io-uring came up.
+	 */
+	pthread_mutex_t app_submit_mutex;
+	pthread_cond_t app_submit_cond;
+	bool app_submit_ready;
+	bool app_submit_active;
 };
 
 struct fuse_timeout_thread;

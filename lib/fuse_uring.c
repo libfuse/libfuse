@@ -128,6 +128,10 @@ struct fuse_ring_pool {
 	struct fuse_ring_queue *queues;
 };
 
+/* app-owned per-completion handler; the same function pointer for every entry */
+static void fuse_uring_entry_cqe_cb(void *fuse_user_data, int res,
+				    unsigned cqe_flags);
+
 /* Helper function to convert hex character to value */
 static unsigned int hex_to_value(char hex_char)
 {
@@ -813,10 +817,10 @@ static int fuse_uring_ent_alloc_buffers(struct fuse_ring_queue *queue,
 	list_init_req(req);
 
 	/*
-	 * Completion handle used by the app-owned driver; the CQE callback is
-	 * wired by the app-owned lifecycle code. Harmless for libfuse-owned.
+	 * Completion handle used by the app-owned driver; the same callback
+	 * for every entry. Harmless for the libfuse-owned driver.
 	 */
-	ring_ent->comp.cqe_cb = NULL;
+	ring_ent->comp.cqe_cb = fuse_uring_entry_cqe_cb;
 	ring_ent->comp.fuse_user_data = ring_ent;
 	ring_ent->comp.app_data = NULL;
 	ring_ent->last_cmd = FUSE_IO_URING_CMD_REGISTER;
@@ -1552,6 +1556,22 @@ int fuse_uring_stop(struct fuse_session *se)
 {
 	struct fuse_ring_pool *ring = se->uring.pool;
 
+	if (se->uring.app_owned) {
+		/*
+		 * Release a reactor still blocked in fuse_uring_app_wait_submit()
+		 * (e.g. INIT never happened), then free the queues the same way
+		 * as the libfuse-owned path: app-owned queues have tid 0,
+		 * eventfd -1 and ring_fd -1, so the thread/eventfd/ring teardown
+		 * is skipped and only the buffers and the queue block are freed.
+		 */
+		fuse_uring_app_wake(se, false);
+		if (ring != NULL) {
+			fuse_session_destruct_uring(ring);
+			se->uring.pool = NULL;
+		}
+		return 0;
+	}
+
 	if (ring == NULL)
 		return 0;
 
@@ -1567,4 +1587,257 @@ void fuse_uring_wake_ring_threads(struct fuse_session *se)
 	/* Wake up the threads to let them send SQEs */
 	for (size_t qid = 0; qid < ring->nr_queues; qid++)
 		sem_post(&ring->init_sem);
+}
+
+/*
+ * ---- App-owned ("reactor") ring API ----
+ *
+ * In app-owned mode the application owns a single io_uring and multiplexes
+ * it across FUSE protocol traffic and its own backend IO. libfuse allocates
+ * the whole queue set centrally in fuse_uring_app_start() (before the INIT
+ * reply, so a failure can still abort the mount), prepares SQE content and
+ * consumes one FUSE CQE at a time; the application owns the wait,
+ * get_sqe/submit, user_data and the eventfd doorbell, and submits the
+ * REGISTER SQEs only once fuse_uring_app_wait_submit() has returned.
+ */
+
+static void fuse_uring_entry_cqe_cb(void *fuse_user_data, int res,
+				    unsigned cqe_flags)
+{
+	struct fuse_ring_ent *ent = fuse_user_data;
+	struct fuse_ring_queue *queue = ent->ring_queue;
+	struct fuse_ring_pool *ring_pool = queue->ring_pool;
+	struct fuse_session *se = ring_pool->se;
+	int err = res;
+
+	/* unused until the kernel supports buf rings (then bid = cqe_flags >> 16) */
+	(void)cqe_flags;
+
+	if (err == -EAGAIN || err == -EINTR) {
+		/* keep the same command and re-queue for another SQE */
+		fuse_uring_pend_append(queue, ent);
+		return;
+	}
+	if (err == -ENOTCONN)
+		return; /* umount/teardown; fuse_uring_stop cleans up */
+	if (err) {
+		se->error = err;
+		return;
+	}
+
+	struct fuse_uring_req_header *rrh = ent->req_header;
+	struct fuse_in_header *in = (struct fuse_in_header *)&rrh->in_out;
+	struct fuse_uring_ent_in_out *ent_in_out = &rrh->ring_ent_in_out;
+	struct fuse_req *req = &ent->req;
+
+	ent->req_commit_id = ent_in_out->commit_id;
+	if (unlikely(ent->req_commit_id == 0)) {
+		/*
+		 * If this happens the kernel will not find the response - it
+		 * would be stuck forever - better to abort immediately.
+		 */
+		fuse_log(FUSE_LOG_ERR, "Received invalid commit_id=0\n");
+		abort();
+	}
+
+	memset(&req->flags, 0, sizeof(req->flags));
+	memset(&req->u, 0, sizeof(req->u));
+	req->flags.is_uring = 1;
+	req->ref_cnt++;
+	req->ch = NULL; /* not needed for uring */
+	req->interrupted = 0;
+	list_init_req(req);
+
+	/*
+	 * The op handler eventually calls fuse_reply_*, whose app-owned tail
+	 * appends the entry back onto the pending FIFO (see commit_sqe).
+	 */
+	fuse_session_process_uring_cqe(se, queue->qid, req, in, &rrh->op_in,
+				       ent->op_payload, ent_in_out->payload_sz);
+}
+
+unsigned int fuse_uring_queue_count(struct fuse_session *se)
+{
+	(void)se;
+
+	/* full per-cpu coverage on the current kernel */
+	return get_nprocs_conf();
+}
+
+unsigned int fuse_uring_queue_depth(struct fuse_session *se)
+{
+	return se->uring.q_depth;
+}
+
+size_t fuse_uring_max_payload(struct fuse_session *se)
+{
+	return se->bufsize - FUSE_BUFFER_HEADER_SIZE;
+}
+
+int fuse_uring_set_app_owned(struct fuse_session *se, unsigned int q_depth)
+{
+	se->uring.enable = true;
+	se->uring.app_owned = true;
+	if (q_depth)
+		se->uring.q_depth = q_depth;
+
+	/* gate that holds the reactor(s) until the INIT reply has been sent */
+	pthread_mutex_init(&se->uring.app_submit_mutex, NULL);
+	pthread_cond_init(&se->uring.app_submit_cond, NULL);
+	se->uring.app_submit_ready = false;
+	se->uring.app_submit_active = false;
+
+	return 0;
+}
+
+int fuse_uring_app_start(struct fuse_session *se)
+{
+	struct fuse_ring_pool *ring;
+	size_t page_sz = sysconf(_SC_PAGESIZE);
+	int res;
+
+	if (se->uring.q_depth == 0) {
+		fuse_log(FUSE_LOG_ERR, "io-uring queue depth must be > 0\n");
+		return -EINVAL;
+	}
+
+	/*
+	 * Allocate the whole queue set up front, before the INIT reply, so an
+	 * allocation failure can still abort the mount (the caller drops
+	 * FUSE_OVER_IO_URING). No ring threads or eventfds are created: the
+	 * application owns the io_uring and submits the REGISTER SQEs itself
+	 * once released by fuse_uring_app_wake() after the reply. The per-entry
+	 * buffers land on each queue's NUMA node regardless of this thread.
+	 */
+	ring = fuse_create_ring(se);
+	if (ring == NULL)
+		return -ENOMEM;
+	se->uring.pool = ring;
+
+	for (size_t qid = 0; qid < ring->nr_queues; qid++) {
+		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
+
+		queue->app_owned = true;
+		queue->req_header_sz =
+			ROUND_UP(sizeof(struct fuse_ring_ent), page_sz);
+
+		res = fuse_uring_queue_alloc_payloads(queue);
+		if (res != 0)
+			goto err;
+
+		for (size_t idx = 0; idx < ring->queue_depth; idx++) {
+			struct fuse_ring_ent *ent = &queue->ent[idx];
+
+			res = fuse_uring_ent_alloc_buffers(queue, ent);
+			if (res != 0)
+				goto err;
+
+			fuse_uring_pend_append(queue, ent); /* pending REGISTER */
+		}
+	}
+
+	return 0;
+
+err:
+	fuse_session_destruct_uring(ring);
+	se->uring.pool = NULL;
+	return res;
+}
+
+/*
+ * Release the app-owned reactor(s) blocked in fuse_uring_app_wait_submit().
+ * Called once after the INIT reply (registration is only valid afterwards);
+ * @active tells the reactor whether io-uring actually came up.
+ */
+void fuse_uring_app_wake(struct fuse_session *se, bool active)
+{
+	pthread_mutex_lock(&se->uring.app_submit_mutex);
+	se->uring.app_submit_active = active;
+	se->uring.app_submit_ready = true;
+	pthread_cond_broadcast(&se->uring.app_submit_cond);
+	pthread_mutex_unlock(&se->uring.app_submit_mutex);
+}
+
+int fuse_uring_app_wait_submit(struct fuse_session *se)
+{
+	bool active;
+
+	pthread_mutex_lock(&se->uring.app_submit_mutex);
+	while (!se->uring.app_submit_ready)
+		pthread_cond_wait(&se->uring.app_submit_cond,
+				  &se->uring.app_submit_mutex);
+	active = se->uring.app_submit_active;
+	pthread_mutex_unlock(&se->uring.app_submit_mutex);
+
+	return active ? 0 : -ENODEV;
+}
+
+unsigned int fuse_uring_pending_count(struct fuse_session *se, unsigned int qid)
+{
+	struct fuse_ring_pool *ring = se->uring.pool;
+	struct fuse_ring_queue *queue;
+	unsigned int count = 0;
+
+	if (ring == NULL || qid >= ring->nr_queues)
+		return 0;
+
+	queue = fuse_uring_get_queue(ring, qid);
+	for (struct fuse_ring_ent *ent = queue->pend_head; ent != NULL;
+	     ent = ent->pend_next)
+		count++;
+
+	return count;
+}
+
+struct fuse_uring_completion *
+fuse_uring_prep_sqe(struct fuse_session *se, unsigned int qid,
+		    struct io_uring_sqe *sqe, unsigned int fuse_fd_index)
+{
+	struct fuse_ring_pool *ring = se->uring.pool;
+	struct fuse_ring_queue *queue;
+	struct fuse_ring_ent *ent;
+
+	if (ring == NULL || qid >= ring->nr_queues)
+		return NULL;
+
+	queue = fuse_uring_get_queue(ring, qid);
+	ent = queue->pend_head;
+	if (ent == NULL)
+		return NULL; /* nothing pending */
+
+	queue->pend_head = ent->pend_next;
+	if (queue->pend_head == NULL)
+		queue->pend_tail = NULL;
+	ent->pend_next = NULL;
+
+	/*
+	 * fuse_uring_sqe_prepare() minus io_uring_sqe_set_data() (the app owns
+	 * user_data), with the app's fixed-file index instead of the hard-coded
+	 * 0 of the libfuse-owned path.
+	 */
+	sqe->opcode = IORING_OP_URING_CMD;
+	sqe->flags = IOSQE_FIXED_FILE;
+	sqe->fd = fuse_fd_index;
+	sqe->rw_flags = 0;
+	sqe->ioprio = 0;
+	sqe->off = 0;
+	sqe->__pad1 = 0;
+	sqe->cmd_op = ent->last_cmd;
+
+	if (ent->last_cmd == FUSE_IO_URING_CMD_REGISTER) {
+		ent->iov[0].iov_base = ent->req_header;
+		ent->iov[0].iov_len = queue->req_header_sz;
+		ent->iov[1].iov_base = ent->op_payload;
+		ent->iov[1].iov_len = ent->req_payload_sz;
+		sqe->addr = (uint64_t)(ent->iov);
+		sqe->len = 2;
+		/* this is a fetch, kernel does not read commit id */
+		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
+					    queue->qid, 0);
+	} else {
+		fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe),
+					    queue->qid, ent->req_commit_id);
+	}
+
+	return &ent->comp; /* app stamps user_data, app submits */
 }

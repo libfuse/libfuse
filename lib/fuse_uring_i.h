@@ -32,6 +32,8 @@ void fuse_session_process_uring_cqe(struct fuse_session *se, int qid,
 struct fuse_in_header;
 
 int fuse_uring_start(struct fuse_session *se);
+int fuse_uring_app_start(struct fuse_session *se);
+void fuse_uring_app_wake(struct fuse_session *se, bool active);
 void fuse_uring_wake_ring_threads(struct fuse_session *se);
 int fuse_uring_stop(struct fuse_session *se);
 int send_reply_uring(fuse_req_t req, int error, const void *arg,
@@ -46,6 +48,16 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count);
 static inline int fuse_uring_start(struct fuse_session *se FUSE_VAR_UNUSED)
 {
 	return -ENOTSUP;
+}
+
+static inline int fuse_uring_app_start(struct fuse_session *se FUSE_VAR_UNUSED)
+{
+	return -ENOTSUP;
+}
+
+static inline void fuse_uring_app_wake(struct fuse_session *se FUSE_VAR_UNUSED,
+				       bool active FUSE_VAR_UNUSED)
+{
 }
 
 static inline void

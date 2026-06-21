@@ -2979,7 +2979,13 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	/* XXX: Add an option to make non-available io-uring fatal */
 	if (enable_io_uring) {
-		int ring_rc = fuse_uring_start(se);
+		/*
+		 * App-owned (reactor) mode allocates the queues here too but
+		 * spawns no libfuse ring threads; the application owns the ring
+		 * and submits the REGISTER SQEs after the INIT reply.
+		 */
+		int ring_rc = se->uring.app_owned ? fuse_uring_app_start(se) :
+						    fuse_uring_start(se);
 
 		if (ring_rc != 0) {
 			fuse_log(FUSE_LOG_INFO,
@@ -3004,8 +3010,17 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	 */
 	se->got_init = 1;
 	send_reply_ok(req, &outarg, outargsize);
-	if (enable_io_uring)
+	if (enable_io_uring && !se->uring.app_owned)
 		fuse_uring_wake_ring_threads(se);
+
+	/*
+	 * Release the app-owned reactor(s) to submit their REGISTER SQEs now
+	 * that the INIT reply has been sent. Always signalled when app-owned so
+	 * a reactor blocked in fuse_uring_app_wait_submit() is released even if
+	 * io-uring did not come up (it then learns the ring is unavailable).
+	 */
+	if (se->uring.app_owned)
+		fuse_uring_app_wake(se, enable_io_uring);
 }
 
 static __attribute__((no_sanitize("thread"))) void
@@ -3430,6 +3445,55 @@ int fuse_uring_set_app_ops(struct fuse_session *se,
 	(void)op_size;
 	(void)userdata;
 	return -ENOTSUP;
+}
+
+int fuse_uring_set_app_owned(struct fuse_session *se, unsigned int q_depth)
+{
+	(void)se;
+	(void)q_depth;
+	return -ENOTSUP;
+}
+
+unsigned int fuse_uring_queue_count(struct fuse_session *se)
+{
+	(void)se;
+	return 0;
+}
+
+unsigned int fuse_uring_queue_depth(struct fuse_session *se)
+{
+	(void)se;
+	return 0;
+}
+
+size_t fuse_uring_max_payload(struct fuse_session *se)
+{
+	(void)se;
+	return 0;
+}
+
+int fuse_uring_app_wait_submit(struct fuse_session *se)
+{
+	(void)se;
+	return -ENOTSUP;
+}
+
+unsigned int fuse_uring_pending_count(struct fuse_session *se, unsigned int qid)
+{
+	(void)se;
+	(void)qid;
+	return 0;
+}
+
+struct fuse_uring_completion *
+fuse_uring_prep_sqe(struct fuse_session *se, unsigned int qid,
+		    struct io_uring_sqe *sqe, unsigned int fuse_fd_index)
+{
+	(void)se;
+	(void)qid;
+	(void)sqe;
+	(void)fuse_fd_index;
+	return NULL;
 }
 #endif
 

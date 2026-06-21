@@ -228,6 +228,13 @@ FUSE_3.19 {
 		fuse_session_stop_teardown_watchdog;
 
 		fuse_uring_set_app_ops;
+		fuse_uring_set_app_owned;
+		fuse_uring_queue_count;
+		fuse_uring_queue_depth;
+		fuse_uring_max_payload;
+		fuse_uring_app_wait_submit;
+		fuse_uring_pending_count;
+		fuse_uring_prep_sqe;
 } FUSE_3.18;
 
 # Local Variables:
