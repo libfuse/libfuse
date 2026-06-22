@@ -184,7 +184,7 @@ static void lo_init(void *userdata,
 	}
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
-	conn->no_interrupt = 1;
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_NO_INTERRUPT);
 }
 
 static void lo_destroy(void *userdata)

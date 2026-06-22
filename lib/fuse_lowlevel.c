@@ -2706,6 +2706,9 @@ bool fuse_set_conn_flag(struct fuse_conn_info *conn, uint64_t flag)
 	case FUSE_CONN_FLAG_SINGLE_ISSUER:
 		conn->io_uring_single_issuer = 1;
 		return true;
+	case FUSE_CONN_FLAG_NO_INTERRUPT:
+		conn->no_interrupt = 1;
+		return true;
 	default:
 		return false;
 	}
