@@ -1151,10 +1151,13 @@ void fuse_unset_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
  */
 bool fuse_get_feature_flag(const struct fuse_conn_info *conn, uint64_t flag);
 
-/* The file system replies to requests from the same thread that received them,
- * allowing io-uring optimizations
+/**
+ * FUSE_CONN_FLAG_SINGLE_ISSUER: Reply from the same thread that received
+ *                               requests, which allows io-uring optimizations
+ * FUSE_CONN_FLAG_NO_INTERRUPT: Disable fuse interrupt handling and (libfuse overhead)
  */
 #define FUSE_CONN_FLAG_SINGLE_ISSUER (1u << 0)
+#define FUSE_CONN_FLAG_NO_INTERRUPT (1u << 1)
 
 /**
  * Set a libfuse connection flag (a FUSE_CONN_FLAG_* value). Unlike

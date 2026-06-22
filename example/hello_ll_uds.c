@@ -82,7 +82,7 @@ static void hello_ll_init(void *userdata, struct fuse_conn_info *conn)
 	(void)userdata;
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
-	conn->no_interrupt = 1;
+	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_NO_INTERRUPT);
 }
 
 static void hello_ll_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
