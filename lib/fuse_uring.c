@@ -352,6 +352,11 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 
 	params.flags = IORING_SETUP_SQE128;
 
+	/* Replies are batched and flushed in one io_uring_enter; don't let a
+	 * single failing commit SQE stall submission of the rest of the batch.
+	 */
+	params.flags |= IORING_SETUP_SUBMIT_ALL;
+
 	/* Avoid cq overflow */
 	params.flags |= IORING_SETUP_CQSIZE;
 	params.cq_entries = depth * 2;
