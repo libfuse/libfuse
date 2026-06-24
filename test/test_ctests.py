@@ -173,3 +173,19 @@ def test_teardown_watchdog(output_checker):
                    stderr=output_checker.fd, timeout=30, check=True)
     logger.debug("Teardown watchdog test completed successfully")
 
+def test_deferred_reply_teardown(output_checker):
+    """FUSE-over-io-uring teardown must drain a reply deferred past umount"""
+    logger = logging.getLogger(__name__)
+    logger.debug("Testing deferred-reply io-uring teardown")
+    cmdline = [ pjoin(basename, 'test', 'test_deferred_reply_teardown') ]
+    env = os.environ.copy()
+    env['FUSE_URING_ENABLE'] = '1'
+    logger.debug(f"Command line: {' '.join(cmdline)}")
+    proc = subprocess.run(cmdline, stdout=output_checker.fd, \
+                          stderr=output_checker.fd, timeout=30, env=env)
+    if proc.returncode == 77:
+        pytest.skip("kernel does not support FUSE-over-io-uring")
+    assert proc.returncode == 0, \
+        f"test_deferred_reply_teardown exited {proc.returncode}"
+    logger.debug("Deferred-reply teardown test completed successfully")
+
