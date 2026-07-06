@@ -34,7 +34,7 @@ jobs:
 
     - name: Upload SARIF to GitHub Code Scanning
       if: always()
-      uses: github/codeql-action/upload-sarif@9cea5827c668a1fe7165dbce6e80c3f9cf3f83ac # v4.35.1
+      uses: github/codeql-action/upload-sarif@006d029c8dc7b906d4ce5b7c700d32f20f2d35dd # v4.35.1
       with:
         sarif_file: builddir/results.sarif
         category: codechecker-gcc
@@ -73,7 +73,7 @@ jobs:
 
     - name: Upload SARIF to GitHub Code Scanning
       if: always()
-      uses: github/codeql-action/upload-sarif@9cea5827c668a1fe7165dbce6e80c3f9cf3f83ac # v4.35.1
+      uses: github/codeql-action/upload-sarif@006d029c8dc7b906d4ce5b7c700d32f20f2d35dd # v4.35.1
       with:
         sarif_file: builddir/results.sarif
         category: codechecker-infer
@@ -112,7 +112,7 @@ jobs:
 
     - name: Upload SARIF to GitHub Code Scanning
       if: always()
-      uses: github/codeql-action/upload-sarif@9cea5827c668a1fe7165dbce6e80c3f9cf3f83ac # v4.35.1
+      uses: github/codeql-action/upload-sarif@006d029c8dc7b906d4ce5b7c700d32f20f2d35dd # v4.35.1
       with:
         sarif_file: builddir/results.sarif
         category: codechecker-cppcheck
