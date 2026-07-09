@@ -131,21 +131,6 @@ special_funcs = {
 	  }
 	}
     ''',
-    'new_mount_api': '''
-	#define _GNU_SOURCE
-	#include <sys/mount.h>
-	#include <linux/mount.h>
-	#include <unistd.h>
-	#include <fcntl.h>
-
-	int main(void) {
-	    int fsfd = fsopen("fuse", FSOPEN_CLOEXEC);
-	    int res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", "test", 0);
-	    int mntfd = fsmount(fsfd, FSMOUNT_CLOEXEC, 0);
-	    res = move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH);
-	    return 0;
-	}
-    ''',
     'systemd_headers': '''
 	#include <systemd/sd-daemon.h>
 
@@ -160,6 +145,62 @@ foreach name, code : special_funcs
         cc.links(code, args: args_default,
                  name: name + ' check'))
 endforeach
+
+# New Linux mount API (fsopen/fsconfig/fsmount/move_mount): the kernel
+# syscalls landed in 5.2, but libc wrapper functions can lag behind (e.g.
+# glibc added them only in 2.36). Test kernel header support and libc
+# wrapper support separately, so the direct syscall() fallback wrappers
+# in mount_i_linux.h are used whenever libc lacks them - regardless of
+# which libc or distro that is. The two code snippets and the arg list
+# are named so test/meson.build can reuse them verbatim against fixture
+# headers, instead of duplicating the checks.
+mount_api_headers_check_code = '''
+    #include <linux/mount.h>
+    int main(void) {
+        int x = FSOPEN_CLOEXEC | FSMOUNT_CLOEXEC | MOVE_MOUNT_F_EMPTY_PATH;
+        int y = FSCONFIG_SET_STRING | FSCONFIG_CMD_CREATE;
+        int z = MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID | MOUNT_ATTR_NODEV |
+                MOUNT_ATTR_NOEXEC | MOUNT_ATTR_NOATIME;
+        return x + y + z;
+    }
+    '''
+
+mount_api_libc_check_code = '''
+	#define _GNU_SOURCE
+	#include <sys/mount.h>
+	#include <linux/mount.h>
+	#include <unistd.h>
+	#include <fcntl.h>
+
+	int main(void) {
+	    int fsfd = fsopen("fuse", FSOPEN_CLOEXEC);
+	    int res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", "test", 0);
+	    int mntfd = fsmount(fsfd, FSMOUNT_CLOEXEC, 0);
+	    res = move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH);
+	    return 0;
+	}
+    '''
+
+# -Werror=implicit-function-declaration: without it, a missing
+# declaration only warns on some compilers, and the link can still
+# silently succeed against a same-named symbol the libc happens to
+# export - which would defeat the point of testing for the wrapper
+# functions' declared presence.
+mount_api_check_args = args_default + [ '-Werror=implicit-function-declaration' ]
+
+have_new_mount_api_headers = cc.compiles(mount_api_headers_check_code,
+    args: mount_api_check_args,
+    name: 'new mount API headers check')
+
+have_new_mount_api_libc_funcs = cc.links(mount_api_libc_check_code,
+    args: mount_api_check_args,
+    name: 'new mount API libc wrapper check')
+
+private_cfg.set('HAVE_NEW_MOUNT_API', have_new_mount_api_headers)
+if have_new_mount_api_headers and not have_new_mount_api_libc_funcs
+    private_cfg.set('NEED_NEW_MOUNT_API_SYSCALL_WRAPPERS', true)
+    message('libc lacks new mount API wrapper functions, using direct syscalls')
+endif
 
 # Headers checks
 test_headers = [ 'sys/xattr.h', 'linux/limits.h' ]

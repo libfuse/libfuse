@@ -26,6 +26,87 @@
 #include <sys/mount.h>
 #include <sys/syscall.h>
 
+#ifdef NEED_NEW_MOUNT_API_SYSCALL_WRAPPERS
+/*
+ * Kernel supports the new mount API (fsopen/fsconfig/fsmount/move_mount)
+ * but libc doesn't provide the wrapper functions yet (e.g. glibc added
+ * these only in 2.36) - call the syscalls directly. Numbers are
+ * identical across x86_64, i386, arm and arm64. fuse_-prefixed so the
+ * fallback never clashes with a libc extern declaration; where libc has
+ * them the #else aliases map straight to the libc wrappers.
+ */
+#ifndef __NR_fsopen
+#define __NR_fsopen 430
+#endif
+#ifndef __NR_fsconfig
+#define __NR_fsconfig 431
+#endif
+#ifndef __NR_fsmount
+#define __NR_fsmount 432
+#endif
+#ifndef __NR_move_mount
+#define __NR_move_mount 429
+#endif
+
+static inline int fuse_fsopen(const char *fsname, unsigned int flags)
+{
+	return syscall(__NR_fsopen, fsname, flags);
+}
+
+static inline int fuse_fsconfig(int fd, unsigned int cmd, const char *key,
+				const void *value, int aux)
+{
+	return syscall(__NR_fsconfig, fd, cmd, key, value, aux);
+}
+
+static inline int fuse_fsmount(int fd, unsigned int flags, unsigned int ms_flags)
+{
+	return syscall(__NR_fsmount, fd, flags, ms_flags);
+}
+
+static inline int fuse_move_mount(int from_dfd, const char *from_pathname,
+				  int to_dfd, const char *to_pathname,
+				  unsigned int flags)
+{
+	return syscall(__NR_move_mount, from_dfd, from_pathname,
+		       to_dfd, to_pathname, flags);
+}
+#else
+#define fuse_fsopen fsopen
+#define fuse_fsconfig fsconfig
+#define fuse_fsmount fsmount
+#define fuse_move_mount move_mount
+#endif /* NEED_NEW_MOUNT_API_SYSCALL_WRAPPERS */
+
+/*
+ * New mount API constants come from <linux/mount.h>. Define the ones an
+ * older or partial uapi header omits so this file still builds - values are
+ * the kernel uapi definitions. FSCONFIG_* are an enum there, so these guards
+ * fire only when a name is genuinely absent; <linux/mount.h> is already
+ * included via mount_i_linux.h, so a fallback macro cannot clash with it.
+ */
+#ifndef FSOPEN_CLOEXEC
+#define FSOPEN_CLOEXEC 0x00000001
+#endif
+#ifndef FSMOUNT_CLOEXEC
+#define FSMOUNT_CLOEXEC 0x00000001
+#endif
+#ifndef MOVE_MOUNT_F_EMPTY_PATH
+#define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
+#endif
+#ifndef MOVE_MOUNT_T_EMPTY_PATH
+#define MOVE_MOUNT_T_EMPTY_PATH 0x00000040
+#endif
+#ifndef FSCONFIG_SET_FLAG
+#define FSCONFIG_SET_FLAG 0
+#endif
+#ifndef FSCONFIG_SET_STRING
+#define FSCONFIG_SET_STRING 1
+#endif
+#ifndef FSCONFIG_CMD_CREATE
+#define FSCONFIG_CMD_CREATE 6
+#endif
+
 /*
  * Mount attribute flags for fsmount() - from linux/mount.h
  * This file is only compiled conditionally when support for the new
@@ -107,7 +188,7 @@ int set_fsconfig_ms_flags(int fsfd, unsigned long *ms_flags)
 		if (!(flags & mount_flags[i].flag))
 			continue;
 
-		ret = fsconfig(fsfd, FSCONFIG_SET_FLAG, mount_flags[i].opt, NULL, 0);
+		ret = fuse_fsconfig(fsfd, FSCONFIG_SET_FLAG, mount_flags[i].opt, NULL, 0);
 		if (ret) {
 			int save_errno = errno;
 
@@ -137,7 +218,7 @@ int apply_fsconfig_opt_fd(int fsfd, const char *value)
 	int res;
 
 	/* The fd parameter is a u32 value, not a file descriptor to pass */
-	res = fsconfig(fsfd, FSCONFIG_SET_STRING, "fd", value, 0);
+	res = fuse_fsconfig(fsfd, FSCONFIG_SET_STRING, "fd", value, 0);
 	if (res == -1) {
 		int save_errno = errno;
 
@@ -153,7 +234,7 @@ int apply_fsconfig_opt_string(int fsfd, const char *key, const char *value)
 {
 	int res, save_errno;
 
-	res = fsconfig(fsfd, FSCONFIG_SET_STRING, key, value, 0);
+	res = fuse_fsconfig(fsfd, FSCONFIG_SET_STRING, key, value, 0);
 	save_errno = errno;
 	if (res == -1) {
 		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig SET_STRING %s=%s failed: ",
@@ -169,7 +250,7 @@ int fuse_fsopen_base_type(int blkdev)
 	const char *type = blkdev ? "fuseblk" : "fuse";
 	int fsfd;
 
-	fsfd = fsopen(type, FSOPEN_CLOEXEC);
+	fsfd = fuse_fsopen(type, FSOPEN_CLOEXEC);
 	if (fsfd == -1)
 		return -errno;
 	return fsfd;
@@ -179,7 +260,7 @@ int fuse_fsconfig_subtype(int fsfd, const char *subtype)
 {
 	int res;
 
-	res = fsconfig(fsfd, FSCONFIG_SET_STRING, "subtype", subtype, 0);
+	res = fuse_fsconfig(fsfd, FSCONFIG_SET_STRING, "subtype", subtype, 0);
 	if (res == -1) {
 		int save_errno = errno;
 
@@ -213,7 +294,7 @@ static int apply_opt_flag(int fsfd, const char *opt)
 {
 	int res;
 
-	res = fsconfig(fsfd, FSCONFIG_SET_FLAG, opt, NULL, 0);
+	res = fuse_fsconfig(fsfd, FSCONFIG_SET_FLAG, opt, NULL, 0);
 	if (res == -1) {
 		int save_errno = errno;
 
@@ -450,7 +531,7 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	}
 
 	/* Configure source */
-	res = fsconfig(fsfd, FSCONFIG_SET_STRING, "source", source, 0);
+	res = fuse_fsconfig(fsfd, FSCONFIG_SET_STRING, "source", source, 0);
 	if (res == -1) {
 		err = -errno;
 		log_fsconfig_kmsg(fsfd);
@@ -475,7 +556,7 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	}
 
 	/* Create the filesystem instance */
-	res = fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+	res = fuse_fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
 	if (res == -1) {
 		err = -errno;
 		log_fsconfig_kmsg(fsfd);
@@ -493,7 +574,7 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	}
 
 	/* Create mount object with mount attributes */
-	mountfd = fsmount(fsfd, FSMOUNT_CLOEXEC, mount_attrs);
+	mountfd = fuse_fsmount(fsfd, FSMOUNT_CLOEXEC, mount_attrs);
 	if (mountfd == -1) {
 		err = -errno;
 		log_fsconfig_kmsg(fsfd);
@@ -506,11 +587,11 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	fsfd = -1;
 
 	if (dest_mnt_fd >= 0)
-		res = move_mount(mountfd, "", dest_mnt_fd, "",
+		res = fuse_move_mount(mountfd, "", dest_mnt_fd, "",
 				 MOVE_MOUNT_F_EMPTY_PATH |
 					 MOVE_MOUNT_T_EMPTY_PATH);
 	else
-		res = move_mount(mountfd, "", AT_FDCWD, mnt,
+		res = fuse_move_mount(mountfd, "", AT_FDCWD, mnt,
 				 MOVE_MOUNT_F_EMPTY_PATH);
 	if (res == -1) {
 		err = -errno;
