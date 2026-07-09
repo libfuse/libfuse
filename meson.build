@@ -155,10 +155,34 @@ special_funcs = {
     ''',
 }
 
+# Detect if we're on Rocky Linux 9
+is_rocky9 = false
+if platform == 'linux'
+    os_release = run_command('sh', '-c', 'cat /etc/os-release 2>/dev/null || echo ""', check: false)
+    if os_release.returncode() == 0
+        os_info = os_release.stdout()
+        # Check for Rocky Linux (ID="rocky")
+        is_rocky = os_info.contains('ID="rocky"')
+        # Check for version 9.x (VERSION_ID="9.x")
+        is_version9 = os_info.contains('VERSION_ID="9.')
+
+        if is_rocky and is_version9
+            is_rocky9 = true
+            message('Detected Rocky Linux 9 - enabling new mount API workaround')
+        endif
+    endif
+endif
+
 foreach name, code : special_funcs
-    private_cfg.set('HAVE_' + name.to_upper(),
-        cc.links(code, args: args_default,
-                 name: name + ' check'))
+    if name == 'new_mount_api' and is_rocky9
+        # Force-enable new mount API for Rocky 9 - syscalls exist but glibc lacks wrappers
+        private_cfg.set('HAVE_NEW_MOUNT_API', true)
+        message('Force-enabling new mount API for Rocky 9')
+    else
+        private_cfg.set('HAVE_' + name.to_upper(),
+            cc.links(code, args: args_default,
+                     name: name + ' check'))
+    endif
 endforeach
 
 # Headers checks

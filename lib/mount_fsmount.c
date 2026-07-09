@@ -30,7 +30,93 @@
  * This file is only compiled conditionally when support for the new
  * mount API is detected - only flags that were not in the initial linux
  * commit introducing that API are defined here.
+ *
+ * Syscall number definitions and wrapper functions for new mount API.
+ * glibc < 2.36 (e.g., Rocky 9's glibc 2.34) lacks these wrappers, so we
+ * provide our own using direct syscall() invocations to access the kernel APIs.
  */
+#ifndef __NR_fsopen
+#define __NR_fsopen 430
+#endif
+#ifndef __NR_fsconfig
+#define __NR_fsconfig 431
+#endif
+#ifndef __NR_fsmount
+#define __NR_fsmount 432
+#endif
+#ifndef __NR_move_mount
+#define __NR_move_mount 429
+#endif
+#if !__GLIBC_PREREQ(2, 36)
+static inline int fsopen(const char *fsname, unsigned int flags)
+{
+	return syscall(__NR_fsopen, fsname, flags);
+}
+
+static inline int fsconfig(int fd, unsigned int cmd, const char *key,
+			   const void *value, int aux)
+{
+	return syscall(__NR_fsconfig, fd, cmd, key, value, aux);
+}
+
+static inline int fsmount(int fd, unsigned int flags, unsigned int ms_flags)
+{
+	return syscall(__NR_fsmount, fd, flags, ms_flags);
+}
+
+static inline int move_mount(int from_dfd, const char *from_pathname,
+			     int to_dfd, const char *to_pathname,
+			     unsigned int flags)
+{
+	return syscall(__NR_move_mount, from_dfd, from_pathname,
+		       to_dfd, to_pathname, flags);
+}
+#endif /* glibc < 2.36 */
+
+/*
+ * Mount attribute flags and fsconfig commands - from linux/mount.h
+ * Define missing constants for Rocky 9 compatibility
+ */
+#ifndef FSOPEN_CLOEXEC
+#define FSOPEN_CLOEXEC 0x00000001
+#endif
+
+#ifndef FSMOUNT_CLOEXEC
+#define FSMOUNT_CLOEXEC 0x00000001
+#endif
+
+#ifndef MOVE_MOUNT_F_EMPTY_PATH
+#define MOVE_MOUNT_F_EMPTY_PATH 0x00000004
+#endif
+
+#ifndef FSCONFIG_SET_STRING
+#define FSCONFIG_SET_STRING 1
+#endif
+
+#ifndef FSCONFIG_CMD_CREATE
+#define FSCONFIG_CMD_CREATE 6
+#endif
+
+#ifndef MOUNT_ATTR_RDONLY
+#define MOUNT_ATTR_RDONLY 0x00000001
+#endif
+
+#ifndef MOUNT_ATTR_NOSUID
+#define MOUNT_ATTR_NOSUID 0x00000002
+#endif
+
+#ifndef MOUNT_ATTR_NODEV
+#define MOUNT_ATTR_NODEV 0x00000004
+#endif
+
+#ifndef MOUNT_ATTR_NOEXEC
+#define MOUNT_ATTR_NOEXEC 0x00000008
+#endif
+
+#ifndef MOUNT_ATTR_NOATIME
+#define MOUNT_ATTR_NOATIME 0x00000010
+#endif
+
 #ifndef MOUNT_ATTR_NOSYMFOLLOW
 #define MOUNT_ATTR_NOSYMFOLLOW  0x00200000
 #endif
