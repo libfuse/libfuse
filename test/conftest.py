@@ -73,6 +73,11 @@ class OutputChecker:
         buf = re.sub(r'^==[0-9]+== .*$', '', buf, flags=re.MULTILINE)
         buf = re.sub(r'^--[0-9]+-- .*$', '', buf, flags=re.MULTILINE)
 
+        # FUSE debug messages "unique: X, error: -Y (...), outsize: Z" contain the
+        # word "error" but just report a request's return code, not a real error.
+        buf = re.sub(r'^.*unique: \d+, error: -\d+ \(.*\), outsize: \d+.*$', '',
+                     buf, flags=re.MULTILINE)
+
         patterns = [ r'\b{}\b'.format(x) for x in
                      ('exception', 'error', 'warning', 'fatal', 'traceback',
                         'fault', 'crash(?:ed)?', 'abort(?:ed)',
@@ -82,10 +87,6 @@ class OutputChecker:
             cp = re.compile(pattern, re.IGNORECASE | re.MULTILINE)
             hit = cp.search(buf)
             if hit:
-                # Skip FUSE error messages in the format "unique: X, error: -Y (...), outsize: Z"
-                # These are no errors, but just fuse debug messages with the return code
-                if re.search(r'unique: \d+, error: -\d+ \(.*\), outsize: \d+', hit.group(0)):
-                    continue
                 raise AssertionError(f'Suspicious output to stderr (matched "{hit.group(0)}")')
 
 @pytest.fixture()
