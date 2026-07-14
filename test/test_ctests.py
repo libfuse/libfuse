@@ -51,7 +51,7 @@ def test_write_cache(tmpdir, writeback, output_checker):
         # This test requires kernel commit a390ccb316be ("fuse: add FOPEN_NOFLUSH")
         # so opt-in for this test from kernel 5.16.
         cmdline.append('--delay_ms=200')
-    subprocess.check_call(cmdline, stdout=output_checker.fd, stderr=output_checker.fd)
+    output_checker.check_call(cmdline)
 
 
 names = [ 'notify_inval_inode', 'invalidate_path' ]
@@ -72,8 +72,7 @@ def test_notify1(tmpdir, name, notify, output_checker):
     if not notify:
         cmdline.append('--no-notify')
     logger.debug(f"Command line: {' '.join(cmdline)}")
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         logger.debug("Mount completed")
@@ -124,8 +123,7 @@ def test_notify_file_size(tmpdir, notify, output_checker):
     if not notify:
         cmdline.append('--no-notify')
     logger.debug(f"Command line: {' '.join(cmdline)}")
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     logger.debug(f"Mount process PID: {mount_process.pid}")
     try:
         wait_for_mount(mount_process, mnt_dir)
@@ -159,8 +157,7 @@ def test_signals(output_checker):
     logger.debug("Testing signal handling")
     cmdline = [ pjoin(basename, 'test', 'test_signals') ]
     logger.debug(f"Command line: {' '.join(cmdline)}")
-    subprocess.run(cmdline, stdout=output_checker.fd, \
-                   stderr=output_checker.fd, timeout=10, check=True)
+    output_checker.run(cmdline, timeout=10, check=True)
     logger.debug("Signal handling test completed successfully")
 
 def test_teardown_watchdog(output_checker):
@@ -169,7 +166,6 @@ def test_teardown_watchdog(output_checker):
     logger.debug("Testing teardown watchdog")
     cmdline = [ pjoin(basename, 'test', 'test_teardown_watchdog') ]
     logger.debug(f"Command line: {' '.join(cmdline)}")
-    subprocess.run(cmdline, stdout=output_checker.fd, \
-                   stderr=output_checker.fd, timeout=30, check=True)
+    output_checker.run(cmdline, timeout=30, check=True)
     logger.debug("Teardown watchdog test completed successfully")
 
