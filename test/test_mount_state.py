@@ -37,8 +37,7 @@ def hello_mount(tmpdir, output_checker, name, options=()):
         cmdline.append('-s')
     if options:
         cmdline += ['-o', ','.join(options)]
-    mp = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                          stderr=output_checker.fd)
+    mp = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mp, mnt_dir)
         yield mnt_dir
