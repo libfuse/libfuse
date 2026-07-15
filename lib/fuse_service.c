@@ -656,6 +656,19 @@ int fuse_service_append_args(struct fuse_service *sf,
 	memfd_args.argc = htonl(memfd_args.argc);
 	memfd_pos += sizeof(memfd_args);
 
+	/*
+	 * The whole args memfd is capped at FUSE_SERVICE_MAX_CMD_SIZE by the
+	 * mount helper, so a well-formed message never holds more args than
+	 * that. Reject anything larger before it reaches the allocation below,
+	 * where memfd_args.argc + existing_args->argc would otherwise wrap in
+	 * unsigned arithmetic and undersize the argv array.
+	 */
+	if (memfd_args.argc > FUSE_SERVICE_MAX_CMD_SIZE) {
+		fuse_log(FUSE_LOG_ERR, "fuse: service args file argc %u too large\n",
+			 memfd_args.argc);
+		return -EBADMSG;
+	}
+
 	/* Allocate a new array of argv string pointers */
 	new_args.argv = calloc(memfd_args.argc + existing_args->argc,
 			       sizeof(char *));
@@ -721,6 +734,20 @@ int fuse_service_append_args(struct fuse_service *sf,
 		memfd_arg.pos = htonl(memfd_arg.pos);
 		memfd_arg.len = htonl(memfd_arg.len);
 		memfd_pos += sizeof(memfd_arg);
+
+		/*
+		 * A single arg string cannot exceed the memfd cap either.
+		 * Rejecting it here keeps memfd_arg.len + 1 from wrapping to 0
+		 * and handing calloc() a zero-size buffer that the pread() below
+		 * would then overflow.
+		 */
+		if (memfd_arg.len >= FUSE_SERVICE_MAX_CMD_SIZE) {
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: service args file argv[%u] len %u too large\n",
+				 i, memfd_arg.len);
+			ret = -EBADMSG;
+			goto out_new_args;
+		}
 
 		/* read arg string from file */
 		str = calloc(1, memfd_arg.len + 1);
