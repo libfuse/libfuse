@@ -1098,6 +1098,7 @@ struct mount_context {
 	int mnt_fd;
 };
 
+#ifdef HAVE_NEW_MOUNT_API
 /*
  * Phase 1: Open device and prepare for mount (sync-init mode)
  * Returns fd on success, -1 on failure
@@ -1163,7 +1164,6 @@ fail_close_fd:
 	return -1;
 }
 
-#ifdef HAVE_NEW_MOUNT_API
 /*
  * Phase 2: Perform the actual mount using new mount API (sync-init mode)
  * Returns 0 on success, -1 on failure
@@ -1352,7 +1352,9 @@ fail_close_fd:
 
 /* Forward declarations for helper functions */
 static int send_fd(int sock_fd, int fd);
+#ifdef HAVE_NEW_MOUNT_API
 static int wait_for_signal(int sock_fd);
+#endif /* HAVE_NEW_MOUNT_API */
 
 #ifdef HAVE_NEW_MOUNT_API
 /*
@@ -1447,6 +1449,7 @@ static int send_fd(int sock_fd, int fd)
  * Wait for a signal byte from the caller.
  * Returns 0 on success, -1 on error.
  */
+#ifdef HAVE_NEW_MOUNT_API
 static int wait_for_signal(int sock_fd)
 {
 	char buf[1];
@@ -1466,6 +1469,7 @@ static int wait_for_signal(int sock_fd)
 	}
 	return 0;
 }
+#endif /* HAVE_NEW_MOUNT_API */
 
 /* Helper for should_auto_unmount
  *
