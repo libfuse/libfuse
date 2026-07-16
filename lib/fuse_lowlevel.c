@@ -4957,11 +4957,35 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 
 	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
 	if (err < 0 && errno == EPERM) {
+		char *fusermount_opts = NULL;
+
 		close(fd);
+		fd = -1;
 		se->fd = -1;
-		fd = new_api_fusermount(se, mountpoint, mtab_opts,
+
+		/*
+		 * fusermount3 receives fsname/subtype (and other fusermount
+		 * options) only via -o, so mirror the legacy fuse_kern_mount()
+		 * fallback here. mtab_opts carries just the kernel/mtab options;
+		 * without appending these the subtype/fsname is lost and the
+		 * mount comes up as plain "fuse".
+		 */
+		if (fuse_opt_add_opt(&fusermount_opts, mtab_opts) == -1 ||
+		    (se->mo->fusermount_opts &&
+		     fuse_opt_add_opt(&fusermount_opts,
+				      se->mo->fusermount_opts) == -1) ||
+		    (se->mo->subtype_opt &&
+		     fuse_opt_add_opt(&fusermount_opts,
+				      se->mo->subtype_opt) == -1)) {
+			free(fusermount_opts);
+			err = -ENOMEM;
+			goto err;
+		}
+
+		fd = new_api_fusermount(se, mountpoint, fusermount_opts,
 					&sock_fd, &fusermount_pid,
 					&is_sync_init);
+		free(fusermount_opts);
 		if (fd < 0) {
 			err = fd;
 			goto err_with_sock;
