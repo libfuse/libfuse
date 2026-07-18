@@ -3528,6 +3528,19 @@ int fuse_req_secctx_next(fuse_req_t req, const char **name,
 	}
 
 	const char *ctx_name = (const char *)(fctx + 1);
+
+	/*
+	 * The name starts right after the header and must leave at least one
+	 * byte for its NUL inside the buffer. The header-fits check above uses
+	 * a strict '>', so ctx_name can land exactly on buf_end; without this
+	 * guard "buf_end - ctx_name - 1" underflows to SIZE_MAX and the strnlen
+	 * below reads past the allocation.
+	 */
+	if (ctx_name >= buf_end) {
+		fuse_log(FUSE_LOG_ERR, "secctx name extends past buffer\n");
+		return -EIO;
+	}
+
 	const size_t max_strlen = buf_end - ctx_name - 1;
 	const size_t name_size = strnlen(ctx_name, max_strlen) + 1;
 	const char *ctx_value = ctx_name + name_size;
