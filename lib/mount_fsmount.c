@@ -162,6 +162,40 @@ int apply_fsconfig_opt_string(int fsfd, const char *key, const char *value)
 	return 0;
 }
 
+int fuse_fsopen_base_type(int blkdev)
+{
+	const char *type = blkdev ? "fuseblk" : "fuse";
+	int fsfd;
+
+	fsfd = fsopen(type, FSOPEN_CLOEXEC);
+	if (fsfd == -1)
+		return -errno;
+	return fsfd;
+}
+
+int fuse_fsconfig_subtype(int fsfd, const char *subtype)
+{
+	int res;
+
+	res = fsconfig(fsfd, FSCONFIG_SET_STRING, "subtype", subtype, 0);
+	if (res == -1) {
+		int save_errno = errno;
+
+		/*
+		 * Not an error worth reporting - the caller falls back to
+		 * encoding the subtype in the source string.
+		 */
+		if (save_errno == ENOPARAM || save_errno == EINVAL ||
+		    save_errno == EOPNOTSUPP)
+			return -ENOPARAM;
+
+		fprintf(stderr, "fuse: fsconfig subtype=%s failed: ", subtype);
+		log_fsconfig_kmsg(fsfd);
+		return -save_errno;
+	}
+	return 0;
+}
+
 /*
  * Apply a boolean flag option via fsconfig
  *
@@ -364,24 +398,45 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	}
 
 	/* Try to open filesystem context */
-	fsfd = fsopen(type, FSOPEN_CLOEXEC);
-	if (fsfd == -1) {
-		err = -errno;
-		if (errno != EPERM)
-			fprintf(stderr, "fuse: fsopen(%s) failed: %s\n", type,
-				strerror(errno));
+	res = fuse_fsopen_base_type(blkdev);
+	if (res < 0) {
+		err = res;
+		if (err != -EPERM)
+			fprintf(stderr, "fuse: fsopen(%s) failed: %s\n",
+				blkdev ? "fuseblk" : "fuse", strerror(-err));
 		goto out_free;
 	}
+	fsfd = res;
 
 	/* Configure subtype */
 	if (subtype) {
-		res = fsconfig(fsfd, FSCONFIG_SET_STRING, "subtype",
-			       subtype, 0);
-		if (res) {
-			err = -errno;
-			log_fsconfig_kmsg(fsfd);
-			fprintf(stderr, "fuse: fsconfig subtype failed: %s\n",
-				strerror(-err));
+		res = fuse_fsconfig_subtype(fsfd, subtype);
+		if (res == -ENOPARAM) {
+			/*
+			 * Kernel without a subtype parameter. Fall back to the
+			 * legacy encoding, the same one mount(2) gets on
+			 * ENODEV: plain "fuse" as the type, subtype carried in
+			 * the source as "<subtype>#<fsname>".
+			 */
+			free(type);
+			free(source);
+			type = fuse_mnt_build_type(blkdev, NULL);
+			if (!fsname)
+				source = type ? strdup(type) : NULL;
+			else if (blkdev)
+				source = fuse_mnt_build_source(fsname, NULL,
+							       source_dev, 0);
+			else
+				source = fuse_mnt_build_source(fsname, subtype,
+							       source_dev, 1);
+			err = -ENOMEM;
+			if (!type || !source) {
+				fprintf(stderr,
+					"fuse: failed to allocate memory\n");
+				goto out_free;
+			}
+		} else if (res < 0) {
+			err = res;
 			goto out_free;
 		}
 	}
