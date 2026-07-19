@@ -834,11 +834,6 @@ static int mount_service_handle_open_bdev_cmd(const struct mount_service *mo,
 	return mount_service_open_path(mo, S_IFBLK, p, psz);
 }
 
-static inline const char *fsname(const struct mount_service *mo)
-{
-	return mo->fuseblk ? "fuseblk" : "fuse";
-}
-
 #ifdef HAVE_NEW_MOUNT_API
 static void try_fsopen(struct mount_service *mo)
 {
@@ -1372,7 +1367,7 @@ static int mount_service_regular_mount(struct mount_service *mo,
 		goto out_realmopts;
 	}
 
-	asprintf(&fstype, "%s.%s", fsname(mo), mo->subtype);
+	fstype = fuse_mnt_build_type(mo->fuseblk, mo->subtype);
 	if (!fstype) {
 		int error = errno;
 
@@ -1508,7 +1503,7 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 	if (have_real_mtabopts(mo)) {
 		char *fstype = NULL;
 
-		asprintf(&fstype, "%s.%s", fsname(mo), mo->subtype);
+		fstype = fuse_mnt_build_type(mo->fuseblk, mo->subtype);
 		if (fstype) {
 			fuse_mnt_add_mount(mo->msgtag, mo->source,
 					   mo->resv_mountpoint, fstype,
