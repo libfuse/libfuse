@@ -118,12 +118,15 @@ class OutputChecker:
     def _loop(self, ifd):
         BUFSIZE = 128*1024
         ofd = sys.stdout.fileno()
-        while True:
-            buf = os.read(ifd, BUFSIZE)
-            if not buf:
-                break
-            os.write(ofd, buf)
-            self._buf += buf
+        try:
+            while True:
+                buf = os.read(ifd, BUFSIZE)
+                if not buf:
+                    break
+                os.write(ofd, buf)
+                self._buf += buf
+        finally:
+            os.close(ifd)
 
     def _finalize(self):
         '''Close the pipe, join the reader thread and return the raw captured
