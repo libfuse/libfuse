@@ -4165,6 +4165,9 @@ void fuse_session_destroy(struct fuse_session *se)
 	free(se->cuse_data);
 	if (se->fd != -1)
 		close(se->fd);
+	/* Closing this lets the auto_unmount fusermount3 helper exit. */
+	if (se->auto_unmount_fd != -1)
+		close(se->auto_unmount_fd);
 	if (se->io != NULL)
 		free(se->io);
 	destroy_mount_opts(se->mo);
@@ -4502,6 +4505,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 	}
 	se->fd = -1;
 	se->init_wakeup_fd = -1;
+	se->auto_unmount_fd = -1;
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
@@ -4999,10 +5003,20 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 
 err_with_sock:
 	if (sock_fd >= 0) {
-		close(sock_fd);
-		/* Reap fusermount3 child process to prevent zombie */
-		if (fusermount_pid > 0)
-			waitpid(fusermount_pid, NULL, 0);
+		if (err == 0 && se->mo->auto_unmount) {
+			/*
+			 * Under auto_unmount fusermount3 --sync-init stays alive
+			 * until this socket closes (its unmount trigger), so
+			 * closing it now would unmount early and waitpid() would
+			 * hang. Keep it; fuse_session_destroy() closes it.
+			 */
+			se->auto_unmount_fd = sock_fd;
+		} else {
+			close(sock_fd);
+			/* Reap fusermount3 child process to prevent zombie */
+			if (fusermount_pid > 0)
+				waitpid(fusermount_pid, NULL, 0);
+		}
 	}
 err:
 	if (err < 0) {
