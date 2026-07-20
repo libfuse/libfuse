@@ -20,7 +20,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
     - name: Build
-      uses: vmactions/freebsd-vm@5a72679103d223925653750faa878a143340fbd0 # v1
+      uses: vmactions/freebsd-vm@77ed28d336d03fe19a3f4f7266c1d2c4714dd79d # v1
       with:
         usesh: true
         prepare: |
