@@ -3065,7 +3065,19 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	se->got_init = 1;
 	fuse_daemonize_set_got_init();
 	send_reply_ok(req, &outarg, outargsize);
-	if (enable_io_uring)
+	/*
+	 * With async init, send_reply_ok() has already marked the connection
+	 * initialized (that happens in the reply write()), so the ring threads
+	 * can send REGISTER now. With sync init, _do_init() runs on the
+	 * sync-init worker thread while the mount is still in progress. The
+	 * connection is not initialized until the mount completes, which is
+	 * after _do_init() returns. Waking the ring threads here would let
+	 * REGISTER race ahead of initialization and get -EAGAIN, so defer the
+	 * wake to fuse_session_mount_new_api() after the mount returns.
+	 * se->is_sync_init is not set yet at this point, so detect sync init
+	 * via init_wakeup_fd
+	 */
+	if (enable_io_uring && se->init_wakeup_fd == -1)
 		fuse_uring_wake_ring_threads(se);
 
 	/*
@@ -5017,6 +5029,15 @@ err:
 	/* Wait for synchronous FUSE_INIT to complete */
 	if (session_wait_sync_init_completion(se) < 0)
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
+
+	/*
+	 * For sync init the ring threads were not woken in _do_init() because
+	 * the connection was not yet initialized. Now that the mount has
+	 * completed, the connection is initialized and REGISTER can be sent, so
+	 * wake them here
+	 */
+	if (se->is_sync_init && se->uring.pool)
+		fuse_uring_wake_ring_threads(se);
 
 	free(mtab_opts);
 	free(mtab_opts_with_fd);
