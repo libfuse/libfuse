@@ -401,7 +401,12 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	res = fuse_fsopen_base_type(blkdev);
 	if (res < 0) {
 		err = res;
-		if (err != -EPERM)
+		/*
+		 * Both are expected and the caller falls back silently:
+		 * EPERM  - unprivileged mount, retry via fusermount3;
+		 * ENOSYS - kernel without the new mount API, retry via mount(2).
+		 */
+		if (err != -EPERM && err != -ENOSYS)
 			fprintf(stderr, "fuse: fsopen(%s) failed: %s\n",
 				blkdev ? "fuseblk" : "fuse", strerror(-err));
 		goto out_free;
