@@ -1,7 +1,7 @@
 fuseconf_path = join_paths(get_option('prefix'), get_option('sysconfdir'), 'fuse.conf')
 
 executable('fusermount3', ['fusermount.c', '../lib/mount_util.c', '../lib/mount_fsmount.c',
-           '../lib/util.c', 'fuser_conf.c'],
+           '../lib/fuse_log.c', '../lib/util.c', 'fuser_conf.c'],
            include_directories: include_dirs,
            install: true,
            install_dir: get_option('bindir'),
