@@ -11,6 +11,7 @@
 #define _GNU_SOURCE
 
 #include "fuse_config.h"
+#include "fuse_log.h"
 #include "mount_util.h"
 #ifdef __linux__
 #include "mount_i_linux.h"
@@ -207,21 +208,21 @@ static int fuse_mount_spawn(pid_t *pid, const char *cmd, char *const argv[],
 
 	res = posix_spawnattr_init(&attr);
 	if (res) {
-		fprintf(stderr, "Failed to init posix_spawn attr for cmd %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "Failed to init posix_spawn attr for cmd %s: %s\n",
 			cmd, strerror(res));
 		return res;
 	}
 
 	res = posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);
 	if (res) {
-		fprintf(stderr, "Failed to set posix_spawn flags for cmd %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "Failed to set posix_spawn flags for cmd %s: %s\n",
 			cmd, strerror(res));
 		goto out_destroy;
 	}
 
 	res = posix_spawnattr_setsigmask(&attr, mask);
 	if (res) {
-		fprintf(stderr, "Failed to set posix_spawn sigmask for cmd %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "Failed to set posix_spawn sigmask for cmd %s: %s\n",
 			cmd, strerror(res));
 		goto out_destroy;
 	}
@@ -235,7 +236,7 @@ static int fuse_mount_spawn(pid_t *pid, const char *cmd, char *const argv[],
 	 */
 	if (ruid != euid && setreuid(euid, -1) == -1) {
 		res = errno;
-		fprintf(stderr, "Failed to set real uid for cmd %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "Failed to set real uid for cmd %s: %s\n",
 			cmd, strerror(res));
 		goto out_destroy;
 	}
@@ -247,7 +248,7 @@ static int fuse_mount_spawn(pid_t *pid, const char *cmd, char *const argv[],
 	 * refuse to continue rather than run on privileged.
 	 */
 	if (ruid != euid && setreuid(ruid, -1) == -1) {
-		fprintf(stderr, "Failed to restore real uid for cmd %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "Failed to restore real uid for cmd %s: %s\n",
 			cmd, strerror(errno));
 		abort();
 	}
@@ -274,7 +275,7 @@ static int add_mount(const char *progname, const char *fsname,
 	sigaddset(&blockmask, SIGCHLD);
 	res = sigprocmask(SIG_BLOCK, &blockmask, &oldmask);
 	if (res == -1) {
-		fprintf(stderr, "%s: sigprocmask: %s\n", progname, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "%s: sigprocmask: %s\n", progname, strerror(errno));
 		return -1;
 	}
 
@@ -285,7 +286,7 @@ static int add_mount(const char *progname, const char *fsname,
 
 	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
 	if (res) {
-		fprintf(stderr, "%s: failed to execute %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "%s: failed to execute %s: %s\n",
 			progname, cmd, strerror(res));
 		res = -1;
 		goto out_restore;
@@ -293,7 +294,7 @@ static int add_mount(const char *progname, const char *fsname,
 
 	res = waitpid(pid, &status, 0);
 	if (res == -1)
-		fprintf(stderr, "%s: waitpid of %d: %s\n", progname,
+		fuse_log(FUSE_LOG_ERR, "%s: waitpid of %d: %s\n", progname,
 			pid, strerror(errno));
 	else
 		res = (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
@@ -326,7 +327,7 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 	sigaddset(&blockmask, SIGCHLD);
 	res = sigprocmask(SIG_BLOCK, &blockmask, &oldmask);
 	if (res == -1) {
-		fprintf(stderr, "%s: sigprocmask: %s\n", progname, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "%s: sigprocmask: %s\n", progname, strerror(errno));
 		return -1;
 	}
 
@@ -340,7 +341,7 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 
 	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
 	if (res) {
-		fprintf(stderr, "%s: failed to execute %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "%s: failed to execute %s: %s\n",
 			progname, cmd, strerror(res));
 		res = -1;
 		goto out_restore;
@@ -348,7 +349,7 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 
 	res = waitpid(pid, &status, 0);
 	if (res == -1)
-		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "%s: waitpid: %s\n", progname, strerror(errno));
 	else
 		res = (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 
@@ -364,7 +365,7 @@ int fuse_mnt_umount(const char *progname, const char *abs_mnt,
 	if (!mtab_needs_update(abs_mnt)) {
 		int res = umount2(rel_mnt, lazy ? 2 : 0);
 		if (res == -1)
-			fprintf(stderr, "%s: failed to unmount %s: %s\n",
+			fuse_log(FUSE_LOG_ERR, "%s: failed to unmount %s: %s\n",
 				progname, abs_mnt, strerror(errno));
 		return res;
 	}
@@ -385,7 +386,7 @@ static int remove_mount(const char *progname, const char *mnt)
 	sigaddset(&blockmask, SIGCHLD);
 	res = sigprocmask(SIG_BLOCK, &blockmask, &oldmask);
 	if (res == -1) {
-		fprintf(stderr, "%s: sigprocmask: %s\n", progname, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "%s: sigprocmask: %s\n", progname, strerror(errno));
 		return -1;
 	}
 
@@ -395,7 +396,7 @@ static int remove_mount(const char *progname, const char *mnt)
 
 	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
 	if (res) {
-		fprintf(stderr, "%s: failed to execute %s: %s\n",
+		fuse_log(FUSE_LOG_ERR, "%s: failed to execute %s: %s\n",
 			 progname, cmd, strerror(res));
 		res = -1;
 		goto out_restore;
@@ -403,7 +404,7 @@ static int remove_mount(const char *progname, const char *mnt)
 
 	res = waitpid(pid, &status, 0);
 	if (res == -1)
-		fprintf(stderr, "%s: waitpid: %s\n", progname, strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "%s: waitpid: %s\n", progname, strerror(errno));
 	else
 		res = (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 
@@ -430,14 +431,14 @@ char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 	const char *toresolv;
 
 	if (!orig[0]) {
-		fprintf(stderr, "%s: invalid mountpoint '%s'\n", progname,
+		fuse_log(FUSE_LOG_ERR, "%s: invalid mountpoint '%s'\n", progname,
 			orig);
 		return NULL;
 	}
 
 	copy = strdup(orig);
 	if (copy == NULL) {
-		fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		fuse_log(FUSE_LOG_ERR, "%s: failed to allocate memory\n", progname);
 		return NULL;
 	}
 
@@ -464,7 +465,7 @@ char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 			tmp[0] = '\0';
 	}
 	if (realpath(toresolv, buf) == NULL) {
-		fprintf(stderr, "%s: bad mount point %s: %s\n", progname, orig,
+		fuse_log(FUSE_LOG_ERR, "%s: bad mount point %s: %s\n", progname, orig,
 			strerror(errno));
 		free(copy);
 		return NULL;
@@ -483,7 +484,7 @@ char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 	}
 	free(copy);
 	if (dst == NULL)
-		fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		fuse_log(FUSE_LOG_ERR, "%s: failed to allocate memory\n", progname);
 	return dst;
 }
 
@@ -510,14 +511,14 @@ int fuse_mnt_parse_fuse_fd(const char *mountpoint)
 	int len = 0;
 
 	if (mountpoint == NULL) {
-		fprintf(stderr, "Invalid null-ptr mount-point!\n");
+		fuse_log(FUSE_LOG_ERR, "Invalid null-ptr mount-point!\n");
 		return -1;
 	}
 
 	if (sscanf(mountpoint, "/dev/fd/%u%n", &fd, &len) == 1 &&
 	    len == strlen(mountpoint)) {
 		if (fd > INT_MAX) {
-			fprintf(stderr, "%s: fd=%u > INT_MAX\n", __func__, fd);
+			fuse_log(FUSE_LOG_ERR, "%s: fd=%u > INT_MAX\n", __func__, fd);
 			return -1;
 		}
 		return (int)fd;
@@ -560,7 +561,7 @@ const char *fuse_mnt_get_devname(void)
 
 	/* Validation 1: Must start with /dev/ */
 	if (strncmp(devname, "/dev/", 5) != 0) {
-		fprintf(stderr,
+		fuse_log(FUSE_LOG_ERR,
 			"fuse: invalid device name from %s: %s (must start with /dev/)\n",
 			FUSE_KERN_DEVICE_ENV, devname);
 		return "/dev/fuse";
@@ -569,7 +570,7 @@ const char *fuse_mnt_get_devname(void)
 	/* Validation 2: Must be a character device */
 	if (stat(devname, &stbuf) == 0) {
 		if (!S_ISCHR(stbuf.st_mode)) {
-			fprintf(stderr,
+			fuse_log(FUSE_LOG_ERR,
 				"fuse: invalid device from %s: %s (not a character device)\n",
 				FUSE_KERN_DEVICE_ENV, devname);
 			return "/dev/fuse";
