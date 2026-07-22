@@ -13,6 +13,7 @@
 
 #include "fuse_config.h"
 #include "fuse_misc.h"
+#include "fuse_log.h"
 #include "mount_util.h"
 #include "mount_i_linux.h"
 
@@ -75,16 +76,16 @@ void log_fsconfig_kmsg(int fd)
 
 		switch (buf[0]) {
 		case 'e':
-			fprintf(stderr, " Error: %s\n", buf + 2);
+			fuse_log(FUSE_LOG_ERR, " Error: %s\n", buf + 2);
 			break;
 		case 'w':
-			fprintf(stderr, " Warning: %s\n", buf + 2);
+			fuse_log(FUSE_LOG_WARNING, " Warning: %s\n", buf + 2);
 			break;
 		case 'i':
-			fprintf(stderr, " Info: %s\n", buf + 2);
+			fuse_log(FUSE_LOG_INFO, " Info: %s\n", buf + 2);
 			break;
 		default:
-			fprintf(stderr, " %s\n", buf);
+			fuse_log(FUSE_LOG_ERR, " %s\n", buf);
 			break;
 		}
 	}
@@ -110,8 +111,9 @@ int set_fsconfig_ms_flags(int fsfd, unsigned long *ms_flags)
 		if (ret) {
 			int save_errno = errno;
 
-			fprintf(stderr, "fuse: set fsconfig %s option failed: %s\n",
-				mount_flags[i].opt, strerror(save_errno));
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: set fsconfig %s option failed: %s\n",
+				 mount_flags[i].opt, strerror(save_errno));
 			log_fsconfig_kmsg(fsfd);
 
 			return -save_errno;
@@ -139,8 +141,8 @@ int apply_fsconfig_opt_fd(int fsfd, const char *value)
 	if (res == -1) {
 		int save_errno = errno;
 
-		fprintf(stderr, "fuse: fsconfig SET_STRING fd=%s failed:",
-			value);
+		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig SET_STRING fd=%s failed:",
+			 value);
 		log_fsconfig_kmsg(fsfd);
 		return -save_errno;
 	}
@@ -154,8 +156,43 @@ int apply_fsconfig_opt_string(int fsfd, const char *key, const char *value)
 	res = fsconfig(fsfd, FSCONFIG_SET_STRING, key, value, 0);
 	save_errno = errno;
 	if (res == -1) {
-		fprintf(stderr, "fuse: fsconfig SET_STRING %s=%s failed: ",
-			key, value);
+		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig SET_STRING %s=%s failed: ",
+			 key, value);
+		log_fsconfig_kmsg(fsfd);
+		return -save_errno;
+	}
+	return 0;
+}
+
+int fuse_fsopen_base_type(int blkdev)
+{
+	const char *type = blkdev ? "fuseblk" : "fuse";
+	int fsfd;
+
+	fsfd = fsopen(type, FSOPEN_CLOEXEC);
+	if (fsfd == -1)
+		return -errno;
+	return fsfd;
+}
+
+int fuse_fsconfig_subtype(int fsfd, const char *subtype)
+{
+	int res;
+
+	res = fsconfig(fsfd, FSCONFIG_SET_STRING, "subtype", subtype, 0);
+	if (res == -1) {
+		int save_errno = errno;
+
+		/*
+		 * Not an error worth reporting - the caller falls back to
+		 * encoding the subtype in the source string.
+		 */
+		if (save_errno == ENOPARAM || save_errno == EINVAL ||
+		    save_errno == EOPNOTSUPP)
+			return -ENOPARAM;
+
+		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig subtype=%s failed: ",
+			 subtype);
 		log_fsconfig_kmsg(fsfd);
 		return -save_errno;
 	}
@@ -180,7 +217,7 @@ static int apply_opt_flag(int fsfd, const char *opt)
 	if (res == -1) {
 		int save_errno = errno;
 
-		fprintf(stderr, "fuse: fsconfig SET_FLAG %s failed:", opt);
+		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig SET_FLAG %s failed:", opt);
 		log_fsconfig_kmsg(fsfd);
 		return -save_errno;
 	}
@@ -306,7 +343,7 @@ int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 
 	opts_copy = strdup(opts);
 	if (!opts_copy) {
-		fprintf(stderr, "fuse: failed to allocate memory\n");
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate memory\n");
 		return -ENOMEM;
 	}
 
@@ -359,29 +396,55 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	source = fuse_mnt_build_source(fsname, subtype, source_dev, 0);
 	err = -ENOMEM;
 	if (!type || !source) {
-		fprintf(stderr, "fuse: failed to allocate memory\n");
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate memory\n");
 		goto out_free;
 	}
 
 	/* Try to open filesystem context */
-	fsfd = fsopen(type, FSOPEN_CLOEXEC);
-	if (fsfd == -1) {
-		err = -errno;
-		if (errno != EPERM)
-			fprintf(stderr, "fuse: fsopen(%s) failed: %s\n", type,
-				strerror(errno));
+	res = fuse_fsopen_base_type(blkdev);
+	if (res < 0) {
+		err = res;
+		/*
+		 * Both are expected and the caller falls back silently:
+		 * EPERM  - unprivileged mount, retry via fusermount3;
+		 * ENOSYS - kernel without the new mount API, retry via mount(2).
+		 */
+		if (err != -EPERM && err != -ENOSYS)
+			fuse_log(FUSE_LOG_ERR, "fuse: fsopen(%s) failed: %s\n",
+				 blkdev ? "fuseblk" : "fuse", strerror(-err));
 		goto out_free;
 	}
+	fsfd = res;
 
 	/* Configure subtype */
 	if (subtype) {
-		res = fsconfig(fsfd, FSCONFIG_SET_STRING, "subtype",
-			       subtype, 0);
-		if (res) {
-			err = -errno;
-			log_fsconfig_kmsg(fsfd);
-			fprintf(stderr, "fuse: fsconfig subtype failed: %s\n",
-				strerror(-err));
+		res = fuse_fsconfig_subtype(fsfd, subtype);
+		if (res == -ENOPARAM) {
+			/*
+			 * Kernel without a subtype parameter. Fall back to the
+			 * legacy encoding, the same one mount(2) gets on
+			 * ENODEV: plain "fuse" as the type, subtype carried in
+			 * the source as "<subtype>#<fsname>".
+			 */
+			free(type);
+			free(source);
+			type = fuse_mnt_build_type(blkdev, NULL);
+			if (!fsname)
+				source = type ? strdup(type) : NULL;
+			else if (blkdev)
+				source = fuse_mnt_build_source(fsname, NULL,
+							       source_dev, 0);
+			else
+				source = fuse_mnt_build_source(fsname, subtype,
+							       source_dev, 1);
+			err = -ENOMEM;
+			if (!type || !source) {
+				fuse_log(FUSE_LOG_ERR,
+					 "fuse: failed to allocate memory\n");
+				goto out_free;
+			}
+		} else if (res < 0) {
+			err = res;
 			goto out_free;
 		}
 	}
@@ -391,8 +454,8 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	if (res == -1) {
 		err = -errno;
 		log_fsconfig_kmsg(fsfd);
-		fprintf(stderr, "fuse: fsconfig source failed: %s\n",
-			strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig source failed: %s\n",
+			 strerror(errno));
 		goto out_free;
 	}
 
@@ -405,9 +468,9 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	err = apply_fsconfig_mount_opts(fsfd, kernel_opts);
 	if (err < 0) {
 		log_fsconfig_kmsg(fsfd);
-		fprintf(stderr,
-			"fuse: failed to apply kernel options '%s'\n",
-			kernel_opts);
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: failed to apply kernel options '%s'\n",
+			 kernel_opts);
 		goto out_free;
 	}
 
@@ -416,8 +479,8 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	if (res == -1) {
 		err = -errno;
 		log_fsconfig_kmsg(fsfd);
-		fprintf(stderr, "fuse: fsconfig CREATE failed: %s\n",
-			strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig CREATE failed: %s\n",
+			 strerror(errno));
 		goto out_free;
 	}
 
@@ -434,8 +497,8 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 	if (mountfd == -1) {
 		err = -errno;
 		log_fsconfig_kmsg(fsfd);
-		fprintf(stderr, "fuse: fsmount failed: %s\n",
-			strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "fuse: fsmount failed: %s\n",
+			 strerror(errno));
 		goto out_free;
 	}
 
@@ -451,8 +514,8 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 				 MOVE_MOUNT_F_EMPTY_PATH);
 	if (res == -1) {
 		err = -errno;
-		fprintf(stderr, "fuse: move_mount failed: %s\n",
-			strerror(errno));
+		fuse_log(FUSE_LOG_ERR, "fuse: move_mount failed: %s\n",
+			 strerror(errno));
 		goto out_close_mntfd;
 	}
 
@@ -474,9 +537,9 @@ out_umount:
 
 		snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", mountfd);
 		if (umount2(fd_path, MNT_DETACH) == -1 && errno != EINVAL) {
-			fprintf(stderr,
-				"fuse: cleanup umount failed: %s\n",
-				strerror(errno));
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: cleanup umount failed: %s\n",
+				 strerror(errno));
 		}
 	}
 out_close_mntfd:
