@@ -3528,6 +3528,19 @@ int fuse_req_secctx_next(fuse_req_t req, const char **name,
 	}
 
 	const char *ctx_name = (const char *)(fctx + 1);
+
+	/*
+	 * The name starts right after the header and must leave at least one
+	 * byte for its NUL inside the buffer. The header-fits check above uses
+	 * a strict '>', so ctx_name can land exactly on buf_end; without this
+	 * guard "buf_end - ctx_name - 1" underflows to SIZE_MAX and the strnlen
+	 * below reads past the allocation.
+	 */
+	if (ctx_name >= buf_end) {
+		fuse_log(FUSE_LOG_ERR, "secctx name extends past buffer\n");
+		return -EIO;
+	}
+
 	const size_t max_strlen = buf_end - ctx_name - 1;
 	const size_t name_size = strnlen(ctx_name, max_strlen) + 1;
 	const char *ctx_value = ctx_name + name_size;
@@ -4165,6 +4178,9 @@ void fuse_session_destroy(struct fuse_session *se)
 	free(se->cuse_data);
 	if (se->fd != -1)
 		close(se->fd);
+	/* Closing this lets the auto_unmount fusermount3 helper exit. */
+	if (se->auto_unmount_fd != -1)
+		close(se->auto_unmount_fd);
 	if (se->io != NULL)
 		free(se->io);
 	destroy_mount_opts(se->mo);
@@ -4502,6 +4518,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 	}
 	se->fd = -1;
 	se->init_wakeup_fd = -1;
+	se->auto_unmount_fd = -1;
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
@@ -4731,15 +4748,14 @@ static void *session_sync_init_worker(void *data)
 /*
  * Enable synchronous FUSE_INIT and start worker thread
  *
- * @param is_sync_init set to true on return if sync init is enabled
+ * Sets se->is_sync_init to true if sync init is enabled.
  * Returns 0 on success or kernel does not support it, -errno on unexpected failure
  */
-static int session_start_sync_init(struct fuse_session *se, int fd,
-				   bool *is_sync_init)
+static int session_start_sync_init(struct fuse_session *se, int fd)
 {
 	int err, res;
 
-	*is_sync_init = false;
+	se->is_sync_init = false;
 
 	/*
 	 * Older fuse servers do not set want_sync_init or start the new
@@ -4791,6 +4807,9 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 		return -EIO;
 	}
 
+	/* Must be set before the worker exists - it reads this in _do_init() */
+	se->is_sync_init = true;
+
 	err = pthread_create(&se->init_thread, NULL,
 				session_sync_init_worker, se);
 	if (err != 0) {
@@ -4798,12 +4817,11 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 			FUSE_LOG_ERR,
 			"fuse: failed to create init worker thread: %s\n",
 			strerror(err));
+		se->is_sync_init = false;
 		close(se->init_wakeup_fd);
 		se->init_wakeup_fd = -1;
 		return -EIO;
 	}
-
-	*is_sync_init = true;
 
 	return 0;
 }
@@ -4832,7 +4850,7 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 	if (err != 0) {
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to join init worker thread: %s\n",
 			 strerror(err));
-		return -1;
+		goto err;
 	}
 
 	if (se->init_wakeup_fd != -1) {
@@ -4845,15 +4863,19 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 	if (se->init_error != 0) {
 		fuse_log(FUSE_LOG_ERR, "fuse: init worker failed: %s\n",
 			 strerror(-se->init_error));
-		return -1;
+		goto err;
 	}
 
 	if (fuse_session_exited(se)) {
 		fuse_log(FUSE_LOG_ERR, "FUSE_INIT failed: session exited\n");
-		return -1;
+		goto err;
 	}
 
 	return 0;
+
+err:
+	se->is_sync_init = false;
+	return -1;
 }
 
 /*
@@ -4863,8 +4885,7 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 static int new_api_fusermount(struct fuse_session *se,
 			      const char *mountpoint,
 			      const char *mtab_opts,
-			      int *sock_fd, pid_t *fusermount_pid,
-			      bool *is_sync_init)
+			      int *sock_fd, pid_t *fusermount_pid)
 {
 	int fd, err;
 
@@ -4887,7 +4908,7 @@ static int new_api_fusermount(struct fuse_session *se,
 
 	/* Start worker thread with correct fd from fusermount3 */
 	se->fd = fd;
-	err = session_start_sync_init(se, fd, is_sync_init);
+	err = session_start_sync_init(se, fd);
 	if (err) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: failed to start sync init worker\n");
@@ -4924,7 +4945,6 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	char *mtab_opts = NULL;
 	char *mtab_opts_with_fd = NULL;
 	char fd_opt[32];
-	bool is_sync_init = false;
 
 	res = fuse_kern_mount_get_base_mtab_opts(se->mo, &mtab_opts);
 	err = -EIO;
@@ -4941,7 +4961,7 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	}
 
 	se->fd = fd;
-	err = session_start_sync_init(se, fd, &is_sync_init);
+	err = session_start_sync_init(se, fd);
 	if (err)
 		goto err;
 
@@ -4962,7 +4982,6 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 		close(fd);
 		fd = -1;
 		se->fd = -1;
-
 		/*
 		 * fusermount3 receives fsname/subtype (and other fusermount
 		 * options) only via -o, so mirror the legacy fuse_kern_mount()
@@ -4983,8 +5002,7 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 		}
 
 		fd = new_api_fusermount(se, mountpoint, fusermount_opts,
-					&sock_fd, &fusermount_pid,
-					&is_sync_init);
+					&sock_fd, &fusermount_pid);
 		free(fusermount_opts);
 		if (fd < 0) {
 			err = fd;
@@ -4998,10 +5016,20 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 
 err_with_sock:
 	if (sock_fd >= 0) {
-		close(sock_fd);
-		/* Reap fusermount3 child process to prevent zombie */
-		if (fusermount_pid > 0)
-			waitpid(fusermount_pid, NULL, 0);
+		if (err == 0 && se->mo->auto_unmount) {
+			/*
+			 * Under auto_unmount fusermount3 --sync-init stays alive
+			 * until this socket closes (its unmount trigger), so
+			 * closing it now would unmount early and waitpid() would
+			 * hang. Keep it; fuse_session_destroy() closes it.
+			 */
+			se->auto_unmount_fd = sock_fd;
+		} else {
+			close(sock_fd);
+			/* Reap fusermount3 child process to prevent zombie */
+			if (fusermount_pid > 0)
+				waitpid(fusermount_pid, NULL, 0);
+		}
 	}
 err:
 	if (err < 0) {
@@ -5011,8 +5039,8 @@ err:
 		fd = -1;
 		se->fd = -1;
 		se->error = err;
+		se->is_sync_init = false;
 	}
-	se->is_sync_init = is_sync_init;
 
 	/* Wait for synchronous FUSE_INIT to complete */
 	if (session_wait_sync_init_completion(se) < 0)
