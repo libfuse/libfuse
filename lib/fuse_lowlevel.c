@@ -3984,16 +3984,7 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	}
 
 	fuse_session_in2req(req, in);
-	if (in->total_extlen)
-		fuse_req_parse_extensions(req, in->total_extlen, in, in->len);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
-
-	if (se->debug && req->secctx_len > 0) {
-		fuse_log(FUSE_LOG_DEBUG,
-			"  secctx: %zu bytes (%u contexts)\n",
-			req->secctx_len,
-			req->secctx_count);
-	}
 
 	err = fuse_req_opcode_sanity_ok(se, in->opcode);
 	if (err)
@@ -4042,6 +4033,21 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 			goto reply_err;
 
 		in = mbuf;
+	}
+
+	/*
+	 * Extensions are appended at the end of the request. On the splice path
+	 * 'in' only holds the fixed header until the payload is copied in above,
+	 * so parse them here, where 'in' spans the whole request for every path.
+	 */
+	if (in->total_extlen)
+		fuse_req_parse_extensions(req, in->total_extlen, in, in->len);
+
+	if (se->debug && req->secctx_len > 0) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"  secctx: %zu bytes (%u contexts)\n",
+			req->secctx_len,
+			req->secctx_count);
 	}
 
 	inarg = (void *) &in[1];
