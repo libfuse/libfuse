@@ -224,6 +224,23 @@ Switch to \fBUSER\fP and its primary group before launching the FUSE file system
 \fBdrop_privileges\fP
 Perform setup of the FUSE file descriptor and mounting the file system before launching the FUSE file system process. \fBmount.fuse3\fP requires privilege to do so, i.e. must be run as root or at least with \fBCAP_SYS_ADMIN\fP and \fBCAP_SETPCAP\fP. It will launch the file system process fully unprivileged, i.e. without \fBcapabilities\fP(7) and \fBprctl\fP(2) flags set up such that privileges can't be reacquired (e.g. via setuid or fscaps binaries). This reduces risk in the event of the FUSE file system process getting compromised by malicious file system data. Because the file system program is launched after privileges have been dropped, it and the libraries it links against must reside at a path the unprivileged process can resolve: every directory component must be searchable without elevated privileges.
 
+.SH SERVICE MOUNTS
+If libfuse was built with service mount support, \fBmount.fuse3\fP can mount
+filesystems whose server runs as a sandboxed systemd socket service instead of
+as a child of the mounting process. When you mount a type \fBfuse.\fIsubtype\fR
+(or \fBfuseblk.\fIsubtype\fR), \fBmount.fuse3\fP first checks for a service
+socket for that subtype. If one exists, the mount is handed to
+\fBfuservicemount3\fP(8) and performed by the already-running, isolated server;
+the \fIsource\fP and \fB-o\fP options are forwarded to it.
+.PP
+If no service socket exists, \fBmount.fuse3\fP transparently falls back to the
+traditional behaviour and launches the filesystem's own mount command, so
+filesystems that are not set up as services are unaffected. Some options that
+are incompatible with an already-running server (such as passing a pre-opened
+FUSE file descriptor, or \fBsetuid=USER\fP) also force the traditional path.
+.PP
+See the libfuse \fIREADME.service-mount\fP document for details on installing
+and using service-mounted filesystems.
 .SH FUSE MODULES (STACKING)
 Modules are filesystem stacking support to high level API. Filesystem modules can be built into libfuse or loaded from shared object
 .SS "iconv"
@@ -269,5 +286,6 @@ Debian GNU/Linux distribution.
 .SH SEE ALSO
 .BR fusermount3 (1)
 .BR fusermount (1)
+.BR fuservicemount3 (8)
 .BR mount (8)
 .BR fuse (4)
