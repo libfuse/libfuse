@@ -473,13 +473,14 @@ char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 	if (lastcomp == NULL)
 		dst = strdup(buf);
 	else {
-		dst = (char *) malloc(strlen(buf) + 1 + strlen(lastcomp) + 1);
+		size_t dstlen = strlen(buf) + 1 + strlen(lastcomp) + 1;
+		dst = (char *) malloc(dstlen);
 		if (dst) {
 			unsigned buflen = strlen(buf);
 			if (buflen && buf[buflen-1] == '/')
-				sprintf(dst, "%s%s", buf, lastcomp);
+				snprintf(dst, dstlen, "%s%s", buf, lastcomp);
 			else
-				sprintf(dst, "%s/%s", buf, lastcomp);
+				snprintf(dst, dstlen, "%s/%s", buf, lastcomp);
 		}
 	}
 	free(copy);
