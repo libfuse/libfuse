@@ -53,6 +53,12 @@ REAP_TIMEOUT = 30.0             # seconds to wait for a killed test to be gone
 # a mktemp directory because a path you cannot predict is a path you cannot
 # look in after CI hands you a red build.
 DEFAULT_BASE_DIR = Path('/var/tmp/fuse-tests')
+
+# Tests declaring this group cannot run concurrently with a copy of themselves:
+# they bind a fixed path, name a device node globally, or take the first free
+# loop device. They run first, with one job, before the rest fan out.
+SERIAL_GROUP = 'serial'
+
 _CONFIG_SECTION = 'tests'
 _CONFIG_BASE_DIR_KEY = 'base_dir'
 
@@ -892,14 +898,24 @@ class TestRunner:
     # ------------------------------------------------------------- scheduling
 
     def run_all(self, specs: list) -> int:
-        """ThreadPoolExecutor over specs; print live lines and the summary.
+        """Run the serial group first with one job, then fan the rest out.
         Returns 0 when nothing failed."""
         started = time.monotonic()
+        serial = [s for s in specs if SERIAL_GROUP in s.groups]
+        parallel = [s for s in specs if SERIAL_GROUP not in s.groups]
+        results = self._run_batch(serial, 1) + \
+            self._run_batch(parallel, self.jobs)
+        return self.summarise(results, time.monotonic() - started)
+
+    def _run_batch(self, specs: list, jobs: int) -> list:
+        """ThreadPoolExecutor over specs; print a live line per finished test."""
         results = []
+        if not specs:
+            return results
         # as_completed() rather than map(): map yields in submission order, so
         # a finished test would be reported -- and its workdir freed -- only
         # once every test submitted before it has landed.
-        with ThreadPoolExecutor(max_workers=self.jobs) as pool:
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
             futures = [pool.submit(self._run_guarded, spec) for spec in specs]
             for future in as_completed(futures):
                 result = future.result()
@@ -907,7 +923,7 @@ class TestRunner:
                     results.append(result)
                     self.report(result)
                     self.discard_workdir(result)
-        return self.summarise(results, time.monotonic() - started)
+        return results
 
     def _run_guarded(self, spec: TestSpec):
         """run_one(), unless SIGINT already asked the run to stop."""
