@@ -3,6 +3,10 @@
 set -e
 
 TEST_CMD="meson test -C . --print-errorlogs"
+# Two selections rather than one: plain `meson test` runs both suites, and the
+# io-uring pass is wanted once per run, not once per build and user.
+TEST_CMD_DEFAULT="${TEST_CMD} --no-suite io-uring"
+TEST_CMD_IO_URING="${TEST_CMD} --suite io-uring"
 SAN="-Db_sanitize=address,undefined"
 
 # not default
@@ -79,6 +83,35 @@ chown_log_dir()
     sudo chown -R "$(id -u):$(id -g)" "${RUN_DIR}"
 }
 
+# The kernel parameter is global and defaults to off, and this script is also
+# run by hand, so put back whatever the machine had. Failing to enable it is
+# fatal: run-tests.py skips its io-uring invocation where the kernel does not
+# offer the transport, which is right for a developer machine and wrong here -
+# a job that silently stops testing io-uring is what this exists to prevent.
+restore_io_uring()
+{
+    echo "${FUSE_URING_WAS}" | sudo tee "$1" >/dev/null
+    [ -z "${IO_URING_DISABLED_WAS}" ] ||
+        sudo sysctl -q -w "kernel.io_uring_disabled=${IO_URING_DISABLED_WAS}"
+}
+
+enable_fuse_uring()
+{
+    local param=/sys/module/fuse/parameters/enable_uring
+    local sysctl_param=/proc/sys/kernel/io_uring_disabled
+
+    FUSE_URING_WAS="$(cat "${param}")" ||
+        { echo "this kernel has no fuse io-uring support"; exit 1; }
+    # Non-zero denies the daemons io_uring_setup(), which drops them back to
+    # /dev/fuse. Empty before 6.6, where nothing restricts ring creation.
+    IO_URING_DISABLED_WAS="$(cat "${sysctl_param}" 2>/dev/null || true)"
+    # Armed before either write, so a failure between them still restores.
+    trap "restore_io_uring ${param}" EXIT
+    echo Y | sudo tee "${param}" >/dev/null
+    [ -z "${IO_URING_DISABLED_WAS}" ] ||
+        sudo sysctl -q -w kernel.io_uring_disabled=0
+}
+
 log_env()
 {
     echo "=== Environment ==="
@@ -136,7 +169,7 @@ non_sanitized_build()
                 sudo chmod 4755 util/fuservicemount3
         fi
 
-        FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}")" ${TEST_CMD}
+        FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}")" ${TEST_CMD_DEFAULT}
         popd
         rm -fr build-${CC}
         sudo rm -fr ${PREFIX_DIR}
@@ -191,25 +224,30 @@ sanitized_build()
     # them.
     sudo env PATH=$PATH \
         FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}${VARIANT:+-$VARIANT}-root")" \
-        ${TEST_CMD} --logbase=testlog-root
+        ${TEST_CMD_DEFAULT} --logbase=testlog-root
 
     # Cleanup temporary files (since they are now owned by root)
     sudo rm -rf test/.pytest_cache/ test/__pycache__
     chown_log_dir
 
-    FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}${VARIANT:+-$VARIANT}")" ${TEST_CMD}
+    FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}${VARIANT:+-$VARIANT}")" \
+        ${TEST_CMD_DEFAULT}
+
+    # The transport is worth exercising with the sanitizers on, and once per
+    # run rather than once per build and user: five identical io-uring passes
+    # buy nothing.
+    if [ "${TEST_IO_URING:-}" = 1 ]; then
+        FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}-iouring")" \
+            ${TEST_CMD_IO_URING}
+    fi
 
     popd
     rm -fr build-san
     sudo rm -fr ${PREFIX_DIR}
 )
 
-# Sanitized with io-uring
-export CC=clang
-export CXX=clang++
-export FUSE_URING_ENABLE=1
-VARIANT=iouring sanitized_build
-unset FUSE_URING_ENABLE
+# run-tests.py's --io-uring invocation must not be able to skip quietly here.
+enable_fuse_uring
 
 # 32-bit sanitized build
 export CC=clang
@@ -228,11 +266,13 @@ unset TEST_WITH_VALGRIND
 unset CC
 unset CXX
 
-# Sanitized build
+# Sanitized build. This is the one that also runs its tests over fuse-io-uring:
+# the two builds the old "sanitized with io-uring" pass produced were
+# byte-identical, and only the transport the tests use differs.
 export CC=clang
 export CXX=clang++
 TEST_WITH_VALGRIND=false
-sanitized_build
+TEST_IO_URING=1 sanitized_build
 
 # Sanitized build without libc versioned symbols
 export CC=clang

@@ -4744,6 +4744,15 @@ int fuse_session_custom_io_317(struct fuse_session *se,
 
 	se->fd = fd;
 	memcpy(se->io, io, op_size);
+	/* fuse_uring registers se->fd as the ring's fixed file and issues
+	 * IORING_OP_URING_CMD against it, bypassing io->read/io->writev
+	 * entirely -- so on a caller-owned fd it would send uring commands to
+	 * whatever the caller passed in. Cleared rather than refused: there is
+	 * no API asking for io-uring, only the environment variable, so
+	 * refusing would let a stray variable break an application that never
+	 * asked for it.
+	 */
+	se->uring.enable = 0;
 	return 0;
 }
 
