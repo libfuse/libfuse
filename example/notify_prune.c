@@ -102,10 +102,11 @@ static const struct fuse_opt option_spec[] = {
 
 static void update_fs(void)
 {
+	struct tm tmbuf;
 	struct tm *now;
 	time_t t = time(NULL);
 
-	now = localtime(&t);
+	now = localtime_r(&t, &tmbuf);
 	assert(now != NULL);
 
 	file_size = strftime(file_contents, MAX_STR_LEN,

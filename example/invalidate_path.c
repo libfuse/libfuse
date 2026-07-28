@@ -164,10 +164,11 @@ static const struct fuse_operations xmp_oper = {
 
 static void update_fs(void) {
 	static int count = 0;
+	struct tm tmbuf;
 	struct tm *now;
 	time_t t;
 	t = time(NULL);
-	now = localtime(&t);
+	now = localtime_r(&t, &tmbuf);
 	assert(now != NULL);
 
 	int time_file_size = strftime(time_file_contents, MAX_STR_LEN,

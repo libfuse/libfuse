@@ -264,11 +264,12 @@ static const struct fuse_lowlevel_ops tfs_oper = {
 static void update_fs(void)
 {
 	time_t t;
+	struct tm tmbuf;
 	struct tm *now;
 	ssize_t ret;
 
 	t = time(NULL);
-	now = localtime(&t);
+	now = localtime_r(&t, &tmbuf);
 	assert(now != NULL);
 
 	ret = strftime(file_name, MAX_STR_LEN, "Time_is_%Hh_%Mm_%Ss", now);
