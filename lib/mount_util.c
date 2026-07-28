@@ -124,7 +124,7 @@ const struct mount_flags mount_flags[] = {
 {"ro",           MS_RDONLY,        1,  1,    1,        MOUNT_ATTR_RDONLY},
 {"suid",         MS_NOSUID,        0,  0,    0,        MOUNT_ATTR_NOSUID},
 {"nosuid",       MS_NOSUID,        1,  1,    0,        MOUNT_ATTR_NOSUID},
-{"dev",          MS_NODEV,         0,  1,    0,        MOUNT_ATTR_NODEV},
+{"dev",          MS_NODEV,         0,  0,    0,        MOUNT_ATTR_NODEV},
 {"nodev",        MS_NODEV,         1,  1,    0,        MOUNT_ATTR_NODEV},
 {"exec",         MS_NOEXEC,        0,  1,    0,        MOUNT_ATTR_NOEXEC},
 {"noexec",       MS_NOEXEC,        1,  1,    0,        MOUNT_ATTR_NOEXEC},

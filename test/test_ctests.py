@@ -28,6 +28,10 @@ def test_loop_config():
     """Unit test for fuse_loop_cfg setter interaction — no FUSE mount needed."""
     subprocess.check_call([ pjoin(basename, 'test', 'test_loop_config') ])
 
+def test_mount_flags():
+    """Unit test for the mount_flags safe column — no FUSE mount needed."""
+    subprocess.check_call([ pjoin(basename, 'test', 'test_mount_flags') ])
+
 @pytest.mark.skipif('FUSE_CAP_WRITEBACK_CACHE' not in fuse_caps,
                     reason='not supported by running kernel')
 @pytest.mark.parametrize("writeback", (False, True))
