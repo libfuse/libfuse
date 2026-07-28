@@ -396,7 +396,12 @@ base, and the leaf is deleted when nothing failed.
 `test/exclude` holds one test name per line for a host that cannot support a
 test; `-X <name>` adds to it for one run.
 
-`TEST_WITH_VALGRIND=1` traces every daemon and scales the timeouts to match.
+`TEST_WITH_VALGRIND=1` traces every daemon and scales every timeout by ten to
+match. A valgrind finding fails the test through the daemon's exit status
+(`--error-exitcode=99`), with the report sitting in that daemon's own log;
+valgrind's `==pid==` lines are stripped before the suspicious-output scan.
+`fusermount3` is traced only when the test runs as root, because it is setuid,
+and the give-up umount on the failure path is not traced at all.
 
 ## Running them over fuse-io-uring
 
