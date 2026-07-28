@@ -784,6 +784,15 @@ def cmd_elf_class(path):
     print({1: 32, 2: 64}.get(ident[4], 0))
 
 
+def cmd_null_roundtrip(path):
+    """Read zeros from the null filesystem, then write to it."""
+    with open(path, 'rb') as fh:
+        got = fh.read(382)
+    _require(got == b'\0' * 382, 'read %r rather than zeros' % got[:32])
+    with open(path, 'wb') as fh:
+        fh.write(b'whatever')
+
+
 def cmd_cuse_roundtrip(devpath, client):
     """The binary read/write/offset exchange test_cuse performed."""
     output = subprocess.check_output([client, devpath, 's'])
@@ -940,6 +949,7 @@ def build_parser():
     add('fuse_test_printcap_caps', cmd_printcap_caps, 'src_root')
     add('fuse_test_reachable_without_caps', cmd_reachable_without_caps, 'path')
     add('fuse_test_elf_class', cmd_elf_class, 'path')
+    add('fuse_test_null_roundtrip', cmd_null_roundtrip, 'path')
     add('fuse_test_cuse_roundtrip', cmd_cuse_roundtrip, 'devpath', 'client')
     add('fuse_test_uds_init', cmd_uds_init, 'sockpath')
     return parser
