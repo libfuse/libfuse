@@ -1,0 +1,7 @@
+# Test code is not shipped. Alerts there describe deliberate behaviour -
+# the test programs take paths and sizes from the command line.
+#
+# Only effective for languages analysed without a build (python here). The
+# C build excludes the same directory via -Dtests=false.
+paths-ignore:
+  - test
