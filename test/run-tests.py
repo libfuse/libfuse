@@ -48,6 +48,18 @@ GDB_TOP_FRAMES = 12             # frames inlined into the summary
 # waiting for one without a bound hangs the run itself.
 REAP_TIMEOUT = 30.0             # seconds to wait for a killed test to be gone
 
+# A daemon under valgrind is an order of magnitude slower, so every timeout is
+# scaled by one constant rather than each script carrying a second number for a
+# mode most runs do not use.
+VALGRIND_TIMEOUT_FACTOR = 10
+# --error-exitcode is what makes a finding fail the test: the daemon exits 99
+# and fuse_umount's existing status check catches it. Leak checking stays off;
+# turning it on is a separate decision with its own noise budget.
+VALGRIND_PREFIX = 'valgrind -q --error-exitcode=99 --'
+# ==PID== is valgrind's standard output, --PID-- its warnings; the report is
+# not the verdict, the daemon's exit status is.
+_VALGRIND_LINE_RE = re.compile(r'^(?:==|--)[0-9]+(?:==|--) .*$', re.MULTILINE)
+
 # Test output must land somewhere predictable, so this is the default base for
 # everything the suite writes. /var/tmp rather than /tmp because it survives a
 # reboot and no tmpfiles cleaner walks it mid-run, and a fixed name rather than
@@ -432,6 +444,16 @@ def make_run_dir(run_dir: Path) -> bool:
     return True
 
 
+def resolve_valgrind() -> str:
+    """The command prefix every daemon launch gets, or "" when off.
+
+    Resolved once here and exported, so the policy lives in one place and no
+    test re-implements the no/false/0 spellings.
+    """
+    value = os.environ.get('TEST_WITH_VALGRIND', 'no').lower().strip()
+    return '' if value in ('no', 'false', '0') else VALGRIND_PREFIX
+
+
 def run_leaf_name(args: argparse.Namespace) -> str:
     """The per-run leaf appended to a base directory.
 
@@ -512,6 +534,7 @@ class TestRunner:
         self.verbose = verbose
         self.io_uring = io_uring
         self.io_uring_depth = io_uring_depth
+        self.valgrind = resolve_valgrind()
         self.core_pattern = read_core_pattern()
         self.fuse_caps = self.read_fuse_caps()
         self._cgroup = CgroupManager.create(str(os.getpid()))
@@ -620,6 +643,7 @@ class TestRunner:
             # is on the record too. It lands in that daemon's log, because
             # none of them redirects fuse_log() anywhere else.
             'FUSE_INIT_STATUS': '1',
+            'FUSE_VALGRIND': self.valgrind,
         })
         if self.io_uring_depth is not None:
             env['FUSE_URING_QUEUE_DEPTH'] = str(self.io_uring_depth)
@@ -742,6 +766,8 @@ class TestRunner:
 
     def effective_timeout(self, spec: TestSpec) -> float:
         """The wall-clock bound actually enforced for *spec*."""
+        if self.valgrind:
+            return spec.timeout * VALGRIND_TIMEOUT_FACTOR
         return spec.timeout
 
     def classify(self, spec: TestSpec, workdir: Path, code: int,
@@ -867,7 +893,14 @@ class TestRunner:
         return SUSPICIOUS_WORDS
 
     def strip_extra(self, buf: str) -> str:
-        """Hook for modes that add their own noise to a daemon's log."""
+        """Drop the noise a mode adds to every daemon's log.
+
+        Valgrind's own lines go before the word scan. Built in rather than a
+        per-test fuse_allow_output, because it applies to every test whenever
+        valgrind is on.
+        """
+        if self.valgrind:
+            return _VALGRIND_LINE_RE.sub('', buf)
         return buf
 
     # ---------------------------------------------------------- core handling

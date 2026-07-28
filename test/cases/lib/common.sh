@@ -360,7 +360,9 @@ fuse_mount_at()
 	# FUSE_INIT report lands there too: the runner asks every session for one
 	# on stderr.
 	log=$TEST_LOGDIR/fs-$idx-$(basename "$fs").out
-	"$bin" "$@" "$mnt" >"$log" 2>&1 &
+	# $FUSE_VALGRIND is unquoted on purpose: it is a command prefix that
+	# has to word-split, and it is empty when valgrind is off.
+	$FUSE_VALGRIND "$bin" "$@" "$mnt" >"$log" 2>&1 &
 	FUSE_FS_PID[$idx]=$!
 	FUSE_FS_LOG[$idx]=$log
 	FUSE_FS_MNT[$idx]=$mnt
@@ -428,7 +430,8 @@ fuse_mount_helper()
 	# The daemon mount.fuse3 execs inherits the runner's environment, so its
 	# FUSE_INIT report lands here and is checked like a direct mount's.
 	log=$TEST_LOGDIR/fs-$idx-$(basename "$fs").out
-	"$FUSE_UTIL_DIR/mount.fuse3" "$spec" "$TEST_MNT" "$@" >"$log" 2>&1 &
+	$FUSE_VALGRIND "$FUSE_UTIL_DIR/mount.fuse3" "$spec" "$TEST_MNT" "$@" \
+		>"$log" 2>&1 &
 	FUSE_FS_PID[$idx]=$!
 	FUSE_FS_LOG[$idx]=$log
 	FUSE_FS_MNT[$idx]=$TEST_MNT
@@ -487,7 +490,13 @@ fuse_umount()
 	local rc
 
 	if _is_linux; then
-		"$FUSE_UTIL_DIR/fusermount3" -u "$mnt" ||
+		local vg=
+		# fusermount3 is setuid root, so valgrind can only trace it
+		# when the test itself runs as root.
+		if [ "$FUSE_UID" = 0 ]; then
+			vg=$FUSE_VALGRIND
+		fi
+		$vg "$FUSE_UTIL_DIR/fusermount3" -u "$mnt" ||
 			_fail "fusermount3 -u $mnt failed"
 	else
 		umount "$mnt" || _fail "umount $mnt failed"
@@ -520,6 +529,8 @@ fuse_umount_lazy()
 
 	# The trap runs over every index, fuse_umount'ed ones included.
 	[ -n "$pid" ] || return 0
+	# The give-up path is not traced: a valgrind report from a teardown
+	# that is already failing is noise.
 	if _is_linux; then
 		"$FUSE_UTIL_DIR/fusermount3" -z -u "$mnt" >/dev/null 2>&1 || true
 	else
