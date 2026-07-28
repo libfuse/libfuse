@@ -32,5 +32,24 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           ./.github/workflows/install-ubuntu-dependencies.sh --full
-      - run: test/ci-build.sh
+
+      # Cores must land in the test's own log directory, which run-tests.py
+      # makes the cwd of every test. Ubuntu's apport pipe swallows them.
+      - name: Collect core dumps in the test work directory
+        run: |
+          sudo sysctl -w kernel.core_pattern=core.%e.%p
+          sudo sysctl -w kernel.core_uses_pid=0
+
+      - run: test/ci-build.sh --work-dir ${{ github.workspace }}/fuse-tests
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-logs-${{ matrix.os }}
+          path: |
+            fuse-tests/run/
+            !fuse-tests/run/**/core.*
+          if-no-files-found: ignore
+          retention-days: 14
 

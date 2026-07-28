@@ -24,6 +24,7 @@ PACKAGES_FULL=(
     doxygen
     gcc-10
     gcc-9
+    gdb
     valgrind
     gcc-multilib
     g++-multilib
