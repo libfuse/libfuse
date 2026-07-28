@@ -283,6 +283,7 @@ fuse_test_assert_source <mnt> <source>...      # any one is acceptable
 fuse_test_printcap_caps <src-root>          # every FUSE_CAP_* is in the header
 fuse_test_reachable_without_caps <path>     # mode-bit walk up the tree
 fuse_test_elf_class <path>                  # 32 or 64, from e_ident
+fuse_test_null_roundtrip <path>             # read zeros, then write
 fuse_test_cuse_roundtrip <devpath> <client> # read/write/offset exchange
 fuse_test_uds_init <sockpath>               # a FUSE INIT handshake
 ```
