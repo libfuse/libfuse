@@ -38,8 +38,17 @@
 
 # _fail <msg...>
 # Print msg to stderr with the test name, then exit 1 (FAIL).
+#
+# A test whose subject only reports an unsupported kernel once it has tried to
+# use it cannot gate on that up front. $FAIL_CALLBACK is its last look, called
+# with the message; _notrun from there turns the failure into a skip.
 _fail()
 {
+	if [ -n "${FAIL_CALLBACK:-}" ]; then
+		local callback=$FAIL_CALLBACK
+		FAIL_CALLBACK=		# a failing callback must not recurse
+		"$callback" "$@"
+	fi
 	echo "FAIL: ${TEST_NAME}: $*" >&2
 	exit 1
 }
@@ -164,11 +173,39 @@ _require_fs_marker_absent()
 	local regex=$1 idx=${2:-0} deadline=$((SECONDS + 3))
 
 	while [ $SECONDS -lt $deadline ]; do
-		if grep -qE -- "$regex" "$(fuse_fs_log "$idx")"; then
-			_notrun "filesystem reported: $regex"
-		fi
+		_skip_if_fs_marker "$regex" "$idx"
 		sleep 0.2
 	done
+}
+
+# _skip_if_fs_marker <regex> [fs-index]
+# _notrun if the daemon's log already matches <regex>, without waiting. For a
+# marker whose arrival the caller has already waited for, polling again would
+# only add delay.
+_skip_if_fs_marker()
+{
+	local regex=$1 idx=${2:-0}
+
+	if grep -qE -- "$regex" "$(fuse_fs_log "$idx")"; then
+		_notrun "filesystem reported: $regex"
+	fi
+}
+
+# _wait_fs_marker <regex> [fs-index]
+# _fail unless the daemon's log comes to match <regex>. For progress a daemon
+# reports itself: waiting for the line rather than for a duration lets a slow
+# machine take longer instead of failing, and lets a fast one stop early.
+_wait_fs_marker()
+{
+	local regex=$1 idx=${2:-0} deadline=$((SECONDS + 10))
+
+	while [ $SECONDS -lt $deadline ]; do
+		if grep -qE -- "$regex" "$(fuse_fs_log "$idx")"; then
+			return 0
+		fi
+		sleep 0.1
+	done
+	_fail "filesystem did not report: $regex"
 }
 
 # ------------------------------------------------------------------- assertions
