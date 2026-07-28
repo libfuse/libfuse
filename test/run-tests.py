@@ -11,6 +11,7 @@ verbs live in cases/lib/common.sh.
 """
 
 import argparse
+import ctypes
 import fnmatch
 import os
 import platform
@@ -75,6 +76,23 @@ CORE_GLOBS = ('core', 'core.*', '*.core')
 SUSPICIOUS_WORDS = ('exception', 'error', 'warning', 'fatal', 'traceback',
                     'fault', 'crash(?:ed)?', 'abort(?:ed)?',
                     'uninitiali[zs]ed')
+
+# libfuse logs this at FUSE_LOG_INFO and then carries on over /dev/fuse, so an
+# io-uring run that nobody checks passes green while testing the transport it
+# was meant to replace.
+IO_URING_FALLBACK = 'failed to start io-uring'
+IO_URING_CAP = 'FUSE_CAP_OVER_IO_URING'
+# Every session states its transport on its own stderr, which is a log the
+# suite keeps either way. off:custom_io is the only refusal a daemon cannot
+# help: no /dev/fuse fd of its own, so no ring to issue against.
+IO_URING_STATE_KEY = 'FUSE_INIT: io_uring='
+IO_URING_STATES_OK = ('FUSE_INIT: io_uring=on',
+                      'FUSE_INIT: io_uring=off:custom_io')
+FUSE_URING_PARAM = Path('/sys/module/fuse/parameters/enable_uring')
+# glibc has no io_uring_setup() wrapper, so this goes through syscall(2), the
+# way liburing does it. 425 on every architecture but alpha.
+IO_URING_SETUP = 425
+IO_URING_PARAMS_SIZE = 120      # sizeof(struct io_uring_params)
 
 # FUSE debug messages "unique: X, error: -Y (...), outsize: Z" contain the word
 # "error" but only report a request's return code.
@@ -178,6 +196,21 @@ def read_core_pattern() -> str:
     proc = subprocess.run(['sysctl', '-n', 'kern.corefile'],
                           capture_output=True, text=True, check=False)
     return proc.stdout.strip()
+
+
+def io_uring_setup_error() -> str:
+    """The errno text when io_uring_setup() is refused, else "".
+
+    Asked as the user the daemons will run as, so it answers for them.
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    ring = libc.syscall(IO_URING_SETUP, 1,
+                        ctypes.create_string_buffer(IO_URING_PARAMS_SIZE))
+    if ring < 0:
+        return os.strerror(ctypes.get_errno())
+    os.close(ring)
+    return ''
 
 
 def raise_nofile_limit() -> None:
@@ -383,7 +416,7 @@ def resolve_run_dir(args: argparse.Namespace) -> Path:
     env_run_dir = os.environ.get('FUSE_TEST_RUN_DIR')
     if env_run_dir:
         return Path(env_run_dir)
-    return resolve_base_dir() / run_leaf_name()
+    return resolve_base_dir() / run_leaf_name(args)
 
 
 def make_run_dir(run_dir: Path) -> bool:
@@ -399,16 +432,21 @@ def make_run_dir(run_dir: Path) -> bool:
     return True
 
 
-def run_leaf_name() -> str:
+def run_leaf_name(args: argparse.Namespace) -> str:
     """The per-run leaf appended to a base directory.
 
     The timestamp is second-resolution, so the pid is what keeps two runs
     started in the same second apart: a shared leaf is a shared work
     directory, log and pid file for every test, and the first run to finish
     clean deletes them all.
+
+    The io-uring invocation gets its own suffix, so which transport a kept
+    directory holds is visible without opening it. A verbatim --run-dir stays
+    verbatim; the caller chose that path.
     """
     user = os.environ.get('USER') or os.environ.get('LOGNAME') or 'unknown'
-    return f'run-{user}-{time.strftime("%y%m%d%H%M%S")}-{os.getpid()}'
+    mode = '-iouring' if getattr(args, 'io_uring', False) else ''
+    return f'run-{user}-{time.strftime("%y%m%d%H%M%S")}-{os.getpid()}{mode}'
 
 
 def as_test_name(pattern: str, cases_dir: Path) -> str:
@@ -464,13 +502,16 @@ class TestRunner:
     """Runs TestSpecs, one worker thread each, and reports."""
 
     def __init__(self, build_dir: Path, run_dir: Path, run_dir_created: bool,
-                 jobs: int, keep_logs: bool, verbose: bool):
+                 jobs: int, keep_logs: bool, verbose: bool,
+                 io_uring: bool = False, io_uring_depth: int | None = None):
         self.build_dir = build_dir
         self.run_dir = run_dir
         self.run_dir_created = run_dir_created
         self.jobs = jobs
         self.keep_logs = keep_logs
         self.verbose = verbose
+        self.io_uring = io_uring
+        self.io_uring_depth = io_uring_depth
         self.core_pattern = read_core_pattern()
         self.fuse_caps = self.read_fuse_caps()
         self._cgroup = CgroupManager.create(str(os.getpid()))
@@ -500,6 +541,35 @@ class TestRunner:
             return frozenset()
         return frozenset(line.strip() for line in proc.stdout.splitlines()
                          if line.startswith('\t'))
+
+    def preflight_io_uring(self) -> str:
+        """Return "" when the io-uring transport can actually be exercised,
+        else the reason the whole invocation skips with exit 77.
+
+        Checked in this order, so the message names the first thing that is
+        actually wrong.
+        """
+        if not IS_LINUX:
+            return f'fuse-io-uring is Linux-only, this is {platform.system()}'
+        try:
+            config = (self.build_dir / 'fuse_config.h').read_text()
+        except OSError:
+            return f'{self.build_dir}/fuse_config.h is unreadable'
+        if 'HAVE_URING' not in config:
+            return 'the library was built with -Denable-io-uring=false'
+        if IO_URING_CAP in self.fuse_caps:
+            return ''
+        # printcap reports capable_ext, so the capability's absence *is* the
+        # kernel's answer. The module parameter only tells the two reasons
+        # apart.
+        try:
+            enabled = FUSE_URING_PARAM.read_text().strip()
+        except OSError:
+            return 'this kernel has no fuse io-uring support'
+        if enabled in ('N', '0'):
+            return ('io-uring is disabled in the fuse module\n'
+                    f'      echo Y | sudo tee {FUSE_URING_PARAM}')
+        return f'the kernel did not offer {IO_URING_CAP}'
 
     def report_environment(self) -> None:
         """Say what will silently degrade before any test runs."""
@@ -540,7 +610,19 @@ class TestRunner:
             'FUSE_CAPS': ' '.join(sorted(self.fuse_caps)),
             'FUSE_UID': str(os.geteuid()),
             'FUSE_OS': platform.system(),
+            # Exported as 0 rather than left unset: fuse_session_new() reads it
+            # from the environment, so a value in the developer's shell would
+            # otherwise change what the default run tests without saying so.
+            'FUSE_URING_ENABLE': '1' if self.io_uring else '0',
+            # Asked of every session, not only the ones a mount verb started,
+            # so the transport a test never launched through the shell -- a
+            # self-mounting C test, a daemon the script backgrounded itself --
+            # is on the record too. It lands in that daemon's log, because
+            # none of them redirects fuse_log() anywhere else.
+            'FUSE_INIT_STATUS': '1',
         })
+        if self.io_uring_depth is not None:
+            env['FUSE_URING_QUEUE_DEPTH'] = str(self.io_uring_depth)
         # $FUSE_UTIL_DIR first: an installed fusermount3 older than the build
         # tree makes printcap emit "unrecognized option '--sync-init'", which
         # is both wrong and would trip the output scanner.
@@ -668,6 +750,7 @@ class TestRunner:
         """Turn an exit status plus the collected evidence into a verdict."""
         unexpected = [c for c in cores
                       if not self.core_is_allowed(workdir, c)]
+        transport = self.wrong_transport(workdir)
         if reason:                       # killed by the runner
             status = 'FAIL'
         elif code == SKIP_EXIT_CODE:
@@ -684,6 +767,8 @@ class TestRunner:
             reason = f'core: {core.executable} (pid {core.pid})'
         elif suspicious:
             status, reason = 'FAIL', f'suspicious output: {suspicious}'
+        elif transport:
+            status, reason = 'FAIL', transport
         else:
             status = 'PASS'
         return TestResult(name=spec.name, status=status, duration=duration,
@@ -700,6 +785,30 @@ class TestRunner:
         for line in reversed(text.splitlines()):
             if line.startswith('SKIP: '):
                 return line[len('SKIP: '):]
+        return ''
+
+    def wrong_transport(self, workdir: Path) -> str:
+        """Under --io-uring, the first session that did not get a ring, or "".
+
+        A test that started no session reports nothing and so has nothing to
+        prove. off:custom_io is the one refusal a daemon cannot avoid: the
+        ring is issued against the session's own /dev/fuse fd, which a
+        custom-io session does not have.
+
+        timestamps.out holds the same lines behind an elapsed-time prefix, so
+        matching on the start of the line reports each session once.
+        """
+        if not self.io_uring:
+            return ''
+        for out in sorted((workdir / 'logs').glob('*.out')):
+            try:
+                text = out.read_text(errors='replace')
+            except OSError:
+                continue
+            for line in text.splitlines():
+                if (line.startswith(IO_URING_STATE_KEY)
+                        and line not in IO_URING_STATES_OK):
+                    return f'{out.name}: {line}'
         return ''
 
     @staticmethod
@@ -746,7 +855,15 @@ class TestRunner:
         return ''
 
     def suspicious_words(self) -> tuple:
-        """The word list scan_logs() looks for."""
+        """The word list scan_logs() looks for.
+
+        Under --io-uring it gains the message libfuse prints before falling
+        back to /dev/fuse. The status file keeps only the last session of a
+        binary that runs several, so the log stays the backstop for the
+        earlier ones.
+        """
+        if self.io_uring:
+            return SUSPICIOUS_WORDS + (re.escape(IO_URING_FALLBACK),)
         return SUSPICIOUS_WORDS
 
     def strip_extra(self, buf: str) -> str:
@@ -976,8 +1093,13 @@ class TestRunner:
                 directory = directory.parent
 
     def mode_note(self) -> str:
-        """Extra text for the summary header naming a non-default mode."""
-        return ''
+        """Extra text for the summary header naming a non-default mode.
+
+        The io-uring invocation selects nothing, so its counts must match the
+        default run's; without the label the two are indistinguishable in a CI
+        log.
+        """
+        return ', io-uring' if self.io_uring else ''
 
     def summarise(self, results: list, elapsed: float) -> int:
         """Print the counts, the slowest tests and every failure."""
@@ -1070,6 +1192,13 @@ def parse_args(argv: list) -> argparse.Namespace:
                         help='print the resolved base directory and exit')
     parser.add_argument('--timeout', type=float, default=None,
                         metavar='SECS', help="override every script's timeout")
+    parser.add_argument('--io-uring', action='store_true',
+                        help='run every test over fuse-io-uring; exits 77 '
+                             'when the kernel or the build does not offer it')
+    parser.add_argument('--io-uring-queue-depth', type=int, default=None,
+                        metavar='N',
+                        help="export FUSE_URING_QUEUE_DEPTH; default is "
+                             "libfuse's 8")
     parser.add_argument('-l', '--list', action='store_true',
                         help='print the selected tests and exit')
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -1105,7 +1234,27 @@ def main(argv: list) -> int:
     run_dir = resolve_run_dir(args)
     runner = TestRunner(build_dir=build_dir, run_dir=run_dir,
                         run_dir_created=make_run_dir(run_dir), jobs=args.jobs,
-                        keep_logs=args.keep_logs, verbose=args.verbose)
+                        keep_logs=args.keep_logs, verbose=args.verbose,
+                        io_uring=args.io_uring,
+                        io_uring_depth=args.io_uring_queue_depth)
+    if args.io_uring:
+        # A missing precondition skips the whole invocation rather than
+        # failing it, so a plain `meson test` on a machine that never enabled
+        # the module parameter reports one SKIP instead of 88 failures. CI does
+        # not rely on that: ci-build.sh enables the parameter itself.
+        reason = runner.preflight_io_uring()
+        if reason:
+            print(f'SKIP: {reason}')
+            runner.cleanup()
+            return SKIP_EXIT_CODE
+        # The capability says the kernel offers the transport, not that this
+        # user may open a ring. Asked here rather than skipped on, because a
+        # run that then fails every ring check is the honest report.
+        refused = io_uring_setup_error()
+        if refused:
+            print(f'warning: io_uring_setup() failed with {refused}; the '
+                  'daemons will fall back to /dev/fuse')
+            print('      sudo sysctl -w kernel.io_uring_disabled=0')
     specs = discover(CASES_DIR, args.test, set(args.group), exclude)
     if args.timeout is not None:
         specs = [replace(s, timeout=args.timeout) for s in specs]

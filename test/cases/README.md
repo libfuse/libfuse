@@ -107,6 +107,7 @@ FUSE_UTIL_DIR=$BUILD_DIR/util
 FUSE_CAPS="FUSE_CAP_ASYNC_READ FUSE_CAP_POSIX_LOCKS …"   # printcap, run once
 FUSE_UID=1000                          # effective uid
 FUSE_OS=Linux                          # platform.system()
+FUSE_INIT_STATUS=1                     # every session logs its FUSE_INIT result
 PATH=$FUSE_UTIL_DIR:$FUSE_EXAMPLE_DIR:$PATH
 ```
 
@@ -396,6 +397,48 @@ base, and the leaf is deleted when nothing failed.
 test; `-X <name>` adds to it for one run.
 
 `TEST_WITH_VALGRIND=1` traces every daemon and scales the timeouts to match.
+
+## Running them over fuse-io-uring
+
+```sh
+echo Y | sudo tee /sys/module/fuse/parameters/enable_uring
+./test/run-tests.py --build-dir build --io-uring
+```
+
+The same tests run again with `FUSE_URING_ENABLE=1` in the environment. Without
+the module parameter the whole invocation skips and says so, rather than
+reporting 88 failures.
+
+`kernel.io_uring_disabled` is the other half, and only warns: the runner opens a
+ring of its own first, and where that fails it prints the errno and runs anyway,
+because the failure then lands on the tests that were supposed to use one.
+
+A test neither opts in nor out: every test runs over both transports, and it
+says nothing about io-uring anywhere in its script. Because setting the
+variable is not evidence the transport was used, the run proves it three ways —
+the kernel has to have offered `FUSE_CAP_OVER_IO_URING`, no daemon may log
+`failed to start io-uring`, and every session that answered FUSE_INIT has to
+have printed `FUSE_INIT: io_uring=on` on its stderr.
+
+That last line is the session's own account of its transport, and every daemon
+the suite starts has its stderr captured, so it covers the ones a mount verb
+never started too — `mount.fuse3`, the self-mounting C tests, a daemon a script
+launched itself:
+
+```text
+FUSE_INIT: io_uring=on                        the ring is up
+FUSE_INIT: io_uring=off:custom_io             no /dev/fuse fd, so no ring
+FUSE_INIT: io_uring=off:start_failed:<errno>  asked for a ring, did not get one
+FUSE_INIT: io_uring=off:disabled              nobody asked
+FUSE_INIT: io_uring=off:not_offered           the kernel did not offer the cap
+```
+
+Only the first two pass. `off:custom_io` is the one refusal a daemon cannot
+help, so it needs no declaration from the test: `hello_ll_uds` serves the
+protocol over an `AF_UNIX` socket and says so itself. A test that starts no
+session reports nothing and has nothing to prove, which is also how
+`cuse` passes — it answers `CUSE_INIT` in `lib/cuse_lowlevel.c` and never
+reaches this reporting at all.
 
 ## What breaks under -j
 

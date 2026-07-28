@@ -86,4 +86,16 @@ else
 	     depends: td,
 	     timeout: 1800,
 	     is_parallel: false)   # the runner does its own -j
+
+	# The same tests over the other transport. Its own suite so a caller
+	# can ask for exactly one of the two: `meson test --suite io-uring`
+	# and `meson test --no-suite io-uring`. Plain `meson test` runs both,
+	# and the io-uring one exits 77 -- meson reports SKIP -- where the
+	# fuse module has io-uring disabled.
+	test('fuse-tests-io-uring', runner,
+	     args: ['--build-dir', meson.project_build_root(), '--io-uring'],
+	     suite: 'io-uring',
+	     depends: td,
+	     timeout: 1800,
+	     is_parallel: false)
 endif

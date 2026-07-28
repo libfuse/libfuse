@@ -356,7 +356,9 @@ fuse_mount_at()
 	bin=$(_fuse_fs_binary "$fs")
 	[ -x "$bin" ] || _notrun "$fs not built"
 
-	# Each daemon gets its own log so a multi-mount test stays readable.
+	# Each daemon gets its own log so a multi-mount test stays readable. Its
+	# FUSE_INIT report lands there too: the runner asks every session for one
+	# on stderr.
 	log=$TEST_LOGDIR/fs-$idx-$(basename "$fs").out
 	"$bin" "$@" "$mnt" >"$log" 2>&1 &
 	FUSE_FS_PID[$idx]=$!
@@ -370,7 +372,33 @@ fuse_mount_at()
 		_fuse_dump_fs_log $idx
 		_fail "$fs did not mount on $mnt"
 	}
+	_fuse_assert_uring $idx
 	echo $idx
+}
+
+# _fuse_assert_uring <idx>
+# libfuse falls back to /dev/fuse when the ring cannot be set up and says so
+# only at INFO level, so an unchecked io-uring run tests the wrong transport.
+# Each session states the transport it settled on in a "FUSE_INIT: io_uring="
+# line on its stderr, which is this daemon's log, while serving FUSE_INIT -
+# that can be a moment after the mountpoint appears, hence the poll rather
+# than a single look.
+_fuse_assert_uring()
+{
+	local idx=$1 log=${FUSE_FS_LOG[$idx]} state
+
+	[ "${FUSE_URING_ENABLE:-0}" = 1 ] || return 0
+	_wait_for 5 "grep -q '^FUSE_INIT: io_uring=' '$log'" || {
+		_fuse_dump_fs_log $idx
+		_fail "${FUSE_FS_NAME[$idx]} never reported its FUSE_INIT negotiation"
+	}
+	# One daemon can serve several sessions, and every one of them has to
+	# have got a ring, so the first line saying otherwise is the answer.
+	state=$(grep '^FUSE_INIT: io_uring=' "$log" | grep -m1 -v '=on$') || state=
+	[ -z "$state" ] || {
+		_fuse_dump_fs_log $idx
+		_fail "${FUSE_FS_NAME[$idx]}: $state"
+	}
 }
 
 # fuse_mount <fs-name> [args...]
@@ -397,6 +425,8 @@ fuse_mount_helper()
 	test/*) spec=$(_fuse_fs_binary "$fs") ;;
 	esac
 
+	# The daemon mount.fuse3 execs inherits the runner's environment, so its
+	# FUSE_INIT report lands here and is checked like a direct mount's.
 	log=$TEST_LOGDIR/fs-$idx-$(basename "$fs").out
 	"$FUSE_UTIL_DIR/mount.fuse3" "$spec" "$TEST_MNT" "$@" >"$log" 2>&1 &
 	FUSE_FS_PID[$idx]=$!
@@ -410,6 +440,7 @@ fuse_mount_helper()
 		_fuse_dump_fs_log $idx
 		_fail "mount.fuse3 $fs did not mount on $TEST_MNT"
 	}
+	_fuse_assert_uring $idx
 	echo $idx
 }
 
