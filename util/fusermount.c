@@ -34,6 +34,7 @@
 
 #include <sys/fsuid.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/utsname.h>
 #include <sched.h>
 #include <stdbool.h>
@@ -1450,10 +1451,25 @@ static int send_fd(int sock_fd, int fd)
  * Returns 0 on success, -1 on error.
  */
 #ifdef HAVE_NEW_MOUNT_API
+
+/*
+ * The caller is unprivileged and decides when to signal, so a mount attempt
+ * must not park this privileged helper forever. Generous enough that a daemon
+ * doing slow start-up work before FUSE_INIT is not cut off.
+ */
+#define SYNC_INIT_PROCEED_TIMEOUT_SEC (5 * 60)
+
 static int wait_for_signal(int sock_fd)
 {
+	struct timeval tv = { .tv_sec = SYNC_INIT_PROCEED_TIMEOUT_SEC };
 	char buf[1];
 	int res;
+
+	if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1) {
+		fprintf(stderr, "%s: failed to set signal timeout: %s\n",
+			progname, strerror(errno));
+		return -1;
+	}
 
 	do {
 		res = recv(sock_fd, buf, sizeof(buf), 0);
@@ -1462,6 +1478,10 @@ static int wait_for_signal(int sock_fd)
 		if (res == 0)
 			fprintf(stderr, "%s: connection closed while waiting for signal\n",
 				progname);
+		else if (errno == EAGAIN || errno == EWOULDBLOCK)
+			fprintf(stderr,
+				"%s: timed out after %i seconds waiting for signal\n",
+				progname, SYNC_INIT_PROCEED_TIMEOUT_SEC);
 		else
 			fprintf(stderr, "%s: error receiving signal: %s\n",
 				progname, strerror(errno));
