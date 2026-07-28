@@ -71,4 +71,19 @@ else
 		test('pytest not found', executable('wrong_command',
                               'wrong_command.c', install: false))
 	endif
+
+	# The shell suite. Nothing is copied into the build tree: the runner,
+	# its library and the test scripts are read from the source dir, and
+	# the only build artefacts a test needs are the binaries, which it
+	# reaches through --build-dir. That also means no custom_target and no
+	# rebuild after editing a test.
+	#
+	# No --run-dir: it defaults under /var/tmp/fuse-tests, and CI redirects
+	# it with $FUSE_TEST_RUN_DIR so the logs outlive the build tree.
+	runner = find_program('run-tests.py')
+	test('fuse-tests', runner,
+	     args: ['--build-dir', meson.project_build_root()],
+	     depends: td,
+	     timeout: 1800,
+	     is_parallel: false)   # the runner does its own -j
 endif
