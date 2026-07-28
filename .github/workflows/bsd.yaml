@@ -23,11 +23,24 @@ jobs:
       uses: vmactions/freebsd-vm@77ed28d336d03fe19a3f4f7266c1d2c4714dd79d # v1
       with:
         usesh: true
+        # bash because FreeBSD has none in base and common.sh uses arrays,
+        # python3 for checks.py, and gdb because the base debugger is lldb --
+        # one backtrace back-end keeps the runner's output identical on both
+        # platforms.
         prepare: |
-          pkg install -y meson ninja
+          pkg install -y meson ninja bash python3 gdb
         run: |
+          kldload fusefs || true
+          sysctl kern.coredump=1
+          # Mirrors the core.%e.%p Ubuntu is set to, so a core lands in the
+          # test's own log directory under the same name on both platforms.
+          sysctl kern.corefile=core.%N.%P
+          sysctl vfs.usermount=1
           mkdir build
           cd build
           meson setup ..
           ninja -v
+          # Not yet enabled on this job; kept here for the follow-up that
+          # turns this into a test run.
+          # ../test/run-tests.py --build-dir . --run-dir "$PWD/../fuse-tests"
 ...
