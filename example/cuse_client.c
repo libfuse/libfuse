@@ -48,6 +48,9 @@
 #include <unistd.h>
 #include "ioctl.h"
 
+/* keeps a mistyped SIZE from asking for the machine's memory */
+#define MAX_XFER_SIZE (16 * 1024 * 1024)
+
 const char *usage =
 "Usage: cuse_client FIOC_FILE COMMAND\n"
 "\n"
@@ -62,6 +65,12 @@ static int do_rw(int fd, int is_read, size_t size, off_t offset,
 {
 	struct fioc_rw_arg arg = { .offset = offset };
 	ssize_t ret;
+
+	if (size > MAX_XFER_SIZE) {
+		fprintf(stderr, "size %zu exceeds limit of %d bytes\n",
+			size, MAX_XFER_SIZE);
+		return -1;
+	}
 
 	arg.buf = calloc(1, size);
 	if (!arg.buf) {
