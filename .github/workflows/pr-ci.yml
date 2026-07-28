@@ -33,12 +33,7 @@ jobs:
         run: |
           ./.github/workflows/install-ubuntu-dependencies.sh --full
 
-      # Cores must land in the test's own log directory, which run-tests.py
-      # makes the cwd of every test. Ubuntu's apport pipe swallows them.
-      - name: Collect core dumps in the test work directory
-        run: |
-          sudo sysctl -w kernel.core_pattern=core.%e.%p
-          sudo sysctl -w kernel.core_uses_pid=0
+      - run: test/ci/prepare-runner.sh ${{ github.workspace }}/fuse-tests
 
       - run: test/ci-build.sh --work-dir ${{ github.workspace }}/fuse-tests
 
