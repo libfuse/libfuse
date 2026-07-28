@@ -81,17 +81,21 @@ nevertheless want to adjust them, you can do so with the
 To build, test, and install libfuse, you then use Ninja:
 
     $ ninja
-    $ sudo python3 -m pytest test/
+    $ sudo ../test/run-tests.py --build-dir .
     $ sudo ninja install
 
-Running the tests requires the [py.test](http://www.pytest.org/)
-Python module. Instead of running the tests as root, the majority of
-tests can also be run as a regular user if *util/fusermount3* is made
-setuid root first:
+Running the tests requires bash, Python 3 and (to resolve core dumps)
+gdb. Instead of running the tests as root, the majority of tests can
+also be run as a regular user if *util/fusermount3* is made setuid root
+first; the rest then skip themselves:
 
     $ sudo chown root:root util/fusermount3
     $ sudo chmod 4755 util/fusermount3
-    $ python3 -m pytest test/
+    $ ../test/run-tests.py --build-dir .
+
+Each test gets its own working and log directory, and the runner prints
+what every one of them cost. See the README under *test/cases* for how
+to add one and where to look when one fails.
 
 Security implications
 ---------------------

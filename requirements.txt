@@ -3,6 +3,5 @@
 # Build packages: 
 meson
 ninja
-# Test packages:
-pytest
+# Test packages: the suite itself is standard library only.
 codechecker

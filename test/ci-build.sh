@@ -226,8 +226,6 @@ sanitized_build()
         FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}${VARIANT:+-$VARIANT}-root")" \
         ${TEST_CMD_DEFAULT} --logbase=testlog-root
 
-    # Cleanup temporary files (since they are now owned by root)
-    sudo rm -rf test/.pytest_cache/ test/__pycache__
     chown_log_dir
 
     FUSE_TEST_RUN_DIR="$(run_log_dir "${CC}${VARIANT:+-$VARIANT}")" \
