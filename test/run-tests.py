@@ -47,7 +47,14 @@ GDB_TOP_FRAMES = 12             # frames inlined into the summary
 # waiting for one without a bound hangs the run itself.
 REAP_TIMEOUT = 30.0             # seconds to wait for a killed test to be gone
 
+# Test output must land somewhere predictable, so this is the default base for
+# everything the suite writes. /var/tmp rather than /tmp because it survives a
+# reboot and no tmpfiles cleaner walks it mid-run, and a fixed name rather than
+# a mktemp directory because a path you cannot predict is a path you cannot
+# look in after CI hands you a red build.
 DEFAULT_BASE_DIR = Path('/var/tmp/fuse-tests')
+_CONFIG_SECTION = 'tests'
+_CONFIG_BASE_DIR_KEY = 'base_dir'
 
 IS_LINUX = platform.system() == 'Linux'
 
@@ -313,24 +320,64 @@ def reexec_under_user_scope_if_needed() -> None:
         return
 
 
+def config_path() -> Path:
+    """Path to the persisted runner config."""
+    return Path.home() / '.config' / 'libfuse' / 'tests.conf'
+
+
+def read_configured_base_dir() -> str | None:
+    """Return the persisted base_dir, or None if unset or unreadable."""
+    import configparser
+
+    parser = configparser.ConfigParser()
+    try:
+        parser.read(config_path())
+    except (OSError, configparser.Error):
+        return None
+    return parser.get(_CONFIG_SECTION, _CONFIG_BASE_DIR_KEY, fallback=None)
+
+
+def write_configured_base_dir(base_dir: str) -> None:
+    """Persist base_dir, preserving any other keys already in the file."""
+    import configparser
+
+    parser = configparser.ConfigParser()
+    path = config_path()
+    try:
+        parser.read(path)
+    except (OSError, configparser.Error):
+        pass
+    if not parser.has_section(_CONFIG_SECTION):
+        parser.add_section(_CONFIG_SECTION)
+    parser.set(_CONFIG_SECTION, _CONFIG_BASE_DIR_KEY, base_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('w') as fh:
+        parser.write(fh)
+
+
+def resolve_base_dir() -> Path:
+    """The base a per-run leaf is appended to."""
+    return Path(read_configured_base_dir() or str(DEFAULT_BASE_DIR))
+
+
 def resolve_run_dir(args: argparse.Namespace) -> Path:
-    """Pick the run directory: --run-dir, $FUSE_TEST_RUN_DIR, or the default.
+    """Pick the run directory: --run-dir, $FUSE_TEST_RUN_DIR, config, default.
 
     --run-dir and $FUSE_TEST_RUN_DIR are used verbatim, because a caller that
     names a directory means that directory: CI has to hand the path to a later
     upload step, and `meson test` cannot pass arguments to a registered test,
     so the env var is the only channel it has.
 
-    DEFAULT_BASE_DIR is a *base*: a run-<user>-<timestamp>-<pid> leaf is
-    appended so two runs on one machine -- or two users sharing /var/tmp --
-    cannot land in the same directory.
+    The persisted config value and DEFAULT_BASE_DIR are *bases*: a
+    run-<user>-<timestamp>-<pid> leaf is appended so two runs on one machine
+    -- or two users sharing /var/tmp -- cannot land in the same directory.
     """
     if args.run_dir:
         return Path(args.run_dir)
     env_run_dir = os.environ.get('FUSE_TEST_RUN_DIR')
     if env_run_dir:
         return Path(env_run_dir)
-    return Path(DEFAULT_BASE_DIR) / run_leaf_name()
+    return resolve_base_dir() / run_leaf_name()
 
 
 def make_run_dir(run_dir: Path) -> bool:
@@ -1000,6 +1047,11 @@ def parse_args(argv: list) -> argparse.Namespace:
                         help='meson build root (default: .)')
     parser.add_argument('--run-dir', default=None,
                         help='where to write per-test output, verbatim')
+    parser.add_argument('--persist-base-dir', default=None, metavar='DIR',
+                        help='write DIR to ~/.config/libfuse/tests.conf '
+                             'and exit')
+    parser.add_argument('--print-base-dir', action='store_true',
+                        help='print the resolved base directory and exit')
     parser.add_argument('--timeout', type=float, default=None,
                         metavar='SECS', help="override every script's timeout")
     parser.add_argument('-l', '--list', action='store_true',
@@ -1015,6 +1067,13 @@ def parse_args(argv: list) -> argparse.Namespace:
 
 def main(argv: list) -> int:
     args = parse_args(argv)
+
+    if args.persist_base_dir:
+        write_configured_base_dir(args.persist_base_dir)
+        return 0
+    if args.print_base_dir:
+        print(resolve_base_dir())
+        return 0
 
     build_dir = Path(args.build_dir).resolve()
     exclude = read_exclude_file() | set(args.exclude)

@@ -8,20 +8,48 @@ SAN="-Db_sanitize=address,undefined"
 # not default
 export UBSAN_OPTIONS=halt_on_error=1
 
+cli_work_dir=
+while [ $# -gt 0 ]; do
+    case $1 in
+    --work-dir) cli_work_dir=$2; shift 2 ;;
+    --work-dir=*) cli_work_dir=${1#--work-dir=}; shift ;;
+    *) echo "usage: $0 [--work-dir DIR]" >&2; exit 1 ;;
+    esac
+done
+
 # Make sure binaries can be accessed when invoked by root.
 umask 0022
 
 # There are tests that run as root but without CAP_DAC_OVERRIDE. To allow these
 # to launch built binaries, the directory tree must be accessible to the root
 # user. Since the source directory isn't necessarily accessible to root, we
-# build and run tests in a temporary directory that we can set up to be world
+# build and run tests in a separate directory that we can set up to be world
 # readable/executable.
 SOURCE_DIR="$(readlink -f .)"
-TEST_DIR="$(mktemp -dt libfuse-build-XXXXXX)"
+
+# Where this run's builds and logs go. --work-dir and $FUSE_TESTS_WORK_DIR are
+# verbatim so CI can predict the path it later uploads; otherwise take the base
+# from run-tests.py (persisted config, else /var/tmp/fuse-tests) and append a
+# dedicated leaf, so two runs never share a directory. Asking the runner keeps
+# the precedence in one place instead of parsing an INI in bash.
+WORK_DIR="${cli_work_dir:-${FUSE_TESTS_WORK_DIR:-}}"
+if [ -z "${WORK_DIR}" ]; then
+    WORK_DIR="$(python3 "${SOURCE_DIR}/test/run-tests.py" --print-base-dir)"
+    WORK_DIR="${WORK_DIR}/ci-${USER:-unknown}-$(date +%y%m%d%H%M%S)"
+fi
+WORK_DIR="$(readlink -f "${WORK_DIR}")"   # resolve before the cd below
+TEST_DIR="${WORK_DIR}/build"
+RUN_DIR="${WORK_DIR}/run"
 
 PREFIX_DIR="$(mktemp -dt libfuse-install-XXXXXXX)"
 
-chmod 0755 "${TEST_DIR}"
+# Builds are scratch and a stale tree would poison the run; logs are the
+# product and are kept until the next run replaces them.
+rm -rf "${TEST_DIR}"
+mkdir -p "${TEST_DIR}" "${RUN_DIR}"
+# Root runs tests without CAP_DAC_OVERRIDE, so every directory on the way in
+# must be traversable by plain permission bits.
+chmod 0755 "${WORK_DIR}" "${TEST_DIR}" "${RUN_DIR}"
 cd "${TEST_DIR}"
 echo "Running in ${TEST_DIR}"
 
@@ -197,6 +225,3 @@ non_sanitized_build
 
 # Documentation.
 (cd "${SOURCE_DIR}"; doxygen doc/Doxyfile)
-
-# Clean up.
-rm -rf "${TEST_DIR}"
