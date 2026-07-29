@@ -43,4 +43,19 @@ jobs:
           # Not yet enabled on this job; kept here for the follow-up that
           # turns this into a test run.
           # ../test/run-tests.py --build-dir . --run-dir "$PWD/../fuse-tests"
+    # Not yet enabled on this job; kept here for the follow-up that turns
+    # this into a test run. The run directory sits in the workspace, which
+    # the action copies back out of the VM; without this step a FreeBSD
+    # failure leaves nothing to read.
+    # - name: Upload test logs
+    #   if: always()
+    #   uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+    #   with:
+    #     name: test-logs-freebsd
+    #     path: |
+    #       fuse-tests/
+    #       !fuse-tests/**/core.*
+    #     # A run that passed deletes its own directory.
+    #     if-no-files-found: ignore
+    #     retention-days: 14
 ...
