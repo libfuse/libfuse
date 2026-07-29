@@ -21,6 +21,7 @@ import re
 import resource
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -42,6 +43,10 @@ DEFAULT_TIMEOUT = 60.0          # seconds; per-script "# TIMEOUT:" overrides
 SKIP_EXIT_CODE = 77             # automake convention
 LAUNCH_FAILED_EXIT_CODE = 125   # launcher could not establish containment
 LAUNCH_FAILED_MARKER = 'run-tests: containment failed'
+
+# util/install_helper.sh installs exactly these setuid; nothing else in util/
+# needs the bit.
+SETUID_HELPERS = ('fusermount3', 'fuservicemount3')
 
 GDB_TIMEOUT = 120.0             # gdb can wedge on a huge core or absent symbols
 GDB_TOP_FRAMES = 12             # frames inlined into the summary
@@ -244,6 +249,26 @@ def raise_nofile_limit() -> None:
     if hard != resource.RLIM_INFINITY and hard < 1024:
         print(f'note: RLIMIT_NOFILE hard limit is only {hard}; '
               'reduce -j if tests fail with EMFILE')
+
+
+def setuid_helpers(build_dir: Path) -> None:
+    """chown root:root + chmod 4755 the build tree's mount helpers.
+
+    Opt-in because it needs sudo and mutates the build tree; without it an
+    unprivileged run skips every test that mounts.
+    """
+    sudo = [] if os.geteuid() == 0 else ['sudo']
+    for name in SETUID_HELPERS:
+        helper = build_dir / 'util' / name
+        if not helper.exists():   # fuservicemount3 is not always built
+            continue
+        info = helper.stat()
+        if info.st_uid == 0 and info.st_mode & stat.S_ISUID:
+            continue
+        for cmd in (['chown', 'root:root', str(helper)],
+                    ['chmod', '4755', str(helper)]):
+            if subprocess.run(sudo + cmd, check=False).returncode:
+                sys.exit(f'{" ".join(sudo + cmd)} failed')
 
 
 class CgroupManager:
@@ -1272,6 +1297,10 @@ def parse_args(argv: list) -> argparse.Namespace:
                         help='skip this test; repeatable, adds to test/exclude')
     parser.add_argument('--build-dir', default='.',
                         help='meson build root (default: .)')
+    parser.add_argument('--setuid-helpers', action='store_true',
+                        help="chown root:root + chmod 4755 the build tree's "
+                             'fusermount3 (needs sudo); without it an '
+                             'unprivileged run skips every mounting test')
     parser.add_argument('--run-dir', default=None,
                         help='where to write per-test output, verbatim')
     parser.add_argument('--persist-base-dir', default=None, metavar='DIR',
@@ -1316,6 +1345,9 @@ def main(argv: list) -> int:
         for spec in discover(CASES_DIR, args.test, set(args.group), exclude):
             print(spec.name)
         return 0
+
+    if args.setuid_helpers:
+        setuid_helpers(build_dir)
 
     reexec_under_user_scope_if_needed()
     raise_nofile_limit()
