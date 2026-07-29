@@ -68,6 +68,12 @@ below `cases/` without the extension, so `cases/examples/hello-direct.sh` is
 Nothing registers a test anywhere. Dropping the file in and making it
 executable is the whole step; `test/run-tests.py` discovers it.
 
+`test/cases/unit/` is the exception to all of the above. A C test that needs
+neither a mount nor a gate has no script there — only a file named after the
+binary, which the runner execs from `$FUSE_TEST_BIN_DIR` with no shell in
+between. It carries no exec bit, and its content is a header block or nothing
+at all.
+
 ## The skeleton
 
 ```sh
