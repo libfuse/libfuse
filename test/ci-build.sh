@@ -145,19 +145,11 @@ if [ -x "${PREFIX_DIR}/sbin/fuservicemount3" ]; then
     sudo chmod 4755 "${PREFIX_DIR}/sbin/fuservicemount3"
 fi
 
-# The tests run the build tree's own helpers, which have to be setuid too.
-sudo chown root:root util/fusermount3
-sudo chmod 4755 util/fusermount3
-if [ -x util/fuservicemount3 ]; then
-    sudo chown root:root util/fuservicemount3
-    sudo chmod 4755 util/fuservicemount3
-fi
-
 TEST_CMD="meson test -C . --print-errorlogs"
-# Two selections rather than one: plain `meson test` runs both suites, and the
-# io-uring pass is wanted once per run, not once per build and user.
+# The root pass keeps going through `meson test`, for --logbase; the non-root
+# passes below call run-tests.py directly so they can pass --setuid-helpers,
+# which meson test's fixed per-test args: list cannot forward.
 TEST_CMD_DEFAULT="${TEST_CMD} --no-suite io-uring"
-TEST_CMD_IO_URING="${TEST_CMD} --suite io-uring"
 
 if [ "${ROOT_PASS}" = 1 ]; then
     # Give the root run a distinct meson log basename so its
@@ -170,7 +162,8 @@ if [ "${ROOT_PASS}" = 1 ]; then
     sudo chown -R "$(id -u):$(id -g)" "${RUN_DIR}"
 fi
 
-FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" ${TEST_CMD_DEFAULT}
+FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" timeout 1800 \
+    python3 "${SOURCE_DIR}/test/run-tests.py" --build-dir . --setuid-helpers
 
 restore_io_uring()
 {
@@ -199,7 +192,9 @@ if [ "${IO_URING}" = 1 ]; then
     [ -z "${IO_URING_DISABLED_WAS}" ] ||
         sudo sysctl -q -w kernel.io_uring_disabled=0
 
-    FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}-iouring" ${TEST_CMD_IO_URING}
+    FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}-iouring" timeout 1800 \
+        python3 "${SOURCE_DIR}/test/run-tests.py" --build-dir . \
+            --setuid-helpers --io-uring
 fi
 
 # Only reached when everything above passed, because of set -e: a failed run
