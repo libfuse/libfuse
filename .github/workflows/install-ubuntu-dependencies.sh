@@ -11,6 +11,7 @@ PACKAGES_CORE=(
     ninja-build
     libudev-dev
     liburing-dev
+    lsb-release
     pkg-config
     python3
     python3-pip
