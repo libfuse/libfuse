@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Run the libfuse shell test suite.
 
-Every executable cases/**/*.sh outside cases/lib is a test. Its name is the
-path below cases/ without the extension. Exit code 0 is a pass, 77 a
-self-declared skip and anything else a failure.
+Every executable cases/**/*.sh outside cases/lib is a test, as is every entry
+in a directory is_shell_exception_dir() names, where the file name is a
+build-tree binary to run instead. A test's name is the path below cases/
+without the extension. Exit code 0 is a pass, 77 a self-declared skip and
+anything else a failure.
 
 The runner knows nothing about FUSE: it owns discovery, working directories,
 containment, timeouts, parallelism, logs, core dumps and the summary. The FUSE
@@ -125,8 +127,9 @@ _HEADER_RE = re.compile(r'^#\s*(TIMEOUT|GROUP):\s*(.+?)\s*$')
 # CPython, which every shell parses as an option. Only the soft limit is raised;
 # raising a finite hard limit needs privilege.
 #
-# bash -e rather than the script's own shebang: errexit is the runner's rule,
-# not something 88 files have to remember.
+# The command to exec is passed in rather than built here: the runner decides
+# whether a test is a script or a binary, and both the spawn and repro.sh must
+# name the same one.
 LAUNCHER = f'''
 [ -z "$1" ] || printf '%s\\n' "$$" >"$1" || {{
 	echo "{LAUNCH_FAILED_MARKER}: cgroup" >&2; exit {LAUNCH_FAILED_EXIT_CODE}
@@ -135,18 +138,20 @@ ulimit -S -c "$(ulimit -H -c)" || {{
 	echo "{LAUNCH_FAILED_MARKER}: core limit" >&2
 	exit {LAUNCH_FAILED_EXIT_CODE}
 }}
-exec bash -e "$2"
+shift
+exec "$@"
 '''
 
 
 @dataclass(frozen=True)
 class TestSpec:
-    """One discovered test script and the two facts parsed from its header."""
+    """One discovered test and the two facts parsed from its header."""
 
     name: str          # "examples/hello-ll-direct" -- path under cases/, no .sh
-    script: Path       # absolute path to the script
+    script: Path       # absolute path to the script, or to the binary marker
     timeout: float     # seconds; DEFAULT_TIMEOUT unless "# TIMEOUT:" overrides
     groups: frozenset  # from "# GROUP:"; used by -g/--group selection
+    binary: str = ''   # marker: the build-tree binary to run; "" for a script
 
 
 @dataclass
@@ -195,7 +200,9 @@ def parse_spec(script: Path, cases_dir: Path) -> TestSpec:
             else:
                 groups.update(hit.group(2).split())
     return TestSpec(name=str(script.relative_to(cases_dir).with_suffix('')),
-                    script=script, timeout=timeout, groups=frozenset(groups))
+                    script=script, timeout=timeout, groups=frozenset(groups),
+                    # discover() collects nothing else without a suffix
+                    binary='' if script.suffix else script.name)
 
 
 def read_core_pattern() -> str:
@@ -492,16 +499,53 @@ def as_test_name(pattern: str, cases_dir: Path) -> str:
     return pattern
 
 
+def is_shell_exception_dir(directory: Path) -> bool:
+    """True when the cases/**/*.sh rule does not apply inside *directory*.
+
+    The runner decides what a file is by where it sits, so the exceptions are
+    listed once here. Today every one of them holds binary markers.
+    """
+    return directory.name in ('unit',)
+
+
+def shell_scripts(cases_dir: Path) -> list:
+    """Executable cases/**/*.sh, outside cases/lib and the shell-exception
+    directories."""
+    return [path for path in cases_dir.rglob('*.sh')
+            if LIB_DIR not in path.parents
+            and not is_shell_exception_dir(path.parent)
+            and os.access(path, os.X_OK)]
+
+
+def binary_markers(cases_dir: Path) -> list:
+    """<dir>/<binary-name> -- one marker per C test that needs no script.
+
+    A binary name has no suffix, so a suffixed entry is malformed and is said
+    so rather than skipped. Only .md is allowed, for documentation.
+    """
+    markers = []
+    for directory in sorted(cases_dir.iterdir()):
+        if not directory.is_dir() or not is_shell_exception_dir(directory):
+            continue
+        for path in sorted(directory.iterdir()):
+            if path.name.startswith('.') or path.suffix == '.md':
+                continue
+            if not path.is_file() or path.suffix:
+                sys.exit(f'{path}: not a binary name; '
+                         f'{directory} holds markers only')
+            markers.append(path)
+    return markers
+
+
 def discover(cases_dir: Path, patterns: list, groups: set,
              exclude: set) -> list:
-    """Executable cases/**/*.sh outside cases/lib, filtered by fnmatch
+    """Executable cases/**/*.sh plus the binary markers, filtered by fnmatch
     patterns, GROUP membership, and the exclude set (CLI -X plus
     test/exclude)."""
     patterns = [as_test_name(p, cases_dir) for p in patterns]
     names, specs = [], []
-    for script in sorted(cases_dir.rglob('*.sh')):
-        if LIB_DIR in script.parents or not os.access(script, os.X_OK):
-            continue
+    for script in sorted([*shell_scripts(cases_dir),
+                          *binary_markers(cases_dir)]):
         spec = parse_spec(script, cases_dir)
         names.append(spec.name)
         if spec.name in exclude:
@@ -654,11 +698,23 @@ class TestRunner:
             [str(util_dir), str(example_dir), env.get('PATH', '')])
         return workdir, env, self._cgroup.new_leaf()
 
-    def write_repro(self, spec: TestSpec, workdir: Path, env: dict) -> None:
-        """Write logs/repro.sh: the env deltas, the cd, and the script.
+    def child_argv(self, spec: TestSpec) -> list:
+        """The command the launcher execs for *spec*.
 
-        It invokes `bash -e <script>`, the same way the launcher does, so the
-        reproducer cannot pass where the run failed.
+        bash -e for a script: errexit is the runner's rule, not something 88
+        files have to remember. A marker names a binary, which the launcher
+        execs itself; there is no shell in between to impose errexit on, and
+        none is wanted -- the binary's exit status is already the verdict.
+        """
+        if spec.binary:
+            return [str(self.build_dir / 'test' / spec.binary)]
+        return ['bash', '-e', str(spec.script)]
+
+    def write_repro(self, spec: TestSpec, workdir: Path, env: dict) -> None:
+        """Write logs/repro.sh: the env deltas, the cd, and the command.
+
+        It execs what the launcher execs, so the reproducer cannot pass where
+        the run failed.
         """
         import shlex
 
@@ -672,7 +728,7 @@ class TestRunner:
             lines.append(f'export {key}={shlex.quote(value)}')
         lines += ['',
                   f'cd {shlex.quote(str(workdir / "logs"))}',
-                  f'exec bash -e {shlex.quote(str(spec.script))}',
+                  'exec ' + shlex.join(self.child_argv(spec)),
                   '']
         repro = workdir / 'logs' / 'repro.sh'
         repro.write_text('\n'.join(lines))
@@ -713,7 +769,7 @@ class TestRunner:
                 continue
 
     def run_one(self, spec: TestSpec) -> TestResult:
-        """Spawn the script, enforce spec.timeout, collect the result."""
+        """Spawn the test, enforce spec.timeout, collect the result."""
         workdir, env, leaf = self.prepare(spec)
         self.write_repro(spec, workdir, env)
         logs = workdir / 'logs'
@@ -722,7 +778,7 @@ class TestRunner:
 
         proc = subprocess.Popen(
             ['/bin/sh', '-c', LAUNCHER, 'run-tests',
-             self._cgroup.procs_path(leaf), str(spec.script)],
+             self._cgroup.procs_path(leaf), *self.child_argv(spec)],
             env=env, cwd=str(logs),
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             start_new_session=True)
