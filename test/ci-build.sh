@@ -91,6 +91,12 @@ chmod 0755 "${WORK_DIR}" "${BUILD_DIR}" "${PREFIX_DIR}" "${RUN_DIR}"
 cd "${BUILD_DIR}"
 echo "Building ${NAME} in ${BUILD_DIR}"
 
+echo "=== System ==="
+uname -a
+lsb_release -a 2>/dev/null || cat /etc/os-release 2>/dev/null || true
+lscpu || true
+echo "==============="
+
 export CC="${CC_BIN}"
 if [ -n "${CXX_BIN}" ]; then
     export CXX="${CXX_BIN}"
