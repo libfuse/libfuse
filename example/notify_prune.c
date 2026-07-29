@@ -308,10 +308,23 @@ static void *update_fs_loop(void *data)
 			 */
 			int ret = fuse_lowlevel_notify_prune(se, &nodeids, 1);
 
+			if (ret == -ENOSYS) {
+				printf("fuse_lowlevel_notify_prune not supported by kernel\n");
+				/*
+				 * stdout is fully buffered once redirected to a
+				 * file, and this thread's loop is the only thing
+				 * that exits - the session loop keeps the daemon
+				 * running - so without an explicit flush the line
+				 * above never reaches the log.
+				 */
+				fflush(stdout);
+				break;
+			}
+
 			if ((ret != 0 && !is_stop) && ret != -ENOENT &&
 			     ret != -EBADF && ret != -ENODEV) {
 				fprintf(stderr,
-					"ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
+					"ERROR: fuse_lowlevel_notify_prune() failed with %s (%d)\n",
 					strerror(-ret), -ret);
 				abort();
 			}
