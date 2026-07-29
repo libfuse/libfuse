@@ -57,6 +57,7 @@ jobs:
           name: test-logs-${{ matrix.os }}-${{ matrix.config }}
           path: |
             fuse-tests/run/
+            fuse-tests/build-*/meson-logs/
             !fuse-tests/run/**/core.*
             !fuse-tests/run/**/mnt
           if-no-files-found: ignore
