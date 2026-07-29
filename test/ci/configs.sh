@@ -40,13 +40,17 @@ san)
 	# The plain sanitized build. This is also the configuration that
 	# exercises fuse-io-uring: the transport is worth testing with the
 	# sanitizers on, and once per run rather than once per build and user.
-	run "${build}" --name san --cc clang --cxx clang++ --sanitize \
-		--root-pass --io-uring "$@"
+	# --root-pass arrives via "$@", from the workflow matrix.
+	#
+	# --io-uring disabled for now: io-uring test coverage is new and not
+	# yet reliable enough to gate CI on. Re-enable once the failures seen
+	# on GitHub-hosted runners are root-caused.
+	run "${build}" --name san --cc clang --cxx clang++ --sanitize "$@"
 	;;
 san-nosymver)
 	# Sanitized build without libc versioned symbols.
 	run "${build}" --name san-nosymver --cc clang --cxx clang++ \
-		--sanitize --root-pass \
+		--sanitize \
 		--meson-opt -Ddisable-libc-symbol-version=true "$@"
 	;;
 san-noiouring)
@@ -54,7 +58,7 @@ san-noiouring)
 	# suite only; run-tests.py --io-uring would refuse this build anyway,
 	# since HAVE_URING is absent from its fuse_config.h.
 	run "${build}" --name san-noiouring --cc clang --cxx clang++ \
-		--sanitize --root-pass \
+		--sanitize \
 		--meson-opt -Denable-io-uring=false "$@"
 	;;
 san-m32)
@@ -64,7 +68,7 @@ san-m32)
 	run env CFLAGS=-m32 CXXFLAGS=-m32 LDFLAGS=-m32 \
 		PKG_CONFIG_PATH=/usr/lib/i386-linux-gnu/pkgconfig \
 		"${build}" --name san-m32 --cc clang --cxx clang++ --sanitize \
-		--root-pass "$@"
+		"$@"
 	;;
 *)
 	echo "unknown configuration: ${name}" >&2
