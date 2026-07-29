@@ -177,13 +177,35 @@ err_out:
 	fuse_reply_err(req, ENOENT);
 }
 
+/*
+ * Progress marker: a prune has taken effect and the contents are new, so a
+ * test can wait for this line instead of for a fixed time, which would race
+ * the daemon. Flushed because stdout is a file when logged.
+ *
+ * This function is a workaround for missing fuse_log_once()
+ */
+static void print_once(_Atomic bool *printed, const char *str)
+{
+	/* Two session threads can be in here at once, and both would print
+	 * if the flag were read and set separately.
+	 */
+	if (!atomic_exchange(printed, true)) {
+		printf("%s\n", str);
+		fflush(stdout);
+	}
+}
+
 static void tfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
 	(void)req;
 	if (ino == FILE_INO) {
 		lookup_cnt -= nlookup;
-		if (!lookup_cnt)
+		if (!lookup_cnt) {
 			update_fs();
+
+			static _Atomic bool printed;
+			print_once(&printed, "prune complete");
+		}
 	} else {
 		assert(ino == FUSE_ROOT_ID);
 	}
@@ -327,6 +349,11 @@ static void *update_fs_loop(void *data)
 					"ERROR: fuse_lowlevel_notify_prune() failed with %s (%d)\n",
 					strerror(-ret), -ret);
 				abort();
+			}
+
+			if (ret == 0) {
+				static _Atomic bool printed;
+				print_once(&printed, "prune sent");
 			}
 		}
 		sleep(options.update_interval);
