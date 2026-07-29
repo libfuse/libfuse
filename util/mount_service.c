@@ -834,21 +834,13 @@ static int mount_service_handle_open_bdev_cmd(const struct mount_service *mo,
 	return mount_service_open_path(mo, S_IFBLK, p, psz);
 }
 
-static inline const char *fsname(const struct mount_service *mo)
-{
-	return mo->fuseblk ? "fuseblk" : "fuse";
-}
-
 #ifdef HAVE_NEW_MOUNT_API
 static void try_fsopen(struct mount_service *mo)
 {
-	/*
-	 * As of Linux 7.0 you can pass subtypes to fsopen, but the manpage for
-	 * fsopen only says that you can pass any value of the second column of
-	 * /proc/filesystems into fsopen.  You must still call fsconfig() for
-	 * the subtype separately, however.
-	 */
-	mo->fsopenfd = fsopen(fsname(mo), FSOPEN_CLOEXEC);
+	/* The subtype is applied separately, see fuse_fsopen_base_type() */
+	int fsfd = fuse_fsopen_base_type(mo->fuseblk);
+
+	mo->fsopenfd = fsfd < 0 ? -1 : fsfd;
 }
 #else
 # define try_fsopen(...)	((void)0)
@@ -1375,7 +1367,7 @@ static int mount_service_regular_mount(struct mount_service *mo,
 		goto out_realmopts;
 	}
 
-	asprintf(&fstype, "%s.%s", fsname(mo), mo->subtype);
+	fstype = fuse_mnt_build_type(mo->fuseblk, mo->subtype);
 	if (!fstype) {
 		int error = errno;
 
@@ -1440,10 +1432,10 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 	if (ms_flags)
 		return FUSE_MOUNT_FALLBACK_NEEDED;
 
-	ret = apply_fsconfig_opt_string(mo->fsopenfd, "subtype", mo->subtype);
+	ret = fuse_fsconfig_subtype(mo->fsopenfd, mo->subtype);
 	if (ret < 0) {
 		/* The subtype option was merged after fsopen */
-		if (ret == -EINVAL)
+		if (ret == -ENOPARAM)
 			return FUSE_MOUNT_FALLBACK_NEEDED;
 
 		error = -ret;
@@ -1511,7 +1503,7 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 	if (have_real_mtabopts(mo)) {
 		char *fstype = NULL;
 
-		asprintf(&fstype, "%s.%s", fsname(mo), mo->subtype);
+		fstype = fuse_mnt_build_type(mo->fuseblk, mo->subtype);
 		if (fstype) {
 			fuse_mnt_add_mount(mo->msgtag, mo->source,
 					   mo->resv_mountpoint, fstype,

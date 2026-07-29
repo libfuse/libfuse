@@ -81,7 +81,6 @@
  * \include notify_inval_entry.c
  */
 
-
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
 
 #include <fuse_lowlevel.h>
@@ -105,51 +104,52 @@ static pthread_t main_thread;
 
 /* Command line parsing */
 struct options {
-    int no_notify;
-    float timeout;
-    int update_interval;
-    int only_expire;
-    int inc_epoch;
+	int no_notify;
+	float timeout;
+	int update_interval;
+	int only_expire;
+	int inc_epoch;
 };
 static struct options options = {
-    .timeout = 5,
-    .no_notify = 0,
-    .update_interval = 1,
-    .only_expire = 0,
-    .inc_epoch = 0,
+	.timeout = 5,
+	.no_notify = 0,
+	.update_interval = 1,
+	.only_expire = 0,
+	.inc_epoch = 0,
 };
 
-#define OPTION(t, p)                           \
-    { t, offsetof(struct options, p), 1 }
+#define OPTION(t, p) { t, offsetof(struct options, p), 1 }
 static const struct fuse_opt option_spec[] = {
-    OPTION("--no-notify", no_notify),
-    OPTION("--update-interval=%d", update_interval),
-    OPTION("--timeout=%f", timeout),
-    OPTION("--only-expire", only_expire),
-    OPTION("--inc-epoch", inc_epoch),
-    FUSE_OPT_END
+	OPTION("--no-notify", no_notify),
+	OPTION("--update-interval=%d", update_interval),
+	OPTION("--timeout=%f", timeout),
+	OPTION("--only-expire", only_expire),
+	OPTION("--inc-epoch", inc_epoch),
+	FUSE_OPT_END
 };
 
-static int tfs_stat(fuse_ino_t ino, struct stat *stbuf) {
-    stbuf->st_ino = ino;
-    if (ino == FUSE_ROOT_ID) {
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 1;
-    }
+static int tfs_stat(fuse_ino_t ino, struct stat *stbuf)
+{
+	stbuf->st_ino = ino;
+	if (ino == FUSE_ROOT_ID) {
+		stbuf->st_mode = S_IFDIR | 0755;
+		stbuf->st_nlink = 1;
+	}
 
-    else if (ino == file_ino) {
-        stbuf->st_mode = S_IFREG | 0000;
-        stbuf->st_nlink = 1;
-        stbuf->st_size = 0;
-    }
+	else if (ino == file_ino) {
+		stbuf->st_mode = S_IFREG | 0000;
+		stbuf->st_nlink = 1;
+		stbuf->st_size = 0;
+	}
 
-    else
-        return -1;
+	else
+		return -1;
 
-    return 0;
+	return 0;
 }
 
-static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
+static void tfs_init(void *userdata, struct fuse_conn_info *conn)
+{
 	(void)userdata;
 
 	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_SINGLE_ISSUER);
@@ -158,267 +158,276 @@ static void tfs_init(void *userdata, struct fuse_conn_info *conn) {
 	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_NO_INTERRUPT);
 }
 
-static void tfs_lookup(fuse_req_t req, fuse_ino_t parent,
-                       const char *name) {
-    struct fuse_entry_param e;
-    memset(&e, 0, sizeof(e));
+static void tfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
+{
+	struct fuse_entry_param e;
+	memset(&e, 0, sizeof(e));
 
-    if (parent != FUSE_ROOT_ID)
-        goto err_out;
-    else if (strcmp(name, file_name) == 0) {
-        e.ino = file_ino;
-        lookup_cnt++;
-    } else
-        goto err_out;
+	if (parent != FUSE_ROOT_ID)
+		goto err_out;
+	else if (strcmp(name, file_name) == 0) {
+		e.ino = file_ino;
+		lookup_cnt++;
+	} else
+		goto err_out;
 
-    e.attr_timeout = options.timeout;
-    e.entry_timeout = options.timeout;
-    if (tfs_stat(e.ino, &e.attr) != 0)
-        goto err_out;
-    fuse_reply_entry(req, &e);
-    return;
+	e.attr_timeout = options.timeout;
+	e.entry_timeout = options.timeout;
+	if (tfs_stat(e.ino, &e.attr) != 0)
+		goto err_out;
+	fuse_reply_entry(req, &e);
+	return;
 
 err_out:
-    fuse_reply_err(req, ENOENT);
+	fuse_reply_err(req, ENOENT);
 }
 
-static void tfs_forget (fuse_req_t req, fuse_ino_t ino,
-                        uint64_t nlookup) {
-    (void) req;
-    if(ino == file_ino)
-        lookup_cnt -= nlookup;
-    else
-        assert(ino == FUSE_ROOT_ID);
-    fuse_reply_none(req);
+static void tfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
+{
+	(void)req;
+	if (ino == file_ino)
+		lookup_cnt -= nlookup;
+	else
+		assert(ino == FUSE_ROOT_ID);
+	fuse_reply_none(req);
 }
 
 static void tfs_getattr(fuse_req_t req, fuse_ino_t ino,
-                        struct fuse_file_info *fi) {
-    struct stat stbuf;
+			struct fuse_file_info *fi)
+{
+	struct stat stbuf;
 
-    (void) fi;
+	(void)fi;
 
-    memset(&stbuf, 0, sizeof(stbuf));
-    if (tfs_stat(ino, &stbuf) != 0)
-        fuse_reply_err(req, ENOENT);
-    else
-        fuse_reply_attr(req, &stbuf, options.timeout);
+	memset(&stbuf, 0, sizeof(stbuf));
+	if (tfs_stat(ino, &stbuf) != 0)
+		fuse_reply_err(req, ENOENT);
+	else
+		fuse_reply_attr(req, &stbuf, options.timeout);
 }
 
 struct dirbuf {
-    char *p;
-    size_t size;
+	char *p;
+	size_t size;
 };
 
 static void dirbuf_add(fuse_req_t req, struct dirbuf *b, const char *name,
-                       fuse_ino_t ino) {
-    struct stat stbuf;
-    size_t oldsize = b->size;
-    b->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
-    b->p = (char *) realloc(b->p, b->size);
-    memset(&stbuf, 0, sizeof(stbuf));
-    stbuf.st_ino = ino;
-    fuse_add_direntry(req, b->p + oldsize, b->size - oldsize, name, &stbuf,
-                      b->size);
+		       fuse_ino_t ino)
+{
+	struct stat stbuf;
+	size_t oldsize = b->size;
+	b->size += fuse_add_direntry(req, NULL, 0, name, NULL, 0);
+	b->p = (char *)realloc(b->p, b->size);
+	memset(&stbuf, 0, sizeof(stbuf));
+	stbuf.st_ino = ino;
+	fuse_add_direntry(req, b->p + oldsize, b->size - oldsize, name, &stbuf,
+			  b->size);
 }
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
 static int reply_buf_limited(fuse_req_t req, const char *buf, size_t bufsize,
-                             off_t off, size_t maxsize) {
-    if (off < bufsize)
-        return fuse_reply_buf(req, buf + off,
-                              min(bufsize - off, maxsize));
-    else
-        return fuse_reply_buf(req, NULL, 0);
+			     off_t off, size_t maxsize)
+{
+	if (off < bufsize)
+		return fuse_reply_buf(req, buf + off,
+				      min(bufsize - off, maxsize));
+	else
+		return fuse_reply_buf(req, NULL, 0);
 }
 
-static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
-                        off_t off, struct fuse_file_info *fi) {
-    (void) fi;
+static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
+			struct fuse_file_info *fi)
+{
+	(void)fi;
 
-    if (ino != FUSE_ROOT_ID)
-        fuse_reply_err(req, ENOTDIR);
-    else {
-        struct dirbuf b;
+	if (ino != FUSE_ROOT_ID)
+		fuse_reply_err(req, ENOTDIR);
+	else {
+		struct dirbuf b;
 
-        memset(&b, 0, sizeof(b));
-        dirbuf_add(req, &b, file_name, file_ino);
-        reply_buf_limited(req, b.p, b.size, off, size);
-        free(b.p);
-    }
+		memset(&b, 0, sizeof(b));
+		dirbuf_add(req, &b, file_name, file_ino);
+		reply_buf_limited(req, b.p, b.size, off, size);
+		free(b.p);
+	}
 }
 
 static const struct fuse_lowlevel_ops tfs_oper = {
-    .init       = tfs_init,
-    .lookup	= tfs_lookup,
-    .getattr	= tfs_getattr,
-    .readdir	= tfs_readdir,
-    .forget     = tfs_forget,
+	.init = tfs_init,
+	.lookup = tfs_lookup,
+	.getattr = tfs_getattr,
+	.readdir = tfs_readdir,
+	.forget = tfs_forget,
 };
 
-static void update_fs(void) {
-    time_t t;
-    struct tm *now;
-    ssize_t ret;
+static void update_fs(void)
+{
+	time_t t;
+	struct tm tmbuf;
+	struct tm *now;
+	ssize_t ret;
 
-    t = time(NULL);
-    now = localtime(&t);
-    assert(now != NULL);
+	t = time(NULL);
+	now = localtime_r(&t, &tmbuf);
+	assert(now != NULL);
 
-    ret = strftime(file_name, MAX_STR_LEN,
-                   "Time_is_%Hh_%Mm_%Ss", now);
-    assert(ret != 0);
+	ret = strftime(file_name, MAX_STR_LEN, "Time_is_%Hh_%Mm_%Ss", now);
+	assert(ret != 0);
 }
 
-static void* update_fs_loop(void *data) {
-    struct fuse_session *se = (struct fuse_session*) data;
-    char *old_name;
-    int ret = 0;
+static void *update_fs_loop(void *data)
+{
+	struct fuse_session *se = (struct fuse_session *)data;
+	char *old_name;
+	int ret = 0;
 
-    while(!fuse_session_exited(se)) {
-        old_name = strdup(file_name);
-        update_fs();
+	while (!fuse_session_exited(se)) {
+		old_name = strdup(file_name);
+		update_fs();
 
-        if (!options.no_notify && lookup_cnt) {
-            if(options.only_expire) { // expire entry
-                ret = fuse_lowlevel_notify_expire_entry
-                    (se, FUSE_ROOT_ID, old_name, strlen(old_name));
+		if (!options.no_notify && lookup_cnt) {
+			if (options.only_expire) { // expire entry
+				ret = fuse_lowlevel_notify_expire_entry(
+					se, FUSE_ROOT_ID, old_name,
+					strlen(old_name));
 
-                // no kernel support
-                if (ret == -ENOSYS) {
-                    printf("fuse_lowlevel_notify_expire_entry not supported by kernel\n");
-                    break;
-                }
+				// no kernel support
+				if (ret == -ENOSYS) {
+					printf("%s not supported by kernel\n",
+					       "fuse_lowlevel_notify_expire_entry");
+					break;
+				}
 
-                // 1) ret == 0: successful expire of an existing entry
-                // 2) ret == -ENOENT: kernel has already expired the entry /
-                //                    entry does not exist anymore in the kernel
-                assert(ret == 0 || ret == -ENOENT);
-            } else if (options.inc_epoch) { // increment epoch
-                ret = fuse_lowlevel_notify_increment_epoch(se);
+				// 1) ret == 0: successful expire of an existing entry
+				// 2) ret == -ENOENT: kernel has already expired the entry /
+				//                    entry does not exist anymore in the kernel
+				assert(ret == 0 || ret == -ENOENT);
+			} else if (options.inc_epoch) { // increment epoch
+				ret = fuse_lowlevel_notify_increment_epoch(se);
 
-                if (ret == -ENOSYS) {
-                    printf("fuse_lowlevel_notify_increment_epoch not supported by kernel\n");
-                    break;
-                }
-                assert(ret == 0);
-            } else { // invalidate entry
-                assert(fuse_lowlevel_notify_inval_entry
-                      (se, FUSE_ROOT_ID, old_name, strlen(old_name)) == 0);
-            }
-        }
-        free(old_name);
-        sleep(options.update_interval);
-    }
+				if (ret == -ENOSYS) {
+					printf("%s not supported by kernel\n",
+					       "fuse_lowlevel_notify_increment_epoch");
+					break;
+				}
+				assert(ret == 0);
+			} else { // invalidate entry
+				assert(fuse_lowlevel_notify_inval_entry(
+					       se, FUSE_ROOT_ID, old_name,
+					       strlen(old_name)) == 0);
+			}
+		}
+		free(old_name);
+		sleep(options.update_interval);
+	}
 
-    if (ret == -ENOSYS) {
-        printf("Exiting...\n");
+	if (ret == -ENOSYS) {
+		printf("Exiting...\n");
 
-        fuse_session_exit(se);
-        // Make sure to exit now, rather than on next request from userspace
-        pthread_kill(main_thread, SIGPIPE);
-    }
+		fuse_session_exit(se);
+		// Make sure to exit now, rather than on next request from userspace
+		pthread_kill(main_thread, SIGPIPE);
+	}
 
-    return NULL;
+	return NULL;
 }
 
 static void show_help(const char *progname)
 {
-    printf("usage: %s [options] <mountpoint>\n\n", progname);
-    printf("File-system specific options:\n"
-               "    --timeout=<secs>       Timeout for kernel caches\n"
-               "    --update-interval=<secs>  Update-rate of file system contents\n"
-               "    --no-notify            Disable kernel notifications\n"
-               "    --only-expire          Expire entries instead of invalidating them\n"
-               "    --inc-epoch            Increment epoch, invalidating all dentries\n"
-               "\n");
+	printf("usage: %s [options] <mountpoint>\n\n", progname);
+	printf("File-system specific options:\n"
+	       "    --timeout=<secs>       Timeout for kernel caches\n"
+	       "    --update-interval=<secs>  Update-rate of file system contents\n"
+	       "    --no-notify            Disable kernel notifications\n"
+	       "    --only-expire          Expire entries instead of invalidating them\n"
+	       "    --inc-epoch            Increment epoch, invalidating all dentries\n"
+	       "\n");
 }
 
-int main(int argc, char *argv[]) {
-    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
-    struct fuse_session *se;
-    struct fuse_cmdline_opts opts;
-    struct fuse_loop_config *config;
-    pthread_t updater;
-    int ret = -1;
+int main(int argc, char *argv[])
+{
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+	struct fuse_session *se;
+	struct fuse_cmdline_opts opts;
+	struct fuse_loop_config *config;
+	pthread_t updater;
+	int ret = -1;
 
-    if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
-        return 1;
+	if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
+		return 1;
 
-    if (fuse_parse_cmdline(&args, &opts) != 0)
-        return 1;
-    if (opts.show_help) {
-        show_help(argv[0]);
-        fuse_cmdline_help();
-        fuse_lowlevel_help();
-        ret = 0;
-        goto err_out1;
-    } else if (opts.show_version) {
-        printf("FUSE library version %s\n", fuse_pkgversion());
-        fuse_lowlevel_version();
-        ret = 0;
-        goto err_out1;
-    }
-    if (options.only_expire && options.inc_epoch) {
-        printf("'only-expire' and 'inc-epoch' options are exclusive\n");
-        ret = 0;
-        goto err_out1;
-    }
+	if (fuse_parse_cmdline(&args, &opts) != 0)
+		return 1;
+	if (opts.show_help) {
+		show_help(argv[0]);
+		fuse_cmdline_help();
+		fuse_lowlevel_help();
+		ret = 0;
+		goto err_out1;
+	} else if (opts.show_version) {
+		printf("FUSE library version %s\n", fuse_pkgversion());
+		fuse_lowlevel_version();
+		ret = 0;
+		goto err_out1;
+	}
+	if (options.only_expire && options.inc_epoch) {
+		printf("'only-expire' and 'inc-epoch' options are exclusive\n");
+		ret = 0;
+		goto err_out1;
+	}
 
-    /* Initial contents */
-    update_fs();
+	/* Initial contents */
+	update_fs();
 
-    se = fuse_session_new(&args, &tfs_oper,
-                          sizeof(tfs_oper), &se);
-    if (se == NULL)
-        goto err_out1;
+	se = fuse_session_new(&args, &tfs_oper, sizeof(tfs_oper), &se);
+	if (se == NULL)
+		goto err_out1;
 
-    if (fuse_set_signal_handlers(se) != 0)
-        goto err_out2;
+	if (fuse_set_signal_handlers(se) != 0)
+		goto err_out2;
 
-    if (fuse_session_mount(se, opts.mountpoint) != 0)
-        goto err_out3;
+	if (fuse_session_mount(se, opts.mountpoint) != 0)
+		goto err_out3;
 
-    fuse_daemonize(opts.foreground);
+	fuse_daemonize(opts.foreground);
 
-    // Needed to ensure that the main thread continues/restarts processing as soon
-    // as the fuse session ends (immediately after calling fuse_session_exit() ) 
-    // and not only on the next request from userspace
-    main_thread = pthread_self();
+	// Needed to ensure that the main thread continues/restarts processing as soon
+	// as the fuse session ends (immediately after calling fuse_session_exit() )
+	// and not only on the next request from userspace
+	main_thread = pthread_self();
 
-    /* Start thread to update file contents */
-    ret = pthread_create(&updater, NULL, update_fs_loop, (void *)se);
-    if (ret != 0) {
-        fprintf(stderr, "pthread_create failed with %s\n",
-                strerror(ret));
-        goto err_out3;
-    }
+	/* Start thread to update file contents */
+	ret = pthread_create(&updater, NULL, update_fs_loop, (void *)se);
+	if (ret != 0) {
+		fprintf(stderr, "pthread_create failed with %s\n",
+			strerror(ret));
+		goto err_out3;
+	}
 
-    /* Block until ctrl+c or fusermount -u */
-    if (opts.singlethread) {
-        ret = fuse_session_loop(se);
-    } else {
+	/* Block until ctrl+c or fusermount -u */
+	if (opts.singlethread) {
+		ret = fuse_session_loop(se);
+	} else {
 		config = fuse_loop_cfg_create();
 		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
 		fuse_loop_cfg_set_max_threads(config, opts.max_threads);
 		ret = fuse_session_loop_mt(se, config);
 		fuse_loop_cfg_destroy(config);
 		config = NULL;
-    }
+	}
 
-    fuse_session_unmount(se);
+	fuse_session_unmount(se);
 err_out3:
-    fuse_remove_signal_handlers(se);
+	fuse_remove_signal_handlers(se);
 err_out2:
-    fuse_session_destroy(se);
+	fuse_session_destroy(se);
 err_out1:
-    free(opts.mountpoint);
-    fuse_opt_free_args(&args);
+	free(opts.mountpoint);
+	fuse_opt_free_args(&args);
 
-    return ret ? 1 : 0;
+	return ret ? 1 : 0;
 }
-
 
 /**
  * Local Variables:

@@ -129,6 +129,12 @@ struct fuse_session {
 	int init_error;
 	int init_wakeup_fd;
 
+	/*
+	 * auto_unmount fusermount3 comm socket; closing it triggers the unmount,
+	 * so it is held open for the session lifetime. -1 if unused.
+	 */
+	int auto_unmount_fd;
+
 	/* io_uring */
 	struct fuse_session_uring uring;
 

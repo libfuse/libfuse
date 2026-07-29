@@ -33,6 +33,11 @@ td += executable('test_loop_config', 'test_loop_config.c',
                  link_with: [ libfuse ],
                  dependencies: thread_dep,
                  install: false)
+td += executable('test_mount_flags',
+                 ['test_mount_flags.c', '../lib/mount_util.c',
+                  '../lib/fuse_log.c'],
+                 include_directories: include_dirs,
+                 install: false)
 
 test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
                  'util.py', 'test_ctests.py', 'test_custom_io.py',

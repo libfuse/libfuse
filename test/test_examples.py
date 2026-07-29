@@ -140,9 +140,7 @@ def test_hello(tmpdir, name, options, cmdline_builder, output_checker):
     logger.debug(f"Mount directory: {mnt_dir}")
     cmdline = cmdline_builder(mnt_dir, name, options)
     logger.debug(f"Command line: {' '.join(cmdline)}")
-    mount_process = subprocess.Popen(
-        cmdline,
-        stdout=output_checker.fd, stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     logger.debug(f"Mount process PID: {mount_process.pid}")
     try:
         logger.debug("Waiting for mount...")
@@ -230,8 +228,7 @@ def test_passthrough(short_tmpdir, name, debug, output_checker, writeback):
 
     print(f"\nDebug: Command line: {' '.join(cmdline)}")
 
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         work_dir = mnt_dir + src_dir
@@ -289,8 +286,7 @@ def test_passthrough_hp(short_tmpdir, cache, output_checker):
     if not cache:
         cmdline.append('--nocache')
 
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
@@ -359,8 +355,7 @@ def test_ioctl(tmpdir, output_checker):
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
     cmdline = base_cmdline + [progname, '-f', mnt_dir ]
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
@@ -397,8 +392,7 @@ def test_ioctl_ll(tmpdir, output_checker):
     mnt_dir = str(tmpdir)
     testfile = pjoin(mnt_dir, 'fioc')
     cmdline = base_cmdline + [progname, '-f', mnt_dir]
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
 
@@ -438,8 +432,7 @@ def test_poll(tmpdir, output_checker):
     mnt_dir = str(tmpdir)
     cmdline = base_cmdline + [pjoin(basename, 'example', 'poll'),
                '-f', mnt_dir ]
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         cmdline = base_cmdline + \
@@ -460,8 +453,7 @@ def test_null(tmpdir, output_checker):
     with open(mnt_file, 'w') as fh:
         fh.write('dummy')
     cmdline = base_cmdline + [ progname, '-f', mnt_file ]
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     def test_fn(name):
         return os.stat(name).st_size > 4000
     try:
@@ -498,8 +490,7 @@ def test_notify_inval_entry(tmpdir, only_expire, notify, output_checker):
         cmdline.append('--inc-epoch')
         if fuse_proto < (7,44):
             pytest.skip('inc-epoch not supported by running kernel')
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
@@ -533,8 +524,7 @@ def test_notify_prune(tmpdir, notify, output_checker):
                 '-f', '--update-interval=1', mnt_dir ]
     if not notify:
         cmdline.append('--no-notify')
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         fname = pjoin(mnt_dir, os.listdir(mnt_dir)[0])
@@ -569,8 +559,7 @@ def test_dev_auto_unmount(short_tmpdir, output_checker, intended_user):
                 [ pjoin(basename, 'example', 'passthrough_ll'),
                 '-o', f'source={src_dir},dev,auto_unmount',
                 '-f', mnt_dir ]
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
     try:
         wait_for_mount(mount_process, mnt_dir)
         if os.getuid() == 0:
@@ -606,8 +595,7 @@ def test_cuse(output_checker):
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'cuse'),
                 '-f', '--name=%s' % devname ]
-    mount_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                     stderr=output_checker.fd)
+    mount_process = output_checker.Popen(cmdline)
 
     cmdline = base_cmdline + \
               [ pjoin(basename, 'example', 'cuse_client'),
@@ -663,9 +651,7 @@ def test_release_unlink_race(tmpdir, output_checker):
         [ pjoin(basename, 'test', 'release_unlink_race'),
         "-f", fuse_mountpoint]
 
-    fuse_process = subprocess.Popen(fuse_binary_command,
-                                   stdout=output_checker.fd,
-                                   stderr=output_checker.fd)
+    fuse_process = output_checker.Popen(fuse_binary_command)
 
     try:
         wait_for_mount(fuse_process, fuse_mountpoint)

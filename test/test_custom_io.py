@@ -62,8 +62,7 @@ def tst_init(sock: socket.socket):
 def test_hello_uds(output_checker):
     cmdline = base_cmdline + [pjoin(basename, 'example', 'hello_ll_uds')]
     print(cmdline)
-    uds_process = subprocess.Popen(cmdline, stdout=output_checker.fd,
-                                   stderr=output_checker.fd)
+    uds_process = output_checker.Popen(cmdline)
     time.sleep(1)
 
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

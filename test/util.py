@@ -112,18 +112,20 @@ def umount(mount_process, mnt_dir):
 
     # Give mount process a little while to terminate. Popen.wait(timeout)
     # was only added in 3.3...
+    cmd = mount_process.args
+    cmd = ' '.join(map(str, cmd)) if isinstance(cmd, (list, tuple)) else str(cmd)
     elapsed = 0
     while elapsed < 30:
         code = mount_process.poll()
         if code is not None:
             if code == 0:
                 return
-            logger.error(f"File system process terminated with code {code}")
-            pytest.fail(f'file system process terminated with code {code}')
+            logger.error(f"File system process '{cmd}' terminated with code {code}")
+            pytest.fail(f"file system process '{cmd}' terminated with code {code}")
         time.sleep(0.1)
         elapsed += 0.1
-    logger.error("Mount process did not terminate within 30 seconds")
-    pytest.fail('mount process did not terminate')
+    logger.error(f"Mount process '{cmd}' did not terminate within 30 seconds")
+    pytest.fail(f"mount process '{cmd}' did not terminate")
 
 
 def parse_mountinfo(mnt_dir):
