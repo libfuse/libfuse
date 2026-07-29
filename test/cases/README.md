@@ -399,6 +399,10 @@ Where the output lands:
 Without `--run-dir`, a run gets a `run-<user>-<timestamp>-<pid>` leaf under the
 base, and the leaf is deleted when nothing failed.
 
+Unprivileged, without a setuid `fusermount3`, everything that mounts skips
+itself. `--setuid-helpers` makes the build tree's helpers setuid root (with
+`sudo`) before the run; it is a no-op once they are.
+
 `test/exclude` holds one test name per line for a host that cannot support a
 test; `-X <name>` adds to it for one run.
 

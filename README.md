@@ -89,9 +89,7 @@ gdb. Instead of running the tests as root, the majority of tests can
 also be run as a regular user if *util/fusermount3* is made setuid root
 first; the rest then skip themselves:
 
-    $ sudo chown root:root util/fusermount3
-    $ sudo chmod 4755 util/fusermount3
-    $ ../test/run-tests.py --build-dir .
+    $ ../test/run-tests.py --build-dir . --setuid-helpers
 
 Each test gets its own working and log directory, and the runner prints
 what every one of them cost. See the README under *test/cases* for how
