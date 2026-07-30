@@ -86,9 +86,25 @@ static int is_dot_or_dotdot(const char *name) {
            (name[1] == '\0' || (name[1] == '.' && name[2] == '\0'));
 }
 
+/*
+ * Seconds since the first line this process printed. The origin is taken
+ * lazily so it needs no init call and cannot precede the first test.
+ */
+static double test_elapsed(void)
+{
+	static struct timespec start;
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (start.tv_sec == 0 && start.tv_nsec == 0)
+		start = now;
+	return (now.tv_sec - start.tv_sec) +
+	       (now.tv_nsec - start.tv_nsec) / 1e9;
+}
+
 static void success(void)
 {
-	fprintf(stderr, "%s OK\n", testname);
+	fprintf(stderr, "+%8.3fs %s OK\n", test_elapsed(), testname);
 }
 
 #define this_test (&tests[testnum-1])
@@ -125,6 +141,11 @@ static void __start_test(const char *fmt, ...)
 		fprintf(stderr, "%s - too many tests\n", testname);
 		exit(1);
 	}
+	/* A test that never finishes prints nothing otherwise, leaving the log
+	 * ending at the last test that passed. stderr, so a SIGKILL cannot
+	 * swallow it.
+	 */
+	fprintf(stderr, "+%8.3fs %s START\n", test_elapsed(), testname);
 	this_test->fd = -1;
 }
 
@@ -2326,6 +2347,11 @@ int main(int argc, char *argv[])
 	int err = 0;
 	int a;
 	int is_root;
+
+	/* Piped stdout is fully buffered, so a killed test loses whatever it
+	 * had printed about what it was doing.
+	 */
+	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	umask(0);
 	if (argc < 2 || argc > 5) {
