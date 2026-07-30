@@ -259,6 +259,19 @@ out_destroy:
 }
 
 /*
+ * These values become command line arguments of /bin/mount and /bin/umount.
+ * BusyBox mount(8) parses an argument starting with '-' as an option even
+ * behind an end-of-options marker ("--"); NULL would end the argument list
+ * early.
+ *
+ * @return 1 if @value is unsafe as a /bin/mount or /bin/umount argument.
+ */
+static int unsafe_operand(const char *value)
+{
+	return value == NULL || value[0] == '-';
+}
+
+/*
  * @return caller expects 0 or -1
  */
 static int add_mount(const char *progname, const char *fsname,
@@ -270,6 +283,21 @@ static int add_mount(const char *progname, const char *fsname,
 	sigset_t blockmask;
 	sigset_t oldmask;
 	const char *cmd = "/bin/mount";
+
+	if (fsname == NULL || mnt == NULL || type == NULL || opts == NULL) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"%s: missing mount argument, skipping mtab update\n",
+			progname);
+		return 0;
+	}
+
+	if (unsafe_operand(fsname) || unsafe_operand(mnt) ||
+	    unsafe_operand(type) || unsafe_operand(opts)) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"%s: option-like mount argument, skipping mtab update\n",
+			progname);
+		return 0;
+	}
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);
@@ -367,7 +395,11 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 int fuse_mnt_umount(const char *progname, const char *abs_mnt,
 		    const char *rel_mnt, int lazy)
 {
-	if (!mtab_needs_update(abs_mnt)) {
+	/*
+	 * umount(8) may read an option-like rel_mnt as an option: unmount here
+	 * instead and leave the mtab/utab record behind
+	 */
+	if (!mtab_needs_update(abs_mnt) || unsafe_operand(rel_mnt)) {
 		int res = umount2(rel_mnt, lazy ? 2 : 0);
 		if (res == -1)
 			fuse_log(FUSE_LOG_ERR, "%s: failed to unmount %s: %s\n",
@@ -386,6 +418,9 @@ static int remove_mount(const char *progname, const char *mnt)
 	sigset_t blockmask;
 	sigset_t oldmask;
 	const char *cmd = "/bin/umount";
+
+	if (unsafe_operand(mnt))
+		return 0;
 
 	sigemptyset(&blockmask);
 	sigaddset(&blockmask, SIGCHLD);

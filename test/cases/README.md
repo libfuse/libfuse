@@ -289,6 +289,8 @@ fuse_test_assert_super_opt <mnt> <opt>...      # present in super_options
 fuse_test_assert_super_opt_prefix <mnt> <p>... # e.g. user_id=
 fuse_test_assert_fstype <mnt> <fstype>...      # any one is acceptable
 fuse_test_assert_source <mnt> <source>...      # any one is acceptable
+fuse_test_assert_utab_target <mnt>             # recorded in /run/mount/utab
+fuse_test_refute_utab_target <mnt>             # not recorded there
 
 # the remainder
 fuse_test_printcap_caps <src-root>          # every FUSE_CAP_* is in the header
@@ -307,7 +309,8 @@ or `fuse_test_stat`.
 underscore-prefixed naming shell uses elsewhere: `_assert_errno`,
 `_assert_listdir`, `_assert_xattr_roundtrip`, `mountinfo_field`,
 `_assert_mount_opt`, `_refute_mount_opt`, `_assert_super_opt`,
-`_assert_super_opt_prefix`, `_assert_fstype`, `_assert_source`.
+`_assert_super_opt_prefix`, `_assert_fstype`, `_assert_source`,
+`_assert_utab_target`, `_refute_utab_target`.
 
 ## Adding a variant of an existing test
 

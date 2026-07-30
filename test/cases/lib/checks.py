@@ -707,6 +707,48 @@ def cmd_assert_source(mnt_dir, expected):
              % (info['source'], expected))
 
 
+UTAB_PATH = '/run/mount/utab'
+
+# libmount escapes these four, and only these four, as \NNN octal.
+UTAB_ESCAPES = {' ': r'\040', '\t': r'\011', '\n': r'\012', '\\': r'\134'}
+
+
+def _utab_escape(path):
+    """Spell *path* the way libmount spells it in a TARGET= field."""
+    out = ''
+    for char in path:
+        escaped = UTAB_ESCAPES.get(char)
+        if escaped is not None:
+            out += escaped
+        else:
+            out += char
+    return out
+
+
+def utab_targets():
+    """Every TARGET= field in /run/mount/utab, as written."""
+    prefix = 'TARGET='
+    targets = []
+    with open(UTAB_PATH, encoding='utf8') as fh:
+        for line in fh:
+            for field in line.split():
+                if field.startswith(prefix):
+                    targets.append(field[len(prefix):])
+    return targets
+
+
+def cmd_assert_utab_target(mnt_dir):
+    target = _utab_escape(os.path.realpath(mnt_dir))
+    _require(target in utab_targets(),
+             '%s missing from %s' % (target, UTAB_PATH))
+
+
+def cmd_refute_utab_target(mnt_dir):
+    target = _utab_escape(os.path.realpath(mnt_dir))
+    _require(target not in utab_targets(),
+             'unexpected %s in %s' % (target, UTAB_PATH))
+
+
 # ------------------------------------------------------------- odds and ends
 
 def cmd_printcap_caps(src_root):
@@ -945,6 +987,8 @@ def build_parser():
                        ('fuse_test_assert_fstype', cmd_assert_fstype),
                        ('fuse_test_assert_source', cmd_assert_source)):
         add(name, func, 'mnt', ('values', {'nargs': '+'}))
+    add('fuse_test_assert_utab_target', cmd_assert_utab_target, 'mnt')
+    add('fuse_test_refute_utab_target', cmd_refute_utab_target, 'mnt')
 
     add('fuse_test_printcap_caps', cmd_printcap_caps, 'src_root')
     add('fuse_test_reachable_without_caps', cmd_reachable_without_caps, 'path')
