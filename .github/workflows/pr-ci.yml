@@ -144,10 +144,18 @@ jobs:
               label=${dir#fuse-tests/run/}
               label=${label%/logs}
               echo "::group::${label}"
-              for out in "$dir"/*.sh "$dir"/*.out "$dir"/*.txt; do
+              for out in "$dir"/*.sh "$dir"/*.out; do
                   [ -e "$out" ] || continue
                   echo "--- ${out##*/} ---"
                   tail -n 100 "$out"
+              done
+              # The stack dumps and the process table are the whole report on
+              # a timeout, and a tail of a backtrace keeps its least useful
+              # end -- print them whole.
+              for out in "$dir"/*.txt; do
+                  [ -e "$out" ] || continue
+                  echo "--- ${out##*/} ---"
+                  cat "$out"
               done
               echo "::endgroup::"
               echo
