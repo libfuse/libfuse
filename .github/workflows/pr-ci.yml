@@ -154,6 +154,26 @@ jobs:
               echo
           done
 
+      - name: Unmount stale test mountpoints
+        if: always()
+        run: |
+          # A killed test never reaches fuse_umount, so its mountpoint stays a
+          # dead transport -- not always a "mnt" directory (examples/null.sh
+          # mounts onto a plain file under tmp/ instead). The upload step's
+          # own directory walk stat()s it and ENOTCONN fails the whole
+          # upload, not just that one entry, so find every FUSE mount under
+          # this run from /proc/self/mountinfo instead of guessing the shape.
+          run_dir="$(readlink -f fuse-tests/run)/"
+          awk -v prefix="$run_dir" '
+              {
+                  for (i = 7; i <= NF; i++) if ($i == "-") { fstype = $(i + 1); break }
+                  if (index($5, prefix) == 1 && fstype ~ /^fuse/) print $5
+              }' /proc/self/mountinfo |
+              sort -r |    # nested mounts before their parent
+              while IFS= read -r mnt; do
+                  sudo umount -f "$mnt" 2>/dev/null || true
+              done
+
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
