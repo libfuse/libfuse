@@ -2,8 +2,8 @@
 #
 # Build one libfuse configuration and run the test suite against it.
 #
-# One invocation is one configuration. test/ci/configs.sh supplies the
-# arguments for each of them, and CI runs them as parallel matrix jobs.
+# One invocation is one configuration. The workflow's build matrix supplies
+# the arguments for each of them, and CI runs them as parallel matrix jobs.
 
 set -e
 
