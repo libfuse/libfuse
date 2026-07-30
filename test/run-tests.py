@@ -860,6 +860,15 @@ class TestRunner:
         return f'=== pid {pid} ({comm}): {" ".join(cmdline.split())} ==='
 
     @staticmethod
+    def _as_text(data) -> str:
+        """TimeoutExpired carries its partial output undecoded even when the
+        run was in text mode."""
+        if data is None:
+            return ''
+        return data if isinstance(data, str) \
+            else data.decode('utf8', errors='replace')
+
+    @staticmethod
     def _containment_pids(proc: subprocess.Popen, leaf: Path | None) -> list:
         """Every pid sharing the test's cgroup leaf, or just proc.pid when
         cgroups are disabled."""
@@ -900,8 +909,11 @@ class TestRunner:
         (logs / f'kstack.{pid}.txt').write_text('\n'.join(lines))
 
     def _dump_gdb_backtrace(self, pid: int, logs: Path) -> None:
-        """sudo gdb -p <pid> "thread apply all bt full", written beside the
-        kernel stacks.
+        """sudo gdb -p <pid> backtraces, written beside the kernel stacks.
+
+        Bare "bt" for every thread first and "bt full" only after it: the
+        locals are worth having, but they bury the frame list they belong to
+        under pages of struct dumps, and the frame list is what is read first.
 
         sudo, not a Yama prctl exception: the wedged pid is as likely to be a
         daemon the test forked after launch as the test's own exec-chain, and
@@ -913,16 +925,22 @@ class TestRunner:
         """
         argv = ['sudo', '-n', self._gdb, '--batch', '--nx',
                 '-ex', 'set pagination off',
+                '-ex', 'thread apply all bt',
                 '-ex', 'set print pretty on',
                 '-ex', 'thread apply all bt full',
                 '-p', str(pid)]
         try:
             proc = subprocess.run(argv, capture_output=True, text=True,
                                   timeout=GDB_TIMEOUT, check=False)
-        except subprocess.TimeoutExpired:
-            return
+            out = proc.stdout + proc.stderr
+        except subprocess.TimeoutExpired as expired:
+            # A pid gdb cannot finish with is the interesting one often
+            # enough that whatever it did print has to be kept.
+            out = (self._as_text(expired.stdout) +
+                   self._as_text(expired.stderr) +
+                   f'\n(gdb killed after {GDB_TIMEOUT:.0f}s)\n')
         (logs / f'gdbstack.{pid}.txt').write_text(
-            f'{self._proc_identity(pid)}\n{proc.stdout}{proc.stderr}')
+            f'{self._proc_identity(pid)}\n{out}')
 
     def _log_started(self, name: str) -> None:
         """A "test X is now running" line, timestamped against the whole
