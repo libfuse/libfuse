@@ -610,6 +610,9 @@ class TestRunner:
         self._stop = threading.Event()
         self._print_lock = threading.Lock()
         self._gdb = shutil.which('gdb')
+        # Overwritten per run_all() call; set here so run_one() always has a
+        # reference even if it is ever driven without run_all().
+        self._run_started = time.monotonic()
         self.report_environment()
 
     # ---------------------------------------------------------------- startup
@@ -761,12 +764,25 @@ class TestRunner:
 
     # -------------------------------------------------------------- execution
 
-    def _stream(self, proc: subprocess.Popen, logs: Path, name: str) -> None:
-        """Copy the script's merged output to logs/script.out until EOF."""
-        with (logs / 'script.out').open('wb') as out:
+    def _stream(self, proc: subprocess.Popen, logs: Path, name: str,
+                started: float) -> None:
+        """Copy the script's merged output to logs/script.out until EOF, and
+        a copy prefixed with elapsed time to logs/timestamps.out.
+
+        A timed-out test's script.out has no way to tell "stalled right
+        after the last line" from "was still grinding right up to the
+        kill" -- the CI step that prints it afterwards timestamps when it
+        printed, not when the test produced it. timestamps.out is named to
+        pick up the same "*.out" glob so CI shows it for free.
+        """
+        with (logs / 'script.out').open('wb') as out, \
+                (logs / 'timestamps.out').open('wb') as timestamps:
             for line in proc.stdout:
                 out.write(line)
                 out.flush()
+                elapsed = time.monotonic() - started
+                timestamps.write(f'+{elapsed:8.3f}s '.encode() + line)
+                timestamps.flush()
                 if self.verbose:
                     text = line.decode('utf8', errors='replace').rstrip('\n')
                     with self._print_lock:
@@ -793,6 +809,17 @@ class TestRunner:
             except subprocess.TimeoutExpired:
                 continue
 
+    def _log_started(self, name: str) -> None:
+        """A "test X is now running" line, timestamped against the whole
+        run's own start rather than the test's -- so under -j the console
+        log (which CI keeps regardless of pass/fail) shows what was in
+        flight and since when, not only what has finished.
+        """
+        elapsed = time.monotonic() - self._run_started
+        with self._print_lock:
+            print(f'+{elapsed:8.3f}s START {name}')
+            sys.stdout.flush()
+
     def run_one(self, spec: TestSpec) -> TestResult:
         """Spawn the test, enforce spec.timeout, collect the result."""
         workdir, env, leaf = self.prepare(spec)
@@ -800,6 +827,7 @@ class TestRunner:
         logs = workdir / 'logs'
         timeout = self.effective_timeout(spec)
         started = time.monotonic()
+        self._log_started(spec.name)
 
         proc = subprocess.Popen(
             ['/bin/sh', '-c', LAUNCHER, 'run-tests',
@@ -816,7 +844,8 @@ class TestRunner:
         # _stream blocks until EOF, so read in a thread and wait with a
         # deadline here; that is what makes the timeout a hard wall-clock bound.
         reader = threading.Thread(target=self._stream,
-                                  args=(proc, logs, spec.name), daemon=True)
+                                  args=(proc, logs, spec.name, started),
+                                  daemon=True)
         reader.start()
         reader.join(timeout=timeout)
         reason = ''
@@ -1131,12 +1160,12 @@ class TestRunner:
     def run_all(self, specs: list) -> int:
         """Run the serial group first with one job, then fan the rest out.
         Returns 0 when nothing failed."""
-        started = time.monotonic()
+        self._run_started = time.monotonic()
         serial = [s for s in specs if SERIAL_GROUP in s.groups]
         parallel = [s for s in specs if SERIAL_GROUP not in s.groups]
         results = self._run_batch(serial, 1) + \
             self._run_batch(parallel, self.jobs)
-        return self.summarise(results, time.monotonic() - started)
+        return self.summarise(results, time.monotonic() - self._run_started)
 
     def _run_batch(self, specs: list, jobs: int) -> list:
         """ThreadPoolExecutor over specs; print a live line per finished test."""
@@ -1164,8 +1193,9 @@ class TestRunner:
 
     def report(self, result: TestResult) -> None:
         """One line per finished test, plus where to look when it failed."""
+        elapsed = time.monotonic() - self._run_started
         with self._print_lock:
-            line = (f'{result.status:<5} {result.name:<50} '
+            line = (f'+{elapsed:8.3f}s {result.status:<5} {result.name:<50} '
                     f'{result.duration:6.2f}s')
             if result.reason:
                 line += f'  {result.reason}'
