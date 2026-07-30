@@ -25,34 +25,68 @@ jobs:
           # cc1: all warnings being treated as errors
           # - ubuntu-18.04
           - ubuntu-latest
-        # What each name builds is one case branch in test/ci/configs.sh.
+        # One entry per CI job. Every build/test parameter is spelled out via
+        # include below and forwarded verbatim to test/ci-build.sh -- nothing
+        # about what a job builds or which pass it runs is hidden in a shell
+        # case branch.
         config:
           - gcc
-          - gcc-9
-          - gcc-10
+          - gcc-valgrind
+          - gcc-9-valgrind
+          - gcc-10-valgrind
           - clang
-          - san
-          - san-nosymver
-          - san-noiouring
-          - san-m32
-        # root_pass decides whether that config also gets --root-pass; a
-        # config without a matching include entry gets an unset (falsy)
-        # matrix.root_pass. include entries must repeat the config key: an
-        # include without any of the base matrix's own keys (os here) would
-        # be folded into every combination instead of just its own.
+          - clang-san
+          - clang-san-nosymver
+          - clang-san-noiouring
+          - clang-san-m32
+        # include entries must repeat the config key: an include naming none
+        # of the base matrix's own keys would be folded into every
+        # combination instead of just its own.
         include:
           - config: gcc
-            root_pass: true
+            cc: gcc
+          - config: gcc-valgrind
+            cc: gcc
+            valgrind: true
+          - config: gcc-9-valgrind
+            cc: gcc-9
+            valgrind: true
+            pass: root
+          - config: gcc-10-valgrind
+            cc: gcc-10
+            valgrind: true
+            meson_opts:
+              - -Dc_args=-flto=auto
+            pass: root
           - config: clang
-            root_pass: true
-          - config: san
-            root_pass: true
-          - config: san-nosymver
-            root_pass: true
-          - config: san-noiouring
-            root_pass: true
-          - config: san-m32
-            root_pass: true
+            cc: clang
+            cxx: clang++
+          - config: clang-san
+            cc: clang
+            cxx: clang++
+            sanitize: true
+          - config: clang-san-nosymver
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Ddisable-libc-symbol-version=true
+          - config: clang-san-noiouring
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Denable-io-uring=false
+          - config: clang-san-m32
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Dc_args=-m32
+              - -Dcpp_args=-m32
+              - -Dc_link_args=-m32
+              - -Dcpp_link_args=-m32
+              - --pkg-config-path=/usr/lib/i386-linux-gnu/pkgconfig
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -65,9 +99,14 @@ jobs:
 
       - run: test/ci/prepare-runner.sh ${{ github.workspace }}/fuse-tests
 
-      - run: test/ci/configs.sh ${{ matrix.config }}
-             --work-dir ${{ github.workspace }}/fuse-tests
-             ${{ matrix.root_pass && '--root-pass' || '' }}
+      - run: test/ci-build.sh --name ${{ matrix.config }}
+               --cc ${{ matrix.cc }}
+               ${{ matrix.cxx && format('--cxx {0}', matrix.cxx) || '' }}
+               ${{ matrix.sanitize && '--sanitize' || '' }}
+               ${{ matrix.valgrind && '--valgrind' || '' }}
+               ${{ matrix.meson_opts && format('--meson-opt {0}', join(matrix.meson_opts, ' --meson-opt ')) || '' }}
+               ${{ matrix.pass && format('--pass {0}', matrix.pass) || '' }}
+               --work-dir ${{ github.workspace }}/fuse-tests
 
       - name: Upload test logs
         if: always()
@@ -81,6 +120,16 @@ jobs:
             !fuse-tests/run/**/mnt
           if-no-files-found: ignore
           retention-days: 14
+
+  # master's branch protection still requires this exact context name
+  # from when the build job's matrix had only the os dimension.
+  build-required-check:
+    name: build (ubuntu-latest)
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: '[[ "${{ needs.build.result }}" == "success" ]]'
 
   doxygen:
     runs-on: ubuntu-latest
