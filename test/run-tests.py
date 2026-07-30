@@ -809,6 +809,85 @@ class TestRunner:
             except subprocess.TimeoutExpired:
                 continue
 
+    def dump_stacks(self, proc: subprocess.Popen, leaf: Path | None,
+                    logs: Path) -> None:
+        """On a timeout, before _kill() tears the containment down, write
+        every thread's kernel stack and (when gdb is available) user
+        backtrace for every process still in it.
+
+        A thread blocked in an uninterruptible syscall never answers
+        PTRACE_ATTACH, so the kernel stack is taken first -- it needs no
+        attach and is often the only trace such a thread ever yields.
+        """
+        for pid in self._containment_pids(proc, leaf):
+            self._dump_kernel_stacks(pid, logs)
+            if self._gdb is not None:
+                self._dump_gdb_backtrace(pid, logs)
+
+    @staticmethod
+    def _containment_pids(proc: subprocess.Popen, leaf: Path | None) -> list:
+        """Every pid sharing the test's cgroup leaf, or just proc.pid when
+        cgroups are disabled."""
+        if leaf is not None:
+            try:
+                pids = [int(line) for line in
+                        (leaf / 'cgroup.procs').read_text().split()]
+                if pids:
+                    return pids
+            except OSError:
+                pass
+        return [proc.pid]
+
+    @staticmethod
+    def _dump_kernel_stacks(pid: int, logs: Path) -> None:
+        """sudo cat /proc/<pid>/task/*/stack for every thread of *pid*.
+
+        /proc/<pid>/task/<tid>/stack is gated on CAP_SYS_ADMIN unconditionally
+        -- unlike ptrace, ownership and Yama's exceptions are not enough --
+        to keep it from leaking kernel addresses. sudo is what gets it on a
+        non-root run; -n so a runner without passwordless sudo fails the read
+        immediately instead of blocking on a password prompt nothing answers.
+        """
+        task_dir = Path(f'/proc/{pid}/task')
+        try:
+            tids = sorted(int(tid) for tid in os.listdir(task_dir))
+        except OSError:
+            return
+        lines = []
+        for tid in tids:
+            stack_path = task_dir / str(tid) / 'stack'
+            result = subprocess.run(['sudo', '-n', 'cat', str(stack_path)],
+                                    capture_output=True, text=True,
+                                    check=False)
+            stack = result.stdout if result.returncode == 0 else \
+                f'(unreadable: {result.stderr.strip() or result.returncode})\n'
+            lines.append(f'=== tid {tid} ===\n{stack}')
+        (logs / f'kstack.{pid}.txt').write_text('\n'.join(lines))
+
+    def _dump_gdb_backtrace(self, pid: int, logs: Path) -> None:
+        """sudo gdb -p <pid> "thread apply all bt full", written beside the
+        kernel stacks.
+
+        sudo, not a Yama prctl exception: the wedged pid is as likely to be a
+        daemon the test forked after launch as the test's own exec-chain, and
+        an exception only covers the specific task that calls it, not
+        children it forks afterwards. Root's CAP_SYS_PTRACE reaches either
+        one uniformly. Best-effort: a thread ptrace cannot stop, or a runner
+        without passwordless sudo, just leaves gdb's or sudo's own error text
+        in the file.
+        """
+        argv = ['sudo', '-n', self._gdb, '--batch', '--nx',
+                '-ex', 'set pagination off',
+                '-ex', 'set print pretty on',
+                '-ex', 'thread apply all bt full',
+                '-p', str(pid)]
+        try:
+            proc = subprocess.run(argv, capture_output=True, text=True,
+                                  timeout=GDB_TIMEOUT, check=False)
+        except subprocess.TimeoutExpired:
+            return
+        (logs / f'gdbstack.{pid}.txt').write_text(proc.stdout + proc.stderr)
+
     def _log_started(self, name: str) -> None:
         """A "test X is now running" line, timestamped against the whole
         run's own start rather than the test's -- so under -j the console
@@ -851,6 +930,7 @@ class TestRunner:
         reason = ''
         if reader.is_alive():
             reason = f'timeout after {timeout:.0f}s'
+            self.dump_stacks(proc, leaf, logs)
             self._kill(proc, leaf)
             reader.join(timeout=5.0)
         try:
