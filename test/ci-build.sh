@@ -195,14 +195,18 @@ fi
 # otherwise drop; harmless when SUDO is empty. Calling run-tests.py directly,
 # never through `meson test`, keeps its per-test results in the job log
 # instead of only printing output on failure.
+rc=0
 "${SUDO[@]}" env PATH="$PATH" FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" \
     timeout 1800 python3 "${SOURCE_DIR}/test/run-tests.py" \
-        "${RUN_TESTS_OPTS[@]}"
+        "${RUN_TESTS_OPTS[@]}" || rc=$?
 
 if [ "${ROOT}" = 1 ]; then
-    # upload-artifact has to read what root wrote.
+    # upload-artifact has to read what root wrote -- before the failure is
+    # propagated, or one unreadable file fails the whole upload of the very
+    # run whose logs are wanted.
     sudo chown -R "$(id -u):$(id -g)" "${RUN_DIR}"
 fi
+[ "${rc}" = 0 ] || exit "${rc}"
 
 # Only reached when everything above passed, because of set -e: a failed run
 # has to stay inspectable. The logs are kept either way, and are the product.
