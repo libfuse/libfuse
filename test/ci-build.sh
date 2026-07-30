@@ -17,8 +17,8 @@ usage: $0 --name NAME [options]
   --cxx CXX         C++ compiler; left unset when not given
   --sanitize        build with the address and undefined-behaviour sanitizers
   --valgrind        run the filesystem daemons under valgrind
-  --root-pass       also run the whole suite under sudo, before the user pass
-  --io-uring        also run the suite over fuse-io-uring
+  --pass PASS       which test invocation to run: default, root or io-uring
+                    (default: default)
   --meson-opt OPT   extra meson option; repeatable
   --work-dir DIR    where to build and log, verbatim
 EOF
@@ -35,8 +35,7 @@ CC_BIN=cc
 CXX_BIN=
 SANITIZE=0
 VALGRIND=0
-ROOT_PASS=0
-IO_URING=0
+PASS=default
 MESON_OPTS=()
 cli_work_dir=
 
@@ -49,12 +48,15 @@ while [ $# -gt 0 ]; do
     --work-dir)  need_arg "$@"; cli_work_dir=$2; shift 2 ;;
     --sanitize)  SANITIZE=1; shift ;;
     --valgrind)  VALGRIND=1; shift ;;
-    --root-pass) ROOT_PASS=1; shift ;;
-    --io-uring)  IO_URING=1; shift ;;
+    --pass)      need_arg "$@"; PASS=$2; shift 2 ;;
     *)           usage ;;
     esac
 done
 [ -n "${NAME}" ] || usage
+case "${PASS}" in
+default|root|io-uring) ;;
+*) echo "$0: unknown --pass ${PASS}" >&2; exit 1 ;;
+esac
 
 # Make sure binaries can be accessed when invoked by root.
 umask 0022
@@ -126,7 +128,7 @@ echo "LSAN_OPTIONS: ${LSAN_OPTIONS}"
 echo "ASAN_OPTIONS: ${ASAN_OPTIONS}"
 echo "UBSAN_OPTIONS: ${UBSAN_OPTIONS}"
 echo "Valgrind: ${TEST_WITH_VALGRIND}"
-echo "io-uring test pass: ${IO_URING}"
+echo "Pass: ${PASS}"
 echo "==================="
 
 meson setup -Dprefix="${PREFIX_DIR}" -Dwerror=true "${MESON_OPTS[@]}" \
@@ -151,26 +153,6 @@ if [ -x "${PREFIX_DIR}/sbin/fuservicemount3" ]; then
     sudo chmod 4755 "${PREFIX_DIR}/sbin/fuservicemount3"
 fi
 
-TEST_CMD="meson test -C . --print-errorlogs"
-# The root pass keeps going through `meson test`, for --logbase; the non-root
-# passes below call run-tests.py directly so they can pass --setuid-helpers,
-# which meson test's fixed per-test args: list cannot forward.
-TEST_CMD_DEFAULT="${TEST_CMD} --no-suite io-uring"
-
-if [ "${ROOT_PASS}" = 1 ]; then
-    # Give the root run a distinct meson log basename so its
-    # meson-logs/testlog.* files don't end up owned by root and block the
-    # subsequent user run from writing them.
-    sudo env PATH="$PATH" \
-        FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}-root" \
-        ${TEST_CMD_DEFAULT} --logbase=testlog-root
-    # upload-artifact and the next run both have to read what root wrote.
-    sudo chown -R "$(id -u):$(id -g)" "${RUN_DIR}"
-fi
-
-FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" timeout 1800 \
-    python3 "${SOURCE_DIR}/test/run-tests.py" --build-dir . --setuid-helpers
-
 restore_io_uring()
 {
     echo "${FUSE_URING_WAS}" | sudo tee "$1" >/dev/null
@@ -178,7 +160,23 @@ restore_io_uring()
         sudo sysctl -q -w "kernel.io_uring_disabled=${IO_URING_DISABLED_WAS}"
 }
 
-if [ "${IO_URING}" = 1 ]; then
+case "${PASS}" in
+default)
+    FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" timeout 1800 \
+        python3 "${SOURCE_DIR}/test/run-tests.py" --build-dir . --setuid-helpers
+    ;;
+root)
+    # No setuid helper and no meson wrapper: root needs neither, and calling
+    # run-tests.py directly means its per-test results reach the job log
+    # instead of being swallowed by `meson test`, which only prints a test's
+    # output on failure.
+    sudo env PATH="$PATH" \
+        FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" timeout 1800 \
+        python3 "${SOURCE_DIR}/test/run-tests.py" --build-dir .
+    # upload-artifact has to read what root wrote.
+    sudo chown -R "$(id -u):$(id -g)" "${RUN_DIR}"
+    ;;
+io-uring)
     # The kernel parameter is global and defaults to off, and this script is
     # also run by hand, so put back whatever the machine had. Failing to enable
     # it is fatal: run-tests.py skips its io-uring invocation where the kernel
@@ -198,10 +196,11 @@ if [ "${IO_URING}" = 1 ]; then
     [ -z "${IO_URING_DISABLED_WAS}" ] ||
         sudo sysctl -q -w kernel.io_uring_disabled=0
 
-    FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}-iouring" timeout 1800 \
+    FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" timeout 1800 \
         python3 "${SOURCE_DIR}/test/run-tests.py" --build-dir . \
             --setuid-helpers --io-uring
-fi
+    ;;
+esac
 
 # Only reached when everything above passed, because of set -e: a failed run
 # has to stay inspectable. The logs are kept either way, and are the product.
