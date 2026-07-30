@@ -154,6 +154,10 @@ jobs:
               echo
           done
 
+          echo "::group::dmesg"
+          sudo dmesg -T | tail -n 300
+          echo "::endgroup::"
+
       - name: Unmount stale test mountpoints
         if: always()
         run: |
