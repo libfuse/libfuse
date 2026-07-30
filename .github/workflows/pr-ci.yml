@@ -31,11 +31,18 @@ jobs:
         # case branch.
         config:
           - gcc
+          - gcc-root
+          # GitHub Actions runners have no fuse io-uring support; kept for a
+          # runner that does.
+          # - gcc-io-uring
+          # - gcc-io-uring-root
           - gcc-valgrind
           - gcc-9-valgrind
           - gcc-10-valgrind
           - clang
           - clang-san
+          - clang-san-root
+          # - clang-san-io-uring
           - clang-san-nosymver
           - clang-san-noiouring
           - clang-san-m32
@@ -45,19 +52,27 @@ jobs:
         include:
           - config: gcc
             cc: gcc
+          - config: gcc-root
+            cc: gcc
+            root: true
+          # - config: gcc-io-uring
+          #   cc: gcc
+          #   io_uring: true
+          # - config: gcc-io-uring-root
+          #   cc: gcc
+          #   root: true
+          #   io_uring: true
           - config: gcc-valgrind
             cc: gcc
             valgrind: true
           - config: gcc-9-valgrind
             cc: gcc-9
             valgrind: true
-            pass: root
           - config: gcc-10-valgrind
             cc: gcc-10
             valgrind: true
             meson_opts:
               - -Dc_args=-flto=auto
-            pass: root
           - config: clang
             cc: clang
             cxx: clang++
@@ -65,6 +80,16 @@ jobs:
             cc: clang
             cxx: clang++
             sanitize: true
+          - config: clang-san-root
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            root: true
+          # - config: clang-san-io-uring
+          #   cc: clang
+          #   cxx: clang++
+          #   sanitize: true
+          #   io_uring: true
           - config: clang-san-nosymver
             cc: clang
             cxx: clang++
@@ -105,7 +130,8 @@ jobs:
                ${{ matrix.sanitize && '--sanitize' || '' }}
                ${{ matrix.valgrind && '--valgrind' || '' }}
                ${{ matrix.meson_opts && format('--meson-opt {0}', join(matrix.meson_opts, ' --meson-opt ')) || '' }}
-               ${{ matrix.pass && format('--pass {0}', matrix.pass) || '' }}
+               ${{ matrix.root && '--root' || '' }}
+               ${{ matrix.io_uring && '--io-uring' || '' }}
                --work-dir ${{ github.workspace }}/fuse-tests
 
       - name: Print failed test logs
