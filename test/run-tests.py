@@ -811,18 +811,53 @@ class TestRunner:
 
     def dump_stacks(self, proc: subprocess.Popen, leaf: Path | None,
                     logs: Path) -> None:
-        """On a timeout, before _kill() tears the containment down, write
-        every thread's kernel stack and (when gdb is available) user
-        backtrace for every process still in it.
+        """On a timeout, before _kill() tears the containment down, write a
+        snapshot of the whole process table, plus every thread's kernel stack
+        and (when gdb is available) user backtrace for every process still in
+        the containment.
 
         A thread blocked in an uninterruptible syscall never answers
         PTRACE_ATTACH, so the kernel stack is taken first -- it needs no
-        attach and is often the only trace such a thread ever yields.
+        attach and is often the only trace such a thread ever yields. The
+        process table is taken before either, while nothing has stopped a
+        thread yet.
         """
+        self._dump_process_table(logs)
         for pid in self._containment_pids(proc, leaf):
             self._dump_kernel_stacks(pid, logs)
             if self._gdb is not None:
                 self._dump_gdb_backtrace(pid, logs)
+
+    @staticmethod
+    def _dump_process_table(logs: Path) -> None:
+        """ps auxwww, so a hang that involves a process outside the test's own
+        containment -- a daemon an earlier test leaked, say -- is still
+        visible in the report.
+        """
+        result = subprocess.run(['ps', 'auxwww'], capture_output=True,
+                                text=True, check=False)
+        (logs / 'ps.txt').write_text(result.stdout + result.stderr)
+
+    @staticmethod
+    def _proc_identity(pid: int) -> str:
+        """A "<pid> (<comm>): <cmdline>" header line for a dump.
+
+        Which pid was the daemon and which the client blocked on it is the
+        first question asked of a stack dump, and a bare pid answers it for
+        nobody reading the report minutes or days later.
+        """
+        try:
+            comm = Path(f'/proc/{pid}/comm').read_text().strip()
+        except OSError:
+            comm = '?'
+        try:
+            raw = Path(f'/proc/{pid}/cmdline').read_bytes()
+            cmdline = raw.decode('utf8', errors='replace').replace('\0', ' ')
+        except OSError:
+            cmdline = ''
+        # An argument may hold a newline; a header that is not one line
+        # breaks every reader that greps the dump for its pid.
+        return f'=== pid {pid} ({comm}): {" ".join(cmdline.split())} ==='
 
     @staticmethod
     def _containment_pids(proc: subprocess.Popen, leaf: Path | None) -> list:
@@ -853,7 +888,7 @@ class TestRunner:
             tids = sorted(int(tid) for tid in os.listdir(task_dir))
         except OSError:
             return
-        lines = []
+        lines = [TestRunner._proc_identity(pid)]
         for tid in tids:
             stack_path = task_dir / str(tid) / 'stack'
             result = subprocess.run(['sudo', '-n', 'cat', str(stack_path)],
@@ -886,7 +921,8 @@ class TestRunner:
                                   timeout=GDB_TIMEOUT, check=False)
         except subprocess.TimeoutExpired:
             return
-        (logs / f'gdbstack.{pid}.txt').write_text(proc.stdout + proc.stderr)
+        (logs / f'gdbstack.{pid}.txt').write_text(
+            f'{self._proc_identity(pid)}\n{proc.stdout}{proc.stderr}')
 
     def _log_started(self, name: str) -> None:
         """A "test X is now running" line, timestamped against the whole
