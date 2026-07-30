@@ -108,6 +108,26 @@ jobs:
                ${{ matrix.pass && format('--pass {0}', matrix.pass) || '' }}
                --work-dir ${{ github.workspace }}/fuse-tests
 
+      - name: Print failed test logs
+        if: failure()
+        run: |
+          # A test's name is <category>/<leaf>, so its logs/ sits three
+          # levels under fuse-tests/run/: <config>/<category>/<leaf>/logs.
+          for dir in fuse-tests/run/*/*/*/logs; do
+              [ -d "$dir" ] || continue
+              label=${dir#fuse-tests/run/}
+              label=${label%/logs}
+              echo "::group::${label}"
+              for out in "$dir"/*.sh "$dir"/*.out "$dir"/*.txt; do
+                  [ -e "$out" ] || continue
+                  echo "--- ${out##*/} ---"
+                  tail -n 100 "$out"
+              done
+              echo "::endgroup::"
+              echo
+              echo
+          done
+
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
