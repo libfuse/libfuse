@@ -2362,12 +2362,17 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
 /**
  * Flag a session as terminated.
  *
- * This will cause any running event loops to terminate on the next opportunity. If this function is
- * called by a thread that is not a FUSE worker thread, the next
- * opportunity will be when FUSE a request is received (which may be far in the future if the
- * filesystem is not currently being used by any clients). One way to avoid this delay is to
- * afterwards sent a signal to the main thread (if fuse_set_signal_handlers() is used, SIGPIPE
- * will cause the main thread to wake-up but otherwise be ignored).
+ * This will cause any running event loop to terminate on the next opportunity.
+ * fuse_session_loop_mt(), and fuse_session_loop() from FUSE_USE_VERSION 3.19
+ * on, are woken up directly and return without waiting for a request, no
+ * matter which thread calls this.
+ *
+ * The deprecated fuse_session_loop() below FUSE_USE_VERSION 3.19 is not woken
+ * up and only notices the flag once the next request is received, which may be
+ * far in the future if the filesystem is not currently being used by any
+ * clients. Sending a signal to its thread afterwards avoids that delay - if
+ * fuse_set_signal_handlers() is used, SIGPIPE will cause the thread to wake-up
+ * but otherwise be ignored.
  *
  * @param se the session
  */
