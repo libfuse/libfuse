@@ -14,9 +14,9 @@
  * down and fchmod() would therefore never carry a handle.
  */
 
-#define FUSE_USE_VERSION 30
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
-/* Not really needed - just to test build with FUSE_USE_VERSION == 30 */
+/* Not really needed - just to test the build with fuse.h included */
 #include <fuse.h>
 
 #include <fuse_config.h>
@@ -189,9 +189,10 @@ int main(int argc, char *argv[])
 	free(fuse_opts.mountpoint);
 
 	/* Stop file system */
-	assert(pthread_cancel(fs_thread) == 0);
-
+	fuse_session_exit(se);
 	fuse_session_unmount(se);
+	assert(pthread_join(fs_thread, NULL) == 0);
+
 	assert(got_fh == 1);
 	fuse_remove_signal_handlers(se);
 	fuse_session_destroy(se);
