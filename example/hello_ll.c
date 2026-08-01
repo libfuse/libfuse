@@ -22,7 +22,7 @@
  * \include hello_ll.c
  */
 
-#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #include <fuse_lowlevel.h>
 #include <fuse_daemonize.h>

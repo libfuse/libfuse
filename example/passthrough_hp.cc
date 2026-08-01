@@ -43,7 +43,7 @@
  * \include passthrough_hp.cc
  */
 
-#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE

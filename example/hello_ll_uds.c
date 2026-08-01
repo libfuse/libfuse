@@ -20,7 +20,7 @@
  * \include hello_ll.c
  */
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 
 #ifndef _GNU_SOURCE
@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
 	if (cfd == -1)
 		goto err_out3;
 
-	if (fuse_session_custom_io(se, &io, cfd) != 0)
+	if (fuse_session_custom_io(se, &io, sizeof(io), cfd) != 0)
 		goto err_out3;
 
 	/* Block until ctrl+c */
