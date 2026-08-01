@@ -173,6 +173,9 @@ static const struct fuse_lowlevel_ops tfs_oper = {
 	.read		= tfs_read,
 };
 
+/* the deprecated loop is what this test is here to cover */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 static void *run_fs(void *data)
 {
 	struct fuse_session *se = (struct fuse_session *)data;
@@ -180,6 +183,7 @@ static void *run_fs(void *data)
 	assert(fuse_session_loop(se) == 0);
 	return NULL;
 }
+#pragma GCC diagnostic pop
 
 static void check_readdir(const char *mountpoint)
 {

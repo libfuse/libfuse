@@ -133,6 +133,11 @@ cuse_lowlevel_setup_fn(int argc, char *argv[], const struct cuse_info *ci,
 void cuse_lowlevel_teardown(struct fuse_session *se);
 
 /* Do not call directly, use cuse_lowlevel_main() */
+int cuse_lowlevel_main_30(int argc, char *argv[], const struct cuse_info *ci,
+			  const struct cuse_lowlevel_ops *clop,
+			  size_t clop_size,
+			  const struct libfuse_version *version,
+			  void *userdata);
 int cuse_lowlevel_main_319(int argc, char *argv[], const struct cuse_info *ci,
 			   const struct cuse_lowlevel_ops *clop,
 			   size_t clop_size,
@@ -151,9 +156,15 @@ static inline int cuse_lowlevel_main_fn(int argc, char *argv[],
 		.padding = 0
 	};
 
+#if FUSE_USE_VERSION >= 319
 	return cuse_lowlevel_main_319(argc, argv, ci, clop,
 				      sizeof(struct cuse_lowlevel_ops),
 				      &version, userdata);
+#else
+	return cuse_lowlevel_main_30(argc, argv, ci, clop,
+				     sizeof(struct cuse_lowlevel_ops),
+				     &version, userdata);
+#endif
 }
 #define cuse_lowlevel_main(argc, argv, ci, clop, userdata) \
 	cuse_lowlevel_main_fn(argc, argv, ci, clop, userdata)

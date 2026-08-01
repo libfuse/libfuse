@@ -163,7 +163,29 @@ New Features
 Version 3.19 (FUSE_MAKE_VERSION(3, 19))
 =======================================
 
-(Reserved for future use)
+Changed Functions
+-----------------
+* ``fuse_session_loop()`` runs the event loop in a single worker thread instead
+  of the calling thread. Requests are still handled one at a time, and
+  ``fuse_session_exit()`` now wakes the loop up rather than leaving it blocked
+  until the next request arrives.
+
+  - Thread local state has to be set up in a callback, not before entering
+    the loop
+  - Use FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 19) for the previous loop
+
+Note: this is not done for every caller, because the callbacks no longer run on
+the thread that entered the loop. Two things follow from that. Pthread keys and
+other thread local state prepared before the loop are not the ones the
+callbacks see. And the worker is started with SIGTERM, SIGINT, SIGHUP and
+SIGQUIT blocked, so those signals no longer interrupt a syscall inside a
+callback. Both keep building and only show up at runtime, hence the tie to
+FUSE_USE_VERSION.
+
+Deprecated
+----------
+* ``fuse_session_loop()`` below FUSE_MAKE_VERSION(3, 19) - it cannot be woken
+  by ``fuse_session_exit()``
 
 Migration Notes
 ===============
@@ -175,4 +197,6 @@ When upgrading FUSE_USE_VERSION:
 3. **< 3.5 → 3.5+**: Change ioctl cmd from int to unsigned int
 4. **< 3.12 → 3.12+**: Use fuse_loop_cfg_*() functions instead of direct struct access
 5. **< 3.17 → 3.17+**: Use fuse_set_feature_flag() instead of conn->want for new caps
+6. **< 3.19 → 3.19+**: fuse_session_loop() serves requests from a worker thread,
+   move thread local setup into a callback
 
