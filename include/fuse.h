@@ -927,7 +927,7 @@ static inline int fuse_main_real(int argc, char *argv[],
 	struct libfuse_version version = { .major = FUSE_MAJOR_VERSION,
 					   .minor = FUSE_MINOR_VERSION,
 					   .hotfix = FUSE_HOTFIX_VERSION,
-					   .padding = 0 };
+					   .api_version = FUSE_USE_VERSION };
 
 	fuse_log(FUSE_LOG_ERR,
 		 "%s is a libfuse internal function, please use fuse_main()\n",
@@ -999,7 +999,7 @@ static inline int fuse_main_fn(int argc, char *argv[],
 		.major  = FUSE_MAJOR_VERSION,
 		.minor  = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return fuse_main_real_versioned(argc, argv, op, sizeof(*(op)), &version,
@@ -1031,7 +1031,7 @@ static inline int fuse_service_main_fn(struct fuse_service *service,
 		.major  = FUSE_MAJOR_VERSION,
 		.minor  = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = FUSE_USE_VERSION,
+		.api_version = FUSE_USE_VERSION,
 	};
 
 	return fuse_service_main_real_versioned(service, args, op,
@@ -1103,7 +1103,7 @@ static inline struct fuse *fuse_new_fn(struct fuse_args *args,
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return _fuse_new_30(args, op, op_size, &version, user_data);
@@ -1117,7 +1117,7 @@ static inline struct fuse *fuse_new_fn(struct fuse_args *args,
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return _fuse_new_31(args, op, op_size, &version, user_data);

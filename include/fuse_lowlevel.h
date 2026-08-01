@@ -2224,7 +2224,7 @@ fuse_session_new_fn(struct fuse_args *args, const struct fuse_lowlevel_ops *op,
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return fuse_session_new_versioned(args, op, op_size, &version,
