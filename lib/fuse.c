@@ -4677,7 +4677,12 @@ static int fuse_session_loop_remember(struct fuse *f)
 	return res < 0 ? -1 : 0;
 }
 
-int fuse_loop(struct fuse *f)
+/*
+ * @param[in] session_loop  serves the requests unless the LRU cache needs the
+ *                          cleanup timer of fuse_session_loop_remember()
+ */
+static int fuse_loop_common(struct fuse *f,
+			    int (*session_loop)(struct fuse_session *se))
 {
 	if (!f)
 		return -1;
@@ -4685,7 +4690,24 @@ int fuse_loop(struct fuse *f)
 	if (lru_enabled(f))
 		return fuse_session_loop_remember(f);
 
-	return fuse_session_loop(f->se);
+	return session_loop(f->se);
+}
+
+int fuse_loop_319(struct fuse *f)
+{
+	return fuse_loop_common(f, fuse_session_loop_319);
+}
+
+/*
+ * ABI compat: filesystems built before 3.19 link this bare name and expect the
+ * caller's thread to serve the requests.
+ */
+#undef fuse_loop
+
+int fuse_loop(struct fuse *f);
+int fuse_loop(struct fuse *f)
+{
+	return fuse_loop_common(f, fuse_session_loop_30);
 }
 
 FUSE_SYMVER("fuse_loop_mt_312", "fuse_loop_mt@@FUSE_3.12")

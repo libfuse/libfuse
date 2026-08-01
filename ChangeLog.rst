@@ -18,6 +18,14 @@ Unreleased Changes
   option") and from fusermount by 235e9a1f80cb ("fusermout: Remove the
   large read check").
 
+* ``fuse_session_loop()`` built with FUSE_USE_VERSION 319 or higher calls the
+  filesystem from a worker thread, no longer from the thread that entered the
+  loop. Requests are still handled one at a time. Thread local state has to be
+  set up in a callback instead of before entering the loop.
+
+* ``fuse_session_loop()`` below FUSE_USE_VERSION 319 is deprecated and warns
+  at compile time.
+
 
 libfuse 3.18.0 (2025-12-18)
 ===========================

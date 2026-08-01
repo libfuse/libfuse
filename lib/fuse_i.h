@@ -273,6 +273,9 @@ struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *o
 int fuse_loop_mt_312(struct fuse *f, struct fuse_loop_config *config);
 int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *config);
 
+/* the pre-3.19 loop, for callers that need the caller's thread to serve */
+int fuse_session_loop_30(struct fuse_session *se);
+
 /**
  * Internal verifier for the given config.
  *

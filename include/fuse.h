@@ -1164,12 +1164,23 @@ void fuse_destroy(struct fuse *f);
  * event loop exits, refer to the documentation of
  * fuse_session_loop().
  *
+ * Which loop is used follows fuse_session_loop(): below FUSE_USE_VERSION 3.19
+ * the caller's thread serves the requests and fuse_session_exit() does not
+ * wake it, from 3.19 on a worker thread serves them one at a time and
+ * fuse_session_exit() returns the loop right away.
+ *
  * @param f the FUSE handle
  * @return see fuse_session_loop()
  *
  * See also: fuse_loop_mt()
  */
-int fuse_loop(struct fuse *f);
+#if FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 19)
+	int fuse_loop_319(struct fuse *f);
+	#define fuse_loop(f) fuse_loop_319(f)
+#else
+	int fuse_loop(struct fuse *f)
+		__attribute__((deprecated("raise FUSE_USE_VERSION to 3.19")));
+#endif
 
 /**
  * Flag session as terminated
