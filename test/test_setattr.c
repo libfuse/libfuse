@@ -6,6 +6,14 @@
   See the file GPL2.txt.
 */
 
+/*
+ * Check that a setattr caused by an operation on an open file descriptor
+ * reaches the filesystem with the file handle of that descriptor, so that it
+ * can tell which open file the request belongs to. ftruncate() is used to
+ * trigger it, as chmod_common() in the kernel does not pass the struct file
+ * down and fchmod() would therefore never carry a handle.
+ */
+
 #define FUSE_USE_VERSION 30
 
 /* Not really needed - just to test build with FUSE_USE_VERSION == 30 */
@@ -31,9 +39,10 @@
 
 #define FILE_INO 2
 #define FILE_NAME "truncate_me"
+#define FILE_SIZE 4096
 
 static int got_fh;
-static mode_t file_mode = S_IFREG | 0644;
+static off_t file_size;
 
 static int tfs_stat(fuse_ino_t ino, struct stat *stbuf)
 {
@@ -44,9 +53,9 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf)
 	}
 
 	else if (ino == FILE_INO) {
-		stbuf->st_mode = file_mode;
+		stbuf->st_mode = S_IFREG | 0644;
 		stbuf->st_nlink = 1;
-		stbuf->st_size = 0;
+		stbuf->st_size = file_size;
 	}
 
 	else
@@ -104,7 +113,7 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 static void tfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			int to_set, struct fuse_file_info *fi)
 {
-	if (ino != FILE_INO || !(to_set & FUSE_SET_ATTR_MODE)) {
+	if (ino != FILE_INO || !(to_set & FUSE_SET_ATTR_SIZE)) {
 		fuse_reply_err(req, EINVAL);
 		return;
 	}
@@ -116,7 +125,7 @@ static void tfs_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 	else {
 		fprintf(stderr, "setattr ok\n");
 		got_fh = 1;
-		file_mode = attr->st_mode;
+		file_size = attr->st_size;
 	}
 
 	tfs_getattr(req, ino, fi);
@@ -139,6 +148,7 @@ static void *run_fs(void *data)
 static void test_fs(const char *mountpoint)
 {
 	char fname[PATH_MAX];
+	struct stat stbuf;
 	int fd;
 
 	assert(snprintf(fname, PATH_MAX, "%s/" FILE_NAME, mountpoint) > 0);
@@ -148,8 +158,10 @@ static void test_fs(const char *mountpoint)
 		assert(0);
 	}
 
-	assert(fchmod(fd, 0600) == 0);
-	close(fd);
+	assert(ftruncate(fd, FILE_SIZE) == 0);
+	assert(fstat(fd, &stbuf) == 0);
+	assert(stbuf.st_size == FILE_SIZE);
+	assert(close(fd) == 0);
 }
 
 int main(int argc, char *argv[])
@@ -164,6 +176,7 @@ int main(int argc, char *argv[])
 	assert(fuse_opt_add_arg(&args, "-oauto_unmount") == 0);
 #endif
 	se = fuse_session_new(&args, &tfs_oper, sizeof(tfs_oper), NULL);
+	fuse_opt_free_args(&args);
 	assert(se != NULL);
 	assert(fuse_set_signal_handlers(se) == 0);
 	assert(fuse_session_mount(se, fuse_opts.mountpoint) == 0);
@@ -173,6 +186,7 @@ int main(int argc, char *argv[])
 
 	/* Do test */
 	test_fs(fuse_opts.mountpoint);
+	free(fuse_opts.mountpoint);
 
 	/* Stop file system */
 	assert(pthread_cancel(fs_thread) == 0);
