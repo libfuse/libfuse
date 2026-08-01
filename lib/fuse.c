@@ -4695,7 +4695,18 @@ static int fuse_loop_common(struct fuse *f,
 
 int fuse_loop_319(struct fuse *f)
 {
-	return fuse_loop_common(f, fuse_session_loop_319);
+	int res;
+
+	if (!f)
+		return -1;
+
+	res = fuse_start_cleanup_thread(f);
+	if (res)
+		return -1;
+
+	res = fuse_session_loop_319(f->se);
+	fuse_stop_cleanup_thread(f);
+	return res;
 }
 
 /*
