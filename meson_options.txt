@@ -28,6 +28,9 @@ option('enable-usdt', type : 'boolean', value : false,
 option('enable-io-uring', type: 'boolean', value: true,
        description: 'Enable fuse-over-io-uring support')
 
+option('sync-init', type: 'combo', choices: ['auto', 'always', 'never'], value: 'auto',
+       description: 'Synchronous FUSE_INIT: auto follows fuse_daemonize_early_start(), always and never override it')
+
 option('service-socket-dir', type : 'string', value : '',
        description: 'Where to install fuse server sockets (if empty, /run/filesystems)')
 

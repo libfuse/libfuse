@@ -4588,7 +4588,8 @@ fuse_session_new_versioned(struct fuse_args *args,
 
 	se->mo = mo;
 
-	se->want_sync_init = FUSE_SYNC_INIT_AUTO;
+	/* -Dsync-init; fuse_session_set_sync_init() still overrides it. */
+	se->want_sync_init = FUSE_SYNC_INIT_DEFAULT;
 
 	/* Fuse server application should pass the version it was compiled
 	 * against and pass it. If a libfuse version accidentally introduces an
