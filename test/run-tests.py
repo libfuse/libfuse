@@ -107,6 +107,9 @@ IO_URING_CAP = 'FUSE_CAP_OVER_IO_URING'
 IO_URING_STATE_KEY = 'FUSE_INIT: io_uring='
 IO_URING_STATES_OK = ('FUSE_INIT: io_uring=on',
                       'FUSE_INIT: io_uring=off:custom_io')
+# What -Dsync-init=always/never leave in fuse_config.h; auto writes neither.
+SYNC_INIT_ENABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_ENABLED'
+SYNC_INIT_DISABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_DISABLED'
 FUSE_URING_PARAM = Path('/sys/module/fuse/parameters/enable_uring')
 # glibc has no io_uring_setup() wrapper, so this goes through syscall(2), the
 # way liburing does it. 425 on every architecture but alpha.
@@ -606,6 +609,7 @@ class TestRunner:
         self.valgrind = resolve_valgrind()
         self.core_pattern = read_core_pattern()
         self.fuse_caps = self.read_fuse_caps()
+        self.sync_init = self.read_sync_init()
         self._cgroup = CgroupManager.create(str(os.getpid()))
         self._stop = threading.Event()
         self._print_lock = threading.Lock()
@@ -636,6 +640,23 @@ class TestRunner:
             return frozenset()
         return frozenset(line.strip() for line in proc.stdout.splitlines()
                          if line.startswith('\t'))
+
+    def read_sync_init(self) -> str:
+        """Which -Dsync-init the library was built with: auto, always, never.
+
+        A property of the build, not of the run, so it is read where the
+        io-uring preflight reads HAVE_URING rather than selected on the
+        command line.
+        """
+        try:
+            config = (self.build_dir / 'fuse_config.h').read_text()
+        except OSError:
+            return 'unknown'
+        for define, mode in ((SYNC_INIT_ENABLED, 'always'),
+                             (SYNC_INIT_DISABLED, 'never')):
+            if define in config:
+                return mode
+        return 'auto'
 
     def preflight_io_uring(self) -> str:
         """Return "" when the io-uring transport can actually be exercised,
@@ -1375,9 +1396,12 @@ class TestRunner:
 
         The io-uring invocation selects nothing, so its counts must match the
         default run's; without the label the two are indistinguishable in a CI
-        log.
+        log. A -Dsync-init build is invisible for the same reason.
         """
-        return ', io-uring' if self.io_uring else ''
+        note = ', io-uring' if self.io_uring else ''
+        if self.sync_init != 'auto':
+            note += f', sync-init={self.sync_init}'
+        return note
 
     def summarise(self, results: list, elapsed: float) -> int:
         """Print the counts, the slowest tests and every failure."""
