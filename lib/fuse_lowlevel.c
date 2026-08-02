@@ -3106,7 +3106,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		if (ring_rc != 0) {
 			fuse_log(FUSE_LOG_INFO,
 				 "fuse: failed to start io-uring: %s\n",
-				 strerror(ring_rc));
+				 strerror(-ring_rc));
 			outargflags &= ~FUSE_OVER_IO_URING;
 			enable_io_uring = false;
 		}
