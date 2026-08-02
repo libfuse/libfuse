@@ -1222,6 +1222,7 @@ int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
 #if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
 int fuse_loop_mt(struct fuse *f, struct fuse_loop_config *config);
 #else
+int fuse_loop_mt_312(struct fuse *f, struct fuse_loop_config *config);
 #define fuse_loop_mt(f, config) fuse_loop_mt_312(f, config)
 #endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 #endif
