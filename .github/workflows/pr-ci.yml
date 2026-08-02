@@ -45,6 +45,7 @@ jobs:
           # - clang-san-io-uring
           - clang-san-nosymver
           - clang-san-noiouring
+          - clang-san-nosyncinit
           - clang-san-m32
         # include entries must repeat the config key: an include naming none
         # of the base matrix's own keys would be folded into every
@@ -102,6 +103,14 @@ jobs:
             sanitize: true
             meson_opts:
               - -Denable-io-uring=false
+          # The daemons a test backgrounds get synchronous FUSE_INIT
+          # everywhere else, so this is the only job running the classic path.
+          - config: clang-san-nosyncinit
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Dsync-init=never
           - config: clang-san-m32
             cc: clang
             cxx: clang++
