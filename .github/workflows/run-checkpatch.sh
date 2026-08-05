@@ -18,5 +18,10 @@ IGNORES="${IGNORES},STRCPY,STRNCPY,COMPLEX_MACRO,LINE_SPACING,SYMBOLIC_PERMS"
 # -c diff.algorithm=default: histogram (a common user gitconfig default)
 # aligns some hunks differently than myers, which can turn an unrelated
 # pre-existing line into a "+" line or vice versa; pin so local runs match CI.
-git -c diff.algorithm=default format-patch -1 --stdout "$commit" -- . ':!*.yml' ':!*.yaml' |
+# <commit>^..<commit> rather than -1 <commit>: with a pathspec, -1 means "one
+# commit reachable from here that touches it", so a YAML-only commit would
+# hand checkpatch its predecessor and report on the wrong patch. The range
+# emits nothing instead, which is the right answer for such a commit.
+git -c diff.algorithm=default format-patch --stdout "${commit}^..${commit}" \
+    -- . ':!*.yml' ':!*.yaml' |
     ./checkpatch.pl --show-types --max-line-length=100 --no-tree --ignore ${IGNORES} -
