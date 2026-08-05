@@ -27,7 +27,9 @@ jobs:
         base_commit=$(git merge-base origin/${{ github.base_ref }} HEAD)
         echo "Base commit: $base_commit"
         echo "Running checkpatch.pl on all commits in the PR:"
-        git rev-list --reverse $base_commit..HEAD | while read commit; do
+        # --no-merges: HEAD is GitHub's test merge, and <merge>^..<merge> is
+        # the whole PR, which checkpatch would read as a single patch.
+        git rev-list --reverse --no-merges $base_commit..HEAD | while read commit; do
           # Skip dependabot commits - we do not have control over it
           if git log -1 --format='%ae' $commit | grep -q "dependabot"; then
             echo "Skipping dependabot commit: $commit"
