@@ -12,6 +12,8 @@
 # have seen the change; with it off the kernel's cache must still be serving
 # what it saw first.
 
+. "$TEST_LIB/common.sh"
+
 notify_args="--update-interval=1"
 [ "$NOTIFY" = 1 ] || notify_args="$notify_args --no-notify"
 

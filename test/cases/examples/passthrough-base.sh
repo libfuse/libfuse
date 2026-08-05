@@ -4,8 +4,6 @@
 # not enough on a loaded runner, and -d makes it slower again.
 # TIMEOUT: 300
 
-. "$TEST_LIB/common.sh"
-
 FS_NAME=passthrough
 FS_ARGS="-f -o entry_timeout=0,negative_timeout=0,attr_timeout=0,ac_attr_timeout=0"
 INODE_CHECK=exact

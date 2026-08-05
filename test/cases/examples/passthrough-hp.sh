@@ -4,8 +4,6 @@
 # not enough on a loaded runner, and -d makes it slower again.
 # TIMEOUT: 300
 
-. "$TEST_LIB/common.sh"
-
 FS_NAME=passthrough_hp
 FS_ARGS="--foreground"
 PT_POSITIONAL="$TEST_SRC"

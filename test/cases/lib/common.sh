@@ -1,8 +1,8 @@
 # common.sh - helper library for the libfuse shell tests.
 #
-# Sourced by every test script. Provides the FUSE verbs (mount, umount,
-# assertions, skip protocol); it knows nothing about scheduling, which belongs
-# to run-tests.py.
+# Sourced by each lib/ body, and by a case that has none or that gates before
+# sourcing one. Provides the FUSE verbs (mount, umount, assertions, skip
+# protocol); it knows nothing about scheduling, which belongs to run-tests.py.
 #
 # Scripts run under errexit, imposed once by the runner (`bash -e`), so an
 # unchecked command that fails ends the test instead of letting the rest of it
@@ -33,6 +33,12 @@
 # TEST_WORKDIR); those are not read here. A case may set FUSE_WAIT_PREDICATE
 # before mounting, to replace the readiness check fuse_mount waits on, and
 # _fuse_no_mount_needed before sourcing this file, when it never mounts.
+
+# A case that gates before sourcing a lib/ body reaches this file twice, and
+# the second pass must not reset the mount bookkeeping the first one is
+# already tracking a mount in.
+[ -z "${_FUSE_COMMON_SH:-}" ] || return 0
+_FUSE_COMMON_SH=1
 
 # --------------------------------------------------------------- result protocol
 

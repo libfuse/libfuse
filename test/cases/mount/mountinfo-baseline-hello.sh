@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # GROUP: mount
 
-. "$TEST_LIB/common.sh"
-
 FS_NAME=hello
 
 mountinfo_assert()
