@@ -890,6 +890,32 @@ class TestRunner:
             else data.decode('utf8', errors='replace')
 
     @staticmethod
+    def _uninterruptible_tids(pid: int) -> list:
+        """Threads of *pid* in uninterruptible sleep, D in /proc.
+
+        Such a thread never answers PTRACE_ATTACH, so gdb waits on it until
+        GDB_TIMEOUT kills it. That is per pid, and a wedged filesystem leaves
+        several -- the client blocked on it and the daemon's own threads -- so
+        the dump can outlast the timeout that asked for it by minutes.
+        """
+        wedged = []
+        try:
+            tids = sorted(int(tid) for tid in os.listdir(f'/proc/{pid}/task'))
+        except OSError:
+            return wedged
+        for tid in tids:
+            try:
+                status = Path(f'/proc/{pid}/task/{tid}/status').read_text()
+            except OSError:
+                continue    # exited between listdir() and here
+            for line in status.splitlines():
+                if line.startswith('State:'):
+                    if line.split()[1] == 'D':
+                        wedged.append(tid)
+                    break
+        return wedged
+
+    @staticmethod
     def _containment_pids(proc: subprocess.Popen, leaf: Path | None) -> list:
         """Every pid sharing the test's cgroup leaf, or just proc.pid when
         cgroups are disabled."""
@@ -943,7 +969,20 @@ class TestRunner:
         one uniformly. Best-effort: a thread ptrace cannot stop, or a runner
         without passwordless sudo, just leaves gdb's or sudo's own error text
         in the file.
+
+        Skipped entirely where a thread is already in uninterruptible sleep:
+        the attach cannot complete, so the whole GDB_TIMEOUT buys one line
+        saying gdb was killed, and the kernel stack taken just before is what
+        such a thread yields instead.
         """
+        wedged = self._uninterruptible_tids(pid)
+        if wedged:
+            tids = ' '.join(str(tid) for tid in wedged)
+            (logs / f'gdbstack.{pid}.txt').write_text(
+                f'{self._proc_identity(pid)}\n'
+                f'(skipped: tid {tids} in uninterruptible sleep, so the '
+                f'attach cannot complete -- see kstack.{pid}.txt)\n')
+            return
         argv = ['sudo', '-n', self._gdb, '--batch', '--nx',
                 '-ex', 'set pagination off',
                 '-ex', 'thread apply all bt',
