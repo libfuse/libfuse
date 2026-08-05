@@ -92,6 +92,10 @@ fuse_umount
 `#!/usr/bin/env bash`, not `#!/bin/bash`: FreeBSD has no bash in base, and
 `common.sh` needs bash for the `FUSE_FS_*` arrays and `$SECONDS`.
 
+A case that sources a body from `lib/` gets `common.sh` with it and does not
+name it itself. Source it directly only when there is no body, or when the case
+gates before one — a gate has to run before the body, which is the whole test.
+
 ## The environment you get
 
 The runner exports all of this into every script:
@@ -315,8 +319,6 @@ a shared body from `lib/`:
 #!/usr/bin/env bash
 # cases/examples/hello-ll-mount-fuse-clone_fd.sh
 # GROUP: examples quick
-
-. "$TEST_LIB/common.sh"
 
 FS_NAME=hello_ll          # which example to mount
 FS_OPTS=clone_fd          # -o option list, empty for none

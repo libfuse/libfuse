@@ -8,6 +8,8 @@
 # differs between the legacy mount(2) path and the fsopen/fsconfig/fsmount
 # path: an option dropped on one of them shows up here and nowhere else.
 
+. "$TEST_LIB/common.sh"
+
 # Every assertion below is about what /proc/self/mountinfo reports, and
 # getmntinfo(3) exposes neither the subtype nor the mount/super option split
 # these tests exist to check.

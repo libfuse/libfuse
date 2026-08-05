@@ -16,6 +16,8 @@
 # passthrough_hp's mount must not be compared against a source directory it is
 # allowed to have a stale view of.
 
+. "$TEST_LIB/common.sh"
+
 fuse_mount_at "$TEST_MNT" "$FS_NAME" $FS_ARGS ${PT_POSITIONAL:-} >/dev/null
 
 if [ "$PT_MIRROR" = 1 ]; then

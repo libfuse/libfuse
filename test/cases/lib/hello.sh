@@ -9,6 +9,8 @@
 # apply to whole columns of the matrix, and a caller that forgot one would
 # fail on BSD instead of skipping.
 
+. "$TEST_LIB/common.sh"
+
 # clone_fd needs the /dev/fuse clone device, which is Linux-only.
 case $FS_OPTS in
 *clone_fd*) _require_linux "the clone_fd mount option" ;;
