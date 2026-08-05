@@ -200,11 +200,14 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-logs-${{ matrix.os }}-${{ matrix.config }}
+          # A test killed on timeout runs no cleanup, so a socket it bound in
+          # its log directory is still there; nothing in one can be uploaded.
           path: |
             fuse-tests/run/
             fuse-tests/build-*/meson-logs/
             !fuse-tests/run/**/core.*
             !fuse-tests/run/**/mnt
+            !fuse-tests/run/**/*.sock
           if-no-files-found: ignore
           retention-days: 14
 
