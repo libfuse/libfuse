@@ -621,11 +621,27 @@ class TestRunner:
 
     # ---------------------------------------------------------------- startup
 
+    def build_path(self, base: str | None = None) -> str:
+        """$PATH with the build tree's util/ and example/ ahead of *base*.
+
+        util/ first for anything that spawns the mount helper by name: an
+        installed one older than the build tree makes printcap emit
+        "unrecognized option '--sync-init'", and a tree whose helper is not
+        installed system-wide at all would find no helper whatsoever.
+        """
+        if base is None:
+            base = os.environ.get('PATH', '')
+        return os.pathsep.join([str(self.build_dir / 'util'),
+                                str(self.build_dir / 'example'), base])
+
     def read_fuse_caps(self) -> frozenset:
         """The FUSE_CAP_* names printcap reports, read once per run.
 
         printcap lives in example/, not util/, so this works the same way on
-        every platform.
+        every platform. It mounts to negotiate, so it needs the same $PATH a
+        test gets rather than the ambient one -- otherwise it reaches for a
+        mount helper that this build may not have installed anywhere, and
+        every _require_cap test silently skips.
         """
         printcap = self.build_dir / 'example' / 'printcap'
         if not os.access(printcap, os.X_OK):
@@ -633,7 +649,8 @@ class TestRunner:
                   'and every _require_cap test will skip')
             return frozenset()
         proc = subprocess.run([str(printcap)], capture_output=True, text=True,
-                              timeout=30, check=False)
+                              timeout=30, check=False,
+                              env=dict(os.environ, PATH=self.build_path()))
         if proc.returncode != 0:
             print(f'note: printcap failed ({proc.returncode}); '
                   'every _require_cap test will skip')
@@ -740,11 +757,7 @@ class TestRunner:
         })
         if self.io_uring_depth is not None:
             env['FUSE_URING_QUEUE_DEPTH'] = str(self.io_uring_depth)
-        # $FUSE_UTIL_DIR first: an installed fusermount3 older than the build
-        # tree makes printcap emit "unrecognized option '--sync-init'", which
-        # is both wrong and would trip the output scanner.
-        env['PATH'] = os.pathsep.join(
-            [str(util_dir), str(example_dir), env.get('PATH', '')])
+        env['PATH'] = self.build_path(env.get('PATH', ''))
         return workdir, env, self._cgroup.new_leaf()
 
     def child_argv(self, spec: TestSpec) -> list:
