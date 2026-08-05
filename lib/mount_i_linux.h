@@ -76,6 +76,8 @@ int mount_fusermount_obtain_fd(const char *mountpoint,
 			       const char *opts, int *sock_fd_out,
 			       pid_t *pid_out);
 
+int setup_auto_unmount(const char *mountpoint, int quiet);
+
 int fuse_fusermount_proceed_mnt(int sock_fd);
 
 /**

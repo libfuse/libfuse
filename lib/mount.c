@@ -289,7 +289,15 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 	}
 }
 
-static int setup_auto_unmount(const char *mountpoint, int quiet)
+/**
+ * @brief Spawn the fusermount3 helper that unmounts when its socket closes.
+ *
+ * @param[in] mountpoint  mountpoint the helper is to unmount
+ * @param[in] quiet       redirect the helper's stdout/stderr to /dev/null
+ * @return socket fd, to be held open for as long as the mount shall live,
+ *         -1 on failure
+ */
+int setup_auto_unmount(const char *mountpoint, int quiet)
 {
 	int fds[2];
 	pid_t pid;
@@ -355,10 +363,9 @@ static int setup_auto_unmount(const char *mountpoint, int quiet)
 	// passed to child now, so can close here.
 	close(fds[0]);
 
-	// Now fusermount3 will only exit when fds[1] closes automatically when our
-	// process exits.
-	return 0;
-	// Note: fds[1] is leakend and doesn't get FD_CLOEXEC
+	// Now fusermount3 will only exit when fds[1] is closed.
+	return fds[1];
+	// Note: fds[1] doesn't get FD_CLOEXEC
 }
 
 static int fuse_mount_fusermount(const char *mountpoint, const struct mount_opts *mo,

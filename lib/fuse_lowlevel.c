@@ -5109,6 +5109,16 @@ err_with_sock:
 			if (fusermount_pid > 0)
 				waitpid(fusermount_pid, NULL, 0);
 		}
+	} else if (err == 0 && se->mo->auto_unmount) {
+		/*
+		 * Direct fsmount(), no fusermount3 in the picture - spawn the
+		 * helper that unmounts once its socket closes.
+		 */
+		se->auto_unmount_fd = setup_auto_unmount(mountpoint, 0);
+		if (se->auto_unmount_fd < 0) {
+			umount2(mountpoint, MNT_DETACH); /* lazy umount */
+			err = -EIO;
+		}
 	}
 err:
 	if (err < 0) {
