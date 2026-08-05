@@ -631,11 +631,12 @@ out_close:
  * @mo: mount options
  * @mtab_opts: options recorded in /etc/mtab via fuse_mnt_add_mount_helper();
  *             see fuse_kern_fsmount() for details
+ * @mountfd_out: see fuse_kern_fsmount()
  *
  * Returns: 0 on success, -1 on failure with errno set
  */
 int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
-			 const char *mtab_opts)
+			 const char *mtab_opts, int *mountfd_out)
 {
 	/* codeql[cpp/path-injection] verification is in the function */
 	const char *devname = fuse_mnt_get_devname();
@@ -643,7 +644,7 @@ int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
 	/* in-process direct mount: no suid boundary, resolve by path (mnt_fd -1) */
 	return fuse_kern_fsmount(mnt, -1, mo->flags, mo->blkdev, mo->fsname,
 				 mo->subtype, devname, mo->kernel_opts,
-				 mtab_opts);
+				 mtab_opts, mountfd_out);
 }
 #endif
 
@@ -843,7 +844,7 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 
 	res = fuse_mount_sys(mountpoint, mo, mtab_opts);
 	if (res >= 0 && mo->auto_unmount) {
-		if(0 > setup_auto_unmount(mountpoint, 0)) {
+		if (setup_auto_unmount(mountpoint, 0) < 0) {
 			// Something went wrong, let's umount like in fuse_mount_sys.
 			umount2(mountpoint, MNT_DETACH); /* lazy umount */
 			res = -1;

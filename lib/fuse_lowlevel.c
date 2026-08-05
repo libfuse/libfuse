@@ -5019,6 +5019,7 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 {
 	int fd = -1;
 	int sock_fd = -1;
+	int mountfd = -1;
 	pid_t fusermount_pid = -1;
 	int res, err;
 	char *mtab_opts = NULL;
@@ -5052,7 +5053,8 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	}
 
 	/* Try to mount directly */
-	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd);
+	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd,
+				   &mountfd);
 
 	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
 	if (err < 0 && errno == EPERM) {
@@ -5116,11 +5118,14 @@ err_with_sock:
 		 */
 		se->auto_unmount_fd = setup_auto_unmount(mountpoint, 0);
 		if (se->auto_unmount_fd < 0) {
-			umount2(mountpoint, MNT_DETACH); /* lazy umount */
+			fuse_kern_umount_mountfd(mountfd);
 			err = -EIO;
 		}
 	}
 err:
+	if (mountfd >= 0)
+		close(mountfd);
+
 	if (err < 0) {
 		/* Close fd first to unblock worker thread */
 		if (fd >= 0)
