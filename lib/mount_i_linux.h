@@ -61,16 +61,26 @@ int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
  *              because /etc/mtab is expected to display kernel-visible
  *              options; the overlap is filtered before fsconfig where
  *              needed and is idempotent at the kernel.
+ * @mountfd_out: on success receives the fsmount() fd, to be closed by the
+ *              caller and usable for fuse_kern_umount_mountfd(), or NULL to
+ *              have it closed here
  *
  * Returns: 0 on success, -1 on failure with errno set
  */
 int fuse_kern_fsmount(const char *mnt, int mnt_fd, unsigned long flags,
 		      int blkdev, const char *fsname, const char *subtype,
 		      const char *source_dev, const char *kernel_opts,
-		      const char *mtab_opts);
+		      const char *mtab_opts, int *mountfd_out);
 
 int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
-			 const char *mtab_opts);
+			 const char *mtab_opts, int *mountfd_out);
+
+/**
+ * Unmount (lazily) the mount @mountfd was created for, without a path lookup.
+ *
+ * @mountfd fd returned by fsmount(), still open
+ */
+void fuse_kern_umount_mountfd(int mountfd);
 int mount_fusermount_obtain_fd(const char *mountpoint,
 			       struct mount_opts *mo,
 			       const char *opts, int *sock_fd_out,

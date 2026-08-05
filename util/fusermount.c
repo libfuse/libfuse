@@ -1208,7 +1208,7 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 	/* Use new mount API; mount onto the pinned fd, not the path string */
 	res = fuse_kern_fsmount(mnt, ctx->mnt_fd, mp.flags, mp.blkdev,
 				mp.fsname, mp.subtype, ctx->dev, mp.optbuf,
-				final_mtab_opts);
+				final_mtab_opts, NULL);
 	if (res == -1)
 		goto fail_free_merged;
 
