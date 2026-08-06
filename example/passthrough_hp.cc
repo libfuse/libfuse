@@ -710,17 +710,27 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		}
 		if (e.attr.st_nlink == 1) {
 			Inode &inode = get_inode(e.ino);
-			lock_guard<mutex> g_fs{ fs.mutex };
-			lock_guard<mutex> g{ inode.m };
-			if (inode.fd > 0 && !inode.nopen) {
-				if (fs.debug)
-					cerr << "DEBUG: unlink: release inode "
-					     << e.attr.st_ino
-					     << "; fd=" << inode.fd << endl;
-				close(inode.fd);
-				inode.fd = -ENOENT;
-				inode.generation++;
+			int release_fd = -1;
+
+			{
+				lock_guard<mutex> g_fs{ fs.mutex };
+				lock_guard<mutex> g{ inode.m };
+				if (inode.fd > 0 && !inode.nopen) {
+					if (fs.debug)
+						cerr << "DEBUG: unlink: release inode "
+						     << e.attr.st_ino
+						     << "; fd=" << inode.fd
+						     << endl;
+					release_fd = inode.fd;
+					inode.fd = -ENOENT;
+					inode.generation++;
+				}
 			}
+			/* closed only after the fd is unpublished, so no other
+			 * thread can hand it to a syscall once it is reused
+			 */
+			if (release_fd != -1)
+				close(release_fd);
 		}
 
 		// decrease the ref which lookup above had increased
@@ -825,28 +835,32 @@ static DirHandle *get_dir_handle(fuse_file_info *fi)
 static void sfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
+	DIR *dp = nullptr;
+	int fd;
+
 	auto d = new (nothrow) DirHandle;
 	if (d == nullptr) {
 		fuse_reply_err(req, ENOMEM);
 		return;
 	}
 
+	fd = openat(inode.fd, ".", O_RDONLY);
+	if (fd == -1)
+		goto out_errno;
+
+	// On success, dir stream takes ownership of fd, so we
+	// do not have to close it.
+	dp = fdopendir(fd);
+	if (dp == nullptr)
+		goto out_errno;
+
 	{
 		// Make Helgrind happy - it can't know that there's an implicit
 		// synchronization due to the fact that other threads cannot
 		// access d until we've called fuse_reply_*.
-		lock_guard<mutex> g{ inode.m };
+		lock_guard<mutex> g{ d->m };
 
-		auto fd = openat(inode.fd, ".", O_RDONLY);
-		if (fd == -1)
-			goto out_errno;
-
-		// On success, dir stream takes ownership of fd, so we
-		// do not have to close it.
-		d->dp = fdopendir(fd);
-		if (d->dp == nullptr)
-			goto out_errno;
-
+		d->dp = dp;
 		d->offset = 0;
 	}
 
@@ -1265,22 +1279,26 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
+	int backing_id = 0;
+
 	{
 		lock_guard<mutex> g{ inode.m };
 		inode.nopen--;
 
 		/* Close the shared backing file on last file close of an inode */
 		if (inode.backing_id && !inode.nopen) {
-			if (fuse_passthrough_close(req, inode.backing_id) < 0) {
-				cerr << "DEBUG: fuse_passthrough_close failed for inode "
-				     << ino << " backing file "
-				     << inode.backing_id << endl;
-			} else if (fs.debug) {
-				cerr << "DEBUG: closed backing file "
-				     << inode.backing_id << " for inode " << ino
-				     << endl;
-			}
+			backing_id = inode.backing_id;
 			inode.backing_id = 0;
+		}
+	}
+
+	if (backing_id) {
+		if (fuse_passthrough_close(req, backing_id) < 0) {
+			cerr << "DEBUG: fuse_passthrough_close failed for inode "
+			     << ino << " backing file " << backing_id << endl;
+		} else if (fs.debug) {
+			cerr << "DEBUG: closed backing file " << backing_id
+			     << " for inode " << ino << endl;
 		}
 	}
 
