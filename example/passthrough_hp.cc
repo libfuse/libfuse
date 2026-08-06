@@ -154,7 +154,7 @@ struct Inode {
 };
 
 struct Fs {
-	// Must be acquired *after* any Inode.m locks.
+	// Must be acquired *before* any Inode.m locks.
 	std::mutex mutex;
 	InodeMap inodes; // protected by mutex
 	Inode root;
@@ -439,10 +439,8 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 		fs_lock.unlock();
 		close(newfd);
 	} else { // no existing inode
-		/* This is just here to make Helgrind happy. It violates the
-		 * lock ordering requirement (inode.m must be acquired before
-		 * fs.mutex), but this is of no consequence because at this
-		 * point no other thread has access to the inode mutex
+		/* An unlinked inode (fd == -ENOENT) stays in fs.inodes and is
+		 * reachable by other threads, so this is a real lock
 		 */
 		lock_guard<mutex> g{ inode.m };
 		inode.src_ino = e->attr.st_ino;
@@ -710,13 +708,13 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		}
 		if (e.attr.st_nlink == 1) {
 			Inode &inode = get_inode(e.ino);
+			lock_guard<mutex> g_fs{ fs.mutex };
 			lock_guard<mutex> g{ inode.m };
 			if (inode.fd > 0 && !inode.nopen) {
 				if (fs.debug)
 					cerr << "DEBUG: unlink: release inode "
 					     << e.attr.st_ino
 					     << "; fd=" << inode.fd << endl;
-				lock_guard<mutex> g_fs{ fs.mutex };
 				close(inode.fd);
 				inode.fd = -ENOENT;
 				inode.generation++;
@@ -733,32 +731,41 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void forget_one(fuse_ino_t ino, uint64_t n)
 {
 	Inode &inode = get_inode(ino);
-	unique_lock<mutex> l{ inode.m };
+	SrcId id;
 
-	if (n > inode.nlookup) {
-		cerr << "INTERNAL ERROR: Negative lookup count for inode "
-		     << inode.src_ino << endl;
-		abort();
+	{
+		lock_guard<mutex> l{ inode.m };
+
+		if (n > inode.nlookup) {
+			cerr << "INTERNAL ERROR: Negative lookup count for inode "
+			     << inode.src_ino << endl;
+			abort();
+		}
+		inode.nlookup -= n;
+
+		if (fs.debug)
+			cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+			     << "inode " << inode.src_ino << " count "
+			     << inode.nlookup << endl;
+
+		if (inode.nlookup)
+			return;
+
+		id = { inode.src_ino, inode.src_dev };
 	}
-	inode.nlookup -= n;
+
+	/* The inode may be erased and re-created between the two locks, so
+	 * look it up by key instead of reusing the reference and let a
+	 * resurrecting do_lookup() win the count check
+	 */
+	lock_guard<mutex> g_fs{ fs.mutex };
+	auto it = fs.inodes.find(id);
+	if (it == fs.inodes.end() || it->second.nlookup)
+		return;
 
 	if (fs.debug)
-		cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
-		     << "inode " << inode.src_ino << " count " << inode.nlookup
-		     << endl;
-
-	if (!inode.nlookup) {
-		lock_guard<mutex> g_fs{ fs.mutex };
-		l.unlock();
-		if (!inode.nlookup) {
-			if (fs.debug)
-				cerr << "DEBUG: forget: cleaning up inode "
-				     << inode.src_ino << endl;
-			fs.inodes.erase({ inode.src_ino, inode.src_dev });
-		}
-	} else if (fs.debug)
-		cerr << "DEBUG: forget: inode " << inode.src_ino
-		     << " lookup count now " << inode.nlookup << endl;
+		cerr << "DEBUG: forget: cleaning up inode " << id.first << endl;
+	fs.inodes.erase(it);
 }
 
 static void sfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
