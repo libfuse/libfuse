@@ -680,6 +680,7 @@ static void sfs_readlink(fuse_req_t req, fuse_ino_t ino)
 struct DirHandle {
 	DIR *dp{ nullptr };
 	off_t offset;
+	std::mutex m; // serialises readdir() on this handle
 
 	DirHandle() = default;
 	DirHandle(const DirHandle &) = delete;
@@ -750,8 +751,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		       off_t offset, fuse_file_info *fi, const int plus)
 {
 	auto d = get_dir_handle(fi);
-	Inode &inode = get_inode(ino);
-	lock_guard<mutex> g{ inode.m };
+	lock_guard<mutex> g{ d->m };
 	char *p;
 	auto rem = size;
 	int err = 0, count = 0;
