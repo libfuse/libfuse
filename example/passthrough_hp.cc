@@ -132,6 +132,9 @@ struct Inode {
 	int backing_id{ 0 };
 	uint64_t nopen{ 0 };
 	std::atomic<uint64_t> nlookup{ 0 };
+	/* Drop before fuse_reply_*: the reply may be the kernel's last
+	 * reference, so forget_one() can erase the inode right after
+	 */
 	std::mutex m;
 
 	// Delete copy constructor and assignments. We could implement
@@ -563,7 +566,6 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 static void sfs_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	Inode &inode_p = get_inode(parent);
-	lock_guard<mutex> g{ inode_p.m };
 	auto res = unlinkat(inode_p.fd, name, AT_REMOVEDIR);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
@@ -690,7 +692,9 @@ static void sfs_readlink(fuse_req_t req, fuse_ino_t ino)
 struct DirHandle {
 	DIR *dp{ nullptr };
 	off_t offset;
-	std::mutex m; // serialises readdir() on this handle
+	// serialises readdir(); drop before fuse_reply_*, the reply may let
+	// RELEASEDIR delete this handle
+	std::mutex m;
 
 	DirHandle() = default;
 	DirHandle(const DirHandle &) = delete;
@@ -717,22 +721,24 @@ static void sfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		return;
 	}
 
-	// Make Helgrind happy - it can't know that there's an implicit
-	// synchronization due to the fact that other threads cannot
-	// access d until we've called fuse_reply_*.
-	lock_guard<mutex> g{ inode.m };
+	{
+		// Make Helgrind happy - it can't know that there's an implicit
+		// synchronization due to the fact that other threads cannot
+		// access d until we've called fuse_reply_*.
+		lock_guard<mutex> g{ inode.m };
 
-	auto fd = openat(inode.fd, ".", O_RDONLY);
-	if (fd == -1)
-		goto out_errno;
+		auto fd = openat(inode.fd, ".", O_RDONLY);
+		if (fd == -1)
+			goto out_errno;
 
-	// On success, dir stream takes ownership of fd, so we
-	// do not have to close it.
-	d->dp = fdopendir(fd);
-	if (d->dp == nullptr)
-		goto out_errno;
+		// On success, dir stream takes ownership of fd, so we
+		// do not have to close it.
+		d->dp = fdopendir(fd);
+		if (d->dp == nullptr)
+			goto out_errno;
 
-	d->offset = 0;
+		d->offset = 0;
+	}
 
 	fi->fh = reinterpret_cast<uint64_t>(d);
 	if (fs.timeout) {
@@ -761,7 +767,6 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		       off_t offset, fuse_file_info *fi, const int plus)
 {
 	auto d = get_dir_handle(fi);
-	lock_guard<mutex> g{ d->m };
 	char *p;
 	auto rem = size;
 	int err = 0, count = 0;
@@ -776,6 +781,8 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		return;
 	}
 	p = buf;
+
+	unique_lock<mutex> l{ d->m };
 
 	if (offset != d->offset) {
 		if (fs.debug)
@@ -854,11 +861,13 @@ error:
 		if (err == ENFILE || err == EMFILE)
 			cerr << "ERROR: Reached maximum number of file descriptors."
 			     << endl;
+		l.unlock();
 		fuse_reply_err(req, err);
 	} else {
 		if (fs.debug)
 			cerr << "DEBUG: readdir(): returning " << count
 			     << " entries, curr offset " << d->offset << endl;
+		l.unlock();
 		fuse_reply_buf(req, buf, size - rem);
 	}
 	delete[] buf;
@@ -968,13 +977,15 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	}
 
 	Inode &inode = get_inode(e.ino);
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen++;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen++;
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	if (fs.passthrough)
-		do_passthrough_open(req, e.ino, fd, fi);
+		if (fs.passthrough)
+			do_passthrough_open(req, e.ino, fd, fi);
+	}
 	fuse_reply_create(req, &e, fi);
 }
 
@@ -1052,12 +1063,14 @@ static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 		return;
 	}
 
-	lock_guard<mutex> g{ inode->m };
+	{
+		lock_guard<mutex> g{ inode->m };
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	if (fs.passthrough)
-		do_passthrough_open(req, e.ino, fd, fi);
+		if (fs.passthrough)
+			do_passthrough_open(req, e.ino, fd, fi);
+	}
 
 	fuse_reply_create(req, &e, fi);
 }
@@ -1110,35 +1123,39 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		return;
 	}
 
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen++;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen++;
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	fi->fh = fd;
-	if (fs.passthrough)
-		do_passthrough_open(req, ino, fd, fi);
+		fi->fh = fd;
+		if (fs.passthrough)
+			do_passthrough_open(req, ino, fd, fi);
+	}
 	fuse_reply_open(req, fi);
 }
 
 static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen--;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen--;
 
-	/* Close the shared backing file on last file close of an inode */
-	if (inode.backing_id && !inode.nopen) {
-		if (fuse_passthrough_close(req, inode.backing_id) < 0) {
-			cerr << "DEBUG: fuse_passthrough_close failed for inode "
-			     << ino << " backing file " << inode.backing_id
-			     << endl;
-		} else if (fs.debug) {
-			cerr << "DEBUG: closed backing file "
-			     << inode.backing_id << " for inode " << ino
-			     << endl;
+		/* Close the shared backing file on last file close of an inode */
+		if (inode.backing_id && !inode.nopen) {
+			if (fuse_passthrough_close(req, inode.backing_id) < 0) {
+				cerr << "DEBUG: fuse_passthrough_close failed for inode "
+				     << ino << " backing file "
+				     << inode.backing_id << endl;
+			} else if (fs.debug) {
+				cerr << "DEBUG: closed backing file "
+				     << inode.backing_id << " for inode " << ino
+				     << endl;
+			}
+			inode.backing_id = 0;
 		}
-		inode.backing_id = 0;
 	}
 
 	close(fi->fh);
