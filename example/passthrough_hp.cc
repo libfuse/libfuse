@@ -658,6 +658,9 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	}
 	e.ino = reinterpret_cast<fuse_ino_t>(&inode);
 	{
+		/* forget_one() reads the count under fs.mutex to decide that
+		 * an inode is unreferenced, so raise it under fs.mutex too */
+		lock_guard<mutex> g_fs{ fs.mutex };
 		inode.nlookup++;
 		if (fs.debug)
 			cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
