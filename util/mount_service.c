@@ -1470,7 +1470,7 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 		goto fail_fsconfig;
 	}
 
-	ret = fsconfig(mo->fsopenfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+	ret = fuse_fsconfig(mo->fsopenfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
 	if (ret) {
 		error = errno;
 		fprintf(stderr, "%s: creating filesystem: %s\n",
@@ -1478,7 +1478,7 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 		goto fail_fsconfig;
 	}
 
-	mfd = fsmount(mo->fsopenfd, FSMOUNT_CLOEXEC, attr_flags);
+	mfd = fuse_fsmount(mo->fsopenfd, FSMOUNT_CLOEXEC, attr_flags);
 	if (mfd < 0) {
 		error = errno;
 		fprintf(stderr, "%s: fsmount: %s\n",
@@ -1486,8 +1486,8 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 		goto fail_fsconfig;
 	}
 
-	ret = move_mount(mfd, "", mo->mountfd, "",
-			 MOVE_MOUNT_F_EMPTY_PATH | MOVE_MOUNT_T_EMPTY_PATH);
+	ret = fuse_move_mount(mfd, "", mo->mountfd, "",
+			      MOVE_MOUNT_F_EMPTY_PATH | MOVE_MOUNT_T_EMPTY_PATH);
 	close(mfd);
 	if (ret) {
 		error = errno;
