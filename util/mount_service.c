@@ -28,11 +28,6 @@
 #include <sys/ioctl.h>
 #include <linux/fs.h>
 
-#ifdef HAVE_NEW_MOUNT_API
-#include <sys/mount.h>
-#include <linux/mount.h>
-#endif
-
 #include "mount_util.h"
 #include "util.h"
 #include "fuse_i.h"
@@ -1439,62 +1434,44 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 			return FUSE_MOUNT_FALLBACK_NEEDED;
 
 		error = -ret;
-		goto fail_fsconfig;
+		goto fail_mount;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%i", mo->fusedevfd);
 	ret = apply_fsconfig_opt_fd(mo->fsopenfd, tmp);
 	if (ret < 0) {
 		error = -ret;
-		goto fail_fsconfig;
+		goto fail_mount;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%o", stbuf->st_mode & S_IFMT);
 	ret = apply_fsconfig_opt_string(mo->fsopenfd, "rootmode", tmp);
 	if (ret < 0) {
 		error = -ret;
-		goto fail_fsconfig;
+		goto fail_mount;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%u", getuid());
 	ret = apply_fsconfig_opt_string(mo->fsopenfd, "user_id", tmp);
 	if (ret < 0) {
 		error = -ret;
-		goto fail_fsconfig;
+		goto fail_mount;
 	}
 
 	snprintf(tmp, sizeof(tmp), "%u", getgid());
 	ret = apply_fsconfig_opt_string(mo->fsopenfd, "group_id", tmp);
 	if (ret < 0) {
 		error = -ret;
-		goto fail_fsconfig;
-	}
-
-	ret = fsconfig(mo->fsopenfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
-	if (ret) {
-		error = errno;
-		fprintf(stderr, "%s: creating filesystem: %s\n",
-			mo->msgtag, strerror(error));
-		goto fail_fsconfig;
-	}
-
-	mfd = fsmount(mo->fsopenfd, FSMOUNT_CLOEXEC, attr_flags);
-	if (mfd < 0) {
-		error = errno;
-		fprintf(stderr, "%s: fsmount: %s\n",
-			mo->msgtag, strerror(error));
-		goto fail_fsconfig;
-	}
-
-	ret = move_mount(mfd, "", mo->mountfd, "",
-			 MOVE_MOUNT_F_EMPTY_PATH | MOVE_MOUNT_T_EMPTY_PATH);
-	close(mfd);
-	if (ret) {
-		error = errno;
-		fprintf(stderr, "%s: move_mount: %s\n",
-			mo->msgtag, strerror(error));
 		goto fail_mount;
 	}
+
+	ret = fuse_fsmount_create_and_move(mo->fsopenfd, attr_flags,
+					   mo->mountfd, NULL, &mfd);
+	if (ret < 0) {
+		error = -ret;
+		goto fail_mount;
+	}
+	close(mfd);
 
 	/*
 	 * The mount succeeded, so we send a positive reply even if the mtab
@@ -1515,8 +1492,6 @@ static int mount_service_fsopen_mount(struct mount_service *mo,
 	mo->mounted = true;
 	return mount_service_send_reply(mo, 0);
 
-fail_fsconfig:
-	log_fsconfig_kmsg(mo->fsopenfd);
 fail_mount:
 	return mount_service_send_reply(mo, error);
 }
