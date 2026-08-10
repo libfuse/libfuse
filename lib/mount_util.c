@@ -140,6 +140,41 @@ const struct mount_flags mount_flags[] = {
 {NULL,           0,                0,  0,    0,        0}
 };
 
+int fuse_mnt_add_opt(char **optsp, const char *opt, unsigned int expand)
+{
+	char *newopts;
+	if (*optsp == NULL)
+		newopts = strdup(opt);
+	else {
+		unsigned int oldsize = strlen(*optsp);
+		unsigned int newsize = oldsize + 1 + strlen(opt) + expand + 1;
+		newopts = (char *) realloc(*optsp, newsize);
+		if (newopts)
+			sprintf(newopts + oldsize, ",%s", opt);
+	}
+	if (newopts == NULL) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate memory\n");
+		return -1;
+	}
+	*optsp = newopts;
+	return 0;
+}
+
+int fuse_mnt_get_mtab_flag_opts(char **mtab_optsp, int flags)
+{
+	int i;
+
+	if (!(flags & MS_RDONLY) && fuse_mnt_add_opt(mtab_optsp, "rw", 0) == -1)
+		return -1;
+
+	for (i = 0; mount_flags[i].opt != NULL; i++) {
+		if (mount_flags[i].on && (flags & mount_flags[i].flag) &&
+		    fuse_mnt_add_opt(mtab_optsp, mount_flags[i].opt, 0) == -1)
+			return -1;
+	}
+	return 0;
+}
+
 #ifdef IGNORE_MTAB
 #define mtab_needs_update(mnt) 0
 #else
