@@ -279,9 +279,14 @@ static int add_mount(const char *progname, const char *fsname,
 		return -1;
 	}
 
+	/*
+	 * fsname comes from -ofsname= (or the service SOURCE command), so it
+	 * can start with '-'. Terminate the options with "--" to keep mount(8)
+	 * from parsing the operands as further options.
+	 */
 	char const * const argv[] = {
 		cmd, "--no-canonicalize", "-i", "-f", "-t", type, "-o", opts,
-		fsname, mnt, NULL
+		"--", fsname, mnt, NULL
 	};
 
 	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
@@ -332,10 +337,10 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 	}
 
 	char const * const argv_lazy[] = {
-		cmd, "-i", "-l", rel_mnt, NULL
+		cmd, "-i", "-l", "--", rel_mnt, NULL
 	};
 	char const * const argv_normal[] = {
-		cmd, "-i", rel_mnt, NULL
+		cmd, "-i", "--", rel_mnt, NULL
 	};
 	char const * const *argv = lazy ? argv_lazy : argv_normal;
 
@@ -391,7 +396,7 @@ static int remove_mount(const char *progname, const char *mnt)
 	}
 
 	char const * const argv[] =  {
-		cmd, "--no-canonicalize", "-i", "--fake", mnt, NULL
+		cmd, "--no-canonicalize", "-i", "--fake", "--", mnt, NULL
 	};
 
 	res = fuse_mount_spawn(&pid, cmd, (char * const *) argv, &oldmask);
@@ -473,13 +478,14 @@ char *fuse_mnt_resolve_path(const char *progname, const char *orig)
 	if (lastcomp == NULL)
 		dst = strdup(buf);
 	else {
-		dst = (char *) malloc(strlen(buf) + 1 + strlen(lastcomp) + 1);
+		size_t dstlen = strlen(buf) + 1 + strlen(lastcomp) + 1;
+		dst = (char *) malloc(dstlen);
 		if (dst) {
 			unsigned buflen = strlen(buf);
 			if (buflen && buf[buflen-1] == '/')
-				sprintf(dst, "%s%s", buf, lastcomp);
+				snprintf(dst, dstlen, "%s%s", buf, lastcomp);
 			else
-				sprintf(dst, "%s/%s", buf, lastcomp);
+				snprintf(dst, dstlen, "%s/%s", buf, lastcomp);
 		}
 	}
 	free(copy);

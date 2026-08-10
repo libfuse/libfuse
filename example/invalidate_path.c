@@ -29,6 +29,7 @@
 
 #include <fuse.h>
 #include <fuse_lowlevel.h>  /* for fuse_cmdline_opts */
+#include <fuse_daemonize.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -164,10 +165,11 @@ static const struct fuse_operations xmp_oper = {
 
 static void update_fs(void) {
 	static int count = 0;
+	struct tm tmbuf;
 	struct tm *now;
 	time_t t;
 	t = time(NULL);
-	now = localtime(&t);
+	now = localtime_r(&t, &tmbuf);
 	assert(now != NULL);
 
 	int time_file_size = strftime(time_file_contents, MAX_STR_LEN,
@@ -248,15 +250,18 @@ int main(int argc, char *argv[]) {
 		goto out1;
 	}
 
-	if (fuse_mount(fuse,opts.mountpoint) != 0) {
+	if (fuse_daemonize_early_start(opts.foreground ?
+				       FUSE_DAEMONIZE_NO_BACKGROUND : 0) != 0) {
 		res = 1;
 		goto out2;
 	}
 
-	if (fuse_daemonize(opts.foreground) != 0) {
+	if (fuse_mount(fuse, opts.mountpoint) != 0) {
 		res = 1;
-		goto out3;
+		goto out2;
 	}
+
+	fuse_daemonize_early_success();
 
 	pthread_t updater;     /* Start thread to update file contents */
 	int ret = pthread_create(&updater, NULL, update_fs_loop, (void *) fuse);

@@ -27,55 +27,14 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "fuse_cap_names_i.h"
+
 struct fuse_session *se;
-
-// Define a structure to hold capability information
-struct cap_info {
-	uint64_t flag;
-	const char *name;
-};
-
-// Define an array of all capabilities
-static const struct cap_info capabilities[] = {
-	{ FUSE_CAP_ASYNC_READ,			"FUSE_CAP_ASYNC_READ"},
-	{ FUSE_CAP_POSIX_LOCKS,			"FUSE_CAP_POSIX_LOCKS"},
-	{ FUSE_CAP_ATOMIC_O_TRUNC,		"FUSE_CAP_ATOMIC_O_TRUNC"},
-	{ FUSE_CAP_EXPORT_SUPPORT,		"FUSE_CAP_EXPORT_SUPPORT"},
-	{ FUSE_CAP_DONT_MASK,			"FUSE_CAP_DONT_MASK"},
-	{ FUSE_CAP_SPLICE_MOVE,			"FUSE_CAP_SPLICE_MOVE"},
-	{ FUSE_CAP_SPLICE_READ,			"FUSE_CAP_SPLICE_READ"},
-	{ FUSE_CAP_SPLICE_WRITE,		"FUSE_CAP_SPLICE_WRITE"},
-	{ FUSE_CAP_FLOCK_LOCKS,			"FUSE_CAP_FLOCK_LOCKS"},
-	{ FUSE_CAP_IOCTL_DIR,			"FUSE_CAP_IOCTL_DIR"},
-	{ FUSE_CAP_AUTO_INVAL_DATA,		"FUSE_CAP_AUTO_INVAL_DATA"},
-	{ FUSE_CAP_READDIRPLUS,			"FUSE_CAP_READDIRPLUS"},
-	{ FUSE_CAP_READDIRPLUS_AUTO,		"FUSE_CAP_READDIRPLUS_AUTO"},
-	{ FUSE_CAP_ASYNC_DIO,			"FUSE_CAP_ASYNC_DIO"},
-	{ FUSE_CAP_WRITEBACK_CACHE,		"FUSE_CAP_WRITEBACK_CACHE"},
-	{ FUSE_CAP_NO_OPEN_SUPPORT,		"FUSE_CAP_NO_OPEN_SUPPORT"},
-	{ FUSE_CAP_PARALLEL_DIROPS,		"FUSE_CAP_PARALLEL_DIROPS"},
-	{ FUSE_CAP_POSIX_ACL,			"FUSE_CAP_POSIX_ACL"},
-	{ FUSE_CAP_CACHE_SYMLINKS,		"FUSE_CAP_CACHE_SYMLINKS"},
-	{ FUSE_CAP_NO_OPENDIR_SUPPORT,		"FUSE_CAP_NO_OPENDIR_SUPPORT"},
-	{ FUSE_CAP_EXPLICIT_INVAL_DATA,		"FUSE_CAP_EXPLICIT_INVAL_DATA"},
-	{ FUSE_CAP_EXPIRE_ONLY,			"FUSE_CAP_EXPIRE_ONLY"},
-	{ FUSE_CAP_SETXATTR_EXT,		"FUSE_CAP_SETXATTR_EXT"},
-	{ FUSE_CAP_HANDLE_KILLPRIV,		"FUSE_CAP_HANDLE_KILLPRIV"},
-	{ FUSE_CAP_HANDLE_KILLPRIV_V2,		"FUSE_CAP_HANDLE_KILLPRIV_V2"},
-	{ FUSE_CAP_DIRECT_IO_ALLOW_MMAP,	"FUSE_CAP_DIRECT_IO_ALLOW_MMAP"},
-	{ FUSE_CAP_NO_EXPORT_SUPPORT,		"FUSE_CAP_NO_EXPORT_SUPPORT"},
-	{ FUSE_CAP_PASSTHROUGH,			"FUSE_CAP_PASSTHROUGH"},
-	{ FUSE_CAP_OVER_IO_URING,		"FUSE_CAP_OVER_IO_URING"},
-	{ FUSE_CAP_ALLOW_IDMAP,			"FUSE_CAP_ALLOW_IDMAP"},
-	{ FUSE_CAP_SECURITY_CTX,		"FUSE_CAP_SECURITY_CTX"},
-	// Add any new capabilities here
-	{ 0, NULL} // Sentinel to mark the end of the array
-};
 
 static void print_capabilities(struct fuse_conn_info *conn)
 {
 	printf("Capabilities:\n");
-	for (const struct cap_info *cap = capabilities; cap->name != NULL; cap++) {
+	for (const struct fuse_cap_name *cap = fuse_cap_names; cap->name != NULL; cap++) {
 		if (fuse_get_feature_flag(conn, cap->flag)) {
 			printf("\t%s\n", cap->name);
 		}

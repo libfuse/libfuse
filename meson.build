@@ -231,6 +231,12 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
 
 private_cfg.set('USDT_ENABLED', get_option('enable-usdt'))
 
+# What a session starts with; fuse_session_set_sync_init() still overrides it.
+private_cfg.set('FUSE_SYNC_INIT_DEFAULT',
+    {'auto':   'FUSE_SYNC_INIT_AUTO',
+     'always': 'FUSE_SYNC_INIT_ENABLED',
+     'never':  'FUSE_SYNC_INIT_DISABLED'}[get_option('sync-init')])
+
 # Check for liburing with SQE128 support
 code = '''
 #include <liburing.h>

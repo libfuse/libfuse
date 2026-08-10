@@ -460,10 +460,27 @@ int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 	return 0;
 }
 
+void fuse_kern_umount_mountfd(int mountfd)
+{
+	char fd_path[64];
+
+	/*
+	 * /proc/self/fd/N resolves to the mount the fd was created for, so
+	 * this cannot hit whatever else got mounted at the path meanwhile.
+	 * MNT_DETACH is required - the open fd is a mount reference and
+	 * makes a non-lazy umount return EBUSY.
+	 */
+	snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", mountfd);
+	if (umount2(fd_path, MNT_DETACH) == -1 && errno != EINVAL) {
+		fuse_log(FUSE_LOG_ERR, "fuse: cleanup umount failed: %s\n",
+			 strerror(errno));
+	}
+}
+
 int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 		      int blkdev, const char *fsname, const char *subtype,
 		      const char *source_dev, const char *kernel_opts,
-		      const char *mtab_opts)
+		      const char *mtab_opts, int *mountfd_out)
 {
 	char *type = NULL;
 	char *source = NULL;
@@ -606,23 +623,16 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 		goto out_umount;
 	}
 
-	close(mountfd);
+	if (mountfd_out)
+		*mountfd_out = mountfd;
+	else
+		close(mountfd);
 	free(source);
 	free(type);
 	return 0;
 
 out_umount:
-	{
-		/* race free umount */
-		char fd_path[64];
-
-		snprintf(fd_path, sizeof(fd_path), "/proc/self/fd/%d", mountfd);
-		if (umount2(fd_path, MNT_DETACH) == -1 && errno != EINVAL) {
-			fuse_log(FUSE_LOG_ERR,
-				 "fuse: cleanup umount failed: %s\n",
-				 strerror(errno));
-		}
-	}
+	fuse_kern_umount_mountfd(mountfd);
 out_close_mntfd:
 	if (mountfd != -1)
 		close(mountfd);

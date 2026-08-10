@@ -39,36 +39,48 @@ td += executable('test_mount_flags',
                  include_directories: include_dirs,
                  install: false)
 
-test_scripts = [ 'conftest.py', 'pytest.ini', 'test_examples.py',
-                 'util.py', 'test_ctests.py', 'test_custom_io.py',
-                 'test_mount_state.py' ]
-td += custom_target('test_scripts', input: test_scripts,
-                      output: test_scripts, build_by_default: true,
-                      command: ['cp', '-fPp',
-                                '@INPUT@', meson.current_build_dir() ])
-
 if meson.is_subproject()
-	test('libfuse is a subproject, skipping tests', executable('wrong_command',
-                      'wrong_command.c', install: false,
-                       c_args: [ '-DMESON_IS_SUBPROJECT' ]))
-else
-	# Run the pytest suite via 'meson test'. The same definition works
-	# both as a regular user and under sudo: invoke 'meson test -C build'
-	# for the unprivileged subset, or 'sudo -E meson test -C build' to
-	# also exercise the tests that require root (they pick the uid up at
-	# runtime via os.geteuid()).
-	pytest = find_program('pytest', required: false)
-	if pytest.found()
-		test('pytest', pytest,
-		     args: ['-vv', '--tb=short', '--maxfail=1',
-		            '--log-level=INFO', '--log-cli-level=INFO',
-		            meson.current_build_dir()],
-		     depends: td,
-		     workdir: meson.project_build_root(),
-		     timeout: 600,
-		     is_parallel: false)
-	else
-		test('pytest not found', executable('wrong_command',
-                              'wrong_command.c', install: false))
+	# Skipped rather than run: the tests mount filesystems, which is not
+	# something a parent project's `meson test` should do. Exit 77 is how a
+	# test tells meson SKIP. python3 is optional here because nothing else
+	# in this branch needs it, and a parent must still be able to configure.
+	python3 = find_program('python3', required: false)
+	if python3.found()
+		test('libfuse is a subproject, skipping tests', python3,
+		     args: ['-c',
+		            'import sys; print("run them with test/run-tests.py ' +
+		            '--build-dir <builddir>", file=sys.stderr); sys.exit(77)'])
 	endif
+else
+	# The same definition works both as a regular user and under sudo:
+	# invoke 'meson test -C build' for the unprivileged subset, or
+	# 'sudo -E meson test -C build' to also exercise the tests that require
+	# root (they pick the uid up at runtime).
+	#
+	# Nothing is copied into the build tree: the runner,
+	# its library and the test scripts are read from the source dir, and
+	# the only build artefacts a test needs are the binaries, which it
+	# reaches through --build-dir. That also means no custom_target and no
+	# rebuild after editing a test.
+	#
+	# No --run-dir: it defaults under /var/tmp/fuse-tests, and CI redirects
+	# it with $FUSE_TEST_RUN_DIR so the logs outlive the build tree.
+	runner = find_program('run-tests.py')
+	test('fuse-tests', runner,
+	     args: ['--build-dir', meson.project_build_root()],
+	     depends: td,
+	     timeout: 1800,
+	     is_parallel: false)   # the runner does its own -j
+
+	# The same tests over the other transport. Its own suite so a caller
+	# can ask for exactly one of the two: `meson test --suite io-uring`
+	# and `meson test --no-suite io-uring`. Plain `meson test` runs both,
+	# and the io-uring one exits 77 -- meson reports SKIP -- where the
+	# fuse module has io-uring disabled.
+	test('fuse-tests-io-uring', runner,
+	     args: ['--build-dir', meson.project_build_root(), '--io-uring'],
+	     suite: 'io-uring',
+	     depends: td,
+	     timeout: 1800,
+	     is_parallel: false)
 endif

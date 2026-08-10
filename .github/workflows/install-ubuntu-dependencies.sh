@@ -11,6 +11,7 @@ PACKAGES_CORE=(
     ninja-build
     libudev-dev
     liburing-dev
+    lsb-release
     pkg-config
     python3
     python3-pip
@@ -24,6 +25,7 @@ PACKAGES_FULL=(
     doxygen
     gcc-10
     gcc-9
+    gdb
     valgrind
     gcc-multilib
     g++-multilib
@@ -31,7 +33,6 @@ PACKAGES_FULL=(
     libpcap0.8-dev:i386
     libudev-dev:i386
     pkg-config:i386
-    python3-pytest
     libsystemd-dev
     systemd-dev
 )

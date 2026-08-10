@@ -17,12 +17,110 @@ jobs:
   build:
     runs-on: '${{ matrix.os }}'
     strategy:
+      # One configuration failing must not cancel its siblings.
+      fail-fast: false
       matrix:
         os:
           # 18.04 does not work because of ‘no_sanitize’ attribute
           # cc1: all warnings being treated as errors
           # - ubuntu-18.04
           - ubuntu-latest
+        # One entry per CI job. Every build/test parameter is spelled out via
+        # include below and forwarded verbatim to test/ci-build.sh -- nothing
+        # about what a job builds or which pass it runs is hidden in a shell
+        # case branch.
+        config:
+          - gcc
+          - gcc-root
+          # GitHub Actions runners have no fuse io-uring support; kept for a
+          # runner that does.
+          # - gcc-io-uring
+          # - gcc-io-uring-root
+          - gcc-valgrind
+          - gcc-9-valgrind
+          - gcc-10-valgrind
+          - clang
+          - clang-san
+          - clang-san-root
+          # - clang-san-io-uring
+          - clang-san-nosymver
+          - clang-san-noiouring
+          - clang-san-nosyncinit
+          - clang-san-m32
+        # include entries must repeat the config key: an include naming none
+        # of the base matrix's own keys would be folded into every
+        # combination instead of just its own.
+        include:
+          - config: gcc
+            cc: gcc
+          - config: gcc-root
+            cc: gcc
+            root: true
+          # - config: gcc-io-uring
+          #   cc: gcc
+          #   io_uring: true
+          # - config: gcc-io-uring-root
+          #   cc: gcc
+          #   root: true
+          #   io_uring: true
+          - config: gcc-valgrind
+            cc: gcc
+            valgrind: true
+          - config: gcc-9-valgrind
+            cc: gcc-9
+            valgrind: true
+          - config: gcc-10-valgrind
+            cc: gcc-10
+            valgrind: true
+            meson_opts:
+              - -Dc_args=-flto=auto
+          - config: clang
+            cc: clang
+            cxx: clang++
+          - config: clang-san
+            cc: clang
+            cxx: clang++
+            sanitize: true
+          - config: clang-san-root
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            root: true
+          # - config: clang-san-io-uring
+          #   cc: clang
+          #   cxx: clang++
+          #   sanitize: true
+          #   io_uring: true
+          - config: clang-san-nosymver
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Ddisable-libc-symbol-version=true
+          - config: clang-san-noiouring
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Denable-io-uring=false
+          # The daemons a test backgrounds get synchronous FUSE_INIT
+          # everywhere else, so this is the only job running the classic path.
+          - config: clang-san-nosyncinit
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Dsync-init=never
+          - config: clang-san-m32
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            meson_opts:
+              - -Dc_args=-m32
+              - -Dcpp_args=-m32
+              - -Dc_link_args=-m32
+              - -Dcpp_link_args=-m32
+              - --pkg-config-path=/usr/lib/i386-linux-gnu/pkgconfig
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -32,5 +130,103 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           ./.github/workflows/install-ubuntu-dependencies.sh --full
-      - run: test/ci-build.sh
+
+      - run: test/ci/prepare-runner.sh ${{ github.workspace }}/fuse-tests
+
+      - run: test/ci-build.sh --name ${{ matrix.config }}
+               --cc ${{ matrix.cc }}
+               ${{ matrix.cxx && format('--cxx {0}', matrix.cxx) || '' }}
+               ${{ matrix.sanitize && '--sanitize' || '' }}
+               ${{ matrix.valgrind && '--valgrind' || '' }}
+               ${{ matrix.meson_opts && format('--meson-opt {0}', join(matrix.meson_opts, ' --meson-opt ')) || '' }}
+               ${{ matrix.root && '--root' || '' }}
+               ${{ matrix.io_uring && '--io-uring' || '' }}
+               --work-dir ${{ github.workspace }}/fuse-tests
+
+      - name: Print failed test logs
+        if: failure()
+        run: |
+          # A test's name is <category>/<leaf>, so its logs/ sits three
+          # levels under fuse-tests/run/: <config>/<category>/<leaf>/logs.
+          for dir in fuse-tests/run/*/*/*/logs; do
+              [ -d "$dir" ] || continue
+              label=${dir#fuse-tests/run/}
+              label=${label%/logs}
+              echo "::group::${label}"
+              for out in "$dir"/*.sh "$dir"/*.out; do
+                  [ -e "$out" ] || continue
+                  echo "--- ${out##*/} ---"
+                  tail -n 100 "$out"
+              done
+              # The stack dumps and the process table are the whole report on
+              # a timeout, and a tail of a backtrace keeps its least useful
+              # end -- print them whole.
+              for out in "$dir"/*.txt; do
+                  [ -e "$out" ] || continue
+                  echo "--- ${out##*/} ---"
+                  cat "$out"
+              done
+              echo "::endgroup::"
+              echo
+              echo
+          done
+
+          echo "::group::dmesg"
+          sudo dmesg -T | tail -n 300
+          echo "::endgroup::"
+
+      - name: Unmount stale test mountpoints
+        if: always()
+        run: |
+          # A killed test never reaches fuse_umount, so its mountpoint stays a
+          # dead transport -- not always a "mnt" directory (examples/null.sh
+          # mounts onto a plain file under tmp/ instead). The upload step's
+          # own directory walk stat()s it and ENOTCONN fails the whole
+          # upload, not just that one entry, so find every FUSE mount under
+          # this run from /proc/self/mountinfo instead of guessing the shape.
+          run_dir="$(readlink -f fuse-tests/run)/"
+          awk -v prefix="$run_dir" '
+              {
+                  for (i = 7; i <= NF; i++) if ($i == "-") { fstype = $(i + 1); break }
+                  if (index($5, prefix) == 1 && fstype ~ /^fuse/) print $5
+              }' /proc/self/mountinfo |
+              sort -r |    # nested mounts before their parent
+              while IFS= read -r mnt; do
+                  sudo umount -f "$mnt" 2>/dev/null || true
+              done
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-logs-${{ matrix.os }}-${{ matrix.config }}
+          # A test killed on timeout runs no cleanup, so a socket it bound in
+          # its log directory is still there; nothing in one can be uploaded.
+          path: |
+            fuse-tests/run/
+            fuse-tests/build-*/meson-logs/
+            !fuse-tests/run/**/core.*
+            !fuse-tests/run/**/mnt
+            !fuse-tests/run/**/*.sock
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # master's branch protection still requires this exact context name
+  # from when the build job's matrix had only the os dimension.
+  build-required-check:
+    name: build (ubuntu-latest)
+    needs: build
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: '[[ "${{ needs.build.result }}" == "success" ]]'
+
+  doxygen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install dependencies (Ubuntu)
+        run: |
+          ./.github/workflows/install-ubuntu-dependencies.sh --full
+      - run: test/ci/doxygen.sh
 
