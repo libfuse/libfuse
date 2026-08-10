@@ -555,26 +555,6 @@ static int find_mount_flag(const char *s, unsigned len, int *on, int *flag)
 	return 0;
 }
 
-static int add_option(char **optsp, const char *opt, unsigned expand)
-{
-	char *newopts;
-	if (*optsp == NULL)
-		newopts = strdup(opt);
-	else {
-		unsigned oldsize = strlen(*optsp);
-		unsigned newsize = oldsize + 1 + strlen(opt) + expand + 1;
-		newopts = (char *) realloc(*optsp, newsize);
-		if (newopts)
-			sprintf(newopts + oldsize, ",%s", opt);
-	}
-	if (newopts == NULL) {
-		fprintf(stderr, "%s: failed to allocate memory\n", progname);
-		return -1;
-	}
-	*optsp = newopts;
-	return 0;
-}
-
 /*
  * Build the mtab/utab record string for this mount: flag-mirrors of MS_*
  * (rw/nosuid/nodev/...) + the kernel-bound -o options + "user=<n>" when
@@ -584,19 +564,12 @@ static int add_option(char **optsp, const char *opt, unsigned expand)
  */
 static int get_mtab_opts(int flags, const char *opts, char **mtab_optsp)
 {
-	int i;
 	int l;
 
-	if (!(flags & MS_RDONLY) && add_option(mtab_optsp, "rw", 0) == -1)
+	if (fuse_mnt_get_mtab_flag_opts(mtab_optsp, flags) == -1)
 		return -1;
 
-	for (i = 0; mount_flags[i].opt != NULL; i++) {
-		if (mount_flags[i].on && (flags & mount_flags[i].flag) &&
-		    add_option(mtab_optsp, mount_flags[i].opt, 0) == -1)
-			return -1;
-	}
-
-	if (add_option(mtab_optsp, opts, 0) == -1)
+	if (fuse_mnt_add_opt(mtab_optsp, opts, 0) == -1)
 		return -1;
 	/* remove comma from end of opts*/
 	l = strlen(*mtab_optsp);
@@ -607,7 +580,7 @@ static int get_mtab_opts(int flags, const char *opts, char **mtab_optsp)
 		if (user == NULL)
 			return -1;
 
-		if (add_option(mtab_optsp, "user=", strlen(user)) == -1)
+		if (fuse_mnt_add_opt(mtab_optsp, "user=", strlen(user)) == -1)
 			return -1;
 		strcat(*mtab_optsp, user);
 	}
