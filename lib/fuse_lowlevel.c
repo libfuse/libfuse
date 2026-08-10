@@ -5522,6 +5522,13 @@ void fuse_session_stop_teardown_watchdog(void *data)
 
 	/* Wait for thread to finish */
 	pthread_join(tt->thread_id, NULL);
+
+	/* the session outlives the watchdog and must not see the freed tt */
+	pthread_mutex_lock(&tt->lock);
+	if (tt->se)
+		tt->se->timeout_thread = NULL;
+	pthread_mutex_unlock(&tt->lock);
+
 	fuse_tt_destruct(tt);
 }
 
