@@ -22,8 +22,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+
+#ifndef __linux__
+#include <sys/types.h>
+#else
+#include <sys/sysmacros.h>
+#endif
 
 struct timeout_data {
 	_Atomic bool triggered;
@@ -59,19 +67,103 @@ static const struct fuse_lowlevel_ops test_ll_ops = {
 	.getattr = test_ll_getattr,
 };
 
-struct unmount_thread_arg {
-	struct fuse_session *se;
+/* the watchdog timeout this test arms and measures against */
+#define WATCHDOG_TIMEOUT_SEC 5
+
+struct abort_thread_arg {
+	const char *mountpoint;
 	int delay_ms;
+
+	/* when the abort was written, CLOCK_MONOTONIC */
+	struct timespec aborted_at;
+
+	int err;
 };
 
-static void *unmount_thread_func(void *arg)
+/*
+ * The connection directory is named after the mount's device number, printed
+ * the way the kernel packs a dev_t: (major << MINORBITS) | minor, MINORBITS
+ * being 20. glibc's dev_t packs the same pair differently, so the halves are
+ * decoded with the <sys/sysmacros.h> accessors and repacked, not cast: below
+ * a minor of 256 the two layouts happen to agree, above it they do not.
+ */
+static unsigned int kernel_dev(dev_t dev)
 {
-	struct unmount_thread_arg *uta = (struct unmount_thread_arg *)arg;
+	const int minorbits = 20;
 
-	usleep(uta->delay_ms * 1000);
-	printf("Unmounting session\n");
-	fuse_session_unmount(uta->se);
+	return (major(dev) << minorbits) | minor(dev);
+}
+
+/*
+ * Sever the connection the way 'umount -f' and an administrator do. The abort
+ * file belongs to the user that mounted, so this works unprivileged.
+ *
+ * @param[out] when  timestamp of the abort
+ * @return 0 on success, -1 on failure
+ */
+static int abort_connection(const char *mountpoint, struct timespec *when)
+{
+	char path[64];
+	struct stat stbuf;
+	ssize_t res;
+	int fd;
+
+	if (stat(mountpoint, &stbuf) == -1) {
+		fprintf(stderr, "Failed to stat %s: %s\n", mountpoint,
+			strerror(errno));
+		return -1;
+	}
+
+	snprintf(path, sizeof(path), "/sys/fs/fuse/connections/%u/abort",
+		 kernel_dev(stbuf.st_dev));
+
+	fd = open(path, O_WRONLY);
+	if (fd == -1) {
+		fprintf(stderr, "Failed to open %s: %s\n", path,
+			strerror(errno));
+		return -1;
+	}
+
+	clock_gettime(CLOCK_MONOTONIC, when);
+	res = write(fd, "1", 1);
+	close(fd);
+
+	if (res != 1) {
+		fprintf(stderr, "Failed to write %s: %s\n", path,
+			strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+static void *abort_thread_func(void *arg)
+{
+	struct abort_thread_arg *ata = (struct abort_thread_arg *)arg;
+
+	usleep(ata->delay_ms * 1000);
+	printf("Aborting the kernel connection\n");
+	ata->err = abort_connection(ata->mountpoint, &ata->aborted_at);
 	return NULL;
+}
+
+static double seconds_since(const struct timespec *start)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return (now.tv_sec - start->tv_sec) +
+	       (now.tv_nsec - start->tv_nsec) / 1e9;
+}
+
+/* @return true if the callback fired within <deadline> seconds of <start> */
+static bool wait_triggered(const struct timeout_data *td,
+			   const struct timespec *start, double deadline)
+{
+	while (!td->triggered && seconds_since(start) < deadline)
+		usleep(100 * 1000);
+
+	return td->triggered;
 }
 
 static void timeout_callback(void *data)
@@ -82,16 +174,17 @@ static void timeout_callback(void *data)
 	td->triggered = true;
 }
 
-static void fork_child(void)
+static void fork_child(const char *mountpoint)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 	struct fuse_session *se;
 	struct fuse_loop_config *loop_config;
 	void *timeout_thread = NULL;
 	struct timeout_data td = { .triggered = false };
-	pthread_t unmount_thread;
-	struct unmount_thread_arg uta;
-	char *mountpoint = NULL;
+	pthread_t abort_thread;
+	struct abort_thread_arg ata = { .mountpoint = mountpoint,
+					.delay_ms = 1000 };
+	bool passed = false;
 	int ret = -1;
 	int exited;
 
@@ -100,16 +193,10 @@ static void fork_child(void)
 		goto out_free_args;
 	}
 
-	mountpoint = strdup("/tmp/fuse_timeout_test_XXXXXX");
-	if (!mountpoint || !mkdtemp(mountpoint)) {
-		fprintf(stderr, "Failed to create temp dir\n");
-		goto out_free_args;
-	}
-
 	se = fuse_session_new(&args, &test_ll_ops, sizeof(test_ll_ops), NULL);
 	if (!se) {
 		fprintf(stderr, "Failed to create FUSE session\n");
-		goto out_free_mountpoint;
+		goto out_free_args;
 	}
 
 	if (fuse_session_mount(se, mountpoint)) {
@@ -130,67 +217,47 @@ static void fork_child(void)
 		goto out_destroy_config;
 	}
 
-	/* Start timeout thread with 5 second timeout */
 	timeout_thread = fuse_session_start_teardown_watchdog(
-		se, 5, timeout_callback, &td);
+		se, WATCHDOG_TIMEOUT_SEC, timeout_callback, &td);
 	if (!timeout_thread) {
 		fprintf(stderr, "Failed to start timeout thread\n");
 		goto out_remove_handlers;
 	}
 
-	/* Start thread that will unmount after 1 second */
-	uta.se = se;
-	uta.delay_ms = 1000;
-	if (pthread_create(&unmount_thread, NULL, unmount_thread_func, &uta)) {
-		fprintf(stderr, "Failed to create unmount thread\n");
+	/* Start thread that will abort the connection after 1 second */
+	if (pthread_create(&abort_thread, NULL, abort_thread_func, &ata)) {
+		fprintf(stderr, "Failed to create abort thread\n");
 		goto out_stop_timeout;
 	}
 
-	printf("Entering FUSE loop, unmount in 1 second\n");
+	printf("Entering FUSE loop, connection abort in 1 second\n");
 	ret = fuse_session_loop_mt_312(se, loop_config);
 
 	printf("fuse_session_loop_mt returned %d\n", ret);
 	exited = fuse_session_exited(se);
 	printf("session exited: %d\n", exited);
 
-	pthread_join(unmount_thread, NULL);
-	fuse_remove_signal_handlers(se);
-	fuse_session_destroy(se);
-	fuse_loop_cfg_destroy(loop_config);
+	pthread_join(abort_thread, NULL);
+	if (ata.err)
+		goto out_stop_timeout;
 
 	/*
-	 * Check callback did NOT fire immediately after unmount.
-	 * POLLERR is returned, but watchdog must wait for timeout.
+	 * The watchdog arms its timeout when it sees POLLERR, which cannot be
+	 * before the abort, so both deadlines are measured from there.
 	 */
-	usleep(500 * 1000);
-	if (td.triggered) {
-		printf("Test FAILED: callback fired too early\n");
-		fuse_session_stop_teardown_watchdog(timeout_thread);
-		rmdir(mountpoint);
-		free(mountpoint);
-		fuse_opt_free_args(&args);
-		exit(1);
+	if (wait_triggered(&td, &ata.aborted_at, WATCHDOG_TIMEOUT_SEC - 1)) {
+		printf("Test FAILED: callback fired before the timeout\n");
+		goto out_stop_timeout;
 	}
 
-	/* Wait for timeout callback with polling loop */
 	printf("Waiting for timeout callback...\n");
-	for (int i = 0; i < 7 * 10; i++) {  /* 5s timeout + 2s margin */
-		if (td.triggered)
-			break;
-		usleep(100 * 1000);
+	if (!wait_triggered(&td, &ata.aborted_at, WATCHDOG_TIMEOUT_SEC + 30)) {
+		printf("Test FAILED: timeout callback was not invoked\n");
+		goto out_stop_timeout;
 	}
 
-	fuse_session_stop_teardown_watchdog(timeout_thread);
-	rmdir(mountpoint);
-	free(mountpoint);
-	fuse_opt_free_args(&args);
-
-	if (td.triggered) {
-		printf("Test PASSED: timeout callback was invoked\n");
-		exit(0);
-	}
-	printf("Test FAILED: timeout callback was not invoked\n");
-	exit(1);
+	printf("Test PASSED: timeout callback was invoked\n");
+	passed = true;
 
 out_stop_timeout:
 	fuse_session_stop_teardown_watchdog(timeout_thread);
@@ -202,20 +269,21 @@ out_unmount:
 	fuse_session_unmount(se);
 out_destroy_session:
 	fuse_session_destroy(se);
-out_free_mountpoint:
-	rmdir(mountpoint);
-	free(mountpoint);
 out_free_args:
 	fuse_opt_free_args(&args);
-	exit(1);
+	exit(passed ? 0 : 1);
 }
 
-static int run_test_in_child(void (*test_func)(void), const char *test_name)
+static int run_test_in_child(void (*test_func)(const char *),
+			     const char *test_name, const char *mountpoint)
 {
 	pid_t child;
 	int status;
 
 	printf("Running test: %s\n", test_name);
+
+	/* the child inherits this buffer and would flush a copy of it */
+	fflush(NULL);
 
 	child = fork();
 	if (child == -1) {
@@ -224,7 +292,7 @@ static int run_test_in_child(void (*test_func)(void), const char *test_name)
 	}
 
 	if (child == 0)
-		test_func();
+		test_func(mountpoint);
 
 	if (waitpid(child, &status, 0) == -1) {
 		perror("waitpid");
@@ -238,13 +306,19 @@ static int run_test_in_child(void (*test_func)(void), const char *test_name)
 	return 1;
 }
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	int ret;
 
+	if (argc != 2) {
+		fprintf(stderr, "usage: %s <mountpoint>\n", argv[0]);
+		return 1;
+	}
+
 	printf("Testing teardown watchdog feature\n");
 
-	ret = run_test_in_child(fork_child, "unmount triggers callback");
+	ret = run_test_in_child(fork_child, "connection abort triggers callback",
+				argv[1]);
 	if (ret != 0)
 		return ret;
 
