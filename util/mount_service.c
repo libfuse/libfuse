@@ -139,21 +139,6 @@ static ssize_t __send_fd(const struct mount_service *mo,
 	return sendmsg(mo->sockfd, &msg, MSG_EOR | MSG_NOSIGNAL);
 }
 
-static ssize_t __send_packet(const struct mount_service *mo, void *ptr,
-			     size_t len)
-{
-	struct iovec iov = {
-		.iov_base = ptr,
-		.iov_len = len,
-	};
-	struct msghdr msg = {
-		.msg_iov = &iov,
-		.msg_iovlen = 1,
-	};
-
-	return sendmsg(mo->sockfd, &msg, MSG_EOR | MSG_NOSIGNAL);
-}
-
 static ssize_t __recv_packet_size(const struct mount_service *mo)
 {
 	struct iovec iov = { };
@@ -162,21 +147,6 @@ static ssize_t __recv_packet_size(const struct mount_service *mo)
 		.msg_iovlen = 1,
 	};
 	return recvmsg(mo->sockfd, &msg, MSG_PEEK | MSG_TRUNC);
-}
-
-static ssize_t __recv_packet(const struct mount_service *mo, void *ptr,
-			     size_t len)
-{
-	struct iovec iov = {
-		.iov_base = ptr,
-		.iov_len = len,
-	};
-	struct msghdr msg = {
-		.msg_iov = &iov,
-		.msg_iovlen = 1,
-	};
-
-	return recvmsg(mo->sockfd, &msg, MSG_TRUNC);
 }
 
 /*
@@ -271,25 +241,14 @@ static int try_drop_passrights(const struct mount_service *mo, int sockfd)
 
 static int check_sendbuf_size(const struct mount_service *mo, int sockfd)
 {
-	const size_t min_size = sizeof_fuse_service_open_command(PATH_MAX);
-	int sendbuf_size = -1;
-	socklen_t optlen = sizeof(sendbuf_size);
-	int ret;
+	int sendbuf_size;
 
-	/*
-	 * If we can't query the maximum send buffer length, just keep going.
-	 * Most likely we won't be sending huge open commands, and if we do,
-	 * the sendmsg will fail there too.
-	 */
-	ret = getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuf_size, &optlen);
-	if (ret || sendbuf_size < 0)
-		return 0;
-
-	if (sendbuf_size >= min_size)
+	if (!fuse_service_sendbuf_too_small(sockfd, &sendbuf_size))
 		return 0;
 
 	fprintf(stderr, "%s: max socket send buffer is %d, need at least %zu.\n",
-		mo->msgtag, sendbuf_size, min_size);
+		mo->msgtag, sendbuf_size,
+		sizeof_fuse_service_open_command(PATH_MAX));
 	return MOUNT_SERVICE_FALLBACK_NEEDED;
 }
 
@@ -369,14 +328,14 @@ static int mount_service_send_hello(const struct mount_service *mo)
 	else if (user_allow_other)
 		hello.flags |= htonl(FUSE_SERVICE_FLAG_ALLOW_OTHER);
 
-	size = __send_packet(mo, &hello, sizeof(hello));
+	size = fuse_service_send_packet(mo->sockfd, &hello, sizeof(hello));
 	if (size < 0) {
 		fprintf(stderr, "%s: send hello: %s\n",
 			mo->msgtag, strerror(errno));
 		return -1;
 	}
 
-	size = __recv_packet(mo, &reply, sizeof(reply));
+	size = fuse_service_recv_packet(mo->sockfd, &reply, sizeof(reply));
 	if (size < 0) {
 		fprintf(stderr, "%s: hello reply: %s\n",
 			mo->msgtag, strerror(errno));
@@ -581,7 +540,7 @@ static int mount_service_send_file_error(const struct mount_service *mo,
 	req->error = htonl(error);
 	memcpy(req->path, path, path_len + 1);
 
-	written = __send_packet(mo, req, req_sz);
+	written = fuse_service_send_packet(mo->sockfd, req, req_sz);
 	if (written < 0) {
 		fprintf(stderr, "%s: send file error: %s\n",
 			mo->msgtag, strerror(errno));
@@ -671,7 +630,7 @@ static int mount_service_receive_command(const struct mount_service *mo,
 		return -1;
 	}
 
-	size = __recv_packet(mo, command, alleged_size);
+	size = fuse_service_recv_packet(mo->sockfd, command, alleged_size);
 	if (size < 0) {
 		fprintf(stderr, "%s: receive service command: %s\n",
 			mo->msgtag, strerror(errno));
@@ -698,7 +657,7 @@ static int mount_service_send_reply(const struct mount_service *mo, int error)
 	};
 	ssize_t size;
 
-	size = __send_packet(mo, &reply, sizeof(reply));
+	size = fuse_service_send_packet(mo->sockfd, &reply, sizeof(reply));
 	if (size < 0) {
 		fprintf(stderr, "%s: send service reply: %s\n",
 			mo->msgtag, strerror(errno));

@@ -135,36 +135,6 @@ static int __recv_fd(const struct fuse_service *sf,
 	return 0;
 }
 
-static ssize_t __send_packet(const struct fuse_service *sf, void *ptr,
-			     size_t len)
-{
-	struct iovec iov = {
-		.iov_base = ptr,
-		.iov_len = len,
-	};
-	struct msghdr msg = {
-		.msg_iov = &iov,
-		.msg_iovlen = 1,
-	};
-
-	return sendmsg(sf->sockfd, &msg, MSG_EOR | MSG_NOSIGNAL);
-}
-
-static ssize_t __recv_packet(const struct fuse_service *sf, void *ptr,
-			     size_t len)
-{
-	struct iovec iov = {
-		.iov_base = ptr,
-		.iov_len = len,
-	};
-	struct msghdr msg = {
-		.msg_iov = &iov,
-		.msg_iovlen = 1,
-	};
-
-	return recvmsg(sf->sockfd, &msg, MSG_TRUNC);
-}
-
 int fuse_service_receive_file(const struct fuse_service *sf, const char *path,
 			      int *fdp)
 {
@@ -266,7 +236,7 @@ static int fuse_service_request_path(const struct fuse_service *sf,
 	cmd->request_flags = htonl(rqflags);
 	memcpy(cmd->path, path, pathlen + 1);
 
-	size = __send_packet(sf, cmd, cmdsz);
+	size = fuse_service_send_packet(sf->sockfd, cmd, cmdsz);
 	if (size < 0) {
 		int error = errno;
 
@@ -313,7 +283,7 @@ int fuse_service_send_goodbye(struct fuse_service *sf, int exitcode)
 	if (sf->sockfd < 0)
 		return 0;
 
-	size = __send_packet(sf, &c, sizeof(c));
+	size = fuse_service_send_packet(sf->sockfd, &c, sizeof(c));
 	if (size < 0) {
 		int error = errno;
 
@@ -367,25 +337,13 @@ static int count_listen_fds(void)
 
 static int check_sendbuf_size(int sockfd)
 {
-	const size_t min_size = sizeof_fuse_service_open_command(PATH_MAX);
-	int sendbuf_size = -1;
-	socklen_t optlen = sizeof(sendbuf_size);
-	int ret;
+	int sendbuf_size;
 
-	/*
-	 * If we can't query the maximum send buffer length, just keep going.
-	 * Most likely we won't be sending huge open commands, and if we do,
-	 * the sendmsg will fail there too.
-	 */
-	ret = getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuf_size, &optlen);
-	if (ret || sendbuf_size < 0)
-		return 0;
-
-	if (sendbuf_size >= min_size)
+	if (!fuse_service_sendbuf_too_small(sockfd, &sendbuf_size))
 		return 0;
 
 	fuse_log(FUSE_LOG_ERR, "max socket send buffer is %d, need at least %zu.\n",
-		 sendbuf_size, min_size);
+		 sendbuf_size, sizeof_fuse_service_open_command(PATH_MAX));
 	return -ENOBUFS;
 }
 
@@ -456,7 +414,7 @@ static int negotiate_hello(struct fuse_service *sf)
 	uint32_t flags;
 	ssize_t size;
 
-	size = __recv_packet(sf, &hello, sizeof(hello));
+	size = fuse_service_recv_packet(sf->sockfd, &hello, sizeof(hello));
 	if (size < 0) {
 		int error = errno;
 
@@ -511,7 +469,7 @@ static int negotiate_hello(struct fuse_service *sf)
 	if (flags & FUSE_SERVICE_FLAG_FUSEBLK)
 		sf->can_fuseblk = true;
 
-	size = __send_packet(sf, &reply, sizeof(reply));
+	size = fuse_service_send_packet(sf->sockfd, &reply, sizeof(reply));
 	if (size < 0) {
 		int error = errno;
 
@@ -821,7 +779,7 @@ static int send_fsopen(const struct fuse_service *sf, const char *fstype,
 	if (!strncmp(fstype, "fuseblk", 7))
 		c.fsopen_flags |= htonl(FUSE_SERVICE_FSOPEN_FUSEBLK);
 
-	size = __send_packet(sf, &c, sizeof(c));
+	size = fuse_service_send_packet(sf->sockfd, &c, sizeof(c));
 	if (size < 0) {
 		int error = errno;
 
@@ -830,7 +788,7 @@ static int send_fsopen(const struct fuse_service *sf, const char *fstype,
 		return -error;
 	}
 
-	size = __recv_packet(sf, &reply, sizeof(reply));
+	size = fuse_service_recv_packet(sf->sockfd, &reply, sizeof(reply));
 	if (size < 0) {
 		int error = errno;
 
@@ -873,7 +831,7 @@ static int send_string(const struct fuse_service *sf, uint32_t command,
 	cmd->p.magic = htonl(command);
 	memcpy(cmd->value, value, valuelen + 1);
 
-	size = __send_packet(sf, cmd, cmdsz);
+	size = fuse_service_send_packet(sf->sockfd, cmd, cmdsz);
 	if (size < 0) {
 		int error = errno;
 
@@ -883,7 +841,7 @@ static int send_string(const struct fuse_service *sf, uint32_t command,
 	}
 	free(cmd);
 
-	size = __recv_packet(sf, &reply, sizeof(reply));
+	size = fuse_service_recv_packet(sf->sockfd, &reply, sizeof(reply));
 	if (size < 0) {
 		int error = errno;
 
@@ -927,7 +885,7 @@ static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
 	cmd->expected_fmt = htons(expected_fmt);
 	memcpy(cmd->value, value, valuelen + 1);
 
-	size = __send_packet(sf, cmd, cmdsz);
+	size = fuse_service_send_packet(sf->sockfd, cmd, cmdsz);
 	if (size < 0) {
 		int error = errno;
 
@@ -937,7 +895,7 @@ static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
 	}
 	free(cmd);
 
-	size = __recv_packet(sf, &reply, sizeof(reply));
+	size = fuse_service_recv_packet(sf->sockfd, &reply, sizeof(reply));
 	if (size < 0) {
 		int error = errno;
 
@@ -971,7 +929,7 @@ static int send_mount(const struct fuse_service *sf, unsigned int ms_flags,
 	};
 	ssize_t size;
 
-	size = __send_packet(sf, &c, sizeof(c));
+	size = fuse_service_send_packet(sf->sockfd, &c, sizeof(c));
 	if (size < 0) {
 		int error = errno;
 
@@ -980,7 +938,7 @@ static int send_mount(const struct fuse_service *sf, unsigned int ms_flags,
 		return -error;
 	}
 
-	size = __recv_packet(sf, &reply, sizeof(reply));
+	size = fuse_service_recv_packet(sf->sockfd, &reply, sizeof(reply));
 	if (size < 0) {
 		int error = errno;
 
