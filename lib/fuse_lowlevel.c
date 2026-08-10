@@ -461,6 +461,10 @@ int fuse_reply_err(fuse_req_t req, int err)
 
 void fuse_reply_none(fuse_req_t req)
 {
+	if (req->flags.is_uring) {
+		send_reply_uring(req, 0, NULL, 0);
+		return;
+	}
 	fuse_free_req(req);
 }
 
