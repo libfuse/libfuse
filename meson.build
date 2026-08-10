@@ -131,13 +131,6 @@ special_funcs = {
 	  }
 	}
     ''',
-    'systemd_headers': '''
-	#include <systemd/sd-daemon.h>
-
-	int main(int argc, char *argv[]) {
-          return SD_LISTEN_FDS_START;
-	}
-    ''',
 }
 
 foreach name, code : special_funcs
@@ -261,11 +254,31 @@ if get_option('enable-io-uring') and liburing.found()
 endif
 
 # Check for systemd support
+#
+# Only the SD_LISTEN_FDS_START macro is used, so the header alone decides
+# this - a link test would additionally demand libsystemd, which nothing
+# here links against.
+private_cfg.set('HAVE_SYSTEMD_HEADERS',
+    cc.has_header('systemd/sd-daemon.h'))
+
+# Only systemd.pc names the unit directory, and it might ship in a package of
+# its own (Debian: systemd-dev); the libsystemd.pc installed with the headers
+# does not carry it. So fall back to looking for the directory itself, rather
+# than dropping systemd support on a host that plainly has systemd.
 systemd_system_unit_dir = get_option('systemd-system-unit-dir')
 if systemd_system_unit_dir == ''
   systemd = dependency('systemd', required: false)
   if systemd.found()
      systemd_system_unit_dir = systemd.get_variable(pkgconfig: 'systemd_system_unit_dir')
+  else
+    # second path for distros without a merged /usr
+    fs = import('fs')
+    foreach dir : [ '/usr/lib/systemd/system', '/lib/systemd/system' ]
+      if fs.is_dir(dir)
+        systemd_system_unit_dir = dir
+        break
+      endif
+    endforeach
   endif
 endif
 

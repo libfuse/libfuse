@@ -1,3 +1,24 @@
+Unreleased Changes
+==================
+
+* ``fusermount3`` no longer accepts several time stamp related mount options
+  (`atime, diratime, relatime, strictatime, lazytime and
+  nolazytime`). These were added in 3.14.1 by commits
+  1e66c92153d4 ("Add more time mount options") and 81ad52c7dbed ("Add
+  more time mount options to fusermount / fix lazytime"), then dropped
+  again from the library in 3.15 by dba6b3983af3 ("Do not pass
+  unsupported mount options to the kernel"), because for FUSE the
+  filesystem daemon and not the kernel implements atime updates.
+  Left over in fusermount3 was unintended.
+
+* ``fusermount3`` no longer accepts ``-o large_read``; passing it is now
+  an error instead of printing a deprecation notice and ignoring the
+  option. Relevant only for Linux 2.4 kernels, it was dropped from the
+  library in 3.0 by commit d6217bb2a045 ("Drop -o large_read mount
+  option") and from fusermount by 235e9a1f80cb ("fusermout: Remove the
+  large read check").
+
+
 libfuse 3.18.0 (2025-12-18)
 ===========================
 

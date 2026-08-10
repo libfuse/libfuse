@@ -133,6 +133,9 @@ struct Inode {
 	int backing_id{ 0 };
 	uint64_t nopen{ 0 };
 	std::atomic<uint64_t> nlookup{ 0 };
+	/* Drop before fuse_reply_*: the reply may be the kernel's last
+	 * reference, so forget_one() can erase the inode right after
+	 */
 	std::mutex m;
 
 	/* max timeout after "umount -f" */
@@ -154,7 +157,7 @@ struct Inode {
 };
 
 struct Fs {
-	// Must be acquired *after* any Inode.m locks.
+	// Must be acquired *before* any Inode.m locks.
 	std::mutex mutex;
 	InodeMap inodes; // protected by mutex
 	Inode root;
@@ -439,10 +442,8 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 		fs_lock.unlock();
 		close(newfd);
 	} else { // no existing inode
-		/* This is just here to make Helgrind happy. It violates the
-		 * lock ordering requirement (inode.m must be acquired before
-		 * fs.mutex), but this is of no consequence because at this
-		 * point no other thread has access to the inode mutex
+		/* An unlinked inode (fd == -ENOENT) stays in fs.inodes and is
+		 * reachable by other threads, so this is a real lock
 		 */
 		lock_guard<mutex> g{ inode.m };
 		inode.src_ino = e->attr.st_ino;
@@ -658,6 +659,9 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	}
 	e.ino = reinterpret_cast<fuse_ino_t>(&inode);
 	{
+		/* forget_one() reads the count under fs.mutex to decide that
+		 * an inode is unreferenced, so raise it under fs.mutex too */
+		lock_guard<mutex> g_fs{ fs.mutex };
 		inode.nlookup++;
 		if (fs.debug)
 			cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
@@ -672,7 +676,6 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 static void sfs_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	Inode &inode_p = get_inode(parent);
-	lock_guard<mutex> g{ inode_p.m };
 	auto res = unlinkat(inode_p.fd, name, AT_REMOVEDIR);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
@@ -707,17 +710,27 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		}
 		if (e.attr.st_nlink == 1) {
 			Inode &inode = get_inode(e.ino);
-			lock_guard<mutex> g{ inode.m };
-			if (inode.fd > 0 && !inode.nopen) {
-				if (fs.debug)
-					cerr << "DEBUG: unlink: release inode "
-					     << e.attr.st_ino
-					     << "; fd=" << inode.fd << endl;
+			int release_fd = -1;
+
+			{
 				lock_guard<mutex> g_fs{ fs.mutex };
-				close(inode.fd);
-				inode.fd = -ENOENT;
-				inode.generation++;
+				lock_guard<mutex> g{ inode.m };
+				if (inode.fd > 0 && !inode.nopen) {
+					if (fs.debug)
+						cerr << "DEBUG: unlink: release inode "
+						     << e.attr.st_ino
+						     << "; fd=" << inode.fd
+						     << endl;
+					release_fd = inode.fd;
+					inode.fd = -ENOENT;
+					inode.generation++;
+				}
 			}
+			/* closed only after the fd is unpublished, so no other
+			 * thread can hand it to a syscall once it is reused
+			 */
+			if (release_fd != -1)
+				close(release_fd);
 		}
 
 		// decrease the ref which lookup above had increased
@@ -730,32 +743,41 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void forget_one(fuse_ino_t ino, uint64_t n)
 {
 	Inode &inode = get_inode(ino);
-	unique_lock<mutex> l{ inode.m };
+	SrcId id;
 
-	if (n > inode.nlookup) {
-		cerr << "INTERNAL ERROR: Negative lookup count for inode "
-		     << inode.src_ino << endl;
-		abort();
+	{
+		lock_guard<mutex> l{ inode.m };
+
+		if (n > inode.nlookup) {
+			cerr << "INTERNAL ERROR: Negative lookup count for inode "
+			     << inode.src_ino << endl;
+			abort();
+		}
+		inode.nlookup -= n;
+
+		if (fs.debug)
+			cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+			     << "inode " << inode.src_ino << " count "
+			     << inode.nlookup << endl;
+
+		if (inode.nlookup)
+			return;
+
+		id = { inode.src_ino, inode.src_dev };
 	}
-	inode.nlookup -= n;
+
+	/* The inode may be erased and re-created between the two locks, so
+	 * look it up by key instead of reusing the reference and let a
+	 * resurrecting do_lookup() win the count check
+	 */
+	lock_guard<mutex> g_fs{ fs.mutex };
+	auto it = fs.inodes.find(id);
+	if (it == fs.inodes.end() || it->second.nlookup)
+		return;
 
 	if (fs.debug)
-		cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
-		     << "inode " << inode.src_ino << " count " << inode.nlookup
-		     << endl;
-
-	if (!inode.nlookup) {
-		lock_guard<mutex> g_fs{ fs.mutex };
-		l.unlock();
-		if (!inode.nlookup) {
-			if (fs.debug)
-				cerr << "DEBUG: forget: cleaning up inode "
-				     << inode.src_ino << endl;
-			fs.inodes.erase({ inode.src_ino, inode.src_dev });
-		}
-	} else if (fs.debug)
-		cerr << "DEBUG: forget: inode " << inode.src_ino
-		     << " lookup count now " << inode.nlookup << endl;
+		cerr << "DEBUG: forget: cleaning up inode " << id.first << endl;
+	fs.inodes.erase(it);
 }
 
 static void sfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
@@ -790,6 +812,9 @@ static void sfs_readlink(fuse_req_t req, fuse_ino_t ino)
 struct DirHandle {
 	DIR *dp{ nullptr };
 	off_t offset;
+	// serialises readdir(); drop before fuse_reply_*, the reply may let
+	// RELEASEDIR delete this handle
+	std::mutex m;
 
 	DirHandle() = default;
 	DirHandle(const DirHandle &) = delete;
@@ -810,28 +835,34 @@ static DirHandle *get_dir_handle(fuse_file_info *fi)
 static void sfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
+	DIR *dp = nullptr;
+	int fd;
+
 	auto d = new (nothrow) DirHandle;
 	if (d == nullptr) {
 		fuse_reply_err(req, ENOMEM);
 		return;
 	}
 
-	// Make Helgrind happy - it can't know that there's an implicit
-	// synchronization due to the fact that other threads cannot
-	// access d until we've called fuse_reply_*.
-	lock_guard<mutex> g{ inode.m };
-
-	auto fd = openat(inode.fd, ".", O_RDONLY);
+	fd = openat(inode.fd, ".", O_RDONLY);
 	if (fd == -1)
 		goto out_errno;
 
 	// On success, dir stream takes ownership of fd, so we
 	// do not have to close it.
-	d->dp = fdopendir(fd);
-	if (d->dp == nullptr)
+	dp = fdopendir(fd);
+	if (dp == nullptr)
 		goto out_errno;
 
-	d->offset = 0;
+	{
+		// Make Helgrind happy - it can't know that there's an implicit
+		// synchronization due to the fact that other threads cannot
+		// access d until we've called fuse_reply_*.
+		lock_guard<mutex> g{ d->m };
+
+		d->dp = dp;
+		d->offset = 0;
+	}
 
 	fi->fh = reinterpret_cast<uint64_t>(d);
 	if (fs.timeout) {
@@ -860,8 +891,6 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		       off_t offset, fuse_file_info *fi, const int plus)
 {
 	auto d = get_dir_handle(fi);
-	Inode &inode = get_inode(ino);
-	lock_guard<mutex> g{ inode.m };
 	char *p;
 	auto rem = size;
 	int err = 0, count = 0;
@@ -876,6 +905,8 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		return;
 	}
 	p = buf;
+
+	unique_lock<mutex> l{ d->m };
 
 	if (offset != d->offset) {
 		if (fs.debug)
@@ -954,11 +985,13 @@ error:
 		if (err == ENFILE || err == EMFILE)
 			cerr << "ERROR: Reached maximum number of file descriptors."
 			     << endl;
+		l.unlock();
 		fuse_reply_err(req, err);
 	} else {
 		if (fs.debug)
 			cerr << "DEBUG: readdir(): returning " << count
 			     << " entries, curr offset " << d->offset << endl;
+		l.unlock();
 		fuse_reply_buf(req, buf, size - rem);
 	}
 	delete[] buf;
@@ -1076,13 +1109,15 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	}
 
 	Inode &inode = get_inode(e.ino);
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen++;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen++;
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	if (fs.passthrough)
-		do_passthrough_open(req, e.ino, fd, fi);
+		if (fs.passthrough)
+			do_passthrough_open(req, e.ino, fd, fi);
+	}
 	fuse_reply_create(req, &e, fi);
 }
 
@@ -1168,12 +1203,14 @@ static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 		return;
 	}
 
-	lock_guard<mutex> g{ inode->m };
+	{
+		lock_guard<mutex> g{ inode->m };
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	if (fs.passthrough)
-		do_passthrough_open(req, e.ino, fd, fi);
+		if (fs.passthrough)
+			do_passthrough_open(req, e.ino, fd, fi);
+	}
 
 	fuse_reply_create(req, &e, fi);
 }
@@ -1226,35 +1263,43 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		return;
 	}
 
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen++;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen++;
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	fi->fh = fd;
-	if (fs.passthrough)
-		do_passthrough_open(req, ino, fd, fi);
+		fi->fh = fd;
+		if (fs.passthrough)
+			do_passthrough_open(req, ino, fd, fi);
+	}
 	fuse_reply_open(req, fi);
 }
 
 static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen--;
+	int backing_id = 0;
 
-	/* Close the shared backing file on last file close of an inode */
-	if (inode.backing_id && !inode.nopen) {
-		if (fuse_passthrough_close(req, inode.backing_id) < 0) {
-			cerr << "DEBUG: fuse_passthrough_close failed for inode "
-			     << ino << " backing file " << inode.backing_id
-			     << endl;
-		} else if (fs.debug) {
-			cerr << "DEBUG: closed backing file "
-			     << inode.backing_id << " for inode " << ino
-			     << endl;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen--;
+
+		/* Close the shared backing file on last file close of an inode */
+		if (inode.backing_id && !inode.nopen) {
+			backing_id = inode.backing_id;
+			inode.backing_id = 0;
 		}
-		inode.backing_id = 0;
+	}
+
+	if (backing_id) {
+		if (fuse_passthrough_close(req, backing_id) < 0) {
+			cerr << "DEBUG: fuse_passthrough_close failed for inode "
+			     << ino << " backing file " << backing_id << endl;
+		} else if (fs.debug) {
+			cerr << "DEBUG: closed backing file " << backing_id
+			     << " for inode " << ino << endl;
+		}
 	}
 
 	close(fi->fh);
