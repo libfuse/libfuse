@@ -4079,6 +4079,15 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	err = ENOSYS;
 	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
 		goto reply_err;
+	if (in->opcode == FUSE_INIT || in->opcode == CUSE_INIT) {
+		size_t hdr  = sizeof(struct fuse_in_header);
+		size_t have = buf->size < in->len ? buf->size : in->len;
+		size_t need = offsetof(struct fuse_init_in, max_readahead); /* 8: major+minor */
+		if (have < hdr || have - hdr < need) {
+			err = EPROTO;
+			goto reply_err;
+		}
+	}
 	/* Do not process interrupt request */
 	if (se->conn.no_interrupt && in->opcode == FUSE_INTERRUPT) {
 		if (se->debug)
