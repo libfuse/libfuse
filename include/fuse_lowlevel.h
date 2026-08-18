@@ -103,6 +103,18 @@ struct fuse_entry_param {
 	    that come through the kernel, this should be set to a very
 	    large value. */
 	double entry_timeout;
+
+	/** Entry attribute flags. See enum fuse_attr_flags below. */
+	uint32_t attr_flags;
+};
+
+/**
+ * Inode attribute flags
+ *
+ * FUSE_LL_ATTR_SUBMOUNT: Inode is a submount root
+ */
+enum fuse_attr_flags {
+	FUSE_LL_ATTR_SUBMOUNT = (1 << 0),
 };
 
 /**
