@@ -1715,8 +1715,11 @@ static void _do_create(fuse_req_t req, const fuse_ino_t nodeid,
 		memset(&fi, 0, sizeof(fi));
 		fi.flags = arg->flags;
 
-		if (req->se->conn.proto_minor >= 12)
+		if (req->se->conn.proto_minor >= 12) {
 			req->ctx.umask = arg->umask;
+			fi.kill_suidgid =
+				(arg->open_flags & FUSE_OPEN_KILL_SUIDGID) != 0;
+		}
 
 		/* XXX: fuse_create_in::open_flags */
 
@@ -1747,6 +1750,7 @@ static void _do_open(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	memset(&fi, 0, sizeof(fi));
 	fi.flags = arg->flags;
+	fi.kill_suidgid = (arg->open_flags & FUSE_OPEN_KILL_SUIDGID) != 0;
 
 	/* XXX: fuse_open_in::open_flags */
 
@@ -1798,6 +1802,7 @@ static void _do_write(fuse_req_t req, const fuse_ino_t nodeid,
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.writepage = (arg->write_flags & FUSE_WRITE_CACHE) != 0;
+	fi.kill_suidgid = (arg->write_flags & FUSE_WRITE_KILL_SUIDGID) != 0;
 
 	if (req->se->conn.proto_minor >= 9) {
 		fi.lock_owner = arg->lock_owner;
@@ -1834,6 +1839,7 @@ static void _do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.writepage = arg->write_flags & FUSE_WRITE_CACHE;
+	fi.kill_suidgid = (arg->write_flags & FUSE_WRITE_KILL_SUIDGID) != 0;
 
 	if (se->conn.proto_minor >= 9) {
 		fi.lock_owner = arg->lock_owner;

@@ -96,8 +96,13 @@ struct fuse_file_info {
 	    file */
 	uint32_t parallel_direct_writes : 1;
 
+	/** Set in open, create and write if FUSE_CAP_HANDLE_KILLPRIV_V2 was
+	    enabled and the filesystem has to unset the setuid and setgid bits
+	    and drop the capability xattr. */
+	uint32_t kill_suidgid : 1;
+
 	/** Padding.  Reserved for future use*/
-	uint32_t padding : 23;
+	uint32_t padding : 22;
 	uint32_t padding2 : 32;
 	uint32_t padding3 : 32;
 
