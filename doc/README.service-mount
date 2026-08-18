@@ -1,0 +1,274 @@
+Mounting FUSE filesystems that run as a socket service
+======================================================
+
+This document is for administrators and end users who want to mount a FUSE
+filesystem whose server runs as a sandboxed systemd socket service, rather
+than as a process in the mount caller's own context.
+
+Developers who want to make their FUSE server runnable this way should read
+README.service-mount-dev instead.
+
+
+What a service mount is
+-----------------------
+
+A traditional FUSE filesystem runs as a child of whoever mounts it: it
+inherits that environment, needs mount permission, and can see the caller's
+files. A *service mount* instead keeps the FUSE server running as an
+independent systemd service. When someone mounts the filesystem, a small
+privileged helper (fuservicemount3) connects to the service over a UNIX
+socket, hands it the /dev/fuse device and any backing files it needs, and
+performs the mount(2) on its behalf.
+
+The benefit is isolation. The server can run:
+
+  - as a separate, unprivileged uid/gid (systemd DynamicUser),
+  - with no capabilities at all,
+  - in private mount, network, and pid namespaces,
+  - with a restricted system-call filter,
+
+while still being mountable by an ordinary user. The server never gains mount
+permission and never runs in the caller's environment; the privileged work is
+confined to the fuservicemount3 helper. See example/service_ll@.service for a
+fully locked-down unit.
+
+
+Do I need this?
+---------------
+
+This feature exists for one specific goal: running a FUSE server with strong
+privilege separation, where the server itself is fully unprivileged and
+sandboxed while a separate setuid helper performs the mount. Getting that
+requires the server to be written to the fuse_service_* API (see
+README.service-mount-dev). An existing FUSE program that simply calls
+fuse_main() cannot be mounted this way unmodified: it opens /dev/fuse and
+performs the mount itself, which the sandbox does not allow.
+
+If all you want is to manage an ordinary FUSE filesystem with systemd --
+start/stop, automatic restart, journald logging, cgroup resource limits --
+you do NOT need this feature. Run the filesystem under a plain systemd service
+unit instead, launching it in the foreground so systemd can track it:
+
+    # myfs.service
+    [Service]
+    ExecStart=/usr/bin/myfs ... -f <mountpoint>
+
+That filesystem still mounts the traditional way (through fusermount3) and
+runs in the service's own context; it is not isolated from the mount the way a
+service mount is.
+
+Use a service mount when you specifically want:
+
+  - the filesystem server to run as a separate, unprivileged uid with no
+    mount permission of its own,
+  - it confined to private mount/network/pid namespaces with no capabilities,
+  - the privileged mount work isolated in the fuservicemount3 helper,
+  - on-demand, socket-activated startup.
+
+In short: a plain systemd unit gives you lifecycle management; a service mount
+gives you lifecycle management AND isolation, at the cost of adapting the
+server to the service API.
+
+
+Requirements
+------------
+
+Service mount support is only built when libfuse is configured with systemd
+support:
+
+  - the systemd development headers (libsystemd-dev), and
+  - a known systemd system unit directory.
+
+When both are present, meson defines HAVE_SERVICEMOUNT and builds the
+fuservicemount3 helper. If either is missing, meson prints a warning and the
+feature is left out; mounts then fall back to the traditional path (see
+"Dispatch and fallback" below).
+
+Relevant meson options:
+
+  - service-socket-dir    directory that holds the per-filesystem service
+                          sockets (default: /run/filesystems)
+  - service-socket-perms  mode for the socket files (default: 0220)
+  - systemd-system-unit-dir
+                          where to install service/socket units (default:
+                          taken from the systemd pkg-config file)
+
+fuservicemount3 is installed setuid root, just like fusermount3, so that
+unprivileged users can trigger a mount handled by the service. The setuid
+privilege is what lets it perform the mount; it drops back to the real user
+before connecting to the service socket, so the socket's own permissions are
+what decide who may mount. The default 0220 mode is only a starting point --
+set the socket's owner, group, or ACL to grant the intended users access (see
+"Who establishes the connection" below).
+
+
+Installing a service
+--------------------
+
+Each mountable filesystem type is backed by two systemd units, named after the
+filesystem subtype (the part after "fuse." in the mount type). For a subtype
+"myfs":
+
+  - myfs@.service   the sandboxed server (a template, one instance per
+                    connection)
+  - myfs.socket     the listening socket that activates it
+
+The socket listens on a SOCK_SEQPACKET UNIX socket at
+
+  <service-socket-dir>/<subtype>            e.g. /run/filesystems/myfs
+
+and is configured with "Accept=yes", so systemd spawns a fresh, isolated
+server instance for every mount request.
+
+Install the units into the systemd unit directory (usually
+/run/systemd/system or /etc/systemd/system), then:
+
+    systemctl daemon-reload
+    systemctl start myfs.socket
+
+The socket unit can be enabled to start at boot:
+
+    systemctl enable myfs.socket
+
+The example filesystems ship ready-to-adapt units; see
+example/service_ll@.service and example/service_ll.socket(.in).
+
+
+Mounting
+--------
+
+Mount the filesystem with the usual mount(8) syntax, using the type
+"fuse.<subtype>":
+
+    mount -t fuse.myfs <source> <mountpoint> [-o options]
+
+For example:
+
+    mount -t fuse.service_ll /dev/sda /mnt
+
+A block-device-backed filesystem uses "fuseblk.<subtype>" instead.
+
+The same line works from /etc/fstab:
+
+    <source>  <mountpoint>  fuse.myfs  <options>  0 0
+
+The mount is handled by the mount.fuse3 helper, which notices that a service
+socket exists for the type and hands the request to fuservicemount3. The
+<source> and -o options are forwarded to the running server.
+
+
+Checking whether a service is available
+---------------------------------------
+
+To test whether a service socket exists for a given filesystem type without
+mounting anything:
+
+    fuservicemount3 -t fuse.myfs --check
+
+It exits 0 if a service socket is present, non-zero otherwise. Note that this
+only checks that the socket exists; it does not verify that a server actually
+answers.
+
+
+Unmounting
+----------
+
+Unmount as you would any FUSE filesystem:
+
+    fusermount3 -u <mountpoint>
+
+or, as a privileged user:
+
+    umount <mountpoint>
+
+
+Dispatch and fallback
+---------------------
+
+When you run "mount -t fuse.myfs ...", the mount.fuse3 helper first checks for
+a service socket for "myfs". The behaviour is:
+
+  - If a socket exists (and no options that are incompatible with service
+    mounts were given), the mount is performed through fuservicemount3 and the
+    running service.
+
+  - If no socket exists, mount.fuse3 transparently falls back to the
+    traditional path: it executes the filesystem's own mount command, exactly
+    as it would without service mount support.
+
+So enabling service mount support does not break filesystems that are not set
+up as services; they continue to mount the old way.
+
+A few options force the traditional path and skip the service even when a
+socket is present, because they are meaningless to an already-running,
+isolated server (for example passing a pre-opened FUSE fd, or the
+mount.fuse3 "setuid=USER" option).
+
+
+Security model
+--------------
+
+  - The FUSE server runs under the confinement defined by its .service unit,
+    not under the mount caller's identity or privileges.
+
+  - The server has no access to the caller's filesystem. Anything it needs
+    (the backing device or file, /dev/fuse) is opened by the privileged
+    fuservicemount3 helper and passed to the server over the socket. The
+    server can refuse to accept further passed file descriptors once it has
+    what it needs.
+
+  - The only setuid-root component is fuservicemount3, which performs just the
+    mount and the file-descriptor hand-off.
+
+This is the same trust boundary as fusermount3, but with the filesystem
+implementation itself kept out of the privileged and caller-facing paths.
+
+
+Who establishes the connection
+------------------------------
+
+Three parties touch the service socket, but only one dials it:
+
+  - systemd owns and listens on the socket. Starting the .socket unit creates
+    the listening socket at <service-socket-dir>/<subtype>; no server is
+    running yet.
+
+  - fuservicemount3 (the helper) is the client. When you mount, it connects to
+    that socket -- after dropping back to your real, unprivileged user id, so
+    the kernel checks the socket's permissions against you, not against root.
+    This is the access-control gate: only users the socket grants connect
+    (write) permission to can mount.
+
+  - systemd accepts the connection and, because the .socket unit uses
+    Accept=yes, starts a fresh per-connection server instance and hands it the
+    already-connected socket. The server never connects or accepts; it
+    inherits the live connection.
+
+So to control who may mount a given filesystem, set the ownership, group, or
+ACL of its socket (or the service-socket-perms build default) accordingly.
+
+
+Troubleshooting
+---------------
+
+  - "mounts the old way / service is ignored": confirm the socket exists with
+    "fuservicemount3 -t fuse.<subtype> --check", that <service-socket-dir>
+    matches how libfuse was built, and that the .socket unit is started.
+
+  - "fuservicemount3: not found" or permission errors: verify the helper is
+    installed in sbindir and is setuid root.
+
+  - server-side errors: because the server logs to its own journal, inspect it
+    with "journalctl -u myfs@*" (the example units log to the kernel ring
+    buffer via /dev/ttyprintk, viewable with dmesg).
+
+
+See also
+--------
+
+  README.service-mount-dev   writing a FUSE server that runs as a service
+  fuservicemount3(8)
+  mount.fuse3(8)
+  fusermount3(1)
+  mount(8)
+  systemd.socket(5)

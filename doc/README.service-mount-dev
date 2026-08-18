@@ -1,0 +1,432 @@
+Writing a FUSE server that runs as a socket service
+===================================================
+
+This document is for developers who want their FUSE server to be mountable as
+a sandboxed systemd socket service, using the fuse_service_* API declared in
+fuse_service.h. Administrators and users who only want to mount such a
+filesystem should read README.service-mount instead.
+
+The complete working examples referenced throughout are:
+
+    example/service_ll.c     low-level API server
+    example/service_hl.c     high-level API server
+    example/single_file.c    backing-store helper shared by both
+    example/service_ll@.service, example/service_ll.socket.in   systemd units
+
+
+The execution model
+--------------------
+
+A service-mount server does not mount anything itself and does not run in the
+mounting user's context. Instead:
+
+  1. systemd listens on a per-subtype UNIX socket (Accept=yes) and starts one
+     confined instance of your server per incoming mount request.
+
+  2. The privileged fuservicemount3 helper connects to that socket, opens
+     /dev/fuse, and passes the device fd plus your command-line arguments to
+     the server.
+
+  3. Your server cannot open files itself (its sandbox has no access to the
+     caller's filesystem or to /dev), so it asks the helper to open any
+     backing files or block devices on its behalf and pass the descriptors
+     back.
+
+  4. Your server binds the FUSE session to the passed /dev/fuse fd and asks
+     the helper to perform the mount(2). Requests start flowing immediately.
+
+Everything the server needs from the outside world therefore arrives over the
+socket; the server never acquires mount permission and never touches the
+caller's environment.
+
+
+The mount protocol
+------------------
+
+S and H denote the two parties:
+
+  S = the FUSE server   -- your binary, one <subtype>@.service instance
+  H = fuservicemount3   -- the setuid-root mount helper; the socket client
+
+Transport:
+
+  - one AF_UNIX SOCK_SEQPACKET socket, created by systemd at
+    <service-socket-dir>/<subtype> (e.g. /run/filesystems/myfs)
+  - H connect()s as the real user (that uid gates who may mount); systemd
+    accept()s (Accept=yes) and hands the connected fd to a fresh S, which
+    adopts it in fuse_service_accept()
+  - one message per datagram (sendmsg with MSG_EOR); a passed fd travels as
+    SCM_RIGHTS ancillary data, exactly one fd per message
+  - every multi-byte field is big-endian; no message exceeds
+    FUSE_SERVICE_MAX_CMD_SIZE (65536 bytes)
+  - after "DOIT" the socket is idle: FUSE traffic uses /dev/fuse, not here
+
+Every message begins with a 4-byte magic that spells the quoted tag in ASCII
+(e.g. "OPEN" is 0x4f50454e), so a message is legible in a hex dump. Most tags
+are operation mnemonics (OPEN, BDEV, TYPE, NAME, MNTP, DOIT, BYEE, ...); the
+handshake pair is not: "SAFT" (the HELLO command) and "LAST" (its reply) are
+fixed sentinels with no mnemonic meaning. Structures, verbatim from
+fuse_service_priv.h:
+
+    struct fuse_service_packet { uint32_t magic; };
+
+    struct fuse_service_hello {              /* "SAFT" */
+        struct fuse_service_packet p;
+        uint16_t min_version, max_version;   /* both 1 */
+        uint32_t flags;  /* ALLOW_OTHER 1<<0 | FUSEBLK 1<<1; what H allows */
+    };
+    struct fuse_service_hello_reply {        /* "LAST" */
+        struct fuse_service_packet p;
+        uint16_t version, padding;           /* version 1 */
+    };
+    struct fuse_service_simple_reply {       /* "REPL" */
+        struct fuse_service_packet p;
+        uint32_t error;  /* 0, else positive errno */
+    };
+    struct fuse_service_requested_file {     /* "FILE", carries one fd */
+        struct fuse_service_packet p;
+        uint32_t error;  /* 0, else positive errno and no fd */
+        char path[];     /* echoes the request path; NUL-terminated */
+    };
+    struct fuse_service_open_command {       /* "OPEN" file / "BDEV" device */
+        struct fuse_service_packet p;
+        uint32_t open_flags;    /* O_* */
+        uint32_t create_mode;
+        uint32_t request_flags; /* QUIET 1<<0 */
+        uint32_t block_size;    /* "BDEV" only */
+        char path[];
+    };
+    struct fuse_service_fsopen_command {     /* "TYPE" */
+        struct fuse_service_packet p;
+        uint32_t fsopen_flags;  /* FUSEBLK 1<<0, set iff fstype is fuseblk */
+    };
+    struct fuse_service_string_command {     /* "NAME" / "OPTS" / "MTAB" */
+        struct fuse_service_packet p;
+        char value[];
+    };
+    struct fuse_service_mountpoint_command { /* "MNTP" */
+        struct fuse_service_packet p;
+        uint16_t expected_fmt, padding;  /* S_IFDIR / S_IFREG, or 0 */
+        char value[];  /* the mountpoint */
+    };
+    struct fuse_service_mount_command {      /* "DOIT" */
+        struct fuse_service_packet p;
+        uint32_t ms_flags;  /* MS_* */
+    };
+    struct fuse_service_bye_command {        /* "BYEE" */
+        struct fuse_service_packet p;
+        uint32_t exitcode;
+    };
+
+The "argv" descriptor is a memfd; its bytes are one header, then argc entries,
+then the packed argument strings:
+
+    struct fuse_service_memfd_argv { uint32_t magic /* "ARGS" */, argc; };
+    struct fuse_service_memfd_arg  { uint32_t pos, len; };  /* x argc */
+
+Message sequence.  "A -> B msg" = A sends msg to B.  A bracketed [call] names
+the fuse_service_* function that drives the step; "local:" steps send nothing.
+
+  handshake  [fuse_service_accept]
+    H -> S  "SAFT"  fuse_service_hello
+    S -> H  "LAST"  fuse_service_hello_reply
+
+  fd handover, both pushed by H unsolicited  [fuse_service_accept]
+    H -> S  "FILE"  fuse_service_requested_file +fd   path "argv"
+    H -> S  "FILE"  fuse_service_requested_file +fd   path "fusedev"
+    local:  S reads argv out of the memfd  [fuse_service_append_args]
+
+  backing store, repeated per file, may be none
+    S -> H  "OPEN" / "BDEV"  fuse_service_open_command
+            [fuse_service_request_file / fuse_service_request_blockdev]
+    H -> S  "FILE"  fuse_service_requested_file +fd   (or error and no fd)
+            [fuse_service_receive_file]
+    local:  setsockopt(SO_PASSRIGHTS, 0)  [fuse_service_finish_file_requests]
+
+  mount  [fuse_service_session_mount].  S sends each command below; H answers
+         every one with  H -> S  "REPL"  fuse_service_simple_reply, whose
+         nonzero errno aborts the mount.
+    local:  bind se to /dev/fd/<fusedev>  (fuse_session_mount)
+    S -> H  "TYPE"  fuse_service_fsopen_command
+    S -> H  "NAME"  fuse_service_string_command        (mtab source)
+    S -> H  "MNTP"  fuse_service_mountpoint_command
+    S -> H  "OPTS"  fuse_service_string_command        (optional)
+    S -> H  "MTAB"  fuse_service_string_command        (optional)
+    S -> H  "DOIT"  fuse_service_mount_command         (H runs mount(2) here)
+
+  shutdown  [fuse_service_send_goodbye]
+    S -> H  "BYEE"  fuse_service_bye_command   no reply; S closes socket
+
+
+The two entry points
+--------------------
+
+There are two ways to write the server, mirroring the normal libfuse APIs:
+
+  - High-level API: do the service setup, then call fuse_service_main(), the
+    service-aware counterpart of fuse_main(). See example/service_hl.c.
+
+  - Low-level API: do the service setup, create the session yourself, call
+    fuse_service_session_mount(), and run your own event loop. See
+    example/service_ll.c.
+
+Both share the same startup, resource-request, and shutdown sequence.
+
+IMPORTANT: define FUSE_USE_VERSION to at least FUSE_MAKE_VERSION(3, 19) and
+include <fuse_service.h>. Do NOT call fuse_daemonize(): a service must stay in
+the foreground so systemd can track it (fuse_service_session_mount and
+fuse_service_main arrange this for you).
+
+
+API reference
+-------------
+
+The full per-call documentation lives in fuse_service.h (and fuse.h for the
+high-level fuse_service_main). Unless noted, each int-returning call returns 0
+on success or a negative errno. In call order:
+
+    /* startup */
+    int  fuse_service_accept(struct fuse_service **sfp);
+    bool fuse_service_accepted(const struct fuse_service *sf);
+    int  fuse_service_append_args(struct fuse_service *sf,
+         struct fuse_args *args);
+    int  fuse_service_parse_cmdline_opts(struct fuse_args *args,
+         struct fuse_cmdline_opts *opts);            /* returns 0 / -1 */
+
+    /* capability negotiation */
+    bool fuse_service_can_allow_other(const struct fuse_service *sf);
+    bool fuse_service_can_fuseblk(const struct fuse_service *sf);
+
+    /* backing files: request, receive each fd, then stop fd passing */
+    int  fuse_service_request_file(const struct fuse_service *sf,
+         const char *path, int open_flags, mode_t create_mode,
+         unsigned int request_flags);
+    int  fuse_service_request_blockdev(const struct fuse_service *sf,
+         const char *path, int open_flags, mode_t create_mode,
+         unsigned int request_flags, unsigned int block_size);
+    int  fuse_service_receive_file(const struct fuse_service *sf,
+         const char *path, int *fdp);
+    int  fuse_service_finish_file_requests(const struct fuse_service *sf);
+
+    /* mount */
+    void fuse_service_expect_mount_format(struct fuse_service *sf,
+         mode_t expected_fmt);
+    int  fuse_service_session_mount(struct fuse_service *sf,
+         struct fuse_session *se, mode_t expected_fmt,
+         struct fuse_cmdline_opts *opts);
+    int  fuse_service_main(struct fuse_service *sf, struct fuse_args *args,
+         const struct fuse_operations *op, void *user_data);
+
+    /* shutdown */
+    int  fuse_service_send_goodbye(struct fuse_service *sf, int exitcode);
+    void fuse_service_release(struct fuse_service *sf);
+    void fuse_service_destroy(struct fuse_service **sfp);
+    int  fuse_service_exit(int ret);
+
+    #define FUSE_SERVICE_REQUEST_FILE_QUIET (1U << 0)
+
+fuse_service_receive_file sets *fdp to a valid fd (>= 0) or a negated errno
+from the helper's open attempt; the call itself returns nonzero only on a
+socket-level failure. fuse_service_accept always initialises *sfp; test
+fuse_service_accepted (true iff *sfp != NULL) to learn whether the program was
+actually launched as a service.
+
+
+Startup sequence
+----------------
+
+The first thing main() does is accept the service context:
+
+    struct fuse_service *service;
+
+    if (fuse_service_accept(&service))
+        goto error;                 /* socket/handshake failure */
+
+    if (!fuse_service_accepted(service))
+        goto error;                 /* not started as a service */
+
+fuse_service_accept() looks for the socket handed to the process by systemd,
+performs the protocol handshake, and receives the argument vector and the
+/dev/fuse fd. It always initialises *service; use fuse_service_accepted() to
+find out whether the program is actually running as a service (it returns
+false, with *service == NULL, when there is no service socket). A real server
+can use this to support both service and traditional invocation from one
+binary.
+
+Next, fold the service-supplied arguments into your fuse_args and parse them:
+
+    struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+
+    if (fuse_service_append_args(service, &args))   /* add helper's args */
+        goto error;
+
+    if (fuse_opt_parse(&args, &priv, my_opts, my_opt_proc))   /* your opts */
+        goto error;
+
+For the low-level API also extract the common command-line options:
+
+    struct fuse_cmdline_opts opts = { };
+
+    if (fuse_service_parse_cmdline_opts(&args, &opts))
+        goto error;
+
+fuse_service_parse_cmdline_opts() is the service-mount analogue of
+fuse_parse_cmdline(). It does NOT validate the mountpoint; that is the
+helper's job. As usual, a missing -o subtype=/fsname= defaults the subtype to
+the program's basename.
+
+
+Requesting backing files and block devices
+-------------------------------------------
+
+Because the sandbox cannot open files, the server asks the helper to open them
+and send back the descriptor. This is a two-step request/receive pattern (see
+single_file_service_open() in example/single_file.c):
+
+    /* ask the helper to open it */
+    fuse_service_request_file(service, path, open_flags, create_mode, flags);
+    /* or, for a block device: */
+    fuse_service_request_blockdev(service, path, open_flags, create_mode,
+                                  flags, block_size);
+
+    /* then collect the descriptor */
+    int fd;
+    fuse_service_receive_file(service, path, &fd);
+
+On success fd is a valid descriptor. A negative fd is a (negated) errno from
+the helper's open attempt — single_file.c uses this to downgrade an O_RDWR
+request to O_RDONLY when the backing store is read-only. Pass
+FUSE_SERVICE_REQUEST_FILE_QUIET in the request flags to suppress the helper's
+error message when a failure is expected.
+
+Once you have every descriptor you need, close the door on further fd passing:
+
+    fuse_service_finish_file_requests(service);
+
+This tells the kernel to reject any additional descriptors on the socket
+(via SO_PASSRIGHTS where available), so a compromised or malicious helper
+cannot smuggle in more fds afterwards.
+
+
+Capability negotiation
+----------------------
+
+During the handshake the helper advertises what it is willing to do. Query it
+before relying on those behaviours:
+
+    fuse_service_can_allow_other(service)   /* may honour -o allow_other */
+    fuse_service_can_fuseblk(service)       /* may mount a fuseblk filesystem */
+
+
+Mounting
+--------
+
+Tell the service the file type expected at the mountpoint (S_IFDIR for a
+directory, S_IFREG for a regular file, or 0 to skip the check):
+
+    fuse_service_expect_mount_format(service, S_IFDIR);
+
+High-level API — hand off to fuse_service_main(), which builds the operations,
+performs the mount, and runs the loop:
+
+    ret = fuse_service_main(service, &args, &my_oper, NULL);
+
+Low-level API — create the session, install signal handlers, then mount:
+
+    se = fuse_session_new(&args, &my_ll_oper, sizeof(my_ll_oper), NULL);
+    ...
+    fuse_set_signal_handlers(se);
+
+    if (fuse_service_session_mount(service, se, S_IFDIR, &opts))
+        goto error;
+
+    fuse_session_loop(se);          /* or fuse_session_loop_mt(se, config) */
+
+fuse_service_session_mount() binds the session to the passed /dev/fuse fd and
+asks the helper to mount(2) the filesystem. It forces foreground operation and
+chdir("/") so you do not need (and must not) call fuse_daemonize(). After it
+returns successfully the kernel is already routing requests to your server, so
+enter your event loop promptly.
+
+
+Shutdown
+--------
+
+Tell the helper you are leaving, releasing and destroying the service context:
+
+    fuse_service_send_goodbye(service, exitcode);   /* report exit status */
+    fuse_service_release(service);                  /* free socket-side state */
+    ...
+    fuse_service_destroy(&service);                 /* free the context */
+
+    return fuse_service_exit(ret);                  /* map ret to an exit code */
+
+In the examples, send_goodbye is sent once mounting has succeeded and the loop
+is about to start, and again on the error paths; fuse_service_exit() at the end
+of main() converts the server's return value into the exit status systemd
+expects. fuse_service_destroy() takes a pointer to the pointer and clears it.
+
+fuse_service_accepted() lets a single binary detect whether it was launched as
+a service. The example servers require it and exit otherwise (their error
+paths run only once the context is valid). A server that also wants to support
+traditional invocation can branch on it and fall back to fuse_main() /
+fuse_session_mount(); in that case do not call the other fuse_service_*
+functions, which assume a valid service context.
+
+
+The systemd units
+-----------------
+
+Ship two units per filesystem, named after the subtype (the part after
+"fuse." in the mount type). For subtype "myfs":
+
+  myfs.socket    — the listening socket. It must use SOCK_SEQPACKET, accept
+                   each connection, and listen at the configured service
+                   socket directory under the subtype name. The example
+                   socket file is processed by meson, which substitutes the
+                   build-time values:
+
+                       [Socket]
+                       ListenSequentialPacket=@FUSE_SERVICE_SOCKET_DIR_RAW@/myfs
+                       Accept=yes
+                       SocketMode=@FUSE_SERVICE_SOCKET_PERMS@
+                       RemoveOnStop=yes
+
+                       [Install]
+                       WantedBy=sockets.target
+
+  myfs@.service  — the server template, one instance per connection. Set
+                   ExecStart to your binary and lock the unit down as tightly
+                   as the filesystem allows. example/service_ll@.service is a
+                   good starting point: DynamicUser, no capabilities, private
+                   mount/network/pid namespaces, a @system-service syscall
+                   filter, and OOMPolicy=continue so the filesystem is not
+                   torn down under memory pressure.
+
+The socket name must match the subtype your server reports (via the program
+basename or -o subtype=), because that is the name fuservicemount3 looks for
+under the service socket directory.
+
+
+Building and installing
+-----------------------
+
+Build a server the usual way, linking against fuse3 and including the new
+header:
+
+    gcc -Wall single_file.c service_ll.c \
+        `pkg-config fuse3 --cflags --libs` -o service_ll
+
+Install the binary, point ExecStart at it, install the .service and .socket
+units into the systemd unit directory, then "systemctl daemon-reload" and
+"systemctl start myfs.socket". From there the filesystem is mounted exactly as
+described in README.service-mount.
+
+
+See also
+--------
+
+  fuse_service.h             the full fuse_service_* API reference (Doxygen)
+  README.service-mount       installing and mounting a service filesystem
+  example/service_ll.c, example/service_hl.c, example/single_file.c
+  systemd.service(5), systemd.socket(5), systemd.exec(5)
