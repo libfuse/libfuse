@@ -3208,7 +3208,7 @@ static void list_init_nreq(struct fuse_notify_req *nreq)
 	nreq->prev = nreq;
 }
 
-static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
+static void _do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 			    const void *inarg, const struct fuse_buf *buf)
 {
 	struct fuse_session *se = req->se;
@@ -3227,6 +3227,15 @@ static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 
 	if (nreq != head)
 		nreq->reply(nreq, req, nodeid, inarg, buf);
+}
+
+static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
+			    const void *inarg, const struct fuse_buf *ibuf)
+{
+	struct fuse_buf buf = *ibuf;
+
+	buf.size -= sizeof(struct fuse_in_header);
+	_do_notify_reply(req, nodeid, inarg, &buf);
 }
 
 static int send_notify_iov(struct fuse_session *se, int notify_code,
@@ -3448,8 +3457,7 @@ static void fuse_ll_retrieve_reply(struct fuse_notify_req *nreq,
 	if (!(bufv.buf[0].flags & FUSE_BUF_IS_FD))
 		bufv.buf[0].mem = PARAM(arg);
 
-	bufv.buf[0].size -= sizeof(struct fuse_in_header) +
-		sizeof(struct fuse_notify_retrieve_in);
+	bufv.buf[0].size -= sizeof(struct fuse_notify_retrieve_in);
 
 	if (bufv.buf[0].size < arg->size) {
 		fuse_log(FUSE_LOG_ERR, "fuse: retrieve reply: buffer size too small\n");
@@ -4188,7 +4196,7 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	} else if (in->opcode == FUSE_NOTIFY_REPLY) {
 		struct fuse_buf buf = { .size = payload_len,
 					.mem = op_payload };
-		do_notify_reply(req, in->nodeid, op_in, &buf);
+		_do_notify_reply(req, in->nodeid, op_payload, &buf);
 	} else {
 		fuse_ll_ops2[in->opcode].func(req, in->nodeid, op_in,
 					      op_payload);
