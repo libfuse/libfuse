@@ -40,6 +40,7 @@ TAGS
 /GSYMS
 /GTAGS
 /test/test_setattr
+/test/test_api_30
 /build/
 # run-tests.py output, when pointed at the source tree with --run-dir
 /fuse-tests/

@@ -990,7 +990,10 @@ struct libfuse_version
 	uint32_t major;
 	uint32_t minor;
 	uint32_t hotfix;
-	uint32_t padding;
+	union {
+		uint32_t api_version;
+		uint32_t padding;
+	};
 };
 
 /* Initialize bufvec with a single buffer of given size */

@@ -19,7 +19,7 @@
  * \include printcap.c
  */
 
-#define FUSE_USE_VERSION 31
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #include <fuse_lowlevel.h>
 #include <stdio.h>
