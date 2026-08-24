@@ -1389,11 +1389,9 @@ static int send_fd(int sock_fd, int fd)
 
 /* Helper for should_auto_unmount
  *
- * fusermount typically has the s-bit set - initial open of `mnt` was as root
- * and got EACCESS as 'allow_other' was not specified.
- * Try opening `mnt` again with uid and guid of the calling process.
+ * Try opening `mnt` with uid and gid of the calling process.
  */
-static int recheck_ENOTCONN_as_owner(const char *mnt)
+static int check_ENOTCONN_as_owner(const char *mnt)
 {
 	int pid = fork();
 	if(pid == -1) {
@@ -1448,7 +1446,6 @@ static int should_auto_unmount(const char *mnt, const char *type)
 	char *copy;
 	const char *last;
 	int result = 0;
-	int fd;
 
 	copy = strdup(mnt);
 	if (copy == NULL) {
@@ -1461,23 +1458,7 @@ static int should_auto_unmount(const char *mnt, const char *type)
 	if (check_is_mount(last, mnt, type) == -1)
 		goto out;
 
-	fd = open(mnt, O_RDONLY);
-
-	if (fd != -1) {
-		close(fd);
-	} else {
-		switch(errno) {
-		case ENOTCONN:
-			result = 1;
-			break;
-		case EACCES:
-			result = recheck_ENOTCONN_as_owner(mnt);
-			break;
-		default:
-			result = 0;
-			break;
-		}
-	}
+	result = check_ENOTCONN_as_owner(mnt);
 out:
 	free(copy);
 	return result;
