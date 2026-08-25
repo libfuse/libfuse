@@ -861,49 +861,51 @@ static int send_string(const struct fuse_service *sf, uint32_t command,
 	const size_t valuelen = strlen(value);
 	const size_t cmdsz = sizeof_fuse_service_string_command(valuelen);
 	ssize_t size;
+	int err;
 
 	cmd = calloc(1, cmdsz);
 	if (!cmd) {
-		int error = errno;
-
+		err = -errno;
 		fuse_log(FUSE_LOG_ERR, "fuse: alloc service string send: %s\n",
-			 strerror(error));
-		return -error;
+			 strerror(-err));
+		goto out;
 	}
 	cmd->p.magic = htonl(command);
 	memcpy(cmd->value, value, valuelen + 1);
 
 	size = __send_packet(sf, cmd, cmdsz);
 	if (size < 0) {
-		int error = errno;
-
+		err = -errno;
 		fuse_log(FUSE_LOG_ERR, "fuse: send service string: %s\n",
-			 strerror(error));
-		return -error;
+			 strerror(-err));
+		goto out;
 	}
-	free(cmd);
 
 	size = __recv_packet(sf, &reply, sizeof(reply));
 	if (size < 0) {
-		int error = errno;
-
+		err = -errno;
 		fuse_log(FUSE_LOG_ERR, "fuse: service string reply: %s\n",
-			 strerror(error));
-		return -error;
+			 strerror(-err));
+		goto out;
 	}
 	if (size != sizeof(reply)) {
 		fuse_log(FUSE_LOG_ERR, "fuse: wrong service string reply size %zd, expected %zd\n",
 			size, sizeof(reply));
-		return -EBADMSG;
+		err = -EBADMSG;
+		goto out;
 	}
 
 	if (ntohl(reply.p.magic) != FUSE_SERVICE_SIMPLE_REPLY) {
 		fuse_log(FUSE_LOG_ERR, "fuse: service string reply contains wrong magic!\n");
-		return -EBADMSG;
+		err = -EBADMSG;
+		goto out;
 	}
 
 	*errorp = ntohl(reply.error);
-	return 0;
+	err = 0;
+out:
+	free(cmd);
+	return err;
 }
 
 static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
@@ -914,14 +916,14 @@ static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
 	const size_t valuelen = strlen(value);
 	const size_t cmdsz = sizeof_fuse_service_mountpoint_command(valuelen);
 	ssize_t size;
+	int err;
 
 	cmd = calloc(1, cmdsz);
 	if (!cmd) {
-		int error = errno;
-
+		err = -errno;
 		fuse_log(FUSE_LOG_ERR, "fuse: alloc service mountpoint send: %s\n",
-			 strerror(error));
-		return -error;
+			 strerror(-err));
+		goto out;
 	}
 	cmd->p.magic = htonl(FUSE_SERVICE_MNTPT_CMD);
 	cmd->expected_fmt = htons(expected_fmt);
@@ -929,36 +931,38 @@ static int send_mountpoint(const struct fuse_service *sf, mode_t expected_fmt,
 
 	size = __send_packet(sf, cmd, cmdsz);
 	if (size < 0) {
-		int error = errno;
-
+		err = -errno;
 		fuse_log(FUSE_LOG_ERR, "fuse: send service mountpoint: %s\n",
-			 strerror(error));
-		return -error;
+			 strerror(-err));
+		goto out;
 	}
-	free(cmd);
 
 	size = __recv_packet(sf, &reply, sizeof(reply));
 	if (size < 0) {
-		int error = errno;
-
+		err = -errno;
 		fuse_log(FUSE_LOG_ERR, "fuse: service mountpoint reply: %s\n",
-			 strerror(error));
-		return -error;
+			 strerror(-err));
+		goto out;
 	}
 	if (size != sizeof(reply)) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: wrong service mountpoint reply size %zd, expected %zd\n",
 			 size, sizeof(reply));
-		return -EBADMSG;
+		err = -EBADMSG;
+		goto out;
 	}
 
 	if (ntohl(reply.p.magic) != FUSE_SERVICE_SIMPLE_REPLY) {
 		fuse_log(FUSE_LOG_ERR, "fuse: service mountpoint reply contains wrong magic!\n");
-		return -EBADMSG;
+		err = -EBADMSG;
+		goto out;
 	}
 
 	*errorp = ntohl(reply.error);
-	return 0;
+	err = 0;
+out:
+	free(cmd);
+	return err;
 }
 
 static int send_mount(const struct fuse_service *sf, unsigned int ms_flags,
