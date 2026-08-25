@@ -3932,6 +3932,8 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
 	struct fuse_bufvec tmpbuf = FUSE_BUFVEC_INIT(write_header_size);
 	struct fuse_in_header *in;
+	/* 'in' spans the whole request, not just the fixed header */
+	bool buf_is_complete;
 	const void *inarg;
 	struct fuse_req *req;
 	void *mbuf = NULL;
@@ -3954,8 +3956,10 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 			goto clear_pipe;
 
 		in = mbuf;
+		buf_is_complete = (tmpbuf.buf[0].size == buf->size);
 	} else {
 		in = buf->mem;
+		buf_is_complete = true;
 	}
 
 	trace_request_process(in->opcode, in->unique);
@@ -3984,16 +3988,7 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	}
 
 	fuse_session_in2req(req, in);
-	if (in->total_extlen)
-		fuse_req_parse_extensions(req, in->total_extlen, in, in->len);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
-
-	if (se->debug && req->secctx_len > 0) {
-		fuse_log(FUSE_LOG_DEBUG,
-			"  secctx: %zu bytes (%u contexts)\n",
-			req->secctx_len,
-			req->secctx_count);
-	}
 
 	err = fuse_req_opcode_sanity_ok(se, in->opcode);
 	if (err)
@@ -4042,6 +4037,31 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 			goto reply_err;
 
 		in = mbuf;
+		buf_is_complete = true;
+	}
+
+	/*
+	 * Extensions sit at the end of the request and are only reachable once
+	 * 'in' spans it. The splice path leaves FUSE_WRITE (with write_buf) and
+	 * FUSE_NOTIFY_REPLY payloads in the pipe; as of Linux 7.1 the kernel
+	 * attaches no extensions to those.
+	 */
+	if (in->total_extlen) {
+		if (buf_is_complete)
+			fuse_req_parse_extensions(req, in->total_extlen, in,
+						  in->len);
+		else
+			fuse_log(FUSE_LOG_WARNING,
+				"fuse: %s: %zu extension bytes outside the header buffer, ignored\n",
+				opname((enum fuse_opcode) in->opcode),
+				FUSE_EXT_SIZE(in->total_extlen));
+	}
+
+	if (se->debug && req->secctx_len > 0) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"  secctx: %zu bytes (%u contexts)\n",
+			req->secctx_len,
+			req->secctx_count);
 	}
 
 	inarg = (void *) &in[1];
