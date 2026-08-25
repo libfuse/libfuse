@@ -597,7 +597,8 @@ class TestRunner:
 
     def __init__(self, build_dir: Path, run_dir: Path, run_dir_created: bool,
                  jobs: int, keep_logs: bool, verbose: bool,
-                 io_uring: bool = False, io_uring_depth: int | None = None):
+                 io_uring: bool = False, io_uring_depth: int | None = None,
+                 io_uring_bufpool: bool = False):
         self.build_dir = build_dir
         self.run_dir = run_dir
         self.run_dir_created = run_dir_created
@@ -606,6 +607,7 @@ class TestRunner:
         self.verbose = verbose
         self.io_uring = io_uring
         self.io_uring_depth = io_uring_depth
+        self.io_uring_bufpool = io_uring_bufpool
         self.valgrind = resolve_valgrind()
         self.core_pattern = read_core_pattern()
         self.fuse_caps = self.read_fuse_caps()
@@ -757,6 +759,8 @@ class TestRunner:
         })
         if self.io_uring_depth is not None:
             env['FUSE_URING_QUEUE_DEPTH'] = str(self.io_uring_depth)
+        if self.io_uring_bufpool:
+            env['FUSE_URING_BUFPOOL'] = '1'
         env['PATH'] = self.build_path(env.get('PATH', ''))
         return workdir, env, self._cgroup.new_leaf()
 
@@ -1557,6 +1561,10 @@ def parse_args(argv: list) -> argparse.Namespace:
                         metavar='N',
                         help="export FUSE_URING_QUEUE_DEPTH; default is "
                              "libfuse's 8")
+    parser.add_argument('--io-uring-bufpool', action='store_true',
+                        help='export FUSE_URING_BUFPOOL, so payload buffers '
+                             'come from a per queue pool the kernel hands out; '
+                             'needs a kernel that supports it')
     parser.add_argument('-l', '--list', action='store_true',
                         help='print the selected tests and exit')
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -1592,12 +1600,16 @@ def main(argv: list) -> int:
     reexec_under_user_scope_if_needed()
     raise_nofile_limit()
 
+    if args.io_uring_bufpool:
+        args.io_uring = True
+
     run_dir = resolve_run_dir(args)
     runner = TestRunner(build_dir=build_dir, run_dir=run_dir,
                         run_dir_created=make_run_dir(run_dir), jobs=args.jobs,
                         keep_logs=args.keep_logs, verbose=args.verbose,
                         io_uring=args.io_uring,
-                        io_uring_depth=args.io_uring_queue_depth)
+                        io_uring_depth=args.io_uring_queue_depth,
+                        io_uring_bufpool=args.io_uring_bufpool)
     if args.io_uring:
         # A missing precondition skips the whole invocation rather than
         # failing it, so a plain `meson test` on a machine that never enabled

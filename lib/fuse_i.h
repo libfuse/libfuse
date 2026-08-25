@@ -73,6 +73,14 @@ struct fuse_notify_req {
 struct fuse_session_uring {
 	bool enable;
 	unsigned int q_depth;
+
+	/*
+	 * Let the kernel manage the memory regions for the queues instead of
+	 * libfuse allocating + binding a buffer to every ring entry. Requires
+	 * FUSE_CAP_IO_URING_BUFPOOL.
+	 */
+	bool bufpool;
+
 	struct fuse_ring_pool *pool;
 };
 

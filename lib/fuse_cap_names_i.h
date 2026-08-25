@@ -62,6 +62,7 @@ static const struct fuse_cap_name fuse_cap_names[] = {
 	{ FUSE_CAP_OVER_IO_URING,		"FUSE_CAP_OVER_IO_URING"},
 	{ FUSE_CAP_ALLOW_IDMAP,			"FUSE_CAP_ALLOW_IDMAP"},
 	{ FUSE_CAP_SECURITY_CTX,		"FUSE_CAP_SECURITY_CTX"},
+	{ FUSE_CAP_IO_URING_BUFPOOL,		"FUSE_CAP_IO_URING_BUFPOOL"},
 	// Add any new capabilities here
 	{ 0, NULL} // Sentinel to mark the end of the array
 };

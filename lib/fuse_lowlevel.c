@@ -2893,6 +2893,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 			se->conn.capable_ext |= FUSE_CAP_NO_EXPORT_SUPPORT;
 		if (inargflags & FUSE_OVER_IO_URING)
 			se->conn.capable_ext |= FUSE_CAP_OVER_IO_URING;
+		if (inargflags & FUSE_HAS_IO_URING_BUFPOOL)
+			se->conn.capable_ext |= FUSE_CAP_IO_URING_BUFPOOL;
 		if (inargflags & FUSE_ALLOW_IDMAP)
 			se->conn.capable_ext |= FUSE_CAP_ALLOW_IDMAP;
 		if (inargflags & FUSE_SECURITY_CTX)
@@ -2941,6 +2943,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	LL_SET_DEFAULT(se->op.readdirplus && se->op.readdir,
 		       FUSE_CAP_READDIRPLUS_AUTO);
 	LL_SET_DEFAULT(1, FUSE_CAP_OVER_IO_URING);
+	LL_SET_DEFAULT(se->uring.bufpool, FUSE_CAP_IO_URING_BUFPOOL);
 
 	/* This could safely become default, but libfuse needs an API extension
 	 * to support it
@@ -3118,8 +3121,10 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	/* Once the reply is composed want_ext is the negotiation result, not a
 	 * wish list; io-uring is the only capability that can still be off.
 	 */
-	if (!enable_io_uring)
+	if (!enable_io_uring) {
 		fuse_unset_feature_flag(&se->conn, FUSE_CAP_OVER_IO_URING);
+		fuse_unset_feature_flag(&se->conn, FUSE_CAP_IO_URING_BUFPOOL);
+	}
 
 	report_init_test_status(se, ring_rc);
 
@@ -4219,6 +4224,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("allow_root", deny_others, 1),
 	LL_OPTION("io_uring", uring.enable, 1),
 	LL_OPTION("io_uring_q_depth=%u", uring.q_depth, -1),
+	LL_OPTION("io_uring_bufpool", uring.bufpool, 1),
 	FUSE_OPT_END
 };
 
@@ -4239,6 +4245,7 @@ void fuse_lowlevel_help(void)
 "    -o auto_unmount        auto unmount on process termination\n"
 "    -o io_uring            enable io-uring\n"
 "    -o io_uring_q_depth=<n> io-uring queue depth\n"
+"    -o io_uring_bufpool    let the kernel manage the memory regions for queues\n"
 );
 }
 
@@ -4615,10 +4622,17 @@ fuse_session_new_versioned(struct fuse_args *args,
 	se->uring.q_depth = getenv("FUSE_URING_QUEUE_DEPTH") ?
 				    atoi(getenv("FUSE_URING_QUEUE_DEPTH")) :
 				    SESSION_DEF_URING_Q_DEPTH;
+	se->uring.bufpool = getenv("FUSE_URING_BUFPOOL") ?
+				    atoi(getenv("FUSE_URING_BUFPOOL")) :
+				    SESSION_DEF_URING_BUFPOOL;
 
 	/* Parse options */
 	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
 		goto out2;
+
+	if (se->uring.bufpool)
+		se->uring.enable = true;
+
 	if(se->deny_others) {
 		/* Allowing access only by root is done by instructing
 		 * kernel to allow access by everyone, and then restricting

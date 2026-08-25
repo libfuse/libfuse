@@ -1,6 +1,11 @@
 Unreleased Changes
 ==================
 
+* Add support for fuse uring buffer pools (``-o io_uring_bufpool``). Instead
+  of every ring entry registering a payload buffer of its own, userspace hands
+  the kernel one contiguous region of memory for the queue and the kernel
+  manages/optimizes the memory usage for the queue.
+
 * ``fusermount3`` no longer accepts several time stamp related mount options
   (`atime, diratime, relatime, strictatime, lazytime and
   nolazytime`). These were added in 3.14.1 by commits

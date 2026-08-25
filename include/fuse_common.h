@@ -530,6 +530,20 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_SECURITY_CTX (1ULL << 33)
 
 /**
+ * Indicates support for io-uring payload buffer pools
+ *
+ * Without this, every io-uring ring entry registers a payload buffer of its
+ * own and owns it for the lifetime of the ring. With it, a queue hands the
+ * kernel one contiguous pool of memory and the kernel assigns regions out of
+ * that pool for requests, allowing the kernel to manage/optimize memory usage
+ * for the queue. The pool is also registered as an io_uring fixed buffer
+ * where possible.
+ *
+ * This feature is disabled by default.
+ */
+#define FUSE_CAP_IO_URING_BUFPOOL (1ULL << 34)
+
+/**
  * Ioctl flags
  *
  * FUSE_IOCTL_COMPAT: 32bit compat ioctl on 64bit machine
