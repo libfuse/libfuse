@@ -508,6 +508,16 @@ struct fuse_loop_config_v1 {
 #define FUSE_CAP_NO_EXPORT_SUPPORT (1UL << 30)
 
 /**
+ * Indicates support for io-uring between fuse-server and fuse-client
+ */
+#define FUSE_CAP_OVER_IO_URING (1UL << 31)
+
+/**
+ * Indicates that creation of idmapped mounts is allowed
+ */
+#define FUSE_CAP_ALLOW_IDMAP (1ULL << 32)
+
+/**
  * Indicates support for sending security context to file creation operations
  * (FUSE_CREATE, FUSE_MKNOD, FUSE_MKDIR, FUSE_SYMLINK)
  *
@@ -518,16 +528,6 @@ struct fuse_loop_config_v1 {
  * This feature is enabled by default when supported by the kernel.
  */
 #define FUSE_CAP_SECURITY_CTX (1ULL << 33)
-
-/**
- * Indicates support for io-uring between fuse-server and fuse-client
- */
-#define FUSE_CAP_OVER_IO_URING (1UL << 31)
-
-/**
- * Indicates that creation of idmapped mounts is allowed
- */
-#define FUSE_CAP_ALLOW_IDMAP (1ULL << 32)
 
 /**
  * Ioctl flags
