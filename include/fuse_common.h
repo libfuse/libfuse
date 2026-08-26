@@ -547,6 +547,12 @@ struct fuse_loop_config_v1 {
 #define FUSE_IOCTL_MAX_IOV	256
 
 /**
+ * This value mirrors the hard coded minimum size for read/write chunking
+ * in the kernel.
+ */
+#define FUSE_MIN_CHUNK_SIZE	4096
+
+/**
  * Connection information, passed to the ->init() method
  *
  * Some of the elements are read-write, these can be changed to
@@ -569,7 +575,20 @@ struct fuse_conn_info {
 	uint32_t proto_minor;
 
 	/**
-	 * Maximum size of the write buffer
+	 * Maximum size of write requests. Initialized with the
+	 * maximum size libfuse supports.
+	 *
+	 * The kernel may always chunk writes to at least
+	 * FUSE_MIN_CHUNK_SIZE, so setting this value to something
+	 * smaller than that will effectively be the same as setting
+	 * it to FUSE_MIN_CHUNK_SIZE.
+	 *
+	 * The kernel builds cached write requests out of whole pages.
+	 * If this value is not a multiple of the system page size
+	 * (getpagesize()), the leftover bytes either go unused or make
+	 * the page at each request boundary be sent in two requests
+	 * instead of one, thus using a multiple of the page size for
+	 * this value is recommended.
 	 */
 	uint32_t max_write;
 
@@ -578,6 +597,11 @@ struct fuse_conn_info {
 	 * limit. However, even if the filesystem does not specify a
 	 * limit, the maximum size of read requests will still be
 	 * limited by the kernel.
+	 *
+	 * The kernel may always chunk reads to at least
+	 * FUSE_MIN_CHUNK_SIZE, so setting this value to a non-zero
+	 * value smaller than that will effectively be the same as
+	 * setting it to FUSE_MIN_CHUNK_SIZE.
 	 *
 	 * NOTE: For the time being, the maximum size of read requests
 	 * must be set both here *and* passed to fuse_session_new()
