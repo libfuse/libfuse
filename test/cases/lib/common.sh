@@ -111,6 +111,15 @@ _require_cap()
 	_notrun "kernel does not offer $cap"
 }
 
+# _require_fuse_device
+# _notrun unless the kernel side is there. A case that reaches fusermount3 but
+# never completes a mount needs this much and no more.
+_require_fuse_device()
+{
+	[ -e /dev/fuse ] ||
+		_notrun "the FUSE kernel module does not seem to be loaded"
+}
+
 # _require_fuse
 # _notrun unless this user can mount a FUSE filesystem at all: the kernel side
 # has to be there, and an unprivileged user needs a setuid fusermount3. It runs
@@ -122,8 +131,7 @@ _require_fuse()
 
 	# BSD has no fusermount3 at all; vfs.usermount decides there.
 	_is_linux || return 0
-	[ -e /dev/fuse ] ||
-		_notrun "the FUSE kernel module does not seem to be loaded"
+	_require_fuse_device
 	[ "$FUSE_UID" != 0 ] || return 0
 	fusermount=$(command -v fusermount3) ||
 		_notrun "no fusermount3 on \$PATH"
