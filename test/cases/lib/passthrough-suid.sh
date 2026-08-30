@@ -8,9 +8,12 @@
 # A write by a caller without CAP_FSETID has to clear setuid and setgid, as it
 # would on a local filesystem. passthrough_hp is the interesting case: it
 # issues the backing write under its own credentials, which normally hold
-# CAP_FSETID, so the backing filesystem never strips the bits. They go away
-# only because the FUSE kernel strips them first - in passthrough mode from
-# backing_file_write_iter(), before those credentials are installed.
+# CAP_FSETID, so the backing filesystem never clears setuid/setgid.
+#
+# What does clear them differs per mode, which is why both are covered:
+# passthrough_hp negotiates KILLPRIV_V2 only with --nopassthrough and clears
+# them itself on fi->kill_suidgid; in passthrough mode the FUSE kernel does it
+# from backing_file_write_iter(), before those credentials are installed.
 #
 # No uid requirement here: checks.py drops CAP_FSETID for the write itself,
 # which a case that needs a root daemon for passthrough could not do by

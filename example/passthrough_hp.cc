@@ -177,6 +177,7 @@ struct Fs {
 	std::string fuse_mount_options;
 	bool direct_io;
 	bool passthrough;
+	bool killpriv_v2;
 	bool selinux;
 };
 static Fs fs{};
@@ -217,6 +218,16 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 	/* Passthrough and writeback cache are conflicting modes */
 	if (fs.timeout && !fs.passthrough)
 		fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
+
+	/*
+	 * KILLPRIV_V2 lets the kernel mark inodes S_NOSEC, which stops it
+	 * probing security.capability on every write. KILLPRIV_V2 conflicts
+	 * with passthrough: the kernel then leaves suid/sgid to this filesystem,
+	 * which in that mode never sees the write.
+	 */
+	if (!fs.passthrough)
+		fs.killpriv_v2 = fuse_set_feature_flag(
+			conn, FUSE_CAP_HANDLE_KILLPRIV_V2);
 
 	fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
 
@@ -286,6 +297,57 @@ static int with_fd_path(int fd, const std::function<int(const char *)> &f)
 	return f(procname);
 #endif
 }
+/*
+ * The mode with S_ISUID and S_ISGID removed, or 0 when neither is set.
+ * S_ISGID counts as sgid only on a group-executable file; without S_IXGRP it
+ * is a mandatory locking mark and has to be left alone.
+ */
+static mode_t suidgid_dropped_mode(const struct stat &st)
+{
+	mode_t mode = st.st_mode & ~S_ISUID;
+
+	if (st.st_mode & S_IXGRP)
+		mode &= ~S_ISGID;
+
+	return mode == st.st_mode ? 0 : mode;
+}
+
+/* Returns an errno, 0 on success. */
+static int drop_suidgid_fd(int fd)
+{
+	struct stat st;
+	mode_t mode;
+
+	if (fstat(fd, &st) == -1)
+		return errno;
+
+	mode = suidgid_dropped_mode(st);
+	if (!mode)
+		return 0;
+
+	return fchmod(fd, mode) == -1 ? errno : 0;
+}
+
+/* Drops S_ISUID/S_ISGID on an O_PATH descriptor, which fchmod() rejects. */
+static int drop_suidgid_at(int ifd)
+{
+	struct stat st;
+	mode_t mode;
+
+	if (fstatat(ifd, "", &st, AT_EMPTY_PATH) == -1)
+		return errno;
+
+	mode = suidgid_dropped_mode(st);
+	if (!mode)
+		return 0;
+
+	int res = with_fd_path(ifd, [mode](const char *procname) {
+		return chmod(procname, mode);
+	});
+
+	return res == -1 ? errno : 0;
+}
+
 static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		       int valid, struct fuse_file_info *fi)
 {
@@ -360,6 +422,15 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		}
 		if (res == -1)
 			goto out_err;
+	}
+	/* After the chown or truncate FUSE_SET_ATTR_KILL_SUID arrived with */
+	if (valid & FUSE_SET_ATTR_KILL_SUID) {
+		int err = fi ? drop_suidgid_fd(fi->fh) : drop_suidgid_at(ifd);
+
+		if (err) {
+			fuse_reply_err(req, err);
+			return;
+		}
 	}
 	return sfs_getattr(req, ino, fi);
 
@@ -1098,6 +1169,16 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	}
 
 	fi->fh = fd;
+
+	if (fi->kill_suidgid) {
+		auto kill_err = drop_suidgid_fd(fd);
+		if (kill_err) {
+			close(fd);
+			fuse_reply_err(req, kill_err);
+			return;
+		}
+	}
+
 	fuse_entry_param e;
 	auto err = do_lookup(parent, name, &e);
 	if (err) {
@@ -1263,6 +1344,16 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		return;
 	}
 
+	/* Outside inode.m: a lock must not span a syscall */
+	if (fi->kill_suidgid) {
+		auto err = drop_suidgid_fd(fd);
+		if (err) {
+			close(fd);
+			fuse_reply_err(req, err);
+			return;
+		}
+	}
+
 	{
 		lock_guard<mutex> g{ inode.m };
 		inode.nopen++;
@@ -1379,6 +1470,15 @@ static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 static void do_write_buf(fuse_req_t req, size_t size, off_t off,
 			 fuse_bufvec *in_buf, fuse_file_info *fi)
 {
+	/* Before the data lands, as the VFS does for a local filesystem */
+	if (fi->kill_suidgid) {
+		auto err = drop_suidgid_fd(fi->fh);
+		if (err) {
+			fuse_reply_err(req, err);
+			return;
+		}
+	}
+
 	fuse_bufvec out_buf = FUSE_BUFVEC_INIT(size);
 	out_buf.buf[0].flags =
 		static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
@@ -1420,6 +1520,21 @@ static void sfs_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 			  off_t offset, off_t length, fuse_file_info *fi)
 {
 	(void)ino;
+
+	/*
+	 * KILLPRIV_V2 has no per-request flag for fallocate, and the kernel
+	 * stops clearing suid/sgid itself once it is negotiated, so a content
+	 * change here would otherwise leave the bits behind. Clear them
+	 * unconditionally: a CAP_FSETID caller keeps them on a local
+	 * filesystem, but guessing wrong that way only costs a chmod.
+	 */
+	if (fs.killpriv_v2) {
+		auto kill_err = drop_suidgid_fd(fi->fh);
+		if (kill_err) {
+			fuse_reply_err(req, kill_err);
+			return;
+		}
+	}
 
 	auto err = -do_fallocate(fi->fh, mode, offset, length);
 
