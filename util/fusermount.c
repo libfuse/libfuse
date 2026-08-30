@@ -1743,7 +1743,7 @@ do_unmount:
 	if (geteuid() == 0)
 		res = unmount_fuse(mnt, quiet, lazy);
 	else {
-		res = umount2(mnt, lazy ? UMOUNT_DETACH : 0);
+		res = umount2(mnt, (lazy ? UMOUNT_DETACH : 0) | UMOUNT_NOFOLLOW);
 		if (res == -1 && !quiet)
 			fprintf(stderr,
 				"%s: failed to unmount %s: %s\n",
