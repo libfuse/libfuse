@@ -14,6 +14,7 @@ or the \\040 escapes subtly wrong.
 """
 
 import argparse
+import ctypes
 import errno
 import filecmp
 import os
@@ -61,6 +62,43 @@ name_generator.counter = 0
 def _require(condition, message):
     if not condition:
         raise CheckFailed(message)
+
+
+# capabilities(7); no Python binding exposes either constant.
+_LINUX_CAPABILITY_VERSION_3 = 0x20080522
+_CAP_FSETID = 4
+
+
+class _CapHeader(ctypes.Structure):
+    _fields_ = [('version', ctypes.c_uint32), ('pid', ctypes.c_int)]
+
+
+class _CapData(ctypes.Structure):
+    _fields_ = [('effective', ctypes.c_uint32),
+                ('permitted', ctypes.c_uint32),
+                ('inheritable', ctypes.c_uint32)]
+
+
+def drop_cap_fsetid():
+    """Clear CAP_FSETID from this process's effective set.
+
+    A caller holding it is exempt from suid/sgid stripping, so a check that
+    wants to see the bits go would otherwise be asserting that nothing
+    happens. Each check is its own process, so losing the capability for the
+    rest of it costs nothing. Unprivileged callers do not hold it and take the
+    early return.
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    header = _CapHeader(_LINUX_CAPABILITY_VERSION_3, 0)
+    # Version 3 spans 64 capabilities, so capget writes two data words.
+    data = (_CapData * 2)()
+    if libc.capget(ctypes.byref(header), ctypes.byref(data)) != 0:
+        raise OSError(ctypes.get_errno(), 'capget failed')
+    if not data[0].effective & (1 << _CAP_FSETID):
+        return
+    data[0].effective &= ~(1 << _CAP_FSETID)
+    if libc.capset(ctypes.byref(header), ctypes.byref(data)) != 0:
+        raise OSError(ctypes.get_errno(), 'capset failed')
 
 
 def readdir_inode(path):
@@ -114,6 +152,61 @@ def expect_enoent(path):
 
 
 # ----------------------------------------------------------- POSIX operations
+
+def cmd_suidgid_dropped(mnt_dir, src_dir):
+    """A write or fallocate without CAP_FSETID has to clear setuid and setgid.
+
+    Checked on the backing file, not through the mount: with attribute caching
+    on, the mount is allowed a stale view of the mode.
+
+    The capability goes after the chmod, so this runs the same whether or not
+    the suite is root. passthrough mode needs a root daemon, CAP_SYS_ADMIN
+    being required to open a backing file, so the two cannot be separated by
+    running the whole case unprivileged.
+
+    Only a root daemon discriminates, for either operation: an unprivileged one
+    has no CAP_FSETID either, so the backing filesystem clears the bits on its
+    own and the check passes whatever the filesystem under test does.
+    """
+    name = name_generator()
+    mnt_path = pjoin(mnt_dir, name)
+    src_path = pjoin(src_dir, name)
+
+    with open(mnt_path, 'wb') as fh:
+        fh.write(b'hello')
+
+    # Group execute as well, so the sgid bit is a real sgid and not a
+    # mandatory locking mark, which the kernel leaves alone.
+    mode = stat.S_ISUID | stat.S_ISGID | 0o755
+    os.chmod(mnt_path, mode)
+    _require(stat.S_IMODE(os.stat(src_path).st_mode) == mode,
+             'chmod 0%o did not reach the backing file' % mode)
+
+    drop_cap_fsetid()
+    with open(mnt_path, 'ab') as fh:
+        fh.write(b'more')
+
+    got = stat.S_IMODE(os.stat(src_path).st_mode)
+    _require(got == 0o755,
+             'a write left the backing mode at 0%o, expected 0755' % got)
+
+    # KILLPRIV_V2 has no fallocate flag, so a filesystem acting only on
+    # FUSE_WRITE_KILL_SUIDGID leaves setuid and setgid set here.
+    os.chmod(mnt_path, mode)
+    with open(mnt_path, 'r+b') as fh:
+        try:
+            os.posix_fallocate(fh.fileno(), 0, 8192)
+        except OSError as exc:
+            if exc.errno not in (errno.EOPNOTSUPP, errno.ENOSYS):
+                raise
+            os.unlink(mnt_path)
+            return
+
+    got = stat.S_IMODE(os.stat(src_path).st_mode)
+    _require(got == 0o755,
+             'a fallocate left the backing mode at 0%o, expected 0755' % got)
+    os.unlink(mnt_path)
+
 
 def cmd_unlink(mnt_dir, src_dir=None):
     name = name_generator()
@@ -966,6 +1059,7 @@ def build_parser():
     add('fuse_test_utimens', cmd_utimens, 'mnt', ns_tol={'default': 0})
     add('fuse_test_passthrough', cmd_passthrough, 'src', 'mnt',
         inode_check=_INODE_CHECK)
+    add('fuse_test_suidgid_dropped', cmd_suidgid_dropped, 'mnt', 'src')
     add('fuse_test_xattr', cmd_xattr, 'path')
 
     add('fuse_test_expect_errno', cmd_expect_errno, 'want', 'op',
