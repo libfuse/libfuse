@@ -430,7 +430,8 @@ thread_dep = dependency('threads')
 # Read build files from sub-directories
 #
 subdirs = [ 'lib', 'include']
-if get_option('utils') and not platform.endswith('bsd') and platform != 'dragonfly'
+build_utils = get_option('utils') and not platform.endswith('bsd') and platform != 'dragonfly'
+if build_utils
   subdirs += [ 'util', 'doc' ]
 endif
 
