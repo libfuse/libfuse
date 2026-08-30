@@ -332,7 +332,7 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 		return;
 	}
 
-	res = umount2(mountpoint, 2);
+	res = umount2(mountpoint, MNT_DETACH | UMOUNT_NOFOLLOW);
 	if (res == 0)
 		return;
 
@@ -618,7 +618,7 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	return fd;
 
 out_umount:
-	umount2(mnt, 2); /* lazy umount */
+	umount2(mnt, MNT_DETACH | UMOUNT_NOFOLLOW); /* lazy umount */
 out_close:
 	free(type);
 	free(source);
@@ -692,7 +692,8 @@ int fuse_kern_mount(const char *mountpoint, struct mount_opts *mo)
 	if (res >= 0 && mo->auto_unmount) {
 		if(0 > setup_auto_unmount(mountpoint, 0)) {
 			// Something went wrong, let's umount like in fuse_mount_sys.
-			umount2(mountpoint, MNT_DETACH); /* lazy umount */
+			umount2(mountpoint,
+				MNT_DETACH | UMOUNT_NOFOLLOW); /* lazy umount */
 			res = -1;
 		}
 	} else if (res == -2) {
