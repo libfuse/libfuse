@@ -136,3 +136,10 @@ change_kind = function-subtype-change
 # This is a pre-existing change in the branch
 name = fuse_session
 change_kind = size-change
+
+[suppress_type]
+# fuse_file_info documents its padding bits as the place for new flags.
+# Claiming one shifts the remaining padding but keeps the struct size and
+# every documented member offset, so bound this to size-preserving changes.
+name = fuse_file_info
+has_size_change = no
