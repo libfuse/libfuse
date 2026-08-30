@@ -875,6 +875,48 @@ def _recvall(sock, bufsize):
     return buf
 
 
+_FUSERMOUNT_REJECTIONS = {
+    'not_dir_or_regular': 'is not a directory or a regular file',
+    'no_write_access': 'user has no write access to mountpoint',
+    'no_such_file': 'failed to access mountpoint',
+}
+
+
+def cmd_fusermount_rejects(mountpoint, reason):
+    """Require fusermount3 to refuse <mountpoint> for the named reason.
+
+    fusermount3 reaches its mountpoint checks only once _FUSE_COMMFD names a
+    socket it could hand the /dev/fuse fd back over, so a real socketpair goes
+    in even though the mount is never meant to get that far.
+    """
+    import socket
+
+    wanted = _FUSERMOUNT_REJECTIONS.get(reason)
+    if wanted is None:
+        raise CheckFailed('unknown rejection reason %r' % reason)
+
+    binary = pjoin(os.environ['FUSE_UTIL_DIR'], 'fusermount3')
+    env = dict(os.environ)
+    parent, child = socket.socketpair()
+    try:
+        env['_FUSE_COMMFD'] = str(child.fileno())
+        proc = subprocess.run([binary, '-o', 'rw', mountpoint], env=env,
+                              pass_fds=(child.fileno(),),
+                              stderr=subprocess.PIPE,
+                              universal_newlines=True)
+    finally:
+        parent.close()
+        child.close()
+
+    _require(proc.returncode != 0,
+             'fusermount3 accepted mountpoint %s' % mountpoint)
+    _require(wanted in proc.stderr,
+             'mountpoint %s: expected %r on stderr, got: %s'
+             % (mountpoint, wanted, proc.stderr.strip()))
+    _require(not os.path.ismount(mountpoint),
+             '%s is a mountpoint after a refused mount' % mountpoint)
+
+
 # ------------------------------------------------------------------ dispatch
 
 _INODE_CHECK = {'default': 'exact', 'choices': ('exact', 'nonzero')}
@@ -945,6 +987,8 @@ def build_parser():
                        ('fuse_test_assert_fstype', cmd_assert_fstype),
                        ('fuse_test_assert_source', cmd_assert_source)):
         add(name, func, 'mnt', ('values', {'nargs': '+'}))
+    add('fuse_test_fusermount_rejects', cmd_fusermount_rejects,
+        'mountpoint', 'reason')
 
     add('fuse_test_printcap_caps', cmd_printcap_caps, 'src_root')
     add('fuse_test_reachable_without_caps', cmd_reachable_without_caps, 'path')

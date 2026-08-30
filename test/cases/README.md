@@ -175,6 +175,7 @@ _require_linux <what>           # skip off Linux, naming the facility
 _require_cap FUSE_CAP_NAME      # skip unless printcap reported it
 _require_binary example/null    # skip unless $BUILD_DIR/<path> is executable
 _require_prog losetup           # skip unless it is on $PATH
+_require_fuse_device            # the kernel module, without the setuid check
 _require_not_32bit_on_64 <path>
 _require_reachable_without_caps <fs-name>
 _require_fs_marker_absent <regex> [fs-index]
@@ -288,6 +289,7 @@ fuse_test_assert_super_opt <mnt> <opt>...      # present in super_options
 fuse_test_assert_super_opt_prefix <mnt> <p>... # e.g. user_id=
 fuse_test_assert_fstype <mnt> <fstype>...      # any one is acceptable
 fuse_test_assert_source <mnt> <source>...      # any one is acceptable
+fuse_test_fusermount_rejects <mnt> <reason>    # fusermount3 refuses to mount it
 
 # the remainder
 fuse_test_printcap_caps <src-root>          # every FUSE_CAP_* is in the header
@@ -300,7 +302,8 @@ fuse_test_uds_init <sockpath>               # a FUSE INIT handshake
 
 `--inode-check M` is `exact` (the default) or `nonzero`. `<op>` for
 `fuse_test_expect_errno` is one of `fuse_test_open_rw`, `fuse_test_open_ro`
-or `fuse_test_stat`.
+or `fuse_test_stat`. `<reason>` for `fuse_test_fusermount_rejects` is
+`not_dir_or_regular`, `no_write_access` or `no_such_file`.
 
 `common.sh` wraps the common ones in shell functions, which keep the
 underscore-prefixed naming shell uses elsewhere: `_assert_errno`,
