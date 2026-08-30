@@ -1672,12 +1672,12 @@ int main(int argc, char *argv[])
 	int ch;
 	int fd;
 	int res;
-	char *origmnt;
+	const char *origmnt;
 	char *mnt;
 	static int unmount = 0;
 	static int lazy = 0;
 	static int quiet = 0;
-	char *commfd = NULL;
+	const char *commfd = NULL;
 	long cfd;
 	const char *opts = "";
 	const char *type = NULL;
