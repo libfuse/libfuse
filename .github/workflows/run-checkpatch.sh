@@ -13,6 +13,8 @@ IGNORES="${IGNORES},PREFER_ATTRIBUTE_ALWAYS_UNUSED,PREFER_DEFINED_ATTRIBUTE_MACR
 IGNORES="${IGNORES},STRCPY,STRNCPY,COMPLEX_MACRO,LINE_SPACING,SYMBOLIC_PERMS"
 # version checks read as "FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 19)"
 IGNORES="${IGNORES},CONSTANT_COMPARISON"
+# a Reported-by has no public report to link while an advisory is embargoed
+IGNORES="${IGNORES},BAD_REPORTED_BY_LINK"
 
 # checkpatch is a C/kernel-style checker; a YAML key like "cc:" reads as a
 # malformed Signed-off-by/Cc trailer to its BAD_SIGN_OFF check, so YAML is
