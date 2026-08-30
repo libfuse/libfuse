@@ -1693,7 +1693,12 @@ int main(int argc, char *argv[])
 
 	res = send_fd(cfd, fd);
 	if (res != 0) {
-		umount2(mnt, MNT_DETACH); /* lazy umount */
+		/*
+		 * euid 0 here and mnt is caller supplied - without
+		 * UMOUNT_NOFOLLOW a swapped symlink detaches an
+		 * unrelated mount.
+		 */
+		umount2(mnt, MNT_DETACH | UMOUNT_NOFOLLOW); /* lazy umount */
 		goto err_out;
 	}
 	close(fd);
