@@ -38,6 +38,19 @@ td += executable('test_mount_flags',
                   '../lib/fuse_log.c'],
                  include_directories: include_dirs,
                  install: false)
+# fuser_conf.h needs <sys/vfs.h>, so this follows util/ rather than being built
+# everywhere.
+# FUSE_CONF is relative here so the test can chdir to a directory of its own
+# and have read_conf() pick up the file it just wrote there.
+if build_utils
+  td += executable('test_fuser_conf',
+                   ['test_fuser_conf.c', '../util/fuser_conf.c',
+                    '../lib/mount_util.c', '../lib/fuse_log.c', '../lib/util.c'],
+                   include_directories: [ include_dirs,
+                                          include_directories('../util') ],
+                   c_args: '-DFUSE_CONF="fuse.conf"',
+                   install: false)
+endif
 
 if meson.is_subproject()
 	# Skipped rather than run: the tests mount filesystems, which is not
