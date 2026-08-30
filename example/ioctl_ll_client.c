@@ -26,6 +26,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
+#include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -77,7 +79,16 @@ static int do_read(int fd, const char *offset_str, const char *size_str)
 	struct fioc_rw_arg arg;
 	char *buf;
 	ssize_t ret;
-	size_t sz = strtoul(size_str, NULL, 0);
+	char *endptr;
+	unsigned long sz;
+
+	errno = 0;
+	sz = strtoul(size_str, &endptr, 0);
+	/* SIZE_MAX would wrap the +1 below and allocate nothing */
+	if (errno || endptr == size_str || *endptr || sz >= SIZE_MAX) {
+		fprintf(stderr, "invalid size '%s'\n", size_str);
+		return 1;
+	}
 
 	buf = malloc(sz + 1);
 	if (!buf) {

@@ -257,7 +257,11 @@ FUSE_3.19 {
 
 		cuse_lowlevel_new_319;
 		cuse_lowlevel_setup_319;
+		cuse_lowlevel_main_30;
 		cuse_lowlevel_main_319;
+
+		fuse_session_loop_319;
+		fuse_loop_319;
 } FUSE_3.18;
 
 # Local Variables:

@@ -129,6 +129,12 @@ struct fuse_session {
 	int init_error;
 	int init_wakeup_fd;
 
+	/*
+	 * auto_unmount fusermount3 comm socket; closing it triggers the unmount,
+	 * so it is held open for the session lifetime. -1 if unused.
+	 */
+	int auto_unmount_fd;
+
 	/* io_uring */
 	struct fuse_session_uring uring;
 
@@ -266,6 +272,9 @@ struct fuse *fuse_new_31(struct fuse_args *args, const struct fuse_operations *o
 		      size_t op_size, void *private_data);
 int fuse_loop_mt_312(struct fuse *f, struct fuse_loop_config *config);
 int fuse_session_loop_mt_312(struct fuse_session *se, struct fuse_loop_config *config);
+
+/* the pre-3.19 loop, for callers that need the caller's thread to serve */
+int fuse_session_loop_30(struct fuse_session *se);
 
 /**
  * Internal verifier for the given config.

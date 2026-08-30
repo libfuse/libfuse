@@ -29,6 +29,9 @@
 #include <errno.h>
 #include <sys/param.h>
 
+#undef fuse_loop
+int fuse_loop(struct fuse *f);
+
 #ifdef HAVE_SERVICEMOUNT
 # include <linux/types.h>
 # include "fuse_service_priv.h"
@@ -301,6 +304,28 @@ struct fuse *_fuse_new_31(struct fuse_args *args,
 		       struct libfuse_version *version,
 		       void *user_data);
 
+static uint32_t fuse_get_api_version(const struct libfuse_version *version)
+{
+	uint32_t header_version =
+		FUSE_MAKE_VERSION(version->major, version->minor);
+
+	if (version->api_version >= FUSE_MAKE_VERSION(3, 0) &&
+	    version->api_version <= header_version)
+		return version->api_version;
+
+	/* Missing metadata must retain pre-3.19 behavior. */
+	return FUSE_MAKE_VERSION(3, 0);
+}
+
+static int fuse_loop_versioned(struct fuse *fuse,
+			       const struct libfuse_version *version)
+{
+	if (fuse_get_api_version(version) >= FUSE_MAKE_VERSION(3, 19))
+		return fuse_loop_319(fuse);
+
+	return fuse_loop(fuse);
+}
+
 int fuse_service_main_real_versioned(struct fuse_service *service,
 				     struct fuse_args *args,
 				     const struct fuse_operations *op,
@@ -372,7 +397,7 @@ int fuse_service_main_real_versioned(struct fuse_service *service,
 		fuse_service_send_goodbye(service, 0);
 		fuse_service_release(service);
 
-		res = fuse_loop(fuse);
+		res = fuse_loop_versioned(fuse, version);
 	} else {
 		fuse_loop_cfg_set_clone_fd(loop_config, opts.clone_fd);
 		fuse_loop_cfg_set_idle_threads(loop_config, opts.max_idle_threads);
@@ -475,7 +500,7 @@ int fuse_main_real_versioned(int argc, char *argv[],
 		fuse_daemonize_early_success();
 
 	if (opts.singlethread)
-		res = fuse_loop(fuse);
+		res = fuse_loop_versioned(fuse, version);
 	else {
 		loop_config = fuse_loop_cfg_create();
 		if (loop_config == NULL) {

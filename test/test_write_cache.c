@@ -6,9 +6,9 @@
   See the file GPL2.txt.
 */
 
-#define FUSE_USE_VERSION 30
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
-/* Not really needed - just to test build with FUSE_USE_VERSION == 30 */
+/* Not really needed - just to test the build with fuse.h included */
 #include <fuse.h>
 
 #include <fuse_config.h>

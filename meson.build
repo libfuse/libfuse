@@ -131,7 +131,34 @@ special_funcs = {
 	  }
 	}
     ''',
-    'new_mount_api': '''
+}
+
+foreach name, code : special_funcs
+    private_cfg.set('HAVE_' + name.to_upper(),
+        cc.links(code, args: args_default,
+                 name: name + ' check'))
+endforeach
+
+# New Linux mount API (fsopen/fsconfig/fsmount/move_mount): the kernel
+# syscalls landed in 5.2, but libc wrapper functions can lag behind (e.g.
+# glibc added them only in 2.36). Test kernel header support and libc
+# wrapper support separately, so the direct syscall() fallback wrappers
+# in mount_i_linux.h are used whenever libc lacks them - regardless of
+# which libc or distro that is. The two code snippets and the arg list
+# are named so test/meson.build can reuse them verbatim against fixture
+# headers, instead of duplicating the checks.
+mount_api_headers_check_code = '''
+    #include <linux/mount.h>
+    int main(void) {
+        int x = FSOPEN_CLOEXEC | FSMOUNT_CLOEXEC | MOVE_MOUNT_F_EMPTY_PATH;
+        int y = FSCONFIG_SET_STRING | FSCONFIG_CMD_CREATE;
+        int z = MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID | MOUNT_ATTR_NODEV |
+                MOUNT_ATTR_NOEXEC | MOUNT_ATTR_NOATIME;
+        return x + y + z;
+    }
+    '''
+
+mount_api_libc_check_code = '''
 	#define _GNU_SOURCE
 	#include <sys/mount.h>
 	#include <linux/mount.h>
@@ -145,21 +172,28 @@ special_funcs = {
 	    res = move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH);
 	    return 0;
 	}
-    ''',
-    'systemd_headers': '''
-	#include <systemd/sd-daemon.h>
+    '''
 
-	int main(int argc, char *argv[]) {
-          return SD_LISTEN_FDS_START;
-	}
-    ''',
-}
+# -Werror=implicit-function-declaration: without it, a missing
+# declaration only warns on some compilers, and the link can still
+# silently succeed against a same-named symbol the libc happens to
+# export - which would defeat the point of testing for the wrapper
+# functions' declared presence.
+mount_api_check_args = args_default + [ '-Werror=implicit-function-declaration' ]
 
-foreach name, code : special_funcs
-    private_cfg.set('HAVE_' + name.to_upper(),
-        cc.links(code, args: args_default,
-                 name: name + ' check'))
-endforeach
+have_new_mount_api_headers = cc.compiles(mount_api_headers_check_code,
+    args: mount_api_check_args,
+    name: 'new mount API headers check')
+
+have_new_mount_api_libc_funcs = cc.links(mount_api_libc_check_code,
+    args: mount_api_check_args,
+    name: 'new mount API libc wrapper check')
+
+private_cfg.set('HAVE_NEW_MOUNT_API', have_new_mount_api_headers)
+if have_new_mount_api_headers and not have_new_mount_api_libc_funcs
+    private_cfg.set('NEED_NEW_MOUNT_API_SYSCALL_WRAPPERS', true)
+    message('libc lacks new mount API wrapper functions, using direct syscalls')
+endif
 
 # Headers checks
 test_headers = [ 'sys/xattr.h', 'linux/limits.h' ]
@@ -190,6 +224,12 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
 
 private_cfg.set('USDT_ENABLED', get_option('enable-usdt'))
 
+# What a session starts with; fuse_session_set_sync_init() still overrides it.
+private_cfg.set('FUSE_SYNC_INIT_DEFAULT',
+    {'auto':   'FUSE_SYNC_INIT_AUTO',
+     'always': 'FUSE_SYNC_INIT_ENABLED',
+     'never':  'FUSE_SYNC_INIT_DISABLED'}[get_option('sync-init')])
+
 # Check for liburing with SQE128 support
 code = '''
 #include <liburing.h>
@@ -214,11 +254,31 @@ if get_option('enable-io-uring') and liburing.found()
 endif
 
 # Check for systemd support
+#
+# Only the SD_LISTEN_FDS_START macro is used, so the header alone decides
+# this - a link test would additionally demand libsystemd, which nothing
+# here links against.
+private_cfg.set('HAVE_SYSTEMD_HEADERS',
+    cc.has_header('systemd/sd-daemon.h'))
+
+# Only systemd.pc names the unit directory, and it might ship in a package of
+# its own (Debian: systemd-dev); the libsystemd.pc installed with the headers
+# does not carry it. So fall back to looking for the directory itself, rather
+# than dropping systemd support on a host that plainly has systemd.
 systemd_system_unit_dir = get_option('systemd-system-unit-dir')
 if systemd_system_unit_dir == ''
   systemd = dependency('systemd', required: false)
   if systemd.found()
      systemd_system_unit_dir = systemd.get_variable(pkgconfig: 'systemd_system_unit_dir')
+  else
+    # second path for distros without a merged /usr
+    fs = import('fs')
+    foreach dir : [ '/usr/lib/systemd/system', '/lib/systemd/system' ]
+      if fs.is_dir(dir)
+        systemd_system_unit_dir = dir
+        break
+      endif
+    endforeach
   endif
 endif
 

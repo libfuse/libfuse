@@ -1,202 +1,214 @@
-#!/bin/bash -x
+#!/bin/bash
+#
+# Build one libfuse configuration and run the test suite against it.
+#
+# One invocation is one configuration. The workflow's build matrix supplies
+# the arguments for each of them, and CI runs them as parallel matrix jobs.
 
 set -e
 
-TEST_CMD="meson test -C . --print-errorlogs"
-SAN="-Db_sanitize=address,undefined"
+usage()
+{
+    cat >&2 <<EOF
+usage: $0 --name NAME [options]
 
-# not default
-export UBSAN_OPTIONS=halt_on_error=1
+  --name NAME       label for the build, install and log directories
+  --cc CC           C compiler (default: cc)
+  --cxx CXX         C++ compiler; left unset when not given
+  --sanitize        build with the address and undefined-behaviour sanitizers
+  --valgrind        run the filesystem daemons under valgrind
+  --root            run the suite as root instead of an unprivileged user
+  --io-uring        also exercise the fuse-io-uring transport
+  --meson-opt OPT   extra meson option; repeatable
+  --work-dir DIR    where to build and log, verbatim
+EOF
+    exit 1
+}
+
+need_arg()
+{
+    [ $# -ge 2 ] || { echo "$0: $1 needs an argument" >&2; exit 1; }
+}
+
+NAME=
+CC_BIN=cc
+CXX_BIN=
+SANITIZE=0
+VALGRIND=0
+ROOT=0
+IO_URING=0
+MESON_OPTS=()
+cli_work_dir=
+
+while [ $# -gt 0 ]; do
+    case $1 in
+    --name)      need_arg "$@"; NAME=$2; shift 2 ;;
+    --cc)        need_arg "$@"; CC_BIN=$2; shift 2 ;;
+    --cxx)       need_arg "$@"; CXX_BIN=$2; shift 2 ;;
+    --meson-opt) need_arg "$@"; MESON_OPTS+=("$2"); shift 2 ;;
+    --work-dir)  need_arg "$@"; cli_work_dir=$2; shift 2 ;;
+    --sanitize)  SANITIZE=1; shift ;;
+    --valgrind)  VALGRIND=1; shift ;;
+    --root)      ROOT=1; shift ;;
+    --io-uring)  IO_URING=1; shift ;;
+    *)           usage ;;
+    esac
+done
+[ -n "${NAME}" ] || usage
 
 # Make sure binaries can be accessed when invoked by root.
 umask 0022
 
-# There are tests that run as root but without CAP_DAC_OVERRIDE. To allow these
-# to launch built binaries, the directory tree must be accessible to the root
-# user. Since the source directory isn't necessarily accessible to root, we
-# build and run tests in a temporary directory that we can set up to be world
-# readable/executable.
-SOURCE_DIR="$(readlink -f .)"
-TEST_DIR="$(mktemp -dt libfuse-build-XXXXXX)"
+SOURCE_DIR="$(readlink -f "$(dirname "$0")/..")"
 
-PREFIX_DIR="$(mktemp -dt libfuse-install-XXXXXXX)"
+# Where this run's builds and logs go. --work-dir is used verbatim so CI can
+# predict the path it later uploads; otherwise take the base from run-tests.py
+# (persisted config, else /var/tmp/fuse-tests) and append a dedicated leaf.
+# Asking the runner keeps the precedence in one place instead of parsing an
+# INI in bash.
+WORK_DIR="${cli_work_dir:-}"
+if [ -z "${WORK_DIR}" ]; then
+    WORK_DIR="$(python3 "${SOURCE_DIR}/test/run-tests.py" --print-base-dir)"
+    WORK_DIR="${WORK_DIR}/ci-${USER:-unknown}-$(date +%y%m%d%H%M%S)"
+fi
+WORK_DIR="$(readlink -f "${WORK_DIR}")"   # resolve before the cd below
 
-chmod 0755 "${TEST_DIR}"
-cd "${TEST_DIR}"
-echo "Running in ${TEST_DIR}"
+# Named after the configuration, so several of them share one work directory
+# without colliding and the logs of a whole run stay together.
+BUILD_DIR="${WORK_DIR}/build-${NAME}"
+PREFIX_DIR="${WORK_DIR}/install-${NAME}"
+RUN_DIR="${WORK_DIR}/run"
+
+# A stale tree from a previous failed run would poison this one. The install
+# prefix is owned by root from the last `ninja install`.
+rm -rf "${BUILD_DIR}"
+sudo rm -rf "${PREFIX_DIR}"
+mkdir -p "${BUILD_DIR}" "${PREFIX_DIR}" "${RUN_DIR}"
+# There are tests that run as root but without CAP_DAC_OVERRIDE. To allow those
+# to launch built binaries, every directory on the way in must be traversable
+# by plain permission bits.
+chmod 0755 "${WORK_DIR}" "${BUILD_DIR}" "${PREFIX_DIR}" "${RUN_DIR}"
+cd "${BUILD_DIR}"
+echo "Building ${NAME} in ${BUILD_DIR}"
+
+echo "=== System ==="
+uname -a
+lsb_release -a 2>/dev/null || cat /etc/os-release 2>/dev/null || true
+lscpu || true
+echo "==============="
+
+export CC="${CC_BIN}"
+if [ -n "${CXX_BIN}" ]; then
+    export CXX="${CXX_BIN}"
+else
+    unset CXX
+fi
+
+# Exported rather than assigned: run-tests.py reads it from the environment of
+# the process meson spawns.
+if [ "${VALGRIND}" = 1 ]; then
+    export TEST_WITH_VALGRIND=true
+else
+    export TEST_WITH_VALGRIND=false
+fi
 
 cp -v "${SOURCE_DIR}/test/lsan_suppress.txt" .
-export LSAN_OPTIONS="suppressions=$(pwd)/lsan_suppress.txt"
+export LSAN_OPTIONS="suppressions=${BUILD_DIR}/lsan_suppress.txt"
 export ASAN_OPTIONS="detect_leaks=1"
-export CC
+export UBSAN_OPTIONS=halt_on_error=1      # not the default
 
-log_env()
+echo "=== Environment ==="
+echo "Configuration: ${NAME}"
+echo "CC: ${CC}"
+echo "CXX: ${CXX-}"
+echo "Sanitize: ${SANITIZE}"
+echo "LSAN_OPTIONS: ${LSAN_OPTIONS}"
+echo "ASAN_OPTIONS: ${ASAN_OPTIONS}"
+echo "UBSAN_OPTIONS: ${UBSAN_OPTIONS}"
+echo "Valgrind: ${TEST_WITH_VALGRIND}"
+echo "Root: ${ROOT}"
+echo "IO-uring: ${IO_URING}"
+echo "==================="
+
+meson setup -Dprefix="${PREFIX_DIR}" -Dwerror=true "${MESON_OPTS[@]}" \
+    "${SOURCE_DIR}" || { cat meson-logs/meson-log.txt; false; }
+
+if [ "${SANITIZE}" = 1 ]; then
+    meson configure -Db_sanitize=address,undefined
+    # b_lundef=false is required to work around a clang bug, cf.
+    # https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
+    meson configure -Db_lundef=false
+    # Reconfigure so the build actually uses them.
+    meson setup --reconfigure "${SOURCE_DIR}"
+fi
+
+meson configure --no-pager      # what was actually configured
+ninja
+sudo env PATH="$PATH" ninja install
+
+# libfuse will first try the install path and then system defaults.
+sudo chmod 4755 "${PREFIX_DIR}/bin/fusermount3"
+if [ -x "${PREFIX_DIR}/sbin/fuservicemount3" ]; then
+    sudo chmod 4755 "${PREFIX_DIR}/sbin/fuservicemount3"
+fi
+
+restore_io_uring()
 {
-    echo "=== Environment ==="
-    echo "CC: ${CC}"
-    echo "CXX: ${CXX}"
-    echo "LSAN_OPTIONS: ${LSAN_OPTIONS}"
-    echo "ASAN_OPTIONS: ${ASAN_OPTIONS}"
-    echo "UBSAN_OPTIONS: ${UBSAN_OPTIONS}"
-    echo "FUSE_URING_ENABLE: ${FUSE_URING_ENABLE}"
-    echo "FUSE_URING_QUEUE_DEPTH: ${FUSE_URING_QUEUE_DEPTH}"
-    echo "Valgrind: ${TEST_WITH_VALGRIND}"
-    echo "==================="
+    echo "${FUSE_URING_WAS}" | sudo tee "$1" >/dev/null
+    [ -z "${IO_URING_DISABLED_WAS}" ] ||
+        sudo sysctl -q -w "kernel.io_uring_disabled=${IO_URING_DISABLED_WAS}"
 }
 
-non_sanitized_build()
-(
-    echo "Standard build (without sanitizers)"
-    for CC in gcc gcc-9 gcc-10 clang; do
-        echo "=== Building with ${CC} ==="
-        mkdir build-${CC}; pushd build-${CC}
-        if [ "${CC}" == "clang" ]; then
-            export CXX="clang++"
-            export TEST_WITH_VALGRIND=false
-        else
-            unset CXX
-            export TEST_WITH_VALGRIND=true
-        fi
-        if [ ${CC} == 'gcc-7' ]; then
-            build_opts='-D b_lundef=false'
-        else
-            build_opts=''
-        fi
-        if [ ${CC} == 'gcc-10' ]; then
-            build_opts='-Dc_args=-flto=auto'
-        else
-            build_opts=''
-        fi
+if [ "${IO_URING}" = 1 ]; then
+    # The kernel parameter is global and defaults to off, and this script is
+    # also run by hand, so put back whatever the machine had. Failing to enable
+    # it is fatal: run-tests.py skips its io-uring invocation where the kernel
+    # does not offer the transport, which is right for a developer machine and
+    # wrong here - a job that silently stops testing io-uring is what this
+    # exists to prevent.
+    param=/sys/module/fuse/parameters/enable_uring
+    sysctl_param=/proc/sys/kernel/io_uring_disabled
+    FUSE_URING_WAS="$(cat "${param}")" ||
+        { echo "this kernel has no fuse io-uring support"; exit 1; }
+    # Non-zero denies the daemons io_uring_setup(), which drops them back to
+    # /dev/fuse. Empty before 6.6, where nothing restricts ring creation.
+    IO_URING_DISABLED_WAS="$(cat "${sysctl_param}" 2>/dev/null || true)"
+    # Armed before either write, so a failure between them still restores.
+    trap "restore_io_uring ${param}" EXIT
+    echo Y | sudo tee "${param}" >/dev/null
+    [ -z "${IO_URING_DISABLED_WAS}" ] ||
+        sudo sysctl -q -w kernel.io_uring_disabled=0
+fi
 
-        log_env
-        meson setup -Dprefix=${PREFIX_DIR} -D werror=true ${build_opts} "${SOURCE_DIR}" || (cat meson-logs/meson-log.txt; false)
-        ninja
-        sudo env PATH=$PATH ninja install
+RUN_TESTS_OPTS=(--build-dir .)
+[ "${IO_URING}" = 1 ] && RUN_TESTS_OPTS+=(--io-uring)
 
-        # libfuse will first try the install path and then system defaults
-        sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
-        test -x "${PREFIX_DIR}/sbin/fuservicemount3" && \
-                sudo chmod 4755 ${PREFIX_DIR}/sbin/fuservicemount3
+if [ "${ROOT}" = 1 ]; then
+    SUDO=(sudo)
+else
+    SUDO=()
+    RUN_TESTS_OPTS+=(--setuid-helpers)
+fi
 
-        # also needed for some of the tests
-        sudo chown root:root util/fusermount3
-        sudo chmod 4755 util/fusermount3
+# sudo resets the environment, so PATH and FUSE_TEST_RUN_DIR are passed
+# through env rather than shell-prefix assignments, which sudo would
+# otherwise drop; harmless when SUDO is empty. Calling run-tests.py directly,
+# never through `meson test`, keeps its per-test results in the job log
+# instead of only printing output on failure.
+rc=0
+"${SUDO[@]}" env PATH="$PATH" FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" \
+    timeout 1800 python3 "${SOURCE_DIR}/test/run-tests.py" \
+        "${RUN_TESTS_OPTS[@]}" || rc=$?
 
-        if [ -x util/fuservicemount3 ]; then
-                sudo chown root:root util/fuservicemount3
-                sudo chmod 4755 util/fuservicemount3
-        fi
+if [ "${ROOT}" = 1 ]; then
+    # upload-artifact has to read what root wrote -- before the failure is
+    # propagated, or one unreadable file fails the whole upload of the very
+    # run whose logs are wanted.
+    sudo chown -R "$(id -u):$(id -g)" "${RUN_DIR}"
+fi
+[ "${rc}" = 0 ] || exit "${rc}"
 
-        ${TEST_CMD}
-        popd
-        rm -fr build-${CC}
-        sudo rm -fr ${PREFIX_DIR}
-
-    done
-)
-
-sanitized_build()
-(
-    echo "=== Building with clang and sanitizers"
-
-    mkdir build-san; pushd build-san
-
-    log_env
-    meson setup -Dprefix=${PREFIX_DIR} -D werror=true\
-           "${SOURCE_DIR}" \
-           || (cat meson-logs/meson-log.txt; false)
-    meson configure $SAN
-
-    # b_lundef=false is required to work around clang
-    # bug, cf. https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
-    meson configure -D b_lundef=false
-
-    # additional options
-    if [[ $# -gt 0 ]]; then
-        meson configure "$@"
-    fi
-
-    # print all options
-    meson configure --no-pager
-
-    # reconfigure to ensure it uses all additional options
-    meson setup --reconfigure "${SOURCE_DIR}"
-    ninja
-    sudo env PATH=$PATH ninja install
-    sudo chmod 4755 ${PREFIX_DIR}/bin/fusermount3
-    test -x "${PREFIX_DIR}/sbin/fuservicemount3" && \
-        sudo chmod 4755 ${PREFIX_DIR}/sbin/fuservicemount3
-
-    # also needed for some of the tests
-    sudo chown root:root util/fusermount3
-    sudo chmod 4755 util/fusermount3
-
-    if [ -x util/fuservicemount3 ]; then
-        sudo chown root:root util/fuservicemount3
-        sudo chmod 4755 util/fuservicemount3
-    fi
-
-    # Test as root and regular user. Give the root run a distinct
-    # meson log basename so its meson-logs/testlog.* files don't end
-    # up owned by root and block the subsequent user run from writing
-    # them.
-    sudo env PATH=$PATH ${TEST_CMD} --logbase=testlog-root
-
-    # Cleanup temporary files (since they are now owned by root)
-    sudo rm -rf test/.pytest_cache/ test/__pycache__
-
-    ${TEST_CMD}
-    
-    popd
-    rm -fr build-san
-    sudo rm -fr ${PREFIX_DIR}
-)
-
-# Sanitized with io-uring
-export CC=clang
-export CXX=clang++
-export FUSE_URING_ENABLE=1
-sanitized_build
-unset FUSE_URING_ENABLE
-
-# 32-bit sanitized build
-export CC=clang
-export CXX=clang++
-export CFLAGS="-m32"
-export CXXFLAGS="-m32"
-export LDFLAGS="-m32"
-export PKG_CONFIG_PATH="/usr/lib/i386-linux-gnu/pkgconfig"
-TEST_WITH_VALGRIND=false
-sanitized_build
-unset CFLAGS
-unset CXXFLAGS
-unset LDFLAGS
-unset PKG_CONFIG_PATH
-unset TEST_WITH_VALGRIND
-unset CC
-unset CXX
-
-# Sanitized build
-export CC=clang
-export CXX=clang++
-TEST_WITH_VALGRIND=false
-sanitized_build
-
-# Sanitized build without libc versioned symbols
-export CC=clang
-export CXX=clang++
-sanitized_build "-Ddisable-libc-symbol-version=true"
-
-# Sanitized build without fuse-io-uring
-export CC=clang
-export CXX=clang++
-sanitized_build "-Denable-io-uring=false"
-
-# Build without any sanitizer
-non_sanitized_build
-
-# Documentation.
-(cd "${SOURCE_DIR}"; doxygen doc/Doxyfile)
-
-# Clean up.
-rm -rf "${TEST_DIR}"
+# Only reached when everything above passed, because of set -e: a failed run
+# has to stay inspectable. The logs are kept either way, and are the product.
+rm -rf "${BUILD_DIR}"
+sudo rm -rf "${PREFIX_DIR}"

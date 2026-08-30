@@ -34,6 +34,7 @@
 
 #include <sys/fsuid.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/utsname.h>
 #include <sched.h>
 #include <stdbool.h>
@@ -1098,6 +1099,7 @@ struct mount_context {
 	int mnt_fd;
 };
 
+#ifdef HAVE_NEW_MOUNT_API
 /*
  * Phase 1: Open device and prepare for mount (sync-init mode)
  * Returns fd on success, -1 on failure
@@ -1163,7 +1165,6 @@ fail_close_fd:
 	return -1;
 }
 
-#ifdef HAVE_NEW_MOUNT_API
 /*
  * Phase 2: Perform the actual mount using new mount API (sync-init mode)
  * Returns 0 on success, -1 on failure
@@ -1208,7 +1209,7 @@ static int mount_fuse_finish_fsmount(const char *mnt,
 	/* Use new mount API; mount onto the pinned fd, not the path string */
 	res = fuse_kern_fsmount(mnt, ctx->mnt_fd, mp.flags, mp.blkdev,
 				mp.fsname, mp.subtype, ctx->dev, mp.optbuf,
-				final_mtab_opts);
+				final_mtab_opts, NULL);
 	if (res == -1)
 		goto fail_free_merged;
 
@@ -1352,7 +1353,9 @@ fail_close_fd:
 
 /* Forward declarations for helper functions */
 static int send_fd(int sock_fd, int fd);
+#ifdef HAVE_NEW_MOUNT_API
 static int wait_for_signal(int sock_fd);
+#endif /* HAVE_NEW_MOUNT_API */
 
 #ifdef HAVE_NEW_MOUNT_API
 /*
@@ -1447,10 +1450,26 @@ static int send_fd(int sock_fd, int fd)
  * Wait for a signal byte from the caller.
  * Returns 0 on success, -1 on error.
  */
+#ifdef HAVE_NEW_MOUNT_API
+
+/*
+ * The caller is unprivileged and decides when to signal, so a mount attempt
+ * must not park this privileged helper forever. Generous enough that a daemon
+ * doing slow start-up work before FUSE_INIT is not cut off.
+ */
+#define SYNC_INIT_PROCEED_TIMEOUT_SEC (5 * 60)
+
 static int wait_for_signal(int sock_fd)
 {
+	struct timeval tv = { .tv_sec = SYNC_INIT_PROCEED_TIMEOUT_SEC };
 	char buf[1];
 	int res;
+
+	if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1) {
+		fprintf(stderr, "%s: failed to set signal timeout: %s\n",
+			progname, strerror(errno));
+		return -1;
+	}
 
 	do {
 		res = recv(sock_fd, buf, sizeof(buf), 0);
@@ -1459,6 +1478,10 @@ static int wait_for_signal(int sock_fd)
 		if (res == 0)
 			fprintf(stderr, "%s: connection closed while waiting for signal\n",
 				progname);
+		else if (errno == EAGAIN || errno == EWOULDBLOCK)
+			fprintf(stderr,
+				"%s: timed out after %i seconds waiting for signal\n",
+				progname, SYNC_INIT_PROCEED_TIMEOUT_SEC);
 		else
 			fprintf(stderr, "%s: error receiving signal: %s\n",
 				progname, strerror(errno));
@@ -1466,6 +1489,7 @@ static int wait_for_signal(int sock_fd)
 	}
 	return 0;
 }
+#endif /* HAVE_NEW_MOUNT_API */
 
 /* Helper for should_auto_unmount
  *

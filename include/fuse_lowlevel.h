@@ -2224,7 +2224,7 @@ fuse_session_new_fn(struct fuse_args *args, const struct fuse_lowlevel_ops *op,
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return fuse_session_new_versioned(args, op, op_size, &version,
@@ -2295,6 +2295,17 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
 /**
  * Enter a single threaded, blocking event loop.
  *
+ * Below FUSE_USE_VERSION 3.19 the caller's thread receives and processes the
+ * requests, and fuse_session_exit() does not wake the loop - while it is
+ * blocked reading from /dev/fuse it only notices the flag once the next
+ * request arrives. That variant is deprecated.
+ *
+ * From FUSE_USE_VERSION 3.19 on, requests are still handled one at a time, but
+ * by a worker thread instead of the calling thread, and fuse_session_exit()
+ * returns the loop without waiting for a request. Filesystems that set up
+ * thread local state before entering the loop have to move that setup into a
+ * callback.
+ *
  * When the event loop terminates because the connection to the FUSE
  * kernel module has been closed, this function returns zero. This
  * happens when the filesystem is unmounted regularly (by the
@@ -2314,7 +2325,13 @@ int fuse_session_mount(struct fuse_session *se, const char *mountpoint);
  * @param se the session
  * @return 0, -errno, or a signal value
  */
-int fuse_session_loop(struct fuse_session *se);
+#if FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 19)
+	int fuse_session_loop_319(struct fuse_session *se);
+	#define fuse_session_loop(se) fuse_session_loop_319(se)
+#else
+	int fuse_session_loop(struct fuse_session *se)
+		__attribute__((deprecated("raise FUSE_USE_VERSION to 3.19")));
+#endif
 
 #if FUSE_USE_VERSION < 32
 	int fuse_session_loop_mt_31(struct fuse_session *se, int clone_fd);
@@ -2345,12 +2362,17 @@ int fuse_session_loop(struct fuse_session *se);
 /**
  * Flag a session as terminated.
  *
- * This will cause any running event loops to terminate on the next opportunity. If this function is
- * called by a thread that is not a FUSE worker thread, the next
- * opportunity will be when FUSE a request is received (which may be far in the future if the
- * filesystem is not currently being used by any clients). One way to avoid this delay is to
- * afterwards sent a signal to the main thread (if fuse_set_signal_handlers() is used, SIGPIPE
- * will cause the main thread to wake-up but otherwise be ignored).
+ * This will cause any running event loop to terminate on the next opportunity.
+ * fuse_session_loop_mt(), and fuse_session_loop() from FUSE_USE_VERSION 3.19
+ * on, are woken up directly and return without waiting for a request, no
+ * matter which thread calls this.
+ *
+ * The deprecated fuse_session_loop() below FUSE_USE_VERSION 3.19 is not woken
+ * up and only notices the flag once the next request is received, which may be
+ * far in the future if the filesystem is not currently being used by any
+ * clients. Sending a signal to its thread afterwards avoids that delay - if
+ * fuse_set_signal_handlers() is used, SIGPIPE will cause the thread to wake-up
+ * but otherwise be ignored.
  *
  * @param se the session
  */

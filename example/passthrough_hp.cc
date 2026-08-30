@@ -43,7 +43,7 @@
  * \include passthrough_hp.cc
  */
 
-#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -133,6 +133,9 @@ struct Inode {
 	int backing_id{ 0 };
 	uint64_t nopen{ 0 };
 	std::atomic<uint64_t> nlookup{ 0 };
+	/* Drop before fuse_reply_*: the reply may be the kernel's last
+	 * reference, so forget_one() can erase the inode right after
+	 */
 	std::mutex m;
 
 	/* max timeout after "umount -f" */
@@ -154,7 +157,7 @@ struct Inode {
 };
 
 struct Fs {
-	// Must be acquired *after* any Inode.m locks.
+	// Must be acquired *before* any Inode.m locks.
 	std::mutex mutex;
 	InodeMap inodes; // protected by mutex
 	Inode root;
@@ -174,6 +177,7 @@ struct Fs {
 	std::string fuse_mount_options;
 	bool direct_io;
 	bool passthrough;
+	bool killpriv_v2;
 	bool selinux;
 };
 static Fs fs{};
@@ -214,6 +218,16 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 	/* Passthrough and writeback cache are conflicting modes */
 	if (fs.timeout && !fs.passthrough)
 		fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
+
+	/*
+	 * KILLPRIV_V2 lets the kernel mark inodes S_NOSEC, which stops it
+	 * probing security.capability on every write. KILLPRIV_V2 conflicts
+	 * with passthrough: the kernel then leaves suid/sgid to this filesystem,
+	 * which in that mode never sees the write.
+	 */
+	if (!fs.passthrough)
+		fs.killpriv_v2 = fuse_set_feature_flag(
+			conn, FUSE_CAP_HANDLE_KILLPRIV_V2);
 
 	fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
 
@@ -283,6 +297,57 @@ static int with_fd_path(int fd, const std::function<int(const char *)> &f)
 	return f(procname);
 #endif
 }
+/*
+ * The mode with S_ISUID and S_ISGID removed, or 0 when neither is set.
+ * S_ISGID counts as sgid only on a group-executable file; without S_IXGRP it
+ * is a mandatory locking mark and has to be left alone.
+ */
+static mode_t suidgid_dropped_mode(const struct stat &st)
+{
+	mode_t mode = st.st_mode & ~S_ISUID;
+
+	if (st.st_mode & S_IXGRP)
+		mode &= ~S_ISGID;
+
+	return mode == st.st_mode ? 0 : mode;
+}
+
+/* Returns an errno, 0 on success. */
+static int drop_suidgid_fd(int fd)
+{
+	struct stat st;
+	mode_t mode;
+
+	if (fstat(fd, &st) == -1)
+		return errno;
+
+	mode = suidgid_dropped_mode(st);
+	if (!mode)
+		return 0;
+
+	return fchmod(fd, mode) == -1 ? errno : 0;
+}
+
+/* Drops S_ISUID/S_ISGID on an O_PATH descriptor, which fchmod() rejects. */
+static int drop_suidgid_at(int ifd)
+{
+	struct stat st;
+	mode_t mode;
+
+	if (fstatat(ifd, "", &st, AT_EMPTY_PATH) == -1)
+		return errno;
+
+	mode = suidgid_dropped_mode(st);
+	if (!mode)
+		return 0;
+
+	int res = with_fd_path(ifd, [mode](const char *procname) {
+		return chmod(procname, mode);
+	});
+
+	return res == -1 ? errno : 0;
+}
+
 static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		       int valid, struct fuse_file_info *fi)
 {
@@ -357,6 +422,15 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		}
 		if (res == -1)
 			goto out_err;
+	}
+	/* After the chown or truncate FUSE_SET_ATTR_KILL_SUID arrived with */
+	if (valid & FUSE_SET_ATTR_KILL_SUID) {
+		int err = fi ? drop_suidgid_fd(fi->fh) : drop_suidgid_at(ifd);
+
+		if (err) {
+			fuse_reply_err(req, err);
+			return;
+		}
 	}
 	return sfs_getattr(req, ino, fi);
 
@@ -439,10 +513,8 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 		fs_lock.unlock();
 		close(newfd);
 	} else { // no existing inode
-		/* This is just here to make Helgrind happy. It violates the
-		 * lock ordering requirement (inode.m must be acquired before
-		 * fs.mutex), but this is of no consequence because at this
-		 * point no other thread has access to the inode mutex
+		/* An unlinked inode (fd == -ENOENT) stays in fs.inodes and is
+		 * reachable by other threads, so this is a real lock
 		 */
 		lock_guard<mutex> g{ inode.m };
 		inode.src_ino = e->attr.st_ino;
@@ -658,6 +730,9 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	}
 	e.ino = reinterpret_cast<fuse_ino_t>(&inode);
 	{
+		/* forget_one() reads the count under fs.mutex to decide that
+		 * an inode is unreferenced, so raise it under fs.mutex too */
+		lock_guard<mutex> g_fs{ fs.mutex };
 		inode.nlookup++;
 		if (fs.debug)
 			cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
@@ -672,7 +747,6 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 static void sfs_rmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
 	Inode &inode_p = get_inode(parent);
-	lock_guard<mutex> g{ inode_p.m };
 	auto res = unlinkat(inode_p.fd, name, AT_REMOVEDIR);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
@@ -707,17 +781,27 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 		}
 		if (e.attr.st_nlink == 1) {
 			Inode &inode = get_inode(e.ino);
-			lock_guard<mutex> g{ inode.m };
-			if (inode.fd > 0 && !inode.nopen) {
-				if (fs.debug)
-					cerr << "DEBUG: unlink: release inode "
-					     << e.attr.st_ino
-					     << "; fd=" << inode.fd << endl;
+			int release_fd = -1;
+
+			{
 				lock_guard<mutex> g_fs{ fs.mutex };
-				close(inode.fd);
-				inode.fd = -ENOENT;
-				inode.generation++;
+				lock_guard<mutex> g{ inode.m };
+				if (inode.fd > 0 && !inode.nopen) {
+					if (fs.debug)
+						cerr << "DEBUG: unlink: release inode "
+						     << e.attr.st_ino
+						     << "; fd=" << inode.fd
+						     << endl;
+					release_fd = inode.fd;
+					inode.fd = -ENOENT;
+					inode.generation++;
+				}
 			}
+			/* closed only after the fd is unpublished, so no other
+			 * thread can hand it to a syscall once it is reused
+			 */
+			if (release_fd != -1)
+				close(release_fd);
 		}
 
 		// decrease the ref which lookup above had increased
@@ -730,32 +814,41 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 static void forget_one(fuse_ino_t ino, uint64_t n)
 {
 	Inode &inode = get_inode(ino);
-	unique_lock<mutex> l{ inode.m };
+	SrcId id;
 
-	if (n > inode.nlookup) {
-		cerr << "INTERNAL ERROR: Negative lookup count for inode "
-		     << inode.src_ino << endl;
-		abort();
+	{
+		lock_guard<mutex> l{ inode.m };
+
+		if (n > inode.nlookup) {
+			cerr << "INTERNAL ERROR: Negative lookup count for inode "
+			     << inode.src_ino << endl;
+			abort();
+		}
+		inode.nlookup -= n;
+
+		if (fs.debug)
+			cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
+			     << "inode " << inode.src_ino << " count "
+			     << inode.nlookup << endl;
+
+		if (inode.nlookup)
+			return;
+
+		id = { inode.src_ino, inode.src_dev };
 	}
-	inode.nlookup -= n;
+
+	/* The inode may be erased and re-created between the two locks, so
+	 * look it up by key instead of reusing the reference and let a
+	 * resurrecting do_lookup() win the count check
+	 */
+	lock_guard<mutex> g_fs{ fs.mutex };
+	auto it = fs.inodes.find(id);
+	if (it == fs.inodes.end() || it->second.nlookup)
+		return;
 
 	if (fs.debug)
-		cerr << "DEBUG:" << __func__ << ":" << __LINE__ << " "
-		     << "inode " << inode.src_ino << " count " << inode.nlookup
-		     << endl;
-
-	if (!inode.nlookup) {
-		lock_guard<mutex> g_fs{ fs.mutex };
-		l.unlock();
-		if (!inode.nlookup) {
-			if (fs.debug)
-				cerr << "DEBUG: forget: cleaning up inode "
-				     << inode.src_ino << endl;
-			fs.inodes.erase({ inode.src_ino, inode.src_dev });
-		}
-	} else if (fs.debug)
-		cerr << "DEBUG: forget: inode " << inode.src_ino
-		     << " lookup count now " << inode.nlookup << endl;
+		cerr << "DEBUG: forget: cleaning up inode " << id.first << endl;
+	fs.inodes.erase(it);
 }
 
 static void sfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
@@ -790,6 +883,9 @@ static void sfs_readlink(fuse_req_t req, fuse_ino_t ino)
 struct DirHandle {
 	DIR *dp{ nullptr };
 	off_t offset;
+	// serialises readdir(); drop before fuse_reply_*, the reply may let
+	// RELEASEDIR delete this handle
+	std::mutex m;
 
 	DirHandle() = default;
 	DirHandle(const DirHandle &) = delete;
@@ -810,28 +906,34 @@ static DirHandle *get_dir_handle(fuse_file_info *fi)
 static void sfs_opendir(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
+	DIR *dp = nullptr;
+	int fd;
+
 	auto d = new (nothrow) DirHandle;
 	if (d == nullptr) {
 		fuse_reply_err(req, ENOMEM);
 		return;
 	}
 
-	// Make Helgrind happy - it can't know that there's an implicit
-	// synchronization due to the fact that other threads cannot
-	// access d until we've called fuse_reply_*.
-	lock_guard<mutex> g{ inode.m };
-
-	auto fd = openat(inode.fd, ".", O_RDONLY);
+	fd = openat(inode.fd, ".", O_RDONLY);
 	if (fd == -1)
 		goto out_errno;
 
 	// On success, dir stream takes ownership of fd, so we
 	// do not have to close it.
-	d->dp = fdopendir(fd);
-	if (d->dp == nullptr)
+	dp = fdopendir(fd);
+	if (dp == nullptr)
 		goto out_errno;
 
-	d->offset = 0;
+	{
+		// Make Helgrind happy - it can't know that there's an implicit
+		// synchronization due to the fact that other threads cannot
+		// access d until we've called fuse_reply_*.
+		lock_guard<mutex> g{ d->m };
+
+		d->dp = dp;
+		d->offset = 0;
+	}
 
 	fi->fh = reinterpret_cast<uint64_t>(d);
 	if (fs.timeout) {
@@ -860,8 +962,6 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		       off_t offset, fuse_file_info *fi, const int plus)
 {
 	auto d = get_dir_handle(fi);
-	Inode &inode = get_inode(ino);
-	lock_guard<mutex> g{ inode.m };
 	char *p;
 	auto rem = size;
 	int err = 0, count = 0;
@@ -876,6 +976,8 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		return;
 	}
 	p = buf;
+
+	unique_lock<mutex> l{ d->m };
 
 	if (offset != d->offset) {
 		if (fs.debug)
@@ -954,11 +1056,13 @@ error:
 		if (err == ENFILE || err == EMFILE)
 			cerr << "ERROR: Reached maximum number of file descriptors."
 			     << endl;
+		l.unlock();
 		fuse_reply_err(req, err);
 	} else {
 		if (fs.debug)
 			cerr << "DEBUG: readdir(): returning " << count
 			     << " entries, curr offset " << d->offset << endl;
+		l.unlock();
 		fuse_reply_buf(req, buf, size - rem);
 	}
 	delete[] buf;
@@ -1065,6 +1169,16 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	}
 
 	fi->fh = fd;
+
+	if (fi->kill_suidgid) {
+		auto kill_err = drop_suidgid_fd(fd);
+		if (kill_err) {
+			close(fd);
+			fuse_reply_err(req, kill_err);
+			return;
+		}
+	}
+
 	fuse_entry_param e;
 	auto err = do_lookup(parent, name, &e);
 	if (err) {
@@ -1076,13 +1190,15 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	}
 
 	Inode &inode = get_inode(e.ino);
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen++;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen++;
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	if (fs.passthrough)
-		do_passthrough_open(req, e.ino, fd, fi);
+		if (fs.passthrough)
+			do_passthrough_open(req, e.ino, fd, fi);
+	}
 	fuse_reply_create(req, &e, fi);
 }
 
@@ -1168,12 +1284,14 @@ static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 		return;
 	}
 
-	lock_guard<mutex> g{ inode->m };
+	{
+		lock_guard<mutex> g{ inode->m };
 
-	sfs_create_open_flags(fi);
+		sfs_create_open_flags(fi);
 
-	if (fs.passthrough)
-		do_passthrough_open(req, e.ino, fd, fi);
+		if (fs.passthrough)
+			do_passthrough_open(req, e.ino, fd, fi);
+	}
 
 	fuse_reply_create(req, &e, fi);
 }
@@ -1226,35 +1344,53 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 		return;
 	}
 
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen++;
+	/* Outside inode.m: a lock must not span a syscall */
+	if (fi->kill_suidgid) {
+		auto err = drop_suidgid_fd(fd);
+		if (err) {
+			close(fd);
+			fuse_reply_err(req, err);
+			return;
+		}
+	}
 
-	sfs_create_open_flags(fi);
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen++;
 
-	fi->fh = fd;
-	if (fs.passthrough)
-		do_passthrough_open(req, ino, fd, fi);
+		sfs_create_open_flags(fi);
+
+		fi->fh = fd;
+		if (fs.passthrough)
+			do_passthrough_open(req, ino, fd, fi);
+	}
 	fuse_reply_open(req, fi);
 }
 
 static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
-	lock_guard<mutex> g{ inode.m };
-	inode.nopen--;
+	int backing_id = 0;
 
-	/* Close the shared backing file on last file close of an inode */
-	if (inode.backing_id && !inode.nopen) {
-		if (fuse_passthrough_close(req, inode.backing_id) < 0) {
-			cerr << "DEBUG: fuse_passthrough_close failed for inode "
-			     << ino << " backing file " << inode.backing_id
-			     << endl;
-		} else if (fs.debug) {
-			cerr << "DEBUG: closed backing file "
-			     << inode.backing_id << " for inode " << ino
-			     << endl;
+	{
+		lock_guard<mutex> g{ inode.m };
+		inode.nopen--;
+
+		/* Close the shared backing file on last file close of an inode */
+		if (inode.backing_id && !inode.nopen) {
+			backing_id = inode.backing_id;
+			inode.backing_id = 0;
 		}
-		inode.backing_id = 0;
+	}
+
+	if (backing_id) {
+		if (fuse_passthrough_close(req, backing_id) < 0) {
+			cerr << "DEBUG: fuse_passthrough_close failed for inode "
+			     << ino << " backing file " << backing_id << endl;
+		} else if (fs.debug) {
+			cerr << "DEBUG: closed backing file " << backing_id
+			     << " for inode " << ino << endl;
+		}
 	}
 
 	close(fi->fh);
@@ -1334,6 +1470,15 @@ static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 static void do_write_buf(fuse_req_t req, size_t size, off_t off,
 			 fuse_bufvec *in_buf, fuse_file_info *fi)
 {
+	/* Before the data lands, as the VFS does for a local filesystem */
+	if (fi->kill_suidgid) {
+		auto err = drop_suidgid_fd(fi->fh);
+		if (err) {
+			fuse_reply_err(req, err);
+			return;
+		}
+	}
+
 	fuse_bufvec out_buf = FUSE_BUFVEC_INIT(size);
 	out_buf.buf[0].flags =
 		static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
@@ -1375,6 +1520,21 @@ static void sfs_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 			  off_t offset, off_t length, fuse_file_info *fi)
 {
 	(void)ino;
+
+	/*
+	 * KILLPRIV_V2 has no per-request flag for fallocate, and the kernel
+	 * stops clearing suid/sgid itself once it is negotiated, so a content
+	 * change here would otherwise leave the bits behind. Clear them
+	 * unconditionally: a CAP_FSETID caller keeps them on a local
+	 * filesystem, but guessing wrong that way only costs a chmod.
+	 */
+	if (fs.killpriv_v2) {
+		auto kill_err = drop_suidgid_fd(fi->fh);
+		if (kill_err) {
+			fuse_reply_err(req, kill_err);
+			return;
+		}
+	}
 
 	auto err = -do_fallocate(fi->fh, mode, offset, length);
 

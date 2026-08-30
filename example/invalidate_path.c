@@ -25,10 +25,11 @@
  * \include invalidate_path.c
  */
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #include <fuse.h>
 #include <fuse_lowlevel.h>  /* for fuse_cmdline_opts */
+#include <fuse_daemonize.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -164,10 +165,11 @@ static const struct fuse_operations xmp_oper = {
 
 static void update_fs(void) {
 	static int count = 0;
+	struct tm tmbuf;
 	struct tm *now;
 	time_t t;
 	t = time(NULL);
-	now = localtime(&t);
+	now = localtime_r(&t, &tmbuf);
 	assert(now != NULL);
 
 	int time_file_size = strftime(time_file_contents, MAX_STR_LEN,
@@ -213,7 +215,7 @@ int main(int argc, char *argv[]) {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse *fuse;
 	struct fuse_cmdline_opts opts;
-	struct fuse_loop_config config;
+	struct fuse_loop_config *config;
 	int res;
 
 	/* Initialize the files */
@@ -248,15 +250,18 @@ int main(int argc, char *argv[]) {
 		goto out1;
 	}
 
-	if (fuse_mount(fuse,opts.mountpoint) != 0) {
+	if (fuse_daemonize_early_start(opts.foreground ?
+				       FUSE_DAEMONIZE_NO_BACKGROUND : 0) != 0) {
 		res = 1;
 		goto out2;
 	}
 
-	if (fuse_daemonize(opts.foreground) != 0) {
+	if (fuse_mount(fuse, opts.mountpoint) != 0) {
 		res = 1;
-		goto out3;
+		goto out2;
 	}
+
+	fuse_daemonize_early_success();
 
 	pthread_t updater;     /* Start thread to update file contents */
 	int ret = pthread_create(&updater, NULL, update_fs_loop, (void *) fuse);
@@ -274,9 +279,15 @@ int main(int argc, char *argv[]) {
 	if (opts.singlethread)
 		res = fuse_loop(fuse);
 	else {
-		config.clone_fd = opts.clone_fd;
-		config.max_idle_threads = opts.max_idle_threads;
-		res = fuse_loop_mt(fuse, &config);
+		config = fuse_loop_cfg_create();
+		if (config == NULL) {
+			res = 1;
+			goto out3;
+		}
+		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+		fuse_loop_cfg_set_idle_threads(config, opts.max_idle_threads);
+		res = fuse_loop_mt(fuse, config);
+		fuse_loop_cfg_destroy(config);
 	}
 	if (res)
 		res = 1;

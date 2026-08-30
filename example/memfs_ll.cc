@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <random>
 #include <fuse_lowlevel.h>
+#include <fuse_daemonize.h>
 #include <fuse_opt.h>
 #ifdef HAVE_LINUX_LIMITS_H
 #include <linux/limits.h>
@@ -1320,10 +1321,14 @@ int main(int argc, char *argv[])
 	if (fuse_set_signal_handlers(se) != 0)
 		goto err_out2;
 
+	if (fuse_daemonize_early_start(opts.foreground ?
+				       FUSE_DAEMONIZE_NO_BACKGROUND : 0) != 0)
+		goto err_out3;
+
 	if (fuse_session_mount(se, opts.mountpoint) != 0)
 		goto err_out3;
 
-	fuse_daemonize(opts.foreground);
+	fuse_daemonize_early_success();
 
 	ret = fuse_session_loop_mt(se, config);
 

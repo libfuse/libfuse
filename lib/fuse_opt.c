@@ -254,17 +254,19 @@ static int process_opt_sep_arg(struct fuse_opt_context *ctx,
 	int res;
 	char *newarg;
 	const char *param;
+	size_t newarglen;
 
 	if (next_arg(ctx, arg) == -1)
 		return -1;
 
 	param = ctx->argv[ctx->argctr];
-	newarg = malloc(sep + strlen(param) + 1);
+	newarglen = sep + strlen(param) + 1;
+	newarg = malloc(newarglen);
 	if (!newarg)
 		return alloc_failed();
 
 	memcpy(newarg, arg, sep);
-	strcpy(newarg + sep, param);
+	snprintf(newarg + sep, newarglen - sep, "%s", param);
 	res = process_opt(ctx, opt, sep, newarg, iso);
 	free(newarg);
 

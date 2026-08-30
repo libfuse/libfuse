@@ -19,6 +19,7 @@
 #include "mount_util.h"
 #include "util.h"
 #include "fuse_uring_i.h"
+#include "fuse_cap_names_i.h"
 #include "fuse_daemonize_i.h"
 #include "fuse_daemonize.h"
 #if defined(__linux__)
@@ -33,6 +34,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/eventfd.h>
 #include <stdalign.h>
 #include <string.h>
@@ -458,6 +461,10 @@ int fuse_reply_err(fuse_req_t req, int err)
 
 void fuse_reply_none(fuse_req_t req)
 {
+	if (req->flags.is_uring) {
+		send_reply_uring(req, 0, NULL, 0);
+		return;
+	}
 	fuse_free_req(req);
 }
 
@@ -1711,7 +1718,9 @@ static void _do_create(fuse_req_t req, const fuse_ino_t nodeid,
 		if (req->se->conn.proto_minor >= 12)
 			req->ctx.umask = arg->umask;
 
-		/* XXX: fuse_create_in::open_flags */
+		if (req->se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+			fi.kill_suidgid =
+				(arg->open_flags & FUSE_OPEN_KILL_SUIDGID) != 0;
 
 		req->se->op.create(req, nodeid, name, arg->mode, &fi);
 	} else {
@@ -1741,7 +1750,9 @@ static void _do_open(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	memset(&fi, 0, sizeof(fi));
 	fi.flags = arg->flags;
 
-	/* XXX: fuse_open_in::open_flags */
+	if (req->se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+		fi.kill_suidgid =
+			(arg->open_flags & FUSE_OPEN_KILL_SUIDGID) != 0;
 
 	if (req->se->op.open)
 		req->se->op.open(req, nodeid, &fi);
@@ -1792,6 +1803,10 @@ static void _do_write(fuse_req_t req, const fuse_ino_t nodeid,
 	fi.fh = arg->fh;
 	fi.writepage = (arg->write_flags & FUSE_WRITE_CACHE) != 0;
 
+	if (req->se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+		fi.kill_suidgid =
+			(arg->write_flags & FUSE_WRITE_KILL_SUIDGID) != 0;
+
 	if (req->se->conn.proto_minor >= 9) {
 		fi.lock_owner = arg->lock_owner;
 		fi.flags = arg->flags;
@@ -1827,6 +1842,10 @@ static void _do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.writepage = arg->write_flags & FUSE_WRITE_CACHE;
+
+	if (se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+		fi.kill_suidgid =
+			(arg->write_flags & FUSE_WRITE_KILL_SUIDGID) != 0;
 
 	if (se->conn.proto_minor >= 9) {
 		fi.lock_owner = arg->lock_owner;
@@ -2714,6 +2733,64 @@ bool fuse_set_conn_flag(struct fuse_conn_info *conn, uint64_t flag)
 	}
 }
 
+/*
+ * Test-only: report the FUSE_INIT negotiation -- capabilities and scalars
+ * alike -- one "FUSE_INIT: FUSE_CAP_*" line per negotiated capability and one
+ * "FUSE_INIT: key=value" line per scalar. The prefix is what lets a reader
+ * pick the report out of a daemon log that carries everything else too.
+ *
+ * $FUSE_INIT_STATUS asks for it; it carries no destination, because the
+ * report goes where everything else the session logs goes. A path would be a
+ * write-anywhere gadget for any daemon that inherits its environment across a
+ * privilege boundary, and no getenv() guard makes that safe enough to be worth
+ * having. A real caller never sets the variable, so this is a no-op outside
+ * the test suite.
+ *
+ * ring_rc is passed in because a fuse_uring_start() that failed leaves no
+ * trace on the session to reconstruct it from.
+ */
+static void report_init_test_status(struct fuse_session *se, int ring_rc)
+{
+	const struct fuse_conn_info *conn = &se->conn;
+
+	if (!getenv("FUSE_INIT_STATUS"))
+		return;
+
+#define EMIT_INIT_STATUS_LINE(fmt, ...) \
+	fuse_log(FUSE_LOG_INFO, "FUSE_INIT: " fmt "\n", ##__VA_ARGS__)
+
+	for (const struct fuse_cap_name *cap = fuse_cap_names; cap->name; cap++) {
+		if (conn->want_ext & cap->flag)
+			EMIT_INIT_STATUS_LINE("%s", cap->name);
+	}
+	/* Absence from the list above does not say why, and only the session
+	 * knows: an impossible ring and a failed one are different verdicts.
+	 */
+	if (conn->want_ext & FUSE_CAP_OVER_IO_URING)
+		EMIT_INIT_STATUS_LINE("io_uring=on");
+	else if (ring_rc != 0)
+		EMIT_INIT_STATUS_LINE("io_uring=off:start_failed:%s",
+				      strerror(-ring_rc));
+	else if (se->io != NULL)
+		EMIT_INIT_STATUS_LINE("io_uring=off:custom_io");
+	else if (!se->uring.enable)
+		EMIT_INIT_STATUS_LINE("io_uring=off:disabled");
+	else
+		EMIT_INIT_STATUS_LINE("io_uring=off:not_offered");
+	EMIT_INIT_STATUS_LINE("proto_major=%u", conn->proto_major);
+	EMIT_INIT_STATUS_LINE("proto_minor=%u", conn->proto_minor);
+	EMIT_INIT_STATUS_LINE("max_readahead=%u", conn->max_readahead);
+	EMIT_INIT_STATUS_LINE("max_write=%u", conn->max_write);
+	EMIT_INIT_STATUS_LINE("max_background=%u", conn->max_background);
+	EMIT_INIT_STATUS_LINE("congestion_threshold=%u", conn->congestion_threshold);
+	EMIT_INIT_STATUS_LINE("time_gran=%u", conn->time_gran);
+	EMIT_INIT_STATUS_LINE("request_timeout=%u", conn->request_timeout);
+	if (conn->want_ext & FUSE_CAP_PASSTHROUGH)
+		EMIT_INIT_STATUS_LINE("max_stack_depth=%u", conn->max_backing_stack_depth + 1);
+
+#undef EMIT_INIT_STATUS_LINE
+}
+
 /* Prevent bogus data races (bogus since "init" is called before
  * multi-threading becomes relevant */
 static __attribute__((no_sanitize("thread"))) void
@@ -2731,6 +2808,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	bool buf_reallocable = se->buf_reallocable;
 	(void) nodeid;
 	bool enable_io_uring = false;
+	int ring_rc = 0;
 
 	if (se->debug) {
 		fuse_log(FUSE_LOG_DEBUG, "INIT: %u.%u\n", arg->major, arg->minor);
@@ -3039,16 +3117,23 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	/* XXX: Add an option to make non-available io-uring fatal */
 	if (enable_io_uring) {
-		int ring_rc = fuse_uring_start(se);
+		ring_rc = fuse_uring_start(se);
 
 		if (ring_rc != 0) {
 			fuse_log(FUSE_LOG_INFO,
 				 "fuse: failed to start io-uring: %s\n",
-				 strerror(ring_rc));
+				 strerror(-ring_rc));
 			outargflags &= ~FUSE_OVER_IO_URING;
 			enable_io_uring = false;
 		}
 	}
+	/* Once the reply is composed want_ext is the negotiation result, not a
+	 * wish list; io-uring is the only capability that can still be off.
+	 */
+	if (!enable_io_uring)
+		fuse_unset_feature_flag(&se->conn, FUSE_CAP_OVER_IO_URING);
+
+	report_init_test_status(se, ring_rc);
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -3135,7 +3220,7 @@ static void list_init_nreq(struct fuse_notify_req *nreq)
 	nreq->prev = nreq;
 }
 
-static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
+static void _do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 			    const void *inarg, const struct fuse_buf *buf)
 {
 	struct fuse_session *se = req->se;
@@ -3154,6 +3239,15 @@ static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
 
 	if (nreq != head)
 		nreq->reply(nreq, req, nodeid, inarg, buf);
+}
+
+static void do_notify_reply(fuse_req_t req, fuse_ino_t nodeid,
+			    const void *inarg, const struct fuse_buf *ibuf)
+{
+	struct fuse_buf buf = *ibuf;
+
+	buf.size -= sizeof(struct fuse_in_header);
+	_do_notify_reply(req, nodeid, inarg, &buf);
 }
 
 static int send_notify_iov(struct fuse_session *se, int notify_code,
@@ -3375,8 +3469,7 @@ static void fuse_ll_retrieve_reply(struct fuse_notify_req *nreq,
 	if (!(bufv.buf[0].flags & FUSE_BUF_IS_FD))
 		bufv.buf[0].mem = PARAM(arg);
 
-	bufv.buf[0].size -= sizeof(struct fuse_in_header) +
-		sizeof(struct fuse_notify_retrieve_in);
+	bufv.buf[0].size -= sizeof(struct fuse_notify_retrieve_in);
 
 	if (bufv.buf[0].size < arg->size) {
 		fuse_log(FUSE_LOG_ERR, "fuse: retrieve reply: buffer size too small\n");
@@ -3528,6 +3621,19 @@ int fuse_req_secctx_next(fuse_req_t req, const char **name,
 	}
 
 	const char *ctx_name = (const char *)(fctx + 1);
+
+	/*
+	 * The name starts right after the header and must leave at least one
+	 * byte for its NUL inside the buffer. The header-fits check above uses
+	 * a strict '>', so ctx_name can land exactly on buf_end; without this
+	 * guard "buf_end - ctx_name - 1" underflows to SIZE_MAX and the strnlen
+	 * below reads past the allocation.
+	 */
+	if (ctx_name >= buf_end) {
+		fuse_log(FUSE_LOG_ERR, "secctx name extends past buffer\n");
+		return -EIO;
+	}
+
 	const size_t max_strlen = buf_end - ctx_name - 1;
 	const size_t name_size = strnlen(ctx_name, max_strlen) + 1;
 	const char *ctx_value = ctx_name + name_size;
@@ -3993,6 +4099,15 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	err = ENOSYS;
 	if (in->opcode >= FUSE_MAXOP || !fuse_ll_ops[in->opcode].func)
 		goto reply_err;
+	if (in->opcode == FUSE_INIT || in->opcode == CUSE_INIT) {
+		size_t hdr  = sizeof(struct fuse_in_header);
+		size_t have = buf->size < in->len ? buf->size : in->len;
+		size_t need = offsetof(struct fuse_init_in, max_readahead); /* 8: major+minor */
+		if (have < hdr || have - hdr < need) {
+			err = EPROTO;
+			goto reply_err;
+		}
+	}
 	/* Do not process interrupt request */
 	if (se->conn.no_interrupt && in->opcode == FUSE_INTERRUPT) {
 		if (se->debug)
@@ -4102,7 +4217,7 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	} else if (in->opcode == FUSE_NOTIFY_REPLY) {
 		struct fuse_buf buf = { .size = payload_len,
 					.mem = op_payload };
-		do_notify_reply(req, in->nodeid, op_in, &buf);
+		_do_notify_reply(req, in->nodeid, op_payload, &buf);
 	} else {
 		fuse_ll_ops2[in->opcode].func(req, in->nodeid, op_in,
 					      op_payload);
@@ -4165,6 +4280,9 @@ void fuse_session_destroy(struct fuse_session *se)
 	free(se->cuse_data);
 	if (se->fd != -1)
 		close(se->fd);
+	/* Closing this lets the auto_unmount fusermount3 helper exit. */
+	if (se->auto_unmount_fd != -1)
+		close(se->auto_unmount_fd);
 	if (se->io != NULL)
 		free(se->io);
 	destroy_mount_opts(se->mo);
@@ -4502,6 +4620,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 	}
 	se->fd = -1;
 	se->init_wakeup_fd = -1;
+	se->auto_unmount_fd = -1;
 	se->conn.max_write = FUSE_DEFAULT_MAX_PAGES_LIMIT * getpagesize();
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 	se->conn.max_readahead = UINT_MAX;
@@ -4571,7 +4690,8 @@ fuse_session_new_versioned(struct fuse_args *args,
 
 	se->mo = mo;
 
-	se->want_sync_init = FUSE_SYNC_INIT_AUTO;
+	/* -Dsync-init; fuse_session_set_sync_init() still overrides it. */
+	se->want_sync_init = FUSE_SYNC_INIT_DEFAULT;
 
 	/* Fuse server application should pass the version it was compiled
 	 * against and pass it. If a libfuse version accidentally introduces an
@@ -4662,6 +4782,15 @@ int fuse_session_custom_io_317(struct fuse_session *se,
 
 	se->fd = fd;
 	memcpy(se->io, io, op_size);
+	/* fuse_uring registers se->fd as the ring's fixed file and issues
+	 * IORING_OP_URING_CMD against it, bypassing io->read/io->writev
+	 * entirely -- so on a caller-owned fd it would send uring commands to
+	 * whatever the caller passed in. Cleared rather than refused: there is
+	 * no API asking for io-uring, only the environment variable, so
+	 * refusing would let a stray variable break an application that never
+	 * asked for it.
+	 */
+	se->uring.enable = 0;
 	return 0;
 }
 
@@ -4731,15 +4860,14 @@ static void *session_sync_init_worker(void *data)
 /*
  * Enable synchronous FUSE_INIT and start worker thread
  *
- * @param is_sync_init set to true on return if sync init is enabled
+ * Sets se->is_sync_init to true if sync init is enabled.
  * Returns 0 on success or kernel does not support it, -errno on unexpected failure
  */
-static int session_start_sync_init(struct fuse_session *se, int fd,
-				   bool *is_sync_init)
+static int session_start_sync_init(struct fuse_session *se, int fd)
 {
 	int err, res;
 
-	*is_sync_init = false;
+	se->is_sync_init = false;
 
 	/*
 	 * Older fuse servers do not set want_sync_init or start the new
@@ -4757,24 +4885,23 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 	/* Try to enable synchronous FUSE_INIT */
 	res = ioctl(fd, FUSE_DEV_IOC_SYNC_INIT);
 	if (res) {
-		err = -errno;
+		err = errno;
 		if (err != ENOTTY) {
 			fuse_log(
 				FUSE_LOG_ERR,
 				"fuse: failed to enable sync init: %s\n",
 				strerror(errno));
-		} else {
-			/*
-			 * ENOTTY means kernel doesn't support sync init,not an
-			 * error
-			 */
-			if (se->debug)
-				fuse_log(
-					FUSE_LOG_DEBUG,
-					"fuse: kernel doesn't support sync init\n");
-			err = 0;
+			return -err;
 		}
-		return err;
+		/*
+		 * ENOTTY means kernel doesn't support sync init,
+		 * not an error
+		 */
+		if (se->debug)
+			fuse_log(
+				FUSE_LOG_DEBUG,
+				"fuse: kernel doesn't support sync init\n");
+		return 0;
 	}
 
 	if (se->debug)
@@ -4792,6 +4919,9 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 		return -EIO;
 	}
 
+	/* Must be set before the worker exists - it reads this in _do_init() */
+	se->is_sync_init = true;
+
 	err = pthread_create(&se->init_thread, NULL,
 				session_sync_init_worker, se);
 	if (err != 0) {
@@ -4799,12 +4929,11 @@ static int session_start_sync_init(struct fuse_session *se, int fd,
 			FUSE_LOG_ERR,
 			"fuse: failed to create init worker thread: %s\n",
 			strerror(err));
+		se->is_sync_init = false;
 		close(se->init_wakeup_fd);
 		se->init_wakeup_fd = -1;
 		return -EIO;
 	}
-
-	*is_sync_init = true;
 
 	return 0;
 }
@@ -4833,7 +4962,7 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 	if (err != 0) {
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to join init worker thread: %s\n",
 			 strerror(err));
-		return -1;
+		goto err;
 	}
 
 	if (se->init_wakeup_fd != -1) {
@@ -4846,15 +4975,19 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 	if (se->init_error != 0) {
 		fuse_log(FUSE_LOG_ERR, "fuse: init worker failed: %s\n",
 			 strerror(-se->init_error));
-		return -1;
+		goto err;
 	}
 
 	if (fuse_session_exited(se)) {
 		fuse_log(FUSE_LOG_ERR, "FUSE_INIT failed: session exited\n");
-		return -1;
+		goto err;
 	}
 
 	return 0;
+
+err:
+	se->is_sync_init = false;
+	return -1;
 }
 
 /*
@@ -4864,8 +4997,7 @@ static int session_wait_sync_init_completion(struct fuse_session *se)
 static int new_api_fusermount(struct fuse_session *se,
 			      const char *mountpoint,
 			      const char *mtab_opts,
-			      int *sock_fd, pid_t *fusermount_pid,
-			      bool *is_sync_init)
+			      int *sock_fd, pid_t *fusermount_pid)
 {
 	int fd, err;
 
@@ -4888,17 +5020,22 @@ static int new_api_fusermount(struct fuse_session *se,
 
 	/* Start worker thread with correct fd from fusermount3 */
 	se->fd = fd;
-	err = session_start_sync_init(se, fd, is_sync_init);
+	err = session_start_sync_init(se, fd);
 	if (err) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: failed to start sync init worker\n");
+		close(fd);
+		se->fd = -1;
 		return err;
 	}
 
 	/* Send proceed signal and wait for mount result */
 	err = fuse_fusermount_proceed_mnt(*sock_fd);
-	if (err < 0)
+	if (err < 0) {
+		close(fd);
+		se->fd = -1;
 		return -EIO;
+	}
 
 	return fd;
 }
@@ -4915,12 +5052,12 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 {
 	int fd = -1;
 	int sock_fd = -1;
+	int mountfd = -1;
 	pid_t fusermount_pid = -1;
 	int res, err;
 	char *mtab_opts = NULL;
 	char *mtab_opts_with_fd = NULL;
 	char fd_opt[32];
-	bool is_sync_init = false;
 
 	res = fuse_kern_mount_get_base_mtab_opts(se->mo, &mtab_opts);
 	err = -EIO;
@@ -4937,7 +5074,7 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	}
 
 	se->fd = fd;
-	err = session_start_sync_init(se, fd, &is_sync_init);
+	err = session_start_sync_init(se, fd);
 	if (err)
 		goto err;
 
@@ -4949,15 +5086,38 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	}
 
 	/* Try to mount directly */
-	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd);
+	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd,
+				   &mountfd);
 
 	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
 	if (err < 0 && errno == EPERM) {
+		char *fusermount_opts = NULL;
+
 		close(fd);
+		fd = -1;
 		se->fd = -1;
-		fd = new_api_fusermount(se, mountpoint, mtab_opts,
-					&sock_fd, &fusermount_pid,
-					&is_sync_init);
+		/*
+		 * fusermount3 receives fsname/subtype (and other fusermount
+		 * options) only via -o, so mirror the legacy fuse_kern_mount()
+		 * fallback here. mtab_opts carries just the kernel/mtab options;
+		 * without appending these the subtype/fsname is lost and the
+		 * mount comes up as plain "fuse".
+		 */
+		if (fuse_opt_add_opt(&fusermount_opts, mtab_opts) == -1 ||
+		    (se->mo->fusermount_opts &&
+		     fuse_opt_add_opt(&fusermount_opts,
+				      se->mo->fusermount_opts) == -1) ||
+		    (se->mo->subtype_opt &&
+		     fuse_opt_add_opt(&fusermount_opts,
+				      se->mo->subtype_opt) == -1)) {
+			free(fusermount_opts);
+			err = -ENOMEM;
+			goto err;
+		}
+
+		fd = new_api_fusermount(se, mountpoint, fusermount_opts,
+					&sock_fd, &fusermount_pid);
+		free(fusermount_opts);
 		if (fd < 0) {
 			err = fd;
 			goto err_with_sock;
@@ -4970,12 +5130,35 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 
 err_with_sock:
 	if (sock_fd >= 0) {
-		close(sock_fd);
-		/* Reap fusermount3 child process to prevent zombie */
-		if (fusermount_pid > 0)
-			waitpid(fusermount_pid, NULL, 0);
+		if (err == 0 && se->mo->auto_unmount) {
+			/*
+			 * Under auto_unmount fusermount3 --sync-init stays alive
+			 * until this socket closes (its unmount trigger), so
+			 * closing it now would unmount early and waitpid() would
+			 * hang. Keep it; fuse_session_destroy() closes it.
+			 */
+			se->auto_unmount_fd = sock_fd;
+		} else {
+			close(sock_fd);
+			/* Reap fusermount3 child process to prevent zombie */
+			if (fusermount_pid > 0)
+				waitpid(fusermount_pid, NULL, 0);
+		}
+	} else if (err == 0 && se->mo->auto_unmount) {
+		/*
+		 * Direct fsmount(), no fusermount3 in the picture - spawn the
+		 * helper that unmounts once its socket closes.
+		 */
+		se->auto_unmount_fd = setup_auto_unmount(mountpoint, 0);
+		if (se->auto_unmount_fd < 0) {
+			fuse_kern_umount_mountfd(mountfd);
+			err = -EIO;
+		}
 	}
 err:
+	if (mountfd >= 0)
+		close(mountfd);
+
 	if (err < 0) {
 		/* Close fd first to unblock worker thread */
 		if (fd >= 0)
@@ -4983,8 +5166,8 @@ err:
 		fd = -1;
 		se->fd = -1;
 		se->error = err;
+		se->is_sync_init = false;
 	}
-	se->is_sync_init = is_sync_init;
 
 	/* Wait for synchronous FUSE_INIT to complete */
 	if (session_wait_sync_init_completion(se) < 0)
@@ -5368,6 +5551,13 @@ void fuse_session_stop_teardown_watchdog(void *data)
 
 	/* Wait for thread to finish */
 	pthread_join(tt->thread_id, NULL);
+
+	/* the session outlives the watchdog and must not see the freed tt */
+	pthread_mutex_lock(&tt->lock);
+	if (tt->se)
+		tt->se->timeout_thread = NULL;
+	pthread_mutex_unlock(&tt->lock);
+
 	fuse_tt_destruct(tt);
 }
 

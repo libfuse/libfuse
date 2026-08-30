@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 
 /* ------------------------------------------------------------------ */
 /* Log capture                                                         */
@@ -38,7 +39,21 @@ static void clear_log(void)
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-#define PASS(name) do { printf("PASS: %s\n", name); } while (0)
+static void print_pass(const char *name)
+{
+	static struct timespec start;
+	struct timespec now;
+	double elapsed;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (start.tv_sec == 0 && start.tv_nsec == 0)
+		start = now;
+	elapsed = (now.tv_sec - start.tv_sec) +
+		  (now.tv_nsec - start.tv_nsec) / 1e9;
+	printf("+%8.3fs PASS: %s\n", elapsed, name);
+}
+
+#define PASS(name) print_pass(name)
 #define FAIL(name, fmt, ...) \
 	do { fprintf(stderr, "FAIL: %s — " fmt "\n", name, ##__VA_ARGS__); \
 	     exit(1); } while (0)

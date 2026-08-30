@@ -16,7 +16,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-int fuse_session_loop(struct fuse_session *se)
+int fuse_session_loop_30(struct fuse_session *se)
 {
 	int res = 0;
 	struct fuse_buf fbuf = {
@@ -45,4 +45,35 @@ int fuse_session_loop(struct fuse_session *se)
 	if (se->uring.pool)
 		fuse_uring_stop(se);
 	return res;
+}
+
+/*
+ * A single worker thread instead of the caller's thread, so that
+ * fuse_session_exit() wakes the loop up.
+ */
+int fuse_session_loop_319(struct fuse_session *se)
+{
+	int err;
+	struct fuse_loop_config *config = fuse_loop_cfg_create();
+
+	if (config == NULL)
+		return -ENOMEM;
+
+	fuse_loop_cfg_set_max_threads(config, 1);
+	err = fuse_session_loop_mt_312(se, config);
+	fuse_loop_cfg_destroy(config);
+
+	return err;
+}
+
+/*
+ * ABI compat: filesystems built before 3.19 link this bare name and expect the
+ * caller's thread to serve the requests.
+ */
+#undef fuse_session_loop
+
+int fuse_session_loop(struct fuse_session *se);
+int fuse_session_loop(struct fuse_session *se)
+{
+	return fuse_session_loop_30(se);
 }
