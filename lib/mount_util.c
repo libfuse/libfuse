@@ -117,8 +117,15 @@ static int add_mount(const char *progname, const char *fsname,
 			goto out_restore;
 		}
 
+		/*
+		 * fsname comes from -ofsname=, so it can start with '-'. The
+		 * setuid() above raises the real uid to 0, so mount(8) is not
+		 * in restricted mode either. Terminate the options with "--"
+		 * to keep it from parsing the operands as further options.
+		 */
 		execle("/bin/mount", "/bin/mount", "--no-canonicalize", "-i",
-		       "-f", "-t", type, "-o", opts, fsname, mnt, NULL, &env);
+		       "-f", "-t", type, "-o", opts, "--", fsname, mnt, NULL,
+		       &env);
 		fprintf(stderr, "%s: failed to execute /bin/mount: %s\n",
 			progname, strerror(errno));
 		exit(1);
@@ -177,11 +184,11 @@ static int exec_umount(const char *progname, const char *rel_mnt, int lazy)
 		}
 
 		if (lazy) {
-			execle("/bin/umount", "/bin/umount", "-i", rel_mnt,
-			       "-l", NULL, &env);
+			execle("/bin/umount", "/bin/umount", "-i", "-l",
+			       "--", rel_mnt, NULL, &env);
 		} else {
-			execle("/bin/umount", "/bin/umount", "-i", rel_mnt,
-			       NULL, &env);
+			execle("/bin/umount", "/bin/umount", "-i",
+			       "--", rel_mnt, NULL, &env);
 		}
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));
@@ -249,7 +256,7 @@ static int remove_mount(const char *progname, const char *mnt)
 		}
 
 		execle("/bin/umount", "/bin/umount", "--no-canonicalize", "-i",
-		       "--fake", mnt, NULL, &env);
+		       "--fake", "--", mnt, NULL, &env);
 		fprintf(stderr, "%s: failed to execute /bin/umount: %s\n",
 			progname, strerror(errno));
 		exit(1);
