@@ -4,6 +4,14 @@ libfuse 3.18.3-rc1 (unreleased)
 Security Fixes
 --------------
 
+* ``fuse_session_custom_io()`` is disabled unless libfuse is built with
+  ``-Denable-custom-io=true``, and returns ``-ENOTSUP`` otherwise. The
+  ``hello_ll_uds`` example is built only with that option, and enabling it
+  warns at configure time.
+  Reason is a custom io peer might not be a kernel and can
+  forge requests that libfuse parses without bounds checks, crashing or
+  corrupting the filesystem process. See ``doc/README.custom-io``.
+
 * fusermount3: resolve the mountpoint once, through an ``O_PATH|O_NOFOLLOW``
   descriptor. A symlink swapped in between the type check and the second
   lookup could redirect the mount.

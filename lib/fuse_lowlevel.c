@@ -4303,6 +4303,14 @@ FUSE_SYMVER("fuse_session_custom_io_317", "fuse_session_custom_io@@FUSE_3.17")
 int fuse_session_custom_io_317(struct fuse_session *se,
 				const struct fuse_custom_io *io, size_t op_size, int fd)
 {
+#ifndef HAVE_CUSTOM_IO
+	(void)se;
+	(void)io;
+	(void)op_size;
+	(void)fd;
+	fuse_log(FUSE_LOG_ERR, "fuse: custom io is not enabled in this build\n");
+	return -ENOTSUP;
+#else
 	if (sizeof(struct fuse_custom_io) < op_size) {
 		fuse_log(FUSE_LOG_ERR, "fuse: warning: library too old, some operations may not work\n");
 		op_size = sizeof(struct fuse_custom_io);
@@ -4337,6 +4345,7 @@ int fuse_session_custom_io_317(struct fuse_session *se,
 	se->fd = fd;
 	memcpy(se->io, io, op_size);
 	return 0;
+#endif
 }
 
 int fuse_session_custom_io_30(struct fuse_session *se,
