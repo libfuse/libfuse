@@ -32,17 +32,15 @@ jobs:
         config:
           - gcc
           - gcc-root
-          # GitHub Actions runners have no fuse io-uring support; kept for a
-          # runner that does.
-          # - gcc-io-uring
-          # - gcc-io-uring-root
+          - gcc-io-uring
+          - gcc-io-uring-root
           - gcc-valgrind
           - gcc-9-valgrind
           - gcc-10-valgrind
           - clang
           - clang-san
           - clang-san-root
-          # - clang-san-io-uring
+          - clang-san-io-uring
           - clang-san-nosymver
           - clang-san-noiouring
           - clang-san-nosyncinit
@@ -56,13 +54,13 @@ jobs:
           - config: gcc-root
             cc: gcc
             root: true
-          # - config: gcc-io-uring
-          #   cc: gcc
-          #   io_uring: true
-          # - config: gcc-io-uring-root
-          #   cc: gcc
-          #   root: true
-          #   io_uring: true
+          - config: gcc-io-uring
+            cc: gcc
+            io_uring: true
+          - config: gcc-io-uring-root
+            cc: gcc
+            root: true
+            io_uring: true
           - config: gcc-valgrind
             cc: gcc
             valgrind: true
@@ -86,11 +84,11 @@ jobs:
             cxx: clang++
             sanitize: true
             root: true
-          # - config: clang-san-io-uring
-          #   cc: clang
-          #   cxx: clang++
-          #   sanitize: true
-          #   io_uring: true
+          - config: clang-san-io-uring
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            io_uring: true
           - config: clang-san-nosymver
             cc: clang
             cxx: clang++
