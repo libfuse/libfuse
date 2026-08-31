@@ -13,7 +13,6 @@ verbs live in cases/lib/common.sh.
 """
 
 import argparse
-import ctypes
 import fnmatch
 import os
 import platform
@@ -38,6 +37,11 @@ CASES_DIR = TEST_DIR / 'cases'
 # What the cases source, beside them rather than above them; discovery skips it.
 LIB_DIR = CASES_DIR / 'lib'
 EXCLUDE_FILE = TEST_DIR / 'exclude'
+
+# test/lib is not on sys.path; test/cases/lib is the shell library, not this.
+sys.path.insert(0, str(TEST_DIR / 'lib'))
+from checks import (IS_LINUX, io_uring_setup_error, preflight_io_uring,
+                    read_fuse_caps, read_sync_init)
 
 DEFAULT_TIMEOUT = 60.0          # seconds; per-script "# TIMEOUT:" overrides
 SKIP_EXIT_CODE = 77             # automake convention
@@ -82,8 +86,6 @@ SERIAL_GROUP = 'serial'
 _CONFIG_SECTION = 'tests'
 _CONFIG_BASE_DIR_KEY = 'base_dir'
 
-IS_LINUX = platform.system() == 'Linux'
-
 # FreeBSD's default kern.corefile is "%N.core"; CI sets "core.%N.%P" to get the
 # shape Linux's "core.%e.%p" produces. Glob those plus the bare "core" and
 # "core.%p" a stock Linux box writes, so an unconfigured developer machine
@@ -100,19 +102,10 @@ SUSPICIOUS_WORDS = ('exception', 'error', 'warning', 'fatal', 'traceback',
 # io-uring run that nobody checks passes green while testing the transport it
 # was meant to replace.
 IO_URING_FALLBACK = 'failed to start io-uring'
-IO_URING_CAP = 'FUSE_CAP_OVER_IO_URING'
 # off:not_offered is left out: that one is the kernel refusing the transport
 # the run exists to exercise.
 IO_URING_STATE_KEY = 'FUSE_INIT: io_uring='
 IO_URING_STATES_OK = ('on', 'off:custom_io', 'off:not_wanted')
-# What -Dsync-init=always/never leave in fuse_config.h; auto writes neither.
-SYNC_INIT_ENABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_ENABLED'
-SYNC_INIT_DISABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_DISABLED'
-FUSE_URING_PARAM = Path('/sys/module/fuse/parameters/enable_uring')
-# glibc has no io_uring_setup() wrapper, so this goes through syscall(2), the
-# way liburing does it. 425 on every architecture but alpha.
-IO_URING_SETUP = 425
-IO_URING_PARAMS_SIZE = 120      # sizeof(struct io_uring_params)
 
 # FUSE debug messages "unique: X, error: -Y (...), outsize: Z" contain the word
 # "error" but only report a request's return code.
@@ -221,21 +214,6 @@ def read_core_pattern() -> str:
     proc = subprocess.run(['sysctl', '-n', 'kern.corefile'],
                           capture_output=True, text=True, check=False)
     return proc.stdout.strip()
-
-
-def io_uring_setup_error() -> str:
-    """The errno text when io_uring_setup() is refused, else "".
-
-    Asked as the user the daemons will run as, so it answers for them.
-    """
-    libc = ctypes.CDLL(None, use_errno=True)
-    libc.syscall.restype = ctypes.c_long
-    ring = libc.syscall(IO_URING_SETUP, 1,
-                        ctypes.create_string_buffer(IO_URING_PARAMS_SIZE))
-    if ring < 0:
-        return os.strerror(ctypes.get_errno())
-    os.close(ring)
-    return ''
 
 
 def raise_nofile_limit() -> None:
@@ -606,8 +584,8 @@ class TestRunner:
         self.io_uring_depth = io_uring_depth
         self.valgrind = resolve_valgrind()
         self.core_pattern = read_core_pattern()
-        self.fuse_caps = self.read_fuse_caps()
-        self.sync_init = self.read_sync_init()
+        self.fuse_caps = read_fuse_caps(build_dir, self.build_path())
+        self.sync_init = read_sync_init(build_dir)
         self._cgroup = CgroupManager.create(str(os.getpid()))
         self._stop = threading.Event()
         self._print_lock = threading.Lock()
@@ -631,76 +609,6 @@ class TestRunner:
             base = os.environ.get('PATH', '')
         return os.pathsep.join([str(self.build_dir / 'util'),
                                 str(self.build_dir / 'example'), base])
-
-    def read_fuse_caps(self) -> frozenset:
-        """The FUSE_CAP_* names printcap reports, read once per run.
-
-        printcap lives in example/, not util/, so this works the same way on
-        every platform. It mounts to negotiate, so it needs the same $PATH a
-        test gets rather than the ambient one -- otherwise it reaches for a
-        mount helper that this build may not have installed anywhere, and
-        every _require_cap test silently skips.
-        """
-        printcap = self.build_dir / 'example' / 'printcap'
-        if not os.access(printcap, os.X_OK):
-            print(f'note: {printcap} not built; no capability is available '
-                  'and every _require_cap test will skip')
-            return frozenset()
-        proc = subprocess.run([str(printcap)], capture_output=True, text=True,
-                              timeout=30, check=False,
-                              env=dict(os.environ, PATH=self.build_path()))
-        if proc.returncode != 0:
-            print(f'note: printcap failed ({proc.returncode}); '
-                  'every _require_cap test will skip')
-            return frozenset()
-        return frozenset(line.strip() for line in proc.stdout.splitlines()
-                         if line.startswith('\t'))
-
-    def read_sync_init(self) -> str:
-        """Which -Dsync-init the library was built with: auto, always, never.
-
-        A property of the build, not of the run, so it is read where the
-        io-uring preflight reads HAVE_URING rather than selected on the
-        command line.
-        """
-        try:
-            config = (self.build_dir / 'fuse_config.h').read_text()
-        except OSError:
-            return 'unknown'
-        for define, mode in ((SYNC_INIT_ENABLED, 'always'),
-                             (SYNC_INIT_DISABLED, 'never')):
-            if define in config:
-                return mode
-        return 'auto'
-
-    def preflight_io_uring(self) -> str:
-        """Return "" when the io-uring transport can actually be exercised,
-        else the reason the whole invocation skips with exit 77.
-
-        Checked in this order, so the message names the first thing that is
-        actually wrong.
-        """
-        if not IS_LINUX:
-            return f'fuse-io-uring is Linux-only, this is {platform.system()}'
-        try:
-            config = (self.build_dir / 'fuse_config.h').read_text()
-        except OSError:
-            return f'{self.build_dir}/fuse_config.h is unreadable'
-        if 'HAVE_URING' not in config:
-            return 'the library was built with -Denable-io-uring=false'
-        if IO_URING_CAP in self.fuse_caps:
-            return ''
-        # printcap reports capable_ext, so the capability's absence *is* the
-        # kernel's answer. The module parameter only tells the two reasons
-        # apart.
-        try:
-            enabled = FUSE_URING_PARAM.read_text().strip()
-        except OSError:
-            return 'this kernel has no fuse io-uring support'
-        if enabled in ('N', '0'):
-            return ('io-uring is disabled in the fuse module\n'
-                    f'      echo Y | sudo tee {FUSE_URING_PARAM}')
-        return f'the kernel did not offer {IO_URING_CAP}'
 
     def report_environment(self) -> None:
         """Say what will silently degrade before any test runs."""
@@ -1604,7 +1512,7 @@ def main(argv: list) -> int:
         # failing it, so a plain `meson test` on a machine that never enabled
         # the module parameter reports one SKIP instead of 88 failures. CI does
         # not rely on that: ci-build.sh enables the parameter itself.
-        reason = runner.preflight_io_uring()
+        reason = preflight_io_uring(runner.build_dir, runner.fuse_caps)
         if reason:
             print(f'SKIP: {reason}')
             runner.cleanup()
