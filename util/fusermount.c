@@ -1105,83 +1105,111 @@ err:
 	return -1;
 }
 
-static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
+/*
+ * Resolve the caller-supplied mountpoint exactly once and hand back a
+ * descriptor for the inode it named. O_NOFOLLOW refuses a symlink outright for
+ * an unprivileged caller; root keeps following them, as it always has.
+ */
+static int pin_mountpoint(const char *mnt, bool is_root, struct stat *stbuf)
 {
-	int res;
-	const char *mnt = *mntp;
-	const char *origmnt = mnt;
-	struct statfs fs_buf;
-	size_t i;
+	int open_flags = O_PATH | O_CLOEXEC;
+	int fd;
 
-	res = lstat(mnt, stbuf);
-	if (res == -1) {
+	if (!is_root)
+		open_flags |= O_NOFOLLOW;
+
+	fd = open(mnt, open_flags);
+	if (fd == -1) {
 		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
 			progname, mnt, strerror(errno));
 		return -1;
 	}
 
+	if (fstat(fd, stbuf) == -1) {
+		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
+			progname, mnt, strerror(errno));
+		close(fd);
+		return -1;
+	}
+
+	return fd;
+}
+
+static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
+{
+	int res;
+	int fd;
+	const char *mnt = *mntp;
+	const bool is_root = getuid() == 0;
+	struct statfs fs_buf;
+	size_t i;
+
+	fd = pin_mountpoint(mnt, is_root, stbuf);
+	if (fd == -1)
+		return -1;
+
 	/* No permission checking is done for root */
-	if (getuid() == 0)
+	if (is_root) {
+		*mountpoint_fd = fd;
 		return 0;
+	}
 
 	if (S_ISDIR(stbuf->st_mode)) {
-		res = chdir(mnt);
+		res = fchdir(fd);
 		if (res == -1) {
 			fprintf(stderr,
 				"%s: failed to chdir to mountpoint: %s\n",
 				progname, strerror(errno));
-			return -1;
+			goto out_close;
 		}
-		mnt = *mntp = ".";
-		res = lstat(mnt, stbuf);
-		if (res == -1) {
-			fprintf(stderr,
-				"%s: failed to access mountpoint %s: %s\n",
-				progname, origmnt, strerror(errno));
-			return -1;
-		}
+		/*
+		 * The pinned directory is the CWD, so "." names it without
+		 * going through the caller-supplied path a second time.
+		 */
+		*mntp = ".";
 
 		if ((stbuf->st_mode & S_ISVTX) && stbuf->st_uid != getuid()) {
 			fprintf(stderr, "%s: mountpoint %s not owned by user\n",
-				progname, origmnt);
-			return -1;
+				progname, mnt);
+			res = -1;
+			goto out_close;
 		}
 
-		res = access(mnt, W_OK);
+		res = access(*mntp, W_OK);
 		if (res == -1) {
 			fprintf(stderr, "%s: user has no write access to mountpoint %s\n",
-				progname, origmnt);
-			return -1;
+				progname, mnt);
+			goto out_close;
 		}
 	} else if (S_ISREG(stbuf->st_mode)) {
 		static char procfile[256];
-		*mountpoint_fd = open(mnt, O_WRONLY);
-		if (*mountpoint_fd == -1) {
+		int wfd;
+
+		snprintf(procfile, sizeof(procfile), "/proc/self/fd/%i", fd);
+
+		/*
+		 * Reopening the pinned inode through its magic link both tests
+		 * write access and yields the descriptor mount(2) is pointed
+		 * at, so the caller's path is never resolved again.
+		 */
+		wfd = open(procfile, O_WRONLY);
+		if (wfd == -1) {
 			fprintf(stderr, "%s: failed to open %s: %s\n",
 				progname, mnt, strerror(errno));
-			return -1;
+			res = -1;
+			goto out_close;
 		}
-		res = fstat(*mountpoint_fd, stbuf);
-		if (res == -1) {
-			fprintf(stderr,
-				"%s: failed to access mountpoint %s: %s\n",
-				progname, mnt, strerror(errno));
-			return -1;
-		}
-		if (!S_ISREG(stbuf->st_mode)) {
-			fprintf(stderr,
-				"%s: mountpoint %s is no longer a regular file\n",
-				progname, mnt);
-			return -1;
-		}
+		close(fd);
+		fd = wfd;
 
-		sprintf(procfile, "/proc/self/fd/%i", *mountpoint_fd);
+		snprintf(procfile, sizeof(procfile), "/proc/self/fd/%i", fd);
 		*mntp = procfile;
 	} else {
 		fprintf(stderr,
 			"%s: mountpoint %s is not a directory or a regular file\n",
 			progname, mnt);
-		return -1;
+		res = -1;
+		goto out_close;
 	}
 
 	/* Do not permit mounting over anything in procfs - it has a couple
@@ -1193,7 +1221,8 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 	if (statfs(*mntp, &fs_buf)) {
 		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
 			progname, mnt, strerror(errno));
-		return -1;
+		res = -1;
+		goto out_close;
 	}
 
 	/* Define permitted filesystems for the mount target. This was
@@ -1242,13 +1271,19 @@ static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
 		0x858458f6 /* RAMFS_MAGIC */,
 	};
 	for (i = 0; i < sizeof(f_type_whitelist)/sizeof(f_type_whitelist[0]); i++) {
-		if (f_type_whitelist[i] == fs_buf.f_type)
+		if (f_type_whitelist[i] == fs_buf.f_type) {
+			*mountpoint_fd = fd;
 			return 0;
+		}
 	}
 
 	fprintf(stderr, "%s: mounting over filesystem type %#010lx is forbidden\n",
 		progname, (unsigned long)fs_buf.f_type);
-	return -1;
+	res = -1;
+
+out_close:
+	close(fd);
+	return res;
 }
 
 static int open_fuse_device(const char *dev)
