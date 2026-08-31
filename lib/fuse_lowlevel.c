@@ -2773,7 +2773,7 @@ static void report_init_test_status(struct fuse_session *se, int ring_rc)
 				      strerror(-ring_rc));
 	else if (se->io != NULL)
 		EMIT_INIT_STATUS_LINE("io_uring=off:custom_io");
-	else if (!se->uring.enable)
+	else if (!se->uring.enabled)
 		EMIT_INIT_STATUS_LINE("io_uring=off:disabled");
 	else
 		EMIT_INIT_STATUS_LINE("io_uring=off:not_offered");
@@ -3062,7 +3062,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
-	if (se->uring.enable && se->conn.want_ext & FUSE_CAP_OVER_IO_URING) {
+	if (se->uring.enabled && se->conn.want_ext & FUSE_CAP_OVER_IO_URING) {
 		outargflags |= FUSE_OVER_IO_URING;
 		enable_io_uring = true;
 	}
@@ -3134,6 +3134,13 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		fuse_unset_feature_flag(&se->conn, FUSE_CAP_OVER_IO_URING);
 
 	report_init_test_status(se, ring_rc);
+
+	/*
+	 * Only now, after the report has had its look at the wish - later
+	 * phases need to know whether the ring came up, not whether it was
+	 * asked for.
+	 */
+	se->uring.enabled = enable_io_uring;
 
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
@@ -4237,7 +4244,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("-d", debug, 1),
 	LL_OPTION("--debug", debug, 1),
 	LL_OPTION("allow_root", deny_others, 1),
-	LL_OPTION("io_uring", uring.enable, 1),
+	LL_OPTION("io_uring", uring.enabled, 1),
 	LL_OPTION("io_uring_q_depth=%u", uring.q_depth, -1),
 	FUSE_OPT_END
 };
@@ -4629,7 +4636,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 	 * Allow overriding with env, mostly to avoid the need to modify
 	 * all tests. I.e. to test with and without io-uring being enabled.
 	 */
-	se->uring.enable = getenv("FUSE_URING_ENABLE") ?
+	se->uring.enabled = getenv("FUSE_URING_ENABLE") ?
 				   atoi(getenv("FUSE_URING_ENABLE")) :
 				   SESSION_DEF_URING_ENABLE;
 	se->uring.q_depth = getenv("FUSE_URING_QUEUE_DEPTH") ?
@@ -4790,7 +4797,7 @@ int fuse_session_custom_io_317(struct fuse_session *se,
 	 * refusing would let a stray variable break an application that never
 	 * asked for it.
 	 */
-	se->uring.enable = 0;
+	se->uring.enabled = 0;
 	return 0;
 }
 
