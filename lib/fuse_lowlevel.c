@@ -3844,6 +3844,7 @@ void fuse_session_destroy(struct fuse_session *se)
 	if (se->io != NULL)
 		free(se->io);
 	destroy_mount_opts(se->mo);
+	free(atomic_exchange(&se->mountpoint, NULL));
 	free(se);
 }
 
