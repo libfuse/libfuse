@@ -2775,8 +2775,10 @@ static void report_init_test_status(struct fuse_session *se, int ring_rc)
 		EMIT_INIT_STATUS_LINE("io_uring=off:custom_io");
 	else if (!se->uring.enabled)
 		EMIT_INIT_STATUS_LINE("io_uring=off:disabled");
-	else
+	else if (!(conn->capable_ext & FUSE_CAP_OVER_IO_URING))
 		EMIT_INIT_STATUS_LINE("io_uring=off:not_offered");
+	else
+		EMIT_INIT_STATUS_LINE("io_uring=off:not_wanted");
 	EMIT_INIT_STATUS_LINE("proto_major=%u", conn->proto_major);
 	EMIT_INIT_STATUS_LINE("proto_minor=%u", conn->proto_minor);
 	EMIT_INIT_STATUS_LINE("max_readahead=%u", conn->max_readahead);

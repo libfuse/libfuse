@@ -101,12 +101,10 @@ SUSPICIOUS_WORDS = ('exception', 'error', 'warning', 'fatal', 'traceback',
 # was meant to replace.
 IO_URING_FALLBACK = 'failed to start io-uring'
 IO_URING_CAP = 'FUSE_CAP_OVER_IO_URING'
-# Every session states its transport on its own stderr, which is a log the
-# suite keeps either way. off:custom_io is the only refusal a daemon cannot
-# help: no /dev/fuse fd of its own, so no ring to issue against.
+# off:not_offered is left out: that one is the kernel refusing the transport
+# the run exists to exercise.
 IO_URING_STATE_KEY = 'FUSE_INIT: io_uring='
-IO_URING_STATES_OK = ('FUSE_INIT: io_uring=on',
-                      'FUSE_INIT: io_uring=off:custom_io')
+IO_URING_STATES_OK = ('on', 'off:custom_io', 'off:not_wanted')
 # What -Dsync-init=always/never leave in fuse_config.h; auto writes neither.
 SYNC_INIT_ENABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_ENABLED'
 SYNC_INIT_DISABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_DISABLED'
@@ -753,6 +751,8 @@ class TestRunner:
             # is on the record too. It lands in that daemon's log, because
             # none of them redirects fuse_log() anywhere else.
             'FUSE_INIT_STATUS': '1',
+            # Handed over so the shell does not carry a second copy.
+            'FUSE_IO_URING_STATES_OK': ' '.join(IO_URING_STATES_OK),
             'FUSE_VALGRIND': self.valgrind,
         })
         if self.io_uring_depth is not None:
@@ -1150,7 +1150,8 @@ class TestRunner:
                 continue
             for line in text.splitlines():
                 if (line.startswith(IO_URING_STATE_KEY)
-                        and line not in IO_URING_STATES_OK):
+                        and line[len(IO_URING_STATE_KEY):]
+                        not in IO_URING_STATES_OK):
                     return f'{out.name}: {line}'
         return ''
 

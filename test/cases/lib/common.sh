@@ -403,16 +403,21 @@ fuse_mount_at()
 # than a single look.
 _fuse_assert_uring()
 {
-	local idx=$1 log=${FUSE_FS_LOG[$idx]} state
+	local idx=$1 log=${FUSE_FS_LOG[$idx]} state ok accepted=
 
 	[ "${FUSE_URING_ENABLE:-0}" = 1 ] || return 0
 	_wait_for 5 "grep -q '^FUSE_INIT: io_uring=' '$log'" || {
 		_fuse_dump_fs_log $idx
 		_fail "${FUSE_FS_NAME[$idx]} never reported its FUSE_INIT negotiation"
 	}
+	# Defaulting to "on" alone keeps a hand-run script strict.
+	for ok in ${FUSE_IO_URING_STATES_OK:-on}; do
+		accepted="${accepted}${accepted:+|}$ok"
+	done
 	# One daemon can serve several sessions, and every one of them has to
 	# have got a ring, so the first line saying otherwise is the answer.
-	state=$(grep '^FUSE_INIT: io_uring=' "$log" | grep -m1 -v '=on$') || state=
+	state=$(grep '^FUSE_INIT: io_uring=' "$log" |
+		grep -m1 -vE "=($accepted)\$") || state=
 	[ -z "$state" ] || {
 		_fuse_dump_fs_log $idx
 		_fail "${FUSE_FS_NAME[$idx]}: $state"
