@@ -1,0 +1,187 @@
+FUSE over a Custom Transport
+============================
+
+This document describes fuse_session_custom_io(), which lets a session speak
+the FUSE protocol over a file descriptor the caller provides instead of over
+/dev/fuse, and the validation such a caller has to do.
+
+The example that ships with libfuse, example/hello_ll_uds.c, uses an AF_UNIX
+socket, which is where the shorthand "UDS" comes from. The API itself does not
+care what the descriptor is: a socket, a pipe pair, anything a read() and a
+writev() work on.
+
+
+Disabled by Default
+-------------------
+
+fuse_session_custom_io() returns -ENOTSUP and logs a message unless libfuse
+was built with:
+
+    meson setup build -Denable-custom-io=true
+
+The hello_ll_uds example is built only with that option, and the test that
+drives it skips without it. The reason is the trust model described below,
+not the transport itself.
+
+The symbols remain exported in every build, so an application that calls
+fuse_session_custom_io() keeps linking and loading; it is refused at run time.
+
+
+How It Works
+------------
+
+A normal session gets its descriptor from the kernel and the kernel is the
+peer at the other end:
+
+    fuse_session_new()
+         |
+         v
+    fuse_session_mount()  --> open /dev/fuse, mount()
+         |
+         v
+    fuse_session_loop()   --> read()/writev() on the /dev/fuse fd
+                              peer: the kernel FUSE module
+
+A custom io session never mounts anything. The caller connects the descriptor
+itself and hands it, plus the io callbacks, to the session:
+
+    fuse_session_new()
+         |
+         v
+    caller creates fd     --> socket(), connect()/accept(), ...
+         |
+         v
+    fuse_session_custom_io(se, &io, sizeof(io), fd)
+         |
+         v
+    fuse_session_loop()   --> io->read()/io->writev() on that fd
+                              peer: whatever is at the other end
+
+From FUSE_INIT onwards the protocol is identical. The peer sends requests in
+the same wire format the kernel would, and the session replies the same way.
+
+
+The io Callbacks
+----------------
+
+struct fuse_custom_io has five members. read and writev are mandatory:
+fuse_session_custom_io() returns -EINVAL without them, because libfuse cannot
+fall back to plain read()/writev() on a descriptor it does not own.
+
+1. **read(fd, buf, buf_len, userdata)**: must deliver exactly one request per
+   call. buf_len is the session buffer size. A return value smaller than
+   sizeof(struct fuse_in_header) ends the session loop with -EIO and the
+   message "short read on fuse device", which is also what a peer closing the
+   connection looks like.
+
+2. **writev(fd, iov, count, userdata)**: must write every iovec.
+
+3. **splice_send** and **splice_receive**: optional. Without them the session
+   does not offer FUSE_CAP_SPLICE_WRITE, FUSE_CAP_SPLICE_MOVE and
+   FUSE_CAP_SPLICE_READ, so replies and requests are copied instead.
+
+4. **clone_fd**: optional, called by the multi-threaded loop to get a
+   descriptor per worker. Without it every worker shares the one descriptor.
+
+The descriptor is closed by fuse_session_destroy().
+
+
+What a Custom io Session Does Not Have
+--------------------------------------
+
+1. **No mountpoint.** fuse_session_mount() and fusermount3 are not involved,
+   so none of the mount options, the setuid helper or /etc/mtab bookkeeping
+   apply.
+
+2. **No kernel.** FUSE_INIT arrives from the peer, so protocol version and
+   feature negotiation are whatever the peer asks for.
+
+3. **No io_uring.** fuse_session_custom_io() clears se->uring.enable: the ring
+   is issued against a /dev/fuse descriptor and would bypass the io callbacks
+   entirely. A session reports this on its own stderr as
+   "FUSE_INIT: io_uring=off:custom_io".
+
+4. **No trustworthy credentials.** The uid, gid and pid that fuse_req_ctx()
+   returns are the ones the peer wrote into fuse_in_header. The allow_root
+   option compares that same uid against the session owner, so it states what
+   the peer claims, not who the peer is.
+
+
+The Trust Model: Unverified Opcodes
+-----------------------------------
+
+libfuse was written against one producer, the Linux kernel, which does not
+need to validate the requests it sends because it builds them itself. A
+kernel-built request always has:
+
+- a fuse_in_header whose len matches the bytes written,
+- the per-opcode header the opcode calls for,
+- name arguments NUL terminated inside the message,
+- count and size fields describing data that is actually present.
+
+libfuse repeats almost none of these checks. What it does check:
+
+- FUSE_INIT and CUSE_INIT: enough bytes for the major/minor fields, at
+  dispatch time, otherwise EPROTO.
+- FUSE_WRITE handled by op.write_buf: fuse_write_in.size against the bytes
+  received, otherwise EIO.
+- FUSE_NOTIFY_REPLY: the same check.
+- The extension block: FUSE_EXT_SIZE(total_extlen) against the buffer length.
+
+Every other opcode is taken at face value, in three classes:
+
+1. **Entry counts.** fuse_batch_forget_in.count bounds the loop over the
+   fuse_forget_one array that follows it. Nothing compares it to the bytes
+   that arrived, so an inflated count reads count * 16 bytes past the array
+   and hands them to op.forget or op.forget_multi as inode numbers and
+   lookup counts.
+
+2. **Payload lengths.** FUSE_SETXATTR passes fuse_setxattr_in.size to
+   op.setxattr as the length of the value, without checking that many bytes
+   were received.
+
+3. **Strings.** Name arguments are handed to the filesystem as a const char *
+   and are expected to be terminated. FUSE_SYMLINK, FUSE_RENAME, FUSE_RENAME2
+   and FUSE_SETXATTR locate their second argument at name + strlen(name) + 1.
+   A name without a NUL runs off the end of the receive buffer.
+
+A malformed request therefore reads memory outside the receive buffer. The
+usual outcome is a crash of the filesystem process; the batch forget case also
+feeds the out-of-bounds words into the filesystem's inode bookkeeping.
+
+**A custom io peer owes the session the validation the kernel would have made
+unnecessary.** The read callback is the place for it, because that is the last
+point before libfuse parses the bytes. At minimum, per message:
+
+- reject a fuse_in_header whose len is below sizeof(struct fuse_in_header) or
+  above the buffer size, and deliver exactly len bytes;
+- reject an opcode whose per-opcode header does not fit in what arrived;
+- check every count and size field against the remaining bytes;
+- check that every name argument is NUL terminated within the message.
+
+A peer that forwards requests it did not build, or that accepts connections
+from anything but itself, has to treat this as the security boundary it is.
+
+
+Example
+-------
+
+example/hello_ll_uds.c serves the protocol on an AF_UNIX socket:
+
+    se = fuse_session_new(&args, &hello_ll_oper, sizeof(hello_ll_oper), NULL);
+    cfd = create_socket(socket_path);   /* socket, bind, listen, accept */
+    fuse_session_custom_io(se, &io, sizeof(io), cfd);
+    fuse_session_loop(se);
+
+Its stream_read() reads the header, takes the length from it and reads the
+rest of the message, which is the framing the read callback contract asks for
+but none of the validation the section above asks for. It is an example of the
+API, not a model for a peer that is not trusted.
+
+
+See Also
+--------
+
+- doc/README.fuse-io-uring - the other non-default transport
+- doc/README.mount - what a /dev/fuse session does instead
+- include/fuse_lowlevel.h - fuse_session_custom_io() and struct fuse_custom_io
