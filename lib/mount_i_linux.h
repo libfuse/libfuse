@@ -76,6 +76,24 @@ int fuse_kern_fsmount_mo(const char *mnt, const struct mount_opts *mo,
 			 const char *mtab_opts, int *mountfd_out);
 
 /**
+ * Create the superblock and attach the resulting mount to a destination.
+ *
+ * The fsopen fd stays owned by the caller - a caller that keeps it in
+ * long-lived state must not be left with a descriptor closed behind its back.
+ *
+ * @fsfd fsopen fd, fully configured
+ * @mount_attrs MOUNT_ATTR_* flags, from ms_flags_to_mount_attrs()
+ * @dest_mnt_fd pre-resolved destination fd, or -1 to use @dest_path
+ * @dest_path destination path, used only when @dest_mnt_fd is -1
+ * @mountfd_out on success receives the fsmount() fd, to be closed by the
+ *              caller and usable for fuse_kern_umount_mountfd()
+ * @return 0 on success, negative error code on failure
+ */
+int fuse_fsmount_create_and_move(int fsfd, unsigned int mount_attrs,
+				 int dest_mnt_fd, const char *dest_path,
+				 int *mountfd_out);
+
+/**
  * Unmount (lazily) the mount @mountfd was created for, without a path lookup.
  *
  * @mountfd fd returned by fsmount(), still open

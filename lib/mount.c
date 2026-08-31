@@ -762,25 +762,6 @@ static int fuse_mount_sys(const char *mnt, struct mount_opts *mo,
 	return fd;
 }
 
-/*
- * Append the flag-mirror prefix (rw/nosuid/nodev/...) of the mtab record
- * to @mtab_optsp, derived from the MS_* bitmask in @flags.
- */
-static int get_mtab_flag_opts(char **mtab_optsp, int flags)
-{
-	int i;
-
-	if (!(flags & MS_RDONLY) && fuse_opt_add_opt(mtab_optsp, "rw") == -1)
-		return -1;
-
-	for (i = 0; mount_flags[i].opt != NULL; i++) {
-		if (mount_flags[i].on && (flags & mount_flags[i].flag) &&
-		    fuse_opt_add_opt(mtab_optsp, mount_flags[i].opt) == -1)
-			return -1;
-	}
-	return 0;
-}
-
 struct mount_opts *parse_mount_opts(struct fuse_args *args)
 {
 	struct mount_opts *mo;
@@ -824,7 +805,7 @@ void destroy_mount_opts(struct mount_opts *mo)
 int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
 				       char **mtab_optsp)
 {
-	if (get_mtab_flag_opts(mtab_optsp, mo->flags) == -1)
+	if (fuse_mnt_get_mtab_flag_opts(mtab_optsp, mo->flags) == -1)
 		return -1;
 	if (mo->kernel_opts && fuse_opt_add_opt(mtab_optsp, mo->kernel_opts) == -1)
 		return -1;

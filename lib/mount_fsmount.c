@@ -434,16 +434,8 @@ int apply_fsconfig_mount_opts(int fsfd, const char *opts)
 			continue;
 		/*
 		 * Skip mount attributes, they're handled by fsmount()
-		 * not fsconfig().
-		 *
-		 * These string options (nosuid, nodev, etc.) are reconstructed
-		 * from MS_* flags by get_mtab_flag_opts() in lib/mount.c and
-		 * get_mtab_opts() in util/fusermount.c. Both the library path
-		 * (via fuse_kern_mount_get_base_mtab_opts) and fusermount3 path
-		 * rebuild these strings from the flags bitmask and pass them in
-		 * mtab_opts. They must be filtered here because they are mount
-		 * attributes (passed to fsmount via MOUNT_ATTR_*), not
-		 * filesystem parameters (which would be passed to fsconfig).
+		 * not fsconfig(). Callers rebuild them as strings from the
+		 * MS_* bitmask for the mtab record, so they do show up here.
 		 *
 		 * Also skip mtab-only options - they're for /run/mount/utab, not kernel
 		 */
@@ -475,6 +467,53 @@ void fuse_kern_umount_mountfd(int mountfd)
 		fuse_log(FUSE_LOG_ERR, "fuse: cleanup umount failed: %s\n",
 			 strerror(errno));
 	}
+}
+
+int fuse_fsmount_create_and_move(int fsfd, unsigned int mount_attrs,
+				 int dest_mnt_fd, const char *dest_path,
+				 int *mountfd_out)
+{
+	int mountfd;
+	int res;
+
+	res = fuse_fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+	if (res == -1) {
+		int save_errno = errno;
+
+		log_fsconfig_kmsg(fsfd);
+		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig CREATE failed: %s\n",
+			 strerror(save_errno));
+		return -save_errno;
+	}
+
+	mountfd = fuse_fsmount(fsfd, FSMOUNT_CLOEXEC, mount_attrs);
+	if (mountfd == -1) {
+		int save_errno = errno;
+
+		log_fsconfig_kmsg(fsfd);
+		fuse_log(FUSE_LOG_ERR, "fuse: fsmount failed: %s\n",
+			 strerror(save_errno));
+		return -save_errno;
+	}
+
+	if (dest_mnt_fd >= 0)
+		res = fuse_move_mount(mountfd, "", dest_mnt_fd, "",
+				      MOVE_MOUNT_F_EMPTY_PATH |
+					      MOVE_MOUNT_T_EMPTY_PATH);
+	else
+		res = fuse_move_mount(mountfd, "", AT_FDCWD, dest_path,
+				      MOVE_MOUNT_F_EMPTY_PATH);
+	if (res == -1) {
+		int save_errno = errno;
+
+		fuse_log(FUSE_LOG_ERR, "fuse: move_mount failed: %s\n",
+			 strerror(save_errno));
+		close(mountfd);
+		return -save_errno;
+	}
+
+	*mountfd_out = mountfd;
+	return 0;
 }
 
 int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
@@ -572,16 +611,6 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 		goto out_free;
 	}
 
-	/* Create the filesystem instance */
-	res = fuse_fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
-	if (res == -1) {
-		err = -errno;
-		log_fsconfig_kmsg(fsfd);
-		fuse_log(FUSE_LOG_ERR, "fuse: fsconfig CREATE failed: %s\n",
-			 strerror(errno));
-		goto out_free;
-	}
-
 	/* Convert MS_* flags to MOUNT_ATTR_* for fsmount() */
 	flags = ms_flags_to_mount_attrs(flags, &mount_attrs);
 	if (flags != 0) {
@@ -590,32 +619,13 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 		goto out_free;
 	}
 
-	/* Create mount object with mount attributes */
-	mountfd = fuse_fsmount(fsfd, FSMOUNT_CLOEXEC, mount_attrs);
-	if (mountfd == -1) {
-		err = -errno;
-		log_fsconfig_kmsg(fsfd);
-		fuse_log(FUSE_LOG_ERR, "fuse: fsmount failed: %s\n",
-			 strerror(errno));
+	err = fuse_fsmount_create_and_move(fsfd, mount_attrs, dest_mnt_fd, mnt,
+					   &mountfd);
+	if (err)
 		goto out_free;
-	}
 
 	close(fsfd);
 	fsfd = -1;
-
-	if (dest_mnt_fd >= 0)
-		res = fuse_move_mount(mountfd, "", dest_mnt_fd, "",
-				 MOVE_MOUNT_F_EMPTY_PATH |
-					 MOVE_MOUNT_T_EMPTY_PATH);
-	else
-		res = fuse_move_mount(mountfd, "", AT_FDCWD, mnt,
-				 MOVE_MOUNT_F_EMPTY_PATH);
-	if (res == -1) {
-		err = -errno;
-		fuse_log(FUSE_LOG_ERR, "fuse: move_mount failed: %s\n",
-			 strerror(errno));
-		goto out_close_mntfd;
-	}
 
 	res = fuse_mnt_add_mount_helper(mnt, source, type, mtab_opts);
 	if (res == -1) {
@@ -633,9 +643,7 @@ int fuse_kern_fsmount(const char *mnt, int dest_mnt_fd, unsigned long flags,
 
 out_umount:
 	fuse_kern_umount_mountfd(mountfd);
-out_close_mntfd:
-	if (mountfd != -1)
-		close(mountfd);
+	close(mountfd);
 out_free:
 	free(source);
 	free(type);
