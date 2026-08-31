@@ -71,7 +71,8 @@ struct fuse_notify_req {
 };
 
 struct fuse_session_uring {
-	bool enable;
+	/* the wish until FUSE_INIT is negotiated, the result afterwards */
+	bool enabled;
 	unsigned int q_depth;
 	struct fuse_ring_pool *pool;
 };
