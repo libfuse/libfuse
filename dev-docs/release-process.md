@@ -33,7 +33,7 @@ Release Process
 Announcement email template
 
 ```
-To: fuse-devel@lists.sourceforge.net
+To: fuse-devel@lists.linux.dev
 Subject: [ANNOUNCE] libfuse XXXX has been released
 
 Dear all,

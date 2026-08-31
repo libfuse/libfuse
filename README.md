@@ -156,9 +156,10 @@ directory and at http://libfuse.github.io/doxygen.
 Getting Help
 ------------
 
-If you need help, please ask on the <fuse-devel@lists.sourceforge.net>
-mailing list (subscribe at
-https://lists.sourceforge.net/lists/listinfo/fuse-devel).
+If you need help, please ask on the <fuse-devel@lists.linux.dev>
+mailing list (subscribe by mailing
+<fuse-devel+subscribe@lists.linux.dev>, archive at
+https://lore.kernel.org/fuse-devel/).
 
 Please report any bugs on the GitHub issue tracker at
 https://github.com/libfuse/libfuse/issues.
