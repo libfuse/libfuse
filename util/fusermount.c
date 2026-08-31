@@ -685,11 +685,19 @@ static int unmount_fuse(const char *mnt, int quiet, int lazy)
 static void strip_line(char *line)
 {
 	char *s = strchr(line, '#');
+	size_t len;
+
 	if (s != NULL)
 		s[0] = '\0';
-	for (s = line + strlen(line) - 1;
-	     s >= line && isspace((unsigned char) *s); s--);
-	s[1] = '\0';
+	/*
+	 * Count down rather than walk a pointer back: an empty or all-blank
+	 * line would form line - 1, which is undefined behaviour even though
+	 * the store that follows lands inside the buffer.
+	 */
+	len = strlen(line);
+	while (len > 0 && isspace((unsigned char) line[len - 1]))
+		len--;
+	line[len] = '\0';
 	for (s = line; isspace((unsigned char) *s); s++);
 	if (s != line)
 		memmove(line, s, strlen(s)+1);
