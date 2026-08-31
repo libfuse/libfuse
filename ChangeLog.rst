@@ -1,3 +1,109 @@
+libfuse 3.18.3-rc1 (unreleased)
+===============================
+
+Security Fixes
+--------------
+
+* fusermount3: resolve the mountpoint once, through an ``O_PATH|O_NOFOLLOW``
+  descriptor. A symlink swapped in between the type check and the second
+  lookup could redirect the mount.
+* fusermount3: run the auto-unmount probe as the calling user. It opened the
+  caller-supplied mountpoint with elevated privileges before, so a symlink
+  could get an attacker-chosen path opened as root.
+* mount_util: terminate the ``/bin/mount`` and ``/bin/umount`` argument
+  vectors with ``--``. ``fsname`` reaches them straight from ``-ofsname=`` in
+  setuid-root fusermount3, and the child raises the real uid to 0 before
+  ``execle()``, so an unprivileged caller controlled a positional operand of a
+  mount(8) that was not in restricted mode.
+* mount_util: skip the mtab update entirely for option-like mount arguments.
+  BusyBox mount(8) does not honour ``--``.
+* fusermount3: unmount through ``unmount_fuse()`` when passing the device
+  descriptor to the caller fails, so that path drops privileges and runs the
+  ``fusermount3 -u`` checks instead of calling ``umount2()`` as root on a
+  caller-supplied path.
+* fusermount3 and lib: pass ``UMOUNT_NOFOLLOW`` on the kernel and non-setuid
+  unmount paths.
+* fusermount3: check the ``fstat()`` return value when validating the
+  communication file descriptor.
+* fusermount3: fix an out-of-bounds read at index -1 in ``get_mnt_opts()``
+  when the option string is empty, which a read-only mount with no further
+  options reaches.
+* util: avoid a pointer underflow when trimming ``fuse.conf`` lines.
+* fusermount3: reject a negative ``mount_max`` other than the documented -1.
+  A typo such as -2 made the limit comparison always true and blocked every
+  non-root mount.
+* lib: relay the KILLPRIV_V2 kill-suidgid flags to the filesystem in the new
+  ``fuse_file_info::kill_suidgid``. Only ``setattr`` saw them before, so a
+  filesystem that had taken over clearing suid/sgid never learned of it on
+  ``O_TRUNC`` open and on write, and the bits survived.
+
+Note: ``fuse_file_info::kill_suidgid`` is new in 3.18.3 and ``FUSE_VERSION``
+carries no patch level. A filesystem built against these headers but running
+against an older 3.18 library finds the field permanently zero, so require
+3.18.3 at run time as well.
+
+Important Fixes
+---------------
+
+* Fixed a hang on ``statx`` in builds without ``HAVE_STATX``: ``_do_statx()``
+  never replied, so the kernel waited forever.
+* io-uring: the CQE dispatch validated the opcode against ``fuse_ll_ops[]``
+  but called through ``fuse_ll_ops2[]``, so an opcode with no handler there
+  was called as a null function pointer.
+* io-uring: fixed the notify-retrieve reply buffer handling. The
+  ``fuse_notify_retrieve_in`` header sits at the start of the payload buffer,
+  not in the ring header.
+* io-uring: fixed the ``req_header_sz`` calculation, which sized the header
+  buffer from the wrong struct.
+* io-uring: create the rings with ``IORING_SETUP_SUBMIT_ALL``, so one failing
+  commit SQE no longer leaves the rest of the batch unsubmitted.
+* io-uring: ``fuse_reply_none()`` commits the ring entry. A FORGET answered
+  that way leaked the entry and left the kernel-side request outstanding.
+* fusermount3: treat ``ECONNABORTED`` like ``ENOTCONN`` when deciding whether
+  to auto-unmount, so a daemon that dies with io-uring registered no longer
+  leaves the mount behind.
+* ``receive_fd()``: check ``CMSG_FIRSTHDR()`` for NULL before dereferencing it.
+* ``fuse_session_loop_mt_312()`` no longer destroys ``se->mt_lock`` before
+  ``fuse_session_destroy()`` destroys it again, which was undefined behaviour
+  on every multi-threaded shutdown.
+* ``fuse_loop_cfg_create()`` returning NULL is checked before the config is
+  dereferenced in ``fuse_session_loop_mt_312()`` and
+  ``fuse_session_loop_mt_31()``.
+* iconv: the error check after opening the ``fromfs`` descriptor tested
+  ``tofs``, so a failed ``iconv_open()`` was ignored and left an invalid
+  descriptor behind.
+* mount.fuse: a failure to clear ``FD_CLOEXEC`` went undetected, because the
+  result was compared against 1 rather than -1.
+* ``grow_pipe_to_max()`` opens ``/proc/sys/fs/pipe-max-size`` with
+  ``O_CLOEXEC``; a concurrent fork+exec leaked the descriptor into the child.
+* Fixed a build failure for ``FUSE_USE_VERSION`` 312 and newer without symbol
+  versioning, where ``fuse_loop_mt()`` expanded to an undeclared
+  ``fuse_loop_mt_312()``.
+* Fixed a Clang 21 build failure in ``ST_MTIM_NSEC``.
+* Fixed leaks: the pipe when its size cannot be grown, the mountpoint in
+  ``fuse_session_mount()`` and ``fuse_session_destroy()``, the pipe
+  descriptors when ``fork()`` or ``setsid()`` fail in ``fuse_daemonize()``,
+  the context when ``pthread_setspecific()`` fails, ``print_module_help()``,
+  and a ``fuse_pollhandle`` in ``fuse_lib_poll()``.
+* Examples: ``update_fs()`` uses ``localtime_r()``. ``localtime()`` returns a
+  shared static ``struct tm``, so it raced with the session threads and
+  ``strftime()`` could format a half-overwritten time.
+* Examples: ``cuse_client`` caps the transfer size at 16 MiB. ``do_rw()``
+  passed the SIZE argument straight to ``calloc()``.
+* Examples: memfs_ll locking, refcounting and bounds fixes, including a
+  use-after-free on rename overwrite and on a concurrent forget.
+* Examples: passthrough_hp lock-order and lifetime fixes. The directory
+  stream is protected by a per-handle lock, ``fs.mutex`` is taken before
+  ``Inode::m`` and when ``link()`` raises nlookup, and no inode lock is held
+  across a syscall or a reply.
+
+Documentation
+-------------
+
+* The fuse-devel mailing list moved to lists.linux.dev.
+* Man page and README corrections.
+
+
 libfuse 3.18.2 (2026-03-18)
 ===========================
 * Fix two io-uring issues that might be security critical

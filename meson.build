@@ -1,5 +1,5 @@
 project('libfuse3', ['c'],
-        version: '3.18.2',
+        version: '3.18.3-rc1',
         meson_version: '>= 0.60.0',
         default_options: [
             'buildtype=debugoptimized',
