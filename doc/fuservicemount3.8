@@ -16,17 +16,155 @@ fuservicemount3 \- mount a FUSE filesystem that runs as a system socket service
 
 .SH DESCRIPTION
 Mount a filesystem using a FUSE server that runs as a socket service.
-These servers can be contained using the platform's service management
-framework.
-
-The second form checks if there is a FUSE service available for the given
-filesystem type.
+Unlike a traditional FUSE filesystem, which runs in the mount caller's
+context, such a server runs as an independent, sandboxed systemd service.
+\fBfuservicemount3\fP connects to the per-type service socket, hands the
+running server the \fI/dev/fuse\fP device and any backing files it needs,
+and performs the mount on its behalf. These servers can therefore be
+contained using the platform's service management framework.
+.PP
+\fBfuservicemount3\fP is installed setuid root so that unprivileged users
+can mount filesystems handled by a service. It is normally invoked
+indirectly by \fBmount.fuse3\fP(8), not run directly.
+.PP
+The second form checks whether a FUSE service is available for the given
+filesystem type, without mounting anything.
+.SH FILESYSTEM REQUIREMENTS
+This is not a transparent wrapper for arbitrary FUSE programs. Only a
+filesystem whose server is written to the libfuse service API can be mounted
+this way. A conventional server that calls \fBfuse_main\fP(3) opens
+\fI/dev/fuse\fP and performs the mount itself, which the service sandbox does
+not permit, so it cannot be used unmodified.
+.PP
+A service-capable server instead:
+.IP \- 2
+accepts the listening socket that systemd hands it, and receives its
+arguments and the \fI/dev/fuse\fP descriptor over that socket, rather than
+opening the device itself;
+.IP \- 2
+asks the helper to open any backing files or block devices on its behalf,
+because its sandbox has no direct filesystem access; and
+.IP \- 2
+lets the helper perform the mount, staying in the foreground under systemd.
+.PP
+The server binary, its \fB@.service\fP unit, and its \fB.socket\fP unit must
+all be installed before the type can be mounted. See \fBEXAMPLES\fP below, the
+\fIservice_ll.c\fP and \fIservice_hl.c\fP example servers, the
+\fI<fuse_service.h>\fP header, and the \fIREADME.service-mount-dev\fP document
+for how to build one.
+.SH OPTIONS
+.TP
+.B source
+The filesystem source, passed on to the running server (for example a
+backing device or file). May be empty.
+.TP
+.B mountpoint
+Where to mount the filesystem.
+.TP
+.BI -t " fstype"
+The filesystem type, of the form \fBfuse.\fIsubtype\fR or
+\fBfuseblk.\fIsubtype\fR. The \fIsubtype\fR selects the service socket.
+.TP
+.BI -o " options"
+Mount options to forward to the server.
+.TP
+.B --check
+Only test whether a service socket exists for the type given with \fB-t\fP;
+do not mount. Exit status is zero if a socket is present, non-zero
+otherwise. This does not verify that a server actually answers.
+.SH FILES
+.TP
+.I /run/filesystems/<subtype>
+The default location of the per-filesystem service socket. The directory is
+configurable at build time (meson option \fBservice-socket-dir\fP).
+.SH EXAMPLES
+A complete walk-through using the \fIservice_ll\fP example filesystem that
+ships with libfuse.
+.SS "What it is for"
+\fIservice_ll\fP exports a single file or block device as a one-file
+filesystem. Running it as a service keeps the server inside a systemd sandbox
+\(em its own unprivileged user, private namespaces, and no capabilities \(em
+while still letting a permitted user mount it with an ordinary \fBmount\fP
+command. The privileged work (opening the backing device and calling
+\fBmount\fP(2)) is done only by the setuid \fBfuservicemount3\fP helper. The
+same recipe applies to any server written with the libfuse service API.
+.SS "Setting up the service (administrator, once)"
+The source for this example ships with the libfuse distribution in its
+\fIexample\fP directory: \fIservice_ll.c\fP together with its helper
+\fIsingle_file.c\fP make up the server, and \fIservice_ll@.service\fP and
+\fIservice_ll.socket\fP are its systemd units. From that directory, build the
+server and install the binary on the root filesystem:
+.PP
+.RS
+.nf
+gcc -Wall single_file.c service_ll.c $(pkg-config fuse3 --cflags --libs) -o service_ll
+sudo install -m 0755 service_ll /usr/local/sbin/service_ll
+.fi
+.RE
+.PP
+libfuse provides two systemd units for this example: \fIservice_ll@.service\fP
+(the sandboxed server) and \fIservice_ll.socket\fP (the activation socket,
+already configured to listen at \fI/run/filesystems/service_ll\fP). Edit the
+service unit's \fBExecStart\fP to point at the installed binary:
+.PP
+.RS
+.nf
+ExecStart=/usr/local/sbin/service_ll
+.fi
+.RE
+.PP
+Install both units, reload systemd, and start the socket:
+.PP
+.RS
+.nf
+sudo cp service_ll@.service service_ll.socket /run/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start service_ll.socket
+.fi
+.RE
+.PP
+Only the socket is running now; systemd starts a fresh, isolated server
+instance on demand for each mount.
+.SS "Mounting and using it"
+Confirm a service is available for the type (this prints nothing; the exit
+status is the answer):
+.PP
+.RS
+.nf
+fuservicemount3 -t fuse.service_ll --check && echo available
+.fi
+.RE
+.PP
+Mount it, passing the backing device or file as the source. Run this as root
+or from an \fI/etc/fstab\fP entry that permits the mount:
+.PP
+.RS
+.nf
+mount -t fuse.service_ll /dev/sda /mnt
+.fi
+.RE
+.PP
+\fBmount.fuse3\fP(8) notices the service, \fBfuservicemount3\fP opens
+\fI/dev/sda\fP and performs the mount, and the data appears under \fI/mnt\fP.
+Unmount it like any other FUSE filesystem:
+.PP
+.RS
+.nf
+fusermount3 -u /mnt
+.fi
+.RE
+.PP
+For the full hardened unit files and further detail, see the
+\fIservice_ll@.service\fP and \fIservice_ll.socket\fP files shipped with
+libfuse and the \fIREADME.service-mount\fP document.
 .SH "AUTHORS"
 .LP
 The author of the fuse socket service code is Darrick J. Wong <djwong@kernel.org>.
 Debian GNU/Linux distribution.
 .SH SEE ALSO
+.BR mount.fuse3 (8)
 .BR fusermount3 (1)
 .BR fusermount (1)
 .BR mount (8)
 .BR fuse (4)
+.BR systemd.socket (5)
