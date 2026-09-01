@@ -1509,7 +1509,7 @@ static int recheck_ENOTCONN_as_owner(const char *mnt)
 		}
 
 		int fd = open(mnt, O_RDONLY);
-		if(fd == -1 && errno == ENOTCONN)
+		if (fd == -1 && (errno == ENOTCONN || errno == ECONNABORTED))
 			_exit(EXIT_SUCCESS);
 		else
 			_exit(EXIT_FAILURE);
@@ -1564,7 +1564,8 @@ static int should_auto_unmount(const char *mnt, const char *type)
 		close(fd);
 	} else {
 		switch(errno) {
-		case ENOTCONN:
+		case ENOTCONN:		/* /dev/fuse */
+		case ECONNABORTED:	/* io-uring */
 			result = 1;
 			break;
 		case EACCES:
