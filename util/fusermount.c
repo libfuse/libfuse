@@ -1459,7 +1459,7 @@ static int check_ENOTCONN_as_owner(const char *mnt)
 		}
 
 		int fd = open(mnt, O_RDONLY);
-		if(fd == -1 && errno == ENOTCONN)
+		if (fd == -1 && (errno == ENOTCONN || errno == ECONNABORTED))
 			_exit(EXIT_SUCCESS);
 		else
 			_exit(EXIT_FAILURE);
