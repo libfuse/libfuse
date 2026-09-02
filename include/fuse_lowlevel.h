@@ -2254,8 +2254,8 @@ int fuse_session_custom_io_317(struct fuse_session *se,
  * and `splice_receive` are optional. If they are not provided splice will not
  * be used for send or receive respectively.
  *
- * The provided file descriptor `fd` will be closed when fuse_session_destroy()
- * is called.
+ * The provided file descriptor `fd` will be closed when the session is freed:
+ * by fuse_session_destroy(), or by the last reply still in flight then.
  *
  * Requires a library built with -Denable-custom-io=true. The peer at the other
  * end of `fd` takes the place of the kernel as the sender of requests, so it
