@@ -42,6 +42,19 @@ int libfuse_strtol(const char *str, long *res)
 	return 0;
 }
 
+void fuse_panic_if_pedantic(const char *func)
+{
+	const char *env = getenv("FUSE_PEDANTIC");
+	long pedantic;
+
+	if (env == NULL || libfuse_strtol(env, &pedantic) != 0 || pedantic != 1)
+		return;
+
+	fuse_log(FUSE_LOG_ERR, "fuse: FUSE_PEDANTIC=1, aborting in %s()\n",
+		 func);
+	abort();
+}
+
 void fuse_set_thread_name(const char *name)
 {
 #ifdef HAVE_PTHREAD_SETNAME_NP
