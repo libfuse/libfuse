@@ -683,6 +683,9 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	req->interrupted = 0;
 	list_init_req(req);
 
+	/* dropped by fuse_free_req() when the application replies */
+	fuse_session_get(fuse_ring->se);
+
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
 				       ent->op_payload, ent_in_out->payload_sz);
 }

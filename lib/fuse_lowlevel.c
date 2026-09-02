@@ -217,6 +217,8 @@ static void list_add_req(struct fuse_req *req, struct fuse_req *next)
 
 static void destroy_req(fuse_req_t req)
 {
+	struct fuse_session *se = req->se;
+
 	if (req->flags.is_uring) {
 		fuse_log(FUSE_LOG_ERR, "Refusing to destruct uring req\n");
 		return;
@@ -224,12 +226,15 @@ static void destroy_req(fuse_req_t req)
 	assert(req->ch == NULL);
 	pthread_mutex_destroy(&req->lock);
 	free(req);
+	fuse_session_put(se);
 }
 
 void fuse_free_req(fuse_req_t req)
 {
 	int ctr;
 	struct fuse_session *se = req->se;
+	/* teardown may free a uring entry as soon as it looks idle */
+	const bool is_uring = req->flags.is_uring;
 
 	free(req->secctx);
 	req->secctx = NULL;
@@ -238,7 +243,7 @@ void fuse_free_req(fuse_req_t req)
 	 *      It actually might work already, though. But then would add
 	 *      a lock across ring queues.
 	 */
-	if (se->conn.no_interrupt || req->flags.is_uring) {
+	if (se->conn.no_interrupt || is_uring) {
 		ctr = --req->ref_cnt;
 		fuse_chan_put(req->ch);
 		req->ch = NULL;
@@ -252,7 +257,11 @@ void fuse_free_req(fuse_req_t req)
 		req->ch = NULL;
 		pthread_mutex_unlock(&se->lock);
 	}
-	if (!ctr)
+
+	/* A uring entry is embedded in its queue and never destroyed here. */
+	if (is_uring)
+		fuse_session_put(se);
+	else if (!ctr)
 		destroy_req(req);
 }
 
@@ -268,6 +277,7 @@ static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
 		req->ref_cnt = 1;
 		list_init_req(req);
 		pthread_mutex_init(&req->lock, NULL);
+		fuse_session_get(se);
 	}
 
 	return req;
@@ -4317,14 +4327,10 @@ void fuse_lowlevel_help(void)
 );
 }
 
-void fuse_session_destroy(struct fuse_session *se)
+static void fuse_session_free(struct fuse_session *se)
 {
 	struct fuse_ll_pipe *llp;
 
-	if (se->got_init && !se->got_destroy) {
-		if (se->op.destroy)
-			se->op.destroy(se->userdata);
-	}
 	llp = pthread_getspecific(se->pipe_key);
 	if (llp != NULL)
 		fuse_ll_pipe_free(llp);
@@ -4342,6 +4348,43 @@ void fuse_session_destroy(struct fuse_session *se)
 		free(se->io);
 	destroy_mount_opts(se->mo);
 
+	free(atomic_exchange(&se->mountpoint, NULL));
+	free(se);
+}
+
+void fuse_session_get(struct fuse_session *se)
+{
+	se->ref_cnt++;
+}
+
+void fuse_session_put(struct fuse_session *se)
+{
+	if (--se->ref_cnt != 0)
+		return;
+
+	/*
+	 * The caller still owns se here, so freeing it would be worse than
+	 * leaking it. Leak and name the bug instead.
+	 */
+	if (!se->destroy_called) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: session released before fuse_session_destroy()\n");
+		return;
+	}
+
+	fuse_session_free(se);
+}
+
+void fuse_session_destroy(struct fuse_session *se)
+{
+	/* on the caller's thread: userdata may not outlive this call */
+	if (se->got_init && !se->got_destroy) {
+		if (se->op.destroy)
+			se->op.destroy(se->userdata);
+	}
+	fuse_ll_clear_pipe(se);
+
+	/* the caller may stop the watchdog as soon as we return */
 	if (se->timeout_thread) {
 		pthread_mutex_lock(&se->timeout_thread->lock);
 		se->timeout_thread->session_destructed = true;
@@ -4350,8 +4393,8 @@ void fuse_session_destroy(struct fuse_session *se)
 		pthread_mutex_unlock(&se->timeout_thread->lock);
 	}
 
-	free(atomic_exchange(&se->mountpoint, NULL));
-	free(se);
+	se->destroy_called = true;
+	fuse_session_put(se);
 }
 
 
@@ -4673,6 +4716,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to allocate fuse object\n");
 		goto out1;
 	}
+	se->ref_cnt = 1;
 	se->fd = -1;
 	se->init_wakeup_fd = -1;
 	se->auto_unmount_fd = -1;

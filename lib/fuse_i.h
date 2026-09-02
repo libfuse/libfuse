@@ -87,6 +87,17 @@ enum fuse_sync_init {
 
 struct fuse_session {
 	_Atomic(char *)mountpoint;
+
+	/*
+	 * Held by the caller of fuse_session_new() and by every request in
+	 * flight. The session is torn down by whoever drops the last one,
+	 * which need not be the caller.
+	 */
+	_Atomic int ref_cnt;
+
+	/* reaching ref_cnt 0 before this is set means an unpaired put */
+	bool destroy_called;
+
 	int fd;
 	struct fuse_custom_io *io;
 	struct mount_opts *mo;
@@ -240,6 +251,23 @@ struct fuse_chan *fuse_chan_get(struct fuse_chan *ch);
  * @param ch the channel
  */
 void fuse_chan_put(struct fuse_chan *ch);
+
+/**
+ * Take a counted reference to a session
+ *
+ * @param se the session
+ */
+void fuse_session_get(struct fuse_session *se);
+
+/**
+ * Drop a counted reference to a session
+ *
+ * The last reference destroys the session, so the caller must not touch it
+ * afterwards.
+ *
+ * @param se the session
+ */
+void fuse_session_put(struct fuse_session *se);
 
 /* Mount-related functions */
 void fuse_mount_version(void);
