@@ -21,6 +21,7 @@
 /* io-uring defaults */
 #define SESSION_DEF_URING_ENABLE (0)
 #define SESSION_DEF_URING_Q_DEPTH (8)
+#define SESSION_DEF_URING_BUFPOOL (0)
 
 void fuse_session_process_uring_cqe(struct fuse_session *se,
 				    struct fuse_req *req,
