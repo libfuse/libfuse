@@ -476,6 +476,7 @@ static void fuse_uring_pool_put(struct fuse_ring_pool *fuse_ring)
 	if (!atomic_load(&fuse_ring->stopping)) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: ring pool released before teardown\n");
+		PANIC_IF_PEDANTIC();
 		return;
 	}
 

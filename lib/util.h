@@ -18,6 +18,20 @@ int libfuse_strtol(const char *str, long *res);
 void fuse_set_thread_name(const char *name);
 
 /**
+ * @brief Abort if FUSE_PEDANTIC=1 is set in the environment.
+ *
+ * @param[in] func  Calling function, for the log line.
+ */
+void fuse_panic_if_pedantic(const char *func);
+
+/*
+ * Crash on a path that cannot be reached without a bug. A file system in
+ * production is better off carrying on, so this only bites where the
+ * environment asks for it.
+ */
+#define PANIC_IF_PEDANTIC() fuse_panic_if_pedantic(__func__)
+
+/**
  * Return the low bits of a number
  */
 static inline uint32_t fuse_lower_32_bits(uint64_t nr)

@@ -4346,6 +4346,7 @@ void fuse_session_put(struct fuse_session *se)
 	if (!se->destroy_called) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: session released before fuse_session_destroy()\n");
+		PANIC_IF_PEDANTIC();
 		return;
 	}
 

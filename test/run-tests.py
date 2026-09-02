@@ -659,6 +659,10 @@ class TestRunner:
             # is on the record too. It lands in that daemon's log, because
             # none of them redirects fuse_log() anywhere else.
             'FUSE_INIT_STATUS': '1',
+            # A libfuse path that cannot be reached without a bug logs and
+            # carries on, which a test run has no way of noticing. Ask for the
+            # abort instead, so the bug lands as a core with a stack.
+            'FUSE_PEDANTIC': '1',
             # Handed over so the shell does not carry a second copy.
             'FUSE_IO_URING_STATES_OK': ' '.join(IO_URING_STATES_OK),
             'FUSE_VALGRIND': self.valgrind,
