@@ -244,9 +244,10 @@ void fuse_free_req(fuse_req_t req)
 	 *      a lock across ring queues.
 	 */
 	if (se->conn.no_interrupt || is_uring) {
-		ctr = --req->ref_cnt;
 		fuse_chan_put(req->ch);
 		req->ch = NULL;
+		/* publishes the entry as idle - do not touch req below */
+		ctr = --req->ref_cnt;
 	} else {
 		pthread_mutex_lock(&se->lock);
 		req->u.ni.func = NULL;
