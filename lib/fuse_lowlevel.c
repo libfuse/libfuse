@@ -5018,6 +5018,10 @@ static int new_api_fusermount(struct fuse_session *se,
 			      const char *mtab_opts,
 			      int *sock_fd, pid_t *fusermount_pid)
 {
+	const uint64_t required_features =
+		FUSERMOUNT_FEATURE_NEW_MOUNT_API |
+		FUSERMOUNT_FEATURE_SYNC_INIT;
+	uint64_t features;
 	int fd, err;
 
 	if (se->debug)
@@ -5027,6 +5031,14 @@ static int new_api_fusermount(struct fuse_session *se,
 	/* Terminate worker thread with wrong fd */
 	if (session_wait_sync_init_completion(se) < 0)
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
+
+	features = fuse_mount_fusermount_features();
+	if ((features & required_features) != required_features) {
+		if (se->debug)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "fuse: fusermount3 lacks new mount API sync-init support\n");
+		return -ENOTSUP;
+	}
 
 	/* Call fusermount3 with --sync-init */
 	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mtab_opts, sock_fd,
