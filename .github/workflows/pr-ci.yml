@@ -190,7 +190,11 @@ jobs:
               }' /proc/self/mountinfo |
               sort -r |    # nested mounts before their parent
               while IFS= read -r mnt; do
-                  sudo umount -f "$mnt" 2>/dev/null || true
+                  # -f aborts the connection, which is what frees a test the
+                  # runner could not kill, but it races that test's unwind for
+                  # the mount reference. Detach the mount when it loses.
+                  sudo umount -f "$mnt" 2>/dev/null ||
+                      sudo umount -l "$mnt" 2>/dev/null || true
               done
 
       - name: Upload test logs
