@@ -5112,6 +5112,14 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	if (err < 0 && errno == EPERM) {
 		char *fusermount_opts = NULL;
 
+		/*
+		 * Without sync init the handshake is pointless, and older
+		 * fusermount3 rejects --sync-init. Leave the new API;
+		 * fuse_session_mount() falls back to fuse_kern_mount().
+		 */
+		if (!se->is_sync_init)
+			goto err;
+
 		close(fd);
 		fd = -1;
 		se->fd = -1;
