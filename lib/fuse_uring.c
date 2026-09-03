@@ -1093,11 +1093,17 @@ static void *fuse_uring_thread(void *arg)
 				      memory_order_relaxed);
 
 		err = fuse_uring_queue_handle_cqes(queue);
-		if (err < 0)
-			goto err;
 
+		/*
+		 * Clear before leaving on error too: a reply deferred past
+		 * teardown has no submitter left but itself, and the gate
+		 * would keep it from submitting.
+		 */
 		atomic_store_explicit(&queue->cqe_processing, false,
 				      memory_order_relaxed);
+
+		if (err < 0)
+			goto err;
 
 		/*
 		 * Multi-issuer does not use io_uring_submit_and_wait(),
