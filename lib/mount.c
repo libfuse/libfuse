@@ -18,6 +18,7 @@
 #include "mount_util.h"
 #include "mount_i_linux.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -125,6 +126,238 @@ static int fusermount_posix_spawn(posix_spawn_file_actions_t *action,
 		waitpid(pid, NULL, 0); /* FIXME: check exit code and return error if any */
 
 	return 0;
+}
+
+/*
+ * Redirect the child's stdout into @p pipe_fds and leave it neither end.
+ * @return 0 on success, an errno value on failure.
+ */
+static int add_stdout_pipe_actions(posix_spawn_file_actions_t *action,
+				   const int pipe_fds[2])
+{
+	int status;
+
+	status = posix_spawn_file_actions_addclose(action, pipe_fds[0]);
+	if (status == 0)
+		status = posix_spawn_file_actions_adddup2(action, pipe_fds[1],
+							  STDOUT_FILENO);
+	if (status == 0)
+		status = posix_spawn_file_actions_addclose(action, pipe_fds[1]);
+
+	return status;
+}
+
+/* A broken or hostile fusermount3 may write without end. */
+#define FUSERMOUNT_OUTPUT_MAX	(64 * 1024)
+
+/*
+ * Read @p fd until EOF into a NUL-terminated string. No bytes gives "".
+ * @param[in]  max_size Fail instead of growing past this many bytes.
+ * @param[out] outputp Allocated string, freed by the caller.
+ * @return 0 on success, -1 on read, size or allocation failure.
+ */
+static int read_fd_to_string(int fd, size_t max_size, char **outputp)
+{
+	char read_buf[BUFSIZ];
+	char *output = NULL;
+	size_t output_size = 0;
+	ssize_t read_size;
+	int ret = -1;
+
+	while ((read_size = read(fd, read_buf, sizeof(read_buf))) != 0) {
+		char *new_output;
+
+		if (read_size == -1) {
+			if (errno == EINTR)
+				continue;
+			goto out;
+		}
+
+		if (output_size + (size_t) read_size > max_size)
+			goto out;
+
+		new_output = realloc(output, output_size + read_size + 1);
+		if (new_output == NULL)
+			goto out;
+		output = new_output;
+		memcpy(output + output_size, read_buf, read_size);
+		output_size += read_size;
+		output[output_size] = '\0';
+	}
+
+	if (output == NULL) {
+		output = strdup("");
+		if (output == NULL)
+			goto out;
+	}
+
+	*outputp = output;
+	output = NULL;
+	ret = 0;
+
+out:
+	free(output);
+	return ret;
+}
+
+/*
+ * Run fusermount3 with one option and capture stdout.
+ * The caller owns the allocated @p outputp buffer.
+ * @return Child exit status, or -1 before a normal child exit.
+ */
+static int fusermount_capture_output(const char *option, char **outputp)
+{
+	char const *const argv[] = {FUSERMOUNT_PROG, option, NULL};
+	char *output = NULL;
+	posix_spawn_file_actions_t action;
+	pid_t pid;
+	int pipe_fds[2];
+	int child_status;
+	int spawn_status;
+	int read_status = -1;
+	int ret = -1;
+
+	*outputp = NULL;
+	if (pipe(pipe_fds) == -1)
+		return -1;
+
+	spawn_status = posix_spawn_file_actions_init(&action);
+	if (spawn_status == 0) {
+		spawn_status = add_stdout_pipe_actions(&action, pipe_fds);
+		if (spawn_status == 0)
+			spawn_status = fusermount_posix_spawn(&action, argv,
+							      &pid);
+		posix_spawn_file_actions_destroy(&action);
+	}
+
+	/* the child owns the write end now; read() only sees EOF once ours is gone */
+	close(pipe_fds[1]);
+
+	if (spawn_status == 0)
+		read_status = read_fd_to_string(pipe_fds[0],
+						FUSERMOUNT_OUTPUT_MAX, &output);
+
+	/* SIGPIPE ends a helper still writing, so waitpid() cannot block */
+	close(pipe_fds[0]);
+	if (spawn_status != 0)
+		goto out;
+
+	while (waitpid(pid, &child_status, 0) == -1) {
+		if (errno == EINTR)
+			continue;
+		goto out;
+	}
+
+	if (read_status != 0 || !WIFEXITED(child_status))
+		goto out;
+
+	*outputp = output;
+	output = NULL;
+	ret = WEXITSTATUS(child_status);
+
+out:
+	free(output);
+	return ret;
+}
+
+/*
+ * Check whether @p output contains @p word as a complete word.
+ * Whitespace boundaries prevent matching option prefixes.
+ * @return true if @p word occurs as a complete word.
+ */
+static bool fusermount_output_has_word(const char *output, const char *word)
+{
+	size_t word_len = strlen(word);
+	const char *match = output;
+
+	while ((match = strstr(match, word)) != NULL) {
+		if ((match == output || isspace((unsigned char) match[-1])) &&
+		    (match[word_len] == '\0' ||
+		     isspace((unsigned char) match[word_len])))
+			return true;
+		match += word_len;
+	}
+
+	return false;
+}
+
+/*
+ * Convert one hexadecimal digit to its numeric value.
+ * @return 0 to 15, or -1 for a non-hexadecimal byte.
+ */
+static int fusermount_hex_digit_value(char digit)
+{
+	if (digit >= '0' && digit <= '9')
+		return digit - '0';
+	if (digit >= 'a' && digit <= 'f')
+		return digit - 'a' + 10;
+	if (digit >= 'A' && digit <= 'F')
+		return digit - 'A' + 10;
+
+	return -1;
+}
+
+/*
+ * Decode @p output from hexadecimal, most significant digit first.
+ * @return 0 on success, -1 for malformed output.
+ */
+static int fusermount_parse_features(const char *output, uint64_t *featuresp)
+{
+	uint64_t features = 0;
+	size_t output_len = strlen(output);
+
+	if (output_len == sizeof(features) * 2 + 1 &&
+	    output[output_len - 1] == '\n')
+		output_len--;
+	if (output_len != sizeof(features) * 2)
+		return -1;
+
+	/* one hex digit at a time, left to right: every further digit shifts
+	 * the value read so far up by one digit, i.e. 4 bits
+	 */
+	for (size_t digit_idx = 0; digit_idx < output_len; digit_idx++) {
+		int digit_value = fusermount_hex_digit_value(output[digit_idx]);
+
+		if (digit_value < 0)
+			return -1;
+		features = (features << 4) | (uint64_t) digit_value;
+	}
+
+	*featuresp = features;
+	return 0;
+}
+
+/*
+ * Obtain supported feature bits from fusermount3.
+ */
+uint64_t fuse_mount_fusermount_features(void)
+{
+	uint64_t features;
+	char *output;
+	int status;
+
+	/* Older versions reject --features, so probe --help first. */
+	status = fusermount_capture_output("--help", &output);
+	if (status < 0)
+		return 0;
+	if (!fusermount_output_has_word(output, "--features")) {
+		free(output);
+		return 0;
+	}
+	free(output);
+
+	status = fusermount_capture_output("--features", &output);
+	if (status != 0) {
+		free(output);
+		return 0;
+	}
+
+	status = fusermount_parse_features(output, &features);
+	free(output);
+	if (status != 0)
+		return 0;
+
+	return features;
 }
 
 void fuse_mount_version(void)

@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <errno.h>
+#include <endian.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <paths.h>
@@ -38,6 +39,7 @@
 #include <sys/utsname.h>
 #include <sched.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/vfs.h>
 
 #if defined HAVE_CLOSE_RANGE && defined linux
@@ -47,7 +49,6 @@
 #if defined HAVE_LISTMOUNT
 #include <linux/mount.h>
 #include <syscall.h>
-#include <stdint.h>
 #endif
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
@@ -1572,12 +1573,51 @@ static void usage(void)
 	       " -q		    quiet\n"
 	       " -z		    lazy unmount\n",
 	       progname);
+	printf(" --features\t    print supported features in hexadecimal\n"
+	       " --features=text    print supported feature names\n");
 	exit(1);
 }
 
 static void show_version(void)
 {
 	printf("fusermount3 version: %s\n", PACKAGE_VERSION);
+	exit(0);
+}
+
+/*
+ * Print supported feature bits in machine-readable or text form.
+ * Machine-readable output is a big-endian uint64_t in hexadecimal.
+ * @param[in] text Select feature names instead.
+ */
+static void show_features(bool text)
+{
+	uint64_t features = 0;
+
+#ifdef HAVE_NEW_MOUNT_API
+	features = FUSERMOUNT_FEATURE_NEW_MOUNT_API |
+		FUSERMOUNT_FEATURE_SYNC_INIT;
+#endif
+
+	if (text) {
+		const char *separator = "";
+
+		if (features & FUSERMOUNT_FEATURE_NEW_MOUNT_API) {
+			printf("%sFUSERMOUNT_FEATURE_NEW_MOUNT_API", separator);
+			separator = " ";
+		}
+		if (features & FUSERMOUNT_FEATURE_SYNC_INIT)
+			printf("%sFUSERMOUNT_FEATURE_SYNC_INIT", separator);
+	} else {
+		uint64_t big_endian_features = htobe64(features);
+		const unsigned char *feature_bytes =
+			(const unsigned char *) &big_endian_features;
+
+		for (size_t byte_idx = 0;
+		     byte_idx < sizeof(big_endian_features);
+		     byte_idx++)
+			printf("%02x", (unsigned int) feature_bytes[byte_idx]);
+	}
+	printf("\n");
 	exit(0);
 }
 
@@ -1664,6 +1704,7 @@ int main(int argc, char *argv[])
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'V'},
+		{"features", optional_argument, NULL, 'F'},
 		{"options", required_argument, NULL, 'o'},
 		// Note: auto-unmount and comm-fd don't have short versions.
 		// They'ne meant for internal use by mount.c
@@ -1687,6 +1728,11 @@ int main(int argc, char *argv[])
 
 		case 'V':
 			show_version();
+			break;
+		case 'F':
+			if (optarg != NULL && strcmp(optarg, "text") != 0)
+				usage();
+			show_features(optarg != NULL);
 			break;
 
 		case 'o':
