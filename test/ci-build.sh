@@ -190,13 +190,15 @@ else
     RUN_TESTS_OPTS+=(--setuid-helpers)
 fi
 
-# sudo resets the environment, so PATH and FUSE_TEST_RUN_DIR are passed
-# through env rather than shell-prefix assignments, which sudo would
+# sudo resets the environment, so PATH and the FUSE_TEST_* variables are
+# passed through env rather than shell-prefix assignments, which sudo would
 # otherwise drop; harmless when SUDO is empty. Calling run-tests.py directly,
 # never through `meson test`, keeps its per-test results in the job log
 # instead of only printing output on failure.
 rc=0
-"${SUDO[@]}" env PATH="$PATH" FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" \
+"${SUDO[@]}" env PATH="$PATH" FUSE_TEST_CI_BUILD=1 \
+    FUSE_TEST_INSTALL_PREFIX="${PREFIX_DIR}" \
+    FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" \
     timeout 1800 python3 "${SOURCE_DIR}/test/run-tests.py" \
         "${RUN_TESTS_OPTS[@]}" || rc=$?
 
