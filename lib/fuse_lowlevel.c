@@ -4102,6 +4102,22 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	fuse_session_in2req(req, in);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
+	/*
+	 * in->len is the sender's claim, buf->size is what the buffer holds.
+	 * Everything below reads the request through in->len, so a caller of
+	 * fuse_session_process_buf() that got the size wrong would take the
+	 * handlers past the allocation.
+	 */
+	if (unlikely(in->len < sizeof(struct fuse_in_header) ||
+		     buf->size < in->len)) {
+		fuse_log(FUSE_LOG_ERR,
+			"fuse: %s: %zu bytes for a %u-byte request\n",
+			opname((enum fuse_opcode) in->opcode), buf->size,
+			in->len);
+		err = EIO;
+		goto reply_err;
+	}
+
 	err = fuse_req_opcode_sanity_ok(se, in->opcode);
 	if (err)
 		goto reply_err;
