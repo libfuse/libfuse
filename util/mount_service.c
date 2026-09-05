@@ -427,6 +427,16 @@ static int mount_service_capture_arg(const struct mount_service *mo,
 	};
 	ssize_t written;
 
+	/*
+	 * string_pos already covers the header and the whole array, so this
+	 * bounds the entire memfd.  The server rejects anything larger.
+	 */
+	if (*string_pos + (off_t)string_len > FUSE_SERVICE_MAX_ARGV_SIZE) {
+		fprintf(stderr, "%s: memfd argv[%u] exceeds %d byte limit\n",
+			mo->msgtag, args->argc, FUSE_SERVICE_MAX_ARGV_SIZE);
+		return -1;
+	}
+
 	written = pwrite(mo->argvfd, string, string_len, *string_pos);
 	if (written < 0) {
 		fprintf(stderr, "%s: memfd argv write: %s\n",
