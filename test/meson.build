@@ -28,6 +28,9 @@ td += executable('test_teardown_watchdog', 'test_teardown_watchdog.c',
 td += executable('test_abi', 'test_abi.c',
                  dependencies: [ libfuse_dep ],
                  install: false)
+td += executable('test_secctx_splice', 'test_secctx_splice.c',
+                 dependencies: [ libfuse_dep, thread_dep ],
+                 install: false)
 td += executable('test_loop_config', 'test_loop_config.c',
                  include_directories: include_dirs,
                  link_with: [ libfuse ],
