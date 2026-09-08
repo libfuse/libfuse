@@ -1,4 +1,4 @@
-libfuse 3.18.3 (unreleased)
+libfuse 3.18.3 (2026-09-09)
 ===========================
 
 Security Fixes
