@@ -364,14 +364,21 @@ REEXEC_SENTINEL = 'FUSE_TESTS_UNDER_SCOPE'   # set on the re-exec'd child
 
 def reexec_under_user_scope_if_needed() -> None:
     """Re-exec under a systemd user scope so cgroup leaves have a writable
-    parent. Returns unchanged when already delegated or when systemd-run is
-    unavailable; replaces this process otherwise."""
+    parent. Returns unchanged when already delegated, when systemd-run is
+    unavailable and when it has no user bus to reach; replaces this process
+    otherwise."""
     if not IS_LINUX or os.environ.get(REEXEC_SENTINEL):
         return
     if CgroupManager.delegated_base() is not None:
         return
     systemd_run = shutil.which('systemd-run')
     if systemd_run is None:
+        return
+    # Without a user bus systemd-run exits non-zero, and by then the execv
+    # below has replaced this process: the run would end before a test starts.
+    runtime_dir = os.environ.get('XDG_RUNTIME_DIR')
+    if not os.environ.get('DBUS_SESSION_BUS_ADDRESS') and not (
+            runtime_dir and Path(runtime_dir, 'bus').exists()):
         return
     os.environ[REEXEC_SENTINEL] = '1'
     argv = [systemd_run, '--user', '--scope', '--quiet',

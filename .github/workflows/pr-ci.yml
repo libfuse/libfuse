@@ -41,6 +41,7 @@ jobs:
           - clang-san
           - clang-san-root
           - clang-san-io-uring
+          - clang-san-io-uring-root
           - clang-san-nosymver
           - clang-san-noiouring
           - clang-san-nosyncinit
@@ -88,6 +89,12 @@ jobs:
             cc: clang
             cxx: clang++
             sanitize: true
+            io_uring: true
+          - config: clang-san-io-uring-root
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            root: true
             io_uring: true
           - config: clang-san-nosymver
             cc: clang
