@@ -52,11 +52,15 @@ def load_matrix() -> list[dict]:
     return entries
 
 
-def ci_build_argv(entry: dict, work_dir: str | None) -> list[str]:
+def ci_build_argv(entry: dict, work_dir: str | None,
+                  bufpool_required: bool = False) -> list[str]:
     """Spell the ci-build.sh command line pr-ci.yml expands this entry to.
 
     A work_dir of None leaves --work-dir off, for vm-run.sh to append: the
     guest needs one of its own.
+
+    bufpool_required asks for the stricter of the two bufpool options, for a
+    caller that knows the kernel has pools.
     """
     argv = [str(CI_BUILD), '--name', entry['config'], '--cc', entry['cc']]
 
@@ -73,6 +77,9 @@ def ci_build_argv(entry: dict, work_dir: str | None) -> list[str]:
         argv.append('--root')
     if entry.get('io_uring'):
         argv.append('--io-uring')
+    if entry.get('io_uring_bufpool'):
+        argv.append('--io-uring-bufpool-required' if bufpool_required
+                    else '--io-uring-bufpool')
 
     if work_dir is not None:
         argv += ['--work-dir', work_dir]
@@ -89,7 +96,13 @@ def config_argv(entry: dict, work_dir: str, kernel: str | None) -> list[str]:
     """The command line that runs one configuration."""
     if kernel is None:
         return ci_build_argv(entry, work_dir)
-    return vm_run_argv(kernel, work_dir, ci_build_argv(entry, None))
+    # ci-build.sh forgives a bufpool skip because the kernel a GitHub runner's
+    # image ships has no pools yet. Here the kernel was named, so a skip means
+    # the one that was named turned out not to have them either -- which is
+    # the answer the run exists to get, and has to be a failure rather than a
+    # green job that tested nothing.
+    return vm_run_argv(kernel, work_dir,
+                       ci_build_argv(entry, None, bufpool_required=True))
 
 
 def missing_tools(entry: dict) -> list[str]:
