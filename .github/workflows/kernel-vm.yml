@@ -16,7 +16,7 @@ jobs:
   kernel-vm:
     # virtme-ng fetches a release candidate only from 1.30 on, 24.04 ships 1.22
     runs-on: ubuntu-26.04
-    name: '${{ matrix.config }}'
+    name: "${{ matrix.config }}${{ matrix.bufpool && '-bufpool' || '' }}"
     strategy:
       fail-fast: false
       matrix:
@@ -24,6 +24,7 @@ jobs:
           - gcc-io-uring
           - gcc-io-uring-root
           - clang-san-io-uring-root
+        bufpool: [false, true]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install dependencies (Ubuntu)
@@ -42,6 +43,7 @@ jobs:
 
       - run: test/ci/run-matrix.py --kernel latest-rc
                --config ${{ matrix.config }}
+               ${{ matrix.bufpool && '--io-uring-bufpool' || '' }}
                --work-dir ${{ github.workspace }}/fuse-tests
 
       - name: Print failed test logs
@@ -52,7 +54,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-logs-kernel-vm-${{ matrix.config }}
+          name: test-logs-kernel-vm-${{ matrix.config }}${{ matrix.bufpool && '-bufpool' || '' }}
           path: |
             fuse-tests/
             !fuse-tests/**/core.*

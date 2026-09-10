@@ -19,6 +19,9 @@ usage: $0 --name NAME [options]
   --valgrind        run the filesystem daemons under valgrind
   --root            run the suite as root instead of an unprivileged user
   --io-uring        also exercise the fuse-io-uring transport
+  --io-uring-bufpool
+                    exercise the fuse-io-uring transport using buffer pools.
+                    implies --io-uring
   --meson-opt OPT   extra meson option; repeatable
   --work-dir DIR    where to build and log, verbatim
 EOF
@@ -37,6 +40,7 @@ SANITIZE=0
 VALGRIND=0
 ROOT=0
 IO_URING=0
+IO_URING_BUFPOOL=0
 MESON_OPTS=()
 cli_work_dir=
 
@@ -51,6 +55,7 @@ while [ $# -gt 0 ]; do
     --valgrind)  VALGRIND=1; shift ;;
     --root)      ROOT=1; shift ;;
     --io-uring)  IO_URING=1; shift ;;
+    --io-uring-bufpool) IO_URING=1; IO_URING_BUFPOOL=1; shift ;;
     *)           usage ;;
     esac
 done
@@ -128,6 +133,7 @@ echo "UBSAN_OPTIONS: ${UBSAN_OPTIONS}"
 echo "Valgrind: ${TEST_WITH_VALGRIND}"
 echo "Root: ${ROOT}"
 echo "IO-uring: ${IO_URING}"
+echo "IO-uring bufpool: ${IO_URING_BUFPOOL}"
 echo "==================="
 
 meson setup -Dprefix="${PREFIX_DIR}" -Dwerror=true "${MESON_OPTS[@]}" \
@@ -182,6 +188,7 @@ fi
 
 RUN_TESTS_OPTS=(--build-dir .)
 [ "${IO_URING}" = 1 ] && RUN_TESTS_OPTS+=(--io-uring)
+[ "${IO_URING_BUFPOOL}" = 1 ] && RUN_TESTS_OPTS+=(--io-uring-bufpool)
 
 if [ "${ROOT}" = 1 ]; then
     SUDO=(sudo)
