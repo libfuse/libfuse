@@ -34,6 +34,7 @@ jobs:
           - gcc-root
           - gcc-io-uring
           - gcc-io-uring-root
+          - gcc-io-uring-bufpool
           - gcc-valgrind
           - gcc-9-valgrind
           - gcc-10-valgrind
@@ -61,6 +62,10 @@ jobs:
             cc: gcc
             root: true
             io_uring: true
+          - config: gcc-io-uring-bufpool
+            cc: gcc
+            io_uring: true
+            io_uring_bufpool: true
           - config: gcc-valgrind
             cc: gcc
             valgrind: true
@@ -139,6 +144,7 @@ jobs:
                ${{ matrix.meson_opts && format('--meson-opt {0}', join(matrix.meson_opts, ' --meson-opt ')) || '' }}
                ${{ matrix.root && '--root' || '' }}
                ${{ matrix.io_uring && '--io-uring' || '' }}
+               ${{ matrix.io_uring_bufpool && '--io-uring-bufpool' || '' }}
                --work-dir ${{ github.workspace }}/fuse-tests
 
       - name: Print failed test logs
