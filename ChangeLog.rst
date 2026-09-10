@@ -39,6 +39,11 @@ Unreleased Changes
   suid/sgid indication in the new ``fuse_file_info::kill_suidgid`` field.
   Before, only ``setattr`` saw it, through ``FUSE_SET_ATTR_KILL_SUID``.
 
+* Add support for fuse uring buffer pools (``-o io_uring_bufpool``). Instead
+  of every ring entry registering a payload buffer of its own, userspace hands
+  the kernel one contiguous region of memory for the queue and the kernel
+  manages/optimizes the memory usage for the queue.
+
 
 libfuse 3.18.0 (2025-12-18)
 ===========================
