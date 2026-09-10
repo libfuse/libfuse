@@ -9,6 +9,7 @@ from pathlib import Path
 IS_LINUX = platform.system() == 'Linux'
 
 IO_URING_CAP = 'FUSE_CAP_OVER_IO_URING'
+IO_URING_BUFPOOL_CAP = 'FUSE_CAP_IO_URING_BUFPOOL'
 # What -Dsync-init=always/never leave in fuse_config.h; auto writes neither.
 SYNC_INIT_ENABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_ENABLED'
 SYNC_INIT_DISABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_DISABLED'
@@ -84,6 +85,19 @@ def preflight_io_uring(build_dir: Path, fuse_caps: frozenset) -> str:
         return ('io-uring is disabled in the fuse module\n'
                 f'      echo Y | sudo tee {FUSE_URING_PARAM}')
     return f'the kernel did not offer {IO_URING_CAP}'
+
+
+def preflight_io_uring_bufpool(fuse_caps: frozenset) -> str:
+    """The reason payload buffer pools cannot be exercised, else "".
+
+    Asked after preflight_io_uring(), which already answered for the
+    transport itself, so all that is left is whether the kernel offers
+    pools; without them the daemons would quietly fall back to a buffer
+    per ring entry and the invocation would test the same thing twice.
+    """
+    if IO_URING_BUFPOOL_CAP in fuse_caps:
+        return ''
+    return f'the kernel did not offer {IO_URING_BUFPOOL_CAP}'
 
 
 def io_uring_setup_error() -> str:
