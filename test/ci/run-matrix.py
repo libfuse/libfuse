@@ -73,6 +73,8 @@ def ci_build_argv(entry: dict, work_dir: str | None) -> list[str]:
         argv.append('--root')
     if entry.get('io_uring'):
         argv.append('--io-uring')
+    if entry.get('io_uring_bufpool'):
+        argv.append('--io-uring-bufpool')
 
     if work_dir is not None:
         argv += ['--work-dir', work_dir]
@@ -120,6 +122,19 @@ def select(entries: list[dict], patterns: list[str],
             continue
         selected.append(entry)
     return selected
+
+
+def with_bufpool(entries: list[dict]) -> list[dict]:
+    """The io-uring entries, each renamed <config>-bufpool and given a pool."""
+    pooled = []
+    for entry in entries:
+        if not entry.get('io_uring'):
+            continue
+        pooled_entry = dict(entry)
+        pooled_entry['config'] = entry['config'] + '-bufpool'
+        pooled_entry['io_uring_bufpool'] = True
+        pooled.append(pooled_entry)
+    return pooled
 
 
 def matches_any(name: str, patterns: list[str]) -> bool:
@@ -196,6 +211,10 @@ def main() -> int:
                              'kernel built from source. Archive kernels are '
                              'downloaded once and cached under '
                              '~/.cache/virtme-ng')
+    parser.add_argument('--io-uring-bufpool', action='store_true',
+                        help='run only the selected io-uring configurations, '
+                             'each with a buffer pool and named '
+                             '<config>-bufpool; needs Linux 7.3')
     parser.add_argument('--work-dir', default=None, metavar='DIR',
                         help='where to build and log; one directory for the '
                              'whole run, as ci-build.sh names its own '
@@ -203,6 +222,8 @@ def main() -> int:
     args = parser.parse_args()
 
     entries = select(load_matrix(), args.config, args.exclude)
+    if args.io_uring_bufpool:
+        entries = with_bufpool(entries)
     if not entries:
         sys.exit('no configuration matches')
 
