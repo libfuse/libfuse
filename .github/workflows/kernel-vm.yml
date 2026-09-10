@@ -1,0 +1,57 @@
+name: 'Build & Test (kernel VM)'
+on:
+  push:
+    branches:
+      - master
+      - 'fuse-[0-9]+.[0-9]+*'
+  pull_request:
+    branches:
+      - master
+      - 'fuse-[0-9]+.[0-9]+*'
+
+permissions:
+  contents: read
+
+jobs:
+  kernel-vm:
+    # virtme-ng fetches a release candidate only from 1.30 on, 24.04 ships 1.22
+    runs-on: ubuntu-26.04
+    name: '${{ matrix.config }}'
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - gcc-io-uring
+          - gcc-io-uring-root
+          - clang-san-io-uring-root
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install dependencies (Ubuntu)
+        run: |
+          ./.github/workflows/install-ubuntu-dependencies.sh --kernel-vm
+
+      - name: Let qemu open /dev/kvm
+        run: |
+          # Adding the runner's user to the kvm group would not reach the
+          # shell it already has, so widen the device instead. Without this
+          # qemu falls back to emulation and the suite takes hours.
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+              sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - run: test/ci/run-matrix.py --kernel latest-rc
+               --config ${{ matrix.config }}
+               --work-dir ${{ github.workspace }}/fuse-tests
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-logs-kernel-vm-${{ matrix.config }}
+          path: |
+            fuse-tests/
+            !fuse-tests/**/core.*
+            !fuse-tests/**/*.sock
+          if-no-files-found: ignore
+          retention-days: 14

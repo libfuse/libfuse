@@ -87,6 +87,7 @@ using namespace std;
 
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
 #define SFS_DEFAULT_CLONE_FD "0"
+#define SFS_DEFAULT_MAX_WRITE "4194304"
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
    sfs_dirp` elements as inodes and file handles. This means that we
@@ -172,6 +173,7 @@ struct Fs {
 	bool nosplice;
 	bool nocache;
 	size_t num_threads;
+	size_t max_write;
 	bool clone_fd;
 
 	std::string fuse_mount_options;
@@ -265,8 +267,7 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_NO_INTERRUPT);
 
-	/* Try a large IO by default */
-	conn->max_write = 4 * 1024 * 1024;
+	conn->max_write = fs.max_write;
 }
 
 static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
@@ -1774,6 +1775,9 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 		cxxopts::value(mount_options))
 		("num-threads", "Number of libfuse worker threads",
 		cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
+		("max-write", "Maximum write size in bytes; also the io-uring "
+			      "payload per ring entry",
+		cxxopts::value<size_t>()->default_value(SFS_DEFAULT_MAX_WRITE))
 		("clone-fd", "use separate fuse device fd for each thread")
 		("direct-io", "enable fuse kernel internal direct-io");
 
@@ -1811,6 +1815,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 	fs.passthrough = options.count("nopassthrough") == 0;
 	fs.selinux = options.count("selinux") != 0;
 	fs.num_threads = options["num-threads"].as<int>();
+	fs.max_write = options["max-write"].as<size_t>();
 	fs.clone_fd = options.count("clone-fd");
 	fs.direct_io = options.count("direct-io");
 

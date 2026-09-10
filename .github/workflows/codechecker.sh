@@ -333,7 +333,11 @@ run_codechecker_gcc()
     cmd="$cmd --analyzers gcc"
 
     # Enable GCC checkers, disable malloc-leak, due to too many false positives
-    cmd="$cmd --enable gcc --disable gcc-malloc-leak"
+    # The gcc prefix on its own also enables every ordinary -W warning
+    cmd="$cmd --enable gcc-analyzer --disable gcc-analyzer-malloc-leak"
+
+    # too-complex reports the analyzer hitting its own enode limits, not a defect
+    cmd="$cmd --disable gcc-analyzer-too-complex"
 
     eval $cmd
 
