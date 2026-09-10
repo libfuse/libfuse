@@ -19,6 +19,10 @@ usage: $0 --name NAME [options]
   --valgrind        run the filesystem daemons under valgrind
   --root            run the suite as root instead of an unprivileged user
   --io-uring        also exercise the fuse-io-uring transport
+  --io-uring-bufpool
+                    exercise the fuse-io-uring transport using buffer pools.
+                    implies --io-uring. skipped, not failed, where the kernel
+                    has no pool support
   --meson-opt OPT   extra meson option; repeatable
   --work-dir DIR    where to build and log, verbatim
 EOF
@@ -37,6 +41,7 @@ SANITIZE=0
 VALGRIND=0
 ROOT=0
 IO_URING=0
+IO_URING_BUFPOOL=0
 MESON_OPTS=()
 cli_work_dir=
 
@@ -51,6 +56,7 @@ while [ $# -gt 0 ]; do
     --valgrind)  VALGRIND=1; shift ;;
     --root)      ROOT=1; shift ;;
     --io-uring)  IO_URING=1; shift ;;
+    --io-uring-bufpool) IO_URING=1; IO_URING_BUFPOOL=1; shift ;;
     *)           usage ;;
     esac
 done
@@ -128,6 +134,7 @@ echo "UBSAN_OPTIONS: ${UBSAN_OPTIONS}"
 echo "Valgrind: ${TEST_WITH_VALGRIND}"
 echo "Root: ${ROOT}"
 echo "IO-uring: ${IO_URING}"
+echo "IO-uring bufpool: ${IO_URING_BUFPOOL}"
 echo "==================="
 
 meson setup -Dprefix="${PREFIX_DIR}" -Dwerror=true "${MESON_OPTS[@]}" \
@@ -182,6 +189,7 @@ fi
 
 RUN_TESTS_OPTS=(--build-dir .)
 [ "${IO_URING}" = 1 ] && RUN_TESTS_OPTS+=(--io-uring)
+[ "${IO_URING_BUFPOOL}" = 1 ] && RUN_TESTS_OPTS+=(--io-uring-bufpool)
 
 if [ "${ROOT}" = 1 ]; then
     SUDO=(sudo)
@@ -201,6 +209,13 @@ rc=0
     FUSE_TEST_RUN_DIR="${RUN_DIR}/${NAME}" \
     timeout 1800 python3 "${SOURCE_DIR}/test/run-tests.py" \
         "${RUN_TESTS_OPTS[@]}" || rc=$?
+
+# 78 is run-tests.py skipping because the kernel doesn't support bufpools
+if [ "${IO_URING_BUFPOOL}" = 1 ] && [ "${rc}" = 78 ]; then
+    echo "note: the suite skipped; this kernel has no bufpool support." \
+         "Treating as success -- see the SKIP line above for the reason."
+    rc=0
+fi
 
 if [ "${ROOT}" = 1 ]; then
     # upload-artifact has to read what root wrote -- before the failure is

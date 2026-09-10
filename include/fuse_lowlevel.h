@@ -2560,6 +2560,13 @@ bool fuse_req_is_uring(fuse_req_t req);
  * and the file system can write directly to the buffer and avoid
  * extra copying. For example useful for network file systems.
  *
+ * Only call this on operations that carry a payload, i.e. ones the
+ * file system answers with data. An operation that replies with no
+ * more than a status - FLUSH, RELEASE, FSYNC - has no buffer of its
+ * own: with a per entry payload buffer the returned pointer is one
+ * this request will never send, and with an io-uring buffer pool it
+ * may belong to another request in flight.
+ *
  * @param req the request
  * @param payload pointer to the payload
  * @param payload_sz size of the payload

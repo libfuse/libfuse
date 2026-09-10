@@ -230,24 +230,32 @@ private_cfg.set('FUSE_SYNC_INIT_DEFAULT',
      'always': 'FUSE_SYNC_INIT_ENABLED',
      'never':  'FUSE_SYNC_INIT_DISABLED'}[get_option('sync-init')])
 
-# Check for liburing with SQE128 support
+# Check for liburing with SQE128 and fixed-buffer uring_cmd support.
+# IORING_URING_CMD_FIXED and sqe->uring_cmd_flags landed a release after
+# IORING_SETUP_SQE128, so testing only the latter leaves headers that pass the
+# probe and then fail to build lib/fuse_uring.c.
 code = '''
 #include <liburing.h>
 #include <stdio.h>
 int main(void) {
     struct io_uring ring;
+    struct io_uring_sqe sqe;
     int ret = io_uring_queue_init(1, &ring, 0);
 #ifndef IORING_SETUP_SQE128
 #error "No SQE128 support"
 #endif
-    return ret;
+#ifndef IORING_URING_CMD_FIXED
+#error "No uring_cmd fixed buffer support"
+#endif
+    sqe.uring_cmd_flags = 0;
+    return ret + sqe.uring_cmd_flags;
 }'''
 
 liburing = dependency('liburing', required: false)
 
 if get_option('enable-io-uring') and liburing.found()
    if cc.links(code,
-              name: 'liburing linking and SQE128 support',
+              name: 'liburing linking, SQE128 and fixed uring_cmd support',
               dependencies: [liburing])
       private_cfg.set('HAVE_URING', true)
    endif
