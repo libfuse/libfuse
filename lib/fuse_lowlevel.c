@@ -3007,6 +3007,11 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	se->conn.max_write = MIN(se->conn.max_write, bufsize - FUSE_BUFFER_HEADER_SIZE);
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 
+	if (se->debug && se->conn.max_write < FUSE_MIN_CHUNK_SIZE) {
+		fuse_log(FUSE_LOG_DEBUG,
+			 "INIT: max_write value below FUSE_MIN_CHUNK_SIZE, may be a bug\n");
+	}
+
 	if (arg->flags & FUSE_MAX_PAGES) {
 		outarg.flags |= FUSE_MAX_PAGES;
 		outarg.max_pages = (se->conn.max_write - 1) / getpagesize() + 1;
