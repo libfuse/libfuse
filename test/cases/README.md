@@ -118,6 +118,7 @@ FUSE_CAPS="FUSE_CAP_ASYNC_READ FUSE_CAP_POSIX_LOCKS …"   # printcap, run once
 FUSE_UID=1000                          # effective uid
 FUSE_OS=Linux                          # platform.system()
 FUSE_INIT_STATUS=1                     # every session logs its FUSE_INIT result
+FUSE_PEDANTIC=1                        # libfuse aborts on a cannot-happen path
 PATH=$FUSE_UTIL_DIR:$FUSE_EXAMPLE_DIR:$PATH
 ```
 

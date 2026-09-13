@@ -30,9 +30,14 @@
 #include <linux/sched.h>
 #include <poll.h>
 #include <sys/eventfd.h>
+#include <time.h>
 
 /* Size of command data area in SQE when IORING_SETUP_SQE128 is used */
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
+
+/* Bound teardown so a stuck application cannot hang umount forever. */
+#define FUSE_URING_TEARDOWN_TIMEOUT_SEC 30
+#define FUSE_URING_DRAIN_POLL_US	10000
 
 struct fuse_ring_ent {
 	struct fuse_ring_queue *ring_queue; /* back pointer */
@@ -74,6 +79,18 @@ struct fuse_ring_queue {
  */
 struct fuse_ring_pool {
 	struct fuse_session *se;
+
+	/*
+	 * Held by se->uring.pool and by every queue; a queue teardown could
+	 * not clean up keeps the pool, and through it the session, alive.
+	 */
+	_Atomic int ref_cnt;
+
+	/*
+	 * Ring teardown in progress. Not se->mt_exited: a failed
+	 * fuse_uring_start() falls back to /dev/fuse and keeps serving.
+	 */
+	_Atomic bool stopping;
 
 	/* mirror of se->conn.io_uring_single_issuer, fixed at ring creation */
 	bool single_issuer;
@@ -419,24 +436,159 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 	return 0;
 }
 
+static bool fuse_uring_past_deadline(const struct timespec *deadline)
+{
+	struct timespec now;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	return now.tv_sec > deadline->tv_sec ||
+	       (now.tv_sec == deadline->tv_sec && now.tv_nsec >= deadline->tv_nsec);
+}
+
+/* Number of entries the application still holds (ref_cnt > 1). */
+static size_t fuse_uring_queue_held(struct fuse_ring_queue *queue, size_t depth)
+{
+	size_t held = 0;
+
+	for (size_t idx = 0; idx < depth; idx++)
+		if (atomic_load(&queue->ent[idx].req.ref_cnt) > 1)
+			held++;
+
+	return held;
+}
+
+static void fuse_uring_pool_get(struct fuse_ring_pool *fuse_ring)
+{
+	fuse_ring->ref_cnt++;
+}
+
+static void fuse_uring_pool_put(struct fuse_ring_pool *fuse_ring)
+{
+	struct fuse_session *se = fuse_ring->se;
+
+	if (--fuse_ring->ref_cnt != 0)
+		return;
+
+	/*
+	 * se->uring.pool still points here, so freeing would be worse than
+	 * leaking. Leak and name the bug instead.
+	 */
+	if (!atomic_load(&fuse_ring->stopping)) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: ring pool released before teardown\n");
+		PANIC_IF_PEDANTIC();
+		return;
+	}
+
+	free(fuse_ring->queues);
+	pthread_cond_destroy(&fuse_ring->thread_start_cond);
+	pthread_mutex_destroy(&fuse_ring->thread_start_mutex);
+	free(fuse_ring);
+
+	/*
+	 * Never the last session reference: callers clear se->uring.pool
+	 * afterwards, and still hold the one fuse_session_new() took.
+	 */
+	fuse_session_put(se);
+}
+
 static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 {
+	struct timespec deadline;
+
+	clock_gettime(CLOCK_MONOTONIC, &deadline);
+	deadline.tv_sec += FUSE_URING_TEARDOWN_TIMEOUT_SEC;
+
+	/*
+	 * Phase 1: stop every ring thread. The eventfd completes the poll SQE
+	 * armed in fuse_uring_register_queue(); init_sem releases a thread
+	 * that is still waiting to be let into the loop, which happens when
+	 * ring startup failed before FUSE_INIT was answered.
+	 */
+	atomic_store(&fuse_ring->stopping, true);
+
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
+		uint64_t value = 1ULL;
+		ssize_t res;
+
+		if (queue->tid == 0)
+			continue;
+
+		sem_post(&fuse_ring->init_sem);
+
+		do {
+			res = write(queue->eventfd, &value, sizeof(value));
+		} while (res < 0 && errno == EINTR);
+
+		if (res != (ssize_t)sizeof(value))
+			fuse_log(FUSE_LOG_ERR, "qid=%d eventfd wake failed: %s\n",
+				 queue->qid, strerror(errno));
+	}
+
+	/*
+	 * Phase 2: parallel, bounded wait. Poll every queue each round so one
+	 * stuck queue cannot consume another's time budget. Done once every
+	 * thread is reaped and no entry is still held by the application.
+	 */
+	while (true) {
+		bool done = true;
+
+		for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
+			struct fuse_ring_queue *queue =
+				fuse_uring_get_queue(fuse_ring, qid);
+
+			if (queue->tid != 0) {
+				if (pthread_tryjoin_np(queue->tid, NULL) == 0)
+					queue->tid = 0;
+				else
+					done = false;
+			}
+
+			if (queue->tid == 0 &&
+			    fuse_uring_queue_held(queue, fuse_ring->queue_depth)) {
+				void (*teardown_waiting)(void) =
+					fuse_ring->se->uring.fsu_test_teardown_waiting;
+
+				done = false;
+				if (teardown_waiting) {
+					fuse_ring->se->uring.fsu_test_teardown_waiting = NULL;
+					teardown_waiting();
+				}
+			}
+		}
+
+		if (done || fuse_uring_past_deadline(&deadline))
+			break;
+
+		usleep(FUSE_URING_DRAIN_POLL_US);
+	}
+
+	/*
+	 * Phase 3: free what is safe, leak what the application still pins. A
+	 * thread that never reaped (tid != 0) still owns ring_lock and the
+	 * ring; an entry at ref_cnt > 1 may still be replied to.
+	 */
+	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
+		struct fuse_ring_queue *queue =
+			fuse_uring_get_queue(fuse_ring, qid);
+		size_t held;
 
 		if (queue->tid != 0) {
-			uint64_t value = 1ULL;
-			int rc;
+			pthread_detach(queue->tid);
+			fuse_log(FUSE_LOG_ERR,
+				 "qid=%d ring thread stuck in application; leaking queue\n",
+				 queue->qid);
+			continue;
+		}
 
-			rc = write(queue->eventfd, &value, sizeof(value));
-			if (rc != sizeof(value))
-				fprintf(stderr,
-					"Wrote to eventfd=%d err=%s: rc=%d\n",
-					queue->eventfd, strerror(errno), rc);
-			pthread_cancel(queue->tid);
-			pthread_join(queue->tid, NULL);
-			queue->tid = 0;
+		held = fuse_uring_queue_held(queue, fuse_ring->queue_depth);
+		if (held) {
+			fuse_log(FUSE_LOG_ERR,
+				 "qid=%d leaking: %zu request(s) still held by application after %d s\n",
+				 queue->qid, held, FUSE_URING_TEARDOWN_TIMEOUT_SEC);
+			continue;
 		}
 
 		if (queue->eventfd >= 0) {
@@ -455,12 +607,16 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 		}
 
 		pthread_mutex_destroy(&queue->ring_lock);
+		fuse_uring_pool_put(fuse_ring);
 	}
 
-	free(fuse_ring->queues);
-	pthread_cond_destroy(&fuse_ring->thread_start_cond);
-	pthread_mutex_destroy(&fuse_ring->thread_start_mutex);
-	free(fuse_ring);
+	/*
+	 * se->uring.pool's own reference, dropped last so the loop above can
+	 * never free the pool it is walking. A queue that kept its reference
+	 * leaks the backing allocation instead - a detached thread and an
+	 * unanswered request both still reach into it.
+	 */
+	fuse_uring_pool_put(fuse_ring);
 }
 
 static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
@@ -553,6 +709,11 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		goto err;
 	}
 
+	/* Both are dropped by fuse_session_destruct_uring() on the err path. */
+	fuse_ring->se = se;
+	fuse_ring->ref_cnt = 1;
+	fuse_session_get(se);
+
 	queue_sz = fuse_ring_queue_size(se->uring.q_depth);
 	fuse_ring->queues = calloc(1, queue_sz * nr_queues);
 	if (fuse_ring->queues == NULL) {
@@ -560,7 +721,6 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		goto err;
 	}
 
-	fuse_ring->se = se;
 	fuse_ring->nr_queues = nr_queues;
 	fuse_ring->queue_depth = se->uring.q_depth;
 	fuse_ring->max_req_payload_sz = payload_sz;
@@ -581,6 +741,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->ring_pool = fuse_ring;
 		queue->eventfd = -1;
 		pthread_mutex_init(&queue->ring_lock, NULL);
+		fuse_uring_pool_get(fuse_ring);
 	}
 
 	pthread_cond_init(&fuse_ring->thread_start_cond, NULL);
@@ -682,6 +843,9 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	req->ch = NULL; /* not needed for uring */
 	req->interrupted = 0;
 	list_init_req(req);
+
+	/* dropped by fuse_free_req() when the application replies */
+	fuse_session_get(fuse_ring->se);
 
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
 				       ent->op_payload, ent_in_out->payload_sz);
@@ -888,6 +1052,10 @@ static void *fuse_uring_thread(void *arg)
 
 	sem_wait(&ring_pool->init_sem);
 
+	/* teardown posted init_sem rather than FUSE_INIT letting us in */
+	if (atomic_load_explicit(&ring_pool->stopping, memory_order_relaxed))
+		goto err_non_fatal;
+
 	/*
 	 * Multi-issuer flushes the registration SQEs here - safe without
 	 * ring_lock, no request can reach this queue yet. Single-issuer's
@@ -897,7 +1065,8 @@ static void *fuse_uring_thread(void *arg)
 		io_uring_submit(&queue->ring);
 
 	/* Not using fuse_session_exited(se), as that cannot be inlined */
-	while (!atomic_load_explicit(&se->mt_exited, memory_order_relaxed)) {
+	while (!atomic_load_explicit(&se->mt_exited, memory_order_relaxed) &&
+	       !atomic_load_explicit(&ring_pool->stopping, memory_order_relaxed)) {
 		/*
 		 * Single-issuer: one combined submit_and_wait() flushes the
 		 * previous iteration's batched replies and waits. Multi-issuer:
@@ -925,11 +1094,17 @@ static void *fuse_uring_thread(void *arg)
 				      memory_order_relaxed);
 
 		err = fuse_uring_queue_handle_cqes(queue);
-		if (err < 0)
-			goto err;
 
+		/*
+		 * Clear before leaving on error too: a reply deferred past
+		 * teardown has no submitter left but itself, and the gate
+		 * would keep it from submitting.
+		 */
 		atomic_store_explicit(&queue->cqe_processing, false,
 				      memory_order_relaxed);
+
+		if (err < 0)
+			goto err;
 
 		/*
 		 * Multi-issuer does not use io_uring_submit_and_wait(),
