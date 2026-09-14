@@ -1314,11 +1314,19 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
 
+#ifdef __FreeBSD__
+	/* During buffered write, the kernel may issue a READ request,
+	   irrespective of whether writeback cache is enabled. */
+	if (!fs.direct_io && !(fi->flags & O_DIRECT)) {
+#else
 	/* With writeback cache, kernel may send read requests even
        when userspace opened write-only */
-	if (fs.timeout && (fi->flags & O_ACCMODE) == O_WRONLY) {
-		fi->flags &= ~O_ACCMODE;
-		fi->flags |= O_RDWR;
+	if (fs.timeout) {
+#endif
+		if ((fi->flags & O_ACCMODE) == O_WRONLY) {
+			fi->flags &= ~O_ACCMODE;
+			fi->flags |= O_RDWR;
+		}
 	}
 
 	/* With writeback cache, O_APPEND is handled by the kernel.  This
