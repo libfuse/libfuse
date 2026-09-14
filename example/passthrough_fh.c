@@ -384,6 +384,14 @@ static int xmp_open(const char *path, struct fuse_file_info *fi)
 {
 	int fd;
 
+#ifdef __FreeBSD__
+	/* During buffered write, the kernel may issue a READ request. */
+	if (!(fi->flags & O_DIRECT) && (fi->flags & O_ACCMODE) == O_WRONLY) {
+		fi->flags &= ~O_ACCMODE;
+		fi->flags |= O_RDWR;
+	}
+#endif
+
 	fd = open(path, fi->flags);
 	if (fd == -1)
 		return -errno;
