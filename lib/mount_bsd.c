@@ -86,6 +86,9 @@ static const struct fuse_opt fuse_mount_opts[] = {
 #if __FreeBSD_version >= 1200519
 	FUSE_DUAL_OPT_KEY("intr",		KEY_KERN),
 #endif
+#if __FreeBSD_version >= 1300048
+	FUSE_DUAL_OPT_KEY("nocover",		KEY_KERN),
+#endif
 	/* stock FBSD mountopt parsing routine lets anything be negated... */
 	/*
 	 * Linux specific mount options, but let just the mount util
