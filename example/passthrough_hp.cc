@@ -984,7 +984,10 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		if (fs.debug)
 			cerr << "DEBUG: readdir(): seeking to " << offset
 			     << endl;
-		seekdir(d->dp, offset);
+		if (offset == 0)
+			rewinddir(d->dp);
+		else
+			seekdir(d->dp, offset);
 		d->offset = offset;
 	}
 
