@@ -695,7 +695,10 @@ static void lo_do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 	p = buf;
 
 	if (offset != d->offset) {
-		seekdir(d->dp, offset);
+		if (offset == 0)
+			rewinddir(d->dp);
+		else
+			seekdir(d->dp, offset);
 		d->entry = NULL;
 		d->offset = offset;
 	}

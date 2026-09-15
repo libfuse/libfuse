@@ -984,7 +984,10 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		if (fs.debug)
 			cerr << "DEBUG: readdir(): seeking to " << offset
 			     << endl;
-		seekdir(d->dp, offset);
+		if (offset == 0)
+			rewinddir(d->dp);
+		else
+			seekdir(d->dp, offset);
 		d->offset = offset;
 	}
 
@@ -1002,7 +1005,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			}
 			break; // End of stream
 		}
-		d->offset = entry->d_off;
+		d->offset = telldir(d->dp);
 
 		fuse_entry_param e{};
 		size_t entsize;
@@ -1020,12 +1023,12 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 				did_lookup = true;
 			}
 			entsize = fuse_add_direntry_plus(
-				req, p, rem, entry->d_name, &e, entry->d_off);
+				req, p, rem, entry->d_name, &e, d->offset);
 		} else {
 			e.attr.st_ino = entry->d_ino;
 			e.attr.st_mode = entry->d_type << 12;
 			entsize = fuse_add_direntry(req, p, rem, entry->d_name,
-						    &e.attr, entry->d_off);
+						    &e.attr, d->offset);
 		}
 
 		if (entsize > rem) {
@@ -1043,7 +1046,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		if (fs.debug) {
 			cerr << "DEBUG: readdir(): added to buffer: "
 			     << entry->d_name << ", ino " << e.attr.st_ino
-			     << ", offset " << entry->d_off << endl;
+			     << ", offset " << d->offset << endl;
 		}
 	}
 	err = 0;

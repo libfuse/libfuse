@@ -158,13 +158,17 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	(void) path;
 	if (offset != d->offset) {
+		if (offset == 0)
+			rewinddir(d->dp);
+		else {
 #ifndef __FreeBSD__
-		seekdir(d->dp, offset);
+			seekdir(d->dp, offset);
 #else
-		/* Subtract the one that we add when calling
-		   telldir() below */
-		seekdir(d->dp, offset-1);
+			/* Subtract the one that we add when calling
+			   telldir() below */
+			seekdir(d->dp, offset-1);
 #endif
+		}
 		d->entry = NULL;
 		d->offset = offset;
 	}
