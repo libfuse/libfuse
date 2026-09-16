@@ -476,7 +476,9 @@ fuse_wait_mount()
 {
 	local path=$1 predicate=${2:-}
 	local idx=$((_fuse_fs_count - 1))
-	local deadline=$((SECONDS + 30))
+	local pid=${FUSE_FS_PID[$idx]}
+	local timeout=30
+	local deadline=$((SECONDS + timeout))
 	local test_cmd
 
 	if [ -n "$predicate" ]; then
@@ -489,14 +491,16 @@ fuse_wait_mount()
 		if eval "$test_cmd" >/dev/null 2>&1; then
 			return 0
 		fi
-		if ! kill -0 "${FUSE_FS_PID[$idx]}" 2>/dev/null; then
+		if ! kill -0 "$pid" 2>/dev/null; then
 			# The daemon may have exited *after* completing the
 			# mount (mount.fuse3 does), so look once more.
 			eval "$test_cmd" >/dev/null 2>&1 && return 0
+			echo "early exit: daemon (pid $pid) exited before mounting $path" >&2
 			return 1
 		fi
 		sleep 0.1
 	done
+	echo "timeout: daemon (pid $pid) still alive but $path not mounted after ${timeout}s" >&2
 	return 1
 }
 
