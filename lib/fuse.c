@@ -1402,10 +1402,13 @@ static void forget_node(struct fuse *f, fuse_ino_t nodeid, uint64_t nlookup)
 
 static void unlink_node(struct fuse *f, struct node *node)
 {
-	if (f->conf.remember) {
-		assert(node->nlookup > 1);
+	/*
+	 * nlookup == 1: the kernel already forgot this node after the
+	 * file vanished underneath the mount, only the remember
+	 * reference is left and fuse_clean_cache() drops it.
+	 */
+	if (f->conf.remember && node->nlookup > 1)
 		node->nlookup--;
-	}
 	unhash_name(f, node);
 }
 
