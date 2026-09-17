@@ -575,6 +575,204 @@ def discover(cases_dir: Path, patterns: list, groups: set,
     return specs
 
 
+class StackDumper:
+    """Writes ps.txt, kstack.<pid>.txt and gdbstack.<pid>.txt for a set of
+    pids into a logs directory.
+
+    Shared by the runner's own timeout and --dump-stacks, which a script calls
+    when it decides a daemon hangs before the runner's timeout would.
+    """
+
+    def __init__(self, gdb: str | None):
+        self.gdb = gdb
+
+    def dump(self, pids: list, logs: Path) -> None:
+        """Write a snapshot of the whole process table, plus every thread's
+        kernel stack and (when gdb is available) user backtrace for every
+        pid.
+
+        A thread blocked in an uninterruptible syscall never answers
+        PTRACE_ATTACH, so the kernel stack is taken first -- it needs no
+        attach and is often the only trace such a thread ever yields. The
+        process table is taken before either, while nothing has stopped a
+        thread yet.
+        """
+        self._dump_process_table(logs)
+        for pid in pids:
+            self._dump_kernel_stacks(pid, logs)
+            if self.gdb is not None:
+                self._dump_gdb_backtrace(pid, logs)
+
+    @staticmethod
+    def with_descendants(pids: list) -> list:
+        """*pids* plus every process below them, from a single /proc scan.
+
+        The daemon a script started is rarely the pid it holds: mount.fuse3
+        execs a shell that execs the filesystem, which forks to daemonize and
+        forks again for fusermount3.
+        """
+        children = {}
+        for entry in os.listdir('/proc'):
+            if not entry.isdigit():
+                continue
+            try:
+                stat_line = Path(f'/proc/{entry}/stat').read_text()
+            except OSError:
+                continue    # exited between listdir() and here
+            # comm may hold spaces and parentheses; ppid is the field after
+            # the closing one.
+            ppid = int(stat_line.rpartition(')')[2].split()[1])
+            children.setdefault(ppid, []).append(int(entry))
+        found = []
+        queue = list(pids)
+        while queue:
+            pid = queue.pop(0)
+            if pid in found:
+                continue
+            found.append(pid)
+            queue.extend(children.get(pid, []))
+        return found
+
+    @staticmethod
+    def _dump_process_table(logs: Path) -> None:
+        """ps auxwww, so a hang that involves a process outside the test's own
+        containment -- a daemon an earlier test leaked, say -- is still
+        visible in the report.
+        """
+        result = subprocess.run(['ps', 'auxwww'], capture_output=True,
+                                text=True, check=False)
+        (logs / 'ps.txt').write_text(result.stdout + result.stderr)
+
+    @staticmethod
+    def _proc_identity(pid: int) -> str:
+        """A "<pid> (<comm>): <cmdline>" header line for a dump.
+
+        Which pid was the daemon and which the client blocked on it is the
+        first question asked of a stack dump, and a bare pid answers it for
+        nobody reading the report minutes or days later.
+        """
+        try:
+            comm = Path(f'/proc/{pid}/comm').read_text().strip()
+        except OSError:
+            comm = '?'
+        try:
+            raw = Path(f'/proc/{pid}/cmdline').read_bytes()
+            cmdline = raw.decode('utf8', errors='replace').replace('\0', ' ')
+        except OSError:
+            cmdline = ''
+        # An argument may hold a newline; a header that is not one line
+        # breaks every reader that greps the dump for its pid.
+        return f'=== pid {pid} ({comm}): {" ".join(cmdline.split())} ==='
+
+    @staticmethod
+    def _as_text(data) -> str:
+        """TimeoutExpired carries its partial output undecoded even when the
+        run was in text mode."""
+        if data is None:
+            return ''
+        return data if isinstance(data, str) \
+            else data.decode('utf8', errors='replace')
+
+    @staticmethod
+    def _uninterruptible_tids(pid: int) -> list:
+        """Threads of *pid* in uninterruptible sleep, D in /proc.
+
+        Such a thread never answers PTRACE_ATTACH, so gdb waits on it until
+        GDB_TIMEOUT kills it. That is per pid, and a wedged filesystem leaves
+        several -- the client blocked on it and the daemon's own threads -- so
+        the dump can outlast the timeout that asked for it by minutes.
+        """
+        wedged = []
+        try:
+            tids = sorted(int(tid) for tid in os.listdir(f'/proc/{pid}/task'))
+        except OSError:
+            return wedged
+        for tid in tids:
+            try:
+                status = Path(f'/proc/{pid}/task/{tid}/status').read_text()
+            except OSError:
+                continue    # exited between listdir() and here
+            for line in status.splitlines():
+                if line.startswith('State:'):
+                    if line.split()[1] == 'D':
+                        wedged.append(tid)
+                    break
+        return wedged
+
+    @staticmethod
+    def _dump_kernel_stacks(pid: int, logs: Path) -> None:
+        """sudo cat /proc/<pid>/task/*/stack for every thread of *pid*.
+
+        /proc/<pid>/task/<tid>/stack is gated on CAP_SYS_ADMIN unconditionally
+        -- unlike ptrace, ownership and Yama's exceptions are not enough --
+        to keep it from leaking kernel addresses. sudo is what gets it on a
+        non-root run; -n so a runner without passwordless sudo fails the read
+        immediately instead of blocking on a password prompt nothing answers.
+        """
+        task_dir = Path(f'/proc/{pid}/task')
+        try:
+            tids = sorted(int(tid) for tid in os.listdir(task_dir))
+        except OSError:
+            return
+        lines = [StackDumper._proc_identity(pid)]
+        for tid in tids:
+            stack_path = task_dir / str(tid) / 'stack'
+            result = subprocess.run(['sudo', '-n', 'cat', str(stack_path)],
+                                    capture_output=True, text=True,
+                                    check=False)
+            stack = result.stdout if result.returncode == 0 else \
+                f'(unreadable: {result.stderr.strip() or result.returncode})\n'
+            lines.append(f'=== tid {tid} ===\n{stack}')
+        (logs / f'kstack.{pid}.txt').write_text('\n'.join(lines))
+
+    def _dump_gdb_backtrace(self, pid: int, logs: Path) -> None:
+        """sudo gdb -p <pid> backtraces, written beside the kernel stacks.
+
+        Bare "bt" for every thread first and "bt full" only after it: the
+        locals are worth having, but they bury the frame list they belong to
+        under pages of struct dumps, and the frame list is what is read first.
+
+        sudo, not a Yama prctl exception: the wedged pid is as likely to be a
+        daemon the test forked after launch as the test's own exec-chain, and
+        an exception only covers the specific task that calls it, not
+        children it forks afterwards. Root's CAP_SYS_PTRACE reaches either
+        one uniformly. Best-effort: a thread ptrace cannot stop, or a runner
+        without passwordless sudo, just leaves gdb's or sudo's own error text
+        in the file.
+
+        Skipped entirely where a thread is already in uninterruptible sleep:
+        the attach cannot complete, so the whole GDB_TIMEOUT buys one line
+        saying gdb was killed, and the kernel stack taken just before is what
+        such a thread yields instead.
+        """
+        wedged = self._uninterruptible_tids(pid)
+        if wedged:
+            tids = ' '.join(str(tid) for tid in wedged)
+            (logs / f'gdbstack.{pid}.txt').write_text(
+                f'{self._proc_identity(pid)}\n'
+                f'(skipped: tid {tids} in uninterruptible sleep, so the '
+                f'attach cannot complete -- see kstack.{pid}.txt)\n')
+            return
+        argv = ['sudo', '-n', self.gdb, '--batch', '--nx',
+                '-ex', 'set pagination off',
+                '-ex', 'thread apply all bt',
+                '-ex', 'set print pretty on',
+                '-ex', 'thread apply all bt full',
+                '-p', str(pid)]
+        try:
+            proc = subprocess.run(argv, capture_output=True, text=True,
+                                  timeout=GDB_TIMEOUT, check=False)
+            out = proc.stdout + proc.stderr
+        except subprocess.TimeoutExpired as expired:
+            # A pid gdb cannot finish with is the interesting one often
+            # enough that whatever it did print has to be kept.
+            out = (self._as_text(expired.stdout) +
+                   self._as_text(expired.stderr) +
+                   f'\n(gdb killed after {GDB_TIMEOUT:.0f}s)\n')
+        (logs / f'gdbstack.{pid}.txt').write_text(
+            f'{self._proc_identity(pid)}\n{out}')
+
+
 class TestRunner:
     """Runs TestSpecs, one worker thread each, and reports."""
 
@@ -597,6 +795,7 @@ class TestRunner:
         self._stop = threading.Event()
         self._print_lock = threading.Lock()
         self._gdb = shutil.which('gdb')
+        self._dumper = StackDumper(self._gdb)
         # Overwritten per run_all() call; set here so run_one() always has a
         # reference even if it is ever driven without run_all().
         self._run_started = time.monotonic()
@@ -760,93 +959,14 @@ class TestRunner:
 
     def dump_stacks(self, proc: subprocess.Popen, leaf: Path | None,
                     logs: Path) -> None:
-        """On a timeout, before _kill() tears the containment down, write a
-        snapshot of the whole process table, plus every thread's kernel stack
-        and (when gdb is available) user backtrace for every process still in
-        the containment.
-
-        A thread blocked in an uninterruptible syscall never answers
-        PTRACE_ATTACH, so the kernel stack is taken first -- it needs no
-        attach and is often the only trace such a thread ever yields. The
-        process table is taken before either, while nothing has stopped a
-        thread yet.
-        """
-        self._dump_process_table(logs)
-        for pid in self._containment_pids(proc, leaf):
-            self._dump_kernel_stacks(pid, logs)
-            if self._gdb is not None:
-                self._dump_gdb_backtrace(pid, logs)
-
-    @staticmethod
-    def _dump_process_table(logs: Path) -> None:
-        """ps auxwww, so a hang that involves a process outside the test's own
-        containment -- a daemon an earlier test leaked, say -- is still
-        visible in the report.
-        """
-        result = subprocess.run(['ps', 'auxwww'], capture_output=True,
-                                text=True, check=False)
-        (logs / 'ps.txt').write_text(result.stdout + result.stderr)
-
-    @staticmethod
-    def _proc_identity(pid: int) -> str:
-        """A "<pid> (<comm>): <cmdline>" header line for a dump.
-
-        Which pid was the daemon and which the client blocked on it is the
-        first question asked of a stack dump, and a bare pid answers it for
-        nobody reading the report minutes or days later.
-        """
-        try:
-            comm = Path(f'/proc/{pid}/comm').read_text().strip()
-        except OSError:
-            comm = '?'
-        try:
-            raw = Path(f'/proc/{pid}/cmdline').read_bytes()
-            cmdline = raw.decode('utf8', errors='replace').replace('\0', ' ')
-        except OSError:
-            cmdline = ''
-        # An argument may hold a newline; a header that is not one line
-        # breaks every reader that greps the dump for its pid.
-        return f'=== pid {pid} ({comm}): {" ".join(cmdline.split())} ==='
-
-    @staticmethod
-    def _as_text(data) -> str:
-        """TimeoutExpired carries its partial output undecoded even when the
-        run was in text mode."""
-        if data is None:
-            return ''
-        return data if isinstance(data, str) \
-            else data.decode('utf8', errors='replace')
-
-    @staticmethod
-    def _uninterruptible_tids(pid: int) -> list:
-        """Threads of *pid* in uninterruptible sleep, D in /proc.
-
-        Such a thread never answers PTRACE_ATTACH, so gdb waits on it until
-        GDB_TIMEOUT kills it. That is per pid, and a wedged filesystem leaves
-        several -- the client blocked on it and the daemon's own threads -- so
-        the dump can outlast the timeout that asked for it by minutes.
-        """
-        wedged = []
-        try:
-            tids = sorted(int(tid) for tid in os.listdir(f'/proc/{pid}/task'))
-        except OSError:
-            return wedged
-        for tid in tids:
-            try:
-                status = Path(f'/proc/{pid}/task/{tid}/status').read_text()
-            except OSError:
-                continue    # exited between listdir() and here
-            for line in status.splitlines():
-                if line.startswith('State:'):
-                    if line.split()[1] == 'D':
-                        wedged.append(tid)
-                    break
-        return wedged
+        """On a timeout, before _kill() tears the containment down, dump
+        every process still in the containment."""
+        self._dumper.dump(self._containment_pids(proc, leaf), logs)
 
     @staticmethod
     def _containment_pids(proc: subprocess.Popen, leaf: Path | None) -> list:
-        """Every pid sharing the test's cgroup leaf, or just proc.pid when
-        cgroups are disabled."""
+        """Every pid sharing the test's cgroup leaf, or proc.pid and its
+        descendants when cgroups are disabled."""
         if leaf is not None:
             try:
                 pids = [int(line) for line in
@@ -855,80 +975,7 @@ class TestRunner:
                     return pids
             except OSError:
                 pass
-        return [proc.pid]
-
-    @staticmethod
-    def _dump_kernel_stacks(pid: int, logs: Path) -> None:
-        """sudo cat /proc/<pid>/task/*/stack for every thread of *pid*.
-
-        /proc/<pid>/task/<tid>/stack is gated on CAP_SYS_ADMIN unconditionally
-        -- unlike ptrace, ownership and Yama's exceptions are not enough --
-        to keep it from leaking kernel addresses. sudo is what gets it on a
-        non-root run; -n so a runner without passwordless sudo fails the read
-        immediately instead of blocking on a password prompt nothing answers.
-        """
-        task_dir = Path(f'/proc/{pid}/task')
-        try:
-            tids = sorted(int(tid) for tid in os.listdir(task_dir))
-        except OSError:
-            return
-        lines = [TestRunner._proc_identity(pid)]
-        for tid in tids:
-            stack_path = task_dir / str(tid) / 'stack'
-            result = subprocess.run(['sudo', '-n', 'cat', str(stack_path)],
-                                    capture_output=True, text=True,
-                                    check=False)
-            stack = result.stdout if result.returncode == 0 else \
-                f'(unreadable: {result.stderr.strip() or result.returncode})\n'
-            lines.append(f'=== tid {tid} ===\n{stack}')
-        (logs / f'kstack.{pid}.txt').write_text('\n'.join(lines))
-
-    def _dump_gdb_backtrace(self, pid: int, logs: Path) -> None:
-        """sudo gdb -p <pid> backtraces, written beside the kernel stacks.
-
-        Bare "bt" for every thread first and "bt full" only after it: the
-        locals are worth having, but they bury the frame list they belong to
-        under pages of struct dumps, and the frame list is what is read first.
-
-        sudo, not a Yama prctl exception: the wedged pid is as likely to be a
-        daemon the test forked after launch as the test's own exec-chain, and
-        an exception only covers the specific task that calls it, not
-        children it forks afterwards. Root's CAP_SYS_PTRACE reaches either
-        one uniformly. Best-effort: a thread ptrace cannot stop, or a runner
-        without passwordless sudo, just leaves gdb's or sudo's own error text
-        in the file.
-
-        Skipped entirely where a thread is already in uninterruptible sleep:
-        the attach cannot complete, so the whole GDB_TIMEOUT buys one line
-        saying gdb was killed, and the kernel stack taken just before is what
-        such a thread yields instead.
-        """
-        wedged = self._uninterruptible_tids(pid)
-        if wedged:
-            tids = ' '.join(str(tid) for tid in wedged)
-            (logs / f'gdbstack.{pid}.txt').write_text(
-                f'{self._proc_identity(pid)}\n'
-                f'(skipped: tid {tids} in uninterruptible sleep, so the '
-                f'attach cannot complete -- see kstack.{pid}.txt)\n')
-            return
-        argv = ['sudo', '-n', self._gdb, '--batch', '--nx',
-                '-ex', 'set pagination off',
-                '-ex', 'thread apply all bt',
-                '-ex', 'set print pretty on',
-                '-ex', 'thread apply all bt full',
-                '-p', str(pid)]
-        try:
-            proc = subprocess.run(argv, capture_output=True, text=True,
-                                  timeout=GDB_TIMEOUT, check=False)
-            out = proc.stdout + proc.stderr
-        except subprocess.TimeoutExpired as expired:
-            # A pid gdb cannot finish with is the interesting one often
-            # enough that whatever it did print has to be kept.
-            out = (self._as_text(expired.stdout) +
-                   self._as_text(expired.stderr) +
-                   f'\n(gdb killed after {GDB_TIMEOUT:.0f}s)\n')
-        (logs / f'gdbstack.{pid}.txt').write_text(
-            f'{self._proc_identity(pid)}\n{out}')
+        return StackDumper.with_descendants([proc.pid])
 
     def _log_started(self, name: str) -> None:
         """A "test X is now running" line, timestamped against the whole
@@ -1481,6 +1528,11 @@ def parse_args(argv: list) -> argparse.Namespace:
                         help="keep every test's output, not just the failures'")
     parser.add_argument('--repeat', type=int, default=1, metavar='N',
                         help='run the selection N times')
+    parser.add_argument('--dump-stacks', type=int, nargs='+', default=[],
+                        metavar='PID',
+                        help='write ps.txt, kstack.*.txt and gdbstack.*.txt '
+                             'for PID and its descendants into the current '
+                             'directory and exit')
     return parser.parse_args(argv)
 
 
@@ -1492,6 +1544,10 @@ def main(argv: list) -> int:
         return 0
     if args.print_base_dir:
         print(resolve_base_dir())
+        return 0
+    if args.dump_stacks:
+        StackDumper(shutil.which('gdb')).dump(
+            StackDumper.with_descendants(args.dump_stacks), Path.cwd())
         return 0
 
     build_dir = Path(args.build_dir).resolve()
