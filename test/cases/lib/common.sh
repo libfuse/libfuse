@@ -501,7 +501,22 @@ fuse_wait_mount()
 		sleep 0.1
 	done
 	echo "timeout: daemon (pid $pid) still alive but $path not mounted after ${timeout}s" >&2
+	fuse_dump_stacks "$pid"
 	return 1
+}
+
+# fuse_dump_stacks [pid...]
+# Write ps.txt, kstack.<pid>.txt and gdbstack.<pid>.txt for each pid and its
+# descendants into $TEST_LOGDIR; every daemon this script started when no pid
+# is given. For a hang the script detects itself, before its own _fail --
+# the runner only dumps on its own timeout, which the script's shorter wait
+# never reaches.
+fuse_dump_stacks()
+{
+	[ $# -gt 0 ] || set -- "${FUSE_FS_PID[@]}"
+	[ $# -gt 0 ] || return 0
+	(cd "$TEST_LOGDIR" &&
+		python3 "$TEST_DIR/run-tests.py" --dump-stacks "$@") || true
 }
 
 # fuse_umount [idx]
