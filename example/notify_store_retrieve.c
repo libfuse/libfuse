@@ -368,6 +368,17 @@ static void *update_fs_loop(void *data)
 
 			ret = fuse_lowlevel_notify_store(se, FILE_INO, 0, &bufv,
 							 0);
+			if (ret == -ENOSYS) {
+				/* Serve on without notifying; the reader sees
+				 * the cached content, as with --no-notify.
+				 */
+				printf("%s not supported by kernel\n",
+				       "fuse_lowlevel_notify_store");
+				fflush(stdout);
+				options.no_notify = 1;
+				pthread_mutex_unlock(&lock);
+				continue;
+			}
 			if ((ret != 0 && !is_umount) && ret != -ENOENT &&
 			    ret != -EBADF && ret != -ENODEV) {
 				fprintf(stderr,
