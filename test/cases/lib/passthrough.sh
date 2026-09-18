@@ -8,6 +8,10 @@
 #                   directory is $TEST_MNT$TEST_SRC rather than $TEST_MNT
 #   PT_SRC_VISIBLE  1 when a change made directly in $TEST_SRC is expected to
 #                   show up under the mount straight away
+#   PT_HIGHLEVEL    1 when the example is on the high-level API, which keeps
+#                   one node per path and so answers LINK with a nodeid that
+#                   is not the source's. The FreeBSD kernel refuses such a
+#                   reply with EIO, so the hard-link checks are left out there.
 #   PT_POSITIONAL   extra trailing arguments before the mountpoint, optional
 #   SYSCALL_ARGS    extra test_syscalls arguments, optional
 #
@@ -28,6 +32,13 @@ fi
 
 # test_syscalls prints "No error" under FreeBSD.
 fuse_allow_output "^ [0-9][0-9] \[[^]]+ message: 'No error: 0'\]"
+
+link_check=1
+if [ "${PT_HIGHLEVEL:-0}" = 1 ] && [ "$FUSE_OS" = FreeBSD ]; then
+	link_check=0
+	# 4 and 5 are test_syscalls' link and link-unlink-link.
+	SYSCALL_ARGS="${SYSCALL_ARGS:-} -4 -5"
+fi
 
 _check fuse_test_statvfs       "$work_dir"
 _check fuse_test_readdir       "$TEST_SRC" "$work_dir" --inode-check "$INODE_CHECK"
@@ -53,7 +64,8 @@ _check fuse_test_symlink       "$work_dir"
 [ "$FUSE_UID" -ne 0 ] || _check fuse_test_chown "$work_dir"
 # The underlying fs may not have full nanosecond resolution.
 _check fuse_test_utimens       "$work_dir" --ns-tol 1000
-[ "$INODE_CHECK" != exact ] || _check fuse_test_link "$work_dir"
+[ "$INODE_CHECK" != exact ] || [ $link_check = 0 ] ||
+	_check fuse_test_link "$work_dir"
 _check fuse_test_truncate_path "$work_dir"
 _check fuse_test_truncate_fd   "$work_dir"
 _check fuse_test_open_unlink   "$work_dir"
