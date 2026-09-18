@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Build libfuse in a FreeBSD guest under qemu.
+# Build libfuse and run the test suite in a FreeBSD guest under qemu.
 #
 # The guest boots a stock FreeBSD cloud image, gets the checkout over ssh and
 # runs everything as root, so the one run is the same on a GitHub runner and
@@ -19,6 +19,7 @@ usage: $0 [options]
                     ~/.cache/fuse-bsd-vm.
   --print-cache     print the image cache directory and the release that
                     would boot, as NAME=VALUE lines, and boot nothing
+  --logs-out DIR    host directory to copy the run logs into
   --cpus N          guest cpus (default: the host's, at most 4)
   --memory SIZE     guest memory (default: 4G)
 EOF
@@ -100,6 +101,7 @@ cleanup()
 
 RELEASE=latest
 PRINT_CACHE=0
+LOGS_OUT=
 QEMU_PID=
 RUN_DIR=
 trap cleanup EXIT
@@ -111,6 +113,7 @@ while [ $# -gt 0 ]; do
     case $1 in
     --release)   need_arg "$@"; RELEASE=$2; shift 2 ;;
     --print-cache) PRINT_CACHE=1; shift ;;
+    --logs-out)  need_arg "$@"; LOGS_OUT=$2; shift 2 ;;
     --cpus)      need_arg "$@"; CPUS=$2; shift 2 ;;
     --memory)    need_arg "$@"; MEMORY=$2; shift 2 ;;
     *)           usage ;;
@@ -231,6 +234,14 @@ mkdir build
 cd build
 meson setup ..
 ninja -v
+../test/run-tests.py --build-dir . --run-dir "$PWD/../fuse-tests/run/freebsd"
 EOF
+
+if [ -n "${LOGS_OUT}" ]; then
+    mkdir -p "${LOGS_OUT}"
+    "${SSH[@]}" 'cd libfuse/fuse-tests 2> /dev/null &&
+        tar -c --exclude mnt --exclude "*.sock" run' |
+        tar -x -C "${LOGS_OUT}"
+fi
 
 exit ${rc}
