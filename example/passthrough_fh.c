@@ -227,10 +227,7 @@ static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	int res;
 
-	if (S_ISFIFO(mode))
-		res = mkfifo(path, mode);
-	else
-		res = mknod(path, mode, rdev);
+	res = mknod_wrapper(AT_FDCWD, path, NULL, mode, rdev);
 	if (res == -1)
 		return -errno;
 
