@@ -653,12 +653,7 @@ static void mknod_symlink(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	bool labeled = sfs_set_selinux_fscreate(req);
 
-	if (S_ISDIR(mode))
-		res = mkdirat(inode_p.fd, name, mode);
-	else if (S_ISLNK(mode))
-		res = symlinkat(link, inode_p.fd, name);
-	else
-		res = mknodat(inode_p.fd, name, mode, rdev);
+	res = mknod_wrapper(inode_p.fd, name, link, mode, rdev);
 	saverr = errno;
 
 	/* Reset the staged label so later creates on this thread are unaffected. */
