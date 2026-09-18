@@ -1,0 +1,66 @@
+BSD support: status and known issues
+
+Status
+------
+
+- FreeBSD: builds and runs the shell test suite. CI boots a stock FreeBSD
+  cloud image under qemu (.github/workflows/bsd.yaml, test/ci/bsd-vm-run.sh)
+  and runs test/run-tests.py in the guest. Tests that need Linux-only
+  features (fusermount, utab, cuse, setuid handling, capabilities, write
+  cache) skip themselves on FreeBSD.
+- NetBSD, DragonFlyBSD: compile-time #ifdefs exist, nothing is built or
+  tested. NetBSD ships its own librefuse; libfuse on NetBSD is untried.
+- The FreeBSD kernel never requests READDIRPLUS, so only the plain readdir
+  path of a filesystem is exercised there.
+
+Inode numbers and getcwd(3)
+---------------------------
+
+- On Linux the d_ino a filesystem returns from readdir is only handed to
+  userspace; the kernel never compares it (getcwd(3) walks the dcache), so
+  0 or -1 is harmless there.
+- On FreeBSD fusefs copies it into d_fileno unchanged, and getcwd(3) and
+  the kernel's __getcwd() find the name of a directory by scanning the
+  parent for the entry whose d_fileno equals the st_ino returned by
+  stat(2). All FUSE entries share one st_dev, so no other signal exists;
+  every readdir entry must carry the st_ino of the same name, or getcwd
+  fails with ENOENT for every directory.
+- A passthrough filesystem with a mount point inside its source tree cannot
+  keep them equal from the source numbers: getdents reports the covered
+  directory's inode, stat the mounted root's. getcwd() then fails with
+  ENOENT (https://github.com/libfuse/libfuse/issues/962).
+- High-level API without use_ino: fuse_new() sets readdir_ino on FreeBSD
+  and NetBSD, so getattr reports the libfuse nodeid and readdir reports
+  the nodeid for names that have been looked up. Names never looked up get
+  -1 (4294967295 in ls -i). getcwd works, since every path component has
+  been looked up; ls -i on a fresh directory does not show usable numbers.
+- Low-level API, or use_ino on the high-level API: the filesystem is
+  responsible. readdir entries with d_type DT_DIR (or DT_UNKNOWN) need a
+  stat to get the right number; regular files cannot be mount points. That
+  stat crosses into a mount point and hits the deadlock below if the
+  entry is the filesystem's own mount point. The passthrough examples do
+  not do this yet.
+
+Deadlock when the daemon stats its own mount point
+--------------------------------------------------
+
+- vop_stdvptocnp() keeps the parent vnode locked shared across VOP_READDIR,
+  i.e. across the wait for the daemon's READDIR reply. If the daemon, while
+  serving that readdir, stats an entry that is its own mount point, the
+  lookup crosses the mount and takes the FUSE root exclusive, which waits on
+  the lock the readdir caller holds. Both sides sleep until daemon_timeout
+  (60 s) or a signal.
+- Hit by example/passthrough --plus mounted anywhere below /, since it
+  mirrors /. Plain readdir does not stat and is not affected.
+- Avoid it by mounting outside the mirrored tree:
+  -o modules=subdir,subdir=DIR restricts the passthrough to DIR.
+- -o intr lets a signal break the wait instead of the timeout.
+- A fusefs fix (MNTK_LOOKUP_SHARED or an own vop_vptocnp) is the real
+  solution; not reported upstream yet.
+
+Console warnings
+----------------
+
+- "FUSE protocol violation ... file has different inode number and nodeid"
+  is printed by fusefs whenever st_ino differs from the nodeid, e.g. with
+  use_ino on the high-level API. Warning only.
