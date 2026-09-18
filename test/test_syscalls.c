@@ -47,7 +47,8 @@ static int testdatalen = sizeof(testdata) - 1;
 static int testdata2len = sizeof(testdata2) - 1;
 static unsigned int testnum = 0;
 static unsigned int select_test = 0;
-static unsigned int skip_test = 0;
+static unsigned int skip_tests[8];
+static unsigned int num_skip_tests;
 static unsigned int unlinked_test = 0;
 static int realdir_fd = -1;
 
@@ -107,6 +108,17 @@ static void success(void)
 	fprintf(stderr, "+%8.3fs %s OK\n", test_elapsed(), testname);
 }
 
+static int test_skipped(unsigned int num)
+{
+	unsigned int idx;
+
+	for (idx = 0; idx < num_skip_tests; idx++) {
+		if (skip_tests[idx] == num)
+			return 1;
+	}
+	return 0;
+}
+
 #define this_test (&tests[testnum-1])
 #define next_test (&tests[testnum])
 
@@ -152,7 +164,7 @@ static void __start_test(const char *fmt, ...)
 #define start_test(msg, args...) { \
 	testnum++; \
 	if ((select_test && testnum != select_test) || \
-	    (testnum == skip_test)) { \
+	    test_skipped(testnum)) { \
 		return 0; \
 	} \
 	__start_test(msg, ##args);		\
@@ -2358,8 +2370,8 @@ int main(int argc, char *argv[])
 	setvbuf(stdout, NULL, _IOLBF, 0);
 
 	umask(0);
-	if (argc < 2 || argc > 5) {
-		fprintf(stderr, "usage: %s testdir [:realdir] [[-]test#] [-u]\n", argv[0]);
+	if (argc < 2) {
+		fprintf(stderr, "usage: %s testdir [:realdir] [test#] [-test#]... [-u]\n", argv[0]);
 		return 1;
 	}
 	basepath = argv[1];
@@ -2381,8 +2393,12 @@ int main(int argc, char *argv[])
 				if (arg[0] == 'u') {
 					unlinked_test = 1;
 					endptr = arg + 1;
+				} else if (num_skip_tests == ARRAY_SIZE(skip_tests)) {
+					fprintf(stderr, "too many tests to skip\n");
+					return 1;
 				} else {
-					skip_test = strtoul(arg, &endptr, 10);
+					skip_tests[num_skip_tests++] =
+						strtoul(arg, &endptr, 10);
 				}
 			} else {
 				select_test = strtoul(arg, &endptr, 10);
