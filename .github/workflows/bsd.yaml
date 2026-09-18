@@ -19,30 +19,34 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-    - name: Build
-      uses: vmactions/freebsd-vm@8b0f1a8fc0ea0def307835c258940ca358fe6480 # v1
+    - name: Install qemu
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qemu-system-x86 qemu-utils genisoimage
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+    # The stock FreeBSD cloud image, ~2 GB unpacked, that every run boots an
+    # overlay on. Each job starts on an empty runner, so without this it is
+    # downloaded from download.freebsd.org on every run.
+    #
+    # actions/cache keeps a tarball per key in GitHub's per-repository cache
+    # store. Its step below asks for the key and unpacks the tarball to
+    # path, so bsd-vm-run.sh finds the image and skips its download; on a
+    # miss the directory stays empty, the script downloads, and the
+    # action's post-job hook uploads what is in path under that key. The
+    # key carries the release, so a new release starts with a miss.
+    - name: Image cache
+      id: image
+      run: test/ci/bsd-vm-run.sh --print-cache >> "$GITHUB_OUTPUT"
+    - name: Cache FreeBSD image
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        usesh: true
-        # bash because FreeBSD has none in base and common.sh uses arrays,
-        # python3 for checks.py, and gdb because the base debugger is lldb --
-        # one backtrace back-end keeps the runner's output identical on both
-        # platforms.
-        prepare: |
-          pkg install -y meson ninja bash python3 gdb
-        run: |
-          kldload fusefs || true
-          sysctl kern.coredump=1
-          # Mirrors the core.%e.%p Ubuntu is set to, so a core lands in the
-          # test's own log directory under the same name on both platforms.
-          sysctl kern.corefile=core.%N.%P
-          sysctl vfs.usermount=1
-          mkdir build
-          cd build
-          meson setup ..
-          ninja -v
-          # Not yet enabled on this job; kept here for the follow-up that
-          # turns this into a test run.
-          # ../test/run-tests.py --build-dir . --run-dir "$PWD/../fuse-tests"
+        path: ${{ steps.image.outputs.dir }}
+        key: freebsd-vm-image-${{ steps.image.outputs.release }}
+    - name: Build
+      run: test/ci/bsd-vm-run.sh
     # Not yet enabled on this job; kept here for the follow-up that turns
     # this into a test run. The run directory sits in the workspace, which
     # the action copies back out of the VM; without this step a FreeBSD
