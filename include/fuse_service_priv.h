@@ -23,6 +23,16 @@ struct fuse_service_memfd_argv {
 
 #define FUSE_SERVICE_MAX_CMD_SIZE	(65536)
 
+/*
+ * Upper bound on the whole argv memfd, as opposed to FUSE_SERVICE_MAX_CMD_SIZE
+ * which bounds one socket command.  Both sides check it: the mount helper
+ * refuses to write past it, and the fuse server refuses to parse a file larger
+ * than it.  Generous next to any real mount(8) invocation, but small enough
+ * that the counts and lengths the server reads out of the file cannot overflow
+ * the allocation math they feed.
+ */
+#define FUSE_SERVICE_MAX_ARGV_SIZE	(1048576)
+
 #define FUSE_SERVICE_ARGS_MAGIC		0x41524753	/* ARGS */
 
 /* mount.service sends a hello to the server and it replies */
