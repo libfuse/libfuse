@@ -773,6 +773,38 @@ class StackDumper:
             f'{self._proc_identity(pid)}\n{out}')
 
 
+def fuse_mounts_under(workdir: Path) -> list:
+    """Every FUSE mountpoint below workdir, deepest first so a nested mount
+    goes before its parent. Linux reads /proc/self/mountinfo; the BSDs have
+    no such file, so `mount -p` (fstab layout) is parsed there."""
+    prefix = str(workdir) + '/'
+    found = []
+    if IS_LINUX:
+        try:
+            lines = Path('/proc/self/mountinfo').read_text().splitlines()
+        except OSError:
+            lines = []
+        for line in lines:
+            fields = line.split()
+            if '-' not in fields:
+                continue
+            fstype = fields[fields.index('-') + 1]
+            mountpoint = fields[4].replace('\\040', ' ')
+            if fstype.startswith('fuse') and mountpoint.startswith(prefix):
+                found.append(mountpoint)
+    else:
+        proc = subprocess.run(['mount', '-p'], capture_output=True, text=True,
+                              check=False)
+        for line in proc.stdout.splitlines():
+            fields = line.split()
+            if len(fields) < 3:
+                continue
+            if fields[2] == 'fusefs' and fields[1].startswith(prefix):
+                found.append(fields[1])
+    found.sort(reverse=True)
+    return found
+
+
 class TestRunner:
     """Runs TestSpecs, one worker thread each, and reports."""
 
@@ -1036,6 +1068,7 @@ class TestRunner:
         # Always reap the subtree: a passing script may still have leaked a
         # daemon, and that would wedge the next test on the same mountpoint.
         self._cgroup.kill_leaf(leaf)
+        self.unmount_leftovers(workdir)
 
         duration = time.monotonic() - started
         cores = self.collect_cores(workdir, leaf)
@@ -1046,6 +1079,26 @@ class TestRunner:
             f'{result.status} {result.duration:.3f} {result.reason}\n'.rstrip()
             + '\n')
         return result
+
+    def unmount_leftovers(self, workdir: Path) -> None:
+        """Drop every mount the test left behind; its daemon is dead by now,
+        so the mountpoint is a dead transport that fails any directory walk
+        over the run directory."""
+        if IS_LINUX and os.geteuid() != 0:
+            umount = ['fusermount3', '-u', '-z']
+        elif IS_LINUX:
+            umount = ['umount', '-f', '-l']
+        else:
+            umount = ['umount', '-f']
+        env = dict(os.environ)
+        env['PATH'] = self.build_path(env.get('PATH', ''))
+        for mountpoint in fuse_mounts_under(workdir):
+            proc = subprocess.run(umount + [mountpoint], capture_output=True,
+                                  text=True, check=False, env=env)
+            outcome = 'unmounted' if proc.returncode == 0 else \
+                f'umount failed: {proc.stderr.strip()}'
+            with (workdir / 'logs' / 'stale-mounts.txt').open('a') as log:
+                log.write(f'{mountpoint}: {outcome}\n')
 
     def effective_timeout(self, spec: TestSpec) -> float:
         """The wall-clock bound actually enforced for *spec*."""
