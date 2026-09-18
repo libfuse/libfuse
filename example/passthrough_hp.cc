@@ -283,7 +283,8 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 	fuse_reply_attr(req, &attr, fs.timeout);
 }
 
-static int with_fd_path(int fd, const std::function<int(const char *)> &f)
+/* A path that names what fd is open on, for calls that take no fd. */
+static int fd_path(int fd, char *path, size_t size)
 {
 #ifdef __FreeBSD__
 	struct kinfo_file kf;
@@ -291,13 +292,13 @@ static int with_fd_path(int fd, const std::function<int(const char *)> &f)
 	int ret = fcntl(fd, F_KINFO, &kf);
 	if (ret == -1)
 		return ret;
-	return f(kf.kf_path);
+	snprintf(path, size, "%s", kf.kf_path);
 #else // Linux
-	char procname[64];
-	sprintf(procname, "/proc/self/fd/%i", fd);
-	return f(procname);
+	snprintf(path, size, "/proc/self/fd/%i", fd);
 #endif
+	return 0;
 }
+
 /*
  * The mode with S_ISUID and S_ISGID removed, or 0 when neither is set.
  * S_ISGID counts as sgid only on a group-executable file; without S_IXGRP it
@@ -342,11 +343,11 @@ static int drop_suidgid_at(int ifd)
 	if (!mode)
 		return 0;
 
-	int res = with_fd_path(ifd, [mode](const char *procname) {
-		return chmod(procname, mode);
-	});
+	char path[PATH_MAX];
+	if (fd_path(ifd, path, sizeof(path)) == -1)
+		return errno;
 
-	return res == -1 ? errno : 0;
+	return chmod(path, mode) == -1 ? errno : 0;
 }
 
 static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
@@ -354,16 +355,17 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 {
 	Inode &inode = get_inode(ino);
 	int ifd = inode.fd;
+	char path[PATH_MAX];
 	int res;
 
+	if (!fi && fd_path(ifd, path, sizeof(path)) == -1)
+		goto out_err;
+
 	if (valid & FUSE_SET_ATTR_MODE) {
-		if (fi) {
+		if (fi)
 			res = fchmod(fi->fh, attr->st_mode);
-		} else {
-			res = with_fd_path(ifd, [attr](const char *procname) {
-				return chmod(procname, attr->st_mode);
-			});
-		}
+		else
+			res = chmod(path, attr->st_mode);
 		if (res == -1)
 			goto out_err;
 	}
@@ -381,13 +383,10 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			goto out_err;
 	}
 	if (valid & FUSE_SET_ATTR_SIZE) {
-		if (fi) {
+		if (fi)
 			res = ftruncate(fi->fh, attr->st_size);
-		} else {
-			res = with_fd_path(ifd, [attr](const char *procname) {
-				return truncate(procname, attr->st_size);
-			});
-		}
+		else
+			res = truncate(path, attr->st_size);
 		if (res == -1)
 			goto out_err;
 	}
@@ -413,9 +412,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			res = futimens(fi->fh, tv);
 		else {
 #ifdef HAVE_UTIMENSAT
-			res = with_fd_path(ifd, [&tv](const char *procname) {
-				return utimensat(AT_FDCWD, procname, tv, 0);
-			});
+			res = utimensat(AT_FDCWD, path, tv, 0);
 #else
 			res = -1;
 			errno = EOPNOTSUPP;
@@ -714,10 +711,11 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	e.attr_timeout = fs.timeout;
 	e.entry_timeout = fs.timeout;
 
-	char procname[64];
-	sprintf(procname, "/proc/self/fd/%i", inode.fd);
-	auto res =
-		linkat(AT_FDCWD, procname, inode_p.fd, name, AT_SYMLINK_FOLLOW);
+	char path[PATH_MAX];
+	auto res = fd_path(inode.fd, path, sizeof(path));
+	if (res == 0)
+		res = linkat(AT_FDCWD, path, inode_p.fd, name,
+			     AT_SYMLINK_FOLLOW);
 	if (res == -1) {
 		fuse_reply_err(req, errno);
 		return;
@@ -1344,9 +1342,10 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 
 	/* Unfortunately we cannot use inode.fd, because this was opened
        with O_PATH (so it doesn't allow read/write access). */
-	auto fd = with_fd_path(inode.fd, [fi](const char *buf) {
-		return open(buf, fi->flags & ~O_NOFOLLOW);
-	});
+	char path[PATH_MAX];
+	int fd = -1;
+	if (fd_path(inode.fd, path, sizeof(path)) == 0)
+		fd = open(path, fi->flags & ~O_NOFOLLOW);
 	if (fd == -1) {
 		auto err = errno;
 		if (err == ENFILE || err == EMFILE)
