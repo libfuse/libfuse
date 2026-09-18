@@ -3,6 +3,7 @@
 
 . "$TEST_LIB/common.sh"
 
+_require_linux FUSE_IOCTL
 _require_binary example/ioctl
 _require_not_32bit_on_64 "$FUSE_EXAMPLE_DIR/ioctl"
 
