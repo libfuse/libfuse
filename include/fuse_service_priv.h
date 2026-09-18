@@ -9,6 +9,9 @@
 #ifndef FUSE_SERVICE_PRIV_H_
 #define FUSE_SERVICE_PRIV_H_
 
+#include <sys/socket.h>
+#include <limits.h>
+
 /* All numeric fields are network order (big-endian) when going across the socket */
 
 struct fuse_service_memfd_arg {
@@ -47,6 +50,36 @@ struct fuse_service_memfd_argv {
 struct fuse_service_packet {
 	uint32_t magic;			/* FUSE_SERVICE_*_{CMD,REPLY} */
 };
+
+static inline ssize_t fuse_service_send_packet(int sockfd, void *ptr,
+					       size_t len)
+{
+	struct iovec iov = {
+		.iov_base = ptr,
+		.iov_len = len,
+	};
+	struct msghdr msg = {
+		.msg_iov = &iov,
+		.msg_iovlen = 1,
+	};
+
+	return sendmsg(sockfd, &msg, MSG_EOR | MSG_NOSIGNAL);
+}
+
+static inline ssize_t fuse_service_recv_packet(int sockfd, void *ptr,
+					       size_t len)
+{
+	struct iovec iov = {
+		.iov_base = ptr,
+		.iov_len = len,
+	};
+	struct msghdr msg = {
+		.msg_iov = &iov,
+		.msg_iovlen = 1,
+	};
+
+	return recvmsg(sockfd, &msg, MSG_TRUNC);
+}
 
 #define FUSE_SERVICE_PROTO	(1)
 #define FUSE_SERVICE_MIN_PROTO	(1)
@@ -115,6 +148,32 @@ struct fuse_service_open_command {
 static inline size_t sizeof_fuse_service_open_command(size_t pathlen)
 {
 	return sizeof(struct fuse_service_open_command) + pathlen + 1;
+}
+
+/*
+ * A send buffer that cannot hold the largest open command makes the sendmsg
+ * fail later on; report the size so the caller can say so in its own words.
+ * A buffer we cannot query is not an error - most likely we won't be sending
+ * huge open commands, and if we do, the sendmsg will fail there too.
+ *
+ * @sendbuf_sizep set to the offending size when the buffer is too small
+ * @return true if the send buffer is too small
+ */
+static inline bool fuse_service_sendbuf_too_small(int sockfd,
+						  int *sendbuf_sizep)
+{
+	int sendbuf_size = -1;
+	socklen_t optlen = sizeof(sendbuf_size);
+
+	if (getsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuf_size, &optlen) ||
+	    sendbuf_size < 0)
+		return false;
+
+	if ((size_t)sendbuf_size >= sizeof_fuse_service_open_command(PATH_MAX))
+		return false;
+
+	*sendbuf_sizep = sendbuf_size;
+	return true;
 }
 
 struct fuse_service_string_command {
