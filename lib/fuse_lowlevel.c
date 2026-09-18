@@ -5150,6 +5150,15 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	}
 
 	se->fd = fd;
+
+	/*
+	 * An armed worker blocks in poll() until a mount attaches to the fd.
+	 * A refused fsopen() never does that, and pthread_join() would hang.
+	 */
+	err = fuse_fsopen_probe();
+	if (err == -EPERM)
+		goto fallback;
+
 	err = session_start_sync_init(se, fd);
 	if (err)
 		goto err;
@@ -5165,6 +5174,7 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd,
 				   &mountfd);
 
+fallback:
 	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
 	if (err < 0 && errno == EPERM) {
 		char *fusermount_opts = NULL;
