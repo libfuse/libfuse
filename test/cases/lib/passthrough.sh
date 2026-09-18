@@ -30,8 +30,9 @@ else
 	work_dir=$TEST_MNT
 fi
 
-# test_syscalls prints "No error" under FreeBSD.
-fuse_allow_output "^ [0-9][0-9] \[[^]]+ message: 'No error: 0'\]"
+# test_syscalls prints "No error" under FreeBSD. One timestamp is its own,
+# and timestamps.out carries the runner's in front of it.
+fuse_allow_output "^(\+ +[0-9.]+s +)+[0-9]+ \[[^]]+ message: 'No error: 0'\] (START|OK)$"
 
 link_check=1
 if [ "${PT_HIGHLEVEL:-0}" = 1 ] && [ "$FUSE_OS" = FreeBSD ]; then
