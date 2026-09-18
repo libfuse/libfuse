@@ -21,6 +21,11 @@
 
 . "$TEST_LIB/common.sh"
 
+# FreeBSD has no CAP_FSETID to drop: root keeps setuid across a write, and
+# its fusefs clears the bits itself with a SETATTR rather than through
+# KILLPRIV_V2, so the daemon side this covers is never reached.
+_require_linux "dropping CAP_FSETID"
+
 fuse_mount_at "$TEST_MNT" passthrough_hp $FS_ARGS "$TEST_SRC" >/dev/null
 
 _check fuse_test_suidgid_dropped "$TEST_MNT" "$TEST_SRC"
