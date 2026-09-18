@@ -1150,6 +1150,10 @@ static int test_mknod(void)
 	int err = 0;
 	int res;
 
+#ifdef __FreeBSD__
+	/* mknod(2) refuses S_IFREG here */
+	return 0;
+#endif
 	start_test("mknod");
 	unlink(testfile);
 	res = mknod(testfile, 0644, 0);
