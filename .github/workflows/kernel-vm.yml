@@ -20,10 +20,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Every io-uring configuration runs a second time with a buffer pool.
         config:
           - gcc-io-uring
           - gcc-io-uring-root
           - clang-san-io-uring-root
+          - gcc-io-uring-bufpool
+          - gcc-io-uring-bufpool-root
+          - clang-san-io-uring-bufpool-root
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install dependencies (Ubuntu)

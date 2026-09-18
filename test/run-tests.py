@@ -40,11 +40,14 @@ EXCLUDE_FILE = TEST_DIR / 'exclude'
 
 # test/lib is not on sys.path; test/cases/lib is the shell library, not this.
 sys.path.insert(0, str(TEST_DIR / 'lib'))
-from checks import (IS_LINUX, io_uring_setup_error, preflight_io_uring,
+from checks import (IO_URING_BUFPOOL_CAP, IS_LINUX, io_uring_setup_error,
+                    preflight_io_uring, preflight_io_uring_bufpool,
                     read_fuse_caps, read_sync_init)
 
 DEFAULT_TIMEOUT = 60.0          # seconds; per-script "# TIMEOUT:" overrides
 SKIP_EXIT_CODE = 77             # automake convention
+# This can be hit if the kernel doesn't support bufpools
+BUFPOOL_SKIP_EXIT_CODE = 78
 LAUNCH_FAILED_EXIT_CODE = 125   # launcher could not establish containment
 LAUNCH_FAILED_MARKER = 'run-tests: containment failed'
 
@@ -106,6 +109,7 @@ IO_URING_FALLBACK = 'failed to start io-uring'
 # the run exists to exercise.
 IO_URING_STATE_KEY = 'FUSE_INIT: io_uring='
 IO_URING_STATES_OK = ('on', 'off:custom_io', 'off:not_wanted')
+IO_URING_BUFPOOL_KEY = f'FUSE_INIT: {IO_URING_BUFPOOL_CAP}'
 
 # FUSE debug messages "unique: X, error: -Y (...), outsize: Z" contain the word
 # "error" but only report a request's return code.
@@ -778,7 +782,8 @@ class TestRunner:
 
     def __init__(self, build_dir: Path, run_dir: Path, run_dir_created: bool,
                  jobs: int, keep_logs: bool, verbose: bool,
-                 io_uring: bool = False, io_uring_depth: int | None = None):
+                 io_uring: bool = False, io_uring_depth: int | None = None,
+                 io_uring_bufpool: bool = False):
         self.build_dir = build_dir
         self.run_dir = run_dir
         self.run_dir_created = run_dir_created
@@ -787,6 +792,7 @@ class TestRunner:
         self.verbose = verbose
         self.io_uring = io_uring
         self.io_uring_depth = io_uring_depth
+        self.io_uring_bufpool = io_uring_bufpool
         self.valgrind = resolve_valgrind()
         self.core_pattern = read_core_pattern()
         self.fuse_caps = read_fuse_caps(build_dir, self.build_path())
@@ -871,6 +877,8 @@ class TestRunner:
         })
         if self.io_uring_depth is not None:
             env['FUSE_URING_QUEUE_DEPTH'] = str(self.io_uring_depth)
+        if self.io_uring_bufpool:
+            env['FUSE_URING_BUFPOOL'] = '1'
         env['PATH'] = self.build_path(env.get('PATH', ''))
         return workdir, env, self._cgroup.new_leaf()
 
@@ -1102,6 +1110,12 @@ class TestRunner:
 
         timestamps.out holds the same lines behind an elapsed-time prefix, so
         matching on the start of the line reports each session once.
+
+        Under --io-uring-bufpool a ring is not enough: the two are separate
+        environment variables, so one can reach a daemon without the other and
+        the run would then pass green having exercised the very path bufpools
+        replace. Counted rather than matched once, because a log can hold
+        several sessions and each of them has to have negotiated a pool.
         """
         if not self.io_uring:
             return ''
@@ -1110,11 +1124,19 @@ class TestRunner:
                 text = out.read_text(errors='replace')
             except OSError:
                 continue
+            rings = bufpools = 0
             for line in text.splitlines():
-                if (line.startswith(IO_URING_STATE_KEY)
-                        and line[len(IO_URING_STATE_KEY):]
-                        not in IO_URING_STATES_OK):
-                    return f'{out.name}: {line}'
+                if line.startswith(IO_URING_STATE_KEY):
+                    state = line[len(IO_URING_STATE_KEY):]
+                    if state not in IO_URING_STATES_OK:
+                        return f'{out.name}: {line}'
+                    if state == 'on':
+                        rings += 1
+                elif line == IO_URING_BUFPOOL_KEY:
+                    bufpools += 1
+            if self.io_uring_bufpool and bufpools < rings:
+                return (f'{out.name}: {rings} session(s) got a ring but '
+                        f'{bufpools} negotiated {IO_URING_BUFPOOL_CAP}')
         return ''
 
     @staticmethod
@@ -1520,6 +1542,10 @@ def parse_args(argv: list) -> argparse.Namespace:
                         metavar='N',
                         help="export FUSE_URING_QUEUE_DEPTH; default is "
                              "libfuse's 8")
+    parser.add_argument('--io-uring-bufpool', action='store_true',
+                        help='export FUSE_URING_BUFPOOL, so payload buffers '
+                             'come from a per queue pool the kernel hands out; '
+                             'needs a kernel that supports it')
     parser.add_argument('-l', '--list', action='store_true',
                         help='print the selected tests and exit')
     parser.add_argument('-v', '--verbose', action='store_true',
@@ -1564,12 +1590,16 @@ def main(argv: list) -> int:
     reexec_under_user_scope_if_needed()
     raise_nofile_limit()
 
+    if args.io_uring_bufpool:
+        args.io_uring = True
+
     run_dir = resolve_run_dir(args)
     runner = TestRunner(build_dir=build_dir, run_dir=run_dir,
                         run_dir_created=make_run_dir(run_dir), jobs=args.jobs,
                         keep_logs=args.keep_logs, verbose=args.verbose,
                         io_uring=args.io_uring,
-                        io_uring_depth=args.io_uring_queue_depth)
+                        io_uring_depth=args.io_uring_queue_depth,
+                        io_uring_bufpool=args.io_uring_bufpool)
     if args.io_uring:
         # A missing precondition skips the whole invocation rather than
         # failing it, so a plain `meson test` on a machine that never enabled
@@ -1580,6 +1610,12 @@ def main(argv: list) -> int:
             print(f'SKIP: {reason}')
             runner.cleanup()
             return SKIP_EXIT_CODE
+        if args.io_uring_bufpool:
+            reason = preflight_io_uring_bufpool(runner.fuse_caps)
+            if reason:
+                print(f'SKIP: {reason}')
+                runner.cleanup()
+                return BUFPOOL_SKIP_EXIT_CODE
         # The capability says the kernel offers the transport, not that this
         # user may open a ring. Asked here rather than skipped on, because a
         # run that then fails every ring check is the honest report.

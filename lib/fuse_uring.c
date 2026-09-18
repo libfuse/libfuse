@@ -34,6 +34,12 @@
 /* Size of command data area in SQE when IORING_SETUP_SQE128 is used */
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
 
+/*
+ * A queue's bufpool is the only buffer the queue registers with io_uring, so
+ * it always lands at index 0 of the ring's registered buffer table.
+ */
+#define FUSE_URING_BUFPOOL_BUF_INDEX 0
+
 struct fuse_ring_ent {
 	struct fuse_ring_queue *ring_queue; /* back pointer */
 	struct fuse_req req;
@@ -59,6 +65,31 @@ struct fuse_ring_queue {
 	int eventfd;
 	size_t req_header_sz;
 	struct io_uring ring;
+
+	/*
+	 * All payload buffers of this queue are in one contiguous mapping.
+	 *
+	 * In bufpool mode the kernel owns the assignment of buffers to entries
+	 * and tells us per request which one it picked. Otherwise each entry
+	 * keeps one buffer of the mapping for the lifetime of the ring.
+	 */
+	void *payload_mem;
+	size_t payload_mem_sz;
+
+	/*
+	 * Index of payload_mem in this ring's registered buffer table, or -1
+	 * where it is not registered (eg every queue not on a bufpool, or a
+	 * pooled one whose registration RLIMIT_MEMLOCK refused.
+	 */
+	int bufpool_buf_index;
+
+	/*
+	 * Let the kernel manage the payload memory regions for the queues
+	 * instead of allocating + binding a buffer to every entry for the
+	 * lifetime of the ring. Only allowed if the kernel has advertised
+	 * FUSE_HAS_IO_URING_BUFPOOL.
+	 */
+	bool use_bufpool;
 
 	pthread_mutex_t ring_lock;
 
@@ -86,6 +117,12 @@ struct fuse_ring_pool {
 
 	/* max payload size for fuse requests*/
 	size_t max_req_payload_sz;
+
+	/*
+	 * Size of one payload buffer within a queue's payload_mem. At least
+	 * max_req_payload_sz.
+	 */
+	size_t payload_chunk_sz;
 
 	/* size of a single queue */
 	size_t queue_mem_size;
@@ -132,9 +169,17 @@ static void fuse_uring_sqe_set_req_data(struct fuse_uring_cmd_req *req,
 					const unsigned int qid,
 					const uint64_t commit_id)
 {
+	/*
+	 * SQEs are recycled and liburing does not clear the 80B command area,
+	 * so what a previous command left in the reserved fields and in the
+	 * union would be read back as this command's. The kernel rejects a
+	 * REGISTER whose ent_zero_copy_buf_index is set on a queue that is not
+	 * a zero-copy one, and an ADD_BUFPOOL with a non-zero reserved field.
+	 */
+	memset(req, 0, sizeof(*req));
+
 	req->qid = qid;
 	req->commit_id = commit_id;
-	req->flags = 0;
 }
 
 static void
@@ -151,7 +196,8 @@ fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
 	sqe->flags = IOSQE_FIXED_FILE;
 	sqe->fd = 0;
 
-	sqe->rw_flags = 0;
+	sqe->uring_cmd_flags = 0;
+	sqe->buf_index = 0;
 	sqe->ioprio = 0;
 	sqe->off = 0;
 
@@ -159,6 +205,22 @@ fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
 
 	sqe->cmd_op = cmd_op;
 	sqe->__pad1 = 0;
+}
+
+/*
+ * Point the SQE at the queue's registered bufpool. The kernel refuses any
+ * command that imports a payload from a registered bufpool without it, so this
+ * has to be applied to every REGISTER, COMMIT_AND_FETCH and ADD_BUFPOOL SQE of
+ * such a queue. A no-op if the pool is not registered.
+ */
+static void fuse_uring_sqe_set_bufpool(struct io_uring_sqe *sqe,
+				       const struct fuse_ring_queue *queue)
+{
+	if (queue->bufpool_buf_index < 0)
+		return;
+
+	sqe->uring_cmd_flags |= IORING_URING_CMD_FIXED;
+	sqe->buf_index = queue->bufpool_buf_index;
 }
 
 static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
@@ -201,6 +263,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 
 	ring_ent->last_cmd = FUSE_IO_URING_CMD_COMMIT_AND_FETCH;
 	fuse_uring_sqe_prepare(sqe, ring_ent, ring_ent->last_cmd);
+	fuse_uring_sqe_set_bufpool(sqe, queue);
 	fuse_uring_sqe_set_req_data(fuse_uring_get_sqe_cmd(sqe), queue->qid,
 				    ring_ent->req_commit_id);
 
@@ -450,9 +513,12 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
 			struct fuse_ring_ent *ent = &queue->ent[idx];
 
-			munmap(ent->op_payload, ent->req_payload_sz);
 			munmap(ent->req_header, queue->req_header_sz);
 		}
+
+		/* op_payload of every entry points into this */
+		if (queue->payload_mem != NULL)
+			munmap(queue->payload_mem, queue->payload_mem_sz);
 
 		pthread_mutex_destroy(&queue->ring_lock);
 	}
@@ -461,6 +527,149 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 	pthread_cond_destroy(&fuse_ring->thread_start_cond);
 	pthread_mutex_destroy(&fuse_ring->thread_start_mutex);
 	free(fuse_ring);
+}
+
+/*
+ * Submit a queue setup command and wait for its completion.
+ *
+ * ADD_QUEUE and ADD_BUFPOOL are handled synchronously by the kernel. Unlike
+ * REGISTER they complete without waiting for fuse traffic. Nothing else has
+ * been submitted on this ring yet, so the next CQE is the one for the sqe.
+ */
+static int fuse_uring_submit_setup_sqe(struct fuse_ring_queue *queue)
+{
+	struct io_uring_cqe *cqe;
+	int res;
+
+	res = io_uring_submit(&queue->ring);
+	if (res < 0)
+		return res;
+
+	do {
+		res = io_uring_wait_cqe(&queue->ring, &cqe);
+	} while (res == -EINTR);
+	if (res < 0)
+		return res;
+
+	res = cqe->res;
+	io_uring_cqe_seen(&queue->ring, cqe);
+
+	return res;
+}
+
+/* Get an SQE for a queue setup command */
+static struct io_uring_sqe *
+fuse_uring_setup_sqe(struct fuse_ring_queue *queue, __u32 cmd_op,
+		     struct fuse_uring_cmd_req **cmd_req)
+{
+	struct io_uring_sqe *sqe;
+
+	sqe = io_uring_get_sqe(&queue->ring);
+	if (!sqe) {
+		fuse_log(FUSE_LOG_ERR, "qid=%d failed to get a setup SQE\n",
+			 queue->qid);
+		return NULL;
+	}
+
+	fuse_uring_sqe_prepare(sqe, NULL, cmd_op);
+	sqe->addr = 0;
+	sqe->len = 0;
+
+	*cmd_req = fuse_uring_get_sqe_cmd(sqe);
+	fuse_uring_sqe_set_req_data(*cmd_req, queue->qid, 0);
+
+	return sqe;
+}
+
+/*
+ * Create the queue in the kernel up front.
+ *
+ * A queue is otherwise created implicitly by the first REGISTER, which also
+ * fixes it to per-entry payload buffers, which would be too late for
+ * bufpools.
+ */
+static int fuse_uring_add_queue(struct fuse_ring_queue *queue)
+{
+	struct fuse_uring_cmd_req *cmd_req;
+	const struct io_uring_sqe *sqe;
+
+	sqe = fuse_uring_setup_sqe(queue, FUSE_IO_URING_CMD_ADD_QUEUE, &cmd_req);
+	if (!sqe)
+		return -EIO;
+
+	return fuse_uring_submit_setup_sqe(queue);
+}
+
+static int fuse_uring_add_bufpool(struct fuse_ring_queue *queue)
+{
+	struct fuse_uring_cmd_req *cmd_req;
+	struct io_uring_sqe *sqe;
+
+	sqe = fuse_uring_setup_sqe(queue, FUSE_IO_URING_CMD_ADD_BUFPOOL,
+				   &cmd_req);
+	if (!sqe)
+		return -EIO;
+
+	cmd_req->bufpool.uaddr = (uint64_t)(uintptr_t)queue->payload_mem;
+	cmd_req->bufpool.len = queue->payload_mem_sz;
+
+	fuse_uring_sqe_set_bufpool(sqe, queue);
+
+	return fuse_uring_submit_setup_sqe(queue);
+}
+
+/*
+ * Register the bufpool as an io_uring fixed buffer (if possible), so that the
+ * kernel can skip pinning overhead per i/o. This is best effort. This may
+ * fail because of RLIMIT_MEMLOCK. If it fails, the pool still works without
+ * it, but i/o requests incur pinning overhead.
+ */
+static void fuse_uring_register_bufpool(struct fuse_ring_queue *queue)
+{
+	struct iovec iov = {
+		.iov_base = queue->payload_mem,
+		.iov_len = queue->payload_mem_sz,
+	};
+	int rc;
+
+	rc = io_uring_register_buffers(&queue->ring, &iov, 1);
+	if (rc < 0) {
+		fuse_log(FUSE_LOG_DEBUG,
+			 "qid=%d bufpool not registered as fixed buffer: %s\n",
+			 queue->qid, strerror(-rc));
+		return;
+	}
+
+	queue->bufpool_buf_index = FUSE_URING_BUFPOOL_BUF_INDEX;
+}
+
+/*
+ * Give every entry its own slice of the queue's mapping, which is what a queue
+ * not on a bufpool registers and owns for the lifetime of the ring.
+ */
+static void fuse_uring_bind_ent_payloads(struct fuse_ring_queue *queue)
+{
+	const struct fuse_ring_pool *ring = queue->ring_pool;
+
+	for (size_t idx = 0; idx < ring->queue_depth; idx++)
+		queue->ent[idx].op_payload = (char *)queue->payload_mem +
+					     idx * ring->payload_chunk_sz;
+}
+
+/*
+ * Give up on this queue's bufpool and leave it with a payload buffer per entry.
+ *
+ * The kernel has not committed the queue to either mode until a REGISTER
+ * arrives, so one that failed ADD_QUEUE or ADD_BUFPOOL can still take the
+ * per-entry path. The mapping is allocated either way and is at least as large
+ * per-entry needs, so nothing has to be reallocated.
+ */
+static void fuse_uring_disable_bufpool(struct fuse_ring_queue *queue)
+{
+	queue->use_bufpool = false;
+	/* stops the SQEs importing a payload that is no longer pooled */
+	queue->bufpool_buf_index = -1;
+	fuse_uring_bind_ent_payloads(queue);
 }
 
 static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
@@ -480,13 +689,29 @@ static int fuse_uring_register_ent(struct fuse_ring_queue *queue,
 
 	ent->last_cmd = FUSE_IO_URING_CMD_REGISTER;
 	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd);
+	fuse_uring_sqe_set_bufpool(sqe, queue);
 
 	/* only needed for fetch */
 	ent->iov[0].iov_base = ent->req_header;
 	ent->iov[0].iov_len = queue->req_header_sz;
 
-	ent->iov[1].iov_base = ent->op_payload;
-	ent->iov[1].iov_len = ent->req_payload_sz;
+	if (queue->use_bufpool) {
+		/*
+		 * The entry does not own a payload buffer. The buffer gets
+		 * assigned by the kernel out of the buffer pool per request.
+		 */
+		ent->iov[1].iov_base = NULL;
+		ent->iov[1].iov_len = 0;
+	} else {
+		/*
+		 * The slot, not req_payload_sz: REGISTER rejects an iov below
+		 * the payload size the kernel derived, which rounds max_write
+		 * up to a page. The entry still only ever carries
+		 * req_payload_sz of it.
+		 */
+		ent->iov[1].iov_base = ent->op_payload;
+		ent->iov[1].iov_len = queue->ring_pool->payload_chunk_sz;
+	}
 
 	sqe->addr = (uint64_t)(ent->iov);
 	sqe->len = 2;
@@ -541,11 +766,40 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	struct fuse_ring_pool *fuse_ring = NULL;
 	const size_t nr_queues = get_nprocs_conf();
 	size_t payload_sz = se->bufsize - FUSE_BUFFER_HEADER_SIZE;
+	bool use_bufpool = se->conn.want_ext & FUSE_CAP_IO_URING_BUFPOOL;
+	const size_t page_sz = sysconf(_SC_PAGESIZE);
+	size_t chunk_sz;
 	size_t queue_sz;
 
 	if (se->debug)
-		fuse_log(FUSE_LOG_DEBUG, "starting io-uring q-depth=%d\n",
-			 se->uring.q_depth);
+		fuse_log(FUSE_LOG_DEBUG,
+			 "starting io-uring q-depth=%d bufpool=%d\n",
+			 se->uring.q_depth, use_bufpool);
+
+	if (!payload_sz) {
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse: io-uring requires a non-zero max_write\n");
+		goto err;
+	}
+
+	/*
+	 * The kernel sizes a payload buffer itself, as
+	 *   max(FUSE_MIN_READ_BUFFER, max_write, max_pages * page_sz)
+	 * and both modes have to agree with it: a bufpool queue because the
+	 * kernel carves the pool into chunks of that size, a per-entry queue
+	 * because REGISTER refuses an iov shorter than it.
+	 */
+	chunk_sz = ROUND_UP(payload_sz, page_sz);
+	if (chunk_sz < FUSE_MIN_READ_BUFFER)
+		chunk_sz = FUSE_MIN_READ_BUFFER;
+
+	/* ADD_BUFPOOL passes the pool length in a u32 */
+	if (use_bufpool && se->uring.q_depth > UINT32_MAX / chunk_sz) {
+		fuse_log(FUSE_LOG_WARNING,
+			 "fuse: %u buffers of %zu bytes exceed the pool limit, using a payload buffer per entry\n",
+			 se->uring.q_depth, chunk_sz);
+		use_bufpool = false;
+	}
 
 	fuse_ring = calloc(1, sizeof(*fuse_ring));
 	if (fuse_ring == NULL) {
@@ -564,6 +818,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	fuse_ring->nr_queues = nr_queues;
 	fuse_ring->queue_depth = se->uring.q_depth;
 	fuse_ring->max_req_payload_sz = payload_sz;
+	fuse_ring->payload_chunk_sz = chunk_sz;
 	fuse_ring->queue_mem_size = queue_sz;
 	fuse_ring->single_issuer = se->conn.io_uring_single_issuer;
 
@@ -580,6 +835,8 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->qid = qid;
 		queue->ring_pool = fuse_ring;
 		queue->eventfd = -1;
+		queue->bufpool_buf_index = -1;
+		queue->use_bufpool = use_bufpool;
 		pthread_mutex_init(&queue->ring_lock, NULL);
 	}
 
@@ -622,6 +879,7 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 	}
 
 	fuse_uring_sqe_prepare(sqe, ent, ent->last_cmd);
+	fuse_uring_sqe_set_bufpool(sqe, queue);
 
 	switch (ent->last_cmd) {
 	case FUSE_IO_URING_CMD_REGISTER:
@@ -675,6 +933,22 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 		abort();
 	}
 
+	if (queue->use_bufpool) {
+		/*
+		 * The buffer the kernel picked for this request out of the
+		 * bufpool.
+		 */
+		if (unlikely(ent_in_out->offset >
+			     queue->payload_mem_sz - ent->req_payload_sz)) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Received out of range bufpool offset %u\n",
+				 ent_in_out->offset);
+			abort();
+		}
+
+		ent->op_payload = (char *)queue->payload_mem + ent_in_out->offset;
+	}
+
 	memset(&req->flags, 0, sizeof(req->flags));
 	memset(&req->u, 0, sizeof(req->u));
 	req->flags.is_uring = 1;
@@ -716,6 +990,14 @@ static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 				fallthrough;
 			case -EINTR:
 				ent = io_uring_cqe_get_data(cqe);
+				/*
+				 * A queue setup command carries no entry, so
+				 * there is nothing to resubmit. Reaching here
+				 * means its submitter already gave up on it
+				 * and moved the queue on without it.
+				 */
+				if (!ent)
+					continue;
 				fuse_uring_resubmit(queue, ent);
 				continue;
 			default:
@@ -817,6 +1099,14 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 	queue->req_header_sz = ROUND_UP(sizeof(struct fuse_uring_req_header),
 				       page_sz);
 
+	queue->payload_mem_sz = ring->queue_depth * ring->payload_chunk_sz;
+	queue->payload_mem = alloc_local(queue->payload_mem_sz);
+	if (!queue->payload_mem)
+		return -ENOMEM;
+
+	if (queue->use_bufpool)
+		fuse_uring_register_bufpool(queue);
+
 	for (size_t idx = 0; idx < ring->queue_depth; idx++) {
 		struct fuse_ring_ent *ring_ent = &queue->ent[idx];
 		struct fuse_req *req = &ring_ent->req;
@@ -833,10 +1123,6 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 
 		ring_ent->req_payload_sz = ring->max_req_payload_sz;
 
-		ring_ent->op_payload = alloc_local(ring_ent->req_payload_sz);
-		if (!ring_ent->op_payload)
-			return -ENOMEM;
-
 		req->se = se;
 		pthread_mutex_init(&req->lock, NULL);
 		req->flags.is_uring = 1;
@@ -844,17 +1130,41 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 		list_init_req(req);
 	}
 
-	res = fuse_uring_register_queue(queue);
-	if (res != 0) {
-		fuse_log(
-			FUSE_LOG_ERR,
-			"Grave fuse-uring error on preparing SQEs, aborting\n");
-		se->error = -EIO;
-		fuse_session_exit(se);
-		return res;
-	}
+	if (!queue->use_bufpool)
+		fuse_uring_bind_ent_payloads(queue);
 
 	return queue->ring.ring_fd;
+}
+
+/*
+ * Bring the queue up in the kernel and prepare its entries.
+ *
+ * Has to run after the FUSE_INIT reply, the kernel rejects any of these
+ * commands with -EAGAIN while the connection is not initialized yet.
+ */
+static int fuse_uring_start_queue(struct fuse_ring_queue *queue)
+{
+	int res;
+
+	if (queue->use_bufpool) {
+		res = fuse_uring_add_queue(queue);
+		if (!res)
+			res = fuse_uring_add_bufpool(queue);
+		if (res) {
+			fuse_log(FUSE_LOG_WARNING,
+				 "qid=%d bufpool setup failed (%s), falling back to a payload buffer per entry\n",
+				 queue->qid, strerror(-res));
+			fuse_uring_disable_bufpool(queue);
+		}
+	}
+
+	res = fuse_uring_register_queue(queue);
+	if (res)
+		fuse_log(FUSE_LOG_ERR,
+			 "fuse-uring error on preparing SQEs, aborting: %s\n",
+			 strerror(-res));
+
+	return res;
 }
 
 static void *fuse_uring_thread(void *arg)
@@ -886,7 +1196,20 @@ static void *fuse_uring_thread(void *arg)
 		goto err_non_fatal;
 	}
 
-	sem_wait(&ring_pool->init_sem);
+	while (sem_wait(&ring_pool->init_sem) == -1 && errno == EINTR)
+		;
+
+	/*
+	 * The connection is initialized now, so the kernel accepts the queue
+	 * setup commands. This is also what prepares the registration SQEs.
+	 */
+	err = fuse_uring_start_queue(queue);
+	if (err) {
+		fuse_log(FUSE_LOG_ERR, "qid=%d queue start failed\n",
+			 queue->qid);
+		se->error = err;
+		goto err;
+	}
 
 	/*
 	 * Multi-issuer flushes the registration SQEs here - safe without
