@@ -222,6 +222,10 @@ private_cfg.set('HAVE_STRUCT_STAT_ST_ATIMESPEC',
                   prefix: include_default + '#include <sys/stat.h>',
                   args: args_default))
 
+# Variable declaration checks
+private_cfg.set('HAVE_ENVIRON_DECL',
+        cc.has_header_symbol('unistd.h', 'environ', args: args_default))
+
 private_cfg.set('USDT_ENABLED', get_option('enable-usdt'))
 
 # What a session starts with; fuse_session_set_sync_init() still overrides it.
@@ -251,6 +255,16 @@ if get_option('enable-io-uring') and liburing.found()
               dependencies: [liburing])
       private_cfg.set('HAVE_URING', true)
    endif
+endif
+
+# A custom io peer might not be a kernel and can forge requests libfuse parses
+# without bounds checks. Off unless a build asks for it.
+private_cfg.set('HAVE_CUSTOM_IO', get_option('enable-custom-io'))
+if get_option('enable-custom-io')
+    warning('enable-custom-io lets a peer that might not be a kernel send ' +
+            'requests that libfuse parses without bounds checks, so a ' +
+            'forged request can crash or corrupt the filesystem process - ' +
+            'see doc/README.custom-io.')
 endif
 
 # Check for systemd support
@@ -430,7 +444,8 @@ thread_dep = dependency('threads')
 # Read build files from sub-directories
 #
 subdirs = [ 'lib', 'include']
-if get_option('utils') and not platform.endswith('bsd') and platform != 'dragonfly'
+build_utils = get_option('utils') and not platform.endswith('bsd') and platform != 'dragonfly'
+if build_utils
   subdirs += [ 'util', 'doc' ]
 endif
 
@@ -457,6 +472,7 @@ summary({
 
 summary({
   'io_uring support': private_cfg.get('HAVE_URING', false),
+  'custom io support': private_cfg.get('HAVE_CUSTOM_IO', false),
   'USDT tracing': private_cfg.get('USDT_ENABLED', false),
   'systemd service support': private_cfg.get('HAVE_SYSTEMD', false),
   'systemd headers': private_cfg.get('HAVE_SYSTEMD_HEADERS', false),

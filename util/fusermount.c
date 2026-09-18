@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <errno.h>
+#include <endian.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <paths.h>
@@ -38,6 +39,7 @@
 #include <sys/utsname.h>
 #include <sched.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/vfs.h>
 
 #if defined HAVE_CLOSE_RANGE && defined linux
@@ -47,7 +49,6 @@
 #if defined HAVE_LISTMOUNT
 #include <linux/mount.h>
 #include <syscall.h>
-#include <stdint.h>
 #endif
 
 #define FUSE_COMMFD_ENV		"_FUSE_COMMFD"
@@ -905,133 +906,126 @@ static int do_mount(const char *mnt, const char **typep, mode_t rootmode,
 }
 
 /*
- * Pin @open_path (the validated mountpoint -- "." after chdir, or the path
- * itself for root) as an O_PATH fd and fstat() it into @stbuf. Re-apply the
- * sticky-directory ownership rule on the pinned inode: done on the held fd
- * this is immune to a symlink swap of @open_path between validation and the
- * mount. A writable non-sticky directory of another user stays a valid
- * mountpoint. @name is the user-facing path for diagnostics.
+ * Pin @mnt as an O_PATH fd and fstat() it into @stbuf. O_NOFOLLOW keeps the
+ * non-root rule that a symlink is not a valid mountpoint; root has always been
+ * allowed to name one.
  * Returns the fd, or -1 on failure.
  */
-static int pin_mountpoint(const char *open_path, const char *name,
-			  uid_t want_uid, struct stat *stbuf)
+static int pin_mountpoint(const char *mnt, bool is_root, struct stat *stbuf)
 {
-	int fd = open(open_path, O_PATH | O_CLOEXEC);
+	int open_flags = O_PATH | O_CLOEXEC;
+	int fd;
 
+	if (!is_root)
+		open_flags |= O_NOFOLLOW;
+
+	fd = open(mnt, open_flags);
 	if (fd == -1) {
-		fprintf(stderr, "%s: failed to pin mountpoint %s: %s\n",
-			progname, name, strerror(errno));
-		return -1;
-	}
-	if (fstat(fd, stbuf) == -1) {
-		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
-			progname, name, strerror(errno));
-		close(fd);
-		return -1;
-	}
-	if (want_uid != (uid_t)-1 && (stbuf->st_mode & S_ISVTX) &&
-	    stbuf->st_uid != want_uid) {
-		fprintf(stderr,
-			"%s: mountpoint %s not owned by user\n",
-			progname, name);
-		close(fd);
-		return -1;
-	}
-	return fd;
-}
-
-static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
-{
-	int res;
-	const char *mnt = *mntp;
-	const char *origmnt = mnt;
-	struct statfs fs_buf;
-
-	res = lstat(mnt, stbuf);
-	if (res == -1) {
 		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
 			progname, mnt, strerror(errno));
 		return -1;
 	}
 
+	if (fstat(fd, stbuf) == -1) {
+		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
+			progname, mnt, strerror(errno));
+		close(fd);
+		return -1;
+	}
+
+	return fd;
+}
+
+/*
+ * Resolve the mountpoint to an inode exactly once and hand that fd back in
+ * @mountpoint_fd: every later check, and the mount itself, run on the fd, so
+ * the caller-supplied path is never resolved a second time and cannot be
+ * re-pointed at another object in between.
+ */
+static int check_perm(const char **mntp, struct stat *stbuf, int *mountpoint_fd)
+{
+	int res;
+	int fd;
+	const char *mnt = *mntp;
+	const bool is_root = getuid() == 0;
+	struct statfs fs_buf;
+
+	fd = pin_mountpoint(mnt, is_root, stbuf);
+	if (fd == -1)
+		return -1;
+
 	/*
-	 * Root skips the permission checks, but still pin the mountpoint inode:
-	 * external tools may invoke this suid helper as root, and the pinned fd
-	 * makes move_mount() target exactly the validated inode regardless of a
-	 * later symlink swap.
+	 * Root skips the permission checks, but keeps the pinned inode as the
+	 * mount target: external tools may invoke this suid helper as root.
 	 */
-	if (getuid() == 0) {
-		*mountpoint_fd = pin_mountpoint(mnt, mnt, (uid_t)-1, stbuf);
-		if (*mountpoint_fd == -1)
-			return -1;
+	if (is_root) {
+		*mountpoint_fd = fd;
 		return 0;
 	}
 
 	if (S_ISDIR(stbuf->st_mode)) {
-		res = chdir(mnt);
+		res = fchdir(fd);
 		if (res == -1) {
 			fprintf(stderr,
 				"%s: failed to chdir to mountpoint: %s\n",
 				progname, strerror(errno));
-			return -1;
+			goto out_close;
 		}
-		mnt = *mntp = ".";
-		res = lstat(mnt, stbuf);
-		if (res == -1) {
-			fprintf(stderr,
-				"%s: failed to access mountpoint %s: %s\n",
-				progname, origmnt, strerror(errno));
-			return -1;
-		}
-
-		res = check_nonroot_dir_access(progname, origmnt, mnt, stbuf);
-		if (res)
-			return res;
-
-		/* Reached only for non-root; root returned above. CWD is the
-		 * just-validated directory after chdir.
+		/* CWD is the pinned directory, so "." names it without going
+		 * through the caller-supplied path again.
 		 */
-		*mountpoint_fd = pin_mountpoint(".", origmnt, getuid(), stbuf);
-		if (*mountpoint_fd == -1)
-			return -1;
+		*mntp = ".";
+		res = check_nonroot_dir_access(progname, mnt, *mntp, stbuf);
+		if (res)
+			goto out_close;
 	} else if (S_ISREG(stbuf->st_mode)) {
 		static char procfile[256];
-		*mountpoint_fd = open(mnt, O_WRONLY);
-		if (*mountpoint_fd == -1) {
+		int wfd;
+
+		snprintf(procfile, sizeof(procfile), "/proc/self/fd/%i", fd);
+
+		/* Write access is checked by reopening the pinned inode rather
+		 * than the path; only the answer is wanted, not the fd.
+		 */
+		wfd = open(procfile, O_WRONLY);
+		if (wfd == -1) {
 			fprintf(stderr, "%s: failed to open %s: %s\n",
 				progname, mnt, strerror(errno));
-			return -1;
+			res = -1;
+			goto out_close;
 		}
-		res = fstat(*mountpoint_fd, stbuf);
-		if (res == -1) {
-			fprintf(stderr,
-				"%s: failed to access mountpoint %s: %s\n",
-				progname, mnt, strerror(errno));
-			return -1;
-		}
-		if (!S_ISREG(stbuf->st_mode)) {
-			fprintf(stderr,
-				"%s: mountpoint %s is no longer a regular file\n",
-				progname, mnt);
-			return -1;
-		}
+		close(wfd);
 
-		sprintf(procfile, "/proc/self/fd/%i", *mountpoint_fd);
 		*mntp = procfile;
 	} else {
 		fprintf(stderr,
 			"%s: mountpoint %s is not a directory or a regular file\n",
 			progname, mnt);
-		return -1;
+		res = -1;
+		goto out_close;
 	}
 
+	/* fstatfs() on the pinned fd would be the direct form, but it rejects
+	 * O_PATH fds before Linux 3.12. *mntp is the pinned directory as CWD or
+	 * its /proc magic link, so neither form re-resolves the caller's path.
+	 */
 	if (statfs(*mntp, &fs_buf)) {
 		fprintf(stderr, "%s: failed to access mountpoint %s: %s\n",
 			progname, mnt, strerror(errno));
-		return -1;
+		res = -1;
+		goto out_close;
 	}
 
-	return check_nonroot_fstype(progname, &fs_buf);
+	res = check_nonroot_fstype(progname, &fs_buf);
+	if (res)
+		goto out_close;
+
+	*mountpoint_fd = fd;
+	return 0;
+
+out_close:
+	close(fd);
+	return res;
 }
 
 static int open_fuse_device(const char *dev)
@@ -1466,11 +1460,9 @@ static int wait_for_signal(int sock_fd)
 
 /* Helper for should_auto_unmount
  *
- * fusermount typically has the s-bit set - initial open of `mnt` was as root
- * and got EACCESS as 'allow_other' was not specified.
- * Try opening `mnt` again with uid and guid of the calling process.
+ * Try opening `mnt` with uid and gid of the calling process.
  */
-static int recheck_ENOTCONN_as_owner(const char *mnt)
+static int check_ENOTCONN_as_owner(const char *mnt)
 {
 	int pid = fork();
 	if(pid == -1) {
@@ -1489,7 +1481,7 @@ static int recheck_ENOTCONN_as_owner(const char *mnt)
 		}
 
 		int fd = open(mnt, O_RDONLY);
-		if(fd == -1 && errno == ENOTCONN)
+		if (fd == -1 && (errno == ENOTCONN || errno == ECONNABORTED))
 			_exit(EXIT_SUCCESS);
 		else
 			_exit(EXIT_FAILURE);
@@ -1525,7 +1517,6 @@ static int should_auto_unmount(const char *mnt, const char *type)
 	char *copy;
 	const char *last;
 	int result = 0;
-	int fd;
 
 	copy = strdup(mnt);
 	if (copy == NULL) {
@@ -1538,23 +1529,7 @@ static int should_auto_unmount(const char *mnt, const char *type)
 	if (check_is_mount(last, mnt, type) == -1)
 		goto out;
 
-	fd = open(mnt, O_RDONLY);
-
-	if (fd != -1) {
-		close(fd);
-	} else {
-		switch(errno) {
-		case ENOTCONN:
-			result = 1;
-			break;
-		case EACCES:
-			result = recheck_ENOTCONN_as_owner(mnt);
-			break;
-		default:
-			result = 0;
-			break;
-		}
-	}
+	result = check_ENOTCONN_as_owner(mnt);
 out:
 	free(copy);
 	return result;
@@ -1571,12 +1546,51 @@ static void usage(void)
 	       " -q		    quiet\n"
 	       " -z		    lazy unmount\n",
 	       progname);
+	printf(" --features\t    print supported features in hexadecimal\n"
+	       " --features=text    print supported feature names\n");
 	exit(1);
 }
 
 static void show_version(void)
 {
 	printf("fusermount3 version: %s\n", PACKAGE_VERSION);
+	exit(0);
+}
+
+/*
+ * Print supported feature bits in machine-readable or text form.
+ * Machine-readable output is a big-endian uint64_t in hexadecimal.
+ * @param[in] text Select feature names instead.
+ */
+static void show_features(bool text)
+{
+	uint64_t features = 0;
+
+#ifdef HAVE_NEW_MOUNT_API
+	features = FUSERMOUNT_FEATURE_NEW_MOUNT_API |
+		FUSERMOUNT_FEATURE_SYNC_INIT;
+#endif
+
+	if (text) {
+		const char *separator = "";
+
+		if (features & FUSERMOUNT_FEATURE_NEW_MOUNT_API) {
+			printf("%sFUSERMOUNT_FEATURE_NEW_MOUNT_API", separator);
+			separator = " ";
+		}
+		if (features & FUSERMOUNT_FEATURE_SYNC_INIT)
+			printf("%sFUSERMOUNT_FEATURE_SYNC_INIT", separator);
+	} else {
+		uint64_t big_endian_features = htobe64(features);
+		const unsigned char *feature_bytes =
+			(const unsigned char *) &big_endian_features;
+
+		for (size_t byte_idx = 0;
+		     byte_idx < sizeof(big_endian_features);
+		     byte_idx++)
+			printf("%02x", (unsigned int) feature_bytes[byte_idx]);
+	}
+	printf("\n");
 	exit(0);
 }
 
@@ -1645,12 +1659,12 @@ int main(int argc, char *argv[])
 	int ch;
 	int fd;
 	int res;
-	char *origmnt;
+	const char *origmnt;
 	char *mnt;
 	static int unmount = 0;
 	static int lazy = 0;
 	static int quiet = 0;
-	char *commfd = NULL;
+	const char *commfd = NULL;
 	long cfd;
 	const char *opts = "";
 	const char *type = NULL;
@@ -1663,6 +1677,7 @@ int main(int argc, char *argv[])
 		{"quiet",   no_argument, NULL, 'q'},
 		{"help",    no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'V'},
+		{"features", optional_argument, NULL, 'F'},
 		{"options", required_argument, NULL, 'o'},
 		// Note: auto-unmount and comm-fd don't have short versions.
 		// They'ne meant for internal use by mount.c
@@ -1686,6 +1701,11 @@ int main(int argc, char *argv[])
 
 		case 'V':
 			show_version();
+			break;
+		case 'F':
+			if (optarg != NULL && strcmp(optarg, "text") != 0)
+				usage();
+			show_features(optarg != NULL);
 			break;
 
 		case 'o':
@@ -1814,7 +1834,7 @@ int main(int argc, char *argv[])
 
 		res = send_fd(cfd, fd);
 		if (res != 0) {
-			umount2(mnt, MNT_DETACH); /* lazy umount */
+			unmount_fuse(mnt, 1, 1); /* lazy umount */
 			goto err_out;
 		}
 		close(fd);
@@ -1870,7 +1890,7 @@ do_unmount:
 	if (geteuid() == 0)
 		res = unmount_fuse(mnt, quiet, lazy);
 	else {
-		res = umount2(mnt, lazy ? UMOUNT_DETACH : 0);
+		res = umount2(mnt, (lazy ? UMOUNT_DETACH : 0) | UMOUNT_NOFOLLOW);
 		if (res == -1 && !quiet)
 			fprintf(stderr,
 				"%s: failed to unmount %s: %s\n",

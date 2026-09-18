@@ -1718,7 +1718,9 @@ static void _do_create(fuse_req_t req, const fuse_ino_t nodeid,
 		if (req->se->conn.proto_minor >= 12)
 			req->ctx.umask = arg->umask;
 
-		/* XXX: fuse_create_in::open_flags */
+		if (req->se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+			fi.kill_suidgid =
+				(arg->open_flags & FUSE_OPEN_KILL_SUIDGID) != 0;
 
 		req->se->op.create(req, nodeid, name, arg->mode, &fi);
 	} else {
@@ -1748,7 +1750,9 @@ static void _do_open(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	memset(&fi, 0, sizeof(fi));
 	fi.flags = arg->flags;
 
-	/* XXX: fuse_open_in::open_flags */
+	if (req->se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+		fi.kill_suidgid =
+			(arg->open_flags & FUSE_OPEN_KILL_SUIDGID) != 0;
 
 	if (req->se->op.open)
 		req->se->op.open(req, nodeid, &fi);
@@ -1799,6 +1803,10 @@ static void _do_write(fuse_req_t req, const fuse_ino_t nodeid,
 	fi.fh = arg->fh;
 	fi.writepage = (arg->write_flags & FUSE_WRITE_CACHE) != 0;
 
+	if (req->se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+		fi.kill_suidgid =
+			(arg->write_flags & FUSE_WRITE_KILL_SUIDGID) != 0;
+
 	if (req->se->conn.proto_minor >= 9) {
 		fi.lock_owner = arg->lock_owner;
 		fi.flags = arg->flags;
@@ -1834,6 +1842,10 @@ static void _do_write_buf(fuse_req_t req, const fuse_ino_t nodeid,
 	memset(&fi, 0, sizeof(fi));
 	fi.fh = arg->fh;
 	fi.writepage = arg->write_flags & FUSE_WRITE_CACHE;
+
+	if (se->conn.want_ext & FUSE_CAP_HANDLE_KILLPRIV_V2)
+		fi.kill_suidgid =
+			(arg->write_flags & FUSE_WRITE_KILL_SUIDGID) != 0;
 
 	if (se->conn.proto_minor >= 9) {
 		fi.lock_owner = arg->lock_owner;
@@ -2761,10 +2773,12 @@ static void report_init_test_status(struct fuse_session *se, int ring_rc)
 				      strerror(-ring_rc));
 	else if (se->io != NULL)
 		EMIT_INIT_STATUS_LINE("io_uring=off:custom_io");
-	else if (!se->uring.enable)
+	else if (!se->uring.enabled)
 		EMIT_INIT_STATUS_LINE("io_uring=off:disabled");
-	else
+	else if (!(conn->capable_ext & FUSE_CAP_OVER_IO_URING))
 		EMIT_INIT_STATUS_LINE("io_uring=off:not_offered");
+	else
+		EMIT_INIT_STATUS_LINE("io_uring=off:not_wanted");
 	EMIT_INIT_STATUS_LINE("proto_major=%u", conn->proto_major);
 	EMIT_INIT_STATUS_LINE("proto_minor=%u", conn->proto_minor);
 	EMIT_INIT_STATUS_LINE("max_readahead=%u", conn->max_readahead);
@@ -3050,7 +3064,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 	if (se->conn.want_ext & FUSE_CAP_NO_EXPORT_SUPPORT)
 		outargflags |= FUSE_NO_EXPORT_SUPPORT;
-	if (se->uring.enable && se->conn.want_ext & FUSE_CAP_OVER_IO_URING) {
+	if (se->uring.enabled && se->conn.want_ext & FUSE_CAP_OVER_IO_URING) {
 		outargflags |= FUSE_OVER_IO_URING;
 		enable_io_uring = true;
 	}
@@ -3123,6 +3137,13 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	report_init_test_status(se, ring_rc);
 
+	/*
+	 * Only now, after the report has had its look at the wish - later
+	 * phases need to know whether the ring came up, not whether it was
+	 * asked for.
+	 */
+	se->uring.enabled = enable_io_uring;
+
 	if (inargflags & FUSE_INIT_EXT) {
 		outargflags |= FUSE_INIT_EXT;
 		outarg.flags2 = outargflags >> 32;
@@ -3138,7 +3159,17 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	se->got_init = 1;
 	fuse_daemonize_set_got_init();
 	send_reply_ok(req, &outarg, outargsize);
-	if (enable_io_uring)
+	/*
+	 * With async init, send_reply_ok() has already marked the connection
+	 * initialized (that happens in the reply write()), so the ring threads
+	 * can send REGISTER now. With sync init, _do_init() runs on the
+	 * sync-init worker thread while the mount is still in progress. The
+	 * connection is not initialized until the mount completes, which is
+	 * after _do_init() returns. Waking the ring threads here would let
+	 * REGISTER race ahead of initialization and get -EAGAIN, so defer the
+	 * wake to fuse_session_mount_new_api() after the mount returns.
+	 */
+	if (enable_io_uring && !se->is_sync_init)
 		fuse_uring_wake_ring_threads(se);
 
 	/*
@@ -4013,6 +4044,8 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	struct fuse_bufvec bufv = { .buf[0] = *buf, .count = 1 };
 	struct fuse_bufvec tmpbuf = FUSE_BUFVEC_INIT(write_header_size);
 	struct fuse_in_header *in;
+	/* 'in' spans the whole request, not just the fixed header */
+	bool buf_is_complete;
 	const void *inarg;
 	struct fuse_req *req;
 	void *mbuf = NULL;
@@ -4035,8 +4068,10 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 			goto clear_pipe;
 
 		in = mbuf;
+		buf_is_complete = (tmpbuf.buf[0].size == buf->size);
 	} else {
 		in = buf->mem;
+		buf_is_complete = true;
 	}
 
 	trace_request_process(in->opcode, in->unique);
@@ -4065,15 +4100,22 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 	}
 
 	fuse_session_in2req(req, in);
-	if (in->total_extlen)
-		fuse_req_parse_extensions(req, in->total_extlen, in, in->len);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
-	if (se->debug && req->secctx_len > 0) {
-		fuse_log(FUSE_LOG_DEBUG,
-			"  secctx: %zu bytes (%u contexts)\n",
-			req->secctx_len,
-			req->secctx_count);
+	/*
+	 * in->len is the sender's claim, buf->size is what the buffer holds.
+	 * Everything below reads the request through in->len, so a caller of
+	 * fuse_session_process_buf() that got the size wrong would take the
+	 * handlers past the allocation.
+	 */
+	if (unlikely(in->len < sizeof(struct fuse_in_header) ||
+		     buf->size < in->len)) {
+		fuse_log(FUSE_LOG_ERR,
+			"fuse: %s: %zu bytes for a %u-byte request\n",
+			opname((enum fuse_opcode) in->opcode), buf->size,
+			in->len);
+		err = EIO;
+		goto reply_err;
 	}
 
 	err = fuse_req_opcode_sanity_ok(se, in->opcode);
@@ -4132,6 +4174,31 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 			goto reply_err;
 
 		in = mbuf;
+		buf_is_complete = true;
+	}
+
+	/*
+	 * Extensions sit at the end of the request and are only reachable once
+	 * 'in' spans it. The splice path leaves FUSE_WRITE (with write_buf) and
+	 * FUSE_NOTIFY_REPLY payloads in the pipe; as of Linux 7.1 the kernel
+	 * attaches no extensions to those.
+	 */
+	if (in->total_extlen) {
+		if (buf_is_complete)
+			fuse_req_parse_extensions(req, in->total_extlen, in,
+						  in->len);
+		else
+			fuse_log(FUSE_LOG_WARNING,
+				"fuse: %s: %zu extension bytes outside the header buffer, ignored\n",
+				opname((enum fuse_opcode) in->opcode),
+				FUSE_EXT_SIZE(in->total_extlen));
+	}
+
+	if (se->debug && req->secctx_len > 0) {
+		fuse_log(FUSE_LOG_DEBUG,
+			"  secctx: %zu bytes (%u contexts)\n",
+			req->secctx_len,
+			req->secctx_count);
 	}
 
 	inarg = (void *) &in[1];
@@ -4225,7 +4292,7 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("-d", debug, 1),
 	LL_OPTION("--debug", debug, 1),
 	LL_OPTION("allow_root", deny_others, 1),
-	LL_OPTION("io_uring", uring.enable, 1),
+	LL_OPTION("io_uring", uring.enabled, 1),
 	LL_OPTION("io_uring_q_depth=%u", uring.q_depth, -1),
 	FUSE_OPT_END
 };
@@ -4617,7 +4684,7 @@ fuse_session_new_versioned(struct fuse_args *args,
 	 * Allow overriding with env, mostly to avoid the need to modify
 	 * all tests. I.e. to test with and without io-uring being enabled.
 	 */
-	se->uring.enable = getenv("FUSE_URING_ENABLE") ?
+	se->uring.enabled = getenv("FUSE_URING_ENABLE") ?
 				   atoi(getenv("FUSE_URING_ENABLE")) :
 				   SESSION_DEF_URING_ENABLE;
 	se->uring.q_depth = getenv("FUSE_URING_QUEUE_DEPTH") ?
@@ -4737,6 +4804,14 @@ FUSE_SYMVER("fuse_session_custom_io_317", "fuse_session_custom_io@@FUSE_3.17")
 int fuse_session_custom_io_317(struct fuse_session *se,
 				const struct fuse_custom_io *io, size_t op_size, int fd)
 {
+#ifndef HAVE_CUSTOM_IO
+	(void)se;
+	(void)io;
+	(void)op_size;
+	(void)fd;
+	fuse_log(FUSE_LOG_ERR, "fuse: custom io is not enabled in this build\n");
+	return -ENOTSUP;
+#else
 	if (sizeof(struct fuse_custom_io) < op_size) {
 		fuse_log(FUSE_LOG_ERR, "fuse: warning: library too old, some operations may not work\n");
 		op_size = sizeof(struct fuse_custom_io);
@@ -4778,8 +4853,9 @@ int fuse_session_custom_io_317(struct fuse_session *se,
 	 * refusing would let a stray variable break an application that never
 	 * asked for it.
 	 */
-	se->uring.enable = 0;
+	se->uring.enabled = 0;
 	return 0;
+#endif
 }
 
 int fuse_session_custom_io_30(struct fuse_session *se,
@@ -4987,6 +5063,10 @@ static int new_api_fusermount(struct fuse_session *se,
 			      const char *mtab_opts,
 			      int *sock_fd, pid_t *fusermount_pid)
 {
+	const uint64_t required_features =
+		FUSERMOUNT_FEATURE_NEW_MOUNT_API |
+		FUSERMOUNT_FEATURE_SYNC_INIT;
+	uint64_t features;
 	int fd, err;
 
 	if (se->debug)
@@ -4996,6 +5076,14 @@ static int new_api_fusermount(struct fuse_session *se,
 	/* Terminate worker thread with wrong fd */
 	if (session_wait_sync_init_completion(se) < 0)
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
+
+	features = fuse_mount_fusermount_features();
+	if ((features & required_features) != required_features) {
+		if (se->debug)
+			fuse_log(FUSE_LOG_DEBUG,
+				 "fuse: fusermount3 lacks new mount API sync-init support\n");
+		return -ENOTSUP;
+	}
 
 	/* Call fusermount3 with --sync-init */
 	fd = mount_fusermount_obtain_fd(mountpoint, se->mo, mtab_opts, sock_fd,
@@ -5062,6 +5150,15 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	}
 
 	se->fd = fd;
+
+	/*
+	 * An armed worker blocks in poll() until a mount attaches to the fd.
+	 * A refused fsopen() never does that, and pthread_join() would hang.
+	 */
+	err = fuse_fsopen_probe();
+	if (err == -EPERM)
+		goto fallback;
+
 	err = session_start_sync_init(se, fd);
 	if (err)
 		goto err;
@@ -5077,6 +5174,7 @@ static int fuse_session_mount_new_api(struct fuse_session *se,
 	err = fuse_kern_fsmount_mo(mountpoint, se->mo, mtab_opts_with_fd,
 				   &mountfd);
 
+fallback:
 	/* If mount failed with EPERM, fall back to fusermount3 with sync-init */
 	if (err < 0 && errno == EPERM) {
 		char *fusermount_opts = NULL;
@@ -5160,6 +5258,15 @@ err:
 	/* Wait for synchronous FUSE_INIT to complete */
 	if (session_wait_sync_init_completion(se) < 0)
 		fuse_log(FUSE_LOG_ERR, "fuse: sync init completion failed\n");
+
+	/*
+	 * For sync init the ring threads were not woken in _do_init() because
+	 * the connection was not yet initialized. Now that the mount has
+	 * completed, the connection is initialized and REGISTER can be sent, so
+	 * wake them here
+	 */
+	if (se->is_sync_init && se->uring.enabled)
+		fuse_uring_wake_ring_threads(se);
 
 	free(mtab_opts);
 	free(mtab_opts_with_fd);

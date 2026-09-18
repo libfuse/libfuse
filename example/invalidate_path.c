@@ -25,7 +25,7 @@
  * \include invalidate_path.c
  */
 
-#define FUSE_USE_VERSION 34
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #include <fuse.h>
 #include <fuse_lowlevel.h>  /* for fuse_cmdline_opts */
@@ -215,7 +215,7 @@ int main(int argc, char *argv[]) {
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse *fuse;
 	struct fuse_cmdline_opts opts;
-	struct fuse_loop_config config;
+	struct fuse_loop_config *config;
 	int res;
 
 	/* Initialize the files */
@@ -279,9 +279,15 @@ int main(int argc, char *argv[]) {
 	if (opts.singlethread)
 		res = fuse_loop(fuse);
 	else {
-		config.clone_fd = opts.clone_fd;
-		config.max_idle_threads = opts.max_idle_threads;
-		res = fuse_loop_mt(fuse, &config);
+		config = fuse_loop_cfg_create();
+		if (config == NULL) {
+			res = 1;
+			goto out3;
+		}
+		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
+		fuse_loop_cfg_set_idle_threads(config, opts.max_idle_threads);
+		res = fuse_loop_mt(fuse, config);
+		fuse_loop_cfg_destroy(config);
 	}
 	if (res)
 		res = 1;

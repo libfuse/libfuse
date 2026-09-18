@@ -8,6 +8,7 @@ FS_NAME=passthrough
 FS_ARGS="-f --plus -o entry_timeout=0,negative_timeout=0,attr_timeout=0,ac_attr_timeout=0"
 INODE_CHECK=exact
 PT_MIRROR=1
+PT_HIGHLEVEL=1
 PT_SRC_VISIBLE=1
 
 . "$TEST_LIB/passthrough.sh"

@@ -13,7 +13,6 @@ verbs live in cases/lib/common.sh.
 """
 
 import argparse
-import ctypes
 import fnmatch
 import os
 import platform
@@ -38,6 +37,11 @@ CASES_DIR = TEST_DIR / 'cases'
 # What the cases source, beside them rather than above them; discovery skips it.
 LIB_DIR = CASES_DIR / 'lib'
 EXCLUDE_FILE = TEST_DIR / 'exclude'
+
+# test/lib is not on sys.path; test/cases/lib is the shell library, not this.
+sys.path.insert(0, str(TEST_DIR / 'lib'))
+from checks import (IS_LINUX, io_uring_setup_error, preflight_io_uring,
+                    read_fuse_caps, read_sync_init)
 
 DEFAULT_TIMEOUT = 60.0          # seconds; per-script "# TIMEOUT:" overrides
 SKIP_EXIT_CODE = 77             # automake convention
@@ -82,8 +86,6 @@ SERIAL_GROUP = 'serial'
 _CONFIG_SECTION = 'tests'
 _CONFIG_BASE_DIR_KEY = 'base_dir'
 
-IS_LINUX = platform.system() == 'Linux'
-
 # FreeBSD's default kern.corefile is "%N.core"; CI sets "core.%N.%P" to get the
 # shape Linux's "core.%e.%p" produces. Glob those plus the bare "core" and
 # "core.%p" a stock Linux box writes, so an unconfigured developer machine
@@ -100,21 +102,10 @@ SUSPICIOUS_WORDS = ('exception', 'error', 'warning', 'fatal', 'traceback',
 # io-uring run that nobody checks passes green while testing the transport it
 # was meant to replace.
 IO_URING_FALLBACK = 'failed to start io-uring'
-IO_URING_CAP = 'FUSE_CAP_OVER_IO_URING'
-# Every session states its transport on its own stderr, which is a log the
-# suite keeps either way. off:custom_io is the only refusal a daemon cannot
-# help: no /dev/fuse fd of its own, so no ring to issue against.
+# off:not_offered is left out: that one is the kernel refusing the transport
+# the run exists to exercise.
 IO_URING_STATE_KEY = 'FUSE_INIT: io_uring='
-IO_URING_STATES_OK = ('FUSE_INIT: io_uring=on',
-                      'FUSE_INIT: io_uring=off:custom_io')
-# What -Dsync-init=always/never leave in fuse_config.h; auto writes neither.
-SYNC_INIT_ENABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_ENABLED'
-SYNC_INIT_DISABLED = '#define FUSE_SYNC_INIT_DEFAULT FUSE_SYNC_INIT_DISABLED'
-FUSE_URING_PARAM = Path('/sys/module/fuse/parameters/enable_uring')
-# glibc has no io_uring_setup() wrapper, so this goes through syscall(2), the
-# way liburing does it. 425 on every architecture but alpha.
-IO_URING_SETUP = 425
-IO_URING_PARAMS_SIZE = 120      # sizeof(struct io_uring_params)
+IO_URING_STATES_OK = ('on', 'off:custom_io', 'off:not_wanted')
 
 # FUSE debug messages "unique: X, error: -Y (...), outsize: Z" contain the word
 # "error" but only report a request's return code.
@@ -223,21 +214,6 @@ def read_core_pattern() -> str:
     proc = subprocess.run(['sysctl', '-n', 'kern.corefile'],
                           capture_output=True, text=True, check=False)
     return proc.stdout.strip()
-
-
-def io_uring_setup_error() -> str:
-    """The errno text when io_uring_setup() is refused, else "".
-
-    Asked as the user the daemons will run as, so it answers for them.
-    """
-    libc = ctypes.CDLL(None, use_errno=True)
-    libc.syscall.restype = ctypes.c_long
-    ring = libc.syscall(IO_URING_SETUP, 1,
-                        ctypes.create_string_buffer(IO_URING_PARAMS_SIZE))
-    if ring < 0:
-        return os.strerror(ctypes.get_errno())
-    os.close(ring)
-    return ''
 
 
 def raise_nofile_limit() -> None:
@@ -388,14 +364,21 @@ REEXEC_SENTINEL = 'FUSE_TESTS_UNDER_SCOPE'   # set on the re-exec'd child
 
 def reexec_under_user_scope_if_needed() -> None:
     """Re-exec under a systemd user scope so cgroup leaves have a writable
-    parent. Returns unchanged when already delegated or when systemd-run is
-    unavailable; replaces this process otherwise."""
+    parent. Returns unchanged when already delegated, when systemd-run is
+    unavailable and when it has no user bus to reach; replaces this process
+    otherwise."""
     if not IS_LINUX or os.environ.get(REEXEC_SENTINEL):
         return
     if CgroupManager.delegated_base() is not None:
         return
     systemd_run = shutil.which('systemd-run')
     if systemd_run is None:
+        return
+    # Without a user bus systemd-run exits non-zero, and by then the execv
+    # below has replaced this process: the run would end before a test starts.
+    runtime_dir = os.environ.get('XDG_RUNTIME_DIR')
+    if not os.environ.get('DBUS_SESSION_BUS_ADDRESS') and not (
+            runtime_dir and Path(runtime_dir, 'bus').exists()):
         return
     os.environ[REEXEC_SENTINEL] = '1'
     argv = [systemd_run, '--user', '--scope', '--quiet',
@@ -592,263 +575,21 @@ def discover(cases_dir: Path, patterns: list, groups: set,
     return specs
 
 
-class TestRunner:
-    """Runs TestSpecs, one worker thread each, and reports."""
+class StackDumper:
+    """Writes ps.txt, kstack.<pid>.txt and gdbstack.<pid>.txt for a set of
+    pids into a logs directory.
 
-    def __init__(self, build_dir: Path, run_dir: Path, run_dir_created: bool,
-                 jobs: int, keep_logs: bool, verbose: bool,
-                 io_uring: bool = False, io_uring_depth: int | None = None):
-        self.build_dir = build_dir
-        self.run_dir = run_dir
-        self.run_dir_created = run_dir_created
-        self.jobs = jobs
-        self.keep_logs = keep_logs
-        self.verbose = verbose
-        self.io_uring = io_uring
-        self.io_uring_depth = io_uring_depth
-        self.valgrind = resolve_valgrind()
-        self.core_pattern = read_core_pattern()
-        self.fuse_caps = self.read_fuse_caps()
-        self.sync_init = self.read_sync_init()
-        self._cgroup = CgroupManager.create(str(os.getpid()))
-        self._stop = threading.Event()
-        self._print_lock = threading.Lock()
-        self._gdb = shutil.which('gdb')
-        # Overwritten per run_all() call; set here so run_one() always has a
-        # reference even if it is ever driven without run_all().
-        self._run_started = time.monotonic()
-        self.report_environment()
+    Shared by the runner's own timeout and --dump-stacks, which a script calls
+    when it decides a daemon hangs before the runner's timeout would.
+    """
 
-    # ---------------------------------------------------------------- startup
+    def __init__(self, gdb: str | None):
+        self.gdb = gdb
 
-    def build_path(self, base: str | None = None) -> str:
-        """$PATH with the build tree's util/ and example/ ahead of *base*.
-
-        util/ first for anything that spawns the mount helper by name: an
-        installed one older than the build tree makes printcap emit
-        "unrecognized option '--sync-init'", and a tree whose helper is not
-        installed system-wide at all would find no helper whatsoever.
-        """
-        if base is None:
-            base = os.environ.get('PATH', '')
-        return os.pathsep.join([str(self.build_dir / 'util'),
-                                str(self.build_dir / 'example'), base])
-
-    def read_fuse_caps(self) -> frozenset:
-        """The FUSE_CAP_* names printcap reports, read once per run.
-
-        printcap lives in example/, not util/, so this works the same way on
-        every platform. It mounts to negotiate, so it needs the same $PATH a
-        test gets rather than the ambient one -- otherwise it reaches for a
-        mount helper that this build may not have installed anywhere, and
-        every _require_cap test silently skips.
-        """
-        printcap = self.build_dir / 'example' / 'printcap'
-        if not os.access(printcap, os.X_OK):
-            print(f'note: {printcap} not built; no capability is available '
-                  'and every _require_cap test will skip')
-            return frozenset()
-        proc = subprocess.run([str(printcap)], capture_output=True, text=True,
-                              timeout=30, check=False,
-                              env=dict(os.environ, PATH=self.build_path()))
-        if proc.returncode != 0:
-            print(f'note: printcap failed ({proc.returncode}); '
-                  'every _require_cap test will skip')
-            return frozenset()
-        return frozenset(line.strip() for line in proc.stdout.splitlines()
-                         if line.startswith('\t'))
-
-    def read_sync_init(self) -> str:
-        """Which -Dsync-init the library was built with: auto, always, never.
-
-        A property of the build, not of the run, so it is read where the
-        io-uring preflight reads HAVE_URING rather than selected on the
-        command line.
-        """
-        try:
-            config = (self.build_dir / 'fuse_config.h').read_text()
-        except OSError:
-            return 'unknown'
-        for define, mode in ((SYNC_INIT_ENABLED, 'always'),
-                             (SYNC_INIT_DISABLED, 'never')):
-            if define in config:
-                return mode
-        return 'auto'
-
-    def preflight_io_uring(self) -> str:
-        """Return "" when the io-uring transport can actually be exercised,
-        else the reason the whole invocation skips with exit 77.
-
-        Checked in this order, so the message names the first thing that is
-        actually wrong.
-        """
-        if not IS_LINUX:
-            return f'fuse-io-uring is Linux-only, this is {platform.system()}'
-        try:
-            config = (self.build_dir / 'fuse_config.h').read_text()
-        except OSError:
-            return f'{self.build_dir}/fuse_config.h is unreadable'
-        if 'HAVE_URING' not in config:
-            return 'the library was built with -Denable-io-uring=false'
-        if IO_URING_CAP in self.fuse_caps:
-            return ''
-        # printcap reports capable_ext, so the capability's absence *is* the
-        # kernel's answer. The module parameter only tells the two reasons
-        # apart.
-        try:
-            enabled = FUSE_URING_PARAM.read_text().strip()
-        except OSError:
-            return 'this kernel has no fuse io-uring support'
-        if enabled in ('N', '0'):
-            return ('io-uring is disabled in the fuse module\n'
-                    f'      echo Y | sudo tee {FUSE_URING_PARAM}')
-        return f'the kernel did not offer {IO_URING_CAP}'
-
-    def report_environment(self) -> None:
-        """Say what will silently degrade before any test runs."""
-        if self.core_pattern.startswith('|'):
-            print('note: core_pattern is piped to systemd-coredump; cores '
-                  'will be fetched via coredumpctl. For in-workdir cores run:')
-            print('      sudo sysctl -w kernel.core_pattern=core.%e.%p')
-        if self._gdb is None:
-            print('note: gdb not found; cores will be kept but not backtraced')
-
-    # ------------------------------------------------------------ preparation
-
-    def prepare(self, spec: TestSpec):
-        """Create the workdir tree, build the env dict, allocate the cgroup
-        leaf. Returns (workdir, env, leaf)."""
-        workdir = self.run_dir / spec.name
-        logs = workdir / 'logs'
-        for sub in ('mnt', 'src', 'tmp', 'logs'):
-            (workdir / sub).mkdir(parents=True, exist_ok=True)
-
-        util_dir = self.build_dir / 'util'
-        example_dir = self.build_dir / 'example'
-        env = dict(os.environ)
-        env.update({
-            'TEST_NAME': spec.name,
-            'TEST_SCRIPT': str(spec.script),
-            'TEST_DIR': str(TEST_DIR),
-            'TEST_LIB': str(LIB_DIR),
-            'TEST_WORKDIR': str(workdir),
-            'TEST_MNT': str(workdir / 'mnt'),
-            'TEST_SRC': str(workdir / 'src'),
-            'TEST_TMP': str(workdir / 'tmp'),
-            'TEST_LOGDIR': str(logs),
-            'BUILD_DIR': str(self.build_dir),
-            'FUSE_EXAMPLE_DIR': str(example_dir),
-            'FUSE_TEST_BIN_DIR': str(self.build_dir / 'test'),
-            'FUSE_UTIL_DIR': str(util_dir),
-            'FUSE_CAPS': ' '.join(sorted(self.fuse_caps)),
-            'FUSE_UID': str(os.geteuid()),
-            'FUSE_OS': platform.system(),
-            # Exported as 0 rather than left unset: fuse_session_new() reads it
-            # from the environment, so a value in the developer's shell would
-            # otherwise change what the default run tests without saying so.
-            'FUSE_URING_ENABLE': '1' if self.io_uring else '0',
-            # Asked of every session, not only the ones a mount verb started,
-            # so the transport a test never launched through the shell -- a
-            # self-mounting C test, a daemon the script backgrounded itself --
-            # is on the record too. It lands in that daemon's log, because
-            # none of them redirects fuse_log() anywhere else.
-            'FUSE_INIT_STATUS': '1',
-            'FUSE_VALGRIND': self.valgrind,
-        })
-        if self.io_uring_depth is not None:
-            env['FUSE_URING_QUEUE_DEPTH'] = str(self.io_uring_depth)
-        env['PATH'] = self.build_path(env.get('PATH', ''))
-        return workdir, env, self._cgroup.new_leaf()
-
-    def child_argv(self, spec: TestSpec) -> list:
-        """The command the launcher execs for *spec*.
-
-        bash -e for a script: errexit is the runner's rule, not something 88
-        files have to remember. A marker names a binary, which the launcher
-        execs itself; there is no shell in between to impose errexit on, and
-        none is wanted -- the binary's exit status is already the verdict.
-        """
-        if spec.binary:
-            return [str(self.build_dir / 'test' / spec.binary)]
-        return ['bash', '-e', str(spec.script)]
-
-    def write_repro(self, spec: TestSpec, workdir: Path, env: dict) -> None:
-        """Write logs/repro.sh: the env deltas, the cd, and the command.
-
-        It execs what the launcher execs, so the reproducer cannot pass where
-        the run failed.
-        """
-        import shlex
-
-        lines = ['#!/bin/sh',
-                 '# Re-run this one test by hand, with the environment the',
-                 '# runner built for it.',
-                 '']
-        for key, value in sorted(env.items()):
-            if os.environ.get(key) == value and key != 'PATH':
-                continue
-            lines.append(f'export {key}={shlex.quote(value)}')
-        lines += ['',
-                  f'cd {shlex.quote(str(workdir / "logs"))}',
-                  'exec ' + shlex.join(self.child_argv(spec)),
-                  '']
-        repro = workdir / 'logs' / 'repro.sh'
-        repro.write_text('\n'.join(lines))
-        repro.chmod(0o755)
-
-    # -------------------------------------------------------------- execution
-
-    def _stream(self, proc: subprocess.Popen, logs: Path, name: str,
-                started: float) -> None:
-        """Copy the script's merged output to logs/script.out until EOF, and
-        a copy prefixed with elapsed time to logs/timestamps.out.
-
-        A timed-out test's script.out has no way to tell "stalled right
-        after the last line" from "was still grinding right up to the
-        kill" -- the CI step that prints it afterwards timestamps when it
-        printed, not when the test produced it. timestamps.out is named to
-        pick up the same "*.out" glob so CI shows it for free.
-        """
-        with (logs / 'script.out').open('wb') as out, \
-                (logs / 'timestamps.out').open('wb') as timestamps:
-            for line in proc.stdout:
-                out.write(line)
-                out.flush()
-                elapsed = time.monotonic() - started
-                timestamps.write(f'+{elapsed:8.3f}s '.encode() + line)
-                timestamps.flush()
-                if self.verbose:
-                    text = line.decode('utf8', errors='replace').rstrip('\n')
-                    with self._print_lock:
-                        print(f'[{name}] {text}')
-        proc.stdout.close()
-
-    def _kill(self, proc: subprocess.Popen, leaf: Path | None) -> None:
-        """Stop a timed-out or interrupted test: cgroup.kill on the leaf when
-        there is one, else killpg() on the session the script leads."""
-        if leaf is not None:
-            try:
-                (leaf / 'cgroup.kill').write_text('1\n')
-                return
-            except OSError:
-                pass
-        for sig in (signal.SIGTERM, signal.SIGKILL):
-            try:
-                os.killpg(proc.pid, sig)
-            except OSError:
-                return
-            try:
-                proc.wait(timeout=5.0)
-                return
-            except subprocess.TimeoutExpired:
-                continue
-
-    def dump_stacks(self, proc: subprocess.Popen, leaf: Path | None,
-                    logs: Path) -> None:
-        """On a timeout, before _kill() tears the containment down, write a
-        snapshot of the whole process table, plus every thread's kernel stack
-        and (when gdb is available) user backtrace for every process still in
-        the containment.
+    def dump(self, pids: list, logs: Path) -> None:
+        """Write a snapshot of the whole process table, plus every thread's
+        kernel stack and (when gdb is available) user backtrace for every
+        pid.
 
         A thread blocked in an uninterruptible syscall never answers
         PTRACE_ATTACH, so the kernel stack is taken first -- it needs no
@@ -857,10 +598,40 @@ class TestRunner:
         thread yet.
         """
         self._dump_process_table(logs)
-        for pid in self._containment_pids(proc, leaf):
+        for pid in pids:
             self._dump_kernel_stacks(pid, logs)
-            if self._gdb is not None:
+            if self.gdb is not None:
                 self._dump_gdb_backtrace(pid, logs)
+
+    @staticmethod
+    def with_descendants(pids: list) -> list:
+        """*pids* plus every process below them, from a single /proc scan.
+
+        The daemon a script started is rarely the pid it holds: mount.fuse3
+        execs a shell that execs the filesystem, which forks to daemonize and
+        forks again for fusermount3.
+        """
+        children = {}
+        for entry in os.listdir('/proc'):
+            if not entry.isdigit():
+                continue
+            try:
+                stat_line = Path(f'/proc/{entry}/stat').read_text()
+            except OSError:
+                continue    # exited between listdir() and here
+            # comm may hold spaces and parentheses; ppid is the field after
+            # the closing one.
+            ppid = int(stat_line.rpartition(')')[2].split()[1])
+            children.setdefault(ppid, []).append(int(entry))
+        found = []
+        queue = list(pids)
+        while queue:
+            pid = queue.pop(0)
+            if pid in found:
+                continue
+            found.append(pid)
+            queue.extend(children.get(pid, []))
+        return found
 
     @staticmethod
     def _dump_process_table(logs: Path) -> None:
@@ -929,20 +700,6 @@ class TestRunner:
         return wedged
 
     @staticmethod
-    def _containment_pids(proc: subprocess.Popen, leaf: Path | None) -> list:
-        """Every pid sharing the test's cgroup leaf, or just proc.pid when
-        cgroups are disabled."""
-        if leaf is not None:
-            try:
-                pids = [int(line) for line in
-                        (leaf / 'cgroup.procs').read_text().split()]
-                if pids:
-                    return pids
-            except OSError:
-                pass
-        return [proc.pid]
-
-    @staticmethod
     def _dump_kernel_stacks(pid: int, logs: Path) -> None:
         """sudo cat /proc/<pid>/task/*/stack for every thread of *pid*.
 
@@ -957,7 +714,7 @@ class TestRunner:
             tids = sorted(int(tid) for tid in os.listdir(task_dir))
         except OSError:
             return
-        lines = [TestRunner._proc_identity(pid)]
+        lines = [StackDumper._proc_identity(pid)]
         for tid in tids:
             stack_path = task_dir / str(tid) / 'stack'
             result = subprocess.run(['sudo', '-n', 'cat', str(stack_path)],
@@ -996,7 +753,7 @@ class TestRunner:
                 f'(skipped: tid {tids} in uninterruptible sleep, so the '
                 f'attach cannot complete -- see kstack.{pid}.txt)\n')
             return
-        argv = ['sudo', '-n', self._gdb, '--batch', '--nx',
+        argv = ['sudo', '-n', self.gdb, '--batch', '--nx',
                 '-ex', 'set pagination off',
                 '-ex', 'thread apply all bt',
                 '-ex', 'set print pretty on',
@@ -1014,6 +771,247 @@ class TestRunner:
                    f'\n(gdb killed after {GDB_TIMEOUT:.0f}s)\n')
         (logs / f'gdbstack.{pid}.txt').write_text(
             f'{self._proc_identity(pid)}\n{out}')
+
+
+def fuse_mounts_under(workdir: Path) -> list:
+    """Every FUSE mountpoint below workdir, deepest first so a nested mount
+    goes before its parent. Linux reads /proc/self/mountinfo; the BSDs have
+    no such file, so `mount -p` (fstab layout) is parsed there."""
+    prefix = str(workdir) + '/'
+    found = []
+    if IS_LINUX:
+        try:
+            lines = Path('/proc/self/mountinfo').read_text().splitlines()
+        except OSError:
+            lines = []
+        for line in lines:
+            fields = line.split()
+            if '-' not in fields:
+                continue
+            fstype = fields[fields.index('-') + 1]
+            mountpoint = fields[4].replace('\\040', ' ')
+            if fstype.startswith('fuse') and mountpoint.startswith(prefix):
+                found.append(mountpoint)
+    else:
+        proc = subprocess.run(['mount', '-p'], capture_output=True, text=True,
+                              check=False)
+        for line in proc.stdout.splitlines():
+            fields = line.split()
+            if len(fields) < 3:
+                continue
+            if fields[2] == 'fusefs' and fields[1].startswith(prefix):
+                found.append(fields[1])
+    found.sort(reverse=True)
+    return found
+
+
+class TestRunner:
+    """Runs TestSpecs, one worker thread each, and reports."""
+
+    def __init__(self, build_dir: Path, run_dir: Path, run_dir_created: bool,
+                 jobs: int, keep_logs: bool, verbose: bool,
+                 print_err: bool = False, log_lines: int = 100,
+                 io_uring: bool = False, io_uring_depth: int | None = None):
+        self.build_dir = build_dir
+        self.run_dir = run_dir
+        self.run_dir_created = run_dir_created
+        self.jobs = jobs
+        self.keep_logs = keep_logs
+        self.verbose = verbose
+        self.print_err = print_err
+        self.log_lines = log_lines
+        self.io_uring = io_uring
+        self.io_uring_depth = io_uring_depth
+        self.valgrind = resolve_valgrind()
+        self.core_pattern = read_core_pattern()
+        self.fuse_caps = read_fuse_caps(build_dir, self.build_path())
+        self.sync_init = read_sync_init(build_dir)
+        self._cgroup = CgroupManager.create(str(os.getpid()))
+        self._stop = threading.Event()
+        self._print_lock = threading.Lock()
+        self._gdb = shutil.which('gdb')
+        self._dumper = StackDumper(self._gdb)
+        # Overwritten per run_all() call; set here so run_one() always has a
+        # reference even if it is ever driven without run_all().
+        self._run_started = time.monotonic()
+        self.report_environment()
+
+    # ---------------------------------------------------------------- startup
+
+    def build_path(self, base: str | None = None) -> str:
+        """$PATH with the build tree's util/ and example/ ahead of *base*.
+
+        util/ first for anything that spawns the mount helper by name: an
+        installed one older than the build tree makes printcap emit
+        "unrecognized option '--sync-init'", and a tree whose helper is not
+        installed system-wide at all would find no helper whatsoever.
+        """
+        if base is None:
+            base = os.environ.get('PATH', '')
+        return os.pathsep.join([str(self.build_dir / 'util'),
+                                str(self.build_dir / 'example'), base])
+
+    def report_environment(self) -> None:
+        """Say what will silently degrade before any test runs."""
+        if self.core_pattern.startswith('|'):
+            print('note: core_pattern is piped to systemd-coredump; cores '
+                  'will be fetched via coredumpctl. For in-workdir cores run:')
+            print('      sudo sysctl -w kernel.core_pattern=core.%e.%p')
+        if self._gdb is None:
+            print('note: gdb not found; cores will be kept but not backtraced')
+
+    # ------------------------------------------------------------ preparation
+
+    def prepare(self, spec: TestSpec):
+        """Create the workdir tree, build the env dict, allocate the cgroup
+        leaf. Returns (workdir, env, leaf)."""
+        workdir = self.run_dir / spec.name
+        logs = workdir / 'logs'
+        for sub in ('mnt', 'src', 'tmp', 'logs'):
+            (workdir / sub).mkdir(parents=True, exist_ok=True)
+
+        util_dir = self.build_dir / 'util'
+        example_dir = self.build_dir / 'example'
+        env = dict(os.environ)
+        env.update({
+            'TEST_NAME': spec.name,
+            'TEST_SCRIPT': str(spec.script),
+            'TEST_DIR': str(TEST_DIR),
+            'TEST_LIB': str(LIB_DIR),
+            'TEST_WORKDIR': str(workdir),
+            'TEST_MNT': str(workdir / 'mnt'),
+            'TEST_SRC': str(workdir / 'src'),
+            'TEST_TMP': str(workdir / 'tmp'),
+            'TEST_LOGDIR': str(logs),
+            'BUILD_DIR': str(self.build_dir),
+            'FUSE_EXAMPLE_DIR': str(example_dir),
+            'FUSE_TEST_BIN_DIR': str(self.build_dir / 'test'),
+            'FUSE_UTIL_DIR': str(util_dir),
+            'FUSE_CAPS': ' '.join(sorted(self.fuse_caps)),
+            'FUSE_UID': str(os.geteuid()),
+            'FUSE_OS': platform.system(),
+            # Exported as 0 rather than left unset: fuse_session_new() reads it
+            # from the environment, so a value in the developer's shell would
+            # otherwise change what the default run tests without saying so.
+            'FUSE_URING_ENABLE': '1' if self.io_uring else '0',
+            # Asked of every session, not only the ones a mount verb started,
+            # so the transport a test never launched through the shell -- a
+            # self-mounting C test, a daemon the script backgrounded itself --
+            # is on the record too. It lands in that daemon's log, because
+            # none of them redirects fuse_log() anywhere else.
+            'FUSE_INIT_STATUS': '1',
+            # Handed over so the shell does not carry a second copy.
+            'FUSE_IO_URING_STATES_OK': ' '.join(IO_URING_STATES_OK),
+            'FUSE_VALGRIND': self.valgrind,
+        })
+        if self.io_uring_depth is not None:
+            env['FUSE_URING_QUEUE_DEPTH'] = str(self.io_uring_depth)
+        env['PATH'] = self.build_path(env.get('PATH', ''))
+        return workdir, env, self._cgroup.new_leaf()
+
+    def child_argv(self, spec: TestSpec) -> list:
+        """The command the launcher execs for *spec*.
+
+        bash -e for a script: errexit is the runner's rule, not something 88
+        files have to remember. A marker names a binary, which the launcher
+        execs itself; there is no shell in between to impose errexit on, and
+        none is wanted -- the binary's exit status is already the verdict.
+        """
+        if spec.binary:
+            return [str(self.build_dir / 'test' / spec.binary)]
+        return ['bash', '-e', str(spec.script)]
+
+    def write_repro(self, spec: TestSpec, workdir: Path, env: dict) -> None:
+        """Write logs/repro.sh: the env deltas, the cd, and the command.
+
+        It execs what the launcher execs, so the reproducer cannot pass where
+        the run failed.
+        """
+        import shlex
+
+        lines = ['#!/bin/sh',
+                 '# Re-run this one test by hand, with the environment the',
+                 '# runner built for it.',
+                 '']
+        for key, value in sorted(env.items()):
+            if os.environ.get(key) == value and key != 'PATH':
+                continue
+            lines.append(f'export {key}={shlex.quote(value)}')
+        lines += ['',
+                  f'cd {shlex.quote(str(workdir / "logs"))}',
+                  'exec ' + shlex.join(self.child_argv(spec)),
+                  '']
+        repro = workdir / 'logs' / 'repro.sh'
+        repro.write_text('\n'.join(lines))
+        repro.chmod(0o755)
+
+    # -------------------------------------------------------------- execution
+
+    def _stream(self, proc: subprocess.Popen, logs: Path, name: str,
+                started: float) -> None:
+        """Copy the script's merged output to logs/script.out until EOF, and
+        a copy prefixed with elapsed time to logs/timestamps.out.
+
+        A timed-out test's script.out has no way to tell "stalled right
+        after the last line" from "was still grinding right up to the
+        kill" -- --print-err dumps it afterwards, and the CI log timestamps
+        when it printed, not when the test produced it. timestamps.out is
+        named to pick up the same "*.out" glob so --print-err shows it for
+        free.
+        """
+        with (logs / 'script.out').open('wb') as out, \
+                (logs / 'timestamps.out').open('wb') as timestamps:
+            for line in proc.stdout:
+                out.write(line)
+                out.flush()
+                elapsed = time.monotonic() - started
+                timestamps.write(f'+{elapsed:8.3f}s '.encode() + line)
+                timestamps.flush()
+                if self.verbose:
+                    text = line.decode('utf8', errors='replace').rstrip('\n')
+                    with self._print_lock:
+                        print(f'[{name}] {text}')
+        proc.stdout.close()
+
+    def _kill(self, proc: subprocess.Popen, leaf: Path | None) -> None:
+        """Stop a timed-out or interrupted test: cgroup.kill on the leaf when
+        there is one, else killpg() on the session the script leads."""
+        if leaf is not None:
+            try:
+                (leaf / 'cgroup.kill').write_text('1\n')
+                return
+            except OSError:
+                pass
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            try:
+                os.killpg(proc.pid, sig)
+            except OSError:
+                return
+            try:
+                proc.wait(timeout=5.0)
+                return
+            except subprocess.TimeoutExpired:
+                continue
+
+    def dump_stacks(self, proc: subprocess.Popen, leaf: Path | None,
+                    logs: Path) -> None:
+        """On a timeout, before _kill() tears the containment down, dump
+        every process still in the containment."""
+        self._dumper.dump(self._containment_pids(proc, leaf), logs)
+
+    @staticmethod
+    def _containment_pids(proc: subprocess.Popen, leaf: Path | None) -> list:
+        """Every pid sharing the test's cgroup leaf, or proc.pid and its
+        descendants when cgroups are disabled."""
+        if leaf is not None:
+            try:
+                pids = [int(line) for line in
+                        (leaf / 'cgroup.procs').read_text().split()]
+                if pids:
+                    return pids
+            except OSError:
+                pass
+        return StackDumper.with_descendants([proc.pid])
 
     def _log_started(self, name: str) -> None:
         """A "test X is now running" line, timestamped against the whole
@@ -1070,6 +1068,7 @@ class TestRunner:
         # Always reap the subtree: a passing script may still have leaked a
         # daemon, and that would wedge the next test on the same mountpoint.
         self._cgroup.kill_leaf(leaf)
+        self.unmount_leftovers(workdir)
 
         duration = time.monotonic() - started
         cores = self.collect_cores(workdir, leaf)
@@ -1080,6 +1079,26 @@ class TestRunner:
             f'{result.status} {result.duration:.3f} {result.reason}\n'.rstrip()
             + '\n')
         return result
+
+    def unmount_leftovers(self, workdir: Path) -> None:
+        """Drop every mount the test left behind; its daemon is dead by now,
+        so the mountpoint is a dead transport that fails any directory walk
+        over the run directory."""
+        if IS_LINUX and os.geteuid() != 0:
+            umount = ['fusermount3', '-u', '-z']
+        elif IS_LINUX:
+            umount = ['umount', '-f', '-l']
+        else:
+            umount = ['umount', '-f']
+        env = dict(os.environ)
+        env['PATH'] = self.build_path(env.get('PATH', ''))
+        for mountpoint in fuse_mounts_under(workdir):
+            proc = subprocess.run(umount + [mountpoint], capture_output=True,
+                                  text=True, check=False, env=env)
+            outcome = 'unmounted' if proc.returncode == 0 else \
+                f'umount failed: {proc.stderr.strip()}'
+            with (workdir / 'logs' / 'stale-mounts.txt').open('a') as log:
+                log.write(f'{mountpoint}: {outcome}\n')
 
     def effective_timeout(self, spec: TestSpec) -> float:
         """The wall-clock bound actually enforced for *spec*."""
@@ -1150,7 +1169,8 @@ class TestRunner:
                 continue
             for line in text.splitlines():
                 if (line.startswith(IO_URING_STATE_KEY)
-                        and line not in IO_URING_STATES_OK):
+                        and line[len(IO_URING_STATE_KEY):]
+                        not in IO_URING_STATES_OK):
                     return f'{out.name}: {line}'
         return ''
 
@@ -1485,6 +1505,11 @@ class TestRunner:
                     elif core.backtrace is None:
                         print(f'    core kept, not backtraced: {core.path}')
                 print(f'    repro: sh {result.workdir / "logs" / "repro.sh"}')
+            if self.print_err:
+                sys.stdout.flush()
+                for result in failed:
+                    dump_logs(result.name, result.workdir / 'logs',
+                              self.log_lines)
 
         if not failed and not self.keep_logs:
             self.discard_run_dir(results)
@@ -1503,6 +1528,49 @@ class TestRunner:
 
     def cleanup(self) -> None:
         self._cgroup.cleanup()
+
+
+def dump_logs(label: str, logs: Path, log_lines: int) -> None:
+    """Write one test's logs/ to stderr, for a CI log where the run directory
+    is out of reach.
+
+    The .txt files are the stack dumps and the process table -- the whole
+    report on a timeout, and a tail of a backtrace keeps its least useful
+    end -- so they go out whole; the rest is tailed.
+    """
+    tailed = sorted(logs.glob('*.sh')) + sorted(logs.glob('*.out'))
+    whole = sorted(logs.glob('*.txt'))
+    sys.stderr.write(f'===== logs for FAIL {label} =====\n')
+    for path in tailed + whole:
+        sys.stderr.write(f'----- {path.name} -----\n')
+        try:
+            text = path.read_text(errors='replace')
+        except OSError as exc:
+            sys.stderr.write(f'(could not read: {exc})\n')
+            continue
+        if path in whole:
+            sys.stderr.write(text)
+        else:
+            lines = text.splitlines(keepends=True)
+            sys.stderr.write(''.join(lines[-log_lines:]))
+        if text and not text.endswith('\n'):
+            sys.stderr.write('\n')
+    sys.stderr.write(f'===== end logs for {label} =====\n\n')
+    sys.stderr.flush()
+
+
+def print_logged_errors(run_dir: Path, log_lines: int) -> None:
+    """Dump the logs of every failed test left under a finished run.
+
+    A test directory that still exists is a failure: the runner deletes the
+    passing ones as they land. run_dir is the CI work directory's run/, so a
+    test's logs/ sits at <config>/<category>/<leaf>/logs.
+    """
+    found = sorted(run_dir.glob('*/*/*/logs'))
+    if not found:
+        print(f'no failed test logs found under {run_dir}')
+    for logs in found:
+        dump_logs(str(logs.parent.relative_to(run_dir)), logs, log_lines)
 
 
 def read_exclude_file() -> set:
@@ -1561,10 +1629,26 @@ def parse_args(argv: list) -> argparse.Namespace:
                         help='print the selected tests and exit')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="stream each script's output live")
+    parser.add_argument('--print-err', action='store_true',
+                        help="dump every failed test's logs to stderr after "
+                             'the summary, for CI where the run directory is '
+                             'not at hand')
+    parser.add_argument('--print-logged-errors', default=None, metavar='DIR',
+                        help='dump the logs of the failed tests left under '
+                             "a finished run's DIR and exit; no tests are run")
+    parser.add_argument('--log-lines', type=int, default=100, metavar='N',
+                        help='how many lines of each log --print-err and '
+                             '--print-logged-errors show; stack dumps are '
+                             'always printed whole')
     parser.add_argument('--keep-logs', action='store_true',
                         help="keep every test's output, not just the failures'")
     parser.add_argument('--repeat', type=int, default=1, metavar='N',
                         help='run the selection N times')
+    parser.add_argument('--dump-stacks', type=int, nargs='+', default=[],
+                        metavar='PID',
+                        help='write ps.txt, kstack.*.txt and gdbstack.*.txt '
+                             'for PID and its descendants into the current '
+                             'directory and exit')
     return parser.parse_args(argv)
 
 
@@ -1576,6 +1660,13 @@ def main(argv: list) -> int:
         return 0
     if args.print_base_dir:
         print(resolve_base_dir())
+        return 0
+    if args.dump_stacks:
+        StackDumper(shutil.which('gdb')).dump(
+            StackDumper.with_descendants(args.dump_stacks), Path.cwd())
+        return 0
+    if args.print_logged_errors:
+        print_logged_errors(Path(args.print_logged_errors), args.log_lines)
         return 0
 
     build_dir = Path(args.build_dir).resolve()
@@ -1596,6 +1687,7 @@ def main(argv: list) -> int:
     runner = TestRunner(build_dir=build_dir, run_dir=run_dir,
                         run_dir_created=make_run_dir(run_dir), jobs=args.jobs,
                         keep_logs=args.keep_logs, verbose=args.verbose,
+                        print_err=args.print_err, log_lines=args.log_lines,
                         io_uring=args.io_uring,
                         io_uring_depth=args.io_uring_queue_depth)
     if args.io_uring:
@@ -1603,7 +1695,7 @@ def main(argv: list) -> int:
         # failing it, so a plain `meson test` on a machine that never enabled
         # the module parameter reports one SKIP instead of 88 failures. CI does
         # not rely on that: ci-build.sh enables the parameter itself.
-        reason = runner.preflight_io_uring()
+        reason = preflight_io_uring(runner.build_dir, runner.fuse_caps)
         if reason:
             print(f'SKIP: {reason}')
             runner.cleanup()

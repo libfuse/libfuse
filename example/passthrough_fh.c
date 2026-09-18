@@ -158,13 +158,16 @@ static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
 	(void) path;
 	if (offset != d->offset) {
+		if (offset == 0)
+			rewinddir(d->dp);
+		else {
 #ifndef __FreeBSD__
-		seekdir(d->dp, offset);
+			seekdir(d->dp, offset);
 #else
-		/* Subtract the one that we add when calling
-		   telldir() below */
-		seekdir(d->dp, offset-1);
+			/* Subtract the one that we add when calling telldir() below */
+			seekdir(d->dp, offset-1);
 #endif
+		}
 		d->entry = NULL;
 		d->offset = offset;
 	}
@@ -224,10 +227,7 @@ static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	int res;
 
-	if (S_ISFIFO(mode))
-		res = mkfifo(path, mode);
-	else
-		res = mknod(path, mode, rdev);
+	res = mknod_wrapper(AT_FDCWD, path, NULL, mode, rdev);
 	if (res == -1)
 		return -errno;
 
@@ -383,6 +383,14 @@ static int xmp_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 static int xmp_open(const char *path, struct fuse_file_info *fi)
 {
 	int fd;
+
+#ifdef __FreeBSD__
+	/* During buffered write, the kernel may issue a READ request. */
+	if (!(fi->flags & O_DIRECT) && (fi->flags & O_ACCMODE) == O_WRONLY) {
+		fi->flags &= ~O_ACCMODE;
+		fi->flags |= O_RDWR;
+	}
+#endif
 
 	fd = open(path, fi->flags);
 	if (fd == -1)

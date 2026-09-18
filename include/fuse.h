@@ -927,7 +927,7 @@ static inline int fuse_main_real(int argc, char *argv[],
 	struct libfuse_version version = { .major = FUSE_MAJOR_VERSION,
 					   .minor = FUSE_MINOR_VERSION,
 					   .hotfix = FUSE_HOTFIX_VERSION,
-					   .padding = 0 };
+					   .api_version = FUSE_USE_VERSION };
 
 	fuse_log(FUSE_LOG_ERR,
 		 "%s is a libfuse internal function, please use fuse_main()\n",
@@ -999,7 +999,7 @@ static inline int fuse_main_fn(int argc, char *argv[],
 		.major  = FUSE_MAJOR_VERSION,
 		.minor  = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return fuse_main_real_versioned(argc, argv, op, sizeof(*(op)), &version,
@@ -1031,7 +1031,7 @@ static inline int fuse_service_main_fn(struct fuse_service *service,
 		.major  = FUSE_MAJOR_VERSION,
 		.minor  = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = FUSE_USE_VERSION,
+		.api_version = FUSE_USE_VERSION,
 	};
 
 	return fuse_service_main_real_versioned(service, args, op,
@@ -1103,7 +1103,7 @@ static inline struct fuse *fuse_new_fn(struct fuse_args *args,
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return _fuse_new_30(args, op, op_size, &version, user_data);
@@ -1117,7 +1117,7 @@ static inline struct fuse *fuse_new_fn(struct fuse_args *args,
 		.major = FUSE_MAJOR_VERSION,
 		.minor = FUSE_MINOR_VERSION,
 		.hotfix = FUSE_HOTFIX_VERSION,
-		.padding = 0
+		.api_version = FUSE_USE_VERSION
 	};
 
 	return _fuse_new_31(args, op, op_size, &version, user_data);
@@ -1164,12 +1164,23 @@ void fuse_destroy(struct fuse *f);
  * event loop exits, refer to the documentation of
  * fuse_session_loop().
  *
+ * Which loop is used follows fuse_session_loop(): below FUSE_USE_VERSION 3.19
+ * the caller's thread serves the requests and fuse_session_exit() does not
+ * wake it, from 3.19 on a worker thread serves them one at a time and
+ * fuse_session_exit() returns the loop right away.
+ *
  * @param f the FUSE handle
  * @return see fuse_session_loop()
  *
  * See also: fuse_loop_mt()
  */
-int fuse_loop(struct fuse *f);
+#if FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 19)
+	int fuse_loop_319(struct fuse *f);
+	#define fuse_loop(f) fuse_loop_319(f)
+#else
+	int fuse_loop(struct fuse *f)
+		__attribute__((deprecated("raise FUSE_USE_VERSION to 3.19")));
+#endif
 
 /**
  * Flag session as terminated
@@ -1222,6 +1233,7 @@ int fuse_loop_mt_32(struct fuse *f, struct fuse_loop_config *config);
 #if (defined(LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS))
 int fuse_loop_mt(struct fuse *f, struct fuse_loop_config *config);
 #else
+int fuse_loop_mt_312(struct fuse *f, struct fuse_loop_config *config);
 #define fuse_loop_mt(f, config) fuse_loop_mt_312(f, config)
 #endif /* LIBFUSE_BUILT_WITH_VERSIONED_SYMBOLS */
 #endif

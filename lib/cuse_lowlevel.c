@@ -357,11 +357,11 @@ void cuse_lowlevel_teardown(struct fuse_session *se)
 	fuse_session_destroy(se);
 }
 
-int cuse_lowlevel_main_319(int argc, char *argv[], const struct cuse_info *ci,
-			   const struct cuse_lowlevel_ops *clop,
-			   size_t clop_size,
-			   const struct libfuse_version *version,
-			   void *userdata)
+static int cuse_lowlevel_main_common(
+	int argc, char *argv[], const struct cuse_info *ci,
+	const struct cuse_lowlevel_ops *clop, size_t clop_size,
+	const struct libfuse_version *version, void *userdata,
+	int (*session_loop)(struct fuse_session *se))
 {
 	struct fuse_session *se;
 	int multithreaded;
@@ -378,13 +378,33 @@ int cuse_lowlevel_main_319(int argc, char *argv[], const struct cuse_info *ci,
 		fuse_loop_cfg_destroy(config);
 	}
 	else
-		res = fuse_session_loop(se);
+		res = session_loop(se);
 
 	cuse_lowlevel_teardown(se);
 	if (res == -1)
 		return 1;
 
 	return 0;
+}
+
+int cuse_lowlevel_main_30(int argc, char *argv[], const struct cuse_info *ci,
+			  const struct cuse_lowlevel_ops *clop,
+			  size_t clop_size,
+			  const struct libfuse_version *version,
+			  void *userdata)
+{
+	return cuse_lowlevel_main_common(argc, argv, ci, clop, clop_size,
+					 version, userdata, fuse_session_loop_30);
+}
+
+int cuse_lowlevel_main_319(int argc, char *argv[], const struct cuse_info *ci,
+			   const struct cuse_lowlevel_ops *clop,
+			   size_t clop_size,
+			   const struct libfuse_version *version,
+			   void *userdata)
+{
+	return cuse_lowlevel_main_common(argc, argv, ci, clop, clop_size,
+					 version, userdata, fuse_session_loop_319);
 }
 
 /*
@@ -445,7 +465,7 @@ int cuse_lowlevel_main(int argc, char *argv[], const struct cuse_info *ci,
 {
 	struct libfuse_version version = { 0 };
 
-	return cuse_lowlevel_main_319(argc, argv, ci, clop,
-				      CUSE_LOWLEVEL_OPS_SIZE_30,
-				      &version, userdata);
+	return cuse_lowlevel_main_30(argc, argv, ci, clop,
+				     CUSE_LOWLEVEL_OPS_SIZE_30,
+				     &version, userdata);
 }

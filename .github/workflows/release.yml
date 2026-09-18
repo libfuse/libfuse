@@ -1,0 +1,27 @@
+---
+name: 'Release tarball'
+# Nothing starts this automatically.  release.py has to know the tarball is
+# good before it pushes a tag, and a pushed tag cannot be taken back.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tarball:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies (Ubuntu)
+        run: .github/workflows/install-ubuntu-dependencies.sh --full
+
+      - run: test/ci/prepare-runner.sh ${{ github.workspace }}/fuse-tests
+
+      - name: Pack what the dispatched commit would release, and test it
+        run: scripts/release-tarball.sh "${RUNNER_TEMP}" ${{ github.workspace }}/fuse-tests

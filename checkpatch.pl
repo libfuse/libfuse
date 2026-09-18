@@ -57,8 +57,12 @@ my %ignore_type = ();
 my @ignore = ();
 my $help = 0;
 my $configuration_file = ".checkpatch.conf";
+my $def_configuration_dirs_help = '.:$HOME:.scripts';
+(my $def_configuration_dirs = $def_configuration_dirs_help) =~ s/\$(\w+)/$ENV{$1}/g;
+my $env_config_dir = 'CHECKPATCH_CONFIG_DIR';
 my $max_line_length = 100;
 my $ignore_perl_version = 0;
+my $spdx_cxx_comments = 0;
 my $minimum_perl_version = 5.10.0;
 my $min_conf_desc_length = 4;
 my $spelling_file = "$D/spelling.txt";
@@ -135,6 +139,10 @@ Options:
                              file.  It's your fault if there's no backup or git
   --ignore-perl-version      override checking of perl version.  expect
                              runtime errors.
+  --spdx-cxx-comments        don't force C comments (/* */) for SPDX license
+                             (required by old toolchains), allow also C++
+                             comments (//).
+                             NOTE: it should *not* be used for Linux mainline.
   --codespell                Use the codespell dictionary for spelling/typos
                              (default:$codespellfile)
   --codespellfile            Use this codespell dictionary
@@ -146,6 +154,11 @@ Options:
   -h, --help, --version      display this help and exit
 
 When FILE is - read standard input.
+
+CONFIGURATION FILE
+Default configuration options can be stored in $configuration_file,
+search path: '$def_configuration_dirs_help' or in a directory specified by
+\$$env_config_dir environment variable (fallback to the default search path).
 EOM
 
 	exit($exitcode);
@@ -237,7 +250,7 @@ sub list_types {
 	exit($exitcode);
 }
 
-my $conf = which_conf($configuration_file);
+my $conf = which_conf($configuration_file, $env_config_dir, $def_configuration_dirs);
 if (-f $conf) {
 	my @conf_args;
 	open(my $conffile, '<', "$conf")
@@ -339,6 +352,7 @@ GetOptions(
 	'fix!'		=> \$fix,
 	'fix-inplace!'	=> \$fix_inplace,
 	'ignore-perl-version!' => \$ignore_perl_version,
+	'spdx-cxx-comments!' => \$spdx_cxx_comments,
 	'debug=s'	=> \%debug,
 	'test-only=s'	=> \$tst_only,
 	'codespell!'	=> \$codespell,
@@ -642,6 +656,7 @@ our $signature_tags = qr{(?xi:
 	Reviewed-by:|
 	Reported-by:|
 	Suggested-by:|
+	Assisted-by:|
 	To:|
 	Cc:
 )};
@@ -865,8 +880,6 @@ our %deprecated_apis = (
 	"DEFINE_IDR"				=> "DEFINE_XARRAY",
 	"idr_init"				=> "xa_init",
 	"idr_init_base"				=> "xa_init_flags",
-	"rcu_read_lock_trace"			=> "rcu_read_lock_tasks_trace",
-	"rcu_read_unlock_trace"			=> "rcu_read_unlock_tasks_trace",
 );
 
 #Create a search pattern for all these strings to speed up a loop below
@@ -1531,9 +1544,15 @@ sub which {
 }
 
 sub which_conf {
-	my ($conf) = @_;
+	my ($conf, $env_key, $paths) = @_;
+	my $env_dir = $ENV{$env_key};
 
-	foreach my $path (split(/:/, ".:$ENV{HOME}:.scripts")) {
+	if (defined($env_dir) && $env_dir ne "") {
+		return "$env_dir/$conf" if (-e "$env_dir/$conf");
+		warn "$P: Can't find a readable $conf in '$env_dir', falling back to default search paths\n";
+	}
+
+	foreach my $path (split(/:/, $paths)) {
 		if (-e "$path/$conf") {
 			return "$path/$conf";
 		}
@@ -2929,7 +2948,7 @@ sub process {
 			}
 			$checklicenseline = 1;
 
-			if ($realfile !~ /^MAINTAINERS/) {
+			if ($realfile !~ /^(MAINTAINERS|dev\/null)/) {
 				my $last_binding_patch = $is_binding_patch;
 
 				$is_binding_patch = () = $realfile =~ m@^(?:Documentation/devicetree/|include/dt-bindings/)@;
@@ -3106,6 +3125,16 @@ sub process {
 				}
 			}
 
+			# Assisted-by uses a free-form value (e.g. "LLM"), not an
+			# email address, so skip the email format checks below.
+			if ($sign_off =~ /^Assisted-by:/i) {
+				if ($email =~ /^\s*$/) {
+					WARN("BAD_SIGN_OFF",
+					     "Assisted-by requires a value\n" . $herecurr);
+				}
+				next;
+			}
+
 			my ($email_name, $name_comment, $email_address, $comment) = parse_email($email);
 			my $suggested_email = format_email(($email_name, $name_comment, $email_address, $comment));
 			if ($suggested_email eq "") {
@@ -3224,10 +3253,10 @@ sub process {
 			if ($sign_off =~ /^reported(?:|-and-tested)-by:$/i) {
 				if (!defined $lines[$linenr]) {
 					WARN("BAD_REPORTED_BY_LINK",
-					     "Reported-by: should be immediately followed by Closes: with a URL to the report\n" . $herecurr . "\n");
-				} elsif ($rawlines[$linenr] !~ /^closes:\s*/i) {
+					     "Reported-by: should be immediately followed by Closes: or Link: with a URL to the report\n" . $herecurr . "\n");
+				} elsif ($rawlines[$linenr] !~ /^(closes|link):\s*/i) {
 					WARN("BAD_REPORTED_BY_LINK",
-					     "Reported-by: should be immediately followed by Closes: with a URL to the report\n" . $herecurr . $rawlines[$linenr] . "\n");
+					     "Reported-by: should be immediately followed by Closes: or Link: with a URL to the report\n" . $herecurr . $rawlines[$linenr] . "\n");
 				}
 			}
 		}
@@ -3754,6 +3783,12 @@ sub process {
 			my $vp_file = $dt_path . "vendor-prefixes.yaml";
 
 			foreach my $compat (@compats) {
+				# Skip ID-based PCI and USB compatible patterns.
+				# DT validation will check them properly.
+				next if $compat =~ /^pciclass,/;
+				next if $compat =~ /^pci[a-f0-9]{2,4},/;
+				next if $compat =~ /^usb(if)?[a-f0-9]{1,4},/;
+
 				my $compat2 = $compat;
 				$compat2 =~ s/\,[a-zA-Z0-9]*\-/\,<\.\*>\-/;
 				my $compat3 = $compat;
@@ -3792,26 +3827,33 @@ sub process {
 				$checklicenseline = 2;
 			} elsif ($rawline =~ /^\+/) {
 				my $comment = "";
-				if ($realfile =~ /\.(h|s|S)$/) {
-					$comment = '/*';
-				} elsif ($realfile =~ /\.(c|rs|dts|dtsi)$/) {
+				if ($realfile =~ /\.(c|rs|dts|dtsi)$/) {
 					$comment = '//';
 				} elsif (($checklicenseline == 2) || $realfile =~ /\.(sh|pl|py|awk|tc|yaml)$/) {
 					$comment = '#';
 				} elsif ($realfile =~ /\.rst$/) {
 					$comment = '..';
 				}
+				my $pattern = qr{\Q$comment\E};
+				if ($realfile =~ /\.(h|s|S)$/) {
+					$comment = '/*';
+					$pattern = qr{/\*};
+					if ($spdx_cxx_comments) {
+						$comment = '// or /*';
+						$pattern = qr{//|/\*};
+					}
+				}
 
 # check SPDX comment style for .[chsS] files
 				if ($realfile =~ /\.[chsS]$/ &&
 				    $rawline =~ /SPDX-License-Identifier:/ &&
-				    $rawline !~ m@^\+\s*\Q$comment\E\s*@) {
+				    $rawline !~ m@^\+\s*$pattern\s*@) {
 					WARN("SPDX_LICENSE_TAG",
 					     "Improper SPDX comment style for '$realfile', please use '$comment' instead\n" . $herecurr);
 				}
 
 				if ($comment !~ /^$/ &&
-				    $rawline !~ m@^\+\Q$comment\E SPDX-License-Identifier: @) {
+				    $rawline !~ m@^\+$pattern SPDX-License-Identifier: @) {
 					WARN("SPDX_LICENSE_TAG",
 					     "Missing or malformed SPDX-License-Identifier tag in line $checklicenseline\n" . $herecurr);
 				} elsif ($rawline =~ /(SPDX-License-Identifier: .*)/) {
@@ -3855,6 +3897,14 @@ sub process {
 		    substr($line, @-, @+ - @-) eq "$;" x (@+ - @-)) {
 			WARN("SPDX_LICENSE_TAG",
 			     "Misplaced SPDX-License-Identifier tag - use line $checklicenseline instead\n" . $herecurr);
+		}
+
+# check for disallowed SPDX file tags
+		if ($rawline =~ /\bSPDX-.*:/ &&
+		    $rawline !~ /\bSPDX-License-Identifier:/ &&
+		    $rawline !~ /\bSPDX-FileCopyrightText:/) {
+			WARN("SPDX_LICENSE_TAG",
+			     "Disallowed SPDX tag\n" . $herecurr);
 		}
 
 # line length limit (with some exclusions)
@@ -4106,6 +4156,7 @@ sub process {
 		      $line =~ /^\+[a-z_]*init/ ||
 		      $line =~ /^\+\s*(?:static\s+)?[A-Z_]*ATTR/ ||
 		      $line =~ /^\+\s*DECLARE/ ||
+		      $line =~ /^\+\s*NOKPROBE_SYMBOL/ ||
 		      $line =~ /^\+\s*builtin_[\w_]*driver/ ||
 		      $line =~ /^\+\s*__setup/)) {
 			if (CHK("LINE_SPACING",
@@ -4139,7 +4190,7 @@ sub process {
 			$pl =~ s/\b(?:$Attribute|$Sparse)\b//g;
 			if (($pl =~ /^\+\s+$Declare\s*$Ident\s*[=,;:\[]/ ||
 			# function pointer declarations
-			     $pl =~ /^\+\s+$Declare\s*\(\s*\*\s*$Ident\s*\)\s*[=,;:\[\(]/ ||
+			     $pl =~ /^\+\s+$Declare\s*\(\s*\*\s*$Ident(?:\s*\[\s*(?:$Ident|$Constant)?\s*\])?\s*\)\s*[=,;:\[\(]/ ||
 			# foo bar; where foo is some local typedef or #define
 			     $pl =~ /^\+\s+$Ident(?:\s+|\s*\*\s*)$Ident\s*[=,;\[]/ ||
 			# known declaration macros
@@ -4153,7 +4204,7 @@ sub process {
 			# looks like a declaration
 			    !($sl =~ /^\+\s+$Declare\s*$Ident\s*[=,;:\[]/ ||
 			# function pointer declarations
-			      $sl =~ /^\+\s+$Declare\s*\(\s*\*\s*$Ident\s*\)\s*[=,;:\[\(]/ ||
+			      $sl =~ /^\+\s+$Declare\s*\(\s*\*\s*$Ident(?:\s*\[\s*(?:$Ident|$Constant)?\s*\])?\s*\)\s*[=,;:\[\(]/ ||
 			# foo bar; where foo is some local typedef or #define
 			      $sl =~ /^\+\s+$Ident(?:\s+|\s*\*\s*)$Ident\s*[=,;\[]/ ||
 			# known declaration macros
@@ -7503,10 +7554,10 @@ sub process {
 		}
 
 # check for various structs that are normally const (ops, kgdb, device_tree)
-# and avoid what seem like struct definitions 'struct foo {'
+# and avoid what seem like struct definitions 'struct foo {' or forward declarations 'struct foo;'
 		if (defined($const_structs) &&
 		    $line !~ /\bconst\b/ &&
-		    $line =~ /\bstruct\s+($const_structs)\b(?!\s*\{)/) {
+		    $line =~ /\bstruct\s+($const_structs)\b(?!\s*[\{;])/) {
 			WARN("CONST_STRUCT",
 			     "struct $1 should normally be const\n" . $herecurr);
 		}
@@ -7579,12 +7630,15 @@ sub process {
 
 # Complain about RCU Tasks Trace used outside of BPF (and of course, RCU).
 		our $rcu_trace_funcs = qr{(?x:
+			rcu_read_lock_tasks_trace |
 			rcu_read_lock_trace |
 			rcu_read_lock_trace_held |
 			rcu_read_unlock_trace |
+			rcu_read_unlock_tasks_trace |
 			call_rcu_tasks_trace |
 			synchronize_rcu_tasks_trace |
 			rcu_barrier_tasks_trace |
+			rcu_tasks_trace_expedite_current |
 			rcu_request_urgent_qs_task
 		)};
 		our $rcu_trace_paths = qr{(?x:

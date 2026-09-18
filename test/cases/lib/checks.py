@@ -14,6 +14,7 @@ or the \\040 escapes subtly wrong.
 """
 
 import argparse
+import ctypes
 import errno
 import filecmp
 import os
@@ -61,6 +62,43 @@ name_generator.counter = 0
 def _require(condition, message):
     if not condition:
         raise CheckFailed(message)
+
+
+# capabilities(7); no Python binding exposes either constant.
+_LINUX_CAPABILITY_VERSION_3 = 0x20080522
+_CAP_FSETID = 4
+
+
+class _CapHeader(ctypes.Structure):
+    _fields_ = [('version', ctypes.c_uint32), ('pid', ctypes.c_int)]
+
+
+class _CapData(ctypes.Structure):
+    _fields_ = [('effective', ctypes.c_uint32),
+                ('permitted', ctypes.c_uint32),
+                ('inheritable', ctypes.c_uint32)]
+
+
+def drop_cap_fsetid():
+    """Clear CAP_FSETID from this process's effective set.
+
+    A caller holding it is exempt from suid/sgid stripping, so a check that
+    wants to see the bits go would otherwise be asserting that nothing
+    happens. Each check is its own process, so losing the capability for the
+    rest of it costs nothing. Unprivileged callers do not hold it and take the
+    early return.
+    """
+    libc = ctypes.CDLL(None, use_errno=True)
+    header = _CapHeader(_LINUX_CAPABILITY_VERSION_3, 0)
+    # Version 3 spans 64 capabilities, so capget writes two data words.
+    data = (_CapData * 2)()
+    if libc.capget(ctypes.byref(header), ctypes.byref(data)) != 0:
+        raise OSError(ctypes.get_errno(), 'capget failed')
+    if not data[0].effective & (1 << _CAP_FSETID):
+        return
+    data[0].effective &= ~(1 << _CAP_FSETID)
+    if libc.capset(ctypes.byref(header), ctypes.byref(data)) != 0:
+        raise OSError(ctypes.get_errno(), 'capset failed')
 
 
 def readdir_inode(path):
@@ -114,6 +152,61 @@ def expect_enoent(path):
 
 
 # ----------------------------------------------------------- POSIX operations
+
+def cmd_suidgid_dropped(mnt_dir, src_dir):
+    """A write or fallocate without CAP_FSETID has to clear setuid and setgid.
+
+    Checked on the backing file, not through the mount: with attribute caching
+    on, the mount is allowed a stale view of the mode.
+
+    The capability goes after the chmod, so this runs the same whether or not
+    the suite is root. passthrough mode needs a root daemon, CAP_SYS_ADMIN
+    being required to open a backing file, so the two cannot be separated by
+    running the whole case unprivileged.
+
+    Only a root daemon discriminates, for either operation: an unprivileged one
+    has no CAP_FSETID either, so the backing filesystem clears the bits on its
+    own and the check passes whatever the filesystem under test does.
+    """
+    name = name_generator()
+    mnt_path = pjoin(mnt_dir, name)
+    src_path = pjoin(src_dir, name)
+
+    with open(mnt_path, 'wb') as fh:
+        fh.write(b'hello')
+
+    # Group execute as well, so the sgid bit is a real sgid and not a
+    # mandatory locking mark, which the kernel leaves alone.
+    mode = stat.S_ISUID | stat.S_ISGID | 0o755
+    os.chmod(mnt_path, mode)
+    _require(stat.S_IMODE(os.stat(src_path).st_mode) == mode,
+             'chmod 0%o did not reach the backing file' % mode)
+
+    drop_cap_fsetid()
+    with open(mnt_path, 'ab') as fh:
+        fh.write(b'more')
+
+    got = stat.S_IMODE(os.stat(src_path).st_mode)
+    _require(got == 0o755,
+             'a write left the backing mode at 0%o, expected 0755' % got)
+
+    # KILLPRIV_V2 has no fallocate flag, so a filesystem acting only on
+    # FUSE_WRITE_KILL_SUIDGID leaves setuid and setgid set here.
+    os.chmod(mnt_path, mode)
+    with open(mnt_path, 'r+b') as fh:
+        try:
+            os.posix_fallocate(fh.fileno(), 0, 8192)
+        except OSError as exc:
+            if exc.errno not in (errno.EOPNOTSUPP, errno.ENOSYS):
+                raise
+            os.unlink(mnt_path)
+            return
+
+    got = stat.S_IMODE(os.stat(src_path).st_mode)
+    _require(got == 0o755,
+             'a fallocate left the backing mode at 0%o, expected 0755' % got)
+    os.unlink(mnt_path)
+
 
 def cmd_unlink(mnt_dir, src_dir=None):
     name = name_generator()
@@ -707,6 +800,48 @@ def cmd_assert_source(mnt_dir, expected):
              % (info['source'], expected))
 
 
+UTAB_PATH = '/run/mount/utab'
+
+# libmount escapes these four, and only these four, as \NNN octal.
+UTAB_ESCAPES = {' ': r'\040', '\t': r'\011', '\n': r'\012', '\\': r'\134'}
+
+
+def _utab_escape(path):
+    """Spell *path* the way libmount spells it in a TARGET= field."""
+    out = ''
+    for char in path:
+        escaped = UTAB_ESCAPES.get(char)
+        if escaped is not None:
+            out += escaped
+        else:
+            out += char
+    return out
+
+
+def utab_targets():
+    """Every TARGET= field in /run/mount/utab, as written."""
+    prefix = 'TARGET='
+    targets = []
+    with open(UTAB_PATH, encoding='utf8') as fh:
+        for line in fh:
+            for field in line.split():
+                if field.startswith(prefix):
+                    targets.append(field[len(prefix):])
+    return targets
+
+
+def cmd_assert_utab_target(mnt_dir):
+    target = _utab_escape(os.path.realpath(mnt_dir))
+    _require(target in utab_targets(),
+             '%s missing from %s' % (target, UTAB_PATH))
+
+
+def cmd_refute_utab_target(mnt_dir):
+    target = _utab_escape(os.path.realpath(mnt_dir))
+    _require(target not in utab_targets(),
+             'unexpected %s in %s' % (target, UTAB_PATH))
+
+
 # ------------------------------------------------------------- odds and ends
 
 def cmd_printcap_caps(src_root):
@@ -875,6 +1010,48 @@ def _recvall(sock, bufsize):
     return buf
 
 
+_FUSERMOUNT_REJECTIONS = {
+    'not_dir_or_regular': 'is not a directory or a regular file',
+    'no_write_access': 'user has no write access to mountpoint',
+    'no_such_file': 'failed to access mountpoint',
+}
+
+
+def cmd_fusermount_rejects(mountpoint, reason):
+    """Require fusermount3 to refuse <mountpoint> for the named reason.
+
+    fusermount3 reaches its mountpoint checks only once _FUSE_COMMFD names a
+    socket it could hand the /dev/fuse fd back over, so a real socketpair goes
+    in even though the mount is never meant to get that far.
+    """
+    import socket
+
+    wanted = _FUSERMOUNT_REJECTIONS.get(reason)
+    if wanted is None:
+        raise CheckFailed('unknown rejection reason %r' % reason)
+
+    binary = pjoin(os.environ['FUSE_UTIL_DIR'], 'fusermount3')
+    env = dict(os.environ)
+    parent, child = socket.socketpair()
+    try:
+        env['_FUSE_COMMFD'] = str(child.fileno())
+        proc = subprocess.run([binary, '-o', 'rw', mountpoint], env=env,
+                              pass_fds=(child.fileno(),),
+                              stderr=subprocess.PIPE,
+                              universal_newlines=True)
+    finally:
+        parent.close()
+        child.close()
+
+    _require(proc.returncode != 0,
+             'fusermount3 accepted mountpoint %s' % mountpoint)
+    _require(wanted in proc.stderr,
+             'mountpoint %s: expected %r on stderr, got: %s'
+             % (mountpoint, wanted, proc.stderr.strip()))
+    _require(not os.path.ismount(mountpoint),
+             '%s is a mountpoint after a refused mount' % mountpoint)
+
+
 # ------------------------------------------------------------------ dispatch
 
 _INODE_CHECK = {'default': 'exact', 'choices': ('exact', 'nonzero')}
@@ -924,6 +1101,7 @@ def build_parser():
     add('fuse_test_utimens', cmd_utimens, 'mnt', ns_tol={'default': 0})
     add('fuse_test_passthrough', cmd_passthrough, 'src', 'mnt',
         inode_check=_INODE_CHECK)
+    add('fuse_test_suidgid_dropped', cmd_suidgid_dropped, 'mnt', 'src')
     add('fuse_test_xattr', cmd_xattr, 'path')
 
     add('fuse_test_expect_errno', cmd_expect_errno, 'want', 'op',
@@ -945,6 +1123,10 @@ def build_parser():
                        ('fuse_test_assert_fstype', cmd_assert_fstype),
                        ('fuse_test_assert_source', cmd_assert_source)):
         add(name, func, 'mnt', ('values', {'nargs': '+'}))
+    add('fuse_test_assert_utab_target', cmd_assert_utab_target, 'mnt')
+    add('fuse_test_refute_utab_target', cmd_refute_utab_target, 'mnt')
+    add('fuse_test_fusermount_rejects', cmd_fusermount_rejects,
+        'mountpoint', 'reason')
 
     add('fuse_test_printcap_caps', cmd_printcap_caps, 'src_root')
     add('fuse_test_reachable_without_caps', cmd_reachable_without_caps, 'path')

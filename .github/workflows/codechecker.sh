@@ -237,20 +237,19 @@ parse_codechecker_results()
     local codechecker="$1"
 
     echo_info "Parsing results..."
+    # parse exits 2 when it has reports, so "set -e" must not see that as a
+    # failure - and the reports only reach the log if parse writes to it
     local has_issues=0
-    if $codechecker parse codechecker-reports | grep -q "found"; then
-        has_issues=1
-        $codechecker parse codechecker-reports
-    fi
+    $codechecker parse codechecker-reports || has_issues=1
 
     # Generate output based on mode
     if [ $GITHUB_WORKFLOW -eq 1 ]; then
         echo_info "Generating SARIF output for GitHub..."
-        $codechecker parse codechecker-reports -e sarif -o results.sarif
+        $codechecker parse codechecker-reports -e sarif -o results.sarif || true
         echo_info "SARIF output saved to results.sarif"
     else
         echo_info "Generating HTML reports..."
-        $codechecker parse codechecker-reports -e html -o codechecker-html
+        $codechecker parse codechecker-reports -e html -o codechecker-html || true
         echo_info "HTML reports saved to codechecker-html/"
     fi
 
@@ -334,7 +333,11 @@ run_codechecker_gcc()
     cmd="$cmd --analyzers gcc"
 
     # Enable GCC checkers, disable malloc-leak, due to too many false positives
-    cmd="$cmd --enable gcc --disable gcc-malloc-leak"
+    # The gcc prefix on its own also enables every ordinary -W warning
+    cmd="$cmd --enable gcc-analyzer --disable gcc-analyzer-malloc-leak"
+
+    # too-complex reports the analyzer hitting its own enode limits, not a defect
+    cmd="$cmd --disable gcc-analyzer-too-complex"
 
     eval $cmd
 

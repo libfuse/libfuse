@@ -43,7 +43,7 @@
  * \include passthrough_hp.cc
  */
 
-#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 12)
+#define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
 
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -87,6 +87,7 @@ using namespace std;
 
 #define SFS_DEFAULT_THREADS "-1" // take libfuse value as default
 #define SFS_DEFAULT_CLONE_FD "0"
+#define SFS_DEFAULT_MAX_WRITE "4194304"
 
 /* We are re-using pointers to our `struct sfs_inode` and `struct
    sfs_dirp` elements as inodes and file handles. This means that we
@@ -172,11 +173,13 @@ struct Fs {
 	bool nosplice;
 	bool nocache;
 	size_t num_threads;
+	size_t max_write;
 	bool clone_fd;
 
 	std::string fuse_mount_options;
 	bool direct_io;
 	bool passthrough;
+	bool killpriv_v2;
 	bool selinux;
 };
 static Fs fs{};
@@ -218,6 +221,16 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 	if (fs.timeout && !fs.passthrough)
 		fuse_set_feature_flag(conn, FUSE_CAP_WRITEBACK_CACHE);
 
+	/*
+	 * KILLPRIV_V2 lets the kernel mark inodes S_NOSEC, which stops it
+	 * probing security.capability on every write. KILLPRIV_V2 conflicts
+	 * with passthrough: the kernel then leaves suid/sgid to this filesystem,
+	 * which in that mode never sees the write.
+	 */
+	if (!fs.passthrough)
+		fs.killpriv_v2 = fuse_set_feature_flag(
+			conn, FUSE_CAP_HANDLE_KILLPRIV_V2);
+
 	fuse_set_feature_flag(conn, FUSE_CAP_FLOCK_LOCKS);
 
 	/* Enable security context extension for SELinux support */
@@ -254,8 +267,7 @@ static void sfs_init(void *userdata, fuse_conn_info *conn)
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_NO_INTERRUPT);
 
-	/* Try a large IO by default */
-	conn->max_write = 4 * 1024 * 1024;
+	conn->max_write = fs.max_write;
 }
 
 static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
@@ -271,7 +283,8 @@ static void sfs_getattr(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 	fuse_reply_attr(req, &attr, fs.timeout);
 }
 
-static int with_fd_path(int fd, const std::function<int(const char *)> &f)
+/* A path that names what fd is open on, for calls that take no fd. */
+static int fd_path(int fd, char *path, size_t size)
 {
 #ifdef __FreeBSD__
 	struct kinfo_file kf;
@@ -279,28 +292,80 @@ static int with_fd_path(int fd, const std::function<int(const char *)> &f)
 	int ret = fcntl(fd, F_KINFO, &kf);
 	if (ret == -1)
 		return ret;
-	return f(kf.kf_path);
+	snprintf(path, size, "%s", kf.kf_path);
 #else // Linux
-	char procname[64];
-	sprintf(procname, "/proc/self/fd/%i", fd);
-	return f(procname);
+	snprintf(path, size, "/proc/self/fd/%i", fd);
 #endif
+	return 0;
 }
+
+/*
+ * The mode with S_ISUID and S_ISGID removed, or 0 when neither is set.
+ * S_ISGID counts as sgid only on a group-executable file; without S_IXGRP it
+ * is a mandatory locking mark and has to be left alone.
+ */
+static mode_t suidgid_dropped_mode(const struct stat &st)
+{
+	mode_t mode = st.st_mode & ~S_ISUID;
+
+	if (st.st_mode & S_IXGRP)
+		mode &= ~S_ISGID;
+
+	return mode == st.st_mode ? 0 : mode;
+}
+
+/* Returns an errno, 0 on success. */
+static int drop_suidgid_fd(int fd)
+{
+	struct stat st;
+	mode_t mode;
+
+	if (fstat(fd, &st) == -1)
+		return errno;
+
+	mode = suidgid_dropped_mode(st);
+	if (!mode)
+		return 0;
+
+	return fchmod(fd, mode) == -1 ? errno : 0;
+}
+
+/* Drops S_ISUID/S_ISGID on an O_PATH descriptor, which fchmod() rejects. */
+static int drop_suidgid_at(int ifd)
+{
+	struct stat st;
+	mode_t mode;
+
+	if (fstatat(ifd, "", &st, AT_EMPTY_PATH) == -1)
+		return errno;
+
+	mode = suidgid_dropped_mode(st);
+	if (!mode)
+		return 0;
+
+	char path[PATH_MAX];
+	if (fd_path(ifd, path, sizeof(path)) == -1)
+		return errno;
+
+	return chmod(path, mode) == -1 ? errno : 0;
+}
+
 static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		       int valid, struct fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
 	int ifd = inode.fd;
+	char path[PATH_MAX];
 	int res;
 
+	if (!fi && fd_path(ifd, path, sizeof(path)) == -1)
+		goto out_err;
+
 	if (valid & FUSE_SET_ATTR_MODE) {
-		if (fi) {
+		if (fi)
 			res = fchmod(fi->fh, attr->st_mode);
-		} else {
-			res = with_fd_path(ifd, [attr](const char *procname) {
-				return chmod(procname, attr->st_mode);
-			});
-		}
+		else
+			res = chmod(path, attr->st_mode);
 		if (res == -1)
 			goto out_err;
 	}
@@ -318,13 +383,10 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			goto out_err;
 	}
 	if (valid & FUSE_SET_ATTR_SIZE) {
-		if (fi) {
+		if (fi)
 			res = ftruncate(fi->fh, attr->st_size);
-		} else {
-			res = with_fd_path(ifd, [attr](const char *procname) {
-				return truncate(procname, attr->st_size);
-			});
-		}
+		else
+			res = truncate(path, attr->st_size);
 		if (res == -1)
 			goto out_err;
 	}
@@ -350,9 +412,7 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 			res = futimens(fi->fh, tv);
 		else {
 #ifdef HAVE_UTIMENSAT
-			res = with_fd_path(ifd, [&tv](const char *procname) {
-				return utimensat(AT_FDCWD, procname, tv, 0);
-			});
+			res = utimensat(AT_FDCWD, path, tv, 0);
 #else
 			res = -1;
 			errno = EOPNOTSUPP;
@@ -360,6 +420,15 @@ static void do_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		}
 		if (res == -1)
 			goto out_err;
+	}
+	/* After the chown or truncate FUSE_SET_ATTR_KILL_SUID arrived with */
+	if (valid & FUSE_SET_ATTR_KILL_SUID) {
+		int err = fi ? drop_suidgid_fd(fi->fh) : drop_suidgid_at(ifd);
+
+		if (err) {
+			fuse_reply_err(req, err);
+			return;
+		}
 	}
 	return sfs_getattr(req, ino, fi);
 
@@ -584,12 +653,7 @@ static void mknod_symlink(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 	bool labeled = sfs_set_selinux_fscreate(req);
 
-	if (S_ISDIR(mode))
-		res = mkdirat(inode_p.fd, name, mode);
-	else if (S_ISLNK(mode))
-		res = symlinkat(link, inode_p.fd, name);
-	else
-		res = mknodat(inode_p.fd, name, mode, rdev);
+	res = mknod_wrapper(inode_p.fd, name, link, mode, rdev);
 	saverr = errno;
 
 	/* Reset the staged label so later creates on this thread are unaffected. */
@@ -642,10 +706,11 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	e.attr_timeout = fs.timeout;
 	e.entry_timeout = fs.timeout;
 
-	char procname[64];
-	sprintf(procname, "/proc/self/fd/%i", inode.fd);
-	auto res =
-		linkat(AT_FDCWD, procname, inode_p.fd, name, AT_SYMLINK_FOLLOW);
+	char path[PATH_MAX];
+	auto res = fd_path(inode.fd, path, sizeof(path));
+	if (res == 0)
+		res = linkat(AT_FDCWD, path, inode_p.fd, name,
+			     AT_SYMLINK_FOLLOW);
 	if (res == -1) {
 		fuse_reply_err(req, errno);
 		return;
@@ -912,7 +977,10 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		if (fs.debug)
 			cerr << "DEBUG: readdir(): seeking to " << offset
 			     << endl;
-		seekdir(d->dp, offset);
+		if (offset == 0)
+			rewinddir(d->dp);
+		else
+			seekdir(d->dp, offset);
 		d->offset = offset;
 	}
 
@@ -930,7 +998,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 			}
 			break; // End of stream
 		}
-		d->offset = entry->d_off;
+		d->offset = telldir(d->dp);
 
 		fuse_entry_param e{};
 		size_t entsize;
@@ -948,12 +1016,12 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 				did_lookup = true;
 			}
 			entsize = fuse_add_direntry_plus(
-				req, p, rem, entry->d_name, &e, entry->d_off);
+				req, p, rem, entry->d_name, &e, d->offset);
 		} else {
 			e.attr.st_ino = entry->d_ino;
 			e.attr.st_mode = entry->d_type << 12;
 			entsize = fuse_add_direntry(req, p, rem, entry->d_name,
-						    &e.attr, entry->d_off);
+						    &e.attr, d->offset);
 		}
 
 		if (entsize > rem) {
@@ -971,7 +1039,7 @@ static void do_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 		if (fs.debug) {
 			cerr << "DEBUG: readdir(): added to buffer: "
 			     << entry->d_name << ", ino " << e.attr.st_ino
-			     << ", offset " << entry->d_off << endl;
+			     << ", offset " << d->offset << endl;
 		}
 	}
 	err = 0;
@@ -1098,6 +1166,16 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	}
 
 	fi->fh = fd;
+
+	if (fi->kill_suidgid) {
+		auto kill_err = drop_suidgid_fd(fd);
+		if (kill_err) {
+			close(fd);
+			fuse_reply_err(req, kill_err);
+			return;
+		}
+	}
+
 	fuse_entry_param e;
 	auto err = do_lookup(parent, name, &e);
 	if (err) {
@@ -1232,11 +1310,19 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	Inode &inode = get_inode(ino);
 
+#ifdef __FreeBSD__
+	/* During buffered write, the kernel may issue a READ request,
+	   irrespective of whether writeback cache is enabled. */
+	if (!fs.direct_io && !(fi->flags & O_DIRECT)) {
+#else
 	/* With writeback cache, kernel may send read requests even
        when userspace opened write-only */
-	if (fs.timeout && (fi->flags & O_ACCMODE) == O_WRONLY) {
-		fi->flags &= ~O_ACCMODE;
-		fi->flags |= O_RDWR;
+	if (fs.timeout) {
+#endif
+		if ((fi->flags & O_ACCMODE) == O_WRONLY) {
+			fi->flags &= ~O_ACCMODE;
+			fi->flags |= O_RDWR;
+		}
 	}
 
 	/* With writeback cache, O_APPEND is handled by the kernel.  This
@@ -1251,9 +1337,10 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 
 	/* Unfortunately we cannot use inode.fd, because this was opened
        with O_PATH (so it doesn't allow read/write access). */
-	auto fd = with_fd_path(inode.fd, [fi](const char *buf) {
-		return open(buf, fi->flags & ~O_NOFOLLOW);
-	});
+	char path[PATH_MAX];
+	int fd = -1;
+	if (fd_path(inode.fd, path, sizeof(path)) == 0)
+		fd = open(path, fi->flags & ~O_NOFOLLOW);
 	if (fd == -1) {
 		auto err = errno;
 		if (err == ENFILE || err == EMFILE)
@@ -1261,6 +1348,16 @@ static void sfs_open(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 			     << endl;
 		fuse_reply_err(req, err);
 		return;
+	}
+
+	/* Outside inode.m: a lock must not span a syscall */
+	if (fi->kill_suidgid) {
+		auto err = drop_suidgid_fd(fd);
+		if (err) {
+			close(fd);
+			fuse_reply_err(req, err);
+			return;
+		}
 	}
 
 	{
@@ -1379,6 +1476,15 @@ static void sfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 static void do_write_buf(fuse_req_t req, size_t size, off_t off,
 			 fuse_bufvec *in_buf, fuse_file_info *fi)
 {
+	/* Before the data lands, as the VFS does for a local filesystem */
+	if (fi->kill_suidgid) {
+		auto err = drop_suidgid_fd(fi->fh);
+		if (err) {
+			fuse_reply_err(req, err);
+			return;
+		}
+	}
+
 	fuse_bufvec out_buf = FUSE_BUFVEC_INIT(size);
 	out_buf.buf[0].flags =
 		static_cast<fuse_buf_flags>(FUSE_BUF_IS_FD | FUSE_BUF_FD_SEEK);
@@ -1420,6 +1526,21 @@ static void sfs_fallocate(fuse_req_t req, fuse_ino_t ino, int mode,
 			  off_t offset, off_t length, fuse_file_info *fi)
 {
 	(void)ino;
+
+	/*
+	 * KILLPRIV_V2 has no per-request flag for fallocate, and the kernel
+	 * stops clearing suid/sgid itself once it is negotiated, so a content
+	 * change here would otherwise leave the bits behind. Clear them
+	 * unconditionally: a CAP_FSETID caller keeps them on a local
+	 * filesystem, but guessing wrong that way only costs a chmod.
+	 */
+	if (fs.killpriv_v2) {
+		auto kill_err = drop_suidgid_fd(fi->fh);
+		if (kill_err) {
+			fuse_reply_err(req, kill_err);
+			return;
+		}
+	}
 
 	auto err = -do_fallocate(fi->fh, mode, offset, length);
 
@@ -1659,6 +1780,9 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 		cxxopts::value(mount_options))
 		("num-threads", "Number of libfuse worker threads",
 		cxxopts::value<int>()->default_value(SFS_DEFAULT_THREADS))
+		("max-write", "Maximum write size in bytes; also the io-uring "
+			      "payload per ring entry",
+		cxxopts::value<size_t>()->default_value(SFS_DEFAULT_MAX_WRITE))
 		("clone-fd", "use separate fuse device fd for each thread")
 		("direct-io", "enable fuse kernel internal direct-io");
 
@@ -1696,6 +1820,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 	fs.passthrough = options.count("nopassthrough") == 0;
 	fs.selinux = options.count("selinux") != 0;
 	fs.num_threads = options["num-threads"].as<int>();
+	fs.max_write = options["max-write"].as<size_t>();
 	fs.clone_fd = options.count("clone-fd");
 	fs.direct_io = options.count("direct-io");
 

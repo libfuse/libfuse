@@ -12,8 +12,12 @@
 
 #include <sys/mount.h>
 #include <linux/mount.h>
+#include <stdint.h>
 
 struct fuse_args;
+
+#define FUSERMOUNT_FEATURE_NEW_MOUNT_API (UINT64_C(1) << 0)
+#define FUSERMOUNT_FEATURE_SYNC_INIT     (UINT64_C(1) << 1)
 
 /*
  * Returned by the kernel for an fsconfig() parameter the filesystem does
@@ -39,6 +43,13 @@ struct mount_opts {
 };
 
 int fuse_kern_mount_prepare(const char *mnt, struct mount_opts *mo);
+
+/**
+ * @brief Obtain feature bits supported by fusermount3.
+ *
+ * @return Supported bits, or zero if the query is unavailable or malformed.
+ */
+uint64_t fuse_mount_fusermount_features(void);
 
 int fuse_kern_mount_get_base_mtab_opts(const struct mount_opts *mo,
 				       char **mtab_optsp);
@@ -159,6 +170,18 @@ int set_fsconfig_ms_flags(int fsfd, unsigned long *ms_flags);
  * @return fsopen fd on success, negative error code on failure
  */
 int fuse_fsopen_base_type(int blkdev);
+
+/**
+ * Test whether this process may fsopen() at all
+ *
+ * fsopen() with flags no kernel accepts. The kernel tests CAP_SYS_ADMIN
+ * before the flags, so an unprivileged caller gets EPERM, a privileged
+ * one EINVAL, and nothing is allocated either way.
+ *
+ * @return -errno of the refused fsopen(): -EPERM unprivileged, -EINVAL
+ *         privileged, -ENOSYS without the new mount API; 0 if it succeeded
+ */
+int fuse_fsopen_probe(void);
 
 /**
  * Apply the filesystem subtype via fsconfig

@@ -111,6 +111,15 @@ _require_cap()
 	_notrun "kernel does not offer $cap"
 }
 
+# _require_fuse_device
+# _notrun unless the kernel side is there. A case that reaches fusermount3 but
+# never completes a mount needs this much and no more.
+_require_fuse_device()
+{
+	[ -e /dev/fuse ] ||
+		_notrun "the FUSE kernel module does not seem to be loaded"
+}
+
 # _require_fuse
 # _notrun unless this user can mount a FUSE filesystem at all: the kernel side
 # has to be there, and an unprivileged user needs a setuid fusermount3. It runs
@@ -122,8 +131,7 @@ _require_fuse()
 
 	# BSD has no fusermount3 at all; vfs.usermount decides there.
 	_is_linux || return 0
-	[ -e /dev/fuse ] ||
-		_notrun "the FUSE kernel module does not seem to be loaded"
+	_require_fuse_device
 	[ "$FUSE_UID" != 0 ] || return 0
 	fusermount=$(command -v fusermount3) ||
 		_notrun "no fusermount3 on \$PATH"
@@ -296,6 +304,8 @@ _assert_super_opt()        { _check fuse_test_assert_super_opt "$@"; }
 _assert_super_opt_prefix() { _check fuse_test_assert_super_opt_prefix "$@"; }
 _assert_fstype()           { _check fuse_test_assert_fstype "$@"; }
 _assert_source()           { _check fuse_test_assert_source "$@"; }
+_assert_utab_target()      { _check fuse_test_assert_utab_target "$@"; }
+_refute_utab_target()      { _check fuse_test_refute_utab_target "$@"; }
 
 # ---------------------------------------------------------------- cleanup hooks
 
@@ -393,16 +403,21 @@ fuse_mount_at()
 # than a single look.
 _fuse_assert_uring()
 {
-	local idx=$1 log=${FUSE_FS_LOG[$idx]} state
+	local idx=$1 log=${FUSE_FS_LOG[$idx]} state ok accepted=
 
 	[ "${FUSE_URING_ENABLE:-0}" = 1 ] || return 0
 	_wait_for 5 "grep -q '^FUSE_INIT: io_uring=' '$log'" || {
 		_fuse_dump_fs_log $idx
 		_fail "${FUSE_FS_NAME[$idx]} never reported its FUSE_INIT negotiation"
 	}
+	# Defaulting to "on" alone keeps a hand-run script strict.
+	for ok in ${FUSE_IO_URING_STATES_OK:-on}; do
+		accepted="${accepted}${accepted:+|}$ok"
+	done
 	# One daemon can serve several sessions, and every one of them has to
 	# have got a ring, so the first line saying otherwise is the answer.
-	state=$(grep '^FUSE_INIT: io_uring=' "$log" | grep -m1 -v '=on$') || state=
+	state=$(grep '^FUSE_INIT: io_uring=' "$log" |
+		grep -m1 -vE "=($accepted)\$") || state=
 	[ -z "$state" ] || {
 		_fuse_dump_fs_log $idx
 		_fail "${FUSE_FS_NAME[$idx]}: $state"
@@ -461,7 +476,9 @@ fuse_wait_mount()
 {
 	local path=$1 predicate=${2:-}
 	local idx=$((_fuse_fs_count - 1))
-	local deadline=$((SECONDS + 30))
+	local pid=${FUSE_FS_PID[$idx]}
+	local timeout=30
+	local deadline=$((SECONDS + timeout))
 	local test_cmd
 
 	if [ -n "$predicate" ]; then
@@ -474,15 +491,32 @@ fuse_wait_mount()
 		if eval "$test_cmd" >/dev/null 2>&1; then
 			return 0
 		fi
-		if ! kill -0 "${FUSE_FS_PID[$idx]}" 2>/dev/null; then
+		if ! kill -0 "$pid" 2>/dev/null; then
 			# The daemon may have exited *after* completing the
 			# mount (mount.fuse3 does), so look once more.
 			eval "$test_cmd" >/dev/null 2>&1 && return 0
+			echo "early exit: daemon (pid $pid) exited before mounting $path" >&2
 			return 1
 		fi
 		sleep 0.1
 	done
+	echo "timeout: daemon (pid $pid) still alive but $path not mounted after ${timeout}s" >&2
+	fuse_dump_stacks "$pid"
 	return 1
+}
+
+# fuse_dump_stacks [pid...]
+# Write ps.txt, kstack.<pid>.txt and gdbstack.<pid>.txt for each pid and its
+# descendants into $TEST_LOGDIR; every daemon this script started when no pid
+# is given. For a hang the script detects itself, before its own _fail --
+# the runner only dumps on its own timeout, which the script's shorter wait
+# never reaches.
+fuse_dump_stacks()
+{
+	[ $# -gt 0 ] || set -- "${FUSE_FS_PID[@]}"
+	[ $# -gt 0 ] || return 0
+	(cd "$TEST_LOGDIR" &&
+		python3 "$TEST_DIR/run-tests.py" --dump-stacks "$@") || true
 }
 
 # fuse_umount [idx]

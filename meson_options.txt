@@ -28,6 +28,9 @@ option('enable-usdt', type : 'boolean', value : false,
 option('enable-io-uring', type: 'boolean', value: true,
        description: 'Enable fuse-over-io-uring support')
 
+option('enable-custom-io', type: 'boolean', value: false,
+       description: 'Enable fuse_session_custom_io(), which serves the protocol over a caller-provided fd instead of /dev/fuse. The peer might not be a kernel and can forge requests that libfuse parses without bounds checks, crashing or corrupting the filesystem process - see doc/README.custom-io')
+
 option('sync-init', type: 'combo', choices: ['auto', 'always', 'never'], value: 'auto',
        description: 'Synchronous FUSE_INIT: auto follows fuse_daemonize_early_start(), always and never override it')
 

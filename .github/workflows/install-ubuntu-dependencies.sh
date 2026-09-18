@@ -15,6 +15,7 @@ PACKAGES_CORE=(
     pkg-config
     python3
     python3-pip
+    python3-yaml
     libsystemd-dev
     systemd-dev
 )
@@ -56,6 +57,15 @@ PACKAGES_CPPCHECK=(
     cppcheck
 )
 
+PACKAGES_KERNEL_VM=(
+    "${PACKAGES_CORE[@]}"
+    clang
+    virtme-ng
+    qemu-system-x86
+    virtiofsd
+    busybox-static
+)
+
 usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
@@ -69,6 +79,7 @@ OPTIONS:
     --cppcheck      Install cppcheck for static analysis
     --abicheck      Install dependencies for ABI compatibility checks
     --codeql        Install dependencies for CodeQL analysis
+    --kernel-vm     Install dependencies for running tests in a virtme-ng guest
     --infer         Install Facebook Infer static analyzer
     -h, --help      Show this help message
 
@@ -79,6 +90,7 @@ EXAMPLES:
     $0 --cppcheck         # Install cppcheck
     $0 --abicheck         # Install ABI check dependencies
     $0 --codeql           # Install CodeQL dependencies
+    $0 --kernel-vm        # Install kernel VM dependencies
     $0 --infer            # Install Infer static analyzer
 
 EOF
@@ -112,6 +124,11 @@ install_full() {
 
     echo "Installing Python test dependencies..."
     pip install -r requirements.txt
+}
+
+install_kernel_vm() {
+    echo "Installing kernel VM dependencies..."
+    install_packages "${PACKAGES_KERNEL_VM[@]}"
 }
 
 install_codechecker() {
@@ -181,6 +198,10 @@ while [[ $# -gt 0 ]]; do
             MODE="codeql"
             shift
             ;;
+        --kernel-vm)
+            MODE="kernel-vm"
+            shift
+            ;;
         --infer)
             INSTALL_INFER=1
             shift
@@ -212,6 +233,9 @@ case $MODE in
         ;;
     codeql)
         install_codeql
+        ;;
+    kernel-vm)
+        install_kernel_vm
         ;;
 esac
 

@@ -32,17 +32,16 @@ jobs:
         config:
           - gcc
           - gcc-root
-          # GitHub Actions runners have no fuse io-uring support; kept for a
-          # runner that does.
-          # - gcc-io-uring
-          # - gcc-io-uring-root
+          - gcc-io-uring
+          - gcc-io-uring-root
           - gcc-valgrind
           - gcc-9-valgrind
           - gcc-10-valgrind
           - clang
           - clang-san
           - clang-san-root
-          # - clang-san-io-uring
+          - clang-san-io-uring
+          - clang-san-io-uring-root
           - clang-san-nosymver
           - clang-san-noiouring
           - clang-san-nosyncinit
@@ -56,13 +55,13 @@ jobs:
           - config: gcc-root
             cc: gcc
             root: true
-          # - config: gcc-io-uring
-          #   cc: gcc
-          #   io_uring: true
-          # - config: gcc-io-uring-root
-          #   cc: gcc
-          #   root: true
-          #   io_uring: true
+          - config: gcc-io-uring
+            cc: gcc
+            io_uring: true
+          - config: gcc-io-uring-root
+            cc: gcc
+            root: true
+            io_uring: true
           - config: gcc-valgrind
             cc: gcc
             valgrind: true
@@ -86,11 +85,17 @@ jobs:
             cxx: clang++
             sanitize: true
             root: true
-          # - config: clang-san-io-uring
-          #   cc: clang
-          #   cxx: clang++
-          #   sanitize: true
-          #   io_uring: true
+          - config: clang-san-io-uring
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            io_uring: true
+          - config: clang-san-io-uring-root
+            cc: clang
+            cxx: clang++
+            sanitize: true
+            root: true
+            io_uring: true
           - config: clang-san-nosymver
             cc: clang
             cxx: clang++
@@ -146,54 +151,11 @@ jobs:
       - name: Print failed test logs
         if: failure()
         run: |
-          # A test's name is <category>/<leaf>, so its logs/ sits three
-          # levels under fuse-tests/run/: <config>/<category>/<leaf>/logs.
-          for dir in fuse-tests/run/*/*/*/logs; do
-              [ -d "$dir" ] || continue
-              label=${dir#fuse-tests/run/}
-              label=${label%/logs}
-              echo "::group::${label}"
-              for out in "$dir"/*.sh "$dir"/*.out; do
-                  [ -e "$out" ] || continue
-                  echo "--- ${out##*/} ---"
-                  tail -n 100 "$out"
-              done
-              # The stack dumps and the process table are the whole report on
-              # a timeout, and a tail of a backtrace keeps its least useful
-              # end -- print them whole.
-              for out in "$dir"/*.txt; do
-                  [ -e "$out" ] || continue
-                  echo "--- ${out##*/} ---"
-                  cat "$out"
-              done
-              echo "::endgroup::"
-              echo
-              echo
-          done
+          test/run-tests.py --print-logged-errors fuse-tests/run
 
           echo "::group::dmesg"
           sudo dmesg -T | tail -n 300
           echo "::endgroup::"
-
-      - name: Unmount stale test mountpoints
-        if: always()
-        run: |
-          # A killed test never reaches fuse_umount, so its mountpoint stays a
-          # dead transport -- not always a "mnt" directory (examples/null.sh
-          # mounts onto a plain file under tmp/ instead). The upload step's
-          # own directory walk stat()s it and ENOTCONN fails the whole
-          # upload, not just that one entry, so find every FUSE mount under
-          # this run from /proc/self/mountinfo instead of guessing the shape.
-          run_dir="$(readlink -f fuse-tests/run)/"
-          awk -v prefix="$run_dir" '
-              {
-                  for (i = 7; i <= NF; i++) if ($i == "-") { fstype = $(i + 1); break }
-                  if (index($5, prefix) == 1 && fstype ~ /^fuse/) print $5
-              }' /proc/self/mountinfo |
-              sort -r |    # nested mounts before their parent
-              while IFS= read -r mnt; do
-                  sudo umount -f "$mnt" 2>/dev/null || true
-              done
 
       - name: Upload test logs
         if: always()

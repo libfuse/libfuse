@@ -20,6 +20,8 @@
 
 #ifdef HAVE_BACKTRACE
 #include <execinfo.h>
+#define BT_STACK_SZ (1024 * 1024)
+static void *backtrace_buffer[BT_STACK_SZ];
 #endif
 
 /*
@@ -31,11 +33,6 @@ static int teardown_sigs[] = { SIGHUP, SIGINT, SIGTERM };
 static int ignore_sigs[] = { SIGPIPE};
 static int fail_sigs[] = { SIGILL, SIGTRAP, SIGABRT, SIGBUS, SIGFPE, SIGSEGV };
 static struct fuse_session *fuse_instance;
-
-#ifdef HAVE_BACKTRACE
-#define BT_STACK_SZ (1024 * 1024)
-static void *backtrace_buffer[BT_STACK_SZ];
-#endif
 
 static void dump_stack(void)
 {

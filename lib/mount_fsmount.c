@@ -256,6 +256,18 @@ int fuse_fsopen_base_type(int blkdev)
 	return fsfd;
 }
 
+int fuse_fsopen_probe(void)
+{
+	int fsfd;
+
+	/* invalid flags: the capability test runs first, nothing is allocated */
+	fsfd = fuse_fsopen("fuse", ~0U);
+	if (fsfd == -1)
+		return -errno;
+	close(fsfd);
+	return 0;
+}
+
 int fuse_fsconfig_subtype(int fsfd, const char *subtype)
 {
 	int res;

@@ -1402,10 +1402,13 @@ static void forget_node(struct fuse *f, fuse_ino_t nodeid, uint64_t nlookup)
 
 static void unlink_node(struct fuse *f, struct node *node)
 {
-	if (f->conf.remember) {
-		assert(node->nlookup > 1);
+	/*
+	 * nlookup == 1: the kernel already forgot this node after the
+	 * file vanished underneath the mount, only the remember
+	 * reference is left and fuse_clean_cache() drops it.
+	 */
+	if (f->conf.remember && node->nlookup > 1)
 		node->nlookup--;
-	}
 	unhash_name(f, node);
 }
 
@@ -4677,7 +4680,12 @@ static int fuse_session_loop_remember(struct fuse *f)
 	return res < 0 ? -1 : 0;
 }
 
-int fuse_loop(struct fuse *f)
+/*
+ * @param[in] session_loop  serves the requests unless the LRU cache needs the
+ *                          cleanup timer of fuse_session_loop_remember()
+ */
+static int fuse_loop_common(struct fuse *f,
+			    int (*session_loop)(struct fuse_session *se))
 {
 	if (!f)
 		return -1;
@@ -4685,7 +4693,35 @@ int fuse_loop(struct fuse *f)
 	if (lru_enabled(f))
 		return fuse_session_loop_remember(f);
 
-	return fuse_session_loop(f->se);
+	return session_loop(f->se);
+}
+
+int fuse_loop_319(struct fuse *f)
+{
+	int res;
+
+	if (!f)
+		return -1;
+
+	res = fuse_start_cleanup_thread(f);
+	if (res)
+		return -1;
+
+	res = fuse_session_loop_319(f->se);
+	fuse_stop_cleanup_thread(f);
+	return res;
+}
+
+/*
+ * ABI compat: filesystems built before 3.19 link this bare name and expect the
+ * caller's thread to serve the requests.
+ */
+#undef fuse_loop
+
+int fuse_loop(struct fuse *f);
+int fuse_loop(struct fuse *f)
+{
+	return fuse_loop_common(f, fuse_session_loop_30);
 }
 
 FUSE_SYMVER("fuse_loop_mt_312", "fuse_loop_mt@@FUSE_3.12")
