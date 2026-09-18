@@ -55,6 +55,10 @@ static const struct fuse_opt option_spec[] = {
 };
 static int got_write;
 static atomic_int write_cnt;
+/* Reported as st_size: FreeBSD's buffered write path reads a block back from
+ * the daemon before extending it, once a getattr has shrunk the file.
+ */
+static off_t file_size;
 
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -81,7 +85,7 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf)
 	else if (ino == FILE_INO) {
 		stbuf->st_mode = S_IFREG | 0222;
 		stbuf->st_nlink = 1;
-		stbuf->st_size = 0;
+		stbuf->st_size = file_size;
 	}
 
 	else
@@ -144,7 +148,6 @@ static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 {
 	(void)fi;
 	(void)buf;
-	(void)off;
 	size_t expected;
 
 	assert(ino == FILE_INO);
@@ -153,6 +156,8 @@ static void tfs_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 		expected *= 2;
 
 	write_cnt++;
+	if (off + (off_t)size > file_size)
+		file_size = off + size;
 
 	if (size != expected && !options.writeback)
 		fprintf(stderr, "ERROR: Expected %zu bytes, got %zu\n!",
