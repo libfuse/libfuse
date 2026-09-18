@@ -778,6 +778,7 @@ class TestRunner:
 
     def __init__(self, build_dir: Path, run_dir: Path, run_dir_created: bool,
                  jobs: int, keep_logs: bool, verbose: bool,
+                 print_err: bool = False, log_lines: int = 100,
                  io_uring: bool = False, io_uring_depth: int | None = None):
         self.build_dir = build_dir
         self.run_dir = run_dir
@@ -785,6 +786,8 @@ class TestRunner:
         self.jobs = jobs
         self.keep_logs = keep_logs
         self.verbose = verbose
+        self.print_err = print_err
+        self.log_lines = log_lines
         self.io_uring = io_uring
         self.io_uring_depth = io_uring_depth
         self.valgrind = resolve_valgrind()
@@ -919,9 +922,10 @@ class TestRunner:
 
         A timed-out test's script.out has no way to tell "stalled right
         after the last line" from "was still grinding right up to the
-        kill" -- the CI step that prints it afterwards timestamps when it
-        printed, not when the test produced it. timestamps.out is named to
-        pick up the same "*.out" glob so CI shows it for free.
+        kill" -- --print-err dumps it afterwards, and the CI log timestamps
+        when it printed, not when the test produced it. timestamps.out is
+        named to pick up the same "*.out" glob so --print-err shows it for
+        free.
         """
         with (logs / 'script.out').open('wb') as out, \
                 (logs / 'timestamps.out').open('wb') as timestamps:
@@ -1448,6 +1452,11 @@ class TestRunner:
                     elif core.backtrace is None:
                         print(f'    core kept, not backtraced: {core.path}')
                 print(f'    repro: sh {result.workdir / "logs" / "repro.sh"}')
+            if self.print_err:
+                sys.stdout.flush()
+                for result in failed:
+                    dump_logs(result.name, result.workdir / 'logs',
+                              self.log_lines)
 
         if not failed and not self.keep_logs:
             self.discard_run_dir(results)
@@ -1466,6 +1475,49 @@ class TestRunner:
 
     def cleanup(self) -> None:
         self._cgroup.cleanup()
+
+
+def dump_logs(label: str, logs: Path, log_lines: int) -> None:
+    """Write one test's logs/ to stderr, for a CI log where the run directory
+    is out of reach.
+
+    The .txt files are the stack dumps and the process table -- the whole
+    report on a timeout, and a tail of a backtrace keeps its least useful
+    end -- so they go out whole; the rest is tailed.
+    """
+    tailed = sorted(logs.glob('*.sh')) + sorted(logs.glob('*.out'))
+    whole = sorted(logs.glob('*.txt'))
+    sys.stderr.write(f'===== logs for FAIL {label} =====\n')
+    for path in tailed + whole:
+        sys.stderr.write(f'----- {path.name} -----\n')
+        try:
+            text = path.read_text(errors='replace')
+        except OSError as exc:
+            sys.stderr.write(f'(could not read: {exc})\n')
+            continue
+        if path in whole:
+            sys.stderr.write(text)
+        else:
+            lines = text.splitlines(keepends=True)
+            sys.stderr.write(''.join(lines[-log_lines:]))
+        if text and not text.endswith('\n'):
+            sys.stderr.write('\n')
+    sys.stderr.write(f'===== end logs for {label} =====\n\n')
+    sys.stderr.flush()
+
+
+def print_logged_errors(run_dir: Path, log_lines: int) -> None:
+    """Dump the logs of every failed test left under a finished run.
+
+    A test directory that still exists is a failure: the runner deletes the
+    passing ones as they land. run_dir is the CI work directory's run/, so a
+    test's logs/ sits at <config>/<category>/<leaf>/logs.
+    """
+    found = sorted(run_dir.glob('*/*/*/logs'))
+    if not found:
+        print(f'no failed test logs found under {run_dir}')
+    for logs in found:
+        dump_logs(str(logs.parent.relative_to(run_dir)), logs, log_lines)
 
 
 def read_exclude_file() -> set:
@@ -1524,6 +1576,17 @@ def parse_args(argv: list) -> argparse.Namespace:
                         help='print the selected tests and exit')
     parser.add_argument('-v', '--verbose', action='store_true',
                         help="stream each script's output live")
+    parser.add_argument('--print-err', action='store_true',
+                        help="dump every failed test's logs to stderr after "
+                             'the summary, for CI where the run directory is '
+                             'not at hand')
+    parser.add_argument('--print-logged-errors', default=None, metavar='DIR',
+                        help='dump the logs of the failed tests left under '
+                             "a finished run's DIR and exit; no tests are run")
+    parser.add_argument('--log-lines', type=int, default=100, metavar='N',
+                        help='how many lines of each log --print-err and '
+                             '--print-logged-errors show; stack dumps are '
+                             'always printed whole')
     parser.add_argument('--keep-logs', action='store_true',
                         help="keep every test's output, not just the failures'")
     parser.add_argument('--repeat', type=int, default=1, metavar='N',
@@ -1549,6 +1612,9 @@ def main(argv: list) -> int:
         StackDumper(shutil.which('gdb')).dump(
             StackDumper.with_descendants(args.dump_stacks), Path.cwd())
         return 0
+    if args.print_logged_errors:
+        print_logged_errors(Path(args.print_logged_errors), args.log_lines)
+        return 0
 
     build_dir = Path(args.build_dir).resolve()
     exclude = read_exclude_file() | set(args.exclude)
@@ -1568,6 +1634,7 @@ def main(argv: list) -> int:
     runner = TestRunner(build_dir=build_dir, run_dir=run_dir,
                         run_dir_created=make_run_dir(run_dir), jobs=args.jobs,
                         keep_logs=args.keep_logs, verbose=args.verbose,
+                        print_err=args.print_err, log_lines=args.log_lines,
                         io_uring=args.io_uring,
                         io_uring_depth=args.io_uring_queue_depth)
     if args.io_uring:
