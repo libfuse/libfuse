@@ -3,8 +3,8 @@
 # Build libfuse and run the test suite in a FreeBSD guest under qemu.
 #
 # The guest boots a stock FreeBSD cloud image, gets the checkout over ssh and
-# runs everything as root, so the one run is the same on a GitHub runner and
-# on a developer machine.
+# builds and runs it as an unprivileged user, or as root with --root, so the
+# one run is the same on a GitHub runner and on a developer machine.
 
 set -e
 
@@ -20,6 +20,7 @@ usage: $0 [options]
   --print-cache     print the image cache directory and the release that
                     would boot, as NAME=VALUE lines, and boot nothing
   --logs-out DIR    host directory to copy the run logs into
+  --root            run the suite as root instead of an unprivileged user
   --cpus N          guest cpus (default: the host's, at most 4)
   --memory SIZE     guest memory (default: 4G)
 EOF
@@ -102,6 +103,7 @@ cleanup()
 RELEASE=latest
 PRINT_CACHE=0
 LOGS_OUT=
+RUN_USER=fuse
 QEMU_PID=
 RUN_DIR=
 trap cleanup EXIT
@@ -114,6 +116,7 @@ while [ $# -gt 0 ]; do
     --release)   need_arg "$@"; RELEASE=$2; shift 2 ;;
     --print-cache) PRINT_CACHE=1; shift ;;
     --logs-out)  need_arg "$@"; LOGS_OUT=$2; shift 2 ;;
+    --root)      RUN_USER=root; shift ;;
     --cpus)      need_arg "$@"; CPUS=$2; shift 2 ;;
     --memory)    need_arg "$@"; MEMORY=$2; shift 2 ;;
     *)           usage ;;
@@ -190,9 +193,10 @@ qemu-system-x86_64 -accel "${ACCEL}" -cpu max -smp "${CPUS}" -m "${MEMORY}" \
     -device virtio-net-pci,netdev=net0 &
 QEMU_PID=$!
 
-SSH=(ssh -p "${PORT}" -i "${RUN_DIR}/id_ed25519" -o StrictHostKeyChecking=no
-     -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR
-     -o ConnectTimeout=5 root@127.0.0.1)
+SSH_OPTS=(-p "${PORT}" -i "${RUN_DIR}/id_ed25519" -o StrictHostKeyChecking=no
+          -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=5)
+SSH_ROOT=(ssh "${SSH_OPTS[@]}" root@127.0.0.1)
+SSH_RUN=(ssh "${SSH_OPTS[@]}" "${RUN_USER}@127.0.0.1")
 
 # The first boot grows the filesystem and runs nuageinit before sshd is up.
 for _ in $(seq 60); do
@@ -201,34 +205,48 @@ for _ in $(seq 60); do
         RUN_DIR=
         exit 1
     fi
-    "${SSH[@]}" true 2> /dev/null && break
+    "${SSH_ROOT[@]}" true 2> /dev/null && break
     sleep 5
 done
-if ! "${SSH[@]}" true 2> /dev/null; then
+if ! "${SSH_ROOT[@]}" true 2> /dev/null; then
     echo "$0: guest never answered on ssh, see ${RUN_DIR}/console.log" >&2
     RUN_DIR=
     exit 1
 fi
 
-# The tree as git sees it: tracked and untracked-but-not-ignored files, with
-# whatever is modified locally, and none of the build directories.
-git -C "${SOURCE_DIR}" ls-files -co --exclude-standard -z |
-    tar -C "${SOURCE_DIR}" --null -T - -c |
-    "${SSH[@]}" 'mkdir -p libfuse && tar -x -C libfuse'
-
-rc=0
-"${SSH[@]}" sh -s <<'EOF' || rc=$?
+# System setup stays root whoever runs the suite. The run user is $1 so the
+# heredoc can stay quoted.
+"${SSH_ROOT[@]}" sh -s "${RUN_USER}" <<'EOF'
 set -e
 # bash because FreeBSD has none in base and common.sh uses arrays, python3
 # for checks.py, and gdb because the base debugger is lldb -- one backtrace
 # back-end keeps the runner's output identical on both platforms.
 pkg install -y meson ninja bash python3 gdb
 kldload fusefs || true
+# An unprivileged mount needs the device writable and vfs.usermount.
+chmod 0666 /dev/fuse
 sysctl kern.coredump=1
 # Mirrors the core.%e.%p Ubuntu is set to, so a core lands in the test's own
 # log directory under the same name on both platforms.
 sysctl kern.corefile=core.%N.%P
 sysctl vfs.usermount=1
+if [ "$1" != root ]; then
+    pw useradd -n "$1" -m -w no
+    home="$(pw usershow -n "$1" | cut -d: -f9)"
+    install -d -o "$1" -m 0700 "${home}/.ssh"
+    install -o "$1" -m 0600 /root/.ssh/authorized_keys "${home}/.ssh/"
+fi
+EOF
+
+# The tree as git sees it: tracked and untracked-but-not-ignored files, with
+# whatever is modified locally, and none of the build directories.
+git -C "${SOURCE_DIR}" ls-files -co --exclude-standard -z |
+    tar -C "${SOURCE_DIR}" --null -T - -c |
+    "${SSH_RUN[@]}" 'mkdir -p libfuse && tar -x -C libfuse'
+
+rc=0
+"${SSH_RUN[@]}" sh -s <<'EOF' || rc=$?
+set -e
 cd libfuse
 mkdir build
 cd build
@@ -239,7 +257,7 @@ EOF
 
 if [ -n "${LOGS_OUT}" ]; then
     mkdir -p "${LOGS_OUT}"
-    "${SSH[@]}" 'cd libfuse/fuse-tests 2> /dev/null &&
+    "${SSH_RUN[@]}" 'cd libfuse/fuse-tests 2> /dev/null &&
         tar -c --exclude mnt --exclude "*.sock" run' |
         tar -x -C "${LOGS_OUT}"
 fi
