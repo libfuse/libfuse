@@ -2489,7 +2489,9 @@ int main(int argc, char *argv[])
 	err += test_open_acc(O_WRONLY, 0600, 0);
 	err += test_open_acc(O_RDWR,   0600, 0);
 	err += test_open_acc(O_RDONLY, 0400, 0);
+#ifndef __FreeBSD__
 	err += test_open_acc(O_WRONLY, 0200, 0);
+#endif
 	if(!is_root) {
 		err += test_open_acc(O_RDONLY | O_TRUNC, 0400, EACCES);
 		err += test_open_acc(O_WRONLY, 0400, EACCES);
