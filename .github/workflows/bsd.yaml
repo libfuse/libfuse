@@ -14,6 +14,16 @@ on:
 jobs:
   build_test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - user
+          - root
+        include:
+          - config: user
+          - config: root
+            root: true
     steps:
     - name: Checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,7 +54,8 @@ jobs:
         path: ${{ steps.image.outputs.dir }}
         key: freebsd-vm-image-${{ steps.image.outputs.release }}
     - name: Build
-      run: test/ci/bsd-vm-run.sh --logs-out fuse-tests
+      run: test/ci/bsd-vm-run.sh ${{ matrix.root && '--root' || '' }}
+             --logs-out fuse-tests
     - name: Print failed test logs
       if: failure()
       run: test/run-tests.py --print-logged-errors fuse-tests/run
@@ -53,7 +64,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: test-logs-freebsd
+        name: test-logs-freebsd-${{ matrix.config }}
         path: |
           fuse-tests/
           !fuse-tests/**/core.*
