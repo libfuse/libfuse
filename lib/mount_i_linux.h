@@ -154,6 +154,18 @@ int set_fsconfig_ms_flags(int fsfd, unsigned long *ms_flags);
 int fuse_fsopen_base_type(int blkdev);
 
 /**
+ * Test whether this process may fsopen() at all
+ *
+ * fsopen() with flags no kernel accepts. The kernel tests CAP_SYS_ADMIN
+ * before the flags, so an unprivileged caller gets EPERM, a privileged
+ * one EINVAL, and nothing is allocated either way.
+ *
+ * @return -errno of the refused fsopen(): -EPERM unprivileged, -EINVAL
+ *         privileged, -ENOSYS without the new mount API; 0 if it succeeded
+ */
+int fuse_fsopen_probe(void);
+
+/**
  * Apply the filesystem subtype via fsconfig
  *
  * The "subtype" parameter was added to the fuse filesystem context after
