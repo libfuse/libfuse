@@ -14,6 +14,8 @@ PT_MIRROR=0
 PT_SRC_VISIBLE=1
 # The unlinked-testfiles check needs "fuse: fix illegal access to
 # inode with reused nodeid"; the suite assumes a current kernel.
-SYSCALL_ARGS=-u
+# FreeBSD's fusefs looks vnodes up by nodeid alone and ignores the
+# generation, so an unlinked file's fd follows the reused nodeid.
+[ "$FUSE_OS" = FreeBSD ] || SYSCALL_ARGS=-u
 
 . "$TEST_LIB/passthrough.sh"
