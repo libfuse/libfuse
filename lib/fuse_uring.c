@@ -478,8 +478,8 @@ static void fuse_uring_pool_put(struct fuse_ring_pool *fuse_ring)
 	free(fuse_ring);
 
 	/*
-	 * Never the last session reference: callers clear se->uring.pool
-	 * afterwards, and still hold the one fuse_session_new() took.
+	 * Can be the last session reference: the session goes away here
+	 * when the application replies after fuse_session_destroy().
 	 */
 	fuse_session_put(se);
 }
@@ -822,9 +822,8 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	req->interrupted = 0;
 	list_init_req(req);
 
-	/* both dropped by fuse_free_req() when the application replies */
+	/* dropped by fuse_free_req() when the application replies */
 	fuse_uring_queue_get(queue);
-	fuse_session_get(fuse_ring->se);
 
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
 				       ent->op_payload, ent_in_out->payload_sz);
