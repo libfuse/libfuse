@@ -71,6 +71,9 @@ struct fuse_ring_queue {
 	/* the ring thread submits for every replier until its queue is empty */
 	_Atomic bool draining;
 
+	/* one for the pool, one per entry handed to the application */
+	_Atomic int ref_cnt;
+
 	/* size depends on queue depth */
 	struct fuse_ring_ent ent[];
 };
@@ -441,15 +444,9 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 }
 
 /* Number of entries the application still holds (ref_cnt > 1). */
-static size_t fuse_uring_queue_held(struct fuse_ring_queue *queue, size_t depth)
+static size_t fuse_uring_queue_held(struct fuse_ring_queue *queue)
 {
-	size_t held = 0;
-
-	for (size_t idx = 0; idx < depth; idx++)
-		if (atomic_load(&queue->ent[idx].req.ref_cnt) > 1)
-			held++;
-
-	return held;
+	return atomic_load(&queue->ref_cnt) - 1;
 }
 
 static void fuse_uring_pool_get(struct fuse_ring_pool *fuse_ring)
@@ -487,6 +484,61 @@ static void fuse_uring_pool_put(struct fuse_ring_pool *fuse_ring)
 	fuse_session_put(se);
 }
 
+static void fuse_uring_queue_destroy(struct fuse_ring_queue *queue)
+{
+	struct fuse_ring_pool *fuse_ring = queue->ring_pool;
+
+	if (queue->eventfd >= 0) {
+		close(queue->eventfd);
+		queue->eventfd = -1;
+	}
+
+	if (queue->ring.ring_fd != -1)
+		io_uring_queue_exit(&queue->ring);
+
+	for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
+		struct fuse_ring_ent *ent = &queue->ent[idx];
+
+		munmap(ent->op_payload, ent->req_payload_sz);
+		munmap(ent->req_header, queue->req_header_sz);
+	}
+
+	pthread_mutex_destroy(&queue->ring_lock);
+	fuse_uring_pool_put(fuse_ring);
+}
+
+static void fuse_uring_queue_get(struct fuse_ring_queue *queue)
+{
+	queue->ref_cnt++;
+}
+
+static void fuse_uring_queue_put(struct fuse_ring_queue *queue)
+{
+	if (--queue->ref_cnt != 0)
+		return;
+
+	/* the ring thread still walks this queue; leak and name the bug */
+	if (!atomic_load(&queue->ring_pool->stopping)) {
+		fuse_log(FUSE_LOG_ERR, "fuse: qid=%d released before teardown\n",
+			 queue->qid);
+		PANIC_IF_PEDANTIC();
+		return;
+	}
+
+	fuse_uring_queue_destroy(queue);
+}
+
+/**
+ * Drop the queue reference an entry holds while the application has it.
+ */
+void fuse_uring_req_done(fuse_req_t req)
+{
+	struct fuse_ring_ent *ring_ent =
+		container_of(req, struct fuse_ring_ent, req);
+
+	fuse_uring_queue_put(ring_ent->ring_queue);
+}
+
 static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 {
 	/*
@@ -518,10 +570,10 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 	}
 
 	/*
-	 * Phase 2: join. A thread only returns once its queue has nothing
-	 * outstanding, so there is no deadline here; an application that
-	 * never replies is what fuse_session_start_teardown_watchdog() is
-	 * for.
+	 * Phase 2: join, then drop the pool's queue reference. A thread only
+	 * returns once its queue has nothing outstanding, so there is no
+	 * deadline here; an application that never replies is what
+	 * fuse_session_start_teardown_watchdog() is for.
 	 */
 	for (size_t qid = 0; qid < fuse_ring->nr_queues; qid++) {
 		struct fuse_ring_queue *queue =
@@ -532,23 +584,7 @@ static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
 			queue->tid = 0;
 		}
 
-		if (queue->eventfd >= 0) {
-			close(queue->eventfd);
-			queue->eventfd = -1;
-		}
-
-		if (queue->ring.ring_fd != -1)
-			io_uring_queue_exit(&queue->ring);
-
-		for (size_t idx = 0; idx < fuse_ring->queue_depth; idx++) {
-			struct fuse_ring_ent *ent = &queue->ent[idx];
-
-			munmap(ent->op_payload, ent->req_payload_sz);
-			munmap(ent->req_header, queue->req_header_sz);
-		}
-
-		pthread_mutex_destroy(&queue->ring_lock);
-		fuse_uring_pool_put(fuse_ring);
+		fuse_uring_queue_put(queue);
 	}
 
 	/*
@@ -680,6 +716,7 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 		queue->ring_pool = fuse_ring;
 		queue->eventfd = -1;
 		pthread_mutex_init(&queue->ring_lock, NULL);
+		queue->ref_cnt = 1;
 		fuse_uring_pool_get(fuse_ring);
 	}
 
@@ -785,7 +822,8 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	req->interrupted = 0;
 	list_init_req(req);
 
-	/* dropped by fuse_free_req() when the application replies */
+	/* both dropped by fuse_free_req() when the application replies */
+	fuse_uring_queue_get(queue);
 	fuse_session_get(fuse_ring->se);
 
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
@@ -866,7 +904,7 @@ static size_t fuse_uring_drain(struct fuse_ring_queue *queue)
 
 	/* repliers only queue now; read the count before flushing them */
 	atomic_store(&queue->draining, true);
-	held = fuse_uring_queue_held(queue, ring_pool->queue_depth);
+	held = fuse_uring_queue_held(queue);
 
 	pthread_mutex_lock(&queue->ring_lock);
 	io_uring_submit(&queue->ring);
