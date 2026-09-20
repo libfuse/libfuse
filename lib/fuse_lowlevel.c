@@ -262,7 +262,7 @@ void fuse_free_req(fuse_req_t req)
 	/* A uring entry is embedded in its queue and never destroyed here. */
 	if (is_uring) {
 		fuse_uring_req_done(req);
-		fuse_session_put(se);
+		/* the queue, the pool and se may be gone now */
 	} else if (!ctr) {
 		destroy_req(req);
 	}
