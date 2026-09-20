@@ -12,7 +12,20 @@ on:
       - 'fuse-[0-9]+.[0-9]+*'
 
 jobs:
+  get_release:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.image.outputs.release }}
+      dir: ${{ steps.image.outputs.dir }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: Image cache
+      id: image
+      run: test/ci/bsd-vm-run.sh --print-cache >> "$GITHUB_OUTPUT"
+
   build_test:
+    needs: get_release
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -45,17 +58,14 @@ jobs:
     # miss the directory stays empty, the script downloads, and the
     # action's post-job hook uploads what is in path under that key. The
     # key carries the release, so a new release starts with a miss.
-    - name: Image cache
-      id: image
-      run: test/ci/bsd-vm-run.sh --print-cache >> "$GITHUB_OUTPUT"
     - name: Cache FreeBSD image
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ steps.image.outputs.dir }}
-        key: freebsd-vm-image-${{ steps.image.outputs.release }}
+        path: ${{ needs.get_release.outputs.dir }}
+        key: freebsd-vm-image-${{ needs.get_release.outputs.release }}
     - name: Build
-      run: test/ci/bsd-vm-run.sh ${{ matrix.root && '--root' || '' }}
-             --logs-out fuse-tests
+      run: test/ci/bsd-vm-run.sh --release ${{ needs.get_release.outputs.release }}
+             ${{ matrix.root && '--root' || '' }} --logs-out fuse-tests
     - name: Print failed test logs
       if: failure()
       run: test/run-tests.py --print-logged-errors fuse-tests/run
