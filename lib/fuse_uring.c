@@ -36,6 +36,7 @@
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
 
 #define FUSE_URING_DRAIN_POLL_US	10000
+#define FUSE_URING_SUBMIT_MAX_RETRIES	100
 
 struct fuse_ring_ent {
 	struct fuse_ring_queue *ring_queue; /* back pointer */
@@ -182,6 +183,31 @@ fuse_uring_sqe_prepare(struct io_uring_sqe *sqe, struct fuse_ring_ent *req,
 	sqe->__pad1 = 0;
 }
 
+static int fuse_uring_submit(struct fuse_ring_queue *queue, unsigned int wait_nr)
+{
+	unsigned int retries = 0;
+
+	do {
+		struct fuse_session *se = queue->ring_pool->se;
+		int res = io_uring_submit_and_wait(&queue->ring, wait_nr);
+		if (res == -EINTR)
+			continue;
+		if (res == -EAGAIN && retries++ < FUSE_URING_SUBMIT_MAX_RETRIES) {
+			usleep(FUSE_URING_DRAIN_POLL_US);
+			continue;
+		}
+		if (res < 0) {
+			se->error = res;
+			fuse_log(FUSE_LOG_ERR, "qid=%d failed to submit: %s\n",
+				 queue->qid, strerror(-res));
+			fuse_session_exit(se);
+			return res;
+		}
+	} while (io_uring_sq_ready(&queue->ring));
+
+	return 0;
+}
+
 static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
 				 struct fuse_ring_ent *ring_ent)
@@ -194,6 +220,7 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	struct fuse_uring_ent_in_out *ent_in_out =
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 	struct io_uring_sqe *sqe;
+	int res = 0;
 
 	/*
 	 * Multi-issuer: serialise every submission-side SQ access under
@@ -234,12 +261,12 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 	/* while draining only the ring thread submits, for everyone */
 	if (!draining &&
 	    !atomic_load_explicit(&queue->cqe_processing, memory_order_relaxed))
-		io_uring_submit(&queue->ring);
+		res = fuse_uring_submit(queue, 0);
 
 	if (locked)
 		pthread_mutex_unlock(&queue->ring_lock);
 
-	return 0;
+	return res < 0 ? res : 0;
 }
 
 int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
@@ -781,7 +808,7 @@ static void fuse_uring_resubmit(struct fuse_ring_queue *queue,
 
 	if (!draining &&
 	    !atomic_load_explicit(&queue->cqe_processing, memory_order_relaxed))
-		io_uring_submit(&queue->ring);
+		fuse_uring_submit(queue, 0);
 	if (locked)
 		pthread_mutex_unlock(&queue->ring_lock);
 }
@@ -906,7 +933,7 @@ static size_t fuse_uring_drain(struct fuse_ring_queue *queue)
 	held = fuse_uring_queue_held(queue);
 
 	pthread_mutex_lock(&queue->ring_lock);
-	io_uring_submit(&queue->ring);
+	fuse_uring_submit(queue, 0);
 	pthread_mutex_unlock(&queue->ring_lock);
 
 	io_uring_for_each_cqe(&queue->ring, head, cqe)
@@ -1082,7 +1109,7 @@ static void *fuse_uring_thread(void *arg)
 	 * first submit_and_wait() below flushes them instead.
 	 */
 	if (!single_issuer)
-		io_uring_submit(&queue->ring);
+		fuse_uring_submit(queue, 0);
 
 	/* Not using fuse_session_exited(se), as that cannot be inlined */
 	while (true) {
@@ -1107,7 +1134,7 @@ static void *fuse_uring_thread(void *arg)
 		 * re-scans and advances the CQ.
 		 */
 		if (single_issuer) {
-			io_uring_submit_and_wait(&queue->ring, 1);
+			fuse_uring_submit(queue, 1);
 		} else {
 			struct io_uring_cqe *cqe;
 
@@ -1134,7 +1161,7 @@ static void *fuse_uring_thread(void *arg)
 		 */
 		if (!single_issuer) {
 			pthread_mutex_lock(&queue->ring_lock);
-			io_uring_submit(&queue->ring);
+			fuse_uring_submit(queue, 0);
 			pthread_mutex_unlock(&queue->ring_lock);
 		}
 	}
