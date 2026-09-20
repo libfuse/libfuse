@@ -811,8 +811,8 @@ static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 		if (unlikely(err != 0)) {
 			if (err > 0 && ((uintptr_t)io_uring_cqe_get_data(cqe) ==
 					(unsigned int)queue->eventfd)) {
-				/* teardown from eventfd */
-				return -ENOTCONN;
+				/* teardown wake; stopping ends the thread loop */
+				break;
 			}
 
 
@@ -828,14 +828,15 @@ static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 			}
 
 			/* -ENOTCONN is ok on umount  */
-			if (err != -ENOTCONN) {
+			if (err != -ENOTCONN)
 				se->error = cqe->res;
 
-				/* return first error */
-				if (ret == 0)
-					ret = err;
-			}
-
+			/*
+			 * Stop processing CQEs when kernel signaled us an error,
+			 * overall system state is unclear then.
+			 */
+			ret = err;
+			break;
 		} else {
 			fuse_uring_handle_cqe(queue, cqe);
 		}
@@ -844,7 +845,7 @@ static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
 	if (num_completed)
 		io_uring_cq_advance(&queue->ring, num_completed);
 
-	return ret == 0 ? 0 : num_completed;
+	return ret;
 }
 
 /*
