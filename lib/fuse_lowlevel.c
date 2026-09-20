@@ -2367,6 +2367,15 @@ static void do_interrupt(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 	_do_interrupt(req, nodeid, inarg, NULL);
 }
 
+/* caller holds se->lock */
+static void destroy_parked_interrupt(struct fuse_req *intr)
+{
+	list_del_req(intr);
+	fuse_chan_put(intr->ch);
+	intr->ch = NULL;
+	destroy_req(intr);
+}
+
 static struct fuse_req *check_interrupt(struct fuse_session *se,
 					struct fuse_req *req)
 {
@@ -2376,10 +2385,7 @@ static struct fuse_req *check_interrupt(struct fuse_session *se,
 	     curr = curr->next) {
 		if (curr->u.i.unique == req->unique) {
 			req->interrupted = 1;
-			list_del_req(curr);
-			fuse_chan_put(curr->ch);
-			curr->ch = NULL;
-			destroy_req(curr);
+			destroy_parked_interrupt(curr);
 			return NULL;
 		}
 	}
@@ -4385,6 +4391,12 @@ void fuse_session_destroy(struct fuse_session *se)
 			se->op.destroy(se->userdata);
 	}
 	fuse_ll_clear_pipe(se);
+
+	/* each one holds a session reference; nothing pops them anymore */
+	pthread_mutex_lock(&se->lock);
+	while (se->interrupts.next != &se->interrupts)
+		destroy_parked_interrupt(se->interrupts.next);
+	pthread_mutex_unlock(&se->lock);
 
 	/* the caller may stop the watchdog as soon as we return */
 	if (se->timeout_thread) {
