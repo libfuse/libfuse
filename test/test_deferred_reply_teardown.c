@@ -32,6 +32,8 @@
 /* automake convention: the runner reports this as SKIP. */
 #define TEST_SKIP_EXIT 77
 #define TEST_DRAIN_TIMEOUT_SEC 5
+/* a lost reply never unblocks stat(); fail fast instead */
+#define TEST_ALARM_SEC 10
 
 static struct deferred_test {
 	struct fuse_session *se;
@@ -40,6 +42,8 @@ static struct deferred_test {
 	fuse_req_t deferred_req;    /* the stashed, not-yet-answered request */
 	_Atomic bool is_uring;      /* did that request arrive via io-uring? */
 	_Atomic bool taken;         /* only the first "deferred" lookup counts */
+	int stat_ret;               /* what the client's stat() returned */
+	int stat_errno;
 	const char *mountpoint;
 } dt;
 
@@ -94,7 +98,8 @@ static void *client_thread_func(void *arg)
 	(void)arg;
 
 	snprintf(path, sizeof(path), "%s/deferred", dt.mountpoint);
-	stat(path, &stbuf);  /* ENOENT is expected; we only need the round trip */
+	dt.stat_ret = stat(path, &stbuf);
+	dt.stat_errno = errno;
 	return NULL;
 }
 
@@ -141,6 +146,8 @@ static void child_main(const char *mountpoint)
 	pthread_t client_thread, orchestrator_thread;
 	int ret;
 
+	alarm(TEST_ALARM_SEC);
+
 	if (fuse_opt_add_arg(&args, "test_deferred_reply_teardown"))
 		exit(1);
 
@@ -172,6 +179,7 @@ static void child_main(const char *mountpoint)
 	/* Returns only after fuse_session_destruct_uring() has run. */
 	ret = fuse_session_loop_mt_312(dt.se, loop_config);
 
+	/* Join before the unmount: only a delivered reply can end the stat(). */
 	pthread_join(client_thread, NULL);
 	pthread_join(orchestrator_thread, NULL);
 
@@ -188,6 +196,11 @@ static void child_main(const char *mountpoint)
 	}
 	if (ret != 0) {
 		printf("Test FAILED: session loop returned %d\n", ret);
+		exit(1);
+	}
+	if (dt.stat_ret != -1 || dt.stat_errno != ENOENT) {
+		printf("Test FAILED: stat() returned %d, errno %d\n",
+		       dt.stat_ret, dt.stat_errno);
 		exit(1);
 	}
 
