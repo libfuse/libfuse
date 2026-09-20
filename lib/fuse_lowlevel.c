@@ -4155,8 +4155,9 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 			goto reply_err;
 		}
 	}
-	/* Do not process interrupt request */
-	if (se->conn.no_interrupt && in->opcode == FUSE_INTERRUPT) {
+	/* Do not process interrupt request; a ring request cannot be found */
+	if ((se->conn.no_interrupt || se->uring.enabled) &&
+	    in->opcode == FUSE_INTERRUPT) {
 		if (se->debug)
 			fuse_log(FUSE_LOG_DEBUG, "FUSE_INTERRUPT: reply to kernel to disable interrupt\n");
 		goto reply_err;
