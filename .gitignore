@@ -42,6 +42,7 @@ TAGS
 /test/test_setattr
 /test/test_api_30
 /test/test_fuser_conf
+/test/test_service
 /build/
 # run-tests.py output, when pointed at the source tree with --run-dir
 /fuse-tests/
