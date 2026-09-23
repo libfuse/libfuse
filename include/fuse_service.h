@@ -139,7 +139,8 @@ int fuse_service_parse_cmdline_opts(struct fuse_args *args,
 
 /**
  * Ask the mount.service helper to open a file on behalf of the fuse server.
- * The helper refuses a path that is not verbatim on the mount command line;
+ * The helper refuses a path that is not verbatim on the mount command line,
+ * and any request made after the mount point was sent;
  * fuse_service_receive_file() then reports -EPERM.
  *
  * @param sf service context

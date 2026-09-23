@@ -801,6 +801,13 @@ static int mount_service_open_path(const struct mount_service *mo,
 		return mount_service_send_file_error(mo, EINVAL, oc->path);
 	}
 
+	/* After fchdir to the mountpoint, a relative path resolves there */
+	if (mo->mountpoint) {
+		fprintf(stderr, "%s: %s: files must be requested before the mount point\n",
+			mo->msgtag, oc->path);
+		return mount_service_send_file_error(mo, EPERM, oc->path);
+	}
+
 	/*
 	 * The file is opened outside the service sandbox, so only hand out
 	 * what the user named.
