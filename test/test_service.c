@@ -12,6 +12,10 @@
  *   test_service open <path>
  *   test_service open-bdev <path>
  *   test_service open-after-mount <path>
+ *   test_service mount dir|file
+ *   test_service mount-elsewhere <mountpoint>
+ *   test_service caps
+ *   test_service exit-early
  */
 
 #define FUSE_USE_VERSION FUSE_MAKE_VERSION(3, 19)
@@ -62,18 +66,25 @@ static int skip_source(void *data, const char *arg, int key,
 }
 
 /*
- * Mount through the helper so that it has a mount point when the file is
- * requested.
+ * Mount through the helper. On success *sep is the mounted session, which
+ * keeps /dev/fuse open until it is destroyed.
  *
- * @return the mounted session, or NULL on failure
+ * @param fmt         mount point type the helper has to find
+ * @param mountpoint  sent in place of the one on the command line, or NULL
+ * @return 0 when the result was printed, -1 otherwise
  */
-static struct fuse_session *session_mounted(struct fuse_service *service,
-					    const char *argv0)
+static int mount_printed(struct fuse_service *service, const char *argv0,
+			 mode_t fmt, const char *mountpoint,
+			 struct fuse_session **sep)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 	struct fuse_cmdline_opts opts = { };
-	struct fuse_session *se = NULL;
+	struct fuse_session *se;
 	bool source_seen = false;
+	int printed = -1;
+	int ret;
+
+	*sep = NULL;
 
 	if (fuse_opt_add_arg(&args, argv0) ||
 	    fuse_service_append_args(service, &args) ||
@@ -81,20 +92,30 @@ static struct fuse_session *session_mounted(struct fuse_service *service,
 	    fuse_service_parse_cmdline_opts(&args, &opts))
 		goto out;
 
+	if (mountpoint) {
+		free(opts.mountpoint);
+		opts.mountpoint = strdup(mountpoint);
+		if (!opts.mountpoint)
+			goto out;
+	}
+
 	se = fuse_session_new(&args, &test_service_oper,
 			      sizeof(test_service_oper), NULL);
 	if (!se)
 		goto out;
 
-	if (fuse_service_session_mount(service, se, S_IFDIR, &opts)) {
+	ret = fuse_service_session_mount(service, se, fmt, &opts);
+	if (ret)
 		fuse_session_destroy(se);
-		se = NULL;
-	}
+	else
+		*sep = se;
 
+	printf("mount result: %s\n", errno_name(-ret));
+	printed = 0;
 out:
 	free(opts.mountpoint);
 	fuse_opt_free_args(&args);
-	return se;
+	return printed;
 }
 
 /* @return 0 when the result was printed, negative errno otherwise */
@@ -127,22 +148,40 @@ static int request_printed(const struct fuse_service *service,
 	return 0;
 }
 
+/* @return S_IFDIR or S_IFREG, 0 for an unknown name */
+static mode_t mount_format(const char *name)
+{
+	if (!strcmp(name, "dir"))
+		return S_IFDIR;
+	if (!strcmp(name, "file"))
+		return S_IFREG;
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
 	struct fuse_service *service = NULL;
 	struct fuse_session *se = NULL;
-	bool blockdev = false;
+	const char *mode;
+	const char *arg;
 	int ret = 1;
 
-	if (argc != 3) {
+	if (argc != 2 && argc != 3) {
 		fprintf(stderr, "usage: %s socket-path <subtype>\n", argv[0]);
 		fprintf(stderr, "       %s open|open-bdev|open-after-mount <path>\n",
 			argv[0]);
+		fprintf(stderr, "       %s mount dir|file\n", argv[0]);
+		fprintf(stderr, "       %s mount-elsewhere <mountpoint>\n",
+			argv[0]);
+		fprintf(stderr, "       %s caps|exit-early\n", argv[0]);
 		return 1;
 	}
+	mode = argv[1];
+	/* argv[argc] is NULL */
+	arg = argv[2];
 
-	if (!strcmp(argv[1], "socket-path")) {
-		printf("%s/%s\n", FUSE_SERVICE_SOCKET_DIR, argv[2]);
+	if (!strcmp(mode, "socket-path") && arg) {
+		printf("%s/%s\n", FUSE_SERVICE_SOCKET_DIR, arg);
 		return 0;
 	}
 
@@ -151,19 +190,36 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	if (!strcmp(argv[1], "open-after-mount")) {
-		se = session_mounted(service, argv[0]);
-		if (!se)
-			goto out;
-	} else if (!strcmp(argv[1], "open-bdev")) {
-		blockdev = true;
-	} else if (strcmp(argv[1], "open")) {
-		fprintf(stderr, "%s: unknown case %s\n", argv[0], argv[1]);
-		goto out;
+	if (!strcmp(mode, "exit-early")) {
+		/* No goodbye, the helper only sees the connection close */
+		fuse_service_destroy(&service);
+		return 0;
 	}
 
-	if (request_printed(service, argv[2], blockdev))
+	if (!strcmp(mode, "caps")) {
+		printf("caps result: allow_other=%d fuseblk=%d\n",
+		       fuse_service_can_allow_other(service),
+		       fuse_service_can_fuseblk(service));
+	} else if (!strcmp(mode, "mount") && arg && mount_format(arg)) {
+		if (mount_printed(service, argv[0], mount_format(arg), NULL,
+				  &se))
+			goto out;
+	} else if (!strcmp(mode, "mount-elsewhere") && arg) {
+		if (mount_printed(service, argv[0], S_IFDIR, arg, &se))
+			goto out;
+	} else if (!strcmp(mode, "open-after-mount") && arg) {
+		if (mount_printed(service, argv[0], S_IFDIR, NULL, &se) || !se)
+			goto out;
+		if (request_printed(service, arg, false))
+			goto out;
+	} else if ((!strcmp(mode, "open") || !strcmp(mode, "open-bdev")) &&
+		   arg) {
+		if (request_printed(service, arg, !strcmp(mode, "open-bdev")))
+			goto out;
+	} else {
+		fprintf(stderr, "%s: unknown case %s\n", argv[0], mode);
 		goto out;
+	}
 
 	ret = 0;
 out:
