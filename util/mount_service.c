@@ -770,9 +770,55 @@ static bool arg_in_cmdline(int argc, const char * const argv[],
 	return false;
 }
 
+struct option_value_match {
+	const char *path;
+	bool found;
+};
+
+/* fuse_opt_parse() callback: set match->found if the path is this option's value */
+static int match_option_value(void *data, const char *arg, int key,
+			      struct fuse_args *outargs)
+{
+	struct option_value_match *match = data;
+	const char *value = strchr(arg, '=');
+
+	(void) outargs;
+
+	if (key != FUSE_OPT_KEY_OPT)
+		return 0;
+
+	if (value && !strcmp(value + 1, match->path))
+		match->found = true;
+
+	/* Short option with its value glued on, as in "-J/dev/sdb1" */
+	if (arg[0] == '-' && arg[1] && arg[1] != '-' &&
+	    !strcmp(arg + 2, match->path))
+		match->found = true;
+
+	return 0;
+}
+
+/* @return true for the path in "-o name=path", "--name=path" or "-Xpath" */
+static bool option_value_in_cmdline(int argc, const char * const argv[],
+				    const char *path)
+{
+	struct option_value_match match = {
+		.path = path,
+	};
+	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **)argv);
+	int ret;
+
+	/* Parse like the fuse server does, so both see the same values */
+	ret = fuse_opt_parse(&args, &match, NULL, match_option_value);
+	fuse_opt_free_args(&args);
+
+	return !ret && match.found;
+}
+
 static int mount_service_open_path(const struct mount_service *mo,
 				   mode_t expected_fmt,
-				   struct fuse_service_packet *p, size_t psz)
+				   struct fuse_service_packet *p, size_t psz,
+				   int argc, const char * const argv[])
 {
 	const struct fuse_service_open_command *oc =
 			container_of(p, struct fuse_service_open_command, p);
@@ -799,6 +845,15 @@ static int mount_service_open_path(const struct mount_service *mo,
 			mo->msgtag, request_flags & ~FUSE_SERVICE_OPEN_FLAGS);
 		return mount_service_send_file_error(mo, EINVAL, oc->path);
 	}
+
+	/*
+	 * The file is opened outside the service sandbox, so report a path
+	 * the user did not name.
+	 */
+	if (!arg_in_cmdline(argc, argv, oc->path) &&
+	    !option_value_in_cmdline(argc, argv, oc->path))
+		fprintf(stderr, "%s: %s: warning: file not in command line arguments\n",
+			mo->msgtag, oc->path);
 
 	open_flags = ntohl(oc->open_flags) | O_CLOEXEC;
 	drop_privs();
@@ -834,16 +889,18 @@ static int mount_service_open_path(const struct mount_service *mo,
 
 static int mount_service_handle_open_cmd(const struct mount_service *mo,
 					 struct fuse_service_packet *p,
-					 size_t psz)
+					 size_t psz, int argc,
+					 const char * const argv[])
 {
-	return mount_service_open_path(mo, 0, p, psz);
+	return mount_service_open_path(mo, 0, p, psz, argc, argv);
 }
 
 static int mount_service_handle_open_bdev_cmd(const struct mount_service *mo,
 					      struct fuse_service_packet *p,
-					      size_t psz)
+					      size_t psz, int argc,
+					      const char * const argv[])
 {
-	return mount_service_open_path(mo, S_IFBLK, p, psz);
+	return mount_service_open_path(mo, S_IFBLK, p, psz, argc, argv);
 }
 
 #ifdef HAVE_NEW_MOUNT_API
@@ -1838,10 +1895,12 @@ int mount_service_main(int argc, char *argv[])
 
 		switch (ntohl(p->magic)) {
 		case FUSE_SERVICE_OPEN_CMD:
-			ret = mount_service_handle_open_cmd(&mo, p, sz);
+			ret = mount_service_handle_open_cmd(&mo, p, sz,
+					argc, (const char * const *)argv);
 			break;
 		case FUSE_SERVICE_OPEN_BDEV_CMD:
-			ret = mount_service_handle_open_bdev_cmd(&mo, p, sz);
+			ret = mount_service_handle_open_bdev_cmd(&mo, p, sz,
+					argc, (const char * const *)argv);
 			break;
 		case FUSE_SERVICE_FSOPEN_CMD:
 			ret = mount_service_handle_fsopen_cmd(&mo, p, sz);
