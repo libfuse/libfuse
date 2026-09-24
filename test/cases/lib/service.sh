@@ -10,6 +10,8 @@ service_setup()
 {
 	service_subtype=$1
 	service_runs=0
+	# A case may prefix it, to run the helper as another user
+	service_helper=("$FUSE_UTIL_DIR/fuservicemount3")
 	service_sock=$("$FUSE_TEST_BIN_DIR/test_service" socket-path "$1")
 	# Every service script binds its own socket here; removing the
 	# directory would break another script's bind()
@@ -31,6 +33,16 @@ service_start()
 	service_pid=$!
 	_wait_for 10 "grep -q '^listening' '$log'" ||
 		_fail "$service_sock never listened"
+	# connect() needs write permission, and a case may run as another user
+	chmod 0666 "$service_sock"
+}
+
+# service_stop
+# Kill an activator that no helper connected to.
+service_stop()
+{
+	kill "$service_pid" 2>/dev/null || true
+	wait "$service_pid" 2>/dev/null || true
 }
 
 # service_wait_exit
@@ -48,7 +60,7 @@ service_wait_exit()
 
 # service_mount <source> <mountpoint> <case> [args...]
 # Run fuservicemount3 once against test_service <case> [args...] and reap the
-# server. Sets service_log.
+# server. Sets service_log and service_helper_rc.
 service_mount()
 {
 	local source=$1 mnt=$2; shift 2
@@ -57,9 +69,9 @@ service_mount()
 	service_runs=$((service_runs + 1))
 	service_start "$service_log" "$FUSE_TEST_BIN_DIR/test_service" "$@"
 
-	# Its exit status depends on the case; the server's line is the verdict.
-	"$FUSE_UTIL_DIR/fuservicemount3" "$source" "$mnt" \
-		-t "fuse.$service_subtype" || true
+	service_helper_rc=0
+	"${service_helper[@]}" "$source" "$mnt" -t "fuse.$service_subtype" ||
+		service_helper_rc=$?
 
 	service_wait_exit
 }
