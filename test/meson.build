@@ -54,6 +54,12 @@ if build_utils
                    c_args: '-DFUSE_CONF="fuse.conf"',
                    install: false)
 endif
+if private_cfg.get('HAVE_SERVICEMOUNT', false)
+  td += executable('test_service', 'test_service.c',
+                   include_directories: include_dirs,
+                   link_with: [ libfuse ],
+                   install: false)
+endif
 
 if meson.is_subproject()
 	# Skipped rather than run: the tests mount filesystems, which is not

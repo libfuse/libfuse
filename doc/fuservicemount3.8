@@ -19,6 +19,11 @@ Mount a filesystem using a FUSE server that runs as a socket service.
 These servers can be contained using the platform's service management
 framework.
 
+The FUSE server may ask fuservicemount3 to open files on its behalf.
+fuservicemount3 opens only paths that appear verbatim on its command line
+and refuses any other request with EPERM.
+Requests after the server has sent the mount point are refused as well.
+
 The second form checks if there is a FUSE service available for the given
 filesystem type.
 .SH "AUTHORS"

@@ -43,6 +43,11 @@
  *
  *     mount -t fuse.service_ll /dev/sda /mnt
  *
+ * /mnt/single_file then holds the bytes of /dev/sda, so a filesystem can be
+ * created on it:
+ *
+ *     mkfs.ext4 /mnt/single_file
+ *
  * ## Source code ##
  * \include service_ll.c
  * \include service_ll.socket
