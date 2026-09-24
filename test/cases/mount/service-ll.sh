@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# GROUP: mount
+
+FS_NAME=service_ll
+LAUNCH=fuservicemount3
+
+. "$TEST_LIB/service-example.sh"
