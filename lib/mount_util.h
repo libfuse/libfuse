@@ -24,6 +24,26 @@ struct mount_flags {
 };
 extern const struct mount_flags mount_flags[];
 
+/**
+ * @brief Append @opt to the comma-separated option list @optsp.
+ *
+ * @param[in,out] optsp   list to extend, NULL for an empty list.
+ * @param[in]     opt     option to append.
+ * @param[in]     expand  extra bytes to reserve for a value the caller
+ *                        appends itself.
+ * @return 0 on success, -1 on failure.
+ */
+int fuse_mnt_add_opt(char **optsp, const char *opt, unsigned int expand);
+
+/**
+ * @brief Append the flag-mirror part of an mtab record (rw/nosuid/nodev/...).
+ *
+ * @param[in,out] mtab_optsp  option list to extend.
+ * @param[in]     flags       MS_* bitmask the mirrors are derived from.
+ * @return 0 on success, -1 on failure.
+ */
+int fuse_mnt_get_mtab_flag_opts(char **mtab_optsp, int flags);
+
 int fuse_mnt_add_mount(const char *progname, const char *fsname,
 		       const char *mnt, const char *type, const char *opts);
 int fuse_mnt_remove_mount(const char *progname, const char *mnt);
