@@ -577,7 +577,12 @@ struct fuse_conn_info {
 	uint32_t proto_minor;
 
 	/**
-	 * Maximum size of the write buffer
+	 * Maximum size of write requests. Initialized with the
+	 * maximum size libfuse supports.
+	 *
+	 * This value must be at least as big as the system page size
+	 * (getpagesize()) and for best performance it is recommended
+	 * to use an integer multiple of the page size.
 	 */
 	uint32_t max_write;
 
@@ -586,6 +591,11 @@ struct fuse_conn_info {
 	 * limit. However, even if the filesystem does not specify a
 	 * limit, the maximum size of read requests will still be
 	 * limited by the kernel.
+	 *
+	 * If set to a non-zero value, it must be at least as big as
+	 * the system page size (getpagesize()) and for best
+	 * performance it is recommended to use an integer multiple of
+	 * the page size.
 	 *
 	 * NOTE: For the time being, the maximum size of read requests
 	 * must be set both here *and* passed to fuse_session_new()

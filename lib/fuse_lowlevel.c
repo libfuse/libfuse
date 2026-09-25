@@ -2995,6 +2995,11 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		return;
 	}
 
+	if (se->conn.max_read != 0 && se->conn.max_read < getpagesize()) {
+		fuse_log(FUSE_LOG_WARNING, "fuse: maximum read size below page size\n");
+		se->conn.max_read = getpagesize();
+	}
+
 	if (bufsize < FUSE_MIN_READ_BUFFER) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: warning: buffer size too small: %zu\n",
@@ -3005,6 +3010,12 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	if (buf_reallocable)
 	    bufsize = UINT_MAX;
 	se->conn.max_write = MIN(se->conn.max_write, bufsize - FUSE_BUFFER_HEADER_SIZE);
+
+	if (se->conn.max_write < getpagesize()) {
+		fuse_log(FUSE_LOG_WARNING, "fuse: maximum write size below page size\n");
+		se->conn.max_write = getpagesize();
+	}
+
 	se->bufsize = se->conn.max_write + FUSE_BUFFER_HEADER_SIZE;
 
 	if (arg->flags & FUSE_MAX_PAGES) {
