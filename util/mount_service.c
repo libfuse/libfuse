@@ -847,13 +847,16 @@ static int mount_service_open_path(const struct mount_service *mo,
 	}
 
 	/*
-	 * The file is opened outside the service sandbox, so report a path
-	 * the user did not name.
+	 * The file is opened outside the service sandbox, so only hand out
+	 * what the user named or fuse.conf lists.
 	 */
 	if (!arg_in_cmdline(argc, argv, oc->path) &&
-	    !option_value_in_cmdline(argc, argv, oc->path))
-		fprintf(stderr, "%s: %s: warning: file not in command line arguments\n",
-			mo->msgtag, oc->path);
+	    !option_value_in_cmdline(argc, argv, oc->path) &&
+	    !service_open_path_listed(mo->subtype, oc->path)) {
+		fprintf(stderr, "%s: %s: file must be in command line arguments or in %s\n",
+			mo->msgtag, oc->path, FUSE_CONF);
+		return mount_service_send_file_error(mo, EPERM, oc->path);
+	}
 
 	open_flags = ntohl(oc->open_flags) | O_CLOEXEC;
 	drop_privs();
