@@ -72,7 +72,7 @@ private_cfg.set_quoted('PACKAGE_VERSION', meson.project_version())
 service_socket_dir = get_option('service-socket-dir')
 service_socket_perms = get_option('service-socket-perms')
 if service_socket_dir == ''
-  service_socket_dir = '/run/filesystems'
+  service_socket_dir = '/run/fuse'
 endif
 if service_socket_perms == ''
   service_socket_perms = '0220'
