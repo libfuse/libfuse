@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <fnmatch.h>
 #include <mntent.h>
 #include <unistd.h>
 #include <sys/fsuid.h>
@@ -34,6 +35,14 @@ int user_allow_other;
 int mount_max = 1000;
 static uid_t oldfsuid;
 static gid_t oldfsgid;
+
+struct service_open_path {
+	struct service_open_path *next;
+	char *subtype;
+	char *pattern;
+};
+
+static struct service_open_path *service_open_paths;
 
 // Older versions of musl libc don't unescape entries in /etc/mtab
 
@@ -192,12 +201,107 @@ static void strip_line(char *line)
 		memmove(line, s, strlen(s)+1);
 }
 
+/*
+ * Store one service_open_path line. For the line
+ * "service_open_path = ext4 /dev/sd*", str is "ext4 /dev/sd*".
+ */
+static void parse_service_open_path(const char *str, int linenum,
+				    const char *progname)
+{
+	/* <subtype> ends at the first blank */
+	const size_t subtype_len = strcspn(str, " \t");
+	const char *pattern = str + subtype_len;
+	struct service_open_path *entry;
+
+	/* The rest of the line is <pattern>, blanks inside it included */
+	pattern += strspn(pattern, " \t");
+	/* A relative pattern would depend on each user's working directory */
+	if (!subtype_len || pattern[0] != '/') {
+		fprintf(stderr,
+			"%s: invalid service_open_path in %s at line %i\n",
+			progname, FUSE_CONF, linenum);
+		return;
+	}
+
+	entry = calloc(1, sizeof(*entry));
+	if (entry) {
+		entry->subtype = strndup(str, subtype_len);
+		entry->pattern = strdup(pattern);
+	}
+	/* Going on without the line would refuse paths the admin allowed */
+	if (!entry || !entry->subtype || !entry->pattern) {
+		fprintf(stderr, "%s: failed to allocate memory\n", progname);
+		exit(1);
+	}
+
+	/* Order does not matter, the lookup checks every entry */
+	entry->next = service_open_paths;
+	service_open_paths = entry;
+}
+
+/* The config can be read more than once; drop the lines of the last read */
+static void free_service_open_paths(void)
+{
+	while (service_open_paths) {
+		struct service_open_path *entry = service_open_paths;
+
+		service_open_paths = entry->next;
+		free(entry->subtype);
+		free(entry->pattern);
+		free(entry);
+	}
+}
+
+/* @return true if a path component is "." or "..", as in "/srv/img/.." */
+static bool has_dot_component(const char *path)
+{
+	const char *comp = path;
+
+	for (;;) {
+		const size_t len = strcspn(comp, "/");
+
+		if ((len == 1 && comp[0] == '.') ||
+		    (len == 2 && comp[0] == '.' && comp[1] == '.'))
+			return true;
+		if (!comp[len])
+			return false;
+		comp += len + 1;
+	}
+}
+
+bool service_open_path_listed(const char *subtype, const char *path)
+{
+	const struct service_open_path *entry;
+
+	/* "*" also matches "..", which reaches the parent directory */
+	if (has_dot_component(path))
+		return false;
+
+	/*
+	 * subtype is whatever the untrusted client passed to fuservicemount
+	 * -t; it is never checked against the actual filesystem, so "*"
+	 * grants nothing a client could not already get by naming a subtype
+	 * that has its own allow-list entry.
+	 */
+	for (entry = service_open_paths; entry; entry = entry->next)
+		if ((!strcmp(entry->subtype, "*") ||
+		     !strcmp(entry->subtype, subtype)) &&
+		    !fnmatch(entry->pattern, path, FNM_PATHNAME))
+			return true;
+
+	return false;
+}
+
 static void parse_line(const char *line, int linenum, const char *progname)
 {
 	int tmp;
+	int value_pos = -1;
 
 	if (strcmp(line, "user_allow_other") == 0)
 		user_allow_other = 1;
+	else if (sscanf(line, "service_open_path = %n", &value_pos) == 0 &&
+		 value_pos >= 0)
+		parse_service_open_path(line + value_pos, linenum, progname);
 	else if (sscanf(line, "mount_max = %i", &tmp) == 1) {
 		if (tmp < -1)
 			fprintf(stderr,
@@ -215,6 +319,8 @@ static void parse_line(const char *line, int linenum, const char *progname)
 void read_conf(const char *progname)
 {
 	FILE *fp = fopen(FUSE_CONF, "r");
+
+	free_service_open_paths();
 
 	if (fp != NULL) {
 		int linenum = 1;

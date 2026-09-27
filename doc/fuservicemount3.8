@@ -19,6 +19,22 @@ Mount a filesystem using a FUSE server that runs as a socket service.
 These servers can be contained using the platform's service management
 framework.
 
+The FUSE server may ask fuservicemount3 to open files on its behalf.
+fuservicemount3 opens a path only in these cases:
+.IP \- 2
+The path is a command line argument, for example /srv/disk.img.
+.IP \- 2
+The path is the value in a key=value option, for example /dev/sdb1 in
+"-o journal_dev=/dev/sdb1".
+.IP \- 2
+The path directly follows a short option, for example /dev/sdb1 in
+"-J/dev/sdb1".
+.IP \- 2
+A service_open_path line in /etc/fuse.conf lists the path for the filesystem
+type.
+.PP
+It refuses any other request with EPERM.
+
 The second form checks if there is a FUSE service available for the given
 filesystem type.
 .SH "AUTHORS"
