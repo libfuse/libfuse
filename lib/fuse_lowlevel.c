@@ -3121,22 +3121,6 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	if (se->conn.proto_minor >= 23)
 		outarg.time_gran = se->conn.time_gran;
 
-	if (se->debug) {
-		fuse_log(FUSE_LOG_DEBUG, "   INIT: %u.%u\n", outarg.major, outarg.minor);
-		fuse_log(FUSE_LOG_DEBUG, "   flags=0x%08x\n", outarg.flags);
-		fuse_log(FUSE_LOG_DEBUG, "   max_readahead=0x%08x\n",
-			outarg.max_readahead);
-		fuse_log(FUSE_LOG_DEBUG, "   max_write=0x%08x\n", outarg.max_write);
-		fuse_log(FUSE_LOG_DEBUG, "   max_background=%i\n",
-			outarg.max_background);
-		fuse_log(FUSE_LOG_DEBUG, "   congestion_threshold=%i\n",
-			outarg.congestion_threshold);
-		fuse_log(FUSE_LOG_DEBUG, "   time_gran=%u\n",
-			outarg.time_gran);
-		if (se->conn.want_ext & FUSE_CAP_PASSTHROUGH)
-			fuse_log(FUSE_LOG_DEBUG, "   max_stack_depth=%u\n",
-				outarg.max_stack_depth);
-	}
 	if (arg->minor < 5)
 		outargsize = FUSE_COMPAT_INIT_OUT_SIZE;
 	else if (arg->minor < 23)
@@ -3178,6 +3162,23 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		outarg.flags2 = outargflags >> 32;
 	}
 	outarg.flags = outargflags;
+
+	if (se->debug) {
+		fuse_log(FUSE_LOG_DEBUG, "   INIT: %u.%u\n", outarg.major, outarg.minor);
+		fuse_log(FUSE_LOG_DEBUG, "   flags=0x%08x\n", outarg.flags);
+		fuse_log(FUSE_LOG_DEBUG, "   max_readahead=0x%08x\n",
+			outarg.max_readahead);
+		fuse_log(FUSE_LOG_DEBUG, "   max_write=0x%08x\n", outarg.max_write);
+		fuse_log(FUSE_LOG_DEBUG, "   max_background=%i\n",
+			outarg.max_background);
+		fuse_log(FUSE_LOG_DEBUG, "   congestion_threshold=%i\n",
+			outarg.congestion_threshold);
+		fuse_log(FUSE_LOG_DEBUG, "   time_gran=%u\n",
+			outarg.time_gran);
+		if (se->conn.want_ext & FUSE_CAP_PASSTHROUGH)
+			fuse_log(FUSE_LOG_DEBUG, "   max_stack_depth=%u\n",
+				outarg.max_stack_depth);
+	}
 
 	/*
 	 * Has to be set before replying, as new kernel requests might
