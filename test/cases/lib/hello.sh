@@ -1,11 +1,11 @@
-# lib/hello.sh - body for the hello / hello_ll / test/hello cases.
+# lib/hello.sh - body for the hello / hello_ll / test/hello / test/hello_ll cases.
 #
 # Caller sets FS_NAME, FS_OPTS and LAUNCH before sourcing:
-#   FS_NAME   hello | hello_ll | test/hello
+#   FS_NAME   hello | hello_ll | test/hello | test/hello_ll
 #   FS_OPTS   -o option list, empty for none
 #   LAUNCH    direct | mount_fuse | mount_fuse_dropcaps
 #
-# The platform gates live here rather than in the 18 callers: three of them
+# The platform gates live here rather than in the 19 callers: three of them
 # apply to whole columns of the matrix, and a caller that forgot one would
 # fail on BSD instead of skipping.
 
@@ -18,7 +18,9 @@ esac
 
 # hello_ll supports single-threading only.
 FS_EXTRA=
-[ "$FS_NAME" != hello_ll ] || FS_EXTRA=-s
+case $FS_NAME in
+hello_ll | test/hello_ll) FS_EXTRA=-s ;;
+esac
 
 case $LAUNCH in
 direct)
