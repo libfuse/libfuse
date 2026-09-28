@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdatomic.h>
+#include <stdlib.h>
 
 #ifndef MIN
 #define MIN(a, b) \
@@ -27,6 +28,14 @@
 	_a < _b ? _a : _b;						\
 })
 #endif
+
+/* The test suite finds these lines by their "FUSE_INIT: " prefix */
+#define EMIT_INIT_STATUS_LINE(fmt, ...)					\
+do {									\
+	if (getenv("FUSE_INIT_STATUS"))					\
+		fuse_log(FUSE_LOG_INFO, "FUSE_INIT: " fmt "\n",		\
+			 ##__VA_ARGS__);					\
+} while (0)
 
 struct fuse_ring_pool;
 

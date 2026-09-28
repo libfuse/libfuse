@@ -2772,12 +2772,6 @@ static void report_init_test_status(struct fuse_session *se, int ring_rc)
 {
 	const struct fuse_conn_info *conn = &se->conn;
 
-	if (!getenv("FUSE_INIT_STATUS"))
-		return;
-
-#define EMIT_INIT_STATUS_LINE(fmt, ...) \
-	fuse_log(FUSE_LOG_INFO, "FUSE_INIT: " fmt "\n", ##__VA_ARGS__)
-
 	for (const struct fuse_cap_name *cap = fuse_cap_names; cap->name; cap++) {
 		if (conn->want_ext & cap->flag)
 			EMIT_INIT_STATUS_LINE("%s", cap->name);
@@ -2808,8 +2802,6 @@ static void report_init_test_status(struct fuse_session *se, int ring_rc)
 	EMIT_INIT_STATUS_LINE("request_timeout=%u", conn->request_timeout);
 	if (conn->want_ext & FUSE_CAP_PASSTHROUGH)
 		EMIT_INIT_STATUS_LINE("max_stack_depth=%u", conn->max_backing_stack_depth + 1);
-
-#undef EMIT_INIT_STATUS_LINE
 }
 
 /* Prevent bogus data races (bogus since "init" is called before

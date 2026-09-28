@@ -957,6 +957,8 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 			 "fuse: %u buffers of %zu bytes exceed the pool limit, using a payload buffer per entry\n",
 			 se->uring.q_depth, chunk_sz);
 		use_bufpool = false;
+		/* want_ext is the negotiation result from here on */
+		fuse_unset_feature_flag(&se->conn, FUSE_CAP_IO_URING_BUFPOOL);
 	}
 
 	fuse_ring = calloc(1, sizeof(*fuse_ring));
@@ -1365,6 +1367,8 @@ static int fuse_uring_start_queue(struct fuse_ring_queue *queue)
 			fuse_log(FUSE_LOG_WARNING,
 				 "qid=%d bufpool setup failed (%s), falling back to a payload buffer per entry\n",
 				 queue->qid, strerror(-res));
+			EMIT_INIT_STATUS_LINE("io_uring_bufpool=off:qid=%d:%s",
+					      queue->qid, strerror(-res));
 			fuse_uring_disable_bufpool(queue);
 		}
 	}
