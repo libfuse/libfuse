@@ -110,6 +110,8 @@ IO_URING_FALLBACK = 'failed to start io-uring'
 IO_URING_STATE_KEY = 'FUSE_INIT: io_uring='
 IO_URING_STATES_OK = ('on', 'off:custom_io', 'off:not_wanted')
 IO_URING_BUFPOOL_KEY = f'FUSE_INIT: {IO_URING_BUFPOOL_CAP}'
+# A ring queue that fell back to a payload buffer per entry after FUSE_INIT.
+IO_URING_BUFPOOL_OFF_KEY = 'FUSE_INIT: io_uring_bufpool=off'
 
 # FUSE debug messages "unique: X, error: -Y (...), outsize: Z" contain the word
 # "error" but only report a request's return code.
@@ -1177,6 +1179,7 @@ class TestRunner:
         the run would then pass green having exercised the very path bufpools
         replace. Counted rather than matched once, because a log can hold
         several sessions and each of them has to have negotiated a pool.
+        A queue that falls back after FUSE_INIT has a line of its own.
         """
         if not self.io_uring:
             return ''
@@ -1195,6 +1198,9 @@ class TestRunner:
                         rings += 1
                 elif line == IO_URING_BUFPOOL_KEY:
                     bufpools += 1
+                elif (self.io_uring_bufpool
+                      and line.startswith(IO_URING_BUFPOOL_OFF_KEY)):
+                    return f'{out.name}: {line}'
             if self.io_uring_bufpool and bufpools < rings:
                 return (f'{out.name}: {rings} session(s) got a ring but '
                         f'{bufpools} negotiated {IO_URING_BUFPOOL_CAP}')
