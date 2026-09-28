@@ -1,10 +1,10 @@
 /*
-  FUSE: Filesystem in Userspace
-  Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
-
-  This program can be distributed under the terms of the GNU GPLv2.
-  See the file GPL2.txt.
-*/
+ * FUSE: Filesystem in Userspace
+ * Copyright (C) 2001-2007  Miklos Szeredi <miklos@szeredi.hu>
+ *
+ * This program can be distributed under the terms of the GNU GPLv2.
+ * See the file GPL2.txt.
+ */
 
 /** @file
  *
@@ -67,6 +67,10 @@ static void hello_ll_init(void *userdata, struct fuse_conn_info *conn)
 
 	/* Disable the receiving and processing of FUSE_INTERRUPT requests */
 	fuse_set_conn_flag(conn, FUSE_CONN_FLAG_NO_INTERRUPT);
+
+	/* Test setting flags the old way */
+	conn->want = FUSE_CAP_ASYNC_READ;
+	conn->want &= ~FUSE_CAP_ASYNC_READ;
 }
 
 static void hello_ll_getattr(fuse_req_t req, fuse_ino_t ino,
@@ -174,13 +178,10 @@ static void hello_ll_getxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 {
 	(void)size;
 	assert(ino == 1 || ino == 2);
-	if (strcmp(name, "hello_ll_getxattr_name") == 0)
-	{
+	if (strcmp(name, "hello_ll_getxattr_name") == 0) {
 		const char *buf = "hello_ll_getxattr_value";
 		fuse_reply_buf(req, buf, strlen(buf));
-	}
-	else
-	{
+	} else {
 		fuse_reply_err(req, ENOTSUP);
 	}
 }
@@ -191,15 +192,12 @@ static void hello_ll_setxattr(fuse_req_t req, fuse_ino_t ino, const char *name,
 	(void)flags;
 	(void)size;
 	assert(ino == 1 || ino == 2);
-	const char* exp_val = "hello_ll_setxattr_value";
+	const char *exp_val = "hello_ll_setxattr_value";
 	if (strcmp(name, "hello_ll_setxattr_name") == 0 &&
 	    strlen(exp_val) == size &&
-	    strncmp(value, exp_val, size) == 0)
-	{
+	    strncmp(value, exp_val, size) == 0) {
 		fuse_reply_err(req, 0);
-	}
-	else
-	{
+	} else {
 		fuse_reply_err(req, ENOTSUP);
 	}
 }
@@ -208,13 +206,9 @@ static void hello_ll_removexattr(fuse_req_t req, fuse_ino_t ino, const char *nam
 {
 	assert(ino == 1 || ino == 2);
 	if (strcmp(name, "hello_ll_removexattr_name") == 0)
-	{
 		fuse_reply_err(req, 0);
-	}
 	else
-	{
 		fuse_reply_err(req, ENOTSUP);
-	}
 }
 
 static const struct fuse_lowlevel_ops hello_ll_oper = {
@@ -252,7 +246,7 @@ int main(int argc, char *argv[])
 		goto err_out1;
 	}
 
-	if(opts.mountpoint == NULL) {
+	if (opts.mountpoint == NULL) {
 		printf("usage: %s [options] <mountpoint>\n", argv[0]);
 		printf("       %s --help\n", argv[0]);
 		ret = 1;
@@ -262,17 +256,17 @@ int main(int argc, char *argv[])
 	se = fuse_session_new(&args, &hello_ll_oper,
 			      sizeof(hello_ll_oper), NULL);
 	if (se == NULL)
-	    goto err_out1;
+		goto err_out1;
 
 	if (fuse_set_signal_handlers(se) != 0)
-	    goto err_out2;
+		goto err_out2;
 
 	if (fuse_daemonize_early_start(opts.foreground ?
 				       FUSE_DAEMONIZE_NO_BACKGROUND : 0) != 0)
 		goto err_out3;
 
 	if (fuse_session_mount(se, opts.mountpoint) != 0)
-	    goto err_out3;
+		goto err_out3;
 
 	fuse_daemonize_early_success();
 
