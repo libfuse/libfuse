@@ -5,3 +5,5 @@ meson
 ninja
 # Test packages: the suite itself is standard library only.
 codechecker
+# test/ci/run-matrix.py reads test/ci/matrix.yml
+pyyaml

@@ -13,18 +13,27 @@ permissions:
   contents: read
 
 jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      jobs: ${{ steps.matrix.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+      - run: pip install pyyaml
+      - id: matrix
+        run: echo "jobs=$(test/ci/run-matrix.py --github-matrix kernel-vm)" >> "$GITHUB_OUTPUT"
+
   kernel-vm:
+    needs: matrix
     # virtme-ng fetches a release candidate only from 1.30 on, 24.04 ships 1.22
     runs-on: ubuntu-26.04
     name: "${{ matrix.config }}${{ matrix.bufpool && '-bufpool' || '' }}"
     strategy:
       fail-fast: false
-      matrix:
-        config:
-          - gcc-io-uring
-          - gcc-io-uring-root
-          - clang-san-io-uring-root
-        bufpool: [false, true]
+      matrix: ${{ fromJSON(needs.matrix.outputs.jobs) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install dependencies (Ubuntu)
