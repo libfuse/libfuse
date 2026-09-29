@@ -306,7 +306,8 @@ class CgroupManager:
                 if not line.startswith('0::'):
                     continue
                 own = Path('/sys/fs/cgroup') / line[3:].lstrip('/')
-                base = own.parent
+                # without systemd (eg a VM guest) everything is in the root
+                base = own if own == Path('/sys/fs/cgroup') else own.parent
                 if os.access(base, os.W_OK):
                     return base
         except OSError:
