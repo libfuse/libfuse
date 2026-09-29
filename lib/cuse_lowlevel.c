@@ -12,6 +12,7 @@
 #include "fuse_kernel.h"
 #include "fuse_i.h"
 #include "fuse_opt.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -240,7 +241,7 @@ void _cuse_lowlevel_init(fuse_req_t req, const fuse_ino_t nodeid,
 	if (bufsize < se->conn.max_write)
 		se->conn.max_write = bufsize;
 
-	se->got_init = 1;
+	WRITE_ONCE(se->got_init, 1);
 	if (se->op.init)
 		se->op.init(se->userdata, &se->conn);
 
