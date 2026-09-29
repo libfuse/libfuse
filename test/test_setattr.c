@@ -354,8 +354,8 @@ int main(int argc, char *argv[])
 
 	/* Stop file system */
 	fuse_session_exit(se);
-	fuse_session_unmount(se);
 	assert(pthread_join(fs_thread, NULL) == 0);
+	fuse_session_unmount(se);
 
 	assert(got_fh == 1);
 
