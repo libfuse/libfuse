@@ -95,3 +95,16 @@ configs:
       - -Dcpp_link_args=-m32
       - --pkg-config-path=/usr/lib/i386-linux-gnu/pkgconfig
     workflows: [pr-ci]
+  - config: clang-tsan-io-uring
+    cc: clang
+    cxx: clang++
+    tsan: true
+    io_uring: true
+    workflows: [kernel-vm]
+  - config: clang-tsan-io-uring-root
+    cc: clang
+    cxx: clang++
+    tsan: true
+    root: true
+    io_uring: true
+    workflows: [kernel-vm]
