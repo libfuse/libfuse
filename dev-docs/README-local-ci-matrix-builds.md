@@ -10,17 +10,17 @@ a red job can be reproduced without pushing.
 The matrix keeps one definition
 -------------------------------
 
-* Every build parameter is spelled out in `pr-ci.yml`, under
-  `jobs.build.strategy.matrix`.
-* `run-matrix.py` reads that file and produces the same `test/ci-build.sh`
-  command line the workflow's expression expansion does. A configuration
-  added there needs no change here.
+* Every build parameter is spelled out in `test/ci/matrix.yml`, with the
+  workflows that run each configuration.
+* `run-matrix.py` reads that file. The workflows run their jobs through it as
+  well, and ask it for their job list with `--github-matrix WORKFLOW`. A
+  configuration added there needs no change here.
 * Needs PyYAML -- `python3-yaml` on Debian and Ubuntu.
 
 Running it
 ----------
 
-* `test/ci/run-matrix.py` -- every configuration, in the order `pr-ci.yml`
+* `test/ci/run-matrix.py` -- every configuration, in the order `matrix.yml`
   lists them.
 * `-c PATTERN` -- run only the configurations matching. fnmatch, repeatable.
 * `-X PATTERN` -- skip the configurations matching. fnmatch, repeatable.
