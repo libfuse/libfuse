@@ -303,7 +303,7 @@ _refute_mount_opt()        { _check fuse_test_refute_mount_opt "$@"; }
 _assert_super_opt()        { _check fuse_test_assert_super_opt "$@"; }
 _assert_super_opt_prefix() { _check fuse_test_assert_super_opt_prefix "$@"; }
 _assert_fstype()           { _check fuse_test_assert_fstype "$@"; }
-_assert_source()           { _check fuse_test_assert_source "$@"; }
+_assert_source()           { _check fuse_test_assert_source -- "$@"; }
 _assert_utab_target()      { _check fuse_test_assert_utab_target "$@"; }
 _refute_utab_target()      { _check fuse_test_refute_utab_target "$@"; }
 
