@@ -4531,7 +4531,8 @@ pipe_retry:
 	bufsize = se->bufsize;
 
 	if (se->conn.proto_minor < 14 ||
-	    !(se->conn.want_ext & FUSE_CAP_SPLICE_READ))
+	    !(se->conn.want_ext & FUSE_CAP_SPLICE_READ) ||
+	    READ_ONCE(se->splice_read_off))
 		goto fallback;
 
 	llp = fuse_ll_get_pipe(se);
@@ -4643,7 +4644,7 @@ pipe_retry:
 
 disable_splice_read:
 	llp->can_grow = 0;
-	fuse_unset_feature_flag(&se->conn, FUSE_CAP_SPLICE_READ);
+	WRITE_ONCE(se->splice_read_off, true);
 
 	/* splice read will never work, write _might_ */
 	if (se->conn.want_ext & FUSE_CAP_SPLICE_WRITE) {
