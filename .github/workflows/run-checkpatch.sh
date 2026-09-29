@@ -22,10 +22,12 @@ IGNORES="${IGNORES},BAD_REPORTED_BY_LINK"
 # -c diff.algorithm=default: histogram (a common user gitconfig default)
 # aligns some hunks differently than myers, which can turn an unrelated
 # pre-existing line into a "+" line or vice versa; pin so local runs match CI.
+# -c diff.renames=true: with "copies", a file copied from a modified file is
+# shown as a 100% copy and its lines are never checked; CI shows them as new.
 # <commit>^..<commit> rather than -1 <commit>: with a pathspec, -1 means "one
 # commit reachable from here that touches it", so a YAML-only commit would
 # hand checkpatch its predecessor and report on the wrong patch. The range
 # emits nothing instead, which is the right answer for such a commit.
-git -c diff.algorithm=default format-patch --stdout "${commit}^..${commit}" \
+git -c diff.algorithm=default -c diff.renames=true format-patch --stdout "${commit}^..${commit}" \
     -- . ':!*.yml' ':!*.yaml' ':!checkpatch.pl' |
     ./checkpatch.pl --show-types --max-line-length=100 --no-tree --ignore ${IGNORES} -
