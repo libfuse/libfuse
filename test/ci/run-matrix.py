@@ -65,6 +65,8 @@ def ci_build_argv(entry: dict, work_dir: str | None) -> list[str]:
         argv += ['--cxx', cxx]
     if entry.get('sanitize'):
         argv.append('--sanitize')
+    if entry.get('tsan'):
+        argv.append('--tsan')
     if entry.get('valgrind'):
         argv.append('--valgrind')
     for meson_opt in entry.get('meson_opts', []):

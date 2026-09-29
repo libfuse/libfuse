@@ -16,6 +16,7 @@ usage: $0 --name NAME [options]
   --cc CC           C compiler (default: cc)
   --cxx CXX         C++ compiler; left unset when not given
   --sanitize        build with the address and undefined-behaviour sanitizers
+  --tsan            build with the thread sanitizer; excludes --sanitize
   --valgrind        run the filesystem daemons under valgrind
   --root            run the suite as root instead of an unprivileged user
   --io-uring        also exercise the fuse-io-uring transport
@@ -36,7 +37,7 @@ need_arg()
 NAME=
 CC_BIN=cc
 CXX_BIN=
-SANITIZE=0
+SANITIZE=
 VALGRIND=0
 ROOT=0
 IO_URING=0
@@ -51,7 +52,8 @@ while [ $# -gt 0 ]; do
     --cxx)       need_arg "$@"; CXX_BIN=$2; shift 2 ;;
     --meson-opt) need_arg "$@"; MESON_OPTS+=("$2"); shift 2 ;;
     --work-dir)  need_arg "$@"; cli_work_dir=$2; shift 2 ;;
-    --sanitize)  SANITIZE=1; shift ;;
+    --sanitize)  [ -z "${SANITIZE}" ] || usage; SANITIZE=address,undefined; shift ;;
+    --tsan)      [ -z "${SANITIZE}" ] || usage; SANITIZE=thread; shift ;;
     --valgrind)  VALGRIND=1; shift ;;
     --root)      ROOT=1; shift ;;
     --io-uring)  IO_URING=1; shift ;;
@@ -139,8 +141,8 @@ echo "==================="
 meson setup -Dprefix="${PREFIX_DIR}" -Dwerror=true "${MESON_OPTS[@]}" \
     "${SOURCE_DIR}" || { cat meson-logs/meson-log.txt; false; }
 
-if [ "${SANITIZE}" = 1 ]; then
-    meson configure -Db_sanitize=address,undefined
+if [ -n "${SANITIZE}" ]; then
+    meson configure -Db_sanitize="${SANITIZE}"
     # b_lundef=false is required to work around a clang bug, cf.
     # https://groups.google.com/forum/#!topic/mesonbuild/tgEdAXIIdC4
     meson configure -Db_lundef=false
