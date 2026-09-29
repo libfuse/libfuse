@@ -2,6 +2,8 @@
 # GROUP: mount
 
 FS_NAME=hello_ll
+# libmount writes a utab line only for options the kernel does not keep
+MOUNT_OPTS=x-fuse-test
 
 utab_setup()
 {
