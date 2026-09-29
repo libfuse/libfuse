@@ -365,8 +365,9 @@ static void *update_fs_loop(void *data)
 				break;
 			}
 
+			/* Linux 7.1+ gives EINVAL once the connection is gone */
 			if ((ret != 0 && !is_stop) && ret != -ENOENT &&
-			     ret != -EBADF && ret != -ENODEV) {
+			     ret != -EBADF && ret != -ENODEV && ret != -EINVAL) {
 				fprintf(stderr,
 					"ERROR: fuse_lowlevel_notify_prune() failed with %s (%d)\n",
 					strerror(-ret), -ret);
