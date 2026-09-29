@@ -71,6 +71,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 
 /* We can't actually tell the kernel that there is no
    timeout, so we just send a big value */
@@ -89,7 +90,7 @@ static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
    received it back correctly (==2) */
 static int retrieve_status = 0;
 
-static bool is_umount = false;
+static _Atomic bool is_umount;
 
 /* updater thread tid */
 static pthread_t updater;
@@ -121,7 +122,9 @@ static int tfs_stat(fuse_ino_t ino, struct stat *stbuf)
 	else if (ino == FILE_INO) {
 		stbuf->st_mode = S_IFREG | 0444;
 		stbuf->st_nlink = 1;
+		pthread_mutex_lock(&lock);
 		stbuf->st_size = file_size;
+		pthread_mutex_unlock(&lock);
 	}
 
 	else
@@ -273,10 +276,17 @@ static void tfs_open(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 static void tfs_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 		     struct fuse_file_info *fi)
 {
+	char contents[MAX_STR_LEN];
+	size_t contents_size;
+
 	(void)fi;
 
 	assert(ino == FILE_INO);
-	reply_buf_limited(req, file_contents, file_size, off, size);
+	pthread_mutex_lock(&lock);
+	contents_size = file_size;
+	memcpy(contents, file_contents, contents_size);
+	pthread_mutex_unlock(&lock);
+	reply_buf_limited(req, contents, contents_size, off, size);
 }
 
 static void tfs_retrieve_reply(fuse_req_t req, void *cookie, fuse_ino_t ino,
@@ -302,7 +312,9 @@ static void tfs_retrieve_reply(fuse_req_t req, void *cookie, fuse_ino_t ino,
 	assert(ret > 0);
 	assert(strncmp(buf, expected, ret) == 0);
 	free(expected);
+	pthread_mutex_lock(&lock);
 	retrieve_status = 2;
+	pthread_mutex_unlock(&lock);
 	fuse_reply_none(req);
 }
 
@@ -311,8 +323,6 @@ static void tfs_destroy(void *userdata)
 	(void)userdata;
 
 	is_umount = true;
-
-	pthread_join(updater, NULL);
 }
 
 static const struct fuse_lowlevel_ops tfs_oper = {
@@ -348,8 +358,8 @@ static void *update_fs_loop(void *data)
 	int ret;
 
 	while (!is_umount) {
-		update_fs();
 		pthread_mutex_lock(&lock);
+		update_fs();
 		if (!options.no_notify && open_cnt && lookup_cnt) {
 			/* Only send notification if the kernel
                is aware of the inode */
@@ -477,6 +487,9 @@ int main(int argc, char *argv[])
 		config = NULL;
 	}
 
+	/* the updater writes to the session fd, which the unmount closes */
+	is_umount = true;
+	pthread_join(updater, NULL);
 	assert(retrieve_status != 1);
 	fuse_session_unmount(se);
 err_out3:
