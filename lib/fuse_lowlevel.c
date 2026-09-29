@@ -88,10 +88,34 @@ struct fuse_timeout_thread {
 	pthread_mutex_t lock;
 	bool session_destructed;
 
+	/* eventfd wakeups without it mean the session fd is being closed */
+	bool stop_requested;
+
 	/* callback on timeout, if NULL exit(1) is called */
 	fuse_timeout_cb timeout_cb;
 	void *cb_data;
 };
+
+/*
+ * Call before closing the session fd: the watchdog may already poll on that
+ * number, which the next open() can reuse. The eventfd makes its poll() return.
+ */
+static void watchdog_drop_session_fd(struct fuse_session *se)
+{
+	struct fuse_timeout_thread *tt = se->timeout_thread;
+	uint64_t val = 1;
+
+	if (tt == NULL)
+		return;
+
+	pthread_mutex_lock(&tt->lock);
+	tt->fuse_session_fd = -1;
+	pthread_mutex_unlock(&tt->lock);
+
+	if (write(tt->eventfd, &val, sizeof(val)) == -1)
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to signal eventfd: %s\n",
+			 strerror(errno));
+}
 
 static size_t pagesize;
 
@@ -4422,6 +4446,7 @@ void fuse_session_destroy(struct fuse_session *se)
 		se->timeout_thread->se = NULL;
 		pthread_mutex_unlock(&se->timeout_thread->lock);
 	}
+	watchdog_drop_session_fd(se);
 
 	se->destroy_called = true;
 	fuse_session_put(se);
@@ -5443,6 +5468,7 @@ void fuse_session_unmount(struct fuse_session *se)
 	if (se->mountpoint != NULL) {
 		char *mountpoint = atomic_exchange(&se->mountpoint, NULL);
 
+		watchdog_drop_session_fd(se);
 		fuse_kern_unmount(mountpoint, se->fd);
 		se->fd = -1;
 		free(mountpoint);
@@ -5576,15 +5602,19 @@ static void *fuse_session_teardown_watchdog(void *arg)
 	int res;
 	int poll_timeout = -1; /* infinity poll */
 	int nfds;
+	int session_fd;
 	int session_fd_idx;
 	int eventfd_idx;
 
 restart:
 	session_fd_idx = -1;
 	nfds = 0;
-	if (tt->fuse_session_fd >= 0) {
+	pthread_mutex_lock(&tt->lock);
+	session_fd = tt->fuse_session_fd;
+	pthread_mutex_unlock(&tt->lock);
+	if (session_fd >= 0) {
 		/* Poll on session fd for POLLERR */
-		pfds[nfds].fd = tt->fuse_session_fd;
+		pfds[nfds].fd = session_fd;
 		pfds[nfds].events = 0;
 		session_fd_idx = nfds;
 		nfds++;
@@ -5604,20 +5634,35 @@ restart:
 				continue;
 			break;
 		} else if (res > 0) {
-			/* Check for POLLERR on session fd */
-			if (session_fd_idx >= 0 &&
-			    pfds[session_fd_idx].revents & (POLLERR | POLLNVAL)) {
+			bool fd_dropped = false;
+
+			/* Check for teardown signal on eventfd */
+			if (pfds[eventfd_idx].revents & POLLIN) {
+				uint64_t val;
+				bool stop;
+
+				if (read(tt->eventfd, &val, sizeof(val)) == -1)
+					fuse_log(FUSE_LOG_ERR,
+						 "fuse: failed to read eventfd: %s\n",
+						 strerror(errno));
+				pthread_mutex_lock(&tt->lock);
+				stop = tt->stop_requested;
+				pthread_mutex_unlock(&tt->lock);
+
+				/* Teardown requested, exit thread */
+				if (stop)
+					break;
+				fd_dropped = true;
+			}
+
+			/* A dropped session fd is a lost connection, as POLLERR */
+			if (fd_dropped || (session_fd_idx >= 0 &&
+			    pfds[session_fd_idx].revents & (POLLERR | POLLNVAL))) {
 				fuse_tt_pollerr_handler(tt);
 
 				/* Timeout for hard exit */
 				poll_timeout = tt->timeout_sec * 1000;
 				goto restart;
-			}
-
-			/* Check for teardown signal on eventfd */
-			if (pfds[eventfd_idx].revents & POLLIN) {
-				/* Teardown requested, exit thread */
-				break;
 			}
 		}
 
@@ -5679,6 +5724,7 @@ void *fuse_session_start_teardown_watchdog(struct fuse_session *se,
 	tt->eventfd = -1;
 	pthread_mutex_init(&tt->lock, NULL);
 	tt->session_destructed = false;
+	tt->stop_requested = false;
 	if (se->timeout_thread) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: timeout thread already running\n");
@@ -5718,6 +5764,10 @@ void fuse_session_stop_teardown_watchdog(void *data)
 	if (data == NULL)
 		return;
 	tt = (struct fuse_timeout_thread *)data;
+
+	pthread_mutex_lock(&tt->lock);
+	tt->stop_requested = true;
+	pthread_mutex_unlock(&tt->lock);
 
 	/* Signal the eventfd to wake up the thread */
 	if (write(tt->eventfd, &val, sizeof(val)) == -1) {
