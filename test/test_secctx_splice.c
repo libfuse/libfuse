@@ -218,8 +218,8 @@ int main(int argc, char *argv[])
 	free(fuse_opts.mountpoint);
 
 	fuse_session_exit(se);
-	fuse_session_unmount(se);
 	assert(pthread_join(fs_thread, NULL) == 0);
+	fuse_session_unmount(se);
 
 	if (!seen_symlink) {
 		fprintf(stderr, "ERROR: the filesystem never saw the symlink\n");
