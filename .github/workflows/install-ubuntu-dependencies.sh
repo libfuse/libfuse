@@ -60,6 +60,7 @@ PACKAGES_CPPCHECK=(
 PACKAGES_KERNEL_VM=(
     "${PACKAGES_CORE[@]}"
     clang
+    gdb
     virtme-ng
     qemu-system-x86
     virtiofsd
