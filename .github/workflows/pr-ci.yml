@@ -14,118 +14,27 @@ permissions:
   contents: read
 
 jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      jobs: ${{ steps.matrix.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+      - run: pip install pyyaml
+      - id: matrix
+        run: echo "jobs=$(test/ci/run-matrix.py --github-matrix pr-ci)" >> "$GITHUB_OUTPUT"
+
   build:
-    runs-on: '${{ matrix.os }}'
+    needs: matrix
+    runs-on: ubuntu-latest
+    name: "build (ubuntu-latest, ${{ matrix.config }})"
     strategy:
       # One configuration failing must not cancel its siblings.
       fail-fast: false
-      matrix:
-        os:
-          # 18.04 does not work because of ‘no_sanitize’ attribute
-          # cc1: all warnings being treated as errors
-          # - ubuntu-18.04
-          - ubuntu-latest
-        # One entry per CI job. Every build/test parameter is spelled out via
-        # include below and forwarded verbatim to test/ci-build.sh -- nothing
-        # about what a job builds or which pass it runs is hidden in a shell
-        # case branch.
-        config:
-          - gcc
-          - gcc-root
-          - gcc-io-uring
-          - gcc-io-uring-root
-          - gcc-valgrind
-          - gcc-9-valgrind
-          - gcc-10-valgrind
-          - clang
-          - clang-san
-          - clang-san-root
-          - clang-san-io-uring
-          - clang-san-io-uring-root
-          - clang-san-nosymver
-          - clang-san-noiouring
-          - clang-san-nosyncinit
-          - clang-san-m32
-        # include entries must repeat the config key: an include naming none
-        # of the base matrix's own keys would be folded into every
-        # combination instead of just its own.
-        include:
-          - config: gcc
-            cc: gcc
-          - config: gcc-root
-            cc: gcc
-            root: true
-          - config: gcc-io-uring
-            cc: gcc
-            io_uring: true
-          - config: gcc-io-uring-root
-            cc: gcc
-            root: true
-            io_uring: true
-          - config: gcc-valgrind
-            cc: gcc
-            valgrind: true
-          - config: gcc-9-valgrind
-            cc: gcc-9
-            valgrind: true
-          - config: gcc-10-valgrind
-            cc: gcc-10
-            valgrind: true
-            meson_opts:
-              - -Dc_args=-flto=auto
-          - config: clang
-            cc: clang
-            cxx: clang++
-          - config: clang-san
-            cc: clang
-            cxx: clang++
-            sanitize: true
-          - config: clang-san-root
-            cc: clang
-            cxx: clang++
-            sanitize: true
-            root: true
-          - config: clang-san-io-uring
-            cc: clang
-            cxx: clang++
-            sanitize: true
-            io_uring: true
-          - config: clang-san-io-uring-root
-            cc: clang
-            cxx: clang++
-            sanitize: true
-            root: true
-            io_uring: true
-          - config: clang-san-nosymver
-            cc: clang
-            cxx: clang++
-            sanitize: true
-            meson_opts:
-              - -Ddisable-libc-symbol-version=true
-          - config: clang-san-noiouring
-            cc: clang
-            cxx: clang++
-            sanitize: true
-            meson_opts:
-              - -Denable-io-uring=false
-          # The daemons a test backgrounds get synchronous FUSE_INIT
-          # everywhere else, so this is the only job running the classic path.
-          - config: clang-san-nosyncinit
-            cc: clang
-            cxx: clang++
-            sanitize: true
-            meson_opts:
-              - -Dsync-init=never
-          - config: clang-san-m32
-            cc: clang
-            cxx: clang++
-            sanitize: true
-            meson_opts:
-              - -Dc_args=-m32
-              - -Dcpp_args=-m32
-              - -Dc_link_args=-m32
-              - -Dcpp_link_args=-m32
-              - --pkg-config-path=/usr/lib/i386-linux-gnu/pkgconfig
+      matrix: ${{ fromJSON(needs.matrix.outputs.jobs) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -138,14 +47,7 @@ jobs:
 
       - run: test/ci/prepare-runner.sh ${{ github.workspace }}/fuse-tests
 
-      - run: test/ci-build.sh --name ${{ matrix.config }}
-               --cc ${{ matrix.cc }}
-               ${{ matrix.cxx && format('--cxx {0}', matrix.cxx) || '' }}
-               ${{ matrix.sanitize && '--sanitize' || '' }}
-               ${{ matrix.valgrind && '--valgrind' || '' }}
-               ${{ matrix.meson_opts && format('--meson-opt {0}', join(matrix.meson_opts, ' --meson-opt ')) || '' }}
-               ${{ matrix.root && '--root' || '' }}
-               ${{ matrix.io_uring && '--io-uring' || '' }}
+      - run: test/ci/run-matrix.py --config ${{ matrix.config }}
                --work-dir ${{ github.workspace }}/fuse-tests
 
       - name: Print failed test logs
@@ -161,7 +63,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-logs-${{ matrix.os }}-${{ matrix.config }}
+          name: test-logs-ubuntu-latest-${{ matrix.config }}
           # A test killed on timeout runs no cleanup, so a socket it bound in
           # its log directory is still there; nothing in one can be uploaded.
           path: |
