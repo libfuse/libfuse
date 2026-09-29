@@ -258,6 +258,14 @@ modprobe cuse 2> /dev/null || true
 grep -q ' /sys/fs/cgroup cgroup2 ' /proc/mounts ||
     mount -t cgroup2 none /sys/fs/cgroup 2> /dev/null || true
 
+# run-tests.py needs a writable parent of its own cgroup to create the
+# per-test ones in; systemd would delegate one to a user session.
+mkdir -p /sys/fs/cgroup/fuse-user/runner &&
+    chown '${RUN_USER}:' /sys/fs/cgroup/fuse-user \
+        /sys/fs/cgroup/fuse-user/cgroup.{procs,threads,subtree_control} &&
+    chown -R '${RUN_USER}:' /sys/fs/cgroup/fuse-user/runner &&
+    echo \$\$ > /sys/fs/cgroup/fuse-user/runner/cgroup.procs || true
+
 cd $(printf '%q' "$PWD")
 
 rc=0
