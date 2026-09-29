@@ -389,8 +389,9 @@ static void *update_fs_loop(void *data)
 				pthread_mutex_unlock(&lock);
 				continue;
 			}
+			/* Linux 7.1+ gives EINVAL once the connection is gone */
 			if ((ret != 0 && !is_umount) && ret != -ENOENT &&
-			    ret != -EBADF && ret != -ENODEV) {
+			    ret != -EBADF && ret != -ENODEV && ret != -EINVAL) {
 				fprintf(stderr,
 					"ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
 					strerror(-ret), -ret);

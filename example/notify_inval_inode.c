@@ -320,8 +320,9 @@ static void *update_fs_loop(void *data)
              */
 			int ret = fuse_lowlevel_notify_inval_inode(se, FILE_INO,
 								   0, 0);
+			/* Linux 7.1+ gives EINVAL once the connection is gone */
 			if ((ret != 0 && !is_stop) && ret != -ENOENT &&
-			    ret != -EBADF && ret != -ENODEV) {
+			    ret != -EBADF && ret != -ENODEV && ret != -EINVAL) {
 				fprintf(stderr,
 					"ERROR: fuse_lowlevel_notify_store() failed with %s (%d)\n",
 					strerror(-ret), -ret);
