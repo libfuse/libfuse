@@ -258,6 +258,11 @@ modprobe cuse 2> /dev/null || true
 grep -q ' /sys/fs/cgroup cgroup2 ' /proc/mounts ||
     mount -t cgroup2 none /sys/fs/cgroup 2> /dev/null || true
 
+# libfuse records a mount in utab only when the file already exists;
+# systemd and mount(8) create it on a normal host.
+mkdir -p /run/mount
+touch /run/mount/utab
+
 # run-tests.py needs a writable parent of its own cgroup to create the
 # per-test ones in; systemd would delegate one to a user session.
 mkdir -p /sys/fs/cgroup/fuse-user/runner &&
