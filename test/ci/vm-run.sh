@@ -253,6 +253,11 @@ mount -t fusectl none /sys/fs/fuse/connections 2> /dev/null || true
 # autoloads a module.
 modprobe cuse 2> /dev/null || true
 
+# run-tests.py puts each test in its own cgroup, so cgroup.kill can stop a
+# wedged daemon; systemd would mount cgroup2 on a normal host.
+grep -q ' /sys/fs/cgroup cgroup2 ' /proc/mounts ||
+    mount -t cgroup2 none /sys/fs/cgroup 2> /dev/null || true
+
 cd $(printf '%q' "$PWD")
 
 rc=0
