@@ -13,6 +13,7 @@
 #include "fuse_i.h"
 #include "fuse_kernel.h"
 #include "fuse_uring_i.h"
+#include "fuse_tsan_i.h"
 
 #include <stdlib.h>
 #include <liburing.h>
@@ -283,6 +284,8 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 	struct io_uring_sqe *sqe;
 	int res = 0;
+
+	tsan_release_reply(se);
 
 	/*
 	 * Multi-issuer: serialise every submission-side SQ access under

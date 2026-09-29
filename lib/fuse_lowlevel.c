@@ -22,6 +22,7 @@
 #include "fuse_cap_names_i.h"
 #include "fuse_daemonize_i.h"
 #include "fuse_daemonize.h"
+#include "fuse_tsan_i.h"
 #if defined(__linux__)
 #include "mount_i_linux.h"
 #endif
@@ -371,6 +372,10 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 				(unsigned long long) out->unique, out->len);
 		}
 	}
+
+	/* io-uring replies release when their SQE is committed */
+	if (!is_uring && out->unique != 0)
+		tsan_release_reply(se);
 
 	if (is_uring)
 		err = fuse_send_msg_uring(req, iov, count);
@@ -1073,6 +1078,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	    (se->conn.want_ext & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
+	tsan_release_reply(se);
 	if (se->io != NULL && se->io->splice_send != NULL) {
 		res = se->io->splice_send(llp->pipe[0], NULL,
 						  ch ? ch->fd : se->fd, NULL, out->len,
@@ -4159,6 +4165,7 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 		goto clear_pipe;
 	}
 
+	tsan_acquire_request(se);
 	fuse_session_in2req(req, in);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
@@ -4290,6 +4297,7 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	int err;
 
 	/* For io_uring, extensions are in the payload buffer, not appended to 'in' header. */
+	tsan_acquire_request(se);
 	fuse_session_in2req(req, in);
 	if (in->total_extlen)
 		fuse_req_parse_extensions(req, in->total_extlen, op_payload, payload_len);
