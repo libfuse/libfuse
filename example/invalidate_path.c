@@ -40,6 +40,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 /* We can't actually tell the kernel that there is no
    timeout, so we just send a big value */
@@ -53,6 +54,8 @@
 
 static char time_file_contents[MAX_STR_LEN];
 static size_t grow_file_size;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER; /* the two above */
+static _Atomic bool is_umount;
 
 /* Command line parsing */
 struct options {
@@ -93,12 +96,16 @@ static int xmp_getattr(const char *path,
 		stbuf->st_ino = TIME_FILE_INO;
 		stbuf->st_mode = S_IFREG | 0444;
 		stbuf->st_nlink = 1;
+		pthread_mutex_lock(&lock);
 		stbuf->st_size = strlen(time_file_contents);
+		pthread_mutex_unlock(&lock);
 	} else if (strcmp(path, "/" GROW_FILE_NAME) == 0) {
 		stbuf->st_ino = GROW_FILE_INO;
 		stbuf->st_mode = S_IFREG | 0444;
 		stbuf->st_nlink = 1;
+		pthread_mutex_lock(&lock);
 		stbuf->st_size = grow_file_size;
+		pthread_mutex_unlock(&lock);
 	} else {
 		return -ENOENT;
 	}
@@ -136,23 +143,26 @@ static int xmp_open(const char *path, struct fuse_file_info *fi) {
 
 static int xmp_read(const char *path, char *buf, size_t size, off_t offset,
 		struct fuse_file_info *fi) {
+	int to_copy;
+
 	(void) fi;
 	(void) offset;
+	pthread_mutex_lock(&lock);
 	if (strcmp(path, "/" TIME_FILE_NAME) == 0) {
 		int file_length = strlen(time_file_contents);
-		int to_copy = offset + size <= file_length
+		to_copy = offset + size <= file_length
 				? size
 						: file_length - offset;
 		memcpy(buf, time_file_contents, to_copy);
-		return to_copy;
 	} else {
 		assert(strcmp(path, "/" GROW_FILE_NAME) == 0);
-		int to_copy = offset + size <= grow_file_size
+		to_copy = offset + size <= grow_file_size
 				? size
 						: grow_file_size - offset;
 		memset(buf, 'x', to_copy);
-		return to_copy;
 	}
+	pthread_mutex_unlock(&lock);
+	return to_copy;
 }
 
 static const struct fuse_operations xmp_oper = {
@@ -181,7 +191,8 @@ static void update_fs(void) {
 
 static int invalidate(struct fuse *fuse, const char *path) {
 	int status = fuse_invalidate_path(fuse, path);
-	if (status == -ENOENT) {
+	/* the kernel rejects notifications once the session has ended */
+	if (status == -ENOENT || fuse_session_exited(fuse_get_session(fuse))) {
 		return 0;
 	} else {
 		return status;
@@ -191,8 +202,10 @@ static int invalidate(struct fuse *fuse, const char *path) {
 static void* update_fs_loop(void *data) {
 	struct fuse *fuse = (struct fuse*) data;
 
-	while (1) {
+	while (!is_umount) {
+		pthread_mutex_lock(&lock);
 		update_fs();
+		pthread_mutex_unlock(&lock);
 		if (!options.no_notify) {
 			assert(invalidate(fuse, "/" TIME_FILE_NAME) == 0);
 			assert(invalidate(fuse, "/" GROW_FILE_NAME) == 0);
@@ -294,6 +307,9 @@ int main(int argc, char *argv[]) {
 
 	fuse_remove_signal_handlers(se);
 out3:
+	/* the updater uses fuse, which fuse_destroy() frees */
+	is_umount = true;
+	pthread_join(updater, NULL);
 	fuse_unmount(fuse);
 out2:
 	fuse_destroy(fuse);
