@@ -254,6 +254,16 @@ parse_codechecker_results()
     fi
 
     if [ $has_issues -eq 1 ]; then
+        # the job page only shows annotations, not the parse output above
+        if [ $GITHUB_WORKFLOW -eq 1 ]; then
+            $codechecker parse codechecker-reports -e json 2>/dev/null |
+                jq -r --arg ws "$GITHUB_WORKSPACE/" '.reports[] |
+                    "::error file=\(.file.original_path | ltrimstr($ws))," +
+                    "line=\(.line),col=\(.column)::" +
+                    ("[\(.checker_name)] \(.message)" |
+                     gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A"))' || true
+        fi
+        echo_error "CodeChecker reported issues, see the parse output above"
         return 1
     fi
 
@@ -376,6 +386,8 @@ run_codechecker_cppcheck()
     # Create a temporary file with cppcheck verbatim arguments
     local cppcheck_args_file="$(mktemp)"
     echo "--inline-suppr" > "$cppcheck_args_file"
+    # analyse complex functions in full instead of reporting the limit
+    echo "--check-level=exhaustive" >> "$cppcheck_args_file"
     cmd="$cmd --analyzer-config cppcheck:cc-verbatim-args-file=$cppcheck_args_file"
 
     # Disable checkers with excessive false positives
