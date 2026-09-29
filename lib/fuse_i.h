@@ -135,6 +135,8 @@ struct fuse_session {
 	int got_destroy;
 	pthread_key_t pipe_key;
 	int broken_splice_nonblock;
+	/* set at runtime; conn.want_ext is read unlocked by every worker */
+	bool splice_read_off;
 	uint64_t notify_ctr;
 	struct fuse_notify_req notify_list;
 	_Atomic size_t bufsize;
