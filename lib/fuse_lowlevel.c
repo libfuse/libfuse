@@ -3186,7 +3186,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	 * Especially with external handlers, where we have no control
 	 * over the thread scheduling.
 	 */
-	se->got_init = 1;
+	WRITE_ONCE(se->got_init, 1);
 	fuse_daemonize_set_got_init();
 	send_reply_ok(req, &outarg, outargsize);
 	/*
@@ -3233,7 +3233,7 @@ static void _do_destroy(fuse_req_t req, const fuse_ino_t nodeid,
 	}
 
 	se->got_destroy = 1;
-	se->got_init = 0;
+	WRITE_ONCE(se->got_init, 0);
 	if (se->op.destroy)
 		se->op.destroy(se->userdata);
 
@@ -3305,7 +3305,7 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 	struct fuse_out_header out;
 	struct fuse_req *req = NULL;
 
-	if (!se->got_init)
+	if (!READ_ONCE(se->got_init))
 		return -ENOTCONN;
 
 	out.unique = 0;
@@ -3879,7 +3879,7 @@ fuse_req_opcode_sanity_ok(struct fuse_session *se, enum fuse_opcode in_op)
 {
 	int err = EIO;
 
-	if (!se->got_init) {
+	if (!READ_ONCE(se->got_init)) {
 		enum fuse_opcode expected;
 
 		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
@@ -4402,7 +4402,7 @@ void fuse_session_put(struct fuse_session *se)
 void fuse_session_destroy(struct fuse_session *se)
 {
 	/* on the caller's thread: userdata may not outlive this call */
-	if (se->got_init && !se->got_destroy) {
+	if (READ_ONCE(se->got_init) && !se->got_destroy) {
 		if (se->op.destroy)
 			se->op.destroy(se->userdata);
 	}
@@ -4705,7 +4705,7 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 	 * if run internally thread buffers are from libfuse - we can
 	 * reallocate them
 	 */
-	if (unlikely(!se->got_init) && !se->buf_reallocable)
+	if (unlikely(!READ_ONCE(se->got_init)) && !se->buf_reallocable)
 		se->buf_reallocable = true;
 
 	return _fuse_session_receive_buf(se, buf, ch, true);
