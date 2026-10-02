@@ -629,8 +629,10 @@ int fuse_service_append_args(struct fuse_service *sf,
 	struct fuse_args new_args = {
 		.allocated = 1,
 	};
+	struct stat statbuf;
 	char *str = NULL;
 	off_t memfd_pos = 0;
+	off_t max_argc;
 	ssize_t received;
 	unsigned int i;
 	int ret;
@@ -655,6 +657,34 @@ int fuse_service_append_args(struct fuse_service *sf,
 	memfd_args.magic = htonl(memfd_args.magic);
 	memfd_args.argc = htonl(memfd_args.argc);
 	memfd_pos += sizeof(memfd_args);
+
+	ret = fstat(sf->argvfd, &statbuf);
+	if (ret) {
+		int error = errno;
+
+		fuse_log(FUSE_LOG_ERR, "fuse: service args file stat: %s\n",
+			 strerror(error));
+		return -error;
+	}
+	if (statbuf.st_size > FUSE_SERVICE_MAX_ARGV_SIZE) {
+		fuse_log(FUSE_LOG_ERR, "fuse: service args file too large\n");
+		return -EBADMSG;
+	}
+
+	/*
+	 * The array of argv iovecs sits between the header and the strings, so
+	 * the file size bounds argc.  Reject a count the file cannot hold: the
+	 * sum below is computed in unsigned arithmetic and would otherwise wrap
+	 * and undersize the array.  argc 0 is rejected as well, because only
+	 * the first loop iteration fills argv[0].
+	 */
+	max_argc = (statbuf.st_size - (off_t)sizeof(memfd_args)) /
+		   (off_t)sizeof(struct fuse_service_memfd_arg);
+	if (memfd_args.argc == 0 || memfd_args.argc > max_argc) {
+		fuse_log(FUSE_LOG_ERR, "fuse: service args file argc %u invalid\n",
+			 memfd_args.argc);
+		return -EBADMSG;
+	}
 
 	/* Allocate a new array of argv string pointers */
 	new_args.argv = calloc(memfd_args.argc + existing_args->argc,
@@ -721,6 +751,19 @@ int fuse_service_append_args(struct fuse_service *sf,
 		memfd_arg.pos = htonl(memfd_arg.pos);
 		memfd_arg.len = htonl(memfd_arg.len);
 		memfd_pos += sizeof(memfd_arg);
+
+		/*
+		 * A string cannot be longer than the file holding it.  len
+		 * UINT32_MAX would make len + 1 wrap to zero below, handing
+		 * calloc() a zero-size buffer for the pread() to overflow.
+		 */
+		if (memfd_arg.len >= statbuf.st_size) {
+			fuse_log(FUSE_LOG_ERR,
+				 "fuse: service args file argv[%u] len %u too large\n",
+				 i, memfd_arg.len);
+			ret = -EBADMSG;
+			goto out_new_args;
+		}
 
 		/* read arg string from file */
 		str = calloc(1, memfd_arg.len + 1);
