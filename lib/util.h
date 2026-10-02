@@ -12,6 +12,10 @@
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
+/* a plain value read and written by several threads, no ordering implied */
+#define READ_ONCE(x) __atomic_load_n(&(x), __ATOMIC_RELAXED)
+#define WRITE_ONCE(x, val) __atomic_store_n(&(x), (val), __ATOMIC_RELAXED)
+
 struct fuse_conn_info;
 
 int libfuse_strtol(const char *str, long *res);

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Run the build matrix of the pr-ci.yml workflow from a checkout.
+"""Run the CI build matrix from a checkout.
 
-The workflow spells every build parameter out in its matrix and forwards it to
-test/ci-build.sh through an expression expansion, so reproducing one job by
-hand means reading YAML and retyping its flags. This reads the same matrix and
-builds the same command lines.
+test/ci/matrix.yml spells every build parameter out, and the workflows run
+each job through this script, so a job run by hand builds the same
+test/ci-build.sh command line as in CI.
 
 Configurations run one after another: the suite has tests that cannot run
 beside a copy of themselves, and the io-uring ones put a global module
@@ -13,6 +12,7 @@ parameter back on exit.
 
 import argparse
 import fnmatch
+import json
 import os
 import shutil
 import subprocess
@@ -21,35 +21,35 @@ import time
 from pathlib import Path
 
 SOURCE_DIR = Path(__file__).resolve().parent.parent.parent
-WORKFLOW = SOURCE_DIR / '.github/workflows/pr-ci.yml'
+MATRIX = SOURCE_DIR / 'test/ci/matrix.yml'
 CI_BUILD = SOURCE_DIR / 'test/ci-build.sh'
 RUN_TESTS = SOURCE_DIR / 'test/run-tests.py'
 VM_RUN = SOURCE_DIR / 'test/ci/vm-run.sh'
 
 
 def load_matrix() -> list[dict]:
-    """Return one dict per matrix entry, in the order pr-ci.yml lists them."""
+    """Return one dict per configuration, in the order matrix.yml lists them."""
     try:
         import yaml
     except ImportError:
-        sys.exit('run-matrix.py needs PyYAML to read the workflow; '
+        sys.exit('run-matrix.py needs PyYAML to read the matrix; '
                  'install python3-yaml')
 
-    with open(WORKFLOW) as workflow_file:
-        document = yaml.safe_load(workflow_file)
+    with open(MATRIX) as matrix_file:
+        document = yaml.safe_load(matrix_file)
+    return document['configs']
 
-    matrix = document['jobs']['build']['strategy']['matrix']
-    includes = {}
-    for include in matrix['include']:
-        includes[include['config']] = include
 
-    entries = []
-    for name in matrix['config']:
-        include = includes.get(name)
-        if include is None:
-            sys.exit(f'{name} is in the matrix but has no include entry')
-        entries.append(include)
-    return entries
+def github_matrix(entries: list[dict], workflow: str) -> dict:
+    """The jobs of one workflow, as a strategy.matrix."""
+    jobs = []
+    for entry in entries:
+        workflows = entry.get('workflows', [])
+        if workflow in workflows:
+            jobs.append({'config': entry['config'], 'bufpool': False})
+        if f'{workflow}-bufpool' in workflows:
+            jobs.append({'config': entry['config'], 'bufpool': True})
+    return {'include': jobs}
 
 
 def ci_build_argv(entry: dict, work_dir: str | None) -> list[str]:
@@ -65,6 +65,8 @@ def ci_build_argv(entry: dict, work_dir: str | None) -> list[str]:
         argv += ['--cxx', cxx]
     if entry.get('sanitize'):
         argv.append('--sanitize')
+    if entry.get('tsan'):
+        argv.append('--tsan')
     if entry.get('valgrind'):
         argv.append('--valgrind')
     for meson_opt in entry.get('meson_opts', []):
@@ -196,6 +198,9 @@ def main() -> int:
     parser.add_argument('-X', '--exclude', action='append', default=[],
                         metavar='PATTERN',
                         help='configuration to skip; repeatable')
+    parser.add_argument('--github-matrix', default=None, metavar='WORKFLOW',
+                        help='print the jobs matrix.yml assigns to WORKFLOW '
+                             'as JSON for strategy.matrix, and exit')
     parser.add_argument('-l', '--list', action='store_true',
                         help='print the command line of each configuration '
                              'and exit')
@@ -220,6 +225,10 @@ def main() -> int:
                              'whole run, as ci-build.sh names its own '
                              'subdirectories after the configuration')
     args = parser.parse_args()
+
+    if args.github_matrix is not None:
+        print(json.dumps(github_matrix(load_matrix(), args.github_matrix)))
+        return 0
 
     entries = select(load_matrix(), args.config, args.exclude)
     if args.io_uring_bufpool:

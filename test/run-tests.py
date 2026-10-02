@@ -672,15 +672,6 @@ class StackDumper:
         return f'=== pid {pid} ({comm}): {" ".join(cmdline.split())} ==='
 
     @staticmethod
-    def _as_text(data) -> str:
-        """TimeoutExpired carries its partial output undecoded even when the
-        run was in text mode."""
-        if data is None:
-            return ''
-        return data if isinstance(data, str) \
-            else data.decode('utf8', errors='replace')
-
-    @staticmethod
     def _uninterruptible_tids(pid: int) -> list:
         """Threads of *pid* in uninterruptible sleep, D in /proc.
 
@@ -760,22 +751,22 @@ class StackDumper:
                 f'(skipped: tid {tids} in uninterruptible sleep, so the '
                 f'attach cannot complete -- see kstack.{pid}.txt)\n')
             return
-        argv = ['sudo', '-n', self.gdb, '--batch', '--nx',
+        # timeout runs under sudo: a SIGKILL to sudo is not passed on and
+        # leaves the root gdb attached. KILL, as gdb blocked in wait4() for
+        # the attach ignores SIGTERM.
+        argv = ['sudo', '-n', 'timeout', '--signal=KILL',
+                f'{GDB_TIMEOUT:.0f}', self.gdb, '--batch', '--nx',
                 '-ex', 'set pagination off',
                 '-ex', 'thread apply all bt',
                 '-ex', 'set print pretty on',
                 '-ex', 'thread apply all bt full',
                 '-p', str(pid)]
-        try:
-            proc = subprocess.run(argv, capture_output=True, text=True,
-                                  timeout=GDB_TIMEOUT, check=False)
-            out = proc.stdout + proc.stderr
-        except subprocess.TimeoutExpired as expired:
-            # A pid gdb cannot finish with is the interesting one often
-            # enough that whatever it did print has to be kept.
-            out = (self._as_text(expired.stdout) +
-                   self._as_text(expired.stderr) +
-                   f'\n(gdb killed after {GDB_TIMEOUT:.0f}s)\n')
+        proc = subprocess.run(argv, capture_output=True, text=True,
+                              check=False)
+        out = proc.stdout + proc.stderr
+        # GNU timeout kills itself with the same signal, uutils exits 124
+        if proc.returncode in (124, -signal.SIGKILL):
+            out += f'\n(gdb killed after {GDB_TIMEOUT:.0f}s)\n'
         (logs / f'gdbstack.{pid}.txt').write_text(
             f'{self._proc_identity(pid)}\n{out}')
 

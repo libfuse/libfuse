@@ -22,6 +22,7 @@
 #include "fuse_cap_names_i.h"
 #include "fuse_daemonize_i.h"
 #include "fuse_daemonize.h"
+#include "fuse_tsan_i.h"
 #if defined(__linux__)
 #include "mount_i_linux.h"
 #endif
@@ -88,10 +89,34 @@ struct fuse_timeout_thread {
 	pthread_mutex_t lock;
 	bool session_destructed;
 
+	/* eventfd wakeups without it mean the session fd is being closed */
+	bool stop_requested;
+
 	/* callback on timeout, if NULL exit(1) is called */
 	fuse_timeout_cb timeout_cb;
 	void *cb_data;
 };
+
+/*
+ * Call before closing the session fd: the watchdog may already poll on that
+ * number, which the next open() can reuse. The eventfd makes its poll() return.
+ */
+static void watchdog_drop_session_fd(struct fuse_session *se)
+{
+	struct fuse_timeout_thread *tt = se->timeout_thread;
+	uint64_t val = 1;
+
+	if (tt == NULL)
+		return;
+
+	pthread_mutex_lock(&tt->lock);
+	tt->fuse_session_fd = -1;
+	pthread_mutex_unlock(&tt->lock);
+
+	if (write(tt->eventfd, &val, sizeof(val)) == -1)
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to signal eventfd: %s\n",
+			 strerror(errno));
+}
 
 static size_t pagesize;
 
@@ -341,6 +366,10 @@ static int fuse_send_msg(struct fuse_session *se, struct fuse_chan *ch,
 				(unsigned long long) out->unique, out->len);
 		}
 	}
+
+	/* io-uring replies release when their SQE is committed */
+	if (!is_uring && out->unique != 0)
+		tsan_release_reply(se);
 
 	if (is_uring)
 		err = fuse_send_msg_uring(req, iov, count);
@@ -1043,6 +1072,7 @@ static int fuse_send_data_iov(struct fuse_session *se, struct fuse_chan *ch,
 	    (se->conn.want_ext & FUSE_CAP_SPLICE_MOVE))
 		splice_flags |= SPLICE_F_MOVE;
 
+	tsan_release_reply(se);
 	if (se->io != NULL && se->io->splice_send != NULL) {
 		res = se->io->splice_send(llp->pipe[0], NULL,
 						  ch ? ch->fd : se->fd, NULL, out->len,
@@ -3186,7 +3216,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	 * Especially with external handlers, where we have no control
 	 * over the thread scheduling.
 	 */
-	se->got_init = 1;
+	WRITE_ONCE(se->got_init, 1);
 	fuse_daemonize_set_got_init();
 	send_reply_ok(req, &outarg, outargsize);
 	/*
@@ -3233,7 +3263,7 @@ static void _do_destroy(fuse_req_t req, const fuse_ino_t nodeid,
 	}
 
 	se->got_destroy = 1;
-	se->got_init = 0;
+	WRITE_ONCE(se->got_init, 0);
 	if (se->op.destroy)
 		se->op.destroy(se->userdata);
 
@@ -3305,7 +3335,7 @@ static int send_notify_iov(struct fuse_session *se, int notify_code,
 	struct fuse_out_header out;
 	struct fuse_req *req = NULL;
 
-	if (!se->got_init)
+	if (!READ_ONCE(se->got_init))
 		return -ENOTCONN;
 
 	out.unique = 0;
@@ -3879,7 +3909,7 @@ fuse_req_opcode_sanity_ok(struct fuse_session *se, enum fuse_opcode in_op)
 {
 	int err = EIO;
 
-	if (!se->got_init) {
+	if (!READ_ONCE(se->got_init)) {
 		enum fuse_opcode expected;
 
 		expected = se->cuse_data ? CUSE_INIT : FUSE_INIT;
@@ -4129,6 +4159,7 @@ void fuse_session_process_buf_internal(struct fuse_session *se,
 		goto clear_pipe;
 	}
 
+	tsan_acquire_request(se);
 	fuse_session_in2req(req, in);
 	req->ch = ch ? fuse_chan_get(ch) : NULL;
 
@@ -4260,6 +4291,7 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	int err;
 
 	/* For io_uring, extensions are in the payload buffer, not appended to 'in' header. */
+	tsan_acquire_request(se);
 	fuse_session_in2req(req, in);
 	if (in->total_extlen)
 		fuse_req_parse_extensions(req, in->total_extlen, op_payload, payload_len);
@@ -4402,7 +4434,7 @@ void fuse_session_put(struct fuse_session *se)
 void fuse_session_destroy(struct fuse_session *se)
 {
 	/* on the caller's thread: userdata may not outlive this call */
-	if (se->got_init && !se->got_destroy) {
+	if (READ_ONCE(se->got_init) && !se->got_destroy) {
 		if (se->op.destroy)
 			se->op.destroy(se->userdata);
 	}
@@ -4422,6 +4454,7 @@ void fuse_session_destroy(struct fuse_session *se)
 		se->timeout_thread->se = NULL;
 		pthread_mutex_unlock(&se->timeout_thread->lock);
 	}
+	watchdog_drop_session_fd(se);
 
 	se->destroy_called = true;
 	fuse_session_put(se);
@@ -4492,7 +4525,8 @@ pipe_retry:
 	bufsize = se->bufsize;
 
 	if (se->conn.proto_minor < 14 ||
-	    !(se->conn.want_ext & FUSE_CAP_SPLICE_READ))
+	    !(se->conn.want_ext & FUSE_CAP_SPLICE_READ) ||
+	    READ_ONCE(se->splice_read_off))
 		goto fallback;
 
 	llp = fuse_ll_get_pipe(se);
@@ -4604,7 +4638,7 @@ pipe_retry:
 
 disable_splice_read:
 	llp->can_grow = 0;
-	fuse_unset_feature_flag(&se->conn, FUSE_CAP_SPLICE_READ);
+	WRITE_ONCE(se->splice_read_off, true);
 
 	/* splice read will never work, write _might_ */
 	if (se->conn.want_ext & FUSE_CAP_SPLICE_WRITE) {
@@ -4705,7 +4739,7 @@ int fuse_session_receive_buf_internal(struct fuse_session *se,
 	 * if run internally thread buffers are from libfuse - we can
 	 * reallocate them
 	 */
-	if (unlikely(!se->got_init) && !se->buf_reallocable)
+	if (unlikely(!READ_ONCE(se->got_init)) && !se->buf_reallocable)
 		se->buf_reallocable = true;
 
 	return _fuse_session_receive_buf(se, buf, ch, true);
@@ -5443,6 +5477,7 @@ void fuse_session_unmount(struct fuse_session *se)
 	if (se->mountpoint != NULL) {
 		char *mountpoint = atomic_exchange(&se->mountpoint, NULL);
 
+		watchdog_drop_session_fd(se);
 		fuse_kern_unmount(mountpoint, se->fd);
 		se->fd = -1;
 		free(mountpoint);
@@ -5576,15 +5611,19 @@ static void *fuse_session_teardown_watchdog(void *arg)
 	int res;
 	int poll_timeout = -1; /* infinity poll */
 	int nfds;
+	int session_fd;
 	int session_fd_idx;
 	int eventfd_idx;
 
 restart:
 	session_fd_idx = -1;
 	nfds = 0;
-	if (tt->fuse_session_fd >= 0) {
+	pthread_mutex_lock(&tt->lock);
+	session_fd = tt->fuse_session_fd;
+	pthread_mutex_unlock(&tt->lock);
+	if (session_fd >= 0) {
 		/* Poll on session fd for POLLERR */
-		pfds[nfds].fd = tt->fuse_session_fd;
+		pfds[nfds].fd = session_fd;
 		pfds[nfds].events = 0;
 		session_fd_idx = nfds;
 		nfds++;
@@ -5604,20 +5643,35 @@ restart:
 				continue;
 			break;
 		} else if (res > 0) {
-			/* Check for POLLERR on session fd */
-			if (session_fd_idx >= 0 &&
-			    pfds[session_fd_idx].revents & (POLLERR | POLLNVAL)) {
+			bool fd_dropped = false;
+
+			/* Check for teardown signal on eventfd */
+			if (pfds[eventfd_idx].revents & POLLIN) {
+				uint64_t val;
+				bool stop;
+
+				if (read(tt->eventfd, &val, sizeof(val)) == -1)
+					fuse_log(FUSE_LOG_ERR,
+						 "fuse: failed to read eventfd: %s\n",
+						 strerror(errno));
+				pthread_mutex_lock(&tt->lock);
+				stop = tt->stop_requested;
+				pthread_mutex_unlock(&tt->lock);
+
+				/* Teardown requested, exit thread */
+				if (stop)
+					break;
+				fd_dropped = true;
+			}
+
+			/* A dropped session fd is a lost connection, as POLLERR */
+			if (fd_dropped || (session_fd_idx >= 0 &&
+			    pfds[session_fd_idx].revents & (POLLERR | POLLNVAL))) {
 				fuse_tt_pollerr_handler(tt);
 
 				/* Timeout for hard exit */
 				poll_timeout = tt->timeout_sec * 1000;
 				goto restart;
-			}
-
-			/* Check for teardown signal on eventfd */
-			if (pfds[eventfd_idx].revents & POLLIN) {
-				/* Teardown requested, exit thread */
-				break;
 			}
 		}
 
@@ -5679,6 +5733,7 @@ void *fuse_session_start_teardown_watchdog(struct fuse_session *se,
 	tt->eventfd = -1;
 	pthread_mutex_init(&tt->lock, NULL);
 	tt->session_destructed = false;
+	tt->stop_requested = false;
 	if (se->timeout_thread) {
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse: timeout thread already running\n");
@@ -5718,6 +5773,10 @@ void fuse_session_stop_teardown_watchdog(void *data)
 	if (data == NULL)
 		return;
 	tt = (struct fuse_timeout_thread *)data;
+
+	pthread_mutex_lock(&tt->lock);
+	tt->stop_requested = true;
+	pthread_mutex_unlock(&tt->lock);
 
 	/* Signal the eventfd to wake up the thread */
 	if (write(tt->eventfd, &val, sizeof(val)) == -1) {

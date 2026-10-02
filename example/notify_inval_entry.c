@@ -96,11 +96,13 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #define MAX_STR_LEN 128
 static char file_name[MAX_STR_LEN];
 static fuse_ino_t file_ino = 2;
 static int lookup_cnt = 0;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER; /* file_name, lookup_cnt */
 static pthread_t main_thread;
 
 /* Command line parsing */
@@ -166,10 +168,13 @@ static void tfs_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 	if (parent != FUSE_ROOT_ID)
 		goto err_out;
-	else if (strcmp(name, file_name) == 0) {
+	pthread_mutex_lock(&lock);
+	if (strcmp(name, file_name) == 0) {
 		e.ino = file_ino;
 		lookup_cnt++;
-	} else
+	}
+	pthread_mutex_unlock(&lock);
+	if (e.ino == 0)
 		goto err_out;
 
 	e.attr_timeout = options.timeout;
@@ -186,9 +191,11 @@ err_out:
 static void tfs_forget(fuse_req_t req, fuse_ino_t ino, uint64_t nlookup)
 {
 	(void)req;
-	if (ino == file_ino)
+	if (ino == file_ino) {
+		pthread_mutex_lock(&lock);
 		lookup_cnt -= nlookup;
-	else
+		pthread_mutex_unlock(&lock);
+	} else
 		assert(ino == FUSE_ROOT_ID);
 	fuse_reply_none(req);
 }
@@ -248,7 +255,9 @@ static void tfs_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 		struct dirbuf b;
 
 		memset(&b, 0, sizeof(b));
+		pthread_mutex_lock(&lock);
 		dirbuf_add(req, &b, file_name, file_ino);
+		pthread_mutex_unlock(&lock);
 		reply_buf_limited(req, b.p, b.size, off, size);
 		free(b.p);
 	}
@@ -281,13 +290,17 @@ static void *update_fs_loop(void *data)
 {
 	struct fuse_session *se = (struct fuse_session *)data;
 	char *old_name;
+	bool looked_up;
 	int ret = 0;
 
 	while (!fuse_session_exited(se)) {
+		pthread_mutex_lock(&lock);
 		old_name = strdup(file_name);
 		update_fs();
+		looked_up = lookup_cnt != 0;
+		pthread_mutex_unlock(&lock);
 
-		if (!options.no_notify && lookup_cnt) {
+		if (!options.no_notify && looked_up) {
 			if (options.only_expire) { // expire entry
 				ret = fuse_lowlevel_notify_expire_entry(
 					se, FUSE_ROOT_ID, old_name,
@@ -422,6 +435,8 @@ int main(int argc, char *argv[])
 		config = NULL;
 	}
 
+	/* the updater writes to the session fd, which the unmount closes */
+	pthread_join(updater, NULL);
 	fuse_session_unmount(se);
 err_out3:
 	fuse_remove_signal_handlers(se);

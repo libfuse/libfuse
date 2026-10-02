@@ -194,6 +194,7 @@ static struct fuse_lowlevel_ops tfs_oper = {
 static void *close_rofd(void *data)
 {
 	int rofd = (int)(long)data;
+	int started, done;
 
 	/* Wait for first write to start */
 	pthread_mutex_lock(&lock);
@@ -202,11 +203,14 @@ static void *close_rofd(void *data)
 	pthread_mutex_unlock(&lock);
 
 	close(rofd);
-	printf("rofd closed. write_start: %d write_done: %d\n", write_start,
-	       write_done);
+	pthread_mutex_lock(&lock);
+	started = write_start;
+	done = write_done;
+	pthread_mutex_unlock(&lock);
+	printf("rofd closed. write_start: %d write_done: %d\n", started, done);
 
 	/* First write should not have been completed */
-	if (write_done)
+	if (done)
 		fprintf(stderr, "ERROR: close(rofd) blocked on write!\n");
 
 	return NULL;
@@ -262,8 +266,14 @@ static void test_fs(const char *mountpoint)
 	close(fd);
 
 	if (options.delay_ms) {
+		int started, done;
+
+		pthread_mutex_lock(&lock);
+		started = write_start;
+		done = write_done;
+		pthread_mutex_unlock(&lock);
 		printf("rwfd closed. write_start: %d write_done: %d\n",
-		       write_start, write_done);
+		       started, done);
 		assert(pthread_join(rofd_thread, NULL) == 0);
 	}
 }
@@ -295,8 +305,8 @@ int main(int argc, char *argv[])
 
 	/* Stop file system */
 	fuse_session_exit(se);
-	fuse_session_unmount(se);
 	assert(pthread_join(fs_thread, NULL) == 0);
+	fuse_session_unmount(se);
 
 	assert(got_write == 1);
 

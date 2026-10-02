@@ -44,6 +44,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <assert.h>
+#include <pthread.h>
 
 #include "ioctl.h"
 
@@ -57,6 +58,7 @@ enum {
 
 static void *fioc_buf;
 static size_t fioc_size;
+static pthread_mutex_t fioc_lock = PTHREAD_MUTEX_INITIALIZER; /* the two above */
 
 static int fioc_resize(size_t new_size)
 {
@@ -99,7 +101,9 @@ static int fioc_stat(fuse_ino_t ino, struct stat *stbuf)
 	case 2:
 		stbuf->st_mode = S_IFREG | 0644;
 		stbuf->st_nlink = 1;
+		pthread_mutex_lock(&fioc_lock);
 		stbuf->st_size = fioc_size;
+		pthread_mutex_unlock(&fioc_lock);
 		break;
 	default:
 		return -1;
@@ -211,32 +215,46 @@ static void fioc_ll_open(fuse_req_t req, fuse_ino_t ino,
 static void fioc_ll_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 			 off_t off, struct fuse_file_info *fi)
 {
+	char *copy = NULL;
+	size_t len = 0;
+
 	(void)fi;
 	assert(ino == 2);
 
-	if ((size_t)off >= fioc_size) {
-		fuse_reply_buf(req, NULL, 0);
-		return;
+	pthread_mutex_lock(&fioc_lock);
+	if ((size_t)off < fioc_size) {
+		len = min(fioc_size - off, size);
+		copy = malloc(len);
+		if (copy)
+			memcpy(copy, (char *)fioc_buf + off, len);
 	}
+	pthread_mutex_unlock(&fioc_lock);
 
-	size_t len = min(fioc_size - off, size);
-
-	fuse_reply_buf(req, (char *)fioc_buf + off, len);
+	if (len && !copy)
+		fuse_reply_err(req, ENOMEM);
+	else
+		fuse_reply_buf(req, copy, len);
+	free(copy);
 }
 
 static void fioc_ll_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
 			  size_t size, off_t off, struct fuse_file_info *fi)
 {
+	int res;
+
 	(void)fi;
 	assert(ino == 2);
 
-	if (fioc_expand(off + size)) {
-		fuse_reply_err(req, ENOMEM);
-		return;
-	}
+	pthread_mutex_lock(&fioc_lock);
+	res = fioc_expand(off + size);
+	if (!res)
+		memcpy((char *)fioc_buf + off, buf, size);
+	pthread_mutex_unlock(&fioc_lock);
 
-	memcpy((char *)fioc_buf + off, buf, size);
-	fuse_reply_write(req, size);
+	if (res)
+		fuse_reply_err(req, ENOMEM);
+	else
+		fuse_reply_write(req, size);
 }
 
 /*
@@ -251,6 +269,9 @@ static void fioc_do_rw(fuse_req_t req, void *addr, const void *in_buf,
 	const struct fioc_rw_arg *arg;
 	struct iovec in_iov[2], out_iov[3], iov[3];
 	size_t cur_size;
+	size_t new_size;
+	char *copy = NULL;
+	int res = 0;
 
 	/* First call: request the fioc_rw_arg structure */
 	in_iov[0].iov_base = addr;
@@ -289,13 +310,14 @@ static void fioc_do_rw(fuse_req_t req, void *addr, const void *in_buf,
 	}
 
 	/* All data available, perform the operation */
-	cur_size = fioc_size;
 	iov[0].iov_base = &cur_size;
 	iov[0].iov_len = sizeof(cur_size);
 
-	iov[1].iov_base = &fioc_size;
-	iov[1].iov_len = sizeof(fioc_size);
+	iov[1].iov_base = &new_size;
+	iov[1].iov_len = sizeof(new_size);
 
+	pthread_mutex_lock(&fioc_lock);
+	cur_size = fioc_size;
 	if (is_read) {
 		size_t off = arg->offset;
 		size_t sz = arg->size;
@@ -305,18 +327,28 @@ static void fioc_do_rw(fuse_req_t req, void *addr, const void *in_buf,
 		if (sz > fioc_size - off)
 			sz = fioc_size - off;
 
-		iov[2].iov_base = (char *)fioc_buf + off;
+		copy = malloc(sz);
+		if (copy)
+			memcpy(copy, (char *)fioc_buf + off, sz);
+		else if (sz)
+			res = -ENOMEM;
+		iov[2].iov_base = copy;
 		iov[2].iov_len = sz;
-		fuse_reply_ioctl_iov(req, sz, iov, 3);
 	} else {
-		if (fioc_expand(arg->offset + in_bufsz)) {
-			fuse_reply_err(req, ENOMEM);
-			return;
-		}
-
-		memcpy((char *)fioc_buf + arg->offset, in_buf, in_bufsz);
-		fuse_reply_ioctl_iov(req, in_bufsz, iov, 2);
+		res = fioc_expand(arg->offset + in_bufsz);
+		if (!res)
+			memcpy((char *)fioc_buf + arg->offset, in_buf, in_bufsz);
 	}
+	new_size = fioc_size;
+	pthread_mutex_unlock(&fioc_lock);
+
+	if (res)
+		fuse_reply_err(req, ENOMEM);
+	else if (is_read)
+		fuse_reply_ioctl_iov(req, iov[2].iov_len, iov, 3);
+	else
+		fuse_reply_ioctl_iov(req, in_bufsz, iov, 2);
+	free(copy);
 }
 
 /*
@@ -361,7 +393,12 @@ static void fioc_ll_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 
 			fuse_reply_ioctl_retry(req, NULL, 0, &iov, 1);
 		} else {
-			fuse_reply_ioctl(req, 0, &fioc_size, sizeof(fioc_size));
+			size_t size;
+
+			pthread_mutex_lock(&fioc_lock);
+			size = fioc_size;
+			pthread_mutex_unlock(&fioc_lock);
+			fuse_reply_ioctl(req, 0, &size, sizeof(size));
 		}
 		break;
 
@@ -376,7 +413,9 @@ static void fioc_ll_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd,
 
 			fuse_reply_ioctl_retry(req, &iov, 1, NULL, 0);
 		} else {
+			pthread_mutex_lock(&fioc_lock);
 			fioc_resize(*(const size_t *)in_buf);
+			pthread_mutex_unlock(&fioc_lock);
 			fuse_reply_ioctl(req, 0, NULL, 0);
 		}
 		break;
