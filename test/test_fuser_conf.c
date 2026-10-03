@@ -105,6 +105,63 @@ static int test_trimmed_options(void)
 	return 0;
 }
 
+static int test_service_open_path(void)
+{
+	const char *test = "service_open_path";
+
+	if (write_conf("service_open_path = ext4 /dev/sd*\n"
+		       "service_open_path = ext4 /dev/nvme*\n"
+		       "service_open_path = ext4 relative/path\n"
+		       "service_open_path = xfs\t/srv/xfs.img\n"
+		       "service_open_path = xfs /srv/img/*\n"
+		       " \tservice_open_path = ext4 /srv/indented.img\n"
+		       "service_open_path = * /proc/pressure\n"
+		       "service_open_path =\x20\n"
+		       "service_open_path = ext4\n") == -1)
+		return fail(test, "could not write the config file");
+
+	read_conf(progname);
+
+	if (!service_open_path_listed("ext4", "/dev/sda"))
+		return fail(test, "/dev/sd* did not match /dev/sda");
+	if (!service_open_path_listed("ext4", "/dev/nvme0n1"))
+		return fail(test, "a second ext4 line was not recognised");
+	if (!service_open_path_listed("ext4", "/srv/indented.img"))
+		return fail(test, "an indented line was not recognised");
+	if (service_open_path_listed("ext4", "/dev/sda/x"))
+		return fail(test, "* matched a /");
+	if (service_open_path_listed("xfs", "/dev/sda"))
+		return fail(test, "an ext4 line matched for xfs");
+	if (!service_open_path_listed("ext4", "/proc/pressure") ||
+	    !service_open_path_listed("xfs", "/proc/pressure"))
+		return fail(test, "a \"*\" subtype did not match every subtype");
+	if (service_open_path_listed("ext4", "relative/path"))
+		return fail(test, "a relative pattern was accepted");
+	if (!service_open_path_listed("xfs", "/srv/xfs.img"))
+		return fail(test, "a tab-separated line was not recognised");
+	if (!service_open_path_listed("xfs", "/srv/img/a.img"))
+		return fail(test, "/srv/img/* did not match /srv/img/a.img");
+	if (service_open_path_listed("xfs", "/srv/img/..") ||
+	    service_open_path_listed("xfs", "/srv/img/."))
+		return fail(test, "a . or .. component was accepted");
+	/* Either line, if stored, would match the empty path */
+	if (service_open_path_listed("", ""))
+		return fail(test, "a line without a subtype was accepted");
+	if (service_open_path_listed("ext4", ""))
+		return fail(test, "a line without a pattern was accepted");
+
+	if (write_conf("\n") == -1)
+		return fail(test, "could not write the config file");
+
+	read_conf(progname);
+
+	if (service_open_path_listed("ext4", "/dev/sda"))
+		return fail(test, "a line survived re-reading the config");
+
+	printf("PASS: %s\n", test);
+	return 0;
+}
+
 int main(void)
 {
 	char tempdir[] = "/tmp/test_fuser_conf.XXXXXX";
@@ -122,6 +179,8 @@ int main(void)
 	if (test_blank_lines())
 		goto out_unlink;
 	if (test_trimmed_options())
+		goto out_unlink;
+	if (test_service_open_path())
 		goto out_unlink;
 
 	printf("All fuse.conf parser tests passed\n");

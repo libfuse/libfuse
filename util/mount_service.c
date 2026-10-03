@@ -84,6 +84,9 @@ struct mount_service {
 	/* fd for fsopen */
 	int fsopenfd;
 
+	/* fd for the initial working directory */
+	int cwdfd;
+
 	/* did we actually mount successfully? */
 	bool mounted;
 
@@ -246,6 +249,18 @@ static int mount_service_init(struct mount_service *mo, int argc, char *argv[])
 			mo->msgtag, strerror(error));
 		return -1;
 	}
+
+	drop_privs();
+	mo->cwdfd = open(".", O_PATH | O_CLOEXEC);
+	if (mo->cwdfd < 0) {
+		int error = errno;
+
+		restore_privs();
+		fprintf(stderr, "%s: cannot open working directory: %s\n",
+			mo->msgtag, strerror(error));
+		return -1;
+	}
+	restore_privs();
 
 	return 0;
 }
@@ -426,6 +441,16 @@ static int mount_service_capture_arg(const struct mount_service *mo,
 		.len = htonl(string_len),
 	};
 	ssize_t written;
+
+	/*
+	 * string_pos already covers the header and the whole array, so this
+	 * bounds the entire memfd.  The server rejects anything larger.
+	 */
+	if (*string_pos + (off_t)string_len > FUSE_SERVICE_MAX_ARGV_SIZE) {
+		fprintf(stderr, "%s: memfd argv[%u] exceeds %ld byte limit\n",
+			mo->msgtag, args->argc, (long)FUSE_SERVICE_MAX_ARGV_SIZE);
+		return -1;
+	}
 
 	written = pwrite(mo->argvfd, string, string_len, *string_pos);
 	if (written < 0) {
@@ -758,9 +783,67 @@ static int prepare_bdev(const struct mount_service *mo,
 	return 0;
 }
 
+static bool arg_in_cmdline(int argc, const char * const argv[],
+			   const char *value)
+{
+	int i;
+
+	for (i = 0; i < argc; i++)
+		if (!strcmp(argv[i], value))
+			return true;
+
+	return false;
+}
+
+struct option_value_match {
+	const char *path;
+	bool found;
+};
+
+/* fuse_opt_parse() callback: set match->found if the path is this option's value */
+static int match_option_value(void *data, const char *arg, int key,
+			      struct fuse_args *outargs)
+{
+	struct option_value_match *match = data;
+	const char *value = strchr(arg, '=');
+
+	(void) outargs;
+
+	if (key != FUSE_OPT_KEY_OPT)
+		return 0;
+
+	if (value && !strcmp(value + 1, match->path))
+		match->found = true;
+
+	/* Short option with its value glued on, as in "-J/dev/sdb1" */
+	if (arg[0] == '-' && arg[1] && arg[1] != '-' &&
+	    !strcmp(arg + 2, match->path))
+		match->found = true;
+
+	return 0;
+}
+
+/* @return true for the path in "-o name=path", "--name=path" or "-Xpath" */
+static bool option_value_in_cmdline(int argc, const char * const argv[],
+				    const char *path)
+{
+	struct option_value_match match = {
+		.path = path,
+	};
+	struct fuse_args args = FUSE_ARGS_INIT(argc, (char **)argv);
+	int ret;
+
+	/* Parse like the fuse server does, so both see the same values */
+	ret = fuse_opt_parse(&args, &match, NULL, match_option_value);
+	fuse_opt_free_args(&args);
+
+	return !ret && match.found;
+}
+
 static int mount_service_open_path(const struct mount_service *mo,
 				   mode_t expected_fmt,
-				   struct fuse_service_packet *p, size_t psz)
+				   struct fuse_service_packet *p, size_t psz,
+				   int argc, const char * const argv[])
 {
 	const struct fuse_service_open_command *oc =
 			container_of(p, struct fuse_service_open_command, p);
@@ -788,9 +871,22 @@ static int mount_service_open_path(const struct mount_service *mo,
 		return mount_service_send_file_error(mo, EINVAL, oc->path);
 	}
 
+	/*
+	 * The file is opened outside the service sandbox, so only hand out
+	 * what the user named or fuse.conf lists.
+	 */
+	if (!arg_in_cmdline(argc, argv, oc->path) &&
+	    !option_value_in_cmdline(argc, argv, oc->path) &&
+	    !service_open_path_listed(mo->subtype, oc->path)) {
+		fprintf(stderr, "%s: %s: file must be in command line arguments or in %s\n",
+			mo->msgtag, oc->path, FUSE_CONF);
+		return mount_service_send_file_error(mo, EPERM, oc->path);
+	}
+
 	open_flags = ntohl(oc->open_flags) | O_CLOEXEC;
+	/* After fchdir to the mountpoint, a relative path would resolve there */
 	drop_privs();
-	fd = open(oc->path, open_flags, ntohl(oc->create_mode));
+	fd = openat(mo->cwdfd, oc->path, open_flags, ntohl(oc->create_mode));
 	if (fd < 0) {
 		int error = errno;
 
@@ -822,16 +918,18 @@ static int mount_service_open_path(const struct mount_service *mo,
 
 static int mount_service_handle_open_cmd(const struct mount_service *mo,
 					 struct fuse_service_packet *p,
-					 size_t psz)
+					 size_t psz, int argc,
+					 const char * const argv[])
 {
-	return mount_service_open_path(mo, 0, p, psz);
+	return mount_service_open_path(mo, 0, p, psz, argc, argv);
 }
 
 static int mount_service_handle_open_bdev_cmd(const struct mount_service *mo,
 					      struct fuse_service_packet *p,
-					      size_t psz)
+					      size_t psz, int argc,
+					      const char * const argv[])
 {
-	return mount_service_open_path(mo, S_IFBLK, p, psz);
+	return mount_service_open_path(mo, S_IFBLK, p, psz, argc, argv);
 }
 
 #ifdef HAVE_NEW_MOUNT_API
@@ -1248,8 +1346,6 @@ static int mount_service_handle_mountpoint_cmd(struct mount_service *mo,
 			container_of(p, struct fuse_service_mountpoint_command, p);
 	char *mntpt;
 	mode_t expected_fmt;
-	bool foundit = false;
-	int i;
 
 	if (psz < sizeof_fuse_service_mountpoint_command(1)) {
 		fprintf(stderr, "%s: mount point command too small\n",
@@ -1289,13 +1385,7 @@ static int mount_service_handle_mountpoint_cmd(struct mount_service *mo,
 	}
 
 	/* Mountpoint must be mentioned in the caller's argument list */
-	for (i = 0; i < argc; i++) {
-		if (!strcmp(argv[i], oc->value)) {
-			foundit = true;
-			break;
-		}
-	}
-	if (!foundit) {
+	if (!arg_in_cmdline(argc, argv, oc->value)) {
 		fprintf(stderr, "%s: mount point must be in command line arguments\n",
 			mo->msgtag);
 		return mount_service_send_reply(mo, EINVAL);
@@ -1743,6 +1833,7 @@ static void mount_service_destroy(struct mount_service *mo)
 	close(mo->fusedevfd);
 	close(mo->argvfd);
 	close(mo->fsopenfd);
+	close(mo->cwdfd);
 	shutdown(mo->sockfd, SHUT_RDWR);
 	close(mo->sockfd);
 
@@ -1760,6 +1851,7 @@ static void mount_service_destroy(struct mount_service *mo)
 	mo->fusedevfd = -1;
 	mo->mountfd = -1;
 	mo->fsopenfd = -1;
+	mo->cwdfd = -1;
 }
 
 int mount_service_main(int argc, char *argv[])
@@ -1834,10 +1926,12 @@ int mount_service_main(int argc, char *argv[])
 
 		switch (ntohl(p->magic)) {
 		case FUSE_SERVICE_OPEN_CMD:
-			ret = mount_service_handle_open_cmd(&mo, p, sz);
+			ret = mount_service_handle_open_cmd(&mo, p, sz,
+					argc, (const char * const *)argv);
 			break;
 		case FUSE_SERVICE_OPEN_BDEV_CMD:
-			ret = mount_service_handle_open_bdev_cmd(&mo, p, sz);
+			ret = mount_service_handle_open_bdev_cmd(&mo, p, sz,
+					argc, (const char * const *)argv);
 			break;
 		case FUSE_SERVICE_FSOPEN_CMD:
 			ret = mount_service_handle_fsopen_cmd(&mo, p, sz);

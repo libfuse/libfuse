@@ -8,6 +8,7 @@
 #ifndef FUSER_CONF_H_
 #define FUSER_CONF_H_
 
+#include <stdbool.h>
 #include <sys/vfs.h>
 #include <sys/stat.h>
 
@@ -39,6 +40,8 @@ static inline struct mntent *GETMNTENT(FILE *stream)
 int count_fuse_fs(const char *progname);
 
 void read_conf(const char *progname);
+
+bool service_open_path_listed(const char *subtype, const char *path);
 
 void drop_privs(void);
 void restore_privs(void);
