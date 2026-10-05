@@ -1,80 +1,96 @@
 # Every CI build configuration. Each entry is forwarded verbatim to
-# test/ci-build.sh by test/ci/run-matrix.py. "workflows" names the workflows
-# that run it; <workflow>-bufpool runs it once more with an io-uring buffer
-# pool.
+# test/ci-build.sh by test/ci/run-matrix.py. "vm: true" runs it in a
+# virtme-ng guest booting "kernel"; without it, it runs on the runner's kernel.
 configs:
   - config: gcc
     cc: gcc
-    workflows: [pr-ci]
   - config: gcc-root
     cc: gcc
     root: true
-    workflows: [pr-ci]
   - config: gcc-io-uring
     cc: gcc
     io_uring: true
-    workflows: [pr-ci, kernel-vm, kernel-vm-bufpool]
+    vm: true
+    kernel: latest-rc
+  # Buffer pools need Linux 7.3, which no runner image ships.
+  - config: gcc-io-uring-bufpool
+    cc: gcc
+    io_uring: true
+    io_uring_bufpool: true
+    vm: true
+    kernel: latest-rc
   - config: gcc-io-uring-root
     cc: gcc
     root: true
     io_uring: true
-    workflows: [pr-ci, kernel-vm, kernel-vm-bufpool]
+    vm: true
+    kernel: latest-rc
+  - config: gcc-io-uring-root-bufpool
+    cc: gcc
+    root: true
+    io_uring: true
+    io_uring_bufpool: true
+    vm: true
+    kernel: latest-rc
   - config: gcc-valgrind
     cc: gcc
     valgrind: true
-    workflows: [pr-ci]
   - config: gcc-9-valgrind
     cc: gcc-9
     valgrind: true
-    workflows: [pr-ci]
   - config: gcc-10-valgrind
     cc: gcc-10
     valgrind: true
     meson_opts:
       - -Dc_args=-flto=auto
-    workflows: [pr-ci]
   - config: clang
     cc: clang
     cxx: clang++
-    workflows: [pr-ci]
   - config: clang-san
     cc: clang
     cxx: clang++
     sanitize: true
-    workflows: [pr-ci]
   - config: clang-san-root
     cc: clang
     cxx: clang++
     sanitize: true
     root: true
-    workflows: [pr-ci]
   - config: clang-san-io-uring
     cc: clang
     cxx: clang++
     sanitize: true
     io_uring: true
-    workflows: [pr-ci]
+    vm: true
+    kernel: latest-rc
   - config: clang-san-io-uring-root
     cc: clang
     cxx: clang++
     sanitize: true
     root: true
     io_uring: true
-    workflows: [pr-ci, kernel-vm, kernel-vm-bufpool]
+    vm: true
+    kernel: latest-rc
+  - config: clang-san-io-uring-root-bufpool
+    cc: clang
+    cxx: clang++
+    sanitize: true
+    root: true
+    io_uring: true
+    io_uring_bufpool: true
+    vm: true
+    kernel: latest-rc
   - config: clang-san-nosymver
     cc: clang
     cxx: clang++
     sanitize: true
     meson_opts:
       - -Ddisable-libc-symbol-version=true
-    workflows: [pr-ci]
   - config: clang-san-noiouring
     cc: clang
     cxx: clang++
     sanitize: true
     meson_opts:
       - -Denable-io-uring=false
-    workflows: [pr-ci]
   # The daemons a test backgrounds get synchronous FUSE_INIT
   # everywhere else, so this is the only job running the classic path.
   - config: clang-san-nosyncinit
@@ -83,7 +99,6 @@ configs:
     sanitize: true
     meson_opts:
       - -Dsync-init=never
-    workflows: [pr-ci]
   - config: clang-san-m32
     cc: clang
     cxx: clang++
@@ -94,17 +109,18 @@ configs:
       - -Dc_link_args=-m32
       - -Dcpp_link_args=-m32
       - --pkg-config-path=/usr/lib/i386-linux-gnu/pkgconfig
-    workflows: [pr-ci]
   - config: clang-tsan-io-uring
     cc: clang
     cxx: clang++
     tsan: true
     io_uring: true
-    workflows: [kernel-vm]
+    vm: true
+    kernel: latest-rc
   - config: clang-tsan-io-uring-root
     cc: clang
     cxx: clang++
     tsan: true
     root: true
     io_uring: true
-    workflows: [kernel-vm]
+    vm: true
+    kernel: latest-rc

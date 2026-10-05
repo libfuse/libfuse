@@ -11,9 +11,9 @@ The matrix keeps one definition
 -------------------------------
 
 * Every build parameter is spelled out in `test/ci/matrix.yml`, with the
-  workflows that run each configuration.
-* `run-matrix.py` reads that file. The workflows run their jobs through it as
-  well, and ask it for their job list with `--github-matrix WORKFLOW`. A
+  configurations that run in a VM (`vm: true`) and the kernel it boots.
+* `run-matrix.py` reads that file. The workflow runs its jobs through it as
+  well, and asks it for the job list with `--github-matrix`. A
   configuration added there needs no change here.
 * Needs PyYAML -- `python3-yaml` on Debian and Ubuntu.
 
@@ -21,12 +21,14 @@ Running it
 ----------
 
 * `test/ci/run-matrix.py` -- every configuration, in the order `matrix.yml`
-  lists them.
+  lists them, each in a VM or not as it says there.
 * `-c PATTERN` -- run only the configurations matching. fnmatch, repeatable.
 * `-X PATTERN` -- skip the configurations matching. fnmatch, repeatable.
 * `--list` -- print the command lines and exit, running nothing.
-* `--kernel KERNEL` -- run each configuration in a VM booting that kernel
-  instead of on this one. See README-kernel-vm-tests.md.
+* `--kernel KERNEL` -- run each configuration in a VM booting that kernel.
+  See README-kernel-vm-tests.md.
+* `--no-vm` -- run each configuration on this machine, including those
+  `matrix.yml` puts in a VM.
 * `--work-dir DIR` -- build and log there instead of the default below.
 
 ```

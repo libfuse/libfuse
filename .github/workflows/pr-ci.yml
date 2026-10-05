@@ -25,12 +25,15 @@ jobs:
           python-version: '3.x'
       - run: pip install pyyaml
       - id: matrix
-        run: echo "jobs=$(test/ci/run-matrix.py --github-matrix pr-ci)" >> "$GITHUB_OUTPUT"
+        run: echo "jobs=$(test/ci/run-matrix.py --github-matrix)" >> "$GITHUB_OUTPUT"
 
   build:
     needs: matrix
-    runs-on: ubuntu-latest
-    name: "build (ubuntu-latest, ${{ matrix.config }})"
+    # virtme-ng fetches a release candidate only from 1.30 on, 24.04 ships 1.22
+    runs-on: ${{ matrix.vm && 'ubuntu-26.04' || 'ubuntu-latest' }}
+    name: "build (${{ matrix.config }})"
+    # A guest kernel is a release candidate; its failures must not block a merge.
+    continue-on-error: ${{ matrix.vm }}
     strategy:
       # One configuration failing must not cancel its siblings.
       fail-fast: false
@@ -40,30 +43,34 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.x'
+      - run: pip install pyyaml
       - name: Install dependencies (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          ./.github/workflows/install-ubuntu-dependencies.sh --full
+        if: ${{ !matrix.vm }}
+        run: ./.github/workflows/install-ubuntu-dependencies.sh --full
+      - name: Install dependencies (Ubuntu, kernel VM)
+        if: matrix.vm
+        run: ./.github/workflows/install-ubuntu-dependencies.sh --kernel-vm
 
-      - run: test/ci/prepare-runner.sh ${{ github.workspace }}/fuse-tests
+      - if: ${{ !matrix.vm }}
+        run: test/ci/prepare-runner.sh fuse-tests
+      - if: matrix.vm
+        run: test/ci/prepare-runner.sh --vm
 
-      - run: test/ci/run-matrix.py --config ${{ matrix.config }}
-               --work-dir ${{ github.workspace }}/fuse-tests
+      - run: test/ci/run-matrix.py --config ${{ matrix.config }} --work-dir fuse-tests
 
       - name: Print failed test logs
         if: failure()
-        run: |
-          test/run-tests.py --print-logged-errors fuse-tests/run
+        run: test/run-tests.py --print-logged-errors fuse-tests/run
 
-          echo "::group::dmesg"
-          sudo dmesg -T | tail -n 300
-          echo "::endgroup::"
+      - name: Print dmesg
+        if: failure() && !matrix.vm
+        run: sudo dmesg -T | tail -n 300
 
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: test-logs-ubuntu-latest-${{ matrix.config }}
+          name: test-logs-${{ matrix.config }}
           # A test killed on timeout runs no cleanup, so a socket it bound in
           # its log directory is still there; nothing in one can be uploaded.
           path: |
@@ -93,4 +100,3 @@ jobs:
         run: |
           ./.github/workflows/install-ubuntu-dependencies.sh --full
       - run: test/ci/doxygen.sh
-

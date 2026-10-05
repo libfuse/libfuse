@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Run the CI build matrix from a checkout.
+"""Run the CI build configurations from test/ci/matrix.yml.
 
-test/ci/matrix.yml spells every build parameter out, and the workflows run
-each job through this script, so a job run by hand builds the same
-test/ci-build.sh command line as in CI.
+With no options, every configuration runs, one after another, on this
+machine or in a VM as matrix.yml says, with the same test/ci-build.sh
+command line CI uses.
 
-Configurations run one after another: the suite has tests that cannot run
-beside a copy of themselves, and the io-uring ones put a global module
-parameter back on exit.
+examples:
+  run-matrix.py                     every configuration
+  run-matrix.py -c clang-san-m32    one of them
+  run-matrix.py -c 'gcc*' --no-vm   the gcc ones, none in a VM
 """
 
 import argparse
@@ -37,23 +38,25 @@ def load_matrix() -> list[dict]:
 
     with open(MATRIX) as matrix_file:
         document = yaml.safe_load(matrix_file)
+
+    for entry in document['configs']:
+        if entry.get('vm', False) != ('kernel' in entry):
+            sys.exit(f'{MATRIX}: {entry["config"]}: "vm: true" and '
+                     '"kernel" go together')
     return document['configs']
 
 
-def github_matrix(entries: list[dict], workflow: str) -> dict:
-    """The jobs of one workflow, as a strategy.matrix."""
+def github_matrix(entries: list[dict]) -> dict:
+    """Every configuration, as a strategy.matrix."""
     jobs = []
     for entry in entries:
-        workflows = entry.get('workflows', [])
-        if workflow in workflows:
-            jobs.append({'config': entry['config'], 'bufpool': False})
-        if f'{workflow}-bufpool' in workflows:
-            jobs.append({'config': entry['config'], 'bufpool': True})
+        jobs.append({'config': entry['config'],
+                     'vm': entry.get('vm', False)})
     return {'include': jobs}
 
 
 def ci_build_argv(entry: dict, work_dir: str | None) -> list[str]:
-    """Spell the ci-build.sh command line pr-ci.yml expands this entry to.
+    """Spell the ci-build.sh command line this entry expands to.
 
     A work_dir of None leaves --work-dir off, for vm-run.sh to append: the
     guest needs one of its own.
@@ -89,11 +92,11 @@ def vm_run_argv(kernel: str, logs_out: str, ci_argv: list[str]) -> list[str]:
             '--logs-out', logs_out, '--'] + ci_argv
 
 
-def config_argv(entry: dict, work_dir: str, kernel: str | None) -> list[str]:
+def config_argv(entry: dict, work_dir: str) -> list[str]:
     """The command line that runs one configuration."""
-    if kernel is None:
+    if not entry.get('vm'):
         return ci_build_argv(entry, work_dir)
-    return vm_run_argv(kernel, work_dir, ci_build_argv(entry, None))
+    return vm_run_argv(entry['kernel'], work_dir, ci_build_argv(entry, None))
 
 
 def missing_tools(entry: dict) -> list[str]:
@@ -124,19 +127,6 @@ def select(entries: list[dict], patterns: list[str],
             continue
         selected.append(entry)
     return selected
-
-
-def with_bufpool(entries: list[dict]) -> list[dict]:
-    """The io-uring entries, each renamed <config>-bufpool and given a pool."""
-    pooled = []
-    for entry in entries:
-        if not entry.get('io_uring'):
-            continue
-        pooled_entry = dict(entry)
-        pooled_entry['config'] = entry['config'] + '-bufpool'
-        pooled_entry['io_uring_bufpool'] = True
-        pooled.append(pooled_entry)
-    return pooled
 
 
 def matches_any(name: str, patterns: list[str]) -> bool:
@@ -190,7 +180,9 @@ def print_summary(results: list[tuple]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-c', '--config', action='append', default=[],
                         metavar='PATTERN',
                         help='configuration to run; fnmatch pattern, '
@@ -198,43 +190,49 @@ def main() -> int:
     parser.add_argument('-X', '--exclude', action='append', default=[],
                         metavar='PATTERN',
                         help='configuration to skip; repeatable')
-    parser.add_argument('--github-matrix', default=None, metavar='WORKFLOW',
-                        help='print the jobs matrix.yml assigns to WORKFLOW '
-                             'as JSON for strategy.matrix, and exit')
+    parser.add_argument('--github-matrix', action='store_true',
+                        help='print every configuration as JSON for '
+                             'strategy.matrix, and exit')
     parser.add_argument('-l', '--list', action='store_true',
                         help='print the command line of each configuration '
                              'and exit')
-    parser.add_argument('--kernel', default=None, metavar='KERNEL',
-                        help='run every configuration in a virtme-ng guest '
-                             'booting this kernel: "latest-rc" or "latest" '
-                             'for the newest release candidate or release in '
-                             'the Ubuntu mainline archive at '
-                             'kernel.ubuntu.com/mainline, an exact version '
-                             'from it ("v7.3-rc2"), a kernel deb or a '
-                             'directory of kernel debs, or the path of a '
-                             'kernel image or of a directory holding a '
-                             'kernel built from source. Archive kernels are '
-                             'downloaded once and cached under '
-                             '~/.cache/virtme-ng')
-    parser.add_argument('--io-uring-bufpool', action='store_true',
-                        help='run only the selected io-uring configurations, '
-                             'each with a buffer pool and named '
-                             '<config>-bufpool; needs Linux 7.3')
+    where = parser.add_mutually_exclusive_group()
+    where.add_argument('--no-vm', action='store_true',
+                       help='run every configuration on this machine, '
+                            'including those matrix.yml puts in a VM')
+    where.add_argument('--kernel', default=None, metavar='KERNEL',
+                       help='run every configuration in a virtme-ng guest '
+                            'booting this kernel instead of where matrix.yml '
+                            'puts it: "latest-rc" or "latest" '
+                            'for the newest release candidate or release in '
+                            'the Ubuntu mainline archive at '
+                            'kernel.ubuntu.com/mainline, an exact version '
+                            'from it ("v7.3-rc2"), a kernel deb or a '
+                            'directory of kernel debs, or the path of a '
+                            'kernel image or of a directory holding a '
+                            'kernel built from source. Archive kernels are '
+                            'downloaded once and cached under '
+                            '~/.cache/virtme-ng')
     parser.add_argument('--work-dir', default=None, metavar='DIR',
                         help='where to build and log; one directory for the '
                              'whole run, as ci-build.sh names its own '
                              'subdirectories after the configuration')
     args = parser.parse_args()
 
-    if args.github_matrix is not None:
-        print(json.dumps(github_matrix(load_matrix(), args.github_matrix)))
+    if args.github_matrix:
+        print(json.dumps(github_matrix(load_matrix())))
         return 0
 
     entries = select(load_matrix(), args.config, args.exclude)
-    if args.io_uring_bufpool:
-        entries = with_bufpool(entries)
     if not entries:
         sys.exit('no configuration matches')
+    if args.no_vm:
+        for entry in entries:
+            entry['vm'] = False
+    if args.kernel is not None:
+        for entry in entries:
+            entry['vm'] = True
+            entry['kernel'] = args.kernel
 
     work_dir = args.work_dir
     if work_dir is None:
@@ -242,7 +240,7 @@ def main() -> int:
 
     if args.list:
         for entry in entries:
-            print(' '.join(config_argv(entry, work_dir, args.kernel)))
+            print(' '.join(config_argv(entry, work_dir)))
         return 0
 
     # test/ci/prepare-runner.sh is deliberately not run here: it rewrites
@@ -263,8 +261,7 @@ def main() -> int:
         log_path = Path(work_dir) / f'{name}.log'
         print(f'=== {name} ===')
         started = time.time()
-        returncode = run_and_tee(config_argv(entry, work_dir, args.kernel),
-                                 log_path)
+        returncode = run_and_tee(config_argv(entry, work_dir), log_path)
         seconds = time.time() - started
 
         status = 'PASS' if returncode == 0 else 'FAIL'
