@@ -3418,7 +3418,7 @@ int fuse_lowlevel_notify_increment_epoch(struct fuse_session *se)
  *
  * @param se the session object
  * @param parent inode number
- * @param name file name
+ * @param name file name (null terminated)
  * @param namelen strlen() of file name
  * @param flags flags to control if the entry should be expired or invalidated
  * @return zero for success, -errno for failure

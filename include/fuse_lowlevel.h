@@ -1826,7 +1826,7 @@ int fuse_lowlevel_notify_increment_epoch(struct fuse_session *se);
  *
  * @param se the session object
  * @param parent inode number
- * @param name file name
+ * @param name file name (null terminated)
  * @param namelen strlen() of file name
  * @return zero for success, -errno for failure
  */
@@ -1857,7 +1857,7 @@ int fuse_lowlevel_notify_inval_entry(struct fuse_session *se, fuse_ino_t parent,
  *
  * @param se the session object
  * @param parent inode number
- * @param name file name
+ * @param name file name (null terminated)
  * @param namelen strlen() of file name
  * @return zero for success, -errno for failure, -enosys if no kernel support
 */
@@ -1888,7 +1888,7 @@ int fuse_lowlevel_notify_expire_entry(struct fuse_session *se, fuse_ino_t parent
  * @param se the session object
  * @param parent inode number
  * @param child inode number
- * @param name file name
+ * @param name file name (null terminated)
  * @param namelen strlen() of file name
  * @return zero for success, -errno for failure
  */
