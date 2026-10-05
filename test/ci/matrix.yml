@@ -32,17 +32,20 @@ configs:
     io_uring_bufpool: true
     vm: true
     kernel: latest-rc
+  - config: gcc-san-lto
+    cc: gcc
+    sanitize: true
+    meson_opts:
+      - -Db_lto=true
+  - config: gcc-san-lto-root
+    cc: gcc
+    sanitize: true
+    root: true
+    meson_opts:
+      - -Db_lto=true
   - config: gcc-valgrind
     cc: gcc
     valgrind: true
-  - config: gcc-9-valgrind
-    cc: gcc-9
-    valgrind: true
-  - config: gcc-10-valgrind
-    cc: gcc-10
-    valgrind: true
-    meson_opts:
-      - -Dc_args=-flto=auto
   - config: clang
     cc: clang
     cxx: clang++
