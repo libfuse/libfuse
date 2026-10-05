@@ -24,8 +24,6 @@ PACKAGES_FULL=(
     "${PACKAGES_CORE[@]}"
     clang
     doxygen
-    gcc-10
-    gcc-9
     gdb
     valgrind
     gcc-multilib
