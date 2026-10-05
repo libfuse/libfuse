@@ -35,8 +35,7 @@ jobs:
     # A guest kernel is a release candidate; its failures must not block a merge.
     continue-on-error: ${{ matrix.vm }}
     strategy:
-      # One configuration failing must not cancel its siblings.
-      fail-fast: false
+      fail-fast: true
       matrix: ${{ fromJSON(needs.matrix.outputs.jobs) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

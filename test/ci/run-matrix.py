@@ -3,7 +3,7 @@
 
 With no options, every configuration runs, one after another, on this
 machine or in a VM as matrix.yml says, with the same test/ci-build.sh
-command line CI uses.
+command line CI uses. The run stops at the first failure.
 
 examples:
   run-matrix.py                     every configuration
@@ -266,6 +266,8 @@ def main() -> int:
 
         status = 'PASS' if returncode == 0 else 'FAIL'
         results.append((name, status, seconds, str(log_path)))
+        if status == 'FAIL':
+            break
 
     print_summary(results)
     for name, status, seconds, detail in results:
