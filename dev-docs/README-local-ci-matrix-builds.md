@@ -51,7 +51,8 @@ What to expect
   names may not be packaged for the distribution at all.
 * `ci-build.sh` calls `sudo` for `ninja install` and for the setuid bits, so
   a run prompts for a password unless sudo is passwordless.
-* Exit status is non-zero when any configuration failed.
+* The run stops at the first configuration that fails, and the exit status
+  is then non-zero.
 
 Where the output goes
 ---------------------
