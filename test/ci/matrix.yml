@@ -94,6 +94,12 @@ configs:
     sanitize: true
     meson_opts:
       - -Denable-io-uring=false
+  - config: clang-san-custom-io
+    cc: clang
+    cxx: clang++
+    sanitize: true
+    meson_opts:
+      - -Denable-custom-io=true
   # The daemons a test backgrounds get synchronous FUSE_INIT
   # everywhere else, so this is the only job running the classic path.
   - config: clang-san-nosyncinit
