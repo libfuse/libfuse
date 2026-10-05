@@ -79,28 +79,27 @@ Where the output goes
 In CI
 -----
 
-* `.github/workflows/kernel-vm.yml` runs the io-uring configurations this way
-  on every push and pull request, each of them once without a buffer pool and
-  once with one.
-* It runs the configurations `test/ci/matrix.yml` assigns to `kernel-vm`,
-  and those assigned to `kernel-vm-bufpool` once more with
-  `--io-uring-bufpool`.
-* It asks for `latest-rc`, so the job follows the current release candidate
-  with no version for anyone to bump.
-* Logs upload as `test-logs-kernel-vm-<config>`, with `-bufpool` appended for
-  a job with a pool.
+* `.github/workflows/pr-ci.yml` runs every configuration with `vm: true` in
+  `test/ci/matrix.yml` this way, on every push and pull request. These are
+  the io-uring configurations.
+* They name `kernel: latest-rc`, so the jobs follow the current release
+  candidate with no version for anyone to bump.
+* These jobs do not block a merge: a release candidate can break on its own.
+* Logs upload as `test-logs-<config>`.
 
 Buffer pools
 ------------
 
-* `run-matrix.py --io-uring-bufpool` runs only the selected io-uring
-  configurations, each with a buffer pool and named `<config>-bufpool`.
+* A configuration with `io_uring_bufpool: true` runs with a buffer pool. Its
+  name ends in `-bufpool`.
 * Buffer pools need Linux 7.3 and no GitHub runner image ships a kernel that
-  new, so `matrix.yml` assigns bufpool runs only to `kernel-vm`.
+  new, so every bufpool configuration in `matrix.yml` runs in a VM booting
+  `latest-rc`.
 * On a kernel without pools run-tests.py skips the whole invocation and
   prints the reason on its `SKIP:` line. ci-build.sh fails on that exit,
   as on every non-zero exit of run-tests.py.
 
 ```
-test/ci/run-matrix.py --kernel latest-rc -c gcc-io-uring --io-uring-bufpool
+test/ci/run-matrix.py -c gcc-io-uring-bufpool
+test/ci/run-matrix.py --kernel ~/linux -c gcc-io-uring-bufpool
 ```
