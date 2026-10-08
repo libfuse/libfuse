@@ -44,6 +44,10 @@ Unreleased Changes
   the kernel one contiguous region of memory for the queue and the kernel
   manages/optimizes the memory usage for the queue.
 
+* For FUSE_USE_VERSION >= 319 the feature flag FUSE_CAP_AUTO_INVAL_DATA
+  is disabled by default.
+  https://lore.kernel.org/r/20251009110623.3115511-1-giveme.gulu@gmail.com
+
 
 libfuse 3.18.0 (2025-12-18)
 ===========================

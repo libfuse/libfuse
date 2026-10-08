@@ -27,6 +27,17 @@ SIGQUIT blocked, so those signals no longer interrupt a syscall inside a
 callback. Both keep building and only show up at runtime, hence the tie to
 FUSE_USE_VERSION.
 
+Changed Defaults
+----------------
+* ``FUSE_CAP_AUTO_INVAL_DATA`` is no longer enabled by default, as it has a
+  known data corruption case
+  (https://lore.kernel.org/r/20251009110623.3115511-1-giveme.gulu@gmail.com)
+
+  - To see changes made outside the kernel without it, set ``fi->direct_io``
+    in ``open()``, or call ``fuse_lowlevel_notify_inval_inode()`` when the
+    backing data changes. Without ``fi->keep_cache``, the cache is also
+    dropped on every open
+
 Deprecated
 ----------
 * ``fuse_session_loop()`` below FUSE_MAKE_VERSION(3, 19) - it cannot be woken
@@ -193,7 +204,8 @@ Migration Notes
 When upgrading FUSE_USE_VERSION:
 
 1. **< 3.19 → 3.19+**: fuse_session_loop() serves requests from a worker thread,
-   move thread local setup into a callback
+   move thread local setup into a callback. FUSE_CAP_AUTO_INVAL_DATA is off by
+   default, set it in init() if needed
 2. **< 3.17 → 3.17+**: Use fuse_set_feature_flag() instead of conn->want for new caps
 3. **< 3.12 → 3.12+**: Use fuse_loop_cfg_*() functions instead of direct struct access
 4. **< 3.5 → 3.5+**: Change ioctl cmd from int to unsigned int

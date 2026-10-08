@@ -280,11 +280,21 @@ struct fuse_loop_config_v1 {
  * request. If the new mtime differs from the previous value, any
  * cached file *contents* will be invalidated as well.
  *
- * This flag should always be set when available. If all file changes
- * go through the kernel, *attr_timeout* should be set to a very large
- * number to avoid unnecessary getattr() calls.
+ * This flag should be set with care. The kernel also invalidates the cache
+ * after its own write-through writes, and a read racing with such a write
+ * can cache data the server has not received yet.
+ * https://lore.kernel.org/r/20251009110623.3115511-1-giveme.gulu@gmail.com
  *
- * This feature is enabled by default when supported by the kernel.
+ * To see changes made outside the kernel without this flag, set
+ * fi->direct_io in open(), or call fuse_lowlevel_notify_inval_inode() when
+ * the backing data changes. Without fi->keep_cache, the cache is also
+ * dropped on every open.
+ *
+ * If all file changes go through the kernel, *attr_timeout* should be set
+ * to a very large number to avoid unnecessary getattr() calls.
+ *
+ * This flag was enabled by default in libfuse3, but is disabled by default
+ * again for FUSE_USE_VERSION >= 319.
  */
 #define FUSE_CAP_AUTO_INVAL_DATA (1UL << 12)
 

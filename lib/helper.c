@@ -304,7 +304,7 @@ struct fuse *_fuse_new_31(struct fuse_args *args,
 		       struct libfuse_version *version,
 		       void *user_data);
 
-static uint32_t fuse_get_api_version(const struct libfuse_version *version)
+uint32_t fuse_get_api_version(const struct libfuse_version *version)
 {
 	uint32_t header_version =
 		FUSE_MAKE_VERSION(version->major, version->minor);
