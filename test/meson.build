@@ -35,6 +35,9 @@ td += executable('test_abi', 'test_abi.c',
 td += executable('test_secctx_splice', 'test_secctx_splice.c',
                  dependencies: [ libfuse_dep, thread_dep ],
                  install: false)
+td += executable('test_stream', 'test_stream.c',
+                 dependencies: [ libfuse_dep, thread_dep ],
+                 install: false)
 td += executable('test_loop_config', 'test_loop_config.c',
                  include_directories: include_dirs,
                  link_with: [ libfuse ],
