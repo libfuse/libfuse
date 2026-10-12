@@ -271,6 +271,8 @@ static int fuse_uring_submit(struct fuse_ring_queue *queue, unsigned int wait_nr
 	return 0;
 }
 
+static void fuse_uring_queue_put(struct fuse_ring_queue *queue);
+
 static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 				 struct fuse_ring_queue *queue,
 				 struct fuse_ring_ent *ring_ent)
@@ -284,8 +286,6 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		(struct fuse_uring_ent_in_out *)&rrh->ring_ent_in_out;
 	struct io_uring_sqe *sqe;
 	int res = 0;
-
-	tsan_release_reply(se);
 
 	/*
 	 * Multi-issuer: serialise every submission-side SQ access under
@@ -305,12 +305,10 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 		 * SQEs matches the number tof requests.
 		 */
 
-		if (locked)
-			pthread_mutex_unlock(&queue->ring_lock);
 		se->error = -EIO;
 		fuse_log(FUSE_LOG_ERR, "Failed to get a ring SQEs\n");
-
-		return -EIO;
+		res = -EIO;
+		goto out;
 	}
 
 	ring_ent->last_cmd = FUSE_IO_URING_CMD_COMMIT_AND_FETCH;
@@ -324,13 +322,19 @@ static int fuse_uring_commit_sqe(struct fuse_ring_pool *ring_pool,
 			 out->unique, ent_in_out->payload_sz);
 	}
 
+	tsan_release_reply(se);
+
 	/* while draining only the ring thread submits, for everyone */
 	if (!draining &&
 	    !atomic_load_explicit(&queue->cqe_processing, memory_order_relaxed))
 		res = fuse_uring_submit(queue, 0);
 
+out:
 	if (locked)
 		pthread_mutex_unlock(&queue->ring_lock);
+
+	/* the request's queue reference; the queue may be gone after this */
+	fuse_uring_queue_put(queue);
 
 	return res < 0 ? res : 0;
 }
@@ -386,9 +390,10 @@ int send_reply_uring(fuse_req_t req, int error, const void *arg, size_t argsize)
 	out->error  = error;
 	out->unique = req->unique;
 
-	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
-
+	/* the entry can carry the next request as soon as it is committed */
 	fuse_free_req(req);
+
+	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 
 	return res;
 }
@@ -419,9 +424,10 @@ int fuse_reply_data_uring(fuse_req_t req, struct fuse_bufvec *bufv,
 
 	ent_in_out->payload_sz = res > 0 ? res : 0;
 
-	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
-
+	/* the entry can carry the next request as soon as it is committed */
 	fuse_free_req(req);
+
+	res = fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 
 	return res;
 }
@@ -465,6 +471,9 @@ int fuse_send_msg_uring(fuse_req_t req, struct iovec *iov, int count)
 	out->error  = res;
 	out->unique = req->unique;
 	out->len = len;
+
+	/* the entry can carry the next request as soon as it is committed */
+	fuse_free_req(req);
 
 	return fuse_uring_commit_sqe(ring_pool, queue, ring_ent);
 }
@@ -622,17 +631,6 @@ static void fuse_uring_queue_put(struct fuse_ring_queue *queue)
 	}
 
 	fuse_uring_queue_destroy(queue);
-}
-
-/**
- * Drop the queue reference an entry holds while the application has it.
- */
-void fuse_uring_req_done(fuse_req_t req)
-{
-	struct fuse_ring_ent *ring_ent =
-		container_of(req, struct fuse_ring_ent, req);
-
-	fuse_uring_queue_put(ring_ent->ring_queue);
 }
 
 static void fuse_session_destruct_uring(struct fuse_ring_pool *fuse_ring)
@@ -1094,6 +1092,8 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	struct fuse_in_header *in = (struct fuse_in_header *)&rrh->in_out;
 	const struct fuse_uring_ent_in_out *ent_in_out = &rrh->ring_ent_in_out;
 
+	tsan_acquire_request(fuse_ring->se);
+
 	ent->req_commit_id = ent_in_out->commit_id;
 	if (unlikely(ent->req_commit_id == 0)) {
 		/*
@@ -1128,7 +1128,7 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	req->interrupted = 0;
 	list_init_req(req);
 
-	/* dropped by fuse_free_req() when the application replies */
+	/* dropped by the commit of the reply */
 	fuse_uring_queue_get(queue);
 
 	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,

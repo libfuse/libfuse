@@ -267,6 +267,13 @@ void fuse_free_req(fuse_req_t req)
 	/* teardown may free a uring entry as soon as it looks idle */
 	const bool is_uring = req->flags.is_uring;
 
+	/* the ring keeps one reference; only that one left means freed already */
+	if (is_uring && req->ref_cnt == 1) {
+		fuse_log(FUSE_LOG_ERR, "fuse: io-uring request freed twice\n");
+		PANIC_IF_PEDANTIC();
+		return;
+	}
+
 	free(req->secctx);
 	req->secctx = NULL;
 
@@ -291,12 +298,8 @@ void fuse_free_req(fuse_req_t req)
 	}
 
 	/* A uring entry is embedded in its queue and never destroyed here. */
-	if (is_uring) {
-		fuse_uring_req_done(req);
-		/* the queue, the pool and se may be gone now */
-	} else if (!ctr) {
+	if (!is_uring && !ctr)
 		destroy_req(req);
-	}
 }
 
 static struct fuse_req *fuse_ll_alloc_req(struct fuse_session *se)
@@ -413,10 +416,13 @@ int fuse_send_reply_iov_nofree(fuse_req_t req, int error, struct iovec *iov,
 static int send_reply_iov(fuse_req_t req, int error, struct iovec *iov,
 			  int count)
 {
+	/* an io-uring reply frees the request before its commit */
+	const bool is_uring = req->flags.is_uring;
 	int res;
 
 	res = fuse_send_reply_iov_nofree(req, error, iov, count);
-	fuse_free_req(req);
+	if (!is_uring)
+		fuse_free_req(req);
 	return res;
 }
 
@@ -4301,7 +4307,6 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	int err;
 
 	/* For io_uring, extensions are in the payload buffer, not appended to 'in' header. */
-	tsan_acquire_request(se);
 	fuse_session_in2req(req, in);
 	if (in->total_extlen)
 		fuse_req_parse_extensions(req, in->total_extlen, op_payload, payload_len);
