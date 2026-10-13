@@ -1188,7 +1188,7 @@ bool fuse_set_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
 void fuse_unset_feature_flag(struct fuse_conn_info *conn, uint64_t flag);
 
 /**
- * Get the value of a feature flag in the want_ext field of fuse_conn_info.
+ * Get the value of a feature flag in the capable_ext field of fuse_conn_info.
  *
  * @param conn connection information
  * @param flag feature flag to be checked

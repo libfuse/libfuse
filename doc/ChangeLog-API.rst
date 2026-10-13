@@ -70,7 +70,7 @@ New Functions
 -------------
 * ``fuse_set_feature_flag()`` - Set capability in want_ext field
 * ``fuse_unset_feature_flag()`` - Unset capability in want_ext field
-* ``fuse_get_feature_flag()`` - Query capability in want_ext field
+* ``fuse_get_feature_flag()`` - Query capability in capable_ext field
 
 Note: These replace direct manipulation of conn->want for 64-bit capability support.
 
