@@ -1161,7 +1161,7 @@ void fuse_loop_cfg_set_clone_fd(struct fuse_loop_config *config,
 				unsigned int value);
 
 /**
- * Convert old config to more recernt fuse_loop_config2
+ * Convert old config to more recent fuse_loop_config2
  *
  * @param config current config2 type
  * @param v1_conf older config1 type (below FUSE API 312)
@@ -1217,7 +1217,7 @@ bool fuse_set_conn_flag(struct fuse_conn_info *conn, uint64_t flag);
 
 /*
  * DO NOT USE: Not part of public API, for internal test use only.
- * The function signature or any use of it is not guaranteeed to
+ * The function signature or any use of it is not guaranteed to
  * remain stable. And neither are results of what this function does.
  */
 int fuse_convert_to_conn_want_ext(struct fuse_conn_info *conn);
