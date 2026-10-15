@@ -270,11 +270,16 @@ struct fuse_config {
 	 * If this option is given the file-system handlers for the
 	 * following operations will not receive path information:
 	 * read, write, flush, release, fallocate, fsync, readdir,
-	 * releasedir, fsyncdir, lock, ioctl and poll.
+	 * releasedir, fsyncdir, lock, flock, ioctl, poll and
+	 * copy_file_range.
 	 *
-	 * For the truncate, getattr, chmod, chown and utimens
+	 * For the truncate, getattr, statx, chmod, chown and utimens
 	 * operations the path will be provided only if the struct
 	 * fuse_file_info argument is NULL.
+	 *
+	 * Without this option these operations can still get a NULL path
+	 * if the open file or one of its parent directories was removed,
+	 * but only together with a non-NULL struct fuse_file_info.
 	 */
 	int32_t nullpath_ok;
 
