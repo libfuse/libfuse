@@ -362,6 +362,20 @@ def cmd_open_unlink(mnt_dir):
     _require(got == data1 + data2, 'unlinked file holds %r' % got)
 
 
+def cmd_open_rmdir_parent(src_dir, mnt_dir):
+    """Write to an open file before and after rmdir of its parent."""
+    dirname = pjoin(mnt_dir, 'dir')
+    fullname = pjoin(dirname, 'file')
+    os.mkdir(dirname)
+    with _open_fd(fullname, os.O_CREAT | os.O_WRONLY) as fd:
+        os.write(fd, b'foo')
+        # Without the backing file, rmdir succeeds while the file is still open
+        os.unlink(pjoin(src_dir, 'dir', 'file'))
+        os.rmdir(dirname)
+        expect_enoent(dirname)
+        os.write(fd, b'bar')
+
+
 def cmd_statvfs(mnt_dir):
     os.statvfs(mnt_dir)
 
@@ -1090,6 +1104,7 @@ def build_parser():
     add('fuse_test_append', cmd_append, 'src', 'mnt')
     add('fuse_test_seek', cmd_seek, 'src', 'mnt')
     add('fuse_test_open_unlink', cmd_open_unlink, 'mnt')
+    add('fuse_test_open_rmdir_parent', cmd_open_rmdir_parent, 'src', 'mnt')
     add('fuse_test_statvfs', cmd_statvfs, 'mnt')
     add('fuse_test_link', cmd_link, 'mnt')
     add('fuse_test_readdir', cmd_readdir, 'src', 'mnt',
