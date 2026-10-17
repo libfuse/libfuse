@@ -1052,6 +1052,96 @@ def cmd_fusermount_rejects(mountpoint, reason):
              '%s is a mountpoint after a refused mount' % mountpoint)
 
 
+def cmd_reduced_queue_options(selection):
+    cpus = sorted(os.sched_getaffinity(0))
+    if len(cpus) < 2:
+        print('skip')
+        return
+
+    if selection == 'count':
+        print('io_uring_nr_qs=1 1 auto')
+        return
+
+    queue_cpus = cpus[1:4]
+    queue_names = []
+    for cpu in queue_cpus:
+        cpu_name = str(cpu)
+        queue_names.append(cpu_name)
+
+    if selection == 'list':
+        mask = ':'.join(queue_names)
+    else:
+        _require(selection == 'hex', 'unknown queue selection %s' % selection)
+        bits = 0
+        for cpu in queue_cpus:
+            bits |= 1 << cpu
+        mask = hex(bits)
+
+    queue_ids = ' '.join(queue_names)
+    print('io_uring_q_mask=%s %d %s' % (mask, len(queue_cpus), queue_ids))
+
+
+def cmd_reduced_queue_io(mnt, log, queue_count, queue_ids):
+    queues = []
+    with open(log) as stream:
+        for line in stream:
+            match = re.fullmatch(r'FUSE_INIT: io_uring_queue=(\d+)\n', line)
+            if match is not None:
+                queue = int(match.group(1))
+                queues.append(queue)
+    queues.sort()
+    _require(len(queues) == int(queue_count),
+             'registered queues %s, expected %s queues' % (queues, queue_count))
+
+    if queue_ids != 'auto':
+        expected = []
+        for queue_id in queue_ids.split():
+            queue = int(queue_id)
+            expected.append(queue)
+        _require(queues == expected,
+                 'registered queues %s, expected %s' % (queues, expected))
+
+    client_cpu = None
+    for cpu in sorted(os.sched_getaffinity(0)):
+        if cpu not in queues:
+            client_cpu = cpu
+            break
+    _require(client_cpu is not None, 'no allowed CPU without a queue')
+    os.sched_setaffinity(0, {client_cpu})
+
+    name = name_generator()
+    path = pjoin(mnt, name)
+    payload = b'reduced io-uring queues\n' * 1024
+    with open(path, 'w+b', buffering=0) as stream:
+        written = stream.write(payload)
+        _require(written == len(payload), 'short write: %s' % written)
+        stream.seek(0)
+        result = stream.read(len(payload))
+        _require(result == payload, 'read did not match the written data')
+    os.unlink(path)
+
+    operations = set()
+    client_pid = os.getpid()
+    with open(log) as stream:
+        for line in stream:
+            match = re.fullmatch(
+                r'cqe unique: \d+, qid=(\d+), opcode: (READ|WRITE) '
+                r'\(\d+\), .* pid: (\d+)\n', line)
+            if match is None:
+                continue
+            if int(match.group(3)) != client_pid:
+                continue
+            queue = int(match.group(1))
+            _require(queue in queues,
+                     'I/O reached unselected queue %d' % queue)
+            operations.add(match.group(2))
+    _require(operations == {'READ', 'WRITE'},
+             'CPU %d: expected READ and WRITE through io-uring, got %s'
+             % (client_cpu, operations))
+    print('CPU %d completed READ and WRITE through queues %s'
+          % (client_cpu, queues))
+
+
 # ------------------------------------------------------------------ dispatch
 
 _INODE_CHECK = {'default': 'exact', 'choices': ('exact', 'nonzero')}
@@ -1134,6 +1224,9 @@ def build_parser():
     add('fuse_test_null_roundtrip', cmd_null_roundtrip, 'path')
     add('fuse_test_cuse_roundtrip', cmd_cuse_roundtrip, 'devpath', 'client')
     add('fuse_test_uds_init', cmd_uds_init, 'sockpath')
+    add('fuse_test_reduced_queue_options', cmd_reduced_queue_options, 'selection')
+    add('fuse_test_reduced_queue_io', cmd_reduced_queue_io,
+        'mnt', 'log', 'queue_count', 'queue_ids')
     return parser
 
 
