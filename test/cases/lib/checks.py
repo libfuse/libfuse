@@ -1066,6 +1066,102 @@ def cmd_fusermount_rejects(mountpoint, reason):
              '%s is a mountpoint after a refused mount' % mountpoint)
 
 
+def _mount_ids(mnt_dir):
+    """Mount IDs of every mount at *mnt_dir*, bottom first."""
+    with open('/proc/self/mountinfo') as fh:
+        return [int(parts[0]) for parts in (line.split(' ') for line in fh)
+                if parts[4].replace('\\040', ' ') == mnt_dir]
+
+
+def cmd_fusermount_overmount(uid, workdir):
+    """Require fusermount3 -u to unmount only a FUSE mount the caller owns.
+
+    umount2() takes the topmost mount at a path, so a mount stacked over the
+    caller's own FUSE mount has to make the helper refuse instead of having
+    that mount removed. Runs as root in a private mount namespace; the setuid
+    helper runs as <uid>.
+
+    The FUSE mounts need no daemon: mount(2) takes the /dev/fuse fd, which is
+    closed again before the helper runs. That leaves them disconnected, as
+    auto_unmount finds a mount whose daemon died.
+    """
+    import pwd
+
+    uid = int(uid)
+    gid = pwd.getpwuid(uid).pw_gid
+    helper = pjoin(os.environ['FUSE_UTIL_DIR'], 'fusermount3')
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.mount.argtypes = [ctypes.c_char_p] * 3 + [ctypes.c_ulong,
+                                                   ctypes.c_char_p]
+    ms_bind = 4096
+
+    def mount(source, target, fstype, flags=0, data=None):
+        if libc.mount(source.encode(), target.encode(),
+                      fstype.encode() if fstype else None, flags,
+                      data.encode() if data else None) != 0:
+            err = ctypes.get_errno()
+            raise OSError(err, os.strerror(err), target)
+
+    def fuse_mount(target, owner):
+        fd = os.open('/dev/fuse', os.O_RDWR)
+        opts = 'fd=%d,rootmode=40000,user_id=%d,group_id=%d' % (fd, owner, gid)
+        try:
+            mount('overmount', target, 'fuse.overmount', data=opts)
+        finally:
+            os.close(fd)
+
+    def stacked(name, stack):
+        """The caller's FUSE mount at <name> with <stack> on top of it."""
+        target = pjoin(workdir, name)
+        src = pjoin(workdir, name + '-src')
+        for path in (target, src):
+            # The runner, running as <uid>, removes the workdir.
+            os.mkdir(path)
+            os.chown(path, uid, gid)
+        fuse_mount(target, uid)
+        stack(target, src)
+        return target, _mount_ids(target)
+
+    def unmount(target, args=()):
+        def as_caller():
+            os.setgroups([])
+            os.setresgid(gid, gid, gid)
+            os.setresuid(uid, uid, uid)
+        return subprocess.run(
+            [helper, '-u'] + list(args) + ['--', target],
+            preexec_fn=as_caller, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=30)
+
+    # What is stacked on the caller's mount, and whether it may go.
+    uppers = {
+        'none': (lambda target, src: None, True),
+        'own-fuse': (lambda target, src: fuse_mount(target, uid), True),
+        'foreign-fuse': (lambda target, src: fuse_mount(target, uid + 1),
+                         False),
+        'tmpfs': (lambda target, src: mount('tmpfs', target, 'tmpfs'), False),
+        'bind': (lambda target, src: mount(src, target, None, ms_bind), False),
+    }
+    failures = []
+    for lazy in (False, True):
+        for upper, (stack, may_go) in uppers.items():
+            name = '%s%s' % (upper, '-lazy' if lazy else '')
+            target, before = stacked(name, stack)
+            proc = unmount(target, ['-z'] if lazy else [])
+            after = _mount_ids(target)
+            print('%s: exit %d, mounts %s -> %s %s' % (
+                name, proc.returncode, before, after, proc.stderr.strip()))
+
+            # Unmounting removes the top mount and nothing else; a
+            # refusal names the reason and leaves every mount in place.
+            if may_go:
+                ok = proc.returncode == 0 and after == before[:-1]
+            else:
+                ok = (proc.returncode != 0 and after == before and
+                      'topmost mount' in proc.stderr)
+            if not ok:
+                failures.append(name)
+    _require(not failures, 'wrong outcome for: %s' % ', '.join(failures))
+
 # ------------------------------------------------------------------ dispatch
 
 _INODE_CHECK = {'default': 'exact', 'choices': ('exact', 'nonzero')}
@@ -1142,6 +1238,8 @@ def build_parser():
     add('fuse_test_refute_utab_target', cmd_refute_utab_target, 'mnt')
     add('fuse_test_fusermount_rejects', cmd_fusermount_rejects,
         'mountpoint', 'reason')
+    add('fuse_test_fusermount_overmount', cmd_fusermount_overmount,
+        'uid', 'workdir')
 
     add('fuse_test_printcap_caps', cmd_printcap_caps, 'src_root')
     add('fuse_test_reachable_without_caps', cmd_reachable_without_caps, 'path')
