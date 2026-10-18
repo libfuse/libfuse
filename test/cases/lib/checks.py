@@ -1086,6 +1086,7 @@ def cmd_fusermount_overmount(uid, workdir):
     auto_unmount finds a mount whose daemon died.
     """
     import pwd
+    import resource
 
     uid = int(uid)
     gid = pwd.getpwuid(uid).pw_gid
@@ -1122,8 +1123,10 @@ def cmd_fusermount_overmount(uid, workdir):
         stack(target, src)
         return target, _mount_ids(target)
 
-    def unmount(target, args=()):
+    def unmount(target, args=(), setup=lambda: None):
         def as_caller():
+            # <setup> runs as root, then the helper runs as the caller.
+            setup()
             os.setgroups([])
             os.setresgid(gid, gid, gid)
             os.setresuid(uid, uid, uid)
@@ -1131,6 +1134,15 @@ def cmd_fusermount_overmount(uid, workdir):
             [helper, '-u'] + list(args) + ['--', target],
             preexec_fn=as_caller, stderr=subprocess.PIPE,
             universal_newlines=True, timeout=30)
+
+    def refused(name, setup):
+        """A stacked tmpfs survives the helper run with <setup>."""
+        target, before = stacked(name, uppers['tmpfs'][0])
+        proc = unmount(target, setup=setup)
+        after = _mount_ids(target)
+        print('%s: exit %d, mounts %s -> %s %s' % (
+            name, proc.returncode, before, after, proc.stderr.strip()))
+        return proc.returncode != 0 and after == before
 
     # What is stacked on the caller's mount, and whether it may go.
     uppers = {
@@ -1160,6 +1172,15 @@ def cmd_fusermount_overmount(uid, workdir):
                       'topmost mount' in proc.stderr)
             if not ok:
                 failures.append(name)
+
+    # The caller sets the helper's resource limits. With too few file
+    # descriptors left to read /proc, it must refuse rather than skip the
+    # check. Below 4 the helper does not get past loading its libraries.
+    for limit in range(4, 9):
+        name = 'nofile-%d' % limit
+        if not refused(name, lambda limit=limit: resource.setrlimit(
+                resource.RLIMIT_NOFILE, (limit, limit))):
+            failures.append(name)
     _require(not failures, 'wrong outcome for: %s' % ', '.join(failures))
 
 # ------------------------------------------------------------------ dispatch
