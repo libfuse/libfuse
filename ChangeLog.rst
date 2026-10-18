@@ -26,6 +26,15 @@ Unreleased Changes
   option") and from fusermount by 235e9a1f80cb ("fusermout: Remove the
   large read check").
 
+* ``fusermount3 -u``, run by a non-root user, refuses to unmount when the
+  topmost mount at the path is not a FUSE mount owned by that user, for
+  example a tmpfs or bind mount stacked over the user's FUSE mount. Before,
+  it unmounted that mount instead of the user's. On kernels that do not
+  report a mount ID in ``/proc/self/fdinfo`` (before Linux 3.15), or
+  without ``/proc``, it unmounts as before. If ``/proc`` or the mountpoint
+  cannot be read for any other reason, for example because the caller left
+  it too few file descriptors, it refuses.
+
 * ``fuse_session_loop()`` built with FUSE_USE_VERSION 319 or higher calls the
   filesystem from a worker thread, no longer from the thread that entered the
   loop. Requests are still handled one at a time. Thread local state has to be
