@@ -200,6 +200,14 @@ static int add_mount(const char *source, const char *mnt, const char *type,
 	return fuse_mnt_add_mount(progname, source, mnt, type, opts);
 }
 
+static int is_fuse_type(const char *type)
+{
+	return strcmp(type, "fuse") == 0 ||
+	       strcmp(type, "fuseblk") == 0 ||
+	       strncmp(type, "fuse.", 5) == 0 ||
+	       strncmp(type, "fuseblk.", 8) == 0;
+}
+
 static int may_unmount(const char *mnt, int quiet)
 {
 	struct mntent *entp;
@@ -226,10 +234,7 @@ static int may_unmount(const char *mnt, int quiet)
 	found = 0;
 	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
-		    (strcmp(entp->mnt_type, "fuse") == 0 ||
-		     strcmp(entp->mnt_type, "fuseblk") == 0 ||
-		     strncmp(entp->mnt_type, "fuse.", 5) == 0 ||
-		     strncmp(entp->mnt_type, "fuseblk.", 8) == 0)) {
+		    is_fuse_type(entp->mnt_type)) {
 			char *p = strstr(entp->mnt_opts, "user=");
 			if (p &&
 			    (p == entp->mnt_opts || *(p-1) == ',') &&
