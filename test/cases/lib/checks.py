@@ -1073,6 +1073,52 @@ def _mount_ids(mnt_dir):
                 if parts[4].replace('\\040', ' ') == mnt_dir]
 
 
+# seccomp(2) audit architecture and openat(2) number, per machine
+_SECCOMP_OPENAT = {
+    'x86_64': (0xc000003e, 257),
+    'aarch64': (0xc00000b7, 56),
+}
+
+
+def _fail_o_path_opens(err):
+    """Make every later O_PATH open in this process, and in what it executes,
+    the setuid helper included, fail with <err>.
+
+    Installing the filter without no_new_privs needs CAP_SYS_ADMIN, so this
+    runs as root before dropping to the caller. Returns False where the
+    filter does not know the architecture.
+    """
+    arch = _SECCOMP_OPENAT.get(os.uname().machine)
+    if arch is None:
+        return False
+    audit_arch, nr_openat = arch
+    ld, jeq, jset, ret = 0x20, 0x15, 0x45, 0x06
+    allow, errno_ret = 0x7fff0000, 0x00050000
+    # struct seccomp_data: nr at 0, arch at 4, the low half of args[2] (the
+    # open flags, little endian) at 32
+    prog = [
+        (ld, 0, 0, 4),
+        (jeq, 0, 5, audit_arch),
+        (ld, 0, 0, 0),
+        (jeq, 0, 3, nr_openat),
+        (ld, 0, 0, 32),
+        (jset, 0, 1, os.O_PATH),
+        (ret, 0, 0, errno_ret | err),
+        (ret, 0, 0, allow),
+    ]
+    filters = b''.join(struct.pack('=HBBI', *insn) for insn in prog)
+    buf = ctypes.create_string_buffer(filters)
+    fprog = struct.pack('@HP', len(prog), ctypes.addressof(buf))
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.prctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_char_p,
+                           ctypes.c_ulong, ctypes.c_ulong]
+    pr_set_seccomp, seccomp_mode_filter = 22, 2
+    if libc.prctl(pr_set_seccomp, seccomp_mode_filter, fprog, 0, 0) != 0:
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err), 'PR_SET_SECCOMP')
+    return True
+
+
 def cmd_fusermount_overmount(uid, workdir):
     """Require fusermount3 -u to unmount only a FUSE mount the caller owns.
 
@@ -1180,6 +1226,16 @@ def cmd_fusermount_overmount(uid, workdir):
         name = 'nofile-%d' % limit
         if not refused(name, lambda limit=limit: resource.setrlimit(
                 resource.RLIMIT_NOFILE, (limit, limit))):
+            failures.append(name)
+
+    # Opening the mountpoint can fail where umount2() on the same name
+    # would not. No limit gets there, as may_unmount() needs a descriptor
+    # just before, so a seccomp filter fails the O_PATH open instead.
+    for err in (errno.EMFILE, errno.ENFILE, errno.ENOMEM, errno.EINTR):
+        name = 'o-path-%s' % errno.errorcode[err]
+        if os.uname().machine not in _SECCOMP_OPENAT:
+            print('%s: no seccomp filter for %s' % (name, os.uname().machine))
+        elif not refused(name, lambda err=err: _fail_o_path_opens(err)):
             failures.append(name)
     _require(not failures, 'wrong outcome for: %s' % ', '.join(failures))
 
