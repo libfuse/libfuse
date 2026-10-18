@@ -457,6 +457,124 @@ static int chdir_to_parent(char *copy, const char **lastp)
 }
 
 #ifndef IGNORE_MTAB
+/*
+ * may_unmount() finds the caller's FUSE mount in the mount table, but
+ * umount2() acts on whatever is mounted on top of the path.  If another
+ * mount is stacked over the caller's one, that mount would be unmounted
+ * instead.  So check that the topmost mount at "last" (relative to the
+ * current directory, the same way umount2() will look it up) is a FUSE mount
+ * owned by the caller.  Where the kernel does not tell which mount that is,
+ * leave it to umount2() as before.
+ *
+ * This narrows the window but cannot close it: umount2() only takes a path,
+ * so a mount stacked between this check and umount2() is still unmounted.
+ */
+static int check_topmost_mount(const char *last, const char *mnt, int quiet)
+{
+	char path[64];
+	char owner[32];
+	char *line = NULL;
+	size_t size = 0;
+	FILE *fp;
+	int mnt_id = -1;
+	int found = 0;
+	int fd;
+
+	/* O_PATH does not send a request to a possibly dead filesystem */
+	fd = open(last, O_PATH | O_NOFOLLOW | O_CLOEXEC);
+	if (fd == -1) {
+		/*
+		 * Where the name cannot be looked up, umount2() would fail on it
+		 * too, so report it the way that failure was reported.  Do not
+		 * leave it to umount2(): this open also revalidates the root of
+		 * the topmost mount, which umount2() skips, and it can fail for
+		 * reasons that say nothing about the name, such as running out
+		 * of memory.
+		 */
+		if (!quiet)
+			fprintf(stderr, "%s: failed to unmount %s: %s\n",
+				progname, mnt, strerror(errno));
+		return -1;
+	}
+
+	/* Before Linux 5.14 only the helper's own ids may read fdinfo */
+	restore_privs();
+	snprintf(path, sizeof(path), "/proc/self/fdinfo/%d", fd);
+	fp = fopen(path, "r");
+	if (fp == NULL) {
+		/* No /proc: nothing to check against */
+		found = errno == ENOENT;
+	} else {
+		while (getline(&line, &size, fp) != -1) {
+			if (sscanf(line, "mnt_id: %d", &mnt_id) == 1)
+				break;
+		}
+		/* No mnt_id before Linux 3.15: nothing to check against */
+		found = mnt_id == -1 && feof(fp);
+		fclose(fp);
+	}
+	/*
+	 * Any other failure must not skip the check: the caller can make the
+	 * helper run out of file descriptors or memory here.
+	 */
+	if (mnt_id == -1) {
+		if (!found && !quiet)
+			fprintf(stderr, "%s: failed to read %s\n", progname, path);
+		goto out;
+	}
+
+	fp = fopen("/proc/self/mountinfo", "r");
+	if (fp == NULL) {
+		if (!quiet)
+			fprintf(stderr, "%s: failed to open /proc/self/mountinfo: %s\n",
+				progname, strerror(errno));
+		goto out;
+	}
+
+	/* The kernel lists user_id= among the super options of every FUSE mount */
+	snprintf(owner, sizeof(owner), "user_id=%u", getuid());
+	while (getline(&line, &size, fp) != -1) {
+		char *sep, *rest, *opts, *saveptr;
+		const char *type, *opt;
+
+		if (strtol(line, NULL, 10) != mnt_id)
+			continue;
+
+		line[strcspn(line, "\n")] = '\0';
+		sep = strstr(line, " - ");
+		if (sep == NULL)
+			break;
+		/* fstype, source and super options */
+		rest = sep + 3;
+		type = strsep(&rest, " ");
+		strsep(&rest, " ");
+		opts = strsep(&rest, " ");
+		if (opts == NULL || !is_fuse_type(type))
+			break;
+		for (opt = strtok_r(opts, ",", &saveptr); opt != NULL;
+		     opt = strtok_r(NULL, ",", &saveptr)) {
+			if (strcmp(opt, owner) == 0)
+				found = 1;
+		}
+		break;
+	}
+
+	if (!found && !quiet && ferror(fp))
+		fprintf(stderr, "%s: failed to read /proc/self/mountinfo\n",
+			progname);
+	else if (!found && !quiet)
+		fprintf(stderr,
+			"%s: topmost mount at %s is not a FUSE mount owned by you\n",
+			progname, mnt);
+	fclose(fp);
+out:
+	drop_privs();
+	/* Closed only now, so that the mount ID could not be reused meanwhile */
+	close(fd);
+	free(line);
+	return found ? 0 : -1;
+}
+
 static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 {
 	int res;
@@ -481,6 +599,14 @@ static int unmount_fuse_locked(const char *mnt, int quiet, int lazy)
 	if (res == -1) {
 		restore_privs();
 		goto out;
+	}
+
+	if (getuid() != 0) {
+		res = check_topmost_mount(last, mnt, quiet);
+		if (res == -1) {
+			restore_privs();
+			goto out;
+		}
 	}
 
 	res = umount2(last, umount_flags);
