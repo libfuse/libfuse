@@ -1066,6 +1066,179 @@ def cmd_fusermount_rejects(mountpoint, reason):
              '%s is a mountpoint after a refused mount' % mountpoint)
 
 
+def _mount_ids(mnt_dir):
+    """Mount IDs of every mount at *mnt_dir*, bottom first."""
+    with open('/proc/self/mountinfo') as fh:
+        return [int(parts[0]) for parts in (line.split(' ') for line in fh)
+                if parts[4].replace('\\040', ' ') == mnt_dir]
+
+
+# seccomp(2) audit architecture and openat(2) number, per machine
+_SECCOMP_OPENAT = {
+    'x86_64': (0xc000003e, 257),
+    'aarch64': (0xc00000b7, 56),
+}
+
+
+def _fail_o_path_opens(err):
+    """Make every later O_PATH open in this process, and in what it executes,
+    the setuid helper included, fail with <err>.
+
+    Installing the filter without no_new_privs needs CAP_SYS_ADMIN, so this
+    runs as root before dropping to the caller. Returns False where the
+    filter does not know the architecture.
+    """
+    arch = _SECCOMP_OPENAT.get(os.uname().machine)
+    if arch is None:
+        return False
+    audit_arch, nr_openat = arch
+    ld, jeq, jset, ret = 0x20, 0x15, 0x45, 0x06
+    allow, errno_ret = 0x7fff0000, 0x00050000
+    # struct seccomp_data: nr at 0, arch at 4, the low half of args[2] (the
+    # open flags, little endian) at 32
+    prog = [
+        (ld, 0, 0, 4),
+        (jeq, 0, 5, audit_arch),
+        (ld, 0, 0, 0),
+        (jeq, 0, 3, nr_openat),
+        (ld, 0, 0, 32),
+        (jset, 0, 1, os.O_PATH),
+        (ret, 0, 0, errno_ret | err),
+        (ret, 0, 0, allow),
+    ]
+    filters = b''.join(struct.pack('=HBBI', *insn) for insn in prog)
+    buf = ctypes.create_string_buffer(filters)
+    fprog = struct.pack('@HP', len(prog), ctypes.addressof(buf))
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.prctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_char_p,
+                           ctypes.c_ulong, ctypes.c_ulong]
+    pr_set_seccomp, seccomp_mode_filter = 22, 2
+    if libc.prctl(pr_set_seccomp, seccomp_mode_filter, fprog, 0, 0) != 0:
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err), 'PR_SET_SECCOMP')
+    return True
+
+
+def cmd_fusermount_overmount(uid, workdir):
+    """Require fusermount3 -u to unmount only a FUSE mount the caller owns.
+
+    umount2() takes the topmost mount at a path, so a mount stacked over the
+    caller's own FUSE mount has to make the helper refuse instead of having
+    that mount removed. Runs as root in a private mount namespace; the setuid
+    helper runs as <uid>.
+
+    The FUSE mounts need no daemon: mount(2) takes the /dev/fuse fd, which is
+    closed again before the helper runs. That leaves them disconnected, as
+    auto_unmount finds a mount whose daemon died.
+    """
+    import pwd
+    import resource
+
+    uid = int(uid)
+    gid = pwd.getpwuid(uid).pw_gid
+    helper = pjoin(os.environ['FUSE_UTIL_DIR'], 'fusermount3')
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.mount.argtypes = [ctypes.c_char_p] * 3 + [ctypes.c_ulong,
+                                                   ctypes.c_char_p]
+    ms_bind = 4096
+
+    def mount(source, target, fstype, flags=0, data=None):
+        if libc.mount(source.encode(), target.encode(),
+                      fstype.encode() if fstype else None, flags,
+                      data.encode() if data else None) != 0:
+            err = ctypes.get_errno()
+            raise OSError(err, os.strerror(err), target)
+
+    def fuse_mount(target, owner):
+        fd = os.open('/dev/fuse', os.O_RDWR)
+        opts = 'fd=%d,rootmode=40000,user_id=%d,group_id=%d' % (fd, owner, gid)
+        try:
+            mount('overmount', target, 'fuse.overmount', data=opts)
+        finally:
+            os.close(fd)
+
+    def stacked(name, stack):
+        """The caller's FUSE mount at <name> with <stack> on top of it."""
+        target = pjoin(workdir, name)
+        src = pjoin(workdir, name + '-src')
+        for path in (target, src):
+            # The runner, running as <uid>, removes the workdir.
+            os.mkdir(path)
+            os.chown(path, uid, gid)
+        fuse_mount(target, uid)
+        stack(target, src)
+        return target, _mount_ids(target)
+
+    def unmount(target, args=(), setup=lambda: None):
+        def as_caller():
+            # <setup> runs as root, then the helper runs as the caller.
+            setup()
+            os.setgroups([])
+            os.setresgid(gid, gid, gid)
+            os.setresuid(uid, uid, uid)
+        return subprocess.run(
+            [helper, '-u'] + list(args) + ['--', target],
+            preexec_fn=as_caller, stderr=subprocess.PIPE,
+            universal_newlines=True, timeout=30)
+
+    def refused(name, setup):
+        """A stacked tmpfs survives the helper run with <setup>."""
+        target, before = stacked(name, uppers['tmpfs'][0])
+        proc = unmount(target, setup=setup)
+        after = _mount_ids(target)
+        print('%s: exit %d, mounts %s -> %s %s' % (
+            name, proc.returncode, before, after, proc.stderr.strip()))
+        return proc.returncode != 0 and after == before
+
+    # What is stacked on the caller's mount, and whether it may go.
+    uppers = {
+        'none': (lambda target, src: None, True),
+        'own-fuse': (lambda target, src: fuse_mount(target, uid), True),
+        'foreign-fuse': (lambda target, src: fuse_mount(target, uid + 1),
+                         False),
+        'tmpfs': (lambda target, src: mount('tmpfs', target, 'tmpfs'), False),
+        'bind': (lambda target, src: mount(src, target, None, ms_bind), False),
+    }
+    failures = []
+    for lazy in (False, True):
+        for upper, (stack, may_go) in uppers.items():
+            name = '%s%s' % (upper, '-lazy' if lazy else '')
+            target, before = stacked(name, stack)
+            proc = unmount(target, ['-z'] if lazy else [])
+            after = _mount_ids(target)
+            print('%s: exit %d, mounts %s -> %s %s' % (
+                name, proc.returncode, before, after, proc.stderr.strip()))
+
+            # Unmounting removes the top mount and nothing else; a
+            # refusal names the reason and leaves every mount in place.
+            if may_go:
+                ok = proc.returncode == 0 and after == before[:-1]
+            else:
+                ok = (proc.returncode != 0 and after == before and
+                      'topmost mount' in proc.stderr)
+            if not ok:
+                failures.append(name)
+
+    # The caller sets the helper's resource limits. With too few file
+    # descriptors left to read /proc, it must refuse rather than skip the
+    # check. Below 4 the helper does not get past loading its libraries.
+    for limit in range(4, 9):
+        name = 'nofile-%d' % limit
+        if not refused(name, lambda limit=limit: resource.setrlimit(
+                resource.RLIMIT_NOFILE, (limit, limit))):
+            failures.append(name)
+
+    # Opening the mountpoint can fail where umount2() on the same name
+    # would not. No limit gets there, as may_unmount() needs a descriptor
+    # just before, so a seccomp filter fails the O_PATH open instead.
+    for err in (errno.EMFILE, errno.ENFILE, errno.ENOMEM, errno.EINTR):
+        name = 'o-path-%s' % errno.errorcode[err]
+        if os.uname().machine not in _SECCOMP_OPENAT:
+            print('%s: no seccomp filter for %s' % (name, os.uname().machine))
+        elif not refused(name, lambda err=err: _fail_o_path_opens(err)):
+            failures.append(name)
+    _require(not failures, 'wrong outcome for: %s' % ', '.join(failures))
+
 # ------------------------------------------------------------------ dispatch
 
 _INODE_CHECK = {'default': 'exact', 'choices': ('exact', 'nonzero')}
@@ -1142,6 +1315,8 @@ def build_parser():
     add('fuse_test_refute_utab_target', cmd_refute_utab_target, 'mnt')
     add('fuse_test_fusermount_rejects', cmd_fusermount_rejects,
         'mountpoint', 'reason')
+    add('fuse_test_fusermount_overmount', cmd_fusermount_overmount,
+        'uid', 'workdir')
 
     add('fuse_test_printcap_caps', cmd_printcap_caps, 'src_root')
     add('fuse_test_reachable_without_caps', cmd_reachable_without_caps, 'path')
