@@ -32,6 +32,8 @@
 #include <poll.h>
 #include <sys/eventfd.h>
 #include <time.h>
+#include <limits.h>
+#include <dirent.h>
 
 /* Size of command data area in SQE when IORING_SETUP_SQE128 is used */
 #define FUSE_URING_MAX_SQE128_CMD_DATA 80
@@ -138,6 +140,9 @@ struct fuse_ring_pool {
 	/* number of per queue entries */
 	size_t queue_depth;
 
+	/* optional mask where to start ring queues/threads on */
+	cpu_set_t *cpu_set;
+
 	/* max payload size for fuse requests*/
 	size_t max_req_payload_sz;
 
@@ -162,6 +167,221 @@ struct fuse_ring_pool {
 	/* pointer to the first queue */
 	struct fuse_ring_queue *queues;
 };
+
+/* Helper function to convert hex character to value */
+static unsigned int hex_to_value(char hex_char)
+{
+	if (hex_char >= '0' && hex_char <= '9')
+		return hex_char - '0';
+	else if (hex_char >= 'a' && hex_char <= 'f')
+		return hex_char - 'a' + 10;
+	else if (hex_char >= 'A' && hex_char <= 'F')
+		return hex_char - 'A' + 10;
+	else
+		return 0; /* Invalid character */
+}
+
+/* Number of bits in a hexadecimal digit */
+#define BITS_PER_HEX_DIGIT 4
+
+static int parse_cpu_token_hex(const char *token, int nr_cpus,
+			       cpu_set_t *cpu_set)
+{
+	const char *hex_string = token + 2; /* Skip "0x" prefix */
+	size_t str_len = strlen(hex_string);
+
+	/* Process hex string from right to left, setting bits in cpu_set */
+	for (int pos = str_len - 1; pos >= 0; pos--) {
+		unsigned int value = hex_to_value(hex_string[pos]);
+
+		/* Example: In "0xA5", str_len=2:
+		 * For digit '5' (pos=1): cpu_base = (2-1-1)*4 = 0 (CPUs 0-3)
+		 * For digit 'A' (pos=0): cpu_base = (2-1-0)*4 = 4 (CPUs 4-7)
+		 */
+		int cpu_base = (str_len - 1 - pos) * BITS_PER_HEX_DIGIT;
+
+		/* Set bits for this digit */
+		for (int bit = 0; bit < BITS_PER_HEX_DIGIT; bit++) {
+			int cpu = cpu_base + bit;
+
+			if (value & (1 << bit)) {
+				if (cpu >= nr_cpus) {
+					/* Found a bit set for CPU that's out of range */
+					fuse_log(
+						FUSE_LOG_ERR,
+						"CPU mask contains CPU %d which exceeds maximum CPU %d\n",
+						cpu, nr_cpus - 1);
+					return -EINVAL;
+				}
+
+				/* Set this CPU in the mask */
+				CPU_SET_S(cpu, CPU_ALLOC_SIZE(nr_cpus),
+					  cpu_set);
+			}
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * Parse a single CPU number or range
+ * @param token String containing a single CPU number or range
+ * @param nr_cpus Maximum number of CPUs to consider
+ * @param cpu_set CPU set to update
+ * @return 0 on success, negative error code on failure
+ */
+static int parse_cpu_token(const char *token, int nr_cpus, cpu_set_t *cpu_set)
+{
+	char *range_str;
+	long start, end, cpu;
+	char *token_copy = strdup(token);
+	int err;
+
+	if (!token_copy)
+		return -ENOMEM;
+
+	/* Check if it's a range (contains a dash) */
+	range_str = strchr(token_copy, '-');
+	if (range_str) {
+		*range_str = '\0';
+		range_str++;
+
+		/* Parse start of range (supports hex with 0x prefix) */
+		int ret = _libfuse_strtol(token_copy, &start, 0);
+		if (ret != 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to parse CPU range start: %s\n",
+				 token_copy);
+			err = -EINVAL;
+			goto out;
+		}
+
+		/* Parse end of range (supports hex with 0x prefix) */
+		ret = _libfuse_strtol(range_str, &end, 0);
+		if (ret != 0 || end < 0 || end >= nr_cpus || end < start) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to parse CPU range end: %s\n",
+				 range_str);
+			err = -EINVAL;
+			goto out;
+		}
+
+		/* Set all CPUs in the range */
+		for (cpu = start; cpu <= end; cpu++) {
+			CPU_SET_S(cpu, CPU_ALLOC_SIZE(nr_cpus), cpu_set);
+		}
+	} else {
+		/* Single CPU number (supports hex with 0x prefix) */
+		int ret = _libfuse_strtol(token_copy, &cpu, 0);
+		if (ret != 0 || cpu < 0 || cpu >= nr_cpus) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to parse CPU number: %s\n",
+				 token_copy);
+			err = -EINVAL;
+			goto out;
+		}
+
+		CPU_SET_S(cpu, CPU_ALLOC_SIZE(nr_cpus), cpu_set);
+	}
+
+	err = 0;
+out:
+	free(token_copy);
+	return err;
+}
+
+/**
+ * Parse a colon-separated list of CPU numbers or ranges, like "1:3:5-7:10-12"
+ * @param mask_str String representation of the CPU list
+ * @param nr_cpus Maximum number of CPUs to consider
+ * @param cpu_set CPU set to update
+ * @return 0 on success, negative error code on failure
+ */
+static int parse_cpu_mask_list(const char *mask_str, int nr_cpus,
+			       cpu_set_t *cpu_set)
+{
+	char *str, *ptr, *token, *saveptr = NULL;
+	int err = 0;
+
+	/* Make a copy of the mask string for tokenization */
+	str = strdup(mask_str);
+	if (!str)
+		return -ENOMEM;
+
+	ptr = str;
+
+	/* Mount options use commas, so CPU lists use colons. */
+	token = strtok_r(ptr, ":", &saveptr);
+	while (token) {
+		if (parse_cpu_token(token, nr_cpus, cpu_set) < 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to parse CPU token: %s\n", token);
+			err = -EINVAL;
+			break;
+		}
+		token = strtok_r(NULL, ":", &saveptr);
+	}
+
+	free(str);
+	return err;
+}
+
+/**
+ * Parse a CPU mask string into a CPU set
+ * @param mask_str String representation of the CPU mask
+ * @param out_mask Pointer to store the allocated CPU set
+ * @param out_nr_cpus Pointer to store the number of CPUs in the set
+ * @return 0 on success, negative error code on failure
+ */
+static int parse_cpu_mask(const char *mask_str, cpu_set_t **out_mask,
+			  size_t *out_nr_cpus)
+{
+	cpu_set_t *cpu_set;
+	int nr_cpus = get_nprocs_conf();
+	int count = 0;
+	int err;
+
+	if (!mask_str || !*mask_str)
+		return -EINVAL;
+
+	cpu_set = CPU_ALLOC(nr_cpus);
+	if (!cpu_set)
+		return -ENOMEM;
+
+	CPU_ZERO_S(CPU_ALLOC_SIZE(nr_cpus), cpu_set);
+
+	/* Check if it's a hex mask (starts with 0x) */
+	if (strncmp(mask_str, "0x", 2) == 0) {
+		err = parse_cpu_token_hex(mask_str, nr_cpus, cpu_set);
+		if (err != 0)
+			goto parse_error;
+	} else {
+		err = parse_cpu_mask_list(mask_str, nr_cpus, cpu_set);
+		if (err != 0)
+			goto parse_error;
+	}
+
+	/* Count the number of set bits to ensure at least one CPU is specified */
+	for (int idx = 0; idx < nr_cpus; idx++) {
+		if (CPU_ISSET(idx, cpu_set))
+			count++;
+	}
+
+	if (count == 0) {
+		fuse_log(FUSE_LOG_ERR, "No CPUs specified in mask\n");
+		err = -EINVAL;
+		goto parse_error;
+	}
+
+	*out_mask = cpu_set;
+	*out_nr_cpus = count;
+	return 0;
+
+parse_error:
+	free(cpu_set);
+	return err;
+}
 
 static size_t
 fuse_ring_queue_size(const size_t q_depth)
@@ -574,6 +794,7 @@ static void fuse_uring_pool_put(struct fuse_ring_pool *fuse_ring)
 		return;
 	}
 
+	CPU_FREE(fuse_ring->cpu_set);
 	free(fuse_ring->queues);
 	pthread_cond_destroy(&fuse_ring->thread_start_cond);
 	pthread_mutex_destroy(&fuse_ring->thread_start_mutex);
@@ -920,20 +1141,181 @@ static int fuse_uring_register_queue(struct fuse_ring_queue *queue)
 	return 0;
 }
 
+static int max_numa_node(const char *path)
+{
+	DIR *dir = opendir(path);
+	struct dirent *entry;
+	int max_node = 0;
+
+	if (!dir)
+		goto out;
+
+	while ((entry = readdir(dir)) != NULL) {
+		long node;
+
+		if (strncmp(entry->d_name, "node", 4) != 0)
+			continue;
+		if (libfuse_strtol(entry->d_name + 4, &node) != 0)
+			continue;
+		if (node > max_node && node < INT_MAX)
+			max_node = node;
+	}
+
+out:
+	if (dir)
+		closedir(dir);
+	return max_node;
+}
+
+static int cpu_numa_node(int cpu)
+{
+	char path[64];
+
+	snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%d", cpu);
+	return max_numa_node(path);
+}
+
+/**
+ * Create a CPU set that distributes queues evenly across NUMA nodes
+ *
+ * @param nr_queues Number of queues to distribute
+ * @return CPU set with selected CPUs, or NULL on error
+ */
+static cpu_set_t *fuse_create_cpu_set(size_t nr_queues)
+{
+	cpu_set_t *cpu_set;
+	int nr_cpus = get_nprocs_conf();
+	int nr_nodes = max_numa_node("/sys/devices/system/node") + 1;
+	int *cpus_left_per_node = NULL;
+	int *queues_per_node = NULL;
+	int cpu, node, err = 0;
+
+	cpu_set = CPU_ALLOC(nr_cpus);
+	if (!cpu_set) {
+		fuse_log(FUSE_LOG_ERR, "Failed to allocate cpu_set\n");
+		return NULL;
+	}
+
+	/* Initialize the CPU set with the proper size */
+	CPU_ZERO_S(CPU_ALLOC_SIZE(nr_cpus), cpu_set);
+
+	/* Set all cores by default */
+	for (cpu = 0; cpu < nr_cpus; cpu++)
+		CPU_SET_S(cpu, CPU_ALLOC_SIZE(nr_cpus), cpu_set);
+
+	/* If nr_queues equals nr_cpus, use all CPUs */
+	if (nr_queues >= nr_cpus)
+		goto out;
+
+	/* unset the cpuset */
+	CPU_ZERO_S(CPU_ALLOC_SIZE(nr_cpus), cpu_set);
+
+	/* Count CPUs per NUMA node */
+	cpus_left_per_node = calloc(nr_nodes, sizeof(*cpus_left_per_node));
+	if (!cpus_left_per_node) {
+		fuse_log(FUSE_LOG_ERR, "Failed to allocate cpus_per_node\n");
+		err = -ENOMEM;
+		goto out;
+	}
+	/* Count CPUs per node */
+	for (cpu = 0; cpu < nr_cpus; cpu++) {
+		int node = cpu_numa_node(cpu);
+		if (node >= nr_nodes)
+			node = 0;
+		cpus_left_per_node[node]++;
+	}
+
+	queues_per_node = calloc(nr_nodes, sizeof(*queues_per_node));
+	if (!queues_per_node) {
+		fuse_log(FUSE_LOG_ERR, "Failed to allocate queues_per_node\n");
+		err = -ENOMEM;
+		goto out;
+	}
+
+	/*
+	 * Distribute queues across NUMA nodes
+	 * Try to handle the possibility that not all nodes have the same
+	 * number of cores.
+	 */
+	node = 0;
+	for (cpu = 0; cpu < nr_queues; cpu++) {
+retry:
+		if (cpus_left_per_node[node] == 0) {
+			/* no queue left for this node */
+			node = (node + 1) % nr_nodes;
+			goto retry;
+		}
+
+		cpus_left_per_node[node]--;
+		queues_per_node[node]++;
+		node = (node + 1) % nr_nodes;
+	}
+
+	/* Select CPUs for the queues according to NUMA distribution */
+	for (cpu = 0; cpu < nr_cpus && nr_queues; cpu++) {
+		node = cpu_numa_node(cpu);
+
+		if (node < 0 || node >= nr_nodes) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to get NUMA node for CPU %d\n", cpu);
+			node = 0;
+		}
+
+		if (queues_per_node[node]) {
+			CPU_SET_S(cpu, CPU_ALLOC_SIZE(nr_cpus), cpu_set);
+			queues_per_node[node]--;
+			nr_queues--;
+		}
+	}
+
+out:
+	if (err) {
+		CPU_FREE(cpu_set);
+		cpu_set = NULL;
+	}
+
+	free(queues_per_node);
+	free(cpus_left_per_node);
+	return cpu_set;
+}
+
 static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 {
 	struct fuse_ring_pool *fuse_ring = NULL;
-	const size_t nr_queues = get_nprocs_conf();
+	size_t nr_procs = get_nprocs_conf();
+	size_t nr_queues = nr_procs;
 	size_t payload_sz = se->bufsize - FUSE_BUFFER_HEADER_SIZE;
 	bool use_bufpool = se->conn.want_ext & FUSE_CAP_IO_URING_BUFPOOL;
 	const size_t page_sz = sysconf(_SC_PAGESIZE);
 	size_t chunk_sz;
 	size_t queue_sz;
+	cpu_set_t *cpu_set = NULL;
+
+	if (se->uring.nr_queues != UINT_MAX)
+		nr_queues = se->uring.nr_queues;
+
+	if (se->uring.q_mask) {
+		int err;
+
+		err = parse_cpu_mask(se->uring.q_mask, &cpu_set, &nr_queues);
+		if (err != 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to parse q_mask: %s: %s\n",
+				 se->uring.q_mask, strerror(-err));
+			goto err;
+		}
+	} else {
+		cpu_set = fuse_create_cpu_set(nr_queues);
+		if (!cpu_set) {
+			fuse_log(FUSE_LOG_ERR, "Failed to create CPU set\n");
+			goto err;
+		}
+	}
 
 	if (se->debug)
 		fuse_log(FUSE_LOG_DEBUG,
-			 "starting io-uring q-depth=%d bufpool=%d\n",
-			 se->uring.q_depth, use_bufpool);
+			 "starting io-uring nr_queues=%zu q-depth=%d bufpool=%d\n",
+			 nr_queues, se->uring.q_depth, use_bufpool);
 
 	if (!payload_sz) {
 		fuse_log(FUSE_LOG_ERR,
@@ -986,22 +1368,29 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	fuse_ring->payload_chunk_sz = chunk_sz;
 	fuse_ring->queue_mem_size = queue_sz;
 	fuse_ring->single_issuer = se->conn.io_uring_single_issuer;
+	fuse_ring->cpu_set = cpu_set;
 
 	/*
 	 * very basic queue initialization, that cannot fail and will
 	 * allow easy cleanup if something (like mmap) fails in the middle
 	 * below
 	 */
-	for (size_t qid = 0; qid < nr_queues; qid++) {
+	size_t qid = 0;
+	for (size_t cpu = 0; cpu < nr_procs; cpu++) {
+		/* Skip this queue if its CPU is not in the CPU set */
+		if (!CPU_ISSET(cpu, cpu_set))
+			continue;
+
 		struct fuse_ring_queue *queue =
 			fuse_uring_get_queue(fuse_ring, qid);
 
 		queue->ring.ring_fd = -1;
-		queue->qid = qid;
+		queue->qid = cpu;
 		queue->ring_pool = fuse_ring;
 		queue->eventfd = -1;
 		queue->bufpool_buf_index = -1;
 		queue->use_bufpool = use_bufpool;
+		qid++;
 		pthread_mutex_init(&queue->ring_lock, NULL);
 		queue->ref_cnt = 1;
 		fuse_uring_pool_get(fuse_ring);
@@ -1014,6 +1403,9 @@ static struct fuse_ring_pool *fuse_create_ring(struct fuse_session *se)
 	return fuse_ring;
 
 err:
+	if (cpu_set)
+		CPU_FREE(cpu_set);
+
 	if (fuse_ring)
 		fuse_session_destruct_uring(fuse_ring);
 
@@ -1131,8 +1523,9 @@ static void fuse_uring_handle_cqe(struct fuse_ring_queue *queue,
 	/* dropped by the commit of the reply */
 	fuse_uring_queue_get(queue);
 
-	fuse_session_process_uring_cqe(fuse_ring->se, req, in, &rrh->op_in,
-				       ent->op_payload, ent_in_out->payload_sz);
+	fuse_session_process_uring_cqe(fuse_ring->se, queue->qid, req, in,
+				       &rrh->op_in, ent->op_payload,
+				       ent_in_out->payload_sz);
 }
 
 static int fuse_uring_queue_handle_cqes(struct fuse_ring_queue *queue)
@@ -1361,10 +1754,13 @@ static int fuse_uring_init_queue(struct fuse_ring_queue *queue)
 static int fuse_uring_start_queue(struct fuse_ring_queue *queue)
 {
 	int res;
+	bool reduced_queues = queue->ring_pool->se->uring.reduced_queues;
 
-	if (queue->use_bufpool) {
+	if (queue->use_bufpool || reduced_queues) {
 		res = fuse_uring_add_queue(queue);
-		if (!res)
+		if (res && reduced_queues)
+			goto out;
+		if (!res && queue->use_bufpool)
 			res = fuse_uring_add_bufpool(queue);
 		if (res) {
 			fuse_log(FUSE_LOG_WARNING,
@@ -1377,10 +1773,13 @@ static int fuse_uring_start_queue(struct fuse_ring_queue *queue)
 	}
 
 	res = fuse_uring_register_queue(queue);
+out:
 	if (res)
 		fuse_log(FUSE_LOG_ERR,
 			 "fuse-uring error on preparing SQEs, aborting: %s\n",
 			 strerror(-res));
+	else
+		EMIT_INIT_STATUS_LINE("io_uring_queue=%d", queue->qid);
 
 	return res;
 }
@@ -1504,13 +1903,23 @@ out:
 static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 {
 	int rc = 0;
+	int qid = 0;
 
-	for (size_t qid = 0; qid < ring->nr_queues; qid++) {
+	for (size_t cpu = 0; cpu < get_nprocs_conf(); cpu++) {
+		/* Skip this queue if its CPU is not in the CPU set */
+		if (!CPU_ISSET(cpu, ring->cpu_set))
+			continue;
+
 		struct fuse_ring_queue *queue = fuse_uring_get_queue(ring, qid);
 
 		rc = pthread_create(&queue->tid, NULL, fuse_uring_thread, queue);
-		if (rc != 0)
+		if (rc != 0) {
+			fuse_log(FUSE_LOG_ERR,
+				 "Failed to start thread for qid=%d\n", qid);
 			break;
+		}
+
+		qid++;
 	}
 
 	return rc;
@@ -1518,13 +1927,51 @@ static int fuse_uring_start_ring_threads(struct fuse_ring_pool *ring)
 
 static int fuse_uring_sanity_check(const struct fuse_session *se)
 {
+	if (!se->uring.reduced_queues) {
+		if (se->uring.nr_queues != UINT_MAX &&
+		    se->uring.nr_queues != get_nprocs_conf()) {
+			fuse_log(
+				FUSE_LOG_ERR,
+				"Kernel does not support queue reduction, invalid nr-queues parameter.\n");
+			return -EINVAL;
+		}
+
+		if (se->uring.q_mask != NULL) {
+			fuse_log(
+				FUSE_LOG_ERR,
+				"Kernel does not support queue reduction, invalid q-mask parameter.\n");
+			return -EINVAL;
+		}
+	}
+
 	if (se->uring.q_depth == 0) {
 		fuse_log(FUSE_LOG_ERR, "io-uring queue depth must be > 0\n");
 		return -EINVAL;
 	}
 
+	if (se->uring.nr_queues == 0) {
+		fuse_log(FUSE_LOG_ERR,
+			 "io-uring number of queues must be > 0\n");
+		return -EINVAL;
+	}
+
+	if (se->uring.nr_queues != UINT_MAX &&
+	    se->uring.nr_queues > get_nprocs_conf()) {
+		fuse_log(
+			FUSE_LOG_ERR,
+			"io-uring number of queues must be <= number of CPUs\n");
+		return -EINVAL;
+	}
+
+	if (se->uring.q_mask && se->uring.nr_queues != UINT_MAX) {
+		fuse_log(
+			FUSE_LOG_ERR,
+			"io-uring queue mask and number-of queues are mutually exclusive\n");
+		return -EINVAL;
+	}
+
 	_Static_assert(sizeof(struct fuse_uring_cmd_req) <=
-		       FUSE_URING_MAX_SQE128_CMD_DATA,
+			       FUSE_URING_MAX_SQE128_CMD_DATA,
 		       "SQE128_CMD_DATA has 80B cmd data");
 
 	return 0;

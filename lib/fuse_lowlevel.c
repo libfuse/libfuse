@@ -2824,6 +2824,12 @@ static void report_init_test_status(struct fuse_session *se, int ring_rc)
 		if (conn->want_ext & cap->flag)
 			EMIT_INIT_STATUS_LINE("%s", cap->name);
 	}
+	if (!se->uring.reduced_queues)
+		EMIT_INIT_STATUS_LINE("io_uring_reduced_q=off:not_offered");
+	else if (conn->want_ext & FUSE_CAP_OVER_IO_URING)
+		EMIT_INIT_STATUS_LINE("io_uring_reduced_q=on");
+	else
+		EMIT_INIT_STATUS_LINE("io_uring_reduced_q=off");
 	/* Absence from the list above does not say why, and only the session
 	 * knows: an impossible ring and a failed one are different verdicts.
 	 */
@@ -2972,6 +2978,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 			se->conn.capable_ext |= FUSE_CAP_ALLOW_IDMAP;
 		if (inargflags & FUSE_SECURITY_CTX)
 			se->conn.capable_ext |= FUSE_CAP_SECURITY_CTX;
+		if (inargflags & FUSE_URING_REDUCED_Q)
+			se->uring.reduced_queues = 1;
 	} else {
 		se->conn.max_readahead = 0;
 	}
@@ -3199,6 +3207,8 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	}
 	if (se->conn.want_ext & FUSE_CAP_IO_URING_BUFPOOL)
 		outargflags |= FUSE_HAS_IO_URING_BUFPOOL;
+	if (enable_io_uring && se->uring.reduced_queues)
+		outargflags |= FUSE_URING_REDUCED_Q;
 
 	report_init_test_status(se, ring_rc);
 
@@ -4305,7 +4315,7 @@ clear_pipe:
 	goto out_free;
 }
 
-void fuse_session_process_uring_cqe(struct fuse_session *se,
+void fuse_session_process_uring_cqe(struct fuse_session *se, int qid,
 				    struct fuse_req *req,
 				    struct fuse_in_header *in, void *op_in,
 				    void *op_payload, size_t payload_len)
@@ -4339,8 +4349,8 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	if (se->debug) {
 		fuse_log(
 			FUSE_LOG_DEBUG,
-			"cqe unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
-			(unsigned long long)in->unique,
+			"cqe unique: %llu, qid=%d, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			(unsigned long long)in->unique, qid,
 			opname((enum fuse_opcode)in->opcode), in->opcode,
 			(unsigned long long)in->nodeid, payload_len, in->pid);
 	}
@@ -4379,6 +4389,8 @@ static const struct fuse_opt fuse_ll_opts[] = {
 	LL_OPTION("io_uring", uring.enabled, 1),
 	LL_OPTION("io_uring_q_depth=%u", uring.q_depth, -1),
 	LL_OPTION("io_uring_bufpool", uring.bufpool, 1),
+	LL_OPTION("io_uring_nr_qs=%u", uring.nr_queues, -1),
+	LL_OPTION("io_uring_q_mask=%s", uring.q_mask, -1),
 	FUSE_OPT_END
 };
 
@@ -4400,6 +4412,8 @@ void fuse_lowlevel_help(void)
 "    -o io_uring            enable io-uring\n"
 "    -o io_uring_q_depth=<n> io-uring queue depth\n"
 "    -o io_uring_bufpool    let the kernel manage the memory regions for queues\n"
+"    -o io_uring_nr_qs=<n>   io-uring number of queues\n"
+"    -o io_uring_q_mask=<s>  io-uring queue mask (0x...) or '1:2:3-5'\n"
 );
 }
 
@@ -4424,6 +4438,7 @@ static void fuse_session_free(struct fuse_session *se)
 		free(se->io);
 	destroy_mount_opts(se->mo);
 
+	free(se->uring.q_mask);
 	free(atomic_exchange(&se->mountpoint, NULL));
 	free(se);
 }
@@ -4822,6 +4837,8 @@ fuse_session_new_versioned(struct fuse_args *args,
 	se->uring.bufpool = getenv("FUSE_URING_BUFPOOL") ?
 				    atoi(getenv("FUSE_URING_BUFPOOL")) :
 				    SESSION_DEF_URING_BUFPOOL;
+	se->uring.nr_queues = UINT_MAX;
+	se->uring.q_mask = NULL;
 
 	/* Parse options */
 	if(fuse_opt_parse(args, se, fuse_ll_opts, NULL) == -1)
@@ -4903,6 +4920,7 @@ out3:
 	if (mo != NULL)
 		destroy_mount_opts(mo);
 out2:
+	free(se->uring.q_mask);
 	free(se);
 out1:
 	return NULL;
