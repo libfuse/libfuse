@@ -1639,7 +1639,12 @@ static const char *file_info_string(const struct fuse_file_info *fi,
 int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf,
 		    struct fuse_file_info *fi)
 {
-	fuse_get_context()->private_data = fs->user_data;
+	struct fuse_context *ctx;
+
+	ctx = fuse_get_context();
+	if (ctx)
+		ctx->private_data = fs->user_data;
+
 	if (!fs->op.getattr)
 		return -ENOSYS;
 
@@ -1656,7 +1661,12 @@ int fuse_fs_getattr(struct fuse_fs *fs, const char *path, struct stat *buf,
 int fuse_fs_rename(struct fuse_fs *fs, const char *oldpath,
 		   const char *newpath, unsigned int flags)
 {
-	fuse_get_context()->private_data = fs->user_data;
+	struct fuse_context *ctx;
+
+	ctx = fuse_get_context();
+	if (ctx)
+		ctx->private_data = fs->user_data;
+
 	if (!fs->op.rename)
 		return -ENOSYS;
 	if (fs->debug)
@@ -1706,7 +1716,12 @@ int fuse_fs_symlink(struct fuse_fs *fs, const char *linkname, const char *path)
 
 int fuse_fs_link(struct fuse_fs *fs, const char *oldpath, const char *newpath)
 {
-	fuse_get_context()->private_data = fs->user_data;
+	struct fuse_context *ctx;
+
+	ctx = fuse_get_context();
+	if (ctx)
+		ctx->private_data = fs->user_data;
+
 	if (!fs->op.link)
 		return -ENOSYS;
 	if (fs->debug)
