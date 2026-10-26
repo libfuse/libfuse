@@ -2453,21 +2453,105 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 }
 
 /*
+ * Rename a hidden file back to its name, without replacing what the name
+ * holds
+ */
+static int rename_back(struct fuse *f, const char *hidpath, const char *path)
+{
+	struct stat buf;
+	int err;
+
+	err = fuse_fs_rename(f->fs, hidpath, path, RENAME_NOREPLACE);
+	if (err == -EINVAL) {
+		/* no rename flags: only to a free name */
+		memset(&buf, 0, sizeof(buf));
+		err = fuse_fs_getattr(f->fs, path, &buf, NULL);
+		if (err == 0)
+			err = -EEXIST;
+		else if (err == -ENOENT)
+			err = fuse_fs_rename(f->fs, hidpath, path, 0);
+	}
+	return err;
+}
+
+/*
+ * A hide that can't be undone: the node follows the file to its hidden
+ * name, where it is left, not unlinked. Not over a node already there,
+ * which may hold path locks
+ */
+static void follow_node(struct fuse *f, fuse_ino_t dir, const char *oldname,
+			const char *hidname)
+{
+	struct node *node;
+	int moved = 0;
+
+	pthread_mutex_lock(&f->lock);
+	node = lookup_node(f, dir, oldname);
+	if (node != NULL && lookup_node(f, dir, hidname) == NULL) {
+		unhash_name(f, node);
+		moved = hash_name(f, node, dir, hidname) == 0;
+	}
+	pthread_mutex_unlock(&f->lock);
+	if (!moved)
+		fuse_log(FUSE_LOG_ERR, "fuse: node of %s not moved to %s\n",
+			 oldname, hidname);
+}
+
+/*
  * Hide the node: rename it to a .fuse_hidden name, given in hidname (64
- * bytes) and, if hidpath is not NULL, *hidpath (to free)
+ * bytes) and, if hidpath is not NULL, *hidpath (to free). If that fails
+ * after the filesystem may have renamed it (its reply lost, or the node
+ * could not follow), rename it back; if it can't be, the node follows it
+ * to the hidden name, where it is left, not unlinked
  */
 static int hide_node(struct fuse *f, const char *oldpath,
 		     fuse_ino_t dir, const char *oldname,
 		     char *hidname, char **hidpath)
 {
+	struct stat buf;
 	char *newpath;
 	int err = -EBUSY;
+	int res;
 
 	newpath = hidden_name(f, dir, oldname, hidname, 64);
 	if (newpath) {
 		err = fuse_fs_rename(f->fs, oldpath, newpath, 0);
-		if (!err)
+		if (!err) {
 			err = rename_node(f, dir, oldname, dir, hidname, 1);
+			/* if the node could not follow, the file is hidden */
+			res = err ? 0 : -ENOENT;
+		} else {
+			/*
+			 * 0 if the file is hidden, -ENOENT if not, or
+			 * unknown
+			 */
+			memset(&buf, 0, sizeof(buf));
+			res = fuse_fs_getattr(f->fs, newpath, &buf, NULL);
+			/*
+			 * not renamed, as far as the filesystem tells: a
+			 * rename it applies late (after a timeout) leaves the
+			 * file under that name, which nothing unlinks
+			 */
+			if (res == -ENOENT && err != -ENOENT)
+				fuse_log(FUSE_LOG_ERR, "fuse: failed to hide %s as %s: %s\n",
+					 oldpath, newpath, strerror(-err));
+		}
+		if (res != -ENOENT) {
+			int back = rename_back(f, newpath, oldpath);
+
+			if (back && (res == 0 || back != -ENOENT)) {
+				fuse_log(FUSE_LOG_ERR, "fuse: failed to rename %s back to %s: %s\n",
+					 newpath, oldpath, strerror(-back));
+				if (res == 0)
+					follow_node(f, dir, oldname, hidname);
+			}
+			/*
+			 * the file was, or may have been, there: ENOENT would
+			 * tell the caller the name is already free
+			 */
+			if (err == -ENOENT && (res == 0 || back != -ENOENT))
+				err = -EIO;
+		}
 		if (!err && hidpath)
 			*hidpath = newpath;
 		else
@@ -2490,7 +2574,6 @@ static void unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
 			const char *path)
 {
 	struct node *node;
-	struct stat buf;
 	int unlink_hidden = 0;
 	int err;
 
@@ -2505,16 +2588,7 @@ static void unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
 	node->unlink_pending = 0;
 	pthread_mutex_unlock(&f->lock);
 
-	err = fuse_fs_rename(f->fs, hidpath, path, RENAME_NOREPLACE);
-	if (err == -EINVAL) {
-		/* no rename flags: only to a free name */
-		memset(&buf, 0, sizeof(buf));
-		err = fuse_fs_getattr(f->fs, path, &buf, NULL);
-		if (err == 0)
-			err = -EEXIST;
-		else if (err == -ENOENT)
-			err = fuse_fs_rename(f->fs, hidpath, path, 0);
-	}
+	err = rename_back(f, hidpath, path);
 	if (!err) {
 		if (rename_node(f, dir, hidname, dir, name, 0))
 			fuse_log(FUSE_LOG_ERR, "fuse: %s renamed back to %s, not its node\n",
