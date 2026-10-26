@@ -2500,6 +2500,22 @@ static int rename_back(struct fuse *f, const char *hidpath, const char *path)
 }
 
 /*
+ * Rename a file to a hidden name, replacing nothing: another process (a
+ * mount of the same filesystem elsewhere) may have taken the name since
+ * hidden_name() found it free. RENAME_NOREPLACE, or a plain rename on a
+ * filesystem that refuses rename flags
+ */
+static int rename_hidden(struct fuse *f, const char *path, const char *hidpath)
+{
+	int err;
+
+	err = fuse_fs_rename(f->fs, path, hidpath, RENAME_NOREPLACE);
+	if (err == -EINVAL || err == -EOPNOTSUPP || err == -ENOSYS)
+		err = fuse_fs_rename(f->fs, path, hidpath, 0);
+	return err;
+}
+
+/*
  * A hide that can't be undone: the node follows the file to its hidden
  * name, where it is left, not unlinked. Not over a node already there,
  * which may hold path locks
@@ -2555,16 +2571,29 @@ static int hide_node(struct fuse *f, const char *oldpath,
 {
 	struct stat buf;
 	char *newpath;
+	int tries = 10;
 	int err = -EBUSY;
 	int res;
 
 	newpath = hidden_name(f, dir, oldname, hidname, 64);
 	if (newpath) {
-		err = fuse_fs_rename(f->fs, oldpath, newpath, 0);
+		err = rename_hidden(f, oldpath, newpath);
+		while (err == -EEXIST && --tries) {
+			/* the name taken since hidden_name() found it free */
+			free(newpath);
+			newpath = hidden_name(f, dir, oldname, hidname, 64);
+			if (newpath == NULL)
+				return -EBUSY;
+			err = rename_hidden(f, oldpath, newpath);
+		}
 		if (!err) {
 			err = rename_node(f, dir, oldname, dir, hidname, 1);
 			/* if the node could not follow, the file is hidden */
 			res = err ? 0 : -ENOENT;
+		} else if (err == -EEXIST) {
+			/* not renamed */
+			res = -ENOENT;
+			err = -EBUSY;
 		} else {
 			/*
 			 * 0 if the file is hidden, -ENOENT if not, or
