@@ -2467,16 +2467,28 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 
 /*
  * Rename a hidden file back to its name, without replacing what the name
- * holds
+ * holds: RENAME_NOREPLACE or, from a filesystem that refuses rename flags,
+ * a link and an unlink (a getattr, then a rename, would replace a file
+ * created in between). A filesystem without link either keeps that
+ * getattr and rename, and their window
  */
 static int rename_back(struct fuse *f, const char *hidpath, const char *path)
 {
 	struct stat buf;
 	int err;
+	int res;
 
 	err = fuse_fs_rename(f->fs, hidpath, path, RENAME_NOREPLACE);
-	if (err == -EINVAL) {
-		/* no rename flags: only to a free name */
+	if (err != -EINVAL && err != -EOPNOTSUPP && err != -ENOSYS)
+		return err;
+	err = fuse_fs_link(f->fs, hidpath, path);
+	if (!err) {
+		res = fuse_fs_unlink(f->fs, hidpath);
+		if (res)
+			fuse_log(FUSE_LOG_ERR, "fuse: %s linked to %s, not unlinked: %s\n",
+				 hidpath, path, strerror(-res));
+	} else if (err == -ENOSYS || err == -EPERM || err == -EOPNOTSUPP) {
+		/* no link either: only to a free name */
 		memset(&buf, 0, sizeof(buf));
 		err = fuse_fs_getattr(f->fs, path, &buf, NULL);
 		if (err == 0)
@@ -2594,27 +2606,51 @@ static int hide_node(struct fuse *f, const char *oldpath,
 }
 
 /*
+ * Whether stbuf, a getattr after a rename, describes another file than src,
+ * the getattr of its source before: another type, size, modification time,
+ * or inode number if both are known. A rename changes none of them. The
+ * inode number alone is not enough: a filesystem may give a removed file's
+ * number to the next file created (ext4 does at once)
+ */
+static int other_file(const struct stat *stbuf, const struct stat *src)
+{
+	if ((stbuf->st_mode ^ src->st_mode) & S_IFMT)
+		return 1;
+	if (stbuf->st_ino && src->st_ino && stbuf->st_ino != src->st_ino)
+		return 1;
+	return stbuf->st_size != src->st_size ||
+		stbuf->st_mtime != src->st_mtime ||
+		ST_MTIM_NSEC(stbuf) != ST_MTIM_NSEC(src);
+}
+
+/*
  * The rename the node was hidden for failed: give it its name back, without
  * replacing what the name holds (the rename may have happened, its reply
  * lost). It is taken back from a release that found it hidden and no
  * longer open, if that release has not unlinked it yet (nullpath_ok: it
- * waits for this rename's path lock). If the name is taken, the node stays
- * hidden, as the rename happened; if renaming it back fails otherwise, it
- * is left under its hidden name, not unlinked
+ * waits for this rename's path lock). If the name is taken by the file the
+ * rename moved (gone from oldpath, and, if src is not NULL, not another
+ * file than src describes), the rename happened: the node stays hidden,
+ * and 1 is returned. If it is taken by another (another client created the
+ * name while the target was hidden), or renaming it back fails otherwise,
+ * it is left under its hidden name, not unlinked
  */
-static void unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
-			const char *hidpath, const char *name,
-			const char *path)
+static int unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
+		       const char *hidpath, const char *name,
+		       const char *path, const char *oldpath,
+		       const struct stat *src)
 {
 	struct node *node;
+	struct stat buf;
 	int unlink_hidden = 0;
+	int happened;
 	int err;
 
 	pthread_mutex_lock(&f->lock);
 	node = lookup_node(f, dir, hidname);
 	if (node == NULL || !(node->is_hidden || node->unlink_pending)) {
 		pthread_mutex_unlock(&f->lock);
-		return;
+		return 0;
 	}
 	node->is_hidden = 0;
 	node->hidden_unlinked = 0;
@@ -2626,12 +2662,25 @@ static void unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
 		if (rename_node(f, dir, hidname, dir, name, 0))
 			fuse_log(FUSE_LOG_ERR, "fuse: %s renamed back to %s, not its node\n",
 				 hidpath, path);
-		return;
+		return 0;
 	}
 	if (err != -EEXIST) {
 		fuse_log(FUSE_LOG_ERR, "fuse: failed to rename %s back to %s: %s\n",
 			 hidpath, path, strerror(-err));
-		return;
+		return 0;
+	}
+	memset(&buf, 0, sizeof(buf));
+	happened = fuse_fs_getattr(f->fs, oldpath, &buf, NULL) == -ENOENT;
+	if (happened && src) {
+		memset(&buf, 0, sizeof(buf));
+		if (fuse_fs_getattr(f->fs, path, &buf, NULL) == 0 &&
+		    other_file(&buf, src))
+			happened = 0;
+	}
+	if (!happened) {
+		fuse_log(FUSE_LOG_ERR, "fuse: %s taken while %s was hidden, left there\n",
+			 path, hidpath);
+		return 0;
 	}
 
 	pthread_mutex_lock(&f->lock);
@@ -2652,6 +2701,7 @@ static void unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
 			remove_node(f, dir, hidname);
 		}
 	}
+	return 1;
 }
 
 static int mtime_eq(const struct stat *stbuf, const struct timespec *ts)
@@ -3287,6 +3337,8 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 	char *newpath;
 	char hidname[64];
 	char *hidpath = NULL;
+	struct stat srcbuf;
+	struct stat *src = NULL;
 	struct node *wnode1;
 	struct node *wnode2;
 	int err;
@@ -3313,6 +3365,15 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 				err = 0;
 			}
 		}
+		if (!err && hidpath) {
+			/*
+			 * the source's attributes, to tell a failed rename
+			 * that happened (its reply lost) from one that did not
+			 */
+			memset(&srcbuf, 0, sizeof(srcbuf));
+			if (fuse_fs_getattr(f->fs, oldpath, &srcbuf, NULL) == 0)
+				src = &srcbuf;
+		}
 		if (!err) {
 			err = fuse_fs_rename(f->fs, oldpath, newpath, flags);
 			if (!err) {
@@ -3331,10 +3392,16 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 					err = rename_node(f, olddir, oldname,
 							  newdir, newname, 0);
 				}
-			} else if (hidpath) {
-				/* The target was hidden for this rename */
-				unhide_node(f, newdir, hidname, hidpath,
-					    newname, newpath);
+			} else if (hidpath &&
+				   unhide_node(f, newdir, hidname, hidpath,
+					       newname, newpath, oldpath, src)) {
+				/*
+				 * The target was hidden for this rename, which
+				 * happened (its reply lost): finish it, or the
+				 * kernel's entry would keep the hidden node
+				 */
+				err = rename_node(f, olddir, oldname,
+						  newdir, newname, 0);
 			}
 		}
 		free(hidpath);
