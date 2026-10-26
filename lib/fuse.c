@@ -875,16 +875,29 @@ static void inc_nlookup(struct node *node)
 	node->nlookup++;
 }
 
+static void unlink_node(struct fuse *f, struct node *node);
+
 static struct node *find_node(struct fuse *f, fuse_ino_t parent,
 			      const char *name)
 {
 	struct node *node;
 
 	pthread_mutex_lock(&f->lock);
-	if (!name)
+	if (!name) {
 		node = get_node(f, parent);
-	else
+	} else {
 		node = lookup_node(f, parent, name);
+		/*
+		 * A node whose hidden file was unlinked, left in the name
+		 * table (a path lock held it then; see unhash_unlinked()):
+		 * not the file that has the name now
+		 */
+		if (node != NULL && node->hidden_unlinked &&
+		    !node->unlink_pending && node->treelock == 0) {
+			unlink_node(f, node);
+			node = NULL;
+		}
+	}
 	if (node == NULL) {
 		node = alloc_node(f);
 		if (node == NULL)
@@ -2635,6 +2648,8 @@ static void unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
 			pthread_mutex_lock(&f->lock);
 			node->hidden_unlinked = 0;
 			pthread_mutex_unlock(&f->lock);
+		} else {
+			remove_node(f, dir, hidname);
 		}
 	}
 }
@@ -3356,9 +3371,9 @@ static void fuse_lib_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 
 /*
  * Unlink the hidden file of a node no longer open, the path locked, unless a
- * failed rename gave it its name back meanwhile
+ * failed rename gave it its name back meanwhile. Returns 1 if it is gone
  */
-static void fuse_unlink_hidden(struct fuse *f, fuse_ino_t ino, const char *path)
+static int fuse_unlink_hidden(struct fuse *f, fuse_ino_t ino, const char *path)
 {
 	struct node *node;
 	int pending;
@@ -3370,7 +3385,7 @@ static void fuse_unlink_hidden(struct fuse *f, fuse_ino_t ino, const char *path)
 	node->unlink_pending = 0;
 	pthread_mutex_unlock(&f->lock);
 	if (!pending)
-		return;
+		return 0;
 
 	err = fuse_fs_unlink(f->fs, path);
 	if (err && err != -ENOENT) {
@@ -3378,14 +3393,39 @@ static void fuse_unlink_hidden(struct fuse *f, fuse_ino_t ino, const char *path)
 		pthread_mutex_lock(&f->lock);
 		get_node(f, ino)->hidden_unlinked = 0;
 		pthread_mutex_unlock(&f->lock);
+		return 0;
 	}
+	return 1;
 }
 
-/* Drop an open of the node: a hidden node is unlinked when no longer open */
-static void fuse_unref_open(struct fuse *f, fuse_ino_t ino, const char *path)
+/*
+ * A node whose hidden file was unlinked leaves the name table, once no path
+ * lock holds it and no release has yet to unlink the file (unlink_pending:
+ * with nullpath_ok, a release that has not locked the path yet): a file
+ * that takes the name later (restored, say) gets a node of its own, which
+ * opens
+ */
+static void unhash_unlinked(struct fuse *f, fuse_ino_t ino)
+{
+	struct node *node;
+
+	pthread_mutex_lock(&f->lock);
+	node = get_node_nocheck(f, ino);
+	if (node != NULL && node->hidden_unlinked && !node->unlink_pending &&
+	    node->name != NULL && node->treelock == 0)
+		unlink_node(f, node);
+	pthread_mutex_unlock(&f->lock);
+}
+
+/*
+ * Drop an open of the node: a hidden node is unlinked when no longer open.
+ * Returns 1 if it was, for unhash_unlinked() once the path is freed
+ */
+static int fuse_unref_open(struct fuse *f, fuse_ino_t ino, const char *path)
 {
 	struct node *node;
 	int unlink_hidden = 0;
+	int unlinked = 0;
 
 	pthread_mutex_lock(&f->lock);
 	node = get_node(f, ino);
@@ -3401,23 +3441,25 @@ static void fuse_unref_open(struct fuse *f, fuse_ino_t ino, const char *path)
 
 	if(unlink_hidden) {
 		if (path) {
-			fuse_unlink_hidden(f, ino, path);
+			unlinked = fuse_unlink_hidden(f, ino, path);
 		} else if (f->conf.nullpath_ok) {
 			char *unlinkpath;
 
 			if (get_path(f, ino, &unlinkpath) == 0)
-				fuse_unlink_hidden(f, ino, unlinkpath);
+				unlinked = fuse_unlink_hidden(f, ino,
+							      unlinkpath);
 
 			free_path(f, ino, unlinkpath);
 		}
 	}
+	return unlinked;
 }
 
-static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
-			    struct fuse_file_info *fi)
+static int fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
+			   struct fuse_file_info *fi)
 {
 	fuse_fs_release(f->fs, path, fi);
-	fuse_unref_open(f, ino, path);
+	return fuse_unref_open(f, ino, path);
 }
 
 static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
@@ -3516,6 +3558,7 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 	struct fuse_intr_data d;
 	struct node *node;
 	char *path;
+	int unlinked = 0;
 	int err;
 
 	err = get_path(f, ino, &path);
@@ -3529,10 +3572,12 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 		 */
 		pthread_mutex_lock(&f->lock);
 		node = get_node(f, ino);
-		if (node->hidden_unlinked)
+		if (node->hidden_unlinked) {
 			err = -ESTALE;
-		else
+			unlinked = 1;
+		} else {
 			node->open_count++;
+		}
 		pthread_mutex_unlock(&f->lock);
 	}
 	if (!err) {
@@ -3557,18 +3602,20 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 		}
 		fuse_finish_interrupt(f, req, &d);
 		if (err)
-			fuse_unref_open(f, ino, path);
+			unlinked = fuse_unref_open(f, ino, path);
 	}
 	if (!err) {
 		if (fuse_reply_open(req, fi) == -ENOENT) {
 			/* The open syscall was interrupted, so it
 			   must be cancelled */
-			fuse_do_release(f, ino, path, fi);
+			unlinked = fuse_do_release(f, ino, path, fi);
 		}
 	} else
 		reply_err(req, err);
 
 	free_path(f, ino, path);
+	if (unlinked)
+		unhash_unlinked(f, ino);
 }
 
 static void fuse_lib_read(fuse_req_t req, fuse_ino_t ino, size_t size,
@@ -4411,6 +4458,7 @@ static void fuse_lib_release(fuse_req_t req, fuse_ino_t ino,
 	struct fuse *f = req_fuse_prepare(req);
 	struct fuse_intr_data d;
 	char *path;
+	int unlinked;
 	int err = 0;
 
 	get_path_nullok(f, ino, &path);
@@ -4421,9 +4469,11 @@ static void fuse_lib_release(fuse_req_t req, fuse_ino_t ino,
 	}
 
 	fuse_prepare_interrupt(f, req, &d);
-	fuse_do_release(f, ino, path, fi);
+	unlinked = fuse_do_release(f, ino, path, fi);
 	fuse_finish_interrupt(f, req, &d);
 	free_path(f, ino, path);
+	if (unlinked)
+		unhash_unlinked(f, ino);
 
 	reply_err(req, err);
 }
