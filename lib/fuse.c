@@ -52,6 +52,10 @@
 #define RENAME_EXCHANGE		(1 << 1)	/* Exchange source and dest */
 #endif
 
+#ifndef RENAME_NOREPLACE
+#define RENAME_NOREPLACE	(1 << 0)	/* Don't overwrite target */
+#endif
+
 #define FUSE_DEFAULT_INTR_SIGNAL SIGUSR1
 
 #define FUSE_UNKNOWN_INO 0xffffffff
@@ -152,6 +156,8 @@ struct node {
 	unsigned int cache_valid : 1;
 	/* was hidden, and the release of its last open unlinked it */
 	unsigned int hidden_unlinked : 1;
+	/* that release has yet to unlink it: a failed rename can claim it */
+	unsigned int unlink_pending : 1;
 	int treelock;
 	char inline_name[32];
 };
@@ -2446,21 +2452,97 @@ static char *hidden_name(struct fuse *f, fuse_ino_t dir, const char *oldname,
 	return newpath;
 }
 
+/*
+ * Hide the node: rename it to a .fuse_hidden name, given in hidname (64
+ * bytes) and, if hidpath is not NULL, *hidpath (to free)
+ */
 static int hide_node(struct fuse *f, const char *oldpath,
-		     fuse_ino_t dir, const char *oldname)
+		     fuse_ino_t dir, const char *oldname,
+		     char *hidname, char **hidpath)
 {
-	char newname[64];
 	char *newpath;
 	int err = -EBUSY;
 
-	newpath = hidden_name(f, dir, oldname, newname, sizeof(newname));
+	newpath = hidden_name(f, dir, oldname, hidname, 64);
 	if (newpath) {
 		err = fuse_fs_rename(f->fs, oldpath, newpath, 0);
 		if (!err)
-			err = rename_node(f, dir, oldname, dir, newname, 1);
-		free(newpath);
+			err = rename_node(f, dir, oldname, dir, hidname, 1);
+		if (!err && hidpath)
+			*hidpath = newpath;
+		else
+			free(newpath);
 	}
 	return err;
+}
+
+/*
+ * The rename the node was hidden for failed: give it its name back, without
+ * replacing what the name holds (the rename may have happened, its reply
+ * lost). It is taken back from a release that found it hidden and no
+ * longer open, if that release has not unlinked it yet (nullpath_ok: it
+ * waits for this rename's path lock). If the name is taken, the node stays
+ * hidden, as the rename happened; if renaming it back fails otherwise, it
+ * is left under its hidden name, not unlinked
+ */
+static void unhide_node(struct fuse *f, fuse_ino_t dir, const char *hidname,
+			const char *hidpath, const char *name,
+			const char *path)
+{
+	struct node *node;
+	struct stat buf;
+	int unlink_hidden = 0;
+	int err;
+
+	pthread_mutex_lock(&f->lock);
+	node = lookup_node(f, dir, hidname);
+	if (node == NULL || !(node->is_hidden || node->unlink_pending)) {
+		pthread_mutex_unlock(&f->lock);
+		return;
+	}
+	node->is_hidden = 0;
+	node->hidden_unlinked = 0;
+	node->unlink_pending = 0;
+	pthread_mutex_unlock(&f->lock);
+
+	err = fuse_fs_rename(f->fs, hidpath, path, RENAME_NOREPLACE);
+	if (err == -EINVAL) {
+		/* no rename flags: only to a free name */
+		memset(&buf, 0, sizeof(buf));
+		err = fuse_fs_getattr(f->fs, path, &buf, NULL);
+		if (err == 0)
+			err = -EEXIST;
+		else if (err == -ENOENT)
+			err = fuse_fs_rename(f->fs, hidpath, path, 0);
+	}
+	if (!err) {
+		if (rename_node(f, dir, hidname, dir, name, 0))
+			fuse_log(FUSE_LOG_ERR, "fuse: %s renamed back to %s, not its node\n",
+				 hidpath, path);
+		return;
+	}
+	if (err != -EEXIST) {
+		fuse_log(FUSE_LOG_ERR, "fuse: failed to rename %s back to %s: %s\n",
+			 hidpath, path, strerror(-err));
+		return;
+	}
+
+	pthread_mutex_lock(&f->lock);
+	if (node->open_count) {
+		node->is_hidden = 1;
+	} else {
+		unlink_hidden = 1;
+		node->hidden_unlinked = 1;
+	}
+	pthread_mutex_unlock(&f->lock);
+	if (unlink_hidden) {
+		err = fuse_fs_unlink(f->fs, hidpath);
+		if (err && err != -ENOENT) {
+			pthread_mutex_lock(&f->lock);
+			node->hidden_unlinked = 0;
+			pthread_mutex_unlock(&f->lock);
+		}
+	}
 }
 
 static int mtime_eq(const struct stat *stbuf, const struct timespec *ts)
@@ -3008,6 +3090,7 @@ static void fuse_lib_unlink(fuse_req_t req, fuse_ino_t parent,
 {
 	struct fuse *f = req_fuse_prepare(req);
 	struct node *wnode;
+	char hidname[64];
 	char *path;
 	int err;
 
@@ -3017,7 +3100,7 @@ static void fuse_lib_unlink(fuse_req_t req, fuse_ino_t parent,
 
 		fuse_prepare_interrupt(f, req, &d);
 		if (!f->conf.hard_remove && is_open(f, parent, name)) {
-			err = hide_node(f, path, parent, name);
+			err = hide_node(f, path, parent, name, hidname, NULL);
 			if (!err) {
 				/* we have hidden the node so now check again under a lock in case it is not used any more */
 				if (!is_open(f, parent, wnode->name)) {
@@ -3093,6 +3176,8 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 	struct fuse *f = req_fuse_prepare(req);
 	char *oldpath;
 	char *newpath;
+	char hidname[64];
+	char *hidpath = NULL;
 	struct node *wnode1;
 	struct node *wnode2;
 	int err;
@@ -3105,7 +3190,8 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 		fuse_prepare_interrupt(f, req, &d);
 		if (!f->conf.hard_remove && !(flags & RENAME_EXCHANGE) &&
 		    is_open(f, newdir, newname))
-			err = hide_node(f, newpath, newdir, newname);
+			err = hide_node(f, newpath, newdir, newname, hidname,
+					&hidpath);
 		if (!err) {
 			err = fuse_fs_rename(f->fs, oldpath, newpath, flags);
 			if (!err) {
@@ -3116,8 +3202,13 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 					err = rename_node(f, olddir, oldname,
 							  newdir, newname, 0);
 				}
+			} else if (hidpath) {
+				/* The target was hidden for this rename */
+				unhide_node(f, newdir, hidname, hidpath,
+					    newname, newpath);
 			}
 		}
+		free(hidpath);
 		fuse_finish_interrupt(f, req, &d);
 		free_path2(f, olddir, newdir, wnode1, wnode2, oldpath, newpath);
 	}
@@ -3149,6 +3240,33 @@ static void fuse_lib_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 	reply_entry(req, &e, err);
 }
 
+/*
+ * Unlink the hidden file of a node no longer open, the path locked, unless a
+ * failed rename gave it its name back meanwhile
+ */
+static void fuse_unlink_hidden(struct fuse *f, fuse_ino_t ino, const char *path)
+{
+	struct node *node;
+	int pending;
+	int err;
+
+	pthread_mutex_lock(&f->lock);
+	node = get_node(f, ino);
+	pending = node->unlink_pending;
+	node->unlink_pending = 0;
+	pthread_mutex_unlock(&f->lock);
+	if (!pending)
+		return;
+
+	err = fuse_fs_unlink(f->fs, path);
+	if (err && err != -ENOENT) {
+		/* still there: opens of it are not stale */
+		pthread_mutex_lock(&f->lock);
+		get_node(f, ino)->hidden_unlinked = 0;
+		pthread_mutex_unlock(&f->lock);
+	}
+}
+
 /* Drop an open of the node: a hidden node is unlinked when no longer open */
 static void fuse_unref_open(struct fuse *f, fuse_ino_t ino, const char *path)
 {
@@ -3163,17 +3281,18 @@ static void fuse_unref_open(struct fuse *f, fuse_ino_t ino, const char *path)
 		unlink_hidden = 1;
 		node->is_hidden = 0;
 		node->hidden_unlinked = 1;
+		node->unlink_pending = 1;
 	}
 	pthread_mutex_unlock(&f->lock);
 
 	if(unlink_hidden) {
 		if (path) {
-			fuse_fs_unlink(f->fs, path);
+			fuse_unlink_hidden(f, ino, path);
 		} else if (f->conf.nullpath_ok) {
 			char *unlinkpath;
 
 			if (get_path(f, ino, &unlinkpath) == 0)
-				fuse_fs_unlink(f->fs, unlinkpath);
+				fuse_unlink_hidden(f, ino, unlinkpath);
 
 			free_path(f, ino, unlinkpath);
 		}
