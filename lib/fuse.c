@@ -150,6 +150,8 @@ struct node {
 	struct lock *locks;
 	unsigned int is_hidden : 1;
 	unsigned int cache_valid : 1;
+	/* was hidden, and the release of its last open unlinked it */
+	unsigned int hidden_unlinked : 1;
 	int treelock;
 	char inline_name[32];
 };
@@ -3151,13 +3153,11 @@ static void fuse_lib_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent,
 	reply_entry(req, &e, err);
 }
 
-static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
-			    struct fuse_file_info *fi)
+/* Drop an open of the node: a hidden node is unlinked when no longer open */
+static void fuse_unref_open(struct fuse *f, fuse_ino_t ino, const char *path)
 {
 	struct node *node;
 	int unlink_hidden = 0;
-
-	fuse_fs_release(f->fs, path, fi);
 
 	pthread_mutex_lock(&f->lock);
 	node = get_node(f, ino);
@@ -3166,6 +3166,7 @@ static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
 	if (node->is_hidden && !node->open_count) {
 		unlink_hidden = 1;
 		node->is_hidden = 0;
+		node->hidden_unlinked = 1;
 	}
 	pthread_mutex_unlock(&f->lock);
 
@@ -3181,6 +3182,13 @@ static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
 			free_path(f, ino, unlinkpath);
 		}
 	}
+}
+
+static void fuse_do_release(struct fuse *f, fuse_ino_t ino, const char *path,
+			    struct fuse_file_info *fi)
+{
+	fuse_fs_release(f->fs, path, fi);
+	fuse_unref_open(f, ino, path);
 }
 
 static void fuse_lib_create(fuse_req_t req, fuse_ino_t parent,
@@ -3282,6 +3290,24 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 
 	err = get_path(f, ino, &path);
 	if (!err) {
+		struct node *node;
+
+		/*
+		 * Count the open before the filesystem's open: the release of
+		 * the node's last other handle meanwhile must not unlink the
+		 * node, if hidden, under this open. If that release came
+		 * first, the kernel looked the name up before a rename hid
+		 * the node: ESTALE makes it look the name up again
+		 */
+		pthread_mutex_lock(&f->lock);
+		node = get_node(f, ino);
+		if (node->hidden_unlinked)
+			err = -ESTALE;
+		else
+			node->open_count++;
+		pthread_mutex_unlock(&f->lock);
+	}
+	if (!err) {
 		fuse_prepare_interrupt(f, req, &d);
 		err = fuse_fs_open(f->fs, path, fi);
 		if (!err) {
@@ -3302,11 +3328,10 @@ static void fuse_lib_open(fuse_req_t req, fuse_ino_t ino,
 
 		}
 		fuse_finish_interrupt(f, req, &d);
+		if (err)
+			fuse_unref_open(f, ino, path);
 	}
 	if (!err) {
-		pthread_mutex_lock(&f->lock);
-		get_node(f, ino)->open_count++;
-		pthread_mutex_unlock(&f->lock);
 		if (fuse_reply_open(req, fi) == -ENOENT) {
 			/* The open syscall was interrupted, so it
 			   must be cancelled */
