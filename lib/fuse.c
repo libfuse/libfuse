@@ -2498,6 +2498,26 @@ static void follow_node(struct fuse *f, fuse_ino_t dir, const char *oldname,
 }
 
 /*
+ * A stale open node (its file removed through another client) at a name a
+ * rename just took: moved aside to a free hidden name, not hidden (its
+ * release unlinks nothing). Not out of the name table: its opens would get
+ * NULL paths, which only nullpath_ok allows
+ */
+static void move_aside(struct fuse *f, fuse_ino_t dir, const char *name)
+{
+	char hidname[64];
+	char *hidpath;
+
+	hidpath = hidden_name(f, dir, name, hidname, sizeof(hidname));
+	if (hidpath == NULL)
+		fuse_log(FUSE_LOG_ERR, "fuse: no free name to move %s aside\n",
+			 name);
+	else
+		follow_node(f, dir, name, hidname);
+	free(hidpath);
+}
+
+/*
  * Hide the node: rename it to a .fuse_hidden name, given in hidname (64
  * bytes) and, if hidpath is not NULL, *hidpath (to free). If that fails
  * after the filesystem may have renamed it (its reply lost, or the node
@@ -3263,9 +3283,21 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 		err = 0;
 		fuse_prepare_interrupt(f, req, &d);
 		if (!f->conf.hard_remove && !(flags & RENAME_EXCHANGE) &&
-		    is_open(f, newdir, newname))
+		    is_open(f, newdir, newname)) {
 			err = hide_node(f, newpath, newdir, newname, hidname,
 					&hidpath);
+			if (err == -ENOENT) {
+				/*
+				 * The target is gone (removed through another
+				 * client), not its node, still open: rename to
+				 * the free name, and move the node aside once
+				 * that worked (below). If the rename fails, the
+				 * node keeps its name: the filesystem may know
+				 * its open handles by that path
+				 */
+				err = 0;
+			}
+		}
 		if (!err) {
 			err = fuse_fs_rename(f->fs, oldpath, newpath, flags);
 			if (!err) {
@@ -3273,6 +3305,14 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 					err = exchange_node(f, olddir, oldname,
 							    newdir, newname);
 				} else {
+					/*
+					 * An open node at a name the rename
+					 * found free (the hide's ENOENT) is
+					 * stale
+					 */
+					if (!hidpath && !f->conf.hard_remove &&
+					    is_open(f, newdir, newname))
+						move_aside(f, newdir, newname);
 					err = rename_node(f, olddir, oldname,
 							  newdir, newname, 0);
 				}
