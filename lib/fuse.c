@@ -3349,7 +3349,13 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 		struct fuse_intr_data d;
 		err = 0;
 		fuse_prepare_interrupt(f, req, &d);
-		if (!f->conf.hard_remove && !(flags & RENAME_EXCHANGE) &&
+		/*
+		 * Not for RENAME_NOREPLACE, which replaces nothing: hiding
+		 * the target would let it replace a file the name holds (the
+		 * kernel's negative entry over a stale open node)
+		 */
+		if (!f->conf.hard_remove &&
+		    !(flags & (RENAME_EXCHANGE | RENAME_NOREPLACE)) &&
 		    is_open(f, newdir, newname)) {
 			err = hide_node(f, newpath, newdir, newname, hidname,
 					&hidpath);
@@ -3383,8 +3389,8 @@ static void fuse_lib_rename(fuse_req_t req, fuse_ino_t olddir,
 				} else {
 					/*
 					 * An open node at a name the rename
-					 * found free (the hide's ENOENT) is
-					 * stale
+					 * found free (the hide's ENOENT, or
+					 * RENAME_NOREPLACE) is stale
 					 */
 					if (!hidpath && !f->conf.hard_remove &&
 					    is_open(f, newdir, newname))
