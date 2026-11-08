@@ -239,14 +239,18 @@ static void fuse_daemonize_early_signal(int status)
 {
 	struct fuse_daemonize *dm = &daemonize;
 
-	if (!dm->active)
+	if (!dm->active) {
+		if (dm->daemonized)
+			return;
 		errx(EINVAL, "%s: not active and cannot signal status", __func__);
+	}
 
 	/* The file system is not mounted yet - don't signal parent */
 	if (status == FUSE_DAEMONIZE_SUCCESS && (!dm->mounted || !dm->got_init))
 		return;
 
-	dm->active = false;
+	if (!atomic_exchange(&dm->active, false))
+		return;
 
 	/* Stop watcher before signaling - parent will exit after this */
 	stop_parent_watcher(dm);
