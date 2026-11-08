@@ -92,7 +92,8 @@ Flags:
 Behavior:
 - Unless NO_BACKGROUND: forks the process
 - Parent waits for status signal from child
-- Child creates new session and continues
+- Child stays in the caller's session and process group and continues;
+  it creates a new session only when it signals success
 - Unless NO_CHDIR: changes directory to "/"
 - Closes stdin immediately in child
 - Starts a watcher thread to detect parent death
@@ -117,7 +118,8 @@ Behavior:
 
 fuse_daemonize_early_success()
 -------------------------------
-- Signals the parent process with success
+- Detaches the child with setsid(), then signals the parent process with
+  success
 - On success: redirects stdout/stderr to /dev/null
 - Stops the parent watcher thread
 - Cleans up pipes and internal state
