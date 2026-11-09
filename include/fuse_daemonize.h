@@ -43,6 +43,9 @@ int fuse_daemonize_early_start(unsigned int flags);
 /**
  * Signal daemonization success to parent and cleanup.
  *
+ * Detaches the child from the caller's session (setsid()) before the parent
+ * is released.
+ *
  * To be called from the child process after a successful mount, when
  * synchronous FUSE_INIT is used (FUSE_INIT as part of the mount).
  *
