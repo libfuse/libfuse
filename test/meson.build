@@ -23,6 +23,9 @@ td += executable('passthrough-hl', 'passthrough-hl.c',
 td += executable('test_want_conversion', 'test_want_conversion.c',
                  dependencies: [ libfuse_dep ],
                  install: false)
+td += executable('test_readdirplus_overflow', 'test_readdirplus_overflow.c',
+                 dependencies: [ libfuse_dep ],
+                 install: false)
 td += executable('test_signals', 'test_signals.c',
                  dependencies: [ libfuse_dep, thread_dep ],
                  install: false)

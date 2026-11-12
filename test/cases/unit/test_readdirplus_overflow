@@ -1,0 +1,2 @@
+# GROUP: unit quick
+# Check READDIRPLUS overflow lookup cleanup without mounting.
