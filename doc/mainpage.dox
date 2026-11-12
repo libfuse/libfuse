@@ -28,6 +28,11 @@ separate set of API functions.
 The high-level API that is primarily specified in fuse.h. The
 low-level API that is primarily documented in fuse_lowlevel.h.
 
+The high-level API can return ESTALE when a removed or replaced inode
+is still held by an O_PATH descriptor, as a working directory, or
+between LOOKUP and OPEN. See fuse_config::hard_remove for details.
+Use the low-level API when these inodes must remain usable.
+
 ## Running a filesystem as a systemd service ##
 
 A FUSE server can also be run as a sandboxed, socket-activated systemd
