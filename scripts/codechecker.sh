@@ -372,7 +372,7 @@ run_codechecker_cppcheck()
     local codechecker=$(detect_codechecker)
 
     # $0 is relative to the directory the cd below leaves
-    local suppressions_file="$(realpath "$(dirname "$0")/../..")/cppcheck-suppressions.xml"
+    local suppressions_file="$(realpath "$(dirname "$0")/..")/cppcheck-suppressions.xml"
 
     # Work in build directory
     cd "$BUILD_DIR"
