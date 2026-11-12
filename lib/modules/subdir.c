@@ -101,7 +101,7 @@ static void strip_common(const char **sp, const char **tp)
 	} while ((*s == *t && *s) || (!*s && *t == '/') || (*s == '/' && !*t));
 }
 
-static void transform_symlink(struct subdir *d, const char *path,
+static void transform_symlink(const struct subdir *d, const char *path,
 			      char *buf, size_t size)
 {
 	const char *l = buf;

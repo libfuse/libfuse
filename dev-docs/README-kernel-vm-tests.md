@@ -36,7 +36,7 @@ Running it
 * `-c` and `-X` select configurations as they do without a kernel. See
   README-local-ci-matrix-builds.md.
 * Needs the virtme-ng, qemu, virtiofsd and busybox packages:
-  `.github/workflows/install-ubuntu-dependencies.sh --kernel-vm`.
+  `scripts/install-ubuntu-dependencies.sh --kernel-vm`.
 * Needs to open `/dev/kvm`. Without it qemu emulates the guest and the suite
   takes hours.
 

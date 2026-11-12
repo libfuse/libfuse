@@ -19,7 +19,7 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies (Ubuntu)
-        run: .github/workflows/install-ubuntu-dependencies.sh --full
+        run: scripts/install-ubuntu-dependencies.sh --full
 
       - run: test/ci/prepare-runner.sh ${{ github.workspace }}/fuse-tests
 

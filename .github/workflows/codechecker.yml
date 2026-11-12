@@ -21,7 +21,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        ./.github/workflows/install-ubuntu-dependencies.sh --codechecker
+        ./scripts/install-ubuntu-dependencies.sh --codechecker
 
     - name: Setup build
       run: |
@@ -30,11 +30,11 @@ jobs:
 
     - name: Run GCC Analysis with CodeChecker
       run: |
-        ./.github/workflows/codechecker.sh --gcc --codechecker --github-workflow --build-dir builddir
+        ./scripts/codechecker.sh --gcc --codechecker --github-workflow --build-dir builddir
 
     - name: Upload SARIF to GitHub Code Scanning
       if: always()
-      uses: github/codeql-action/upload-sarif@ee07b503f465bcf3338b6e4807a36789e3106f4b # v4.35.1
+      uses: github/codeql-action/upload-sarif@3ea37a44b6e4e6847c46edae209410d258d548d1 # v4.35.1
       with:
         sarif_file: builddir/results.sarif
         category: codechecker-gcc
@@ -60,7 +60,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        ./.github/workflows/install-ubuntu-dependencies.sh --codechecker --infer
+        ./scripts/install-ubuntu-dependencies.sh --codechecker --infer
 
     - name: Setup build
       run: |
@@ -69,11 +69,11 @@ jobs:
 
     - name: Run Infer Analysis with CodeChecker
       run: |
-        ./.github/workflows/codechecker.sh --infer --codechecker --github-workflow --build-dir builddir
+        ./scripts/codechecker.sh --infer --codechecker --github-workflow --build-dir builddir
 
     - name: Upload SARIF to GitHub Code Scanning
       if: always()
-      uses: github/codeql-action/upload-sarif@ee07b503f465bcf3338b6e4807a36789e3106f4b # v4.35.1
+      uses: github/codeql-action/upload-sarif@3ea37a44b6e4e6847c46edae209410d258d548d1 # v4.35.1
       with:
         sarif_file: builddir/results.sarif
         category: codechecker-infer
@@ -99,7 +99,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        ./.github/workflows/install-ubuntu-dependencies.sh --codechecker --cppcheck
+        ./scripts/install-ubuntu-dependencies.sh --codechecker --cppcheck
 
     - name: Setup build
       run: |
@@ -108,11 +108,11 @@ jobs:
 
     - name: Run cppcheck Analysis with CodeChecker
       run: |
-        ./.github/workflows/codechecker.sh --cppcheck --codechecker --github-workflow --build-dir builddir
+        ./scripts/codechecker.sh --cppcheck --codechecker --github-workflow --build-dir builddir
 
     - name: Upload SARIF to GitHub Code Scanning
       if: always()
-      uses: github/codeql-action/upload-sarif@ee07b503f465bcf3338b6e4807a36789e3106f4b # v4.35.1
+      uses: github/codeql-action/upload-sarif@3ea37a44b6e4e6847c46edae209410d258d548d1 # v4.35.1
       with:
         sarif_file: builddir/results.sarif
         category: codechecker-cppcheck
