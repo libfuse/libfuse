@@ -12,6 +12,7 @@
 #                   one node per path and so answers LINK with a nodeid that
 #                   is not the source's. The FreeBSD kernel refuses such a
 #                   reply with EIO, so the hard-link checks are left out there.
+#                   Require ESTALE for replaced files held by O_PATH (-p).
 #   PT_POSITIONAL   extra trailing arguments before the mountpoint, optional
 #   SYSCALL_ARGS    extra test_syscalls arguments, optional
 #
@@ -40,6 +41,8 @@ if [ "${PT_HIGHLEVEL:-0}" = 1 ] && [ "$FUSE_OS" = FreeBSD ]; then
 	# 4 and 5 are test_syscalls' link and link-unlink-link.
 	SYSCALL_ARGS="${SYSCALL_ARGS:-} -4 -5"
 fi
+
+[ "${PT_HIGHLEVEL:-0}" != 1 ] || SYSCALL_ARGS="${SYSCALL_ARGS:-} -p"
 
 _check fuse_test_statvfs       "$work_dir"
 _check fuse_test_readdir       "$TEST_SRC" "$work_dir" --inode-check "$INODE_CHECK"

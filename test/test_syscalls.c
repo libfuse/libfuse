@@ -50,6 +50,8 @@ static unsigned int select_test = 0;
 static unsigned int skip_tests[8];
 static unsigned int num_skip_tests;
 static unsigned int unlinked_test = 0;
+/* -p: require ESTALE for replaced files held by O_PATH. */
+static unsigned int opath_stale;
 static int realdir_fd = -1;
 
 #define MAX_ENTRIES 1024
@@ -2358,6 +2360,266 @@ daemon_crashed:
 }
 #endif
 
+#ifdef __linux__
+/* Require the high-level API's ESTALE result. */
+static int expect_estale(int failed, const char *call)
+{
+	if (!failed) {
+		fprintf(stderr, "%s %s succeeded, but -p expects ESTALE\n",
+			testname, call);
+		return -1;
+	}
+	if (errno != ESTALE) {
+		fprintf(stderr, "%s %s: %s, but -p expects ESTALE\n",
+			testname, call, strerror(errno));
+		return -1;
+	}
+	return 0;
+}
+
+/*
+ * Rename over a file held by O_PATH, then check the old inode through
+ * fstat() and /proc/self/fd/N. With -p, expect ESTALE instead.
+ *
+ * Create without open(): RELEASE is asynchronous, so closing a regular
+ * descriptor can leave the file temporarily eligible for hiding.
+ */
+static int test_rename_over_opath(void)
+{
+	const char *data = zerodata;
+	int datalen = testdatalen;
+	const char *data2 = testdata2;
+	int datalen2 = testdata2len;
+	char procpath[64];
+	struct stat st;
+	int err = 0;
+	int res;
+	int fd, fd2;
+
+	start_test("rename over O_PATH fd");
+	unlink(testfile2);
+	res = mknod(testfile, S_IFREG | 0644, 0);
+	if (res == -1) {
+		PERROR("mknod");
+		return -1;
+	}
+	res = truncate(testfile, datalen);
+	if (res == -1) {
+		PERROR("truncate");
+		unlink(testfile);
+		return -1;
+	}
+	fd = open(testfile, O_PATH);
+	if (fd == -1) {
+		PERROR("open(O_PATH)");
+		unlink(testfile);
+		return -1;
+	}
+	res = create_file(testfile2, data2, datalen2);
+	if (res == -1) {
+		close(fd);
+		unlink(testfile);
+		return -1;
+	}
+	res = rename(testfile2, testfile);
+	if (res == -1) {
+		PERROR("rename");
+		close(fd);
+		unlink(testfile);
+		unlink(testfile2);
+		return -1;
+	}
+	res = fstat(fd, &st);
+	if (opath_stale) {
+		err += expect_estale(res == -1, "fstat");
+	} else if (res == -1) {
+		PERROR("fstat");
+		err--;
+	} else {
+		err += st_check_type(&st, S_IFREG);
+		err += st_check_size(&st, datalen);
+		err += st_check_nlink(&st, 0);
+	}
+
+	sprintf(procpath, "/proc/self/fd/%i", fd);
+	fd2 = open(procpath, O_RDONLY);
+	if (opath_stale) {
+		err += expect_estale(fd2 == -1, "open(/proc/self/fd/N)");
+		if (fd2 != -1)
+			close(fd2);
+	} else if (fd2 == -1) {
+		PERROR("open(/proc/self/fd/N)");
+		err--;
+	} else {
+		err += fcheck_data(fd2, data, 0, datalen);
+		res = close(fd2);
+		if (res == -1) {
+			PERROR("close");
+			err--;
+		}
+	}
+	res = chmod(procpath, 0600);
+	if (opath_stale) {
+		err += expect_estale(res == -1, "chmod(/proc/self/fd/N)");
+	} else if (res == -1) {
+		PERROR("chmod(/proc/self/fd/N)");
+		err--;
+	} else {
+		res = fstat(fd, &st);
+		if (res == -1) {
+			PERROR("fstat");
+			err--;
+		} else {
+			err += st_check_mode(&st, 0600);
+			err += st_check_nlink(&st, 0);
+		}
+	}
+	res = close(fd);
+	if (res == -1) {
+		PERROR("close");
+		err--;
+	}
+	// The file renamed over it keeps its own mode and data
+	err += check_mode(testfile, 0644);
+	err += check_data(testfile, data2, 0, datalen2);
+	res = unlink(testfile);
+	if (res == -1) {
+		PERROR("unlink");
+		return -1;
+	}
+	res = check_nonexist(testfile);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	success();
+	return 0;
+}
+
+/* Repeat for a directory; inode and link count identify the old directory. */
+static int test_rename_over_opath_dir(void)
+{
+	char procpath[64];
+	struct stat st;
+	struct dirent *de;
+	DIR *dp;
+	int err = 0;
+	int res;
+	ino_t ino = 0;
+	int fd, dfd;
+
+	start_test("rename over O_PATH fd of a directory");
+	rmdir(testdir);
+	rmdir(testdir2);
+	res = mkdir(testdir, 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		return -1;
+	}
+	fd = open(testdir, O_PATH | O_DIRECTORY);
+	if (fd == -1) {
+		PERROR("open(O_PATH)");
+		rmdir(testdir);
+		return -1;
+	}
+	res = mkdir(testdir2, 0755);
+	if (res == -1) {
+		PERROR("mkdir");
+		close(fd);
+		rmdir(testdir);
+		return -1;
+	}
+	res = rename(testdir2, testdir);
+	if (res == -1) {
+		PERROR("rename");
+		close(fd);
+		rmdir(testdir);
+		rmdir(testdir2);
+		return -1;
+	}
+	res = fstat(fd, &st);
+	if (opath_stale) {
+		err += expect_estale(res == -1, "fstat");
+	} else if (res == -1) {
+		PERROR("fstat");
+		err--;
+	} else {
+		err += st_check_type(&st, S_IFDIR);
+		err += st_check_nlink(&st, 0);
+		ino = st.st_ino;
+	}
+
+	sprintf(procpath, "/proc/self/fd/%i", fd);
+	dfd = open(procpath, O_RDONLY | O_DIRECTORY);
+	if (opath_stale) {
+		err += expect_estale(dfd == -1, "open(/proc/self/fd/N)");
+		if (dfd != -1)
+			close(dfd);
+	} else if (dfd == -1) {
+		PERROR("open(/proc/self/fd/N)");
+		err--;
+	} else {
+		/* Both directories are empty: check that it is the old one */
+		res = fstat(dfd, &st);
+		if (res == -1) {
+			PERROR("fstat(/proc/self/fd/N)");
+			err--;
+		} else {
+			err += st_check_nlink(&st, 0);
+			if (st.st_ino != ino) {
+				ERROR("reopened inode %lu instead of %lu",
+				      (unsigned long)st.st_ino,
+				      (unsigned long)ino);
+				err--;
+			}
+		}
+		dp = fdopendir(dfd);
+		if (dp == NULL) {
+			PERROR("fdopendir");
+			close(dfd);
+			err--;
+		} else {
+			errno = 0;
+			while ((de = readdir(dp)) != NULL) {
+				if (!is_dot_or_dotdot(de->d_name)) {
+					ERROR("removed directory lists '%s'",
+					      de->d_name);
+					err--;
+				}
+			}
+			if (errno != 0) {
+				PERROR("readdir");
+				err--;
+			}
+			res = closedir(dp);
+			if (res == -1) {
+				PERROR("closedir");
+				err--;
+			}
+		}
+	}
+	res = close(fd);
+	if (res == -1) {
+		PERROR("close");
+		err--;
+	}
+	res = rmdir(testdir);
+	if (res == -1) {
+		PERROR("rmdir");
+		return -1;
+	}
+	res = check_nonexist(testdir);
+	if (res == -1)
+		return -1;
+	if (err)
+		return -1;
+
+	success();
+	return 0;
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	int err = 0;
@@ -2371,7 +2633,9 @@ int main(int argc, char *argv[])
 
 	umask(0);
 	if (argc < 2) {
-		fprintf(stderr, "usage: %s testdir [:realdir] [test#] [-test#]... [-u]\n", argv[0]);
+		fprintf(stderr,
+			"usage: %s testdir [:realdir] [test#] [-test#]... [-u] [-p]\n",
+			argv[0]);
 		return 1;
 	}
 	basepath = argv[1];
@@ -2392,6 +2656,9 @@ int main(int argc, char *argv[])
 				arg++;
 				if (arg[0] == 'u') {
 					unlinked_test = 1;
+					endptr = arg + 1;
+				} else if (arg[0] == 'p') {
+					opath_stale = 1;
 					endptr = arg + 1;
 				} else if (num_skip_tests == ARRAY_SIZE(skip_tests)) {
 					fprintf(stderr, "too many tests to skip\n");
@@ -2512,6 +2779,10 @@ int main(int argc, char *argv[])
 	err += test_create_tmpfile();
 	err += test_create_and_link_tmpfile();
 	err += test_lookup_forget_race();
+#endif
+#ifdef __linux__
+	err += test_rename_over_opath();
+	err += test_rename_over_opath_dir();
 #endif
 
 	unlink(testfile2);
