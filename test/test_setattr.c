@@ -274,8 +274,10 @@ static void test_fs(const char *mountpoint)
 	char fname[PATH_MAX];
 	struct stat stbuf;
 	int fd;
+	int ret;
 
-	assert(snprintf(fname, PATH_MAX, "%s/" FILE_NAME, mountpoint) > 0);
+	ret = snprintf(fname, PATH_MAX, "%s/" FILE_NAME, mountpoint);
+	assert(ret > 0);
 	fd = open(fname, O_WRONLY);
 	if (fd == -1) {
 		perror(fname);
@@ -293,7 +295,8 @@ static void test_fs(const char *mountpoint)
 	drop_cap_fsetid();
 
 	/* O_TRUNC, no O_EXCL: CREATE carries FUSE_OPEN_KILL_SUIDGID */
-	assert(snprintf(fname, PATH_MAX, "%s/" NEW_NAME, mountpoint) > 0);
+	ret = snprintf(fname, PATH_MAX, "%s/" NEW_NAME, mountpoint);
+	assert(ret > 0);
 	fd = open(fname, O_CREAT | O_WRONLY | O_TRUNC, 0644);
 	if (fd == -1) {
 		perror(fname);
@@ -303,7 +306,8 @@ static void test_fs(const char *mountpoint)
 	assert(close(fd) == 0);
 
 	/* O_TRUNC on an existing file: OPEN carries FUSE_OPEN_KILL_SUIDGID */
-	assert(snprintf(fname, PATH_MAX, "%s/" FILE_NAME, mountpoint) > 0);
+	ret = snprintf(fname, PATH_MAX, "%s/" FILE_NAME, mountpoint);
+	assert(ret > 0);
 	fd = open(fname, O_WRONLY | O_TRUNC);
 	if (fd == -1) {
 		perror(fname);
