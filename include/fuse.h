@@ -14,6 +14,9 @@
  * This file defines the library interface of FUSE
  *
  * IMPORTANT: you should define FUSE_USE_VERSION before including this header.
+ *
+ * The high-level API addresses files by path. For limitations after
+ * unlink or rename, see fuse_config::hard_remove.
  */
 
 #include "fuse_common.h"
@@ -173,20 +176,23 @@ struct fuse_config {
 	int32_t remember;
 
 	/**
-	 * The default behavior is that if an open file is deleted,
-	 * the file is renamed to a hidden file (.fuse_hiddenXXX), and
-	 * only removed when the file is finally released.  This
-	 * relieves the filesystem implementation of having to deal
-	 * with this problem. This option disables the hiding
-	 * behavior, and files are removed immediately in an unlink
-	 * operation (or in a rename operation which overwrites an
-	 * existing file).
+	 * By default, libfuse gives an open file a .fuse_hiddenXXX name
+	 * when it is unlinked or replaced by rename, and removes it after
+	 * its last release. hard_remove disables this behavior. Its use
+	 * is discouraged.
 	 *
-	 * It is recommended that you not use the hard_remove
-	 * option. When hard_remove is set, the following libc
-	 * functions fail on unlinked files (returning errno of
-	 * ENOENT): read(2), write(2), fsync(2), close(2), f*xattr(2),
-	 * ftruncate(2), fstat(2), fchmod(2), fchown(2)
+	 * Hiding applies to files opened by FUSE OPEN or CREATE and not
+	 * yet released. O_PATH sends neither request; directories are
+	 * never hidden. If libfuse can no longer build a path, requests
+	 * that need it fail with ESTALE before reaching callbacks.
+	 * The low-level API lets filesystems keep such inodes usable until
+	 * FORGET.
+	 *
+	 * With hard_remove, open files lose their names too. Requests with
+	 * a file handle reach callbacks with a NULL path, even when
+	 * nullpath_ok is unset; requests without one fail with ESTALE.
+	 * On Linux, the latter include fstat(2), fchmod(2), fchown(2)
+	 * and the f*xattr(2) calls.
 	 */
 	int32_t hard_remove;
 
