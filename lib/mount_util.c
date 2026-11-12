@@ -279,7 +279,7 @@ static int add_mount(const char *progname, const char *fsname,
 {
 	int res;
 	int status;
-	pid_t pid;
+	pid_t pid = -1;
 	sigset_t blockmask;
 	sigset_t oldmask;
 	const char *cmd = "/bin/mount";

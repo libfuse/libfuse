@@ -5288,7 +5288,7 @@ void fuse_destroy(struct fuse *f)
 		fuse_create_context(f);
 
 		for (i = 0; i < f->id_table.size; i++) {
-			struct node *node;
+			const struct node *node;
 
 			for (node = f->id_table.array[i]; node != NULL;
 			     node = node->id_next) {

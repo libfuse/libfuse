@@ -14,7 +14,7 @@
 int main(int argc, char *argv[])
 {
 	DIR *dirp;
-	struct dirent *dent;
+	const struct dirent *dent;
 
 	if (argc != 2) {
 		fprintf(stderr, "Usage: readdir_inode dir\n");
