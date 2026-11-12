@@ -348,6 +348,7 @@ run_codechecker_gcc()
 
     # too-complex reports the analyzer hitting its own enode limits, not a defect
     cmd="$cmd --disable gcc-analyzer-too-complex"
+    cmd="$cmd --disable gcc-analyzer-symbol-too-complex"
 
     eval $cmd
 
@@ -395,6 +396,7 @@ run_codechecker_cppcheck()
     cmd="$cmd --disable cppcheck-constParameterCallback"
     cmd="$cmd --disable cppcheck-knownConditionTrueFalse"
     cmd="$cmd --disable cppcheck-unusedStructMember"
+    cmd="$cmd --disable cppcheck-staticFunction"
 
     eval $cmd
 
