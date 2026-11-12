@@ -35,6 +35,9 @@ td += executable('test_deferred_reply_teardown', 'test_deferred_reply_teardown.c
 td += executable('test_abi', 'test_abi.c',
                  dependencies: [ libfuse_dep ],
                  install: false)
+td += executable('test_buf_eintr', 'test_buf_eintr.c',
+                 dependencies: [ libfuse_dep, thread_dep ],
+                 install: false)
 td += executable('test_secctx_splice', 'test_secctx_splice.c',
                  dependencies: [ libfuse_dep, thread_dep ],
                  install: false)

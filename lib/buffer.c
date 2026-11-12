@@ -54,6 +54,8 @@ static ssize_t fuse_buf_write(const struct fuse_buf *dst, size_t dst_off,
 			res = write(dst->fd, (char *)src->mem + src_off, len);
 		}
 		if (res == -1) {
+			if (errno == EINTR && (dst->flags & FUSE_BUF_FD_RETRY))
+				continue;
 			if (!copied)
 				return -errno;
 			break;
@@ -88,6 +90,14 @@ static ssize_t fuse_buf_read(const struct fuse_buf *dst, size_t dst_off,
 			res = read(src->fd, (char *)dst->mem + dst_off, len);
 		}
 		if (res == -1) {
+			/*
+			 * Interrupted before any data was transferred. A socket
+			 * with SO_RCVTIMEO reports that as EINTR even with
+			 * SA_RESTART (signal(7)), and so does io_uring task_work
+			 * (TIF_NOTIFY_SIGNAL) when it hits a uring queue thread.
+			 */
+			if (errno == EINTR && (src->flags & FUSE_BUF_FD_RETRY))
+				continue;
 			if (!copied)
 				return -errno;
 			break;
@@ -187,6 +197,9 @@ static ssize_t fuse_buf_splice(const struct fuse_buf *dst, size_t dst_off,
 		ssize_t res = splice(src->fd, srcpos, dst->fd, dstpos, len,
 			     splice_flags);
 		if (res == -1) {
+			if (errno == EINTR &&
+			    ((src->flags | dst->flags) & FUSE_BUF_FD_RETRY))
+				continue;
 			if (copied)
 				break;
 

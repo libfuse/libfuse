@@ -1,0 +1,2 @@
+# GROUP: unit quick
+# fuse_buf_copy() retries EINTR on FUSE_BUF_FD_RETRY fds -- no FUSE mount needed.
