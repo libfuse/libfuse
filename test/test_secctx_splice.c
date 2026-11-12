@@ -183,6 +183,7 @@ int main(int argc, char *argv[])
 	struct fuse_session *se;
 	pthread_t fs_thread;
 	char path[PATH_MAX];
+	int ret;
 
 	if (REQUEST_SIZE <= splice_threshold()) {
 		fprintf(stderr,
@@ -209,8 +210,9 @@ int main(int argc, char *argv[])
 
 	assert(pthread_create(&fs_thread, NULL, run_fs, (void *)se) == 0);
 
-	assert(snprintf(path, sizeof(path), "%s/" LINK_NAME,
-			fuse_opts.mountpoint) > 0);
+	ret = snprintf(path, sizeof(path), "%s/" LINK_NAME,
+		       fuse_opts.mountpoint);
+	assert(ret > 0);
 	if (symlink(link_target, path) != 0) {
 		perror(path);
 		exit(1);
