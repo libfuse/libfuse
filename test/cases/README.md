@@ -294,6 +294,7 @@ fuse_test_assert_source <mnt> <source>...      # any one is acceptable
 fuse_test_assert_utab_target <mnt>             # recorded in /run/mount/utab
 fuse_test_refute_utab_target <mnt>             # not recorded there
 fuse_test_fusermount_rejects <mnt> <reason>    # fusermount3 refuses to mount it
+fuse_test_fusermount_overmount <uid> <dir>     # -u spares mounts on top
 
 # the remainder
 fuse_test_printcap_caps <src-root>          # every FUSE_CAP_* is in the header
