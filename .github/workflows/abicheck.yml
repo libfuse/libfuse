@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          ./current/.github/workflows/install-ubuntu-dependencies.sh --abicheck
+          ./current/scripts/install-ubuntu-dependencies.sh --abicheck
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,4 +46,4 @@ jobs:
 
       - name: Run ABI check
         run: |
-          current/.github/workflows/abicheck.sh --current-dir current --previous-dir previous
+          current/scripts/abicheck.sh --current-dir current --previous-dir previous

@@ -75,7 +75,7 @@ jobs:
     - if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        ./.github/workflows/install-ubuntu-dependencies.sh --codeql
+        ./scripts/install-ubuntu-dependencies.sh --codeql
         # paths-ignore does not apply to a manually built language: CodeQL
         # analyses whatever the build compiles, so skip test/ here
         meson setup build --buildtype=debug -Dtests=false

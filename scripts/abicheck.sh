@@ -85,7 +85,7 @@ if [ -n "$CURRENT_DIR" ] && [ -n "$PREVIOUS_DIR" ]; then
 else
     # Auto-detect previous release tag if not provided
     if [ -z "$PREV_TAG" ]; then
-        PREV_TAG=$(.github/workflows/find_previous_release_tag.sh)
+        PREV_TAG=$(scripts/find_previous_release_tag.sh)
     fi
 
     echo "Previous release: $PREV_TAG"
