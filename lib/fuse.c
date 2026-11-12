@@ -3709,7 +3709,6 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 {
 	off_t pos;
 	struct fuse_direntry *de = dh->first;
-	int res;
 
 	dh->len = 0;
 
@@ -3737,6 +3736,8 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 
 			if (de->flags & FUSE_FILL_DIR_PLUS &&
 			    !is_dot_or_dotdot(de->name)) {
+				int res;
+
 				res = do_lookup(dh->fuse, dh->nodeid,
 						de->name, &e);
 				if (res) {
@@ -5292,7 +5293,7 @@ void fuse_destroy(struct fuse *f)
 		fuse_create_context(f);
 
 		for (i = 0; i < f->id_table.size; i++) {
-			struct node *node;
+			const struct node *node;
 
 			for (node = f->id_table.array[i]; node != NULL;
 			     node = node->id_next) {

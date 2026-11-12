@@ -30,13 +30,13 @@ jobs:
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          ./current/.github/workflows/install-ubuntu-dependencies.sh --abicheck
+          ./current/scripts/install-ubuntu-dependencies.sh --abicheck
 
       - name: Determine previous major release tag
         id: prev_release
         run: |
           cd current
-          PREV_TAG=$(.github/workflows/find_previous_release_tag.sh)
+          PREV_TAG=$(scripts/find_previous_release_tag.sh)
           echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,4 +55,4 @@ jobs:
       - name: Run ABI check
         run: |
           echo "Previous release tag: ${{ steps.prev_release.outputs.prev_tag }}"
-          current/.github/workflows/abicheck.sh --current-dir current --previous-dir previous
+          current/scripts/abicheck.sh --current-dir current --previous-dir previous
