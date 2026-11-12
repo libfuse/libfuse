@@ -139,7 +139,7 @@ static int extract_x_options(const char *original, char **regular_opts,
 
 static const char *get_user_name(void)
 {
-	struct passwd *pw = getpwuid(getuid());
+	const struct passwd *pw = getpwuid(getuid());
 	if (pw != NULL && pw->pw_name != NULL)
 		return pw->pw_name;
 	else {
