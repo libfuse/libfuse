@@ -292,7 +292,6 @@ static int check_is_mount_child(void *p)
 {
 	const char **a = p;
 	const char *last = a[0];
-	const char *mnt = a[1];
 	const char *type = a[2];
 	int res;
 	const char *procmounts = "/proc/mounts";
@@ -350,6 +349,8 @@ static int check_is_mount_child(void *p)
 	endmntent(fp);
 
 	if (!found) {
+		const char *mnt = a[1];
+
 		fprintf(stderr, "%s: %s not mounted\n", progname, mnt);
 		return 1;
 	}
