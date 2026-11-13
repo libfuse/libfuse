@@ -121,12 +121,6 @@ static int daemonize_child(struct fuse_daemonize *dm)
 	dm->stop_pipe_rd = stop_pipe[0];
 	dm->stop_pipe_wr = stop_pipe[1];
 
-	if (setsid() == -1) {
-		err = -errno;
-		perror("fuse_daemonize_start: setsid");
-		goto err_close_stop;
-	}
-
 	/* Close stdin immediately */
 	int nullfd = open("/dev/null", O_RDWR, 0);
 
@@ -254,6 +248,10 @@ static void fuse_daemonize_early_signal(int status)
 
 	/* Stop watcher before signaling - parent will exit after this */
 	stop_parent_watcher(dm);
+
+	if (status == FUSE_DAEMONIZE_SUCCESS && dm->daemonized &&
+	    setsid() == -1)
+		perror("fuse_daemonize: setsid");
 
 	/* Signal status to parent */
 	if (dm->signal_pipe_wr != -1) {
