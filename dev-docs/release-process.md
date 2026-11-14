@@ -10,23 +10,41 @@ Step 1 -- prepare the release commit
 
 * `scripts/release.py prepare X.Y.Z`
 * Sets the version in `meson.build`.
-* Renames the `Unreleased Changes` section of `ChangeLog.rst` to this release.
+* Renames the open section of `ChangeLog.rst` to this release. Its heading is
+  `Unreleased Changes` on master, and `libfuse X.Y.Z-rcN (unreleased)` on a
+  release branch that named its version before it went out.
 * Appends every author who is not in `AUTHORS` yet.
-* Generates a signing key only when the next release has none, which is a new
-  minor or major version. A patch release inherits the keys of its `.0`.
+* Generates the next minor's signing key when a `.0` release does not carry it
+  yet. A patch release is signed with the key of its own minor.
+* Builds the branch with `meson setup -Dwerror=true` and `ninja` before it
+  writes any of that, in `/var/tmp/fuse-release/prepare-build`. A branch that
+  does not build gets no release commit, and the build directory is left
+  behind with its `meson-logs/`. `--skip-test` leaves the build out.
+* `meson.build` asks for `warning_level=2` only, so `-Dwerror=true` is what
+  turns a warning into a failed release. It is the same switch
+  `test/ci-build.sh` sets for the tarball build in Step 3.
 * Leaves one commit, `Released fuse-X.Y.Z`.
 * Offers to push the branch, and prints the URL that opens a pull request for
   it. `--remote` names the remote it is pushed to, `origin` by default.
   `--base` names the branch that pull request merges into, `master` by
-  default.
+  default. `--force-new-version` is under Signing keys below.
+* `--branch` commits the release to another branch than the checked-out one.
+  That branch is brought up to what `--remote` has it at, checked out on its
+  own, and the temporary checkout is taken back out afterwards. A dry run adds
+  and removes it too, and writes nothing.
+* A maintenance release is cut that way. `fuse-X.Y.x` carries neither
+  `release.py` nor `release.yml`, so checking it out would take the script
+  away, and there is no pull request either: the release commit lands on the
+  branch and only the push is left.
 
 Step 2 -- get the pull request merged
 -------------------------------------
 
 * Open the pull request at the printed URL, and get it merged. Neither is
-  scriptable without `gh`.
-* `git checkout master`. `publish` reads the signing keys from the checkout,
-  so it releases another branch only from master.
+  scriptable without `gh`. A `--branch` release has none of this: its commit
+  is on the branch already, and `prepare` offered the push.
+* `git checkout master`, or any branch of it. `publish` reads the signing keys
+  from the checkout, not from the branch it releases.
 * Pulling master is not needed. `publish` offers the fast-forward itself.
 
 Step 3 -- publish
@@ -51,9 +69,10 @@ Step 3 -- publish
   a repeated one cannot ship an earlier commit under the same version.
 * Released is the branch `--branch` names, the checked-out one by default. The
   version and the ChangeLog are read out of its commit, not out of the
-  checkout. Another branch than the checked-out one needs master checked out.
-  Every `signify/*.pub` is on master, a release branch only has the ones that
-  existed when it forked.
+  checkout. The signing key is read out of the checkout, and every
+  `signify/*.pub` is on master while a release branch only has the ones that
+  existed when it forked -- so run `publish` from master or a branch of it,
+  whatever branch it releases.
 * That branch has to point at what `origin` has it point at, so what is
   released is what everyone else can see.
 * A `fuse-X.Y.Z` tag `origin` carries already has to point at that same
@@ -143,8 +162,12 @@ Signing keys
 
 * `signify/fuse-<major>.<minor>.sec` signs every release of that minor and is
   gitignored -- back it up.
-* `prepare X.Y.0` generates the keys of `X.<Y+1>` and `<X+1>.0` and commits
-  their `.pub`, so this release carries the key of whichever comes next.
-* `prepare X.Y.Z` refuses when one of them is gone: it may be published
-  already, and a second key of that name is indistinguishable to whoever
-  verifies with the first. `--new-key` generates it anyway.
+* `prepare X.Y.0` generates the key of `X.<Y+1>` and commits its `.pub`, so
+  this release carries the key the next one is signed with.
+* `prepare X.Y.Z` generates nothing. `X.Y.Z+1` is signed with the key of
+  `X.Y`, which the `.0` carried already.
+* The key name is the next version, so `prepare` asks whether that is what it
+  is going to be. A no ends the release before anything is written.
+* `--force-new-version` generates the key in a patch release too. A series
+  whose `.0` never went out leaves its successor's key to the first patch
+  release that does go out.
