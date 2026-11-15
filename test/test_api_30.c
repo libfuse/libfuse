@@ -205,9 +205,11 @@ static void check_read(const char *mountpoint)
 	char path[PATH_MAX];
 	char buf[sizeof(file_contents)];
 	int fd;
+	int ret;
 	ssize_t len;
 
-	assert(snprintf(path, PATH_MAX, "%s/%s", mountpoint, file_name) > 0);
+	ret = snprintf(path, PATH_MAX, "%s/%s", mountpoint, file_name);
+	assert(ret > 0);
 	fd = open(path, O_RDONLY);
 	if (fd == -1) {
 		perror(path);

@@ -348,6 +348,7 @@ run_codechecker_gcc()
 
     # too-complex reports the analyzer hitting its own enode limits, not a defect
     cmd="$cmd --disable gcc-analyzer-too-complex"
+    cmd="$cmd --disable gcc-analyzer-symbol-too-complex"
 
     eval $cmd
 
@@ -370,6 +371,9 @@ run_codechecker_cppcheck()
 
     local codechecker=$(detect_codechecker)
 
+    # $0 is relative to the directory the cd below leaves
+    local suppressions_file="$(realpath "$(dirname "$0")/..")/cppcheck-suppressions.xml"
+
     # Work in build directory
     cd "$BUILD_DIR"
 
@@ -388,6 +392,7 @@ run_codechecker_cppcheck()
     echo "--inline-suppr" > "$cppcheck_args_file"
     # analyse complex functions in full instead of reporting the limit
     echo "--check-level=exhaustive" >> "$cppcheck_args_file"
+    echo "--suppress-xml=$suppressions_file" >> "$cppcheck_args_file"
     cmd="$cmd --analyzer-config cppcheck:cc-verbatim-args-file=$cppcheck_args_file"
 
     # Disable checkers with excessive false positives
@@ -395,6 +400,7 @@ run_codechecker_cppcheck()
     cmd="$cmd --disable cppcheck-constParameterCallback"
     cmd="$cmd --disable cppcheck-knownConditionTrueFalse"
     cmd="$cmd --disable cppcheck-unusedStructMember"
+    cmd="$cmd --disable cppcheck-staticFunction"
 
     eval $cmd
 

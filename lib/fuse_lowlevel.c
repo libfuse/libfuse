@@ -1428,7 +1428,6 @@ static void _do_batch_forget(fuse_req_t req, const fuse_ino_t nodeid,
 			     const void *op_in, const void *in_payload)
 {
 	(void)nodeid;
-	unsigned int i;
 
 	const struct fuse_batch_forget_in *arg = op_in;
 	const struct fuse_forget_one *forgets = in_payload;
@@ -1437,6 +1436,8 @@ static void _do_batch_forget(fuse_req_t req, const fuse_ino_t nodeid,
 		req->se->op.forget_multi(req, arg->count,
 					 (struct fuse_forget_data *)in_payload);
 	} else if (req->se->op.forget) {
+		unsigned int i;
+
 		for (i = 0; i < arg->count; i++) {
 			const struct fuse_forget_one *forget = &forgets[i];
 			struct fuse_req *dummy_req;
@@ -1537,12 +1538,14 @@ static void _do_access(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *op_in, const void *in_payload)
 {
 	(void)in_payload;
-	const struct fuse_access_in *arg = op_in;
 
-	if (req->se->op.access)
+	if (req->se->op.access) {
+		const struct fuse_access_in *arg = op_in;
+
 		req->se->op.access(req, nodeid, arg->mask);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_access(fuse_req_t req, const fuse_ino_t nodeid,
@@ -1573,15 +1576,17 @@ static void _do_mknod(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *op_in, const void *in_payload)
 {
 	const struct fuse_mknod_in *arg = (struct fuse_mknod_in *)op_in;
-	const char *name = in_payload;
 
 	if (req->se->conn.proto_minor >= 12)
 		req->ctx.umask = arg->umask;
 
-	if (req->se->op.mknod)
+	if (req->se->op.mknod) {
+		const char *name = in_payload;
+
 		req->se->op.mknod(req, nodeid, name, arg->mode, arg->rdev);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_mknod(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
@@ -1598,16 +1603,18 @@ static void do_mknod(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
 static void _do_mkdir(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *op_in, const void *in_payload)
 {
-	const char *name = in_payload;
 	const struct fuse_mkdir_in *arg = op_in;
 
 	if (req->se->conn.proto_minor >= 12)
 		req->ctx.umask = arg->umask;
 
-	if (req->se->op.mkdir)
+	if (req->se->op.mkdir) {
+		const char *name = in_payload;
+
 		req->se->op.mkdir(req, nodeid, name, arg->mode);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_mkdir(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
@@ -1622,12 +1629,14 @@ static void _do_unlink(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *op_in, const void *in_payload)
 {
 	(void)op_in;
-	const char *name = in_payload;
 
-	if (req->se->op.unlink)
+	if (req->se->op.unlink) {
+		const char *name = in_payload;
+
 		req->se->op.unlink(req, nodeid, name);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_unlink(fuse_req_t req, const fuse_ino_t nodeid,
@@ -1640,12 +1649,14 @@ static void _do_rmdir(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *op_in, const void *in_payload)
 {
 	(void)op_in;
-	const char *name = in_payload;
 
-	if (req->se->op.rmdir)
+	if (req->se->op.rmdir) {
+		const char *name = in_payload;
+
 		req->se->op.rmdir(req, nodeid, name);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_rmdir(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
@@ -1698,15 +1709,17 @@ static void do_rename(fuse_req_t req, const fuse_ino_t nodeid,
 static void _do_rename2(fuse_req_t req, const fuse_ino_t nodeid,
 			const void *op_in, const void *in_payload)
 {
-	const struct fuse_rename2_in *arg = op_in;
 	const char *oldname = in_payload;
 	const char *newname = oldname + strlen(oldname) + 1;
 
-	if (req->se->op.rename)
+	if (req->se->op.rename) {
+		const struct fuse_rename2_in *arg = op_in;
+
 		req->se->op.rename(req, nodeid, oldname, arg->newdir, newname,
 				   arg->flags);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_rename2(fuse_req_t req, const fuse_ino_t nodeid,
@@ -1768,9 +1781,9 @@ static void _do_create(fuse_req_t req, const fuse_ino_t nodeid,
 		       const void *op_in, const void *in_payload)
 {
 	const struct fuse_create_in *arg = op_in;
-	const char *name = in_payload;
 
 	if (req->se->op.create) {
+		const char *name = in_payload;
 		struct fuse_file_info fi;
 
 		memset(&fi, 0, sizeof(fi));
@@ -1857,7 +1870,6 @@ static void _do_write(fuse_req_t req, const fuse_ino_t nodeid,
 		      const void *op_in, const void *in_payload)
 {
 	struct fuse_write_in *arg = (struct fuse_write_in *)op_in;
-	const char *buf = in_payload;
 	struct fuse_file_info fi;
 
 	memset(&fi, 0, sizeof(fi));
@@ -1873,11 +1885,14 @@ static void _do_write(fuse_req_t req, const fuse_ino_t nodeid,
 		fi.flags = arg->flags;
 	}
 
-	if (req->se->op.write)
+	if (req->se->op.write) {
+		const char *buf = in_payload;
+
 		req->se->op.write(req, nodeid, buf, arg->size, arg->offset,
 				  &fi);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_write(fuse_req_t req, const fuse_ino_t nodeid, const void *inarg)
@@ -2198,12 +2213,13 @@ static void do_setxattr(fuse_req_t req, const fuse_ino_t nodeid,
 static void _do_getxattr(fuse_req_t req, const fuse_ino_t nodeid,
 			 const void *op_in, const void *in_payload)
 {
-	const struct fuse_getxattr_in *arg = op_in;
+	if (req->se->op.getxattr) {
+		const struct fuse_getxattr_in *arg = op_in;
 
-	if (req->se->op.getxattr)
 		req->se->op.getxattr(req, nodeid, in_payload, arg->size);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 
 static void do_getxattr(fuse_req_t req, const fuse_ino_t nodeid,
@@ -2219,12 +2235,14 @@ static void _do_listxattr(fuse_req_t req, const fuse_ino_t nodeid,
 			  const void *inarg, const void *in_payload)
 {
 	(void)in_payload;
-	const struct fuse_getxattr_in *arg = inarg;
 
-	if (req->se->op.listxattr)
+	if (req->se->op.listxattr) {
+		const struct fuse_getxattr_in *arg = inarg;
+
 		req->se->op.listxattr(req, nodeid, arg->size);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 static void do_listxattr(fuse_req_t req, const fuse_ino_t nodeid,
 			 const void *inarg)
@@ -2236,12 +2254,14 @@ static void _do_removexattr(fuse_req_t req, const fuse_ino_t nodeid,
 			    const void *inarg, const void *in_payload)
 {
 	(void)inarg;
-	const char *name = in_payload;
 
-	if (req->se->op.removexattr)
+	if (req->se->op.removexattr) {
+		const char *name = in_payload;
+
 		req->se->op.removexattr(req, nodeid, name);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 static void do_removexattr(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
@@ -2452,12 +2472,14 @@ static void _do_bmap(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 		     const void *in_payload)
 {
 	(void)in_payload;
-	const struct fuse_bmap_in *arg = op_in;
 
-	if (req->se->op.bmap)
+	if (req->se->op.bmap) {
+		const struct fuse_bmap_in *arg = op_in;
+
 		req->se->op.bmap(req, nodeid, arg->blocksize, arg->block);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 static void do_bmap(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {
@@ -2469,7 +2491,6 @@ static void _do_ioctl(fuse_req_t req, const fuse_ino_t nodeid,
 {
 	struct fuse_ioctl_in *arg = (struct fuse_ioctl_in *)op_in;
 	unsigned int flags = arg->flags;
-	const void *in_buf = in_payload;
 	struct fuse_file_info fi;
 
 	if (flags & FUSE_IOCTL_DIR &&
@@ -2486,12 +2507,15 @@ static void _do_ioctl(fuse_req_t req, const fuse_ino_t nodeid,
 		req->flags.ioctl_64bit = 1;
 	}
 
-	if (req->se->op.ioctl)
+	if (req->se->op.ioctl) {
+		const void *in_buf = in_payload;
+
 		req->se->op.ioctl(req, nodeid, arg->cmd,
 				 (void *)(uintptr_t)arg->arg, &fi, flags,
 				 in_buf, arg->in_size, arg->out_size);
-	else
+	} else {
 		fuse_reply_err(req, ENOSYS);
+	}
 }
 static void do_ioctl(fuse_req_t req, fuse_ino_t nodeid, const void *inarg)
 {

@@ -231,6 +231,7 @@ static void test_fs(const char *mountpoint)
 	const size_t iosize = options.data_size;
 	const size_t dsize = options.data_size * WRITE_SYSCALLS;
 	int fd;
+	int ret;
 	pthread_t rofd_thread;
 	off_t off = 0;
 
@@ -241,7 +242,8 @@ static void test_fs(const char *mountpoint)
 	assert(read(fd, buf, dsize) == dsize);
 	close(fd);
 
-	assert(snprintf(fname, PATH_MAX, "%s/" FILE_NAME, mountpoint) > 0);
+	ret = snprintf(fname, PATH_MAX, "%s/" FILE_NAME, mountpoint);
+	assert(ret > 0);
 	fd = open(fname, O_WRONLY);
 	if (fd == -1) {
 		perror(fname);
