@@ -159,6 +159,7 @@ struct fuse_session {
 	/* synchronous FUSE_INIT support */
 	enum fuse_sync_init want_sync_init;
 	bool is_sync_init; /* sync FUSE_INIT mount succeeded*/
+	const char *sync_init_off_reason;
 	pthread_t init_thread;
 	int init_error;
 	int init_wakeup_fd;
