@@ -1292,7 +1292,6 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
-	struct fuse_loop_config *config;
 	struct lo_data lo = { .debug = 0,
 	                      .writeback = 0 };
 	int ret = -1;
