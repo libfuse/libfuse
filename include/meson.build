@@ -7,3 +7,6 @@ if private_cfg.get('HAVE_SERVICEMOUNT', false)
 endif
 
 install_headers(libfuse_headers, subdir: 'fuse3')
+install_data(libfuse_headers,
+             install_dir: join_paths(get_option('includedir'), 'fuse3'),
+             install_tag: 'headers')
