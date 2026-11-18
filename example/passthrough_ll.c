@@ -1292,7 +1292,6 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
-	struct fuse_loop_config *config;
 	struct lo_data lo = { .debug = 0,
 	                      .writeback = 0 };
 	int ret = -1;
@@ -1402,12 +1401,15 @@ int main(int argc, char *argv[])
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
 	else {
-		config = fuse_loop_cfg_create();
-		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
-		fuse_loop_cfg_set_max_threads(config, opts.max_threads);
-		ret = fuse_session_loop_mt(se, config);
-		fuse_loop_cfg_destroy(config);
-		config = NULL;
+		struct fuse_loop_config *loop_config = fuse_loop_cfg_create();
+		if (loop_config == NULL)
+			ret = -ENOMEM;
+		else {
+			fuse_loop_cfg_set_clone_fd(loop_config, opts.clone_fd);
+			fuse_loop_cfg_set_max_threads(loop_config, opts.max_threads);
+			ret = fuse_session_loop_mt(se, loop_config);
+			fuse_loop_cfg_destroy(loop_config);
+		}
 	}
 
 	fuse_session_unmount(se);
