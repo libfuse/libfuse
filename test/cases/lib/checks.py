@@ -362,6 +362,16 @@ def cmd_open_unlink(mnt_dir):
     _require(got == data1 + data2, 'unlinked file holds %r' % got)
 
 
+def cmd_open_unlink_setattr(mnt_dir):
+    """Check st_nlink stays zero after fchmod() of an open, unlinked file."""
+    fullname = pjoin(mnt_dir, name_generator())
+    with _open_fd(fullname, os.O_CREAT | os.O_RDWR) as fd:
+        os.unlink(fullname)
+        os.fchmod(fd, 0o600)
+        nlink = os.fstat(fd).st_nlink
+    _require(nlink == 0, 'st_nlink after fchmod: %d, want 0' % nlink)
+
+
 def cmd_open_rmdir_parent(src_dir, mnt_dir):
     """Write to an open file before and after rmdir of its parent."""
     dirname = pjoin(mnt_dir, 'dir')
@@ -1104,6 +1114,7 @@ def build_parser():
     add('fuse_test_append', cmd_append, 'src', 'mnt')
     add('fuse_test_seek', cmd_seek, 'src', 'mnt')
     add('fuse_test_open_unlink', cmd_open_unlink, 'mnt')
+    add('fuse_test_open_unlink_setattr', cmd_open_unlink_setattr, 'mnt')
     add('fuse_test_open_rmdir_parent', cmd_open_rmdir_parent, 'src', 'mnt')
     add('fuse_test_statvfs', cmd_statvfs, 'mnt')
     add('fuse_test_link', cmd_link, 'mnt')

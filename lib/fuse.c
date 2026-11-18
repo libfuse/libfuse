@@ -2890,11 +2890,15 @@ static void fuse_lib_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
 		free_path(f, ino, path);
 	}
 	if (!err) {
-		if (f->conf.auto_cache) {
-			pthread_mutex_lock(&f->lock);
-			update_stat(get_node(f, ino), &buf);
-			pthread_mutex_unlock(&f->lock);
-		}
+		struct node *node;
+
+		pthread_mutex_lock(&f->lock);
+		node = get_node(f, ino);
+		if (node->is_hidden && buf.st_nlink > 0)
+			buf.st_nlink--;
+		if (f->conf.auto_cache)
+			update_stat(node, &buf);
+		pthread_mutex_unlock(&f->lock);
 		set_stat(f, ino, &buf);
 		fuse_reply_attr(req, &buf, f->conf.attr_timeout);
 	} else
@@ -3705,7 +3709,6 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 {
 	off_t pos;
 	struct fuse_direntry *de = dh->first;
-	int res;
 
 	dh->len = 0;
 
@@ -3733,6 +3736,8 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 
 			if (de->flags & FUSE_FILL_DIR_PLUS &&
 			    !is_dot_or_dotdot(de->name)) {
+				int res;
+
 				res = do_lookup(dh->fuse, dh->nodeid,
 						de->name, &e);
 				if (res) {
@@ -5288,7 +5293,7 @@ void fuse_destroy(struct fuse *f)
 		fuse_create_context(f);
 
 		for (i = 0; i < f->id_table.size; i++) {
-			struct node *node;
+			const struct node *node;
 
 			for (node = f->id_table.array[i]; node != NULL;
 			     node = node->id_next) {

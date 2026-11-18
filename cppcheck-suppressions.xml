@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<suppressions>
+  <!-- version is a parameter of exported functions, which must not change -->
+  <suppress>
+    <id>constParameterPointer</id>
+    <fileName>*/lib/fuse.c</fileName>
+    <symbolName>version</symbolName>
+  </suppress>
+
+  <!-- the callers pass a char **, which does not convert to a const array -->
+  <suppress>
+    <id>constParameter</id>
+    <fileName>*/util/mount_service.c</fileName>
+    <symbolName>argv</symbolName>
+  </suppress>
+
+  <!-- (void *)1 marks FUSE_NOTIFY_REPLY as handled in the request tables, it is never called -->
+  <suppress>
+    <id>intToPointerCast</id>
+    <fileName>*/lib/fuse_lowlevel.c</fileName>
+  </suppress>
+
+  <!-- buf_alloc() only moves the pointer into the allocation and reads nothing -->
+  <suppress>
+    <id>uninitdata</id>
+    <fileName>*/lib/fuse_lowlevel.c</fileName>
+    <symbolName>buf</symbolName>
+  </suppress>
+
+  <!-- cppcheck 2.19 bug, fixed by 2.21 -->
+  <suppress>
+    <id>constParameterPointer</id>
+    <fileName>*/lib/mount_fsmount.c</fileName>
+    <symbolName>opt</symbolName>
+  </suppress>
+
+  <!-- cppcheck 2.19 bug, fixed by 2.21 -->
+  <suppress>
+    <id>constParameterPointer</id>
+    <fileName>*/util/fusermount.c</fileName>
+    <symbolName>copy</symbolName>
+  </suppress>
+</suppressions>

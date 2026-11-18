@@ -39,6 +39,7 @@ struct fuse_daemonize {
 	int stop_pipe_wr;	/* write end for stop signal */
 	pthread_t watcher;
 	bool watcher_started;
+	_Atomic bool started;    /* fuse_daemonize_early_start() called */
 	_Atomic bool active;     /* daemonization in progress */
 	_Atomic bool daemonized; /* daemonized successfully */
 	_Atomic bool mounted;  /* fuse_session_mount() completed */
@@ -208,6 +209,7 @@ int fuse_daemonize_early_start(unsigned int flags)
 	if (dm->active)
 		return 0; /* already called, no need for another fork */
 
+	dm->started = true;
 	dm->flags = flags;
 	dm->signal_pipe_wr = -1;
 	dm->death_pipe_rd = -1;
@@ -285,7 +287,7 @@ void fuse_daemonize_early_success(void)
 	 * Needs to be gracefully handled as automatically called libfuse
 	 * internal from FUSE_INIT handler
 	 */
-	if (!fuse_daemonize_early_is_used())
+	if (!fuse_daemonize_early_is_active())
 		return;
 
 	fuse_daemonize_early_signal(FUSE_DAEMONIZE_SUCCESS);
@@ -298,7 +300,7 @@ void fuse_daemonize_early_fail(int err)
 
 bool fuse_daemonize_early_is_used(void)
 {
-	return daemonize.daemonized || daemonize.active;
+	return daemonize.started;
 }
 
 bool fuse_daemonize_early_is_active(void)
