@@ -292,6 +292,9 @@ void fuse_session_get(struct fuse_session *se);
  */
 void fuse_session_put(struct fuse_session *se);
 
+/* Set by fuse_session_exit(): buffer.c then stops retrying EINTR */
+extern atomic_bool fuse_exiting;
+
 /* Mount-related functions */
 void fuse_mount_version(void);
 void fuse_kern_unmount(const char *mountpoint, int fd);
