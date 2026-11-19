@@ -5600,11 +5600,14 @@ int fuse_req_getgroups(fuse_req_t req, int size, gid_t list[])
 }
 #endif
 
+atomic_bool fuse_exiting;
+
 /* Prevent spurious data race warning - we don't care
  * about races for this flag */
 __attribute__((no_sanitize_thread))
 void fuse_session_exit(struct fuse_session *se)
 {
+	atomic_store(&fuse_exiting, true);
 	atomic_store_explicit(&se->mt_exited, 1, memory_order_relaxed);
 	sem_post(&se->mt_finish);
 }
@@ -5614,6 +5617,7 @@ void fuse_session_reset(struct fuse_session *se)
 {
 	se->mt_exited = false;
 	se->error = 0;
+	atomic_store(&fuse_exiting, false);
 }
 
 __attribute__((no_sanitize_thread))

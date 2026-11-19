@@ -39,6 +39,13 @@ static size_t min_size(size_t s1, size_t s2)
 	return s1 < s2 ? s1 : s2;
 }
 
+/* After fuse_session_exit(), EINTR may be the signal that ended the session */
+static int fuse_buf_retry_eintr(int err, int flags)
+{
+	return err == EINTR && (flags & FUSE_BUF_FD_RETRY) &&
+	       !atomic_load(&fuse_exiting);
+}
+
 static ssize_t fuse_buf_write(const struct fuse_buf *dst, size_t dst_off,
 			      const struct fuse_buf *src, size_t src_off,
 			      size_t len)
@@ -54,6 +61,8 @@ static ssize_t fuse_buf_write(const struct fuse_buf *dst, size_t dst_off,
 			res = write(dst->fd, (char *)src->mem + src_off, len);
 		}
 		if (res == -1) {
+			if (fuse_buf_retry_eintr(errno, dst->flags))
+				continue;
 			if (!copied)
 				return -errno;
 			break;
@@ -88,6 +97,8 @@ static ssize_t fuse_buf_read(const struct fuse_buf *dst, size_t dst_off,
 			res = read(src->fd, (char *)dst->mem + dst_off, len);
 		}
 		if (res == -1) {
+			if (fuse_buf_retry_eintr(errno, src->flags))
+				continue;
 			if (!copied)
 				return -errno;
 			break;
@@ -187,6 +198,8 @@ static ssize_t fuse_buf_splice(const struct fuse_buf *dst, size_t dst_off,
 		ssize_t res = splice(src->fd, srcpos, dst->fd, dstpos, len,
 			     splice_flags);
 		if (res == -1) {
+			if (fuse_buf_retry_eintr(errno, src->flags | dst->flags))
+				continue;
 			if (copied)
 				break;
 
