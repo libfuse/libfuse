@@ -148,6 +148,22 @@ static const char *get_user_name(void)
 	}
 }
 
+static int is_fuse_type(const char *type)
+{
+	return strcmp(type, "fuse") == 0 ||
+	       strcmp(type, "fuseblk") == 0 ||
+	       strncmp(type, "fuse.", 5) == 0 ||
+	       strncmp(type, "fuseblk.", 8) == 0;
+}
+
+/* With no type given, any FUSE mount matches. */
+static int mount_type_matches(const char *mnt_type, const char *type)
+{
+	if (type)
+		return strcmp(mnt_type, type) == 0;
+	return is_fuse_type(mnt_type);
+}
+
 #ifndef IGNORE_MTAB
 /*
  * Make sure that /etc/mtab is checked and updated atomically
@@ -198,14 +214,6 @@ static int add_mount(const char *source, const char *mnt, const char *type,
 		     const char *opts)
 {
 	return fuse_mnt_add_mount(progname, source, mnt, type, opts);
-}
-
-static int is_fuse_type(const char *type)
-{
-	return strcmp(type, "fuse") == 0 ||
-	       strcmp(type, "fuseblk") == 0 ||
-	       strncmp(type, "fuse.", 5) == 0 ||
-	       strncmp(type, "fuseblk.", 8) == 0;
 }
 
 static int may_unmount(const char *mnt, int quiet)
@@ -346,7 +354,7 @@ static int check_is_mount_child(void *p)
 		}
 		if (entp->mnt_dir[0] == '/' &&
 		    strcmp(entp->mnt_dir + 1, last) == 0 &&
-		    (!type || strcmp(entp->mnt_type, type) == 0)) {
+		    mount_type_matches(entp->mnt_type, type)) {
 			found = 1;
 			break;
 		}
