@@ -833,9 +833,10 @@ static void lo_tmpfile(fuse_req_t req, fuse_ino_t parent,
 	fi->parallel_direct_writes = 1;
 
 	err = fill_entry_param_new_inode(req, parent, fd, &e);
-	if (err)
+	if (err) {
+		close(fd);
 		fuse_reply_err(req, err);
-	else
+	} else
 		fuse_reply_create(req, &e, fi);
 }
 
@@ -868,9 +869,10 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	fi->parallel_direct_writes = 1;
 
 	err = lo_do_lookup(req, parent, name, &e);
-	if (err)
+	if (err) {
+		close(fd);
 		fuse_reply_err(req, err);
-	else
+	} else
 		fuse_reply_create(req, &e, fi);
 }
 
@@ -949,8 +951,12 @@ static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 static void lo_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	int res;
+	int dupfd;
 	(void) ino;
-	res = close(dup(fi->fh));
+	dupfd = dup(fi->fh);
+	if (dupfd == -1)
+		return (void) fuse_reply_err(req, errno);
+	res = close(dupfd);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
