@@ -39,6 +39,7 @@ struct fuse_daemonize {
 	int stop_pipe_wr;	/* write end for stop signal */
 	pthread_t watcher;
 	bool watcher_started;
+	_Atomic bool started;    /* fuse_daemonize_early_start() called */
 	_Atomic bool active;     /* daemonization in progress */
 	_Atomic bool daemonized; /* daemonized successfully */
 	_Atomic bool mounted;  /* fuse_session_mount() completed */
@@ -120,12 +121,6 @@ static int daemonize_child(struct fuse_daemonize *dm)
 	}
 	dm->stop_pipe_rd = stop_pipe[0];
 	dm->stop_pipe_wr = stop_pipe[1];
-
-	if (setsid() == -1) {
-		err = -errno;
-		perror("fuse_daemonize_start: setsid");
-		goto err_close_stop;
-	}
 
 	/* Close stdin immediately */
 	int nullfd = open("/dev/null", O_RDWR, 0);
@@ -214,6 +209,7 @@ int fuse_daemonize_early_start(unsigned int flags)
 	if (dm->active)
 		return 0; /* already called, no need for another fork */
 
+	dm->started = true;
 	dm->flags = flags;
 	dm->signal_pipe_wr = -1;
 	dm->death_pipe_rd = -1;
@@ -255,6 +251,10 @@ static void fuse_daemonize_early_signal(int status)
 	/* Stop watcher before signaling - parent will exit after this */
 	stop_parent_watcher(dm);
 
+	if (status == FUSE_DAEMONIZE_SUCCESS && dm->daemonized &&
+	    setsid() == -1)
+		perror("fuse_daemonize: setsid");
+
 	/* Signal status to parent */
 	if (dm->signal_pipe_wr != -1) {
 		int rc = write(dm->signal_pipe_wr, &status, sizeof(status));
@@ -287,7 +287,7 @@ void fuse_daemonize_early_success(void)
 	 * Needs to be gracefully handled as automatically called libfuse
 	 * internal from FUSE_INIT handler
 	 */
-	if (!fuse_daemonize_early_is_used())
+	if (!fuse_daemonize_early_is_active())
 		return;
 
 	fuse_daemonize_early_signal(FUSE_DAEMONIZE_SUCCESS);
@@ -300,7 +300,7 @@ void fuse_daemonize_early_fail(int err)
 
 bool fuse_daemonize_early_is_used(void)
 {
-	return daemonize.daemonized || daemonize.active;
+	return daemonize.started;
 }
 
 bool fuse_daemonize_early_is_active(void)

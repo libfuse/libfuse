@@ -37,7 +37,7 @@ jobs:
           fi
           subject=$(git log -1 --format=%s $commit)
           echo "Checking commit: $commit - $subject"
-          if !  .github/workflows/run-checkpatch.sh $commit; then
+          if !  scripts/run-checkpatch.sh $commit; then
             echo "checkpatch.pl found issues in commit $commit - $subject"
             exit 1
           fi

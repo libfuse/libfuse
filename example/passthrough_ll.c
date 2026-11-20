@@ -339,6 +339,8 @@ static struct lo_inode *create_new_inode(int fd, struct fuse_entry_param *e, str
 static int fill_entry_param_new_inode(fuse_req_t req, fuse_ino_t parent, int fd, struct fuse_entry_param *e)
 {
 	int res;
+	int dupfd;
+	struct lo_inode *inode;
 	struct lo_data *lo = lo_data(req);
 
 	memset(e, 0, sizeof(*e));
@@ -349,7 +351,16 @@ static int fill_entry_param_new_inode(fuse_req_t req, fuse_ino_t parent, int fd,
 	if (res == -1)
 		return errno;
 
-	e->ino = (uintptr_t) create_new_inode(dup(fd), e, lo);
+	dupfd = dup(fd);
+	if (dupfd == -1)
+		return errno;
+
+	inode = create_new_inode(dupfd, e, lo);
+	if (!inode) {
+		close(dupfd);
+		return -ENOMEM;
+	}
+	e->ino = (uintptr_t) inode;
 
 	if (lo_debug(req))
 		fuse_log(FUSE_LOG_DEBUG, "  %lli/%d -> %lli\n",
@@ -485,12 +496,17 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
 	res = linkat(AT_FDCWD, procname, lo_fd(req, parent), name,
 		     AT_SYMLINK_FOLLOW);
-	if (res == -1)
+	if (res == -1) {
+		saverr = errno;
 		goto out_err;
+	}
 
-	res = fstatat(inode->fd, "", &e.attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-	if (res == -1)
-		goto out_err;
+	res = fstat(inode->fd, &e.attr);
+	if (res == -1) {
+		fuse_log(FUSE_LOG_ERR,
+			     "fstat after linkat failed: fs corrupt, exit to prevent damage: %m\n");
+		exit(1);
+	}
 
 	pthread_mutex_lock(&lo->mutex);
 	inode->refcount++;
@@ -506,7 +522,6 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	return;
 
 out_err:
-	saverr = errno;
 	fuse_reply_err(req, saverr);
 }
 
@@ -822,9 +837,10 @@ static void lo_tmpfile(fuse_req_t req, fuse_ino_t parent,
 	fi->parallel_direct_writes = 1;
 
 	err = fill_entry_param_new_inode(req, parent, fd, &e);
-	if (err)
+	if (err) {
+		close(fd);
 		fuse_reply_err(req, err);
-	else
+	} else
 		fuse_reply_create(req, &e, fi);
 }
 
@@ -857,9 +873,10 @@ static void lo_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 	fi->parallel_direct_writes = 1;
 
 	err = lo_do_lookup(req, parent, name, &e);
-	if (err)
+	if (err) {
+		close(fd);
 		fuse_reply_err(req, err);
-	else
+	} else
 		fuse_reply_create(req, &e, fi);
 }
 
@@ -938,8 +955,12 @@ static void lo_release(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi
 static void lo_flush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
 	int res;
+	int dupfd;
 	(void) ino;
-	res = close(dup(fi->fh));
+	dupfd = dup(fi->fh);
+	if (dupfd == -1)
+		return (void) fuse_reply_err(req, errno);
+	res = close(dupfd);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
@@ -1292,7 +1313,6 @@ int main(int argc, char *argv[])
 	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 	struct fuse_session *se;
 	struct fuse_cmdline_opts opts;
-	struct fuse_loop_config *config;
 	struct lo_data lo = { .debug = 0,
 	                      .writeback = 0 };
 	int ret = -1;
@@ -1402,12 +1422,15 @@ int main(int argc, char *argv[])
 	if (opts.singlethread)
 		ret = fuse_session_loop(se);
 	else {
-		config = fuse_loop_cfg_create();
-		fuse_loop_cfg_set_clone_fd(config, opts.clone_fd);
-		fuse_loop_cfg_set_max_threads(config, opts.max_threads);
-		ret = fuse_session_loop_mt(se, config);
-		fuse_loop_cfg_destroy(config);
-		config = NULL;
+		struct fuse_loop_config *loop_config = fuse_loop_cfg_create();
+		if (loop_config == NULL)
+			ret = -ENOMEM;
+		else {
+			fuse_loop_cfg_set_clone_fd(loop_config, opts.clone_fd);
+			fuse_loop_cfg_set_max_threads(loop_config, opts.max_threads);
+			ret = fuse_session_loop_mt(se, loop_config);
+			fuse_loop_cfg_destroy(loop_config);
+		}
 	}
 
 	fuse_session_unmount(se);

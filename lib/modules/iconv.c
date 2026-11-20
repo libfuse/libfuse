@@ -666,6 +666,10 @@ static void iconv_help(void)
 		setlocale(LC_CTYPE, old);
 	else
 		perror("setlocale");
+	if (!charmap) {
+		perror("strdup");
+		return;
+	}
 
 	printf(
 "    -o from_code=CHARSET   original encoding of file names (default: UTF-8)\n"
