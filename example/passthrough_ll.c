@@ -339,6 +339,8 @@ static struct lo_inode *create_new_inode(int fd, struct fuse_entry_param *e, str
 static int fill_entry_param_new_inode(fuse_req_t req, fuse_ino_t parent, int fd, struct fuse_entry_param *e)
 {
 	int res;
+	int dupfd;
+	struct lo_inode *inode;
 	struct lo_data *lo = lo_data(req);
 
 	memset(e, 0, sizeof(*e));
@@ -349,7 +351,16 @@ static int fill_entry_param_new_inode(fuse_req_t req, fuse_ino_t parent, int fd,
 	if (res == -1)
 		return errno;
 
-	e->ino = (uintptr_t) create_new_inode(dup(fd), e, lo);
+	dupfd = dup(fd);
+	if (dupfd == -1)
+		return errno;
+
+	inode = create_new_inode(dupfd, e, lo);
+	if (!inode) {
+		close(dupfd);
+		return -ENOMEM;
+	}
+	e->ino = (uintptr_t) inode;
 
 	if (lo_debug(req))
 		fuse_log(FUSE_LOG_DEBUG, "  %lli/%d -> %lli\n",
