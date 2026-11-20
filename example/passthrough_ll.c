@@ -496,12 +496,17 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	sprintf(procname, "/proc/self/fd/%i", inode->fd);
 	res = linkat(AT_FDCWD, procname, lo_fd(req, parent), name,
 		     AT_SYMLINK_FOLLOW);
-	if (res == -1)
+	if (res == -1) {
+		saverr = errno;
 		goto out_err;
+	}
 
-	res = fstatat(inode->fd, "", &e.attr, AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
-	if (res == -1)
-		goto out_err;
+	res = fstat(inode->fd, &e.attr);
+	if (res == -1) {
+		fuse_log(FUSE_LOG_ERR,
+			     "fstat after linkat failed: fs corrupt, exit to prevent damage: %m\n");
+		exit(1);
+	}
 
 	pthread_mutex_lock(&lo->mutex);
 	inode->refcount++;
@@ -517,7 +522,6 @@ static void lo_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 	return;
 
 out_err:
-	saverr = errno;
 	fuse_reply_err(req, saverr);
 }
 
