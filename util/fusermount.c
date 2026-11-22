@@ -33,6 +33,7 @@
 
 #include "fuse_mount_compat.h"
 
+#include <sys/auxv.h>
 #include <sys/fsuid.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -2074,7 +2075,7 @@ wait_for_auto_unmount:
 	}
 
 do_unmount:
-	if (geteuid() == 0)
+	if (geteuid() == 0 || getauxval(AT_SECURE))
 		res = unmount_fuse(mnt, quiet, lazy);
 	else {
 		res = umount2(mnt, (lazy ? UMOUNT_DETACH : 0) | UMOUNT_NOFOLLOW);
