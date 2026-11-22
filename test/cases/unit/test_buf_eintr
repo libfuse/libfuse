@@ -1,0 +1,2 @@
+# GROUP: unit quick
+# fuse_buf_copy() retries EINTR until fuse_session_exit(); no FUSE mount needed.

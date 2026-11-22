@@ -243,7 +243,10 @@ static int may_unmount(const char *mnt, int quiet)
 	found = 0;
 	while ((entp = GETMNTENT(fp)) != NULL) {
 		if (!found && strcmp(entp->mnt_dir, mnt) == 0 &&
-		    is_fuse_type(entp->mnt_type)) {
+		    (strcmp(entp->mnt_type, "fuse") == 0 ||
+		     strcmp(entp->mnt_type, "fuseblk") == 0 ||
+		     strncmp(entp->mnt_type, "fuse.", 5) == 0 ||
+		     strncmp(entp->mnt_type, "fuseblk.", 8) == 0)) {
 			char *p = strstr(entp->mnt_opts, "user=");
 			if (p &&
 			    (p == entp->mnt_opts || *(p-1) == ',') &&
@@ -468,6 +471,41 @@ static int chdir_to_parent(char *copy, const char **lastp)
 
 #ifndef IGNORE_MTAB
 /*
+ * Whether a /proc/self/mountinfo line is a FUSE mount owned by the caller.
+ * Line: "<mount ID> <parent ID> <major:minor> <root> <mount point>
+ *        <mount options> [<optional fields>...] - <fstype> <source> <super options>"
+ */
+static int mountinfo_line_is_callers_fuse(const char *line, const char *owner)
+{
+	char *fstype = NULL, *super_opts = NULL;
+	char *saveptr;
+	const char *opt, *sep;
+	int found = 0;
+
+	/* The kernel writes a space inside a field as \040 */
+	sep = strstr(line, " - ");
+	if (sep == NULL ||
+	    sscanf(sep, " - %ms %*s %ms", &fstype, &super_opts) != 2)
+		goto out;
+	if (!is_fuse_type(fstype))
+		goto out;
+
+	/*
+	 * Compare each comma-separated option whole: strstr() would match
+	 * user_id=100 inside user_id=1000.
+	 */
+	for (opt = strtok_r(super_opts, ",", &saveptr); opt != NULL;
+	     opt = strtok_r(NULL, ",", &saveptr)) {
+		if (strcmp(opt, owner) == 0)
+			found = 1;
+	}
+out:
+	free(fstype);
+	free(super_opts);
+	return found;
+}
+
+/*
  * may_unmount() finds the caller's FUSE mount in the mount table, but
  * umount2() acts on whatever is mounted on top of the path.  If another
  * mount is stacked over the caller's one, that mount would be unmounted
@@ -544,28 +582,10 @@ static int check_topmost_mount(const char *last, const char *mnt, int quiet)
 	/* The kernel lists user_id= among the super options of every FUSE mount */
 	snprintf(owner, sizeof(owner), "user_id=%u", getuid());
 	while (getline(&line, &size, fp) != -1) {
-		char *sep, *rest, *opts, *saveptr;
-		const char *type, *opt;
-
 		if (strtol(line, NULL, 10) != mnt_id)
 			continue;
 
-		line[strcspn(line, "\n")] = '\0';
-		sep = strstr(line, " - ");
-		if (sep == NULL)
-			break;
-		/* fstype, source and super options */
-		rest = sep + 3;
-		type = strsep(&rest, " ");
-		strsep(&rest, " ");
-		opts = strsep(&rest, " ");
-		if (opts == NULL || !is_fuse_type(type))
-			break;
-		for (opt = strtok_r(opts, ",", &saveptr); opt != NULL;
-		     opt = strtok_r(NULL, ",", &saveptr)) {
-			if (strcmp(opt, owner) == 0)
-				found = 1;
-		}
+		found = mountinfo_line_is_callers_fuse(line, owner);
 		break;
 	}
 

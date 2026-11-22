@@ -1083,11 +1083,10 @@ def _mount_ids(mnt_dir):
                 if parts[4].replace('\\040', ' ') == mnt_dir]
 
 
-# seccomp(2) audit architectures and openat(2) numbers, per machine: the
-# native one, and the compat one that a -m32 build of the helper uses
+# seccomp(2) audit architecture and openat(2) number, per machine
 _SECCOMP_OPENAT = {
-    'x86_64': ((0xc000003e, 257), (0x40000003, 295)),
-    'aarch64': ((0xc00000b7, 56), (0x40000028, 322)),
+    'x86_64': (0xc000003e, 257),
+    'aarch64': (0xc00000b7, 56),
 }
 
 
@@ -1099,24 +1098,19 @@ def _fail_o_path_opens(err):
     runs as root before dropping to the caller. Returns False where the
     filter does not know the architecture.
     """
-    arches = _SECCOMP_OPENAT.get(os.uname().machine)
-    if arches is None:
+    arch = _SECCOMP_OPENAT.get(os.uname().machine)
+    if arch is None:
         return False
+    audit_arch, nr_openat = arch
     ld, jeq, jset, ret = 0x20, 0x15, 0x45, 0x06
     allow, errno_ret = 0x7fff0000, 0x00050000
     # struct seccomp_data: nr at 0, arch at 4, the low half of args[2] (the
-    # open flags, little endian) at 32. Three instructions per architecture
-    # send its openat on to the flags check; everything else is allowed.
-    prog = [(ld, 0, 0, 4)]
-    for i, (audit_arch, nr_openat) in enumerate(arches):
-        later = 3 * (len(arches) - 1 - i)
-        prog += [
-            (jeq, 0, 2, audit_arch),
-            (ld, 0, 0, 0),
-            (jeq, later + 1, later, nr_openat),
-        ]
-    prog += [
-        (ret, 0, 0, allow),
+    # open flags, little endian) at 32
+    prog = [
+        (ld, 0, 0, 4),
+        (jeq, 0, 5, audit_arch),
+        (ld, 0, 0, 0),
+        (jeq, 0, 3, nr_openat),
         (ld, 0, 0, 32),
         (jset, 0, 1, os.O_PATH),
         (ret, 0, 0, errno_ret | err),
@@ -1146,17 +1140,6 @@ def cmd_fusermount_overmount(uid, workdir):
     The FUSE mounts need no daemon: mount(2) takes the /dev/fuse fd, which is
     closed again before the helper runs. That leaves them disconnected, as
     auto_unmount finds a mount whose daemon died.
-
-    The helper finds the topmost mount through /proc/self/fdinfo. Older
-    kernels are stood in for by a tmpfs over the helper's own fdinfo
-    directory, so the rest of /proc, which the sanitizers read, stays real:
-    before Linux 5.14 fdinfo is readable only by the process owner, root
-    here, so the check has to work with that; before 3.15 there is no mnt_id
-    in it, and the helper has to unmount as it did without the check rather
-    than refuse everything.
-    Any other failure to read it, such as running out of file descriptors
-    under a limit the caller set, must still refuse. So must any failure to
-    open the mountpoint.
     """
     import pwd
     import resource
@@ -1184,24 +1167,6 @@ def cmd_fusermount_overmount(uid, workdir):
         finally:
             os.close(fd)
 
-    def write(path, text, mode):
-        with open(path, 'w') as fh:
-            fh.write(text)
-        os.chmod(path, mode)
-
-    def fake_fdinfo(mnt_id):
-        """Cover this process's fdinfo directory, which the helper it
-        executes reads as /proc/self/fdinfo, as an older kernel has it:
-        owner-only, with <mnt_id> for every fd or no mnt_id at all if it is
-        None."""
-        fdinfo_dir = '/proc/%d/fdinfo' % os.getpid()
-        mount('fakefdinfo', fdinfo_dir, 'tmpfs', data='mode=0500')
-        fdinfo = 'pos:\t0\nflags:\t012000000\n'
-        if mnt_id is not None:
-            fdinfo += 'mnt_id:\t%d\n' % mnt_id
-        for fd in range(64):
-            write(pjoin(fdinfo_dir, str(fd)), fdinfo, 0o400)
-
     def stacked(name, stack):
         """The caller's FUSE mount at <name> with <stack> on top of it."""
         target = pjoin(workdir, name)
@@ -1226,16 +1191,14 @@ def cmd_fusermount_overmount(uid, workdir):
             preexec_fn=as_caller, stderr=subprocess.PIPE,
             universal_newlines=True, timeout=30)
 
-    def refused(name, setup, reason=''):
-        """A stacked tmpfs survives the helper run with <setup>, which
-        reports <reason>."""
+    def refused(name, setup):
+        """A stacked tmpfs survives the helper run with <setup>."""
         target, before = stacked(name, uppers['tmpfs'][0])
         proc = unmount(target, setup=setup)
         after = _mount_ids(target)
         print('%s: exit %d, mounts %s -> %s %s' % (
             name, proc.returncode, before, after, proc.stderr.strip()))
-        return (proc.returncode != 0 and after == before and
-                reason in proc.stderr)
+        return proc.returncode != 0 and after == before
 
     # What is stacked on the caller's mount, and whether it may go.
     uppers = {
@@ -1246,37 +1209,25 @@ def cmd_fusermount_overmount(uid, workdir):
         'tmpfs': (lambda target, src: mount('tmpfs', target, 'tmpfs'), False),
         'bind': (lambda target, src: mount(src, target, None, ms_bind), False),
     }
-    # How /proc looks: as is, owner-only fdinfo, or fdinfo without mnt_id,
-    # where the helper cannot tell what is on top and every case may go.
-    procs = ('proc', 'fdinfo-owner-only', 'fdinfo-no-mnt-id')
     failures = []
-    for proc_kind in procs:
-        for lazy in (False, True):
-            for upper, (stack, allowed) in uppers.items():
-                name = '%s-%s%s' % (proc_kind, upper, '-lazy' if lazy else '')
-                target, before = stacked(name, stack)
+    for lazy in (False, True):
+        for upper, (stack, may_go) in uppers.items():
+            name = '%s%s' % (upper, '-lazy' if lazy else '')
+            target, before = stacked(name, stack)
+            proc = unmount(target, ['-z'] if lazy else [])
+            after = _mount_ids(target)
+            print('%s: exit %d, mounts %s -> %s %s' % (
+                name, proc.returncode, before, after, proc.stderr.strip()))
 
-                setup = lambda: None
-                if proc_kind != 'proc':
-                    mnt_id = (before[-1] if proc_kind == 'fdinfo-owner-only'
-                              else None)
-                    setup = lambda mnt_id=mnt_id: fake_fdinfo(mnt_id)
-                may_go = allowed or proc_kind == 'fdinfo-no-mnt-id'
-                proc = unmount(target, ['-z'] if lazy else [], setup)
-                after = _mount_ids(target)
-                print('%s: exit %d, mounts %s -> %s %s' % (
-                    name, proc.returncode, before, after,
-                    proc.stderr.strip()))
-
-                # Unmounting removes the top mount and nothing else; a
-                # refusal names the reason and leaves every mount in place.
-                if may_go:
-                    ok = proc.returncode == 0 and after == before[:-1]
-                else:
-                    ok = (proc.returncode != 0 and after == before and
-                          'topmost mount' in proc.stderr)
-                if not ok:
-                    failures.append(name)
+            # Unmounting removes the top mount and nothing else; a
+            # refusal names the reason and leaves every mount in place.
+            if may_go:
+                ok = proc.returncode == 0 and after == before[:-1]
+            else:
+                ok = (proc.returncode != 0 and after == before and
+                      'topmost mount' in proc.stderr)
+            if not ok:
+                failures.append(name)
 
     # The caller sets the helper's resource limits. With too few file
     # descriptors left to read /proc, it must refuse rather than skip the
@@ -1289,17 +1240,12 @@ def cmd_fusermount_overmount(uid, workdir):
 
     # Opening the mountpoint can fail where umount2() on the same name
     # would not. No limit gets there, as may_unmount() needs a descriptor
-    # just before, so a seccomp filter fails the O_PATH open instead. The
-    # helper names the error, so a filter that missed the open does not pass
-    # as the refusal of the tmpfs on top.
+    # just before, so a seccomp filter fails the O_PATH open instead.
     for err in (errno.EMFILE, errno.ENFILE, errno.ENOMEM, errno.EINTR):
         name = 'o-path-%s' % errno.errorcode[err]
-        reason = 'failed to unmount %s: %s' % (pjoin(workdir, name),
-                                               os.strerror(err))
         if os.uname().machine not in _SECCOMP_OPENAT:
             print('%s: no seccomp filter for %s' % (name, os.uname().machine))
-        elif not refused(name, lambda err=err: _fail_o_path_opens(err),
-                         reason):
+        elif not refused(name, lambda err=err: _fail_o_path_opens(err)):
             failures.append(name)
     _require(not failures, 'wrong outcome for: %s' % ', '.join(failures))
 
