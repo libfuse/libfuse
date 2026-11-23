@@ -262,6 +262,10 @@ if get_option('enable-io-uring') and liburing.found()
               name: 'liburing linking, SQE128 and fixed uring_cmd support',
               dependencies: [liburing])
       private_cfg.set('HAVE_URING', true)
+      private_cfg.set('HAVE_IO_URING_SET_IOWAIT',
+          cc.has_function('io_uring_set_iowait',
+                          prefix: '#include <liburing.h>',
+                          dependencies: [liburing]))
    endif
 endif
 

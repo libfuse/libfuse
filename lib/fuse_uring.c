@@ -520,6 +520,15 @@ static int fuse_queue_setup_io_uring(struct io_uring *ring, size_t qid,
 		return rc;
 	}
 
+#ifdef HAVE_IO_URING_SET_IOWAIT
+	/*
+	 * Waiting for the next request is not I/O, but with the queue's
+	 * commands in flight the kernel would account it as iowait.
+	 * Fails with -EOPNOTSUPP before Linux 6.15.
+	 */
+	io_uring_set_iowait(ring, false);
+#endif
+
 	rc = io_uring_register_files(ring, files, 1);
 	if (rc != 0) {
 		rc = -errno;

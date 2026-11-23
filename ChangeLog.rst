@@ -1,6 +1,10 @@
 Unreleased Changes
 ==================
 
+* FUSE over io_uring: a queue thread waiting for requests is no longer
+  accounted as iowait (Linux 6.15 and liburing 2.10 or later), so an idle
+  server no longer shows near 100% iowait.
+
 * ``fuse_session_custom_io()`` is disabled unless libfuse is built with
   ``-Denable-custom-io=true``, and returns ``-ENOTSUP`` otherwise. The
   ``hello_ll_uds`` example is built only with that option, and enabling it
