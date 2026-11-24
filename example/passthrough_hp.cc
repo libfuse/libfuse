@@ -152,7 +152,7 @@ struct Inode {
 
 	~Inode()
 	{
-		if (fd > 0)
+		if (fd >= 0)
 			close(fd);
 	}
 };
@@ -496,7 +496,7 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 		/* fallthrough to new inode but keep existing inode.nlookup */
 	}
 
-	if (inode.fd > 0) { // found existing inode
+	if (inode.fd >= 0) { // found existing inode
 		if (fs.debug)
 			cerr << "DEBUG: lookup(): inode " << e->attr.st_ino
 			     << " (userspace) already known; fd = " << inode.fd
@@ -780,7 +780,7 @@ static void sfs_unlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 			{
 				lock_guard<mutex> g_fs{ fs.mutex };
 				lock_guard<mutex> g{ inode.m };
-				if (inode.fd > 0 && !inode.nopen) {
+				if (inode.fd >= 0 && !inode.nopen) {
 					if (fs.debug)
 						cerr << "DEBUG: unlink: release inode "
 						     << e.attr.st_ino
