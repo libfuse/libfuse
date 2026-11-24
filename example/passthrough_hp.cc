@@ -1417,7 +1417,13 @@ static void sfs_release(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 static void sfs_flush(fuse_req_t req, fuse_ino_t ino, fuse_file_info *fi)
 {
 	(void)ino;
-	auto res = close(dup(fi->fh));
+	int fd = dup(fi->fh);
+	if (fd == -1) {
+		fuse_reply_err(req, errno);
+		return;
+	}
+
+	auto res = close(fd);
 	fuse_reply_err(req, res == -1 ? errno : 0);
 }
 
