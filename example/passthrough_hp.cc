@@ -1826,7 +1826,7 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 
 	char *resolved_path = realpath(argv[1], NULL);
 	if (resolved_path == NULL)
-		warn("WARNING: realpath() failed with");
+		err(1, "ERROR: realpath(\"%s\")", argv[1]);
 	fs.source = std::string{ resolved_path };
 	free(resolved_path);
 
