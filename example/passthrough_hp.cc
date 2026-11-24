@@ -469,10 +469,12 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 	if (e->attr.st_dev != fs.src_dev) {
 		cerr << "WARNING: Mountpoints in the source directory tree will be hidden."
 		     << endl;
+		close(newfd);
 		return ENOTSUP;
 	} else if (e->attr.st_ino == FUSE_ROOT_ID) {
 		cerr << "ERROR: Source directory tree must not include inode "
 		     << FUSE_ROOT_ID << endl;
+		close(newfd);
 		return EIO;
 	}
 
@@ -482,6 +484,7 @@ static int do_lookup(fuse_ino_t parent, const char *name, fuse_entry_param *e)
 	try {
 		inode_p = &fs.inodes[id];
 	} catch (std::bad_alloc &) {
+		close(newfd);
 		return ENOMEM;
 	}
 	e->ino = reinterpret_cast<fuse_ino_t>(inode_p);
