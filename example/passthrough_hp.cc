@@ -1220,6 +1220,7 @@ static Inode *create_new_inode(int fd, fuse_entry_param *e)
 	try {
 		p_inode = &fs.inodes[id];
 	} catch (std::bad_alloc &) {
+		errno = -ENOMEM;
 		return NULL;
 	}
 
@@ -1272,10 +1273,19 @@ static void sfs_tmpfile(fuse_req_t req, fuse_ino_t parent, mode_t mode,
 	fi->fh = fd;
 	fuse_entry_param e;
 
-	Inode *inode = create_new_inode(dup(fd), &e);
+	int inode_fd = dup(fd);
+	if (inode_fd == -1) {
+		auto err = errno;
+		close(fd);
+		fuse_reply_err(req, err);
+		return;
+	}
+
+	Inode *inode = create_new_inode(inode_fd, &e);
 	if (inode == NULL) {
 		auto err = errno;
 		cerr << "ERROR: could not create new inode." << endl;
+		close(inode_fd);
 		close(fd);
 		fuse_reply_err(req, err);
 		return;
