@@ -1182,6 +1182,7 @@ static void sfs_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 		if (err == ENFILE || err == EMFILE)
 			cerr << "ERROR: Reached maximum number of file descriptors."
 			     << endl;
+		close(fd);
 		fuse_reply_err(req, err);
 		return;
 	}
