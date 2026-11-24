@@ -1837,6 +1837,8 @@ static cxxopts::ParseResult parse_options(int argc, char **argv)
 	fs.passthrough = options.count("nopassthrough") == 0;
 	fs.selinux = options.count("selinux") != 0;
 	fs.num_threads = options["num-threads"].as<int>();
+	if (options.count("single"))
+		fs.num_threads = 1;
 	fs.max_write = options["max-write"].as<size_t>();
 	fs.clone_fd = options.count("clone-fd");
 	fs.direct_io = options.count("direct-io");
@@ -1892,7 +1894,6 @@ static void maximize_fd_limit()
 
 int main(int argc, char *argv[])
 {
-	struct fuse_loop_config *loop_config = NULL;
 	void *teardown_watchog = NULL;
 	unsigned int daemon_flags = 0;
 
@@ -1945,14 +1946,6 @@ int main(int argc, char *argv[])
 	// Don't apply umask, use modes exactly as specified
 	umask(0);
 
-	// Mount and run main loop
-	loop_config = fuse_loop_cfg_create();
-
-	if (fs.num_threads != -1)
-		fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
-
-	fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
-
 	if (!fs.foreground)
 		fuse_log_enable_syslog("passthrough-hp", LOG_PID | LOG_CONS,
 				       LOG_DAEMON);
@@ -1980,10 +1973,18 @@ int main(int argc, char *argv[])
 	/* required here for sync init */
 	fuse_daemonize_early_success();
 
-	if (options.count("single"))
-		ret = fuse_session_loop(se);
-	else
-		ret = fuse_session_loop_mt(se, loop_config);
+	{
+		struct fuse_loop_config *loop_config = fuse_loop_cfg_create();
+		if (loop_config == NULL)
+			ret = -ENOMEM;
+		else {
+			if (fs.num_threads != -1)
+				fuse_loop_cfg_set_max_threads(loop_config, fs.num_threads);
+			fuse_loop_cfg_set_clone_fd(loop_config, fs.clone_fd);
+			ret = fuse_session_loop_mt(se, loop_config);
+			fuse_loop_cfg_destroy(loop_config);
+		}
+	}
 
 	fuse_session_unmount(se);
 
@@ -1995,8 +1996,6 @@ err_out3:
 err_out2:
 	fuse_session_destroy(se);
 err_out1:
-
-	fuse_loop_cfg_destroy(loop_config);
 	fuse_opt_free_args(&args);
 
 	if (!fs.foreground)
