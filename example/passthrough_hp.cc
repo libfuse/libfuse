@@ -716,11 +716,11 @@ static void sfs_link(fuse_req_t req, fuse_ino_t ino, fuse_ino_t parent,
 		return;
 	}
 
-	res = fstatat(inode.fd, "", &e.attr,
-		      AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW);
+	res = fstat(inode.fd, &e.attr);
 	if (res == -1) {
-		fuse_reply_err(req, errno);
-		return;
+		fuse_log(FUSE_LOG_ERR,
+				 "fstat after linkat failed: fs corrupt, exit to prevent damage: %m\n");
+		exit(1);
 	}
 	e.ino = reinterpret_cast<fuse_ino_t>(&inode);
 	{
