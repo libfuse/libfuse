@@ -1,6 +1,6 @@
 libfuse_headers = [ 'fuse.h', 'fuse_common.h', 'fuse_lowlevel.h',
 	            'fuse_opt.h', 'cuse_lowlevel.h', 'fuse_log.h',
-	            'fuse_daemonize.h' ]
+	            'fuse_daemonize.h', 'fuse_uring.h' ]
 
 if private_cfg.get('HAVE_SERVICEMOUNT', false)
   libfuse_headers += [ 'fuse_service.h' ]

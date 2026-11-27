@@ -3218,7 +3218,13 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 
 	/* XXX: Add an option to make non-available io-uring fatal */
 	if (enable_io_uring) {
-		ring_rc = fuse_uring_start(se);
+		/*
+		 * App-owned (reactor) mode allocates the queues here too but
+		 * spawns no libfuse ring threads; the application owns the ring
+		 * and submits the REGISTER SQEs after the INIT reply.
+		 */
+		ring_rc = se->uring.app_owned ? fuse_uring_app_start(se) :
+			  fuse_uring_start(se);
 
 		if (ring_rc != 0) {
 			fuse_log(FUSE_LOG_INFO,
@@ -3288,7 +3294,7 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	 * REGISTER race ahead of initialization and get -EAGAIN, so defer the
 	 * wake to fuse_session_mount_new_api() after the mount returns.
 	 */
-	if (enable_io_uring && !se->is_sync_init)
+	if (enable_io_uring && !se->is_sync_init && !se->uring.app_owned)
 		fuse_uring_wake_ring_threads(se);
 
 	/*
@@ -3298,6 +3304,16 @@ _do_init(fuse_req_t req, const fuse_ino_t nodeid, const void *op_in,
 	 */
 	if (!se->is_sync_init)
 		fuse_daemonize_early_success();
+
+	/*
+	 * Release the app-owned reactor(s) to submit their REGISTER SQEs now
+	 * that the INIT reply has been sent. Always signalled when app-owned so
+	 * a reactor blocked in fuse_uring_app_wait_submit() is released even if
+	 * io-uring did not come up (it then learns the ring is unavailable).
+	 * With sync init fuse_session_mount_new_api() releases them instead.
+	 */
+	if (se->uring.app_owned && !se->is_sync_init)
+		fuse_uring_app_wake(se, enable_io_uring);
 }
 
 static __attribute__((no_sanitize("thread"))) void
@@ -3836,6 +3852,50 @@ int fuse_req_get_payload(fuse_req_t req, char **payload, size_t *payload_sz,
 	(void)mr;
 	return -ENOTSUP;
 }
+
+int fuse_uring_set_app_ops(struct fuse_session *se,
+			   const struct fuse_uring_app_ops *ops,
+			   size_t op_size, void *userdata)
+{
+	(void)se;
+	(void)ops;
+	(void)op_size;
+	(void)userdata;
+	return -ENOTSUP;
+}
+
+int fuse_uring_set_app_owned(struct fuse_session *se, unsigned int q_depth,
+			     unsigned int fuse_fd_index)
+{
+	(void)se;
+	(void)q_depth;
+	(void)fuse_fd_index;
+	return -ENOTSUP;
+}
+
+unsigned int fuse_uring_queue_count(struct fuse_session *se)
+{
+	(void)se;
+	return 0;
+}
+
+unsigned int fuse_uring_queue_depth(struct fuse_session *se)
+{
+	(void)se;
+	return 0;
+}
+
+size_t fuse_uring_max_payload(struct fuse_session *se)
+{
+	(void)se;
+	return 0;
+}
+
+int fuse_uring_app_wait_submit(struct fuse_session *se)
+{
+	(void)se;
+	return -ENOTSUP;
+}
 #endif
 
 static struct {
@@ -4342,7 +4402,7 @@ clear_pipe:
 	goto out_free;
 }
 
-void fuse_session_process_uring_cqe(struct fuse_session *se,
+void fuse_session_process_uring_cqe(struct fuse_session *se, int qid,
 				    struct fuse_req *req,
 				    struct fuse_in_header *in, void *op_in,
 				    void *op_payload, size_t payload_len)
@@ -4376,8 +4436,8 @@ void fuse_session_process_uring_cqe(struct fuse_session *se,
 	if (se->debug) {
 		fuse_log(
 			FUSE_LOG_DEBUG,
-			"cqe unique: %llu, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
-			(unsigned long long)in->unique,
+			"cqe unique: %llu, qid=%d, opcode: %s (%i), nodeid: %llu, insize: %zu, pid: %u\n",
+			(unsigned long long)in->unique, qid,
 			opname((enum fuse_opcode)in->opcode), in->opcode,
 			(unsigned long long)in->nodeid, payload_len, in->pid);
 	}
@@ -4491,6 +4551,10 @@ void fuse_session_put(struct fuse_session *se)
 
 void fuse_session_destroy(struct fuse_session *se)
 {
+	/* free_payload_mem() gets userdata, so the pool goes before op.destroy */
+	if (se->uring.app_owned)
+		fuse_uring_destroy(se);
+
 	/* on the caller's thread: userdata may not outlive this call */
 	if (READ_ONCE(se->got_init) && !se->got_destroy) {
 		if (se->op.destroy)
@@ -5443,7 +5507,9 @@ err:
 	 * completed, the connection is initialized and REGISTER can be sent, so
 	 * wake them here
 	 */
-	if (se->is_sync_init && se->uring.enabled)
+	if (se->is_sync_init && se->uring.app_owned)
+		fuse_uring_app_wake(se, se->uring.enabled);
+	else if (se->is_sync_init && se->uring.enabled)
 		fuse_uring_wake_ring_threads(se);
 
 	free(mtab_opts);

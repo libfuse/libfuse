@@ -11,6 +11,7 @@
 
 #include "fuse.h"
 #include "fuse_lowlevel.h"
+#include "fuse_uring.h"
 #include "util.h"
 
 #include <pthread.h>
@@ -84,6 +85,13 @@ typedef void (*fuse_teardown_waiting_fn)(void);
 struct fuse_session_uring {
 	/* the wish until FUSE_INIT is negotiated, the result afterwards */
 	bool enabled;
+
+	/* application owns the ring (reactor mode) instead of libfuse */
+	bool app_owned;
+
+	/* app-owned mode: fixed-file index of the FUSE fd on the app's ring */
+	unsigned int fuse_fd_index;
+
 	unsigned int q_depth;
 
 	/*
@@ -95,6 +103,20 @@ struct fuse_session_uring {
 
 	struct fuse_ring_pool *pool;
 	_Atomic fuse_teardown_waiting_fn fsu_test_teardown_waiting;
+
+	/* optional app payload-allocation hooks (zeroed = libfuse default) */
+	struct fuse_uring_app_ops app_ops;
+	void *app_ops_userdata;
+
+	/*
+	 * Gate holding the app-owned reactor(s) until the FUSE_INIT reply has
+	 * been sent (registration is only valid afterwards): app_submit_ready
+	 * releases them, app_submit_active tells them whether io-uring came up.
+	 */
+	pthread_mutex_t app_submit_mutex;
+	pthread_cond_t app_submit_cond;
+	bool app_submit_ready;
+	bool app_submit_active;
 };
 
 struct fuse_timeout_thread;

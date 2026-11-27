@@ -62,6 +62,12 @@ foreach ex : threaded_examples
                install: false)
 endforeach
 
+if private_cfg.get('HAVE_URING', false)
+    executable('hello_reactor', 'hello_reactor.c',
+               dependencies: [ thread_dep, libfuse_dep, liburing ],
+               install: false)
+endif
+
 if platform != 'dragonfly' and add_languages('cpp', native : false, required : false)
     executable('passthrough_hp', 'passthrough_hp.cc',
                dependencies: [ thread_dep, libfuse_dep ],
