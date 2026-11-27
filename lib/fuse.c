@@ -3641,8 +3641,12 @@ static int fill_dir_plus(void *dh_, const char *name, const struct stat *statp,
 			fuse_add_direntry_plus(dh->req, dh->contents + dh->len,
 					       dh->needlen - dh->len, name,
 					       &e, off);
-		if (newlen > dh->needlen)
+		if (newlen > dh->needlen) {
+			/* Undo the lookup; the kernel will never see this entry. */
+			if (e.ino)
+				forget_node(f, e.ino, 1);
 			return 1;
+		}
 		dh->len = newlen;
 	} else {
 		dh->filled = 1;
@@ -3726,6 +3730,7 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 		unsigned rem = dh->needlen - dh->len;
 		unsigned thislen;
 		unsigned newlen;
+		fuse_ino_t looked_up = 0;
 		pos++;
 
 		if (flags & FUSE_READDIR_PLUS) {
@@ -3744,6 +3749,7 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 					dh->error = res;
 					return 1;
 				}
+				looked_up = e.ino;
 			}
 
 			thislen = fuse_add_direntry_plus(req, p, rem,
@@ -3753,8 +3759,12 @@ static int readdir_fill_from_list(fuse_req_t req, struct fuse_dh *dh,
 						    de->name, &de->stat, pos);
 		}
 		newlen = dh->len + thislen;
-		if (newlen > dh->needlen)
+		if (newlen > dh->needlen) {
+			/* Undo the lookup for the entry that does not fit. */
+			if (looked_up)
+				forget_node(dh->fuse, looked_up, 1);
 			break;
+		}
 		dh->len = newlen;
 		de = de->next;
 	}
