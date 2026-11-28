@@ -32,6 +32,10 @@
 #include <linux/limits.h>
 #endif
 
+#ifdef __FreeBSD__
+#include <sys/param.h>
+#endif
+
 #define FILE_INO 2
 
 static const char file_name[] = "hello";
@@ -230,7 +234,7 @@ int main(int argc, char *argv[])
 	pthread_t fs_thread;
 
 	assert(fuse_parse_cmdline(&args, &fuse_opts) == 0);
-#ifndef __FreeBSD__
+#if !defined(__FreeBSD__) || __FreeBSD_version >= 1600010
 	assert(fuse_opt_add_arg(&args, "-oauto_unmount") == 0);
 #endif
 	se = fuse_session_new(&args, &tfs_oper, sizeof(tfs_oper), NULL);

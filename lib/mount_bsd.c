@@ -95,6 +95,9 @@ static const struct fuse_opt fuse_mount_opts[] = {
 #if __FreeBSD_version >= 1300048
 	FUSE_DUAL_OPT_KEY("nocover",		KEY_KERN),
 #endif
+#if __FreeBSD_version >= 1600010
+	FUSE_DUAL_OPT_KEY("auto_unmount", KEY_KERN),
+#endif
 	/* stock FBSD mountopt parsing routine lets anything be negated... */
 	/*
 	 * Linux specific mount options, but let just the mount util
@@ -137,7 +140,9 @@ void fuse_kern_unmount(const char *mountpoint, int fd)
 {
 	if (close(fd) < 0)
 		fuse_log(FUSE_LOG_WARNING, "closing FD %d failed: %s\n", fd, strerror(errno));
-	if (unmount(mountpoint, MNT_FORCE) < 0)
+    /* FreeBSD unmounts FUSE file systems with auto_unmount set when the 
+     * fd is closed, so skip the error message in that case. */
+	if (unmount(mountpoint, MNT_FORCE) < 0 && errno != EINVAL)
 		fuse_log(FUSE_LOG_ERR, "unmounting %s failed: %s\n",
 			 mountpoint, strerror(errno));
 }
