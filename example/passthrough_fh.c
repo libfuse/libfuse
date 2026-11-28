@@ -635,6 +635,8 @@ static int xmp_statx(const char *path, int flags, int mask, struct statx *stxbuf
 
 	if (fi)
 		fd = fi->fh;
+	if (!path)
+		path = "";
 
 	res = statx(fd, path, flags | AT_SYMLINK_NOFOLLOW, mask, stxbuf);
 	if (res == -1)
